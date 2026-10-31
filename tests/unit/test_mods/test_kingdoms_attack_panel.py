@@ -3977,3 +3977,58 @@ async def test_reveal_note_stays_above_the_room_and_dies_at_resolution() -> None
     bot = type("Bot", (), {"guilds": [guild]})()  # type: ignore[arg-type]
     await _sweep_reveal_notes_safe(bot, fresh)  # type: ignore[arg-type]
     assert reveal.deleted is True
+
+
+async def test_declare_button_refuses_an_engaged_lord_at_the_click() -> None:
+    """declare-early-lock-v1 (Drasah 31/10): an ENGAGED lord gets the
+    engaged bubble AT THE CLICK — no wizard view opens at all (the
+    answer used to arrive only at the END of the flow)."""
+    from kingdoms.mods.kingdoms.kingdom_attack_panel import (
+        KingdomAttackDeclareButton,
+        _strings,
+    )
+
+    bundle = PhasesBundle()
+    await bundle.launch_season()
+    await bundle.draw(24)
+    await bundle.fresh_attack()  # king-a is the ENGAGED attacker
+    _wiring(bundle)
+    button = KingdomAttackDeclareButton(_strings("fr")["declare_button"])
+    click = MockInteraction(  # type: ignore[arg-type]
+        user=MockUser(id="king-a"),  # type: ignore[arg-type]
+        custom_id="kingdoms:attack:declare",
+        locale="fr",
+    )
+    await button.callback(click)  # type: ignore[arg-type]
+    assert "engagé dans une bataille" in str(click.response.message.content)
+    assert click.response.message.view is None
+
+
+async def test_defend_button_refuses_an_engaged_lord_at_the_click() -> None:
+    """declare-early-lock-v1 (Drasah 31/10) — TRANCHÉ: Défendre also
+    refuses an engaged lord AT THE CLICK, before any defense lands."""
+    from kingdoms.mods.kingdoms.kingdom_attack_panel import (
+        KingdomAttackDefendButton,
+        _strings,
+    )
+
+    bundle = PhasesBundle()
+    await bundle.launch_season()
+    await bundle.draw(24)
+    attack = await bundle.fresh_attack()
+    # king-b (Bourgogne, the DEFENDING kingdom) leads a second
+    # unresolved attack — he is ENGAGED and must not defend.
+    aquitaine = await bundle.kingdom_id("Aquitaine")
+    await bundle.attacks.declare_attack(
+        "king-b", (await bundle.owner_maps(aquitaine))[0], "aoe2de://x"
+    )
+    _wiring(bundle)
+    button = KingdomAttackDefendButton(attack.id, _strings("fr")["defend_button"])
+    click = MockInteraction(  # type: ignore[arg-type]
+        user=MockUser(id="king-b"),  # type: ignore[arg-type]
+        locale="fr",
+    )
+    await button.callback(click)  # type: ignore[arg-type]
+    assert "engagé dans une bataille" in str(click.response.message.content)
+    fresh = next(a for a in await bundle.attacks.attacks() if a.id == attack.id)
+    assert fresh.defender_lord_id is None

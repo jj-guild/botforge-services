@@ -1412,6 +1412,21 @@ class KingdomAttackDeclareButton(
             await _open_unique_ephemeral(interaction, strings["not_a_lord"])
             return
         own_kingdom_id = str(getattr(lord, "kingdom_id", "") or "")
+        # declare-early-lock-v1 (Drasah 31/10): an ENGAGED or tavern-
+        # locked lord used to discover it only at the END of the flow —
+        # the same early-guard as KingdomPlanButton now fires AT THE
+        # CLICK and NO view opens at all.
+        from kingdoms.mods.kingdoms.attacks import LordEngagedError, LordTavernLockedError
+
+        try:
+            await wiring.attacks_service._refuse_engaged(str(interaction.user.id), game_now())
+            wiring.attacks_service._refuse_tavern(lord, game_now())
+        except LordEngagedError:
+            await _open_unique_ephemeral(interaction, strings["lord_engaged"])
+            return
+        except LordTavernLockedError:
+            await _open_unique_ephemeral(interaction, strings["lord_tavern_locked"])
+            return
         # embuscade-v1 (Drasah 27/10): with bought Embuscade cards in
         # stock, the flow opens on a MODE view first — the classic
         # itinerary vs the exceptional fixed 1h Embuscade. Zero stock
@@ -2428,6 +2443,21 @@ class KingdomAttackDefendButton(
             return
         if getattr(attack, "state", None) is not AttackState.DECLARED:
             await _open_unique_ephemeral(interaction, strings["gaia_gone"])
+            return
+        # declare-early-lock-v1 (Drasah 31/10): an ENGAGED or tavern-
+        # locked lord used to discover it only at the END of the flow —
+        # the same early-guard as KingdomPlanButton now fires AT THE
+        # CLICK and NO view opens at all.
+        from kingdoms.mods.kingdoms.attacks import LordEngagedError, LordTavernLockedError
+
+        try:
+            await wiring.attacks_service._refuse_engaged(str(interaction.user.id), game_now())
+            wiring.attacks_service._refuse_tavern(lord, game_now())
+        except LordEngagedError:
+            await _open_unique_ephemeral(interaction, strings["lord_engaged"])
+            return
+        except LordTavernLockedError:
+            await _open_unique_ephemeral(interaction, strings["lord_tavern_locked"])
             return
         await interaction.response.defer(ephemeral=True)
         try:
