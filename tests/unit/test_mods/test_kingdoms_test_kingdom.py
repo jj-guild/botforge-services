@@ -197,3 +197,91 @@ def test_the_test_items_register_on_the_bot() -> None:
         KingdomTestDestructButton,
         KingdomTestRefreshButton,
     } <= bot._dynamic_items
+
+
+class _RefreshInteraction:
+    """A minimal interaction shell for the refresh callback."""
+
+    def __init__(self, guild: Any = "guild") -> None:
+        self.locale = "fr"
+        self.guild = guild
+        self.user = SimpleNamespace(id="42")
+
+        class _Response:
+            async def defer(self, ephemeral: bool = True) -> None:
+                return None
+
+        class _Followup:
+            async def send(self, *args: Any, **kwargs: Any) -> Any:
+                return SimpleNamespace(id="w")
+
+        self.response = _Response()
+        self.followup = _Followup()
+
+
+def _patch_refresh_seam(
+    monkeypatch: pytest.MonkeyPatch,
+    kingdoms: list[Any],
+) -> tuple[list[tuple[Any, Any, Any]], list[str]]:
+    """Stub the persistent seam + record the provisioning calls."""
+    import kingdoms.mods.kingdoms.kingdom_persistent as persistent
+    import kingdoms.mods.kingdoms.kingdom_test as test_module
+
+    provision_calls: list[tuple[Any, Any, Any]] = []
+    fallback_calls: list[str] = []
+
+    class _Service:
+        async def kingdoms(self) -> list[Any]:
+            return list(kingdoms)
+
+    svc = _Service()
+
+    async def fake_provision(guild: Any, kingdom: Any, service: Any) -> None:
+        provision_calls.append((guild, kingdom, service))
+
+    async def fake_refresh(guild: Any, kingdom_id: str) -> None:
+        fallback_calls.append(str(kingdom_id))
+
+    async def no_close(user_id: str) -> None:
+        return None
+
+    monkeypatch.setattr(test_module, "_provision_test_realm", fake_provision)
+    monkeypatch.setattr(
+        persistent, "_wiring", lambda: SimpleNamespace(kingdoms_service=svc, bot_admins=[])
+    )
+    monkeypatch.setattr(persistent, "_is_admin", lambda interaction, admins: True)
+    monkeypatch.setattr(persistent, "_refresh_realm_views_for_kingdom_safe", fake_refresh)
+    monkeypatch.setattr(persistent, "_close_previous_ephemeral", no_close)
+    monkeypatch.setattr(persistent, "_EPHEMERAL_WINDOWS", {})
+    return provision_calls, fallback_calls
+
+
+async def test_refresh_rides_the_provisioning_seam(monkeypatch: pytest.MonkeyPatch) -> None:
+    """refresh-structure-v1: the click re-provisions Nilrem (not just views)."""
+    from kingdoms.mods.kingdoms.kingdom_test import KingdomTestRefreshButton
+
+    kingdom = SimpleNamespace(id=TEST_KINGDOM_ID)
+    provision_calls, fallback_calls = _patch_refresh_seam(monkeypatch, [kingdom])
+    button = KingdomTestRefreshButton("🔄 Actualiser")
+    await button.callback(_RefreshInteraction(guild="guild"))
+    # the SAME idempotent seam as the create flow, with the loaded kingdom
+    assert len(provision_calls) == 1
+    guild, loaded, service = provision_calls[0]
+    assert guild == "guild"
+    assert loaded is kingdom
+    assert service is not None
+    assert fallback_calls == []
+
+
+async def test_refresh_falls_back_to_views_when_nilrem_is_gone(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from kingdoms.mods.kingdoms.kingdom_test import KingdomTestRefreshButton
+
+    provision_calls, fallback_calls = _patch_refresh_seam(
+        monkeypatch, [SimpleNamespace(id="k-3")]
+    )
+    button = KingdomTestRefreshButton("🔄 Actualiser")
+    await button.callback(_RefreshInteraction(guild="guild"))
+    assert provision_calls == []
+    assert fallback_calls == [TEST_KINGDOM_ID]
