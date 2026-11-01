@@ -276,6 +276,12 @@ def setup_hook(bot: Any) -> None:
     from kingdoms.mods.kingdoms.kingdom_test import register_kingdom_test_items
 
     register_kingdom_test_items(bot)
+    # lieux-et-conseil-v1 (Drasah 01/11): the five castle-place views
+    # behind the canary gate (registration is unconditional — the gate
+    # lives in the rendering, declaration over live state).
+    from kingdoms.mods.kingdoms.kingdom_lieux import register_kingdom_lieux_items
+
+    register_kingdom_lieux_items(bot)
     from kingdoms.mods.kingdoms.kingdom_events_loop import start_kingdoms_event_scheduler
 
     started = start_kingdoms_event_scheduler(bot)

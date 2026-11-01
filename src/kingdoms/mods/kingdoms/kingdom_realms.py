@@ -457,9 +457,27 @@ async def ensure_realm_structure(
         # ordre-salons-v1: adoption is decoration-blind and renames the
         # live salon to the charte display (never duplicates it).
         existing = await _adopt_realm_salon(guild, category, key, name)
+        # lieux-et-conseil-v1 (Drasah 01/11): the canary realms rename
+        # 💬 salle du conseil → 💬 Discussions (the charte slug stays
+        # the anchor, the display rides the gate — declaration wins).
+        try:
+            from kingdoms.mods.kingdoms.kingdom_lieux import canary_salon_display
+
+            display_name = canary_salon_display(key, name, kingdom)
+        except Exception:
+            display_name = name
         channel = (
-            existing if existing is not None else await guild.create_text_channel(name, category=category)
+            existing
+            if existing is not None
+            else await guild.create_text_channel(display_name, category=category)
         )
+        if display_name != name and getattr(channel, "name", "") != display_name:
+            try:
+                await channel.edit(name=display_name)
+            except Exception:
+                logger.warning(
+                    "KINGDOM REALMS: canary salon rename failed (%s)", display_name
+                )
         # kingdom-test-v1 (Drasah 01/11): the Nilrem realm is
         # admin-only — its Territoire/Alliances never open to kingdoms_lord.
         if (

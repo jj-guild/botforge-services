@@ -525,14 +525,14 @@ STRINGS: dict[str, dict[str, Any]] = {
         "market_use_jeu_d_armes_ok": (
             "🧪 Arms mastery used — your defence bot reaches level {}/5."
         ),
-        "ffa_join_button": "🗺️ Aller explorer",
+        "ffa_join_button": "🗺️ Partir en expédition",
         "ffa_join_note": (
-            "✅ **{lord}** holds an FFA Exploration slot — **{time}** (Paris time). "
+            "✅ **{lord}** holds an Expedition slot — **{time}** (Paris time). "
             "{count}/{max} participant(s)."
         ),
         "ffa_left_note": "🚪 **{lord}** released their slot — {count}/{max} participant(s).",
-        "ffa_not_open": "❌ No FFA Exploration is open for enrollment right now.",
-        "ffa_full": "❌ The FFA Exploration is full ({max} participants).",
+        "ffa_not_open": "❌ No Expedition is open for enrollment right now.",
+        "ffa_full": "❌ The Expedition is full ({max} participants).",
         "ffa_kingdom_full": (
             "❌ Your kingdom already holds a slot (mode: one lord per kingdom)."
         ),
@@ -541,20 +541,20 @@ STRINGS: dict[str, dict[str, Any]] = {
             "you cannot enroll."
         ),
         "ffa_announce": (
-            "🧭 **FFA Exploration — Saturday {time} (Paris time)**\n"
+            "🧭 **Expedition — Saturday {time} (Paris time)**\n"
             "One FREE {duration}-minute game against the Gaïa AI and the other "
             "participants — {max} slots, mode: {mode}. Click "
-            "**« Aller explorer »** to reserve yours (first come, first "
+            "**« Partir en expédition »** to reserve yours (first come, first "
             "served; click again to release it)."
         ),
         "ffa_start": (
-            "🧭 **The FFA Exploration starts now** — {count} participant(s), "
+            "🧭 **The Expedition starts now** — {count} participant(s), "
             "{duration} minutes. Good luck!"
         ),
         "ffa_mode_one": "one lord per kingdom",
         "ffa_mode_free": "free slots",
         # restructuration-serveur-v1 c (Drasah 19/10): the ephemeral FFA salon.
-        "ffa_salon_title": "🗺️ Exploration FFA",
+        "ffa_salon_title": "🗺️ Expédition",
         "market_err_no_points": "❌ The kingdom holds no marriage point.",
         "market_err_no_token": (
             "❌ No arranged marriage in stock — buy a token at the Market."
@@ -1026,14 +1026,14 @@ STRINGS: dict[str, dict[str, Any]] = {
         "market_use_jeu_d_armes_ok": (
             "🧪 Jeu d'armes utilisé — ton bot de défense monte au niveau {}/5."
         ),
-        "ffa_join_button": "🗺️ Aller explorer",
+        "ffa_join_button": "🗺️ Partir en expédition",
         "ffa_join_note": (
-            "✅ **{lord}** tient un créneau du FFA Exploration — **{time}** "
+            "✅ **{lord}** tient un créneau de l'Expédition — **{time}** "
             "(heure de Paris). {count}/{max} participant(s)."
         ),
         "ffa_left_note": "🚪 **{lord}** a libéré son créneau — {count}/{max} participant(s).",
-        "ffa_not_open": "❌ Aucun FFA Exploration n'est ouvert aux inscriptions pour le moment.",
-        "ffa_full": "❌ Le FFA Exploration est complet ({max} participants).",
+        "ffa_not_open": "❌ Aucune expédition n'est ouverte aux inscriptions pour le moment.",
+        "ffa_full": "❌ L'expédition est complète ({max} participants).",
         "ffa_kingdom_full": (
             "❌ Ton royaume tient déjà un créneau (mode : 1 seigneur par royaume)."
         ),
@@ -1042,20 +1042,20 @@ STRINGS: dict[str, dict[str, Any]] = {
             "inscription impossible."
         ),
         "ffa_announce": (
-            "🧭 **FFA Exploration — samedi {time} (heure de Paris)**\n"
+            "🧭 **Expédition — samedi {time} (heure de Paris)**\n"
             "Une partie GRATUITE de {duration} minutes contre l'IA Gaïa et les "
             "autres participants — {max} places, mode : {mode}. Clique sur "
-            "**« Aller explorer »** pour réserver ton créneau (1er arrivé, "
+            "**« Partir en expédition »** pour réserver ton créneau (1er arrivé, "
             "1er servi ; re-clique pour le libérer)."
         ),
         "ffa_start": (
-            "🧭 **Le FFA Exploration commence maintenant** — {count} participant(s), "
+            "🧭 **L'expédition commence maintenant** — {count} participant(s), "
             "{duration} minutes. Bonne chance !"
         ),
         "ffa_mode_one": "1 seigneur par royaume",
         "ffa_mode_free": "places libres",
         # restructuration-serveur-v1 c (Drasah 19/10): le salon FFA éphémère.
-        "ffa_salon_title": "🗺️ Exploration FFA",
+        "ffa_salon_title": "🗺️ Expédition",
         "market_err_no_points": "❌ Le royaume ne détient plus de point de mariage.",
         "market_err_no_token": (
             "❌ Aucun mariage arrangé en stock — achetez un jeton au Marché."

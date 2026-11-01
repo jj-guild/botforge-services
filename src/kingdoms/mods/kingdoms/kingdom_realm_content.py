@@ -686,6 +686,17 @@ async def deploy_realm_content(
             # of the hand's crests — every tile carries its origin
             # badge, the page fits again.
             files = None
+            if key == "le-royaume":
+                # lieux-et-conseil-v1: the canary hub wears the castle
+                # illustration (the sheet's MediaGallery references it).
+                from kingdoms.mods.kingdoms.kingdom_lieux import (
+                    hub_file,
+                    is_canary_realm,
+                )
+
+                if is_canary_realm(kingdom):
+                    castle = hub_file()
+                    files = [castle] if castle is not None else None
             if key == "alliances-panel":
                 from kingdoms.mods.kingdoms.civ_crests import civ_crest_mosaic_file
 
@@ -926,14 +937,12 @@ def _parish_overview_line(state: dict[str, Any], strings: dict[str, str]) -> str
     return strings["parish_placeholder"]
 
 
-def _build_overview(
+def _overview_body(
     strings: dict[str, str],
     kingdom: Any,
     state: dict[str, Any],
-) -> Any:
-    """Build the 🏰 Le-Royaume pinned sheet."""
-    import discord
-
+) -> str:
+    """The realm stats block (lieux-et-conseil-v1: it moved to the Council)."""
     members = state["members"]
     king = next((m for m in members if str(getattr(m, "role", "")) == "king"), None)
     king_name = getattr(king, "display_name", None) or strings["no_king"]
@@ -945,7 +954,7 @@ def _build_overview(
         if slots
         else strings["none_f"]
     )
-    body = "\n".join(
+    return "\n".join(
         [
             f"**{strings['members']}** : "
             f"{strings['members_line'].format(king_name, len(subjects), len(members))}",
@@ -960,53 +969,84 @@ def _build_overview(
             f"{_parish_overview_line(state, strings)}",
         ]
     )
-    from kingdoms.mods.kingdoms.kingdom_persistent import (
-        KingdomMarketLedgerButton,
-        KingdomTraquenardButton,
-    )
-    from kingdoms.mods.kingdoms.kingdom_voliere_panel import KingdomVoliereButton
-    from kingdoms.mods.kingdoms.kingdom_voliere_panel import (
-        _strings as _voliere_strings,
-    )
 
-    buttons: list[Any] = [KingdomMarketLedgerButton(strings["ledger_button"])]
-    # The Traquenard button only exists when the kingdom holds a charge
-    # (same rule as the cover proposal of the declare flow).
-    if int(state.get("purchases", {}).get("traquenard", 0) or 0) > 0:
-        buttons.append(KingdomTraquenardButton(strings))
-    # exploration-expedition-v1 (Drasah 30/10): the 🧭 Exploration
-    # button exists ONLY while the kingdom holds an unused Explorateur
-    # token (the launch consumes it, the view refresh drops the button).
-    from kingdoms.mods.kingdoms.kingdom_expedition_panel import (
-        KingdomExpeditionOpenButton,
-        _strings as _expedition_strings,
-    )
 
-    if int(state.get("purchases", {}).get("explorateur_stock", 0) or 0) > 0:
-        expe_locale = "fr" if strings.get("yes") == "oui" else "en"
-        buttons.append(
-            KingdomExpeditionOpenButton(
-                _expedition_strings(expe_locale)["open_button"]
-            )
+def _build_overview(
+    strings: dict[str, str],
+    kingdom: Any,
+    state: dict[str, Any],
+) -> Any:
+    """Build the 🏰 Le-Royaume pinned sheet.
+
+    lieux-et-conseil-v1 (Drasah 01/11): the canary kingdoms render the
+    CASTLE HUB — the stats move into the ⚔️ Salle du conseil, the five
+    doors open the realm's places, the castle illustration rides the
+    sheet. The player kingdoms keep the classic sheet while the gate
+    is active (canary-gate-v1: the declaration wins, never the live
+    state).
+    """
+    import discord
+
+    from kingdoms.mods.kingdoms.kingdom_lieux import is_canary_realm
+
+    media = None
+    if is_canary_realm(kingdom):
+        from kingdoms.mods.kingdoms.kingdom_lieux import _strings as _lieux_strings
+        from kingdoms.mods.kingdoms.kingdom_lieux import hub_buttons
+
+        lieu_locale = "fr" if strings.get("yes") == "oui" else "en"
+        body = _lieux_strings(lieu_locale)["hub_flavor"]
+        buttons: list[Any] = hub_buttons(lieu_locale)
+        media = "attachment://royaume.png"
+    else:
+        body = _overview_body(strings, kingdom, state)
+        from kingdoms.mods.kingdoms.kingdom_persistent import (
+            KingdomMarketLedgerButton,
+            KingdomTraquenardButton,
         )
-    # Volière (voliere-v1): always visible — the Féodal gate lives in the
-    # service (VoliereLockedError), so the view stays simple.
-    voliere_locale = "fr" if strings.get("yes") == "oui" else "en"
-    buttons.append(
-        KingdomVoliereButton(_voliere_strings(voliere_locale)["voliere_button"])
-    )
-    # Drasah 19/10 (restructuration-serveur-v1): Remparts and Seigneurie
-    # leave the salon world — they open as ephemeral views from here.
-    from kingdoms.mods.kingdoms.kingdom_persistent import (
-        KingdomRempartsOpenButton,
-        KingdomSeigneurieOpenButton,
-    )
+        from kingdoms.mods.kingdoms.kingdom_voliere_panel import KingdomVoliereButton
+        from kingdoms.mods.kingdoms.kingdom_voliere_panel import (
+            _strings as _voliere_strings,
+        )
 
-    buttons.append(KingdomRempartsOpenButton(strings["remparts_open_button"]))
-    buttons.append(KingdomSeigneurieOpenButton(strings["seigneurie_open_button"]))
+        buttons = [KingdomMarketLedgerButton(strings["ledger_button"])]
+        # The Traquenard button only exists when the kingdom holds a charge
+        # (same rule as the cover proposal of the declare flow).
+        if int(state.get("purchases", {}).get("traquenard", 0) or 0) > 0:
+            buttons.append(KingdomTraquenardButton(strings))
+        # exploration-expedition-v1 (Drasah 30/10): the 🧭 Exploration
+        # button exists ONLY while the kingdom holds an unused Explorateur
+        # token (the launch consumes it, the view refresh drops the button).
+        from kingdoms.mods.kingdoms.kingdom_expedition_panel import (
+            KingdomExpeditionOpenButton,
+            _strings as _expedition_strings,
+        )
+
+        if int(state.get("purchases", {}).get("explorateur_stock", 0) or 0) > 0:
+            expe_locale = "fr" if strings.get("yes") == "oui" else "en"
+            buttons.append(
+                KingdomExpeditionOpenButton(
+                    _expedition_strings(expe_locale)["open_button"]
+                )
+            )
+        # Volière (voliere-v1): always visible — the Féodal gate lives in the
+        # service (VoliereLockedError), so the view stays simple.
+        voliere_locale = "fr" if strings.get("yes") == "oui" else "en"
+        buttons.append(
+            KingdomVoliereButton(_voliere_strings(voliere_locale)["voliere_button"])
+        )
+        # Drasah 19/10 (restructuration-serveur-v1): Remparts and Seigneurie
+        # leave the salon world — they open as ephemeral views from here.
+        from kingdoms.mods.kingdoms.kingdom_persistent import (
+            KingdomRempartsOpenButton,
+            KingdomSeigneurieOpenButton,
+        )
+
+        buttons.append(KingdomRempartsOpenButton(strings["remparts_open_button"]))
+        buttons.append(KingdomSeigneurieOpenButton(strings["seigneurie_open_button"]))
     # kingdom-test-v1 (Drasah 01/11): the Nilrem realm carries its
-    # admin-only controls — the red autodestruct and the blue refresh
-    # (re-render the views after a code change, data untouched).
+    # admin-only controls — on the canary hub they ride the second row,
+    # on the classic sheet they close the action rows (data untouched).
     from kingdoms.mods.kingdoms.service import is_test_kingdom
 
     if is_test_kingdom(kingdom):
@@ -1025,6 +1065,7 @@ def _build_overview(
         f"{VIEW_MARKER_PREFIX}:le-royaume",
         discord.Colour.gold(),
         buttons,
+        media=media,
     )
     # immersion-v1 (Drasah 20/10): the user-settings button lives in its
     # OWN footer container, visually detached from the game buttons —
