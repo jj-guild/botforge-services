@@ -1611,8 +1611,11 @@ def _panel_view_with_buttons(
     # illustration-top-v1 (Drasah 01/11): the illustration is FIXED and
     # TOP — the image of the place the reader stands in rides above the
     # panel, never under it (the hub castle, a lieu's own picture).
+    # ⚠️ the item class is TOP-LEVEL discord.MediaGalleryItem — the
+    # deployed discord.py 2.7.1 has NO discord.ui.MediaGalleryItem
+    # (live crash 01/11 15:31, Nilrem's Le-Royaume empty since entree-v1).
     if media:
-        view.add_item(discord.ui.MediaGallery(discord.ui.MediaGalleryItem(media)))
+        view.add_item(discord.ui.MediaGallery(discord.MediaGalleryItem(media=media)))
     view.add_item(container)
     return view
 

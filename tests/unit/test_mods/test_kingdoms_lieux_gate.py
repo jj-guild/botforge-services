@@ -153,6 +153,22 @@ def test_player_kingdom_keeps_classic_sheet() -> None:
     assert strings["treasury"] in _walk_text(view.children)
 
 
+def test_canary_hub_carries_the_castle_above_the_panel() -> None:
+    # live crash 01/11 (Nilrem's Le-Royaume empty): the illustration-top
+    # rewrite mistyped the item class (discord.ui.MediaGalleryItem, which
+    # the deployed discord.py does not expose) — every media-bearing view
+    # died at build. The castle must ride ABOVE the panel, first child.
+    strings = _strings("fr")
+    view = _build_overview(
+        strings,
+        _kingdom(TEST_KINGDOM_ID),
+        {"members": [], "wallet": 3, "territories": [], "purchases": {}, "parish": {}},
+    )
+    assert view.children
+    assert isinstance(view.children[0], discord.MediaGallery)
+    assert view.children[0].items[0].media == "attachment://royaume.png"
+
+
 def test_council_salon_renamed_for_canary_only() -> None:
     assert (
         canary_salon_display(

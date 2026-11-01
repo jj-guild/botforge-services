@@ -466,6 +466,18 @@ async def ensure_realm_structure(
             display_name = canary_salon_display(key, name, kingdom)
         except Exception:
             display_name = name
+        # salon-adoption-canary (fix 01/11, live): the renamed salon no
+        # longer matches its charte slug — adopt it by the DISPLAY slug
+        # too, or every pass created a duplicate « discussions ».
+        if existing is None and display_name != name:
+            existing = next(
+                (
+                    c
+                    for c in getattr(category, "channels", [])
+                    if _slug(getattr(c, "name", "")) == _slug(display_name)
+                ),
+                None,
+            )
         channel = (
             existing
             if existing is not None
