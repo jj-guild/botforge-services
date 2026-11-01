@@ -109,6 +109,29 @@ STRINGS: dict[str, dict[str, str]] = {
         ),
         "conseil_actions": "Action cards",
         "sortir_button": "🚪 Leave",
+        "exploration_button": "🧭 Exploration",
+        "exploration_fiche_title": "🧭 Exploration",
+        "exploration_effect_title": "Effect",
+        "exploration_effect_l1": (
+            "Enlist as Captain and sail for 48 hours in search of a new"
+            " territory."
+        ),
+        "exploration_effect_l2": "Once the journey ends, claim an unknown new territory.",
+        "exploration_effect_l3": (
+            "While at sea you are « locked »: you can neither defend nor"
+            " attack."
+        ),
+        "exploration_effect_l4": (
+            "Other lords may join the voyage; each joining lord cuts 4 hours"
+            " off the travel (24 hours off at most)."
+        ),
+        "exploration_prerequis_title": "Prerequisite",
+        "exploration_prerequis": (
+            "The lord enlisting as Captain must have one defence point"
+            " available (the defence point is NOT consumed)."
+        ),
+        "exploration_capitaine_button": "🧭 Become captain",
+        "exploration_annuler_button": "Cancel",
     },
     "fr": {
         "hub_flavor": (
@@ -188,6 +211,31 @@ STRINGS: dict[str, dict[str, str]] = {
         ),
         "conseil_actions": "Cartes d'action",
         "sortir_button": "🚪 Sortir",
+        "exploration_button": "🧭 Exploration",
+        "exploration_fiche_title": "🧭 Exploration",
+        "exploration_effect_title": "Effet",
+        "exploration_effect_l1": (
+            "Enrôlez-vous en tant que Capitaine et voyagez durant 48 h à la"
+            " recherche d'un nouveau territoire."
+        ),
+        "exploration_effect_l2": "Après le délai, récupérez un nouveau territoire inconnu.",
+        "exploration_effect_l3": (
+            "Durant ce trajet vous êtes dans l'état « verrouillé » : vous ne"
+            " pouvez ni défendre ni attaquer."
+        ),
+        "exploration_effect_l4": (
+            "D'autres seigneurs peuvent participer au voyage ; chaque"
+            " seigneur participant réduit le délai du voyage de 4 h"
+            " (réduction maximum de 24 h)."
+        ),
+        "exploration_prerequis_title": "Pré-requis",
+        "exploration_prerequis": (
+            "Le seigneur s'enrôlant en tant que Capitaine doit avoir un"
+            " point de défense disponible (le point de défense n'est pas"
+            " consommé)."
+        ),
+        "exploration_capitaine_button": "🧭 Devenir capitaine",
+        "exploration_annuler_button": "Annuler",
     },
 }
 
@@ -1482,6 +1530,215 @@ class KingdomLieuClassementButton(
         _EPHEMERAL_WINDOWS[user_id] = (interaction, monotonic(), window)
 
 
+# ---------------------------------------------------------------------------
+# conseil-exploration-v1 (Drasah 01/11) — the 🧭 Exploration action card.
+# ---------------------------------------------------------------------------
+
+
+def _exploration_fiche_content(locale: str) -> str:
+    """The fiche body — the card's effect and prerequisite, Drasah's own
+    words (the boarding flow itself stays the salon's business)."""
+    lieu = _strings(locale)
+    return "\n".join(
+        [
+            f"## {lieu['exploration_fiche_title']}",
+            "",
+            f"**{lieu['exploration_effect_title']}**",
+            lieu["exploration_effect_l1"],
+            lieu["exploration_effect_l2"],
+            lieu["exploration_effect_l3"],
+            lieu["exploration_effect_l4"],
+            "",
+            f"**{lieu['exploration_prerequis_title']}**",
+            lieu["exploration_prerequis"],
+        ]
+    )
+
+
+def _exploration_capitaine(
+    wiring: Any, kingdom: Any, lord: Any, locale: str
+) -> Any:
+    """The 🧭 Devenir capitaine callback factory — one click CREATES the
+    🧭 exploration salon (the existing boarding flow) and enrolls the
+    clicker as CHEF. A refusal (no available defence point…) rides the
+    note: the salon stays open, another lord may still embark."""
+
+    from time import monotonic
+
+    async def _go(interaction: discord.Interaction) -> None:
+        from kingdoms.mods.kingdoms.kingdom_expedition_panel import (
+            _map_error,
+            _strings as _expe_strings,
+            open_expedition_salon_safe,
+            refresh_expedition_panel_safe,
+        )
+        from kingdoms.mods.kingdoms.kingdom_persistent import _EPHEMERAL_WINDOWS
+
+        expe = _expe_strings(locale)
+        user_id = str(getattr(interaction.user, "id", ""))
+        # the fiche closes — the note replaces it (the interaction's
+        # original response is the fiche window itself).
+        await interaction.response.defer(ephemeral=True)
+        _EPHEMERAL_WINDOWS.pop(user_id, None)
+        try:
+            await interaction.delete_original_response()
+        except Exception:
+            logger.info(
+                "KINGDOM LIEUX: exploration fiche close failed (ignored)",
+                exc_info=True,
+            )
+        channel = await open_expedition_salon_safe(
+            interaction.guild, wiring, kingdom
+        )
+        if channel is None:
+            economy = getattr(wiring, "economy_service", None)
+            try:
+                doc = await economy.expedition(str(kingdom.id))
+                note = (
+                    expe["already_sailing"]
+                    if str(doc.get("state", "")) == "sailing"
+                    else expe["no_token"]
+                )
+            except Exception:
+                note = expe["no_token"]
+        else:
+            note = str(expe["open_note"]).format(channel=f"<#{int(channel.id)}>")
+            try:
+                await wiring.economy_service.toggle_expedition_chef(
+                    str(kingdom.id), str(lord.id)
+                )
+                await refresh_expedition_panel_safe(
+                    interaction.guild, wiring, str(kingdom.id)
+                )
+            except Exception as exc:
+                # the salon is OPEN — the clicker may still embark once
+                # he meets the prerequisite (the defence point).
+                note = f"{note}\n{_map_error(expe, exc)}"
+        try:
+            message = await interaction.followup.send(note, ephemeral=True)
+            _EPHEMERAL_WINDOWS[user_id] = (interaction, monotonic(), message)
+        except Exception:
+            logger.warning(
+                "KINGDOM LIEUX: exploration capitaine note failed",
+                exc_info=True,
+            )
+
+    return _go
+
+
+def _exploration_fiche_view(
+    wiring: Any, kingdom: Any, lord: Any, locale: str
+) -> discord.ui.View:
+    """The fiche's two buttons — 🧭 Devenir capitaine (green) and
+    Annuler (secondary) which closes the window, nothing else."""
+    lieu = _strings(locale)
+    view = discord.ui.View(timeout=None)
+    capitaine = discord.ui.Button(
+        label=lieu["exploration_capitaine_button"],
+        style=discord.ButtonStyle.success,
+        row=0,
+    )
+    capitaine.callback = _exploration_capitaine(wiring, kingdom, lord, locale)
+    annuler = discord.ui.Button(
+        label=lieu["exploration_annuler_button"],
+        style=discord.ButtonStyle.secondary,
+        row=0,
+    )
+    # Annuler simply closes the fiche — the shared ephemeral exit.
+    annuler.callback = _close_ephemeral_window
+    view.add_item(capitaine)
+    view.add_item(annuler)
+    return view
+
+
+class KingdomLieuExplorationButton(
+    discord.ui.DynamicItem[discord.ui.Button[Any]],
+    template=r"kingdoms:lieux:exploration",
+):
+    """conseil-exploration-v1 (Drasah 01/11): the 🧭 Exploration action
+    card of the Salle du conseil — line 2, green while an Explorateur
+    token is held (gray+disabled otherwise, never hidden). The click
+    opens the FICHE as the clicker's side window (type-7 ack: the
+    council sheet SURVIVES, coexist) — the card's art + its effect +
+    its prerequisite, with two buttons: 🧭 Devenir capitaine CREATES the
+    exploration salon (and enrolls the clicker as chef), Annuler closes
+    the window, nothing else."""
+
+    def __init__(self, label: str) -> None:
+        super().__init__(
+            discord.ui.Button(
+                label=label[:80],
+                custom_id="kingdoms:lieux:exploration",
+                style=discord.ButtonStyle.primary,
+            )
+        )
+
+    @classmethod
+    async def from_custom_id(
+        cls,
+        interaction: discord.Interaction,
+        item: discord.ui.Item[Any],
+        match: re.Match[str],
+        /,
+    ) -> "KingdomLieuExplorationButton":
+        """Rebuild from the wire — THIS module's strings only."""
+        return cls(_strings(_locale(interaction))["exploration_button"])
+
+    async def callback(self, interaction: discord.Interaction) -> None:
+        from time import monotonic
+
+        from kingdoms.mods.kingdoms.kingdom_persistent import (
+            _EPHEMERAL_WINDOWS,
+            _close_previous_ephemeral,
+            _market_card_back_file,
+            _market_card_file,
+            _market_error_note,
+            _strings as _merged_strings,
+            _wiring,
+        )
+
+        locale = _locale(interaction)
+        lieu = _strings(locale)
+        wiring = _wiring()
+        if wiring.kingdoms_service is None:
+            await interaction.response.send_message(
+                lieu["no_service"], ephemeral=True
+            )
+            return
+        lord, kingdom = await _require_lord_kingdom(interaction, wiring, lieu)
+        if lord is None or kingdom is None:
+            return
+        # type-7 ack — the council sheet (an ephemeral parent) survives
+        # (objectif-coexist-type7-fix lesson).
+        await interaction.response.defer(ephemeral=True, thinking=True)
+        user_id = str(getattr(interaction.user, "id", ""))
+        try:
+            content = _exploration_fiche_content(locale)
+            view = _exploration_fiche_view(wiring, kingdom, lord, locale)
+            # the card's own art rides the fiche (fallback: the back).
+            file = _market_card_file("explorateur") or _market_card_back_file()
+            files = [file] if file is not None else None
+            if _objectif_replaces_previous(_EPHEMERAL_WINDOWS.get(user_id)):
+                await _close_previous_ephemeral(user_id)
+            window = await interaction.followup.send(
+                content, view=view, files=files, ephemeral=True
+            )
+        except Exception:
+            # AFTER a defer Discord stays silent on failure — surface a
+            # visible error note instead (the v2-fix lesson).
+            logger.warning(
+                "KINGDOM LIEUX: exploration fiche failed", exc_info=True
+            )
+            await interaction.followup.send(
+                _market_error_note(
+                    Exception("exploration"), _merged_strings(locale)
+                ),
+                ephemeral=True,
+            )
+            return
+        _EPHEMERAL_WINDOWS[user_id] = (interaction, monotonic(), window)
+
+
 async def build_conseil_view(
     strings: dict[str, Any],
     kingdom: Any,
@@ -1553,10 +1810,6 @@ async def build_conseil_view(
     # line 1 = the default action (green) + the King's 🎯 Objectif +
     # Sortir (red, last), line 2 = the technology cards, ALWAYS
     # visible — green while held, gray+disabled while out of stock.
-    from kingdoms.mods.kingdoms.kingdom_expedition_panel import (
-        KingdomExpeditionOpenButton,
-        _strings as _expedition_strings,
-    )
     from kingdoms.mods.kingdoms.kingdom_persistent import KingdomTraquenardButton
 
     row_one = [
@@ -1568,8 +1821,11 @@ async def build_conseil_view(
         _sortir(locale),
     ]
     row_two = [
+        # conseil-exploration-v1 (Drasah 01/11): the Exploration card
+        # opens the FICHE first — the reminder + the effect + the two
+        # buttons (🧭 Devenir capitaine / Annuler).
         _stock_style(
-            KingdomExpeditionOpenButton(_expedition_strings(locale)["open_button"]),
+            KingdomLieuExplorationButton(lieu["exploration_button"]),
             int(purchases.get("explorateur_stock", 0) or 0) > 0,
         ),
         _stock_style(
@@ -2053,6 +2309,7 @@ def register_kingdom_lieux_items(bot: discord.Client) -> None:
         KingdomLieuSortirButton,
         KingdomLieuObjectifButton,
         KingdomLieuClassementButton,
+        KingdomLieuExplorationButton,
         KingdomLieuHistButton,
         KingdomLieuCardInfoButton,
         KingdomLieuEntreeButton,

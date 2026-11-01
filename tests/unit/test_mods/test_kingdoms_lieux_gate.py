@@ -1197,3 +1197,263 @@ def test_rank_medal_marks_the_podium() -> None:
     assert _rank_medal(4) == "🏰"
     assert _rank_medal(9) == "🏰"
     assert _rank_medal(0) == ""
+
+
+# ---------------------------------------------------------------------------
+# conseil-exploration-v1 (Drasah 01/11) — the Exploration action card.
+# ---------------------------------------------------------------------------
+
+
+def test_exploration_button_registered_and_stock_gated() -> None:
+    import asyncio
+
+    from kingdoms.mods.kingdoms.kingdom_lieux import (
+        KingdomLieuExplorationButton,
+        build_conseil_view,
+        register_kingdom_lieux_items,
+    )
+
+    bot = _FakeBot()
+    register_kingdom_lieux_items(bot)
+    assert KingdomLieuExplorationButton in bot._dynamic_items
+    button = KingdomLieuExplorationButton(_strings("fr")["exploration_button"])
+    assert button.item.custom_id == "kingdoms:lieux:exploration"
+    # the council card REPLACES the old open flow — line 2, slot 1,
+    # green while a token is held
+    view, _files = asyncio.run(
+        build_conseil_view(
+            _merged_fr(),
+            _kingdom(TEST_KINGDOM_ID),
+            _minimal_state({"explorateur_stock": 1, "traquenard": 1}),
+            SimpleNamespace(kingdoms_service=None),
+            "fr",
+        )
+    )
+    second = list(_action_rows(view.children)[1].children)
+    assert second[0].custom_id == "kingdoms:lieux:exploration"
+    assert second[0].style == discord.ButtonStyle.success
+
+
+def test_exploration_fiche_carries_effect_prerequis_and_two_buttons() -> None:
+    from kingdoms.mods.kingdoms.kingdom_lieux import (
+        _exploration_fiche_content,
+        _exploration_fiche_view,
+    )
+
+    lieu = _strings("fr")
+    content = _exploration_fiche_content("fr")
+    for key in (
+        "exploration_fiche_title",
+        "exploration_effect_title",
+        "exploration_effect_l1",
+        "exploration_effect_l2",
+        "exploration_effect_l3",
+        "exploration_effect_l4",
+        "exploration_prerequis_title",
+        "exploration_prerequis",
+    ):
+        assert lieu[key] in content
+    view = _exploration_fiche_view(
+        SimpleNamespace(kingdoms_service=None),
+        _kingdom(TEST_KINGDOM_ID),
+        SimpleNamespace(id="l-1"),
+        "fr",
+    )
+    buttons = [c for c in view.children if isinstance(c, discord.ui.Button)]
+    labels = [str(b.label) for b in buttons]
+    assert labels == [
+        lieu["exploration_capitaine_button"],
+        lieu["exploration_annuler_button"],
+    ]
+    assert buttons[0].style == discord.ButtonStyle.success
+
+
+def test_exploration_capitaine_opens_salon_and_enrols_the_chef(monkeypatch) -> None:
+    import asyncio
+
+    import kingdoms.mods.kingdoms.kingdom_expedition_panel as expedition
+    from kingdoms.mods.kingdoms.kingdom_lieux import _exploration_fiche_view
+    from kingdoms.mods.kingdoms.kingdom_persistent import _EPHEMERAL_WINDOWS
+
+    calls: dict[str, Any] = {}
+
+    class _Channel:
+        id = 555
+
+    async def _fake_open(guild: Any, wiring: Any, kingdom: Any) -> Any:
+        calls["opened"] = True
+        return _Channel()
+
+    async def _fake_refresh(guild: Any, wiring: Any, kingdom_id: str) -> None:
+        calls["refreshed"] = kingdom_id
+
+    async def _toggle_chef(kingdom_id: str, lord_id: str) -> None:
+        calls["chef"] = (kingdom_id, lord_id)
+
+    monkeypatch.setattr(expedition, "open_expedition_salon_safe", _fake_open)
+    monkeypatch.setattr(expedition, "refresh_expedition_panel_safe", _fake_refresh)
+    wiring = SimpleNamespace(
+        kingdoms_service=None,
+        economy_service=SimpleNamespace(toggle_expedition_chef=_toggle_chef),
+    )
+    kingdom = SimpleNamespace(id=TEST_KINGDOM_ID, name="Nilrem")
+    lord = SimpleNamespace(id="l-1")
+    view = _exploration_fiche_view(wiring, kingdom, lord, "fr")
+    capitaine = next(
+        c
+        for c in view.children
+        if isinstance(c, discord.ui.Button)
+        and str(c.label) == _strings("fr")["exploration_capitaine_button"]
+    )
+    sent: dict[str, Any] = {}
+
+    class _Response:
+        async def defer(self, **kwargs: Any) -> None:
+            sent["deferred"] = True
+
+    class _Followup:
+        async def send(self, content: str, **kwargs: Any) -> Any:
+            sent["note"] = content
+            return SimpleNamespace(id="note-1")
+
+    async def _delete_original_response() -> None:
+        sent["fiche_closed"] = True
+
+    interaction = SimpleNamespace(
+        response=_Response(),
+        followup=_Followup(),
+        user=SimpleNamespace(id="tester-capitaine"),
+        guild=None,
+        delete_original_response=_delete_original_response,
+    )
+    _EPHEMERAL_WINDOWS["tester-capitaine"] = (
+        interaction,
+        0.0,
+        SimpleNamespace(id="fiche-1"),
+    )
+    try:
+        asyncio.run(capitaine.callback(interaction))
+    finally:
+        _EPHEMERAL_WINDOWS.pop("tester-capitaine", None)
+    # the salon OPENS, the clicker ENROLLS as chef, the panel refreshes
+    assert calls["opened"] is True
+    assert calls["chef"] == (TEST_KINGDOM_ID, "l-1")
+    assert calls["refreshed"] == TEST_KINGDOM_ID
+    # the fiche closed and the note carries the salon link
+    assert sent["fiche_closed"] is True
+    assert "<#555>" in str(sent["note"])
+
+
+def test_exploration_capitaine_refusal_keeps_the_salon_note(monkeypatch) -> None:
+    import asyncio
+
+    import kingdoms.mods.kingdoms.kingdom_expedition_panel as expedition
+    from kingdoms.mods.kingdoms.kingdom_lieux import _exploration_fiche_view
+
+    calls: dict[str, Any] = {}
+
+    class _Channel:
+        id = 556
+
+    async def _fake_open(guild: Any, wiring: Any, kingdom: Any) -> Any:
+        calls["opened"] = True
+        return _Channel()
+
+    async def _fake_refresh(guild: Any, wiring: Any, kingdom_id: str) -> None:
+        return None
+
+    async def _boom(kingdom_id: str, lord_id: str) -> None:
+        raise RuntimeError("no available defence point")
+
+    monkeypatch.setattr(expedition, "open_expedition_salon_safe", _fake_open)
+    monkeypatch.setattr(expedition, "refresh_expedition_panel_safe", _fake_refresh)
+    wiring = SimpleNamespace(
+        kingdoms_service=None,
+        economy_service=SimpleNamespace(toggle_expedition_chef=_boom),
+    )
+    view = _exploration_fiche_view(
+        wiring, SimpleNamespace(id=TEST_KINGDOM_ID), SimpleNamespace(id="l-1"), "fr"
+    )
+    capitaine = next(
+        c
+        for c in view.children
+        if isinstance(c, discord.ui.Button)
+        and str(c.label) == _strings("fr")["exploration_capitaine_button"]
+    )
+    sent: dict[str, Any] = {}
+
+    class _Response:
+        async def defer(self, **kwargs: Any) -> None:
+            sent["deferred"] = True
+
+    class _Followup:
+        async def send(self, content: str, **kwargs: Any) -> Any:
+            sent["note"] = content
+            return SimpleNamespace(id="note-2")
+
+    async def _delete() -> None:
+        sent["fiche_closed"] = True
+
+    interaction = SimpleNamespace(
+        response=_Response(),
+        followup=_Followup(),
+        user=SimpleNamespace(id="tester-refus"),
+        guild=None,
+        delete_original_response=_delete,
+    )
+    from kingdoms.mods.kingdoms.kingdom_persistent import _EPHEMERAL_WINDOWS
+
+    try:
+        asyncio.run(capitaine.callback(interaction))
+    finally:
+        _EPHEMERAL_WINDOWS.pop("tester-refus", None)
+    # the salon OPENS anyway — the refusal rides the note, another lord
+    # may still embark.
+    assert calls["opened"] is True
+    assert "<#556>" in str(sent["note"])
+    assert "🛡️" in str(sent["note"])
+
+
+def test_exploration_annuler_closes_the_window() -> None:
+    import asyncio
+
+    from kingdoms.mods.kingdoms.kingdom_lieux import _exploration_fiche_view
+    from kingdoms.mods.kingdoms.kingdom_persistent import _EPHEMERAL_WINDOWS
+
+    view = _exploration_fiche_view(
+        SimpleNamespace(kingdoms_service=None),
+        _kingdom(TEST_KINGDOM_ID),
+        SimpleNamespace(id="l-1"),
+        "fr",
+    )
+    annuler = next(
+        c
+        for c in view.children
+        if isinstance(c, discord.ui.Button)
+        and str(c.label) == _strings("fr")["exploration_annuler_button"]
+    )
+    closed: dict[str, Any] = {}
+
+    class _Response:
+        async def defer(self, **kwargs: Any) -> None:
+            closed["deferred"] = True
+
+    async def _delete() -> None:
+        closed["deleted"] = True
+
+    interaction = SimpleNamespace(
+        response=_Response(),
+        user=SimpleNamespace(id="tester-annuler"),
+        message=SimpleNamespace(id="fiche-1"),
+        delete_original_response=_delete,
+    )
+    _EPHEMERAL_WINDOWS["tester-annuler"] = (
+        interaction,
+        0.0,
+        SimpleNamespace(id="fiche-1"),
+    )
+    asyncio.run(annuler.callback(interaction))
+    # Annuler closes the window — defer + delete + registry drop
+    assert closed["deferred"] is True
+    assert closed["deleted"] is True
+    assert "tester-annuler" not in _EPHEMERAL_WINDOWS
