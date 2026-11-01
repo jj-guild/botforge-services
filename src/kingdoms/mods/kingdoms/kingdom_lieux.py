@@ -965,4 +965,3 @@ def register_kingdom_lieux_items(bot: discord.Client) -> None:
         KingdomLieuParoisseButton,
         KingdomLieuVoliereButton,
     )
- 
