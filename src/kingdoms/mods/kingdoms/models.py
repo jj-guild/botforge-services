@@ -212,8 +212,10 @@ class KingdomModel(BaseModel):
     """conseil-objectif-v1 (Drasah 01/11): the King's INDICATIVE goals —
     ``{"target_kingdom", "target_territory", "target_alliance",
     "updated_at"}`` set through the 🎯 Objectif button of the Salle du
-    conseil (king-only) and injected into the realm's council salon to
-    orient the lords. Free text — never engine-enforced."""
+    conseil (king-only, DROPDOWNS of the kingdoms/maps/civilizations —
+    conseil-objectif-v2) and displayed on the council sheet with the
+    targeted alliance's blason. Each goal rides as « key » plus
+    « key_label » — indicative, never engine-enforced."""
 
     def to_mongo(self) -> dict[str, Any]:
         """Convert to a MongoDB document."""

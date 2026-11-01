@@ -729,28 +729,6 @@ async def deploy_realm_content(
         except Exception:
             logger.warning("KINGDOM REALM CONTENT: view %s failed", key, exc_info=True)
             results[key] = False
-    # conseil-objectif-v1 (Drasah 01/11): the canary realms inject the
-    # King's 🎯 objectifs into the council salon — the message edits in
-    # place like every realm view (never a duplicate).
-    from kingdoms.mods.kingdoms.kingdom_lieux import (
-        _objectives_salon,
-        build_objectives_view,
-        is_canary_realm,
-    )
-
-    if is_canary_realm(kingdom):
-        channel = _objectives_salon(category)
-        if channel is not None:
-            try:
-                results["objectifs"] = await _upsert_view(
-                    channel, "objectifs", build_objectives_view(kingdom, locale)
-                )
-            except Exception:
-                logger.warning(
-                    "KINGDOM REALM CONTENT: view objectifs failed",
-                    exc_info=True,
-                )
-                results["objectifs"] = False
     return results
 
 
@@ -1604,6 +1582,7 @@ def _panel_view_with_buttons(
     buttons: list[Any],
     media: str | None = None,
     rows: list[list[Any]] | None = None,
+    extra_medias: list[str] | None = None,
 ) -> discord.ui.LayoutView:
     """Build one Components V2 state panel with an action row of buttons.
 
@@ -1653,6 +1632,10 @@ def _panel_view_with_buttons(
     if media:
         view.add_item(discord.ui.MediaGallery(discord.MediaGalleryItem(media=media)))
     view.add_item(container)
+    # conseil-objectif-v2 (Drasah 01/11): extra referenced attachments
+    # (the targeted alliance's blason) render UNDER the panel.
+    for media_url in extra_medias or ():
+        view.add_item(discord.ui.MediaGallery(discord.MediaGalleryItem(media=media_url)))
     return view
 
 
