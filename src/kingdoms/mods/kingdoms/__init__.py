@@ -272,6 +272,10 @@ def setup_hook(bot: Any) -> None:
 
     register_kingdoms_panel_bot(bot)
     register_kingdoms_persistent_items(bot)
+    # kingdom-test-v1 (Drasah 01/11): the Nilrem test kingdom items.
+    from kingdoms.mods.kingdoms.kingdom_test import register_kingdom_test_items
+
+    register_kingdom_test_items(bot)
     from kingdoms.mods.kingdoms.kingdom_events_loop import start_kingdoms_event_scheduler
 
     started = start_kingdoms_event_scheduler(bot)

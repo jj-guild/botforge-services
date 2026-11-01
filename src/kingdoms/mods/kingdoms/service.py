@@ -36,6 +36,21 @@ from kingdoms.mods.kingdoms.storage import KingdomsStore
 
 logger = logging.getLogger("kingdoms.kingdoms_service")
 
+# kingdom-test-v1 (Drasah 01/11): the Nilrem test kingdom — a
+# reserved, admin-only realm where the admin pilots the game without
+# touching the player kingdoms. The reserved id never collides with the
+# generated ``k-{len}`` ids, and its fictional king id (non-digit) never
+# resolves to a real Discord member.
+TEST_KINGDOM_ID = "k-nilrem"
+TEST_KINGDOM_NAME = "Nilrem"
+TEST_KING_ID = "nilrem-roi"
+
+
+def is_test_kingdom(kingdom: Any | None) -> bool:
+    """True when the kingdom is the Nilrem test kingdom (admin-only)."""
+    return kingdom is not None and str(getattr(kingdom, "id", "")) == TEST_KINGDOM_ID
+
+
 KING_ROLE = LordRole.KING
 LORD_ROLE = LordRole.LORD
 
@@ -423,6 +438,8 @@ class KingdomsService:
         kingdom = await self._find_kingdom_by_name(kingdom_name)
         if kingdom.is_gaia:
             raise NotEnrollableError("Gaïa kingdoms are never enrollable")
+        if is_test_kingdom(kingdom):
+            raise NotEnrollableError("the Nilrem test kingdom is admin-only")
         await self._check_capacity(kingdom, role)
         lord.kingdom_id = kingdom.id
         lord.role = role
@@ -439,12 +456,16 @@ class KingdomsService:
         season = await self._require_season()
         self._check_name(name)
         kingdoms = await self.kingdoms()
-        if len([k for k in kingdoms if not k.is_gaia]) >= self._config.kingdoms_count:
+        # kingdom-test-v1: the test kingdom never consumes the quota.
+        if (
+            len([k for k in kingdoms if not k.is_gaia and k.id != TEST_KINGDOM_ID])
+            >= self._config.kingdoms_count
+        ):
             raise KingdomLimitError("the season already counts its maximum of kingdoms")
         if any(k.name.casefold() == name.strip().casefold() for k in kingdoms):
             raise KingdomNameInvalidError("a kingdom with this name already exists")
         kingdom = self._new_kingdom(
-            f"k-{len(kingdoms)}",
+            self._next_kingdom_id(kingdoms),
             KingdomType.PLAYER,
             season.id,
             name=name.strip(),
@@ -456,6 +477,56 @@ class KingdomsService:
             await self._grant_starting_civilizations(kingdom)
         await self._store.upsert_kingdom(kingdom.to_mongo())
         logger.info("kingdoms: kingdom %s added manually by an admin", kingdom.name)
+        return kingdom
+
+    def _next_kingdom_id(self, kingdoms: list[KingdomModel]) -> str:
+        """Next free sequential kingdom id (never the reserved test id)."""
+        taken = {str(k.id) for k in kingdoms}
+        index = len(kingdoms)
+        while f"k-{index}" in taken:
+            index += 1
+        return f"k-{index}"
+
+    async def test_kingdom(self) -> KingdomModel | None:
+        """Return the Nilrem test kingdom when it exists; None otherwise."""
+        return next((k for k in await self.kingdoms() if k.id == TEST_KINGDOM_ID), None)
+
+    async def ensure_test_kingdom(self) -> KingdomModel:
+        """Create (or return) the Nilrem test kingdom — idempotent.
+
+        kingdom-test-v1 (Drasah 01/11): a reserved APPROVED kingdom with
+        a fictional king document (``nilrem-roi`` — never a real Discord
+        member) and an EMPTY hand: the admin injects the test elements
+        through the distributor. Never counted against the kingdoms
+        quota; a season sweep removes it like any other kingdom and the
+        distributor button recreates it.
+        """
+        existing = await self.test_kingdom()
+        if existing is not None:
+            return existing
+        season = await self._require_season()
+        kingdoms = await self.kingdoms()
+        if any(k.name.casefold() == TEST_KINGDOM_NAME.casefold() for k in kingdoms):
+            raise KingdomNameInvalidError("a kingdom with this name already exists")
+        kingdom = self._new_kingdom(
+            TEST_KINGDOM_ID,
+            KingdomType.PLAYER,
+            season.id,
+            name=TEST_KINGDOM_NAME,
+            name_approved=True,
+        )
+        kingdom.validation = KingdomValidation.APPROVED
+        await self._store.upsert_kingdom(kingdom.to_mongo())
+        await self._store.upsert_lord(
+            LordModel(
+                _id=TEST_KING_ID,
+                season_id=season.id,
+                kingdom_id=kingdom.id,
+                role=KING_ROLE,
+                display_name="Merlin",
+            ).to_mongo()
+        )
+        logger.info("kingdoms: test kingdom %s ensured", TEST_KINGDOM_NAME)
         return kingdom
 
     async def upgrade_parish(self, kingdom_id: str) -> KingdomModel:
@@ -659,10 +730,14 @@ class KingdomsService:
             raise KingdomNameInvalidError("a founding King must propose a name")
         self._check_name(proposed_name)
         kingdoms = await self.kingdoms()
-        if len([k for k in kingdoms if not k.is_gaia]) >= self._config.kingdoms_count:
+        # kingdom-test-v1: the test kingdom never consumes the quota.
+        if (
+            len([k for k in kingdoms if not k.is_gaia and k.id != TEST_KINGDOM_ID])
+            >= self._config.kingdoms_count
+        ):
             raise KingdomLimitError("the season already counts its maximum of kingdoms")
         kingdom = self._new_kingdom(
-            f"k-{len(kingdoms)}",
+            self._next_kingdom_id(kingdoms),
             KingdomType.PLAYER,
             season.id,
             name=proposed_name,
@@ -730,6 +805,7 @@ class KingdomsService:
             for kingdom in kingdoms
             if not kingdom.is_gaia
             and kingdom.validation is not KingdomValidation.REFUSED
+            and kingdom.id != TEST_KINGDOM_ID
             and kingdom.id not in taken
         ]
 
@@ -747,6 +823,8 @@ class KingdomsService:
         kingdom = await self._require_kingdom(kingdom_id)
         if kingdom.is_gaia:
             raise NotEnrollableError("Gaïa kingdoms are never claimable")
+        if is_test_kingdom(kingdom):
+            raise NotEnrollableError("the Nilrem test kingdom is admin-only")
         if kingdom.validation is KingdomValidation.REFUSED:
             raise KingdomNotFoundError("this kingdom was refused and cannot be claimed")
         if all(item.id != kingdom.id for item in await self.available_kingdoms()):
@@ -806,12 +884,16 @@ class KingdomsService:
         if lord.role is not KING_ROLE or not lord.in_queue or lord.kingdom_id is not None:
             raise NotQueuedError("only a King awaiting a kingdom name can found one")
         kingdoms = await self.kingdoms()
-        if len([k for k in kingdoms if not k.is_gaia]) >= self._config.kingdoms_count:
+        # kingdom-test-v1: the test kingdom never consumes the quota.
+        if (
+            len([k for k in kingdoms if not k.is_gaia and k.id != TEST_KINGDOM_ID])
+            >= self._config.kingdoms_count
+        ):
             raise KingdomLimitError("the season already counts its maximum of kingdoms")
         if any(k.name.casefold() == name.casefold() for k in kingdoms):
             raise KingdomNameInvalidError("a kingdom with this name already exists")
         kingdom = self._new_kingdom(
-            f"k-{len(kingdoms)}",
+            self._next_kingdom_id(kingdoms),
             KingdomType.PLAYER,
             season.id,
             name=name,
@@ -858,6 +940,8 @@ class KingdomsService:
         kingdom = await self._find_kingdom_by_name(kingdom_name)
         if kingdom.is_gaia:
             raise NotEnrollableError("Gaïa kingdoms are never enrollable")
+        if is_test_kingdom(kingdom):
+            raise NotEnrollableError("the Nilrem test kingdom is admin-only")
         if kingdom.validation is KingdomValidation.REFUSED:
             raise KingdomNotFoundError("this kingdom was refused and cannot be joined")
         await self._check_capacity(kingdom, LORD_ROLE)
@@ -962,7 +1046,11 @@ class KingdomsService:
         import random as _random
 
         rng = _random.Random(seed)  # noqa: S311 - game draw, not crypto
-        kingdoms = [k for k in await self.kingdoms() if not k.is_gaia]
+        kingdoms = [
+            k
+            for k in await self.kingdoms()
+            if not k.is_gaia and k.id != TEST_KINGDOM_ID
+        ]
         taken = {civ for other in kingdoms for civ in other.civilizations}
         pool = [civ.key for civ in self._config.civilizations]
         drawn_report: dict[str, list[str]] = {}
@@ -995,6 +1083,8 @@ class KingdomsService:
         count = self._config.starting_civilizations
         if count <= 0 or kingdom.is_gaia:
             return
+        if is_test_kingdom(kingdom):
+            return  # kingdom-test-v1: the test hand is admin-injected
         taken = {civ for other in await self.kingdoms() for civ in other.civilizations}
         pool = [civ.key for civ in self._config.civilizations if civ.key not in taken]
         if len(pool) < count:

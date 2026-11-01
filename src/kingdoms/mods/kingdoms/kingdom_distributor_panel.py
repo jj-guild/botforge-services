@@ -39,6 +39,7 @@ _STRINGS: dict[str, dict[str, str]] = {
             "duplicate of the hand, never a married civilization)."
         ),
         "open_button": "🏰 Open the distributor",
+        "test_create_button": "🧪 Create the test kingdom",
         "not_allowed": "The distributor is admin-only.",
         "no_service": "The distributor service is not wired.",
         "failed": "The distributor action failed: `{0}`.",
@@ -135,6 +136,7 @@ _STRINGS: dict[str, dict[str, str]] = {
             "déjà mariée)."
         ),
         "open_button": "🏰 Ouvrir le distributeur",
+        "test_create_button": "🧪 Créer le royaume test",
         "not_allowed": "Le distributeur est réservé aux admins.",
         "no_service": "Le service distributeur n'est pas câblé.",
         "failed": "L'action distributeur a échoué : `{0}`.",
@@ -1432,118 +1434,3 @@ class _TechActionView(discord.ui.View):
         await self._apply(interaction, +1)
 
     @discord.ui.button(label="❌", style=discord.ButtonStyle.secondary)
-    async def minus(self, interaction: discord.Interaction, button: discord.ui.Button[Any]) -> None:
-        await self._apply(interaction, -1)
-
-
-def _tech_back(locale: str, kingdom_id: str) -> Any:
-    """Return the shared callback returning to the technology picker."""
-
-    async def _callback(interaction: discord.Interaction) -> None:
-        view = _TechView(locale, kingdom_id)
-        await view.refresh()
-        await interaction.response.edit_message(content=view.title_text(), view=view)
-
-    return _callback
-
-
-# ----------------------------------------------------------------------
-# The 🧾 status block
-# ----------------------------------------------------------------------
-async def _status_text(locale: str, kingdom_id: str) -> str:
-    """Render the compact overview of a kingdom (🧾 Statut view)."""
-    strings = _strings(locale)
-    distributor = _distributor()
-    if distributor is None:
-        return strings["no_service"]
-    try:
-        overview = await distributor.overview(kingdom_id)
-    except Exception as exc:
-        return await _error_note(exc, strings)
-    kingdom = overview["kingdom"]
-    tier = overview["tier"]
-    lines = [
-        strings["status_title"].format(
-            kingdom=kingdom.name, validation=str(getattr(kingdom, "validation", ""))
-        ),
-        strings["status_parish"].format(
-            tier=tier.display_name,
-            tech=kingdom.tech_points_bank,
-            points=kingdom.marriage_points,
-            tokens=kingdom.arranged_marriage_stock,
-        ),
-    ]
-    hand = list(kingdom.civilizations)
-    lines.append(
-        strings["status_hand"].format(count=len(hand), civs=", ".join(hand) or "—")
-    )
-    secured = list(kingdom.secured_civilizations)
-    if secured:
-        lines.append(strings["status_secured"].format(civs=", ".join(secured)))
-    from datetime import UTC, datetime
-
-    for lord in overview["lords"]:
-        role = (
-            strings["lord_role_king"]
-            if str(getattr(lord, "role", "")) == "king"
-            else strings["lord_role_lord"]
-        )
-        marriage = lord.married_civilization or strings["status_married_none"]
-        lock = ""
-        if lord.marriage_locked_until:
-            stamp = datetime.fromtimestamp(lord.marriage_locked_until, tz=UTC)
-            lock = strings["status_lock_line"].format(until=f"{stamp:%d/%m %Hh%M}")
-        lines.append(
-            strings["status_lord"].format(
-                role=role,
-                name=lord.display_name,
-                marriage=marriage,
-                attack=lord.attack_used,
-                defense=lord.defense_used,
-                lock=lock,
-            )
-        )
-    territories = list(overview["territories"])
-    lines.append(
-        strings["status_territories"].format(
-            count=len(territories),
-            maps=", ".join(territory.map_key for territory in territories) or "—",
-        )
-    )
-    purchases: dict[str, int] = dict(overview["purchases"])
-    lines.append(
-        strings["status_purchases"].format(
-            purchases=", ".join(f"{k}x{v}" for k, v in purchases.items()) or ""
-        )
-        if purchases
-        else strings["status_purchases_none"]
-    )
-    return "\n".join(lines)
-
-
-# ----------------------------------------------------------------------
-# The salon deployment (pinned panel message)
-# ----------------------------------------------------------------------
-async def deploy_distributor_panel(channel: discord.TextChannel, locale: str) -> None:
-    """Pin (or refresh) the distributor panel message in its salon."""
-    strings = _strings(locale)
-    for message in await _channel_messages(channel):
-        if DISTRIBUTOR_PANEL_MARKER in (message.content or ""):
-            try:
-                await message.delete()
-            except Exception:
-                logger.warning("KINGDOM DISTRIBUTOR: old panel removal failed", exc_info=True)
-    try:
-        view = discord.ui.View(timeout=None)
-        view.add_item(KingdomDistributorButton(strings["open_button"]))
-        await channel.send(content=panel_text(strings), view=view)
-    except Exception:
-        logger.warning("KINGDOM DISTRIBUTOR: panel send failed", exc_info=True)
-
-
-async def _channel_messages(channel: discord.TextChannel) -> list[discord.Message]:
-    try:
-        return [message async for message in channel.history(limit=50)]
-    except Exception:
-        logger.warning("KINGDOM DISTRIBUTOR: channel history read failed", exc_info=True)
-        return []

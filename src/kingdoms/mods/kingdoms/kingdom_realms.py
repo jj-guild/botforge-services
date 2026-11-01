@@ -31,6 +31,7 @@ import discord
 # source of the hand, its mosaic is built by kingdom_realm_content.
 from kingdoms.mods.kingdoms.kingdom_setup import _slug
 from kingdoms.mods.kingdoms.panel_messages import NO_MENTIONS, channel_messages, message_text
+from kingdoms.mods.kingdoms.service import is_test_kingdom
 
 logger = logging.getLogger("kingdoms.kingdom_realms")
 
@@ -459,7 +460,13 @@ async def ensure_realm_structure(
         channel = (
             existing if existing is not None else await guild.create_text_channel(name, category=category)
         )
-        if key in PUBLIC_REALM_SALONS and lord_role is not None:
+        # kingdom-test-v1 (Drasah 01/11): the Nilrem realm is
+        # admin-only — its Territoire/Alliances never open to kingdoms_lord.
+        if (
+            key in PUBLIC_REALM_SALONS
+            and lord_role is not None
+            and not is_test_kingdom(kingdom)
+        ):
             # same live finding: the lord role must read the history too,
             # not just view the salon
             await channel.set_permissions(
