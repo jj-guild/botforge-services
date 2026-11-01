@@ -616,7 +616,12 @@ def test_objectif_picker_pages_and_options() -> None:
     for select in selects:
         assert len(select.options) <= 25  # the Discord cap, always
     # the « Aucun » sentinel leads every select
-    assert all(select.options[0].value == "" for select in selects)
+    # Discord requires a select option value of 1-100 characters —
+    # the « Aucun » sentinel rides "none" on the wire (NEVER "").
+    assert all(select.options[0].value == "none" for select in selects)
+    assert all(
+        option.value for select in selects for option in select.options
+    )
     # the current map goal is pinned first with its check mark
     map_select = selects[1]
     assert len(map_select.options) == 25
@@ -644,6 +649,39 @@ def test_objectif_picker_pages_and_options() -> None:
     assert buttons[1].disabled is False
     assert buttons[2].disabled is True  # civs ◀ on page 0
     assert buttons[3].disabled is False
+
+
+def test_objectif_picker_sentinel_clears_the_goal() -> None:
+    import asyncio
+
+    from kingdoms.mods.kingdoms.kingdom_lieux import _objectifs_picker
+
+    saved: list[Any] = []
+
+    class _Service:
+        async def save_kingdom(self, kingdom: Any) -> Any:
+            saved.append(kingdom)
+            return kingdom
+
+    wiring = SimpleNamespace(kingdoms_service=_Service())
+    kingdom = SimpleNamespace(
+        id=TEST_KINGDOM_ID,
+        council_objectives={"target_kingdom": "k-2", "target_kingdom_label": "HeN"},
+    )
+    view = _objectifs_picker(wiring, kingdom, "fr", {"k-2": "HeN"}, {}, {})
+    select = next(c for c in view.children if isinstance(c, discord.ui.Select))
+    select.values = [select.options[0].value]  # the « Aucun » sentinel
+    edited: dict[str, Any] = {}
+
+    class _Response:
+        async def edit_message(self, **kwargs: Any) -> None:
+            edited.update(kwargs)
+
+    asyncio.run(select.callback(SimpleNamespace(response=_Response())))
+    # choosing the sentinel CLEARS the goal and re-renders the picker
+    assert kingdom.council_objectives["target_kingdom"] == ""
+    assert kingdom.council_objectives["target_kingdom_label"] == ""
+    assert saved and "view" in edited
 
 
 def test_save_objective_persists_key_and_label() -> None:

@@ -527,6 +527,12 @@ async def _build_voliere(
 
 
 _OBJECTIF_PAGE_SIZE = 23
+# conseil-objectif-v2-fix (Drasah 01/11): Discord REQUIRES a select
+# option value of 1-100 characters — the « Aucun » sentinel rides a
+# real "none" value on the wire, mapped back to « clear » in _on_pick
+# (an empty value made followup.send 400 AFTER the defer: the King
+# clicked and NOTHING answered — his 01/11 live report).
+_OBJECTIF_NONE_VALUE = "none"
 
 
 def _objectif_max_page(catalog: dict[str, str]) -> int:
@@ -548,7 +554,11 @@ def _objectif_page_options(
     his choice whatever the page), then the catalog's slice.
     """
     lieu = _strings(locale)
-    options = [discord.SelectOption(label=lieu["objectif_none_label"], value="")]
+    options = [
+        discord.SelectOption(
+            label=lieu["objectif_none_label"], value=_OBJECTIF_NONE_VALUE
+        )
+    ]
     if current and current in catalog:
         options.append(
             discord.SelectOption(label=f"✅ {catalog[current]}"[:100], value=current)
@@ -644,7 +654,9 @@ def _objectifs_picker(
 
     def _on_pick(kind: str, catalog: dict[str, str], select: discord.ui.Select) -> Any:
         async def _choose(interaction: discord.Interaction) -> None:
-            value = str(select.values[0]) if select.values else ""
+            raw = str(select.values[0]) if select.values else _OBJECTIF_NONE_VALUE
+            # the sentinel maps back to « clear the goal »
+            value = "" if raw == _OBJECTIF_NONE_VALUE else raw
             label = catalog.get(value, "") if value else ""
             await _save_objective(wiring, kingdom, locale, kind, value, label)
             await interaction.response.edit_message(
@@ -844,17 +856,39 @@ class KingdomLieuObjectifButton(
                 "KINGDOM LIEUX: objectives kingdom catalog failed",
                 exc_info=True,
             )
-        maps_catalog = _catalog_names(wiring.kingdoms_service, "maps")
-        civs_catalog = _catalog_names(wiring.kingdoms_service, "civilizations")
-        content = _objectifs_content(locale, kingdom)
-        view = _objectifs_picker(
-            wiring, kingdom, locale, kingdoms_catalog, maps_catalog, civs_catalog
-        )
         user_id = str(getattr(interaction.user, "id", ""))
-        await _close_previous_ephemeral(user_id)
-        window = await interaction.followup.send(
-            content, view=view, ephemeral=True
-        )
+        try:
+            maps_catalog = _catalog_names(wiring.kingdoms_service, "maps")
+            civs_catalog = _catalog_names(
+                wiring.kingdoms_service, "civilizations"
+            )
+            content = _objectifs_content(locale, kingdom)
+            view = _objectifs_picker(
+                wiring, kingdom, locale, kingdoms_catalog, maps_catalog, civs_catalog
+            )
+            await _close_previous_ephemeral(user_id)
+            window = await interaction.followup.send(
+                content, view=view, ephemeral=True
+            )
+        except Exception:
+            # AFTER a type-6 defer Discord stays SILENT on failure —
+            # the King would see nothing at all (his 01/11 live report
+            # on the v2 rollout). Surface a visible error note instead.
+            logger.warning(
+                "KINGDOM LIEUX: objectives picker failed", exc_info=True
+            )
+            from kingdoms.mods.kingdoms.kingdom_persistent import (
+                _market_error_note,
+                _strings as _merged_strings,
+            )
+
+            await interaction.followup.send(
+                _market_error_note(
+                    Exception("objectif"), _merged_strings(locale)
+                ),
+                ephemeral=True,
+            )
+            return
         _EPHEMERAL_WINDOWS[user_id] = (interaction, monotonic(), window)
 
 
