@@ -1120,4 +1120,3 @@ class EconomyService:
         if season is None:
             raise NoSeasonError("no season is running")
         return season
-  
