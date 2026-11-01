@@ -65,8 +65,19 @@ STRINGS: dict[str, dict[str, str]] = {
             " technology points."
         ),
         "conseil_stats": (
-            "**Treasury** : {0} ⚙️ · **Territories** : {1} · **Alliances** : {2}"
+            "**Treasury** : {0} ⚙️ · **Territories** : {1} 🗺️ ·"
+            " **Alliances** : {2} 🤝"
         ),
+        "objectif_detail_suffix": " — {0}",
+        "objectif_map_unknown_owner": "Unknown destination",
+        "objectif_alliance_mercenary_suffix": " · {0}",
+        "objectif_alliance_mercenary": (
+            "offered as a mercenary contract at the tavern"
+        ),
+        "classement_button": "🏆 Ranking",
+        "classement_title": "🏆 Ranking of the season",
+        "classement_line": "{0} {1}. **{2}** — {3} 🗺️ · {4} 🤝",
+        "classement_empty": "No kingdom to rank yet.",
         "objectif_button": "🎯 Objective",
         "objectif_king_only": "🎯 Reserved to the King of the realm.",
         "objectif_picker_title": "🎯 Kingdom objectives — {0}",
@@ -133,8 +144,19 @@ STRINGS: dict[str, dict[str, str]] = {
             " alliances, puis points technologiques."
         ),
         "conseil_stats": (
-            "**Trésorerie** : {0} ⚙️ · **Territoires** : {1} · **Alliances** : {2}"
+            "**Trésorerie** : {0} ⚙️ · **Territoires** : {1} 🗺️ ·"
+            " **Alliances** : {2} 🤝"
         ),
+        "objectif_detail_suffix": " — {0}",
+        "objectif_map_unknown_owner": "Destination inconnue",
+        "objectif_alliance_mercenary_suffix": " · {0}",
+        "objectif_alliance_mercenary": (
+            "proposée par contrat de mercenaire à la taverne"
+        ),
+        "classement_button": "🏆 Classement",
+        "classement_title": "🏆 Classement de la saison",
+        "classement_line": "{0} {1}. **{2}** — {3} 🗺️ · {4} 🤝",
+        "classement_empty": "Aucun royaume à classer pour le moment.",
         "objectif_button": "🎯 Objectif",
         "objectif_king_only": "🎯 Réservé au Roi du royaume.",
         "objectif_picker_title": "🎯 Objectifs du royaume — {0}",
@@ -641,11 +663,162 @@ def _objectifs_lines(
     return lines
 
 
-def _objectifs_read_content(locale: str, kingdom: Any) -> str:
-    """The picker's READ sheet — the realm's goals, one line each."""
+async def _territory_owner_suffix(
+    locale: str, wiring: Any, map_key: str
+) -> str:
+    """conseil-objectif-axe1 (Drasah 01/11): the sought territory's line
+    carries its OWNER — or « Destination inconnue » while the map
+    belongs to nobody (never released). Live data: the line re-renders
+    each time the sheet is built, so a change of hands moves it."""
+    if not map_key:
+        return ""
+    lieu = _strings(locale)
+    try:
+        service = getattr(wiring, "kingdoms_service", None)
+        territories_service = getattr(wiring, "territories_service", None)
+        if service is None or territories_service is None:
+            return ""
+        owner = ""
+        for territory in await territories_service.territories():
+            if str(getattr(territory, "map_key", "")) == map_key:
+                owner = str(getattr(territory, "owner_kingdom_id", "") or "")
+                break
+        if not owner:
+            return lieu["objectif_detail_suffix"].format(
+                lieu["objectif_map_unknown_owner"]
+            )
+        for kingdom in await service.kingdoms():
+            if str(getattr(kingdom, "id", "")) == owner:
+                return lieu["objectif_detail_suffix"].format(
+                    str(getattr(kingdom, "name", owner))
+                )
+        return lieu["objectif_detail_suffix"].format(
+            lieu["objectif_map_unknown_owner"]
+        )
+    except Exception:
+        logger.warning(
+            "KINGDOM LIEUX: territory owner suffix failed", exc_info=True
+        )
+        return ""
+
+
+async def _alliance_detail_suffix(
+    locale: str, wiring: Any, civ_key: str, civ_label: str
+) -> str:
+    """conseil-objectif-axe1 (Drasah 01/11): the sought alliance's line
+    carries its live detail. A MARRIAGE wins — only the wedded lord
+    shows; otherwise the official acquisition condition (the
+    Scriptorium renderer). Independently, a live mercenary lot at the
+    tavern rides as a trailing note."""
+    if not civ_key:
+        return ""
+    lieu = _strings(locale)
+    detail = ""
+    try:
+        service = getattr(wiring, "kingdoms_service", None)
+        if service is not None:
+            married = [
+                lord
+                for lord in await service.lords()
+                if not getattr(lord, "left", False)
+                and str(getattr(lord, "married_civilization", "") or "")
+                == civ_key
+            ]
+            if married:
+                detail = lieu["objectif_detail_suffix"].format(
+                    str(getattr(married[0], "display_name", "?"))
+                )
+            else:
+                config = getattr(service, "config", None)
+                civ = next(
+                    (
+                        entry
+                        for entry in (
+                            getattr(config, "civilizations", ()) or ()
+                        )
+                        if str(getattr(entry, "key", "")) == civ_key
+                    ),
+                    None,
+                )
+                if civ is not None:
+                    from kingdoms.mods.kingdoms.kingdom_scriptorium import (
+                        _diplomatie_condition_text,
+                        _strings as _scriptorium_strings,
+                    )
+
+                    condition = _diplomatie_condition_text(
+                        civ,
+                        _scriptorium_strings(locale),
+                        list(getattr(config, "maps", ()) or ()),
+                    )
+                    if condition:
+                        detail = lieu["objectif_detail_suffix"].format(
+                            condition
+                        )
+        market = None
+        try:
+            from kingdoms.mods.kingdoms.kingdom_mercenary_panel import (
+                _read_market_safe,
+            )
+
+            market = await _read_market_safe(wiring)
+        except Exception:
+            market = None
+        if isinstance(market, dict) and not market.get("closed"):
+            needles = {civ_key, civ_label}
+            offered = any(
+                str(lot.get("civ", "") or "") in needles
+                for lot in market.get("lots", []) or []
+            )
+            if offered:
+                detail += lieu["objectif_alliance_mercenary_suffix"].format(
+                    lieu["objectif_alliance_mercenary"]
+                )
+    except Exception:
+        logger.warning(
+            "KINGDOM LIEUX: alliance detail suffix failed", exc_info=True
+        )
+        return ""
+    return detail
+
+
+async def _objectifs_display_lines(
+    locale: str, kingdom: Any, wiring: Any | None = None
+) -> list[str]:
+    """The three goal lines, ENRICHED with live data (axe1): the
+    territory's owner (or « Destination inconnue ») and the alliance's
+    marriage lord / acquisition condition (+ mercenary note). Wiring
+    None (or a failure) keeps the plain lines — never a crash."""
     lieu = _strings(locale)
     goals = dict(getattr(kingdom, "council_objectives", {}) or {})
-    lines = _objectifs_lines(locale, goals)
+    lines: list[str] = []
+    for kind, _emoji, _select, template in _OBJECTIF_KINDS:
+        label = str(goals.get(f"{kind}_label") or "").strip()
+        if not label:
+            continue
+        text = lieu[template].format(label)
+        if wiring is not None:
+            if kind == "target_territory":
+                text += await _territory_owner_suffix(
+                    locale, wiring, str(goals.get("target_territory") or "")
+                )
+            elif kind == "target_alliance":
+                text += await _alliance_detail_suffix(
+                    locale,
+                    wiring,
+                    str(goals.get("target_alliance") or ""),
+                    label,
+                )
+        lines.append(text)
+    return lines
+
+
+async def _objectifs_read_content(
+    locale: str, kingdom: Any, wiring: Any | None = None
+) -> str:
+    """The picker's READ sheet — the realm's goals, one line each."""
+    lieu = _strings(locale)
+    lines = await _objectifs_display_lines(locale, kingdom, wiring)
     return "\n".join(
         [
             f"## {lieu['objectif_picker_title'].format(getattr(kingdom, 'name', ''))}",
@@ -703,40 +876,44 @@ async def _save_objectives(
     return True
 
 
-def _objectif_quit_button(lieu: dict[str, Any], row: int = 3) -> Any:
+async def _close_ephemeral_window(interaction: discord.Interaction) -> None:
+    """Close the ephemeral window the component sits on (type-6 defer +
+    delete the original response), and drop the registry entry when it
+    matches — the shared exit of the Objectif picker AND the Classement
+    view (conseil-objectif-axe2/axe3, Drasah 01/11)."""
+    from kingdoms.mods.kingdoms.kingdom_persistent import _EPHEMERAL_WINDOWS
+
+    await interaction.response.defer()
+    try:
+        await interaction.delete_original_response()
+    except Exception:
+        logger.info(
+            "KINGDOM LIEUX: ephemeral window close failed (ignored)",
+            exc_info=True,
+        )
+    user_id = str(getattr(interaction.user, "id", ""))
+    previous = _EPHEMERAL_WINDOWS.get(user_id)
+    window = (
+        previous[2] if previous is not None and len(previous) > 2 else None
+    )
+    if (
+        window is not None
+        and getattr(getattr(interaction, "message", None), "id", None)
+        == getattr(window, "id", None)
+    ):
+        _EPHEMERAL_WINDOWS.pop(user_id, None)
+
+
+def _objectif_quit_button(
+    lieu: dict[str, Any], row: int = 3, label: str | None = None
+) -> Any:
     """The 🚪 Quitter button — closes the ephemeral window."""
     button = discord.ui.Button(
-        label=lieu["objectif_quit_button"],
+        label=label or lieu["objectif_quit_button"],
         style=discord.ButtonStyle.secondary,
         row=row,
     )
-
-    async def _quit(interaction: discord.Interaction) -> None:
-        from kingdoms.mods.kingdoms.kingdom_persistent import _EPHEMERAL_WINDOWS
-
-        # Type-6 defer on the window's own component — deleting the
-        # original response deletes the WINDOW the button sits on.
-        await interaction.response.defer()
-        try:
-            await interaction.delete_original_response()
-        except Exception:
-            logger.info(
-                "KINGDOM LIEUX: objectives window close failed (ignored)",
-                exc_info=True,
-            )
-        user_id = str(getattr(interaction.user, "id", ""))
-        previous = _EPHEMERAL_WINDOWS.get(user_id)
-        window = (
-            previous[2] if previous is not None and len(previous) > 2 else None
-        )
-        if (
-            window is not None
-            and getattr(getattr(interaction, "message", None), "id", None)
-            == getattr(window, "id", None)
-        ):
-            _EPHEMERAL_WINDOWS.pop(user_id, None)
-
-    button.callback = _quit
+    button.callback = _close_ephemeral_window
     return button
 
 
@@ -942,20 +1119,33 @@ def _objectifs_picker(
 
     async def _validate(interaction: discord.Interaction) -> None:
         saved = await _save_objectives(wiring, kingdom, staged)
-        content = _objectifs_read_content(locale, kingdom)
         if not saved:
-            content = f"{content}\n{lieu['objectif_save_failed']}"
-        await interaction.response.edit_message(
-            content=content,
-            view=_objectifs_read_view(
-                wiring,
-                kingdom,
-                locale,
-                kingdoms_catalog,
-                maps_catalog,
-                civs_catalog,
-            ),
-        )
+            # the window STAYS open — the ⚠️ note rides the edit sheet
+            # so the King retries without losing his staging.
+            await interaction.response.edit_message(
+                content=(
+                    f"{_objectifs_edit_content(locale, kingdom, staged)}"
+                    f"\n{lieu['objectif_save_failed']}"
+                ),
+                view=_objectifs_picker(
+                    wiring,
+                    kingdom,
+                    locale,
+                    kingdoms_catalog,
+                    maps_catalog,
+                    civs_catalog,
+                    staged,
+                    map_page,
+                    civ_page,
+                    reveal,
+                ),
+            )
+            return
+        # conseil-objectif-axe2 (Drasah 01/11): a valid save CLOSES the
+        # window — no read sheet back, no note: the council sheet above
+        # already shows the fresh goals (his « comportement plus
+        # naturel » wish).
+        await _close_ephemeral_window(interaction)
 
     validate = discord.ui.Button(
         label=lieu["objectif_validate_button"],
@@ -1072,7 +1262,7 @@ class KingdomLieuObjectifButton(
             civs_catalog = _catalog_names(
                 wiring.kingdoms_service, "civilizations"
             )
-            content = _objectifs_read_content(locale, kingdom)
+            content = await _objectifs_read_content(locale, kingdom, wiring)
             view = _objectifs_read_view(
                 wiring,
                 kingdom,
@@ -1110,14 +1300,26 @@ class KingdomLieuObjectifButton(
         _EPHEMERAL_WINDOWS[user_id] = (interaction, monotonic(), window)
 
 
-async def _conseil_rank(wiring: Any, kingdom: Any) -> tuple[int, int]:
-    """The kingdom's Classement — territories first, ties broken by
-    alliances then technology points (conseil-objectif-v1, Drasah
-    01/11). Defensive: (0, 0) renders the line as « — »."""
+_RANK_MEDALS = {1: "🥇", 2: "🥈", 3: "🥉"}
+
+
+def _rank_medal(rank: int) -> str:
+    """The rank's emoji — the podium medals, 🏰 beyond (axe4, Drasah
+    01/11): « Classement : 🥈 2/3 » and the ranking view lines."""
+    rank = int(rank or 0)
+    if rank in _RANK_MEDALS:
+        return _RANK_MEDALS[rank]
+    return "🏰" if rank >= 4 else ""
+
+
+async def _classement_rows(wiring: Any) -> list[tuple[Any, int, int]]:
+    """The season ranking rows — (kingdom, territories, alliances),
+    sorted territories desc, ties by alliances then tech points (the
+    shared engine of the Classement line AND the ranking view)."""
     service = getattr(wiring, "kingdoms_service", None)
     territories_service = getattr(wiring, "territories_service", None)
     if service is None:
-        return (0, 0)
+        return []
     try:
         kingdoms = [
             item
@@ -1130,23 +1332,154 @@ async def _conseil_rank(wiring: Any, kingdom: Any) -> tuple[int, int]:
                 owner = str(getattr(territory, "owner_kingdom_id", ""))
                 if owner in counts:
                     counts[owner] += 1
-
-        def _sort_key(item: Any) -> tuple[int, int, int]:
-            return (
-                -counts[str(item.id)],
-                -len(getattr(item, "civilizations", []) or []),
-                -int(getattr(item, "tech_points_bank", 0) or 0),
+        rows = [
+            (
+                item,
+                counts[str(item.id)],
+                len(getattr(item, "civilizations", []) or []),
             )
-
-        ordered = sorted(kingdoms, key=_sort_key)
-        ids = [str(item.id) for item in ordered]
-        kid = str(getattr(kingdom, "id", ""))
-        if kid not in ids:
-            return (0, len(ids))
-        return (ids.index(kid) + 1, len(ids))
+            for item in kingdoms
+        ]
+        rows.sort(
+            key=lambda row: (
+                -row[1],
+                -row[2],
+                -int(getattr(row[0], "tech_points_bank", 0) or 0),
+            )
+        )
+        return rows
     except Exception:
-        logger.warning("KINGDOM LIEUX: council rank failed", exc_info=True)
+        logger.warning("KINGDOM LIEUX: classement rows failed", exc_info=True)
+        return []
+
+
+async def _conseil_rank(wiring: Any, kingdom: Any) -> tuple[int, int]:
+    """The kingdom's Classement — territories first, ties broken by
+    alliances then technology points (conseil-objectif-v1, Drasah
+    01/11). Defensive: (0, 0) renders the line as « — »."""
+    rows = await _classement_rows(wiring)
+    if not rows:
         return (0, 0)
+    ids = [str(getattr(row[0], "id", "")) for row in rows]
+    kid = str(getattr(kingdom, "id", ""))
+    if kid not in ids:
+        return (0, len(ids))
+    return (ids.index(kid) + 1, len(ids))
+
+
+def _classement_content(locale: str, rows: list[tuple[Any, int, int]]) -> str:
+    """conseil-objectif-axe3 (Drasah 01/11): the ephemeral Classement —
+    one line per kingdom, 🥇🥈🥉 for the podium, 🏰 beyond, a BLANK
+    line between the 3rd and the 4th so the podium stands out."""
+    lieu = _strings(locale)
+    lines = [lieu["classement_title"], ""]
+    for index, (kingdom, territories, alliances) in enumerate(rows, start=1):
+        if index == 4:
+            lines.append("")
+        lines.append(
+            lieu["classement_line"].format(
+                _rank_medal(index),
+                index,
+                str(getattr(kingdom, "name", "?")),
+                territories,
+                alliances,
+            )
+        )
+    lines += ["", lieu["conseil_classement_hint"]]
+    return "\n".join(lines)
+
+
+def _classement_view(locale: str) -> discord.ui.View:
+    """The Classement view — one 🚪 Sortir that CLOSES the window (a
+    plain close, NEVER a walk back to the Entrée)."""
+    lieu = _strings(locale)
+    view = discord.ui.View(timeout=None)
+    view.add_item(
+        _objectif_quit_button(
+            lieu, row=0, label=lieu["sortir_button"]
+        )
+    )
+    return view
+
+
+class KingdomLieuClassementButton(
+    discord.ui.DynamicItem[discord.ui.Button[Any]],
+    template=r"kingdoms:lieux:classement",
+):
+    """conseil-objectif-axe3 (Drasah 01/11): the 🏆 Classement button of
+    the Salle du conseil — line 1, between 🎯 Objectif and 🚪 Sortir.
+    Opens the season ranking as an ephemeral window (type-7 ack + a
+    followup so the council sheet SURVIVES, coexist), with a 🚪 Sortir
+    that simply closes it. Open to every lord of the realm."""
+
+    def __init__(self, label: str) -> None:
+        super().__init__(
+            discord.ui.Button(
+                label=label[:80],
+                custom_id="kingdoms:lieux:classement",
+                style=discord.ButtonStyle.primary,
+            )
+        )
+
+    @classmethod
+    async def from_custom_id(
+        cls,
+        interaction: discord.Interaction,
+        item: discord.ui.Item[Any],
+        match: re.Match[str],
+        /,
+    ) -> "KingdomLieuClassementButton":
+        """Rebuild from the wire."""
+        return cls(_strings(_locale(interaction))["classement_button"])
+
+    async def callback(self, interaction: discord.Interaction) -> None:
+        from time import monotonic
+
+        from kingdoms.mods.kingdoms.kingdom_persistent import (
+            _EPHEMERAL_WINDOWS,
+            _close_previous_ephemeral,
+            _market_error_note,
+            _strings as _merged_strings,
+            _wiring,
+        )
+
+        locale = _locale(interaction)
+        lieu = _strings(locale)
+        wiring = _wiring()
+        if wiring.kingdoms_service is None:
+            await interaction.response.send_message(
+                lieu["no_service"], ephemeral=True
+            )
+            return
+        rows = await _classement_rows(wiring)
+        if not rows:
+            await interaction.response.send_message(
+                lieu["classement_empty"], ephemeral=True
+            )
+            return
+        # type-7 ack — the council sheet (an ephemeral parent) survives.
+        await interaction.response.defer(ephemeral=True, thinking=True)
+        user_id = str(getattr(interaction.user, "id", ""))
+        try:
+            if _objectif_replaces_previous(_EPHEMERAL_WINDOWS.get(user_id)):
+                await _close_previous_ephemeral(user_id)
+            window = await interaction.followup.send(
+                _classement_content(locale, rows),
+                view=_classement_view(locale),
+                ephemeral=True,
+            )
+        except Exception:
+            logger.warning(
+                "KINGDOM LIEUX: classement window failed", exc_info=True
+            )
+            await interaction.followup.send(
+                _market_error_note(
+                    Exception("classement"), _merged_strings(locale)
+                ),
+                ephemeral=True,
+            )
+            return
+        _EPHEMERAL_WINDOWS[user_id] = (interaction, monotonic(), window)
 
 
 async def build_conseil_view(
@@ -1178,21 +1511,18 @@ async def build_conseil_view(
     from kingdoms.mods.kingdoms.kingdom_persistent import KingdomSeigneurieOpenButton
 
     lieu = _strings(locale)
-    classement = lieu["conseil_classement"].format(
-        f"{int(rank[0])}/{int(rank[1])}"
+    rank_display = (
+        f"{_rank_medal(int(rank[0]))} {int(rank[0])}/{int(rank[1])}".strip()
         if int(rank[0] or 0) > 0 and int(rank[1] or 0) > 0
         else "—"
     )
+    classement = lieu["conseil_classement"].format(rank_display)
+    # conseil-objectif-axe1 (Drasah 01/11): the goal lines ride the sheet
+    # ENRICHED — the territory's owner (or « Destination inconnue »),
+    # the alliance's marriage lord / acquisition condition (+ mercenary
+    # note). Wiring failures keep the plain lines.
+    goal_parts = await _objectifs_display_lines(locale, kingdom, wiring)
     objectives = dict(getattr(kingdom, "council_objectives", {}) or {})
-    goal_parts: list[str] = []
-    for label_key, template in (
-        ("target_kingdom_label", "conseil_objectif_kingdom"),
-        ("target_territory_label", "conseil_objectif_map"),
-        ("target_alliance_label", "conseil_objectif_alliance"),
-    ):
-        label = str(objectives.get(label_key) or "").strip()
-        if label:
-            goal_parts.append(lieu[template].format(label))
     # conseil-objectif-lignes-fix (Drasah 01/11): one goal per line —
     # the pipe-separated line read badly (his live report).
     goals_line = (
@@ -1232,6 +1562,9 @@ async def build_conseil_view(
     row_one = [
         _green(KingdomSeigneurieOpenButton(strings["seigneurie_open_button"])),
         KingdomLieuObjectifButton(lieu["objectif_button"], enabled=viewer_is_king),
+        # conseil-objectif-axe3: the Classement rides line 1, between
+        # Objectif and Sortir — the ranking is EVERY lord's business.
+        KingdomLieuClassementButton(lieu["classement_button"]),
         _sortir(locale),
     ]
     row_two = [
@@ -1719,6 +2052,7 @@ def register_kingdom_lieux_items(bot: discord.Client) -> None:
     bot.add_dynamic_items(
         KingdomLieuSortirButton,
         KingdomLieuObjectifButton,
+        KingdomLieuClassementButton,
         KingdomLieuHistButton,
         KingdomLieuCardInfoButton,
         KingdomLieuEntreeButton,

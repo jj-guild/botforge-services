@@ -506,7 +506,7 @@ def test_conseil_base_carries_intro_rank_stats_and_goals(monkeypatch) -> None:
     assert lieu["conseil_intro_l1"] in text
     assert lieu["conseil_intro_l2"] in text
     assert lieu["conseil_intro_l3"] in text
-    assert lieu["conseil_classement"].format("2/5") in text
+    assert lieu["conseil_classement"].format("🥈 2/5") in text
     assert lieu["conseil_stats"].format(4, 3, 2) in text
     assert lieu["conseil_classement_hint"] in text
     # the old overview block left the base sheet
@@ -595,6 +595,8 @@ def test_objectif_button_follows_the_crown() -> None:
 
 
 def test_objectif_read_view_offers_edit_and_quit() -> None:
+    import asyncio
+
     from kingdoms.mods.kingdoms.kingdom_lieux import (
         _objectifs_read_content,
         _objectifs_read_view,
@@ -612,7 +614,7 @@ def test_objectif_read_view_offers_edit_and_quit() -> None:
     buttons = [c for c in view.children if isinstance(c, discord.ui.Button)]
     labels = [str(b.label) for b in buttons]
     assert labels == [lieu["objectif_edit_button"], lieu["objectif_quit_button"]]
-    content = _objectifs_read_content("fr", kingdom)
+    content = asyncio.run(_objectifs_read_content("fr", kingdom))
     assert lieu["objectif_picker_title"].format("Nilrem") in content
     assert lieu["conseil_objectif_kingdom"].format("HeN") in content
     assert lieu["objectif_read_hint"] in content
@@ -812,7 +814,7 @@ def test_objectif_picker_sentinel_and_change_round_trip() -> None:
     assert "— non défini" in cleared["content"]
 
 
-def test_objectif_validate_saves_all_and_returns_to_read() -> None:
+def test_objectif_validate_saves_all_and_closes_the_window() -> None:
     import asyncio
 
     from kingdoms.mods.kingdoms.kingdom_lieux import _objectifs_picker
@@ -849,6 +851,55 @@ def test_objectif_validate_saves_all_and_returns_to_read() -> None:
         if isinstance(c, discord.ui.Button)
         and str(c.label) == _strings("fr")["objectif_validate_button"]
     )
+    closed: dict[str, Any] = {}
+
+    class _Response:
+        async def defer(self, **kwargs: Any) -> None:
+            closed["deferred"] = True
+
+    async def _delete_original_response() -> None:
+        closed["deleted"] = True
+
+    interaction = SimpleNamespace(
+        response=_Response(),
+        user=SimpleNamespace(id="crown-less-tester"),
+        message=SimpleNamespace(id=None),
+        delete_original_response=_delete_original_response,
+    )
+    asyncio.run(validate.callback(interaction))
+    # ONE save commits ALL three kinds, empty choices included
+    assert saved == [kingdom]
+    assert kingdom.council_objectives["target_kingdom"] == "k-2"
+    assert kingdom.council_objectives["target_territory"] == "m-1"
+    assert kingdom.council_objectives["target_alliance"] == ""
+    assert "updated_at" in kingdom.council_objectives
+    # conseil-objectif-axe2: a valid save CLOSES the window — no read
+    # sheet back, no note (the council sheet above shows the result)
+    assert closed.get("deferred") is True
+    assert closed.get("deleted") is True
+
+
+def test_objectif_save_failure_keeps_the_picker_open() -> None:
+    import asyncio
+
+    from kingdoms.mods.kingdoms.kingdom_lieux import _objectifs_picker
+
+    class _Broken:
+        async def save_kingdom(self, kingdom: Any) -> Any:
+            raise RuntimeError("boom")
+
+    wiring = SimpleNamespace(kingdoms_service=_Broken())
+    kingdom = SimpleNamespace(id=TEST_KINGDOM_ID, name="Nilrem", council_objectives={})
+    staged = {"target_kingdom": "k-2", "target_kingdom_label": "HeN"}
+    view = _objectifs_picker(
+        wiring, kingdom, "fr", {"k-2": "HeN"}, {"m-1": "Ile"}, {"c-1": "Huns"}, staged
+    )
+    validate = next(
+        c
+        for c in view.children
+        if isinstance(c, discord.ui.Button)
+        and str(c.label) == _strings("fr")["objectif_validate_button"]
+    )
     edited: dict[str, Any] = {}
 
     class _Response:
@@ -856,23 +907,19 @@ def test_objectif_validate_saves_all_and_returns_to_read() -> None:
             edited.update(kwargs)
 
     asyncio.run(validate.callback(SimpleNamespace(response=_Response())))
-    # ONE save commits ALL three kinds, empty choices included
-    assert saved == [kingdom]
-    assert kingdom.council_objectives["target_kingdom"] == "k-2"
-    assert kingdom.council_objectives["target_territory"] == "m-1"
-    assert kingdom.council_objectives["target_alliance"] == ""
-    assert "updated_at" in kingdom.council_objectives
-    # back to the READ sheet — Modifier + Quitter only
+    # a FAILED save keeps the window open — the ⚠️ note rides the
+    # edit sheet and the staging survives for a retry
+    assert _strings("fr")["objectif_save_failed"] in edited["content"]
+    assert "HeN" in edited["content"]
     labels = [
         str(c.label)
         for c in edited["view"].children
         if isinstance(c, discord.ui.Button) and c.label
     ]
-    assert labels == [
-        _strings("fr")["objectif_edit_button"],
+    assert labels[-2:] == [
+        _strings("fr")["objectif_validate_button"],
         _strings("fr")["objectif_quit_button"],
     ]
-    assert _strings("fr")["objectif_read_hint"] in edited["content"]
 
 
 def test_objectif_save_failure_never_crashes_the_picker() -> None:
@@ -908,3 +955,245 @@ def test_objectif_click_keeps_the_council_sheet_alive() -> None:
     assert _objectif_replaces_previous(None) is False
     assert _objectif_replaces_previous((object(), 1.0)) is False  # the sheet
     assert _objectif_replaces_previous((object(), 1.0, object())) is True  # a picker
+
+
+# ---------------------------------------------------------------------------
+# conseil-objectif axes 1/3/4 (Drasah 01/11) — enriched lines, Classement.
+# ---------------------------------------------------------------------------
+
+
+def _enrichment_wiring() -> Any:
+    """A fake wiring with live territory, marriage and market data."""
+
+    class _Kingdoms:
+        config = SimpleNamespace(
+            civilizations=(
+                SimpleNamespace(
+                    key="c-9",
+                    display_name="Ostrogoths",
+                    requires_map_keys=("m-x",),
+                ),
+            ),
+            maps=(SimpleNamespace(key="m-x", display_name="Atlas"),),
+        )
+
+        async def kingdoms(self) -> list[Any]:
+            return [SimpleNamespace(id="k-2", name="HeN", is_gaia=False)]
+
+        async def lords(self) -> list[Any]:
+            return [
+                SimpleNamespace(
+                    married_civilization="c-1",
+                    left=False,
+                    display_name="Drasah",
+                )
+            ]
+
+    class _Territories:
+        async def territories(self) -> list[Any]:
+            return [
+                SimpleNamespace(map_key="m-1", owner_kingdom_id="k-2"),
+                SimpleNamespace(map_key="m-free", owner_kingdom_id=""),
+            ]
+
+    class _Market:
+        async def market(self) -> dict[str, Any]:
+            return {
+                "closed": False,
+                "lots": [{"civ": "c-9", "uses": 1, "bids": []}],
+            }
+
+    return SimpleNamespace(
+        kingdoms_service=_Kingdoms(),
+        territories_service=_Territories(),
+        mercenary_service=_Market(),
+    )
+
+
+def test_goal_lines_carry_live_details() -> None:
+    import asyncio
+
+    from kingdoms.mods.kingdoms.kingdom_lieux import _objectifs_display_lines
+
+    lieu = _strings("fr")
+    kingdom = SimpleNamespace(
+        id=TEST_KINGDOM_ID,
+        name="Nilrem",
+        council_objectives={
+            "target_territory": "m-1",
+            "target_territory_label": "Ile du Pacifique",
+            "target_alliance": "c-1",
+            "target_alliance_label": "Huns",
+        },
+    )
+    lines = asyncio.run(
+        _objectifs_display_lines("fr", kingdom, _enrichment_wiring())
+    )
+    # the territory rides its OWNER (live — a change of hands moves it)
+    assert any(
+        line.startswith(lieu["conseil_objectif_map"].format("Ile du Pacifique"))
+        and "HeN" in line
+        for line in lines
+    )
+    # a MARRIED alliance shows ONLY the wedded lord — no condition
+    alliance = next(line for line in lines if "Huns" in line)
+    assert "Drasah" in alliance
+    assert "carte" not in alliance and "mariage" not in alliance.lower()
+
+
+def test_goal_line_shows_unknown_destination_when_unowned() -> None:
+    import asyncio
+
+    from kingdoms.mods.kingdoms.kingdom_lieux import _objectifs_display_lines
+
+    kingdom = SimpleNamespace(
+        id=TEST_KINGDOM_ID,
+        name="Nilrem",
+        council_objectives={
+            "target_territory": "m-free",
+            "target_territory_label": "Tourbière",
+        },
+    )
+    lines = asyncio.run(
+        _objectifs_display_lines("fr", kingdom, _enrichment_wiring())
+    )
+    assert any("Tourbière" in line for line in lines)
+    assert any(
+        _strings("fr")["objectif_map_unknown_owner"] in line for line in lines
+    )
+
+
+def test_alliance_line_shows_condition_and_mercenary_note() -> None:
+    import asyncio
+
+    from kingdoms.mods.kingdoms.kingdom_lieux import _objectifs_display_lines
+
+    lieu = _strings("fr")
+    kingdom = SimpleNamespace(
+        id=TEST_KINGDOM_ID,
+        name="Nilrem",
+        council_objectives={
+            "target_alliance": "c-9",
+            "target_alliance_label": "Ostrogoths",
+        },
+    )
+    lines = asyncio.run(
+        _objectifs_display_lines("fr", kingdom, _enrichment_wiring())
+    )
+    alliance = next(line for line in lines if "Ostrogoths" in line)
+    # the OFFICIAL acquisition condition (the Scriptorium renderer)…
+    assert "Atlas" in alliance
+    # …and the live mercenary note rides behind it
+    assert lieu["objectif_alliance_mercenary"] in alliance
+
+
+def test_goal_lines_survive_a_dead_wiring() -> None:
+    import asyncio
+
+    from kingdoms.mods.kingdoms.kingdom_lieux import _objectifs_display_lines
+
+    kingdom = SimpleNamespace(
+        id=TEST_KINGDOM_ID,
+        name="Nilrem",
+        council_objectives={
+            "target_territory": "m-1",
+            "target_territory_label": "Ile du Pacifique",
+        },
+    )
+    # a broken service NEVER crashes the sheet — the plain line stays
+    lines = asyncio.run(
+        _objectifs_display_lines(
+            "fr",
+            kingdom,
+            SimpleNamespace(
+                kingdoms_service=None, territories_service=None
+            ),
+        )
+    )
+    assert lines == [
+        _strings("fr")["conseil_objectif_map"].format("Ile du Pacifique")
+    ]
+
+
+def test_classement_content_medals_gap_and_counters() -> None:
+    from kingdoms.mods.kingdoms.kingdom_lieux import _classement_content
+
+    lieu = _strings("fr")
+    rows = [
+        (SimpleNamespace(name="HeN"), 5, 7),
+        (SimpleNamespace(name="Gwen"), 4, 2),
+        (SimpleNamespace(name="AEGIS"), 3, 1),
+        (SimpleNamespace(name="Huns"), 1, 0),
+    ]
+    content = _classement_content("fr", rows)
+    assert lieu["classement_title"] in content
+    assert lieu["classement_line"].format("🥇", 1, "HeN", 5, 7) in content
+    assert lieu["classement_line"].format("🥈", 2, "Gwen", 4, 2) in content
+    assert lieu["classement_line"].format("🥉", 3, "AEGIS", 3, 1) in content
+    assert lieu["classement_line"].format("🏰", 4, "Huns", 1, 0) in content
+    # the PODIUM stands apart — a blank line between the 3rd and 4th
+    third = content.index(lieu["classement_line"].format("🥉", 3, "AEGIS", 3, 1))
+    fourth = content.index(lieu["classement_line"].format("🏰", 4, "Huns", 1, 0))
+    between = content[
+        third + len(lieu["classement_line"].format("🥉", 3, "AEGIS", 3, 1)) : fourth
+    ]
+    assert between.strip() == ""
+    # the tie-break hint rides the bottom
+    assert lieu["conseil_classement_hint"] in content
+
+
+def test_classement_view_offers_a_plain_sortir() -> None:
+    from kingdoms.mods.kingdoms.kingdom_lieux import _classement_view
+
+    view = _classement_view("fr")
+    buttons = [c for c in view.children if isinstance(c, discord.ui.Button)]
+    assert [str(b.label) for b in buttons] == [
+        _strings("fr")["sortir_button"]
+    ]
+    assert all(b.style == discord.ButtonStyle.secondary for b in buttons)
+
+
+def test_classement_button_registered_and_rides_line_one() -> None:
+    import asyncio
+
+    from kingdoms.mods.kingdoms.kingdom_lieux import (
+        KingdomLieuClassementButton,
+        build_conseil_view,
+        register_kingdom_lieux_items,
+    )
+
+    bot = _FakeBot()
+    register_kingdom_lieux_items(bot)
+    assert KingdomLieuClassementButton in bot._dynamic_items
+    button = KingdomLieuClassementButton(_strings("fr")["classement_button"])
+    assert button.item.style == discord.ButtonStyle.primary
+    assert button.item.custom_id == "kingdoms:lieux:classement"
+    # the Classement rides line 1 — between 🎯 Objectif and 🚪 Sortir
+    view, _files = asyncio.run(
+        build_conseil_view(
+            _merged_fr(),
+            _kingdom(TEST_KINGDOM_ID),
+            _minimal_state(),
+            SimpleNamespace(kingdoms_service=None),
+            "fr",
+        )
+    )
+    rows = _action_rows(view.children)
+    labels = [str(b.label) for b in rows[0].children]
+    assert labels == [
+        _merged_fr()["seigneurie_open_button"],
+        _strings("fr")["objectif_button"],
+        _strings("fr")["classement_button"],
+        _strings("fr")["sortir_button"],
+    ]
+
+
+def test_rank_medal_marks_the_podium() -> None:
+    from kingdoms.mods.kingdoms.kingdom_lieux import _rank_medal
+
+    assert _rank_medal(1) == "🥇"
+    assert _rank_medal(2) == "🥈"
+    assert _rank_medal(3) == "🥉"
+    assert _rank_medal(4) == "🏰"
+    assert _rank_medal(9) == "🏰"
+    assert _rank_medal(0) == ""
