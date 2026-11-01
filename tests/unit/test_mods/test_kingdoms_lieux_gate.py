@@ -511,8 +511,9 @@ def test_conseil_base_carries_intro_rank_stats_and_goals(monkeypatch) -> None:
     assert lieu["conseil_classement_hint"] in text
     # the old overview block left the base sheet
     assert strings["members"] not in text
-    # the goals ride the sheet — one line, pipe separated
-    goals = " | ".join(
+    # the goals ride the sheet — one line EACH (conseil-objectif-
+    # lignes-fix: the pipe line read badly)
+    goals = "\n".join(
         [
             lieu["conseil_objectif_kingdom"].format("HeN"),
             lieu["conseil_objectif_map"].format("Arabie"),
@@ -674,7 +675,16 @@ def test_objectif_picker_pages_and_options() -> None:
     map_select = selects[1]
     assert map_select.options[1].value == "map-7"
     assert "Map 7" in map_select.options[1].label
-    # line 3 = [✅ Valider][🚪 Quitter] whatever the page
+    # a select is ALWAYS alone in its action row (Discord) — the
+    # flips ride their OWN rows (2 = maps, 4 = civs + Valider/Quitter)
+    rows_used: dict[int, int] = {}
+    for child in view_revealed.children:
+        rows_used[child.row or 0] = rows_used.get(child.row or 0, 0) + 1
+    assert rows_used[0] == 1  # kingdom select
+    assert rows_used[1] == 1  # map select
+    assert rows_used[2] == 2  # maps ◀️▶️
+    assert rows_used[3] == 1  # civ select
+    assert rows_used[4] == 4  # civs ◀️▶️ + Valider + Quitter
     buttons = [
         c for c in view_revealed.children if isinstance(c, discord.ui.Button)
     ]

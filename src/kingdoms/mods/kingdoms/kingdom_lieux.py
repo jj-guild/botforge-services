@@ -917,15 +917,22 @@ def _objectifs_picker(
         )
         select.callback = _on_pick(kind, catalog, select)
         view.add_item(select)
-        if kind != "target_kingdom":
+        # objectif-select-rows-fix (Drasah 01/11): Discord requires a
+        # select ALONE in its action row — the ◀️▶️ flips rode the
+        # selects' rows and the map/alliance dropdowns went dead (his
+        # live report: only the kingdom dropdown answered). The maps
+        # flips own row 2; the civs flips share row 4 with Valider +
+        # Quitter so the view stays within Discord's five rows.
+        if kind != "target_kingdom" and _objectif_max_page(catalog) > 0:
+            flip_row = 2 if kind == "target_territory" else 4
             prev = discord.ui.Button(
-                emoji="◀️", row=rows[kind], disabled=page <= 0
+                emoji="◀️", row=flip_row, disabled=page <= 0
             )
             prev.callback = _on_flip(kind, -1)
             view.add_item(prev)
             nxt = discord.ui.Button(
                 emoji="▶️",
-                row=rows[kind],
+                row=flip_row,
                 disabled=page >= _objectif_max_page(catalog),
             )
             nxt.callback = _on_flip(kind, 1)
@@ -951,11 +958,11 @@ def _objectifs_picker(
     validate = discord.ui.Button(
         label=lieu["objectif_validate_button"],
         style=discord.ButtonStyle.success,
-        row=3,
+        row=4,
     )
     validate.callback = _validate
     view.add_item(validate)
-    view.add_item(_objectif_quit_button(lieu))
+    view.add_item(_objectif_quit_button(lieu, row=4))
     return view
 
 
@@ -1184,8 +1191,10 @@ async def build_conseil_view(
         label = str(objectives.get(label_key) or "").strip()
         if label:
             goal_parts.append(lieu[template].format(label))
+    # conseil-objectif-lignes-fix (Drasah 01/11): one goal per line —
+    # the pipe-separated line read badly (his live report).
     goals_line = (
-        " | ".join(goal_parts) if goal_parts else lieu["conseil_objectifs_none"]
+        "\n".join(goal_parts) if goal_parts else lieu["conseil_objectifs_none"]
     )
     body = "\n".join(
         [
