@@ -11,7 +11,8 @@ propagates. Three restart-proof DynamicItems ride the surfaces:
 - the 🧪 red autodestruct (the Le-Royaume view of Nilrem): a
   confirmation, then the full kingdom deletion (service) + the
   Discord structure sweep;
-- the 🔄 blue refresh (same view): re-renders every Nilrem view after
+- the 🔄 blue refresh (same view): re-provisions Nilrem (structure + views)
+  after
   a code change — the data is never touched.
 
 Every label is rebuilt from THIS module's strings at ``from_custom_id``
@@ -51,7 +52,7 @@ STRINGS: dict[str, dict[str, str]] = {
         "destruct_cancel": "Cancel",
         "cancelled": "Cancelled.",
         "destruct_done": "🧪 **Nilrem** destroyed.",
-        "refresh_done": "🔄 **Nilrem** views re-rendered.",
+        "refresh_done": "🔄 **Nilrem** re-provisioned: structure + views re-rendered.",
     },
     "fr": {
         "create_button": "🧪 Créer le royaume test",
@@ -74,7 +75,7 @@ STRINGS: dict[str, dict[str, str]] = {
         "destruct_cancel": "Annuler",
         "cancelled": "Annulé.",
         "destruct_done": "🧪 **Nilrem** détruit.",
-        "refresh_done": "🔄 Vues de **Nilrem** actualisées.",
+        "refresh_done": "🔄 **Nilrem** réinitialisé : structure + vues actualisées.",
     },
 }
 
@@ -302,7 +303,15 @@ class KingdomTestRefreshButton(
         return cls(_strings(_locale(interaction))["refresh_button"])
 
     async def callback(self, interaction: discord.Interaction) -> None:
-        """Admin-only: re-render every Nilrem view (data untouched)."""
+        """Admin-only: re-provision Nilrem (structure + views, data safe).
+
+        refresh-structure-v1 (Drasah 01/11): a plain view re-render
+        could not repair a missing/renamed/duplicated salon — the click
+        now rides the SAME idempotent provisioning seam as the create
+        flow: structure convergence (adopt + rename + gating), the
+        alliances/territory sweeps (no-ops once done) and every state
+        view re-deployed in place.
+        """
         from kingdoms.mods.kingdoms.kingdom_persistent import (
             _EPHEMERAL_WINDOWS,
             _close_previous_ephemeral,
@@ -317,7 +326,28 @@ class KingdomTestRefreshButton(
             await interaction.response.send_message(strings["not_allowed"], ephemeral=True)
             return
         await interaction.response.defer(ephemeral=True)
-        await _refresh_realm_views_for_kingdom_safe(interaction.guild, TEST_KINGDOM_ID)
+        wiring = _wiring()
+        kingdom = None
+        if wiring.kingdoms_service is not None:
+            try:
+                kingdoms = await wiring.kingdoms_service.kingdoms()
+                kingdom = next(
+                    (k for k in kingdoms if str(k.id) == str(TEST_KINGDOM_ID)), None
+                )
+            except Exception:
+                logger.warning(
+                    "KINGDOM TEST: refresh kingdom read failed", exc_info=True
+                )
+        if kingdom is not None:
+            await _provision_test_realm(
+                interaction.guild, kingdom, wiring.kingdoms_service
+            )
+        else:
+            # no kingdom to provision (service down or Nilrem gone):
+            # fall back to the plain view re-render seam.
+            await _refresh_realm_views_for_kingdom_safe(
+                interaction.guild, TEST_KINGDOM_ID
+            )
         user_id = str(getattr(interaction.user, "id", ""))
         await _close_previous_ephemeral(user_id)
         window = await interaction.followup.send(strings["refresh_done"], ephemeral=True)
