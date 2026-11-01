@@ -1033,7 +1033,15 @@ class KingdomLieuObjectifButton(
         if kingdom is None:
             await interaction.response.send_message(lieu["not_lord"], ephemeral=True)
             return
-        await interaction.response.defer(ephemeral=True)
+        # objectif-coexist-type7-fix (Drasah 01/11): a bare
+        # defer(ephemeral=True) on a component rides a TYPE-6 ack —
+        # "DEFERRED UPDATE of the message the button sits on". On an
+        # EPHEMERAL parent (the council sheet) the client then drops
+        # the sheet waiting for an update that never comes — his live
+        # report: one Objectif click and EVERYTHING vanished. The
+        # window flow needs the TYPE-7 ack (deferred NEW message):
+        # thinking=True.
+        await interaction.response.defer(ephemeral=True, thinking=True)
         # the three catalogs — the kingdoms minus one's own realm, the
         # full map cadastre, the full civilization catalog.
         kingdoms_catalog: dict[str, str] = {}
