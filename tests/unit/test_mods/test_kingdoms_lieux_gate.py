@@ -593,9 +593,34 @@ def test_objectif_button_follows_the_crown() -> None:
     assert KingdomLieuObjectifButton in bot._dynamic_items
 
 
+def test_objectif_read_view_offers_edit_and_quit() -> None:
+    from kingdoms.mods.kingdoms.kingdom_lieux import (
+        _objectifs_read_content,
+        _objectifs_read_view,
+    )
+
+    lieu = _strings("fr")
+    kingdom = SimpleNamespace(
+        id=TEST_KINGDOM_ID,
+        name="Nilrem",
+        council_objectives={"target_kingdom": "k-2", "target_kingdom_label": "HeN"},
+    )
+    view = _objectifs_read_view(
+        SimpleNamespace(kingdoms_service=None), kingdom, "fr", {"k-2": "HeN"}, {}, {}
+    )
+    buttons = [c for c in view.children if isinstance(c, discord.ui.Button)]
+    labels = [str(b.label) for b in buttons]
+    assert labels == [lieu["objectif_edit_button"], lieu["objectif_quit_button"]]
+    content = _objectifs_read_content("fr", kingdom)
+    assert lieu["objectif_picker_title"].format("Nilrem") in content
+    assert lieu["conseil_objectif_kingdom"].format("HeN") in content
+    assert lieu["objectif_read_hint"] in content
+
+
 def test_objectif_picker_pages_and_options() -> None:
     from kingdoms.mods.kingdoms.kingdom_lieux import _objectifs_picker
 
+    lieu = _strings("fr")
     wiring = SimpleNamespace(kingdoms_service=None)
     kingdom = SimpleNamespace(
         id=TEST_KINGDOM_ID,
@@ -605,17 +630,17 @@ def test_objectif_picker_pages_and_options() -> None:
             "target_territory_label": "Map 7",
         },
     )
+    staged = dict(kingdom.council_objectives)
     kingdoms_catalog = {"k-2": "HeN", "k-3": "Gwen"}
     maps_catalog = {f"map-{i}": f"Map {i}" for i in range(1, 61)}
     civs_catalog = {f"civ-{i}": f"Civ {i}" for i in range(1, 41)}
     view = _objectifs_picker(
-        wiring, kingdom, "fr", kingdoms_catalog, maps_catalog, civs_catalog
+        wiring, kingdom, "fr", kingdoms_catalog, maps_catalog, civs_catalog, staged
     )
     selects = [c for c in view.children if isinstance(c, discord.ui.Select)]
     assert len(selects) == 3
     for select in selects:
         assert len(select.options) <= 25  # the Discord cap, always
-    # the « Aucun » sentinel leads every select
     # Discord requires a select option value of 1-100 characters —
     # the « Aucun » sentinel rides "none" on the wire (NEVER "").
     assert all(select.options[0].value == "none" for select in selects)
@@ -624,9 +649,18 @@ def test_objectif_picker_pages_and_options() -> None:
     )
     # the current map goal is pinned first with its check mark
     map_select = selects[1]
-    assert len(map_select.options) == 25
     assert map_select.options[1].value == "map-7"
     assert "Map 7" in map_select.options[1].label
+    # line 3 = [✅ Valider][🚪 Quitter] whatever the page
+    buttons = [c for c in view.children if isinstance(c, discord.ui.Button)]
+    labels = [str(b.label) for b in buttons]
+    assert labels[-2:] == [lieu["objectif_validate_button"], lieu["objectif_quit_button"]]
+    flips = [b for b in buttons if b.label is None]
+    assert len(flips) == 4
+    assert flips[0].disabled is True  # maps ◀ on page 0
+    assert flips[1].disabled is False
+    assert flips[2].disabled is True  # civs ◀ on page 0
+    assert flips[3].disabled is False
     # page two serves the NEXT slice of maps, the goal stays pinned
     view_two = _objectifs_picker(
         wiring,
@@ -635,6 +669,7 @@ def test_objectif_picker_pages_and_options() -> None:
         kingdoms_catalog,
         maps_catalog,
         civs_catalog,
+        staged,
         map_page=1,
     )
     selects_two = [c for c in view_two.children if isinstance(c, discord.ui.Select)]
@@ -642,16 +677,103 @@ def test_objectif_picker_pages_and_options() -> None:
     assert "map-25" in page_one_values
     assert "map-1" not in page_one_values
     assert selects_two[1].options[1].value == "map-7"
-    # the flip buttons guard the bounds
-    buttons = [c for c in view.children if isinstance(c, discord.ui.Button)]
-    assert len(buttons) == 4
-    assert buttons[0].disabled is True  # maps ◀ on page 0
-    assert buttons[1].disabled is False
-    assert buttons[2].disabled is True  # civs ◀ on page 0
-    assert buttons[3].disabled is False
 
 
-def test_objectif_picker_sentinel_clears_the_goal() -> None:
+def test_objectif_picker_choice_becomes_a_change_button() -> None:
+    import asyncio
+
+    from kingdoms.mods.kingdoms.kingdom_lieux import _objectifs_picker
+
+    wiring = SimpleNamespace(kingdoms_service=None)
+    kingdom = SimpleNamespace(id=TEST_KINGDOM_ID, name="Nilrem", council_objectives={})
+    view = _objectifs_picker(
+        wiring,
+        kingdom,
+        "fr",
+        {"k-2": "HeN"},
+        {"m-1": "Ile du Pacifique"},
+        {"c-1": "Huns"},
+        {},
+    )
+    kingdom_select = next(c for c in view.children if isinstance(c, discord.ui.Select))
+    kingdom_select.values = ["k-2"]
+    edited: dict[str, Any] = {}
+
+    class _Response:
+        async def edit_message(self, **kwargs: Any) -> None:
+            edited.update(kwargs)
+
+    asyncio.run(kingdom_select.callback(SimpleNamespace(response=_Response())))
+    # the chosen goal STAGES (never saves on the spot) and the dropdown
+    # transforms into a « ✏️ change » button carrying the chosen value
+    assert "view" in edited and "content" in edited
+    new_selects = [c for c in edited["view"].children if isinstance(c, discord.ui.Select)]
+    assert len(new_selects) == 2  # the kingdom dropdown is GONE
+    change_buttons = [
+        c
+        for c in edited["view"].children
+        if isinstance(c, discord.ui.Button) and c.label and "HeN" in str(c.label)
+    ]
+    assert len(change_buttons) == 1
+    assert "✏️" in str(change_buttons[0].label)
+    labels = [
+        str(c.label)
+        for c in edited["view"].children
+        if isinstance(c, discord.ui.Button) and c.label
+    ]
+    assert labels[-2:] == [
+        _strings("fr")["objectif_validate_button"],
+        _strings("fr")["objectif_quit_button"],
+    ]
+    assert "HeN" in edited["content"]
+
+
+def test_objectif_picker_sentinel_and_change_round_trip() -> None:
+    import asyncio
+
+    from kingdoms.mods.kingdoms.kingdom_lieux import _objectifs_picker
+
+    wiring = SimpleNamespace(kingdoms_service=None)
+    kingdom = SimpleNamespace(id=TEST_KINGDOM_ID, name="Nilrem", council_objectives={})
+    staged = {"target_kingdom": "k-2", "target_kingdom_label": "HeN"}
+    view = _objectifs_picker(
+        wiring, kingdom, "fr", {"k-2": "HeN"}, {}, {}, staged
+    )
+    # a staged goal rides as a change button — « changer » reveals it
+    change = next(
+        c
+        for c in view.children
+        if isinstance(c, discord.ui.Button) and c.label and "HeN" in str(c.label)
+    )
+    edited: dict[str, Any] = {}
+
+    class _Response:
+        async def edit_message(self, **kwargs: Any) -> None:
+            edited.update(kwargs)
+
+    asyncio.run(change.callback(SimpleNamespace(response=_Response())))
+    select = next(
+        c for c in edited["view"].children if isinstance(c, discord.ui.Select)
+    )
+    assert select.options[1].value == "k-2"  # the staged goal stays pinned ✅
+    select.values = [select.options[0].value]  # the « Aucun » sentinel
+    cleared: dict[str, Any] = {}
+
+    class _Response2:
+        async def edit_message(self, **kwargs: Any) -> None:
+            cleared.update(kwargs)
+
+    asyncio.run(select.callback(SimpleNamespace(response=_Response2())))
+    # choosing the sentinel CLEARS the staged goal — back to a dropdown
+    cleared_selects = [
+        c for c in cleared["view"].children if isinstance(c, discord.ui.Select)
+    ]
+    assert len(cleared_selects) == 3
+    assert cleared_selects[0].options[0].value == "none"  # no pinned goal anymore
+    assert "— non défini" in cleared["content"]
+
+
+def test_objectif_validate_saves_all_and_returns_to_read() -> None:
     import asyncio
 
     from kingdoms.mods.kingdoms.kingdom_lieux import _objectifs_picker
@@ -664,72 +786,77 @@ def test_objectif_picker_sentinel_clears_the_goal() -> None:
             return kingdom
 
     wiring = SimpleNamespace(kingdoms_service=_Service())
-    kingdom = SimpleNamespace(
-        id=TEST_KINGDOM_ID,
-        council_objectives={"target_kingdom": "k-2", "target_kingdom_label": "HeN"},
+    kingdom = SimpleNamespace(id=TEST_KINGDOM_ID, name="Nilrem", council_objectives={})
+    staged = {
+        "target_kingdom": "k-2",
+        "target_kingdom_label": "HeN",
+        "target_territory": "m-1",
+        "target_territory_label": "Ile du Pacifique",
+        "target_alliance": "",
+        "target_alliance_label": "",
+    }
+    view = _objectifs_picker(
+        wiring,
+        kingdom,
+        "fr",
+        {"k-2": "HeN"},
+        {"m-1": "Ile du Pacifique"},
+        {"c-1": "Huns"},
+        staged,
     )
-    view = _objectifs_picker(wiring, kingdom, "fr", {"k-2": "HeN"}, {}, {})
-    select = next(c for c in view.children if isinstance(c, discord.ui.Select))
-    select.values = [select.options[0].value]  # the « Aucun » sentinel
+    validate = next(
+        c
+        for c in view.children
+        if isinstance(c, discord.ui.Button)
+        and str(c.label) == _strings("fr")["objectif_validate_button"]
+    )
     edited: dict[str, Any] = {}
 
     class _Response:
         async def edit_message(self, **kwargs: Any) -> None:
             edited.update(kwargs)
 
-    asyncio.run(select.callback(SimpleNamespace(response=_Response())))
-    # choosing the sentinel CLEARS the goal and re-renders the picker
-    assert kingdom.council_objectives["target_kingdom"] == ""
-    assert kingdom.council_objectives["target_kingdom_label"] == ""
-    assert saved and "view" in edited
+    asyncio.run(validate.callback(SimpleNamespace(response=_Response())))
+    # ONE save commits ALL three kinds, empty choices included
+    assert saved == [kingdom]
+    assert kingdom.council_objectives["target_kingdom"] == "k-2"
+    assert kingdom.council_objectives["target_territory"] == "m-1"
+    assert kingdom.council_objectives["target_alliance"] == ""
+    assert "updated_at" in kingdom.council_objectives
+    # back to the READ sheet — Modifier + Quitter only
+    labels = [
+        str(c.label)
+        for c in edited["view"].children
+        if isinstance(c, discord.ui.Button) and c.label
+    ]
+    assert labels == [
+        _strings("fr")["objectif_edit_button"],
+        _strings("fr")["objectif_quit_button"],
+    ]
+    assert _strings("fr")["objectif_read_hint"] in edited["content"]
 
 
-def test_save_objective_persists_key_and_label() -> None:
+def test_objectif_save_failure_never_crashes_the_picker() -> None:
     import asyncio
 
-    from kingdoms.mods.kingdoms.kingdom_lieux import _save_objective
+    from kingdoms.mods.kingdoms.kingdom_lieux import _save_objectives
 
-    saved: list[Any] = []
-
-    class _Service:
-        async def save_kingdom(self, kingdom: Any) -> Any:
-            saved.append(kingdom)
-            return kingdom
-
-    wiring = SimpleNamespace(kingdoms_service=_Service())
-    kingdom = SimpleNamespace(id=TEST_KINGDOM_ID, council_objectives={})
-    assert asyncio.run(
-        _save_objective(wiring, kingdom, "fr", "target_territory", "arabia", "Arabie")
-    )
-    assert kingdom.council_objectives["target_territory"] == "arabia"
-    assert kingdom.council_objectives["target_territory_label"] == "Arabie"
-    assert "updated_at" in kingdom.council_objectives
-    assert saved == [kingdom]
-    # picking « Aucun » CLEARS the goal
-    assert asyncio.run(
-        _save_objective(wiring, kingdom, "fr", "target_territory", "", "")
-    )
-    assert kingdom.council_objectives["target_territory"] == ""
-    assert kingdom.council_objectives["target_territory_label"] == ""
-
-    # a store failure never crashes the picker
     class _Broken:
         async def save_kingdom(self, kingdom: Any) -> Any:
             raise RuntimeError("boom")
 
+    kingdom = SimpleNamespace(id=TEST_KINGDOM_ID, council_objectives={})
+    staged = {"target_alliance": "c-1", "target_alliance_label": "Huns"}
     assert (
         asyncio.run(
-            _save_objective(
-                SimpleNamespace(kingdoms_service=_Broken()),
-                kingdom,
-                "fr",
-                "target_kingdom",
-                "k-2",
-                "HeN",
+            _save_objectives(
+                SimpleNamespace(kingdoms_service=_Broken()), kingdom, staged
             )
         )
         is False
     )
+    # the staged values still landed on the in-memory kingdom
+    assert kingdom.council_objectives["target_alliance"] == "c-1"
 
 
 def test_objectif_click_keeps_the_council_sheet_alive() -> None:
@@ -742,25 +869,3 @@ def test_objectif_click_keeps_the_council_sheet_alive() -> None:
     assert _objectif_replaces_previous(None) is False
     assert _objectif_replaces_previous((object(), 1.0)) is False  # the sheet
     assert _objectif_replaces_previous((object(), 1.0, object())) is True  # a picker
-
-
-def test_objectifs_content_lines() -> None:
-    from kingdoms.mods.kingdoms.kingdom_lieux import _objectifs_content
-
-    lieu = _strings("fr")
-    kingdom = SimpleNamespace(
-        name="Nilrem",
-        council_objectives={
-            "target_kingdom_label": "HeN",
-            "target_territory_label": "Arabie",
-            "target_alliance_label": "Francs",
-        },
-    )
-    content = _objectifs_content("fr", kingdom)
-    assert lieu["objectif_picker_title"].format("Nilrem") in content
-    assert lieu["conseil_objectif_kingdom"].format("HeN") in content
-    assert lieu["conseil_objectif_map"].format("Arabie") in content
-    assert lieu["conseil_objectif_alliance"].format("Francs") in content
-    assert lieu["objectif_footer"] in content
-    empty = SimpleNamespace(name="Nilrem", council_objectives={})
-    assert lieu["conseil_objectifs_none"] in _objectifs_content("fr", empty)

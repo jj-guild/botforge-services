@@ -74,6 +74,20 @@ STRINGS: dict[str, dict[str, str]] = {
         "objectif_select_map": "🗺️ Territory you seek",
         "objectif_select_alliance": "🤝 Alliance you covet",
         "objectif_none_label": "🚫 None — leave undefined",
+        "objectif_edit_button": "✏️ Edit",
+        "objectif_validate_button": "✅ Apply",
+        "objectif_quit_button": "🚪 Quit",
+        "objectif_change_button": "✏️ {0}",
+        "objectif_undefined": "— undefined",
+        "objectif_read_hint": (
+            "-# Indicative objectives set by the King — ✏️ Edit to change"
+            " them, 🚪 Quit to close."
+        ),
+        "objectif_edit_hint": (
+            "-# Each menu picked becomes your objective — ✅ Apply to save,"
+            " 🚪 Quit to close without saving."
+        ),
+        "objectif_save_failed": "⚠️ Save failed — try again in a moment.",
         "conseil_objectifs_title": "🎯 Objectives",
         "conseil_objectif_kingdom": "⚔️ Kingdom to focus : **{0}**",
         "conseil_objectif_map": "🗺️ Territory sought : **{0}**",
@@ -82,7 +96,6 @@ STRINGS: dict[str, dict[str, str]] = {
             "No objective set yet — the King may define them with the"
             " 🎯 Objective button."
         ),
-        "objectif_footer": "-# Indicative objectives set by the King.",
         "conseil_actions": "Action cards",
         "sortir_button": "🚪 Leave",
     },
@@ -129,6 +142,20 @@ STRINGS: dict[str, dict[str, str]] = {
         "objectif_select_map": "🗺️ Territoire recherché",
         "objectif_select_alliance": "🤝 Alliance souhaitée",
         "objectif_none_label": "🚫 Aucun — ne pas définir",
+        "objectif_edit_button": "✏️ Modifier",
+        "objectif_validate_button": "✅ Valider",
+        "objectif_quit_button": "🚪 Quitter",
+        "objectif_change_button": "✏️ {0}",
+        "objectif_undefined": "— non défini",
+        "objectif_read_hint": (
+            "-# Objectifs indicatifs fixés par le Roi — ✏️ Modifier pour les"
+            " changer, 🚪 Quitter pour fermer."
+        ),
+        "objectif_edit_hint": (
+            "-# Chaque menu choisi devient ton objectif — ✅ Valider pour"
+            " sauvegarder, 🚪 Quitter pour fermer sans sauvegarder."
+        ),
+        "objectif_save_failed": "⚠️ Sauvegarde échouée — réessaie dans un instant.",
         "conseil_objectifs_title": "🎯 Objectifs",
         "conseil_objectif_kingdom": "⚔️ Royaume à focus : **{0}**",
         "conseil_objectif_map": "🗺️ Territoire recherché : **{0}**",
@@ -137,7 +164,6 @@ STRINGS: dict[str, dict[str, str]] = {
             "Aucun objectif fixé pour le moment — le Roi peut les définir"
             " avec le bouton 🎯 Objectif."
         ),
-        "objectif_footer": "-# Objectifs indicatifs fixés par le Roi.",
         "conseil_actions": "Cartes d'action",
         "sortir_button": "🚪 Sortir",
     },
@@ -583,25 +609,88 @@ def _objectif_page_options(
     return options[:25]
 
 
-async def _save_objective(
-    wiring: Any,
-    kingdom: Any,
-    locale: str,
-    kind: str,
-    key: str,
-    label: str,
-) -> bool:
-    """Persist ONE goal choice on the kingdom (best effort, never a crash).
+_OBJECTIF_KINDS = (
+    ("target_kingdom", "⚔️", "objectif_select_kingdom", "conseil_objectif_kingdom"),
+    (
+        "target_territory",
+        "🗺️",
+        "objectif_select_map",
+        "conseil_objectif_map",
+    ),
+    (
+        "target_alliance",
+        "🤝",
+        "objectif_select_alliance",
+        "conseil_objectif_alliance",
+    ),
+)
 
-    Each dropdown saves on the spot — the choice rides as « key » plus
-    « key_label » so the council sheet renders the display names without
-    re-resolving the catalogs.
+
+def _objectifs_lines(
+    locale: str, goals: dict[str, Any], undefined: bool = False
+) -> list[str]:
+    """The three goal lines — one display line per kind."""
+    lieu = _strings(locale)
+    lines: list[str] = []
+    for kind, _emoji, _select, template in _OBJECTIF_KINDS:
+        label = str(goals.get(f"{kind}_label") or "").strip()
+        if not label and undefined:
+            label = lieu["objectif_undefined"]
+        if label:
+            lines.append(lieu[template].format(label))
+    return lines
+
+
+def _objectifs_read_content(locale: str, kingdom: Any) -> str:
+    """The picker's READ sheet — the realm's goals, one line each."""
+    lieu = _strings(locale)
+    goals = dict(getattr(kingdom, "council_objectives", {}) or {})
+    lines = _objectifs_lines(locale, goals)
+    return "\n".join(
+        [
+            f"## {lieu['objectif_picker_title'].format(getattr(kingdom, 'name', ''))}",
+            "",
+            *(lines or [lieu["conseil_objectifs_none"]]),
+            "",
+            lieu["objectif_read_hint"],
+        ]
+    )
+
+
+def _objectifs_edit_content(
+    locale: str, kingdom: Any, staged: dict[str, Any]
+) -> str:
+    """The picker's EDIT sheet — the STAGED goals, « non défini » holes."""
+    lieu = _strings(locale)
+    lines = _objectifs_lines(locale, staged, undefined=True)
+    return "\n".join(
+        [
+            f"## {lieu['objectif_picker_title'].format(getattr(kingdom, 'name', ''))}",
+            "",
+            *lines,
+            "",
+            lieu["objectif_edit_hint"],
+        ]
+    )
+
+
+async def _save_objectives(
+    wiring: Any, kingdom: Any, staged: dict[str, Any]
+) -> bool:
+    """Persist ALL THREE goal choices in ONE save (best effort).
+
+    conseil-objectif-v3 (Drasah 01/11): the choices stay STAGED in the
+    window — only ✅ Valider commits them, all at once, with their
+    display labels and an updated_at stamp.
     """
     from time import time
 
     objectives = dict(getattr(kingdom, "council_objectives", {}) or {})
-    objectives[kind] = str(key or "").strip()
-    objectives[f"{kind}_label"] = str(label or "").strip()
+    for kind, _emoji, _select, _template in _OBJECTIF_KINDS:
+        objectives[kind] = str(staged.get(kind) or "").strip()
+        objectives[f"{kind}_label"] = str(
+            staged.get(f"{kind}_label") or ""
+        ).strip()
     objectives["updated_at"] = int(time())
     service = getattr(wiring, "kingdoms_service", None)
     try:
@@ -609,32 +698,90 @@ async def _save_objective(
         if service is not None and hasattr(service, "save_kingdom"):
             await service.save_kingdom(kingdom)
     except Exception:
-        logger.warning("KINGDOM LIEUX: objective save failed", exc_info=True)
+        logger.warning("KINGDOM LIEUX: objectives save failed", exc_info=True)
         return False
     return True
 
 
-def _objectifs_content(locale: str, kingdom: Any) -> str:
-    """The picker window's text — the realm's current goals, one line."""
+def _objectif_quit_button(lieu: dict[str, Any], row: int = 3) -> Any:
+    """The 🚪 Quitter button — closes the ephemeral window."""
+    button = discord.ui.Button(
+        label=lieu["objectif_quit_button"],
+        style=discord.ButtonStyle.secondary,
+        row=row,
+    )
+
+    async def _quit(interaction: discord.Interaction) -> None:
+        from kingdoms.mods.kingdoms.kingdom_persistent import _EPHEMERAL_WINDOWS
+
+        # Type-6 defer on the window's own component — deleting the
+        # original response deletes the WINDOW the button sits on.
+        await interaction.response.defer()
+        try:
+            await interaction.delete_original_response()
+        except Exception:
+            logger.info(
+                "KINGDOM LIEUX: objectives window close failed (ignored)",
+                exc_info=True,
+            )
+        user_id = str(getattr(interaction.user, "id", ""))
+        previous = _EPHEMERAL_WINDOWS.get(user_id)
+        window = (
+            previous[2] if previous is not None and len(previous) > 2 else None
+        )
+        if (
+            window is not None
+            and getattr(getattr(interaction, "message", None), "id", None)
+            == getattr(window, "id", None)
+        ):
+            _EPHEMERAL_WINDOWS.pop(user_id, None)
+
+    button.callback = _quit
+    return button
+
+
+def _objectifs_read_view(
+    wiring: Any,
+    kingdom: Any,
+    locale: str,
+    kingdoms_catalog: dict[str, str],
+    maps_catalog: dict[str, str],
+    civs_catalog: dict[str, str],
+) -> discord.ui.View:
+    """The READ view — the goals sheet + [✏️ Modifier][🚪 Quitter]."""
     lieu = _strings(locale)
-    objectives = dict(getattr(kingdom, "council_objectives", {}) or {})
-    parts: list[str] = []
-    for label_key, template in (
-        ("target_kingdom_label", "conseil_objectif_kingdom"),
-        ("target_territory_label", "conseil_objectif_map"),
-        ("target_alliance_label", "conseil_objectif_alliance"),
-    ):
-        label = str(objectives.get(label_key) or "").strip()
-        if label:
-            parts.append(lieu[template].format(label))
-    lines = [
-        f"**{lieu['objectif_picker_title'].format(getattr(kingdom, 'name', ''))}**",
-        "",
-        " | ".join(parts) if parts else lieu["conseil_objectifs_none"],
-        "",
-        lieu["objectif_footer"],
-    ]
-    return "\n".join(lines)
+    view = discord.ui.View(timeout=None)
+
+    async def _edit(interaction: discord.Interaction) -> None:
+        staged = {
+            key: value
+            for key, value in dict(
+                getattr(kingdom, "council_objectives", {}) or {}
+            ).items()
+            if key != "updated_at"
+        }
+        await interaction.response.edit_message(
+            content=_objectifs_edit_content(locale, kingdom, staged),
+            view=_objectifs_picker(
+                wiring,
+                kingdom,
+                locale,
+                kingdoms_catalog,
+                maps_catalog,
+                civs_catalog,
+                staged,
+            ),
+        )
+
+    edit_button = discord.ui.Button(
+        label=lieu["objectif_edit_button"],
+        style=discord.ButtonStyle.success,
+        row=0,
+    )
+    edit_button.callback = _edit
+    view.add_item(edit_button)
+    view.add_item(_objectif_quit_button(lieu, row=0))
+    return view
 
 
 def _objectifs_picker(
@@ -644,135 +791,171 @@ def _objectifs_picker(
     kingdoms_catalog: dict[str, str],
     maps_catalog: dict[str, str],
     civs_catalog: dict[str, str],
+    staged: dict[str, Any] | None = None,
     map_page: int = 0,
     civ_page: int = 0,
+    reveal: tuple[str, ...] = (),
 ) -> discord.ui.View:
-    """The King's goal PICKER (conseil-objectif-v2, Drasah 01/11).
+    """The EDIT view (conseil-objectif-v3, Drasah 01/11).
 
-    Three dropdowns — a priority kingdom, a sought territory, a wanted
-    alliance — every choice saved on the spot and the window re-rendered
-    in place. The maps (97) and civilizations (55) exceed Discord's
-    25-option cap, so each dropdown pages 23 options with a ◀️/▶️ pair;
-    the current goal stays pinned first whatever the page. A
-    session-scoped ephemeral: the closures die with the message, the
-    fenêtre-unique registry owns the picker — and the council sheet
-    SURVIVES the click: the picker opens ALONGSIDE it (coexist).
+    One row per goal: a dropdown (the maps/civs page through ◀️▶️)
+    that TRANSFORMS into a « ✏️ <choix> » change button once picked —
+    the choices stay STAGED until ✅ Valider saves them all at once;
+    🚪 Quitter closes without saving (the council sheet survives,
+    coexist). The « Aucun » sentinel clears a staged goal.
     """
     lieu = _strings(locale)
-    objectives = dict(getattr(kingdom, "council_objectives", {}) or {})
+    staged = dict(staged or {})
     view = discord.ui.View(timeout=None)
 
-    def _on_pick(kind: str, catalog: dict[str, str], select: discord.ui.Select) -> Any:
+    def _rerender(
+        interaction: discord.Interaction,
+        new_staged: dict[str, Any],
+        map_p: int = map_page,
+        civ_p: int = civ_page,
+        new_reveal: tuple[str, ...] = reveal,
+    ) -> Any:
+        async def _go() -> None:
+            await interaction.response.edit_message(
+                content=_objectifs_edit_content(locale, kingdom, new_staged),
+                view=_objectifs_picker(
+                    wiring,
+                    kingdom,
+                    locale,
+                    kingdoms_catalog,
+                    maps_catalog,
+                    civs_catalog,
+                    new_staged,
+                    map_p,
+                    civ_p,
+                    new_reveal,
+                ),
+            )
+
+        return _go
+
+    def _on_pick(kind: str, catalog: dict[str, str], select: Any) -> Any:
         async def _choose(interaction: discord.Interaction) -> None:
             raw = str(select.values[0]) if select.values else _OBJECTIF_NONE_VALUE
             # the sentinel maps back to « clear the goal »
             value = "" if raw == _OBJECTIF_NONE_VALUE else raw
-            label = catalog.get(value, "") if value else ""
-            await _save_objective(wiring, kingdom, locale, kind, value, label)
-            await interaction.response.edit_message(
-                view=_objectifs_picker(
-                    wiring,
-                    kingdom,
-                    locale,
-                    kingdoms_catalog,
-                    maps_catalog,
-                    civs_catalog,
-                    map_page,
-                    civ_page,
-                )
+            new_staged = dict(staged)
+            new_staged[kind] = value
+            new_staged[f"{kind}_label"] = str(
+                catalog.get(value, "") if value else ""
             )
+            await _rerender(
+                interaction, new_staged, new_reveal=tuple(set(reveal) - {kind})
+            )()
 
         return _choose
 
+    def _on_change(kind: str) -> Any:
+        async def _change(interaction: discord.Interaction) -> None:
+            # « changer » — the dropdown of that goal comes back
+            await _rerender(
+                interaction, staged, new_reveal=tuple(set(reveal) | {kind})
+            )()
+
+        return _change
+
     def _on_flip(which: str, delta: int) -> Any:
         async def _flip(interaction: discord.Interaction) -> None:
-            new_map = min(
-                max(map_page + (delta if which == "map" else 0), 0),
-                _objectif_max_page(maps_catalog),
-            )
-            new_civ = min(
-                max(civ_page + (delta if which == "civ" else 0), 0),
-                _objectif_max_page(civs_catalog),
-            )
-            await interaction.response.edit_message(
-                view=_objectifs_picker(
-                    wiring,
-                    kingdom,
-                    locale,
-                    kingdoms_catalog,
-                    maps_catalog,
-                    civs_catalog,
-                    new_map,
-                    new_civ,
-                )
-            )
+            if which == "target_territory":
+                await _rerender(
+                    interaction,
+                    staged,
+                    map_p=min(
+                        max(map_page + delta, 0),
+                        _objectif_max_page(maps_catalog),
+                    ),
+                )()
+            else:
+                await _rerender(
+                    interaction,
+                    staged,
+                    civ_p=min(
+                        max(civ_page + delta, 0),
+                        _objectif_max_page(civs_catalog),
+                    ),
+                )()
 
         return _flip
 
-    kingdom_select = discord.ui.Select(
-        placeholder=lieu["objectif_select_kingdom"],
-        options=_objectif_page_options(
-            locale,
-            kingdoms_catalog,
-            str(objectives.get("target_kingdom") or ""),
-            0,
-        ),
-        min_values=1,
-        max_values=1,
-        row=0,
-    )
-    kingdom_select.callback = _on_pick(
-        "target_kingdom", kingdoms_catalog, kingdom_select
-    )
-    view.add_item(kingdom_select)
-    map_select = discord.ui.Select(
-        placeholder=lieu["objectif_select_map"],
-        options=_objectif_page_options(
-            locale,
-            maps_catalog,
-            str(objectives.get("target_territory") or ""),
-            map_page,
-        ),
-        min_values=1,
-        max_values=1,
-        row=1,
-    )
-    map_select.callback = _on_pick("target_territory", maps_catalog, map_select)
-    view.add_item(map_select)
-    map_prev = discord.ui.Button(emoji="◀️", row=2, disabled=map_page <= 0)
-    map_prev.callback = _on_flip("map", -1)
-    view.add_item(map_prev)
-    map_next = discord.ui.Button(
-        emoji="▶️",
-        row=2,
-        disabled=map_page >= _objectif_max_page(maps_catalog),
-    )
-    map_next.callback = _on_flip("map", 1)
-    view.add_item(map_next)
-    civ_select = discord.ui.Select(
-        placeholder=lieu["objectif_select_alliance"],
-        options=_objectif_page_options(
-            locale,
-            civs_catalog,
-            str(objectives.get("target_alliance") or ""),
-            civ_page,
-        ),
-        min_values=1,
-        max_values=1,
+    rows = {
+        "target_kingdom": 0,
+        "target_territory": 1,
+        "target_alliance": 2,
+    }
+    for kind, emoji, select_key, _template in _OBJECTIF_KINDS:
+        staged_key = str(staged.get(kind) or "")
+        if staged_key and kind not in reveal:
+            change = discord.ui.Button(
+                label=lieu["objectif_change_button"]
+                .format(
+                    f"{emoji} {staged.get(f'{kind}_label') or staged_key}"
+                )[:80],
+                style=discord.ButtonStyle.secondary,
+                row=rows[kind],
+            )
+            change.callback = _on_change(kind)
+            view.add_item(change)
+            continue
+        catalog, page = (
+            (kingdoms_catalog, 0)
+            if kind == "target_kingdom"
+            else (maps_catalog, map_page)
+            if kind == "target_territory"
+            else (civs_catalog, civ_page)
+        )
+        select = discord.ui.Select(
+            placeholder=lieu[select_key],
+            options=_objectif_page_options(locale, catalog, staged_key, page),
+            min_values=1,
+            max_values=1,
+            row=rows[kind],
+        )
+        select.callback = _on_pick(kind, catalog, select)
+        view.add_item(select)
+        if kind != "target_kingdom":
+            prev = discord.ui.Button(
+                emoji="◀️", row=rows[kind], disabled=page <= 0
+            )
+            prev.callback = _on_flip(kind, -1)
+            view.add_item(prev)
+            nxt = discord.ui.Button(
+                emoji="▶️",
+                row=rows[kind],
+                disabled=page >= _objectif_max_page(catalog),
+            )
+            nxt.callback = _on_flip(kind, 1)
+            view.add_item(nxt)
+
+    async def _validate(interaction: discord.Interaction) -> None:
+        saved = await _save_objectives(wiring, kingdom, staged)
+        content = _objectifs_read_content(locale, kingdom)
+        if not saved:
+            content = f"{content}\n{lieu['objectif_save_failed']}"
+        await interaction.response.edit_message(
+            content=content,
+            view=_objectifs_read_view(
+                wiring,
+                kingdom,
+                locale,
+                kingdoms_catalog,
+                maps_catalog,
+                civs_catalog,
+            ),
+        )
+
+    validate = discord.ui.Button(
+        label=lieu["objectif_validate_button"],
+        style=discord.ButtonStyle.success,
         row=3,
     )
-    civ_select.callback = _on_pick("target_alliance", civs_catalog, civ_select)
-    view.add_item(civ_select)
-    civ_prev = discord.ui.Button(emoji="◀️", row=4, disabled=civ_page <= 0)
-    civ_prev.callback = _on_flip("civ", -1)
-    view.add_item(civ_prev)
-    civ_next = discord.ui.Button(
-        emoji="▶️",
-        row=4,
-        disabled=civ_page >= _objectif_max_page(civs_catalog),
-    )
-    civ_next.callback = _on_flip("civ", 1)
-    view.add_item(civ_next)
+    validate.callback = _validate
+    view.add_item(validate)
+    view.add_item(_objectif_quit_button(lieu))
     return view
 
 
@@ -780,12 +963,12 @@ class KingdomLieuObjectifButton(
     discord.ui.DynamicItem[discord.ui.Button[Any]],
     template=r"kingdoms:lieux:objectif",
 ):
-    """conseil-objectif-v2 (Drasah 01/11): the King's 🎯 Objectif button
-    of the Salle du conseil — line 1, RIGHT of Seigneurie. The King sets
-    the realm's INDICATIVE goals through three DROPDOWNS (a priority
-    kingdom, a sought territory, a wanted alliance — the catalogs,
-    never free text); every choice saves on the spot and the goals
-    render on the council sheet with the targeted alliance's blason.
+    """conseil-objectif-v3 (Drasah 01/11): the King's 🎯 Objectif button
+    of the Salle du conseil — line 1, RIGHT of Seigneurie. The window
+    opens as a READ sheet of the realm's INDICATIVE goals (the catalogs,
+    never free text); ✏️ Modifier turns each goal into a dropdown that
+    TRANSFORMS into the chosen value, ✅ Valider saves all at once and
+    🚪 Quitter closes the window — the council sheet survives (coexist).
     Green for the King, red+disabled for everyone else (never hidden)."""
 
     def __init__(self, label: str, enabled: bool = True) -> None:
@@ -872,9 +1055,14 @@ class KingdomLieuObjectifButton(
             civs_catalog = _catalog_names(
                 wiring.kingdoms_service, "civilizations"
             )
-            content = _objectifs_content(locale, kingdom)
-            view = _objectifs_picker(
-                wiring, kingdom, locale, kingdoms_catalog, maps_catalog, civs_catalog
+            content = _objectifs_read_content(locale, kingdom)
+            view = _objectifs_read_view(
+                wiring,
+                kingdom,
+                locale,
+                kingdoms_catalog,
+                maps_catalog,
+                civs_catalog,
             )
             # objectif-fenetre-coexist-v1: the council sheet
             # SURVIVES the click — only a previous PICKER is replaced.
