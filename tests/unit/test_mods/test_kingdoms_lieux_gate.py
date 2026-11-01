@@ -447,4 +447,3 @@ def test_history_button_labels_styles_and_registration() -> None:
     register_kingdom_lieux_items(bot)
     assert KingdomLieuHistButton in bot._dynamic_items
     assert KingdomLieuCardInfoButton in bot._dynamic_items
-  
