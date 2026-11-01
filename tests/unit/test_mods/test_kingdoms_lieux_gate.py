@@ -447,3 +447,230 @@ def test_history_button_labels_styles_and_registration() -> None:
     register_kingdom_lieux_items(bot)
     assert KingdomLieuHistButton in bot._dynamic_items
     assert KingdomLieuCardInfoButton in bot._dynamic_items
+
+
+# ---------------------------------------------------------------------------
+# conseil-objectif-v1 (Drasah 01/11) — the council base sheet + 🎯 Objectif.
+# ---------------------------------------------------------------------------
+
+
+def test_conseil_base_carries_intro_rank_and_stats() -> None:
+    from kingdoms.mods.kingdoms.kingdom_lieux import build_conseil_view
+
+    strings = _merged_fr()
+    lieu = _strings("fr")
+    kingdom = SimpleNamespace(
+        id=TEST_KINGDOM_ID, name="Nilrem", civilizations=["azteques", "britons"]
+    )
+    state = _minimal_state()
+    state["wallet"] = 4
+    state["territories"] = [SimpleNamespace(), SimpleNamespace(), SimpleNamespace()]
+    view, _files = build_conseil_view(
+        strings,
+        kingdom,
+        state,
+        SimpleNamespace(kingdoms_service=None),
+        "fr",
+        rank=(2, 5),
+        viewer_is_king=True,
+    )
+    text = _walk_text(view.children)
+    assert lieu["conseil_intro_l1"] in text
+    assert lieu["conseil_intro_l2"] in text
+    assert lieu["conseil_intro_l3"] in text
+    assert lieu["conseil_classement"].format("2/5") in text
+    assert lieu["conseil_stats"].format(4, 3, 2) in text
+    assert lieu["conseil_classement_hint"] in text
+    # the old overview block left the base sheet
+    assert strings["members"] not in text
+    assert strings["marriages"] not in text
+    # an unknown rank renders the dash sentinel
+    view_unknown, _ = build_conseil_view(
+        strings, kingdom, state, SimpleNamespace(kingdoms_service=None), "fr"
+    )
+    assert lieu["conseil_classement"].format("—") in _walk_text(
+        view_unknown.children
+    )
+
+
+def test_objectif_button_follows_the_crown() -> None:
+    from kingdoms.mods.kingdoms.kingdom_lieux import (
+        KingdomLieuObjectifButton,
+        build_conseil_view,
+        register_kingdom_lieux_items,
+    )
+
+    strings = _merged_fr()
+    wiring = SimpleNamespace(kingdoms_service=None)
+    kingdom = _kingdom(TEST_KINGDOM_ID)
+    view, _ = build_conseil_view(
+        strings, kingdom, _minimal_state(), wiring, "fr", viewer_is_king=True
+    )
+    line_one = list(_action_rows(view.children)[0].children)
+    labels = [str(button.label) for button in line_one]
+    assert labels == [
+        strings["seigneurie_open_button"],
+        _strings("fr")["objectif_button"],
+        _strings("fr")["sortir_button"],
+    ]
+    assert line_one[1].style == discord.ButtonStyle.success
+    assert line_one[1].disabled is False
+    # a subject sees the SAME button, red+disabled (never hidden)
+    view_subject, _ = build_conseil_view(
+        strings, kingdom, _minimal_state(), wiring, "fr", viewer_is_king=False
+    )
+    line_subject = list(_action_rows(view_subject.children)[0].children)
+    assert line_subject[1].style == discord.ButtonStyle.danger
+    assert line_subject[1].disabled is True
+    # restart-proof registration
+    bot = _FakeBot()
+    register_kingdom_lieux_items(bot)
+    assert KingdomLieuObjectifButton in bot._dynamic_items
+
+
+def test_objectif_modal_saves_goals_and_refreshes_the_salon(monkeypatch) -> None:
+    import asyncio
+
+    from kingdoms.mods.kingdoms import kingdom_lieux
+
+    lieu = _strings("fr")
+    saved: list[Any] = []
+    refreshed: list[Any] = []
+    sent: list[str] = []
+
+    class _Service:
+        async def save_kingdom(self, kingdom: Any) -> Any:
+            saved.append(kingdom)
+            return kingdom
+
+    wiring = SimpleNamespace(kingdoms_service=_Service())
+    kingdom = SimpleNamespace(
+        id=TEST_KINGDOM_ID,
+        name="Nilrem",
+        council_objectives={"target_kingdom": "HeN"},
+    )
+
+    async def _fake_deploy(guild: Any, k: Any, w: Any, locale: str = "fr") -> bool:
+        refreshed.append(k)
+        return True
+
+    monkeypatch.setattr(kingdom_lieux, "deploy_objectives_safe", _fake_deploy)
+
+    modal = kingdom_lieux.KingdomObjectifModal(lieu, wiring, kingdom)
+    assert modal.target_kingdom.default == "HeN"
+    modal.target_kingdom.value = "Gwen"
+    modal.target_territory.value = "Arabie"
+    modal.target_alliance.value = "Francs"
+
+    async def _send(message: str, ephemeral: bool = True) -> None:
+        sent.append(message)
+
+    interaction = SimpleNamespace(
+        guild=SimpleNamespace(),
+        response=SimpleNamespace(send_message=_send),
+    )
+    asyncio.run(modal.on_submit(interaction))
+    assert kingdom.council_objectives["target_kingdom"] == "Gwen"
+    assert kingdom.council_objectives["target_territory"] == "Arabie"
+    assert kingdom.council_objectives["target_alliance"] == "Francs"
+    assert saved == [kingdom]
+    assert refreshed == [kingdom]
+    assert sent == [lieu["objectif_saved"]]
+
+
+def test_objectives_view_renders_goals_and_empty_state() -> None:
+    from kingdoms.mods.kingdoms.kingdom_lieux import build_objectives_view
+
+    lieu = _strings("fr")
+    kingdom = SimpleNamespace(
+        id=TEST_KINGDOM_ID,
+        name="Nilrem",
+        council_objectives={
+            "target_kingdom": "HeN",
+            "target_territory": "Arabie",
+            "target_alliance": "Francs",
+        },
+    )
+    text = _walk_text(build_objectives_view(kingdom, "fr").children)
+    assert lieu["objectif_view_title"].format("Nilrem") in text
+    assert lieu["objectif_kingdom_line"].format("HeN") in text
+    assert lieu["objectif_territory_line"].format("Arabie") in text
+    assert lieu["objectif_alliance_line"].format("Francs") in text
+    assert lieu["objectif_footer"] in text
+    empty_kingdom = SimpleNamespace(
+        id=TEST_KINGDOM_ID, name="Nilrem", council_objectives={}
+    )
+    empty_text = _walk_text(build_objectives_view(empty_kingdom, "fr").children)
+    assert lieu["objectif_empty_line"] in empty_text
+
+
+def test_objectives_salon_resolution() -> None:
+    from kingdoms.mods.kingdoms.kingdom_lieux import _objectives_salon
+
+    renamed = SimpleNamespace(name="💬 discussions")
+    legacy = SimpleNamespace(name="💬 salle du conseil")
+    other = SimpleNamespace(name="🗺️ territoire")
+    assert _objectives_salon(SimpleNamespace(channels=[other, renamed])) is renamed
+    assert _objectives_salon(SimpleNamespace(channels=[other, legacy])) is legacy
+    assert _objectives_salon(SimpleNamespace(channels=[other])) is None
+
+
+def test_conseil_rank_territories_then_alliances_then_tech() -> None:
+    import asyncio
+
+    from kingdoms.mods.kingdoms.kingdom_lieux import _conseil_rank
+
+    kingdoms = [
+        SimpleNamespace(
+            id="k-1", is_gaia=False, civilizations=["a"], tech_points_bank=9
+        ),
+        SimpleNamespace(
+            id="k-2", is_gaia=False, civilizations=["a", "b"], tech_points_bank=0
+        ),
+        SimpleNamespace(id="gaia", is_gaia=True, civilizations=[], tech_points_bank=99),
+    ]
+    territories = [
+        SimpleNamespace(owner_kingdom_id="k-1"),
+        SimpleNamespace(owner_kingdom_id="k-1"),
+        SimpleNamespace(owner_kingdom_id="gaia"),
+    ]
+
+    class _Service:
+        async def kingdoms(self) -> list[Any]:
+            return kingdoms
+
+    class _Territories:
+        async def territories(self) -> list[Any]:
+            return territories
+
+    wiring = SimpleNamespace(
+        kingdoms_service=_Service(), territories_service=_Territories()
+    )
+    # territories decide first: k-1 (2) ranks above k-2 (0); Gaïa is out
+    assert asyncio.run(_conseil_rank(wiring, kingdoms[0])) == (1, 2)
+    assert asyncio.run(_conseil_rank(wiring, kingdoms[1])) == (2, 2)
+
+    # a tie on territories: alliances decide
+    tie = [
+        SimpleNamespace(
+            id="k-3", is_gaia=False, civilizations=["x"], tech_points_bank=0
+        ),
+        SimpleNamespace(
+            id="k-4", is_gaia=False, civilizations=["x", "y"], tech_points_bank=0
+        ),
+    ]
+
+    class _ServiceTie:
+        async def kingdoms(self) -> list[Any]:
+            return tie
+
+    wiring_tie = SimpleNamespace(
+        kingdoms_service=_ServiceTie(), territories_service=_Territories()
+    )
+    assert asyncio.run(_conseil_rank(wiring_tie, tie[1])) == (1, 2)
+    assert asyncio.run(_conseil_rank(wiring_tie, tie[0])) == (2, 2)
+    # an unwired service renders the dash sentinel
+    assert (
+        asyncio.run(_conseil_rank(SimpleNamespace(kingdoms_service=None), kingdoms[0]))
+        == (0, 0)
+    )

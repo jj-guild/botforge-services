@@ -261,6 +261,15 @@ class KingdomsService:
         logger.info("kingdoms: season %s phase set to %s", season.id, phase)
         return season
 
+    async def save_kingdom(self, kingdom: KingdomModel) -> KingdomModel:
+        """Persist one kingdom document (conseil-objectif-v1 surface seam).
+
+        The 🎯 objectives are written by the Discord surface; the
+        mutation stays auditable through the service's store seam.
+        """
+        await self._store.upsert_kingdom(kingdom.to_mongo())
+        return kingdom
+
     async def reset(self) -> None:
         """Reset the season data without launching anything (reference §3.3)."""
         await self._archive_current_data()

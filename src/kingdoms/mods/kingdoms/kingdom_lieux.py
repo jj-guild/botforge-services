@@ -47,6 +47,46 @@ STRINGS: dict[str, dict[str, str]] = {
         "not_lord": "Only the lords of this kingdom may enter its places.",
         "no_service": "The Kingdoms service is not wired.",
         "conseil_title": "⚔️ Council room — {0}",
+        "conseil_intro_l1": (
+            "Keep an eye on your lords' attacks and defenses — their"
+            " marriages as well as their locks."
+        ),
+        "conseil_intro_l2": (
+            "You may set your objectives to coordinate better: a kingdom"
+            " to strike, a map you seek or an alliance you covet."
+        ),
+        "conseil_intro_l3": (
+            "You can also organise your explorations or your traps from"
+            " this interface."
+        ),
+        "conseil_classement": "**Rank** : {0}",
+        "conseil_classement_hint": (
+            "-# Ranked by territories — ties broken by alliances, then"
+            " technology points."
+        ),
+        "conseil_stats": (
+            "**Treasury** : {0} ⚙️ · **Territories** : {1} · **Alliances** : {2}"
+        ),
+        "objectif_button": "🎯 Objective",
+        "objectif_king_only": "🎯 Reserved to the King of the realm.",
+        "objectif_modal_title": "🎯 Kingdom objectives",
+        "objectif_kingdom_label": "⚔️ Kingdom to strike first",
+        "objectif_territory_label": "🗺️ Territory you seek",
+        "objectif_alliance_label": "🤝 Alliance you covet",
+        "objectif_placeholder": "Leave empty to leave undefined",
+        "objectif_saved": (
+            "🎯 Objectives updated — they now guide the lords in the"
+            " realm's salon."
+        ),
+        "objectif_view_title": "🎯 Kingdom objectives — {0}",
+        "objectif_kingdom_line": "⚔️ Priority kingdom : **{0}**",
+        "objectif_territory_line": "🗺️ Territory sought : **{0}**",
+        "objectif_alliance_line": "🤝 Alliance wanted : **{0}**",
+        "objectif_empty_line": (
+            "No objective set yet — the King may define them from the"
+            " Council room."
+        ),
+        "objectif_footer": "-# Indicative objectives set by the King.",
         "conseil_actions": "Action cards",
         "sortir_button": "🚪 Leave",
     },
@@ -66,6 +106,46 @@ STRINGS: dict[str, dict[str, str]] = {
         "not_lord": "Seuls les seigneurs du royaume peuvent entrer dans ses lieux.",
         "no_service": "Le service Kingdoms n'est pas câblé.",
         "conseil_title": "⚔️ Salle du conseil — {0}",
+        "conseil_intro_l1": (
+            "Jetez un coup d'œil aux attaques et défenses de vos seigneurs —"
+            " leurs mariages comme leurs verrouillages."
+        ),
+        "conseil_intro_l2": (
+            "Vous pouvez définir vos objectifs pour mieux vous coordonner :"
+            " attaque de royaume, map recherchée ou alliance recherchée."
+        ),
+        "conseil_intro_l3": (
+            "Vous pouvez aussi organiser vos explorations ou vos traquenards"
+            " depuis cette interface."
+        ),
+        "conseil_classement": "**Classement** : {0}",
+        "conseil_classement_hint": (
+            "-# Classement par nombre de territoires — en cas d'égalité :"
+            " alliances, puis points technologiques."
+        ),
+        "conseil_stats": (
+            "**Trésorerie** : {0} ⚙️ · **Territoires** : {1} · **Alliances** : {2}"
+        ),
+        "objectif_button": "🎯 Objectif",
+        "objectif_king_only": "🎯 Réservé au Roi du royaume.",
+        "objectif_modal_title": "🎯 Objectifs du royaume",
+        "objectif_kingdom_label": "⚔️ Royaume à attaquer en priorité",
+        "objectif_territory_label": "🗺️ Territoire recherché",
+        "objectif_alliance_label": "🤝 Alliance souhaitée",
+        "objectif_placeholder": "Laisser vide pour ne pas définir",
+        "objectif_saved": (
+            "🎯 Objectifs mis à jour — ils orientent désormais les seigneurs"
+            " dans le salon du royaume."
+        ),
+        "objectif_view_title": "🎯 Objectifs du royaume — {0}",
+        "objectif_kingdom_line": "⚔️ Royaume prioritaire : **{0}**",
+        "objectif_territory_line": "🗺️ Territoire recherché : **{0}**",
+        "objectif_alliance_line": "🤝 Alliance recherchée : **{0}**",
+        "objectif_empty_line": (
+            "Aucun objectif fixé pour le moment — le Roi peut en définir"
+            " depuis la Salle du conseil."
+        ),
+        "objectif_footer": "-# Objectifs indicatifs fixés par le Roi.",
         "conseil_actions": "Cartes d'action",
         "sortir_button": "🚪 Sortir",
     },
@@ -375,7 +455,18 @@ async def _open_lieu(interaction: discord.Interaction, kind: str) -> None:
 
     state = await _gather_state(kingdom, wiring)
     if kind == "conseil":
-        view, files = build_conseil_view(strings, kingdom, state, wiring, locale)
+        # conseil-objectif-v1 (Drasah 01/11): the base body carries the
+        # Classement computed LIVE from the whole season, and the Objectif
+        # button follows the clicker's crown (king-only).
+        view, files = build_conseil_view(
+            strings,
+            kingdom,
+            state,
+            wiring,
+            locale,
+            rank=await _conseil_rank(wiring, kingdom),
+            viewer_is_king=str(getattr(lord, "role", "")) == "king",
+        )
     elif kind == "remparts":
         view, files = (
             _build_patrol(
@@ -443,46 +534,340 @@ async def _build_voliere(
     )
 
 
+class KingdomObjectifModal(discord.ui.Modal):
+    """The King's goal sheet (conseil-objectif-v1, Drasah 01/11).
+
+    Three free INDICATIVE fields — a priority kingdom, a sought
+    territory, a wanted alliance. An empty field leaves the goal
+    undefined; re-opening the modal always shows the current values
+    so the King modifies the choice at will.
+    """
+
+    def __init__(
+        self,
+        strings: dict[str, str],
+        wiring: Any,
+        kingdom: Any,
+    ) -> None:
+        super().__init__(title=str(strings["objectif_modal_title"])[:45], timeout=None)
+        self._strings = strings
+        self._wiring = wiring
+        self._kingdom = kingdom
+        objectives = dict(getattr(kingdom, "council_objectives", {}) or {})
+        self.target_kingdom = discord.ui.TextInput(
+            label=str(strings["objectif_kingdom_label"])[:45],
+            style=discord.TextStyle.short,
+            max_length=100,
+            required=False,
+            default=str(objectives.get("target_kingdom") or "") or None,
+            placeholder=str(strings["objectif_placeholder"]),
+        )
+        self.target_territory = discord.ui.TextInput(
+            label=str(strings["objectif_territory_label"])[:45],
+            style=discord.TextStyle.short,
+            max_length=100,
+            required=False,
+            default=str(objectives.get("target_territory") or "") or None,
+            placeholder=str(strings["objectif_placeholder"]),
+        )
+        self.target_alliance = discord.ui.TextInput(
+            label=str(strings["objectif_alliance_label"])[:45],
+            style=discord.TextStyle.short,
+            max_length=100,
+            required=False,
+            default=str(objectives.get("target_alliance") or "") or None,
+            placeholder=str(strings["objectif_placeholder"]),
+        )
+        for field in (
+            self.target_kingdom,
+            self.target_territory,
+            self.target_alliance,
+        ):
+            self.add_item(field)
+
+    async def on_submit(self, interaction: discord.Interaction) -> None:
+        from time import time
+
+        kingdom = self._kingdom
+        objectives: dict[str, Any] = {
+            "target_kingdom": str(self.target_kingdom.value or "").strip(),
+            "target_territory": str(self.target_territory.value or "").strip(),
+            "target_alliance": str(self.target_alliance.value or "").strip(),
+            "updated_at": int(time()),
+        }
+        try:
+            kingdom.council_objectives = objectives
+            service = getattr(self._wiring, "kingdoms_service", None)
+            if service is not None and hasattr(service, "save_kingdom"):
+                await service.save_kingdom(kingdom)
+        except Exception:
+            logger.warning("KINGDOM LIEUX: objectives save failed", exc_info=True)
+            await interaction.response.send_message(
+                self._strings["no_service"], ephemeral=True
+            )
+            return
+        guild = getattr(interaction, "guild", None)
+        if guild is not None:
+            try:
+                await deploy_objectives_safe(guild, kingdom, self._wiring)
+            except Exception:
+                logger.warning(
+                    "KINGDOM LIEUX: objectives salon refresh failed",
+                    exc_info=True,
+                )
+        await interaction.response.send_message(
+            self._strings["objectif_saved"], ephemeral=True
+        )
+
+
+class KingdomLieuObjectifButton(
+    discord.ui.DynamicItem[discord.ui.Button[Any]],
+    template=r"kingdoms:lieux:objectif",
+):
+    """conseil-objectif-v1 (Drasah 01/11): the King's 🎯 Objectif button
+    of the Salle du conseil — line 1, RIGHT of Seigneurie. The King
+    sets the realm's INDICATIVE goals through a modal; they are
+    injected into the realm's council salon to orient the lords, and a
+    re-click re-opens the modal so the choice is always modifiable.
+    Green for the King, red+disabled for everyone else (never hidden)."""
+
+    def __init__(self, label: str, enabled: bool = True) -> None:
+        super().__init__(
+            discord.ui.Button(
+                label=label[:80],
+                custom_id="kingdoms:lieux:objectif",
+                style=(
+                    discord.ButtonStyle.success
+                    if enabled
+                    else discord.ButtonStyle.danger
+                ),
+                disabled=not enabled,
+            )
+        )
+
+    @classmethod
+    async def from_custom_id(
+        cls,
+        interaction: discord.Interaction,
+        item: discord.ui.Item[Any],
+        match: re.Match[str],
+        /,
+    ) -> "KingdomLieuObjectifButton":
+        """Rebuild from the wire (the crown check re-runs on click)."""
+        return cls(_strings(_locale(interaction))["objectif_button"])
+
+    async def callback(self, interaction: discord.Interaction) -> None:
+        from kingdoms.mods.kingdoms.kingdom_persistent import (
+            _kingdom_by_id_safe,
+            _lord_of,
+            _wiring,
+        )
+
+        locale = _locale(interaction)
+        lieu = _strings(locale)
+        wiring = _wiring()
+        if wiring.kingdoms_service is None:
+            await interaction.response.send_message(
+                lieu["no_service"], ephemeral=True
+            )
+            return
+        lord = await _lord_of(
+            wiring.kingdoms_service, str(interaction.user.id), wiring.bot_admins
+        )
+        if lord is None or getattr(lord, "left", False):
+            await interaction.response.send_message(lieu["not_lord"], ephemeral=True)
+            return
+        if str(getattr(lord, "role", "")) != "king":
+            await interaction.response.send_message(
+                lieu["objectif_king_only"], ephemeral=True
+            )
+            return
+        kingdom = await _kingdom_by_id_safe(
+            wiring.kingdoms_service, str(getattr(lord, "kingdom_id", "") or "")
+        )
+        if kingdom is None:
+            await interaction.response.send_message(lieu["not_lord"], ephemeral=True)
+            return
+        await interaction.response.send_modal(
+            KingdomObjectifModal(lieu, wiring, kingdom)
+        )
+
+
+async def _conseil_rank(wiring: Any, kingdom: Any) -> tuple[int, int]:
+    """The kingdom's Classement — territories first, ties broken by
+    alliances then technology points (conseil-objectif-v1, Drasah
+    01/11). Defensive: (0, 0) renders the line as « — »."""
+    service = getattr(wiring, "kingdoms_service", None)
+    territories_service = getattr(wiring, "territories_service", None)
+    if service is None:
+        return (0, 0)
+    try:
+        kingdoms = [
+            item
+            for item in await service.kingdoms()
+            if not getattr(item, "is_gaia", False)
+        ]
+        counts: dict[str, int] = {str(item.id): 0 for item in kingdoms}
+        if territories_service is not None:
+            for territory in await territories_service.territories():
+                owner = str(getattr(territory, "owner_kingdom_id", ""))
+                if owner in counts:
+                    counts[owner] += 1
+
+        def _sort_key(item: Any) -> tuple[int, int, int]:
+            return (
+                -counts[str(item.id)],
+                -len(getattr(item, "civilizations", []) or []),
+                -int(getattr(item, "tech_points_bank", 0) or 0),
+            )
+
+        ordered = sorted(kingdoms, key=_sort_key)
+        ids = [str(item.id) for item in ordered]
+        kid = str(getattr(kingdom, "id", ""))
+        if kid not in ids:
+            return (0, len(ids))
+        return (ids.index(kid) + 1, len(ids))
+    except Exception:
+        logger.warning("KINGDOM LIEUX: council rank failed", exc_info=True)
+        return (0, 0)
+
+
+def build_objectives_view(kingdom: Any, locale: str) -> Any:
+    """The 🎯 objectifs message of the realm's council salon — the
+    King's indicative goals, marker-keyed so the upsert edits it in
+    place (conseil-objectif-v1, Drasah 01/11)."""
+    import discord
+
+    lieu = _strings(locale)
+    objectives = dict(getattr(kingdom, "council_objectives", {}) or {})
+    kingdom_goal = str(objectives.get("target_kingdom") or "").strip()
+    territory_goal = str(objectives.get("target_territory") or "").strip()
+    alliance_goal = str(objectives.get("target_alliance") or "").strip()
+    lines: list[str] = [
+        f"# {lieu['objectif_view_title'].format(getattr(kingdom, 'name', ''))}"
+    ]
+    lines.append("")
+    if not any((kingdom_goal, territory_goal, alliance_goal)):
+        lines.append(lieu["objectif_empty_line"])
+    else:
+        if kingdom_goal:
+            lines.append(lieu["objectif_kingdom_line"].format(kingdom_goal))
+        if territory_goal:
+            lines.append(lieu["objectif_territory_line"].format(territory_goal))
+        if alliance_goal:
+            lines.append(lieu["objectif_alliance_line"].format(alliance_goal))
+    lines.append("")
+    lines.append(lieu["objectif_footer"])
+    lines.append("-# kingdoms:realm:view:objectifs")
+    view = discord.ui.LayoutView(timeout=None)
+    view.add_item(
+        discord.ui.Container(
+            discord.ui.TextDisplay("\n".join(lines)),
+            accent_colour=discord.Colour.gold(),
+        )
+    )
+    return view
+
+
+def _objectives_salon(category: Any) -> Any | None:
+    """Resolve the council salon of a realm category — the canary
+    « discussions » name first, the legacy « salle du conseil » second."""
+    from kingdoms.mods.kingdoms.kingdom_setup import _slug
+
+    for slug in ("discussions", "salle-du-conseil"):
+        for channel in getattr(category, "channels", []) or []:
+            if _slug(str(getattr(channel, "name", ""))) == slug:
+                return channel
+    return None
+
+
+async def deploy_objectives_safe(
+    guild: Any,
+    kingdom: Any,
+    wiring: Any,
+    locale: str = "fr",
+) -> bool:
+    """Best-effort upsert of the 🎯 objectifs message into the realm's
+    council salon (edit-in-place like every realm view, never a
+    duplicate). The wiring seam keeps the signature future-proof."""
+    from kingdoms.mods.kingdoms.kingdom_realm_content import _upsert_view
+    from kingdoms.mods.kingdoms.kingdom_realms import _find_realm_category
+
+    if guild is None:
+        return False
+    category = _find_realm_category(guild, getattr(kingdom, "name", ""))
+    if category is None:
+        return False
+    channel = _objectives_salon(category)
+    if channel is None:
+        return False
+    return await _upsert_view(
+        channel, "objectifs", build_objectives_view(kingdom, locale)
+    )
+
+
 def build_conseil_view(
     strings: dict[str, Any],
     kingdom: Any,
     state: dict[str, Any],
     wiring: Any,
     locale: str,
+    rank: tuple[int, int] = (0, 0),
+    viewer_is_king: bool = False,
 ) -> tuple[Any, list[discord.File]]:
-    """The ⚔️ Salle du conseil — the state of the realm + action cards."""
+    """The ⚔️ Salle du conseil — the realm's state + action cards.
+
+    conseil-objectif-v1 (Drasah 01/11): the base body becomes the
+    orientation sheet — the intro (what the council is for), the
+    Classement (territories, ties broken by alliances then technology
+    points) and the Trésorerie/Territoires/Alliances line. The 🎯
+    Objectif button rides line 1 RIGHT of Seigneurie: green for the
+    King, red+disabled for everyone else (never hidden).
+    """
     import discord
 
     from kingdoms.mods.kingdoms.kingdom_realm_content import (
-        _overview_body,
         _panel_view_with_buttons,
     )
-    from kingdoms.mods.kingdoms.kingdom_persistent import (
-        KingdomMarketTechButton,
-        KingdomSeigneurieOpenButton,
-        KingdomTraquenardButton,
-    )
+    from kingdoms.mods.kingdoms.kingdom_persistent import KingdomSeigneurieOpenButton
 
     lieu = _strings(locale)
+    classement = lieu["conseil_classement"].format(
+        f"{int(rank[0])}/{int(rank[1])}"
+        if int(rank[0] or 0) > 0 and int(rank[1] or 0) > 0
+        else "—"
+    )
     body = "\n".join(
         [
-            _overview_body(strings, kingdom, state),
+            lieu["conseil_intro_l1"],
+            lieu["conseil_intro_l2"],
+            lieu["conseil_intro_l3"],
+            "",
+            classement,
+            lieu["conseil_stats"].format(
+                int(state.get("wallet", 0) or 0),
+                len(state.get("territories") or []),
+                len(getattr(kingdom, "civilizations", []) or []),
+            ),
+            lieu["conseil_classement_hint"],
             "",
             f"## {lieu['conseil_actions']}",
         ]
     )
     purchases = dict(state.get("purchases") or {})
     # lieux-rows-v1 (Drasah 01/11) — the council button RULES:
-    # line 1 = the default action (green) + Sortir (red, last),
-    # line 2 = the technology cards, ALWAYS visible — green while
-    # held, gray+disabled while out of stock (never hidden).
+    # line 1 = the default action (green) + the King's 🎯 Objectif +
+    # Sortir (red, last), line 2 = the technology cards, ALWAYS
+    # visible — green while held, gray+disabled while out of stock.
     from kingdoms.mods.kingdoms.kingdom_expedition_panel import (
         KingdomExpeditionOpenButton,
         _strings as _expedition_strings,
     )
+    from kingdoms.mods.kingdoms.kingdom_persistent import KingdomTraquenardButton
 
     row_one = [
         _green(KingdomSeigneurieOpenButton(strings["seigneurie_open_button"])),
+        KingdomLieuObjectifButton(lieu["objectif_button"], enabled=viewer_is_king),
         _sortir(locale),
     ]
     row_two = [
@@ -956,6 +1341,7 @@ def register_kingdom_lieux_items(bot: discord.Client) -> None:
     """Re-register the lieu hub doors on the bot (restart-proof)."""
     bot.add_dynamic_items(
         KingdomLieuSortirButton,
+        KingdomLieuObjectifButton,
         KingdomLieuHistButton,
         KingdomLieuCardInfoButton,
         KingdomLieuEntreeButton,

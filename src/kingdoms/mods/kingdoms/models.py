@@ -208,6 +208,12 @@ class KingdomModel(BaseModel):
     (lord ids, each −4h of travel), ``salon_id``, ``panel_message_id``,
     ``ends_at`` (unix, sailing only), ``locked`` (lord ids locked at
     launch)."""
+    council_objectives: dict[str, Any] = Field(default_factory=dict)
+    """conseil-objectif-v1 (Drasah 01/11): the King's INDICATIVE goals —
+    ``{"target_kingdom", "target_territory", "target_alliance",
+    "updated_at"}`` set through the 🎯 Objectif button of the Salle du
+    conseil (king-only) and injected into the realm's council salon to
+    orient the lords. Free text — never engine-enforced."""
 
     def to_mongo(self) -> dict[str, Any]:
         """Convert to a MongoDB document."""

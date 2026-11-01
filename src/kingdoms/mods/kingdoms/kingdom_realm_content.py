@@ -729,6 +729,28 @@ async def deploy_realm_content(
         except Exception:
             logger.warning("KINGDOM REALM CONTENT: view %s failed", key, exc_info=True)
             results[key] = False
+    # conseil-objectif-v1 (Drasah 01/11): the canary realms inject the
+    # King's 🎯 objectifs into the council salon — the message edits in
+    # place like every realm view (never a duplicate).
+    from kingdoms.mods.kingdoms.kingdom_lieux import (
+        _objectives_salon,
+        build_objectives_view,
+        is_canary_realm,
+    )
+
+    if is_canary_realm(kingdom):
+        channel = _objectives_salon(category)
+        if channel is not None:
+            try:
+                results["objectifs"] = await _upsert_view(
+                    channel, "objectifs", build_objectives_view(kingdom, locale)
+                )
+            except Exception:
+                logger.warning(
+                    "KINGDOM REALM CONTENT: view objectifs failed",
+                    exc_info=True,
+                )
+                results["objectifs"] = False
     return results
 
 
