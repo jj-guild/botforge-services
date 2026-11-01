@@ -1155,6 +1155,7 @@ def _build_patrol(
     kingdom: Any,
     state: dict[str, Any],
     media: str | None = None,
+    rows: list[list[Any]] | None = None,
 ) -> Any:
     """Build the 🧱 Remparts view (remparts-v2, Drasah 14/10).
 
@@ -1238,6 +1239,7 @@ def _build_patrol(
             ),
         ],
         media=media,
+        rows=rows,
     )
 
 
@@ -1412,6 +1414,7 @@ def _build_church(
     kingdom: Any,
     state: dict[str, Any],
     media: str | None = None,
+    rows: list[list[Any]] | None = None,
 ) -> Any:
     """Build the ⛪ Paroisse state view (D64 paliers + marriages, v3).
 
@@ -1528,7 +1531,7 @@ def _build_church(
     ]
     body = "\n".join(lines)
 
-    buttons = _church_buttons(strings, kingdom, state)
+    buttons = rows if rows is not None else _church_buttons(strings, kingdom, state)
     return _panel_view_with_buttons(
         strings["church_title"].format(
             getattr(kingdom, "name", ""),
@@ -1541,6 +1544,7 @@ def _build_church(
         discord.Colour.purple(),
         buttons,
         media=media,
+        rows=rows,
     )
 
 
@@ -1577,6 +1581,7 @@ def _panel_view_with_buttons(
     accent: discord.Colour,
     buttons: list[Any],
     media: str | None = None,
+    rows: list[list[Any]] | None = None,
 ) -> discord.ui.LayoutView:
     """Build one Components V2 state panel with an action row of buttons.
 
@@ -1595,7 +1600,16 @@ def _panel_view_with_buttons(
         discord.ui.Separator(),
         accent_colour=accent,
     )
-    if buttons:
+    if rows:
+        # lieux-rows-v1 (Drasah 01/11): the lieu views lay their own
+        # rows — line 1 = the place's default actions (green) + Sortir
+        # (red) last, line 2 = the technology cards (gray/disabled
+        # while out of stock, green while held). Every sublist is the
+        # CALLER's responsibility (max 5 children per row).
+        for row in rows:
+            if row:
+                container.add_item(discord.ui.ActionRow(*row))
+    elif buttons:
         # overview-rows-v1 (Drasah 31/10, live incident HeN): Discord
         # caps an ActionRow at FIVE children — the Le-Royaume sheet
         # reached SIX buttons (ledger, traquenard, exploration,

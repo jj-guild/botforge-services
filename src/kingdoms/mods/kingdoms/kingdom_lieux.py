@@ -48,6 +48,7 @@ STRINGS: dict[str, dict[str, str]] = {
         "no_service": "The Kingdoms service is not wired.",
         "conseil_title": "⚔️ Council room — {0}",
         "conseil_actions": "Action cards",
+        "sortir_button": "🚪 Leave",
     },
     "fr": {
         "hub_flavor": (
@@ -66,6 +67,7 @@ STRINGS: dict[str, dict[str, str]] = {
         "no_service": "Le service Kingdoms n'est pas câblé.",
         "conseil_title": "⚔️ Salle du conseil — {0}",
         "conseil_actions": "Cartes d'action",
+        "sortir_button": "🚪 Sortir",
     },
 }
 
@@ -205,6 +207,65 @@ def entree_view(locale: str) -> Any:
     return view
 
 
+def _green(button: Any) -> Any:
+    """lieux-rows-v1: a default place action renders GREEN."""
+    button.item.style = discord.ButtonStyle.success
+    return button
+
+
+def _gray(button: Any) -> Any:
+    """lieux-rows-v1: an out-of-stock card renders GRAY and disabled."""
+    button.item.style = discord.ButtonStyle.secondary
+    button.item.disabled = True
+    return button
+
+
+def _stock_style(button: Any, has_stock: bool) -> Any:
+    """Green while held, gray+disabled otherwise (never hidden)."""
+    return _green(button) if has_stock else _gray(button)
+
+
+class KingdomLieuSortirButton(
+    discord.ui.DynamicItem[discord.ui.Button[Any]],
+    template=r"kingdoms:lieux:sortir",
+):
+    """The red 🚪 Sortir of every lieu view (lieux-rows-v1, Drasah 01/11).
+
+    Line 1 rule: the place's default actions render green and Sortir
+    closes the LAST slot in red — one click walks the player back to
+    the Entrée orientation (the single ephemeral window is REPLACED,
+    fenetre-unique-v2).
+    """
+
+    def __init__(self, label: str) -> None:
+        super().__init__(
+            discord.ui.Button(
+                label=label[:80],
+                custom_id="kingdoms:lieux:sortir",
+                style=discord.ButtonStyle.danger,
+            )
+        )
+
+    @classmethod
+    async def from_custom_id(
+        cls,
+        interaction: discord.Interaction,
+        item: discord.ui.Item[Any],
+        match: re.Match[str],
+        /,
+    ) -> "KingdomLieuSortirButton":
+        """Rebuild from the wire — THIS module's strings only."""
+        return cls(_strings(_locale(interaction))["sortir_button"])
+
+    async def callback(self, interaction: discord.Interaction) -> None:
+        await _open_entree(interaction)
+
+
+def _sortir(locale: str) -> KingdomLieuSortirButton:
+    """The red exit of a lieu view."""
+    return KingdomLieuSortirButton(_strings(locale)["sortir_button"])
+
+
 async def _open_entree(interaction: discord.Interaction) -> None:
     """Open the Entrée chooser as the clicker's single ephemeral window."""
     from kingdoms.mods.kingdoms.kingdom_persistent import (
@@ -310,19 +371,27 @@ async def _open_lieu(interaction: discord.Interaction, kind: str) -> None:
     elif kind == "remparts":
         view, files = (
             _build_patrol(
-                strings, kingdom, state, media="attachment://rempart.png"
+                strings,
+                kingdom,
+                state,
+                media="attachment://rempart.png",
+                rows=_remparts_rows(strings, state, wiring, locale),
             ),
             _lieu_files("Rempart.png", "rempart.png"),
         )
     elif kind == "paroisse":
         view, files = (
             _build_church(
-                strings, kingdom, state, media="attachment://paroisse.png"
+                strings,
+                kingdom,
+                state,
+                media="attachment://paroisse.png",
+                rows=_paroisse_rows(strings, kingdom, state, locale),
             ),
             _paroisse_files(state),
         )
     else:  # voliere
-        view, files = await _build_voliere(wiring, kingdom, strings)
+        view, files = await _build_voliere(wiring, kingdom, strings, locale)
     await _open_unique_ephemeral(interaction, view=view, files=files or None)
 
 
@@ -337,7 +406,7 @@ def _paroisse_files(state: dict[str, Any]) -> list[discord.File]:
 
 
 async def _build_voliere(
-    wiring: Any, kingdom: Any, strings: dict[str, Any]
+    wiring: Any, kingdom: Any, strings: dict[str, Any], locale: str
 ) -> tuple[Any, list[discord.File]]:
     """The Volière lieu view — the voliere panel content + illustration."""
     from kingdoms.mods.kingdoms.kingdom_voliere_panel import (
@@ -359,7 +428,7 @@ async def _build_voliere(
             str(content),
             "kingdoms:realm:view:lieu-voliere",
             discord.Colour.green(),
-            [],
+            [_sortir(locale)],
             media="attachment://voliere.png",
         ),
         _lieu_files("voliere.png", "voliere.png"),
@@ -394,45 +463,145 @@ def build_conseil_view(
             f"## {lieu['conseil_actions']}",
         ]
     )
-    buttons: list[Any] = [KingdomSeigneurieOpenButton(strings["seigneurie_open_button"])]
     purchases = dict(state.get("purchases") or {})
-    # Exploration card: only while the kingdom holds an unused token
-    # (the launch consumes it — existing convention, green when present).
-    if int(purchases.get("explorateur_stock", 0) or 0) > 0:
-        from kingdoms.mods.kingdoms.kingdom_expedition_panel import (
-            KingdomExpeditionOpenButton,
-            _strings as _expedition_strings,
-        )
-
-        buttons.append(
-            KingdomExpeditionOpenButton(
-                _expedition_strings(locale)["open_button"]
-            )
-        )
-    # Traquenard card: only while the kingdom holds a charge (red style).
-    if int(purchases.get("traquenard", 0) or 0) > 0:
-        buttons.append(KingdomTraquenardButton(strings))
-    # Jeu d'armes card: the Marché buy button, green when affordable,
-    # red otherwise (the couleur-convention of the council cards).
-    tech_cost = _jeu_d_armes_cost(wiring)
-    label = str(strings.get("market_tech", {}).get("jeu_d_armes", "Jeu d'armes"))
-    affordable = int(state.get("wallet", 0) or 0) >= tech_cost
-    buttons.append(
-        KingdomMarketTechButton(
-            "jeu_d_armes",
-            f"{label} — {tech_cost} ⚙️",
-            discord.ButtonStyle.success if affordable else discord.ButtonStyle.danger,
-        )
+    # lieux-rows-v1 (Drasah 01/11) — the council button RULES:
+    # line 1 = the default action (green) + Sortir (red, last),
+    # line 2 = the technology cards, ALWAYS visible — green while
+    # held, gray+disabled while out of stock (never hidden).
+    from kingdoms.mods.kingdoms.kingdom_expedition_panel import (
+        KingdomExpeditionOpenButton,
+        _strings as _expedition_strings,
     )
+
+    row_one = [
+        _green(KingdomSeigneurieOpenButton(strings["seigneurie_open_button"])),
+        _sortir(locale),
+    ]
+    row_two = [
+        _stock_style(
+            KingdomExpeditionOpenButton(_expedition_strings(locale)["open_button"]),
+            int(purchases.get("explorateur_stock", 0) or 0) > 0,
+        ),
+        _stock_style(
+            KingdomTraquenardButton(strings),
+            int(purchases.get("traquenard", 0) or 0) > 0,
+        ),
+    ]
     view = _panel_view_with_buttons(
         lieu["conseil_title"].format(getattr(kingdom, "name", "")),
         body,
         "kingdoms:realm:view:lieu-conseil",
         discord.Colour.gold(),
-        buttons,
+        row_one,
         media="attachment://salle_du_conseil.png",
+        rows=[row_one, row_two],
     )
     return view, _lieu_files("salle du conseil.png", "salle_du_conseil.png")
+
+
+def _remparts_rows(
+    strings: dict[str, Any],
+    state: dict[str, Any],
+    wiring: Any,
+    locale: str,
+) -> list[list[Any]]:
+    """lieux-rows-v1 — the Remparts button rules (Drasah 01/11).
+
+    Line 1: the default war actions (green) + Sortir (red, last).
+    Line 2: the placement + card buttons — Garde / Patrouille 1 / 2
+    green while their stock/unlock is held (gray+disabled otherwise)
+    and the Jeu d'armes card, green while affordable, gray otherwise.
+    """
+    from kingdoms.mods.kingdoms.kingdom_attack_panel import (
+        KingdomAttackManagerButton,
+        KingdomDefenseManagerButton,
+    )
+    from kingdoms.mods.kingdoms.kingdom_persistent import (
+        KingdomMarketTechButton,
+        KingdomRempartsGuardButton,
+        KingdomRempartsPatrouilleButton,
+    )
+
+    purchases = dict(state.get("purchases") or {})
+    row_one = [
+        _green(
+            KingdomDefenseManagerButton(
+                strings.get("defense_manager_button", "🛡️ Gestion de la défense")
+            )
+        ),
+        _green(
+            KingdomAttackManagerButton(
+                strings.get("attack_manager_button", "⚔️ Gestion d'attaque")
+            )
+        ),
+        _sortir(locale),
+    ]
+    guard = _stock_style(
+        KingdomRempartsGuardButton(strings),
+        int(purchases.get("garde_royale_stock", 0) or 0) > 0,
+    )
+    patrols = []
+    for slot_no in (1, 2):
+        patrols.append(
+            _stock_style(
+                KingdomRempartsPatrouilleButton(slot_no, strings),
+                f"patrouille_unlock_{slot_no}" in purchases
+                or f"patrouille_slot_{slot_no}" in purchases,
+            )
+        )
+    # Jeu d'armes lives HERE now (Drasah 01/11): the card activates on
+    # the Ramparts — green while the treasury affords it, gray+disabled
+    # otherwise (never hidden).
+    tech_cost = _jeu_d_armes_cost(wiring)
+    label = str(strings.get("market_tech", {}).get("jeu_d_armes", "Jeu d'armes"))
+    jeu = KingdomMarketTechButton(
+        "jeu_d_armes", f"{label} — {tech_cost} ⚙️", discord.ButtonStyle.success
+    )
+    if int(state.get("wallet", 0) or 0) < tech_cost:
+        _gray(jeu)
+    return [row_one, [guard, *patrols, jeu]]
+
+
+def _paroisse_rows(
+    strings: dict[str, Any],
+    kingdom: Any,
+    state: dict[str, Any],
+    locale: str,
+) -> list[list[Any]]:
+    """lieux-rows-v1 — the Paroisse button rules (Drasah 01/11).
+
+    Line 1: the parish's default actions (green) + Sortir (red, last).
+    Line 2: the 💒 Mariage arrangé card, ALWAYS visible — green from the
+    Église palier while a token is held, gray+disabled otherwise.
+    """
+    from kingdoms.mods.kingdoms.kingdom_realm_content import _church_buttons
+
+    base = _church_buttons(strings, kingdom, state)
+    arrange: Any = None
+    others: list[Any] = []
+    for button in base:
+        if str(getattr(button.item, "custom_id", "")) == "kingdoms:church:arrange":
+            arrange = button
+        else:
+            others.append(button)
+    row_one: list[Any] = []
+    for button in others:
+        # The max-palier Améliorer stays disabled (its own convention).
+        if not button.item.disabled:
+            _green(button)
+        row_one.append(button)
+    row_one.append(_sortir(locale))
+    parish = state.get("parish") or {}
+    tier = int(parish.get("tier", 1) or 1)
+    stock = int(getattr(kingdom, "arranged_marriage_stock", 0) or 0)
+    if arrange is None:
+        from kingdoms.mods.kingdoms.kingdom_persistent import (
+            KingdomChurchArrangeButton,
+        )
+
+        arrange = KingdomChurchArrangeButton(strings, 0)
+    _stock_style(arrange, tier >= 2 and stock > 0)
+    return [row_one, [arrange]]
 
 
 def _jeu_d_armes_cost(wiring: Any) -> int:
@@ -487,6 +656,13 @@ async def _open_comptes(
     files = list(card_files or []) + _lieu_files(
         "chambre des comptes.png", "chambre_des_comptes.png"
     )
+    # lieux-rows-v1: the ledger window carries the red Sortir too.
+    if card_info_view is None:
+        card_info_view = discord.ui.View(timeout=None)
+    try:
+        card_info_view.add_item(_sortir(locale))
+    except Exception:
+        logger.warning("KINGDOM LIEUX: ledger Sortir add failed", exc_info=True)
     user_id = str(getattr(interaction.user, "id", ""))
     await _close_previous_ephemeral(user_id)
     window = await interaction.followup.send(
@@ -498,6 +674,7 @@ async def _open_comptes(
 def register_kingdom_lieux_items(bot: discord.Client) -> None:
     """Re-register the lieu hub doors on the bot (restart-proof)."""
     bot.add_dynamic_items(
+        KingdomLieuSortirButton,
         KingdomLieuEntreeButton,
         KingdomLieuConseilButton,
         KingdomLieuRempartsButton,

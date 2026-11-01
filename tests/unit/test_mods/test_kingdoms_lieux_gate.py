@@ -186,3 +186,151 @@ def test_council_salon_renamed_for_canary_only() -> None:
         canary_salon_display("territoire", "🗺️ territoire", _kingdom(TEST_KINGDOM_ID))
         == "🗺️ territoire"
     )
+
+
+# ---------------------------------------------------------------------------
+# lieux-rows-v1 (Drasah 01/11) — the button rules of every lieu view.
+# ---------------------------------------------------------------------------
+
+
+def _action_rows(children: Any) -> list[discord.ui.ActionRow]:
+    rows: list[discord.ui.ActionRow] = []
+    for child in children:
+        if isinstance(child, discord.ui.ActionRow):
+            rows.append(child)
+        rows.extend(_action_rows(getattr(child, "children", []) or []))
+    return rows
+
+
+def _merged_fr() -> dict[str, str]:
+    from kingdoms.mods.kingdoms.kingdom_realm_content import _strings as _realm
+
+    return _realm("fr")
+
+
+def _minimal_state(purchases: dict[str, Any] | None = None) -> dict[str, Any]:
+    return {
+        "members": [],
+        "wallet": 0,
+        "territories": [],
+        "purchases": purchases or {},
+        "parish": {"tier": 1, "max_tier": 3, "next_name": "Église", "cost": 2},
+    }
+
+
+def test_sortir_button_registered_and_red() -> None:
+    from kingdoms.mods.kingdoms.kingdom_lieux import KingdomLieuSortirButton
+
+    bot = _FakeBot()
+    register_kingdom_lieux_items(bot)
+    assert KingdomLieuSortirButton in bot._dynamic_items
+    sortir = KingdomLieuSortirButton("🚪 Sortir")
+    assert sortir.item.style == discord.ButtonStyle.danger
+    assert sortir.item.custom_id == "kingdoms:lieux:sortir"
+
+
+def test_conseil_rows_follow_the_button_rules() -> None:
+    from kingdoms.mods.kingdoms.kingdom_lieux import build_conseil_view
+
+    strings = _merged_fr()
+    wiring = SimpleNamespace(kingdoms_service=None)
+    view, _files = build_conseil_view(
+        strings, _kingdom(TEST_KINGDOM_ID), _minimal_state(), wiring, "fr"
+    )
+    rows = _action_rows(view.children)
+    assert len(rows) == 2
+    first = list(rows[0].children)
+    second = list(rows[1].children)
+    # line 1: default action GREEN + Sortir RED last
+    assert first[0].style == discord.ButtonStyle.success
+    assert first[-1].label == _strings("fr")["sortir_button"]
+    assert first[-1].style == discord.ButtonStyle.danger
+    # line 2: the cards stay VISIBLE, gray+disabled while out of stock
+    assert len(second) == 2
+    for button in second:
+        assert button.disabled is True
+        assert button.style == discord.ButtonStyle.secondary
+
+
+def test_conseil_cards_green_while_held() -> None:
+    from kingdoms.mods.kingdoms.kingdom_lieux import build_conseil_view
+
+    strings = _merged_fr()
+    wiring = SimpleNamespace(kingdoms_service=None)
+    state = _minimal_state({"explorateur_stock": 1, "traquenard": 2})
+    view, _files = build_conseil_view(
+        strings, _kingdom(TEST_KINGDOM_ID), state, wiring, "fr"
+    )
+    rows = _action_rows(view.children)
+    for button in rows[1].children:
+        assert button.disabled is False
+        assert button.style == discord.ButtonStyle.success
+
+
+def test_remparts_rows_follow_the_button_rules() -> None:
+    from kingdoms.mods.kingdoms.kingdom_lieux import _remparts_rows
+
+    strings = _merged_fr()
+    wiring = SimpleNamespace(kingdoms_service=None)
+    rows = _remparts_rows(strings, _minimal_state(), wiring, "fr")
+    assert len(rows) == 2
+    first, second = (list(row) for row in rows)
+    # line 1: the war actions GREEN + Sortir RED last
+    for button in first[:-1]:
+        assert button.item.style == discord.ButtonStyle.success
+    assert first[-1].item.label == _strings("fr")["sortir_button"]
+    assert first[-1].item.style == discord.ButtonStyle.danger
+    # line 2: Garde + Patrouille 1/2 gray+disabled without stock, and
+    # the Jeu d'armes card lives HERE (moved out of the Council).
+    labels = [str(button.item.label) for button in second]
+    assert any("Jeu d'armes" in label for label in labels)
+    for button in second:
+        assert button.item.disabled is True
+        assert button.item.style == discord.ButtonStyle.secondary
+    # with everything held, line 2 turns green
+    green_state = _minimal_state(
+        {
+            "garde_royale_stock": 1,
+            "patrouille_unlock_1": 1,
+            "patrouille_unlock_2": 1,
+        }
+    )
+    green_state["wallet"] = 999  # the Jeu d'armes card turns green too
+    rows_green = _remparts_rows(
+        strings,
+        green_state,
+        SimpleNamespace(kingdoms_service=SimpleNamespace(config=None)),
+        "fr",
+    )
+    for button in rows_green[1]:
+        assert button.item.disabled is False
+        assert button.item.style == discord.ButtonStyle.success
+
+
+def test_paroisse_rows_follow_the_button_rules() -> None:
+    from kingdoms.mods.kingdoms.kingdom_lieux import _paroisse_rows
+
+    strings = _merged_fr()
+    kingdom = SimpleNamespace(
+        id=TEST_KINGDOM_ID, name="Nilrem", arranged_marriage_stock=0
+    )
+    rows = _paroisse_rows(strings, kingdom, _minimal_state(), "fr")
+    assert len(rows) == 2
+    first, second = (list(row) for row in rows)
+    # line 1: the parish actions GREEN + Sortir RED last
+    assert first[-1].item.label == _strings("fr")["sortir_button"]
+    assert first[-1].item.style == discord.ButtonStyle.danger
+    # line 2: Mariage arrangé ALWAYS visible, gray at tier 1
+    assert len(second) == 1
+    assert second[0].item.disabled is True
+    assert second[0].item.style == discord.ButtonStyle.secondary
+    # from the Église palier with a token held, it turns green
+    kingdom2 = SimpleNamespace(
+        id=TEST_KINGDOM_ID, name="Nilrem", arranged_marriage_stock=1
+    )
+    state2 = _minimal_state()
+    state2["parish"] = {"tier": 2, "max_tier": 3, "next_name": "Cathédrale", "cost": 4}
+    rows2 = _paroisse_rows(strings, kingdom2, state2, "fr")
+    arrange = list(rows2[1])[0]
+    assert arrange.item.disabled is False
+    assert arrange.item.style == discord.ButtonStyle.success
