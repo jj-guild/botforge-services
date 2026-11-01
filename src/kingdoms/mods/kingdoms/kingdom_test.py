@@ -106,7 +106,16 @@ async def _provision_test_realm(guild: discord.Guild | None, kingdom: Any, servi
         # construction, and the fictional king id never resolves to a
         # real member anyway.
         await ensure_realm_structure(guild, kingdom, [])
+        # kingdom-test-v2 (Drasah 01/11): the alliances and the map are
+        # distributed like a fresh approval — in ``setup`` the helpers
+        # no-op (placeholder / deferred), once the game has started the
+        # territory draw fills the Territoire salon for real.
+        from kingdoms.mods.kingdoms.kingdom_persistent import (
+            _draw_territories_for_kingdom_safe,
+        )
+
         await _announce_realm_alliances(guild, kingdom, service)
+        await _draw_territories_for_kingdom_safe(str(kingdom.id))
         await _deploy_realm_content_safe(guild, kingdom)
     except Exception:
         logger.warning("KINGDOM TEST: realm provisioning failed", exc_info=True)

@@ -1407,7 +1407,9 @@ class KingdomAttackDeclareButton(
         if wiring.attacks_service is None:
             await _open_unique_ephemeral(interaction, strings["no_service"])
             return
-        lord = await _lord_of(wiring.kingdoms_service, str(interaction.user.id))
+        lord = await _lord_of(
+            wiring.kingdoms_service, str(interaction.user.id), wiring.bot_admins
+        )
         if lord is None:
             await _open_unique_ephemeral(interaction, strings["not_a_lord"])
             return
@@ -2429,7 +2431,9 @@ class KingdomAttackDefendButton(
         if attack.is_over:
             await _open_unique_ephemeral(interaction, strings["gaia_gone"])
             return
-        lord = await _lord_of(wiring.kingdoms_service, str(interaction.user.id))
+        lord = await _lord_of(
+            wiring.kingdoms_service, str(interaction.user.id), wiring.bot_admins
+        )
         # defend-probe-leak (Drasah 29/10): ANY lord outside the
         # defending kingdom gets the SAME generic refusal — probing the
         # button must never reveal whether a defense is already taken.
@@ -2519,7 +2523,9 @@ class KingdomDefenseManagerButton(
         if wiring.attacks_service is None or wiring.kingdoms_service is None:
             await _open_unique_ephemeral(interaction, strings["defense_manager_no_service"])
             return
-        lord = await _lord_of(wiring.kingdoms_service, str(interaction.user.id))
+        lord = await _lord_of(
+            wiring.kingdoms_service, str(interaction.user.id), wiring.bot_admins
+        )
         if lord is None or getattr(lord, "kingdom_id", None) is None:
             await _open_unique_ephemeral(interaction, strings["defense_manager_not_defender"])
             return
@@ -2944,7 +2950,9 @@ class KingdomPlanButton(
         if wiring.attacks_service is None or wiring.kingdoms_service is None:
             await _open_unique_ephemeral(interaction, strings["plan_no_service"])
             return
-        lord = await _lord_of(wiring.kingdoms_service, str(interaction.user.id))
+        lord = await _lord_of(
+            wiring.kingdoms_service, str(interaction.user.id), wiring.bot_admins
+        )
         if lord is None or getattr(lord, "kingdom_id", None) is None:
             await _open_unique_ephemeral(
                 interaction, strings["defense_manager_not_defender"]
@@ -3108,7 +3116,9 @@ class KingdomAttackManagerButton(
         if wiring.attacks_service is None or wiring.kingdoms_service is None:
             await _open_unique_ephemeral(interaction, strings["plan_no_service"])
             return
-        lord = await _lord_of(wiring.kingdoms_service, str(interaction.user.id))
+        lord = await _lord_of(
+            wiring.kingdoms_service, str(interaction.user.id), wiring.bot_admins
+        )
         if lord is None or getattr(lord, "kingdom_id", None) is None:
             await _open_unique_ephemeral(
                 interaction, strings["defense_manager_not_defender"]

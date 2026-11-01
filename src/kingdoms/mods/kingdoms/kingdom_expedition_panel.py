@@ -191,7 +191,9 @@ async def _require_lord(
     """Resolve the acting lord + kingdom or answer the refusal."""
     from kingdoms.mods.kingdoms.kingdom_persistent import _lord_of
 
-    lord = await _lord_of(wiring.kingdoms_service, str(interaction.user.id))
+    lord = await _lord_of(
+            wiring.kingdoms_service, str(interaction.user.id), wiring.bot_admins
+        )
     if lord is None or not lord.kingdom_id or lord.left:
         await _error_note(interaction, strings["not_a_lord"])
         return (None, None)

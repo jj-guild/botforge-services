@@ -1051,7 +1051,9 @@ def _fiche_select_callback(locale: str) -> Any:
             return
         wiring = _wiring()
         try:
-            consultant = await _lord_of(wiring.kingdoms_service, str(interaction.user.id))
+            consultant = await _lord_of(
+            wiring.kingdoms_service, str(interaction.user.id), wiring.bot_admins
+        )
         except Exception:
             consultant = None
         try:
@@ -1142,7 +1144,9 @@ class KingdomSeigneurieButton(
         strings = _strings(locale)
         wiring = _wiring()
         try:
-            consultant = await _lord_of(wiring.kingdoms_service, str(interaction.user.id))
+            consultant = await _lord_of(
+            wiring.kingdoms_service, str(interaction.user.id), wiring.bot_admins
+        )
             kingdoms = await wiring.kingdoms_service.kingdoms()
             consultant_kingdom = None
             if consultant is not None:

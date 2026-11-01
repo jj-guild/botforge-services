@@ -804,8 +804,50 @@ class KingdomRequestButton(
                 except Exception:
                     logger.info("KINGDOMS: leave-applied note failed", exc_info=True)
 
-async def _king_of(kingdoms_service: Any, user_id: str) -> Any | None:
-    """Return the active King lord record of the user (None otherwise)."""
+async def _test_lord_fallback(
+    kingdoms_service: Any, user_id: str, bot_admins: tuple[str, ...], *, king_only: bool
+) -> Any | None:
+    """kingdom-test-v1 (Drasah 01/11): the admin-as-king fallback.
+
+    An admin with no record of their own IS the king of the test
+    kingdom: the lookup adopts the fictional Nilrem king document
+    (``nilrem-roi`` — never a real Discord member), so the admin
+    pilots the test realm like a king without touching the players.
+    A real record always wins; non-admins never fall back.
+    """
+    if kingdoms_service is None:
+        return None
+    admin_ids = {str(admin) for admin in bot_admins}
+    if not admin_ids or str(user_id) not in admin_ids:
+        return None
+    from kingdoms.mods.kingdoms.service import KING_ROLE, TEST_KING_ID
+
+    try:
+        lords = await kingdoms_service.lords()
+    except Exception:
+        logger.warning("KINGDOMS: admin-as-king fallback lookup failed", exc_info=True)
+        return None
+    return next(
+        (
+            lord
+            for lord in lords
+            if str(lord.id) == TEST_KING_ID
+            and not lord.left
+            and bool(lord.kingdom_id)
+            and (not king_only or lord.role == KING_ROLE)
+        ),
+        None,
+    )
+
+
+async def _king_of(
+    kingdoms_service: Any, user_id: str, bot_admins: tuple[str, ...] = ()
+) -> Any | None:
+    """Return the active King lord record of the user (None otherwise).
+
+    kingdom-test-v1: an admin with no throne falls back to the
+    fictional Nilrem king (the admin-as-king rule).
+    """
     if kingdoms_service is None:
         return None
     from kingdoms.mods.kingdoms.service import KING_ROLE
@@ -815,7 +857,7 @@ async def _king_of(kingdoms_service: Any, user_id: str) -> Any | None:
     except Exception:
         logger.warning("KINGDOMS MARKET: lord lookup failed", exc_info=True)
         return None
-    return next(
+    king = next(
         (
             lord
             for lord in lords
@@ -826,6 +868,9 @@ async def _king_of(kingdoms_service: Any, user_id: str) -> Any | None:
         ),
         None,
     )
+    if king is not None:
+        return king
+    return await _test_lord_fallback(kingdoms_service, user_id, bot_admins, king_only=True)
 
 
 def _market_error_note(exc: Exception, strings: dict[str, Any]) -> str:
@@ -1695,7 +1740,9 @@ class KingdomMarketConfirmButton(
         if wiring.economy_service is None:
             await interaction.response.send_message(strings["market_no_service"], ephemeral=True)
             return
-        king = await _king_of(wiring.kingdoms_service, str(interaction.user.id))
+        king = await _king_of(
+            wiring.kingdoms_service, str(interaction.user.id), wiring.bot_admins
+        )
         if king is None:
             await interaction.response.send_message(strings["market_not_king"], ephemeral=True)
             return
@@ -1872,7 +1919,9 @@ class KingdomMarketTechButton(
         if wiring.economy_service is None:
             await interaction.response.send_message(strings["market_no_service"], ephemeral=True)
             return
-        king = await _king_of(wiring.kingdoms_service, str(interaction.user.id))
+        king = await _king_of(
+            wiring.kingdoms_service, str(interaction.user.id), wiring.bot_admins
+        )
         if king is None:
             await interaction.response.send_message(strings["market_not_king"], ephemeral=True)
             return
@@ -1923,7 +1972,9 @@ class KingdomMarketActionButton(
         if wiring.economy_service is None:
             await interaction.response.send_message(strings["market_no_service"], ephemeral=True)
             return
-        king = await _king_of(wiring.kingdoms_service, str(interaction.user.id))
+        king = await _king_of(
+            wiring.kingdoms_service, str(interaction.user.id), wiring.bot_admins
+        )
         if king is None:
             await interaction.response.send_message(strings["market_not_king"], ephemeral=True)
             return
@@ -1974,7 +2025,9 @@ class KingdomRempartsOpenButton(
         if wiring.kingdoms_service is None:
             await interaction.response.send_message(strings["market_no_service"], ephemeral=True)
             return
-        lord = await _lord_of(wiring.kingdoms_service, str(interaction.user.id))
+        lord = await _lord_of(
+            wiring.kingdoms_service, str(interaction.user.id), wiring.bot_admins
+        )
         if lord is None or getattr(lord, "left", False):
             await interaction.response.send_message(strings["not_lord"], ephemeral=True)
             return
@@ -2039,7 +2092,9 @@ class KingdomSeigneurieOpenButton(
         if wiring.kingdoms_service is None:
             await interaction.response.send_message(strings["market_no_service"], ephemeral=True)
             return
-        lord = await _lord_of(wiring.kingdoms_service, str(interaction.user.id))
+        lord = await _lord_of(
+            wiring.kingdoms_service, str(interaction.user.id), wiring.bot_admins
+        )
         if lord is None or getattr(lord, "left", False):
             await interaction.response.send_message(strings["not_lord"], ephemeral=True)
             return
@@ -2100,7 +2155,9 @@ class KingdomRempartsGuardButton(
         if wiring.economy_service is None or wiring.territories_service is None:
             await interaction.response.send_message(strings["market_no_service"], ephemeral=True)
             return
-        king = await _king_of(wiring.kingdoms_service, str(interaction.user.id))
+        king = await _king_of(
+            wiring.kingdoms_service, str(interaction.user.id), wiring.bot_admins
+        )
         if king is None:
             await interaction.response.send_message(strings["market_not_king"], ephemeral=True)
             return
@@ -2212,7 +2269,9 @@ class KingdomRempartsPatrouilleButton(
         if wiring.economy_service is None:
             await interaction.response.send_message(strings["market_no_service"], ephemeral=True)
             return
-        king = await _king_of(wiring.kingdoms_service, str(interaction.user.id))
+        king = await _king_of(
+            wiring.kingdoms_service, str(interaction.user.id), wiring.bot_admins
+        )
         if king is None:
             await interaction.response.send_message(strings["market_not_king"], ephemeral=True)
             return
@@ -2475,7 +2534,9 @@ class KingdomTraquenardButton(
         locale = str(interaction.locale) if interaction.locale else "en"
         strings = _strings(locale)
         wiring = _wiring()
-        lord = await _lord_of(wiring.kingdoms_service, str(interaction.user.id))
+        lord = await _lord_of(
+            wiring.kingdoms_service, str(interaction.user.id), wiring.bot_admins
+        )
         if lord is None:
             await interaction.response.send_message(strings["market_not_king"], ephemeral=True)
             return
@@ -2697,7 +2758,9 @@ class KingdomMarketCardInfoButton(
         locale = str(interaction.locale) if interaction.locale else "en"
         strings = _strings(locale)
         wiring = _wiring()
-        lord = await _lord_of(wiring.kingdoms_service, str(interaction.user.id))
+        lord = await _lord_of(
+            wiring.kingdoms_service, str(interaction.user.id), wiring.bot_admins
+        )
         kingdom_id = str(getattr(lord, "kingdom_id", "") or "") if lord else ""
         kingdom = (
             await _kingdom_by_id_safe(wiring.kingdoms_service, kingdom_id)
@@ -2803,7 +2866,9 @@ class KingdomMarketUseButton(
         locale = str(interaction.locale) if interaction.locale else "en"
         strings = _strings(locale)
         wiring = _wiring()
-        lord = await _lord_of(wiring.kingdoms_service, str(interaction.user.id))
+        lord = await _lord_of(
+            wiring.kingdoms_service, str(interaction.user.id), wiring.bot_admins
+        )
         if lord is None:
             await interaction.response.send_message(
                 strings["church_marry_kingdom_none"], ephemeral=True
@@ -2957,7 +3022,9 @@ class KingdomMarketLedgerButton(
         locale = str(interaction.locale) if interaction.locale else "en"
         strings = _strings(locale)
         wiring = _wiring()
-        lord = await _lord_of(wiring.kingdoms_service, str(interaction.user.id))
+        lord = await _lord_of(
+            wiring.kingdoms_service, str(interaction.user.id), wiring.bot_admins
+        )
         if lord is None:
             await interaction.response.send_message(
                 strings["church_marry_kingdom_none"], ephemeral=True
@@ -2992,8 +3059,14 @@ class KingdomMarketLedgerButton(
         _EPHEMERAL_WINDOWS[user_id] = (interaction, time.monotonic(), window)
 
 
-async def _lord_of(kingdoms_service: Any, user_id: str) -> Any | None:
-    """Return the active lord record of the user (any role, None otherwise)."""
+async def _lord_of(
+    kingdoms_service: Any, user_id: str, bot_admins: tuple[str, ...] = ()
+) -> Any | None:
+    """Return the active lord record of the user (any role, None otherwise).
+
+    kingdom-test-v1: an admin with no record falls back to the
+    fictional Nilrem king (the admin-as-king rule).
+    """
     if kingdoms_service is None:
         return None
     try:
@@ -3001,10 +3074,13 @@ async def _lord_of(kingdoms_service: Any, user_id: str) -> Any | None:
     except Exception:
         logger.warning("KINGDOMS PARISH: lord lookup failed", exc_info=True)
         return None
-    return next(
+    lord = next(
         (item for item in lords if str(item.id) == str(user_id) and not item.left),
         None,
     )
+    if lord is not None:
+        return lord
+    return await _test_lord_fallback(kingdoms_service, user_id, bot_admins, king_only=False)
 
 
 async def _record_clicked_chronicle(
@@ -3025,7 +3101,7 @@ async def _record_clicked_chronicle(
         from kingdoms.mods.kingdoms import chronicle
         from kingdoms.mods.kingdoms.game_clock import game_now
 
-        lord = await _lord_of(wiring.kingdoms_service, str(user_id))
+        lord = await _lord_of(wiring.kingdoms_service, str(user_id), wiring.bot_admins)
         if lord is None:
             return
         await chronicle.record(
@@ -3215,7 +3291,9 @@ class KingdomChurchMarryButton(
         if wiring.kingdoms_service is None or wiring.diplomacy_service is None:
             await interaction.response.send_message(strings["market_no_service"], ephemeral=True)
             return
-        lord = await _lord_of(wiring.kingdoms_service, str(interaction.user.id))
+        lord = await _lord_of(
+            wiring.kingdoms_service, str(interaction.user.id), wiring.bot_admins
+        )
         if lord is None or lord.kingdom_id is None:
             await interaction.response.send_message(
                 strings["church_marry_kingdom_none"], ephemeral=True
@@ -3285,7 +3363,9 @@ class KingdomChurchArrangeButton(
         stock = 0
         wiring = _wiring()
         if wiring.kingdoms_service is not None:
-            king = await _king_of(wiring.kingdoms_service, str(interaction.user.id))
+            king = await _king_of(
+            wiring.kingdoms_service, str(interaction.user.id), wiring.bot_admins
+        )
             if king is not None and king.kingdom_id:
                 kingdom = await _kingdom_by_id_safe(
                     wiring.kingdoms_service, str(king.kingdom_id)
@@ -3302,7 +3382,9 @@ class KingdomChurchArrangeButton(
         if wiring.kingdoms_service is None or wiring.diplomacy_service is None:
             await interaction.response.send_message(strings["market_no_service"], ephemeral=True)
             return
-        king = await _king_of(wiring.kingdoms_service, str(interaction.user.id))
+        king = await _king_of(
+            wiring.kingdoms_service, str(interaction.user.id), wiring.bot_admins
+        )
         if king is None:
             await interaction.response.send_message(
                 strings["church_arrange_king_only"], ephemeral=True
@@ -3364,7 +3446,9 @@ class KingdomChurchUpgradeButton(
         wiring = _wiring()
         next_name, cost = "", 0
         if wiring.kingdoms_service is not None:
-            king = await _king_of(wiring.kingdoms_service, str(interaction.user.id))
+            king = await _king_of(
+            wiring.kingdoms_service, str(interaction.user.id), wiring.bot_admins
+        )
             if king is not None and king.kingdom_id:
                 kingdom = await _kingdom_by_id_safe(
                     wiring.kingdoms_service, str(king.kingdom_id)
@@ -3389,7 +3473,9 @@ class KingdomChurchUpgradeButton(
         if wiring.kingdoms_service is None:
             await interaction.response.send_message(strings["market_no_service"], ephemeral=True)
             return
-        king = await _king_of(wiring.kingdoms_service, str(interaction.user.id))
+        king = await _king_of(
+            wiring.kingdoms_service, str(interaction.user.id), wiring.bot_admins
+        )
         if king is None:
             await interaction.response.send_message(
                 strings["church_upgrade_king_only"], ephemeral=True
@@ -3552,7 +3638,9 @@ class KingdomChurchConsecrateButton(
         if wiring.kingdoms_service is None or cathedral_service is None:
             await interaction.response.send_message(strings["market_no_service"], ephemeral=True)
             return
-        king = await _king_of(wiring.kingdoms_service, str(interaction.user.id))
+        king = await _king_of(
+            wiring.kingdoms_service, str(interaction.user.id), wiring.bot_admins
+        )
         if king is None:
             await interaction.response.send_message(
                 strings["cathedral_consecrate_king_only"], ephemeral=True
