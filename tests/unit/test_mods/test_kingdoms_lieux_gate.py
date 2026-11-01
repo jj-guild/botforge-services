@@ -634,10 +634,34 @@ def test_objectif_picker_pages_and_options() -> None:
     kingdoms_catalog = {"k-2": "HeN", "k-3": "Gwen"}
     maps_catalog = {f"map-{i}": f"Map {i}" for i in range(1, 61)}
     civs_catalog = {f"civ-{i}": f"Civ {i}" for i in range(1, 41)}
+    # a STAGED goal rides as a « ✏️ change » button — its dropdown
+    # comes back through « changer » (the reveal below)
     view = _objectifs_picker(
         wiring, kingdom, "fr", kingdoms_catalog, maps_catalog, civs_catalog, staged
     )
     selects = [c for c in view.children if isinstance(c, discord.ui.Select)]
+    assert len(selects) == 2  # kingdom + civ — the map is a change button
+    change = [
+        c
+        for c in view.children
+        if isinstance(c, discord.ui.Button) and c.label and "Map 7" in str(c.label)
+    ]
+    assert len(change) == 1
+    assert "✏️" in str(change[0].label)
+    # revealed, the map dropdown leads with the pinned goal
+    view_revealed = _objectifs_picker(
+        wiring,
+        kingdom,
+        "fr",
+        kingdoms_catalog,
+        maps_catalog,
+        civs_catalog,
+        staged,
+        reveal=("target_territory",),
+    )
+    selects = [
+        c for c in view_revealed.children if isinstance(c, discord.ui.Select)
+    ]
     assert len(selects) == 3
     for select in selects:
         assert len(select.options) <= 25  # the Discord cap, always
@@ -647,14 +671,18 @@ def test_objectif_picker_pages_and_options() -> None:
     assert all(
         option.value for select in selects for option in select.options
     )
-    # the current map goal is pinned first with its check mark
     map_select = selects[1]
     assert map_select.options[1].value == "map-7"
     assert "Map 7" in map_select.options[1].label
     # line 3 = [✅ Valider][🚪 Quitter] whatever the page
-    buttons = [c for c in view.children if isinstance(c, discord.ui.Button)]
+    buttons = [
+        c for c in view_revealed.children if isinstance(c, discord.ui.Button)
+    ]
     labels = [str(b.label) for b in buttons]
-    assert labels[-2:] == [lieu["objectif_validate_button"], lieu["objectif_quit_button"]]
+    assert labels[-2:] == [
+        lieu["objectif_validate_button"],
+        lieu["objectif_quit_button"],
+    ]
     flips = [b for b in buttons if b.label is None]
     assert len(flips) == 4
     assert flips[0].disabled is True  # maps ◀ on page 0
@@ -671,6 +699,7 @@ def test_objectif_picker_pages_and_options() -> None:
         civs_catalog,
         staged,
         map_page=1,
+        reveal=("target_territory",),
     )
     selects_two = [c for c in view_two.children if isinstance(c, discord.ui.Select)]
     page_one_values = {o.value for o in selects_two[1].options}
