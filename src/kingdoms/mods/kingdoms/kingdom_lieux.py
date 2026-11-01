@@ -37,6 +37,8 @@ STRINGS: dict[str, dict[str, str]] = {
             "behind its door. The state of the kingdom sits in the "
             "Council room."
         ),
+        "entree_button": "🏰 Entrance",
+        "entree_title": "Where would you like to go?",
         "conseil_button": "⚔️ Council room",
         "remparts_button": "🧭 Ramparts",
         "comptes_button": "🏛️ Chamber of accounts",
@@ -53,6 +55,8 @@ STRINGS: dict[str, dict[str, str]] = {
             "vit derrière sa porte. L'état du royaume siège en Salle "
             "du conseil."
         ),
+        "entree_button": "🏰 Entrée",
+        "entree_title": "Où souhaitez-vous vous rendre ?",
         "conseil_button": "⚔️ Salle du conseil",
         "remparts_button": "🧭 Remparts",
         "comptes_button": "🏛️ Chambre des comptes",
@@ -175,7 +179,7 @@ KingdomLieuVoliereButton = _lieu_view_class("voliere")
 
 
 def hub_buttons(locale: str) -> list[Any]:
-    """The five doors of the canary hub (rows chunk at five upstream)."""
+    """The five doors (they live in the Entrée chooser view)."""
     strings = _strings(locale)
     return [
         KingdomLieuConseilButton(strings["conseil_button"]),
@@ -184,6 +188,80 @@ def hub_buttons(locale: str) -> list[Any]:
         KingdomLieuParoisseButton(strings["paroisse_button"]),
         KingdomLieuVoliereButton(strings["voliere_button"]),
     ]
+
+
+def entree_view(locale: str) -> Any:
+    """The ephemeral chooser behind 🏰 Entrée — « Où souhaitez-vous
+
+    vous rendre ? » — the five doors in one ActionRow (fenetre-unique-v2
+    keeps it the clicker's single live window).
+    """
+    import discord
+
+    strings = _strings(locale)
+    view = discord.ui.LayoutView(timeout=None)
+    view.add_item(discord.ui.TextDisplay(f"## {strings['entree_title']}"))
+    view.add_item(discord.ui.ActionRow(*hub_buttons(locale)))
+    return view
+
+
+async def _open_entree(interaction: discord.Interaction) -> None:
+    """Open the Entrée chooser as the clicker's single ephemeral window."""
+    from kingdoms.mods.kingdoms.kingdom_persistent import (
+        _open_unique_ephemeral,
+        _strings as _merged_strings,
+        _wiring,
+    )
+
+    locale = _locale(interaction)
+    strings = _merged_strings(locale)
+    wiring = _wiring()
+    if wiring.kingdoms_service is None:
+        await interaction.response.send_message(
+            _strings(locale)["no_service"], ephemeral=True
+        )
+        return
+    lord, kingdom = await _require_lord_kingdom(
+        interaction, wiring, _strings(locale)
+    )
+    if lord is None or kingdom is None:
+        return
+    await _open_unique_ephemeral(interaction, view=entree_view(locale))
+
+
+class KingdomLieuEntreeButton(
+    discord.ui.DynamicItem[discord.ui.Button[Any]],
+    template=r"kingdoms:lieux:entree",
+):
+    """The hub's ONE door — 🏰 Entrée opens the ephemeral chooser."""
+
+    def __init__(self, label: str) -> None:
+        super().__init__(
+            discord.ui.Button(
+                label=label[:80],
+                custom_id="kingdoms:lieux:entree",
+                style=discord.ButtonStyle.primary,
+            )
+        )
+
+    @classmethod
+    async def from_custom_id(
+        cls,
+        interaction: discord.Interaction,
+        item: discord.ui.Item[Any],
+        match: re.Match[str],
+        /,
+    ) -> "KingdomLieuEntreeButton":
+        """Rebuild from the wire — THIS module's strings only."""
+        return cls(_strings(_locale(interaction))["entree_button"])
+
+    async def callback(self, interaction: discord.Interaction) -> None:
+        await _open_entree(interaction)
+
+
+def hub_entree_button(locale: str) -> KingdomLieuEntreeButton:
+    """The single 🏰 Entrée button the canary hub renders."""
+    return KingdomLieuEntreeButton(_strings(locale)["entree_button"])
 
 
 def canary_salon_display(key: str, name: str, kingdom: Any) -> str:
@@ -230,11 +308,19 @@ async def _open_lieu(interaction: discord.Interaction, kind: str) -> None:
     if kind == "conseil":
         view, files = build_conseil_view(strings, kingdom, state, wiring, locale)
     elif kind == "remparts":
-        view, files = _build_patrol(strings, kingdom, state), _lieu_files(
-            "Rempart.png", "rempart.png"
+        view, files = (
+            _build_patrol(
+                strings, kingdom, state, media="attachment://rempart.png"
+            ),
+            _lieu_files("Rempart.png", "rempart.png"),
         )
     elif kind == "paroisse":
-        view, files = _build_church(strings, kingdom, state), _paroisse_files(state)
+        view, files = (
+            _build_church(
+                strings, kingdom, state, media="attachment://paroisse.png"
+            ),
+            _paroisse_files(state),
+        )
     else:  # voliere
         view, files = await _build_voliere(wiring, kingdom, strings)
     await _open_unique_ephemeral(interaction, view=view, files=files or None)
@@ -412,6 +498,7 @@ async def _open_comptes(
 def register_kingdom_lieux_items(bot: discord.Client) -> None:
     """Re-register the lieu hub doors on the bot (restart-proof)."""
     bot.add_dynamic_items(
+        KingdomLieuEntreeButton,
         KingdomLieuConseilButton,
         KingdomLieuRempartsButton,
         KingdomLieuComptesButton,

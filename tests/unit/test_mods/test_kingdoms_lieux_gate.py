@@ -16,11 +16,13 @@ import discord
 from kingdoms.mods.kingdoms.kingdom_lieux import (
     KingdomLieuComptesButton,
     KingdomLieuConseilButton,
+    KingdomLieuEntreeButton,
     KingdomLieuParoisseButton,
     KingdomLieuRempartsButton,
     KingdomLieuVoliereButton,
     _strings,
     canary_salon_display,
+    entree_view,
     hub_buttons,
     is_canary_realm,
     register_kingdom_lieux_items,
@@ -70,6 +72,7 @@ def test_items_registered_on_bot() -> None:
     bot = _FakeBot()
     register_kingdom_lieux_items(bot)
     expected = {
+        KingdomLieuEntreeButton,
         KingdomLieuConseilButton,
         KingdomLieuRempartsButton,
         KingdomLieuComptesButton,
@@ -99,7 +102,7 @@ def test_hub_buttons_are_the_five_doors() -> None:
         assert strings[key]
 
 
-def test_canary_hub_hides_stats_and_opens_doors() -> None:
+def test_canary_hub_shows_one_entree_door() -> None:
     strings = _strings("fr")
     kingdom = _kingdom(TEST_KINGDOM_ID)
     view = _build_overview(
@@ -107,6 +110,26 @@ def test_canary_hub_hides_stats_and_opens_doors() -> None:
         kingdom,
         {"members": [], "wallet": 3, "territories": [], "purchases": {}, "parish": {}},
     )
+    labels = _walk_buttons(view.children)
+    # entree-v1: the hub carries the ONE 🏰 Entrée door — the five
+    # places moved into its ephemeral chooser.
+    assert strings["entree_button"] in labels
+    for key in (
+        "conseil_button",
+        "remparts_button",
+        "comptes_button",
+        "paroisse_button",
+        "voliere_button",
+    ):
+        assert strings[key] not in labels
+    # the stats block left the hub (it moved into the Council)
+    assert strings["treasury"] not in _walk_text(view.children)
+
+
+def test_entree_chooser_holds_the_five_doors() -> None:
+    strings = _strings("fr")
+    view = entree_view("fr")
+    assert strings["entree_title"] in _walk_text(view.children)
     labels = _walk_buttons(view.children)
     for key in (
         "conseil_button",
@@ -116,8 +139,6 @@ def test_canary_hub_hides_stats_and_opens_doors() -> None:
         "voliere_button",
     ):
         assert strings[key] in labels
-    # the stats block left the hub (it moved into the Council)
-    assert strings["treasury"] not in _walk_text(view.children)
 
 
 def test_player_kingdom_keeps_classic_sheet() -> None:

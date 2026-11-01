@@ -992,11 +992,14 @@ def _build_overview(
     media = None
     if is_canary_realm(kingdom):
         from kingdoms.mods.kingdoms.kingdom_lieux import _strings as _lieux_strings
-        from kingdoms.mods.kingdoms.kingdom_lieux import hub_buttons
+        from kingdoms.mods.kingdoms.kingdom_lieux import hub_entree_button
 
         lieu_locale = "fr" if strings.get("yes") == "oui" else "en"
         body = _lieux_strings(lieu_locale)["hub_flavor"]
-        buttons: list[Any] = hub_buttons(lieu_locale)
+        # entree-v1 (Drasah 01/11): the hub carries ONE door — 🏰 Entrée.
+        # The five places moved into its ephemeral chooser « Où
+        # souhaitez-vous vous rendre ? » (fenetre-unique-v2 rides it).
+        buttons: list[Any] = [hub_entree_button(lieu_locale)]
         media = "attachment://royaume.png"
     else:
         body = _overview_body(strings, kingdom, state)
@@ -1151,6 +1154,7 @@ def _build_patrol(
     strings: dict[str, str],
     kingdom: Any,
     state: dict[str, Any],
+    media: str | None = None,
 ) -> Any:
     """Build the 🧱 Remparts view (remparts-v2, Drasah 14/10).
 
@@ -1233,6 +1237,7 @@ def _build_patrol(
                 strings.get("attack_manager_button", "⚔️ Gestion d'attaque")
             ),
         ],
+        media=media,
     )
 
 
@@ -1406,6 +1411,7 @@ def _build_church(
     strings: dict[str, str],
     kingdom: Any,
     state: dict[str, Any],
+    media: str | None = None,
 ) -> Any:
     """Build the ⛪ Paroisse state view (D64 paliers + marriages, v3).
 
@@ -1534,6 +1540,7 @@ def _build_church(
         f"{VIEW_MARKER_PREFIX}:eglise",
         discord.Colour.purple(),
         buttons,
+        media=media,
     )
 
 
@@ -1601,9 +1608,12 @@ def _panel_view_with_buttons(
             container.add_item(discord.ui.ActionRow(*buttons[offset:offset + 5]))
     if marker:
         container.add_item(discord.ui.TextDisplay(f"-# {marker}"))
-    view.add_item(container)
+    # illustration-top-v1 (Drasah 01/11): the illustration is FIXED and
+    # TOP — the image of the place the reader stands in rides above the
+    # panel, never under it (the hub castle, a lieu's own picture).
     if media:
-        view.add_item(discord.ui.MediaGallery(discord.MediaGalleryItem(media=media)))
+        view.add_item(discord.ui.MediaGallery(discord.ui.MediaGalleryItem(media)))
+    view.add_item(container)
     return view
 
 
