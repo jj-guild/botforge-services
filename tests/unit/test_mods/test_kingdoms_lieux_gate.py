@@ -732,6 +732,18 @@ def test_save_objective_persists_key_and_label() -> None:
     )
 
 
+def test_objectif_click_keeps_the_council_sheet_alive() -> None:
+    # objectif-fenetre-coexist-v1: the 🎯 Objectif picker opens
+    # ALONGSIDE the council sheet — a send_message window (a 2-tuple
+    # registry entry) is NEVER replaced by the click, only a previous
+    # PICKER (a defer+followup 3-tuple) is.
+    from kingdoms.mods.kingdoms.kingdom_lieux import _objectif_replaces_previous
+
+    assert _objectif_replaces_previous(None) is False
+    assert _objectif_replaces_previous((object(), 1.0)) is False  # the sheet
+    assert _objectif_replaces_previous((object(), 1.0, object())) is True  # a picker
+
+
 def test_objectifs_content_lines() -> None:
     from kingdoms.mods.kingdoms.kingdom_lieux import _objectifs_content
 

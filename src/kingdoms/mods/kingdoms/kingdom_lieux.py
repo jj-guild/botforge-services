@@ -535,6 +535,15 @@ _OBJECTIF_PAGE_SIZE = 23
 _OBJECTIF_NONE_VALUE = "none"
 
 
+def _objectif_replaces_previous(entry: Any) -> bool:
+    """objectif-fenetre-coexist-v1 (Drasah 01/11): True only when the
+    previous registry entry is a defer+followup PICKER window (a
+    3-tuple) — the council sheet rides a send_message 2-tuple and
+    SURVIVES the 🎯 Objectif click: the picker opens ALONGSIDE the
+    window the button sits on (his 01/11 live report)."""
+    return entry is not None and len(entry) > 2
+
+
 def _objectif_max_page(catalog: dict[str, str]) -> int:
     """The last page index of a goal catalog (23 options per page)."""
     return max(0, (max(len(catalog), 1) - 1) // _OBJECTIF_PAGE_SIZE)
@@ -646,7 +655,8 @@ def _objectifs_picker(
     25-option cap, so each dropdown pages 23 options with a ◀️/▶️ pair;
     the current goal stays pinned first whatever the page. A
     session-scoped ephemeral: the closures die with the message, the
-    fenêtre-unique registry owns the window.
+    fenêtre-unique registry owns the picker — and the council sheet
+    SURVIVES the click: the picker opens ALONGSIDE it (coexist).
     """
     lieu = _strings(locale)
     objectives = dict(getattr(kingdom, "council_objectives", {}) or {})
@@ -866,7 +876,10 @@ class KingdomLieuObjectifButton(
             view = _objectifs_picker(
                 wiring, kingdom, locale, kingdoms_catalog, maps_catalog, civs_catalog
             )
-            await _close_previous_ephemeral(user_id)
+            # objectif-fenetre-coexist-v1: the council sheet
+            # SURVIVES the click — only a previous PICKER is replaced.
+            if _objectif_replaces_previous(_EPHEMERAL_WINDOWS.get(user_id)):
+                await _close_previous_ephemeral(user_id)
             window = await interaction.followup.send(
                 content, view=view, ephemeral=True
             )
