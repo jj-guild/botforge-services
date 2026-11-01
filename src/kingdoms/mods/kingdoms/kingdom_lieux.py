@@ -80,6 +80,13 @@ def _locale(interaction: discord.Interaction) -> str:
     return str(interaction.locale) if interaction.locale else "fr"
 
 
+def _merged_strings(locale: str) -> dict[str, str]:
+    """The merged panel strings (labels of the market cards etc.)."""
+    from kingdoms.mods.kingdoms.kingdom_persistent import _strings as _merged
+
+    return _merged(locale)
+
+
 def is_canary_realm(kingdom: Any | None) -> bool:
     """True when the kingdom renders the new hub (the gate decides)."""
     return kingdom is not None and str(getattr(kingdom, "id", "")) in CANARY_REALM_KINGDOM_IDS
@@ -237,12 +244,13 @@ class KingdomLieuSortirButton(
     fenetre-unique-v2).
     """
 
-    def __init__(self, label: str) -> None:
+    def __init__(self, label: str, row: int | None = None) -> None:
         super().__init__(
             discord.ui.Button(
                 label=label[:80],
                 custom_id="kingdoms:lieux:sortir",
                 style=discord.ButtonStyle.danger,
+                row=row,
             )
         )
 
@@ -261,9 +269,9 @@ class KingdomLieuSortirButton(
         await _open_entree(interaction)
 
 
-def _sortir(locale: str) -> KingdomLieuSortirButton:
-    """The red exit of a lieu view."""
-    return KingdomLieuSortirButton(_strings(locale)["sortir_button"])
+def _sortir(locale: str, row: int | None = None) -> KingdomLieuSortirButton:
+    """The red exit of a lieu view (classic rows may pin it to a row)."""
+    return KingdomLieuSortirButton(_strings(locale)["sortir_button"], row=row)
 
 
 async def _open_entree(interaction: discord.Interaction) -> None:
@@ -618,6 +626,286 @@ def _jeu_d_armes_cost(wiring: Any) -> int:
     return int(getattr(TechnologyCosts(), "jeu_d_armes"))
 
 
+def _strip_purchases(content: str, strings: dict[str, Any]) -> str:
+    """comptes-rows-v1 (Drasah 01/11): the canary Chambre des comptes
+    keeps the balance + the cards in hand ONLY — the purchases section
+    moves behind the 📜 Historique achats button."""
+    start = content.find(f"## {strings['market_ledger_purchases_title']}")
+    cards = content.find(f"## {strings['market_ledger_cards_title']}")
+    if start == -1 or cards == -1 or start > cards:
+        return content
+    return content[:start].rstrip("\n") + "\n\n" + content[cards:]
+
+
+def _comptes_canary_view(
+    strings: dict[str, Any],
+    locale: str,
+    held: list[tuple[str, str, int]],
+    selected_card: str | None = None,
+) -> Any:
+    """Line 1 of the canary comptes view: 🚀 Utiliser (ONLY while the
+    SELECTED card is a usable one) · 📜 Historique achats · ⚔️
+    Historique actions · 🚪 Sortir (red) — the card buttons ride the
+    rows below, five per row."""
+    from kingdoms.mods.kingdoms.kingdom_persistent import KingdomMarketUseButton
+
+    view = discord.ui.View(timeout=None)
+    if selected_card is not None and _card_is_usable(selected_card):
+        view.add_item(KingdomMarketUseButton(selected_card, strings, row=0))
+    view.add_item(KingdomLieuHistButton("achats", strings, row=0))
+    view.add_item(KingdomLieuHistButton("actions", strings, row=0))
+    view.add_item(_sortir(locale, row=0))
+    for offset, (key, _line, _stock) in enumerate(held):
+        view.add_item(KingdomLieuCardInfoButton(key, strings, row=1 + offset // 5))
+    return view
+
+
+def _card_is_usable(card: str) -> bool:
+    """The cards carrying the 🚀 Utiliser button (chambre-utiliser-v1)."""
+    from kingdoms.mods.kingdoms.kingdom_persistent import _MARKET_USABLE_CARDS
+
+    return card in _MARKET_USABLE_CARDS
+
+
+async def _comptes_canary(
+    wiring: Any,
+    kingdom: Any,
+    strings: dict[str, Any],
+    locale: str,
+    selected_card: str | None = None,
+) -> tuple[str, list[Any], Any]:
+    """Build the CANARY Chambre des comptes sheet (comptes-rows-v1):
+    balance + cards in hand only, the canary line-1 view, the purchases
+    and the uses living behind their history buttons."""
+    from kingdoms.mods.kingdoms.kingdom_persistent import (
+        _market_ledger_cards,
+        _market_ledger_content,
+    )
+
+    content, card_files, _classic_view = await _market_ledger_content(
+        wiring, kingdom, strings
+    )
+    held = await _market_ledger_cards(wiring, str(getattr(kingdom, "id", "")), strings)
+    content = _strip_purchases(content, strings)
+    view = _comptes_canary_view(strings, locale, held, selected_card)
+    return content, list(card_files or []), view
+
+
+class KingdomLieuHistButton(
+    discord.ui.DynamicItem[discord.ui.Button[Any]],
+    template=r"kingdoms:lieux:hist:(?P<kind>achats|actions)",
+):
+    """comptes-rows-v1 (Drasah 01/11): the 📜 Historique achats and ⚔️
+    Historique actions buttons of the canary Chambre des comptes — the
+    base window keeps the balance + the cards in hand, the histories
+    open on click as the player's single ephemeral window (fenêtre
+    unique) with the red 🚪 Sortir riding along. Restart-proof."""
+
+    def __init__(
+        self, kind: str, strings: dict[str, Any], row: int | None = None
+    ) -> None:
+        key = (
+            "market_hist_achats_button" if kind == "achats" else "market_hist_actions_button"
+        )
+        super().__init__(
+            discord.ui.Button(
+                label=str(strings[key])[:80],
+                custom_id=f"kingdoms:lieux:hist:{kind}",
+                style=discord.ButtonStyle.success,
+                row=row,
+            )
+        )
+        self.kind = str(kind)
+
+    @classmethod
+    async def from_custom_id(
+        cls,
+        interaction: discord.Interaction,
+        item: discord.ui.Item[Any],
+        match: re.Match[str],
+        /,
+    ) -> "KingdomLieuHistButton":
+        """Rebuild from the wire — THIS module's strings only."""
+        return cls(match["kind"], _merged_strings(_locale(interaction)))
+
+    async def callback(self, interaction: discord.Interaction) -> None:
+        from datetime import datetime
+        from zoneinfo import ZoneInfo
+
+        from kingdoms.mods.kingdoms.kingdom_persistent import (
+            _kingdom_by_id_safe,
+            _lord_of,
+            _market_label,
+            _open_unique_ephemeral,
+            _strings as _merged,
+            _wiring,
+        )
+
+        locale = _locale(interaction)
+        strings = _merged(locale)
+        wiring = _wiring()
+        lord = await _lord_of(
+            wiring.kingdoms_service, str(interaction.user.id), wiring.bot_admins
+        )
+        kingdom_id = str(getattr(lord, "kingdom_id", "") or "") if lord else ""
+        kingdom = (
+            await _kingdom_by_id_safe(wiring.kingdoms_service, kingdom_id)
+            if kingdom_id
+            else None
+        )
+        if kingdom is None:
+            await interaction.response.send_message(
+                strings["church_marry_kingdom_none"], ephemeral=True
+            )
+            return
+        if self.kind == "achats":
+            title = str(strings["market_hist_achats_title"])
+            registry = list(getattr(kingdom, "market_registry", None) or [])
+            if not registry:
+                body_lines = [str(strings["market_ledger_empty"])]
+            else:
+                emojis = strings.get("market_ledger_emoji") or {}
+                body_lines = []
+                for entry in sorted(
+                    registry, key=lambda e: int(e.get("at", 0) or 0), reverse=True
+                ):
+                    item = str(entry.get("item", ""))
+                    at = int(entry.get("at", 0) or 0)
+                    when = datetime.fromtimestamp(
+                        at, tz=ZoneInfo("Europe/Paris")
+                    ).strftime("%d/%m %H:%M")
+                    body_lines.append(
+                        str(strings["market_ledger_line"]).format(
+                            emojis.get(item, "•"),
+                            _market_label(item, strings),
+                            str(entry.get("detail", "")),
+                            int(entry.get("cost", 0) or 0),
+                            when,
+                        )
+                    )
+        else:
+            title = str(strings["market_hist_actions_title"])
+            actions = list(getattr(kingdom, "market_actions", None) or [])
+            if not actions:
+                body_lines = [str(strings["market_hist_actions_empty"])]
+            else:
+                emojis = strings.get("market_ledger_emoji") or {}
+                body_lines = []
+                for entry in sorted(
+                    actions, key=lambda e: int(e.get("at", 0) or 0), reverse=True
+                ):
+                    item = str(entry.get("item", ""))
+                    at = int(entry.get("at", 0) or 0)
+                    when = datetime.fromtimestamp(
+                        at, tz=ZoneInfo("Europe/Paris")
+                    ).strftime("%d/%m %H:%M")
+                    body_lines.append(
+                        str(strings["market_action_line"]).format(
+                            emojis.get(item, "•"),
+                            _market_label(item, strings),
+                            str(entry.get("detail", "")),
+                            when,
+                        )
+                    )
+        view = discord.ui.LayoutView(timeout=None)
+        view.add_item(discord.ui.TextDisplay(f"# {title}"))
+        view.add_item(discord.ui.TextDisplay("\n".join(body_lines)))
+        view.add_item(discord.ui.ActionRow(_sortir(locale)))
+        await _open_unique_ephemeral(interaction, view=view)
+
+
+class KingdomLieuCardInfoButton(
+    discord.ui.DynamicItem[discord.ui.Button[Any]],
+    template=r"kingdoms:lieux:cardinfo:(?P<card>[a-z_]+)",
+):
+    """comptes-rows-v1 (Drasah 01/11): the canary card-reveal button of
+    the Chambre des comptes — clicking EDITS the window in place (the
+    card's art + Effet + Usage) and line 1 gains the 🚀 Utiliser button
+    FIRST while the selected card is a usable one. Mirrors the classic
+    KingdomMarketCardInfoButton, never replaces it."""
+
+    def __init__(
+        self, card: str, strings: dict[str, Any], row: int | None = None
+    ) -> None:
+        from kingdoms.mods.kingdoms.kingdom_persistent import _market_label
+
+        label = _market_label(card, strings)
+        super().__init__(
+            discord.ui.Button(
+                label=label[:80],
+                custom_id=f"kingdoms:lieux:cardinfo:{card}",
+                style=discord.ButtonStyle.secondary,
+                row=row,
+            )
+        )
+        self.card = str(card)
+
+    @classmethod
+    async def from_custom_id(
+        cls,
+        interaction: discord.Interaction,
+        item: discord.ui.Item[Any],
+        match: re.Match[str],
+        /,
+    ) -> "KingdomLieuCardInfoButton":
+        """Rebuild from the wire — THIS module's strings only."""
+        return cls(match["card"], _merged_strings(_locale(interaction)))
+
+    async def callback(self, interaction: discord.Interaction) -> None:
+        from kingdoms.mods.kingdoms.kingdom_persistent import (
+            _kingdom_by_id_safe,
+            _lord_of,
+            _market_card_back_file,
+            _market_card_file,
+            _market_label,
+            _strings as _merged,
+            _wiring,
+        )
+
+        locale = _locale(interaction)
+        strings = _merged(locale)
+        wiring = _wiring()
+        lord = await _lord_of(
+            wiring.kingdoms_service, str(interaction.user.id), wiring.bot_admins
+        )
+        kingdom_id = str(getattr(lord, "kingdom_id", "") or "") if lord else ""
+        kingdom = (
+            await _kingdom_by_id_safe(wiring.kingdoms_service, kingdom_id)
+            if kingdom_id
+            else None
+        )
+        if kingdom is None:
+            await interaction.response.send_message(
+                strings["church_marry_kingdom_none"], ephemeral=True
+            )
+            return
+        # Type-6 defer on the window's own component: the edit below
+        # lands on the ledger window itself (the classic v6 semantics).
+        await interaction.response.defer()
+        content, _files, view = await _comptes_canary(
+            wiring, kingdom, strings, locale, selected_card=self.card
+        )
+        emojis = strings.get("market_ledger_emoji") or {}
+        fiche = [
+            "",
+            f"## {emojis.get(self.card, '•')} "
+            f"{_market_label(self.card, strings)}",
+            str(strings["market_card_effect"]).format(
+                (strings.get("market_effect") or {}).get(self.card, "")
+            ),
+            str(strings["market_card_usage"]).format(
+                (strings.get("market_usage") or {}).get(self.card, "")
+            ),
+        ]
+        file = _market_card_file(self.card) or _market_card_back_file()
+        files = [file] if file is not None else []
+        await interaction.edit_original_response(
+            content="\n".join([content, *fiche]),
+            attachments=files,
+            view=view,
+        )
+
+
 async def _open_comptes(
     interaction: discord.Interaction,
     wiring: Any,
@@ -627,28 +915,28 @@ async def _open_comptes(
 ) -> None:
     """The 🏛️ Chambre des comptes — the ledger sheet + illustration.
 
-    Mirrors the ledger button (defer, heavy paint, followup window)
-    with the lieu illustration riding along the card attachments.
+    comptes-rows-v1 (Drasah 01/11): the CANARY sheet keeps the balance
+    + the cards in hand only — the purchases live behind 📜 Historique
+    achats, the card uses behind ⚔️ Historique actions, line 1 reads
+    [Utiliser (selected usable card) · hist achats · hist actions ·
+    Sortir]. Mirrors the ledger button (defer, heavy paint, followup
+    window) with the lieu illustration riding along the attachments.
     """
     from time import monotonic
 
     from kingdoms.mods.kingdoms.kingdom_persistent import (
         _EPHEMERAL_WINDOWS,
         _close_previous_ephemeral,
-        _market_ledger_content,
+        _market_error_note,
     )
 
     await interaction.response.defer(ephemeral=True)
     try:
-        content, card_files, card_info_view = await _market_ledger_content(
-            wiring, kingdom, strings
+        content, card_files, view = await _comptes_canary(
+            wiring, kingdom, strings, locale
         )
     except Exception:
         logger.warning("KINGDOM LIEUX: ledger sheet build failed", exc_info=True)
-        from kingdoms.mods.kingdoms.kingdom_persistent import (
-            _market_error_note,
-        )
-
         await interaction.followup.send(
             _market_error_note(Exception("ledger"), strings), ephemeral=True
         )
@@ -656,17 +944,10 @@ async def _open_comptes(
     files = list(card_files or []) + _lieu_files(
         "chambre des comptes.png", "chambre_des_comptes.png"
     )
-    # lieux-rows-v1: the ledger window carries the red Sortir too.
-    if card_info_view is None:
-        card_info_view = discord.ui.View(timeout=None)
-    try:
-        card_info_view.add_item(_sortir(locale))
-    except Exception:
-        logger.warning("KINGDOM LIEUX: ledger Sortir add failed", exc_info=True)
     user_id = str(getattr(interaction.user, "id", ""))
     await _close_previous_ephemeral(user_id)
     window = await interaction.followup.send(
-        content, files=files, view=card_info_view, ephemeral=True
+        content, files=files, view=view, ephemeral=True
     )
     _EPHEMERAL_WINDOWS[user_id] = (interaction, monotonic(), window)
 
@@ -675,6 +956,8 @@ def register_kingdom_lieux_items(bot: discord.Client) -> None:
     """Re-register the lieu hub doors on the bot (restart-proof)."""
     bot.add_dynamic_items(
         KingdomLieuSortirButton,
+        KingdomLieuHistButton,
+        KingdomLieuCardInfoButton,
         KingdomLieuEntreeButton,
         KingdomLieuConseilButton,
         KingdomLieuRempartsButton,
@@ -682,3 +965,4 @@ def register_kingdom_lieux_items(bot: discord.Client) -> None:
         KingdomLieuParoisseButton,
         KingdomLieuVoliereButton,
     )
+ 
