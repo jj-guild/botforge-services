@@ -332,7 +332,7 @@ class EconomyService:
             lord.exploration_locked_until,
             stock - 1,
         )
-        await self._record_purchase(kingdom_id, EXPLORATEUR, f"lord {lord.id}", 0)
+        await self._record_action(kingdom_id, EXPLORATEUR, f"lord {lord.id}")
         return lord
 
     async def resolve_due_explorations(
@@ -566,7 +566,7 @@ class EconomyService:
             hours,
             len(crew),
         )
-        await self._record_purchase(kingdom_id, EXPLORATEUR, "expédition lancée", 0)
+        await self._record_action(kingdom_id, EXPLORATEUR, "expédition lancée")
         return doc
 
     async def resolve_due_expeditions(
@@ -820,7 +820,7 @@ class EconomyService:
             fresh.protected_until.isoformat(),
             stock - 1,
         )
-        await self._record_purchase(kingdom_id, CORRUPTION, f"map {fresh.map_key}", 0)
+        await self._record_action(kingdom_id, CORRUPTION, f"map {fresh.map_key}")
         return fresh
 
     # ------------------------------------------------------------------
@@ -880,8 +880,8 @@ class EconomyService:
             AI_LEVEL_CAP,
             stock - 1,
         )
-        await self._record_purchase(
-            kingdom_id, JEU_D_ARMES, f"IA {level + 1}/{AI_LEVEL_CAP}", 0
+        await self._record_action(
+            kingdom_id, JEU_D_ARMES, f"IA {level + 1}/{AI_LEVEL_CAP}"
         )
         return level + 1
 
@@ -935,6 +935,9 @@ class EconomyService:
         if int(state.purchases.get(guard_key, 0) or 0) > int(timestamp.timestamp()):
             raise GuardAlreadyActiveError("a royal guard already shields this territory")
         state.purchases[GARDE_ROYALE_STOCK] = stock - 1
+        await self._record_action(
+            kingdom_id, GARDE_ROYALE, f"map {territory.map_key} placé"
+        )
         territory.protected_until = timestamp + timedelta(hours=ROYAL_GUARD_HOURS)
         state.purchases[guard_key] = int(territory.protected_until.timestamp())
         await self._store.upsert_technology(state.to_mongo())
@@ -1048,6 +1051,24 @@ class EconomyService:
         except Exception:
             logger.warning("kingdoms: ledger write failed for %s", kingdom_id, exc_info=True)
 
+    async def _record_action(self, kingdom_id: str, item: str, detail: str) -> None:
+        """comptes-rows-v1 (Drasah 01/11): append one dated USE entry to
+        the kingdom's action ledger (the ⚔️ Historique actions view).
+
+        Best-effort: a ledger failure never breaks a successful use —
+        the registry is consultative history, never an invariant.
+        """
+        try:
+            kingdom = await self._kingdom_by_id(kingdom_id)
+            actions = list(getattr(kingdom, "market_actions", None) or [])
+            actions.append(
+                {"item": str(item), "detail": str(detail)[:100], "at": int(time.time())}
+            )
+            kingdom.market_actions = actions[-50:]
+            await self._store.upsert_kingdom(kingdom.to_mongo())
+        except Exception:
+            logger.warning("kingdoms: action ledger write failed for %s", kingdom_id, exc_info=True)
+
     def _cost(self, action: str) -> int:
         """Return the configured cost of one special action (D9)."""
         return int(getattr(self._config.technologies, action))
@@ -1099,3 +1120,4 @@ class EconomyService:
         if season is None:
             raise NoSeasonError("no season is running")
         return season
+  
