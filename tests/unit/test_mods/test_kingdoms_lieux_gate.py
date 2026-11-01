@@ -334,3 +334,117 @@ def test_paroisse_rows_follow_the_button_rules() -> None:
     arrange = list(rows2[1])[0]
     assert arrange.item.disabled is False
     assert arrange.item.style == discord.ButtonStyle.success
+
+
+# ---------------------------------------------------------------------------
+# comptes-rows-v1 (Drasah 01/11) — the canary Chambre des comptes.
+# ---------------------------------------------------------------------------
+
+
+def _ledger_kingdom(kid: str) -> Any:
+    return SimpleNamespace(
+        id=kid,
+        name="Nilrem",
+        tech_points_bank=3,
+        market_registry=[{"item": "traquenard", "detail": "", "cost": 2, "at": 1730000000}],
+        market_actions=[{"item": "corruption", "detail": "map alpha", "at": 1730000100}],
+    )
+
+
+def _ledger_wiring() -> Any:
+    return SimpleNamespace(kingdoms_service=None, attacks_service=None)
+
+
+def _view_buttons(view: Any) -> list[Any]:
+    return list(getattr(view, "children", []) or [])
+
+
+def test_canary_comptes_strip_removes_the_purchases_section() -> None:
+    from kingdoms.mods.kingdoms.kingdom_lieux import _strip_purchases
+
+    strings = _merged_fr()
+    content = (
+        "# Chambre des comptes\n\n"
+        "Bilan — dépensé : 0 ⚙️ · trésor : 1 ⚙️\n\n"
+        f"## {strings['market_ledger_purchases_title']}\n"
+        "🪤 Traquenard — · 0 ⚙️ · 31/10 13:16\n\n"
+        f"## {strings['market_ledger_cards_title']}\n"
+        "🪤 Traquenard — ×1"
+    )
+    stripped = _strip_purchases(content, strings)
+    # the base window keeps the balance + the cards in hand ONLY
+    assert strings["market_ledger_purchases_title"] not in stripped
+    assert "Traquenard — · 0 ⚙️" not in stripped
+    assert strings["market_ledger_cards_title"] in stripped
+    assert "Traquenard — ×1" in stripped
+    assert "trésor" in stripped
+
+
+def test_canary_comptes_view_hides_purchases_and_adds_history_buttons() -> None:
+    from kingdoms.mods.kingdoms.kingdom_lieux import _comptes_canary_view
+
+    strings = _merged_fr()
+    held = [
+        ("traquenard", "🪤 Traquenard — ×1", 1),
+        ("explorateur", "🛡️ Explorateur — ×3", 3),
+    ]
+    view = _comptes_canary_view(strings, "fr", held, None)
+    buttons = _view_buttons(view)
+    labels = [str(b.label) for b in buttons]
+    custom_ids = [str(b.custom_id) for b in buttons]
+    # line 1: the two history buttons + the red Sortir (no Utiliser —
+    # no card is selected on the base window)
+    assert strings["market_hist_achats_button"] in labels
+    assert strings["market_hist_actions_button"] in labels
+    assert "kingdoms:lieux:hist:achats" in custom_ids
+    assert "kingdoms:lieux:hist:actions" in custom_ids
+    assert "kingdoms:lieux:sortir" in custom_ids
+    assert not any(cid.startswith("kingdoms:market:use:") for cid in custom_ids)
+    for cid in ("kingdoms:lieux:hist:achats", "kingdoms:lieux:hist:actions", "kingdoms:lieux:sortir"):
+        assert [b for b in buttons if str(b.custom_id) == cid][0].row == 0
+    # the cards ride the rows below, one canary cardinfo button each
+    assert "kingdoms:lieux:cardinfo:traquenard" in custom_ids
+    assert "kingdoms:lieux:cardinfo:explorateur" in custom_ids
+    card_rows = sorted(
+        b.row for b in buttons if str(b.custom_id).startswith("kingdoms:lieux:cardinfo:")
+    )
+    assert card_rows[0] >= 1
+
+
+def test_canary_comptes_utiliser_rides_line_one_for_a_usable_card() -> None:
+    from kingdoms.mods.kingdoms.kingdom_lieux import _comptes_canary_view
+
+    strings = _merged_fr()
+    held = [("traquenard", "🪤 Traquenard — ×1", 1)]
+    view = _comptes_canary_view(strings, "fr", held, "traquenard")
+    buttons = _view_buttons(view)
+    custom_ids = [str(b.custom_id) for b in buttons]
+    use = [b for b in buttons if str(b.custom_id) == "kingdoms:market:use:traquenard"]
+    assert use, "the selected usable card adds the Utiliser button"
+    assert use[0].style == discord.ButtonStyle.success
+    assert use[0].row == 0
+    # Utiliser is the FIRST button of the view (line 1, slot 1)
+    assert custom_ids[0] == "kingdoms:market:use:traquenard"
+
+
+def test_history_button_labels_styles_and_registration() -> None:
+    from kingdoms.mods.kingdoms.kingdom_lieux import (
+        KingdomLieuCardInfoButton,
+        KingdomLieuHistButton,
+    )
+
+    strings = _merged_fr()
+    achats = KingdomLieuHistButton("achats", strings, row=0)
+    actions = KingdomLieuHistButton("actions", strings, row=0)
+    assert achats.item.label == strings["market_hist_achats_button"]
+    assert actions.item.label == strings["market_hist_actions_button"]
+    for button in (achats, actions):
+        assert button.item.style == discord.ButtonStyle.success
+    card = KingdomLieuCardInfoButton("traquenard", strings, row=1)
+    assert card.item.custom_id == "kingdoms:lieux:cardinfo:traquenard"
+    # the canary buttons ride the lieu register
+    bot = _FakeBot()
+    register_kingdom_lieux_items(bot)
+    assert KingdomLieuHistButton in bot._dynamic_items
+    assert KingdomLieuCardInfoButton in bot._dynamic_items
+  
