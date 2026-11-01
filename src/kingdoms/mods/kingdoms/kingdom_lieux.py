@@ -885,7 +885,9 @@ def _objectifs_picker(
     rows = {
         "target_kingdom": 0,
         "target_territory": 1,
-        "target_alliance": 2,
+        # the alliance select rides row 3 (its flips share row 4
+        # with Valider/Quitter) — row 2 belongs to the maps flips.
+        "target_alliance": 3,
     }
     for kind, emoji, select_key, _template in _OBJECTIF_KINDS:
         staged_key = str(staged.get(kind) or "")
