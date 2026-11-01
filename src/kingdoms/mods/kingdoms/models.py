@@ -153,6 +153,11 @@ class KingdomModel(BaseModel):
     """Chambre des comptes (marche-v2, 2026-10-13): the kingdom's dated
     purchase ledger — one ``{"item", "detail", "cost", "at"}`` entry per
     successful Marché buy, newest readable through the ledger modal."""
+    market_actions: list[dict[str, Any]] = Field(default_factory=list)
+    """comptes-rows-v1 (Drasah 01/11): the kingdom's dated ACTION ledger
+    — one ``{"item", "detail", "at"}`` entry per consumed card (token
+    spent, charge fired), readable through the ⚔️ Historique actions
+    button of the Chambre des comptes. Starts empty at deployment."""
     voliere_cooldowns: dict[str, int] = Field(default_factory=dict)
     """Volière (voliere-v2, 2026-10-14): per-BIRD cooldown registry,
     SHARED by the whole kingdom — one ``{bird: unix_ready_at}`` entry
