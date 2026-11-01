@@ -724,6 +724,7 @@ class AttackService:
             raise EmbuscadeError("le royaume n'a pas acheté d'Embuscade")
         state.purchases["embuscade"] = bought - 1
         await self._store.upsert_technology(state.to_mongo())
+        await self._record_action(lord.kingdom_id, "embuscade", "déclarée")
         attack = AttackModel(
             # attaques-score-v1: epoch-unique id (see declare_attack).
             _id=f"{season.id}-a-{territory.id}-{lord.id}-{int(timestamp.timestamp())}",
@@ -1192,6 +1193,7 @@ class AttackService:
             raise AttackError("le royaume n'a pas acheté de Contre-espionnage")
         state.purchases["contre_espionnage"] = bought - 1
         await self._store.upsert_technology(state.to_mongo())
+        await self._record_action(lord.kingdom_id, "contre_espionnage", "couverture activée")
         return cover.id
 
     async def respond_defense(self, attack_id: str, player_id: str, *, now: datetime | None = None) -> AttackModel:
@@ -2325,6 +2327,7 @@ class AttackService:
         # a refused pick never consumes a charge.
         state.purchases["sabotage"] = state.purchases["sabotage"] - 1
         await self._store.upsert_technology(state.to_mongo())
+        await self._record_action(kingdom_id, "sabotage", f"civilisation {civ_key}")
         sabotages.append(civ_key)
         pickban[f"{side}_sabotages"] = sabotages
         attack.pickban = pickban
@@ -3250,6 +3253,32 @@ class AttackService:
                 return state
         return TechnologyState(_id=kingdom_id, season_id=(await self._require_season()).id)
 
+    async def _record_action(self, kingdom_id: str, item: str, detail: str) -> None:
+        """comptes-rows-v1 (Drasah 01/11): append one dated USE entry to
+        the kingdom's action ledger (the ⚔️ Historique actions view).
+        Best-effort — a ledger failure never breaks a successful use.
+        """
+        try:
+            kingdoms = await self._kingdoms.kingdoms()
+            kingdom = next(
+                (k for k in kingdoms if str(getattr(k, "id", "")) == str(kingdom_id)),
+                None,
+            )
+            if kingdom is None:
+                return
+            actions = list(getattr(kingdom, "market_actions", None) or [])
+            actions.append(
+                {
+                    "item": str(item),
+                    "detail": str(detail)[:100],
+                    "at": int(datetime.now(UTC).timestamp()),
+                }
+            )
+            kingdom.market_actions = actions[-50:]
+            await self._store.upsert_kingdom(kingdom.to_mongo())
+        except Exception:
+            logger.warning("kingdoms: action ledger write failed for %s", kingdom_id, exc_info=True)
+
     async def buy_technology(self, kingdom_id: str, technology: str) -> TechnologyState:
         """Buy one combat technology with tech points (D9/D36)."""
         if technology not in COMBAT_TECHNOLOGIES:
@@ -3314,6 +3343,7 @@ class AttackService:
             raise TechnologyLimitReachedError("le royaume n'a pas acheté de Traquenard")
         state.purchases["traquenard"] = bought - 1
         await self._store.upsert_technology(state.to_mongo())
+        await self._record_action(lord.kingdom_id, "traquenard", f"royaume {target_kingdom_id}")
         now_ts = int(timestamp.timestamp())
         # (1) one-shot: +2h on the target's already-sealed marriages.
         for victim in await self._kingdoms.lords():
