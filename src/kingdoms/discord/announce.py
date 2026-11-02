@@ -418,6 +418,9 @@ def build_announcement_layout(
     container = container.add(*_infra_blocks(status, catalog))
     from kingdoms.core.ids import footer
 
+    # the UILayout contract (factory): every Text rides a container —
+    # the id footer is the container's LAST block (the anchor stays
+    # the view's last rendered line)
     container = container.add(Text(footer("panel:status")))
     return UILayout().add(container).build()
 
