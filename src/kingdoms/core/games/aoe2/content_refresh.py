@@ -129,14 +129,18 @@ async def refresh_aoe2_maps() -> dict[str, int]:
     game_data = GameDataService(MongoAoE2Database(database))
     content = FactionContentService(database)
     await content.ensure_indexes()
-    maps_enriched = 0
+    maps_total = 0
+    maps_complete = 0
     maps_checked = 0
+    maps_enriched = 0
     try:
         from kingdoms.mapsdata.seed import LiquipediaUnconfiguredError, fetch_map_seed
 
         for entry in await game_data.list_maps("aoe2"):
+            maps_total += 1
             already = await content.get(entry.id, "en")
             if already is not None and already.get("icon_url") and already.get("walls"):
+                maps_complete += 1
                 continue
             maps_checked += 1
             seed = None
@@ -170,13 +174,17 @@ async def refresh_aoe2_maps() -> dict[str, int]:
             "CONTENT REFRESH: map image enrichment failed — best-effort", exc_info=True
         )
     logger.info(
-        "CONTENT REFRESH (maps, on demand): %d maps enriched out of %d checked",
+        "CONTENT REFRESH (maps, on demand): %d/%d maps enriched, %d complete skipped, %d checked",
         maps_enriched,
+        maps_total,
+        maps_complete,
         maps_checked,
     )
     return {
         "maps_enriched": maps_enriched,
         "maps_checked": maps_checked,
+        "maps_complete": maps_complete,
+        "maps_total": maps_total,
     }
 
 

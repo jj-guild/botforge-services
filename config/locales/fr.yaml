@@ -300,7 +300,7 @@ fr:
     sync_subtitle: 'Les actions de synchronisation au niveau du bot : chaque bouton met \u00e0 jour les donn\u00e9es partag\u00e9es par tous les serveurs.'
     btn_sync_civs: Civs
     btn_sync_maps: Maps
-    maps_sync_done: Sync maps terminé — {enriched} map(s) enrichie(s) sur {checked} vérifiée(s), les posts du forum sont rafraîchis (respect du rythme imposé par l'API Liquipedia).
+    maps_sync_done: "Sync maps terminé — {enriched} map(s) enrichie(s) sur {total}, {complete} déjà complètes, {checked} à vérifier ; les posts du forum sont rafraîchis (respect du rythme imposé par l'API Liquipedia)."
     maps_sync_failed: Sync maps échoué (voir les logs).
     menu_current_language: '🌐 Langue : {current}'
     access_btn_manage: Gérer les accès

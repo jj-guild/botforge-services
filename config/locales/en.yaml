@@ -300,7 +300,7 @@ en:
     sync_maps_line: "**Maps** \u2014 enrich the maps content from Liquipedia (on demand, paced against the API terms: one page every 60 s \u2014 a cold catalog takes a while)."
     btn_sync_civs: Civs
     btn_sync_maps: Maps
-    maps_sync_done: Maps sync done — {enriched} map(s) enriched out of {checked} checked, the forum posts are refreshed (paced against the Liquipedia API terms).
+    maps_sync_done: "Maps sync done — {enriched} map(s) enriched out of {total}, {complete} already complete, {checked} needed a check; the forum posts are refreshed (paced against the Liquipedia API terms)."
     maps_sync_failed: Maps sync failed (see the logs).
     menu_current_language: '🌐 Language: {current}'
     access_btn_manage: Manage access

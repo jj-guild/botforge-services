@@ -491,6 +491,8 @@ class MapsSyncButton(
                 "maps_sync_done",
                 enriched=int(counts.get("maps_enriched", 0)),
                 checked=int(counts.get("maps_checked", 0)),
+                complete=int(counts.get("maps_complete", 0)),
+                total=int(counts.get("maps_total", 0)),
             ),
             ephemeral=True,
         )
