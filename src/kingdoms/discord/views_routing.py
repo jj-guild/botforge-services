@@ -48,7 +48,7 @@ async def open_declared_view(interaction: discord.Interaction, view_id: str) -> 
     if get_view(view_id) is not None:
         guild_id = str(interaction.guild_id) if interaction.guild_id else ""
         builder = build_declared_menu(interaction.client, view_id)
-        await interaction.response.defer(ephemeral=True, thinking=True)
+        await interaction.response.defer(ephemeral=True, thinking=False)
         await interaction.followup.send(view=await builder(guild_id), ephemeral=True)
         return
     from kingdoms.discord.commands_i18n import reply
@@ -470,9 +470,8 @@ def build_declared_menu(bot: Any, view_id: str) -> Any:
         for button in menu_buttons(decl, catalog, locale):
             row.add_item(button)
         view.add_item(row)
-        from kingdoms.core.ids import footer
+        from kingdoms.discord.ui.view_footer import add_view_footer
 
-        view.add_item(discord.ui.TextDisplay(footer(view_id)))
-        return view
+        return add_view_footer(view, view_id)
 
     return _build
