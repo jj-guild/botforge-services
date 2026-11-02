@@ -37,6 +37,13 @@ LIQUIPEDIA_ATTRIBUTION = "https://liquipedia.net/ageofempires/"
 _MIN_REQUEST_INTERVAL_S = 2.0
 _PARSE_INTERVAL_S = 30.0
 
+# Shared pacing state: one clock per PROCESS, not per provider instance.
+# fetch_map_seed builds a fresh provider per map (bulk imports, the maps
+# sync) \u2014 instance-level markers would reset every time and the
+# requests would fire back-to-back, tripping the API into 429s.
+_shared_last_request_at = 0.0
+_shared_last_parse_at = 0.0
+
 _FIELD_RE = re.compile(r"^\s*\|\s*([A-Za-z0-9_]+)\s*=\s*(.*?)\s*$", re.MULTILINE)
 _TEMPLATE_RE = re.compile(r"\[\[(?:[^|\]]*\|)?([^\]]+)\]\]")
 _STRIP_RE = re.compile(r"\{\{[^{}]*\}\}|\[\[(?:[^|\]]*\|)?")
@@ -153,29 +160,46 @@ class LiquipediaMapsProvider:
             timeout=timeout_s,
         )
         self._api_url = api_url
-        self._last_request_at = 0.0
-        self._last_parse_at = 0.0
         self._cache: dict[str, MapData] = {}
 
     # -- transport ---------------------------------------------------------
 
     def _rate_limit(self, is_parse: bool) -> None:
-        """Sleep until the request is allowed by the API terms of use."""
+        """Sleep until the request is allowed by the API terms of use.
+
+        The markers are shared process-wide: every provider instance
+        (a bulk import builds one per map) paces against the same
+        clock \u2014 the 30 s parse interval holds across the whole
+        batch, never per instance.
+        """
+        global _shared_last_request_at, _shared_last_parse_at
         now = time.monotonic()
         interval = _PARSE_INTERVAL_S if is_parse else _MIN_REQUEST_INTERVAL_S
-        last = self._last_parse_at if is_parse else self._last_request_at
+        last = _shared_last_parse_at if is_parse else _shared_last_request_at
         wait = last + interval - now
         if wait > 0:
             self._sleep(wait)
         marker = time.monotonic()
         if is_parse:
-            self._last_parse_at = marker
+            _shared_last_parse_at = marker
         else:
-            self._last_request_at = marker
+            _shared_last_request_at = marker
 
     def _get_json(self, params: dict[str, str], is_parse: bool = False) -> dict[str, Any]:
         self._rate_limit(is_parse=is_parse)
         response = self._client.get(self._api_url, params=params)
+        if response.status_code == 429:
+            # The server-side quota was hit anyway (an earlier burst, a
+            # shared IP): honour its Retry-After, then retry once \u2014
+            # a 429 is "later", not "no such page".
+            retry_after = float(response.headers.get("Retry-After") or _PARSE_INTERVAL_S)
+            logger.warning(
+                "LIQUIPEDIA 429 \u2014 waiting %s s (Retry-After) and retrying once",
+                retry_after,
+            )
+            self._sleep(retry_after)
+            self._rate_limit(is_parse=is_parse)
+            response = self._client.get(self._api_url, params=params)
         response.raise_for_status()
         payload: dict[str, Any] = response.json()
         if "error" in payload:

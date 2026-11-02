@@ -232,3 +232,80 @@ def test_query_tags_normalize_info() -> None:
     assert "water" in query_tags(hybrid)
     provider = _make_provider(_mock_transport(ARABIA_WIKITEXT))
     provider.close()
+
+
+def test_pacing_is_shared_across_provider_instances(monkeypatch: pytest.MonkeyPatch) -> None:
+    """One pacing clock per process — a fresh provider per map still waits.
+
+    fetch_map_seed builds a new provider per map: with instance-level
+    markers every map's first parse fired immediately and the batch
+    hammered the API into 429s. The markers are module-level: a second
+    provider paces against the first one's last parse.
+    """
+    import kingdoms.mapsdata.liquipedia as lp
+
+    sleeps: list[float] = []
+    calls: list[str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        calls.append(str(request.url.params.get("page")))
+        body = {"parse": {"wikitext": "{{Infobox map\n|name=X\n}}"}}
+        return httpx.Response(200, text=json.dumps(body))
+
+    def fake_sleep(seconds: float) -> None:
+        sleeps.append(seconds)
+
+    # reset the shared markers so the test is order-independent
+    monkeypatch.setattr(lp, "_shared_last_request_at", 0.0)
+    monkeypatch.setattr(lp, "_shared_last_parse_at", 0.0)
+
+    first = lp.LiquipediaMapsProvider(USER_AGENT, api_url=API_URL, sleep=fake_sleep)
+    first._client = httpx.Client(
+        headers={"User-Agent": USER_AGENT}, transport=httpx.MockTransport(handler)
+    )
+    second = lp.LiquipediaMapsProvider(USER_AGENT, api_url=API_URL, sleep=fake_sleep)
+    second._client = httpx.Client(
+        headers={"User-Agent": USER_AGENT}, transport=httpx.MockTransport(handler)
+    )
+
+    # neutralize the sub-parse pacing (image queries) for the assertion
+    first.map_data("Arabia")
+    first_sleeps = list(sleeps)
+    second.map_data("Black Forest")
+    # the second provider's first parse waited the full 30 s interval
+    # minus whatever the first provider's remaining pacing used.
+    assert sleeps[len(first_sleeps) :], "the second provider slept"
+    waits = sleeps[len(first_sleeps) :]
+    assert max(waits) > 0, "a fresh provider paced against the shared clock"
+    assert len(calls) >= 2
+    first.close()
+    second.close()
+
+
+def test_429_honors_retry_after_then_retries(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A 429 is 'later', not 'no such page' — retry once after Retry-After."""
+    import kingdoms.mapsdata.liquipedia as lp
+
+    attempts: list[int] = []
+    sleeps: list[float] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        attempts.append(1)
+        if len(attempts) == 1:
+            return httpx.Response(429, headers={"Retry-After": "1"})
+        return httpx.Response(
+            200, text=json.dumps({"parse": {"wikitext": "{{Infobox map\n|name=X\n}}"}})
+        )
+
+    monkeypatch.setattr(lp, "_shared_last_request_at", 0.0)
+    monkeypatch.setattr(lp, "_shared_last_parse_at", 0.0)
+
+    provider = lp.LiquipediaMapsProvider(USER_AGENT, api_url=API_URL, sleep=sleeps.append)
+    provider._client = httpx.Client(
+        headers={"User-Agent": USER_AGENT}, transport=httpx.MockTransport(handler)
+    )
+    data = provider.map_data("Arabia")
+    assert data.info.name == "X"
+    assert 1.0 in sleeps, "the Retry-After wait happened"
+    assert len(attempts) == 2, "exactly one retry"
+    provider.close()
