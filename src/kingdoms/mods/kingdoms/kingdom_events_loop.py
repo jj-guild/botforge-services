@@ -28,6 +28,12 @@ from kingdoms.mods.kingdoms.kingdom_content import announce_geopolitics
 logger = logging.getLogger("kingdoms.events_loop")
 
 _TICK_SECONDS = 300
+# expedition-fastlane-v1 (Drasah 02/11): the 🧭 countdown is CLIENT-side
+# (<t:…:R> hits 00:00 by itself) while the panel flip waited for the
+# 300 s tick — up to 5 minutes of « timer done, panel stale » live
+# frustration. The fast lane re-runs ONLY the expedition passes (both
+# are idempotent and near-free when nothing is due) every 30 seconds.
+_EXPEDITION_FASTLANE_SECONDS = 30
 
 # attack-phases-tick-v1 (Drasah 22/10): the loop wakes AT the next
 # attack deadline — the epsilon makes the tick land just past it, the
@@ -36,6 +42,7 @@ _ATTACK_TICK_EPSILON_SECONDS = 2.0
 _ATTACK_TICK_FLOOR_SECONDS = 5.0
 
 _EVENT_SCHEDULER_TASK: asyncio.Task[None] | None = None
+_EXPEDITION_FASTLANE_TASK: asyncio.Task[None] | None = None
 
 _ANNOUNCE_STRINGS: dict[str, dict[str, str]] = {
     "en": {
@@ -170,7 +177,14 @@ def start_kingdoms_event_scheduler(bot: Any, *, tick_seconds: int = _TICK_SECOND
         logger.info("KINGDOMS EVENTS: no running loop — the scheduler is not started")
         return False
     _EVENT_SCHEDULER_TASK = loop.create_task(_kingdoms_events_loop(bot, tick_seconds))
+    global _EXPEDITION_FASTLANE_TASK
+    if _EXPEDITION_FASTLANE_TASK is None or _EXPEDITION_FASTLANE_TASK.done():
+        _EXPEDITION_FASTLANE_TASK = loop.create_task(_expeditions_fast_lane(bot))
     logger.info("KINGDOMS EVENTS: scheduler started (tick=%ss)", tick_seconds)
+    logger.info(
+        "KINGDOMS EVENTS: expedition fast lane started (tick=%ss)",
+        _EXPEDITION_FASTLANE_SECONDS,
+    )
     return True
 
 
@@ -186,6 +200,16 @@ async def stop_kingdoms_event_scheduler() -> None:
         except Exception:
             logger.info("KINGDOMS EVENTS: scheduler stopped after an error", exc_info=True)
         _EVENT_SCHEDULER_TASK = None
+    global _EXPEDITION_FASTLANE_TASK
+    if _EXPEDITION_FASTLANE_TASK is not None:
+        _EXPEDITION_FASTLANE_TASK.cancel()
+        try:
+            await _EXPEDITION_FASTLANE_TASK
+        except asyncio.CancelledError:
+            pass
+        except Exception:
+            logger.info("KINGDOMS EVENTS: fast lane stopped after an error", exc_info=True)
+        _EXPEDITION_FASTLANE_TASK = None
 
 
 def _auto_snapshotter(time_service: Any) -> Callable[[str], Awaitable[None]] | None:
@@ -1089,6 +1113,25 @@ async def _sweep_tavern_zone_safe(bot: Any) -> None:
             await sweep_tavern_state(guild)
         except Exception:
             logger.warning("KINGDOMS EVENTS: tavern zone sweep failed", exc_info=True)
+
+
+async def _expeditions_fast_lane(bot: Any) -> None:
+    """expedition-fastlane-v1 (Drasah 02/11): re-run ONLY the
+    expedition passes every 30 seconds, so the 🧭 panel flips to its
+    ◉ Retour face (and a due boarding casts off) within ~30 s of the
+    client-side countdown — instead of waiting for the 300 s tick.
+    Both passes are idempotent and near-free when nothing is due; any
+    failure is swallowed here (the next pass retries, the main tick
+    remains the backstop)."""
+    while True:
+        await asyncio.sleep(_EXPEDITION_FASTLANE_SECONDS)
+        try:
+            await _auto_launch_expeditions_safe(bot)
+            await _resolve_expeditions_safe(bot)
+        except Exception:
+            logger.warning(
+                "KINGDOMS EVENTS: expedition fast lane pass failed", exc_info=True
+            )
 
 
 async def _kingdoms_events_loop(bot: Any, tick_seconds: int) -> None:

@@ -929,3 +929,25 @@ async def test_a_salon_kingdom_stays_silent_until_the_crew_lands(
     assert "revient d'un long périple" in sent[1][1]
     assert "tourbiere" in sent[1][1]
     assert "Aquitaine" in sent[1][1]
+
+
+async def test_the_scheduler_spawns_and_stops_the_expedition_fast_lane() -> None:
+    """expedition-fastlane-v1: the 🧭 panel flip must not wait for the
+    300 s tick — the scheduler also spawns a 30 s fast lane that re-runs
+    only the expedition passes, and a double start never spawns a
+    second one; the stop cancels both tasks."""
+    from types import SimpleNamespace
+
+    from kingdoms.mods.kingdoms import kingdom_events_loop as events_loop
+
+    events_loop._EVENT_SCHEDULER_TASK = None
+    events_loop._EXPEDITION_FASTLANE_TASK = None
+    bot = SimpleNamespace(guilds=[])
+    assert events_loop.start_kingdoms_event_scheduler(bot, tick_seconds=300) is True
+    assert events_loop._EXPEDITION_FASTLANE_TASK is not None
+    assert not events_loop._EXPEDITION_FASTLANE_TASK.done()
+    # a double start keeps ONE heartbeat and ONE fast lane.
+    assert events_loop.start_kingdoms_event_scheduler(bot) is True
+    await events_loop.stop_kingdoms_event_scheduler()
+    assert events_loop._EVENT_SCHEDULER_TASK is None
+    assert events_loop._EXPEDITION_FASTLANE_TASK is None
