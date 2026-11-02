@@ -1,13 +1,21 @@
-"""Kingdoms mod — the 🧭 Expédition salon (exploration-expedition-v1,
-Drasah 30/10/2026).
+"""Kingdoms mod — the 🧭 Exploration salon (exploration-refonte-v1,
+Drasah 02/11).
 
 The Explorateur token opens a JOURNEY now: the 🧭 button (Chambre des
-comptes « Utiliser » + Le-Royaume view) creates the kingdom's 🧭
-exploration salon. A lord enrolls as CHEF (prerequisite: one AVAILABLE
-defence point 🛡️ — never consumed, going exploring is a real risk),
-every other lord embarks himself as CREW (each −4h of travel, the chef
-never cuts it, plancher 24h). ⛵ Lâcher les amarres shows ONLY with a
-chef on board and is the single step that consumes the token.
+comptes « Utiliser » + the council's exploration fiche) creates the
+kingdom's 🧭 exploration salon. A lord enrolls as CAPITAINE from the
+council fiche — « Devenir capitaine » (prerequisite: one AVAILABLE
+defence point 🛡️, checked BEFORE the salon opens, never consumed, and
+re-checked at the cast-off), every other lord embarks himself as CREW
+(each −4h of travel, the captain never cuts it, plancher 24h, no
+prerequisite to join). ⛵ Lâcher les amarres shows ONLY with a captain
+on board (only he may click it) and is the single step that consumes
+the token. The boarding window lasts 15 MINUTES — past it the voyage
+launches itself (the events tick). 🚪 Quitter le navire: the captain
+cancels the exploration (sailing: locks clear + the token is REFUNDED
++ the salon sweeps; boarding: nothing was consumed), a crew member
+cancels his own embarkment (the travel recalculates), everyone else
+gets a refusal. Once the lines are cast the mates stay aboard.
 
 Anti-pollution (hygiene rules): the panel edits in place, the refusals
 are 90-second ephemeral bubbles, the salon is gated like the realm
@@ -37,26 +45,31 @@ _ERROR_NOTE_SECONDS = 90.0
 _STRINGS: dict[str, dict[str, str]] = {
     "fr": {
         "open_button": "🧭 Exploration",
-        "panel_title": "# 🧭 Expédition de {kingdom}",
-        "chef_line": "🧭 **Chef d'expédition :** {name}",
+        "panel_title": "# 🧭 Exploration de {kingdom}",
+        "chef_line": "🧭 **Capitaine :** {name}",
         "crew_line": "⚓ **Équipage :** {names}",
         "eta_line": "⏳ **Trajet au départ :** **{hours} h** (48 h − 4 h par matelot, plancher 24 h)",
-        "chef_rule": "🧭 Le chef doit disposer d'un point de défense 🛡️ disponible (non consommé).",
+        "chef_rule": "🧭 Le capitaine doit disposer d'un point de défense 🛡️ disponible (non consommé).",
         "crew_rule": (
-            "⚓ Chaque seigneur embarque de lui-même — le jeton 🧭 Explorateur"
-            " n'est consommé qu'au Lâcher les amarres."
+            "⚓ Chaque seigneur embarque de lui-même (pas de pré-requis"
+            " pour participer au voyage)."
         ),
-        "chef_button": "🧭 S'enroller comme chef d'expédition",
+        "window_line": (
+            "🕐 Vous disposez de 15 minutes pour embarquer au sein de"
+            " l'équipage, après ce délai le voyage se lancera"
+            " automatiquement."
+        ),
         "crew_button": "⚓ Participer au voyage",
         "launch_button": "⛵ Lâcher les amarres",
-        "sailing_title": "# 🧭 Expédition de {kingdom}",
+        "quit_button": "🚪 Quitter le navire",
+        "sailing_title": "# 🧭 Exploration de {kingdom}",
         "sailing_line": "⛵ **En mer** — retour estimé <t:{ends}:R>.",
         "sailing_note": (
             "⛵ Les amarres sont lâchées — le jeton 🧭 Explorateur est consommé."
             " Bon voyage, l'équipage revient <t:{ends}:R>."
         ),
         "depart_announce": (
-            "🧭 Le royaume {kingdom} envoie une expédition explorer de"
+            "🧭 Le royaume {kingdom} part explorer de"
             " nouveaux horizons..."
         ),
         "return_announce_map": (
@@ -78,32 +91,46 @@ _STRINGS: dict[str, dict[str, str]] = {
         "no_token": "❌ Aucun jeton Explorateur en réserve — achètes-en un au Marché.",
         "already_sailing": "⛔ Une expédition est déjà en mer.",
         "locked": "⛔ Tu es dans un état verrouillé (mariage, exploration ou FFA).",
-        "no_defense": "🛡️ Il te faut un point de défense disponible pour mener l'expédition.",
-        "chef_not_crew": "⛔ Le chef d'expédition n'embarque pas comme matelot.",
+        "no_defense": "🛡️ Le capitaine doit disposer d'un point de défense disponible pour lâcher les amarres.",
+        "chef_not_crew": "⛔ Le capitaine n'embarque pas comme matelot.",
+        "not_captain_launch": "⛔ Seul le capitaine peut lâcher les amarres.",
+        "not_captain_cancel": "⛔ Seul le capitaine peut annuler l'exploration.",
+        "crew_locked": "⛔ Une fois les amarres lâchées, les matelots restent à bord jusqu'au retour.",
+        "not_aboard": "⛔ Tu n'es pas à bord de l'exploration.",
+        "cancel_note_boarding": "🚪 Le capitaine a quitté le navire — l'exploration est annulée.",
+        "cancel_note_sailing": (
+            "🚪 Le capitaine a quitté le navire — l'exploration est"
+            " annulée et le jeton 🧭 Explorateur est remboursé au royaume."
+        ),
+        "open_failed": "⚠️ Le salon d'exploration n'a pas pu être ouvert — réessaie dans un instant.",
         "failed": "❌ {message}",
     },
     "en": {
         "open_button": "🧭 Exploration",
-        "panel_title": "# 🧭 Expedition of {kingdom}",
-        "chef_line": "🧭 **Expedition chief:** {name}",
+        "panel_title": "# 🧭 Exploration of {kingdom}",
+        "chef_line": "🧭 **Captain:** {name}",
         "crew_line": "⚓ **Crew:** {names}",
         "eta_line": "⏳ **Travel at departure:** **{hours} h** (48 h − 4 h per mate, floor 24 h)",
-        "chef_rule": "🧭 The chief needs one AVAILABLE defence point 🛡️ (never consumed).",
+        "chef_rule": "🧭 The captain needs one AVAILABLE defence point 🛡️ (never consumed).",
         "crew_rule": (
-            "⚓ Every lord embarks himself — the 🧭 Explorateur token is"
-            " only consumed at Cast off."
+            "⚓ Every lord embarks himself (no prerequisite to join the"
+            " voyage)."
         ),
-        "chef_button": "🧭 Enroll as expedition chief",
+        "window_line": (
+            "🕐 You have 15 minutes to board the crew — past that delay"
+            " the voyage launches on its own."
+        ),
         "crew_button": "⚓ Join the voyage",
         "launch_button": "⛵ Cast off",
-        "sailing_title": "# 🧭 Expedition of {kingdom}",
+        "quit_button": "🚪 Leave the ship",
+        "sailing_title": "# 🧭 Exploration of {kingdom}",
         "sailing_line": "⛵ **At sea** — back <t:{ends}:R>.",
         "sailing_note": (
             "⛵ The lines are cast — the 🧭 Explorateur token is consumed."
             " Safe travels, the crew returns <t:{ends}:R>."
         ),
         "depart_announce": (
-            "🧭 The kingdom {kingdom} sends an expedition to explore new"
+            "🧭 The kingdom {kingdom} sails out to explore new"
             " horizons..."
         ),
         "return_announce_map": (
@@ -125,8 +152,18 @@ _STRINGS: dict[str, dict[str, str]] = {
         "no_token": "❌ No Explorateur token in reserve — buy one at the Market.",
         "already_sailing": "⛔ An expedition is already at sea.",
         "locked": "⛔ You are in a locked state (marriage, exploration or FFA).",
-        "no_defense": "🛡️ You need one available defence point to lead the expedition.",
-        "chef_not_crew": "⛔ The expedition chief does not embark as a mate.",
+        "no_defense": "🛡️ The captain needs one available defence point to cast off.",
+        "chef_not_crew": "⛔ The captain does not embark as a mate.",
+        "not_captain_launch": "⛔ Only the captain may cast off.",
+        "not_captain_cancel": "⛔ Only the captain may cancel the exploration.",
+        "crew_locked": "⛔ Once the lines are cast, the mates stay aboard until the return.",
+        "not_aboard": "⛔ You are not aboard the exploration.",
+        "cancel_note_boarding": "🚪 The captain left the ship — the exploration is cancelled.",
+        "cancel_note_sailing": (
+            "🚪 The captain left the ship — the exploration is cancelled"
+            " and the 🧭 Explorateur token is refunded to the kingdom."
+        ),
+        "open_failed": "⚠️ The exploration salon could not be opened — try again in a moment.",
         "failed": "❌ {message}",
     },
 }
@@ -180,6 +217,8 @@ def _map_error(strings: dict[str, str], exc: Exception) -> str:
         return strings["no_defense"]
     if "not embark as crew" in text or "does not embark" in text:
         return strings["chef_not_crew"]
+    if "only the exploration captain" in text:
+        return strings["not_captain_cancel"]
     if isinstance(exc, EconomyError):
         return str(strings["failed"]).format(message=text)
     return str(strings["failed"]).format(message=text)
@@ -243,17 +282,23 @@ def _panel_text(
         "",
         strings["chef_rule"],
         strings["crew_rule"],
+        strings["window_line"],
     ]
     return "\n".join(lines)
 
 
 def _panel_view(strings: dict[str, str], doc: dict[str, Any]) -> discord.ui.View:
-    """The panel's persistent buttons — ⛵ only with a chef on board."""
+    """The panel's persistent buttons — exploration-refonte-v1 (Drasah
+    02/11): boarding = ⛵ (captain on board) + ⚓ + 🚪, sailing keeps 🚪
+    alone (the captain may still cancel — refund + sweep)."""
     view = discord.ui.View(timeout=None)
-    view.add_item(KingdomExpeditionChefButton(strings))
-    view.add_item(KingdomExpeditionCrewButton(strings))
+    if str(doc.get("state", "")) == "sailing":
+        view.add_item(KingdomExpeditionQuitButton(strings))
+        return view
     if doc.get("chef_lord_id"):
         view.add_item(KingdomExpeditionLaunchButton(strings))
+    view.add_item(KingdomExpeditionCrewButton(strings))
+    view.add_item(KingdomExpeditionQuitButton(strings))
     return view
 
 
@@ -292,8 +337,11 @@ async def refresh_expedition_panel_safe(guild: Any, wiring: Any, kingdom_id: str
         strings = _strings(locale)
         names = await _lord_names(wiring, kingdom_id)
         if str(doc.get("state", "")) == "sailing":
+            # exploration-refonte-v1: the sailing face keeps 🚪 alone —
+            # the captain may still cancel (refund + sweep).
             await message.edit(
-                content=_panel_text(strings, kingdom, doc, names), view=None
+                content=_panel_text(strings, kingdom, doc, names),
+                view=_panel_view(strings, doc),
             )
         else:
             await message.edit(
@@ -562,18 +610,26 @@ async def _handle_toggle(
         pass
 
 
-class KingdomExpeditionChefButton(
+class KingdomExpeditionQuitButton(
     discord.ui.DynamicItem[discord.ui.Button[Any]],
-    template=r"kingdoms:expedition:chef",
+    template=r"kingdoms:expedition:quit",
 ):
-    """« S'enroller comme chef d'expédition » — one available defence point."""
+    """« 🚪 Quitter le navire » — exploration-refonte-v1 (Drasah 02/11).
+
+    The CAPTAIN cancels the exploration (boarding: the doc clears,
+    nothing was consumed; sailing: every lock clears, the token is
+    refunded and the salon sweeps). A CREW member cancels his own
+    embarkment — the panel recalculates the travel in place. Anyone
+    else gets a refusal. Once the lines are cast the mates stay aboard
+    (locked until the return); only the captain may leave a sailing
+    ship."""
 
     def __init__(self, strings: dict[str, str]) -> None:
         super().__init__(
             discord.ui.Button(
-                label=str(strings["chef_button"])[:80],
-                custom_id="kingdoms:expedition:chef",
-                style=discord.ButtonStyle.primary,
+                label=str(strings["quit_button"])[:80],
+                custom_id="kingdoms:expedition:quit",
+                style=discord.ButtonStyle.secondary,
             )
         )
 
@@ -584,19 +640,88 @@ class KingdomExpeditionChefButton(
         item: discord.ui.Item[Any],
         match: re.Match[str],
         /,
-    ) -> KingdomExpeditionChefButton:
+    ) -> KingdomExpeditionQuitButton:
         """Rebuild the button from the wire."""
         return cls(_strings(_locale(interaction)))
 
     async def callback(self, interaction: discord.Interaction) -> None:
-        """Toggle the chef (never consumes the defence point)."""
+        """Quit the ship — captain cancels, a mate disembarks, else note."""
         from kingdoms.mods.kingdoms.kingdom_persistent import _wiring
 
+        strings = _strings(_locale(interaction))
         wiring = _wiring()
         if wiring.economy_service is None:
-            await _error_note(interaction, _strings(_locale(interaction))["no_service"])
+            await _error_note(interaction, strings["no_service"])
             return
-        await _handle_toggle(interaction, wiring.economy_service.toggle_expedition_chef)
+        lord, kingdom = await _require_lord(interaction, strings, wiring)
+        if lord is None or kingdom is None:
+            return
+        economy = wiring.economy_service
+        try:
+            doc = await economy.expedition(str(kingdom.id))
+        except Exception:
+            await _error_note(interaction, strings["no_service"])
+            return
+        state = str(doc.get("state", ""))
+        is_captain = str(doc.get("chef_lord_id", "") or "") == str(lord.id)
+        if state == "boarding":
+            if is_captain:
+                await self._cancel(
+                    interaction, wiring, strings, kingdom, lord, economy
+                )
+            elif str(lord.id) in [str(item) for item in doc.get("crew", [])]:
+                # a mate steps off BEFORE the launch — the travel
+                # recalculates on the panel refresh (−4h read back).
+                await _handle_toggle(interaction, economy.toggle_expedition_crew)
+            else:
+                await _error_note(interaction, strings["not_aboard"])
+            return
+        if state == "sailing":
+            if is_captain:
+                await self._cancel(
+                    interaction, wiring, strings, kingdom, lord, economy
+                )
+            else:
+                await _error_note(interaction, strings["crew_locked"])
+            return
+        await _error_note(interaction, strings["not_aboard"])
+
+    async def _cancel(
+        self,
+        interaction: discord.Interaction,
+        wiring: Any,
+        strings: dict[str, str],
+        kingdom: Any,
+        lord: Any,
+        economy: Any,
+    ) -> None:
+        """The captain steps down — the exploration is cancelled."""
+        from kingdoms.mods.kingdoms.kingdom_persistent import (
+            _refresh_realm_views_for_kingdom_safe,
+        )
+
+        try:
+            result = await economy.cancel_expedition(str(kingdom.id), str(lord.id))
+        except Exception as exc:
+            await _error_note(interaction, _map_error(strings, exc))
+            return
+        note = strings[
+            "cancel_note_sailing" if result.get("refunded") else "cancel_note_boarding"
+        ]
+        await _error_note(interaction, note)
+        await sweep_expedition_salon_safe(
+            interaction.guild, int(result.get("salon_id", 0) or 0)
+        )
+        # the 🧭 card may light up again on the realm view (refunded).
+        try:
+            await _refresh_realm_views_for_kingdom_safe(
+                interaction.guild, str(kingdom.id)
+            )
+        except Exception:
+            logger.warning(
+                "KINGDOMS EXPEDITION: realm refresh after cancel failed",
+                exc_info=True,
+            )
 
 
 class KingdomExpeditionCrewButton(
@@ -681,6 +806,16 @@ class KingdomExpeditionLaunchButton(
             return
         lord, kingdom = await _require_lord(interaction, strings, wiring)
         if lord is None or kingdom is None:
+            return
+        # exploration-refonte-v1: ONLY the captain may cast off — the
+        # button is visible to everyone (Discord shows it to all), the
+        # guard refuses anyone else with a bubble.
+        try:
+            doc = await wiring.economy_service.expedition(str(kingdom.id))
+        except Exception:
+            doc = {}
+        if str(doc.get("chef_lord_id", "") or "") != str(lord.id):
+            await _error_note(interaction, strings["not_captain_launch"])
             return
         try:
             doc = await wiring.economy_service.launch_expedition(str(kingdom.id))

@@ -132,6 +132,10 @@ STRINGS: dict[str, dict[str, str]] = {
         ),
         "exploration_capitaine_button": "🧭 Become captain",
         "exploration_annuler_button": "Cancel",
+        "exploration_no_defense": (
+            "🛡️ Prerequisite not met: you need one AVAILABLE defence"
+            " point."
+        ),
     },
     "fr": {
         "hub_flavor": (
@@ -236,6 +240,9 @@ STRINGS: dict[str, dict[str, str]] = {
         ),
         "exploration_capitaine_button": "🧭 Devenir capitaine",
         "exploration_annuler_button": "Annuler",
+        "exploration_no_defense": (
+            "🛡️ Pré-requis du point de défense possédé non respecté."
+        ),
     },
 }
 
@@ -1558,10 +1565,12 @@ def _exploration_fiche_content(locale: str) -> str:
 def _exploration_capitaine(
     wiring: Any, kingdom: Any, lord: Any, locale: str
 ) -> Any:
-    """The 🧭 Devenir capitaine callback factory — one click CREATES the
-    🧭 exploration salon (the existing boarding flow) and enrolls the
-    clicker as CHEF. A refusal (no available defence point…) rides the
-    note: the salon stays open, another lord may still embark."""
+    """The 🧭 Devenir capitaine callback factory — exploration-refonte-v1
+    (Drasah 02/11): the defence point 🛡️ is verified BEFORE anything
+    else (``captain_expedition`` checks it first). No eligible clicker →
+    NO salon at all, the note « Pré-requis du point de défense possédé
+    non respecté » rides alone. On success one click CREATES the 🧭
+    exploration salon and enrolls the clicker as CAPITAINE."""
 
     from time import monotonic
 
@@ -1575,6 +1584,7 @@ def _exploration_capitaine(
         from kingdoms.mods.kingdoms.kingdom_persistent import _EPHEMERAL_WINDOWS
 
         expe = _expe_strings(locale)
+        lieu = _strings(locale)
         user_id = str(getattr(interaction.user, "id", ""))
         # the fiche closes — the note replaces it (the interaction's
         # original response is the fiche window itself).
@@ -1587,33 +1597,37 @@ def _exploration_capitaine(
                 "KINGDOM LIEUX: exploration fiche close failed (ignored)",
                 exc_info=True,
             )
-        channel = await open_expedition_salon_safe(
-            interaction.guild, wiring, kingdom
-        )
-        if channel is None:
-            economy = getattr(wiring, "economy_service", None)
-            try:
-                doc = await economy.expedition(str(kingdom.id))
-                note = (
-                    expe["already_sailing"]
-                    if str(doc.get("state", "")) == "sailing"
-                    else expe["no_token"]
-                )
-            except Exception:
-                note = expe["no_token"]
+        economy = getattr(wiring, "economy_service", None)
+        if economy is None:
+            note = expe["no_service"]
         else:
-            note = str(expe["open_note"]).format(channel=f"<#{int(channel.id)}>")
             try:
-                await wiring.economy_service.toggle_expedition_chef(
-                    str(kingdom.id), str(lord.id)
-                )
-                await refresh_expedition_panel_safe(
-                    interaction.guild, wiring, str(kingdom.id)
-                )
+                await economy.captain_expedition(str(kingdom.id), str(lord.id))
             except Exception as exc:
-                # the salon is OPEN — the clicker may still embark once
-                # he meets the prerequisite (the defence point).
-                note = f"{note}\n{_map_error(expe, exc)}"
+                # the defence point FIRST — no salon opens without it.
+                if "defence point" in str(exc):
+                    note = lieu["exploration_no_defense"]
+                else:
+                    note = _map_error(expe, exc)
+            else:
+                channel = await open_expedition_salon_safe(
+                    interaction.guild, wiring, kingdom
+                )
+                if channel is None:
+                    note = expe["open_failed"]
+                else:
+                    note = str(expe["open_note"]).format(
+                        channel=f"<#{int(channel.id)}>"
+                    )
+                    try:
+                        await refresh_expedition_panel_safe(
+                            interaction.guild, wiring, str(kingdom.id)
+                        )
+                    except Exception:
+                        logger.warning(
+                            "KINGDOM LIEUX: exploration panel refresh failed",
+                            exc_info=True,
+                        )
         try:
             message = await interaction.followup.send(note, ephemeral=True)
             _EPHEMERAL_WINDOWS[user_id] = (interaction, monotonic(), message)
@@ -1660,9 +1674,10 @@ class KingdomLieuExplorationButton(
     token is held (gray+disabled otherwise, never hidden). The click
     opens the FICHE as the clicker's side window (type-7 ack: the
     council sheet SURVIVES, coexist) — the card's art + its effect +
-    its prerequisite, with two buttons: 🧭 Devenir capitaine CREATES the
-    exploration salon (and enrolls the clicker as chef), Annuler closes
-    the window, nothing else."""
+    its prerequisite, with two buttons: 🧭 Devenir capitaine checks the
+    defence point FIRST (no salon on refusal), then CREATES the
+    exploration salon and enrolls the clicker as CAPITAINE; Annuler
+    closes the window, nothing else."""
 
     def __init__(self, label: str) -> None:
         super().__init__(

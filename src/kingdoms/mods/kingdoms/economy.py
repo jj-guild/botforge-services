@@ -82,6 +82,10 @@ expedition — every embarked CREW member cuts it by 4h (the chef never
 cuts it), plancher 24h."""
 EXPEDITION_HOURS_PER_LORD = 4
 EXPEDITION_MIN_HOURS = 24
+EXPEDITION_BOARDING_SECONDS = 900
+"""exploration-refonte-v1 (Drasah 02/11): the 15-minute boarding
+window — a due boarding WITH a captain launches itself (the events
+tick fires the auto-launch)."""
 EXPEDITION_COMPENSATION_TECH = 2
 """exploration-expedition-v1: when the map pool runs dry at the return,
 the kingdom keeps a compensation lot — one civilization it does not
@@ -400,14 +404,18 @@ class EconomyService:
         kingdom = await self._kingdom_by_id(kingdom_id)
         return dict(getattr(kingdom, "expedition", None) or {})
 
-    async def begin_expedition(self, kingdom_id: str) -> dict[str, Any]:
+    async def begin_expedition(
+        self, kingdom_id: str, *, now: datetime | None = None
+    ) -> dict[str, Any]:
         """Open the boarding state (idempotent — the token stays intact).
 
         The 🧭 button opens the salon: a kingdom without a token cannot
         start, a boarding expedition returns its doc unchanged, a
         sailing one refuses. The Explorateur token is consumed at the
-        LAUNCH, never here.
+        LAUNCH, never here. ``opened_at`` stamps the 15-minute boarding
+        window (exploration-refonte-v1 — the auto-launch deadline).
         """
+        timestamp = now or game_now()
         kingdom = await self._kingdom_by_id(kingdom_id)
         doc = dict(getattr(kingdom, "expedition", None) or {})
         if str(doc.get("state", "")) == "sailing":
@@ -425,6 +433,7 @@ class EconomyService:
             "panel_message_id": None,
             "ends_at": None,
             "locked": [],
+            "opened_at": int(timestamp.timestamp()),
         }
         kingdom.expedition = doc
         await self._store.upsert_kingdom(kingdom.to_mongo())
@@ -444,6 +453,45 @@ class EconomyService:
             doc["panel_message_id"] = int(panel_message_id)
         kingdom.expedition = doc
         await self._store.upsert_kingdom(kingdom.to_mongo())
+
+    async def captain_expedition(
+        self,
+        kingdom_id: str,
+        lord_id: str,
+        *,
+        now: datetime | None = None,
+    ) -> dict[str, Any]:
+        """conseil-exploration-v1 (Drasah 01/11): the fiche's 🧭 Devenir
+        capitaine — the defence point is checked BEFORE anything else
+        (no eligible clicker → no salon at all, the note alone rides).
+
+        The boarding opens first (idempotent — a live boarding returns
+        untouched), then the clicker enrolls as CAPITAINE. Idempotent:
+        a lord already captain returns the doc unchanged (a second click
+        never steps him down). The defence point stays a PREREQUISITE —
+        enrolling never consumes it.
+        """
+        timestamp = now or game_now()
+        await self.begin_expedition(kingdom_id, now=timestamp)
+        kingdom = await self._kingdom_by_id(kingdom_id)
+        doc = dict(getattr(kingdom, "expedition", None) or {})
+        lord = next(
+            (item for item in await self._kingdoms.lords() if item.id == lord_id),
+            None,
+        )
+        if lord is None or lord.left or lord.kingdom_id != kingdom_id:
+            raise EconomyError("the lord is no active lord of this kingdom")
+        if str(doc.get("chef_lord_id", "") or "") == str(lord.id):
+            return doc
+        if self._expedition_locked(lord, int(timestamp.timestamp())):
+            raise EconomyError("the lord is locked (marriage, exploration or FFA)")
+        if int(lord.defense_used) >= int(self._config.attacks.defenses_per_week):
+            raise EconomyError("the captain needs one AVAILABLE defence point")
+        doc["chef_lord_id"] = lord.id
+        doc["crew"] = [item for item in doc.get("crew", []) if item != lord.id]
+        kingdom.expedition = doc
+        await self._store.upsert_kingdom(kingdom.to_mongo())
+        return doc
 
     async def toggle_expedition_chef(
         self,
@@ -538,6 +586,24 @@ class EconomyService:
             raise EconomyError("the expedition is not boarding")
         if not doc.get("chef_lord_id"):
             raise EconomyError("no expedition chef on board")
+        # exploration-refonte-v1 (Drasah 02/11): the captain's defence
+        # point is RE-CHECKED at the cast-off (he could have spent it
+        # during the 15-minute boarding window) and stays LOCKED for the
+        # whole voyage (the exploration lock forbids attack/defence).
+        chef = next(
+            (
+                item
+                for item in await self._kingdoms.lords()
+                if str(item.id) == str(doc.get("chef_lord_id"))
+            ),
+            None,
+        )
+        if chef is None or chef.left or chef.kingdom_id != kingdom_id:
+            raise EconomyError("no expedition chef on board")
+        if self._expedition_locked(chef, ts):
+            raise EconomyError("the lord is locked (marriage, exploration or FFA)")
+        if int(chef.defense_used) >= int(self._config.attacks.defenses_per_week):
+            raise EconomyError("the chef needs one AVAILABLE defence point")
         state = await self._attacks.technology_state(kingdom_id)
         stock = int(state.purchases.get(EXPLORATEUR_STOCK, 0) or 0)
         if stock <= 0:
@@ -568,6 +634,109 @@ class EconomyService:
         )
         await self._record_action(kingdom_id, EXPLORATEUR, "expédition lancée")
         return doc
+
+    async def cancel_expedition(
+        self,
+        kingdom_id: str,
+        lord_id: str,
+        *,
+        now: datetime | None = None,
+    ) -> dict[str, Any]:
+        """exploration-refonte-v1 (Drasah 02/11): ONLY the captain may
+        cancel (🚪 Quitter le navire). Boarding: the doc clears —
+        nothing was consumed yet. Sailing: every lock clears and the
+        Explorateur token is REFUNDED to the kingdom's stock. Returns
+        ``{"kind": "boarding"|"sailing", "salon_id": int, "refunded":
+        bool}`` — the salon sweeps on the caller's side.
+        """
+        kingdom = await self._kingdom_by_id(kingdom_id)
+        doc = dict(getattr(kingdom, "expedition", None) or {})
+        state = str(doc.get("state", ""))
+        if state not in ("boarding", "sailing"):
+            raise EconomyError("there is no exploration to cancel")
+        lord = next(
+            (item for item in await self._kingdoms.lords() if item.id == lord_id),
+            None,
+        )
+        if lord is None or lord.left or lord.kingdom_id != kingdom_id:
+            raise EconomyError("the lord is no active lord of this kingdom")
+        if str(doc.get("chef_lord_id", "") or "") != str(lord.id):
+            raise EconomyError("only the exploration captain may cancel")
+        salon_id = int(doc.get("salon_id", 0) or 0)
+        refunded = False
+        if state == "sailing":
+            locked = [str(item) for item in doc.get("locked", [])]
+            for item in await self._kingdoms.lords():
+                if str(item.id) in locked and not item.left:
+                    item.exploration_locked_until = None
+                    await self._store.upsert_lord(item.to_mongo())
+            tech = await self._attacks.technology_state(kingdom_id)
+            tech.purchases[EXPLORATEUR_STOCK] = (
+                int(tech.purchases.get(EXPLORATEUR_STOCK, 0) or 0) + 1
+            )
+            await self._store.upsert_technology(tech.to_mongo())
+            refunded = True
+            logger.info(
+                "kingdoms: %s cancels its exploration at sea (token refunded)",
+                kingdom_id,
+            )
+        else:
+            logger.info("kingdoms: %s cancels its exploration boarding", kingdom_id)
+        kingdom = await self._kingdom_by_id(kingdom_id)
+        kingdom.expedition = {}
+        await self._store.upsert_kingdom(kingdom.to_mongo())
+        return {"kind": state, "salon_id": salon_id, "refunded": refunded}
+
+    async def auto_launch_due_expeditions(
+        self, *, now: datetime | None = None
+    ) -> list[tuple[KingdomModel, str, str, int]]:
+        """exploration-refonte-v1 (Drasah 02/11): the 15-minute boarding
+        window — every due boarding WITH a captain launches itself.
+
+        A captain who lost his defence point (or left) cancels the
+        boarding — nothing was consumed, no refund needed — and the
+        salon sweeps. A boarding without a captain keeps waiting (the
+        window targets the crew-building phase). Returns
+        ``(kingdom, kind, value, salon_id)`` — kind ``launched`` (value
+        = ends_at) or ``cancelled`` (value = ``""``).
+        """
+        timestamp = now or game_now()
+        now_ts = int(timestamp.timestamp())
+        results: list[tuple[KingdomModel, str, str, int]] = []
+        for kingdom in await self._kingdoms.kingdoms():
+            doc = dict(getattr(kingdom, "expedition", None) or {})
+            if str(doc.get("state", "")) != "boarding":
+                continue
+            if not doc.get("chef_lord_id"):
+                continue
+            opened_at = int(doc.get("opened_at", 0) or 0)
+            if opened_at <= 0:
+                continue  # a legacy boarding without a window stamp waits
+            if opened_at + EXPEDITION_BOARDING_SECONDS > now_ts:
+                continue
+            salon_id = int(doc.get("salon_id", 0) or 0)
+            try:
+                launched = await self.launch_expedition(kingdom.id, now=timestamp)
+            except EconomyError as exc:
+                logger.warning(
+                    "kingdoms: the auto-launch of %s failed (%s) — the boarding is cancelled",
+                    kingdom.id,
+                    exc,
+                )
+                fresh = await self._kingdom_by_id(kingdom.id)
+                fresh.expedition = {}
+                await self._store.upsert_kingdom(fresh.to_mongo())
+                results.append((kingdom, "cancelled", "", salon_id))
+                continue
+            results.append(
+                (
+                    kingdom,
+                    "launched",
+                    str(int(launched.get("ends_at", 0) or 0)),
+                    salon_id,
+                )
+            )
+        return results
 
     async def resolve_due_expeditions(
         self, *, now: datetime | None = None

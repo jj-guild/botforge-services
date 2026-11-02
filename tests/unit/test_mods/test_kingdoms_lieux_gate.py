@@ -1268,7 +1268,7 @@ def test_exploration_fiche_carries_effect_prerequis_and_two_buttons() -> None:
     assert buttons[0].style == discord.ButtonStyle.success
 
 
-def test_exploration_capitaine_opens_salon_and_enrols_the_chef(monkeypatch) -> None:
+def test_exploration_capitaine_checks_first_then_opens_the_salon(monkeypatch) -> None:
     import asyncio
 
     import kingdoms.mods.kingdoms.kingdom_expedition_panel as expedition
@@ -1287,14 +1287,14 @@ def test_exploration_capitaine_opens_salon_and_enrols_the_chef(monkeypatch) -> N
     async def _fake_refresh(guild: Any, wiring: Any, kingdom_id: str) -> None:
         calls["refreshed"] = kingdom_id
 
-    async def _toggle_chef(kingdom_id: str, lord_id: str) -> None:
-        calls["chef"] = (kingdom_id, lord_id)
+    async def _fake_captain(kingdom_id: str, lord_id: str) -> None:
+        calls["captain"] = (kingdom_id, lord_id)
 
     monkeypatch.setattr(expedition, "open_expedition_salon_safe", _fake_open)
     monkeypatch.setattr(expedition, "refresh_expedition_panel_safe", _fake_refresh)
     wiring = SimpleNamespace(
         kingdoms_service=None,
-        economy_service=SimpleNamespace(toggle_expedition_chef=_toggle_chef),
+        economy_service=SimpleNamespace(captain_expedition=_fake_captain),
     )
     kingdom = SimpleNamespace(id=TEST_KINGDOM_ID, name="Nilrem")
     lord = SimpleNamespace(id="l-1")
@@ -1335,16 +1335,19 @@ def test_exploration_capitaine_opens_salon_and_enrols_the_chef(monkeypatch) -> N
         asyncio.run(capitaine.callback(interaction))
     finally:
         _EPHEMERAL_WINDOWS.pop("tester-capitaine", None)
-    # the salon OPENS, the clicker ENROLLS as chef, the panel refreshes
+    # the defence point is checked FIRST — the captain enrolls, THEN the
+    # salon OPENS, the panel refreshes, the note carries the salon link
+    assert calls["captain"] == (TEST_KINGDOM_ID, "l-1")
     assert calls["opened"] is True
-    assert calls["chef"] == (TEST_KINGDOM_ID, "l-1")
     assert calls["refreshed"] == TEST_KINGDOM_ID
     # the fiche closed and the note carries the salon link
     assert sent["fiche_closed"] is True
     assert "<#555>" in str(sent["note"])
 
 
-def test_exploration_capitaine_refusal_keeps_the_salon_note(monkeypatch) -> None:
+def test_exploration_capitaine_defence_refusal_opens_no_salon(monkeypatch) -> None:
+    """exploration-refonte-v1 (Drasah 02/11): no available defence
+    point → the fiche rides the verbatim refusal ALONE — NO salon opens."""
     import asyncio
 
     import kingdoms.mods.kingdoms.kingdom_expedition_panel as expedition
@@ -1352,24 +1355,17 @@ def test_exploration_capitaine_refusal_keeps_the_salon_note(monkeypatch) -> None
 
     calls: dict[str, Any] = {}
 
-    class _Channel:
-        id = 556
-
     async def _fake_open(guild: Any, wiring: Any, kingdom: Any) -> Any:
         calls["opened"] = True
-        return _Channel()
-
-    async def _fake_refresh(guild: Any, wiring: Any, kingdom_id: str) -> None:
-        return None
+        return SimpleNamespace(id=556)
 
     async def _boom(kingdom_id: str, lord_id: str) -> None:
-        raise RuntimeError("no available defence point")
+        raise RuntimeError("the captain needs one AVAILABLE defence point")
 
     monkeypatch.setattr(expedition, "open_expedition_salon_safe", _fake_open)
-    monkeypatch.setattr(expedition, "refresh_expedition_panel_safe", _fake_refresh)
     wiring = SimpleNamespace(
         kingdoms_service=None,
-        economy_service=SimpleNamespace(toggle_expedition_chef=_boom),
+        economy_service=SimpleNamespace(captain_expedition=_boom),
     )
     view = _exploration_fiche_view(
         wiring, SimpleNamespace(id=TEST_KINGDOM_ID), SimpleNamespace(id="l-1"), "fr"
@@ -1407,10 +1403,12 @@ def test_exploration_capitaine_refusal_keeps_the_salon_note(monkeypatch) -> None
         asyncio.run(capitaine.callback(interaction))
     finally:
         _EPHEMERAL_WINDOWS.pop("tester-refus", None)
-    # the salon OPENS anyway — the refusal rides the note, another lord
-    # may still embark.
-    assert calls["opened"] is True
-    assert "<#556>" in str(sent["note"])
+    # NO salon opens — the defence point is checked BEFORE anything.
+    assert "opened" not in calls
+    # the verbatim refusal rides the note.
+    assert (
+        _strings("fr")["exploration_no_defense"] in str(sent["note"])
+    )
     assert "🛡️" in str(sent["note"])
 
 

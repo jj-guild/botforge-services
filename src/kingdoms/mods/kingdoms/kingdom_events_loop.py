@@ -365,6 +365,71 @@ async def _resolve_expeditions_safe(bot: Any) -> None:
                 )
 
 
+async def _auto_launch_expeditions_safe(bot: Any) -> None:
+    """exploration-refonte-v1 (Drasah 02/11): the 15-minute boarding
+    window — a due boarding WITH a captain launches itself (the panel
+    flips to its sailing face, the salon notes the departure and the
+    vague Géopolitique announcement goes out). A failed auto-launch
+    (the captain lost his defence point) cancels the boarding — nothing
+    was consumed — and sweeps the salon. Idempotent: the launch flips
+    the doc to sailing, a replay never fires twice.
+    """
+    from kingdoms.mods.kingdoms.kingdom_expedition_panel import (
+        _strings as _panel_strings,
+        announce_expedition_depart_safe,
+        refresh_expedition_panel_safe,
+        sweep_expedition_salon_safe,
+    )
+    from kingdoms.mods.kingdoms.kingdom_persistent import (
+        _refresh_realm_views_for_kingdom_safe,
+        _wiring,
+    )
+
+    for guild in list(getattr(bot, "guilds", []) or []):
+        wiring = _wiring()
+        if wiring.economy_service is None:
+            continue
+        try:
+            results = await wiring.economy_service.auto_launch_due_expeditions()
+        except Exception:
+            logger.warning(
+                "KINGDOMS EVENTS: expedition auto-launch failed", exc_info=True
+            )
+            continue
+        if not results:
+            continue
+        locale = await _guild_locale(bot, str(guild.id))
+        for kingdom, kind, value, salon_id in results:
+            if kind == "launched":
+                await refresh_expedition_panel_safe(guild, wiring, str(kingdom.id))
+                salon = getattr(guild, "get_channel", lambda _id: None)(
+                    int(salon_id or 0)
+                )
+                if salon is not None:
+                    try:
+                        await salon.send(
+                            str(_panel_strings(locale)["sailing_note"]).format(
+                                ends=int(value or 0)
+                            )
+                        )
+                    except Exception:
+                        logger.warning(
+                            "KINGDOMS EVENTS: auto-launch sailing note failed",
+                            exc_info=True,
+                        )
+                await announce_expedition_depart_safe(guild, str(kingdom.name))
+            else:
+                await sweep_expedition_salon_safe(guild, int(salon_id or 0))
+        for kingdom_id in sorted({str(k.id) for k, _, _, _ in results}):
+            try:
+                await _refresh_realm_views_for_kingdom_safe(guild, kingdom_id)
+            except Exception:
+                logger.warning(
+                    "KINGDOMS EVENTS: post-auto-launch view refresh failed",
+                    exc_info=True,
+                )
+
+
 async def _ffa_salon(guild: Any, ffa: Any) -> Any:
     """Return the FFA's ephemeral salon (restructuration-serveur-v1 c).
 
@@ -982,6 +1047,7 @@ async def _kingdoms_events_loop(bot: Any, tick_seconds: int) -> None:
             logger.warning("KINGDOMS EVENTS: attack phases failed", exc_info=True)
         await _resolve_explorations_safe(bot)
         await _resolve_expeditions_safe(bot)
+        await _auto_launch_expeditions_safe(bot)
         await _ffa_exploration_tick_safe(bot)
         await _resolve_cathedrals_safe(bot)
         await _resolve_corbeau_thefts_safe(bot)

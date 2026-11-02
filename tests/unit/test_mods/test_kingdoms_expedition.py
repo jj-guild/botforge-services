@@ -312,15 +312,20 @@ async def test_the_salon_opens_in_the_realm_category_with_its_panel() -> None:
     doc = await bundle.economy.expedition(aquitaine)
     assert int(doc["salon_id"]) == int(channel.id)
     assert doc["panel_message_id"] is not None
-    # The panel carries the two boarding toggles — and ⛵ stays hidden
-    # until a chef is on board.
+    # exploration-refonte-v1: the boarding face carries ⚓ + 🚪 (the
+    # captain enrolls from the council fiche, never from the salon) —
+    # ⛵ stays hidden until a captain is on board, and the body carries
+    # the 15-minute window.
     message = await channel.fetch_message(int(doc["panel_message_id"]))
     view = message.view
     assert view is not None
     custom_ids = [item.custom_id for item in view.children]
-    assert "kingdoms:expedition:chef" in custom_ids
     assert "kingdoms:expedition:crew" in custom_ids
+    assert "kingdoms:expedition:quit" in custom_ids
     assert "kingdoms:expedition:launch" not in custom_ids
+    text = str(message.content)
+    assert "Capitaine" in text
+    assert "15 minutes" in text
     # The overwrites carry the INVARIANT: @everyone denied, the bot in.
     overwrites = channel.overwrites
     assert not overwrites[guild.default_role].view_channel
@@ -333,3 +338,203 @@ class _PanelWiring:
     def __init__(self, bundle: Bundle) -> None:
         self.kingdoms_service = bundle.kingdoms
         self.economy_service = bundle.economy
+
+
+# ---------------------------------------------------------------------------
+# exploration-refonte-v1 (Drasah 02/11) — the captain-first fiche, the
+# 15-minute window, the quit semantics and the refund.
+# ---------------------------------------------------------------------------
+
+
+async def test_captain_expedition_checks_the_defence_point_first() -> None:
+    """conseil-exploration-v1: no token → nothing; no defence point →
+    the boarding opens but NO captain (and the fiche never opens a
+    salon); eligible → captain enrolled, idempotent."""
+    bundle = Bundle()
+    await bundle.launch_season()
+    aquitaine = await bundle.kingdom_id("Aquitaine")
+    # no token: refused before anything.
+    with pytest.raises(EconomyError):
+        await bundle.economy.captain_expedition(aquitaine, "king-a")
+    assert await bundle.economy.expedition(aquitaine) == {}
+    await bundle.token(aquitaine)
+    # the weekly defence already spent: refused, no captain, no salon.
+    king = next(l for l in await bundle.kingdoms.lords() if l.id == "king-a")
+    king.defense_used = 1
+    await bundle.store.upsert_lord(king.to_mongo())
+    with pytest.raises(EconomyError):
+        await bundle.economy.captain_expedition(aquitaine, "king-a")
+    doc = await bundle.economy.expedition(aquitaine)
+    assert doc["state"] == "boarding"
+    assert doc["chef_lord_id"] is None
+    assert doc["salon_id"] is None
+    # eligible: enrolled — and the point stays unconsumed.
+    king.defense_used = 0
+    await bundle.store.upsert_lord(king.to_mongo())
+    doc = await bundle.economy.captain_expedition(aquitaine, "king-a")
+    assert doc["chef_lord_id"] == "king-a"
+    king = next(l for l in await bundle.kingdoms.lords() if l.id == "king-a")
+    assert king.defense_used == 0
+    # idempotent: a second click never steps him down.
+    doc = await bundle.economy.captain_expedition(aquitaine, "king-a")
+    assert doc["chef_lord_id"] == "king-a"
+
+
+async def test_launch_rechecks_the_captain_defence_point() -> None:
+    """The captain spent his point during the window → the cast-off
+    refuses, nothing is consumed."""
+    bundle = Bundle()
+    await bundle.launch_season()
+    aquitaine = await bundle.kingdom_id("Aquitaine")
+    await bundle.token(aquitaine)
+    await bundle.economy.begin_expedition(aquitaine)
+    await bundle.economy.toggle_expedition_chef(aquitaine, "king-a")
+    king = next(l for l in await bundle.kingdoms.lords() if l.id == "king-a")
+    king.defense_used = 1
+    await bundle.store.upsert_lord(king.to_mongo())
+    with pytest.raises(EconomyError):
+        await bundle.economy.launch_expedition(aquitaine, now=_MONDAY)
+    doc = await bundle.economy.expedition(aquitaine)
+    assert doc["state"] == "boarding"
+    assert await bundle.stock_left(aquitaine) == 1
+
+
+async def test_only_the_captain_may_cancel_a_boarding() -> None:
+    """🚪 on a boarding: the doc clears, nothing was consumed — and
+    nobody but the captain may cancel."""
+    bundle = Bundle()
+    await bundle.launch_season()
+    aquitaine = await bundle.kingdom_id("Aquitaine")
+    await bundle.token(aquitaine)
+    await bundle.economy.captain_expedition(aquitaine, "king-a")
+    with pytest.raises(EconomyError):
+        await bundle.economy.cancel_expedition(aquitaine, "lord-a")
+    doc = await bundle.economy.expedition(aquitaine)
+    assert doc["state"] == "boarding"
+    result = await bundle.economy.cancel_expedition(aquitaine, "king-a")
+    assert result["kind"] == "boarding"
+    assert result["refunded"] is False
+    assert await bundle.economy.expedition(aquitaine) == {}
+    assert await bundle.stock_left(aquitaine) == 1
+
+
+async def test_cancelling_a_sailing_exploration_refunds_and_unlocks() -> None:
+    """🚪 on a sailing ship: the captain alone may leave — every lock
+    clears and the Explorateur token is refunded."""
+    bundle = Bundle()
+    await bundle.launch_season()
+    aquitaine = await bundle.kingdom_id("Aquitaine")
+    await bundle.token(aquitaine)
+    await bundle.economy.begin_expedition(aquitaine)
+    await bundle.economy.toggle_expedition_chef(aquitaine, "king-a")
+    await bundle.economy.toggle_expedition_crew(aquitaine, "lord-a")
+    doc = await bundle.economy.launch_expedition(aquitaine, now=_MONDAY)
+    ends = int(doc["ends_at"])
+    # a mate cannot quit a sailing ship.
+    with pytest.raises(EconomyError):
+        await bundle.economy.cancel_expedition(aquitaine, "lord-a")
+    result = await bundle.economy.cancel_expedition(aquitaine, "king-a")
+    assert result["kind"] == "sailing"
+    assert result["refunded"] is True
+    assert await bundle.stock_left(aquitaine) == 1
+    assert await bundle.economy.expedition(aquitaine) == {}
+    king = next(l for l in await bundle.kingdoms.lords() if l.id == "king-a")
+    lord = next(l for l in await bundle.kingdoms.lords() if l.id == "lord-a")
+    assert king.exploration_locked_until is None
+    assert lord.exploration_locked_until is None
+
+
+async def test_auto_launch_fires_once_the_window_elapses() -> None:
+    """The 15-minute window: no captain → it waits; 14 minutes →
+    nothing; 16 minutes → the voyage launches itself; idempotent."""
+    bundle = Bundle()
+    await bundle.launch_season()
+    aquitaine = await bundle.kingdom_id("Aquitaine")
+    await bundle.token(aquitaine)
+    await bundle.economy.begin_expedition(aquitaine, now=_MONDAY)
+    # no captain yet: the window keeps waiting.
+    assert (
+        await bundle.economy.auto_launch_due_expeditions(
+            now=_MONDAY + timedelta(minutes=20)
+        )
+    ) == []
+    await bundle.economy.toggle_expedition_chef(aquitaine, "king-a")
+    await bundle.economy.toggle_expedition_crew(aquitaine, "lord-a")
+    assert (
+        await bundle.economy.auto_launch_due_expeditions(
+            now=_MONDAY + timedelta(minutes=14)
+        )
+    ) == []
+    results = await bundle.economy.auto_launch_due_expeditions(
+        now=_MONDAY + timedelta(minutes=16)
+    )
+    assert len(results) == 1
+    _kingdom, kind, value, _salon = results[0]
+    assert kind == "launched"
+    assert int(value) == int((_MONDAY + timedelta(hours=44)).timestamp())
+    doc = await bundle.economy.expedition(aquitaine)
+    assert doc["state"] == "sailing"
+    assert await bundle.stock_left(aquitaine) == 0
+    assert (
+        await bundle.economy.auto_launch_due_expeditions(
+            now=_MONDAY + timedelta(minutes=17)
+        )
+    ) == []
+
+
+async def test_auto_launch_fails_when_the_point_was_spent() -> None:
+    """The captain lost his defence point at the deadline → the boarding
+    cancels (nothing was consumed, no refund needed)."""
+    bundle = Bundle()
+    await bundle.launch_season()
+    aquitaine = await bundle.kingdom_id("Aquitaine")
+    await bundle.token(aquitaine)
+    await bundle.economy.begin_expedition(aquitaine, now=_MONDAY)
+    await bundle.economy.toggle_expedition_chef(aquitaine, "king-a")
+    king = next(l for l in await bundle.kingdoms.lords() if l.id == "king-a")
+    king.defense_used = 1
+    await bundle.store.upsert_lord(king.to_mongo())
+    results = await bundle.economy.auto_launch_due_expeditions(
+        now=_MONDAY + timedelta(minutes=16)
+    )
+    assert len(results) == 1
+    _kingdom, kind, value, _salon = results[0]
+    assert kind == "cancelled"
+    assert value == ""
+    assert await bundle.economy.expedition(aquitaine) == {}
+    assert await bundle.stock_left(aquitaine) == 1
+
+
+async def test_the_sailing_panel_keeps_the_quit_button() -> None:
+    """After the cast-off the panel keeps 🚪 alone (the captain may
+    still cancel — refund + sweep); the boarding face shows ⛵ only
+    once a captain is on board."""
+    from kingdoms.mods.kingdoms import kingdom_expedition_panel as panel
+
+    bundle = Bundle()
+    await bundle.launch_season()
+    aquitaine = await bundle.kingdom_id("Aquitaine")
+    await bundle.token(aquitaine)
+    guild = MockGuild()
+    await guild.create_category("🏰 Aquitaine")
+    wiring = _PanelWiring(bundle)
+    kingdom = next(
+        k for k in await bundle.kingdoms.kingdoms() if k.id == aquitaine
+    )
+    await bundle.economy.captain_expedition(aquitaine, "king-a")
+    channel = await panel.open_expedition_salon_safe(guild, wiring, kingdom)
+    assert channel is not None
+    doc = await bundle.economy.expedition(aquitaine)
+    message = await channel.fetch_message(int(doc["panel_message_id"]))
+    ids = [item.custom_id for item in message.view.children]
+    # a captain is on board: boarding = ⛵ + ⚓ + 🚪.
+    assert ids == [
+        "kingdoms:expedition:launch",
+        "kingdoms:expedition:crew",
+        "kingdoms:expedition:quit",
+    ]
+    await bundle.economy.launch_expedition(aquitaine)
+    await panel.refresh_expedition_panel_safe(guild, wiring, aquitaine)
+    ids = [item.custom_id for item in message.view.children]
+    assert ids == ["kingdoms:expedition:quit"]
+    assert "En mer" in str(message.content)
