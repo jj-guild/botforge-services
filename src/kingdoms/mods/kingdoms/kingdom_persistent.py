@@ -194,11 +194,14 @@ def register_kingdoms_persistent_items(bot: discord.Client) -> None:
     )
     # exploration-refonte-v1 (Drasah 02/11): the 🧭 exploration salon
     # — the open button, the crew toggle, the cast-off and the quit.
+    # exploration-retour-v1: + the sailing refresh and the unload.
     from kingdoms.mods.kingdoms.kingdom_expedition_panel import (
         KingdomExpeditionCrewButton,
         KingdomExpeditionLaunchButton,
         KingdomExpeditionOpenButton,
         KingdomExpeditionQuitButton,
+        KingdomExpeditionRefreshButton,
+        KingdomExpeditionUnloadButton,
     )
 
     bot.add_dynamic_items(
@@ -206,6 +209,8 @@ def register_kingdoms_persistent_items(bot: discord.Client) -> None:
         KingdomExpeditionCrewButton,
         KingdomExpeditionLaunchButton,
         KingdomExpeditionQuitButton,
+        KingdomExpeditionRefreshButton,
+        KingdomExpeditionUnloadButton,
         KingdomVoliereButton,
         KingdomTheftButton,
         KingdomRempartsOpenButton,

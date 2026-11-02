@@ -317,14 +317,17 @@ async def _resolve_expeditions_safe(bot: Any) -> None:
     """Resolve the due sailing expeditions (exploration-expedition-v1).
 
     The return announces itself in Géopolitique (a new map, or the
-    compensation civ +2 ⚙️ when the pool ran dry), sweeps the 🧭 salon
-    (the journey never outlives its room) and clears every lock. The
-    pass is idempotent — a restart mid-sail never resolves twice.
+    compensation civ +2 ⚙️ when the pool ran dry) and flips the 🧭
+    panel to its RETURNED face (exploration-retour-v1 — the rail shows
+    ◉ Retour, the RP dock text and « 🪜 Descendre du navire »): the
+    locks HOLD and the salon SURVIVES until the crew unloads (no
+    auto-fallback, Drasah's call). The pass is idempotent — a restart
+    mid-sail never resolves twice.
     """
     from kingdoms.mods.kingdoms.kingdom_content import announce_geopolitics
     from kingdoms.mods.kingdoms.kingdom_expedition_panel import (
         expedition_return_text,
-        sweep_expedition_salon_safe,
+        refresh_expedition_panel_safe,
     )
     from kingdoms.mods.kingdoms.kingdom_persistent import (
         _refresh_realm_views_for_kingdom_safe,
@@ -354,7 +357,9 @@ async def _resolve_expeditions_safe(bot: Any) -> None:
                     "KINGDOMS EVENTS: expedition return announcement failed",
                     exc_info=True,
                 )
-            await sweep_expedition_salon_safe(guild, int(salon_id or 0))
+            # exploration-retour-v1: the panel flips to its RETURNED
+            # face — the salon survives until the crew unloads it.
+            await refresh_expedition_panel_safe(guild, wiring, str(kingdom.id))
         for kingdom_id in sorted({str(k.id) for k, _, _, _ in resolved}):
             try:
                 await _refresh_realm_views_for_kingdom_safe(guild, kingdom_id)
@@ -377,6 +382,7 @@ async def _auto_launch_expeditions_safe(bot: Any) -> None:
     from kingdoms.mods.kingdoms.kingdom_expedition_panel import (
         _strings as _panel_strings,
         announce_expedition_depart_safe,
+        mask_crew_for_voyage_safe,
         refresh_expedition_panel_safe,
         sweep_expedition_salon_safe,
     )
@@ -402,6 +408,9 @@ async def _auto_launch_expeditions_safe(bot: Any) -> None:
         for kingdom, kind, value, salon_id in results:
             if kind == "launched":
                 await refresh_expedition_panel_safe(guild, wiring, str(kingdom.id))
+                # exploration-retour-v1: the crew is AT SEA — masked
+                # from its realm until the return is unloaded.
+                await mask_crew_for_voyage_safe(guild, wiring, kingdom)
                 salon = getattr(guild, "get_channel", lambda _id: None)(
                     int(salon_id or 0)
                 )

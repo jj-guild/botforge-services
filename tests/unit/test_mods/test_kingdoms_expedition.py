@@ -161,6 +161,9 @@ async def test_launch_consumes_the_token_and_locks_chef_and_crew() -> None:
     lord = next(l for l in await bundle.kingdoms.lords() if l.id == "lord-a")
     assert king.exploration_locked_until == ends
     assert lord.exploration_locked_until == ends
+    doc = await bundle.economy.launch_expedition(aquitaine, now=_MONDAY)
+    ends = int(doc["ends_at"])
+    assert await bundle.stock_left(aquitaine) == 0
     # A second expedition cannot start while one sails.
     await bundle.token(aquitaine)
     with pytest.raises(EconomyError):
@@ -169,6 +172,13 @@ async def test_launch_consumes_the_token_and_locks_chef_and_crew() -> None:
     await bundle.economy.resolve_due_expeditions(
         now=_MONDAY + timedelta(hours=45)
     )
+    # exploration-retour-v1: the resolve HOLDS the locks — the crew
+    # must unload before a new journey.
+    doc = await bundle.economy.expedition(aquitaine)
+    assert doc["state"] == "returned"
+    with pytest.raises(EconomyError):
+        await bundle.economy.begin_expedition(aquitaine)
+    await bundle.economy.claim_expedition_return(aquitaine, "king-a")
     await bundle.token(aquitaine)
     doc = await bundle.economy.begin_expedition(aquitaine)
     for name in ("lord-a", "lord-c", "lord-d", "lord-e", "lord-f", "lord-g", "lord-h"):
@@ -200,8 +210,9 @@ async def test_launch_without_chef_or_token_is_refused() -> None:
     assert doc["state"] == "boarding"
 
 
-async def test_resolve_draws_a_map_and_clears_every_lock() -> None:
-    """The return draws a brand-new map and clears chef + crew locks."""
+async def test_resolve_draws_a_map_and_waits_for_the_unload() -> None:
+    """exploration-retour-v1: the resolve draws the map but HOLDS the
+    locks — the doc flips to RETURNED and the crew unloads it (« 🪜 »)."""
     bundle = Bundle()
     await bundle.launch_season()
     aquitaine = await bundle.kingdom_id("Aquitaine")
@@ -232,17 +243,37 @@ async def test_resolve_draws_a_map_and_clears_every_lock() -> None:
         t for t in await bundle.territories.territories() if t.map_key == value
     )
     assert territory.owner_kingdom_id == aquitaine
-    assert await bundle.economy.expedition(aquitaine) == {}
+    # the doc flips to RETURNED — gain stored, locks HELD (no fallback).
+    doc = await bundle.economy.expedition(aquitaine)
+    assert doc["state"] == "returned"
+    assert doc["gain_kind"] == "map"
+    assert doc["gain_value"] == value
     king = next(l for l in await bundle.kingdoms.lords() if l.id == "king-a")
     lord = next(l for l in await bundle.kingdoms.lords() if l.id == "lord-a")
-    assert king.exploration_locked_until is None
-    assert lord.exploration_locked_until is None
-    # Idempotent: a second pass resolves nothing.
+    assert king.exploration_locked_until == ends
+    assert lord.exploration_locked_until == ends
+    # Idempotent: a second pass resolves nothing (the doc is no longer
+    # sailing).
     assert (
         await bundle.economy.resolve_due_expeditions(
             now=_MONDAY + timedelta(hours=46)
         )
     ) == []
+    # a stranger may NOT unload the return.
+    with pytest.raises(EconomyError):
+        await bundle.economy.claim_expedition_return(aquitaine, "lord-b")
+    # any ABOARD lord may: the mate's click wins — locks clear, doc empties.
+    claimed = await bundle.economy.claim_expedition_return(aquitaine, "lord-a")
+    assert claimed["gain_kind"] == "map"
+    assert claimed["chef_lord_id"] == "king-a"
+    assert claimed["crew"] == ["lord-a"]
+    king = next(l for l in await bundle.kingdoms.lords() if l.id == "king-a")
+    lord = next(l for l in await bundle.kingdoms.lords() if l.id == "lord-a")
+    assert king.exploration_locked_until is None
+    assert lord.exploration_locked_until is None
+    assert await bundle.economy.expedition(aquitaine) == {}
+    with pytest.raises(EconomyError):
+        await bundle.economy.claim_expedition_return(aquitaine, "king-a")
 
 
 async def test_exhausted_pool_pays_a_civ_and_two_points() -> None:
@@ -536,5 +567,86 @@ async def test_the_sailing_panel_keeps_the_quit_button() -> None:
     await bundle.economy.launch_expedition(aquitaine)
     await panel.refresh_expedition_panel_safe(guild, wiring, aquitaine)
     ids = [item.custom_id for item in message.view.children]
-    assert ids == ["kingdoms:expedition:quit"]
-    assert "En mer" in str(message.content)
+    # exploration-retour-v1: the sailing face = 🔄 Actualiser + 🚪.
+    assert ids == [
+        "kingdoms:expedition:refresh",
+        "kingdoms:expedition:quit",
+    ]
+    text = str(message.content)
+    assert "◉ Voyage" in text
+    assert "Retour estimé" in text
+    # the returned face = 🪜 alone, the RP dock text and the gain.
+    await bundle.economy.resolve_due_expeditions(
+        now=datetime(2026, 12, 1, tzinfo=UTC)
+    )
+    await panel.refresh_expedition_panel_safe(guild, wiring, aquitaine)
+    ids = [item.custom_id for item in message.view.children]
+    assert ids == ["kingdoms:expedition:unload"]
+    text = str(message.content)
+    assert "◉ Retour" in text
+    assert "*" in text  # the italic RP dock line
+    assert "Découverte" in text or "Recrue" in text or "Butin" in text
+
+
+# ---------------------------------------------------------------------------
+# exploration-retour-v1 (Drasah 02/11) — the AT-SEA mask and the unload.
+# ---------------------------------------------------------------------------
+
+
+async def test_cancel_returns_the_locked_ids_for_the_unmask() -> None:
+    """The sailing cancel rides its locked ids — the caller lifts the
+    AT-SEA mask with them."""
+    bundle = Bundle()
+    await bundle.launch_season()
+    aquitaine = await bundle.kingdom_id("Aquitaine")
+    await bundle.token(aquitaine)
+    await bundle.economy.begin_expedition(aquitaine)
+    await bundle.economy.toggle_expedition_chef(aquitaine, "king-a")
+    await bundle.economy.toggle_expedition_crew(aquitaine, "lord-a")
+    await bundle.economy.launch_expedition(aquitaine, now=_MONDAY)
+    result = await bundle.economy.cancel_expedition(aquitaine, "king-a")
+    assert result["kind"] == "sailing"
+    assert result["refunded"] is True
+    assert sorted(result["locked"]) == ["king-a", "lord-a"]
+
+
+async def test_the_at_sea_mask_hides_the_realm_and_keeps_the_salon() -> None:
+    """exploration-retour-v1: once at sea the crew is masked from its
+    realm category (member deny) and keeps the expedition salon (child
+    allow) — the unload restores the realm allow."""
+    from types import SimpleNamespace
+
+    from kingdoms.mods.kingdoms import kingdom_expedition_panel as panel
+    from kingdoms.mods.kingdoms.kingdom_realms import realm_category_name
+
+    from tests.mocks.discord_mock import MockMember
+
+    guild = MockGuild()
+    captain = MockMember(id=101, name="captain", guild=guild)
+    mate = MockMember(id=102, name="mate", guild=guild)
+    guild.add_member(captain)
+    guild.add_member(mate)
+    category = await guild.create_category(realm_category_name("Aquitaine"))
+    salon = await guild.create_text_channel("🧭 exploration", category=category)
+    doc = {
+        "state": "sailing",
+        "chef_lord_id": "101",
+        "crew": ["102"],
+        "salon_id": str(salon.id),
+    }
+
+    class _Economy:
+        async def expedition(self, _kingdom_id: str) -> dict:
+            return doc
+
+    wiring = SimpleNamespace(economy_service=_Economy())
+    kingdom = SimpleNamespace(id="k-1", name="Aquitaine")
+    await panel.mask_crew_for_voyage_safe(guild, wiring, kingdom)
+    assert not category.permission_overwrite_for(captain).view_channel
+    assert not category.permission_overwrite_for(mate).view_channel
+    assert salon.overwrites[captain].view_channel
+    assert salon.overwrites[mate].view_channel
+    # the unload restores the realm allow (the _realm_overwrites entry).
+    await panel.unmask_crew_safe(guild, kingdom, ["101", "102"])
+    assert category.permission_overwrite_for(captain).view_channel
+    assert category.permission_overwrite_for(mate).view_channel

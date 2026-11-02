@@ -22,6 +22,15 @@ are 90-second ephemeral bubbles, the salon is gated like the realm
 (everyone deny + members allow) and dies at the return. The Géopolitique
 departure message stays deliberately VAGUE (no lord, no duration) — it
 feeds the future rumour/raven system (Drasah, in reflection).
+
+exploration-retour-v1 (Drasah 02/11): the journey now reads on a
+three-phase rail — À QUAI, VOYAGE, RETOUR. While at sea the crew is
+MASKED from its realm category (member-level deny, one edit per entity)
+and keeps only the expedition salon (child allow); 🔄 Actualiser
+re-renders the sailing face. At the resolve the doc flips to RETURNED
+(gain drawn, locks held, NO auto-fallback) and shows the RP dock text
+plus « 🪜 Descendre du navire » — any aboard lord validates the gain,
+lifts the mask, clears the locks and sweeps the salon.
 """
 
 from __future__ import annotations
@@ -59,11 +68,28 @@ _STRINGS: dict[str, dict[str, str]] = {
             " l'équipage, après ce délai le voyage se lancera"
             " automatiquement."
         ),
+        "rail_quai": "◉ À quai ────── ○ Voyage ────── ○ Retour",
+        "rail_voyage": "○ À quai ────── ◉ Voyage ────── ○ Retour",
+        "rail_retour": "○ À quai ────── ○ Voyage ────── ◉ Retour",
+        "separator": "──────────────────",
         "crew_button": "⚓ Participer au voyage",
         "launch_button": "⛵ Lâcher les amarres",
         "quit_button": "🚪 Quitter le navire",
+        "refresh_button": "🔄 Actualiser",
+        "unload_button": "🪜 Descendre du navire",
         "sailing_title": "# 🧭 Exploration de {kingdom}",
-        "sailing_line": "⛵ **En mer** — retour estimé <t:{ends}:R>.",
+        "sailing_line": "⏳ **Retour estimé :** <t:{ends}:f> (<t:{ends}:R>).",
+        "returned_rp": (
+            "*Après de longues semaines en mer, le navire a enfin"
+            " accosté. L'équipage descend à quai, une découverte en cale.*"
+        ),
+        "returned_gain_map": "🗺️ **Découverte :** le territoire **{map}**",
+        "returned_gain_civ": "🤝 **Recrue :** la civilisation **{civ}** (+2 ⚙️)",
+        "returned_gain_tech": "⚙️ **Butin :** 2 ⚙️ de compensation",
+        "unload_note": (
+            "⚓ L'équipage a débarqué — le royaume garde sa découverte,"
+            " le salon se referme."
+        ),
         "sailing_note": (
             "⛵ Les amarres sont lâchées — le jeton 🧭 Explorateur est consommé."
             " Bon voyage, l'équipage revient <t:{ends}:R>."
@@ -120,11 +146,28 @@ _STRINGS: dict[str, dict[str, str]] = {
             "🕐 You have 15 minutes to board the crew — past that delay"
             " the voyage launches on its own."
         ),
+        "rail_quai": "◉ Docked ────── ○ Voyage ────── ○ Return",
+        "rail_voyage": "○ Docked ────── ◉ Voyage ────── ○ Return",
+        "rail_retour": "○ Docked ────── ○ Voyage ────── ◉ Return",
+        "separator": "──────────────────",
         "crew_button": "⚓ Join the voyage",
         "launch_button": "⛵ Cast off",
         "quit_button": "🚪 Leave the ship",
+        "refresh_button": "🔄 Refresh",
+        "unload_button": "🪜 Disembark",
         "sailing_title": "# 🧭 Exploration of {kingdom}",
-        "sailing_line": "⛵ **At sea** — back <t:{ends}:R>.",
+        "sailing_line": "⏳ **Back around:** <t:{ends}:f> (<t:{ends}:R>).",
+        "returned_rp": (
+            "*After long weeks at sea, the ship has finally docked. The"
+            " crew steps down with a discovery in the hold.*"
+        ),
+        "returned_gain_map": "🗺️ **Discovery:** the territory **{map}**",
+        "returned_gain_civ": "🤝 **Recruit:** the civilization **{civ}** (+2 ⚙️)",
+        "returned_gain_tech": "⚙️ **Loot:** 2 ⚙️ of compensation",
+        "unload_note": (
+            "⚓ The crew has disembarked — the kingdom keeps its"
+            " discovery, the salon closes."
+        ),
         "sailing_note": (
             "⛵ The lines are cast — the 🧭 Explorateur token is consumed."
             " Safe travels, the crew returns <t:{ends}:R>."
@@ -219,6 +262,8 @@ def _map_error(strings: dict[str, str], exc: Exception) -> str:
         return strings["chef_not_crew"]
     if "only the exploration captain" in text:
         return strings["not_captain_cancel"]
+    if "no exploration to unload" in text or "exploration crew may unload" in text:
+        return strings["not_aboard"]
     if isinstance(exc, EconomyError):
         return str(strings["failed"]).format(message=text)
     return str(strings["failed"]).format(message=text)
@@ -261,14 +306,52 @@ def _expedition_hours(doc: dict[str, Any]) -> int:
     )
 
 
+def _rail(strings: dict[str, str], state: str) -> str:
+    """The three-phase rail — the filled dot marks the current phase."""
+    if state == "sailing":
+        return str(strings["rail_voyage"])
+    if state == "returned":
+        return str(strings["rail_retour"])
+    return str(strings["rail_quai"])
+
+
 def _panel_text(
     strings: dict[str, str], kingdom: Any, doc: dict[str, Any], lord_names: dict[str, str]
 ) -> str:
-    """The salon's pinned panel body (boarding or sailing)."""
+    """The salon's pinned panel body (quai, voyage or retour)."""
     title = str(strings["panel_title"]).format(kingdom=getattr(kingdom, "name", ""))
-    if str(doc.get("state", "")) == "sailing":
+    state = str(doc.get("state", ""))
+    rail = _rail(strings, state)
+    if state in ("sailing", "returned"):
         ends = int(doc.get("ends_at", 0) or 0)
-        return "\n".join([title, "", str(strings["sailing_line"]).format(ends=ends)])
+        chef_id = str(doc.get("chef_lord_id", "") or "")
+        crew = [str(item) for item in doc.get("crew", []) if item]
+        chef_name = lord_names.get(chef_id, "—")
+        crew_names = ", ".join(f"<@{item}>" for item in crew) if crew else "—"
+        lines = [
+            title,
+            "",
+            rail,
+            "",
+            str(strings["chef_line"]).format(name=chef_name),
+            str(strings["crew_line"]).format(names=crew_names),
+        ]
+        if state == "sailing":
+            lines.append(str(strings["sailing_line"]).format(ends=ends))
+        else:
+            kind = str(doc.get("gain_kind", "") or "")
+            value = str(doc.get("gain_value", "") or "")
+            lines += [
+                "",
+                strings["returned_rp"],
+                "",
+                str(strings["returned_gain_map"]).format(map=value)
+                if kind == "map"
+                else str(strings["returned_gain_civ"]).format(civ=value)
+                if kind == "civ"
+                else str(strings["returned_gain_tech"]),
+            ]
+        return "\n".join(lines)
     chef_id = str(doc.get("chef_lord_id", "") or "")
     crew = [str(item) for item in doc.get("crew", []) if item]
     chef_name = lord_names.get(chef_id, "—")
@@ -276,9 +359,13 @@ def _panel_text(
     lines = [
         title,
         "",
+        rail,
+        "",
         str(strings["chef_line"]).format(name=chef_name),
         str(strings["crew_line"]).format(names=crew_names),
         str(strings["eta_line"]).format(hours=_expedition_hours(doc)),
+        "",
+        strings["separator"],
         "",
         strings["chef_rule"],
         strings["crew_rule"],
@@ -288,11 +375,17 @@ def _panel_text(
 
 
 def _panel_view(strings: dict[str, str], doc: dict[str, Any]) -> discord.ui.View:
-    """The panel's persistent buttons — exploration-refonte-v1 (Drasah
-    02/11): boarding = ⛵ (captain on board) + ⚓ + 🚪, sailing keeps 🚪
-    alone (the captain may still cancel — refund + sweep)."""
+    """The panel's persistent buttons — exploration-retour-v1 (Drasah
+    02/11): boarding = ⛵ (captain on board) + ⚓ + 🚪, sailing = 🔄 +
+    🚪 (the captain may still cancel — refund + sweep), returned = 🪜
+    alone (the crew validates the gain and closes the salon)."""
     view = discord.ui.View(timeout=None)
-    if str(doc.get("state", "")) == "sailing":
+    state = str(doc.get("state", ""))
+    if state == "returned":
+        view.add_item(KingdomExpeditionUnloadButton(strings))
+        return view
+    if state == "sailing":
+        view.add_item(KingdomExpeditionRefreshButton(strings))
         view.add_item(KingdomExpeditionQuitButton(strings))
         return view
     if doc.get("chef_lord_id"):
@@ -476,6 +569,130 @@ async def sweep_expedition_salon_safe(guild: Any, salon_id: int) -> None:
         logger.info("KINGDOMS EXPEDITION: salon swept (expedition over)")
     except Exception:
         logger.warning("KINGDOMS EXPEDITION: salon deletion failed", exc_info=True)
+
+
+def _guild_member(guild: Any, member_id: str) -> Any:
+    """Resolve one member id to a guild member (None on any mismatch)."""
+    try:
+        return getattr(guild, "get_member", lambda _id: None)(int(member_id))
+    except (TypeError, ValueError):
+        return None
+
+
+def _merged_overwrites(channel: Any) -> dict[Any, Any]:
+    """Read a channel's live overwrites (target-keyed) — falls back to
+    the raw ``(id, is_role)`` store then to an empty set. Never raises."""
+    try:
+        live = getattr(channel, "overwrites", None)
+        if isinstance(live, dict) and live:
+            return dict(live)
+    except Exception:
+        pass
+    raw = getattr(channel, "_overwrites", None)
+    if isinstance(raw, dict) and raw:
+        guild = getattr(channel, "guild", None)
+        result: dict[Any, Any] = {}
+        for key, overwrite in raw.items():
+            try:
+                target_id, is_role = key  # the raw (id, is_role) store
+            except (TypeError, ValueError):
+                continue
+            if is_role:
+                target = getattr(guild, "get_role", lambda _i: None)(target_id)
+            else:
+                target = getattr(guild, "get_member", lambda _i: None)(
+                    int(target_id)
+                )
+            if target is not None:
+                result[target] = overwrite
+        return result
+    return {}
+
+
+async def mask_crew_for_voyage_safe(guild: Any, wiring: Any, kingdom: Any) -> None:
+    """exploration-retour-v1 (Drasah 02/11): the AT-SEA illusion —
+    once the lines are cast, the crew sees ONLY the voyage: every
+    aboard member (captain + mates) loses view of the realm category
+    (member-level deny, reversible at the unload) and KEEPS the
+    expedition salon (a child allow beats the category deny). One
+    single overwrites edit per entity (the rate-limit lesson — never
+    one PATCH per target). Best effort, never raises."""
+    from kingdoms.mods.kingdoms.kingdom_realms import _find_realm_category
+
+    economy = wiring.economy_service
+    if economy is None:
+        return
+    try:
+        doc = await economy.expedition(str(kingdom.id))
+    except Exception:
+        logger.warning("KINGDOMS EXPEDITION: mask read failed", exc_info=True)
+        return
+    ids = [str(doc.get("chef_lord_id", "") or "")]
+    ids += [str(item) for item in doc.get("crew", [])]
+    ids = [item for item in ids if item]
+    if not ids:
+        return
+    members = []
+    for member_id in ids:
+        member = _guild_member(guild, member_id)
+        if member is not None:
+            members.append(member)
+    if not members:
+        return
+    category = _find_realm_category(guild, str(kingdom.name))
+    if category is not None:
+        try:
+            overwrites = _merged_overwrites(category)
+            for member in members:
+                overwrites[member] = discord.PermissionOverwrite(view_channel=False)
+            await category.edit(overwrites=overwrites)
+        except Exception:
+            logger.warning(
+                "KINGDOMS EXPEDITION: crew mask on category failed", exc_info=True
+            )
+    salon = getattr(guild, "get_channel", lambda _id: None)(
+        int(doc.get("salon_id", 0) or 0)
+    )
+    if salon is None:
+        return
+    try:
+        overwrites = _merged_overwrites(salon)
+        for member in members:
+            overwrites[member] = discord.PermissionOverwrite(
+                view_channel=True, read_message_history=True
+            )
+        await salon.edit(overwrites=overwrites)
+    except Exception:
+        logger.warning("KINGDOMS EXPEDITION: crew allow on salon failed", exc_info=True)
+
+
+async def unmask_crew_safe(guild: Any, kingdom: Any, member_ids: list[str]) -> None:
+    """Lift the AT-SEA mask — the realm allow comes back (the same
+    entry _realm_overwrites grants), one single category edit. Best
+    effort, never raises; the salon itself dies with the sweep."""
+    from kingdoms.mods.kingdoms.kingdom_realms import _find_realm_category
+
+    if not member_ids:
+        return
+    category = _find_realm_category(guild, str(kingdom.name))
+    if category is None:
+        return
+    members = []
+    for member_id in member_ids:
+        member = _guild_member(guild, str(member_id))
+        if member is not None:
+            members.append(member)
+    if not members:
+        return
+    try:
+        overwrites = _merged_overwrites(category)
+        for member in members:
+            overwrites[member] = discord.PermissionOverwrite(
+                view_channel=True, read_message_history=True
+            )
+        await category.edit(overwrites=overwrites)
+    except Exception:
+        logger.warning("KINGDOMS EXPEDITION: crew unmask failed", exc_info=True)
 
 
 async def open_expedition_from_market(
@@ -709,6 +926,12 @@ class KingdomExpeditionQuitButton(
             "cancel_note_sailing" if result.get("refunded") else "cancel_note_boarding"
         ]
         await _error_note(interaction, note)
+        if result.get("refunded"):
+            # exploration-retour-v1: the AT-SEA mask lifts with the
+            # locks — the crew sees its realm again.
+            await unmask_crew_safe(
+                interaction.guild, kingdom, [str(i) for i in result.get("locked", [])]
+            )
         await sweep_expedition_salon_safe(
             interaction.guild, int(result.get("salon_id", 0) or 0)
         )
@@ -827,6 +1050,9 @@ class KingdomExpeditionLaunchButton(
         except Exception:
             pass
         await refresh_expedition_panel_safe(interaction.guild, wiring, str(kingdom.id))
+        # exploration-retour-v1: the crew is AT SEA — it sees only the
+        # voyage salon until the return is unloaded.
+        await mask_crew_for_voyage_safe(interaction.guild, wiring, kingdom)
         ends = int(doc.get("ends_at", 0) or 0)
         salon = getattr(
             interaction.guild, "get_channel", lambda _id: None
@@ -850,3 +1076,144 @@ class KingdomExpeditionLaunchButton(
             )
         except Exception:
             logger.warning("KINGDOMS EXPEDITION: realm refresh failed", exc_info=True)
+
+
+class KingdomExpeditionRefreshButton(
+    discord.ui.DynamicItem[discord.ui.Button[Any]],
+    template=r"kingdoms:expedition:refresh",
+):
+    """« 🔄 Actualiser » — exploration-retour-v1 (Drasah 02/11).
+
+    The sailing face keeps no live state of its own: the countdown
+    rides Discord's <t:…:R> stamp, but the crew may want the panel
+    re-read (a late mate, a restarted bot). Anyone may click — the
+    refresh never consumes anything, it just re-renders the panel.
+    """
+
+    def __init__(self, strings: dict[str, str]) -> None:
+        super().__init__(
+            discord.ui.Button(
+                label=str(strings["refresh_button"])[:80],
+                custom_id="kingdoms:expedition:refresh",
+                style=discord.ButtonStyle.secondary,
+            )
+        )
+
+    @classmethod
+    async def from_custom_id(
+        cls,
+        interaction: discord.Interaction,
+        item: discord.ui.Item[Any],
+        match: re.Match[str],
+        /,
+    ) -> KingdomExpeditionRefreshButton:
+        """Rebuild the button from the wire."""
+        return cls(_strings(_locale(interaction)))
+
+    async def callback(self, interaction: discord.Interaction) -> None:
+        """Re-render the pinned panel in place (zero bubble)."""
+        from kingdoms.mods.kingdoms.kingdom_persistent import _wiring
+
+        strings = _strings(_locale(interaction))
+        wiring = _wiring()
+        if wiring.economy_service is None or wiring.kingdoms_service is None:
+            await _error_note(interaction, strings["no_service"])
+            return
+        lord, kingdom = await _require_lord(interaction, strings, wiring)
+        if lord is None or kingdom is None:
+            return
+        try:
+            await interaction.response.defer()
+        except Exception:
+            pass
+        await refresh_expedition_panel_safe(interaction.guild, wiring, str(kingdom.id))
+        try:
+            await interaction.delete_original_response()
+        except Exception:
+            pass
+
+
+class KingdomExpeditionUnloadButton(
+    discord.ui.DynamicItem[discord.ui.Button[Any]],
+    template=r"kingdoms:expedition:unload",
+):
+    """« 🪜 Descendre du navire » — exploration-retour-v1 (Drasah
+    02/11).
+
+    The RETURNED face: the gain was already drawn at the resolve (the
+    tick) — the crew VALIDATES it here. Any ABOARD lord (captain or
+    mate) may click: every lock clears, the AT-SEA mask lifts, the
+    salon sweeps and the doc empties. NO automatic fallback — the
+    button alone closes the journey (Drasah's call). A stranger gets
+    the refusal bubble."""
+
+    def __init__(self, strings: dict[str, str]) -> None:
+        super().__init__(
+            discord.ui.Button(
+                label=str(strings["unload_button"])[:80],
+                custom_id="kingdoms:expedition:unload",
+                style=discord.ButtonStyle.success,
+            )
+        )
+
+    @classmethod
+    async def from_custom_id(
+        cls,
+        interaction: discord.Interaction,
+        item: discord.ui.Item[Any],
+        match: re.Match[str],
+        /,
+    ) -> KingdomExpeditionUnloadButton:
+        """Rebuild the button from the wire."""
+        return cls(_strings(_locale(interaction)))
+
+    async def callback(self, interaction: discord.Interaction) -> None:
+        """The crew disembarks — locks clear, mask lifts, salon closes."""
+        from kingdoms.mods.kingdoms.kingdom_persistent import (
+            _refresh_realm_views_for_kingdom_safe,
+            _wiring,
+        )
+
+        strings = _strings(_locale(interaction))
+        wiring = _wiring()
+        if wiring.economy_service is None or wiring.kingdoms_service is None:
+            await _error_note(interaction, strings["no_service"])
+            return
+        lord, kingdom = await _require_lord(interaction, strings, wiring)
+        if lord is None or kingdom is None:
+            return
+        economy = wiring.economy_service
+        try:
+            doc = await economy.expedition(str(kingdom.id))
+        except Exception:
+            await _error_note(interaction, strings["no_service"])
+            return
+        if str(doc.get("state", "")) != "returned":
+            await _error_note(interaction, strings["not_aboard"])
+            return
+        try:
+            claimed = await economy.claim_expedition_return(
+                str(kingdom.id), str(lord.id)
+            )
+        except Exception as exc:
+            await _error_note(interaction, _map_error(strings, exc))
+            return
+        await _error_note(interaction, strings["unload_note"])
+        # the AT-SEA mask lifts with the locks — the realm comes back.
+        crew_ids = [str(claimed.get("chef_lord_id", "") or "")]
+        crew_ids += [str(item) for item in claimed.get("crew", [])]
+        await unmask_crew_safe(interaction.guild, kingdom, crew_ids)
+        await sweep_expedition_salon_safe(
+            interaction.guild, int(claimed.get("salon_id", 0) or 0)
+        )
+        # the 🧭 card may light up again on the realm view (a new token
+        # buys a new journey).
+        try:
+            await _refresh_realm_views_for_kingdom_safe(
+                interaction.guild, str(kingdom.id)
+            )
+        except Exception:
+            logger.warning(
+                "KINGDOMS EXPEDITION: realm refresh after unload failed",
+                exc_info=True,
+            )

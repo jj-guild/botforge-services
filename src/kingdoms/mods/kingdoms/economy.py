@@ -414,11 +414,14 @@ class EconomyService:
         sailing one refuses. The Explorateur token is consumed at the
         LAUNCH, never here. ``opened_at`` stamps the 15-minute boarding
         window (exploration-refonte-v1 — the auto-launch deadline).
+        A RETURNED expedition (the gain drawn, the crew not yet
+        unloaded — exploration-retour-v1) refuses too: the salon must
+        be unloaded first.
         """
         timestamp = now or game_now()
         kingdom = await self._kingdom_by_id(kingdom_id)
         doc = dict(getattr(kingdom, "expedition", None) or {})
-        if str(doc.get("state", "")) == "sailing":
+        if str(doc.get("state", "")) in ("sailing", "returned"):
             raise EconomyError("an expedition is already at sea")
         if str(doc.get("state", "")) == "boarding":
             return doc
@@ -647,7 +650,9 @@ class EconomyService:
         nothing was consumed yet. Sailing: every lock clears and the
         Explorateur token is REFUNDED to the kingdom's stock. Returns
         ``{"kind": "boarding"|"sailing", "salon_id": int, "refunded":
-        bool}`` — the salon sweeps on the caller's side.
+        bool, "locked": [str]}`` — the locked ids ride along so the
+        caller can lift the AT-SEA salon mask (exploration-retour-v1);
+        the salon sweeps on the caller's side.
         """
         kingdom = await self._kingdom_by_id(kingdom_id)
         doc = dict(getattr(kingdom, "expedition", None) or {})
@@ -663,11 +668,11 @@ class EconomyService:
         if str(doc.get("chef_lord_id", "") or "") != str(lord.id):
             raise EconomyError("only the exploration captain may cancel")
         salon_id = int(doc.get("salon_id", 0) or 0)
+        locked_ids = [str(item) for item in doc.get("locked", [])]
         refunded = False
         if state == "sailing":
-            locked = [str(item) for item in doc.get("locked", [])]
             for item in await self._kingdoms.lords():
-                if str(item.id) in locked and not item.left:
+                if str(item.id) in locked_ids and not item.left:
                     item.exploration_locked_until = None
                     await self._store.upsert_lord(item.to_mongo())
             tech = await self._attacks.technology_state(kingdom_id)
@@ -685,7 +690,50 @@ class EconomyService:
         kingdom = await self._kingdom_by_id(kingdom_id)
         kingdom.expedition = {}
         await self._store.upsert_kingdom(kingdom.to_mongo())
-        return {"kind": state, "salon_id": salon_id, "refunded": refunded}
+        return {
+            "kind": state,
+            "salon_id": salon_id,
+            "refunded": refunded,
+            "locked": locked_ids,
+        }
+
+    async def claim_expedition_return(
+        self,
+        kingdom_id: str,
+        lord_id: str,
+    ) -> dict[str, Any]:
+        """exploration-retour-v1 (Drasah 02/11): « 🪜 Descendre du
+        navire » — the crew VALIDATES the return. The gain was already
+        drawn and granted at the resolve (the tick) — this never draws
+        again: every lock clears, the doc empties and the salon may
+        sweep. Any ABOARD lord (captain or mate) may click — the first
+        click wins, the button dies with the salon. Returns the claimed
+        doc (chef, crew, salon_id, gain_kind, gain_value) so the caller
+        can lift the AT-SEA mask before sweeping."""
+        kingdom = await self._kingdom_by_id(kingdom_id)
+        doc = dict(getattr(kingdom, "expedition", None) or {})
+        if str(doc.get("state", "")) != "returned":
+            raise EconomyError("there is no exploration to unload")
+        lord = next(
+            (item for item in await self._kingdoms.lords() if item.id == lord_id),
+            None,
+        )
+        if lord is None or lord.left or lord.kingdom_id != kingdom_id:
+            raise EconomyError("the lord is no active lord of this kingdom")
+        aboard = [str(doc.get("chef_lord_id", "") or "")]
+        aboard += [str(item) for item in doc.get("crew", [])]
+        if str(lord.id) not in aboard:
+            raise EconomyError("only the exploration crew may unload")
+        locked = [str(item) for item in doc.get("locked", [])]
+        for item in await self._kingdoms.lords():
+            if str(item.id) in locked and not item.left:
+                item.exploration_locked_until = None
+                await self._store.upsert_lord(item.to_mongo())
+        fresh = await self._kingdom_by_id(kingdom_id)
+        fresh.expedition = {}
+        await self._store.upsert_kingdom(fresh.to_mongo())
+        logger.info("kingdoms: %s unloads its exploration return", kingdom_id)
+        return doc
 
     async def auto_launch_due_expeditions(
         self, *, now: datetime | None = None
@@ -746,9 +794,12 @@ class EconomyService:
         The return draws a brand-new map for the kingdom; an exhausted
         pool pays the compensation lot instead — one civilization the
         kingdom does not hold yet (origin ``exploration``) plus 2 ⚙️.
-        Every lock clears, the doc empties and the salon may be swept.
-        Returns ``(kingdom, kind, value, salon_id)`` — kind is ``map``,
-        ``civ`` or ``tech`` (no civ left either: points only).
+        exploration-retour-v1 (Drasah 02/11): the doc flips to the
+        RETURNED state (gain stored, salon alive, locks held) — the
+        crew unloads it with « Descendre du navire » (no auto-fallback,
+        Drasah's call). Returns ``(kingdom, kind, value, salon_id)`` —
+        kind is ``map``, ``civ`` or ``tech`` (no civ left either:
+        points only).
         """
         timestamp = now or game_now()
         now_ts = int(timestamp.timestamp())
@@ -799,13 +850,13 @@ class EconomyService:
                         "kingdoms: the expedition of %s paid points only", kingdom.id
                     )
             kingdom = await self._kingdom_by_id(kingdom.id)
-            kingdom.expedition = {}
+            fresh = dict(getattr(kingdom, "expedition", None) or {})
+            fresh["state"] = "returned"
+            fresh["gain_kind"] = kind
+            fresh["gain_value"] = value
+            fresh["returned_at"] = now_ts
+            kingdom.expedition = fresh
             await self._store.upsert_kingdom(kingdom.to_mongo())
-            locked = [str(item) for item in doc.get("locked", [])]
-            for lord in await self._kingdoms.lords():
-                if str(lord.id) in locked:
-                    lord.exploration_locked_until = None
-                    await self._store.upsert_lord(lord.to_mongo())
             resolved.append((kingdom, kind, value, salon_id))
         return resolved
 
