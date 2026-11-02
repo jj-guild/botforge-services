@@ -314,6 +314,57 @@ async def _resolve_explorations_safe(bot: Any) -> None:
                 )
 
 
+async def _objectives_tick_safe(bot: Any) -> None:
+    """objectif-annonces-v1 (Drasah 02/11): the canary kingdoms'
+    achievements — a realized objective (a map conquered, an alliance
+    obtained) is auto-erased, announced in Discussions with the
+    redefine shortcut, and the pinned recap follows. Idempotent: an
+    erased goal never re-announces."""
+    from kingdoms.mods.kingdoms.kingdom_lieux import (
+        announce_objectif_achieved_safe,
+        erase_objectifs_kinds,
+        is_canary_realm,
+        objectifs_achieved,
+        refresh_objectifs_pin_safe,
+    )
+    from kingdoms.mods.kingdoms.kingdom_persistent import _wiring
+
+    for guild in list(getattr(bot, "guilds", []) or []):
+        wiring = _wiring()
+        service = getattr(wiring, "kingdoms_service", None)
+        if service is None:
+            continue
+        try:
+            kingdoms = await service.kingdoms()
+        except Exception:
+            logger.warning(
+                "KINGDOMS EVENTS: objectives kingdoms read failed",
+                exc_info=True,
+            )
+            continue
+        locale = await _guild_locale(bot, str(guild.id))
+        for kingdom in kingdoms:
+            if not is_canary_realm(kingdom):
+                continue
+            try:
+                achieved = await objectifs_achieved(kingdom, wiring)
+            except Exception:
+                logger.warning(
+                    "KINGDOMS EVENTS: objectives achieve check failed",
+                    exc_info=True,
+                )
+                continue
+            if not achieved:
+                continue
+            kinds = [kind for kind, _label in achieved]
+            if not await erase_objectifs_kinds(wiring, kingdom, kinds):
+                continue
+            await announce_objectif_achieved_safe(
+                guild, wiring, kingdom, achieved, locale
+            )
+            await refresh_objectifs_pin_safe(guild, wiring, kingdom, locale)
+
+
 async def _resolve_expeditions_safe(bot: Any) -> None:
     """Resolve the due sailing expeditions (exploration-expedition-v1).
 
@@ -1061,6 +1112,7 @@ async def _kingdoms_events_loop(bot: Any, tick_seconds: int) -> None:
         await _ffa_exploration_tick_safe(bot)
         await _resolve_cathedrals_safe(bot)
         await _resolve_corbeau_thefts_safe(bot)
+        await _objectives_tick_safe(bot)
         if not reports:
             continue
         logger.info("KINGDOMS EVENTS: %s due slot(s) replayed", len(reports))

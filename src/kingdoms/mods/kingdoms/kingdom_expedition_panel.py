@@ -125,8 +125,15 @@ _STRINGS: dict[str, dict[str, str]] = {
         "open_note": "🧭 Le salon d'expédition est ouvert : {channel}",
         "not_a_lord": "❌ Tu n'es pas un seigneur actif d'un royaume.",
         "no_service": "❌ Le service de l'économie est indisponible.",
-        "no_token": "❌ Aucun jeton Explorateur en réserve — achètes-en un au Marché.",
+        "no_token": (
+            "⚠️ Vous avez épuisé toutes vos explorations — achète un jeton"
+            " 🧭 Explorateur au Marché."
+        ),
         "already_sailing": "⛔ Une expédition est déjà en mer.",
+        "return_pending": (
+            "⚓ L'expédition est de retour — l'équipage doit d'abord"
+            " débarquer du navire avant tout nouveau départ."
+        ),
         "locked": "⛔ Tu es dans un état verrouillé (mariage, exploration ou FFA).",
         "no_defense": "🛡️ Le capitaine doit disposer d'un point de défense disponible pour lâcher les amarres.",
         "chef_not_crew": "⛔ Le capitaine n'embarque pas comme matelot.",
@@ -203,8 +210,15 @@ _STRINGS: dict[str, dict[str, str]] = {
         "open_note": "🧭 The expedition salon is open: {channel}",
         "not_a_lord": "❌ You are not an active lord of a kingdom.",
         "no_service": "❌ The economy service is unavailable.",
-        "no_token": "❌ No Explorateur token in reserve — buy one at the Market.",
+        "no_token": (
+            "⚠️ You have exhausted all your explorations — buy a"
+            " 🧭 Explorateur token at the Market."
+        ),
         "already_sailing": "⛔ An expedition is already at sea.",
+        "return_pending": (
+            "⚓ The expedition is back — the crew must first disembark"
+            " from the ship before any new departure."
+        ),
         "locked": "⛔ You are in a locked state (marriage, exploration or FFA).",
         "no_defense": "🛡️ The captain needs one available defence point to cast off.",
         "chef_not_crew": "⛔ The captain does not embark as a mate.",
@@ -263,6 +277,10 @@ def _map_error(strings: dict[str, str], exc: Exception) -> str:
     text = str(exc)
     if "no explorateur token" in text:
         return strings["no_token"]
+    # expedition-messages-v1 (Drasah 02/11): a RETURNED journey is not
+    # "at sea" — its crew must disembark first, the bubble says so.
+    if "is back" in text:
+        return strings["return_pending"]
     if "already at sea" in text:
         return strings["already_sailing"]
     if "locked" in text:
@@ -804,10 +822,16 @@ async def open_expedition_from_market(
     await interaction.response.defer(ephemeral=True)
     channel = await open_expedition_salon_safe(interaction.guild, wiring, kingdom)
     if channel is None:
+        # expedition-messages-v1 (Drasah 02/11): the refusal names its
+        # CAUSE — sailing, returned-but-not-unloaded, or the exhausted
+        # token stock (never a wrong "already at sea").
         try:
             doc = await economy.expedition(str(kingdom.id))
-            if str(doc.get("state", "")) == "sailing":
+            state = str(doc.get("state", ""))
+            if state == "sailing":
                 note = expe_strings["already_sailing"]
+            elif state == "returned":
+                note = expe_strings["return_pending"]
             else:
                 note = expe_strings["no_token"]
         except Exception:
@@ -1234,3 +1258,4 @@ class KingdomExpeditionUnloadButton(
                 "KINGDOMS EXPEDITION: realm refresh after unload failed",
                 exc_info=True,
             )
+

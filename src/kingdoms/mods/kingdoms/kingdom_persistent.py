@@ -1628,6 +1628,22 @@ async def _close_previous_ephemeral(user_id: str) -> None:
         )
 
 
+def _seigneurie_closes_previous(previous: Any, parent_ephemeral: bool) -> bool:
+    """seigneurie-coexist-v1 (Drasah 02/11): the 🛡️ Seigneurie roster
+    closes the player's previous window ONLY when the click does NOT
+    sit on an ephemeral parent sheet (the legacy single-window rule of
+    the pinned panels), or when the previous entry is itself a CHILD
+    window (a defer+followup 3-tuple: a picker or a previous roster).
+    A 2-tuple sheet (the ⚔️ Salle du conseil of the canary hub)
+    SURVIVES the click — his live report: the Seigneurie button closed
+    the council window it was opened from."""
+    if previous is None:
+        return False
+    if parent_ephemeral:
+        return len(previous) > 2
+    return True
+
+
 async def _open_unique_ephemeral(
     interaction: discord.Interaction, content: str | None = None, **kwargs: Any
 ) -> None:
@@ -2112,11 +2128,26 @@ class KingdomSeigneurieOpenButton(
             await interaction.response.send_message(strings["not_lord"], ephemeral=True)
             return
         state = await _gather_state(kingdom, wiring)
-        # fenetre-unique-royaume-v1 (Drasah 30/10): same registry — one
-        # live ephemeral window per player across the Le-Royaume panel.
-        await _open_unique_ephemeral(
-            interaction, view=_build_roster(strings, kingdom, state), ephemeral=True
+        # seigneurie-coexist-v1 (Drasah 02/11): from the ⚔️ Salle du
+        # conseil the roster opens ALONGSIDE the sheet — the parent
+        # survives, only a previous CHILD window is replaced. From a
+        # pinned panel the legacy single-window rule stays.
+        parent = getattr(interaction, "message", None)
+        parent_ephemeral = bool(
+            getattr(getattr(parent, "flags", None), "ephemeral", False)
         )
+        user_id = str(getattr(interaction.user, "id", ""))
+        previous = _EPHEMERAL_WINDOWS.get(user_id)
+        if _seigneurie_closes_previous(previous, parent_ephemeral):
+            await _close_previous_ephemeral(user_id)
+        # type-7 ack (objectif-coexist-type7-fix lesson): on an
+        # ephemeral parent a bare defer is a DEFERRED UPDATE of the
+        # sheet — defer(thinking=True) opens a NEW window instead.
+        await interaction.response.defer(ephemeral=True, thinking=True)
+        window = await interaction.followup.send(
+            view=_build_roster(strings, kingdom, state), ephemeral=True
+        )
+        _EPHEMERAL_WINDOWS[user_id] = (interaction, time.monotonic(), window)
 
 
 class KingdomRempartsGuardButton(
@@ -6768,3 +6799,4 @@ class KingdomRealmButton(
         else:
             await interaction.followup.send(strings["realms_done"], ephemeral=True)
         await _refresh_realms_panel_safe(interaction.guild, locale)
+

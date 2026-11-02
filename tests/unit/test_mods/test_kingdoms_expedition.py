@@ -19,12 +19,22 @@ from kingdoms.mods.kingdoms.economy import (
     EconomyError,
     EconomyService,
 )
+from kingdoms.mods.kingdoms import economy as economy_module
 from kingdoms.mods.kingdoms.models import LordRole, TechnologyState
 from tests.mocks.discord_mock import MockGuild
 
 from .test_kingdoms_attacks import Bundle as _AttackBundle
 
 _CIVS = ("bretons", "perses", "byzantins")
+
+
+@pytest.fixture(autouse=True)
+def _prod_token_rules(monkeypatch: pytest.MonkeyPatch) -> None:
+    """exploration-beta-illimite (Drasah 02/11): the beta ships with
+    UNLIMITED voyages, so the module flag is True in production — the
+    suite freezes the prod token rules back ON (boarding needs a
+    token, the launch consumes it, a cancel refunds it)."""
+    monkeypatch.setattr(economy_module, "EXPEDITION_BETA_UNLIMITED", False)
 _MONDAY = datetime(2026, 10, 12, 12, 0, tzinfo=UTC)
 
 
@@ -755,3 +765,71 @@ async def test_the_refresh_reposts_a_vanished_panel() -> None:
     await panel.refresh_expedition_panel_safe(guild, wiring, aquitaine)
     assert len(channel.messages) == 1
     assert int((await bundle.economy.expedition(aquitaine))["panel_message_id"]) == new_id
+
+
+
+async def test_beta_unlimited_voyages_never_touch_the_stock(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """exploration-beta-illimite (Drasah 02/11): under the beta flag the
+    voyages are UNLIMITED — no token needed to board, none consumed at
+    the cast-off, and a cancel must NOT mint a phantom refund."""
+    monkeypatch.setattr(economy_module, "EXPEDITION_BETA_UNLIMITED", True)
+    bundle = Bundle()
+    await bundle.launch_season()
+    aquitaine = await bundle.kingdom_id("Aquitaine")
+    # boarding with an EMPTY reserve: allowed under the flag.
+    doc = await bundle.economy.begin_expedition(aquitaine, now=_MONDAY)
+    assert doc["state"] == "boarding"
+    await bundle.economy.toggle_expedition_chef(aquitaine, "king-a")
+    launched = await bundle.economy.launch_expedition(aquitaine, now=_MONDAY)
+    assert launched["state"] == "sailing"
+    assert await bundle.stock_left(aquitaine) == 0
+    # a cancel under the flag refunds NOTHING (no token was spent).
+    result = await bundle.economy.cancel_expedition(aquitaine, "king-a")
+    assert result["kind"] == "sailing"
+    assert result["refunded"] is False
+    assert await bundle.stock_left(aquitaine) == 0
+
+
+async def test_sailing_and_returned_refusals_are_distinct_messages() -> None:
+    """expedition-messages-v1 (Drasah 02/11): his live report showed a
+    RETURNED expedition answered « already at sea » — the refusals are
+    now split: sailing says "at sea", returned says "disembark"."""
+    bundle = Bundle()
+    await bundle.launch_season()
+    aquitaine = await bundle.kingdom_id("Aquitaine")
+    await bundle.token(aquitaine)
+    await bundle.economy.begin_expedition(aquitaine, now=_MONDAY)
+    await bundle.economy.toggle_expedition_chef(aquitaine, "king-a")
+    launched = await bundle.economy.launch_expedition(aquitaine, now=_MONDAY)
+    # still sailing: the old wording.
+    with pytest.raises(EconomyError, match="already at sea"):
+        await bundle.economy.begin_expedition(aquitaine)
+    # the journey returns: the NEW wording, never "at sea" again.
+    resolved = await bundle.economy.resolve_due_expeditions(
+        now=_MONDAY + timedelta(seconds=int(launched["ends_at"]) - int(_MONDAY.timestamp()) + 10)
+    )
+    assert len(resolved) == 1
+    doc = await bundle.economy.expedition(aquitaine)
+    assert doc["state"] == "returned"
+    with pytest.raises(EconomyError, match="disembark"):
+        await bundle.economy.begin_expedition(aquitaine)
+
+
+def test_map_error_translates_the_split_refusals_to_french_bubbles() -> None:
+    """expedition-messages-v1 (Drasah 02/11): his wording — the exhausted
+    explorer reads « épuisé » (never "a voyage is already at sea"), the
+    returned journey reads « retour », the sailing one « en mer »."""
+    from kingdoms.mods.kingdoms import kingdom_expedition_panel as panel
+
+    strings = panel._strings("fr")
+    assert "épuisé" in panel._map_error(
+        strings, EconomyError("no explorateur token in stock — buy one at the market first")
+    )
+    assert "retour" in panel._map_error(
+        strings, EconomyError("the expedition is back and its crew has not yet disembarked")
+    )
+    assert "en mer" in panel._map_error(
+        strings, EconomyError("an expedition is already at sea")
+    )

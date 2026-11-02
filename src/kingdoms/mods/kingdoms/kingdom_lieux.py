@@ -107,6 +107,25 @@ STRINGS: dict[str, dict[str, str]] = {
             "No objective set yet — the King may define them with the"
             " 🎯 Objective button."
         ),
+        "objectif_map_defend_line": "⚔️ Priority : defend **{0}** at all costs /!\\",
+        "objectif_alliance_marry_line": "💍 Marriage wished with **{0}**",
+        "objectif_pin_title": "🎯 Objectives — {0}",
+        "objectif_pin_none": "No objective set for the moment.",
+        "objectif_pin_hint": (
+            "-# The King changes these from ⚔️ Council room → 🎯 Objective."
+        ),
+        "objectif_achieved_map": (
+            "🎯 Objective reached! The realm now holds **{0}** — the King"
+            " may set a new course."
+        ),
+        "objectif_achieved_alliance": (
+            "🎯 Objective reached! **{0}** joins the realm's alliances —"
+            " the King may set a new course."
+        ),
+        "objectif_achieved_hint": (
+            "-# The objective was cleared — 🎯 below to define a new one."
+        ),
+        "objectif_redefine_button": "🎯 Set a new objective",
         "conseil_actions": "Action cards",
         "sortir_button": "🚪 Leave",
         "exploration_button": "🧭 Exploration",
@@ -213,6 +232,26 @@ STRINGS: dict[str, dict[str, str]] = {
             "Aucun objectif fixé pour le moment — le Roi peut les définir"
             " avec le bouton 🎯 Objectif."
         ),
+        "objectif_map_defend_line": "⚔️ Priorité : défendre coûte que coûte **{0}** /!\\",
+        "objectif_alliance_marry_line": "💍 Mariage souhaité avec **{0}**",
+        "objectif_pin_title": "🎯 Objectifs — {0}",
+        "objectif_pin_none": "Aucun objectif défini pour le moment.",
+        "objectif_pin_hint": (
+            "-# Le Roi les modifie depuis ⚔️ Salle du conseil → 🎯 Objectif."
+        ),
+        "objectif_achieved_map": (
+            "🎯 Objectif atteint ! Le royaume possède désormais **{0}** —"
+            " le Roi peut fixer un nouveau cap."
+        ),
+        "objectif_achieved_alliance": (
+            "🎯 Objectif atteint ! **{0}** rejoint les alliances du royaume"
+            " — le Roi peut fixer un nouveau cap."
+        ),
+        "objectif_achieved_hint": (
+            "-# L'objectif a été effacé — 🎯 ci-dessous pour en définir un"
+            " nouveau."
+        ),
+        "objectif_redefine_button": "🎯 Redéfinir un objectif",
         "conseil_actions": "Cartes d'action",
         "sortir_button": "🚪 Sortir",
         "exploration_button": "🧭 Exploration",
@@ -718,6 +757,42 @@ def _objectifs_lines(
     return lines
 
 
+async def _territory_owned_by_kingdom(
+    wiring: Any, kingdom: Any, map_key: str
+) -> bool:
+    """objectif-possede-v1 (Drasah 02/11): True when the territory
+    behind ``map_key`` already belongs to ``kingdom`` — the goal then
+    reads as a DEFEND priority, never as a « sought » map. Wiring
+    without a territories service answers False (never a crash)."""
+    if not map_key:
+        return False
+    try:
+        territories_service = getattr(wiring, "territories_service", None)
+        if territories_service is None:
+            return False
+        for territory in await territories_service.territories():
+            if str(getattr(territory, "map_key", "")) == map_key:
+                return (
+                    str(getattr(territory, "owner_kingdom_id", "") or "")
+                    == str(getattr(kingdom, "id", ""))
+                )
+    except Exception:
+        logger.warning(
+            "KINGDOM LIEUX: territory ownership check failed", exc_info=True
+        )
+    return False
+
+
+def _kingdom_holds_civ(kingdom: Any, civ_key: str) -> bool:
+    """objectif-possede-v1: True when the kingdom already holds the
+    civilization — the alliance goal then reads as a MARRIAGE wish."""
+    if not civ_key:
+        return False
+    return civ_key in [
+        str(item) for item in (getattr(kingdom, "civilizations", None) or [])
+    ]
+
+
 async def _territory_owner_suffix(
     locale: str, wiring: Any, map_key: str
 ) -> str:
@@ -851,6 +926,22 @@ async def _objectifs_display_lines(
         label = str(goals.get(f"{kind}_label") or "").strip()
         if not label:
             continue
+        if wiring is not None:
+            # objectif-possede-v1 (Drasah 02/11): a goal on something
+            # the kingdom ALREADY holds never reads « sought » — an
+            # owned map becomes a DEFEND priority, a held alliance a
+            # MARRIAGE wish. The reformulation is LIVE: the line
+            # re-renders at every sheet build.
+            if kind == "target_territory" and await _territory_owned_by_kingdom(
+                wiring, kingdom, str(goals.get("target_territory") or "")
+            ):
+                lines.append(lieu["objectif_map_defend_line"].format(label))
+                continue
+            if kind == "target_alliance" and _kingdom_holds_civ(
+                kingdom, str(goals.get("target_alliance") or "")
+            ):
+                lines.append(lieu["objectif_alliance_marry_line"].format(label))
+                continue
         text = lieu[template].format(label)
         if wiring is not None:
             if kind == "target_territory":
@@ -919,6 +1010,18 @@ async def _save_objectives(
         objectives[f"{kind}_label"] = str(
             staged.get(f"{kind}_label") or ""
         ).strip()
+    # objectif-possede-v1 (Drasah 02/11): stamp whether the target was
+    # ALREADY held at save time — the achieve check (announce + erase)
+    # only fires on a goal that was NOT owned when it was set.
+    objectives["target_territory_at_save_owned"] = (
+        bool(objectives.get("target_territory"))
+        and await _territory_owned_by_kingdom(
+            wiring, kingdom, str(objectives.get("target_territory") or "")
+        )
+    )
+    objectives["target_alliance_at_save_owned"] = _kingdom_holds_civ(
+        kingdom, str(objectives.get("target_alliance") or "")
+    )
     objectives["updated_at"] = int(time())
     service = getattr(wiring, "kingdoms_service", None)
     try:
@@ -929,6 +1032,232 @@ async def _save_objectives(
         logger.warning("KINGDOM LIEUX: objectives save failed", exc_info=True)
         return False
     return True
+
+
+# ---------------------------------------------------------------------------
+# objectif-annonces-v1 (Drasah 02/11): the achievement announce in the
+# Discussions salon + the ONE pinned recap that follows every save.
+# ---------------------------------------------------------------------------
+
+_OBJECTIFS_PIN_MARKER = "kingdoms:objectifs:pin"
+
+
+async def objectifs_achieved(kingdom: Any, wiring: Any) -> list[tuple[str, str]]:
+    """The goals the kingdom has just REALIZED — (kind, label) pairs.
+
+    objectif-annonces-v1 (Drasah 02/11): a territory goal fires when
+    the kingdom now OWNS the map it did NOT own at save time; an
+    alliance goal when the civilization entered a hand it was not in
+    at save time. A goal set on something ALREADY held stays a
+    reformulated line (defend / marriage — objectif-possede-v1) and
+    NEVER announces. The kingdom goal carries no state — never fires.
+    """
+    goals = dict(getattr(kingdom, "council_objectives", None) or {})
+    achieved: list[tuple[str, str]] = []
+    map_key = str(goals.get("target_territory") or "")
+    map_label = str(goals.get("target_territory_label") or "").strip()
+    if (
+        map_key
+        and map_label
+        and not bool(goals.get("target_territory_at_save_owned"))
+        and await _territory_owned_by_kingdom(wiring, kingdom, map_key)
+    ):
+        achieved.append(("target_territory", map_label))
+    civ_key = str(goals.get("target_alliance") or "")
+    civ_label = str(goals.get("target_alliance_label") or "").strip()
+    if (
+        civ_key
+        and civ_label
+        and not bool(goals.get("target_alliance_at_save_owned"))
+        and _kingdom_holds_civ(kingdom, civ_key)
+    ):
+        achieved.append(("target_alliance", civ_label))
+    return achieved
+
+
+async def erase_objectifs_kinds(wiring: Any, kingdom: Any, kinds: list[str]) -> bool:
+    """Clear the ACHIEVED goals (Drasah 02/11: an achieved objective is
+    auto-erased — the announce + the redefine shortcut replace it)."""
+    from time import time
+
+    service = getattr(wiring, "kingdoms_service", None)
+    objectives = dict(getattr(kingdom, "council_objectives", None) or {})
+    for kind in kinds:
+        objectives[kind] = ""
+        objectives[f"{kind}_label"] = ""
+        objectives.pop(f"{kind}_at_save_owned", None)
+    objectives["updated_at"] = int(time())
+    try:
+        kingdom.council_objectives = objectives
+        if service is not None and hasattr(service, "save_kingdom"):
+            await service.save_kingdom(kingdom)
+    except Exception:
+        logger.warning(
+            "KINGDOM LIEUX: achieved objectives erase failed", exc_info=True
+        )
+        return False
+    return True
+
+
+async def _discussions_channel(guild: Any, kingdom: Any) -> Any:
+    """The kingdom's Discussions salon (the renamed council salon of
+    the canary hub) — slug-blind on the display name."""
+    try:
+        from kingdoms.mods.kingdoms.kingdom_realms import _find_realm_category
+        from kingdoms.mods.kingdoms.kingdom_setup import _slug
+
+        category = _find_realm_category(guild, str(getattr(kingdom, "name", "")))
+        if category is None:
+            return None
+        for wanted in ("discussions", "salle-du-conseil"):
+            for channel in getattr(category, "channels", []) or []:
+                if _slug(getattr(channel, "name", "")) == wanted:
+                    return channel
+    except Exception:
+        logger.warning(
+            "KINGDOM LIEUX: discussions channel resolve failed", exc_info=True
+        )
+    return None
+
+
+def _objectifs_active(kingdom: Any) -> bool:
+    """True when at least one goal carries a label."""
+    goals = dict(getattr(kingdom, "council_objectives", None) or {})
+    return any(
+        str(goals.get(f"{kind}_label") or "").strip()
+        for kind, _emoji, _select, _template in _OBJECTIF_KINDS
+    )
+
+
+async def _objectifs_pin_content(
+    locale: str, kingdom: Any, wiring: Any, active: bool
+) -> str:
+    """The pinned recap text — the same enriched lines as the council
+    sheet, or the « none » line when no goal is active."""
+    lieu = _strings(locale)
+    lines = (
+        await _objectifs_display_lines(locale, kingdom, wiring) if active else []
+    )
+    return "\n".join(
+        [
+            f"## {lieu['objectif_pin_title'].format(getattr(kingdom, 'name', ''))}",
+            "",
+            *(lines or [lieu["objectif_pin_none"]]),
+            "",
+            lieu["objectif_pin_hint"],
+            f"-# {_OBJECTIFS_PIN_MARKER}:{getattr(kingdom, 'id', '')}",
+        ]
+    )
+
+
+async def refresh_objectifs_pin_safe(
+    guild: Any, wiring: Any, kingdom: Any, locale: str
+) -> bool:
+    """The pinned objective recap in Discussions — ONE pinned message
+    per kingdom, edited in place (objectif-annonces-v1, Drasah 02/11:
+    redefining the objective replaces the previous pin, never stacks).
+    An EMPTY goals sheet unpins the message (nothing left to show)."""
+    from kingdoms.mods.kingdoms.panel_messages import NO_MENTIONS
+
+    if not is_canary_realm(kingdom):
+        return False
+    channel = await _discussions_channel(guild, kingdom)
+    if channel is None:
+        return False
+    active = _objectifs_active(kingdom)
+    content = await _objectifs_pin_content(locale, kingdom, wiring, active)
+    goals = dict(getattr(kingdom, "council_objectives", None) or {})
+    message = None
+    pin_id = int(goals.get("pin_message_id") or 0)
+    if pin_id:
+        try:
+            message = await channel.fetch_message(pin_id)
+        except Exception:
+            message = None
+    if message is None:
+        if not active:
+            return False  # nothing to show, nothing pinned
+        try:
+            message = await channel.send(content, allowed_mentions=NO_MENTIONS)
+        except Exception:
+            logger.warning(
+                "KINGDOM LIEUX: objectives pin send failed", exc_info=True
+            )
+            return False
+    else:
+        try:
+            if (getattr(message, "content", "") or "") != content:
+                await message.edit(content=content)
+        except Exception:
+            logger.warning(
+                "KINGDOM LIEUX: objectives pin edit failed", exc_info=True
+            )
+    if active:
+        if not getattr(message, "pinned", False):
+            try:
+                await message.pin()
+            except Exception:
+                logger.warning(
+                    "KINGDOM LIEUX: objectives pin failed", exc_info=True
+                )
+    elif getattr(message, "pinned", False):
+        try:
+            await message.unpin()
+        except Exception:
+            logger.warning(
+                "KINGDOM LIEUX: objectives unpin failed", exc_info=True
+            )
+    # persist the pin ref on the objectives doc (best effort).
+    if active:
+        try:
+            fresh = dict(getattr(kingdom, "council_objectives", None) or {})
+            if int(fresh.get("pin_message_id") or 0) != int(message.id):
+                fresh["pin_message_id"] = int(message.id)
+                kingdom.council_objectives = fresh
+                service = getattr(wiring, "kingdoms_service", None)
+                if service is not None and hasattr(service, "save_kingdom"):
+                    await service.save_kingdom(kingdom)
+        except Exception:
+            logger.warning(
+                "KINGDOM LIEUX: objectives pin ref save failed",
+                exc_info=True,
+            )
+    return True
+
+
+async def announce_objectif_achieved_safe(
+    guild: Any,
+    wiring: Any,
+    kingdom: Any,
+    achieved: list[tuple[str, str]],
+    locale: str,
+) -> None:
+    """Post the achievement announce in Discussions with the redefine
+    shortcut (objectif-annonces-v1) — the goals were already erased on
+    the caller's side, the announce alone carries the news."""
+    from kingdoms.mods.kingdoms.panel_messages import NO_MENTIONS
+
+    channel = await _discussions_channel(guild, kingdom)
+    if channel is None:
+        return
+    lieu = _strings(locale)
+    view = discord.ui.View(timeout=None)
+    view.add_item(KingdomLieuObjectifButton(lieu["objectif_redefine_button"]))
+    for kind, label in achieved:
+        key = (
+            "objectif_achieved_map"
+            if kind == "target_territory"
+            else "objectif_achieved_alliance"
+        )
+        text = "\n".join(
+            [str(lieu[key]).format(label=label), "", lieu["objectif_achieved_hint"]]
+        )
+        try:
+            await channel.send(text, view=view, allowed_mentions=NO_MENTIONS)
+        except Exception:
+            logger.warning(
+                "KINGDOM LIEUX: achievement announce failed", exc_info=True
+            )
 
 
 async def _close_ephemeral_window(interaction: discord.Interaction) -> None:
@@ -1208,6 +1537,17 @@ def _objectifs_picker(
         # already shows the fresh goals (his « comportement plus
         # naturel » wish).
         await _close_ephemeral_window(interaction)
+        # objectif-annonces-v1 (Drasah 02/11): the pinned recap of the
+        # Discussions salon follows the save — one pinned message,
+        # edited in place, never a stack.
+        try:
+            await refresh_objectifs_pin_safe(
+                interaction.guild, wiring, kingdom, locale
+            )
+        except Exception:
+            logger.warning(
+                "KINGDOM LIEUX: objectives pin refresh failed", exc_info=True
+            )
 
     validate = discord.ui.Button(
         label=lieu["objectif_validate_button"],
@@ -2342,3 +2682,4 @@ def register_kingdom_lieux_items(bot: discord.Client) -> None:
         KingdomLieuParoisseButton,
         KingdomLieuVoliereButton,
     )
+

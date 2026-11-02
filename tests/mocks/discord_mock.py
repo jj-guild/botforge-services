@@ -891,6 +891,11 @@ class MockMessage(discord.Message):
         """In-memory pin (permissions-serveur-v1: the age message is pinned)."""
         self.pinned = True  # type: ignore[attr-defined]
 
+    async def unpin(self, *, reason: str | None = None) -> None:
+        """In-memory unpin (objectif-annonces-v1: an emptied goals sheet
+        unpins the kingdom's recap message in Discussions)."""
+        self.pinned = False  # type: ignore[attr-defined]
+
     @property
     def edited(self) -> bool:
         return self._edited

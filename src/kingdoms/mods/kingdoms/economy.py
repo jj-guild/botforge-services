@@ -95,6 +95,15 @@ EXPEDITION_COMPENSATION_TECH = 2
 """exploration-expedition-v1: when the map pool runs dry at the return,
 the kingdom keeps a compensation lot — one civilization it does not
 hold yet (origin ``exploration``) plus 2 ⚙️."""
+EXPEDITION_BETA_UNLIMITED = True
+"""exploration-beta-illimite (Drasah 02/11): BETA on the drasah canary
+— the voyages are UNLIMITED: no Explorateur token is required to open
+a boarding and none is consumed at the cast-off (nor refunded at a
+sailing cancel), so Drasah can loop the whole rail while testing the
+refonte. NEVER merge this branch to prod without flipping this flag
+to False — the token stock, the consumption and the refund are the
+prod economy (exploration-expedition-v1).
+"""
 
 
 class EconomyError(KingdomsModError):
@@ -436,12 +445,23 @@ class EconomyService:
         timestamp = now or game_now()
         kingdom = await self._kingdom_by_id(kingdom_id)
         doc = dict(getattr(kingdom, "expedition", None) or {})
-        if str(doc.get("state", "")) in ("sailing", "returned"):
+        # expedition-messages-v1 (Drasah 02/11): the refusals SPLIT —
+        # a sailing journey and a returned one are NOT the same state,
+        # each refusal carries its own message (his live report: a
+        # returned expedition answered « already at sea »).
+        if str(doc.get("state", "")) == "sailing":
             raise EconomyError("an expedition is already at sea")
+        if str(doc.get("state", "")) == "returned":
+            raise EconomyError(
+                "the expedition is back and its crew has not yet disembarked"
+            )
         if str(doc.get("state", "")) == "boarding":
             return doc
         state = await self._attacks.technology_state(kingdom_id)
-        if int(state.purchases.get(EXPLORATEUR_STOCK, 0) or 0) <= 0:
+        if (
+            int(state.purchases.get(EXPLORATEUR_STOCK, 0) or 0) <= 0
+            and not EXPEDITION_BETA_UNLIMITED
+        ):
             raise EconomyError("no explorateur token in stock — buy one at the market first")
         doc = {
             "state": "boarding",
@@ -625,10 +645,11 @@ class EconomyService:
             raise EconomyError("the chef needs one AVAILABLE defence point")
         state = await self._attacks.technology_state(kingdom_id)
         stock = int(state.purchases.get(EXPLORATEUR_STOCK, 0) or 0)
-        if stock <= 0:
+        if stock <= 0 and not EXPEDITION_BETA_UNLIMITED:
             raise EconomyError("no explorateur token in stock — buy one at the market first")
-        state.purchases[EXPLORATEUR_STOCK] = stock - 1
-        await self._store.upsert_technology(state.to_mongo())
+        if not EXPEDITION_BETA_UNLIMITED:
+            state.purchases[EXPLORATEUR_STOCK] = stock - 1
+            await self._store.upsert_technology(state.to_mongo())
         crew = [str(item) for item in doc.get("crew", [])]
         # exploration-beta-duree: 10 minutes (BETA), each mate cuts 50 s,
         # plancher 5 minutes.
@@ -693,12 +714,15 @@ class EconomyService:
                 if str(item.id) in locked_ids and not item.left:
                     item.exploration_locked_until = None
                     await self._store.upsert_lord(item.to_mongo())
-            tech = await self._attacks.technology_state(kingdom_id)
-            tech.purchases[EXPLORATEUR_STOCK] = (
-                int(tech.purchases.get(EXPLORATEUR_STOCK, 0) or 0) + 1
-            )
-            await self._store.upsert_technology(tech.to_mongo())
-            refunded = True
+            # exploration-beta-illimite: under the beta flag nothing was
+            # consumed at the cast-off — refunding would mint a token.
+            if not EXPEDITION_BETA_UNLIMITED:
+                tech = await self._attacks.technology_state(kingdom_id)
+                tech.purchases[EXPLORATEUR_STOCK] = (
+                    int(tech.purchases.get(EXPLORATEUR_STOCK, 0) or 0) + 1
+                )
+                await self._store.upsert_technology(tech.to_mongo())
+                refunded = True
             logger.info(
                 "kingdoms: %s cancels its exploration at sea (token refunded)",
                 kingdom_id,
@@ -1358,3 +1382,4 @@ class EconomyService:
         if season is None:
             raise NoSeasonError("no season is running")
         return season
+
