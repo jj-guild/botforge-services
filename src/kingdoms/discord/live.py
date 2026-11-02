@@ -507,7 +507,8 @@ async def _last_completed_matches_ms(matches: Any, profile_ids: list[str]) -> di
     ]
     results: dict[str, int] = {}
     try:
-        async for doc in matches.aggregate(pipeline):
+        cursor: Any = await matches.aggregate(pipeline)
+        async for doc in cursor:
             value = doc.get("last")
             if isinstance(value, str) and value.isdigit():
                 value = int(value)
