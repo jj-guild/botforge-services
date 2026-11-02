@@ -13,6 +13,7 @@ skip. KINGDOMS_ANNOUNCE_ENABLED=0 silences it entirely (CI/CD bot).
 
 from __future__ import annotations
 
+import logging
 import time
 from pathlib import Path
 from typing import Any
@@ -411,22 +412,25 @@ async def test_announce_dm_the_layout_to_every_bot_admin() -> None:
 
 
 @pytest.mark.asyncio
-async def test_announce_dm_refusal_logs_one_clean_line_and_serves_the_other_admins(
+async def test_announce_dm_refusal_is_info_level_and_serves_the_other_admins(
     caplog: pytest.LogCaptureFixture,
 ) -> None:
-    """A 403 on one bot-admin (no mutual guild / closed DMs) logs a
-    single actionnable warning line — no traceback — and never blocks
-    the remaining admins' DMs."""
+    """A 403 on one bot-admin (no mutual guild / closed DMs) is an
+    expected best-effort outcome: one info line, never a warning nor a
+    traceback, and it never blocks the remaining admins' DMs."""
     status = _status_service(deploy_label="pr-42-x", bot_admins=BotAdmins(user_ids=("10", "20")))
     logs = _FakeLogService()
     bot = _Bot(["111"], refused_admins={"10"})
     config = AnnounceConfig(locale="en", config_dir=CONFIG_DIR)
-    with caplog.at_level("WARNING", logger="kingdoms.bot.announce"):
+    with caplog.at_level("INFO", logger="kingdoms.bot.announce"):
         await announce_startup(bot, status, config, logs_service=logs, deploy_env="test")  # type: ignore[arg-type]
     assert bot.dm_targets == ["10", "20"], "both admins are tried, the refusal is best-effort"
-    refused = [r for r in caplog.records if "refused" in r.getMessage()]
-    assert len(refused) == 1, "the 403 surfaces as one warning line"
-    assert "10" in refused[0].getMessage(), "the warning names the unreachable admin"
+    records = caplog.records
+    assert not [r for r in records if r.levelname == "WARNING"], "an expected 403 never warns"
+    refused = [r for r in records if "refused" in r.getMessage()]
+    assert len(refused) == 1, "the 403 surfaces as one info line"
+    assert "10" in refused[0].getMessage(), "the info line names the unreachable admin"
+    assert refused[0].levelno == logging.INFO
     assert not refused[0].exc_info, "no traceback for an expected 403"
 
 
