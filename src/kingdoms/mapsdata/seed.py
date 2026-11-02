@@ -118,6 +118,17 @@ async def fetch_map_seed(name: str) -> MapSeed | None:
         logger.debug("liquipedia seed skipped: LIQUIPEDIA_CONTACT unset")
         raise LiquipediaUnconfiguredError("LIQUIPEDIA_CONTACT is not set")
     name = _extract_page_name(name)
+    # The legacy path is a SYNCHRONOUS client: blocking HTTP plus the
+    # API-terms rate-limit sleeps (a 30 s parse interval). Running it on
+    # the event loop froze the bot's heartbeat during bulk imports —
+    # it rides a worker thread instead.
+    import asyncio
+
+    return await asyncio.to_thread(_fetch_map_seed_liquipedia, user_agent, name)
+
+
+def _fetch_map_seed_liquipedia(user_agent: str, name: str) -> MapSeed | None:
+    """Resolve the seed in-process over the sync Liquipedia client (thread)."""
     from kingdoms.mapsdata.liquipedia import (
         LIQUIPEDIA_ATTRIBUTION,
         LiquipediaMapsProvider,

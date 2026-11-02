@@ -1329,7 +1329,10 @@ class GamesBulkImportModal(discord.ui.Modal):
 
         if not await _guard_admin(interaction):
             return
-        await interaction.response.defer(ephemeral=True, thinking=False)
+        # thinking=True: the Liquipedia seeding is slow by design (API
+        # rate limits) — the user sees the import working instead of a
+        # silent wait.
+        await interaction.response.defer(ephemeral=True, thinking=True)
         from kingdoms.mapsdata.bulk_import import parse_import_line
 
         parsed = [parse_import_line(item) for item in str(self.lines.value or "").splitlines()]
