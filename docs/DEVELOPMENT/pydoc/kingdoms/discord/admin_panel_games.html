@@ -93,7 +93,7 @@ no&nbsp;batch&nbsp;rollback&nbsp;on&nbsp;a&nbsp;partial&nbsp;import.<br>&nbsp;</
 Methods defined here:<br>
 <dl><dt><a name="GamesBulkImportModal-__init__"><strong>__init__</strong></a>(self, game_key: 'str', pool_id: 'str' = '') -&gt; 'None'</dt><dd><span class="code">Initialize&nbsp;self.&nbsp;&nbsp;See&nbsp;help(type(self))&nbsp;for&nbsp;accurate&nbsp;signature.</span></dd></dl>
 
-<dl><dt>async <a name="GamesBulkImportModal-on_submit"><strong>on_submit</strong></a>(self, interaction: 'discord.Interaction') -&gt; 'None'</dt><dd><span class="code">Guard,&nbsp;parse,&nbsp;import&nbsp;the&nbsp;batch&nbsp;transactionally,&nbsp;report.</span></dd></dl>
+<dl><dt>async <a name="GamesBulkImportModal-on_submit"><strong>on_submit</strong></a>(self, interaction: 'discord.Interaction') -&gt; 'None'</dt><dd><span class="code">Guard,&nbsp;parse,&nbsp;confirm,&nbsp;then&nbsp;report&nbsp;the&nbsp;batch&nbsp;live,&nbsp;line&nbsp;by&nbsp;line.</span></dd></dl>
 
 <hr>
 Data and other attributes defined here:<br>
@@ -3576,5 +3576,6 @@ copy,&nbsp;create&nbsp;and&nbsp;manage.</span></dd></dl>
 <td class="singlecolumn"><strong>GAME_KEY</strong> = 'aoe2'<br>
 <strong>MOD_KEY</strong> = 'games'<br>
 <strong>PAGE_SIZE</strong> = 25<br>
+<strong>ProgressCallback</strong> = collections.abc.Callable[[str, bool, str], collections.abc.Awaitable[None]]<br>
 <strong>logger</strong> = &lt;Logger kingdoms.games.admin_panel (WARNING)&gt;</td></tr></table>
 </body></html>
