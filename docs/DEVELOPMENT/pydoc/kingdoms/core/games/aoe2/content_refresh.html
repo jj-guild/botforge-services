@@ -47,7 +47,7 @@ here:&nbsp;their&nbsp;Liquipedia&nbsp;enrichment&nbsp;is&nbsp;on&nbsp;demand&nbs
  <dl><dt>async <a name="-refresh_aoe2_maps"><strong>refresh_aoe2_maps</strong></a>() -&gt; 'dict[str, int]'</dt><dd><span class="code">Enrich&nbsp;the&nbsp;maps'&nbsp;content&nbsp;docs&nbsp;from&nbsp;Liquipedia&nbsp;—&nbsp;on&nbsp;demand&nbsp;only.<br>
 &nbsp;<br>
 Never&nbsp;runs&nbsp;at&nbsp;boot:&nbsp;the&nbsp;Liquipedia&nbsp;seeding&nbsp;is&nbsp;slow&nbsp;by&nbsp;design&nbsp;(the<br>
-API&nbsp;terms&nbsp;pace&nbsp;one&nbsp;parse&nbsp;every&nbsp;30&nbsp;s,&nbsp;and&nbsp;a&nbsp;cold&nbsp;catalog&nbsp;fires&nbsp;one<br>
+API&nbsp;terms&nbsp;pace&nbsp;one&nbsp;parse&nbsp;every&nbsp;60&nbsp;s,&nbsp;and&nbsp;a&nbsp;cold&nbsp;catalog&nbsp;fires&nbsp;one<br>
 request&nbsp;per&nbsp;map&nbsp;—&nbsp;boot-time&nbsp;runs&nbsp;hammered&nbsp;the&nbsp;API&nbsp;into&nbsp;429s).<br>
 The&nbsp;DM&nbsp;panel's&nbsp;maps&nbsp;sync&nbsp;button&nbsp;calls&nbsp;this;&nbsp;the&nbsp;boot&nbsp;refresh&nbsp;and<br>
 the&nbsp;civs&nbsp;refresh&nbsp;stay&nbsp;Liquipedia-free.&nbsp;Returns&nbsp;the&nbsp;enrichment<br>

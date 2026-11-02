@@ -306,7 +306,8 @@ def test_429_honors_retry_after_then_retries(monkeypatch: pytest.MonkeyPatch) ->
     )
     data = provider.map_data("Arabia")
     assert data.info.name == "X"
-    assert 1.0 in sleeps, "the Retry-After wait happened"
+    # the backoff FLOOR wins over a tiny Retry-After: 30 s (attempt 1)
+    assert 30.0 in sleeps, "the exponential backoff floor was honoured"
     assert len(attempts) == 2, "exactly one retry"
     provider.close()
 

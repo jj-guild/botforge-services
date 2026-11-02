@@ -429,7 +429,7 @@ class MapsSyncButton(
     """The on-demand Liquipedia maps enrichment (never at boot).
 
     The enrichment is SLOW BY DESIGN: the Liquipedia API terms pace one
-    parse request every 30 s, and every map missing its content doc
+    parse request every 60 s, and every map missing its content doc
     costs one request \u2014 a cold catalog means minutes of pacing.
     Boot-time runs hammered the API into 429s; this button is the only
     trigger, and the defer(thinking) keeps the admin informed while it

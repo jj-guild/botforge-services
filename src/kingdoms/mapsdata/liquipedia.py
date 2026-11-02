@@ -35,7 +35,9 @@ LICENSE_TERMS_URL = "https://liquipedia.net/api-terms-of-use"
 LIQUIPEDIA_ATTRIBUTION = "https://liquipedia.net/ageofempires/"
 
 _MIN_REQUEST_INTERVAL_S = 2.0
-_PARSE_INTERVAL_S = 30.0
+_PARSE_INTERVAL_S = 60.0
+_429_BACKOFF_BASE_S = 30.0
+_429_MAX_RETRIES = 3
 
 # Shared pacing state: one clock per PROCESS, not per provider instance.
 # fetch_map_seed builds a fresh provider per map (bulk imports, the maps
@@ -188,16 +190,29 @@ class LiquipediaMapsProvider:
     def _get_json(self, params: dict[str, str], is_parse: bool = False) -> dict[str, Any]:
         self._rate_limit(is_parse=is_parse)
         response = self._client.get(self._api_url, params=params)
-        if response.status_code == 429:
+        for attempt in range(_429_MAX_RETRIES):
+            if response.status_code != 429:
+                break
             # The server-side quota was hit anyway (an earlier burst, a
-            # shared IP): honour its Retry-After, then retry once \u2014
-            # a 429 is "later", not "no such page".
-            retry_after = float(response.headers.get("Retry-After") or _PARSE_INTERVAL_S)
+            # shared IP): honour its Retry-After, at least the
+            # exponential backoff, and retry \u2014 a 429 is "later",
+            # not "no such page". The shared clock inflates by the same
+            # wait so the NEXT map paces behind this one too.
+            global _shared_last_request_at, _shared_last_parse_at
+            retry_after = float(response.headers.get("Retry-After") or 0.0)
+            wait = max(retry_after, _429_BACKOFF_BASE_S * (2**attempt))
             logger.warning(
-                "LIQUIPEDIA 429 \u2014 waiting %s s (Retry-After) and retrying once",
-                retry_after,
+                "LIQUIPEDIA 429 \u2014 backing off %s s (attempt %d/%d) and retrying",
+                wait,
+                attempt + 1,
+                _429_MAX_RETRIES,
             )
-            self._sleep(retry_after)
+            self._sleep(wait)
+            marker = time.monotonic()
+            if is_parse:
+                _shared_last_parse_at = marker
+            else:
+                _shared_last_request_at = marker
             self._rate_limit(is_parse=is_parse)
             response = self._client.get(self._api_url, params=params)
         response.raise_for_status()

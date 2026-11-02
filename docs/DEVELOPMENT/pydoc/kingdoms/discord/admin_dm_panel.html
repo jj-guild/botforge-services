@@ -344,7 +344,7 @@ classes&nbsp;in&nbsp;the&nbsp;first&nbsp;place&nbsp;with&nbsp;`class&nbsp;Foo[T]
 The&nbsp;on-demand&nbsp;Liquipedia&nbsp;maps&nbsp;enrichment&nbsp;(never&nbsp;at&nbsp;boot).<br>
 &nbsp;<br>
 The&nbsp;enrichment&nbsp;is&nbsp;SLOW&nbsp;BY&nbsp;DESIGN:&nbsp;the&nbsp;Liquipedia&nbsp;API&nbsp;terms&nbsp;pace&nbsp;one<br>
-parse&nbsp;request&nbsp;every&nbsp;30&nbsp;s,&nbsp;and&nbsp;every&nbsp;map&nbsp;missing&nbsp;its&nbsp;content&nbsp;doc<br>
+parse&nbsp;request&nbsp;every&nbsp;60&nbsp;s,&nbsp;and&nbsp;every&nbsp;map&nbsp;missing&nbsp;its&nbsp;content&nbsp;doc<br>
 costs&nbsp;one&nbsp;request&nbsp;—&nbsp;a&nbsp;cold&nbsp;catalog&nbsp;means&nbsp;minutes&nbsp;of&nbsp;pacing.<br>
 Boot-time&nbsp;runs&nbsp;hammered&nbsp;the&nbsp;API&nbsp;into&nbsp;429s;&nbsp;this&nbsp;button&nbsp;is&nbsp;the&nbsp;only<br>
 trigger,&nbsp;and&nbsp;the&nbsp;defer(thinking)&nbsp;keeps&nbsp;the&nbsp;admin&nbsp;informed&nbsp;while&nbsp;it<br>

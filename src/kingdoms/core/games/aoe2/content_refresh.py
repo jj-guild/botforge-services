@@ -112,7 +112,7 @@ async def refresh_aoe2_maps() -> dict[str, int]:
     """Enrich the maps' content docs from Liquipedia — on demand only.
 
     Never runs at boot: the Liquipedia seeding is slow by design (the
-    API terms pace one parse every 30 s, and a cold catalog fires one
+    API terms pace one parse every 60 s, and a cold catalog fires one
     request per map — boot-time runs hammered the API into 429s).
     The DM panel's maps sync button calls this; the boot refresh and
     the civs refresh stay Liquipedia-free. Returns the enrichment

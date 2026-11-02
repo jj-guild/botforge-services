@@ -297,7 +297,7 @@ en:
     sync_title: Cross-guild sync
     sync_subtitle: 'The bot-wide sync actions: each button updates the data shared by every server.'
     sync_civs_line: "**Civs** \u2014 reconcile the civs catalog and content with the vendored aoe2techtree dataset (fast, local data)."
-    sync_maps_line: "**Maps** \u2014 enrich the maps content from Liquipedia (on demand, paced against the API terms: one page every 30 s \u2014 a cold catalog takes minutes)."
+    sync_maps_line: "**Maps** \u2014 enrich the maps content from Liquipedia (on demand, paced against the API terms: one page every 60 s \u2014 a cold catalog takes a while)."
     btn_sync_civs: Civs
     btn_sync_maps: Maps
     maps_sync_done: Maps sync done — {enriched} map(s) enriched out of {checked} checked, the forum posts are refreshed (paced against the Liquipedia API terms).
