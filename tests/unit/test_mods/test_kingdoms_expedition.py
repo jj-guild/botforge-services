@@ -858,3 +858,74 @@ def test_the_returned_refusal_names_who_is_back_and_carries_unload() -> None:
     assert "équipage" not in note_solo
     assert "capitaine" in note_solo
     assert view_solo.children[0].custom_id == "kingdoms:expedition:unload"
+
+
+async def test_a_salon_kingdom_stays_silent_until_the_crew_lands(
+    monkeypatch,
+) -> None:
+    """exploration-retour-v5 (Drasah live report HeN 02/11): the tick
+    NEVER pre-empts the crew's click for a kingdom WITH its 🧭 salon —
+    the gain text reaches Géopolitique at the « 🪜 » unload. A
+    salon-less kingdom (no refonte, no button to click) keeps the tick
+    as its only herald."""
+    from types import SimpleNamespace
+
+    from kingdoms.mods.kingdoms import kingdom_content
+    from kingdoms.mods.kingdoms import kingdom_events_loop as events_loop
+    from kingdoms.mods.kingdoms import kingdom_expedition_panel as panel
+    from kingdoms.mods.kingdoms import kingdom_persistent
+
+    bundle = Bundle()
+    await bundle.launch_season()
+    aquitaine = await bundle.kingdom_id("Aquitaine")
+    bourgogne = await bundle.kingdom_id("Bourgogne")
+    await bundle.token(aquitaine)
+    # Aquitaine HAS its 🧭 salon (the refonte flow).
+    guild = MockGuild()
+    await guild.create_category("🏰 Aquitaine")
+    wiring = _PanelWiring(bundle)
+    kingdom = next(k for k in await bundle.kingdoms.kingdoms() if k.id == aquitaine)
+    channel = await panel.open_expedition_salon_safe(guild, wiring, kingdom)
+    assert channel is not None
+    await bundle.economy.toggle_expedition_chef(aquitaine, "king-a")
+    await bundle.economy.launch_expedition(aquitaine, now=_MONDAY)
+    # Bourgogne sails WITHOUT a salon (no refonte, like HeN).
+    await bundle.token(bourgogne)
+    await bundle.economy.begin_expedition(bourgogne)
+    await bundle.economy.toggle_expedition_chef(bourgogne, "king-b")
+    await bundle.economy.launch_expedition(bourgogne, now=_MONDAY)
+    # Both voyages are due (ends in the past for whatever now is).
+    for kid in (aquitaine, bourgogne):
+        model = next(k for k in await bundle.kingdoms.kingdoms() if k.id == kid)
+        doc = dict(model.expedition)
+        doc["ends_at"] = 1
+        model.expedition = doc
+        await bundle.store.upsert_kingdom(model.to_mongo())
+
+    sent: list[tuple[str, str]] = []
+
+    async def fake_announce(guild_: object, locale: str, text: str, view: object = None) -> None:
+        sent.append((str(locale), str(text)))
+
+    monkeypatch.setattr(events_loop, "announce_geopolitics", fake_announce)
+    monkeypatch.setattr(kingdom_content, "announce_geopolitics", fake_announce)
+    monkeypatch.setattr(kingdom_persistent, "_wiring", lambda: wiring)
+    bot = SimpleNamespace(guilds=[guild])
+
+    await events_loop._resolve_expeditions_safe(bot)
+    # The salon kingdom is SILENT — only the salon-less one is herald.
+    assert len(sent) == 1
+    assert "Bourgogne" in sent[0][1]
+    assert "Aquitaine" not in sent[0][1]
+    doc = await bundle.economy.expedition(aquitaine)
+    assert doc["state"] == "returned"
+    assert int(doc["salon_id"]) == int(channel.id)
+
+    # The crew lands — the « 🪜 » click alone carries the gain text.
+    await panel.announce_expedition_return_safe(
+        guild, "fr", "Aquitaine", "map", "tourbiere"
+    )
+    assert len(sent) == 2
+    assert "revient d'un long périple" in sent[1][1]
+    assert "tourbiere" in sent[1][1]
+    assert "Aquitaine" in sent[1][1]

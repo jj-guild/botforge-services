@@ -611,6 +611,25 @@ async def announce_expedition_depart_safe(guild: Any, kingdom_name: str) -> None
         logger.warning("KINGDOMS EXPEDITION: departure announcement failed", exc_info=True)
 
 
+async def announce_expedition_return_safe(
+    guild: Any, locale: str, kingdom_name: str, kind: str, value: str
+) -> None:
+    """exploration-retour-v5 (Drasah 02/11): the return reaches
+    Géopolitique when the crew LANDS — the « 🪜 Descendre du navire »
+    click alone enacts it. A kingdom WITH its salon stays silent at the
+    resolve (the tick); a salon-less kingdom keeps the tick as its only
+    herald (no button exists to click). Best effort, never raises."""
+    from kingdoms.mods.kingdoms.kingdom_content import announce_geopolitics
+
+    try:
+        text = expedition_return_text(locale, kingdom_name, kind, value)
+        await announce_geopolitics(guild, locale, text)
+    except Exception:
+        logger.warning(
+            "KINGDOMS EXPEDITION: return announcement failed", exc_info=True
+        )
+
+
 def expedition_return_text(
     locale: str, kingdom_name: str, kind: str, value: str
 ) -> str:
@@ -1276,6 +1295,16 @@ class KingdomExpeditionUnloadButton(
         await unmask_crew_safe(interaction.guild, kingdom, crew_ids)
         await sweep_expedition_salon_safe(
             interaction.guild, int(claimed.get("salon_id", 0) or 0)
+        )
+        # exploration-retour-v5 (Drasah 02/11): the click alone enacts
+        # the return — the gain text reaches Géopolitique HERE, the tick
+        # never pre-empts it for a kingdom with its salon.
+        await announce_expedition_return_safe(
+            interaction.guild,
+            _locale(interaction),
+            str(kingdom.name),
+            str(claimed.get("gain_kind", "") or ""),
+            str(claimed.get("gain_value", "") or ""),
         )
         # the 🧭 card may light up again on the realm view (a new token
         # buys a new journey).

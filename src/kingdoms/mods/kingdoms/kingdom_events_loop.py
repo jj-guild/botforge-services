@@ -416,14 +416,21 @@ async def _resolve_expeditions_safe(bot: Any) -> None:
             continue
         locale = await _guild_locale(bot, str(guild.id))
         for kingdom, kind, value, salon_id in resolved:
-            text = expedition_return_text(locale, str(kingdom.name), kind, value)
-            try:
-                await announce_geopolitics(guild, locale, text)
-            except Exception:
-                logger.warning(
-                    "KINGDOMS EVENTS: expedition return announcement failed",
-                    exc_info=True,
-                )
+            # exploration-retour-v5 (Drasah 02/11): a kingdom WITH its
+            # 🧭 salon stays SILENT here — the crew's « 🪜 Descendre du
+            # navire » click alone enacts the return (the gain text
+            # reaches Géopolitique at the unload). A salon-less kingdom
+            # (no refonte, no button to click) keeps its only herald:
+            # the tick announces as before.
+            if not salon_id:
+                text = expedition_return_text(locale, str(kingdom.name), kind, value)
+                try:
+                    await announce_geopolitics(guild, locale, text)
+                except Exception:
+                    logger.warning(
+                        "KINGDOMS EVENTS: expedition return announcement failed",
+                        exc_info=True,
+                    )
             # exploration-retour-v1: the panel flips to its RETURNED
             # face — the salon survives until the crew unloads it.
             await refresh_expedition_panel_safe(guild, wiring, str(kingdom.id))
