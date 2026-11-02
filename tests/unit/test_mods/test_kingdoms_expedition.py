@@ -549,7 +549,8 @@ async def test_auto_launch_fails_when_the_point_was_spent() -> None:
 
 async def test_the_sailing_panel_is_a_pure_info_panel() -> None:
     """exploration-retour-v4: after the cast-off the panel carries ZERO
-    buttons (the native <t:…:R> countdown lives client-side, nobody may
+    buttons (the ETA line carries NO second-precise countdown — the panel
+flips on the bot's tick, nobody may
     quit mid-sea); the boarding face keeps ⛵ + ⚓ + 🚪 and gains the
     💎 bounty line."""
     from kingdoms.mods.kingdoms import kingdom_expedition_panel as panel
@@ -586,6 +587,10 @@ async def test_the_sailing_panel_is_a_pure_info_panel() -> None:
     text = str(message.content)
     assert "◉ Voyage" in text
     assert "Retour estimé" in text
+    # exploration-flou-v1 (Drasah 02/11): NO second-precise countdown —
+    # the panel flips on the bot's tick, a live <t:…:R> would scream
+    # "overdue" for up to 5 minutes before anything moves.
+    assert ":R>" not in text
     # the returned face = 🪜 alone, the RP dock text and the gain.
     await bundle.economy.resolve_due_expeditions(
         now=datetime(2026, 12, 1, tzinfo=UTC)
@@ -929,25 +934,3 @@ async def test_a_salon_kingdom_stays_silent_until_the_crew_lands(
     assert "revient d'un long périple" in sent[1][1]
     assert "tourbiere" in sent[1][1]
     assert "Aquitaine" in sent[1][1]
-
-
-async def test_the_scheduler_spawns_and_stops_the_expedition_fast_lane() -> None:
-    """expedition-fastlane-v1: the 🧭 panel flip must not wait for the
-    300 s tick — the scheduler also spawns a 30 s fast lane that re-runs
-    only the expedition passes, and a double start never spawns a
-    second one; the stop cancels both tasks."""
-    from types import SimpleNamespace
-
-    from kingdoms.mods.kingdoms import kingdom_events_loop as events_loop
-
-    events_loop._EVENT_SCHEDULER_TASK = None
-    events_loop._EXPEDITION_FASTLANE_TASK = None
-    bot = SimpleNamespace(guilds=[])
-    assert events_loop.start_kingdoms_event_scheduler(bot, tick_seconds=300) is True
-    assert events_loop._EXPEDITION_FASTLANE_TASK is not None
-    assert not events_loop._EXPEDITION_FASTLANE_TASK.done()
-    # a double start keeps ONE heartbeat and ONE fast lane.
-    assert events_loop.start_kingdoms_event_scheduler(bot) is True
-    await events_loop.stop_kingdoms_event_scheduler()
-    assert events_loop._EVENT_SCHEDULER_TASK is None
-    assert events_loop._EXPEDITION_FASTLANE_TASK is None

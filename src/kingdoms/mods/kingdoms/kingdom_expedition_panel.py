@@ -89,7 +89,7 @@ _STRINGS: dict[str, dict[str, str]] = {
         "quit_button": "🚪 Quitter le navire",
         "unload_button": "🪜 Descendre du navire",
         "sailing_title": "# 🧭 Exploration de {kingdom}",
-        "sailing_line": "⏳ **Retour estimé :** <t:{ends}:f> (<t:{ends}:R>).",
+        "sailing_line": "⏳ **Retour estimé :** <t:{ends}:f> — le panneau confirme le retour au passage du bot.",
         "returned_rp": (
             "*Après de longues semaines en mer, le navire a enfin"
             " accosté. L'équipage descend à quai, une découverte en cale.*"
@@ -103,7 +103,7 @@ _STRINGS: dict[str, dict[str, str]] = {
         ),
         "sailing_note": (
             "⛵ Les amarres sont lâchées — le jeton 🧭 Explorateur est consommé."
-            " Bon voyage, l'équipage revient <t:{ends}:R>."
+            " Bon voyage, l'équipage revient <t:{ends}:f>."
         ),
         "depart_announce": (
             "🧭 Le royaume {kingdom} part explorer de"
@@ -178,7 +178,7 @@ _STRINGS: dict[str, dict[str, str]] = {
         "quit_button": "🚪 Leave the ship",
         "unload_button": "🪜 Disembark",
         "sailing_title": "# 🧭 Exploration of {kingdom}",
-        "sailing_line": "⏳ **Back around:** <t:{ends}:f> (<t:{ends}:R>).",
+        "sailing_line": "⏳ **Back around:** <t:{ends}:f> — the panel confirms the return on the bot's next pass.",
         "returned_rp": (
             "*After long weeks at sea, the ship has finally docked. The"
             " crew steps down with a discovery in the hold.*"
@@ -192,7 +192,7 @@ _STRINGS: dict[str, dict[str, str]] = {
         ),
         "sailing_note": (
             "⛵ The lines are cast — the 🧭 Explorateur token is consumed."
-            " Safe travels, the crew returns <t:{ends}:R>."
+            " Safe travels, the crew returns <t:{ends}:f>."
         ),
         "depart_announce": (
             "🧭 The kingdom {kingdom} sails out to explore new"
