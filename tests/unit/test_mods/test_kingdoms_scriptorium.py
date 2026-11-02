@@ -128,6 +128,28 @@ async def test_seigneurie_rubric_lists_budgets() -> None:
     assert "⚔️ 1/1 · 🛡️ 1/1" in content
 
 
+async def test_seigneurie_rubric_shows_live_locks_only() -> None:
+    """exploration-retour-v4: the ACTIVE locks ride Discord's native
+    <t:…:R> stamps (client-side countdown), expired ones vanish."""
+    import time as _time
+
+    from kingdoms.mods.kingdoms.kingdom_scriptorium import _seigneurie_content, _strings
+
+    bundle = PhasesBundle()
+    await bundle.launch_season()
+    kingdoms = await bundle.kingdoms.kingdoms()
+    lords = await bundle.kingdoms.lords()
+    now_ts = int(_time.time())
+    lord = lords[0]
+    lord.marriage_locked_until = now_ts + 7200  # 💍 active, 2 h ahead
+    lord.exploration_locked_until = now_ts - 60  # 🧭 EXPIRED — never shown
+    lord.ffa_locked_until = now_ts + 86400  # 🎲 active, 1 day ahead
+    content = _seigneurie_content(_strings("fr"), kingdoms, lords, 1, 1)
+    assert f"💍 <t:{now_ts + 7200}:R>" in content
+    assert f"🎲 <t:{now_ts + 86400}:R>" in content
+    assert "🧭 <t:" not in content
+
+
 async def test_cadastre_rubric_shows_bonus() -> None:
     """The Cadastre rubric lists the catalog maps with their bonus."""
     from kingdoms.mods.kingdoms.kingdom_scriptorium import _cadastre_content, _strings

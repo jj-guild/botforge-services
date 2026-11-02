@@ -1142,7 +1142,9 @@ def test_classement_content_medals_gap_and_counters() -> None:
     assert lieu["conseil_classement_hint"] in content
 
 
-def test_classement_view_offers_a_plain_sortir() -> None:
+def test_classement_view_sortir_walks_back_to_entree() -> None:
+    """exploration-retour-v4: the Classement's 🚪 Sortir OVERWRITES the
+    window with the Entrée hub (never a dead-end close anymore)."""
     from kingdoms.mods.kingdoms.kingdom_lieux import _classement_view
 
     view = _classement_view("fr")
@@ -1151,6 +1153,8 @@ def test_classement_view_offers_a_plain_sortir() -> None:
         _strings("fr")["sortir_button"]
     ]
     assert all(b.style == discord.ButtonStyle.secondary for b in buttons)
+    assert buttons[0].callback is not None
+    assert buttons[0].callback.__name__ == "_walk_to_entree"
 
 
 def test_classement_button_registered_and_rides_line_one() -> None:

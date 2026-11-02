@@ -27,8 +27,9 @@ feeds the future rumour/raven system (Drasah, in reflection).
 exploration-retour-v1 (Drasah 02/11): the journey now reads on a
 three-phase rail — À QUAI, VOYAGE, RETOUR. While at sea the crew is
 MASKED (member-level denies) and keeps only the expedition salon
-(child allow); 🔄 Actualiser
-re-renders the sailing face. At the resolve the doc flips to RETURNED
+(child allow); the sailing face is a PURE INFO panel — the native
+<t:…:R> countdown ticks client-side and NO button exists mid-sea
+(exploration-retour-v4). At the resolve the doc flips to RETURNED
 (gain drawn, locks held, NO auto-fallback) and shows the RP dock text
 plus « 🪜 Descendre du navire » — any aboard lord validates the gain,
 lifts the mask, clears the locks and sweeps the salon.
@@ -68,6 +69,7 @@ _STRINGS: dict[str, dict[str, str]] = {
         "chef_line": "🧭 **Capitaine :** {name}",
         "crew_line": "⚓ **Équipage :** {names}",
         "eta_line": "⏳ **Trajet au départ :** **{minutes} min** (bêta : −50 s par matelot, plancher 5 min)",
+        "gain_line": "💎 **Butin escompté :** Remporte un territoire aléatoire.",
         "chef_rule": "🧭 Le capitaine doit disposer d'un point de défense 🛡️ disponible (non consommé).",
         "crew_rule": (
             "⚓ Chaque seigneur embarque de lui-même (pas de pré-requis"
@@ -85,7 +87,6 @@ _STRINGS: dict[str, dict[str, str]] = {
         "crew_button": "⚓ Participer au voyage",
         "launch_button": "⛵ Lâcher les amarres",
         "quit_button": "🚪 Quitter le navire",
-        "refresh_button": "🔄 Actualiser",
         "unload_button": "🪜 Descendre du navire",
         "sailing_title": "# 🧭 Exploration de {kingdom}",
         "sailing_line": "⏳ **Retour estimé :** <t:{ends}:f> (<t:{ends}:R>).",
@@ -147,6 +148,7 @@ _STRINGS: dict[str, dict[str, str]] = {
         "chef_line": "🧭 **Captain:** {name}",
         "crew_line": "⚓ **Crew:** {names}",
         "eta_line": "⏳ **Travel at departure:** **{minutes} min** (beta: −50 s per mate, floor 5 min)",
+        "gain_line": "💎 **Expected bounty:** Win a random territory.",
         "chef_rule": "🧭 The captain needs one AVAILABLE defence point 🛡️ (never consumed).",
         "crew_rule": (
             "⚓ Every lord embarks himself (no prerequisite to join the"
@@ -163,7 +165,6 @@ _STRINGS: dict[str, dict[str, str]] = {
         "crew_button": "⚓ Join the voyage",
         "launch_button": "⛵ Cast off",
         "quit_button": "🚪 Leave the ship",
-        "refresh_button": "🔄 Refresh",
         "unload_button": "🪜 Disembark",
         "sailing_title": "# 🧭 Exploration of {kingdom}",
         "sailing_line": "⏳ **Back around:** <t:{ends}:f> (<t:{ends}:R>).",
@@ -377,6 +378,7 @@ def _panel_text(
         str(strings["eta_line"]).format(
             minutes=max(1, round(_expedition_seconds(doc) / 60))
         ),
+        str(strings["gain_line"]),
         "",
         strings["separator"],
         "",
@@ -398,8 +400,10 @@ def _panel_view(strings: dict[str, str], doc: dict[str, Any]) -> discord.ui.View
         view.add_item(KingdomExpeditionUnloadButton(strings))
         return view
     if state == "sailing":
-        view.add_item(KingdomExpeditionRefreshButton(strings))
-        view.add_item(KingdomExpeditionQuitButton(strings))
+        # exploration-retour-v4 (Drasah 02/11): the sailing face is a
+        # PURE INFO panel — the native <t:…:R> countdown already lives
+        # client-side, and nobody may quit mid-sea (nor the captain —
+        # his 🚪 cancel stays a boarding-only action). Zero buttons.
         return view
     if doc.get("chef_lord_id"):
         view.add_item(KingdomExpeditionLaunchButton(strings))
@@ -902,13 +906,12 @@ class KingdomExpeditionQuitButton(
 ):
     """« 🚪 Quitter le navire » — exploration-refonte-v1 (Drasah 02/11).
 
-    The CAPTAIN cancels the exploration (boarding: the doc clears,
-    nothing was consumed; sailing: every lock clears, the token is
-    refunded and the salon sweeps). A CREW member cancels his own
+    A BOARDING-only action (exploration-retour-v4: the sailing face
+    carries zero buttons). The CAPTAIN cancels the boarding (the doc
+    clears, nothing was consumed). A CREW member cancels his own
     embarkment — the panel recalculates the travel in place. Anyone
-    else gets a refusal. Once the lines are cast the mates stay aboard
-    (locked until the return); only the captain may leave a sailing
-    ship."""
+    else gets a refusal. The economy's sailing cancel + refund stays
+    reachable for the tests and the API, never from a button."""
 
     def __init__(self, strings: dict[str, str]) -> None:
         super().__init__(
@@ -1145,61 +1148,6 @@ class KingdomExpeditionLaunchButton(
             )
         except Exception:
             logger.warning("KINGDOMS EXPEDITION: realm refresh failed", exc_info=True)
-
-
-class KingdomExpeditionRefreshButton(
-    discord.ui.DynamicItem[discord.ui.Button[Any]],
-    template=r"kingdoms:expedition:refresh",
-):
-    """« 🔄 Actualiser » — exploration-retour-v1 (Drasah 02/11).
-
-    The sailing face keeps no live state of its own: the countdown
-    rides Discord's <t:…:R> stamp, but the crew may want the panel
-    re-read (a late mate, a restarted bot). Anyone may click — the
-    refresh never consumes anything, it just re-renders the panel.
-    """
-
-    def __init__(self, strings: dict[str, str]) -> None:
-        super().__init__(
-            discord.ui.Button(
-                label=str(strings["refresh_button"])[:80],
-                custom_id="kingdoms:expedition:refresh",
-                style=discord.ButtonStyle.secondary,
-            )
-        )
-
-    @classmethod
-    async def from_custom_id(
-        cls,
-        interaction: discord.Interaction,
-        item: discord.ui.Item[Any],
-        match: re.Match[str],
-        /,
-    ) -> KingdomExpeditionRefreshButton:
-        """Rebuild the button from the wire."""
-        return cls(_strings(_locale(interaction)))
-
-    async def callback(self, interaction: discord.Interaction) -> None:
-        """Re-render the pinned panel in place (zero bubble)."""
-        from kingdoms.mods.kingdoms.kingdom_persistent import _wiring
-
-        strings = _strings(_locale(interaction))
-        wiring = _wiring()
-        if wiring.economy_service is None or wiring.kingdoms_service is None:
-            await _error_note(interaction, strings["no_service"])
-            return
-        lord, kingdom = await _require_lord(interaction, strings, wiring)
-        if lord is None or kingdom is None:
-            return
-        try:
-            await interaction.response.defer()
-        except Exception:
-            pass
-        await refresh_expedition_panel_safe(interaction.guild, wiring, str(kingdom.id))
-        try:
-            await interaction.delete_original_response()
-        except Exception:
-            pass
 
 
 class KingdomExpeditionUnloadButton(

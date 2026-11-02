@@ -962,13 +962,20 @@ async def _close_ephemeral_window(interaction: discord.Interaction) -> None:
 def _objectif_quit_button(
     lieu: dict[str, Any], row: int = 3, label: str | None = None
 ) -> Any:
-    """The 🚪 Quitter button — closes the ephemeral window."""
+    """The 🚪 exit of a sub-window — OVERWRITES it with the Entrée
+    hub (Drasah 02/11: « il écrase et remplace la vue » — Sortir in a
+    sub-view walks the player back to the orientation chooser so he
+    can redirect, never a dead-end close)."""
     button = discord.ui.Button(
         label=label or lieu["objectif_quit_button"],
         style=discord.ButtonStyle.secondary,
         row=row,
     )
-    button.callback = _close_ephemeral_window
+
+    async def _walk_to_entree(interaction: discord.Interaction) -> None:
+        await _open_entree(interaction)
+
+    button.callback = _walk_to_entree
     return button
 
 
@@ -1445,8 +1452,9 @@ def _classement_content(locale: str, rows: list[tuple[Any, int, int]]) -> str:
 
 
 def _classement_view(locale: str) -> discord.ui.View:
-    """The Classement view — one 🚪 Sortir that CLOSES the window (a
-    plain close, NEVER a walk back to the Entrée)."""
+    """The Classement view — one 🚪 Sortir that OVERWRITES the window
+    with the Entrée hub (exploration-retour-v4, Drasah 02/11 — the old
+    plain close left a dead end, the player could not redirect)."""
     lieu = _strings(locale)
     view = discord.ui.View(timeout=None)
     view.add_item(

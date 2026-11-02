@@ -537,10 +537,11 @@ async def test_auto_launch_fails_when_the_point_was_spent() -> None:
     assert await bundle.stock_left(aquitaine) == 1
 
 
-async def test_the_sailing_panel_keeps_the_quit_button() -> None:
-    """After the cast-off the panel keeps 🚪 alone (the captain may
-    still cancel — refund + sweep); the boarding face shows ⛵ only
-    once a captain is on board."""
+async def test_the_sailing_panel_is_a_pure_info_panel() -> None:
+    """exploration-retour-v4: after the cast-off the panel carries ZERO
+    buttons (the native <t:…:R> countdown lives client-side, nobody may
+    quit mid-sea); the boarding face keeps ⛵ + ⚓ + 🚪 and gains the
+    💎 bounty line."""
     from kingdoms.mods.kingdoms import kingdom_expedition_panel as panel
 
     bundle = Bundle()
@@ -565,14 +566,13 @@ async def test_the_sailing_panel_keeps_the_quit_button() -> None:
         "kingdoms:expedition:crew",
         "kingdoms:expedition:quit",
     ]
+    # exploration-retour-v4: the boarding face carries the bounty line.
+    assert "Remporte un territoire aléatoire" in str(message.content)
     await bundle.economy.launch_expedition(aquitaine)
     await panel.refresh_expedition_panel_safe(guild, wiring, aquitaine)
     ids = [item.custom_id for item in message.view.children]
-    # exploration-retour-v1: the sailing face = 🔄 Actualiser + 🚪.
-    assert ids == [
-        "kingdoms:expedition:refresh",
-        "kingdoms:expedition:quit",
-    ]
+    # exploration-retour-v4: the sailing face = ZERO buttons.
+    assert ids == []
     text = str(message.content)
     assert "◉ Voyage" in text
     assert "Retour estimé" in text

@@ -285,10 +285,24 @@ def _seigneurie_content(
 ) -> str:
     """Build the Seigneurie rubric: every lord per kingdom, remaining budgets."""
 
+    now_ts = int(game_now().timestamp())
+
     def _budget_line(member: Any) -> str:
         attack_left = max(0, attack_budget - int(getattr(member, "attack_used", 0) or 0))
         defense_left = max(0, defense_budget - int(getattr(member, "defense_used", 0) or 0))
-        return f" — ⚔️ {attack_left}/{attack_budget} · 🛡️ {defense_left}/{defense_budget}"
+        line = f" — ⚔️ {attack_left}/{attack_budget} · 🛡️ {defense_left}/{defense_budget}"
+        # exploration-retour-v4 (Drasah 02/11): the ACTIVE locks ride
+        # Discord's NATIVE <t:…:R> stamps — the countdown renders and
+        # ticks on every player's client, zero re-edit, zero API.
+        for emoji, until in (
+            ("💍", getattr(member, "marriage_locked_until", None)),
+            ("🧭", getattr(member, "exploration_locked_until", None)),
+            ("🎲", getattr(member, "ffa_locked_until", None)),
+        ):
+            locked_until = int(until or 0)
+            if locked_until > now_ts:
+                line += f" · {emoji} <t:{locked_until}:R>"
+        return line
 
     lines = [strings["seigneurie_title"], ""]
     active = [lord for lord in lords if not getattr(lord, "left", False)]
