@@ -309,3 +309,52 @@ def test_429_honors_retry_after_then_retries(monkeypatch: pytest.MonkeyPatch) ->
     assert 1.0 in sleeps, "the Retry-After wait happened"
     assert len(attempts) == 2, "exactly one retry"
     provider.close()
+
+
+@pytest.mark.asyncio
+async def test_fetch_map_seed_runs_off_the_event_loop(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The legacy seed path never blocks the event loop (kingdoms-services#295).
+
+    The sync Liquipedia client sleeps for API rate limits: on the loop it
+    froze the gateway heartbeat during bulk imports. A slow seed must
+    therefore ride a worker thread — the loop stays responsive while it
+    runs.
+    """
+    import asyncio
+    import threading
+    import time
+
+    from kingdoms.mapsdata.seed import fetch_map_seed
+
+    monkeypatch.setenv("LIQUIPEDIA_CONTACT", "dev@example.com")
+    monkeypatch.delenv("EXT_LIQUIPEDIA_URI", raising=False)
+
+    loop_thread = threading.get_ident()
+    provider_threads: list[int] = []
+
+    class _SlowProvider:
+        def __init__(self, user_agent: str) -> None:
+            provider_threads.append(threading.get_ident())
+
+        def map_data(self, page: str) -> None:
+            time.sleep(0.4)  # the blocking rate-limit wait, condensed
+            raise RuntimeError("no page")
+
+        def close(self) -> None:
+            pass
+
+    monkeypatch.setattr(
+        "kingdoms.mapsdata.liquipedia.LiquipediaMapsProvider", _SlowProvider, raising=False
+    )
+
+    async def _heartbeat() -> None:
+        await asyncio.sleep(0.05)
+
+    heartbeat = asyncio.create_task(_heartbeat())
+    seed = await fetch_map_seed("Arabia")
+    assert seed is None  # unknown page degrades to None
+    assert provider_threads, "the provider ran"
+    # The blocking client ran off the event loop's thread — the heartbeat
+    # stayed serviced while it slept.
+    assert provider_threads[0] != loop_thread, "the sync Liquipedia client ran on the event loop"
+    assert heartbeat.done(), "the event loop stayed responsive during seeding"
