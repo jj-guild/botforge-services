@@ -4615,6 +4615,7 @@ class KingdomAdminButton(
             "start-season": discord.ButtonStyle.success,
             "start-beta": discord.ButtonStyle.success,
             "season-mode": discord.ButtonStyle.secondary,
+            "hat": discord.ButtonStyle.secondary,
             "back-setup": discord.ButtonStyle.danger,
             "back-setup-confirm": discord.ButtonStyle.success,
             "back-setup-cancel": discord.ButtonStyle.secondary,
