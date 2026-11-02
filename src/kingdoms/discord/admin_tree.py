@@ -115,11 +115,11 @@ async def _ensure_scope(bot: Any, guild_id: str, scope: str) -> str:
 
     guild = getattr(bot, "get_guild", lambda _gid: None)(int(guild_id)) if guild_id.isdigit() else None
     if guild is None:
-        return "Guilde introuvable — impossible de re-provisionner."
+        return "Guild not found — cannot re-provision."
     scopes = [part for part in scope.split(",") if part]
     specs = [s for s in registered_scopes() if s.scope in scopes]
     if not specs:
-        return f"Périmètre inconnu : `{scope}`."
+        return f"Unknown scope: `{scope}`."
     catalog = getattr(bot, "messages", None)
 
     def _translate(key: str, locale: str) -> str:
@@ -144,7 +144,7 @@ async def _ensure_scope(bot: Any, guild_id: str, scope: str) -> str:
             await persist_resolutions(guild_id, spec.scope, resolved)
         except Exception:
             logger.warning("ADMIN TREE: ensure failed (scope %s, guild %s)", spec.scope, guild_id, exc_info=True)
-            return "La création des salons a échoué — voir les logs du bot."
+            return "Channel provisioning failed — see the bot logs."
         lines.append(f"\U0001F527 **{spec.scope}** \u2014 salons v\u00e9rifi\u00e9s/cr\u00e9\u00e9s :")
         for decl in spec.channels:
             channel_id = resolved.get(decl.key, "")
@@ -214,7 +214,7 @@ class TreeOpenButton(
         """Open the section's view (guarded at click time)."""
         if not await _guard(interaction):
             return
-        await interaction.response.defer(ephemeral=True, thinking=True)
+        await interaction.response.defer(ephemeral=True, thinking=False)
         if self.section in ("games", "mods"):
             # the declared menus own the navigation: the scope's admin
             # menu renders from the views registry
@@ -272,7 +272,7 @@ class TreeEnsureButton(
         if not await _guard(interaction):
             return
         guild_id = str(interaction.guild_id) if interaction.guild_id else ""
-        await interaction.response.defer(ephemeral=True, thinking=True)
+        await interaction.response.defer(ephemeral=True, thinking=False)
         answer = await _ensure_scope(interaction.client, guild_id, self.scope)
         await interaction.followup.send(answer, ephemeral=True)
 
@@ -281,7 +281,6 @@ async def build_admin_menu(
     guild_id: str, locale: str, interaction: Any = None
 ) -> discord.ui.LayoutView:
     """Build the light admin menu: lang/games/mods openers + ensure."""
-    from kingdoms.core.ids import footer
     from kingdoms.discord.commands_i18n import tr_guild
 
     bot = getattr(interaction, "client", None) if interaction is not None else None
@@ -312,8 +311,9 @@ async def build_admin_menu(
     ensure_row: discord.ui.ActionRow[discord.ui.LayoutView] = discord.ui.ActionRow()
     ensure_row.add_item(TreeEnsureButton("bot", await _label("admin_tree.ensure_btn", "Sync now")))
     view.add_item(ensure_row)
-    view.add_item(discord.ui.TextDisplay(footer("panel:bot:admin")))
-    return view
+    from kingdoms.discord.ui.view_footer import add_view_footer
+
+    return add_view_footer(view, "panel:bot:admin")
 
 
 def ensure_button(scope: str, label: str = "Sync now") -> TreeEnsureButton:
