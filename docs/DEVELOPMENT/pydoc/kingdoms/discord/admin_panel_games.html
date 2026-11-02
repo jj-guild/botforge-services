@@ -79,8 +79,9 @@ sub-view&nbsp;carries&nbsp;the&nbsp;back&nbsp;button.</span></p>
 The&nbsp;bulk&nbsp;Liquipedia&nbsp;import:&nbsp;one&nbsp;map&nbsp;per&nbsp;line&nbsp;(id&nbsp;/&nbsp;slug&nbsp;/&nbsp;URL).<br>
 &nbsp;<br>
 Missing&nbsp;maps&nbsp;are&nbsp;imported&nbsp;from&nbsp;Liquipedia&nbsp;and&nbsp;(optionally)&nbsp;all<br>
-lines&nbsp;are&nbsp;associated&nbsp;to&nbsp;a&nbsp;target&nbsp;pool.&nbsp;Any&nbsp;failure&nbsp;rolls&nbsp;the&nbsp;whole<br>
-batch&nbsp;back&nbsp;—&nbsp;the&nbsp;catalog&nbsp;never&nbsp;keeps&nbsp;a&nbsp;half-imported&nbsp;state&nbsp;(#259).<br>&nbsp;</span></td></tr>
+lines&nbsp;are&nbsp;associated&nbsp;to&nbsp;a&nbsp;target&nbsp;pool.&nbsp;Every&nbsp;line&nbsp;runs&nbsp;whatever&nbsp;its<br>
+neighbours&nbsp;did:&nbsp;the&nbsp;successes&nbsp;stay,&nbsp;the&nbsp;failures&nbsp;are&nbsp;reported&nbsp;—<br>
+no&nbsp;batch&nbsp;rollback&nbsp;on&nbsp;a&nbsp;partial&nbsp;import.<br>&nbsp;</span></td></tr>
 <tr><td>&nbsp;</td>
 <td class="singlecolumn"><dl><dt>Method resolution order:</dt>
 <dd><a href="kingdoms.discord.admin_panel_games.html#GamesBulkImportModal">GamesBulkImportModal</a></dd>

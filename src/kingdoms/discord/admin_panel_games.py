@@ -1203,16 +1203,21 @@ class GamesMapImportModal(discord.ui.Modal):
         await _finish_map_import(interaction, service, self.game_key, entry, seed)
 
 
-async def _bulk_import_maps(service: Any, game_key: str, parsed: list[Any]) -> tuple[list[Any], str]:
-    """Import the missing maps transactionally; (created, failure).
+async def _bulk_import_maps(
+    service: Any, game_key: str, parsed: list[Any]
+) -> tuple[list[Any], list[tuple[str, str]]]:
+    """Import every missing map, best-effort; (created, failures).
 
-    Existing non-archived maps are skipped (re-import = no-op); any
-    failure returns the created-so-far entries with the reason — the
-    caller rolls them back (#259 semantics for the bulk path).
+    Existing non-archived maps are skipped (re-import = no-op). One
+    map failing never stops the batch: every line runs to the end,
+    the successes stay in the catalog, and each failure comes back
+    with its reason — the caller reports both sides. A partial
+    import is an accepted outcome, not a state to undo.
     """
     from kingdoms.mapsdata.seed import fetch_map_seed
 
     created: list[Any] = []
+    failures: list[tuple[str, str]] = []
     for p in parsed:
         try:
             from kingdoms.core.ids import map_entry_id
@@ -1222,7 +1227,8 @@ async def _bulk_import_maps(service: Any, game_key: str, parsed: list[Any]) -> t
                 continue
             seed = await fetch_map_seed(p.page_name)
             if seed is None:
-                return created, f"Aucune page Liquipedia pour « {p.page_name} »."
+                failures.append((p.page_name, "aucune page Liquipedia"))
+                continue
             entry = await service.create_map(
                 game_key,
                 seed.name,
@@ -1255,8 +1261,8 @@ async def _bulk_import_maps(service: Any, game_key: str, parsed: list[Any]) -> t
             created.append(entry)
         except Exception as exc:
             logger.exception("GAMES ADMIN: bulk import failed on %s", p.page_name)
-            return created, f"échec sur « {p.page_name} » ({exc})."
-    return created, ""
+            failures.append((p.page_name, str(exc)))
+    return created, failures
 
 
 async def _finish_bulk_import(
@@ -1299,8 +1305,9 @@ class GamesBulkImportModal(discord.ui.Modal):
     """The bulk Liquipedia import: one map per line (id / slug / URL).
 
     Missing maps are imported from Liquipedia and (optionally) all
-    lines are associated to a target pool. Any failure rolls the whole
-    batch back — the catalog never keeps a half-imported state (#259).
+    lines are associated to a target pool. Every line runs whatever its
+    neighbours did: the successes stay, the failures are reported —
+    no batch rollback on a partial import.
     """
 
     def __init__(self, game_key: str, pool_id: str = "") -> None:
@@ -1342,23 +1349,23 @@ class GamesBulkImportModal(discord.ui.Modal):
             await interaction.followup.send((await reply(interaction, "ui.flows.wiring_unavailable")), ephemeral=True)
             return
 
-        created, failure = await _bulk_import_maps(service, self.game_key, parsed)
-        if failure:
-            logger.exception("GAMES ADMIN: bulk import failed — rolling back %d maps", len(created))
-            rolled = 0
-            for entry in created:
-                try:
-                    await service.delete_map(entry.id)
-                    rolled += 1
-                except Exception:
-                    logger.exception("GAMES ADMIN: bulk rollback failed for %s", entry.id)
+        created, failures = await _bulk_import_maps(service, self.game_key, parsed)
+        if not created and failures:
+            lines = "\n".join(f"- « {name} » : {reason}" for name, reason in failures[:10])
             await interaction.followup.send(
-                f"Import refusé — {failure} "
-                f"{rolled}/{len(created)} maps créées ont été supprimées ; corrige la liste et réessaie.",
+                f"Aucune map importée — échecs :\n{lines}",
                 ephemeral=True,
             )
             return
-        await _finish_bulk_import(interaction, service, created, self.pool_id)
+        if created:
+            await _finish_bulk_import(interaction, service, created, self.pool_id)
+        if failures:
+            lines = "\n".join(f"- « {name} » : {reason}" for name, reason in failures[:10])
+            more = f"\n- … et {len(failures) - 10} autre(s)" if len(failures) > 10 else ""
+            await interaction.followup.send(
+                f"\u26a0️ {len(failures)} échec(s) sur la liste (les autres maps sont bien importées) :\n{lines}{more}",
+                ephemeral=True,
+            )
 
 
 
