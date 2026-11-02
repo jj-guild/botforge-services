@@ -17,7 +17,7 @@ Discord&nbsp;exposes&nbsp;it&nbsp;only&nbsp;through&nbsp;the&nbsp;interaction&nb
 it.&nbsp;The&nbsp;pattern&nbsp;(the&nbsp;skill&nbsp;rule&nbsp;"an&nbsp;ephemeral&nbsp;view&nbsp;edits&nbsp;itself"):<br>
 &nbsp;<br>
 1.&nbsp;the&nbsp;click&nbsp;that&nbsp;opens&nbsp;the&nbsp;flow&nbsp;captures&nbsp;the&nbsp;pair<br>
-&nbsp;&nbsp;&nbsp;``(interaction.webhook,&nbsp;interaction.message.id)``&nbsp;—&nbsp;the&nbsp;click's<br>
+&nbsp;&nbsp;&nbsp;``(interaction.followup,&nbsp;interaction.message.id)``&nbsp;—&nbsp;the&nbsp;click's<br>
 &nbsp;&nbsp;&nbsp;webhook&nbsp;token&nbsp;lives&nbsp;15&nbsp;minutes&nbsp;after&nbsp;the&nbsp;click,&nbsp;plenty&nbsp;for&nbsp;a<br>
 &nbsp;&nbsp;&nbsp;modal&nbsp;round-trip;<br>
 2.&nbsp;the&nbsp;submit&nbsp;(or&nbsp;the&nbsp;deferred&nbsp;callback)&nbsp;edits&nbsp;the&nbsp;ORIGINAL&nbsp;message<br>
@@ -28,7 +28,7 @@ the&nbsp;edit,&nbsp;best-effort.&nbsp;A&nbsp;direct&nbsp;click&nbsp;that&nbsp;an
 ``interaction.response.edit_message``&nbsp;needs&nbsp;none&nbsp;of&nbsp;this&nbsp;—&nbsp;the<br>
 current&nbsp;interaction's&nbsp;own&nbsp;webhook&nbsp;does&nbsp;it.&nbsp;This&nbsp;helper&nbsp;is&nbsp;for&nbsp;the<br>
 two&nbsp;deferred&nbsp;shapes:&nbsp;a&nbsp;modal&nbsp;submit,&nbsp;and&nbsp;a&nbsp;callback&nbsp;that&nbsp;had&nbsp;to<br>
-``defer(thinking=True)``&nbsp;(whose&nbsp;response&nbsp;is&nbsp;a&nbsp;new&nbsp;ephemeral,&nbsp;not&nbsp;the<br>
+``defer(thinking=False)``&nbsp;(whose&nbsp;response&nbsp;is&nbsp;a&nbsp;new&nbsp;ephemeral,&nbsp;not&nbsp;the<br>
 menu's).</span></p>
 <p>
 <table class="section">

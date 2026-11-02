@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Python: kingdoms.core.db_indexes</title>
+</head><body>
+
+<table class="heading">
+<tr class="heading-text decor">
+<td class="title">&nbsp;<br><strong class="title"><a href="kingdoms.html" class="white">kingdoms</a>.<a href="kingdoms.core.html" class="white">core</a>.db_indexes</strong></td>
+<td class="extra"><a href=".">index</a><br><a href="file:SOURCE_ROOT/core/db_indexes.py">SOURCE_ROOT/core/db_indexes.py</a></td></tr></table>
+    <p><span class="code">The&nbsp;query&nbsp;indexes&nbsp;of&nbsp;the&nbsp;live&nbsp;dashboards'&nbsp;hot&nbsp;collections.<br>
+&nbsp;<br>
+The&nbsp;hot&nbsp;paths&nbsp;(owner&nbsp;direction:&nbsp;the&nbsp;players&nbsp;panel&nbsp;must&nbsp;be&nbsp;immediate):<br>
+``collect_profile_stats``&nbsp;reads&nbsp;the&nbsp;profile&nbsp;bindings&nbsp;by<br>
+``(game_key,&nbsp;profile_id)``&nbsp;and&nbsp;aggregates&nbsp;the&nbsp;completed&nbsp;matches&nbsp;by<br>
+profile&nbsp;side;&nbsp;the&nbsp;profile&nbsp;lookups&nbsp;join&nbsp;the&nbsp;bindings&nbsp;by&nbsp;user.<br>
+&nbsp;<br>
+Every&nbsp;index&nbsp;is&nbsp;idempotent&nbsp;(Mongo's&nbsp;``create_index``&nbsp;is&nbsp;a&nbsp;no-op&nbsp;when<br>
+the&nbsp;index&nbsp;exists)&nbsp;—&nbsp;safe&nbsp;to&nbsp;call&nbsp;from&nbsp;every&nbsp;boot.</span></p>
+<p>
+<table class="section">
+<tr class="decor pkg-content-decor heading-text">
+<td class="section-title" colspan=3>&nbsp;<br><strong class="bigsection">Modules</strong></td></tr>
+    
+<tr><td class="decor pkg-content-decor"><span class="code">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span></td><td>&nbsp;</td>
+<td class="singlecolumn"><table><tr><td class="multicolumn"><a href="logging.html">logging</a><br>
+</td><td class="multicolumn"></td><td class="multicolumn"></td><td class="multicolumn"></td></tr></table></td></tr></table><p>
+<table class="section">
+<tr class="decor functions-decor heading-text">
+<td class="section-title" colspan=3>&nbsp;<br><strong class="bigsection">Functions</strong></td></tr>
+    
+<tr><td class="decor functions-decor"><span class="code">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span></td><td>&nbsp;</td>
+<td class="singlecolumn"><dl><dt>async <a name="-ensure_live_indexes"><strong>ensure_live_indexes</strong></a>(database: 'Any') -&gt; 'None'</dt><dd><span class="code">Create&nbsp;the&nbsp;hot-path&nbsp;indexes&nbsp;(idempotent,&nbsp;best-effort).</span></dd></dl>
+</td></tr></table><p>
+<table class="section">
+<tr class="decor data-decor heading-text">
+<td class="section-title" colspan=3>&nbsp;<br><strong class="bigsection">Data</strong></td></tr>
+    
+<tr><td class="decor data-decor"><span class="code">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span></td><td>&nbsp;</td>
+<td class="singlecolumn"><strong>logger</strong> = &lt;Logger kingdoms.core.db_indexes (WARNING)&gt;</td></tr></table>
+</body></html>

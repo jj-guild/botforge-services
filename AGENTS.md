@@ -97,10 +97,15 @@ A session writing a doc, a comment or a commit in French is a bug.
   buttons render with 🔒, sync buttons with 🔄. Declaring a menu
   button whose target is undeclared is a drift the tests reject.
 - **Every view carries its view id as its footer** — a `-#` line with
-  the id in backticks (`view:aoe2:admin`), built through
-  `kingdoms.core.ids.footer` or `MenuSpec.view_id`. The id is the
-  anchor every human feedback refers to; a view without its footer id
-  is a bug.
+  the id in backticks (`view:aoe2:admin`), the LAST line of the panel.
+  The SDK enforces it (`kingdoms.discord.ui.view_footer.build_view`):
+  build panels through `build_view(view_id, *items)` — the constructor
+  appends the id footer automatically; `require_declared_view_id`
+  fails fast when the id is not declared in `views.yaml`. NEVER add
+  the id line by hand (not in the message content, not in an embed
+  footer, not inside a container) — a manually-footed view is a bug
+  the review rejects. The id is the anchor every human feedback refers
+  to; a view without its footer id is a bug.
 - **Admin surface (transparency rule):** admin messages with actions
   live in the guild's `🛡-bot-admins` channel (AdminChannelService,
   cache-aside provisioning); the BOT_ADMINS are synced into the
