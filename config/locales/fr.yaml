@@ -298,6 +298,9 @@ fr:
     sync_subtitle: 'Les actions de synchronisation au niveau du bot : chaque bouton met à jour les données
       partagées par tous les serveurs.'
     btn_refresh_aoe2_civs: Rafraîchir les civs AoE2
+    btn_sync_aoe2_maps: Synchroniser les maps AoE2
+    maps_sync_done: Sync maps terminé — {enriched} map(s) enrichie(s) sur {checked} vérifiée(s), les posts du forum sont rafraîchis (respect du rythme imposé par l'API Liquipedia).
+    maps_sync_failed: Sync maps échoué (voir les logs).
     menu_current_language: '🌐 Langue : {current}'
     access_btn_manage: Gérer les accès
     menu_btn_language: Langue

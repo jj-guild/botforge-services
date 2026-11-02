@@ -350,6 +350,7 @@ async def _open_sync(interaction: discord.Interaction) -> None:
     )
     row: discord.ui.ActionRow[discord.ui.LayoutView] = discord.ui.ActionRow()
     row.add_item(ContentRefreshButton(label=_dm_tr(interaction, dm_locale, "btn_refresh_aoe2_civs")))
+    row.add_item(MapsSyncButton(label=_dm_tr(interaction, dm_locale, "btn_sync_aoe2_maps")))
     view.add_item(row)
     await interaction.response.send_message(view=add_view_footer(view, "panel:dm:sync"), ephemeral=True)
 
@@ -412,7 +413,82 @@ class ContentRefreshButton(
         )
 
 
+class MapsSyncButton(
+    discord.ui.DynamicItem[discord.ui.Button[Any]],
+    template=rf"{_NS}:refresh:maps",
+):
+    """The on-demand Liquipedia maps enrichment (never at boot).
+
+    The enrichment is SLOW BY DESIGN: the Liquipedia API terms pace one
+    parse request every 30 s, and every map missing its content doc
+    costs one request \u2014 a cold catalog means minutes of pacing.
+    Boot-time runs hammered the API into 429s; this button is the only
+    trigger, and the defer(thinking) keeps the admin informed while it
+    grinds.
+    """
+
+    def __init__(self, label: str) -> None:
+        super().__init__(
+            discord.ui.Button(
+                label=label,
+                emoji="\U0001F5FA",
+                style=discord.ButtonStyle.secondary,
+                custom_id=f"{_NS}:refresh:maps",
+            )
+        )
+
+    @classmethod
+    async def from_custom_id(
+        cls,
+        interaction: discord.Interaction,
+        item: discord.ui.Item[Any],
+        match: re.Match[str],
+        /,
+    ) -> MapsSyncButton:
+        """Rebuild from the wire; the label is re-resolved on render."""
+        del interaction, item, match
+        return cls("Maps")
+
+    async def callback(self, interaction: discord.Interaction) -> None:
+        """Guard, run the paced Liquipedia enrichment, confirm."""
+        if not _is_bot_admin(interaction):
+            await _deny(interaction)
+            return
+        dm_locale = await _dm_locale(interaction)
+        await interaction.response.defer(ephemeral=True, thinking=True)
+        try:
+            from kingdoms.core.games.aoe2.content_refresh import refresh_aoe2_maps
+
+            counts = await refresh_aoe2_maps()
+        except Exception:
+            logger.exception("DM PANEL: maps sync failed")
+            await interaction.followup.send(
+                _dm_tr(interaction, dm_locale, "maps_sync_failed"), ephemeral=True
+            )
+            return
+        # best-effort: the enriched content shows up on the maps forum
+        # posts right away, not at the next boot.
+        try:
+            from kingdoms.discord.maps_forum import sync_maps_forum
+
+            for guild in interaction.client.guilds:
+                await sync_maps_forum(str(guild.id), "aoe2", interaction.client)
+        except Exception:
+            logger.warning("DM PANEL: maps forum sync after enrichment failed — best-effort")
+        await interaction.followup.send(
+            _dm_tr(
+                interaction,
+                dm_locale,
+                "maps_sync_done",
+                enriched=int(counts.get("maps_enriched", 0)),
+                checked=int(counts.get("maps_checked", 0)),
+            ),
+            ephemeral=True,
+        )
+
+
 def register_admin_dm_items(bot: discord.Client) -> None:
     """Register the DM panel's persistent dynamic items."""
     bot.add_dynamic_items(DmOpenButton)
     bot.add_dynamic_items(ContentRefreshButton)
+    bot.add_dynamic_items(MapsSyncButton)

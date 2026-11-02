@@ -297,6 +297,9 @@ en:
     sync_title: Cross-guild sync
     sync_subtitle: 'The bot-wide sync actions: each button updates the data shared by every server.'
     btn_refresh_aoe2_civs: Refresh aoe2 civs
+    btn_sync_aoe2_maps: Sync aoe2 maps
+    maps_sync_done: Maps sync done — {enriched} map(s) enriched out of {checked} checked, the forum posts are refreshed (paced against the Liquipedia API terms).
+    maps_sync_failed: Maps sync failed (see the logs).
     menu_current_language: '🌐 Language: {current}'
     access_btn_manage: Manage access
     menu_btn_language: Language

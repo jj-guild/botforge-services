@@ -33,7 +33,9 @@ async def refresh_aoe2_content(dataset_dir: Path = DATASET_DIR) -> dict[str, int
 
     Returns the per-section counts (``factions`` created, ``content_docs``
     upserted). Raises when the dataset or Mongo is unreachable — the
-    caller (DM panel, CLI) reports the failure.
+    caller (DM panel, CLI) reports the failure. Maps are NOT touched
+    here: their Liquipedia enrichment is on demand only
+    (:func:`refresh_aoe2_maps`).
     """
     from kingdoms.core.games.aoe2.content_source import resolve_aoe2_content_source
     from kingdoms.core.games.aoe2.faction_content import (
@@ -93,7 +95,42 @@ async def refresh_aoe2_content(dataset_dir: Path = DATASET_DIR) -> dict[str, int
                 }
             )
             content_docs += 1
+    logger.info(
+        "CONTENT REFRESH: %d factions created, %d content docs upserted (maps enrichment is on demand)",
+        factions,
+        content_docs,
+    )
+    return {
+        "factions": factions,
+        "new_factions": new_factions,
+        "total_factions": len(known),
+        "content_docs": content_docs,
+    }
+
+
+async def refresh_aoe2_maps() -> dict[str, int]:
+    """Enrich the maps' content docs from Liquipedia — on demand only.
+
+    Never runs at boot: the Liquipedia seeding is slow by design (the
+    API terms pace one parse every 30 s, and a cold catalog fires one
+    request per map — boot-time runs hammered the API into 429s).
+    The DM panel's maps sync button calls this; the boot refresh and
+    the civs refresh stay Liquipedia-free. Returns the enrichment
+    counts (``maps_enriched`` upserted docs, ``maps_checked`` entries
+    that qualified).
+    """
+    from kingdoms.core.models.db import get_async_database
+    from kingdoms.core.services.faction_content import FactionContentService
+    from kingdoms.core.services.game_data import GameDataService
+
+    from .seed import MongoAoE2Database
+
+    database = get_async_database()
+    game_data = GameDataService(MongoAoE2Database(database))
+    content = FactionContentService(database)
+    await content.ensure_indexes()
     maps_enriched = 0
+    maps_checked = 0
     try:
         from kingdoms.mapsdata.seed import LiquipediaUnconfiguredError, fetch_map_seed
 
@@ -101,6 +138,7 @@ async def refresh_aoe2_content(dataset_dir: Path = DATASET_DIR) -> dict[str, int
             already = await content.get(entry.id, "en")
             if already is not None and already.get("icon_url") and already.get("walls"):
                 continue
+            maps_checked += 1
             seed = None
             try:
                 seed = await fetch_map_seed(entry.name)
@@ -128,19 +166,17 @@ async def refresh_aoe2_content(dataset_dir: Path = DATASET_DIR) -> dict[str, int
             )
             maps_enriched += 1
     except Exception:
-        logger.warning("CONTENT REFRESH: map image enrichment failed — best-effort", exc_info=True)
+        logger.warning(
+            "CONTENT REFRESH: map image enrichment failed — best-effort", exc_info=True
+        )
     logger.info(
-        "CONTENT REFRESH: %d factions created, %d content docs upserted, %d maps enriched",
-        factions,
-        content_docs,
+        "CONTENT REFRESH (maps, on demand): %d maps enriched out of %d checked",
         maps_enriched,
+        maps_checked,
     )
     return {
-        "factions": factions,
-        "new_factions": new_factions,
-        "total_factions": len(known),
-        "content_docs": content_docs,
         "maps_enriched": maps_enriched,
+        "maps_checked": maps_checked,
     }
 
 
