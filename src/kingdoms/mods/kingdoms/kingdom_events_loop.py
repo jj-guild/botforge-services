@@ -372,8 +372,8 @@ async def _resolve_expeditions_safe(bot: Any) -> None:
 
 
 async def _auto_launch_expeditions_safe(bot: Any) -> None:
-    """exploration-refonte-v1 (Drasah 02/11): the 15-minute boarding
-    window — a due boarding WITH a captain launches itself (the panel
+    """exploration-refonte-v1 (Drasah 02/11): the boarding window
+    (5 minutes, BETA drasah — was 15) — a due boarding WITH a captain launches itself (the panel
     flips to its sailing face, the salon notes the departure and the
     vague Géopolitique announcement goes out). A failed auto-launch
     (the captain lost his defence point) cancels the boarding — nothing

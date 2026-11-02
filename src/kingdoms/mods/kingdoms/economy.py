@@ -86,10 +86,11 @@ plancher 5 minutes. NEVER merge this branch to prod without restoring
 exploration-expedition-v1)."""
 EXPEDITION_PER_LORD_SECONDS = 50
 EXPEDITION_MIN_SECONDS = 300
-EXPEDITION_BOARDING_SECONDS = 900
-"""exploration-refonte-v1 (Drasah 02/11): the 15-minute boarding
-window — a due boarding WITH a captain launches itself (the events
-tick fires the auto-launch)."""
+EXPEDITION_BOARDING_SECONDS = 300
+"""exploration-refonte-v1 (Drasah 02/11): the boarding window — a due
+boarding WITH a captain launches itself (the events tick fires the
+auto-launch). exploration-retour-v3 (Drasah 02/11): BETA 5 minutes on
+the drasah canary (was 900) — restore 900 before any prod merge."""
 EXPEDITION_COMPENSATION_TECH = 2
 """exploration-expedition-v1: when the map pool runs dry at the return,
 the kingdom keeps a compensation lot — one civilization it does not
@@ -357,12 +358,22 @@ class EconomyService:
         timestamp = now or game_now()
         now_ts = int(timestamp.timestamp())
         resolved: list[tuple[LordModel, TerritoryModel | None]] = []
+        # exploration-retour-v3: a live expedition (boarding/sailing/
+        # returned) owns its crew's exploration locks — the legacy solo
+        # resolver must NEVER touch them (double-draw bug, 02/11 logs).
+        live_expeditions: set[str] = set()
+        for kingdom in await self._kingdoms.kingdoms():
+            doc = dict(getattr(kingdom, "expedition", None) or {})
+            if str(doc.get("state", "")) in ("boarding", "sailing", "returned"):
+                live_expeditions.add(str(kingdom.id))
         drawn = await self._territories.drawn_map_keys()
         for lord in await self._kingdoms.lords():
             until = int(lord.exploration_locked_until or 0)
             if until <= 0 or until > now_ts:
                 continue
             kingdom_id = lord.kingdom_id or ""
+            if kingdom_id in live_expeditions:
+                continue  # the expedition's own resolver owns this lock
             pool = [
                 entry.key
                 for entry in self._config.maps
@@ -416,7 +427,7 @@ class EconomyService:
         The 🧭 button opens the salon: a kingdom without a token cannot
         start, a boarding expedition returns its doc unchanged, a
         sailing one refuses. The Explorateur token is consumed at the
-        LAUNCH, never here. ``opened_at`` stamps the 15-minute boarding
+        LAUNCH, never here. ``opened_at`` stamps the 5-minute (beta) boarding
         window (exploration-refonte-v1 — the auto-launch deadline).
         A RETURNED expedition (the gain drawn, the crew not yet
         unloaded — exploration-retour-v1) refuses too: the salon must
@@ -596,7 +607,7 @@ class EconomyService:
             raise EconomyError("no expedition chef on board")
         # exploration-refonte-v1 (Drasah 02/11): the captain's defence
         # point is RE-CHECKED at the cast-off (he could have spent it
-        # during the 15-minute boarding window) and stays LOCKED for the
+        # during the boarding window) and stays LOCKED for the
         # whole voyage (the exploration lock forbids attack/defence).
         chef = next(
             (
@@ -745,7 +756,7 @@ class EconomyService:
     async def auto_launch_due_expeditions(
         self, *, now: datetime | None = None
     ) -> list[tuple[KingdomModel, str, str, int]]:
-        """exploration-refonte-v1 (Drasah 02/11): the 15-minute boarding
+        """exploration-refonte-v1 (Drasah 02/11): the boarding
         window — every due boarding WITH a captain launches itself.
 
         A captain who lost his defence point (or left) cancels the

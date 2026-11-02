@@ -347,7 +347,7 @@ async def test_the_salon_opens_in_the_realm_category_with_its_panel() -> None:
     # exploration-refonte-v1: the boarding face carries ⚓ + 🚪 (the
     # captain enrolls from the council fiche, never from the salon) —
     # ⛵ stays hidden until a captain is on board, and the body carries
-    # the 15-minute window.
+    # the boarding window (5 minutes, beta).
     message = await channel.fetch_message(int(doc["panel_message_id"]))
     view = message.view
     assert view is not None
@@ -357,7 +357,7 @@ async def test_the_salon_opens_in_the_realm_category_with_its_panel() -> None:
     assert "kingdoms:expedition:launch" not in custom_ids
     text = str(message.content)
     assert "Capitaine" in text
-    assert "15 minutes" in text
+    assert "5 minutes" in text
     # The overwrites carry the INVARIANT: @everyone denied, the bot in.
     overwrites = channel.overwrites
     assert not overwrites[guild.default_role].view_channel
@@ -477,8 +477,8 @@ async def test_cancelling_a_sailing_exploration_refunds_and_unlocks() -> None:
 
 
 async def test_auto_launch_fires_once_the_window_elapses() -> None:
-    """The 15-minute window: no captain → it waits; 14 minutes →
-    nothing; 16 minutes → the voyage launches itself; idempotent."""
+    """The 5-minute window (beta): no captain → it waits; 4 minutes →
+    nothing; 6 minutes → the voyage launches itself; idempotent."""
     bundle = Bundle()
     await bundle.launch_season()
     aquitaine = await bundle.kingdom_id("Aquitaine")
@@ -487,29 +487,29 @@ async def test_auto_launch_fires_once_the_window_elapses() -> None:
     # no captain yet: the window keeps waiting.
     assert (
         await bundle.economy.auto_launch_due_expeditions(
-            now=_MONDAY + timedelta(minutes=20)
+            now=_MONDAY + timedelta(minutes=8)
         )
     ) == []
     await bundle.economy.toggle_expedition_chef(aquitaine, "king-a")
     await bundle.economy.toggle_expedition_crew(aquitaine, "lord-a")
     assert (
         await bundle.economy.auto_launch_due_expeditions(
-            now=_MONDAY + timedelta(minutes=14)
+            now=_MONDAY + timedelta(minutes=4)
         )
     ) == []
     results = await bundle.economy.auto_launch_due_expeditions(
-        now=_MONDAY + timedelta(minutes=16)
+        now=_MONDAY + timedelta(minutes=6)
     )
     assert len(results) == 1
     _kingdom, kind, value, _salon = results[0]
     assert kind == "launched"
-    assert int(value) == int((_MONDAY + timedelta(hours=44)).timestamp())
+    assert int(value) == int((_MONDAY + timedelta(minutes=6, seconds=550)).timestamp())
     doc = await bundle.economy.expedition(aquitaine)
     assert doc["state"] == "sailing"
     assert await bundle.stock_left(aquitaine) == 0
     assert (
         await bundle.economy.auto_launch_due_expeditions(
-            now=_MONDAY + timedelta(minutes=17)
+            now=_MONDAY + timedelta(minutes=7)
         )
     ) == []
 
@@ -527,7 +527,7 @@ async def test_auto_launch_fails_when_the_point_was_spent() -> None:
     king.defense_used = 1
     await bundle.store.upsert_lord(king.to_mongo())
     results = await bundle.economy.auto_launch_due_expeditions(
-        now=_MONDAY + timedelta(minutes=16)
+        now=_MONDAY + timedelta(minutes=6)
     )
     assert len(results) == 1
     _kingdom, kind, value, _salon = results[0]
@@ -669,3 +669,89 @@ async def test_the_at_sea_mask_hides_the_realm_and_keeps_the_salon() -> None:
         MockMember(id=103, name="stranger", guild=guild)
     )
     assert survivor is not None and survivor.view_channel
+
+
+async def test_the_legacy_resolver_never_touches_a_live_expedition() -> None:
+    """exploration-retour-v3: the SOLO resolver (the market's legacy
+    engine) skips the crew of a kingdom whose expedition is alive
+    (boarding/sailing/returned) — the expedition's own resolver owns
+    those locks (the 02/11 double-draw: two maps for one token)."""
+    bundle = Bundle()
+    await bundle.launch_season()
+    aquitaine = await bundle.kingdom_id("Aquitaine")
+    await bundle.token(aquitaine)
+    await bundle.economy.begin_expedition(aquitaine)
+    await bundle.economy.toggle_expedition_chef(aquitaine, "king-a")
+    await bundle.economy.toggle_expedition_crew(aquitaine, "lord-a")
+    await bundle.economy.launch_expedition(aquitaine, now=_MONDAY)
+    ends = int((await bundle.economy.expedition(aquitaine))["ends_at"])
+    # A SOLO lord of another kingdom with an expired lock still resolves.
+    solo = next(l for l in await bundle.kingdoms.lords() if l.id == "lord-b")
+    solo.exploration_locked_until = ends - 60
+    await bundle.store.upsert_lord(solo.to_mongo())
+    resolved = await bundle.economy.resolve_due_explorations(
+        now=_MONDAY + timedelta(seconds=600)
+    )
+    assert [lord.id for lord, _ in resolved] == ["lord-b"]
+    # The expedition crew was NOT touched: locks held, no solo draw.
+    king = next(l for l in await bundle.kingdoms.lords() if l.id == "king-a")
+    mate = next(l for l in await bundle.kingdoms.lords() if l.id == "lord-a")
+    assert king.exploration_locked_until == ends
+    assert mate.exploration_locked_until == ends
+    drawn = await bundle.territories.territories()
+    assert all(t.owner_kingdom_id != aquitaine for t in drawn)
+    # Past the voyage, the RETURNED doc keeps shielding the crew — only
+    # « 🪜 Descendre du navire » may clear those locks.
+    await bundle.economy.resolve_due_expeditions(
+        now=_MONDAY + timedelta(seconds=600)
+    )
+    resolved = await bundle.economy.resolve_due_explorations(
+        now=_MONDAY + timedelta(seconds=600)
+    )
+    assert resolved == []
+    king = next(l for l in await bundle.kingdoms.lords() if l.id == "king-a")
+    assert king.exploration_locked_until == ends
+    # Once claimed the doc is gone — nothing left to shield (the locks
+    # were already cleared by the claim itself).
+    await bundle.economy.claim_expedition_return(aquitaine, "king-a")
+    assert (
+        await bundle.economy.resolve_due_explorations(
+            now=_MONDAY + timedelta(seconds=600)
+        )
+    ) == []
+
+
+async def test_the_refresh_reposts_a_vanished_panel() -> None:
+    """exploration-retour-v3: when the pinned panel message is GONE
+    (404 Unknown Message, 02/11 logs) the refresh re-posts a fresh
+    panel into the salon and re-records its id — the ◉ Retour face
+    never silently disappears."""
+    from kingdoms.mods.kingdoms import kingdom_expedition_panel as panel
+
+    bundle = Bundle()
+    await bundle.launch_season()
+    aquitaine = await bundle.kingdom_id("Aquitaine")
+    await bundle.token(aquitaine)
+    guild = MockGuild()
+    await guild.create_category("🏰 Aquitaine")
+    wiring = _PanelWiring(bundle)
+    kingdom = next(
+        k for k in await bundle.kingdoms.kingdoms() if k.id == aquitaine
+    )
+    channel = await panel.open_expedition_salon_safe(guild, wiring, kingdom)
+    assert channel is not None
+    doc = await bundle.economy.expedition(aquitaine)
+    old_id = int(doc["panel_message_id"])
+    # The panel message vanishes (deleted by a human, a purge, anything).
+    channel.messages.clear()
+    await panel.refresh_expedition_panel_safe(guild, wiring, aquitaine)
+    doc = await bundle.economy.expedition(aquitaine)
+    new_id = int(doc["panel_message_id"])
+    assert new_id != old_id
+    assert len(channel.messages) == 1
+    fresh = await channel.fetch_message(new_id)
+    assert "Capitaine" in str(fresh.content)
+    # The next refresh edits the RE-POSTED message in place (no growth).
+    await panel.refresh_expedition_panel_safe(guild, wiring, aquitaine)
+    assert len(channel.messages) == 1
+    assert int((await bundle.economy.expedition(aquitaine))["panel_message_id"]) == new_id

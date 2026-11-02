@@ -11,7 +11,7 @@ re-checked at the cast-off), every other lord embarks himself as CREW
 the captain never cuts it, plancher 5 min, no
 prerequisite to join). ⛵ Lâcher les amarres shows ONLY with a captain
 on board (only he may click it) and is the single step that consumes
-the token. The boarding window lasts 15 MINUTES — past it the voyage
+the token. The boarding window lasts 5 MINUTES (beta) — past it the voyage
 launches itself (the events tick). 🚪 Quitter le navire: the captain
 cancels the exploration (sailing: locks clear + the token is REFUNDED
 + the salon sweeps; boarding: nothing was consumed), a crew member
@@ -74,7 +74,7 @@ _STRINGS: dict[str, dict[str, str]] = {
             " pour participer au voyage)."
         ),
         "window_line": (
-            "🕐 Vous disposez de 15 minutes pour embarquer au sein de"
+            "🕐 Vous disposez de 5 minutes pour embarquer au sein de"
             " l'équipage, après ce délai le voyage se lancera"
             " automatiquement."
         ),
@@ -153,7 +153,7 @@ _STRINGS: dict[str, dict[str, str]] = {
             " voyage)."
         ),
         "window_line": (
-            "🕐 You have 15 minutes to board the crew — past that delay"
+            "🕐 You have 5 minutes to board the crew — past that delay"
             " the voyage launches on its own."
         ),
         "rail_quai": "◉ Docked ────── ○ Voyage ────── ○ Return",
@@ -427,32 +427,42 @@ async def refresh_expedition_panel_safe(guild: Any, wiring: Any, kingdom_id: str
         return
     try:
         doc = await economy.expedition(kingdom_id)
-        if not doc or not doc.get("panel_message_id") or not doc.get("salon_id"):
+        if not doc or not doc.get("salon_id"):
             return
         channel = getattr(guild, "get_channel", lambda _id: None)(int(doc["salon_id"]))
         if channel is None:
             return
-        message = await channel.fetch_message(int(doc["panel_message_id"]))
         kingdom = next(
             (k for k in await wiring.kingdoms_service.kingdoms() if k.id == kingdom_id),
             None,
         )
         if kingdom is None:
             return
-        locale = "fr"
-        strings = _strings(locale)
+        strings = _strings("fr")
         names = await _lord_names(wiring, kingdom_id)
-        if str(doc.get("state", "")) == "sailing":
-            # exploration-refonte-v1: the sailing face keeps 🚪 alone —
-            # the captain may still cancel (refund + sweep).
-            await message.edit(
-                content=_panel_text(strings, kingdom, doc, names),
-                view=_panel_view(strings, doc),
-            )
+        content = _panel_text(strings, kingdom, doc, names)
+        view = _panel_view(strings, doc)
+        message = None
+        panel_id = doc.get("panel_message_id")
+        if panel_id:
+            try:
+                message = await channel.fetch_message(int(panel_id))
+            except Exception:
+                # exploration-retour-v3: the pinned panel vanished (404
+                # Unknown Message, 02/11 logs) — never abandon silently,
+                # a fresh panel is re-posted and re-recorded instead.
+                message = None
+        if message is not None:
+            await message.edit(content=content, view=view)
         else:
-            await message.edit(
-                content=_panel_text(strings, kingdom, doc, names),
-                view=_panel_view(strings, doc),
+            fresh = await channel.send(content, view=view)
+            await economy.record_expedition_salon(
+                kingdom_id, int(channel.id), int(fresh.id)
+            )
+            logger.info(
+                "KINGDOMS EXPEDITION: panel re-posted for %s (previous "
+                "message was missing)",
+                kingdom_id,
             )
     except Exception:
         logger.warning("KINGDOMS EXPEDITION: panel refresh failed", exc_info=True)
