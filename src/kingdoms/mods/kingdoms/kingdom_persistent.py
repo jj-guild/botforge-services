@@ -3095,6 +3095,27 @@ class KingdomMarketLedgerButton(
         _EPHEMERAL_WINDOWS[user_id] = (interaction, time.monotonic(), window)
 
 
+_TEST_HAT_ADMINS: set[str] = set()
+
+
+def toggle_test_hat(user_id: str) -> bool:
+    """admin-hat-v1 (Drasah 02/11): flip the admin's CASQUETTE.
+
+    A bot admin who ALSO carries a real lord record (e.g. King of a
+    player kingdom like HeN) is resolved to that record by every click
+    — the admin-as-king fallback never fires and the canary Nilrem
+    becomes unreachable (Drasah's live 02/11 diagnosis). The hat swaps
+    the resolution: ON = the admin pilots the test kingdom (Nilrem)
+    instead of their real record; OFF = the real record wins again.
+    In-memory only — a container restart clears every hat.
+    """
+    if user_id in _TEST_HAT_ADMINS:
+        _TEST_HAT_ADMINS.discard(user_id)
+        return False
+    _TEST_HAT_ADMINS.add(user_id)
+    return True
+
+
 async def _lord_of(
     kingdoms_service: Any, user_id: str, bot_admins: tuple[str, ...] = ()
 ) -> Any | None:
@@ -3105,6 +3126,19 @@ async def _lord_of(
     """
     if kingdoms_service is None:
         return None
+    admin_ids = {str(admin) for admin in bot_admins}
+    # admin-hat-v1 (Drasah 02/11): the hat wins over the real record —
+    # an admin who is ALSO a player lord pilots the test kingdom.
+    if (
+        admin_ids
+        and str(user_id) in admin_ids
+        and str(user_id) in _TEST_HAT_ADMINS
+    ):
+        hatted = await _test_lord_fallback(
+            kingdoms_service, user_id, bot_admins, king_only=False
+        )
+        if hatted is not None:
+            return hatted
     try:
         lords = await kingdoms_service.lords()
     except Exception:
@@ -4507,7 +4541,7 @@ class KingdomAdminButton(
         r"|status|assign|add-kingdom|launch|start-season|start-beta|season-mode"
         r"|back-setup|back-setup-confirm|back-setup-cancel"
         r"|end-season|end-season-confirm|end-season-cancel"
-        r"|age-next|age-prev|lords-day-enter|lords-day-exit)"
+        r"|age-next|age-prev|lords-day-enter|lords-day-exit|hat)"
     ),
 ):
     """The restart-proof admin buttons of the Param\u00e8tres panel."""
@@ -4546,6 +4580,7 @@ class KingdomAdminButton(
             "sync-confirm": strings["sync_confirm_button"],
             "sync-cancel": strings["sync_cancel_button"],
             "status": strings["status_button"],
+            "hat": strings["hat_button"],
             "assign": strings["assign_button"],
             "add-kingdom": strings["add_kingdom_button"],
             "start-season": strings["start_season_button"],
@@ -4665,6 +4700,7 @@ class KingdomAdminButton(
             ),
             "end-season-confirm": lambda _i, _l: _run_end_season(interaction, strings),
             "age-next": lambda _i, _l: _run_age_next(interaction, strings),
+            "hat": lambda _i, _l: _run_hat_toggle(interaction, strings),
             "age-prev": lambda _i, _l: _run_age_prev(interaction, strings),
             "lords-day-enter": lambda _i, _l: _run_lords_day_enter(interaction, strings),
             "lords-day-exit": lambda _i, _l: _run_lords_day_exit(interaction, strings),
@@ -4676,6 +4712,31 @@ class KingdomAdminButton(
     @staticmethod
     def _confirm_button(verdict: str, label: str, style: discord.ButtonStyle) -> KingdomAdminButton:
         return KingdomAdminButton(verdict, label[:80], style)
+
+async def _run_hat_toggle(interaction: discord.Interaction, strings: dict[str, Any]) -> None:
+    """admin-hat-v1 (Drasah 02/11): flip the clicking admin's casquette.
+
+    ON  → every click resolves to the test kingdom (Nilrem king).
+    OFF → the real lord record wins again (e.g. King of HeN).
+    """
+    wiring = _wiring()
+    admin_ids = {str(admin) for admin in (wiring.bot_admins or ())}
+    user_id = str(interaction.user.id)
+    if user_id not in admin_ids:
+        await interaction.response.send_message(strings["hat_denied"], ephemeral=True)
+        return
+    on = toggle_test_hat(user_id)
+    await interaction.response.send_message(
+        strings["hat_on_note"] if on else strings["hat_off_note"], ephemeral=True
+    )
+    try:
+        await _log_admin_action_safe(
+            interaction.guild,
+            strings["hat_log"].format(user=f"<@{user_id}>", state=strings["hat_log_on" if on else "hat_log_off"]),
+        )
+    except Exception:
+        logger.warning("KINGDOMS ADMIN: hat toggle log failed", exc_info=True)
+
 
 async def _ask_action_confirmation(interaction: discord.Interaction, strings: dict[str, Any], action: str) -> None:
     """Ask the admin to confirm a destructive/heavy panel action."""

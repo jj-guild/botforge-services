@@ -321,3 +321,38 @@ def test_the_canary_gate_survives_a_reset_recreated_realm() -> None:
         is False
     )
     assert lieux.is_canary_realm(None) is False
+
+
+async def test_the_admin_hat_swaps_the_casquette_between_kingdoms() -> None:
+    """admin-hat-v1 (Drasah 02/11): a bot admin who ALSO carries a real
+    lord record (King of a player kingdom like HeN) is resolved to that
+    record by every click — the admin-as-king fallback never fires and
+    the canary Nilrem becomes unreachable. The hat swaps the resolution:
+    ON = the admin pilots the test kingdom, OFF = the real record wins."""
+    from kingdoms.mods.kingdoms import kingdom_persistent as persistent
+    from kingdoms.mods.kingdoms.kingdom_persistent import _lord_of
+    from kingdoms.mods.kingdoms.service import TEST_KING_ID
+
+    persistent._TEST_HAT_ADMINS.clear()
+    real = SimpleNamespace(id="u-admin", left=False, kingdom_id="k-hen")
+    test_king = SimpleNamespace(
+        id=TEST_KING_ID, left=False, kingdom_id="k-nilrem", role="king"
+    )
+
+    class _Service:
+        async def lords(self):
+            return [real, test_king]
+
+    service = _Service()
+    # Without the hat the REAL record (the player kingdom) wins.
+    assert await _lord_of(service, "u-admin", ("u-admin",)) is real
+    # Hat ON: the admin pilots the TEST kingdom instead.
+    assert persistent.toggle_test_hat("u-admin") is True
+    assert await _lord_of(service, "u-admin", ("u-admin",)) is test_king
+    # Hat OFF: back to the player kingdom.
+    assert persistent.toggle_test_hat("u-admin") is False
+    assert await _lord_of(service, "u-admin", ("u-admin",)) is real
+    # A NON-admin never gets the fallback, hat or not.
+    persistent._TEST_HAT_ADMINS.add("someone-else")
+    assert await _lord_of(service, "someone-else", ("u-admin",)) is None
+    persistent._TEST_HAT_ADMINS.clear()

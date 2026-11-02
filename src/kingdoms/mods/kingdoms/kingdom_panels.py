@@ -1831,6 +1831,7 @@ async def build_settings_panel(
         ("add-kingdom", "add_kingdom_button", discord.ButtonStyle.primary),
         ("season-mode", "season_mode_button", discord.ButtonStyle.secondary),
         ("remove", "remove_player_button", discord.ButtonStyle.danger),
+        ("hat", "hat_button", discord.ButtonStyle.secondary),
     )
     # Rows pack in chunks of 5: an overlong ActionRow is rejected by
     # Discord and kills the whole panel send (the D68 lesson).

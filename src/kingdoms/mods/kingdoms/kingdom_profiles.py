@@ -112,6 +112,20 @@ STRINGS: dict[str, dict[str, str]] = {
         "sync_cancelled": "Resync cancelled.",
         "sync_done": "Panels re-synced — {} panels.",
         "status_button": "📊 Season status",
+        "hat_button": "🧪 Casquette test",
+        "hat_denied": "❌ Only a bot admin may swap their casquette.",
+        "hat_on_note": (
+            "🧪 Casquette ON — you now pilot the TEST kingdom (Nilrem):"
+            " every click resolves as its king, your player record is"
+            " ignored. Click again to give your real kingdom back."
+        ),
+        "hat_off_note": (
+            "👑 Casquette OFF — you are back to your own lord record"
+            " (your player kingdom answers your clicks again)."
+        ),
+        "hat_log": "🧪 Casquette toggled by {user} — {state}",
+        "hat_log_on": "now piloting the TEST kingdom (Nilrem)",
+        "hat_log_off": "back to their player kingdom",
         "status_title": "📊 Kingdoms — Season II status",
         "status_kingdoms": "👑 Kingdoms",
         "status_queue": "⏳ Waiting players",
@@ -285,6 +299,20 @@ STRINGS: dict[str, dict[str, str]] = {
         "sync_cancelled": "Resynchronisation annulée.",
         "sync_done": "Panels resynchronisés — {} panels.",
         "status_button": "📊 Statut de la saison",
+        "hat_button": "🧪 Casquette test",
+        "hat_denied": "❌ Seul un admin du bot peut basculer sa casquette.",
+        "hat_on_note": (
+            "🧪 Casquette ON — tu pilotes désormais le royaume TEST"
+            " (Nilrem) : chaque clic agit comme son roi, ton seigneur"
+            " joueur est ignoré. Reclique pour reprendre ton royaume."
+        ),
+        "hat_off_note": (
+            "👑 Casquette OFF — tu retrouves ton seigneur joueur :"
+            " tes clics répondent à nouveau pour ton royaume."
+        ),
+        "hat_log": "🧪 Casquette basculée par {user} — {state}",
+        "hat_log_on": "pilote maintenant le royaume TEST (Nilrem)",
+        "hat_log_off": "de retour sur son royaume joueur",
         "status_title": "📊 Kingdoms — Statut de la Saison II",
         "status_kingdoms": "👑 Royaumes",
         "status_queue": "⏳ Joueurs en attente",
