@@ -25,12 +25,21 @@ feeds the future rumour/raven system (Drasah, in reflection).
 
 exploration-retour-v1 (Drasah 02/11): the journey now reads on a
 three-phase rail — À QUAI, VOYAGE, RETOUR. While at sea the crew is
-MASKED from its realm category (member-level deny, one edit per entity)
-and keeps only the expedition salon (child allow); 🔄 Actualiser
+MASKED (member-level denies) and keeps only the expedition salon
+(child allow); 🔄 Actualiser
 re-renders the sailing face. At the resolve the doc flips to RETURNED
 (gain drawn, locks held, NO auto-fallback) and shows the RP dock text
 plus « 🪜 Descendre du navire » — any aboard lord validates the gain,
 lifts the mask, clears the locks and sweeps the salon.
+
+exploration-retour-v2 (Drasah 02/11: « oui tout masqué, comme la
+Taverne »): the AT-SEA mask now covers the WHOLE SERVER — every
+category and every un-synced channel, exactly like the Taverne
+immersion. The tavern lesson applies: a ROLE deny loses to an
+explicit role ALLOW, so the denies ride the MEMBER overwrites; the
+expedition salon keeps its child allow (it beats its parent category
+deny) and the unload drops ONLY our denies (an unrelated member
+overwrite is never touched).
 """
 
 from __future__ import annotations
@@ -610,14 +619,17 @@ def _merged_overwrites(channel: Any) -> dict[Any, Any]:
 
 
 async def mask_crew_for_voyage_safe(guild: Any, wiring: Any, kingdom: Any) -> None:
-    """exploration-retour-v1 (Drasah 02/11): the AT-SEA illusion —
-    once the lines are cast, the crew sees ONLY the voyage: every
-    aboard member (captain + mates) loses view of the realm category
-    (member-level deny, reversible at the unload) and KEEPS the
-    expedition salon (a child allow beats the category deny). One
-    single overwrites edit per entity (the rate-limit lesson — never
-    one PATCH per target). Best effort, never raises."""
+    """exploration-retour-v2 (Drasah 02/11: « tout masqué, comme la
+    Taverne »): the AT-SEA illusion — once the lines are cast, the crew
+    sees ONLY the voyage. Every aboard member (captain + mates) gets a
+    MEMBER-level view deny on the realm category (the v1 batch edit)
+    AND on every other category / un-synced channel of the server (the
+    Taverne immersion pattern — a role deny would lose to an explicit
+    role ALLOW, the member overwrites override the role layer). The
+    expedition salon keeps its child allow (it beats the category
+    deny). Converged denies are skipped (zero steady-state writes)."""
     from kingdoms.mods.kingdoms.kingdom_realms import _find_realm_category
+    from kingdoms.mods.kingdoms.tavern_immersion import _deny_member_view
 
     economy = wiring.economy_service
     if economy is None:
@@ -653,6 +665,12 @@ async def mask_crew_for_voyage_safe(guild: Any, wiring: Any, kingdom: Any) -> No
     salon = getattr(guild, "get_channel", lambda _id: None)(
         int(doc.get("salon_id", 0) or 0)
     )
+    # exploration-retour-v2: the WHOLE SERVER disappears — every other
+    # category plus every un-synced channel (the Taverne lesson), one
+    # member-level deny per (target, member), skipped when converged.
+    for target in _voyage_mask_targets(guild, salon, category):
+        for member in members:
+            await _deny_member_view(target, member)
     if salon is None:
         return
     try:
@@ -666,17 +684,48 @@ async def mask_crew_for_voyage_safe(guild: Any, wiring: Any, kingdom: Any) -> No
         logger.warning("KINGDOMS EXPEDITION: crew allow on salon failed", exc_info=True)
 
 
+def _voyage_mask_targets(
+    guild: Any, salon: Any | None, realm_category: Any | None
+) -> list[Any]:
+    """Every hide-able target of the AT-SEA mask EXCEPT the ones the
+    mask function already handles by hand (the realm category rides the
+    v1 batch edit): the other categories plus the un-synced channels
+    (a synced channel inherits its category's deny). The salon itself
+    is never a target — its child allow keeps it alive."""
+    targets: list[Any] = []
+    realm_id = getattr(realm_category, "id", None)
+    for category in list(getattr(guild, "categories", []) or []):
+        if getattr(category, "id", None) != realm_id:
+            targets.append(category)
+    channels: list[Any] = [
+        *(getattr(guild, "text_channels", []) or []),
+        *(getattr(guild, "voice_channels", []) or []),
+        *(getattr(guild, "forums", []) or []),
+    ]
+    salon_id = getattr(salon, "id", None)
+    for channel in channels:
+        if getattr(channel, "id", None) == salon_id:
+            continue
+        parent = getattr(channel, "category", None)
+        if parent is not None and getattr(channel, "permissions_synced", True):
+            continue  # the category deny covers the synced channels
+        targets.append(channel)
+    return targets
+
+
 async def unmask_crew_safe(guild: Any, kingdom: Any, member_ids: list[str]) -> None:
     """Lift the AT-SEA mask — the realm allow comes back (the same
-    entry _realm_overwrites grants), one single category edit. Best
-    effort, never raises; the salon itself dies with the sweep."""
+    entry _realm_overwrites grants, one single category edit) and the
+    full-server denies of exploration-retour-v2 are dropped the
+    Taverne way: ONLY our member view deny is removed (an unrelated
+    member overwrite — e.g. an ALLOW — is never touched). Best effort,
+    never raises; the salon itself dies with the sweep."""
     from kingdoms.mods.kingdoms.kingdom_realms import _find_realm_category
+    from kingdoms.mods.kingdoms.tavern_immersion import _clear_member_view_deny
 
     if not member_ids:
         return
     category = _find_realm_category(guild, str(kingdom.name))
-    if category is None:
-        return
     members = []
     for member_id in member_ids:
         member = _guild_member(guild, str(member_id))
@@ -684,15 +733,21 @@ async def unmask_crew_safe(guild: Any, kingdom: Any, member_ids: list[str]) -> N
             members.append(member)
     if not members:
         return
-    try:
-        overwrites = _merged_overwrites(category)
-        for member in members:
-            overwrites[member] = discord.PermissionOverwrite(
-                view_channel=True, read_message_history=True
+    if category is not None:
+        try:
+            overwrites = _merged_overwrites(category)
+            for member in members:
+                overwrites[member] = discord.PermissionOverwrite(
+                    view_channel=True, read_message_history=True
+                )
+            await category.edit(overwrites=overwrites)
+        except Exception:
+            logger.warning(
+                "KINGDOMS EXPEDITION: crew unmask failed", exc_info=True
             )
-        await category.edit(overwrites=overwrites)
-    except Exception:
-        logger.warning("KINGDOMS EXPEDITION: crew unmask failed", exc_info=True)
+    for target in _voyage_mask_targets(guild, None, category):
+        for member in members:
+            await _clear_member_view_deny(target, member)
 
 
 async def open_expedition_from_market(

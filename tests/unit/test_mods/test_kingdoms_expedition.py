@@ -611,13 +611,17 @@ async def test_cancel_returns_the_locked_ids_for_the_unmask() -> None:
 
 
 async def test_the_at_sea_mask_hides_the_realm_and_keeps_the_salon() -> None:
-    """exploration-retour-v1: once at sea the crew is masked from its
-    realm category (member deny) and keeps the expedition salon (child
-    allow) — the unload restores the realm allow."""
+    """exploration-retour-v2: once at sea the crew sees ONLY the voyage
+    — member denies on the realm category AND on every other category
+    of the server (the Taverne pattern), the salon keeps its child
+    allow, and the unload restores everything WITHOUT touching an
+    unrelated member overwrite (an ALLOW survives)."""
     from types import SimpleNamespace
 
     from kingdoms.mods.kingdoms import kingdom_expedition_panel as panel
     from kingdoms.mods.kingdoms.kingdom_realms import realm_category_name
+
+    import discord
 
     from tests.mocks.discord_mock import MockMember
 
@@ -628,6 +632,8 @@ async def test_the_at_sea_mask_hides_the_realm_and_keeps_the_salon() -> None:
     guild.add_member(mate)
     category = await guild.create_category(realm_category_name("Aquitaine"))
     salon = await guild.create_text_channel("🧭 exploration", category=category)
+    beta = await guild.create_category(realm_category_name("Beta"))
+    await guild.create_text_channel("salon beta", category=beta)
     doc = {
         "state": "sailing",
         "chef_lord_id": "101",
@@ -646,7 +652,19 @@ async def test_the_at_sea_mask_hides_the_realm_and_keeps_the_salon() -> None:
     assert not category.permission_overwrite_for(mate).view_channel
     assert salon.overwrites[captain].view_channel
     assert salon.overwrites[mate].view_channel
-    # the unload restores the realm allow (the _realm_overwrites entry).
+    # exploration-retour-v2: the WHOLE server disappears, Taverne-style.
+    assert not beta.permission_overwrite_for(captain).view_channel
+    assert not beta.permission_overwrite_for(mate).view_channel
+    # the unload restores the realm allow (the _realm_overwrites entry)
+    # and drops ONLY our view denies elsewhere — an unrelated member
+    # overwrite (here: an outgame-style ALLOW) survives the cleanup.
+    beta._overwrites[(103, False)] = discord.PermissionOverwrite(view_channel=True)
     await panel.unmask_crew_safe(guild, kingdom, ["101", "102"])
     assert category.permission_overwrite_for(captain).view_channel
     assert category.permission_overwrite_for(mate).view_channel
+    assert beta.permission_overwrite_for(captain) is None
+    assert beta.permission_overwrite_for(mate) is None
+    survivor = beta.permission_overwrite_for(
+        MockMember(id=103, name="stranger", guild=guild)
+    )
+    assert survivor is not None and survivor.view_channel
