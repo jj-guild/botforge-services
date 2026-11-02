@@ -830,6 +830,9 @@ def test_map_error_translates_the_split_refusals_to_french_bubbles() -> None:
     assert "retour" in panel._map_error(
         strings, EconomyError("the expedition is back and its crew has not yet disembarked")
     )
+    # expedition-messages-v2 (Drasah 02/11): his wording — it is the
+    # CAPTAIN (and the crew, if any) who is back, not « l'expédition ».
+    assert "capitaine" in strings["return_pending"]
     assert "en mer" in panel._map_error(
         strings, EconomyError("an expedition is already at sea")
     )

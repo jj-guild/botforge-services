@@ -131,8 +131,9 @@ _STRINGS: dict[str, dict[str, str]] = {
         ),
         "already_sailing": "⛔ Une expédition est déjà en mer.",
         "return_pending": (
-            "⚓ L'expédition est de retour — l'équipage doit d'abord"
-            " débarquer du navire avant tout nouveau départ."
+            "⚓ Le capitaine — ainsi que l'équipage, s'il y en a un —"
+            " est de retour : veuillez débarquer du navire avant tout"
+            " nouveau départ."
         ),
         "locked": "⛔ Tu es dans un état verrouillé (mariage, exploration ou FFA).",
         "no_defense": "🛡️ Le capitaine doit disposer d'un point de défense disponible pour lâcher les amarres.",
@@ -216,8 +217,8 @@ _STRINGS: dict[str, dict[str, str]] = {
         ),
         "already_sailing": "⛔ An expedition is already at sea.",
         "return_pending": (
-            "⚓ The expedition is back — the crew must first disembark"
-            " from the ship before any new departure."
+            "⚓ The captain — and the crew, if any — is back: please"
+            " disembark from the ship before any new departure."
         ),
         "locked": "⛔ You are in a locked state (marriage, exploration or FFA).",
         "no_defense": "🛡️ The captain needs one available defence point to cast off.",
@@ -836,8 +837,18 @@ async def open_expedition_from_market(
                 note = expe_strings["no_token"]
         except Exception:
             note = expe_strings["no_token"]
+        # returned-orphan-soupape-v1 (Drasah 02/11): a returned
+        # journey whose salon vanished (his reset swept it while the
+        # doc stayed « returned ») left the kingdom stuck forever — the
+        # refusal bubble itself carries « 🪜 Descendre du navire », the
+        # SAME unload button as the salon (aboard lords only: the
+        # captain or a mate — his call).
+        view = None
+        if note is expe_strings["return_pending"]:
+            view = discord.ui.View(timeout=None)
+            view.add_item(KingdomExpeditionUnloadButton(expe_strings))
         try:
-            await interaction.followup.send(note, ephemeral=True)
+            await interaction.followup.send(note, view=view, ephemeral=True)
         except Exception:
             logger.warning("KINGDOMS EXPEDITION: refusal followup failed", exc_info=True)
         return

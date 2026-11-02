@@ -321,6 +321,7 @@ async def _objectives_tick_safe(bot: Any) -> None:
     redefine shortcut, and the pinned recap follows. Idempotent: an
     erased goal never re-announces."""
     from kingdoms.mods.kingdoms.kingdom_lieux import (
+        _objectifs_active,
         announce_objectif_achieved_safe,
         erase_objectifs_kinds,
         is_canary_realm,
@@ -346,6 +347,20 @@ async def _objectives_tick_safe(bot: Any) -> None:
         for kingdom in kingdoms:
             if not is_canary_realm(kingdom):
                 continue
+            # objectif-pin-autogueri-v1 (Drasah 02/11): the recap pin
+            # re-renders at EVERY tick for a kingdom with active goals —
+            # a pin missed (the salon swept by a reset, a send failure)
+            # heals itself at the next slot instead of staying silent.
+            if _objectifs_active(kingdom):
+                try:
+                    await refresh_objectifs_pin_safe(
+                        guild, wiring, kingdom, locale
+                    )
+                except Exception:
+                    logger.warning(
+                        "KINGDOMS EVENTS: objectives pin tick failed",
+                        exc_info=True,
+                    )
             try:
                 achieved = await objectifs_achieved(kingdom, wiring)
             except Exception:

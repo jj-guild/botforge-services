@@ -5793,9 +5793,26 @@ async def _run_reset(interaction: discord.Interaction, strings: dict[str, Any]) 
             )
         except Exception:
             logger.exception("KINGDOMS ADMIN: realm content reinstall failed for guild %s", guild.id)
-        await interaction.followup.send(strings["reset_done"].format(deleted), ephemeral=True)
+        # reset-crash-fix (Drasah 02/11): the purge may have deleted
+        # the very channel the admin console lives in — its webhook
+        # dies with it and the confirmation crashed (his live log:
+        # HTTPException 10003 Unknown Channel). Best effort: log it
+        # loud, never raise.
+        try:
+            await interaction.followup.send(strings["reset_done"].format(deleted), ephemeral=True)
+        except Exception:
+            logger.exception(
+                "KINGDOMS ADMIN: reset confirmation lost for guild %s"
+                " (the console's own channel was purged)",
+                guild.id,
+            )
     else:
-        await interaction.followup.send(strings["reset_failed"], ephemeral=True)
+        try:
+            await interaction.followup.send(strings["reset_failed"], ephemeral=True)
+        except Exception:
+            logger.exception(
+                "KINGDOMS ADMIN: reset failure note lost for guild %s", guild.id
+            )
 
 
 def _declared_structure_slugs(registry: Any) -> set[str]:

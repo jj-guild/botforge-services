@@ -1150,6 +1150,42 @@ async def _objectifs_pin_content(
     )
 
 
+async def _refresh_council_parent_safe(
+    wiring: Any, kingdom: Any, locale: str, parent: Any
+) -> None:
+    """conseil-rafraichi-v1 (Drasah 02/11): re-render the ⚔️ Salle du
+    conseil ephemeral IN PLACE after a goals save — his live report:
+    validating the picker left the council sheet showing the STALE
+    goals (the sheet was rendered BEFORE the save). Best effort: a
+    failure never blocks the save's own flow."""
+    from kingdoms.mods.kingdoms.kingdom_realm_content import _gather_state
+    from kingdoms.mods.kingdoms.kingdom_persistent import (
+        _strings as _merged_strings,
+    )
+
+    try:
+        state = await _gather_state(kingdom, wiring)
+        view, _files = await build_conseil_view(
+            _merged_strings(locale),
+            kingdom,
+            state,
+            wiring,
+            locale,
+            rank=await _conseil_rank(wiring, kingdom),
+            viewer_is_king=True,
+        )
+        await parent.edit(view=view)
+        logger.info(
+            "KINGDOM LIEUX: council sheet refreshed in place (%s)",
+            str(getattr(kingdom, "id", "")),
+        )
+    except Exception:
+        logger.warning(
+            "KINGDOM LIEUX: council sheet refresh failed (ignored)",
+            exc_info=True,
+        )
+
+
 async def refresh_objectifs_pin_safe(
     guild: Any, wiring: Any, kingdom: Any, locale: str
 ) -> bool:
@@ -1163,6 +1199,43 @@ async def refresh_objectifs_pin_safe(
         return False
     channel = await _discussions_channel(guild, kingdom)
     if channel is None:
+        # pin-diagnostic-v1 (Drasah 02/11): this failure was SILENT —
+        # his live report had nothing in Discussions after a save, and
+        # the logs said nothing. Name what the realm actually carries.
+        cat_name, salons = "?", "?"
+        try:
+            from kingdoms.mods.kingdoms.kingdom_realms import (
+                _find_realm_category,
+            )
+
+            category = _find_realm_category(
+                guild, str(getattr(kingdom, "name", ""))
+            )
+            cat_name = (
+                str(getattr(category, "name", "?"))
+                if category is not None
+                else "MISSING"
+            )
+            salons = (
+                ",".join(
+                    str(getattr(c, "name", "?"))
+                    for c in (getattr(category, "channels", []) or [])
+                )
+                if category is not None
+                else "-"
+            )
+        except Exception:
+            logger.warning(
+                "KINGDOM LIEUX: objectives pin diagnostic failed",
+                exc_info=True,
+            )
+        logger.warning(
+            "KINGDOM LIEUX: objectives pin SKIPPED — no discussions salon"
+            " for %s (category=%s, salons=[%s])",
+            str(getattr(kingdom, "name", "")),
+            cat_name,
+            salons,
+        )
         return False
     active = _objectifs_active(kingdom)
     content = await _objectifs_pin_content(locale, kingdom, wiring, active)
@@ -1222,6 +1295,12 @@ async def refresh_objectifs_pin_safe(
                 "KINGDOM LIEUX: objectives pin ref save failed",
                 exc_info=True,
             )
+    logger.info(
+        "KINGDOM LIEUX: objectives pin refreshed (%s, #%s, active=%s)",
+        str(getattr(kingdom, "id", "")),
+        str(getattr(channel, "name", "?")),
+        active,
+    )
     return True
 
 
@@ -1509,6 +1588,15 @@ def _objectifs_picker(
             view.add_item(nxt)
 
     async def _validate(interaction: discord.Interaction) -> None:
+        # conseil-rafraichi-v1 (Drasah 02/11): the council sheet the
+        # picker was opened from is RE-RENDERED in place at the save —
+        # his live report: validating left the sheet showing the STALE
+        # goals. The parent rides the registry entry's 4th slot (the
+        # CHILD back-reference), captured BEFORE the close pops it.
+        from kingdoms.mods.kingdoms.kingdom_persistent import _EPHEMERAL_WINDOWS
+
+        _entry = _EPHEMERAL_WINDOWS.get(str(getattr(interaction.user, "id", "")))
+        parent = _entry[3] if _entry is not None and len(_entry) > 3 else None
         saved = await _save_objectives(wiring, kingdom, staged)
         if not saved:
             # the window STAYS open — the ⚠️ note rides the edit sheet
@@ -1547,6 +1635,10 @@ def _objectifs_picker(
         except Exception:
             logger.warning(
                 "KINGDOM LIEUX: objectives pin refresh failed", exc_info=True
+            )
+        if parent is not None:
+            await _refresh_council_parent_safe(
+                wiring, kingdom, locale, parent
             )
 
     validate = discord.ui.Button(
@@ -1699,7 +1791,17 @@ class KingdomLieuObjectifButton(
                 ephemeral=True,
             )
             return
-        _EPHEMERAL_WINDOWS[user_id] = (interaction, monotonic(), window)
+        # conseil-rafraichi-v1 (Drasah 02/11): a 4th slot carries the
+        # EPHEMERAL PARENT back-reference (the council sheet the button
+        # sits on) so the validate re-renders it in place. The
+        # Discussions ANNOUNCE is a channel message, never an ephemeral
+        # parent — no back-reference there.
+        _parent = getattr(interaction, "message", None)
+        if not bool(
+            getattr(getattr(_parent, "flags", None), "ephemeral", False)
+        ):
+            _parent = None
+        _EPHEMERAL_WINDOWS[user_id] = (interaction, monotonic(), window, _parent)
 
 
 _RANK_MEDALS = {1: "🥇", 2: "🥈", 3: "🥉"}
