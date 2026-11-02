@@ -141,7 +141,14 @@ class KingdomsBot(discord.Client):
         """Create the client, the command tree and attach the services."""
         intents = discord.Intents.default()
         intents.members = True  # the member cache's roster fetch + join/leave events
-        super().__init__(intents=intents)
+        # A 429 whose retry_after exceeds this raises RateLimited instead of
+        # freezing the call (and every call sharing the bucket) behind a
+        # multi-minute sleep — the 492-second freeze of the test env (#276).
+        # The sync loops catch HTTPException and retry on their next pass.
+        super().__init__(intents=intents, max_ratelimit_timeout=60.0)
+        from kingdoms.discord.rate_limit_monitor import install_rate_limit_monitor
+
+        install_rate_limit_monitor()
         self.config = config
         self.status_service = status
         self.registry = registry

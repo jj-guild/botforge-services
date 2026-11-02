@@ -32,6 +32,39 @@ GAMES_CATEGORY_NAME = "games"
 EDIT_BACKOFF_S = 23 * 3600
 _STALE_EDITS: dict[str, float] = {}
 
+#: Per-channel PATCH pacing (#276 W4): Discord allows roughly 5 message
+#: edits per 5 seconds on one channel. Even idempotent (fingerprinted)
+#: syncs edit many posts of one forum in a tight loop and flirt with
+#: the bucket ceiling; the pacer keeps consecutive edits of the SAME
+#: forum apart so a full sync pass stays under the quota.
+EDIT_PACING_S = 0.5
+_last_edit_at: dict[str, float] = {}
+
+
+async def pace_channel_edit(channel_id: str) -> None:
+    """Wait so consecutive post edits on one channel stay under ~5/5s.
+
+    Threads of one forum share the parent channel's key: a sync pass
+    edits dozens of posts "in a row" and the pacing is what keeps the
+    burst from eating the channel's PATCH budget (the 492-second 429
+    of the test env). Idempotent and best-effort: the pacer never
+    raises, it only sleeps.
+    """
+    import asyncio
+    import time
+
+    now = time.monotonic()
+    wait = _last_edit_at.get(channel_id, 0.0) + EDIT_PACING_S - now
+    if wait > 0:
+        await asyncio.sleep(wait)
+    _last_edit_at[channel_id] = time.monotonic()
+
+
+def _edit_pacing_key(thread: Any) -> str:
+    """One pacing key per forum: the parent channel, or the thread itself."""
+    parent = getattr(thread, "parent_id", None)
+    return str(parent) if parent else str(thread.id)
+
 
 def _content_fingerprint(content: str) -> str:
     """Hash one post's rendered content for change detection."""
@@ -207,6 +240,7 @@ async def _refresh_post(thread: Any, content: str, view: Any | None) -> None:
         if _content_fingerprint(current or "") == fingerprint:
             return
         _remember_layout_render(thread.id, fingerprint)
+        await pace_channel_edit(_edit_pacing_key(thread))
         if isinstance(view, discord.ui.LayoutView):
             await starter.edit(view=view)
         else:
