@@ -1,8 +1,8 @@
 fr:
   profile_dm:
-    account_added: "✅ Compte {account} lié — ton profil est à jour."
-    accounts_removed: "✅ Comptes retirés : {listed} — ton profil est à jour."
-    pseudo_updated: "✅ Pseudo mis à jour : {name}"
+    account_added: ✅ Compte {account} lié — ton profil est à jour.
+    accounts_removed: '✅ Comptes retirés : {listed} — ton profil est à jour.'
+    pseudo_updated: '✅ Pseudo mis à jour : {name}'
   common:
     greeting: Bienvenue sur Kingdoms !
     error: Une erreur est survenue. Veuillez réessayer.
@@ -64,9 +64,12 @@ fr:
       add_success: ✅ Compte lié — voilà ton profil à jour.
       add_taken: Ce profil est déjà lié — retire-le d'abord ou choisis un autre profil.
       add_game_unconfigured: 'Ajout échoué : le jeu {game} n''est pas configuré pour l''inscription.'
-      add_unknown: 'Ajout échoué : aucun profil trouvé pour {profile}. Colle l''URL de ta page aoe2insights (ou l''id qu''elle contient) — le bon id sera récupéré automatiquement.'
-      add_provider_error: 'Ajout échoué : le provider {provider} ne répond pas correctement — le détail part aux admins (vois les logs du bot).'
-      add_not_configured: 'Ajout échoué : le provider {provider} ne sert pas les stats de profil — vois les logs du bot.'
+      add_unknown: 'Ajout échoué : aucun profil trouvé pour {profile}. Colle l''URL de ta page aoe2insights
+        (ou l''id qu''elle contient) — le bon id sera récupéré automatiquement.'
+      add_provider_error: 'Ajout échoué : le provider {provider} ne répond pas correctement — le détail
+        part aux admins (vois les logs du bot).'
+      add_not_configured: 'Ajout échoué : le provider {provider} ne sert pas les stats de profil — vois
+        les logs du bot.'
       remove_title: Retirer des comptes
       remove_placeholder: Comptes à retirer...
       remove_label: Comptes à retirer
@@ -160,12 +163,6 @@ fr:
     admin_description: Panneau admin (opérateurs du bot et admins du serveur uniquement)
     register_name: inscription
     register_description: Lier votre profil AoE2 à votre compte (inscription en DM)
-    live_name: live
-    live_description: 'Dashboard de test en direct : joueurs liés, lobbys et parties'
-    game_link_name: game-link
-    game_link_description: Lier votre profil AoE2 à votre compte (portée test)
-    game_unlink_name: game-unlink
-    game_unlink_description: Détachez votre profil AoE2 de votre compte
     home_name: home
     home_description: Le menu d'accueil du serveur
     ladder_name: ladder
@@ -178,7 +175,7 @@ fr:
     joined_queue: Tu as rejoint la file.
     join_failed: 'Impossible de rejoindre : {reason}'
     join_unconfigured: L'inscription n'est pas configurée — les profils ne peuvent pas être vérifiés.
-    join_no_profile: Aucun profil AoE2 lié — utilise /inscription d'abord.
+    join_no_profile: Aucun profil AoE2 lié — ajoutez-en un depuis le menu profil (/home → Profil).
     season_state:
       scheduled: planifiée
       active: en cours
@@ -237,7 +234,8 @@ fr:
     visibility_placeholder: Visibilité…
     route_placeholder: Router vers un channel…
     not_provisioned: pas encore provisionné
-    admin_channel_note: La visibilité du channel admin est gouvernée par le rôle bot-admins (règle de transparence). inscription, rapports de match.'
+    admin_channel_note: La visibilité du channel admin est gouvernée par le rôle bot-admins (règle de
+      transparence). inscription, rapports de match.'
     route_failed: Échec du routage — voir les logs du bot.
     visibility_failed: Échec du changement de visibilité — voir les logs du bot.
     no_service: Les réglages admin sont indisponibles (pas de LogService câblé).
@@ -297,7 +295,8 @@ fr:
     menu_btn_servers: Serveurs
     menu_btn_sync: Synchroniser
     sync_title: Synchronisation cross-guild
-    sync_subtitle: 'Les actions de synchronisation au niveau du bot : chaque bouton met à jour les données partagées par tous les serveurs.'
+    sync_subtitle: 'Les actions de synchronisation au niveau du bot : chaque bouton met à jour les données
+      partagées par tous les serveurs.'
     btn_refresh_aoe2_civs: Rafraîchir les civs AoE2
     menu_current_language: '🌐 Langue : {current}'
     access_btn_manage: Gérer les accès
@@ -311,10 +310,12 @@ fr:
   live:
     title: 🎮 Dashboard en direct
     offline_separator: — hors ligne —
-    no_players: Aucun joueur lié — liez un profil avec /game-link.
-    all_offline: Tout le monde est hors ligne depuis plus d'une heure.
+    no_players: Aucun joueur lié — ajoutez votre profil AoE2 depuis le menu profil (/home → Profil).
+    all_offline: Tout le monde est hors ligne.
+    refresh: Rafraîchir
     unavailable: 'Dashboard indisponible : CORE_URI n''est pas configuré.'
-    linked: Profil `{profile}` lié à <@{user}> — le dashboard l'affichera. Relancez /game-link pour lier d'autres profils.
+    linked: Profil `{profile}` lié à <@{user}> — le dashboard l'affichera. Ajoutez-en d'autres depuis
+      le menu profil (/home → Profil).
     unlinked: Profil `{profile}` délié.
     no_link: Aucun lien pour le profil `{profile}`.
     degraded: ⚠️ Fournisseurs injoignables — états potentiellement périmés, tout le monde hors ligne.
@@ -326,7 +327,8 @@ fr:
     creation_failed: Création impossible (nom déjà pris ?).
     edit_failed: Modification impossible (voir les logs).
     import_failed: Import échoué (nom déjà pris ? voir les logs).
-    liquipedia_unconfigured: 'Import Liquipedia désactivé : la variable LIQUIPEDIA_CONTACT manque sur l’environnement.'
+    liquipedia_unconfigured: 'Import Liquipedia désactivé : la variable LIQUIPEDIA_CONTACT manque sur
+      l’environnement.'
     pool_locked: Ce pool est verrouillé — dupliquez-le pour l'éditer.
     guild_maps_only: Seules les maps du serveur sont modifiables.
     transition_failed: Transition impossible (voir les logs).
@@ -336,8 +338,8 @@ fr:
     tree:
       channels_heading: '**Salons** (générés par le bot) :'
       roles_heading: '**Rôles** (générés par le bot) :'
-      bot_admins_role: "les opérateurs du bot : administrent la plateforme"
-      bot_admins_role_pending: "les opérateurs du bot (le rôle est créé au premier sync)"
+      bot_admins_role: 'les opérateurs du bot : administrent la plateforme'
+      bot_admins_role_pending: les opérateurs du bot (le rôle est créé au premier sync)
     games:
       no_game: Aucun jeu
       no_game_granted: Aucun jeu autorise
@@ -414,23 +416,23 @@ fr:
     panels:
       channels:
         general: 🗺️ général
-        general_description: "l'accueil : le menu du serveur, chaque bouton ouvre une vue"
+        general_description: 'l''accueil : le menu du serveur, chaque bouton ouvre une vue'
         discussions: 💬 discussions
-        discussions_description: "les discussions libres du serveur"
+        discussions_description: les discussions libres du serveur
         decisions: ⚖️ décisions
-        decisions_description: "les décisions d'exploitation du serveur"
+        decisions_description: les décisions d'exploitation du serveur
         logs: 📜 logs
-        logs_description: "le journal du bot : démarrages, déploiements, erreurs"
+        logs_description: 'le journal du bot : démarrages, déploiements, erreurs'
         admin: 🛠️ admin
-        admin_description: "le poste de pilotage : le menu d'administration épinglé"
+        admin_description: 'le poste de pilotage : le menu d''administration épinglé'
         live: 📡 live
-        live_description: "qui joue en direct, rafraîchi en continu"
+        live_description: qui joue en direct, rafraîchi en continu
         civs: 🏛️ civilisations
-        civs_description: "une fiche par civilisation : bonus, unités, arbres technologiques"
+        civs_description: 'une fiche par civilisation : bonus, unités, arbres technologiques'
         maps: 🌍 maps
-        maps_description: "une fiche par carte : image, description, pools"
+        maps_description: 'une fiche par carte : image, description, pools'
         map_pools: 🧱 map pools
-        map_pools_description: "une fiche par map pool : composition et état"
+        map_pools_description: 'une fiche par map pool : composition et état'
       categories:
         bot: 🤖 bot
         games: 🎮 games
@@ -438,11 +440,13 @@ fr:
         mods: 🧩 mods
     homes:
       root_home_title: 🏰 Kingdoms
-      root_home_description: Bienvenue — chaque bouton ouvre une vue réservée à toi. Les échanges vont dans 💬 discussions.
+      root_home_description: Bienvenue — chaque bouton ouvre une vue réservée à toi. Les échanges vont
+        dans 💬 discussions.
       games_home_title: 🎮 Games
       games_home_description: 'Les jeux du serveur : forums de données, discussions et gestion.'
       games_aoe2_home_title: ⚔️ Age of Empires II
-      games_aoe2_home_description: Les données du jeu — civilisations, maps et map pools — et son suivi live.
+      games_aoe2_home_description: Les données du jeu — civilisations, maps et map pools — et son suivi
+        live.
       mods_home_title: 🧩 Mods
       mods_home_description: 'Les mods du serveur : données, discussions et gestion.'
       bot_home_title: 🤖 Bot
@@ -476,6 +480,7 @@ fr:
       heading_actions: 🎩 Actions
       btn_add_map: Ajouter une map
       btn_create_pool: Créer un map pool
+      btn_providers: Providers (santé & tests)
       btn_ensure: Créer les salons manquants
       bot_home_description: L'exploitation du bot — logs, administration, décisions.
       btn_sync: Synchroniser
@@ -486,9 +491,9 @@ fr:
         description: 'Le point de départ : ton profil, les jeux, les mods et l''admin.'
       menu.admin:
         title: 🛠️ Admin
-        description: 'L''exploitation du bot : statut, jeux, mods, et la synchronisation des salons et rôles.'
+        description: 'L''exploitation du bot : statut, jeux, mods, et la synchronisation des salons et
+          rôles.'
         current_language: '**Langue du serveur** : {current}'
-
       menu.games.home:
         title: 🎮 Jeux
         description: Les jeux disponibles sur ce serveur.
@@ -576,7 +581,8 @@ fr:
       enrolled_cancelled_short: Inscription annulée.
       unknown_panel: Panneau inconnu
       registered: Inscrit ({value}).
-      error_processing_registration: Une erreur est survenue pendant le traitement de ton inscription. Réessaie.
+      error_processing_registration: Une erreur est survenue pendant le traitement de ton inscription.
+        Réessaie.
       error_processing_feedback: Une erreur est survenue pendant le traitement de ton retour. Réessaie.
       not_bot_operator: Tu n'es ni opérateur du bot (BOT_ADMINS) ni administrateur du serveur.
       dm_settings_follow_client: 'Réglages personnels : la langue suit celle de ton client Discord.'
@@ -590,3 +596,25 @@ fr:
     decided: '## 🛡 Candidature staff **{mod}**
 
       <@{user_id}> — **{verb}** par <@{decided_by}>.'
+  providers:
+    title: 🛠 Providers — Age of Empires II
+    subtitle: Santé des providers du service game-{game} — ping, capacités, rafraîchi chaque minute.
+    latency: 'Ping : {ms} ms'
+    failures: 'Échecs consécutifs : {count}'
+    features: Fonctionnalités
+    no_features: —
+    status_in_use: en service
+    status_planned: planifié
+    features_labels:
+      map_descriptions: Descriptions et images des cartes (anglais uniquement)
+      civ_descriptions: Descriptions des civilisations
+      civ_tech_tree: Arbres technologiques des civs
+      multilingual_content: Contenu multilingue
+      realtime_user_state: État temps réel des utilisateurs
+      lobby_settings: Réglages des lobbies
+      match_settings: Réglages des matchs
+      leaderboards: Classements
+      match_history: Historique/résultats de matchs
+      player_profiles: Profils de joueurs
+    probe_ok: OK
+    probe_ko: KO
