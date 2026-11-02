@@ -286,7 +286,8 @@ async def _sync_marriage_locks_safe(bot: Any) -> None:
 async def _resolve_explorations_safe(bot: Any) -> None:
     """Resolve the due Explorateur locks (marche-v2 art. 6).
 
-    A 48h exploration ends with a fresh map drawn for the kingdom (or a
+    A 48h exploration (10 min in BETA drasah — exploration-beta-duree)
+    ends with a fresh map drawn for the kingdom (or a
     refund when the pool ran dry). The tick IS the resolution engine:
     after it, the salon views re-render and the marriage-lock pass (red
     pseudo + 🔒) drops the livery on its next pass.

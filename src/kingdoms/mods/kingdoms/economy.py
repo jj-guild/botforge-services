@@ -76,12 +76,16 @@ tokens, bought = the per-season purchase counter. The APPLIED AI
 levels stay under ``jeu_d_armes`` (the defence bot reads it)."""
 EXPLORATEUR_STOCK = "explorateur_stock"
 """chambre-utiliser-v1: bought-but-unused Explorateur tokens."""
-EXPEDITION_BASE_HOURS = 48
-"""exploration-expedition-v1 (Drasah 30/10): the base travel time of an
-expedition — every embarked CREW member cuts it by 4h (the chef never
-cuts it), plancher 24h."""
-EXPEDITION_HOURS_PER_LORD = 4
-EXPEDITION_MIN_HOURS = 24
+EXPEDITION_BASE_SECONDS = 600
+"""exploration-beta-duree (Drasah 02/11): BETA timing on the drasah
+canary — the voyage lasts 10 MINUTES instead of 48h so the whole rail
+(embarquement, masque en mer, retour, débarquement) can be tested live.
+Every embarked CREW member cuts it by 50 s (the chef never cuts it),
+plancher 5 minutes. NEVER merge this branch to prod without restoring
+48h / −4h par matelot / plancher 24h (the hour constants of
+exploration-expedition-v1)."""
+EXPEDITION_PER_LORD_SECONDS = 50
+EXPEDITION_MIN_SECONDS = 300
 EXPEDITION_BOARDING_SECONDS = 900
 """exploration-refonte-v1 (Drasah 02/11): the 15-minute boarding
 window — a due boarding WITH a captain launches itself (the events
@@ -576,8 +580,9 @@ class EconomyService:
     ) -> dict[str, Any]:
         """Lâcher les amarres — the ONLY step that consumes the token.
 
-        Travel = 48h − 4h per CREW member (the chef never cuts it),
-        plancher 24h. The chef and every crew member are combat-locked
+        Travel = 10 min (BETA drasah, exploration-beta-duree) − 50 s per
+        CREW member (the chef never cuts it), plancher 5 min. The chef
+        and every crew member are combat-locked
         (``exploration_locked_until``) until the return — the lock is
         the SAME one the attack/defence guards already respect.
         """
@@ -614,11 +619,13 @@ class EconomyService:
         state.purchases[EXPLORATEUR_STOCK] = stock - 1
         await self._store.upsert_technology(state.to_mongo())
         crew = [str(item) for item in doc.get("crew", [])]
-        hours = max(
-            EXPEDITION_MIN_HOURS,
-            EXPEDITION_BASE_HOURS - EXPEDITION_HOURS_PER_LORD * len(crew),
+        # exploration-beta-duree: 10 minutes (BETA), each mate cuts 50 s,
+        # plancher 5 minutes.
+        seconds = max(
+            EXPEDITION_MIN_SECONDS,
+            EXPEDITION_BASE_SECONDS - EXPEDITION_PER_LORD_SECONDS * len(crew),
         )
-        ends_at = ts + int(hours * 3600)
+        ends_at = ts + int(seconds)
         locked = [str(doc.get("chef_lord_id", "")), *crew]
         for lord in await self._kingdoms.lords():
             if str(lord.id) in locked and not lord.left:
@@ -630,9 +637,9 @@ class EconomyService:
         kingdom.expedition = doc
         await self._store.upsert_kingdom(kingdom.to_mongo())
         logger.info(
-            "kingdoms: %s launches its expedition (%dh, %d crew, token used)",
+            "kingdoms: %s launches its expedition (%ds, %d crew, token used)",
             kingdom_id,
-            hours,
+            seconds,
             len(crew),
         )
         await self._record_action(kingdom_id, EXPLORATEUR, "expédition lancée")

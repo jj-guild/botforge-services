@@ -7,7 +7,8 @@ kingdom's 🧭 exploration salon. A lord enrolls as CAPITAINE from the
 council fiche — « Devenir capitaine » (prerequisite: one AVAILABLE
 defence point 🛡️, checked BEFORE the salon opens, never consumed, and
 re-checked at the cast-off), every other lord embarks himself as CREW
-(each −4h of travel, the captain never cuts it, plancher 24h, no
+(each −50 s of travel in BETA (exploration-beta-duree: 10 min base,
+the captain never cuts it, plancher 5 min, no
 prerequisite to join). ⛵ Lâcher les amarres shows ONLY with a captain
 on board (only he may click it) and is the single step that consumes
 the token. The boarding window lasts 15 MINUTES — past it the voyage
@@ -66,7 +67,7 @@ _STRINGS: dict[str, dict[str, str]] = {
         "panel_title": "# 🧭 Exploration de {kingdom}",
         "chef_line": "🧭 **Capitaine :** {name}",
         "crew_line": "⚓ **Équipage :** {names}",
-        "eta_line": "⏳ **Trajet au départ :** **{hours} h** (48 h − 4 h par matelot, plancher 24 h)",
+        "eta_line": "⏳ **Trajet au départ :** **{minutes} min** (bêta : −50 s par matelot, plancher 5 min)",
         "chef_rule": "🧭 Le capitaine doit disposer d'un point de défense 🛡️ disponible (non consommé).",
         "crew_rule": (
             "⚓ Chaque seigneur embarque de lui-même (pas de pré-requis"
@@ -145,7 +146,7 @@ _STRINGS: dict[str, dict[str, str]] = {
         "panel_title": "# 🧭 Exploration of {kingdom}",
         "chef_line": "🧭 **Captain:** {name}",
         "crew_line": "⚓ **Crew:** {names}",
-        "eta_line": "⏳ **Travel at departure:** **{hours} h** (48 h − 4 h per mate, floor 24 h)",
+        "eta_line": "⏳ **Travel at departure:** **{minutes} min** (beta: −50 s per mate, floor 5 min)",
         "chef_rule": "🧭 The captain needs one AVAILABLE defence point 🛡️ (never consumed).",
         "crew_rule": (
             "⚓ Every lord embarks himself (no prerequisite to join the"
@@ -300,18 +301,19 @@ async def _require_lord(
     return (lord, kingdom)
 
 
-def _expedition_hours(doc: dict[str, Any]) -> int:
-    """The travel time at departure (48h − 4h per mate, floor 24h)."""
+def _expedition_seconds(doc: dict[str, Any]) -> int:
+    """The travel time at departure (BETA: 10 min − 50 s per mate, floor
+    5 min — exploration-beta-duree)."""
     from kingdoms.mods.kingdoms.economy import (
-        EXPEDITION_BASE_HOURS,
-        EXPEDITION_HOURS_PER_LORD,
-        EXPEDITION_MIN_HOURS,
+        EXPEDITION_BASE_SECONDS,
+        EXPEDITION_MIN_SECONDS,
+        EXPEDITION_PER_LORD_SECONDS,
     )
 
     crew = len([item for item in doc.get("crew", []) if item])
     return max(
-        EXPEDITION_MIN_HOURS,
-        EXPEDITION_BASE_HOURS - EXPEDITION_HOURS_PER_LORD * crew,
+        EXPEDITION_MIN_SECONDS,
+        EXPEDITION_BASE_SECONDS - EXPEDITION_PER_LORD_SECONDS * crew,
     )
 
 
@@ -372,7 +374,9 @@ def _panel_text(
         "",
         str(strings["chef_line"]).format(name=chef_name),
         str(strings["crew_line"]).format(names=crew_names),
-        str(strings["eta_line"]).format(hours=_expedition_hours(doc)),
+        str(strings["eta_line"]).format(
+            minutes=max(1, round(_expedition_seconds(doc) / 60))
+        ),
         "",
         strings["separator"],
         "",

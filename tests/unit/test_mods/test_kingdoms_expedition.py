@@ -14,7 +14,7 @@ import pytest
 
 from kingdoms.mods.kingdoms.config import default_season_config
 from kingdoms.mods.kingdoms.economy import (
-    EXPEDITION_MIN_HOURS,
+    EXPEDITION_MIN_SECONDS,
     EXPLORATEUR_STOCK,
     EconomyError,
     EconomyService,
@@ -139,7 +139,8 @@ async def test_crew_cuts_the_travel_but_never_the_chef() -> None:
 
 
 async def test_launch_consumes_the_token_and_locks_chef_and_crew() -> None:
-    """48h − 4h per mate, floor 24h — the locks ride the existing guard."""
+    """BETA (exploration-beta-duree): 10 min − 50 s per mate, floor
+    5 min — the locks ride the existing guard."""
     bundle = Bundle()
     await bundle.launch_season()
     for name in ("lord-c", "lord-d", "lord-e", "lord-f", "lord-g", "lord-h"):
@@ -150,12 +151,12 @@ async def test_launch_consumes_the_token_and_locks_chef_and_crew() -> None:
     await bundle.token(aquitaine)
     await bundle.economy.begin_expedition(aquitaine)
     await bundle.economy.toggle_expedition_chef(aquitaine, "king-a")
-    # One crew member: 48h − 4h = 44h.
+    # One crew member: 600 s − 50 s = 550 s.
     await bundle.economy.toggle_expedition_crew(aquitaine, "lord-a")
     doc = await bundle.economy.launch_expedition(aquitaine, now=_MONDAY)
     assert doc["state"] == "sailing"
     assert await bundle.stock_left(aquitaine) == 0
-    ends = int((_MONDAY + timedelta(hours=44)).timestamp())
+    ends = int((_MONDAY + timedelta(seconds=550)).timestamp())
     assert doc["ends_at"] == ends
     king = next(l for l in await bundle.kingdoms.lords() if l.id == "king-a")
     lord = next(l for l in await bundle.kingdoms.lords() if l.id == "lord-a")
@@ -168,9 +169,9 @@ async def test_launch_consumes_the_token_and_locks_chef_and_crew() -> None:
     await bundle.token(aquitaine)
     with pytest.raises(EconomyError):
         await bundle.economy.begin_expedition(aquitaine)
-    # Floor: 7 mates would cut to 20h — the plancher holds 24h.
+    # Floor: 7 mates would cut below — the plancher holds 5 min.
     await bundle.economy.resolve_due_expeditions(
-        now=_MONDAY + timedelta(hours=45)
+        now=_MONDAY + timedelta(seconds=600)
     )
     # exploration-retour-v1: the resolve HOLDS the locks — the crew
     # must unload before a new journey.
@@ -186,7 +187,7 @@ async def test_launch_consumes_the_token_and_locks_chef_and_crew() -> None:
     await bundle.economy.toggle_expedition_chef(aquitaine, "king-a")
     doc = await bundle.economy.launch_expedition(aquitaine, now=_MONDAY)
     assert doc["ends_at"] == int(
-        (_MONDAY + timedelta(hours=EXPEDITION_MIN_HOURS)).timestamp()
+        (_MONDAY + timedelta(seconds=EXPEDITION_MIN_SECONDS)).timestamp()
     )
 
 
