@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import logging
 import re
+from collections.abc import Awaitable, Callable
 from typing import Any
 
 import discord
@@ -1203,8 +1204,15 @@ class GamesMapImportModal(discord.ui.Modal):
         await _finish_map_import(interaction, service, self.game_key, entry, seed)
 
 
+ProgressCallback = Callable[[str, bool, str], Awaitable[None]]
+"""Per-line progress reporter: (page_name, ok, reason) — awaited live."""
+
+
 async def _bulk_import_maps(
-    service: Any, game_key: str, parsed: list[Any]
+    service: Any,
+    game_key: str,
+    parsed: list[Any],
+    on_result: ProgressCallback | None = None,
 ) -> tuple[list[Any], list[tuple[str, str]]]:
     """Import every missing map, best-effort; (created, failures).
 
@@ -1212,9 +1220,15 @@ async def _bulk_import_maps(
     map failing never stops the batch: every line runs to the end,
     the successes stay in the catalog, and each failure comes back
     with its reason — the caller reports both sides. A partial
-    import is an accepted outcome, not a state to undo.
+    import is an accepted outcome, not a state to undo. ``on_result``
+    is awaited after every line so the caller can stream the batch's
+    progress in real time.
     """
     from kingdoms.mapsdata.seed import fetch_map_seed
+
+    async def _report(name: str, ok: bool, reason: str = "") -> None:
+        if on_result is not None:
+            await on_result(name, ok, reason)
 
     created: list[Any] = []
     failures: list[tuple[str, str]] = []
@@ -1224,10 +1238,12 @@ async def _bulk_import_maps(
 
             existing = await service.get_map(map_entry_id(game_key, p.page_name, None))
             if existing is not None and existing.archived_at is None:
+                await _report(p.page_name, True, "déjà présente")
                 continue
             seed = await fetch_map_seed(p.page_name)
             if seed is None:
                 failures.append((p.page_name, "aucune page Liquipedia"))
+                await _report(p.page_name, False, "aucune page Liquipedia")
                 continue
             entry = await service.create_map(
                 game_key,
@@ -1259,9 +1275,11 @@ async def _bulk_import_maps(
                     }
                 )
             created.append(entry)
+            await _report(p.page_name, True)
         except Exception as exc:
             logger.exception("GAMES ADMIN: bulk import failed on %s", p.page_name)
             failures.append((p.page_name, str(exc)))
+            await _report(p.page_name, False, str(exc))
     return created, failures
 
 
@@ -1270,8 +1288,14 @@ async def _finish_bulk_import(
     service: Any,
     created: list[Any],
     pool_id: str,
+    final: Callable[[str], Awaitable[None]] | None = None,
 ) -> None:
-    """Associate the batch to its pool, sync the forum, confirm."""
+    """Associate the batch to its pool, sync the forum, confirm.
+
+    ``final`` is the live report's closer: when given, the closing
+    summary goes through it (the one message the admin watched) instead
+    of a fresh generic confirmation.
+    """
     if pool_id:
         try:
             pool = await service.get_map_pool(pool_id)
@@ -1295,10 +1319,68 @@ async def _finish_bulk_import(
     except Exception:
         logger.warning("GAMES ADMIN: forum sync after bulk import failed — best-effort")
     target = f" et associées au pool `{pool_id}`" if pool_id else ""
-    await interaction.followup.send(
-        f"{len(created)} maps importées{target} — les posts arrivent dans le forum maps.",
-        ephemeral=True,
+    summary = (
+        f"\U0001f4e5 Import termin\u00e9 \u2014 {len(created)} map(s) import\u00e9e(s){target}.\n"
+        + "".join(f"\u2705 {entry.name}\n" for entry in created)
+        + "Les posts arrivent dans le forum maps."
     )
+    if final is not None:
+        await final(summary)
+    else:
+        await interaction.followup.send(summary, ephemeral=True)
+
+
+async def _bulk_import_live_report(
+    interaction: discord.Interaction, total: int
+) -> tuple[ProgressCallback, Callable[[str], Awaitable[None]]]:
+    """Stream the batch's progress through one ephemeral message.
+
+    Returns ``(on_result, final)``. The acknowledgement ("request
+    submitted, N lines queued") is posted right here — the user's
+    request is confirmed the moment it is queued; ``on_result`` is
+    awaited after every line and appends that line's outcome —
+    success or failure, with its reason — to the live message;
+    ``final`` replaces it with the closing summary. The admin watches
+    the import run in real time instead of waiting for one generic
+    verdict at the end.
+    """
+    state: dict[str, Any] = {"msg": None, "lines": []}
+
+    def _body() -> str:
+        lines = "\n".join(state["lines"]) or "(en attente…)"
+        return (
+            f"\U0001f4e5 Demande soumise \u2014 {total} map(s) en file\n"
+            f"{len(state['lines'])}/{total} trait\u00e9e(s) :\n{lines}"
+        )
+
+    async def _edit() -> None:
+        msg = state["msg"]
+        if msg is None:
+            # followup.send answers the sent message (editable through
+            # followup.edit_message) — typed Any: discord.py marks it None.
+            sent: Any = await interaction.followup.send(  # type: ignore[func-returns-value]
+                _body(), ephemeral=True
+            )
+            state["msg"] = sent
+        else:
+            await interaction.followup.edit_message(msg.id, content=_body())
+
+    async def on_result(name: str, ok: bool, reason: str = "") -> None:
+        icon = "\u2705" if ok else "\u274c"
+        suffix = f" \u2014 {reason}" if reason else ""
+        state["lines"].append(f"{icon} {name}{suffix}")
+        await _edit()
+
+    await _edit()
+
+    async def final(summary: str) -> None:
+        msg = state["msg"]
+        if msg is None:
+            await interaction.followup.send(summary, ephemeral=True)
+        else:
+            await interaction.followup.edit_message(msg.id, content=summary)
+
+    return on_result, final
 
 
 class GamesBulkImportModal(discord.ui.Modal):
@@ -1324,7 +1406,7 @@ class GamesBulkImportModal(discord.ui.Modal):
         self.add_item(self.lines)
 
     async def on_submit(self, interaction: discord.Interaction) -> None:
-        """Guard, parse, import the batch transactionally, report."""
+        """Guard, parse, confirm, then report the batch live, line by line."""
         from kingdoms.discord.maps_pool_flow import _guard_admin
 
         if not await _guard_admin(interaction):
@@ -1352,24 +1434,21 @@ class GamesBulkImportModal(discord.ui.Modal):
             await interaction.followup.send((await reply(interaction, "ui.flows.wiring_unavailable")), ephemeral=True)
             return
 
-        created, failures = await _bulk_import_maps(service, self.game_key, parsed)
+        on_result, final = await _bulk_import_live_report(interaction, len(parsed))
+        created, failures = await _bulk_import_maps(service, self.game_key, parsed, on_result)
         if not created and failures:
-            lines = "\n".join(f"- « {name} » : {reason}" for name, reason in failures[:10])
-            await interaction.followup.send(
-                f"Aucune map importée — échecs :\n{lines}",
-                ephemeral=True,
-            )
+            lines = "\n".join(f"\u274c {name} \u2014 {reason}" for name, reason in failures)
+            await final(f"\u274c Aucune map import\u00e9e \u2014 {len(failures)} \u00e9chec(s) :\n{lines}")
             return
         if created:
-            await _finish_bulk_import(interaction, service, created, self.pool_id)
-        if failures:
-            lines = "\n".join(f"- « {name} » : {reason}" for name, reason in failures[:10])
-            more = f"\n- … et {len(failures) - 10} autre(s)" if len(failures) > 10 else ""
-            await interaction.followup.send(
-                f"\u26a0️ {len(failures)} échec(s) sur la liste (les autres maps sont bien importées) :\n{lines}{more}",
-                ephemeral=True,
-            )
-
+            await _finish_bulk_import(interaction, service, created, self.pool_id, final)
+            if failures:
+                await interaction.followup.send(
+                    "\u26a0\ufe0f "
+                    + f"{len(failures)} \u00e9chec(s) d\u00e9taill\u00e9(s) dans le rapport ci-dessus ; "
+                    + "les autres maps sont bien import\u00e9es.",
+                    ephemeral=True,
+                )
 
 
 class GamesPoolCopyButton(
