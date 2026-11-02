@@ -338,19 +338,28 @@ async def _open_servers(interaction: discord.Interaction) -> None:
 
 
 async def _open_sync(interaction: discord.Interaction) -> None:
-    """Open the content sync sub-view: the refresh action."""
+    """Open the content sync sub-view: both on-demand sync actions.
+
+    Short button labels ("Civs", "Maps") \u2014 the panel carries the
+    descriptions: each action gets its own line under the buttons,
+    stating what it does and how long it takes (the maps sync is paced
+    against the Liquipedia API terms, minutes on a cold catalog).
+    """
     dm_locale = await _dm_locale(interaction)
     view = discord.ui.LayoutView(timeout=None)
     view.add_item(
         discord.ui.Container(
             discord.ui.TextDisplay("# " + _dm_tr(interaction, dm_locale, "sync_title")),
             discord.ui.TextDisplay(_dm_tr(interaction, dm_locale, "sync_subtitle")),
+            discord.ui.Separator(),
+            discord.ui.TextDisplay(_dm_tr(interaction, dm_locale, "sync_civs_line")),
+            discord.ui.TextDisplay(_dm_tr(interaction, dm_locale, "sync_maps_line")),
             accent_colour=discord.Colour(0x5865F2),
         )
     )
     row: discord.ui.ActionRow[discord.ui.LayoutView] = discord.ui.ActionRow()
-    row.add_item(ContentRefreshButton(label=_dm_tr(interaction, dm_locale, "btn_refresh_aoe2_civs")))
-    row.add_item(MapsSyncButton(label=_dm_tr(interaction, dm_locale, "btn_sync_aoe2_maps")))
+    row.add_item(ContentRefreshButton(label=_dm_tr(interaction, dm_locale, "btn_sync_civs")))
+    row.add_item(MapsSyncButton(label=_dm_tr(interaction, dm_locale, "btn_sync_maps")))
     view.add_item(row)
     await interaction.response.send_message(view=add_view_footer(view, "panel:dm:sync"), ephemeral=True)
 
@@ -361,7 +370,7 @@ class ContentRefreshButton(
 ):
     """Refresh the localized faction content from the vendored dataset."""
 
-    def __init__(self, label: str = "Rafraîchir") -> None:
+    def __init__(self, label: str = "Civs") -> None:
         super().__init__(
             discord.ui.Button(
                 label=label[:80],
