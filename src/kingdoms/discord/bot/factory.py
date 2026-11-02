@@ -692,15 +692,34 @@ class KingdomsBot(discord.Client):
         DMs render in the language the user was last seen using).
         """
         try:
-            logger.info(
-                "ACTION %s by %s: %s",
-                "command" if interaction.type is discord.InteractionType.application_command else
-                "component" if interaction.type is discord.InteractionType.component else
-                "modal-submit" if interaction.type is discord.InteractionType.modal_submit else str(interaction.type),
-                str(getattr(getattr(interaction, "user", None), "id", "?")),
+            kind = (
+                "command"
+                if interaction.type is discord.InteractionType.application_command
+                else "component"
+                if interaction.type is discord.InteractionType.component
+                else "modal-submit"
+                if interaction.type is discord.InteractionType.modal_submit
+                else str(interaction.type)
+            )
+            user = getattr(interaction, "user", None)
+            user_id = str(getattr(user, "id", ""))
+            user_name = str(getattr(user, "name", ""))
+            who = f"{user_name} ({user_id})" if user_name and user_id else (user_id or "unknown")
+            guild = getattr(interaction, "guild", None)
+            where = f"guild {getattr(guild, 'name', '')} ({interaction.guild_id})" if interaction.guild_id else "DM"
+            data: Any = interaction.data or {}
+            raw_custom_id = data.get("custom_id", "") if isinstance(data, dict) else getattr(data, "custom_id", "")
+            what = (
                 interaction.command.qualified_name
                 if interaction.type is discord.InteractionType.application_command and interaction.command
-                else str(getattr(interaction.data, "custom_id", "") or "?"),
+                else str(raw_custom_id or "unknown")
+            )
+            logger.info(
+                "ACTION %s by %s in %s: %s",
+                kind,
+                who,
+                where,
+                what,
             )
         except Exception:
             logger.debug("action log failed — best-effort", exc_info=True)
