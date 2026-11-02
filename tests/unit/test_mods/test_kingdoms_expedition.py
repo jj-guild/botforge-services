@@ -836,3 +836,25 @@ def test_map_error_translates_the_split_refusals_to_french_bubbles() -> None:
     assert "en mer" in panel._map_error(
         strings, EconomyError("an expedition is already at sea")
     )
+
+
+def test_the_returned_refusal_names_who_is_back_and_carries_unload() -> None:
+    """expedition-messages-v2 + returned-orphan-soupape-v1 (Drasah
+    02/11): his wording — a crewed return names the captain AND his
+    crew, a solo one names the captain alone (never « l'expédition »);
+    both bubbles carry the 🪜 unload so a vanished salon never leaves
+    the kingdom stuck."""
+    from kingdoms.mods.kingdoms import kingdom_expedition_panel as panel
+
+    strings = panel._strings("fr")
+    note, view = panel.returned_refusal_note_and_view(
+        strings, {"state": "returned", "crew": ["lord-a"]}
+    )
+    assert "capitaine et son équipage" in note
+    assert view.children[0].custom_id == "kingdoms:expedition:unload"
+    note_solo, view_solo = panel.returned_refusal_note_and_view(
+        strings, {"state": "returned"}
+    )
+    assert "équipage" not in note_solo
+    assert "capitaine" in note_solo
+    assert view_solo.children[0].custom_id == "kingdoms:expedition:unload"

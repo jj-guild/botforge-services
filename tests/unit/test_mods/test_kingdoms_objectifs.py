@@ -301,3 +301,23 @@ def test_seigneurie_keeps_the_parent_sheet_alive() -> None:
     assert _seigneurie_closes_previous((*sheet, object()), True) is True
     # a NON-ephemeral parent keeps the legacy single-window rule.
     assert _seigneurie_closes_previous(sheet, False) is True
+
+
+def test_the_canary_gate_survives_a_reset_recreated_realm() -> None:
+    """canary-porte-nom-v1 (Drasah 02/11): his resets purge the kingdom
+    docs — the realm comes back with a fresh generated ``k-N`` id and
+    the hardcoded id list silently rejected it (no pin, no announce,
+    no « discussions » rename). The gate keeps the reserved TEST NAME
+    on the refonte, whatever its new id."""
+    assert lieux.is_canary_realm(_kingdom()) is True  # the reserved id
+    recreated = SimpleNamespace(
+        id="k-3", name="Nilrem", civilizations=[], council_objectives={}
+    )
+    assert lieux.is_canary_realm(recreated) is True
+    assert (
+        lieux.is_canary_realm(
+            SimpleNamespace(id="k-4", name="Aquitaine", civilizations=[])
+        )
+        is False
+    )
+    assert lieux.is_canary_realm(None) is False

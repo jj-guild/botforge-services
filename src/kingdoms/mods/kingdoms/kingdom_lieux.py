@@ -27,6 +27,11 @@ logger = logging.getLogger("kingdoms.kingdom_lieux")
 # canary-gate-v1 (Drasah 01/11): the ids allowed to render the new hub.
 # Empty the tuple (or delete the ids) to generalise — no other change.
 CANARY_REALM_KINGDOM_IDS: tuple[str, ...] = ("k-nilrem",)
+# canary-porte-nom-v1 (Drasah 02/11): a reset purges the kingdom docs
+# and the recreated realm gets a fresh ``k-N`` id — the hardcoded id
+# list silently rejected his own realm (no pin, no announce, no
+# « discussions » rename). The reserved test NAME joins the gate.
+CANARY_REALM_KINGDOM_NAMES: tuple[str, ...] = ("nilrem",)
 
 _LIEUX_ASSETS = Path(__file__).resolve().parent / "assets" / "lieux"
 
@@ -78,7 +83,7 @@ STRINGS: dict[str, dict[str, str]] = {
         "classement_title": "🏆 Ranking of the season",
         "classement_line": "{0} {1}. **{2}** — {3} 🗺️ · {4} 🤝",
         "classement_empty": "No kingdom to rank yet.",
-        "objectif_button": "🎯 Objective",
+        "objectif_button": "🎯 Objectives",
         "objectif_king_only": "🎯 Reserved to the King of the realm.",
         "objectif_picker_title": "🎯 Kingdom objectives — {0}",
         "objectif_select_kingdom": "⚔️ Kingdom to strike first",
@@ -203,7 +208,7 @@ STRINGS: dict[str, dict[str, str]] = {
         "classement_title": "🏆 Classement de la saison",
         "classement_line": "{0} {1}. **{2}** — {3} 🗺️ · {4} 🤝",
         "classement_empty": "Aucun royaume à classer pour le moment.",
-        "objectif_button": "🎯 Objectif",
+        "objectif_button": "🎯 Objectifs",
         "objectif_king_only": "🎯 Réservé au Roi du royaume.",
         "objectif_picker_title": "🎯 Objectifs du royaume — {0}",
         "objectif_select_kingdom": "⚔️ Royaume à attaquer en priorité",
@@ -302,8 +307,19 @@ def _merged_strings(locale: str) -> dict[str, str]:
 
 
 def is_canary_realm(kingdom: Any | None) -> bool:
-    """True when the kingdom renders the new hub (the gate decides)."""
-    return kingdom is not None and str(getattr(kingdom, "id", "")) in CANARY_REALM_KINGDOM_IDS
+    """True when the kingdom renders the new hub (the gate decides).
+
+    canary-porte-nom-v1 (Drasah 02/11): the reserved id OR the
+    reserved test name (case-insensitive) — a reset-recreated
+    « Nilrem » keeps the refonte whatever its generated id."""
+    if kingdom is None:
+        return False
+    if str(getattr(kingdom, "id", "")) in CANARY_REALM_KINGDOM_IDS:
+        return True
+    return (
+        str(getattr(kingdom, "name", "")).strip().casefold()
+        in CANARY_REALM_KINGDOM_NAMES
+    )
 
 
 def _lieu_file(filename_on_disk: str, filename: str) -> discord.File | None:
@@ -2030,6 +2046,7 @@ def _exploration_capitaine(
             _strings as _expe_strings,
             open_expedition_salon_safe,
             refresh_expedition_panel_safe,
+            returned_refusal_note_and_view,
         )
         from kingdoms.mods.kingdoms.kingdom_persistent import _EPHEMERAL_WINDOWS
 
@@ -2048,6 +2065,7 @@ def _exploration_capitaine(
                 exc_info=True,
             )
         economy = getattr(wiring, "economy_service", None)
+        view = None
         if economy is None:
             note = expe["no_service"]
         else:
@@ -2057,6 +2075,21 @@ def _exploration_capitaine(
                 # the defence point FIRST — no salon opens without it.
                 if "defence point" in str(exc):
                     note = lieu["exploration_no_defense"]
+                elif "is back" in str(exc):
+                    # returned-orphan-soupape-v1 (Drasah 02/11): his
+                    # live report — this very flow said « descendez du
+                    # navire » with NOWHERE to do it (the salon was
+                    # swept, the bubble carried no button). The note
+                    # names who is back AND carries the 🪜 unload.
+                    doc = {}
+                    try:
+                        doc = await economy.expedition(str(kingdom.id))
+                    except Exception:
+                        logger.warning(
+                            "KINGDOM LIEUX: returned refusal doc read failed",
+                            exc_info=True,
+                        )
+                    note, view = returned_refusal_note_and_view(expe, doc)
                 else:
                     note = _map_error(expe, exc)
             else:
@@ -2079,7 +2112,9 @@ def _exploration_capitaine(
                             exc_info=True,
                         )
         try:
-            message = await interaction.followup.send(note, ephemeral=True)
+            message = await interaction.followup.send(
+                note, view=view, ephemeral=True
+            )
             _EPHEMERAL_WINDOWS[user_id] = (interaction, monotonic(), message)
         except Exception:
             logger.warning(

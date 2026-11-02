@@ -131,9 +131,12 @@ _STRINGS: dict[str, dict[str, str]] = {
         ),
         "already_sailing": "⛔ Une expédition est déjà en mer.",
         "return_pending": (
-            "⚓ Le capitaine — ainsi que l'équipage, s'il y en a un —"
-            " est de retour : veuillez débarquer du navire avant tout"
-            " nouveau départ."
+            "⚓ Le capitaine et son équipage sont de retour : veuillez"
+            " débarquer du navire avant tout nouveau départ."
+        ),
+        "return_pending_solo": (
+            "⚓ Le capitaine est de retour : veuillez débarquer du"
+            " navire avant tout nouveau départ."
         ),
         "locked": "⛔ Tu es dans un état verrouillé (mariage, exploration ou FFA).",
         "no_defense": "🛡️ Le capitaine doit disposer d'un point de défense disponible pour lâcher les amarres.",
@@ -217,8 +220,12 @@ _STRINGS: dict[str, dict[str, str]] = {
         ),
         "already_sailing": "⛔ An expedition is already at sea.",
         "return_pending": (
-            "⚓ The captain — and the crew, if any — is back: please"
-            " disembark from the ship before any new departure."
+            "⚓ The captain and the crew are back: please disembark"
+            " from the ship before any new departure."
+        ),
+        "return_pending_solo": (
+            "⚓ The captain is back: please disembark from the ship"
+            " before any new departure."
         ),
         "locked": "⛔ You are in a locked state (marriage, exploration or FFA).",
         "no_defense": "🛡️ The captain needs one available defence point to cast off.",
@@ -269,6 +276,23 @@ async def _error_note(interaction: discord.Interaction, text: str) -> None:
         asyncio.create_task(_delete_later())
     except Exception:
         pass
+
+
+def returned_refusal_note_and_view(
+    expe_strings: dict[str, str], doc: dict[str, Any]
+) -> tuple[str, Any]:
+    """expedition-messages-v2 + returned-orphan-soupape-v1 (Drasah
+    02/11): the returned-journey refusal — the note names WHO is back
+    (the captain alone, or with his crew — his wording, never «
+    l'expédition »), and the bubble carries « 🪜 Descendre du navire »
+    so a journey whose salon vanished still unblocks the kingdom."""
+    crew = [str(item) for item in (dict(doc or {}).get("crew") or [])]
+    note = (
+        expe_strings["return_pending"] if crew else expe_strings["return_pending_solo"]
+    )
+    view = discord.ui.View(timeout=None)
+    view.add_item(KingdomExpeditionUnloadButton(expe_strings))
+    return note, view
 
 
 def _map_error(strings: dict[str, str], exc: Exception) -> str:
@@ -826,27 +850,22 @@ async def open_expedition_from_market(
         # expedition-messages-v1 (Drasah 02/11): the refusal names its
         # CAUSE — sailing, returned-but-not-unloaded, or the exhausted
         # token stock (never a wrong "already at sea").
+        view = None
         try:
             doc = await economy.expedition(str(kingdom.id))
             state = str(doc.get("state", ""))
             if state == "sailing":
                 note = expe_strings["already_sailing"]
             elif state == "returned":
-                note = expe_strings["return_pending"]
+                # expedition-messages-v2 + returned-orphan-soupape-v1:
+                # the note names who is back and the bubble carries the
+                # 🪜 unload — a journey whose salon vanished still
+                # unblocks the kingdom (aboard lords only: his call).
+                note, view = returned_refusal_note_and_view(expe_strings, doc)
             else:
                 note = expe_strings["no_token"]
         except Exception:
             note = expe_strings["no_token"]
-        # returned-orphan-soupape-v1 (Drasah 02/11): a returned
-        # journey whose salon vanished (his reset swept it while the
-        # doc stayed « returned ») left the kingdom stuck forever — the
-        # refusal bubble itself carries « 🪜 Descendre du navire », the
-        # SAME unload button as the salon (aboard lords only: the
-        # captain or a mate — his call).
-        view = None
-        if note is expe_strings["return_pending"]:
-            view = discord.ui.View(timeout=None)
-            view.add_item(KingdomExpeditionUnloadButton(expe_strings))
         try:
             await interaction.followup.send(note, view=view, ephemeral=True)
         except Exception:
