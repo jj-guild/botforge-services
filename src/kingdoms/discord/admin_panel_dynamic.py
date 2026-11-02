@@ -424,9 +424,9 @@ async def build_pin_channel_menu(
     blocks.append(_select_row(PinReadOnlySelect.per_channel(category, locked)))
     blocks.append(discord.ui.Separator())
     blocks.append(_select_row(PinBackButton(_t(catalog, locale, "back"))))
-    view = discord.ui.LayoutView(timeout=None)
-    view.add_item(discord.ui.Container(*blocks, accent_colour=discord.Colour(BLURPLE)))
-    from kingdoms.core.ids import footer
+    from kingdoms.discord.ui.view_footer import build_view
 
-    view.add_item(discord.ui.TextDisplay(footer("panel:admin:channel")))
-    return view
+    return build_view(
+        "panel:admin:channel",
+        discord.ui.Container(*blocks, accent_colour=discord.Colour(BLURPLE)),
+    )

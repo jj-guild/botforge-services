@@ -1,0 +1,35 @@
+# The aoe2 providers panel's declared features and statuses (the owner's
+# spec, 2026-11-01): every provider's description lives HERE, in config —
+# what it serves, what we use, what we plan to implement. The labels
+# translate through the locales (providers.features_labels.*).
+#
+# NOTE the aoe2 vocabulary (the owner's rule): we say civilizations/civs,
+# not factions — factions is the core/generic term.
+
+providers:
+  ext-liquipedia:
+    status: in_use
+    features: [map_descriptions]
+    note: >-
+      Map descriptions in English only (the Liquipedia AoE2 wiki's
+      pages); the map seeds and the map data sync ride its API.
+  ext-aoe2techtree:
+    status: in_use
+    features: [civ_descriptions, civ_tech_tree, multilingual_content]
+    note: >-
+      The multilingual civilization descriptions (civs — the aoe2
+      vocabulary, not 'factions') and their tech trees.
+  ext-aoe2lobby:
+    status: in_use
+    features: [realtime_user_state, lobby_settings, match_settings]
+    note: >-
+      Maintains the bot users' realtime state (in-lobby/in-game) and
+      the lobbies'/matches' settings until they complete: players,
+      teams, map, the game's start time...
+  ext-librematch:
+    status: in_use
+    features: [leaderboards, match_history, player_profiles]
+    note: >-
+      The leaderboards; the match history/results (start/end dates,
+      duration, map, winner); the player profiles (rating, global
+      ranking, country, elo + max elo, the clan, the name, and more).
