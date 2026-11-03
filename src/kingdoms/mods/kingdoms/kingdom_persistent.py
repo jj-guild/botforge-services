@@ -47,6 +47,9 @@ __all__ = [
     "KingdomRempartsOpenButton",
     "KingdomRempartsInfoButton",
     "KingdomRempartsStateButton",
+    "KingdomJeuDarmesUseButton",
+    "KingdomJeuDarmesActivateButton",
+    "KingdomJeuDarmesCancelButton",
     "KingdomRequestButton",
     "KingdomRoleInfoButton",
     "KingdomSeigneurieOpenButton",
@@ -218,6 +221,9 @@ def register_kingdoms_persistent_items(bot: discord.Client) -> None:
         KingdomRempartsOpenButton,
         KingdomRempartsInfoButton,
         KingdomRempartsStateButton,
+        KingdomJeuDarmesUseButton,
+        KingdomJeuDarmesActivateButton,
+        KingdomJeuDarmesCancelButton,
         KingdomSeigneurieOpenButton,
         KingdomSeigneurieButton,
         KingdomSeigneurieSelect,
@@ -2274,6 +2280,258 @@ class KingdomRempartsStateButton(
         await self._toggle(interaction)
 
 
+async def _jeu_darmes_resolve(interaction: discord.Interaction) -> tuple[Any, ...] | None:
+    """jeu-darmes-bonus-v1: resolve the clicker's kingdom + state.
+
+    ANY lord may use the Arms mastery (Drasah 03/11: PLUS King-only —
+    the token is consumed by the lord who clicks). Answers the refusal
+    notes itself and returns None on failure.
+    """
+    from kingdoms.mods.kingdoms.kingdom_realm_content import _gather_state
+
+    locale = str(interaction.locale) if interaction.locale else "en"
+    strings = _strings(locale)
+    wiring = _wiring()
+    if wiring.kingdoms_service is None:
+        await interaction.response.send_message(strings["market_no_service"], ephemeral=True)
+        return None
+    lord = await _lord_of(
+        wiring.kingdoms_service, str(interaction.user.id), wiring.bot_admins
+    )
+    if lord is None or getattr(lord, "left", False):
+        await interaction.response.send_message(strings["not_lord"], ephemeral=True)
+        return None
+    kingdoms = await wiring.kingdoms_service.kingdoms()
+    kingdom = next(
+        (k for k in kingdoms if str(k.id) == str(getattr(lord, "kingdom_id", None))),
+        None,
+    )
+    if kingdom is None:
+        await interaction.response.send_message(strings["not_lord"], ephemeral=True)
+        return None
+    state = await _gather_state(kingdom, wiring)
+    return (strings, wiring, lord, kingdom, state)
+
+
+def _jeu_darmes_card(strings: dict[str, Any], state: dict[str, Any]) -> str:
+    """jeu-darmes-bonus-v1: the 🧪 confirmation card body (Drasah's
+    maquette verbatim — Effet, the four effect lines, the stock and
+    the current AI level)."""
+    purchases = dict(state.get("purchases") or {})
+    stock = int(purchases.get("jeu_d_armes_stock", 0) or 0)
+    level = int(state.get("defense_ai") or 0)
+    display, level_name = _traquenard_ai_display(level, strings)
+    lines = [
+        "## " + str(strings["jeu_darmes_card_title"]),
+        "**Effet :**",
+        str(strings["jeu_darmes_effect_ia"]),
+        str(strings["jeu_darmes_effect_cap"]),
+        str(strings["jeu_darmes_effect_patrouille"]),
+        str(strings["jeu_darmes_effect_rush"]),
+        "",
+        str(strings["jeu_darmes_owned"]).format(stock),
+        str(strings["jeu_darmes_level"]).format(display, level_name),
+    ]
+    return "\n".join(lines)
+
+
+async def _jeu_darmes_open(interaction: discord.Interaction) -> None:
+    """jeu-darmes-bonus-v1: open the 🧪 confirmation card (or the
+    no-stock note) as the player's single ephemeral window."""
+    resolved = await _jeu_darmes_resolve(interaction)
+    if resolved is None:
+        return
+    strings, wiring, lord, kingdom, state = resolved
+    purchases = dict(state.get("purchases") or {})
+    stock = int(purchases.get("jeu_d_armes_stock", 0) or 0)
+    if stock <= 0:
+        await interaction.response.send_message(
+            strings["jeu_darmes_no_stock"], ephemeral=True
+        )
+        return
+    view = discord.ui.LayoutView(timeout=None)
+    view.add_item(
+        discord.ui.ActionRow(
+            KingdomJeuDarmesActivateButton(strings),
+            KingdomJeuDarmesCancelButton(strings),
+        )
+    )
+    await _open_unique_ephemeral(
+        interaction, content=_jeu_darmes_card(strings, state), view=view
+    )
+
+
+class KingdomJeuDarmesUseButton(
+    discord.ui.DynamicItem[discord.ui.Button[Any]],
+    template=r"kingdoms:jeu-darmes:open$",
+):
+    """jeu-darmes-bonus-v1 (Drasah 03/11): the 🧪 Jeu d'armes opener.
+
+    Sits on the 🧱 Remparts view (green when the kingdom holds a
+    token, grey + disabled otherwise) and on the Chambre des comptes
+    ledger — the click opens the CONFIRMATION card instead of firing
+    the effect on the spot.
+    """
+
+    def __init__(self, strings: dict[str, Any], *, enabled: bool = True) -> None:
+        super().__init__(
+            discord.ui.Button(
+                label=str(strings["jeu_darmes_button"])[:80],
+                custom_id="kingdoms:jeu-darmes:open",
+                style=(
+                    discord.ButtonStyle.success
+                    if enabled
+                    else discord.ButtonStyle.secondary
+                ),
+                disabled=not enabled,
+            )
+        )
+
+    @classmethod
+    async def from_custom_id(
+        cls,
+        interaction: discord.Interaction,
+        item: discord.ui.Item[Any],
+        match: re.Match[str],
+        /,
+    ) -> "KingdomJeuDarmesUseButton":
+        locale = str(interaction.locale) if interaction.locale else "en"
+        return cls(_strings(locale))
+
+    async def callback(self, interaction: discord.Interaction) -> None:
+        """Open the confirmation card (any lord — Drasah 03/11)."""
+        await _jeu_darmes_open(interaction)
+
+
+class KingdomJeuDarmesActivateButton(
+    discord.ui.DynamicItem[discord.ui.Button[Any]],
+    template=r"kingdoms:jeu-darmes:activate$",
+):
+    """jeu-darmes-bonus-v1: « ✅ Activer » — consume the token and apply
+    every effect (+1 AI under the cap, Reinforced Patrols at the cap,
+    and the -1h declaration rush on the lord's next normal/planned
+    attack — non-cumulable, Embuscade never touched)."""
+
+    def __init__(self, strings: dict[str, Any]) -> None:
+        super().__init__(
+            discord.ui.Button(
+                label=str(strings["jeu_darmes_activate_button"])[:80],
+                custom_id="kingdoms:jeu-darmes:activate",
+                style=discord.ButtonStyle.success,
+            )
+        )
+
+    @classmethod
+    async def from_custom_id(
+        cls,
+        interaction: discord.Interaction,
+        item: discord.ui.Item[Any],
+        match: re.Match[str],
+        /,
+    ) -> "KingdomJeuDarmesActivateButton":
+        locale = str(interaction.locale) if interaction.locale else "en"
+        return cls(_strings(locale))
+
+    async def callback(self, interaction: discord.Interaction) -> None:
+        """Consume the token, then edit the card into the result note."""
+        from kingdoms.mods.kingdoms.kingdom_realm_content import _gather_state
+
+        locale = str(interaction.locale) if interaction.locale else "en"
+        strings = _strings(locale)
+        wiring = _wiring()
+        lord = await _lord_of(
+            wiring.kingdoms_service, str(interaction.user.id), wiring.bot_admins
+        )
+        if lord is None:
+            await interaction.response.send_message(
+                strings["church_marry_kingdom_none"], ephemeral=True
+            )
+            return
+        kingdom = next(
+            (
+                k
+                for k in await wiring.kingdoms_service.kingdoms()
+                if str(k.id) == str(getattr(lord, "kingdom_id", None))
+            ),
+            None,
+        )
+        if kingdom is None:
+            await interaction.response.send_message(
+                strings["church_marry_kingdom_none"], ephemeral=True
+            )
+            return
+        state = await _gather_state(kingdom, wiring)
+        purchases = dict(state.get("purchases") or {})
+        rush_key = f"jeu_d_armes_rush:{getattr(lord, 'id', '')}"
+        if int(purchases.get(rush_key, 0) or 0) > 0:
+            await interaction.response.edit_message(
+                content=str(strings["jeu_darmes_already_active"]), view=None
+            )
+            _register_ephemeral_interaction(interaction)
+            return
+        economy = wiring.economy_service
+        if economy is None:
+            await interaction.response.edit_message(
+                content=str(strings["market_no_service"]), view=None
+            )
+            return
+        try:
+            level, leveled = await economy.use_jeu_d_armes(
+                str(getattr(kingdom, "id", "") or ""), str(getattr(lord, "id", "") or "")
+            )
+        except Exception as exc:
+            logger.warning("KINGDOMS: jeu d'armes use failed", exc_info=True)
+            await interaction.response.edit_message(
+                content=_market_error_note(exc, strings), view=None
+            )
+            _register_ephemeral_interaction(interaction)
+            return
+        display, level_name = _traquenard_ai_display(level, strings)
+        if leveled:
+            note = str(strings["jeu_darmes_use_ok"]).format(display, level_name)
+        else:
+            note = str(strings["jeu_darmes_use_ok_rush_only"])
+        await interaction.response.edit_message(content=note, view=None)
+        _register_ephemeral_interaction(interaction)
+
+
+class KingdomJeuDarmesCancelButton(
+    discord.ui.DynamicItem[discord.ui.Button[Any]],
+    template=r"kingdoms:jeu-darmes:cancel$",
+):
+    """jeu-darmes-bonus-v1: « ❌ Annuler » — nothing is consumed, the
+    card window simply goes away."""
+
+    def __init__(self, strings: dict[str, Any]) -> None:
+        super().__init__(
+            discord.ui.Button(
+                label=str(strings["jeu_darmes_cancel_button"])[:80],
+                custom_id="kingdoms:jeu-darmes:cancel",
+                style=discord.ButtonStyle.danger,
+            )
+        )
+
+    @classmethod
+    async def from_custom_id(
+        cls,
+        interaction: discord.Interaction,
+        item: discord.ui.Item[Any],
+        match: re.Match[str],
+        /,
+    ) -> "KingdomJeuDarmesCancelButton":
+        locale = str(interaction.locale) if interaction.locale else "en"
+        return cls(_strings(locale))
+
+    async def callback(self, interaction: discord.Interaction) -> None:
+        """Close the card — nothing is consumed."""
+        await interaction.response.defer()
+        try:
+            await interaction.delete_original_response()
+        except Exception:
+            logger.info("KINGDOMS: jeu d'armes card close failed (ignored)", exc_info=True)
+        _EPHEMERAL_WINDOWS.pop(str(getattr(interaction.user, "id", "")), None)
+
+
 class KingdomSeigneurieOpenButton(
     discord.ui.DynamicItem[discord.ui.Button[Any]],
     template=r"kingdoms:seigneurie:open",
@@ -4123,7 +4381,7 @@ class KingdomMarketUseButton(
         # The token cards are KINGDOM-level strategic actions bought by
         # the King — their USE is King-only (the traquenard keeps its
         # any-lord rule, the embuscade its declaration-flow rules).
-        if self.card in ("corruption", "explorateur", "jeu_d_armes") and str(
+        if self.card in ("corruption", "explorateur") and str(
             getattr(lord, "role", "") or ""
         ) != "king":
             await interaction.response.send_message(
@@ -4161,45 +4419,12 @@ class KingdomMarketUseButton(
             await open_expedition_from_market(interaction, wiring, strings, lord)
             return
         if self.card == "jeu_d_armes":
-            economy = wiring.economy_service
-            if economy is None:
-                await interaction.response.send_message(
-                    strings["market_no_service"], ephemeral=True
-                )
-                return
-            await interaction.response.defer()
-            kingdom_id = str(getattr(lord, "kingdom_id", "") or "")
-            try:
-                level = await economy.use_jeu_d_armes(kingdom_id)
-            except Exception as exc:
-                note = await _market_failure_note(
-                    exc,
-                    wiring,
-                    lord,
-                    "jeu_d_armes",
-                    int(getattr(_market_costs(wiring), "jeu_d_armes", 0) or 0),
-                    strings,
-                )
-                await interaction.followup.send(note, ephemeral=True)
-                return
-            # The ledger window refreshes in place (the stock moved) and
-            # the result rides a small followup bubble.
-            kingdom = await _kingdom_by_id_safe(wiring.kingdoms_service, kingdom_id)
-            if kingdom is not None:
-                content, files, ledger_view = await _market_ledger_content(
-                    wiring, kingdom, strings
-                )
-                try:
-                    await interaction.edit_original_response(
-                        content=content, attachments=files, view=ledger_view
-                    )
-                except Exception:
-                    logger.warning(
-                        "KINGDOMS MARKET: ledger refresh after use failed",
-                        exc_info=True,
-                    )
-            note = str(strings["market_use_jeu_d_armes_ok"]).format(level)
-            await interaction.followup.send(note, ephemeral=True)
+            # jeu-darmes-bonus-v1 (Drasah 03/11): the 🚀 Utiliser now
+            # opens the 🧪 CONFIRMATION CARD (Effet + stock + AI level,
+            # ✅ Activer / ❌ Annuler) instead of firing the token on
+            # the spot — any lord may click (the token is consumed by
+            # the lord who clicks Activer).
+            await _jeu_darmes_open(interaction)
             return
         if self.card == "traquenard":
             await _traquenard_open_flow(interaction, wiring, strings, lord)
