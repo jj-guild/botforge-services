@@ -144,11 +144,21 @@ class KingdomModel(BaseModel):
     consumed at the Paroisse button — never from the marriage points."""
     traquenard_until: int | None = None
     """Fin (timestamp Unix) de la fenêtre Traquenard ACTIVE contre ce
-    royaume (Drasah 2026-10-14, recâblage v2) : pendant la fenêtre l'IA
-    de défense du royaume est Facile (niveau 1) pour TOUTE attaque
-    adverse. La fenêtre s'ouvre à l'activation (le royaume activant
-    consomme une charge, voir ``activate_traquenard``) — les verrous
-    de mariage +2h, eux, sont appliqués en one-shot à ce moment-là."""
+    royaume (Drasah 2026-10-14, recâblage v2 ; traquenard-fiche-v1,
+    03/11) : pendant la fenêtre l'IA de défense du royaume est Facile
+    (niveau 1) pour TOUTE attaque adverse. La fenêtre s'ouvre à
+    l'activation (le royaume activant consomme une charge, voir
+    ``activate_traquenard``) et SE CUMULE : chaque nouvelle activation
+    repousse la fin de 2h — les +2h sur les verrous vivants (mariage,
+    taverne, exploration en voyage), eux, sont appliqués en one-shot à
+    ce moment-là (un seul +2h par verrou, voir
+    ``LordModel.traquenard_lock_marks``)."""
+    traquenard_uses: dict[str, int] = Field(default_factory=dict)
+    """traquenard-fiche-v1 (Drasah 03/11) : registre des Traquenards
+    ACTIVÉS par CE royaume — ``{kingdom_id_cible: timestamp_unix}`` de
+    la dernière activation contre chaque royaume. Alimente la ligne de
+    statut live de la Salle du conseil (vue Objectifs) ; l'entrée est
+    nettoyée quand la fenêtre expire."""
     market_registry: list[dict[str, Any]] = Field(default_factory=list)
     """Chambre des comptes (marche-v2, 2026-10-13): the kingdom's dated
     purchase ledger — one ``{"item", "detail", "cost", "at"}`` entry per
@@ -324,6 +334,13 @@ class LordModel(BaseModel):
     mercenary_uses_left: int = Field(default=0, ge=0)
     """The remaining DRAFT uses of the mercenary civilization (0 when
     the lord holds none — the holder check reads BOTH fields)."""
+    traquenard_lock_marks: dict[str, int] = Field(default_factory=dict)
+    """traquenard-fiche-v1 (Drasah 03/11) : marqueurs one-shot du
+    Traquenard adverse — ``{kind: valeur_actuelle_du_verrou}`` où kind
+    vaut ``marriage``/``tavern``/``exploration``. Un verrou déjà
+    marqué (valeur toujours égale au verrou vivant) ne peut PLUS être
+    re-étendu par un Traquenard ; un NOUVEAU verrou né plus tard
+    redevient étendable. Vide = jamais affecté."""
     chronicle: list[ChronicleEntryModel] = Field(default_factory=list)
     """Lord chronique (Seigneurie V2, Drasah 15/10/2026): the FACTUAL,
     exactly-timestamped log of the actions the lord REALLY CLICKED —

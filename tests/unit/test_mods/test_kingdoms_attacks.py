@@ -409,9 +409,10 @@ async def test_defense_ai_level_traquenard_and_reinforced_patrols_marche_v2() ->
     assert patrouille_active_at(
         patrol, twenty_thirty_paris, base_level=5
     )
-    # The Traquenard is INDEPENDENT of the declaration (recâblage v2):
-    # any lord triggers it from the salon — a 6h Facile window opens on
-    # the target kingdom and every ALREADY-SEALED marriage gains +2h.
+    # The Traquenard is INDEPENDENT of the declaration (recâblage v2
+    # + traquenard-fiche-v1, Drasah 03/11): ANY lord triggers it from
+    # the Salle du conseil — a CUMULATIVE 2h Facile window opens on the
+    # target kingdom and every LIVING lock gains +2h ONCE (one-shot).
     monday = datetime(2026, 10, 12, 12, 0, tzinfo=UTC)
     target = (await bundle.owner_maps(bourgogne))[0]
     with pytest.raises(TechnologyLimitReachedError):
@@ -422,17 +423,30 @@ async def test_defense_ai_level_traquenard_and_reinforced_patrols_marche_v2() ->
     bought = (await bundle.attacks.technology_state(aquitaine)).purchases["traquenard"]
     lord_b = next(item for item in await bundle.kingdoms.lords() if item.id == "lord-b")
     lord_b.married_civilization = "celtes"
-    lord_b.marriage_locked_until = int(monday.timestamp())
+    lord_b.marriage_locked_until = int((monday + timedelta(hours=3)).timestamp())
     await bundle.store.upsert_lord(lord_b.to_mongo())
-    victim = await bundle.attacks.activate_traquenard("king-a", bourgogne, now=monday)
-    assert victim.id == bourgogne
-    assert victim.traquenard_until == int((monday + timedelta(hours=6)).timestamp())
+    result = await bundle.attacks.activate_traquenard("king-a", bourgogne, now=monday)
+    assert result.target.id == bourgogne
+    assert result.until == int((monday + timedelta(hours=2)).timestamp())
+    assert result.target.traquenard_until == result.until
+    assert result.affected == [("lord-b", ["marriage"])]
     # One charge was consumed by the activation itself.
     left = (await bundle.attacks.technology_state(aquitaine)).purchases["traquenard"]
     assert left == bought - 1
-    # The target kingdom's sealed marriage gained exactly +2h.
+    # The target kingdom's living marriage gained exactly +2h, and the
+    # one-shot marker rides the lord (a second Traquenard never
+    # re-extends the same living lock).
     locked = next(item for item in await bundle.kingdoms.lords() if item.id == "lord-b")
-    assert locked.marriage_locked_until == int((monday + timedelta(hours=2)).timestamp())
+    assert locked.marriage_locked_until == int((monday + timedelta(hours=5)).timestamp())
+    assert locked.traquenard_lock_marks == {
+        "marriage": int((monday + timedelta(hours=5)).timestamp())
+    }
+    # traquenard-fiche-v1: the activator kingdom records the live
+    # window (the Salle du conseil status line reads it).
+    activator = next(
+        item for item in await bundle.kingdoms.kingdoms() if item.id == aquitaine
+    )
+    assert activator.traquenard_uses == {bourgogne: result.until}
     # An attack declared inside the window faces the Facile AI (1/5).
     attack = await bundle.attacks.declare_attack(
         "king-a", target, "aoe2de://t", now=monday
@@ -447,6 +461,121 @@ async def test_defense_ai_level_traquenard_and_reinforced_patrols_marche_v2() ->
         "king-a", other, "aoe2de://t", now=monday + timedelta(hours=7)
     )
     assert plain.traquenard is False
+
+
+async def test_traquenard_fiche_v1_cumulates_the_window_and_locks_once() -> None:
+    """traquenard-fiche-v1 (Drasah 03/11): the 2h Facile window
+    CUMULATES (each new activation pushes the end 2h further, 2h+2h=4h)
+    and a living lock is extended ONCE — a second Traquenard never adds
+    a second +2h on the same living lock (``traquenard_lock_marks``),
+    while a NEW lock born later is extendable again."""
+    bundle = Bundle()
+    await bundle.launch_season()
+    await bundle.draw(12)
+    aquitaine = await bundle.kingdom_id("Aquitaine")
+    bourgogne = await bundle.kingdom_id("Bourgogne")
+    stocked = TechnologyState(
+        _id=aquitaine, season_id="s", tech_points=0, purchases={"traquenard": 3}
+    )
+    await bundle.store.upsert_technology(stocked.to_mongo())
+    monday = datetime(2026, 10, 12, 12, 0, tzinfo=UTC)
+    lord_b = next(item for item in await bundle.kingdoms.lords() if item.id == "lord-b")
+    lord_b.married_civilization = "celtes"
+    lord_b.marriage_locked_until = int((monday + timedelta(hours=3)).timestamp())
+    await bundle.store.upsert_lord(lord_b.to_mongo())
+    first = await bundle.attacks.activate_traquenard("king-a", bourgogne, now=monday)
+    assert first.until == int((monday + timedelta(hours=2)).timestamp())
+    assert first.affected == [("lord-b", ["marriage"])]
+    extended_once = int((monday + timedelta(hours=5)).timestamp())
+    # A second activation one hour later: the window CUMULATES (2h+2h)
+    # but the LIVING marriage lock is never re-extended.
+    tuesday = monday + timedelta(hours=1)
+    second = await bundle.attacks.activate_traquenard("lord-a", bourgogne, now=tuesday)
+    assert second.until == int((monday + timedelta(hours=4)).timestamp())
+    assert second.affected == []
+    locked = next(item for item in await bundle.kingdoms.lords() if item.id == "lord-b")
+    assert locked.marriage_locked_until == extended_once
+    assert locked.traquenard_lock_marks == {"marriage": extended_once}
+    # A NEW lock born later is extendable again (fresh one-shot).
+    locked.marriage_locked_until = int((tuesday + timedelta(hours=6)).timestamp())
+    await bundle.store.upsert_lord(locked.to_mongo())
+    third = await bundle.attacks.activate_traquenard(
+        "king-a", bourgogne, now=tuesday + timedelta(minutes=30)
+    )
+    fresh_extended = int((tuesday + timedelta(hours=8)).timestamp())
+    assert third.affected == [("lord-b", ["marriage"])]
+    assert third.until == int((monday + timedelta(hours=6)).timestamp())
+    relocked = next(item for item in await bundle.kingdoms.lords() if item.id == "lord-b")
+    assert relocked.marriage_locked_until == fresh_extended
+    assert relocked.traquenard_lock_marks == {"marriage": fresh_extended}
+    # The activator kingdom's live window registry follows the LAST
+    # activation per target (the Salle du conseil status line).
+    activator = next(
+        item for item in await bundle.kingdoms.kingdoms() if item.id == aquitaine
+    )
+    assert activator.traquenard_uses == {bourgogne: third.until}
+
+
+async def test_traquenard_fiche_v1_extends_tavern_and_sailing_exploration() -> None:
+    """traquenard-fiche-v1 (Drasah 03/11): the one-shot +2h covers the
+    tavern drink AND the SAILING crew's exploration lock, and the
+    sailing expedition ``ends_at`` itself sails +2h longer — a crewless
+    (boarding) expedition is never touched."""
+    bundle = Bundle()
+    await bundle.launch_season()
+    await bundle.draw(12)
+    aquitaine = await bundle.kingdom_id("Aquitaine")
+    bourgogne = await bundle.kingdom_id("Bourgogne")
+    stocked = TechnologyState(
+        _id=aquitaine, season_id="s", tech_points=0, purchases={"traquenard": 1}
+    )
+    await bundle.store.upsert_technology(stocked.to_mongo())
+    monday = datetime(2026, 10, 12, 12, 0, tzinfo=UTC)
+    lord_b = next(item for item in await bundle.kingdoms.lords() if item.id == "lord-b")
+    lord_b.tavern_locked_until = int((monday + timedelta(hours=1)).timestamp())
+    lord_b.exploration_locked_until = int((monday + timedelta(hours=2)).timestamp())
+    await bundle.store.upsert_lord(lord_b.to_mongo())
+    ends_at = int((monday + timedelta(hours=3)).timestamp())
+    kingdom = next(
+        item for item in await bundle.kingdoms.kingdoms() if item.id == bourgogne
+    )
+    kingdom.expedition = {
+        "state": "sailing",
+        "chef_lord_id": "lord-b",
+        "crew": [],
+        "salon_id": "123",
+        "panel_message_id": "456",
+        "ends_at": ends_at,
+        "locked": ["lord-b"],
+    }
+    await bundle.store.upsert_kingdom(kingdom.to_mongo())
+    result = await bundle.attacks.activate_traquenard("king-a", bourgogne, now=monday)
+    assert result.affected == [("lord-b", ["tavern", "exploration"])]
+    sailing = next(item for item in await bundle.kingdoms.lords() if item.id == "lord-b")
+    assert sailing.tavern_locked_until == int((monday + timedelta(hours=3)).timestamp())
+    assert sailing.exploration_locked_until == int((monday + timedelta(hours=4)).timestamp())
+    assert sailing.traquenard_lock_marks == {
+        "tavern": int((monday + timedelta(hours=3)).timestamp()),
+        "exploration": int((monday + timedelta(hours=4)).timestamp()),
+    }
+    # The sailing expedition itself sails +2h longer.
+    sailed = next(
+        item for item in await bundle.kingdoms.kingdoms() if item.id == bourgogne
+    )
+    assert int(sailed.expedition.get("ends_at", 0) or 0) == int(
+        (monday + timedelta(hours=5)).timestamp()
+    )
+    # A BOARDING expedition (no crew yet) is never touched.
+    sailed.expedition = {"state": "boarding", "salon_id": "789"}
+    await bundle.store.upsert_kingdom(sailed.to_mongo())
+    rested = TechnologyState(
+        _id=aquitaine, season_id="s", tech_points=0, purchases={"traquenard": 1}
+    )
+    await bundle.store.upsert_technology(rested.to_mongo())
+    plain = await bundle.attacks.activate_traquenard(
+        "king-a", bourgogne, now=monday + timedelta(minutes=30)
+    )
+    assert plain.affected == []
 
 
 async def test_sabotage_and_counter_espionage_d12_d28() -> None:

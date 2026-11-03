@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import logging
 import random
+from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING, Any
 
@@ -284,10 +285,30 @@ PATROUILLE_REINFORCED_HOURS = 3
 PATROUILLE_TZ = "Europe/Paris"
 AI_LEVEL_CAP = 5
 TRAQUENARD_LOCK_HOURS = 2
-TRAQUENARD_WINDOW_HOURS = 6
+# traquenard-fiche-v1 (Drasah 03/11): the Facile window is CUMULATIVE —
+# each new activation pushes ``traquenard_until`` 2h further (2h+2h=4h),
+# never a fixed-from-now reset.
+TRAQUENARD_WINDOW_HOURS = 2
 # planification-attaque-v1 (Drasah 23/10): the preference order holds
 # up to 3 territory choices (bascule auto on rupture).
 PLANNING_CHOICES_MAX = 3
+
+
+@dataclass(slots=True)
+class TraquenardResult:
+    """traquenard-fiche-v1 (Drasah 03/11): what an activation changed.
+
+    ``target`` is the freshly upserted target kingdom, ``until`` the
+    new cumulative ``traquenard_until`` (unix), and ``affected`` the
+    ``(lord_id, kinds)`` pairs of the target lords whose LIVING locks
+    were extended +2h — ``kinds`` subset of
+    ``marriage``/``tavern``/``exploration`` (sailing crew only). Empty
+    ``affected`` = no living lock to extend (still a valid Traquenard).
+    """
+
+    target: "KingdomModel"
+    until: int
+    affected: list[tuple[str, list[str]]]
 
 
 def patrouille_slots(state: TechnologyState) -> tuple[int, ...]:
@@ -578,7 +599,7 @@ class AttackService:
         tension) — EXCEPT a lord of the ATTACKED kingdom. The Traquenard v2 (Drasah
         2026-10-14) is INDEPENDENT of the declaration: the kingdom
         activates it from its own salon (see ``activate_traquenard``)
-        and every attack declared against the target inside the 6h
+        and every attack declared against the target inside the cumulative 2h
         window faces the Facile AI — the declaration merely RECORDS the
         flag for the reveal.
         """
@@ -3310,18 +3331,28 @@ class AttackService:
         target_kingdom_id: str,
         *,
         now: datetime | None = None,
-    ) -> KingdomModel:
-        """Activate a Traquenard against a kingdom (Drasah's recâblage v2).
+    ) -> TraquenardResult:
+        """Activate a Traquenard against a kingdom (traquenard-fiche-v1).
 
-        INDEPENDENT of any declaration (2026-10-14): any lord of the
-        activator kingdom triggers it from the kingdom's own salon. Two
-        effects — (1) one-shot: +2h of lock on every marriage ALREADY
-        sealed in the target kingdom (a later marriage never is); (2)
-        a 6h window (``traquenard_until``): every attack declared
-        against the target while the window is open faces the Facile AI
-        (level 1 whatever the defence bot's real level — the reveal
-        shows 1/5). One bought charge is consumed at the activation;
-        the target learns it only when an attack is actually declared.
+        INDEPENDENT of any declaration (2026-10-14): ANY lord of the
+        activator kingdom triggers it from the Salle du conseil
+        (traquenard-fiche-v1, Drasah 03/11 — no longer king-only). Two
+        effects — (1) one-shot, per LIVING lock: +2h on every lock the
+        target's lords hold at the activation (marriage, tavern drink,
+        exploration — the sailing crew only), ONE single +2h per lock
+        (``traquenard_lock_marks``): a lock already extended by a
+        previous Traquenard is never re-extended while it lives, a
+        NEW lock born later can be extended again. The target's
+        sailing expedition ``ends_at`` sails +2h longer too (the crew
+        stays at sea with it). (2) the CUMULATIVE 2h Facile window
+        (``traquenard_until``): every attack declared against the
+        target while the window is open faces the Facile AI (level 1
+        whatever the defence bot's real level — the reveal shows 1/5);
+        each new activation pushes the window's end 2h further. One
+        bought charge is consumed at the activation; the activator
+        kingdom's ``traquenard_uses`` records the live window (the
+        Salle du conseil status line); the target learns it only when
+        an attack is actually declared. Returns ``TraquenardResult``.
         """
         await self._require_running_season()
         lord = await self._require_lord(player_id)
@@ -3345,23 +3376,73 @@ class AttackService:
         await self._store.upsert_technology(state.to_mongo())
         await self._record_action(lord.kingdom_id, "traquenard", f"royaume {target_kingdom_id}")
         now_ts = int(timestamp.timestamp())
-        # (1) one-shot: +2h on the target's already-sealed marriages.
+        lock_delta = int(TRAQUENARD_LOCK_HOURS * 3600)
+        # (1) one-shot +2h on every LIVING lock of the target's lords
+        # (marriage + tavern + exploration for the sailing crew), ONE
+        # extension per lock (``traquenard_lock_marks`` guards against a
+        # second +2h on the same living lock).
+        expedition = dict(target.expedition or {})
+        expedition_sailing = str(expedition.get("state", "") or "") == "sailing"
+        expedition_crew = set(expedition.get("locked") or []) if expedition_sailing else set()
+        affected: list[tuple[str, list[str]]] = []
         for victim in await self._kingdoms.lords():
-            if victim.kingdom_id != target_kingdom_id or victim.left or victim.married_civilization is None:
+            if victim.kingdom_id != target_kingdom_id or victim.left:
                 continue
-            current = int(victim.marriage_locked_until or 0)
-            victim.marriage_locked_until = max(current, now_ts) + int(TRAQUENARD_LOCK_HOURS * 3600)
-            await self._store.upsert_lord(victim.to_mongo())
-        # (2) the 6h Facile window on the target kingdom.
-        target.traquenard_until = now_ts + int(TRAQUENARD_WINDOW_HOURS * 3600)
+            marks = dict(victim.traquenard_lock_marks or {})
+            kinds: list[str] = []
+
+            def _extend(kind: str, current: int) -> int | None:
+                if current <= now_ts:
+                    return None  # not a living lock
+                if marks.get(kind) == current:
+                    return None  # already +2h'd once — never re-extended
+                extended = current + lock_delta
+                marks[kind] = extended
+                kinds.append(kind)
+                return extended
+
+            extended_marriage = _extend("marriage", int(victim.marriage_locked_until or 0))
+            if extended_marriage is not None:
+                victim.marriage_locked_until = extended_marriage
+            extended_tavern = _extend("tavern", int(victim.tavern_locked_until or 0))
+            if extended_tavern is not None:
+                victim.tavern_locked_until = extended_tavern
+            if victim.id in expedition_crew:
+                extended_exploration = _extend("exploration", int(victim.exploration_locked_until or 0))
+                if extended_exploration is not None:
+                    victim.exploration_locked_until = extended_exploration
+            if kinds:
+                victim.traquenard_lock_marks = marks
+                await self._store.upsert_lord(victim.to_mongo())
+                affected.append((victim.id, kinds))
+        # The sailing expedition itself sails +2h longer (chef + crew).
+        if expedition_sailing:
+            expedition_ends = int(expedition.get("ends_at") or 0)
+            if expedition_ends > now_ts:
+                expedition["ends_at"] = expedition_ends + lock_delta
+                target.expedition = expedition
+        # (2) the CUMULATIVE 2h Facile window on the target kingdom
+        # (each activation pushes the end 2h further, never resets it).
+        window_until = max(now_ts, int(target.traquenard_until or 0)) + int(
+            TRAQUENARD_WINDOW_HOURS * 3600
+        )
+        target.traquenard_until = window_until
         await self._store.upsert_kingdom(target.to_mongo())
+        # traquenard-fiche-v1: the activator kingdom's live status line
+        # (Salle du conseil) — {target_id: window_until}, cleaned on expiry.
+        activator = await self._kingdom_by_id(lord.kingdom_id)
+        uses = dict(activator.traquenard_uses or {})
+        uses[target_kingdom_id] = window_until
+        activator.traquenard_uses = uses
+        await self._store.upsert_kingdom(activator.to_mongo())
         logger.info(
-            "kingdoms: %s activated a Traquenard against %s (Facile AI for %sh, +2h locks)",
+            "kingdoms: %s activated a Traquenard against %s (Facile AI until %s, %d locks extended)",
             lord.kingdom_id,
             target_kingdom_id,
-            TRAQUENARD_WINDOW_HOURS,
+            window_until,
+            sum(len(kinds) for _lord_id, kinds in affected),
         )
-        return target
+        return TraquenardResult(target=target, until=window_until, affected=affected)
 
     async def base_ai_level(self) -> int:
         """Return the season epoch's base AI level (D18 scale, fallback 1)."""
