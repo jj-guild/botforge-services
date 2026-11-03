@@ -276,28 +276,36 @@ def _strings(locale: str) -> dict[str, str]:
                 " à être prudent. {lock} de verrouillage (Traquenard)."
             ),
             "remparts_ai_intro": (
-                "🤖 **Bot de défense (IA)**\n"
+                "🤖 **Bot de défense (IA):**\n"
                 "Si aucun seigneur ne défend votre royaume, votre bot IA prend le"
                 " relais de votre défense automatiquement. Vous pouvez augmenter le"
                 " niveau de votre IA en l'entraînant via l'achat d'un Jeu d'armes au"
                 " Marché ; lorsque votre IA est au niveau max, cela améliore votre"
                 " Patrouille (Patrouilles Renforcées, créneaux de 3h)."
             ),
-            "remparts_ai_level": "Niveau de votre IA : **{0}/5 {1}**",
+            "remparts_ai_level": "🤖 Niveau de votre IA : **{0}/5 {1}**",
             "remparts_reinforced": "💪 Patrouilles Renforcées (créneaux de 3h)",
             "remparts_patrouille_intro": (
-                "🛡️ **Patrouille** : permet de vous protéger d'une attaque normale,"
-                " exceptionnelle et technologique, sur un créneau de 2h fixe dans une"
-                " journée — cela s'applique donc tous les jours de la semaine. Si"
-                " votre patrouille est améliorée, le créneau de protection passe à"
-                " 3h. Limite de 2 patrouilles par royaume, une patrouille est"
-                " utilisable pour la durée de toute la saison."
+                "🛡️ **Patrouille :**\n"
+                "Permet de vous protéger d'une attaque normale, exceptionnelle et"
+                " technologique, sur un créneau de 2h fixe dans une journée — cela"
+                " s'applique donc tous les jours de la semaine. Si votre patrouille"
+                " est améliorée, le créneau de protection passe à 3h. Limite de 2"
+                " patrouilles par royaume, une patrouille est utilisable pour la"
+                " durée de toute la saison."
             ),
             "remparts_garde_intro": (
-                "🛡️ **Gardes Royales** : permet de protéger un territoire de toute"
-                " attaque — normale, exceptionnelle et technologique — pour une"
-                " durée de 12h. La Garde Royale se consomme."
+                "🛡️ **Gardes Royales :**\n"
+                "Permet de protéger un territoire de toute attaque — normale,"
+                " exceptionnelle et technologique — pour une durée de 12h. La"
+                " Garde Royale se consomme."
             ),
+            "remparts_patrouille_title": "👣 **Patrouille :**",
+            "remparts_patrouille_title_reinforced": "👣 **Patrouilles Renforcées :**",
+            "remparts_garde_title": "🛡️ **Garde Royale :**",
+            "remparts_garde_owned_one": "Vous disposez de {0} garde royale",
+            "remparts_garde_owned_many": "Vous disposez de {0} gardes royales",
+            "remparts_garde_owned_none": "Vous ne disposez d'aucune Garde Royale",
             "roster_exploring": "🗺️ exploration jusqu'à {0}",
             "roster_marriage_lock": "🔒 verrou mariage jusqu'à {0}",
             "roster_ffa_lock": "🚫 FFA verrouillé jusqu'à {0}",
@@ -569,25 +577,32 @@ def _strings(locale: str) -> dict[str, str]:
                 " to be careful. {lock} of lockout (Traquenard)."
             ),
             "remparts_ai_intro": (
-                "🤖 **Defense bot (AI)**\n"
+                "🤖 **Defense bot (AI):**\n"
                 "If no lord defends your kingdom, your AI bot automatically takes"
                 " over your defense. You can raise your AI's level by training it —"
                 " buy a Set of Arms at the Market; once your AI reaches its max"
                 " level, it improves your Patrol (Reinforced Patrols, 3h slots)."
             ),
-            "remparts_ai_level": "Your AI level: **{0}/5 {1}**",
+            "remparts_ai_level": "🤖 Your AI level: **{0}/5 {1}**",
             "remparts_reinforced": "💪 Reinforced Patrols (3h slots)",
             "remparts_patrouille_intro": (
-                "🛡️ **Patrol**: shields your kingdom from a normal, exceptional"
-                " and technological attack on a fixed 2h slot each day — every day"
-                " of the week. An improved patrol widens the protection slot to"
-                " 3h. Limit of 2 patrols per kingdom, usable for the whole season."
+                "🛡️ **Patrol:**\n"
+                "Shields your kingdom from a normal, exceptional and technological"
+                " attack on a fixed 2h slot each day — every day of the week. An"
+                " improved patrol widens the protection slot to 3h. Limit of 2"
+                " patrols per kingdom, usable for the whole season."
             ),
             "remparts_garde_intro": (
-                "🛡️ **Royal Guards**: shields one territory from every attack —"
-                " normal, exceptional and technological — for 12 hours. The"
-                " Royal Guard is consumed."
+                "🛡️ **Royal Guards:**\n"
+                "Shields one territory from every attack — normal, exceptional"
+                " and technological — for 12 hours. The Royal Guard is consumed."
             ),
+            "remparts_patrouille_title": "👣 **Patrol:**",
+            "remparts_patrouille_title_reinforced": "👣 **Reinforced Patrols:**",
+            "remparts_garde_title": "🛡️ **Royal Guard:**",
+            "remparts_garde_owned_one": "You own {0} Royal Guard",
+            "remparts_garde_owned_many": "You own {0} Royal Guards",
+            "remparts_garde_owned_none": "You do not own any Royal Guard",
             "roster_exploring": "🗺️ exploring until {0}",
             "roster_marriage_lock": "🔒 marriage lock until {0}",
             "roster_ffa_lock": "🚫 FFA locked until {0}",
@@ -1370,10 +1385,14 @@ def _build_patrol(
         lines.append(strings["remparts_ai_intro"])
         if state.get("reinforced"):
             lines.append(strings["remparts_reinforced"])
-        lines.append(strings["remparts_patrouille_intro"])
-        lines.append(strings["remparts_garde_intro"])
+        # remparts-etats-aeration (Drasah 03/11 soir): one blank line
+        # between each block; the Lord's-Day note stays GLUED to the
+        # Patrouille block (it is about placing the slots).
         lines.append("")
+        lines.append(strings["remparts_patrouille_intro"])
         lines.append(strings["patrol_window"])
+        lines.append("")
+        lines.append(strings["remparts_garde_intro"])
         body = "\n".join(lines)
         return _panel_view_with_buttons(
             strings["patrol_title"].format(getattr(kingdom, "name", "")),
@@ -1395,8 +1414,6 @@ def _build_patrol(
             int(state["defense_ai"]), strings
         )
         lines.append(strings["remparts_ai_level"].format(display, level_name))
-        if state.get("reinforced"):
-            lines.append(strings["remparts_reinforced"])
         lines.append("")
     # remparts-etats-v1 (Drasah 03/11): one STATUS line per slot —
     # ❌ not owned (market hint), ⚠️ owned but not configured,
@@ -1414,7 +1431,18 @@ def _build_patrol(
         else:
             line = strings["remparts_state_missing"].format(slot_no)
         lines.append(line)
-    # Gardes Royales — one line per shielded map + the reserve (v2).
+    # remparts-etats-titres (Drasah 03/11 soir): the section titles
+    # ride their own line — 👣 Patrouille (renamed Patrouilles
+    # Renforcées while reinforced, per Drasah's tranche) and 🛡️ Garde
+    # Royale; the 💪 line is GONE from the state face (the rename
+    # carries it).
+    lines.append("")
+    lines.append(
+        strings["remparts_patrouille_title_reinforced"]
+        if state.get("reinforced")
+        else strings["remparts_patrouille_title"]
+    )
+    # Gardes Royales — one line per shielded map + the owned count.
     guard_lines: list[str] = []
     for territory in state["territories"]:
         guard_key = f"garde_royale_until:{getattr(territory, 'id', '')}"
@@ -1429,14 +1457,18 @@ def _build_patrol(
         )
     guard_block = "\n".join(guard_lines) or strings["remparts_guard_none"]
     lines.append("")
-    # remparts-etats-v1: the Garde intro stays on the STATE face
-    # (Drasah's paste keeps it) — the ✅ lines follow.
-    lines.append(strings["remparts_garde_intro"])
-    lines.append(f"**{strings['remparts_guard']}** :")
-    lines.append(guard_block)
+    # remparts-etats-titres: 🛡️ Garde Royale — the owned counter
+    # REPLACES « En réserve » (Drasah's tranche: none/one/many), then
+    # the ✅ lines follow; the pedagogical intro lives in info only.
+    lines.append(strings["remparts_garde_title"])
     stock = int(purchases.get("garde_royale_stock", 0) or 0)
-    if stock > 0:
-        lines.append(strings["remparts_guard_stock"].format(stock))
+    if stock <= 0:
+        lines.append(strings["remparts_garde_owned_none"])
+    elif stock == 1:
+        lines.append(strings["remparts_garde_owned_one"].format(stock))
+    else:
+        lines.append(strings["remparts_garde_owned_many"].format(stock))
+    lines.append(guard_block)
     body = "\n".join(lines)
     from kingdoms.mods.kingdoms.kingdom_attack_panel import (
         KingdomAttackManagerButton,

@@ -273,21 +273,28 @@ async def test_remparts_view_wears_the_pedagogical_blocks() -> None:
     assert "Bot de défense (IA)" in content
     assert "Jeu d'armes au Marché" in content
     assert "Patrouilles Renforcées" in content
-    assert "**Patrouille** : permet de vous protéger" in content
+    # remparts-etats-aeration: title on its own line, description below
+    assert "**Patrouille :**" in content
+    assert "Permet de vous protéger" in content
     assert "tous les jours de la semaine" in content
     assert "Limite de 2 patrouilles par royaume" in content
-    assert "**Gardes Royales** : permet de protéger un territoire" in content
+    assert "**Gardes Royales :**" in content
+    assert "Permet de protéger un territoire" in content
     assert "durée de 12h" in content
     assert "La Garde Royale se consomme" in content
-    # the Lord's-Day note LIVES on the info face now
+    # the Lord's-Day note LIVES on the info face, glued to Patrouille
     assert "Redéfinition des créneaux" in content
-    # --- state face: the live statuses only
+    # --- state face: the live statuses only, with section titles
     content = _view_text(_build_patrol(_strings("fr"), _Kingdom(), state))
-    assert "Niveau de votre IA : **3/5 Difficile**" in content  # moteur = échelle Drasah (ia-base-zero-v1)
+    assert "🤖 Niveau de votre IA : **3/5 Difficile**" in content  # moteur = échelle Drasah (ia-base-zero-v1)
     assert "Bot de défense (IA)" not in content
+    # remparts-etats-titres: the section titles ride the state face
+    assert "👣 **Patrouille :**" in content
+    assert "🛡️ **Garde Royale :**" in content
     assert "❌ Vous ne disposez pas de patrouille [1/2]" in content
     assert "❌ Vous ne disposez pas de patrouille [2/2]" in content
-    assert "En réserve : 1" in content
+    # remparts-etats-titres: the owned counter replaces « En réserve »
+    assert "Vous disposez de 1 garde royale" in content
 
 
 async def test_remparts_view_shows_patrols_and_the_guard_button() -> None:
@@ -306,8 +313,9 @@ async def test_remparts_view_shows_patrols_and_the_guard_button() -> None:
     # remparts-etats-v1: ⏲ for the placed slot, ❌ for the locked one
     assert "⏲ Votre patrouille [1/2] est bien active entre 02h00 et 04h00" in content
     assert "❌ Vous ne disposez pas de patrouille [2/2]" in content
-    assert "Gardes Royales" in content
-    assert "En réserve : 1" in content  # one guard token in stock
+    assert "👣 **Patrouille :**" in content  # remparts-etats-titres
+    assert "🛡️ **Garde Royale :**" in content  # remparts-etats-titres
+    assert "Vous disposez de 1 garde royale" in content  # one guard token in stock
     ids = _ids(view)
     assert "kingdoms:remparts:guard" in ids
     # remparts-etats-v1: the 🔎 En savoir more button rides the view
@@ -546,7 +554,7 @@ async def test_remparts_button_opens_the_ephemeral_patrol_view() -> None:
     assert message is not None and message.view is not None
     content = _view_text(message.view)
     assert "Votre patrouille" in content
-    assert "Gardes Royales" in content
+    assert "🛡️ **Garde Royale :**" in content
     # the persistent patrol/guard/defense buttons ride the ephemeral view
     assert "kingdoms:remparts:patrouille" in _ids(message.view)
     assert "kingdoms:remparts:info" in _ids(message.view)
