@@ -378,9 +378,11 @@ async def test_defense_ai_level_traquenard_and_reinforced_patrols_marche_v2() ->
     await bundle.draw(12)
     aquitaine = await bundle.kingdom_id("Aquitaine")
     bourgogne = await bundle.kingdom_id("Bourgogne")
+    # ia-base-zero-v1 (Drasah 03/11): the defence bot starts at 0 on
+    # Drasah's scale — the epoch's gaia_ai_level stays the GAÏA scale.
     base = await bundle.attacks.base_ai_level()
     assert base >= 1
-    assert await bundle.attacks.defense_ai_level(bourgogne) == base
+    assert await bundle.attacks.defense_ai_level(bourgogne) == 0
     # Jeu d'armes: each purchase adds one PERMANENT level, ceiling 5.
     state = TechnologyState(
         _id=bourgogne,
@@ -389,7 +391,7 @@ async def test_defense_ai_level_traquenard_and_reinforced_patrols_marche_v2() ->
         purchases={"jeu_d_armes": 1},
     )
     await bundle.store.upsert_technology(state.to_mongo())
-    assert await bundle.attacks.defense_ai_level(bourgogne) == min(5, base + 1)
+    assert await bundle.attacks.defense_ai_level(bourgogne) == 1
     state.purchases["jeu_d_armes"] = 10  # far beyond the ceiling
     await bundle.store.upsert_technology(state.to_mongo())
     assert await bundle.attacks.defense_ai_level(bourgogne) == 5
@@ -404,7 +406,7 @@ async def test_defense_ai_level_traquenard_and_reinforced_patrols_marche_v2() ->
     await bundle.store.upsert_technology(patrol.to_mongo())
     twenty_thirty_paris = datetime(2026, 10, 12, 18, 30, tzinfo=UTC)  # 20h30 in Paris
     assert not patrouille_active_at(
-        patrol, twenty_thirty_paris, base_level=base
+        patrol, twenty_thirty_paris, base_level=0
     )
     assert patrouille_active_at(
         patrol, twenty_thirty_paris, base_level=5

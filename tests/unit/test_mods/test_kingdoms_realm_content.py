@@ -270,7 +270,7 @@ async def test_remparts_view_wears_the_pedagogical_blocks() -> None:
     assert "Bot de défense (IA)" in content
     assert "Jeu d'armes au Marché" in content
     assert "Patrouilles Renforcées" in content
-    assert "Niveau de votre IA : **2/5 Standard**" in content  # échelle -1
+    assert "Niveau de votre IA : **3/5 Difficile**" in content  # moteur = échelle Drasah (ia-base-zero-v1)
     assert "**Patrouille** : permet de vous protéger" in content
     assert "tous les jours de la semaine" in content
     assert "Limite de 2 patrouilles par royaume" in content
