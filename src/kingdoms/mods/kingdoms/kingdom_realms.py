@@ -42,8 +42,11 @@ REALM_SALONS: tuple[tuple[str, str], ...] = (
     ("le-royaume", "🏰 le-royaume"),
     ("territoire", "🗺️ territoire"),
     ("alliances", "🤝 alliances"),
-    ("eglise", "⛪ paroisse"),
 )
+# retrait-paroisse-salon-v1 (Drasah 03/11): the ⛪ Paroisse SALON
+# disappears from the realm structure — the lieu stays reachable via
+# the 🏰 Le-Royaume hub button (kingdom_lieux), the ``eglise`` data
+# key (parish tier, marriages) never changes.
 # ordre-salons-v1 (Drasah 19/10): the grimoire charte reaches the realm
 # salons — lowercase + one emoji, and the lookups stay decoration-blind
 # (kingdom_setup._slug), so panels and content keep resolving after
@@ -57,6 +60,11 @@ REMOVED_REALM_SALONS: tuple[tuple[str, str], ...] = (
     ("remparts", "🧱 Remparts"),
     ("seigneurs", "Seigneurs"),
     ("pigeon-voyageur", "Pigeon-Voyageur"),
+    # retrait-paroisse-salon-v1 (Drasah 03/11): the salon is purged at
+    # the next provisioning pass (best-effort), by the charte slug AND
+    # the legacy « Église » name for the oldest realms.
+    ("eglise", "⛪ paroisse"),
+    ("eglise", "Église"),
 )
 # Drasah 2026-10-11: the salon « Église » is renamed « Paroisse » (the
 # palier lives inside); the data key ``eglise`` never changes.

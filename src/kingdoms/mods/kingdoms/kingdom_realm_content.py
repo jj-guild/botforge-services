@@ -746,7 +746,10 @@ async def deploy_realm_content(
     builders: dict[str, Any] = {
         "le-royaume": _build_overview,
         "territoire": _build_territory if phase != "setup" else _build_territory_pending,
-        "eglise": _build_church,
+        # retrait-paroisse-salon-v1 (Drasah 03/11): the ⛪ Paroisse
+        # salon is retired from the structure — the lieu view lives on
+        # via the 🏰 Le-Royaume hub button, the salon panel no longer
+        # has a channel to ride (the builder is simply not scheduled).
         # alliances-lisibilite-v1 T3 (Drasah 25/10): the unified hand
         # view — one crest MOSAIC (origin badge per tile) + the legend,
         # the married holders and the live mercenary contracts as

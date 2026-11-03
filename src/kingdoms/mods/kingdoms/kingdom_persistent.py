@@ -2531,7 +2531,7 @@ def _traquenard_fiche_view(strings: dict[str, Any], *, active: str) -> discord.u
     view = discord.ui.View(timeout=None)
     view.add_item(KingdomTraquenardForcesButton(strings, active=active))
     view.add_item(KingdomTraquenardFicheButton(strings, active=active))
-    view.add_item(KingdomTraquenardGoButton(strings))
+    view.add_item(KingdomTraquenardGoButton(strings, active=active))
     view.add_item(KingdomTraquenardCancelButton(strings))
     return view
 
@@ -2979,7 +2979,12 @@ class KingdomTraquenardFicheButton(
         await interaction.response.edit_message(
             content=_traquenard_fiche_content(strings),
             view=_traquenard_fiche_view(strings, active="fiche"),
-            files=[card] if card is not None else None,
+            # onglet-mort-fix (Drasah live report 03/11): ``files`` is
+            # NOT an edit_message kwarg (discord.py raises TypeError and
+            # the tab dies silently) — the card rides ``attachments``
+            # (a NEW discord.File is uploaded, the dropped art is not
+            # re-listed so it stays removed).
+            attachments=[card] if card is not None else [],
         )
 
 
@@ -2994,12 +2999,20 @@ class KingdomTraquenardGoButton(
     green with one) and the red ❌ Annuler. The VALIDATION alone
     consumes the bought charge (usable by EVERY lord)."""
 
-    def __init__(self, strings: dict[str, Any]) -> None:
+    def __init__(self, strings: dict[str, Any], *, active: str = "fiche") -> None:
         super().__init__(
             discord.ui.Button(
                 label=str(strings["traquenard_activate_button"])[:80],
                 custom_id="kingdoms:traquenard:go",
-                style=discord.ButtonStyle.success,
+                # forces-activer-fix (Drasah live report 03/11): the
+                # ⚔️ Activer is only meaningful on the FICHE — on the
+                # forces sheet it renders grey and never dispatches.
+                style=(
+                    discord.ButtonStyle.success
+                    if active == "fiche"
+                    else discord.ButtonStyle.secondary
+                ),
+                disabled=active != "fiche",
             )
         )
 
@@ -6457,7 +6470,15 @@ async def _delete_matching_channels(guild: discord.Guild, structure_names: set[s
     from kingdoms.mods.kingdoms.kingdom_realms import REALM_SALONS
     from kingdoms.mods.kingdoms.kingdom_setup import _slug
 
-    realm_slugs = {_slug(name) for _key, name in REALM_SALONS}
+    # retrait-paroisse-salon-v1 (Drasah 03/11): the retired salons
+    # (remparts/seigneurs/pigeon/paroisse) must die with their kingdom
+    # too — otherwise they survive the reset as orphans at the root.
+    from kingdoms.mods.kingdoms.kingdom_realms import REMOVED_REALM_SALONS
+
+    realm_slugs = {
+        _slug(name)
+        for _key, name in (*REALM_SALONS, *REMOVED_REALM_SALONS)
+    }
     deleted = 0
     channels = [*list(guild.text_channels), *list(getattr(guild, "forums", []))]
     for channel in channels:
