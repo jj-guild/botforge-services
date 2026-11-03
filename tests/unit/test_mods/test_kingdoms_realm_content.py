@@ -303,8 +303,10 @@ async def test_remparts_view_shows_patrols_and_the_guard_button() -> None:
     assert "En réserve : 1" in content  # one guard token in stock
     ids = _ids(view)
     assert "kingdoms:remparts:guard" in ids
-    assert "kingdoms:remparts:patrouille:1" in ids
-    assert "kingdoms:remparts:patrouille:2" in ids
+    # remparts-boutons-v1: ONE Patrouille cockpit button rules both slots
+    assert "kingdoms:remparts:patrouille" in ids
+    assert "kingdoms:remparts:patrouille:1" not in ids
+    assert "kingdoms:remparts:patrouille:2" not in ids
     assert "kingdoms:attack:defense-manager" in ids
 
 
@@ -537,7 +539,7 @@ async def test_remparts_button_opens_the_ephemeral_patrol_view() -> None:
     assert "Patrouille 1" in content
     assert "Gardes Royales" in content
     # the persistent patrol/guard/defense buttons ride the ephemeral view
-    assert "kingdoms:remparts:patrouille:1" in _ids(message.view)
+    assert "kingdoms:remparts:patrouille" in _ids(message.view)
     assert "kingdoms:attack:defense-manager" in _ids(message.view)
 
 
