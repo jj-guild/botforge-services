@@ -374,6 +374,7 @@ class ContentRefreshButton(
         super().__init__(
             discord.ui.Button(
                 label=label[:80],
+                emoji="\U0001F3DB",
                 style=discord.ButtonStyle.primary,
                 custom_id=f"{_NS}:refresh",
             )
@@ -440,7 +441,7 @@ class MapsSyncButton(
         super().__init__(
             discord.ui.Button(
                 label=label,
-                emoji="\U0001F5FA",
+                emoji="\U0001F30D",
                 style=discord.ButtonStyle.secondary,
                 custom_id=f"{_NS}:refresh:maps",
             )

@@ -297,10 +297,10 @@ fr:
     sync_title: Synchronisation cross-guild
     sync_civs_line: "**Civs** \u2014 r\u00e9concilie le catalogue et le contenu des civs avec le dataset aoe2techtree embarqu\u00e9 (rapide, donn\u00e9es locales)."
     sync_maps_line: "**Maps** \u2014 enrichit le contenu des maps depuis Liquipedia (\u00e0 la demande, au rythme impos\u00e9 par l'API : une page toutes les 60 s \u2014 un catalogue froid prend un moment)."
-    sync_subtitle: 'Les actions de synchronisation au niveau du bot : chaque bouton met \u00e0 jour les donn\u00e9es partag\u00e9es par tous les serveurs.'
+    sync_subtitle: 'Synchronisation des données AoE2 partagées par tous les serveurs — chaque bouton met à jour le jeu Age of Empires II (données communes à tous les serveurs).'
     btn_sync_civs: Civs
     btn_sync_maps: Maps
-    maps_sync_done: "Sync maps terminé — {enriched} map(s) enrichie(s) sur {total}, {complete} déjà complètes, {checked} à vérifier ; les posts du forum sont rafraîchis (respect du rythme imposé par l'API Liquipedia)."
+    maps_sync_done: "Sync maps terminé — {total} map(s) au catalogue : {complete} déjà complètes (ignorées), {checked} interrogées auprès de Liquipedia, {enriched} enrichie(s). Les posts du forum sont rafraîchis (respect du rythme imposé par l'API Liquipedia)."
     maps_sync_failed: Sync maps échoué (voir les logs).
     menu_current_language: '🌐 Langue : {current}'
     access_btn_manage: Gérer les accès
