@@ -309,6 +309,10 @@ class TraquenardResult:
     target: "KingdomModel"
     until: int
     affected: list[tuple[str, list[str]]]
+    # traquenard-beta-v1 (Drasah 03/11): the lock extension actually
+    # applied (+2h live, +1 minute under an armed beta) — the DM and
+    # done-note wording rides it, never a hardcoded +2h.
+    lock_seconds: int = 0
 
 
 def patrouille_slots(state: TechnologyState) -> tuple[int, ...]:
@@ -3376,7 +3380,21 @@ class AttackService:
         await self._store.upsert_technology(state.to_mongo())
         await self._record_action(lord.kingdom_id, "traquenard", f"royaume {target_kingdom_id}")
         now_ts = int(timestamp.timestamp())
+        # traquenard-beta-v1 (Drasah 03/11): under an armed beta the
+        # +2h lock extension compresses to +1 minute (the beta windows
+        # are minutes — a +2h would drown every beta test flow). The
+        # 2h Facile window is NOT scaled (it stays testable live).
         lock_delta = int(TRAQUENARD_LOCK_HOURS * 3600)
+        try:
+            from kingdoms.mods.kingdoms.beta_weekend import beta_started
+
+            season = await self._kingdoms.current_season()
+            if season is not None and beta_started(season, timestamp):
+                lock_delta = 60
+        except Exception:
+            logger.warning(
+                "kingdoms: traquenard beta probe failed (ignored)", exc_info=True
+            )
         # (1) one-shot +2h on every LIVING lock of the target's lords
         # (marriage + tavern + exploration for the sailing crew), ONE
         # extension per lock (``traquenard_lock_marks`` guards against a
@@ -3442,7 +3460,12 @@ class AttackService:
             window_until,
             sum(len(kinds) for _lord_id, kinds in affected),
         )
-        return TraquenardResult(target=target, until=window_until, affected=affected)
+        return TraquenardResult(
+            target=target,
+            until=window_until,
+            affected=affected,
+            lock_seconds=lock_delta,
+        )
 
     async def base_ai_level(self) -> int:
         """Return the season epoch's base AI level (D18 scale, fallback 1)."""

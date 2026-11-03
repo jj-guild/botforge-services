@@ -2536,6 +2536,24 @@ def _traquenard_fiche_view(strings: dict[str, Any], *, active: str) -> discord.u
     return view
 
 
+def _traquenard_lock_text(lock_seconds: int) -> str:
+    """traquenard-beta-v1 (Drasah 03/11): the extension actually applied —
+    ``+2h`` live, ``+1 minute`` under an armed beta (locale-neutral)."""
+    if lock_seconds >= 3600 and lock_seconds % 3600 == 0:
+        return f"+{lock_seconds // 3600}h"
+    minutes = max(1, int(lock_seconds) // 60) if lock_seconds else 2 * 60
+    return f"+{minutes} minute" + ("s" if minutes > 1 else "")
+
+
+def _traquenard_delay_text(seconds: int, strings: dict[str, Any]) -> str:
+    """The channel note's delay wording (« 2 heures » / « 2 hours »)."""
+    if seconds >= 3600 and seconds % 3600 == 0:
+        hours = seconds // 3600
+        return f"{hours} {strings.get('traquenard_hours', 'heures')}"
+    minutes = max(1, int(seconds) // 60) if seconds > 0 else 1
+    return f"{minutes} {strings.get('traquenard_minutes', 'minutes')}"
+
+
 async def _traquenard_close(interaction: discord.Interaction) -> None:
     """The shared ❌ Annuler — close the ephemeral window the component
     sits on (type-6 defer + delete), and drop the registry entry."""
@@ -2584,6 +2602,7 @@ def _traquenard_on_validate(
         note = str(strings["traquenard_done"]).format(
             kingdom=str(getattr(result.target, "name", "") or chosen_id),
             time=f"<t:{int(result.until)}:R>",
+            lock=_traquenard_lock_text(int(getattr(result, "lock_seconds", 0) or 0)),
         )
         await target.response.edit_message(content=note, view=None)
         _market_ttl(target, getattr(target, "message", None))
@@ -2619,10 +2638,23 @@ async def _traquenard_announce(
         channel = await _discussions_channel(guild, activator)
         if channel is None:
             return
+        # traquenard-note-v2 (Drasah 03/11): « Votre Royaume a utilisé
+        # un Traquenard contre le Royaume X — l'IA de défense est très
+        # facile pour un délai {duration}. » — the duration is the
+        # LIVE remaining window (game clock), not a hardcoded 2h.
+        try:
+            from kingdoms.mods.kingdoms.game_clock import game_now
+
+            remaining = int(getattr(result, "until", 0) or 0) - int(
+                game_now().timestamp()
+            )
+        except Exception:
+            remaining = int(getattr(result, "until", 0) or 0) - int(
+                __import__("time").time()
+            )
         note = str(strings["traquenard_channel_note"]).format(
-            kingdom=str(getattr(activator, "name", "") or activator_kingdom_id),
             target=str(getattr(getattr(result, "target", None), "name", "") or ""),
-            time=f"<t:{int(getattr(result, 'until', 0) or 0)}:R>",
+            duration=_traquenard_delay_text(remaining, strings),
         )
         await channel.send(note)
     except Exception:
@@ -2658,7 +2690,20 @@ async def _traquenard_dm_lords(guild: Any, result: Any, strings: dict[str, Any])
             if key is None:
                 continue
             try:
-                await member.send(str(strings[key]))
+                # traquenard-dm-visuel-v1 (Drasah 03/11): the DM wears
+                # the Traquenard CARD ART — the player understands the
+                # lock comes from a technology CARD (best-effort, a
+                # fresh File per DM — a discord.File is consumed by its
+                # first send).
+                card = _market_card_file("traquenard") or _market_card_back_file()
+                await member.send(
+                    str(strings[key]).format(
+                        lock=_traquenard_lock_text(
+                            int(getattr(result, "lock_seconds", 0) or 0)
+                        )
+                    ),
+                    files=[card] if card is not None else None,
+                )
             except Exception:
                 logger.info(
                     "KINGDOMS: traquenard DM to %s failed (ignored)", str(lord_id)
