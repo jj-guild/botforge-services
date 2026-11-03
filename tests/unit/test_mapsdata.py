@@ -359,3 +359,88 @@ async def test_fetch_map_seed_runs_off_the_event_loop(monkeypatch: pytest.Monkey
     # stayed serviced while it slept.
     assert provider_threads[0] != loop_thread, "the sync Liquipedia client ran on the event loop"
     assert heartbeat.done(), "the event loop stayed responsive during seeding"
+
+
+def test_map_data_batch_resolves_pages_and_images_in_few_requests(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The batch path: one wikitext query + two imageinfo queries, 2 s pacing.
+
+    action=parse is capped at one request per 30 s by the API terms;
+    the batch rides action=query (2 s pacing) and carries up to 50
+    pages per call \u2014 a whole catalog in a handful of requests.
+    """
+    import kingdoms.mapsdata.liquipedia as lp
+
+    calls: list[str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        params = dict(request.url.params)
+        titles = str(params.get("titles") or "")
+        calls.append(f"{params.get('action')}:{params.get('prop')}")
+        if params.get("prop") == "revisions":
+            pages = []
+            for title in titles.split("|"):
+                if title == "Missing_Map":
+                    pages.append({"title": title, "missing": True})
+                    continue
+                pages.append(
+                    {
+                        "title": title,
+                        "revisions": [
+                            {
+                                "slots": {
+                                    "main": {
+                                        "content": (
+                                            f"{{{{Infobox map\n|name={title}\n|image={title}.png\n}}}}"
+                                        )
+                                    }
+                                }
+                            }
+                        ],
+                    }
+                )
+            return httpx.Response(200, text=json.dumps({"query": {"pages": pages}}))
+        # imageinfo
+        assert params.get("prop") == "imageinfo"
+        iiprop = str(params.get("iiprop"))
+        pages = []
+        for title in titles.split("|"):
+            if "missing" in title:
+                pages.append({"title": title, "missing": True})
+                continue
+            if iiprop == "url":
+                imageinfo = [{"url": f"https://liquipedia.test/images/{title}"}]
+            else:
+                imageinfo = [
+                    {"extmetadata": {"LicenseShortName": {"value": "CC-BY-SA 3.0"}}}
+                ]
+            pages.append({"title": title, "imageinfo": imageinfo})
+        return httpx.Response(200, text=json.dumps({"query": {"pages": pages}}))
+
+    def fake_sleep(seconds: float) -> None:
+        pass
+
+    monkeypatch.setattr(lp, "_shared_last_request_at", 0.0)
+    monkeypatch.setattr(lp, "_shared_last_parse_at", 0.0)
+
+    provider = lp.LiquipediaMapsProvider(USER_AGENT, api_url=API_URL, sleep=fake_sleep)
+    provider._client = httpx.Client(
+        headers={"User-Agent": USER_AGENT}, transport=httpx.MockTransport(handler)
+    )
+    data = provider.map_data_batch(["Arabia", "Black Forest", "Missing Map"])
+    # the two existing pages are resolved with their images; the missing
+    # page is simply absent.
+    assert set(data) == {"Arabia", "Black_Forest"}
+    assert data["Arabia"].image_url.startswith("https://liquipedia.test/images/")
+    assert data["Arabia"].info.name == "Arabia"
+    # one revisions query + two imageinfo queries \u2014 no action=parse at all.
+    assert calls.count("query:revisions") == 1
+    assert calls.count("query:imageinfo") == 2
+    assert "parse:wikitext" not in calls
+    # the second batch call serves from cache: zero extra requests.
+    calls.clear()
+    again = provider.map_data_batch(["Arabia", "Black Forest"])
+    assert set(again) == {"Arabia", "Black_Forest"}
+    assert calls == []
+    provider.close()

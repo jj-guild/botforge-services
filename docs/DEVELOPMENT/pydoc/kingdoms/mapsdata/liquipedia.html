@@ -79,6 +79,20 @@ cache&nbsp;as&nbsp;long&nbsp;as&nbsp;possible&nbsp;—&nbsp;maps&nbsp;rarely&nbs
 
 <dl><dt><a name="LiquipediaMapsProvider-map_data"><strong>map_data</strong></a>(self, page_name: 'str') -&gt; 'MapData'</dt><dd><span class="code">Return&nbsp;one&nbsp;map's&nbsp;descriptor,&nbsp;from&nbsp;cache&nbsp;when&nbsp;already&nbsp;fetched.</span></dd></dl>
 
+<dl><dt><a name="LiquipediaMapsProvider-map_data_batch"><strong>map_data_batch</strong></a>(self, page_names: 'list[str]') -&gt; 'dict[str, MapData]'</dt><dd><span class="code">Several&nbsp;maps'&nbsp;descriptors&nbsp;in&nbsp;a&nbsp;few&nbsp;BATCHED&nbsp;action=query&nbsp;calls.<br>
+&nbsp;<br>
+The&nbsp;API&nbsp;terms&nbsp;(<a href="https://liquipedia.net/api-terms-of-use">https://liquipedia.net/api-terms-of-use</a>)&nbsp;cap<br>
+``action=parse``&nbsp;at&nbsp;one&nbsp;request&nbsp;per&nbsp;30&nbsp;s&nbsp;—&nbsp;one&nbsp;parse&nbsp;per&nbsp;map<br>
+makes&nbsp;a&nbsp;large&nbsp;sync&nbsp;crawl&nbsp;for&nbsp;hours.&nbsp;``action=query``&nbsp;instead<br>
+rides&nbsp;the&nbsp;light&nbsp;2&nbsp;s&nbsp;pacing&nbsp;and&nbsp;carries&nbsp;up&nbsp;to&nbsp;50&nbsp;pages&nbsp;per<br>
+request:&nbsp;the&nbsp;wikitext&nbsp;of&nbsp;the&nbsp;whole&nbsp;batch&nbsp;(``prop=revisions``)<br>
+and&nbsp;the&nbsp;image&nbsp;URLs&nbsp;and&nbsp;licence&nbsp;metadata&nbsp;of&nbsp;every&nbsp;image<br>
+(``prop=imageinfo``)&nbsp;each&nbsp;fit&nbsp;in&nbsp;ONE&nbsp;request&nbsp;per&nbsp;chunk&nbsp;of&nbsp;50.<br>
+Returns&nbsp;{cache_key:&nbsp;<a href="#MapData">MapData</a>}&nbsp;for&nbsp;the&nbsp;pages&nbsp;that&nbsp;exist;&nbsp;a&nbsp;page<br>
+whose&nbsp;image&nbsp;licence&nbsp;is&nbsp;incompatible&nbsp;is&nbsp;simply&nbsp;absent&nbsp;from&nbsp;the<br>
+result&nbsp;(the&nbsp;single-map&nbsp;path&nbsp;raises&nbsp;<a href="#MapLicenseError">MapLicenseError</a>&nbsp;instead&nbsp;—<br>
+the&nbsp;batch&nbsp;caller&nbsp;treats&nbsp;"absent"&nbsp;as&nbsp;"no&nbsp;seed").</span></dd></dl>
+
 <hr>
 Data descriptors defined here:<br>
 <dl><dt><strong>__dict__</strong></dt>

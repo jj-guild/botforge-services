@@ -247,6 +247,130 @@ class LiquipediaMapsProvider:
             icon_url = self._resolve_image_url(info.gallery_icon)
         return MapData(info=info, image_url=image_url, icon_url=icon_url)
 
+    def map_data_batch(self, page_names: list[str]) -> dict[str, MapData]:
+        """Several maps' descriptors in a few BATCHED action=query calls.
+
+        The API terms (https://liquipedia.net/api-terms-of-use) cap
+        ``action=parse`` at one request per 30 s \u2014 one parse per map
+        makes a large sync crawl for hours. ``action=query`` instead
+        rides the light 2 s pacing and carries up to 50 pages per
+        request: the wikitext of the whole batch (``prop=revisions``)
+        and the image URLs and licence metadata of every image
+        (``prop=imageinfo``) each fit in ONE request per chunk of 50.
+        Returns {cache_key: MapData} for the pages that exist; a page
+        whose image licence is incompatible is simply absent from the
+        result (the single-map path raises MapLicenseError instead \u2014
+        the batch caller treats "absent" as "no seed").
+        """
+        result: dict[str, MapData] = {}
+        todo: list[str] = []
+        for raw in page_names:
+            key = raw.strip().replace(" ", "_")
+            if key in self._cache:
+                result[key] = self._cache[key]
+            elif key not in todo:
+                todo.append(key)
+        for chunk_start in range(0, len(todo), 50):
+            chunk = todo[chunk_start : chunk_start + 50]
+            result.update(self._fetch_map_data_batch(chunk))
+        return result
+
+    def _wikitext_batch(self, chunk: list[str]) -> dict[str, str]:
+        """One ``action=query`` call for the wikitext of \u226450 pages."""
+        payload = self._get_json(
+            {
+                "action": "query",
+                "prop": "revisions",
+                "rvprop": "content",
+                "rvslots": "main",
+                "titles": "|".join(chunk),
+                "format": "json",
+                "formatversion": "2",
+            }
+        )
+        wikitexts: dict[str, str] = {}
+        for page in payload.get("query", {}).get("pages", []):
+            if page.get("missing"):
+                continue
+            revisions = page.get("revisions") or []
+            if not revisions:
+                continue
+            slots = revisions[0].get("slots", {})
+            content = str((slots.get("main") or {}).get("content", ""))
+            key = str(page.get("title", "")).strip().replace(" ", "_")
+            wikitexts[key] = content
+        return wikitexts
+
+    def _fetch_map_data_batch(self, chunk: list[str]) -> dict[str, MapData]:
+        """One wikitext query + two imageinfo queries for \u226450 pages."""
+        wikitexts = self._wikitext_batch(chunk)
+        infos: dict[str, MapInfo] = {}
+        for key in chunk:
+            wikitext = wikitexts.get(key)
+            if not wikitext:
+                continue
+            infos[key] = self._info_from_wikitext(key, wikitext)
+        if not infos:
+            return {}
+        # every referenced image file, resolved and licence-checked in
+        # one imageinfo=url query + one imageinfo=extmetadata query
+        files: list[str] = []
+        for info in infos.values():
+            for name in (info.image_file, info.gallery_icon):
+                if name and f"File:{name}" not in files:
+                    files.append(f"File:{name}")
+        urls = self._imageinfo_batch(files, "url")
+        notices = self._imageinfo_batch(files, "extmetadata")
+        out: dict[str, MapData] = {}
+        for key, info in infos.items():
+            if _UNLICENSED_NOTICE_RE.search(notices.get(info.image_file, "")):
+                logger.info(
+                    "liquipedia batch: image licence refused for %s \u2014 skipped",
+                    info.name,
+                )
+                continue
+            out[key] = MapData(
+                info=info,
+                image_url=urls.get(info.image_file, ""),
+                icon_url=urls.get(info.gallery_icon, "") if info.gallery_icon else "",
+            )
+        self._cache.update(out)
+        return out
+
+    def _imageinfo_batch(self, files: list[str], iiprop: str) -> dict[str, str]:
+        """Query imageinfo for up to 50 File: titles at once.
+
+        Returns {file name without the File: prefix: url or licence
+        notice} for the ``url`` / ``extmetadata`` iiprop respectively.
+        """
+        if not files:
+            return {}
+        out: dict[str, str] = {}
+        for chunk_start in range(0, len(files), 50):
+            chunk = files[chunk_start : chunk_start + 50]
+            payload = self._get_json(
+                {
+                    "action": "query",
+                    "prop": "imageinfo",
+                    "titles": "|".join(chunk),
+                    "iiprop": iiprop,
+                    "format": "json",
+                    "formatversion": "2",
+                }
+            )
+            for page in payload.get("query", {}).get("pages", []):
+                imageinfo = page.get("imageinfo") or []
+                if not imageinfo:
+                    continue
+                title = str(page.get("title", ""))
+                name = title.split("File:", 1)[-1] if title.startswith("File:") else title
+                if iiprop == "url":
+                    out[name] = str(imageinfo[0].get("url", ""))
+                else:
+                    meta = imageinfo[0].get("extmetadata", {})
+                    out[name] = str((meta.get("LicenseShortName") or {}).get("value", ""))
+        return out
+
     def _fetch_infobox(self, page: str) -> MapInfo:
         payload = self._get_json(
             {
@@ -259,6 +383,10 @@ class LiquipediaMapsProvider:
             is_parse=True,
         )
         wikitext = str(payload.get("parse", {}).get("wikitext", ""))
+        return self._info_from_wikitext(page, wikitext)
+
+    def _info_from_wikitext(self, page: str, wikitext: str) -> MapInfo:
+        """Build the descriptor from already-fetched wikitext."""
         fields = self._parse_infobox_fields(wikitext)
         name = fields.get("name") or page.replace("_", " ")
         description = self._lead_paragraph(wikitext) or self._clean_wikitext(

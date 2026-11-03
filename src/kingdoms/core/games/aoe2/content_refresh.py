@@ -134,20 +134,30 @@ async def refresh_aoe2_maps() -> dict[str, int]:
     maps_checked = 0
     maps_enriched = 0
     try:
-        from kingdoms.mapsdata.seed import LiquipediaUnconfiguredError, fetch_map_seed
+        import asyncio
+        import os
 
-        for entry in await game_data.list_maps("aoe2"):
+        contact = os.environ.get("LIQUIPEDIA_CONTACT", "")
+        if not contact:
+            from kingdoms.mapsdata.seed import LiquipediaUnconfiguredError
+
+            raise LiquipediaUnconfiguredError("LIQUIPEDIA_CONTACT is not set")
+
+        entries = await game_data.list_maps("aoe2")
+        pending: list[tuple[Any, str]] = []
+        for entry in entries:
             maps_total += 1
             already = await content.get(entry.id, "en")
             if already is not None and already.get("icon_url") and already.get("walls"):
                 maps_complete += 1
                 continue
             maps_checked += 1
-            seed = None
-            try:
-                seed = await fetch_map_seed(entry.name)
-            except LiquipediaUnconfiguredError:
-                break
+            pending.append((entry, entry.name))
+        seeds = await asyncio.to_thread(_resolve_map_seeds_batch, contact, [n for _, n in pending])
+        for entry, name in pending:
+            seed = seeds.get(_title_variants_key(name))
+            if seed is None:
+                seed = seeds.get(name)
             if seed is None or not seed.image_url:
                 continue
             await content.store(
@@ -186,6 +196,56 @@ async def refresh_aoe2_maps() -> dict[str, int]:
         "maps_complete": maps_complete,
         "maps_total": maps_total,
     }
+
+
+def _title_variants_key(name: str) -> str:
+    """Return the canonical cache key of a map name (spaces -> underscores)."""
+    return name.strip().replace(" ", "_")
+
+
+def _resolve_map_seeds_batch(contact: str, names: list[str]) -> dict[str, Any]:
+    """Resolve many map seeds in a few BATCHED Liquipedia calls.
+
+    Runs in a worker thread (the client is synchronous): one
+    ``map_data_batch`` covers up to 50 pages per ``action=query``
+    request at the light 2 s pacing \u2014 instead of one
+    ``action=parse`` per map at 30 s each (the API terms,
+    https://liquipedia.net/api-terms-of-use). Returns {cache_key: seed}
+    for the pages Liquipedia knows; a refused image licence simply
+    leaves the page absent.
+    """
+    from kingdoms.mapsdata.liquipedia import LiquipediaMapsProvider, query_tags
+    from kingdoms.mapsdata.seed import MapSeed
+
+    user_agent = f"KingdomsBot/1.0 (https://github.com/merlin-pinpin-org/kingdoms; {contact})"
+    provider = LiquipediaMapsProvider(user_agent)
+    out: dict[str, MapSeed] = {}
+    try:
+        data = provider.map_data_batch(names)
+        for key, d in data.items():
+            out[key] = MapSeed(
+                name=d.info.name,
+                description=d.info.description,
+                resource_url=d.info.source_url,
+                image_url=d.image_url,
+                icon_url=d.icon_url,
+                terrain=d.info.terrain,
+                nomad=d.info.nomad,
+                walls=d.info.walls,
+                tc=d.info.tc,
+                size=d.info.size,
+                map_type=d.info.map_type,
+                public=True,
+                game_versions=d.info.game_versions,
+                versions=tuple(
+                    {"name": v.name, "description": v.description, "details": list(v.details)}
+                    for v in d.info.versions
+                ),
+                tags=query_tags(d.info),
+            )
+    finally:
+        provider.close()
+    return out
 
 
 async def _legacy_renames(database: Any, collections: tuple[tuple[str, str], ...]) -> dict[str, str]:
