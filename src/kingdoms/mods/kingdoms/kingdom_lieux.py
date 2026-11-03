@@ -116,8 +116,10 @@ STRINGS: dict[str, dict[str, str]] = {
             "No objective set yet — the King may define them with the"
             " 🎯 Objective button."
         ),
+        "conseil_traquenard_title": "**🪤 Traquenard**",
         "conseil_traquenard_line": (
-            "🪤 You used a Traquenard on **{0}** — active {1}"
+            "You weakened the AI level of the kingdom **{0}** — active"
+            " for {1}"
         ),
         "objectif_map_defend_line": "⚔️ Priority : defend **{0}** at all costs /!\\",
         "objectif_alliance_marry_line": "💍 Marriage wished with **{0}**",
@@ -244,8 +246,10 @@ STRINGS: dict[str, dict[str, str]] = {
             "Aucun objectif fixé pour le moment — le Roi peut les définir"
             " avec le bouton 🎯 Objectif."
         ),
+        "conseil_traquenard_title": "**🪤 Traquenard**",
         "conseil_traquenard_line": (
-            "🪤 Vous avez utilisé un Traquenard sur **{0}** — actif {1}"
+            "Vous avez affaibli le niveau de l'IA du royaume **{0}** —"
+            " actif pendant {1}"
         ),
         "objectif_map_defend_line": "⚔️ Priorité : défendre coûte que coûte **{0}** /!\\",
         "objectif_alliance_marry_line": "💍 Mariage souhaité avec **{0}**",
@@ -2254,10 +2258,11 @@ class KingdomLieuExplorationButton(
 
 
 async def _traquenard_status_lines(locale: str, kingdom: Any, wiring: Any) -> list[str]:
-    """traquenard-fiche-v1 (Drasah 03/11): the LIVE Traquenard status
-    of the council sheet — one line per STILL-OPEN Facile window the
-    realm opened (``traquenard_uses``), native ``<t:…:R>`` stamp; the
-    line simply disappears once the window expires."""
+    """traquenard-echelle-v1 (Drasah 03/11): the LIVE Traquenard status
+    of the council sheet — a BLANK line, the « 🪤 Traquenard » title,
+    then one line per STILL-OPEN Facile window the realm opened
+    (``traquenard_uses``), delay in hours+minutes (« 2h05 »); the block
+    simply disappears once every window expires."""
     from time import time as _time
 
     lieu = _strings(locale)
@@ -2286,13 +2291,18 @@ async def _traquenard_status_lines(locale: str, kingdom: Any, wiring: Any) -> li
                 "KINGDOM LIEUX: traquenard status lookup failed (ignored)",
                 exc_info=True,
             )
-    return [
-        str(lieu["conseil_traquenard_line"]).format(
-            names.get(str(target_id), str(target_id)),
-            f"<t:{int(until)}:R>",
+    # traquenard-echelle-v1: delay en heures+minutes (Drasah 03/11 —
+    # « 2h05 », plus de <t:…:R> « dans 2 heures »).
+    lines = ["", str(lieu["conseil_traquenard_title"])]
+    for target_id, until in sorted(live.items()):
+        remaining = max(0, int(until) - now_ts)
+        lines.append(
+            str(lieu["conseil_traquenard_line"]).format(
+                names.get(str(target_id), str(target_id)),
+                f"{remaining // 3600}h{(remaining % 3600) // 60:02d}",
+            )
         )
-        for target_id, until in sorted(live.items())
-    ]
+    return lines
 
 
 async def build_conseil_view(

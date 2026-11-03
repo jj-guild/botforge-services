@@ -207,12 +207,20 @@ def _strings(locale: str) -> dict[str, str]:
             "traquenard_activate_button": "⚔️ Activer",
             "traquenard_cancel_button": "❌ Annuler",
             "traquenard_forces_title": "👁️ Forces IA",
-            "traquenard_forces_line": "🏰 **{name}** — IA **{ai}**/5",
-            "traquenard_forces_active": "🪤 état affaibli — se termine {time}",
+            # traquenard-echelle-v1 (Drasah 03/11) : échelle affichée
+            # DÉCALÉE DE -1 vs moteur (moteur 1 « Facile » → « 0/5 Très
+            # facile »), niveau EN TOUTES LETTRES (échelle Drasah :
+            # 0 Très facile · 1 Standard · 2 Intermédiaire · 3 Difficile
+            # · 4 Plus difficile · 5 Expert), timer en heures+minutes.
+            "traquenard_ai_levels": (
+                "Très facile|Standard|Intermédiaire|Difficile|Plus difficile|Expert"
+            ),
+            "traquenard_forces_line": "🏰 **{name}** — IA : {level} {ai}/5",
+            "traquenard_forces_active": "🪤 état affaibli — se termine dans {time}",
             "traquenard_forces_none": "Aucun royaume adverse à afficher.",
             "traquenard_choose_title": "Choisir le royaume sur lequel utiliser Traquenard",
             "traquenard_select_placeholder": "Sélectionner un royaume",
-            "traquenard_selected": "🎯 Cible : **{name}** (IA **{ai}**/5)",
+            "traquenard_selected": "🎯 Cible : **{name}** (IA : {ai})",
             "traquenard_validate_button": "✅ Valider",
             "traquenard_modify_button": "📝 Modifier",
             "traquenard_choose": "🪤 Contre quel royaume activer le Traquenard ?",
@@ -461,12 +469,15 @@ def _strings(locale: str) -> dict[str, str]:
             "traquenard_activate_button": "⚔️ Activate",
             "traquenard_cancel_button": "❌ Cancel",
             "traquenard_forces_title": "👁️ AI forces",
-            "traquenard_forces_line": "🏰 **{name}** — AI **{ai}**/5",
-            "traquenard_forces_active": "🪤 weakened — ends {time}",
+            "traquenard_ai_levels": (
+                "Very easy|Standard|Intermediate|Hard|Harder|Expert"
+            ),
+            "traquenard_forces_line": "🏰 **{name}** — AI: {level} {ai}/5",
+            "traquenard_forces_active": "🪤 weakened — ends in {time}",
             "traquenard_forces_none": "No adversary kingdom to display.",
             "traquenard_choose_title": "Choose the kingdom to use the Traquenard on",
             "traquenard_select_placeholder": "Select a kingdom",
-            "traquenard_selected": "🎯 Target: **{name}** (AI **{ai}**/5)",
+            "traquenard_selected": "🎯 Target: **{name}** (AI: {ai})",
             "traquenard_validate_button": "✅ Confirm",
             "traquenard_modify_button": "📝 Change",
             "traquenard_choose": "🪤 Against which kingdom should the Traquenard be activated?",

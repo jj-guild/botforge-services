@@ -2508,17 +2508,23 @@ async def _traquenard_forces_content(
         lines.append(str(strings["traquenard_forces_none"]))
         return "\n".join(lines)
     for item, level in rows:
+        # traquenard-echelle-v1 (Drasah 03/11): the displayed scale is
+        # the motor's minus one (0 « Très facile » …), name spelt out —
+        # `🏰 aegis — IA : Très facile 0/5`.
+        display, level_name = _traquenard_ai_display(level, strings)
         lines.append(
             str(strings["traquenard_forces_line"]).format(
                 name=str(getattr(item, "name", "") or kid),
-                ai=level,
+                ai=display,
+                level=level_name,
             )
         )
         until = int(getattr(item, "traquenard_until", 0) or 0)
         if until > now_ts:
+            # timer en heures+minutes (« 2h05 »), pas de <t:…:R>.
             lines.append(
                 str(strings["traquenard_forces_active"]).format(
-                    time=f"<t:{until}:R>"
+                    time=_traquenard_timer_text(until - now_ts)
                 )
             )
     return "\n".join(lines)
@@ -2534,6 +2540,24 @@ def _traquenard_fiche_view(strings: dict[str, Any], *, active: str) -> discord.u
     view.add_item(KingdomTraquenardGoButton(strings, active=active))
     view.add_item(KingdomTraquenardCancelButton(strings))
     return view
+
+
+def _traquenard_ai_display(level_motor: int, strings: dict[str, Any]) -> tuple[int, str]:
+    """traquenard-echelle-v1 (Drasah 03/11): the DISPLAYED AI scale rides
+    one step below the motor (Drasah's scale starts at 0 « Très facile »
+    — the motor's 1 « Facile »): motor 1 → 0 Très facile, 2 → 1 Standard,
+    … the level name spelt out in full."""
+    display = max(0, int(level_motor) - 1)
+    names = str(strings.get("traquenard_ai_levels", "") or "").split("|")
+    name = names[display].strip() if 0 <= display < len(names) else str(display)
+    return display, name
+
+
+def _traquenard_timer_text(seconds: int) -> str:
+    """traquenard-echelle-v1 (Drasah 03/11): hours AND minutes (« 2h05 »)
+    — never « 2 heures », wherever a Traquenard delay shows."""
+    total = max(0, int(seconds))
+    return f"{total // 3600}h{(total % 3600) // 60:02d}"
 
 
 def _traquenard_lock_text(lock_seconds: int) -> str:
@@ -2770,7 +2794,7 @@ def _traquenard_choose_view(
                 name=str(names.get(raw, raw)),
                 ai=str(next(
                     (
-                        opt.label.split("IA ")[-1].split("/")[0]
+                        opt.label.split("IA : ")[-1]
                         for opt in options
                         if opt.value == raw
                     ),
@@ -3119,9 +3143,13 @@ class KingdomTraquenardGoButton(
                     "KINGDOMS: traquenard AI level read failed for %s (ignored)",
                     kid,
                 )
+            # traquenard-echelle-v1: the dropdown rides the SAME
+            # displayed scale as the forces view (décalage -1 + nom en
+            # toutes lettres) — one scale everywhere.
+            display, level_name = _traquenard_ai_display(level, strings)
             options.append(
                 discord.SelectOption(
-                    label=f"{name} — IA {level}/5"[:100],
+                    label=f"{name} — IA : {level_name} {display}/5"[:100],
                     value=kid[:100],
                     description=None,
                 )
