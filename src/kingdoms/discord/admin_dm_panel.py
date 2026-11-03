@@ -476,10 +476,13 @@ class MapsSyncButton(
         import time as _time
 
         if _time.monotonic() - _MAPS_SYNC_LAST_DONE < _MAPS_SYNC_COOLDOWN_S:
-            remaining = int(_MAPS_SYNC_COOLDOWN_S - (_time.monotonic() - _MAPS_SYNC_LAST_DONE))
+            remaining = max(
+                int((_MAPS_SYNC_COOLDOWN_S - (_time.monotonic() - _MAPS_SYNC_LAST_DONE)) // 60),
+                1,
+            )
+            dm_locale = await _dm_locale(interaction)
             await interaction.response.send_message(
-                f"\u23f3 Une sync maps tourne d\u00e9j\u00e0 (ou vient de finir) \u2014 "
-                f"r\u00e9essaie dans ~{max(remaining // 60, 1)} min.",
+                _dm_tr(interaction, dm_locale, "maps_sync_cooldown", minutes=remaining),
                 ephemeral=True,
             )
             return

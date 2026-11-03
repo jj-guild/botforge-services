@@ -300,6 +300,7 @@ fr:
     sync_subtitle: 'Synchronisation des données AoE2 partagées par tous les serveurs — chaque bouton met à jour le jeu Age of Empires II (données communes à tous les serveurs).'
     btn_sync_civs: Civs
     btn_sync_maps: Maps
+    maps_sync_cooldown: "\u23f3 Une sync maps tourne d\u00e9j\u00e0 (ou vient de finir) \u2014 r\u00e9essaie dans ~{minutes} min."
     maps_sync_started: "\U0001F504 Sync maps en cours \u2014 Liquipedia est interrog\u00e9e au rythme impos\u00e9 par son API (quelques minutes sur un catalogue froid). Le r\u00e9sultat sera post\u00e9 dans ce message."
     maps_sync_done: "Sync maps terminé — {total} map(s) au catalogue : {complete} déjà complètes (ignorées), {checked} interrogées auprès de Liquipedia, {enriched} enrichie(s). Les posts du forum sont rafraîchis (respect du rythme imposé par l'API Liquipedia)."
     maps_sync_failed: Sync maps échoué (voir les logs).
