@@ -888,10 +888,18 @@ async def test_use_button_jeu_d_armes_opens_the_confirmation_card() -> None:
     ids = _custom_ids(message.view)
     assert "kingdoms:jeu-darmes:activate" in ids
     assert "kingdoms:jeu-darmes:cancel" in ids
-    content = str(message.content or "")
+    # jeu-darmes-cosmetique-v1: the body rides the EMBED (title +
+    # description), with the TCG card art attached like the revealed
+    # market cards (his Explorateur capture).
+    assert len(message.embeds) == 1
+    card = message.embeds[0]
+    content = str(card.description or "")
     assert "Effect:" in content
     assert "You own: **1**" in content
     assert "0/5" in content
+    assert card.image is not None
+    assert card.image.url == "attachment://Jeu_darme.png"
+    assert [f.filename for f in (message.files or [])] == ["Jeu_darme.png"]
     assert economy.jeu_d_armes_levels == 0  # nothing consumed yet
 
     # ✅ Activer — the token spends, the card turns into the note.

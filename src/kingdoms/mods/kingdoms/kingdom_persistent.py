@@ -2314,15 +2314,17 @@ async def _jeu_darmes_resolve(interaction: discord.Interaction) -> tuple[Any, ..
 
 
 def _jeu_darmes_card(strings: dict[str, Any], state: dict[str, Any]) -> str:
-    """jeu-darmes-bonus-v1: the 🧪 confirmation card body (Drasah's
+    """jeu-darmes-bonus-v1: the 🧪 confirmation card BODY (Drasah's
     maquette verbatim — Effet, the four effect lines, the stock and
-    the current AI level)."""
+    the current AI level). The title lives in the embed."""
     purchases = dict(state.get("purchases") or {})
     stock = int(purchases.get("jeu_d_armes_stock", 0) or 0)
     level = int(state.get("defense_ai") or 0)
     display, level_name = _traquenard_ai_display(level, strings)
+    # jeu-darmes-cosmetique-v1 (Drasah 03/11): the title rides the
+    # EMBED — the TCG card image rides under it, exactly like the
+    # revealed market cards (his Explorateur capture).
     lines = [
-        "## " + str(strings["jeu_darmes_card_title"]),
         "**Effet :**",
         str(strings["jeu_darmes_effect_ia"]),
         str(strings["jeu_darmes_effect_cap"]),
@@ -2356,8 +2358,23 @@ async def _jeu_darmes_open(interaction: discord.Interaction) -> None:
     view = discord.ui.View(timeout=None)
     view.add_item(KingdomJeuDarmesActivateButton(strings))
     view.add_item(KingdomJeuDarmesCancelButton(strings))
+    # jeu-darmes-cosmetique-v1 (Drasah 03/11 live report: « toujours
+    # pas d'image »): the confirmation card renders EXACTLY like the
+    # revealed market cards — an EMBED (title + body) carrying the
+    # TCG card art as an attachment. Missing art stays cosmetic.
+    embed = discord.Embed(
+        title=str(strings["jeu_darmes_card_title"]),
+        description=_jeu_darmes_card(strings, state),
+        colour=discord.Colour.teal(),
+    )
+    file = _market_card_file("jeu_d_armes")
+    if file is not None:
+        embed.set_image(url=f"attachment://{file.filename}")
     await _open_unique_ephemeral(
-        interaction, content=_jeu_darmes_card(strings, state), view=view
+        interaction,
+        embed=embed,
+        files=[file] if file is not None else [],
+        view=view,
     )
 
 
