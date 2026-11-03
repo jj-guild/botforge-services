@@ -248,6 +248,40 @@ async def test_roster_lists_members_with_marriages_and_budgets() -> None:
     assert "🔒 verrou mariage" in content
 
 
+async def test_remparts_view_wears_the_pedagogical_blocks() -> None:
+    """remparts-v3 (Drasah 03/11): the IA block spells the training
+    loop (no defender -> the IA defends, Jeu d'armes raises it, the max
+    level improves the Patrouille) and rides the SHIFTED scale (-1,
+    spelt out); the Patrouille / Gardes Royales intros live in the body
+    and the Lord's-Day line MOVED into the Patrouille button flow."""
+    from kingdoms.mods.kingdoms.kingdom_realm_content import (
+        _build_patrol,
+        _strings,
+    )
+
+    state: dict[str, Any] = {
+        "purchases": {"garde_royale_stock": 1},
+        "territories": [],
+        "map_names": {},
+        "defense_ai": 3,
+        "reinforced": False,
+    }
+    content = _view_text(_build_patrol(_strings("fr"), _Kingdom(), state))
+    assert "Bot de défense (IA)" in content
+    assert "Jeu d'armes au Marché" in content
+    assert "Patrouilles Renforcées" in content
+    assert "Niveau de votre IA : **2/5 Standard**" in content  # échelle -1
+    assert "**Patrouille** : permet de vous protéger" in content
+    assert "tous les jours de la semaine" in content
+    assert "Limite de 2 patrouilles par royaume" in content
+    assert "**Gardes Royales** : permet de protéger un territoire" in content
+    assert "durée de 12h" in content
+    assert "La Garde Royale se consomme" in content
+    assert "En réserve : 1" in content
+    # the Lord's-Day note left the body (it rides the flow now)
+    assert "Redéfinition des créneaux" not in content
+
+
 async def test_remparts_view_shows_patrols_and_the_guard_button() -> None:
     """restructuration-serveur-v1: the Remparts view keeps the patrol
     slots, the Garde Royale lines and the King's placement buttons — it

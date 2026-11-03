@@ -249,6 +249,11 @@ def register_kingdoms_persistent_items(bot: discord.Client) -> None:
         KingdomMarketCancelButton,
         KingdomMarketUseButton,
         KingdomRempartsGuardButton,
+        # remparts-v3 (Drasah 03/11): the Garde Royale wizard's
+        # Valider / Modifier / Annuler (restart-proof, mode in the id).
+        KingdomRempartsGuardValidateButton,
+        KingdomRempartsGuardModifyButton,
+        KingdomRempartsGuardCancelButton,
         KingdomRempartsPatrouilleButton,
         KingdomFFAJoinButton,
         KingdomRealmButton,
@@ -1618,8 +1623,11 @@ async def _close_previous_ephemeral(user_id: str) -> None:
         return
     old_interaction, opened_at = previous[0], previous[1]
     window = previous[2] if len(previous) > 2 else None
-    if time.monotonic() - opened_at > _EPHEMERAL_WINDOW_TTL:
-        return  # token expiré — Discord laisse l'éphémère mourir seule
+    # entree-double-ephemere (Drasah 03/11): the 15-min TTL guard SKIPPED
+    # the close and the old window stayed — now we ALWAYS attempt the
+    # delete (best-effort): a live token closes the window, an expired
+    # one raises and is logged (nothing more we can do — Discord keeps
+    # it on the player's side until he dismisses it).
     try:
         if window is not None:
             # A defer+followup window: delete the followup MESSAGE —
@@ -1675,6 +1683,52 @@ async def _open_unique_ephemeral(
     kwargs["ephemeral"] = True
     await interaction.response.send_message(content, **kwargs)
     _EPHEMERAL_WINDOWS[user_id] = (interaction, time.monotonic())
+
+
+def _is_ephemeral_parent(interaction: discord.Interaction) -> bool:
+    """remparts-fenetre-v1 (Drasah 03/11): whether the clicked button
+    sits on the player's own ephemeral window. Those flows REPLACE the
+    window in place (edit_message) instead of closing it and stacking
+    a fresh one — Drasah's 03/11 live report: « Gestion de la défense »
+    / « Gestion d'attaque » / Garde Royale quittaient la vue Remparts."""
+    message = getattr(interaction, "message", None)
+    if message is None:
+        return False
+    flags = getattr(message, "flags", None)
+    return bool(getattr(flags, "ephemeral", False))
+
+
+def _ephemeral_layout_view(text: str, items: list[Any] | None = None) -> Any:
+    """The in-place replacement face: ONE Components V2 LayoutView of
+    text displays + at most one action row (the window stays, only its
+    content changes)."""
+    view = discord.ui.LayoutView(timeout=None)
+    view.add_item(discord.ui.TextDisplay(text))
+    if items:
+        view.add_item(discord.ui.ActionRow(*items))
+    return view
+
+
+async def _replace_ephemeral_window(
+    interaction: discord.Interaction, text: str, items: list[Any] | None = None
+) -> None:
+    """Edit the player's ephemeral window in place (Components V2 face)
+    and re-bind the single-window registry to the fresh interaction."""
+    await interaction.response.edit_message(
+        view=_ephemeral_layout_view(text, items), attachments=[]
+    )
+    _EPHEMERAL_WINDOWS[str(getattr(interaction.user, "id", ""))] = (
+        interaction,
+        time.monotonic(),
+    )
+
+
+def _register_ephemeral_interaction(interaction: discord.Interaction) -> None:
+    """Re-bind the single-window registry to a fresh in-place edit."""
+    _EPHEMERAL_WINDOWS[str(getattr(interaction.user, "id", ""))] = (
+        interaction,
+        time.monotonic(),
+    )
 
 
 async def _send_market_card(
@@ -2160,7 +2214,7 @@ class KingdomSeigneurieOpenButton(
 
 class KingdomRempartsGuardButton(
     discord.ui.DynamicItem[discord.ui.Button[Any]],
-    template=r"kingdoms:remparts:guard",
+    template=r"kingdoms:remparts:guard$",
 ):
     """The restart-proof 🛡️ « Placer un Garde Royal » button (remparts-v2).
 
@@ -2192,7 +2246,14 @@ class KingdomRempartsGuardButton(
         return cls(_strings(locale))
 
     async def callback(self, interaction: discord.Interaction) -> None:
-        """Open the King-only owned-map select and place one guard token."""
+        """Open the King-only Garde Royale wizard (remparts-v3, Drasah 03/11).
+
+        garde-royale-v2: the stock line + the 12h wording, the select
+        REPLACES itself with the chosen map, then Valider / Modifier /
+        Annuler. Clicked from the player's ephemeral window (the 🧱
+        Remparts view) the wizard takes the window IN PLACE — the
+        previous view is never quit.
+        """
         locale = str(interaction.locale) if interaction.locale else "en"
         strings = _strings(locale)
         wiring = _wiring()
@@ -2214,60 +2275,337 @@ class KingdomRempartsGuardButton(
         if not owned:
             await interaction.response.send_message(strings["market_no_options"], ephemeral=True)
             return
-        select: discord.ui.Select[Any] = discord.ui.Select(
-            custom_id="kingdoms:remparts:choose:guard",
-            placeholder=str(strings["remparts_place_guard_choose"])[:100],
-            options=[
-                discord.SelectOption(
-                    label=str(getattr(t, "map_key", t.id))[:100], value=str(t.id)[:100]
-                )
-                for t in owned[:25]
-            ],
+        stock = await _remparts_guard_stock(wiring, kingdom_id)
+        if stock <= 0:
+            note = str(strings["remparts_guard_no_stock"])
+            if _is_ephemeral_parent(interaction):
+                await _replace_ephemeral_window(interaction, note)
+            else:
+                await _open_unique_ephemeral(interaction, note)
+            return
+        mode = "cv2" if _is_ephemeral_parent(interaction) else "win"
+        # fenetre-unique-globale-v1 (Drasah 30/10): the fresh-window
+        # face joins the shared single-window registry — no stacking
+        # with the player's previous ephemeral view.
+        await _remparts_guard_show_select(
+            interaction, strings, wiring, king, mode, fresh=(mode == "win")
         )
 
-        async def on_choose(target: discord.Interaction[Any]) -> None:
-            values = getattr(target, "data", None) or {}
-            chosen = [str(v) for v in values.get("values", [])]
-            if not chosen:
-                return
-            economy = wiring.economy_service
-            if economy is None:
-                await target.response.edit_message(
-                    content=strings["market_no_service"], view=None
-                )
-                return
-            try:
-                territory = await economy.place_royal_guard(kingdom_id, chosen[0])
-            except Exception as exc:
-                await target.response.edit_message(
-                    content=_market_error_note(exc, strings),
-                    view=None,
-                )
-                _market_ttl(interaction, getattr(target, "message", None))
-                return
-            until = datetime.fromtimestamp(
-                int(territory.protected_until.timestamp()), tz=ZoneInfo("Europe/Paris")
-            )
-            note = str(strings["remparts_guard_placed"]).format(
-                str(getattr(territory, "map_key", chosen[0])),
-                until.strftime("%d/%m %H:%M"),
-            )
-            await target.response.edit_message(content=note, view=None)
-            _market_ttl(interaction, getattr(target, "message", None))
-            await _refresh_realm_views_for_kingdom_safe(target.guild, kingdom_id)
 
-        select.callback = on_choose  # type: ignore[method-assign, assignment]
+async def _remparts_guard_stock(wiring: Any, kingdom_id: str) -> int:
+    """The kingdom's LIVE Garde Royale reserve (0 when unreadable)."""
+    service = getattr(wiring, "attacks_service", None)
+    if service is None or not hasattr(service, "technology_state"):
+        return 0
+    try:
+        state = await service.technology_state(kingdom_id)
+        purchases = dict(getattr(state, "purchases", {}) or {})
+        return int(purchases.get("garde_royale_stock", 0) or 0)
+    except Exception:
+        return 0
+
+
+def _remparts_guard_wizard_text(strings: dict[str, Any], stock: int) -> str:
+    """The wizard header: the LIVE reserve + the 12h instruction."""
+    return "{0}\n{1}".format(
+        str(strings["remparts_guard_wizard_stock"]).format(stock),
+        str(strings["remparts_guard_wizard_line"]),
+    )
+
+
+async def _remparts_guard_show_choice(
+    target: discord.Interaction,
+    strings: dict[str, Any],
+    mode: str,
+    territory_id: str,
+    map_label: str,
+    stock: int,
+) -> None:
+    """garde-royale-v2 (Drasah 03/11): the chosen map REPLACES the
+    dropdown — the choice face carries the Valider / Modifier /
+    Annuler row. « Modifier » re-opens the choice, « Valider »
+    consumes + locks, « Annuler » closes the wizard."""
+    text = "{0}\n{1}".format(
+        _remparts_guard_wizard_text(strings, stock),
+        str(strings["remparts_guard_wizard_chosen"]).format(map_label),
+    )
+    items: list[Any] = [
+        KingdomRempartsGuardValidateButton(mode, territory_id, strings),
+        KingdomRempartsGuardModifyButton(mode, strings),
+        KingdomRempartsGuardCancelButton(mode, strings),
+    ]
+    if mode == "cv2":
+        await target.response.edit_message(
+            view=_ephemeral_layout_view(text, items)
+        )
+    else:
+        view = discord.ui.View(timeout=600)
+        for item in items:
+            view.add_item(item)
+        await target.response.edit_message(content=text, view=view)
+    _register_ephemeral_interaction(target)
+
+
+async def _remparts_guard_note(
+    target: discord.Interaction, strings: dict[str, Any], mode: str, text: str
+) -> None:
+    """Edit the wizard window down to a bare note (mode-aware)."""
+    if mode == "cv2":
+        await _replace_ephemeral_window(target, str(text))
+    else:
+        await target.response.edit_message(content=str(text), view=None)
+
+
+async def _remparts_guard_show_select(
+    interaction: discord.Interaction,
+    strings: dict[str, Any],
+    wiring: Any,
+    king: Any,
+    mode: str,
+    fresh: bool,
+) -> None:
+    """The wizard's select face (the entry + the Modifier re-open)."""
+    kingdom_id = king.kingdom_id or ""
+    owned = [
+        t
+        for t in await wiring.territories_service.territories()
+        if t.owner_kingdom_id == kingdom_id
+    ]
+    stock = await _remparts_guard_stock(wiring, kingdom_id)
+    if not owned or stock <= 0:
+        note = str(
+            strings["remparts_guard_no_stock" if stock <= 0 else "market_no_options"]
+        )
+        if fresh:
+            await _open_unique_ephemeral(interaction, note)
+        else:
+            await _remparts_guard_note(interaction, strings, mode, note)
+        return
+    text = _remparts_guard_wizard_text(strings, stock)
+    select: discord.ui.Select[Any] = discord.ui.Select(
+        custom_id="kingdoms:remparts:choose:guard",
+        placeholder=str(strings["remparts_place_guard_choose"])[:100],
+        options=[
+            discord.SelectOption(
+                label=str(getattr(t, "map_key", t.id))[:100], value=str(t.id)[:100]
+            )
+            for t in owned[:25]
+        ],
+    )
+
+    async def on_choose(target: discord.Interaction[Any]) -> None:
+        values = getattr(target, "data", None) or {}
+        chosen = [str(v) for v in values.get("values", [])]
+        if not chosen:
+            return
+        territory_id = chosen[0]
+        map_label = territory_id
+        for territory in owned:
+            if str(territory.id) == territory_id:
+                map_label = str(getattr(territory, "map_key", territory_id))
+                break
+        await _remparts_guard_show_choice(
+            target, strings, mode, territory_id, map_label, stock
+        )
+
+    select.callback = on_choose  # type: ignore[method-assign, assignment]
+    if fresh:
         view = discord.ui.View(timeout=600)
         view.add_item(select)
-        # fenetre-unique-globale-v1 (Drasah 30/10): joins the shared
-        # single-window registry — no stacking with the player's
-        # previous ephemeral view.
-        await _open_unique_ephemeral(
-            interaction,
-            str(strings["remparts_place_guard_choose"]),
-            view=view,
-            ephemeral=True,
+        await _open_unique_ephemeral(interaction, text, view=view)
+        return
+    if mode == "cv2":
+        await interaction.response.edit_message(
+            view=_ephemeral_layout_view(text, [select])
         )
+        _register_ephemeral_interaction(interaction)
+    else:
+        view = discord.ui.View(timeout=600)
+        view.add_item(select)
+        await interaction.response.edit_message(content=text, view=view)
+
+
+class KingdomRempartsGuardValidateButton(
+    discord.ui.DynamicItem[discord.ui.Button[Any]],
+    template=r"kingdoms:remparts:guard:validate:(?P<mode>cv2|win):(?P<tid>[\w-]+)",
+):
+    """garde-royale-v2 (Drasah 03/11): « ✅ Valider » — consumes one
+    Garde Royale and LOCKS the choice (it can no longer be modified).
+    The shielded map refuses attackers at declaration time and every
+    live plan targeting it BASCULES onto its next choice (engine
+    behaviour — ``_rupture_plans_on`` / the execution-time switch)."""
+
+    def __init__(self, mode: str, territory_id: str, strings: dict[str, Any]) -> None:
+        self.mode = str(mode)
+        self.territory_id = str(territory_id)
+        super().__init__(
+            discord.ui.Button(
+                label=str(strings["remparts_guard_validate_button"])[:80],
+                custom_id=f"kingdoms:remparts:guard:validate:{self.mode}:{self.territory_id}",
+                style=discord.ButtonStyle.success,
+            )
+        )
+
+    @classmethod
+    async def from_custom_id(
+        cls,
+        interaction: discord.Interaction,
+        item: discord.ui.Item[Any],
+        match: re.Match[str],
+        /,
+    ) -> "KingdomRempartsGuardValidateButton":
+        locale = str(interaction.locale) if interaction.locale else "en"
+        return cls(match.group("mode"), match.group("tid"), _strings(locale))
+
+    async def callback(self, interaction: discord.Interaction) -> None:
+        """Consume one guard token — in place, back to the Remparts."""
+        locale = str(interaction.locale) if interaction.locale else "en"
+        strings = _strings(locale)
+        wiring = _wiring()
+        if wiring.economy_service is None:
+            await _remparts_guard_note(
+                interaction, strings, self.mode, strings["market_no_service"]
+            )
+            return
+        king = await _king_of(
+            wiring.kingdoms_service, str(interaction.user.id), wiring.bot_admins
+        )
+        if king is None:
+            await _remparts_guard_note(
+                interaction, strings, self.mode, strings["market_not_king"]
+            )
+            return
+        kingdom_id = king.kingdom_id or ""
+        try:
+            territory = await wiring.economy_service.place_royal_guard(
+                kingdom_id, self.territory_id
+            )
+        except Exception as exc:
+            await _remparts_guard_note(
+                interaction, strings, self.mode, _market_error_note(exc, strings)
+            )
+            _market_ttl(interaction, getattr(interaction, "message", None))
+            return
+        until = datetime.fromtimestamp(
+            int(territory.protected_until.timestamp()), tz=ZoneInfo("Europe/Paris")
+        )
+        note = str(strings["remparts_guard_placed"]).format(
+            str(getattr(territory, "map_key", self.territory_id)),
+            until.strftime("%d/%m %H:%M"),
+        )
+        if self.mode == "cv2":
+            # remparts-fenetre-v1: the wizard exits onto the Remparts
+            # view IN PLACE — the fresh guard line is the confirmation.
+            from kingdoms.mods.kingdoms.kingdom_lieux import edit_remparts_view
+
+            if await edit_remparts_view(interaction):
+                await _refresh_realm_views_for_kingdom_safe(
+                    interaction.guild, kingdom_id
+                )
+                return
+            await _replace_ephemeral_window(interaction, note)
+        else:
+            await interaction.response.edit_message(content=note, view=None)
+            _market_ttl(interaction, getattr(interaction, "message", None))
+        await _refresh_realm_views_for_kingdom_safe(interaction.guild, kingdom_id)
+
+
+class KingdomRempartsGuardModifyButton(
+    discord.ui.DynamicItem[discord.ui.Button[Any]],
+    template=r"kingdoms:remparts:guard:modify:(?P<mode>cv2|win)",
+):
+    """garde-royale-v2 (Drasah 03/11): « ✏️ Modifier » — re-opens the
+    map choice (useless once validated: the choice is locked)."""
+
+    def __init__(self, mode: str, strings: dict[str, Any]) -> None:
+        self.mode = str(mode)
+        super().__init__(
+            discord.ui.Button(
+                label=str(strings["remparts_guard_modify_button"])[:80],
+                custom_id=f"kingdoms:remparts:guard:modify:{self.mode}",
+                style=discord.ButtonStyle.secondary,
+            )
+        )
+
+    @classmethod
+    async def from_custom_id(
+        cls,
+        interaction: discord.Interaction,
+        item: discord.ui.Item[Any],
+        match: re.Match[str],
+        /,
+    ) -> "KingdomRempartsGuardModifyButton":
+        locale = str(interaction.locale) if interaction.locale else "en"
+        return cls(match.group("mode"), _strings(locale))
+
+    async def callback(self, interaction: discord.Interaction) -> None:
+        """Re-open the wizard's select face (same window, in place)."""
+        locale = str(interaction.locale) if interaction.locale else "en"
+        strings = _strings(locale)
+        wiring = _wiring()
+        if wiring.economy_service is None or wiring.territories_service is None:
+            await _remparts_guard_note(
+                interaction, strings, self.mode, strings["market_no_service"]
+            )
+            return
+        king = await _king_of(
+            wiring.kingdoms_service, str(interaction.user.id), wiring.bot_admins
+        )
+        if king is None:
+            await _remparts_guard_note(
+                interaction, strings, self.mode, strings["market_not_king"]
+            )
+            return
+        await _remparts_guard_show_select(
+            interaction, strings, wiring, king, self.mode, fresh=False
+        )
+
+
+class KingdomRempartsGuardCancelButton(
+    discord.ui.DynamicItem[discord.ui.Button[Any]],
+    template=r"kingdoms:remparts:guard:cancel:(?P<mode>cv2|win)",
+):
+    """garde-royale-v2 (Drasah 03/11): « ❌ Annuler » — closes the
+    wizard: back to the Remparts view in place (cv2), or the fresh
+    window simply goes away (win)."""
+
+    def __init__(self, mode: str, strings: dict[str, Any]) -> None:
+        self.mode = str(mode)
+        super().__init__(
+            discord.ui.Button(
+                label=str(strings["remparts_guard_cancel_button"])[:80],
+                custom_id=f"kingdoms:remparts:guard:cancel:{self.mode}",
+                style=discord.ButtonStyle.danger,
+            )
+        )
+
+    @classmethod
+    async def from_custom_id(
+        cls,
+        interaction: discord.Interaction,
+        item: discord.ui.Item[Any],
+        match: re.Match[str],
+        /,
+    ) -> "KingdomRempartsGuardCancelButton":
+        locale = str(interaction.locale) if interaction.locale else "en"
+        return cls(match.group("mode"), _strings(locale))
+
+    async def callback(self, interaction: discord.Interaction) -> None:
+        """Close the wizard — nothing is consumed."""
+        if self.mode == "cv2":
+            from kingdoms.mods.kingdoms.kingdom_lieux import edit_remparts_view
+
+            if await edit_remparts_view(interaction):
+                return
+        await interaction.response.defer()
+        try:
+            await interaction.delete_original_response()
+        except Exception:
+            logger.info(
+                "KINGDOMS: remparts guard wizard close failed (ignored)",
+                exc_info=True,
+            )
+        _EPHEMERAL_WINDOWS.pop(str(getattr(interaction.user, "id", "")), None)
 
 
 class KingdomRempartsPatrouilleButton(
@@ -2306,7 +2644,13 @@ class KingdomRempartsPatrouilleButton(
         return cls(int(match.group("slot")), _strings(locale))
 
     async def callback(self, interaction: discord.Interaction) -> None:
-        """Open the King-only tranche select and place the patrol window."""
+        """Open the King-only tranche select and place the patrol window.
+
+        remparts-v3 (Drasah 03/11): the « 🔄 Redéfinition des créneaux »
+        line MOVED here (the King acts where the information sits) and
+        clicked from the player's ephemeral window the flow takes the
+        window IN PLACE (remparts-fenetre-v1).
+        """
         locale = str(interaction.locale) if interaction.locale else "en"
         strings = _strings(locale)
         wiring = _wiring()
@@ -2320,6 +2664,9 @@ class KingdomRempartsPatrouilleButton(
             await interaction.response.send_message(strings["market_not_king"], ephemeral=True)
             return
         kingdom_id = king.kingdom_id or ""
+        mode = "cv2" if _is_ephemeral_parent(interaction) else "win"
+        # remparts-v3: the Lord's-Day note rides the flow, not the body.
+        wizard_text = str(strings["patrol_window"])
         select: discord.ui.Select[Any] = discord.ui.Select(
             custom_id=f"kingdoms:remparts:choose:patrouille:{self.slot}",
             placeholder=str(strings["market_choose_slot"])[:100],
@@ -2339,36 +2686,47 @@ class KingdomRempartsPatrouilleButton(
                 return
             economy = wiring.economy_service
             if economy is None:
-                await target.response.edit_message(
-                    content=strings["market_no_service"], view=None
+                await _remparts_guard_note(
+                    target, strings, mode, strings["market_no_service"]
                 )
                 return
             slot = int(chosen[0])
             try:
                 await economy.place_patrouille(kingdom_id, self.slot, slot)
             except Exception as exc:
-                await target.response.edit_message(
-                    content=_market_error_note(exc, strings),
-                    view=None,
+                await _remparts_guard_note(
+                    target, strings, mode, _market_error_note(exc, strings)
                 )
                 _market_ttl(interaction, getattr(target, "message", None))
                 return
             note = str(strings["remparts_patrouille_placed"]).format(
                 self.slot, slot, slot + 2
             )
-            await target.response.edit_message(content=note, view=None)
+            if mode == "cv2":
+                # The window is a Components V2 message (opened in place
+                # from the Remparts view): the note replaces its VIEW.
+                await _replace_ephemeral_window(target, note)
+            else:
+                await target.response.edit_message(content=note, view=None)
             _market_ttl(interaction, getattr(target, "message", None))
             await _refresh_realm_views_for_kingdom_safe(target.guild, kingdom_id)
 
         select.callback = on_choose  # type: ignore[method-assign, assignment]
+        # fenetre-unique-globale-v1 (Drasah 30/10): the fresh-window
+        # face joins the shared single-window registry — no stacking
+        # with the player's previous ephemeral view; the in-place face
+        # REPLACES the Remparts window (remparts-fenetre-v1).
+        if mode == "cv2":
+            await interaction.response.edit_message(
+                view=_ephemeral_layout_view(wizard_text, [select])
+            )
+            _register_ephemeral_interaction(interaction)
+            return
         view = discord.ui.View(timeout=600)
         view.add_item(select)
-        # fenetre-unique-globale-v1 (Drasah 30/10): joins the shared
-        # single-window registry — no stacking with the player's
-        # previous ephemeral view.
         await _open_unique_ephemeral(
             interaction,
-            str(strings["market_choose_slot"]),
+            wizard_text,
             view=view,
             ephemeral=True,
         )

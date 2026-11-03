@@ -49,7 +49,7 @@ STRINGS: dict[str, dict[str, str]] = {
         "entree_button": "🏰 Entrance",
         "entree_title": "Where would you like to go?",
         "conseil_button": "⚔️ Council room",
-        "remparts_button": "🧭 Ramparts",
+        "remparts_button": "🧱 Ramparts",
         "comptes_button": "🏛️ Chamber of accounts",
         "paroisse_button": "⛪ Parish",
         "voliere_button": "🏗️ Aviary",
@@ -179,7 +179,7 @@ STRINGS: dict[str, dict[str, str]] = {
         "entree_button": "🏰 Entrée",
         "entree_title": "Où souhaitez-vous vous rendre ?",
         "conseil_button": "⚔️ Salle du conseil",
-        "remparts_button": "🧭 Remparts",
+        "remparts_button": "🧱 Remparts",
         "comptes_button": "🏛️ Chambre des comptes",
         "paroisse_button": "⛪ Paroisse",
         "voliere_button": "🏗️ Volière",
@@ -660,6 +660,67 @@ async def _open_lieu(interaction: discord.Interaction, kind: str) -> None:
     else:  # voliere
         view, files = await _build_voliere(wiring, kingdom, strings, locale)
     await _open_unique_ephemeral(interaction, view=view, files=files or None)
+
+
+async def edit_remparts_view(interaction: discord.Interaction) -> bool:
+    """remparts-fenetre-v1 (Drasah 03/11): re-render the 🧱 Remparts
+    view IN PLACE — the player's ephemeral window KEEPS its message
+    (the Garde Royale wizard's Valider / Annuler exits walk back to
+    the Remparts view instead of leaving a bare note behind).
+
+    False when the view could not be rebuilt (the caller falls back
+    to its own note); the caller OWNS the interaction response.
+    """
+    import time as _time
+
+    from kingdoms.mods.kingdoms.kingdom_persistent import (
+        _EPHEMERAL_WINDOWS,
+        _lord_of,
+        _strings as _merged_strings,
+        _wiring,
+    )
+    from kingdoms.mods.kingdoms.kingdom_realm_content import (
+        _build_patrol,
+        _gather_state,
+    )
+
+    locale = _locale(interaction)
+    strings = _merged_strings(locale)
+    wiring = _wiring()
+    kingdoms_service = wiring.kingdoms_service
+    if kingdoms_service is None:
+        return False
+    lord = await _lord_of(
+        kingdoms_service, str(interaction.user.id), wiring.bot_admins
+    )
+    if lord is None or getattr(lord, "left", False):
+        return False
+    kingdom = next(
+        (
+            k
+            for k in await kingdoms_service.kingdoms()
+            if str(k.id) == str(getattr(lord, "kingdom_id", None))
+        ),
+        None,
+    )
+    if kingdom is None:
+        return False
+    state = await _gather_state(kingdom, wiring)
+    view = _build_patrol(
+        strings,
+        kingdom,
+        state,
+        media="attachment://rempart.png",
+        rows=_remparts_rows(strings, state, wiring, locale),
+    )
+    await interaction.response.edit_message(
+        view=view, attachments=_lieu_files("Rempart.png", "rempart.png")
+    )
+    _EPHEMERAL_WINDOWS[str(getattr(interaction.user, "id", ""))] = (
+        interaction,
+        _time.monotonic(),
+    )
+    return True
 
 
 def _paroisse_files(state: dict[str, Any]) -> list[discord.File]:
@@ -2437,9 +2498,9 @@ def _remparts_rows(
     """lieux-rows-v1 — the Remparts button rules (Drasah 01/11).
 
     Line 1: the default war actions (green) + Sortir (red, last).
-    Line 2: the placement + card buttons — Garde / Patrouille 1 / 2
-    green while their stock/unlock is held (gray+disabled otherwise)
-    and the Jeu d'armes card, green while affordable, gray otherwise.
+    remparts-v3 (Drasah 03/11): Line 2 order = Jeu d'armes first,
+    then the Patrouille slots, Garde Royal last — each green while
+    its stock/unlock is held or affordable (gray+disabled otherwise).
     """
     from kingdoms.mods.kingdoms.kingdom_attack_panel import (
         KingdomAttackManagerButton,
@@ -2488,7 +2549,7 @@ def _remparts_rows(
     )
     if int(state.get("wallet", 0) or 0) < tech_cost:
         _gray(jeu)
-    return [row_one, [guard, *patrols, jeu]]
+    return [row_one, [jeu, *patrols, guard]]
 
 
 def _paroisse_rows(

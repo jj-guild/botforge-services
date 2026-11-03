@@ -2554,20 +2554,37 @@ class KingdomDefenseManagerButton(
                 )
             )
         body = "\n".join(rows) if rows else strings["defense_manager_empty"]
+        text = strings["defense_manager_title"].format(kingdom=kingdom_name) + "\n" + body
         # restructuration-serveur-v1 b: the defender may WITHDRAW their
         # own defense — one ↩️ button per attack THIS lord defends (the
         # draft-start threshold lives service side, ``pick_ban_lead_minutes``).
-        view = discord.ui.View(timeout=600)
+        cancels: list[Any] = []
         for attack in ongoing:
             if (
                 not getattr(attack, "revealed", False)
                 and getattr(attack, "state", None) is AttackState.DEFENDED
                 and str(getattr(attack, "defender_lord_id", "") or "") == str(lord.id)
             ):
-                view.add_item(KingdomCancelDefenseButton(str(attack.id), strings["cancel_defense_button"]))
+                cancels.append(
+                    KingdomCancelDefenseButton(str(attack.id), strings["cancel_defense_button"])
+                )
+        # remparts-fenetre-v1 (Drasah 03/11): clicked from the player's
+        # ephemeral window (the 🧱 Remparts view) the sheet takes the
+        # window IN PLACE — the previous view is never quit.
+        from kingdoms.mods.kingdoms.kingdom_persistent import (
+            _is_ephemeral_parent,
+            _replace_ephemeral_window,
+        )
+
+        if _is_ephemeral_parent(interaction):
+            await _replace_ephemeral_window(interaction, text, cancels or None)
+            return
+        view = discord.ui.View(timeout=600)
+        for button in cancels:
+            view.add_item(button)
         await _open_unique_ephemeral(
             interaction,
-            strings["defense_manager_title"].format(kingdom=kingdom_name) + "\n" + body,
+            text,
             view=view if list(view.children) else None,  # type: ignore[arg-type]
         )
 
@@ -3175,6 +3192,17 @@ class KingdomAttackManagerButton(
                         total=len(plan.choices),
                     )
                 )
+        # remparts-fenetre-v1 (Drasah 03/11): clicked from the player's
+        # ephemeral window (the 🧱 Remparts view) the sheet takes the
+        # window IN PLACE — the previous view is never quit.
+        from kingdoms.mods.kingdoms.kingdom_persistent import (
+            _is_ephemeral_parent,
+            _replace_ephemeral_window,
+        )
+
+        if _is_ephemeral_parent(interaction):
+            await _replace_ephemeral_window(interaction, "\n".join(sections))
+            return
         await _open_unique_ephemeral(interaction, "\n".join(sections))
 
 
