@@ -2501,17 +2501,20 @@ def _remparts_rows(
     + Sortir (red, last). remparts-boutons-v1 (Drasah 03/11): Line 2 order = Jeu d'armes,
     then ONE 👣 Patrouille cockpit button (it rules BOTH slots),
     Garde Royal last — each green while its stock/unlock is held
-    or affordable (gray+disabled otherwise).
+    (gray+disabled otherwise). jeu-darmes-bonus-v1 (Drasah 03/11):
+    the Jeu d'armes button opens the CONFIRMATION CARD — green when a
+    token is HELD (stock > 0), gray+disabled otherwise (the wallet no
+    longer rules it).
     """
     from kingdoms.mods.kingdoms.kingdom_attack_panel import (
         KingdomAttackManagerButton,
         KingdomDefenseManagerButton,
     )
     from kingdoms.mods.kingdoms.kingdom_persistent import (
-        KingdomMarketTechButton,
         KingdomRempartsGuardButton,
         KingdomRempartsPatrouilleHubButton,
         KingdomRempartsInfoButton,
+        KingdomJeuDarmesUseButton,
     )
 
     purchases = dict(state.get("purchases") or {})
@@ -2545,16 +2548,12 @@ def _remparts_rows(
         KingdomRempartsPatrouilleHubButton(strings),
         patrouille_unlocked,
     )
-    # Jeu d'armes lives HERE now (Drasah 01/11): the card activates on
-    # the Ramparts — green while the treasury affords it, gray+disabled
-    # otherwise (never hidden).
-    tech_cost = _jeu_d_armes_cost(wiring)
-    label = str(strings.get("market_tech", {}).get("jeu_d_armes", "Jeu d'armes"))
-    jeu = KingdomMarketTechButton(
-        "jeu_d_armes", f"{label} — {tech_cost} ⚙️", discord.ButtonStyle.success
+    # jeu-darmes-bonus-v1 (Drasah 03/11): the button opens the 🧪
+    # confirmation card — green while the kingdom HOLDS a token,
+    # gray+disabled otherwise (never hidden, wallet no longer rules).
+    jeu = KingdomJeuDarmesUseButton(
+        strings, enabled=int(purchases.get("jeu_d_armes_stock", 0) or 0) > 0
     )
-    if int(state.get("wallet", 0) or 0) < tech_cost:
-        _gray(jeu)
     return [row_one, [jeu, patrouille, guard]]
 
 
@@ -2609,18 +2608,6 @@ def _paroisse_rows(
     return [row_one, [arrange]]
 
 
-def _jeu_d_armes_cost(wiring: Any) -> int:
-    """The configured Jeu d'armes cost (default ladder if unwired)."""
-    try:
-        technologies = getattr(getattr(wiring, "kingdoms_service", None), "config", None)
-        technologies = getattr(technologies, "technologies", None)
-        if technologies is not None:
-            return int(getattr(technologies, "jeu_d_armes"))
-    except Exception:
-        pass
-    from kingdoms.mods.kingdoms.config import TechnologyCosts
-
-    return int(getattr(TechnologyCosts(), "jeu_d_armes"))
 
 
 def _strip_purchases(content: str, strings: dict[str, Any]) -> str:

@@ -22,6 +22,7 @@ from typing import TYPE_CHECKING, Any
 from kingdoms.mods.kingdoms.admin_debug import bypass_guard
 from kingdoms.mods.kingdoms.attacks import (
     AI_LEVEL_CAP,
+    JEU_D_ARMES_RUSH_PREFIX,
     PATROUILLE_SLOT_KEYS,
     patrouille_active_at,
 )
@@ -1117,11 +1118,15 @@ class EconomyService:
         )
         return stock
 
-    async def use_jeu_d_armes(self, kingdom_id: str) -> int:
-        """Spend ONE Arms-mastery token: +1 defence-AI level (chambre-utiliser-v1).
+    async def use_jeu_d_armes(self, kingdom_id: str, lord_id: str) -> tuple[int, bool]:
+        """Spend ONE Arms-mastery token (jeu-darmes-bonus-v1, Drasah 03/11).
 
-        The token is consumed ONLY on a successful use — a kingdom
-        already at the AI cap keeps its card.
+        Effects: +1 defence-AI level when under the cap (the token
+        still spends at the cap — only the declaration rush applies),
+        and the USING LORD's next normal (or planned) attack
+        declaration rides with -1h (6h -> 5h in prod). The rush is NOT
+        cumulable: a lord already holding one keeps his token. Returns
+        (AI level after, whether the level actually rose).
         """
         state = await self._attacks.technology_state(kingdom_id)
         stock = int(state.purchases.get(JEU_D_ARMES_STOCK, 0) or 0)
@@ -1129,23 +1134,34 @@ class EconomyService:
             raise EconomyError(
                 "no arms-mastery token in stock — buy one at the market first"
             )
+        rush_key = f"{JEU_D_ARMES_RUSH_PREFIX}{lord_id}"
+        if int(state.purchases.get(rush_key, 0) or 0) > 0:
+            raise EconomyError(
+                "arms-mastery rush already active — it applies to the lord's next attack declaration"
+            )
         level = int(state.purchases.get(JEU_D_ARMES, 0) or 0)
-        if level >= AI_LEVEL_CAP:
-            raise EconomyError("the defence bot already sits at the AI level cap")
+        leveled = level < AI_LEVEL_CAP
         state.purchases[JEU_D_ARMES_STOCK] = stock - 1
-        state.purchases[JEU_D_ARMES] = level + 1
+        if leveled:
+            state.purchases[JEU_D_ARMES] = level + 1
+        state.purchases[rush_key] = 1
         await self._store.upsert_technology(state.to_mongo())
         logger.info(
-            "kingdoms: %s uses an arms-mastery token (AI level %d/%d, %d left)",
+            "kingdoms: %s uses an arms-mastery token (AI level %d/%d, %d left, rush %s)",
             kingdom_id,
-            level + 1,
+            level + 1 if leveled else level,
             AI_LEVEL_CAP,
             stock - 1,
+            lord_id,
         )
         await self._record_action(
-            kingdom_id, JEU_D_ARMES, f"IA {level + 1}/{AI_LEVEL_CAP}"
+            kingdom_id,
+            JEU_D_ARMES,
+            f"IA {min(level + 1, AI_LEVEL_CAP)}/{AI_LEVEL_CAP}"
+            if leveled
+            else f"rush -1h ({lord_id})",
         )
-        return level + 1
+        return (level + 1 if leveled else level, leveled)
 
     # ------------------------------------------------------------------
     # Garde Royale (remparts-v2, Drasah 14/10: guards in stock)

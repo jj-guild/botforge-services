@@ -415,6 +415,16 @@ cancellation window after the declaration — hardcoded on purpose
 (Drasah tranché : pas dans la config)."""
 
 
+JEU_D_ARMES_RUSH_PREFIX = "jeu_d_armes_rush:"
+"""jeu-darmes-bonus-v1 (Drasah 03/11): the purchases key prefix of a
+lord's pending Arms-mastery rush — his NEXT normal (or planned) attack
+declaration rides with one hour less of delay (6h -> 5h in prod), then
+the flag is consumed. The Embuscade flows elsewhere and never applies."""
+
+JEU_D_ARMES_RUSH_MINUTES = 60
+"""jeu-darmes-bonus-v1: the rush's delay reduction, in minutes."""
+
+
 def _faucon_released(kingdom: Any, timestamp: datetime) -> bool:
     """Whether the kingdom runs an active Lâcher de faucon (voliere-v1)."""
     return int(getattr(kingdom, "faucon_release_until", 0) or 0) > int(timestamp.timestamp())
@@ -641,6 +651,14 @@ class AttackService:
         delay_minutes = self._config.attacks.player_attack_delay_minutes
         if await self._lord_tracked_by_corbeau(lord.id, timestamp):
             delay_minutes = CORBEAU_TRACK_DELAY_MINUTES
+        elif await self._jeu_d_armes_rush_pending(lord.id, str(lord.kingdom_id or "")):
+            # jeu-darmes-bonus-v1 (Drasah 03/11): an Arms-mastery token
+            # was used — THIS declaration rides with one hour less of
+            # delay (6h -> 5h in prod), then the flag is consumed and
+            # everything goes back to normal. The Corbeau keeps its
+            # 24h priority; the Embuscade never passes here.
+            delay_minutes = max(1, int(delay_minutes) - JEU_D_ARMES_RUSH_MINUTES)
+            await self._consume_jeu_d_armes_rush(lord.id, str(lord.kingdom_id or ""))
         # Drasah's Lord's Day window: declaring inside the window is
         # fine ONLY when the execution (the attack's expiry deadline)
         # lands after the window closes (Monday 10:00) — a game that
@@ -704,6 +722,31 @@ class AttackService:
                 ):
                     return True
         return False
+
+    async def _jeu_d_armes_rush_pending(self, lord_id: str, kingdom_id: str) -> bool:
+        """jeu-darmes-bonus-v1: whether the lord's NEXT normal (or
+        planned) declaration rides with -1h (an Arms-mastery token was
+        used). Never raises — a missing technology state reads empty."""
+        if not kingdom_id:
+            return False
+        try:
+            state = await self.technology_state(kingdom_id)
+        except Exception:
+            return False
+        key = f"{JEU_D_ARMES_RUSH_PREFIX}{lord_id}"
+        return int(state.purchases.get(key, 0) or 0) > 0
+
+    async def _consume_jeu_d_armes_rush(self, lord_id: str, kingdom_id: str) -> None:
+        """jeu-darmes-bonus-v1: drop the lord's pending rush flag (the
+        reduced declaration just happened — the delay goes back to
+        normal for the following attacks)."""
+        if not kingdom_id:
+            return
+        state = await self.technology_state(kingdom_id)
+        key = f"{JEU_D_ARMES_RUSH_PREFIX}{lord_id}"
+        if key in state.purchases:
+            del state.purchases[key]
+            await self._store.upsert_technology(state.to_mongo())
 
     async def declare_embuscade(
         self,
@@ -832,16 +875,22 @@ class AttackService:
         ):
             raise LordTavernLockedError("le seigneur est bloqué par une boisson de taverne (taverne-v1)")
 
-    def _plan_declare_at(self, plan: PlannedAttackModel) -> datetime:
+    async def _plan_declare_at(self, plan: PlannedAttackModel) -> datetime:
         """The scheduled declaration moment: T - itinéraire (Drasah 23/10).
 
         The declaration cannot be skipped — the RDV keeps at least the
         travel delay of a fresh declaration, whatever the itinéraire
         (6h vs a player kingdom, 3h vs Gaïa, 10 min in beta — the
         config value is the single source of truth).
+        jeu-darmes-bonus-v1 (Drasah 03/11): a lord holding the
+        Arms-mastery rush declares one hour LATER (T - (itinéraire -
+        1h)) — the RDV T never moves, the declaration-to-execution
+        delay shrinks to 5h in prod, exactly like a fresh declaration.
         """
-        delay = timedelta(minutes=int(self._config.attacks.player_attack_delay_minutes))
-        return plan.meeting_at - delay
+        delay = int(self._config.attacks.player_attack_delay_minutes)
+        if await self._jeu_d_armes_rush_pending(plan.lord_id, str(plan.kingdom_id or "")):
+            delay = max(1, delay - JEU_D_ARMES_RUSH_MINUTES)
+        return plan.meeting_at - timedelta(minutes=delay)
 
     async def plan_attack(
         self,
@@ -1018,7 +1067,7 @@ class AttackService:
         for plan in await self.plans():
             if not plan.is_live:
                 continue
-            if self._plan_declare_at(plan) > timestamp:
+            if await self._plan_declare_at(plan) > timestamp:
                 continue
             changed.extend(await self._execute_plan(plan, timestamp))
         # The rupture events of OTHER declarations (instant feedback):
@@ -1030,7 +1079,7 @@ class AttackService:
     async def _execute_plan(self, plan: PlannedAttackModel, timestamp: datetime) -> list[PlannedAttackModel]:
         """Try to declare one due plan — execute, switch or break it."""
         changed: list[PlannedAttackModel] = []
-        while plan.is_live and self._plan_declare_at(plan) <= timestamp:
+        while plan.is_live and await self._plan_declare_at(plan) <= timestamp:
             map_key = plan.active_choice
             if map_key is None:
                 plan.state = PlanState.BROKEN
@@ -1144,9 +1193,9 @@ class AttackService:
             return changed
         return changed
 
-    def _plan_probe_deadline(self, plans: list[PlannedAttackModel]) -> datetime | None:
+    async def _plan_probe_deadline(self, plans: list[PlannedAttackModel]) -> datetime | None:
         """The earliest upcoming declaration moment of the live plans."""
-        due = [self._plan_declare_at(plan) for plan in plans if plan.is_live]
+        due = [await self._plan_declare_at(plan) for plan in plans if plan.is_live]
         return min(due) if due else None
 
     async def _validate_attack_target(self, lord: LordModel, map_key: str, timestamp: datetime) -> TerritoryModel:
@@ -2288,7 +2337,7 @@ class AttackService:
         # planification-attaque-v1 (Drasah 23/10): a live plan's
         # scheduled declaration (T - itinéraire) is a deadline like
         # any phase — the loop wakes within the second of it.
-        plan_deadline = self._plan_probe_deadline(await self.plans())
+        plan_deadline = await self._plan_probe_deadline(await self.plans())
         if plan_deadline is not None and plan_deadline > timestamp:
             if nearest is None or plan_deadline < nearest:
                 nearest = plan_deadline

@@ -365,7 +365,9 @@ STRINGS: dict[str, dict[str, Any]] = {
                 "Buys ONE Arms-mastery token. Use it from the Chambre des "
                 "comptes: +1 permanent AI level (until the season ends) on "
                 "your defence bot — cap 5, reached: your Patrols become "
-                "Reinforced (3h)."
+                "Reinforced (3h). The lord who uses it cuts 1h off his "
+                "next normal attack's declaration delay (no Embuscade); "
+                "not stackable — one active Arms mastery per lord."
             ),
             "explorateur": (
                 "Buys ONE Explorateur token. Use it from the Chambre des "
@@ -450,7 +452,9 @@ STRINGS: dict[str, dict[str, Any]] = {
             ),
             "jeu_d_armes": (
                 "Use it from the Chambre des comptes: your defence bot gains "
-                "+1 permanent AI level on the spot (cap 5)."
+                "+1 permanent AI level on the spot (cap 5) — and your next "
+                "normal attack rides with 1h less of declaration delay "
+                "(no Embuscade)."
             ),
             "explorateur": (
                 "Use it from the Chambre des comptes: choose the lord to send "
@@ -535,6 +539,41 @@ STRINGS: dict[str, dict[str, Any]] = {
         "market_use_jeu_d_armes_ok": (
             "🧪 Arms mastery used — your defence bot reaches level {}/5."
         ),
+        "jeu_darmes_card_title": "🧪 Arms Mastery",
+        "jeu_darmes_effect_ia": (
+            "On use, raises your AI's level by 1 for the whole season."
+        ),
+        "jeu_darmes_effect_cap": (
+            "Once your AI sits at its max difficulty, it upgrades your "
+            "Patrol into a Reinforced Patrol."
+        ),
+        "jeu_darmes_effect_patrouille": (
+            "Reinforced Patrol: +1h of slot on your patrols (3h total)."
+        ),
+        "jeu_darmes_effect_rush": (
+            "The lord using Arms Mastery cuts 1h off his next normal "
+            "attack's declaration delay; after that declaration the delay "
+            "goes back to normal. Never works with an Embuscade."
+        ),
+        "jeu_darmes_owned": "You own: **{0}**",
+        "jeu_darmes_level": "Your current AI level: **{0}/5 {1}**",
+        "jeu_darmes_button": "🧪 Arms Mastery",
+        "jeu_darmes_activate_button": "✅ Activate",
+        "jeu_darmes_cancel_button": "❌ Cancel",
+        "jeu_darmes_use_ok": (
+            "🧪 Arms mastery used — your defence bot reaches level {0}/5 "
+            "{1}. Your next normal attack rides with 1h less of declaration "
+            "delay."
+        ),
+        "jeu_darmes_use_ok_rush_only": (
+            "🧪 Arms mastery used — your AI already sits at its max level: "
+            "only the 1h cut on your next normal attack applies."
+        ),
+        "jeu_darmes_already_active": (
+            "🧪 You already hold an active Arms mastery — it will apply to "
+            "your next normal attack."
+        ),
+        "jeu_darmes_no_stock": "🧪 No Arms mastery in reserve — buy one at the Market.",
         "ffa_join_button": "🗺️ Partir en expédition",
         "ffa_join_note": (
             "✅ **{lord}** holds an Expedition slot — **{time}** (Paris time). "
@@ -874,7 +913,10 @@ STRINGS: dict[str, dict[str, Any]] = {
                 "Achète UN jeton Jeu d'armes. Utilise-le depuis la Chambre "
                 "des comptes : +1 niveau d'IA permanent (jusqu'à la fin de "
                 "saison) sur ton bot de défense — plafond 5, atteint : les "
-                "Patrouilles deviennent Renforcées (3h)."
+                "Patrouilles deviennent Renforcées (3h). Le seigneur qui "
+                "l'utilise réduit de 1h le délai de déclaration de sa "
+                "prochaine attaque normale (pas d'embuscade) ; non "
+                "cumulable — un seul Jeu d'armes actif par seigneur."
             ),
             "explorateur": (
                 "Achète UN jeton Explorateur. Utilise-le depuis la Chambre "
@@ -961,7 +1003,9 @@ STRINGS: dict[str, dict[str, Any]] = {
             ),
             "jeu_d_armes": (
                 "S'utilise depuis la Chambre des comptes : ton bot de défense "
-                "gagne immédiatement +1 niveau d'IA permanent (plafond 5)."
+                "gagne immédiatement +1 niveau d'IA permanent (plafond 5) et "
+                "ta prochaine attaque normale partira avec 1h de délai en "
+                "moins (pas d'embuscade)."
             ),
             "explorateur": (
                 "S'utilise depuis la Chambre des comptes : choisis le seigneur "
@@ -1046,6 +1090,44 @@ STRINGS: dict[str, dict[str, Any]] = {
         "market_use_jeu_d_armes_ok": (
             "🧪 Jeu d'armes utilisé — ton bot de défense monte au niveau {}/5."
         ),
+        "jeu_darmes_card_title": "🧪 Jeu d'armes",
+        "jeu_darmes_effect_ia": (
+            "À l'usage, augmente le niveau de votre IA de 1 durant toute la "
+            "saison."
+        ),
+        "jeu_darmes_effect_cap": (
+            "Si la difficulté de votre IA est au niveau max, améliore votre "
+            "Patrouille en Patrouille Renforcée."
+        ),
+        "jeu_darmes_effect_patrouille": (
+            "Patrouille Renforcée : +1h de créneau sur vos patrouilles "
+            "(3h total)."
+        ),
+        "jeu_darmes_effect_rush": (
+            "Le seigneur utilisant Jeu d'armes réduit de 1h le délai de "
+            "déclaration de sa prochaine attaque normale ; après cette "
+            "déclaration, le délai redevient normal. Ne fonctionne pas avec "
+            "une embuscade."
+        ),
+        "jeu_darmes_owned": "Vous possédez : **{0}**",
+        "jeu_darmes_level": "Votre niveau d'IA actuel : **{0}/5 {1}**",
+        "jeu_darmes_button": "🧪 Jeu d'armes",
+        "jeu_darmes_activate_button": "✅ Activer",
+        "jeu_darmes_cancel_button": "❌ Annuler",
+        "jeu_darmes_use_ok": (
+            "🧪 Jeu d'armes utilisé — ton bot de défense monte au niveau "
+            "{0}/5 {1}. Ta prochaine attaque normale partira avec 1h de "
+            "délai en moins."
+        ),
+        "jeu_darmes_use_ok_rush_only": (
+            "🧪 Jeu d'armes utilisé — ton IA est déjà au niveau max : seule "
+            "la réduction de 1h sur ta prochaine attaque normale s'applique."
+        ),
+        "jeu_darmes_already_active": (
+            "🧪 Tu as déjà un Jeu d'armes actif — il s'appliquera à ta "
+            "prochaine attaque normale."
+        ),
+        "jeu_darmes_no_stock": "🧪 Aucun Jeu d'armes en réserve — achat au Marché.",
         "ffa_join_button": "🗺️ Partir en expédition",
         "ffa_join_note": (
             "✅ **{lord}** tient un créneau de l'Expédition — **{time}** "
