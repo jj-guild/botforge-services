@@ -7,8 +7,10 @@ players until the gate opens.
 
 canary-gate-v1: the whole refonte renders ONLY for the kingdom ids
 listed below (THE DECLARATION WINS — never a live-state derivation,
-leçon divider-gating-v2). During the beta: Nilrem alone. Removing the
-id from the list (empty tuple) generalises to every kingdom.
+leçon divider-gating-v2). refonte-generale-v1 (Drasah 03/11): GO —
+the beta validated on Nilrem, the gate tuples are now EMPTY and an
+empty gate is an ALL-PASS: every kingdom renders the new hub. Re-list
+an id to re-gate it (never a live-state derivation).
 
 fenetre-unique-v2: every lieu view rides the shared single-window
 registry — one live ephemeral per player, whatever opens it.
@@ -25,13 +27,15 @@ import discord
 logger = logging.getLogger("kingdoms.kingdom_lieux")
 
 # canary-gate-v1 (Drasah 01/11): the ids allowed to render the new hub.
-# Empty the tuple (or delete the ids) to generalise — no other change.
-CANARY_REALM_KINGDOM_IDS: tuple[str, ...] = ("k-nilrem",)
+# refonte-generale-v1 (Drasah 03/11): GO — both tuples emptied, the
+# gate is now an ALL-PASS (see ``is_canary_realm``); re-list an id to
+# re-gate a single kingdom.
+CANARY_REALM_KINGDOM_IDS: tuple[str, ...] = ()
 # canary-porte-nom-v1 (Drasah 02/11): a reset purges the kingdom docs
-# and the recreated realm gets a fresh ``k-N`` id — the hardcoded id
-# list silently rejected his own realm (no pin, no announce, no
-# « discussions » rename). The reserved test NAME joins the gate.
-CANARY_REALM_KINGDOM_NAMES: tuple[str, ...] = ("nilrem",)
+# and the recreated realm gets a fresh ``k-N`` id — the reserved test
+# NAME joined the gate so a recreated realm kept the refonte.
+# refonte-generale-v1 (Drasah 03/11): emptied with the ids above.
+CANARY_REALM_KINGDOM_NAMES: tuple[str, ...] = ()
 
 _LIEUX_ASSETS = Path(__file__).resolve().parent / "assets" / "lieux"
 
@@ -111,6 +115,9 @@ STRINGS: dict[str, dict[str, str]] = {
         "conseil_objectifs_none": (
             "No objective set yet — the King may define them with the"
             " 🎯 Objective button."
+        ),
+        "conseil_traquenard_line": (
+            "🪤 You used a Traquenard on **{0}** — active {1}"
         ),
         "objectif_map_defend_line": "⚔️ Priority : defend **{0}** at all costs /!\\",
         "objectif_alliance_marry_line": "💍 Marriage wished with **{0}**",
@@ -237,6 +244,9 @@ STRINGS: dict[str, dict[str, str]] = {
             "Aucun objectif fixé pour le moment — le Roi peut les définir"
             " avec le bouton 🎯 Objectif."
         ),
+        "conseil_traquenard_line": (
+            "🪤 Vous avez utilisé un Traquenard sur **{0}** — actif {1}"
+        ),
         "objectif_map_defend_line": "⚔️ Priorité : défendre coûte que coûte **{0}** /!\\",
         "objectif_alliance_marry_line": "💍 Mariage souhaité avec **{0}**",
         "objectif_pin_title": "🎯 Objectifs — {0}",
@@ -314,6 +324,10 @@ def is_canary_realm(kingdom: Any | None) -> bool:
     « Nilrem » keeps the refonte whatever its generated id."""
     if kingdom is None:
         return False
+    if not CANARY_REALM_KINGDOM_IDS and not CANARY_REALM_KINGDOM_NAMES:
+        # refonte-generale-v1 (Drasah 03/11): an EMPTY gate is an
+        # ALL-PASS — every kingdom renders the new hub.
+        return True
     if str(getattr(kingdom, "id", "")) in CANARY_REALM_KINGDOM_IDS:
         return True
     return (
@@ -2239,6 +2253,45 @@ class KingdomLieuExplorationButton(
         _EPHEMERAL_WINDOWS[user_id] = (interaction, monotonic(), window)
 
 
+async def _traquenard_status_lines(locale: str, kingdom: Any, wiring: Any) -> list[str]:
+    """traquenard-fiche-v1 (Drasah 03/11): the LIVE Traquenard status
+    of the council sheet — one line per STILL-OPEN Facile window the
+    realm opened (``traquenard_uses``), native ``<t:…:R>`` stamp; the
+    line simply disappears once the window expires."""
+    from time import time as _time
+
+    lieu = _strings(locale)
+    uses = dict(getattr(kingdom, "traquenard_uses", None) or {})
+    now_ts = int(_time())
+    live = {
+        str(target_id): int(until or 0)
+        for target_id, until in uses.items()
+        if int(until or 0) > now_ts
+    }
+    if not live:
+        return []
+    names: dict[str, str] = {}
+    service = getattr(wiring, "kingdoms_service", None)
+    if service is not None:
+        try:
+            for item in await service.kingdoms():
+                kid = str(getattr(item, "kingdom_id", "") or "")
+                if kid in live:
+                    names[kid] = str(getattr(item, "name", "") or kid)
+        except Exception:
+            logger.warning(
+                "KINGDOM LIEUX: traquenard status lookup failed (ignored)",
+                exc_info=True,
+            )
+    return [
+        str(lieu["conseil_traquenard_line"]).format(
+            names.get(str(target_id), str(target_id)),
+            f"<t:{int(until)}:R>",
+        )
+        for target_id, until in sorted(live.items())
+    ]
+
+
 async def build_conseil_view(
     strings: dict[str, Any],
     kingdom: Any,
@@ -2285,6 +2338,9 @@ async def build_conseil_view(
     goals_line = (
         "\n".join(goal_parts) if goal_parts else lieu["conseil_objectifs_none"]
     )
+    # traquenard-fiche-v1 (Drasah 03/11): the LIVE Traquenard status —
+    # one line per still-open window, right under the Objectifs block.
+    traquenard_lines = await _traquenard_status_lines(locale, kingdom, wiring)
     body = "\n".join(
         [
             lieu["conseil_intro_l1"],
@@ -2301,6 +2357,7 @@ async def build_conseil_view(
             "",
             f"## {lieu['conseil_objectifs_title']}",
             goals_line,
+            *traquenard_lines,
             "",
             f"## {lieu['conseil_actions']}",
         ]
