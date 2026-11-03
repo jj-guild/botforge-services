@@ -2782,10 +2782,15 @@ async def _traquenard_open_flow(
     # type-7 ack — the council sheet (an ephemeral parent) survives.
     await interaction.response.defer(ephemeral=True, thinking=True)
     user_id = str(getattr(interaction.user, "id", ""))
+    # traquenard-visuel-v1 (Drasah 03/11): the fiche wears the CARD ART
+    # (the Exploration pattern) — the 🪤 Traquenard TCG face, fallback
+    # the card back when the asset was not uploaded.
+    card = _market_card_file("traquenard") or _market_card_back_file()
     try:
         window = await interaction.followup.send(
             _traquenard_fiche_content(strings),
             view=_traquenard_fiche_view(strings, active="fiche"),
+            files=[card] if card is not None else None,
             ephemeral=True,
         )
     except Exception:
