@@ -292,7 +292,9 @@ def test_remparts_rows_follow_the_button_rules() -> None:
     assert first[3].item.label == _strings("fr")["sortir_button"]
     assert first[3].item.style == discord.ButtonStyle.danger
     # line 2: Garde + Patrouille 1/2 gray+disabled without stock, and
-    # the Jeu d'armes card lives HERE (moved out of the Council).
+    # the Jeu d'armes card lives HERE (moved out of the Council) —
+    # jeu-darmes-bonus-v1: it opens the confirmation card, green only
+    # when a token is HELD (the wallet no longer rules it).
     labels = [str(button.item.label) for button in second]
     assert any("Jeu d'armes" in label for label in labels)
     for button in second:
@@ -304,9 +306,9 @@ def test_remparts_rows_follow_the_button_rules() -> None:
             "garde_royale_stock": 1,
             "patrouille_unlock_1": 1,
             "patrouille_unlock_2": 1,
+            "jeu_d_armes_stock": 2,
         }
     )
-    green_state["wallet"] = 999  # the Jeu d'armes card turns green too
     rows_green = _remparts_rows(
         strings,
         green_state,
@@ -316,6 +318,23 @@ def test_remparts_rows_follow_the_button_rules() -> None:
     for button in rows_green[1]:
         assert button.item.disabled is False
         assert button.item.style == discord.ButtonStyle.success
+    # a full wallet but NO token keeps the card gray+disabled
+    wallet_only = _minimal_state()
+    wallet_only["wallet"] = 999
+    rows_wallet = _remparts_rows(
+        strings,
+        wallet_only,
+        SimpleNamespace(kingdoms_service=SimpleNamespace(config=None)),
+        "fr",
+    )
+    jeu_buttons = [
+        button
+        for button in rows_wallet[1]
+        if "Jeu d'armes" in str(button.item.label)
+    ]
+    assert len(jeu_buttons) == 1
+    assert jeu_buttons[0].item.disabled is True
+    assert jeu_buttons[0].item.style == discord.ButtonStyle.secondary
 
 
 def test_paroisse_rows_follow_the_button_rules() -> None:

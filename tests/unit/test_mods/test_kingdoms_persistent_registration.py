@@ -76,3 +76,18 @@ def test_the_draft_view_button_is_registered() -> None:
     register_kingdoms_persistent_items(bot)  # type: ignore[arg-type]
 
     assert any(item.__name__ == "KingdomDraftViewButton" for item in bot.registered)
+
+
+def test_the_jeu_darmes_buttons_are_registered() -> None:
+    """jeu-darmes-bonus-v1 (Drasah 03/11): the 🧪 confirmation-card
+    trio (open / ✅ Activer / ❌ Annuler) must survive a restart."""
+    bot = _RecordingBot()
+
+    register_kingdoms_persistent_items(bot)  # type: ignore[arg-type]
+
+    for name in (
+        "KingdomJeuDarmesUseButton",
+        "KingdomJeuDarmesActivateButton",
+        "KingdomJeuDarmesCancelButton",
+    ):
+        assert any(item.__name__ == name for item in bot.registered), name

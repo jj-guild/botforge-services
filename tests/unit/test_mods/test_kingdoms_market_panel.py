@@ -150,6 +150,7 @@ class FakeEconomyService:
         self.corruption_tokens = corruption_tokens
         self.jeu_d_armes_tokens = jeu_d_armes_tokens
         self.jeu_d_armes_levels = 0
+        self.jeu_d_armes_rush: list[str] = []
         self.explorateur_tokens = explorateur_tokens
         self.tech_bought: list[tuple[str, str]] = []
         self.explorateur_bought: list[str] = []
@@ -209,10 +210,17 @@ class FakeEconomyService:
         self.jeu_d_armes_tokens += 1
         return self.jeu_d_armes_tokens
 
-    async def use_jeu_d_armes(self, kingdom_id: str) -> int:
+    async def use_jeu_d_armes(self, kingdom_id: str, lord_id: str) -> tuple[int, bool]:
+        """jeu-darmes-bonus-v1: (AI level after, leveled?) — the rush is
+        NOT cumulable per lord, a stock of 0 refuses."""
+        if self.jeu_d_armes_tokens <= 0:
+            raise RuntimeError("no arms-mastery token in stock")
+        if lord_id in self.jeu_d_armes_rush:
+            raise RuntimeError("arms-mastery rush already active")
         self.jeu_d_armes_tokens -= 1
         self.jeu_d_armes_levels += 1
-        return self.jeu_d_armes_levels
+        self.jeu_d_armes_rush.append(lord_id)
+        return (self.jeu_d_armes_levels, True)
 
     async def buy_explorateur_token(self, kingdom_id: str) -> int:
         self.spent.append((kingdom_id, 2))
@@ -264,6 +272,17 @@ class FakeTerritoryService:
 
     async def drawn_map_keys(self) -> set[str]:
         return set(self._drawn)
+
+
+def _find_by_id(node: Any, custom_id: str) -> Any:
+    """Depth-first search for the component carrying a custom_id."""
+    for child in getattr(node, "children", None) or []:
+        if getattr(getattr(child, "item", child), "custom_id", "") == custom_id:
+            return child
+        found = _find_by_id(child, custom_id)
+        if found is not None:
+            return found
+    return None
 
 
 def _custom_ids(item: Any) -> list[str]:
@@ -846,14 +865,16 @@ async def test_use_button_explorateur_locks_the_chosen_lord() -> None:
     assert economy.explorateur_tokens == 0  # the token is consumed
 
 
-async def test_use_button_jeu_d_armes_applies_the_level_and_refreshes() -> None:
-    """chambre-utiliser-v1: the Arms-mastery's Use applies the +1 AI
-    level immediately, refreshes the ledger window in place and echoes
-    the reached level."""
+async def test_use_button_jeu_d_armes_opens_the_confirmation_card() -> None:
+    """jeu-darmes-bonus-v1: the Arms-mastery's Use opens the 🧪 card
+    (Effet + stock + AI level) — ANY lord may click, the token is
+    consumed at ✅ Activer, never here."""
     economy = FakeEconomyService(jeu_d_armes_tokens=1)
     attacks = FakeAttacksService()
+    tech = await attacks.technology_state("k1")
+    tech.purchases["jeu_d_armes_stock"] = 1
     _wiring(
-        lords=[FakeLord(id="111", role="king", kingdom_id="k1")],
+        lords=[FakeLord(id="111", role="lord", kingdom_id="k1")],
         economy=economy,
         attacks=attacks,
         kingdoms=[FakeKingdom(id="k1", name="Merlinia")],
@@ -862,13 +883,36 @@ async def test_use_button_jeu_d_armes_applies_the_level_and_refreshes() -> None:
     button = KingdomMarketUseButton("jeu_d_armes", strings)
     interaction: Any = MockInteraction(user=MockUser(id=111), locale="en-US")
     await button.callback(interaction)
-    assert interaction.response.deferred is True
+    message = interaction.response.message
+    assert message is not None and message.view is not None
+    ids = _custom_ids(message.view)
+    assert "kingdoms:jeu-darmes:activate" in ids
+    assert "kingdoms:jeu-darmes:cancel" in ids
+    content = str(message.content or "")
+    assert "Effect:" in content
+    assert "You own: **1**" in content
+    assert "0/5" in content
+    assert economy.jeu_d_armes_levels == 0  # nothing consumed yet
+
+    # ✅ Activer — the token spends, the card turns into the note.
+    activate = _find_by_id(message.view, "kingdoms:jeu-darmes:activate")
+    assert activate is not None
+    click: Any = MockInteraction(user=MockUser(id=111), locale="en-US")
+    click.message = message
+    await activate.callback(click)
     assert economy.jeu_d_armes_levels == 1
     assert economy.jeu_d_armes_tokens == 0
-    assert interaction.followup.messages  # the result bubble
-    assert "level 1/5" in str(interaction.followup.messages[-1].content or "")
-    # the ledger window refreshed in place (the stock moved)
-    assert interaction.response.message is not None
+    assert economy.jeu_d_armes_rush == ["111"]
+    assert "1/5" in str((click.response.message or None).content or "")
+
+    # non-cumul: a second Activate (a fresh token) is refused.
+    economy.jeu_d_armes_tokens = 1
+    second: Any = MockInteraction(user=MockUser(id=111), locale="en-US")
+    second.message = message
+    await activate.callback(second)
+    assert economy.jeu_d_armes_tokens == 1  # kept
+    note = str((second.response.message or None).content or "")
+    assert "already" in note.lower()
 
 
 async def test_use_button_refuses_non_kings() -> None:

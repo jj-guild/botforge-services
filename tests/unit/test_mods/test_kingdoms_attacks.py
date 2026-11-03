@@ -171,6 +171,42 @@ async def test_cover_can_be_a_foreign_lord_but_never_of_the_attacked_kingdom() -
     assert (await bundle.attacks.technology_state(aquitaine)).purchases["contre_espionnage"] == 1
 
 
+async def test_declare_rides_the_jeu_d_armes_rush_once() -> None:
+    """jeu-darmes-bonus-v1 (Drasah 03/11): a lord holding an active
+    Arms-mastery rush declares with ONE hour less of delay (6h -> 5h),
+    the flag is consumed, and the very next declaration goes back to
+    the normal delay."""
+    from kingdoms.mods.kingdoms.models import TechnologyState
+
+    bundle = Bundle()
+    await bundle.launch_season()
+    await bundle.draw(31)
+    aquitaine = await bundle.kingdom_id("Aquitaine")
+    bourgogne = await bundle.kingdom_id("Bourgogne")
+    target = (await bundle.owner_maps(bourgogne))[0]
+    base_delay = int(bundle.config.attacks.player_attack_delay_minutes)
+
+    # Seed the rush flag for king-a (the Jeu d'armes was Activated).
+    await bundle.store.upsert_technology(
+        TechnologyState(
+            _id=aquitaine,
+            season_id="s",
+            tech_points=0,
+            purchases={"jeu_d_armes_rush:king-a": 1},
+        ).to_mongo()
+    )
+    attack = await bundle.attacks.declare_attack("king-a", target, "aoe2de://x")
+    assert attack.expires_at - attack.declared_at == timedelta(
+        minutes=base_delay - 60
+    )
+    # the flag is consumed — the next declaration is back to normal
+    state = await bundle.attacks.technology_state(aquitaine)
+    assert int(state.purchases.get("jeu_d_armes_rush:king-a", 0) or 0) == 0
+    other = (await bundle.owner_maps(bourgogne))[1]
+    attack2 = await bundle.attacks.declare_attack("lord-a", other, "aoe2de://y")
+    assert attack2.expires_at - attack2.declared_at == timedelta(minutes=base_delay)
+
+
 async def test_declare_defend_resolve_captures_the_territory() -> None:
     """Nominal 1v1: declare, defend, resolve for the attacker, transfer."""
     bundle = Bundle()
