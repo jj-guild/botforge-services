@@ -1293,3 +1293,573 @@ def _build_roster(
             ffa_lock = int(getattr(member, "ffa_locked_until", 0) or 0)
             if ffa_lock > int(game_now().timestamp()):
                 line += f" {strings['roster_ffa_lock'].format(_lock_until_label(ffa_lock, strings))}"
+            if getattr(member, "left", False):
+                line += f" {strings['left_badge']}"
+            lines.append(line)
+    return _panel_view(
+        strings["roster_title"].format(getattr(kingdom, "name", "")),
+        "\n".join(lines),
+        f"{VIEW_MARKER_PREFIX}:seigneurs",
+        discord.Colour.blue(),
+    )
+
+
+def _patrol_slots(state: dict[str, Any]) -> list[int]:
+    """Return the bought patrol slots (sorted slot starts)."""
+    from kingdoms.mods.kingdoms.attacks import PATROUILLE_SLOT_KEYS
+
+    slots: list[int] = []
+    for key in PATROUILLE_SLOT_KEYS:
+        value = state["purchases"].get(key)
+        if isinstance(value, int):
+            slots.append(value)
+    return sorted(slots)
+
+
+def _build_patrol(
+    strings: dict[str, str],
+    kingdom: Any,
+    state: dict[str, Any],
+    media: str | None = None,
+    rows: list[list[Any]] | None = None,
+) -> Any:
+    """Build the 🧱 Remparts view (remparts-v2, Drasah 14/10).
+
+    The view carries the defence AI level, the Patrouille 1 / 2 slots
+    (placed window, unlocked-but-unplaced, or locked behind a market
+    purchase) and the Garde Royale lines (one per shielded map, the
+    reserve count) — plus the King-only placement buttons (the market
+    sells, Remparts places; ONE 👣 Patrouille cockpit rules both slots).
+    """
+    import discord
+
+    purchases = dict(state.get("purchases") or {})
+    span = 3 if state.get("reinforced") else 2
+    now = game_now()
+    now_ts = int(now.timestamp())
+    lines: list[str] = []
+    if state.get("defense_ai") is not None:
+        # remparts-v3 (Drasah 03/11): the pedagogical IA block — the
+        # training loop spelled out (no defender -> the IA defends, a
+        # Jeu d'armes raises it, the max level improves the Patrouille)
+        # and the level riding Drasah's SHIFTED scale (-1, spelt out).
+        from kingdoms.mods.kingdoms.kingdom_persistent import (
+            _traquenard_ai_display,
+        )
+
+        display, level_name = _traquenard_ai_display(
+            int(state["defense_ai"]), strings
+        )
+        lines.append(strings["remparts_ai_intro"])
+        lines.append(strings["remparts_ai_level"].format(display, level_name))
+        if state.get("reinforced"):
+            lines.append(strings["remparts_reinforced"])
+    # remparts-v3 (Drasah 03/11): the pedagogical Patrouille intro —
+    # the line lives HERE, the Lord's-Day note moved to the flow
+    # (the King acts where the information sits).
+    lines.append(strings["remparts_patrouille_intro"])
+    # Patrouille 1 / Patrouille 2 — placed, unlocked or locked (v2).
+    for slot_no in (1, 2):
+        unlock_key = f"patrouille_unlock_{slot_no}"
+        slot_key = f"patrouille_slot_{slot_no}"
+        if slot_key in purchases:
+            window = strings["remparts_patrouille_placed"].format(
+                slot_no, int(purchases[slot_key]), int(purchases[slot_key]) + span
+            )
+        elif unlock_key in purchases:
+            window = strings["remparts_patrouille_unplaced"]
+        else:
+            window = strings["remparts_patrouille_locked"]
+        lines.append(f"{strings['remparts_patrouille_slot'].format(slot_no)} : {window}")
+    # Gardes Royales — one line per shielded map + the reserve (v2).
+    guard_lines: list[str] = []
+    for territory in state["territories"]:
+        guard_key = f"garde_royale_until:{getattr(territory, 'id', '')}"
+        until_ts = int(purchases.get(guard_key, 0) or 0)
+        if until_ts <= now_ts:
+            continue
+        key = str(getattr(territory, "map_key", ""))
+        guard_lines.append(
+            strings["remparts_guard_line"].format(
+                state["map_names"].get(key, key), _lock_until_label(until_ts, strings)
+            )
+        )
+    guard_block = "\n".join(guard_lines) or strings["remparts_guard_none"]
+    # remparts-v3: the pedagogical Garde intro (12h, consumed).
+    lines.append(strings["remparts_garde_intro"])
+    lines.append(f"**{strings['remparts_guard']}** :")
+    lines.append(guard_block)
+    stock = int(purchases.get("garde_royale_stock", 0) or 0)
+    if stock > 0:
+        lines.append(strings["remparts_guard_stock"].format(stock))
+    # remparts-v3 (Drasah 03/11): the « 🔄 Redéfinition des créneaux »
+    # line MOVED into the Patrouille button flow (kingdom_persistent)
+    # — it no longer pads the body.
+    body = "\n".join(lines)
+    from kingdoms.mods.kingdoms.kingdom_attack_panel import (
+        KingdomAttackManagerButton,
+        KingdomDefenseManagerButton,
+    )
+    from kingdoms.mods.kingdoms.kingdom_persistent import (
+        KingdomRempartsGuardButton,
+        KingdomRempartsPatrouilleHubButton,
+    )
+
+    return _panel_view_with_buttons(
+        strings["patrol_title"].format(getattr(kingdom, "name", "")),
+        body,
+        f"{VIEW_MARKER_PREFIX}:patrouille",
+        discord.Colour.teal(),
+        [
+            KingdomRempartsGuardButton(strings),
+            KingdomRempartsPatrouilleHubButton(strings),
+            # Drasah 18/10: la vue privée du royaume défenseur — qui
+            # défend quoi, l'effet de surprise restant public-board-free.
+            KingdomDefenseManagerButton(strings.get("defense_manager_button", "🛡️ Gestion de la défense")),
+            # planification-attaque-v1 (Drasah 23/10): ⚔️ Gestion
+            # d'attaque — les déclarations en cours + les
+            # plannifications du royaume (3 choix visibles).
+            KingdomAttackManagerButton(
+                strings.get("attack_manager_button", "⚔️ Gestion d'attaque")
+            ),
+        ],
+        media=media,
+        rows=rows,
+    )
+
+
+def _build_territory(
+    strings: dict[str, str],
+    kingdom: Any,
+    state: dict[str, Any],
+) -> Any:
+    """Build the 🗺️ Territoire state view (guarded maps wear 🛡️ + end)."""
+    import discord
+
+    now = game_now()
+    lines = [strings["territory_count"].format(len(state["territories"]))]
+    if not state["territories"]:
+        lines.append(strings["territory_empty"])
+    for territory in state["territories"]:
+        key = str(getattr(territory, "map_key", ""))
+        line = f"• **{state['map_names'].get(key, key)}**"
+        until = getattr(territory, "protected_until", None)
+        if until is not None and until > now:
+            # marche-v2 article 7: the shielded map shows its 🛡️ and the
+            # protection END TIME next to its name.
+            line += f" {strings['territory_guard'].format(_lock_until_label(int(until.timestamp()), strings))}"
+        # lieu-sacree-v1: the real chantier (⏳ end Paris) and SACRED (⛪)
+        # states show next to the map name — never a stale placeholder.
+        cathedral_until = getattr(territory, "cathedral_until", None)
+        if bool(getattr(territory, "sacred", False)):
+            line += f" {strings['territory_sacred']}"
+        elif cathedral_until is not None and cathedral_until > now:
+            line += (
+                f" {strings['territory_chantier'].format(
+                    _lock_until_label(int(cathedral_until.timestamp()), strings)
+                )}"
+            )
+        lines.append(line)
+    lines.append(strings["territory_note"])
+    return _panel_view(
+        strings["territory_title"].format(getattr(kingdom, "name", "")),
+        "\n".join(lines),
+        f"{VIEW_MARKER_PREFIX}:territoire",
+        discord.Colour.green(),
+    )
+
+
+def _build_territory_pending(
+    strings: dict[str, str],
+    kingdom: Any,
+    state: dict[str, Any],
+) -> Any:
+    """Build the 🗺️ setup-phase placeholder (nothing revealed yet)."""
+    import discord
+
+    return _panel_view(
+        strings["territory_title"].format(getattr(kingdom, "name", "")),
+        strings["territory_pending_body"],
+        f"{VIEW_MARKER_PREFIX}:territoire",
+        discord.Colour.dark_grey(),
+    )
+
+
+def _build_gaia_territory(
+    strings: dict[str, str],
+    kingdom: Any,
+    state: dict[str, Any],
+    ai_level: int,
+) -> Any:
+    """Build the Gaïa 🗺️ Territoire view (restructuration-serveur-v1 c).
+
+    The Gaïa category keeps ONE salon: the retired « Patrouille » info
+    (the AI level) is integrated here — Drasah 19/10, the level is read
+    LIVE from the season epoch (D18 scale, fallback 1), never hardcoded.
+    The territories carry the same guard/chantier/sacred badges as the
+    player-kingdom views.
+    """
+    import discord
+
+    now = game_now()
+    lines = [strings["gaia_ai_level"].format(int(ai_level))]
+    lines.append(strings["territory_count"].format(len(state["territories"])))
+    if not state["territories"]:
+        lines.append(strings["territory_empty"])
+    for territory in state["territories"]:
+        key = str(getattr(territory, "map_key", ""))
+        line = f"• **{state['map_names'].get(key, key)}**"
+        until = getattr(territory, "protected_until", None)
+        if until is not None and until > now:
+            line += f" {strings['territory_guard'].format(_lock_until_label(int(until.timestamp()), strings))}"
+        if bool(getattr(territory, "sacred", False)):
+            line += f" {strings['territory_sacred']}"
+        else:
+            cathedral_until = getattr(territory, "cathedral_until", None)
+            if cathedral_until is not None and cathedral_until > now:
+                line += (
+                    f" {strings['territory_chantier'].format(
+                        _lock_until_label(int(cathedral_until.timestamp()), strings)
+                    )}"
+                )
+        lines.append(line)
+    lines.append(strings["territory_note"])
+    return _panel_view(
+        strings["territory_title"].format(getattr(kingdom, "name", "") or "Gaïa"),
+        "\n".join(lines),
+        f"{VIEW_MARKER_PREFIX}:territoire-gaia",
+        discord.Colour.green(),
+    )
+
+
+async def deploy_gaia_content(
+    guild: discord.Guild,
+    wiring: Any,
+    locale: str = "fr",
+) -> dict[str, bool]:
+    """Deploy the Gaïa territory view (the Territoire salon, c).
+
+    restructuration-serveur-v1 c (Drasah 19/10): the Gaïa category drops
+    to ONE salon — the AI level lives in the Territoire view and the
+    FFA lives in its ephemeral salon. restructuration-gaia-v1
+    (Drasah 24/10): the retired Gaïa category's Territoire salon now
+    lives inside the renamed Kingdoms-Gaia structure category — the
+    lookup goes through it (the realm-category path is gone with the
+    category). Best effort: a missing category, salon or kingdom simply
+    reports False, never raises.
+    """
+    from kingdoms.mods.kingdoms.kingdom_setup import _find_category, _slug
+
+    category = _find_category(guild, "Kingdoms-Gaia") or _find_category(guild, "Kingdoms")
+    if category is None:
+        return {}
+    service = getattr(wiring, "kingdoms_service", None)
+    if service is None:
+        return {}
+    try:
+        kingdoms = await service.kingdoms()
+    except Exception:
+        logger.warning("KINGDOM REALM CONTENT: gaia kingdom read failed", exc_info=True)
+        return {}
+    kingdom = next((k for k in kingdoms if getattr(k, "is_gaia", False)), None)
+    if kingdom is None:
+        return {}
+    # The AI level is the LIVE season epoch's (D18 scale, fallback 1) —
+    # the same source as the attackers' Itinéraire/defense checks.
+    ai_level = 1
+    attacks_service = getattr(wiring, "attacks_service", None)
+    if attacks_service is not None:
+        try:
+            ai_level = int(await attacks_service.base_ai_level())
+        except Exception:
+            logger.warning("KINGDOM REALM CONTENT: gaia ai level read failed", exc_info=True)
+    channel = next(
+        (
+            c
+            for c in getattr(category, "channels", [])
+            if _slug(getattr(c, "name", "")) == "territoire"
+        ),
+        None,
+    )
+    if channel is None:
+        return {"territoire-gaia": False}
+    state = await _gather_state(kingdom, wiring)
+    strings = _strings(locale)
+    try:
+        view = _build_gaia_territory(strings, kingdom, state, ai_level)
+        return {"territoire-gaia": await _upsert_view(channel, "territoire-gaia", view)}
+    except Exception:
+        logger.warning("KINGDOM REALM CONTENT: gaia territory view failed", exc_info=True)
+        return {"territoire-gaia": False}
+
+
+
+def _build_church(
+    strings: dict[str, str],
+    kingdom: Any,
+    state: dict[str, Any],
+    media: str | None = None,
+    rows: list[list[Any]] | None = None,
+) -> Any:
+    """Build the ⛪ Paroisse state view (D64 paliers + marriages, v3).
+
+    Live data only: palier, points de mariage and jetons in the title
+    (Drasah's 2026-10-11 header), one line per Fidèle with their
+    marriage and their lock END TIME (never a stale remaining
+    duration), the palier ladder with the Cathédrale's Lieu Sacrée,
+    and a small legend (verrou, offrande, jeton, sacrée). The buttons
+    (marry / arranged / upgrade) are restart-proof DynamicItems.
+    """
+    import time as _time
+
+    import discord
+
+    from kingdoms.mods.kingdoms.diplomacy import _pick_promise
+
+    parish = state["parish"]
+    members = [m for m in state["members"] if not getattr(m, "left", False)]
+    now = int(_time.time())
+    married = [m for m in members if getattr(m, "married_civilization", None)]
+    singles = [
+        m for m in members if getattr(m, "married_civilization", None) is None
+    ]
+
+    # ✨ Palier block
+    lines = [
+        f"## {strings['church_household_palier'].format(parish['name'])}",
+        strings["church_tier_line"].format(
+            parish["name"], parish["tier"], parish["max_tier"], parish["offering"]
+        ),
+        strings["church_lock_line"].format(parish["lock_hours"]),
+        strings["church_royal_lock_line"].format(parish["lock_hours"] * 2),
+        "",
+        # 💒 Les Fidèles du Royaume — one line per member with their state
+        f"## {strings['church_household']}",
+    ]
+    if not members:
+        lines.append(strings["church_none"])
+    for member in married:
+        civ = str(getattr(member, "married_civilization", ""))
+        civ_display = state["civ_names"].get(civ, civ)
+        # Drasah 2026-10-12: the badge shows the promise herself —
+        # « 💍 Luc — Atotoztli (Aztèques) » — never a lone civ key.
+        promise = _pick_promise(f"{member.id}:{civ_display}", civ_display)
+        civ_label = f"{promise} ({civ_display})" if promise else civ_display
+        until = int(getattr(member, "marriage_locked_until", 0) or 0)
+        royal = bool(getattr(member, "royal_marriage", False))
+        base = "church_badge_royal" if royal else "church_badge"
+        key = f"{base}_locked" if until > now else f"{base}_free"
+        lines.append(
+            strings[key].format(
+                getattr(member, "display_name", strings["unknown"]),
+                civ_label,
+                _lock_until_label(until, strings) if until > now else "",
+            )
+        )
+    for member in singles:
+        lines.append(
+            strings["church_bachelor"].format(
+                getattr(member, "display_name", member.id)
+            )
+        )
+    # 🔭 Aperçu des paliers — every tier visible with cost and perks
+    lines += [
+        "",
+        f"## {strings['church_ladder_title']}",
+    ]
+    for index, step in enumerate(parish.get("ladder") or [], start=1):
+        marker = strings["church_ladder_current"] if index == parish["tier"] else strings["church_ladder_other"]
+        line = strings["church_ladder_line"].format(
+            marker,
+            step["name"],
+            step["cost"],
+            step["lock_hours"],
+            step["offering"],
+        )
+        if index == parish["max_tier"]:
+            line += strings["church_ladder_sacree"]
+        lines.append(line)
+    # lieu-sacree-v1: the REAL Lieu Sacrée state — every chantier
+    # (⏳ verdict end, Paris) and every SACRED territory of the kingdom.
+    now_dt = game_now()
+    chantiers = [
+        item
+        for item in state["territories"]
+        if getattr(item, "cathedral_until", None) is not None
+        and item.cathedral_until > now_dt
+    ]
+    sacreds = [
+        item for item in state["territories"] if bool(getattr(item, "sacred", False))
+    ]
+    if chantiers or sacreds:
+        lines += [""]
+        for item in chantiers:
+            lines.append(
+                strings["church_chantier_line"].format(
+                    str(getattr(item, "map_key", "")),
+                    _lock_until_label(
+                        int(item.cathedral_until.timestamp()), strings
+                    ),
+                )
+            )
+        for item in sacreds:
+            lines.append(
+                strings["church_sacred_line"].format(str(getattr(item, "map_key", "")))
+            )
+    # 📖 la légende — verrou, offrande, jeton, lieu sacrée
+    lines += [
+        "",
+        strings["church_legend_lock"],
+        strings["church_legend_offering"],
+        strings["church_legend_token"],
+        strings["church_legend_sacree"],
+    ]
+    body = "\n".join(lines)
+
+    buttons = rows if rows is not None else _church_buttons(strings, kingdom, state)
+    return _panel_view_with_buttons(
+        strings["church_title"].format(
+            getattr(kingdom, "name", ""),
+            parish["name"],
+            int(getattr(kingdom, "marriage_points", 0) or 0),
+            int(getattr(kingdom, "arranged_marriage_stock", 0) or 0),
+        ),
+        body,
+        f"{VIEW_MARKER_PREFIX}:eglise",
+        discord.Colour.purple(),
+        buttons,
+        media=media,
+        rows=rows,
+    )
+
+
+def _church_buttons(strings: dict[str, str], kingdom: Any, state: dict[str, Any]) -> list[Any]:
+    """Build the restart-proof Paroisse buttons of the current palier."""
+    from kingdoms.mods.kingdoms.kingdom_persistent import (
+        KingdomChurchArrangeButton,
+        KingdomChurchConsecrateButton,
+        KingdomChurchMarryButton,
+        KingdomChurchUpgradeButton,
+    )
+
+    parish = state["parish"]
+    arranged = int(getattr(kingdom, "arranged_marriage_stock", 0) or 0)
+    buttons: list[Any] = [KingdomChurchMarryButton(strings)]
+    if parish["tier"] >= 2:
+        buttons.append(KingdomChurchArrangeButton(strings, arranged))
+    if parish["tier"] < parish["max_tier"]:
+        buttons.append(
+            KingdomChurchUpgradeButton(strings, parish["next_name"], parish["cost"])
+        )
+    else:
+        buttons.append(KingdomChurchUpgradeButton(strings, "", 0))
+        # lieu-sacree-v1: at the Cathédrale palier the King may
+        # consecrate a Lieu Sacrée (3 ⚙️, 72h chantier).
+        buttons.append(KingdomChurchConsecrateButton(strings))
+    return buttons
+
+
+def _panel_view_with_buttons(
+    title: str,
+    body: str,
+    marker: str,
+    accent: discord.Colour,
+    buttons: list[Any],
+    media: str | None = None,
+    rows: list[list[Any]] | None = None,
+    extra_medias: list[str] | None = None,
+) -> discord.ui.LayoutView:
+    """Build one Components V2 state panel with an action row of buttons.
+
+    mosaic-render-fix (T3b, Drasah 25/10): Components V2 messages do
+    NOT render unreferenced file attachments — an optional top-level
+    ``MediaGallery`` referencing the mosaic attachment makes the
+    blasons visible under the panel container.
+    """
+    import discord
+
+    view = discord.ui.LayoutView(timeout=None)
+    container: discord.ui.Container[discord.ui.LayoutView] = discord.ui.Container(
+        discord.ui.TextDisplay(f"# {title}"),
+        discord.ui.Separator(),
+        discord.ui.TextDisplay(body),
+        discord.ui.Separator(),
+        accent_colour=accent,
+    )
+    if rows:
+        # lieux-rows-v1 (Drasah 01/11): the lieu views lay their own
+        # rows — line 1 = the place's default actions (green) + Sortir
+        # (red) last, line 2 = the technology cards (gray/disabled
+        # while out of stock, green while held). Every sublist is the
+        # CALLER's responsibility (max 5 children per row).
+        for row in rows:
+            if row:
+                container.add_item(discord.ui.ActionRow(*row))
+    elif buttons:
+        # overview-rows-v1 (Drasah 31/10, live incident HeN): Discord
+        # caps an ActionRow at FIVE children — the Le-Royaume sheet
+        # reached SIX buttons (ledger, traquenard, exploration,
+        # volière, remparts, seigneurie) and every deploy crashed with
+        # ValueError, SILENTLY leaving the realm salon empty (only the
+        # kingdoms holding the extra cards were hit). The helper now
+        # chunks the buttons into rows of five (up to 5 rows = 25
+        # buttons, far beyond any surface).
+        for offset in range(0, len(buttons), 5):
+            container.add_item(discord.ui.ActionRow(*buttons[offset:offset + 5]))
+    if marker:
+        container.add_item(discord.ui.TextDisplay(f"-# {marker}"))
+    # illustration-top-v1 (Drasah 01/11): the illustration is FIXED and
+    # TOP — the image of the place the reader stands in rides above the
+    # panel, never under it (the hub castle, a lieu's own picture).
+    # ⚠️ the item class is TOP-LEVEL discord.MediaGalleryItem — the
+    # deployed discord.py 2.7.1 has NO discord.ui.MediaGalleryItem
+    # (live crash 01/11 15:31, Nilrem's Le-Royaume empty since entree-v1).
+    if media:
+        view.add_item(discord.ui.MediaGallery(discord.MediaGalleryItem(media=media)))
+    view.add_item(container)
+    # conseil-objectif-v2 (Drasah 01/11): extra referenced attachments
+    # (the targeted alliance's blason) render UNDER the panel.
+    for media_url in extra_medias or ():
+        view.add_item(discord.ui.MediaGallery(discord.MediaGalleryItem(media=media_url)))
+    return view
+
+
+
+async def _upsert_view(
+    channel: Any, key: str, view: Any, files: list[Any] | None = None
+) -> bool:
+    """Edit the marked panel in place, or send it once (never duplicate).
+
+    vues-silencieuses-v1 (Drasah 19/10): the marked message is now edited in
+    place instead of delete+send, with an identity guard so an unchanged view
+    costs zero API calls. Duplicates are purged, and a failed edit falls back
+    to a fresh send.
+    """
+    marker = f"{VIEW_MARKER_PREFIX}:{key}"
+    marked: list[Any] = [
+        message
+        for message in await channel_messages(channel)
+        if marker in message_text(message)
+    ]
+    if marked:
+        for duplicate in marked[1:]:
+            try:
+                await duplicate.delete()
+            except Exception:
+                logger.warning(
+                    "KINGDOM REALM CONTENT: view %s duplicate purge failed", key, exc_info=True
+                )
+        existing = marked[0]
+        if message_text_squashed(existing) == view_text(view) and (
+            files is None or getattr(existing, "attachments", None)
+        ):
+            return True
+        try:
+            await existing.edit(view=view, **({"attachments": files} if files else {}))
+            return True
+        except Exception:
+            logger.warning(
+                "KINGDOM REALM CONTENT: view %s edit failed, resending", key, exc_info=True
+            )
+    await channel.send(view=view, **({"files": files} if files else {}), allowed_mentions=NO_MENTIONS)
+    return True
