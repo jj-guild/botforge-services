@@ -2275,7 +2275,10 @@ async def _traquenard_status_lines(locale: str, kingdom: Any, wiring: Any) -> li
     if service is not None:
         try:
             for item in await service.kingdoms():
-                kid = str(getattr(item, "kingdom_id", "") or "")
+                # kingdom-id-fix (Drasah live report 03/11): the
+                # kingdom doc carries ``id`` — ``kingdom_id`` is a
+                # LORD field, the lookup never matched.
+                kid = str(getattr(item, "id", "") or "")
                 if kid in live:
                     names[kid] = str(getattr(item, "name", "") or kid)
         except Exception:

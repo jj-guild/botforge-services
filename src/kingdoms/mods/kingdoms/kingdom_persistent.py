@@ -2488,18 +2488,20 @@ async def _traquenard_forces_content(
     attacks = wiring.attacks_service
     rows: list[tuple[Any, int]] = []
     for item in kingdoms:
-        if getattr(item, "is_gaia", False) or str(item.kingdom_id) == kingdom_id:
+        # kingdom-id-fix (Drasah live report 03/11): the KINGDOM doc
+        # carries ``id`` — only LORD docs carry ``kingdom_id``. The
+        # old select crashed the whole sheet with an AttributeError.
+        kid = str(getattr(item, "id", "") or "")
+        if getattr(item, "is_gaia", False) or not kid or kid == str(kingdom_id):
             continue
         level = 1
         if attacks is not None:
             try:
-                level = int(
-                    await attacks.defense_ai_level(str(item.kingdom_id)) or 1
-                )
+                level = int(await attacks.defense_ai_level(kid) or 1)
             except Exception:
                 logger.warning(
                     "KINGDOMS: traquenard AI level read failed for %s (ignored)",
-                    str(item.kingdom_id),
+                    kid,
                 )
         rows.append((item, level))
     if not rows:
@@ -2508,7 +2510,7 @@ async def _traquenard_forces_content(
     for item, level in rows:
         lines.append(
             str(strings["traquenard_forces_line"]).format(
-                name=str(getattr(item, "name", "") or item.kingdom_id),
+                name=str(getattr(item, "name", "") or kid),
                 ai=level,
             )
         )
@@ -2925,7 +2927,12 @@ class KingdomTraquenardForcesButton(
             )
             return
         await interaction.response.edit_message(
-            content=content, view=_traquenard_fiche_view(strings, active="forces")
+            content=content,
+            view=_traquenard_fiche_view(strings, active="forces"),
+            # forces-visuel-fix (Drasah live report 03/11): an in-place
+            # edit KEEPS the fiche's card attachment — the 🪤 art is
+            # irrelevant on the AI forces sheet, drop it.
+            attachments=[],
         )
 
 
@@ -2966,9 +2973,13 @@ class KingdomTraquenardFicheButton(
         """Edit the window in place — back to the fiche sheet."""
         locale = str(interaction.locale) if interaction.locale else "en"
         strings = _strings(locale)
+        # forces-visuel-fix (Drasah live report 03/11): the fiche
+        # re-attaches its card art (the forces edit dropped it).
+        card = _market_card_file("traquenard") or _market_card_back_file()
         await interaction.response.edit_message(
             content=_traquenard_fiche_content(strings),
             view=_traquenard_fiche_view(strings, active="fiche"),
+            files=[card] if card is not None else None,
         )
 
 
@@ -3031,9 +3042,13 @@ class KingdomTraquenardGoButton(
         options: list[discord.SelectOption] = []
         names: dict[str, str] = {}
         for item in kingdoms:
-            if getattr(item, "is_gaia", False) or str(item.kingdom_id) == kingdom_id:
+            # kingdom-id-fix (Drasah live report 03/11): ``id``, never
+            # ``kingdom_id`` (lords only).
+            if getattr(item, "is_gaia", False):
                 continue
-            kid = str(item.kingdom_id)
+            kid = str(getattr(item, "id", "") or "")
+            if not kid or kid == str(kingdom_id):
+                continue
             name = str(getattr(item, "name", "") or kid)
             names[kid] = name
             level = 1
