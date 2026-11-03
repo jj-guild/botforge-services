@@ -128,6 +128,7 @@ async def maps_section_layout(game_key: str, guild_id: str) -> discord.ui.Layout
     actions: discord.ui.ActionRow[discord.ui.LayoutView] = discord.ui.ActionRow()
     actions.add_item(GamesMapImportButton(game_key))
     actions.add_item(GamesMapCreateButton(game_key))
+    actions.add_item(GamesMapOrphansButton(game_key))
     view.add_item(actions)
     return view
 
@@ -1034,6 +1035,82 @@ class GamesMapImportButton(
         await interaction.response.send_modal(GamesBulkImportModal(self.game_key))
 
 
+class GamesMapOrphansButton(
+    discord.ui.DynamicItem[discord.ui.Button[Any]],
+    template=rf"{_NS}:maps:orphans:(?P<game_key>[a-z0-9_]+)",
+):
+    """List the orphan maps (no forum post) with their admin menu (#259).
+
+    A map whose import failed after the record landed but whose
+    rollback failed too has NO forum post \u2014 and the map's admin
+    menu only lives on its post. This button is the admin-visible
+    orphan list: one ephemeral pass, each orphan with its admin
+    button (the menu that carries the delete).
+    """
+
+    def __init__(self, game_key: str) -> None:
+        self.game_key = game_key
+        super().__init__(
+            discord.ui.Button(
+                label="Orphelines",
+                emoji="\U0001f9f9",
+                style=discord.ButtonStyle.secondary,
+                custom_id=f"{_NS}:maps:orphans:{game_key}"[:100],
+            )
+        )
+
+    @classmethod
+    async def from_custom_id(
+        cls,
+        interaction: discord.Interaction,
+        item: discord.ui.Item[Any],
+        match: re.Match[str],
+        /,
+    ) -> GamesMapOrphansButton:
+        """Rebuild the item from the wire (game key from the custom_id)."""
+        del interaction, item
+        return cls(match.group("game_key"))
+
+    async def callback(self, interaction: discord.Interaction) -> None:
+        """Guard, list the orphans, hand each its admin menu entry."""
+        from kingdoms.discord.maps_pool_flow import _guard_admin
+
+        await interaction.response.defer(ephemeral=True, thinking=False)
+        if not await _guard_admin(interaction):
+            return
+        service = _games_wiring()
+        if service is None:
+            await interaction.edit_original_response(
+                content=await reply(interaction, "replies_shared.wiring_unavailable")
+            )
+            return
+        maps = await service.list_maps(self.game_key)
+        orphans = [m for m in maps if m.archived_at is None and not m.forum_message_id]
+        view = discord.ui.LayoutView(timeout=None)
+        title = f"# Maps orphelines \u2014 {len(orphans)}"
+        if not orphans:
+            view.add_item(
+                discord.ui.Container(
+                    discord.ui.TextDisplay(f"{title}\nAucune map orpheline \u2014 tout a son post.")
+                )
+            )
+        for entry in orphans[:20]:
+            owned = entry.owner_guild_id is not None
+            row: discord.ui.ActionRow[discord.ui.LayoutView] = discord.ui.ActionRow()
+            from kingdoms.discord.entity_admin_menu import EntityAdminButton
+
+            row.add_item(
+                EntityAdminButton("map", entry.id, game_key=self.game_key, owned=owned)
+            )
+            view.add_item(
+                discord.ui.Container(
+                    discord.ui.TextDisplay(f"**{entry.name}** \u2014 `{entry.id}`"),
+                    row,
+                )
+            )
+        await interaction.edit_original_response(view=view)
+
+
 def _map_summary_from_seed(seed: Any) -> str:
     """Render the imported map's content: Liquipedia description + traits.
 
@@ -1113,8 +1190,8 @@ async def _finish_map_import(
         else:
             message = (
                 f"Import échoué à l'étape « contenu/forum » ({exc}) et le nettoyage a échoué : "
-                f"la map **{entry.name}** (`{entry.id}`) est orpheline — supprime-la depuis le "
-                "menu Maps puis réessaie."
+                f"la map **{entry.name}** (`{entry.id}`) est orpheline — supprime-la via le "
+                "bouton « Orphelines » de la section Maps puis réessaie."
             )
         if final is not None:
             await final(message)
@@ -1589,6 +1666,7 @@ def register_games_admin_items(bot: discord.Client) -> None:
         GamesPoolAddByIdButton,
         GamesPoolDuplicateButton,
         GamesMapImportButton,
+        GamesMapOrphansButton,
         GamesPoolCopyButton,
         GamesPoolPublishButton,
         GamesPoolHardDeleteButton,
