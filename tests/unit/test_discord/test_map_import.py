@@ -48,11 +48,20 @@ class _FakeGamesService:
         return _Entry() if entry_id == _Entry.id else None
 
 
+class _Message:
+    id = 1
+
+
 class _Followups:
     def __init__(self) -> None:
         self.messages: list[str] = []
 
-    async def send(self, content: str | None = None, **kwargs: Any) -> None:
+    async def send(self, content: str | None = None, **kwargs: Any) -> object:
+        self.messages.append(content or "")
+        return _Message()
+
+    async def edit_message(self, message_id: int, content: str | None = None, **kwargs: Any) -> None:
+        # the long-running pattern edits the progress message in place
         self.messages.append(content or "")
 
 

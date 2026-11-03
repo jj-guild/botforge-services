@@ -1063,6 +1063,7 @@ async def _finish_map_import(
     game_key: str,
     entry: Any,
     seed: Any,
+    final: Callable[[str], Awaitable[None]] | None = None,
 ) -> None:
     """Store the imported map's content and sync its forum post (#259).
 
@@ -1105,18 +1106,20 @@ async def _finish_map_import(
         except Exception:
             logger.exception("GAMES ADMIN: rollback failed for %s", entry.id)
         if rolled_back:
-            await interaction.followup.send(
+            message = (
                 f"Import échoué à l'étape « contenu/forum » ({exc}) — la map a été supprimée, "
-                "réessaie.",
-                ephemeral=True,
+                "réessaie."
             )
         else:
-            await interaction.followup.send(
+            message = (
                 f"Import échoué à l'étape « contenu/forum » ({exc}) et le nettoyage a échoué : "
                 f"la map **{entry.name}** (`{entry.id}`) est orpheline — supprime-la depuis le "
-                "menu Maps puis réessaie.",
-                ephemeral=True,
+                "menu Maps puis réessaie."
             )
+        if final is not None:
+            await final(message)
+        else:
+            await interaction.followup.send(message, ephemeral=True)
         return
     fresh = await service.get_map(entry.id)
     post_link = ""
@@ -1125,8 +1128,12 @@ async def _finish_map_import(
             f" — son post : https://discord.com/channels/{interaction.guild_id}/"
             f"{fresh.forum_message_id}/{fresh.forum_message_id}"
         )
+    message = f"Map **{entry.name}** importée{post_link or ' — son post est dans le forum maps.'}"
+    if final is not None:
+        await final(message)
+        return
     await interaction.followup.send(
-        f"Map **{entry.name}** importée{post_link or ' — son post est dans le forum maps.'}",
+        message,
         ephemeral=True,
     )
 
@@ -1161,20 +1168,29 @@ class GamesMapImportModal(discord.ui.Modal):
         # modal window; the ack-less import raised in the popup while
         # the map was still created, leaving "name already taken" on
         # retry.
-        await interaction.response.defer(ephemeral=True, thinking=False)
+        # The long-running action pattern (skills/discord-ui): announce
+        # WHAT runs and that the result lands in this very message \u2014
+        # the Liquipedia seed is rate-limited (>= 2 s per request, 3-4
+        # requests per map), past Discord's 3-second window.
+        await interaction.response.defer(ephemeral=True, thinking=True)
+        progress: Any = await interaction.followup.send(  # type: ignore[func-returns-value]
+            f"\U0001F504 Import de « {name} » en cours \u2014 interrogation de Liquipedia… "
+            "Le r\u00e9sultat sera post\u00e9 dans ce message.",
+            ephemeral=True,
+        )
         from kingdoms.mapsdata.seed import LiquipediaUnconfiguredError, fetch_map_seed
         try:
             seed = await fetch_map_seed(name)
         except LiquipediaUnconfiguredError:
-            await interaction.followup.send(
-                await reply(interaction, "replies_shared.liquipedia_unconfigured"),
-                ephemeral=True,
+            await interaction.followup.edit_message(
+                progress.id,
+                content=await reply(interaction, "replies_shared.liquipedia_unconfigured"),
             )
             return
         if seed is None:
-            await interaction.followup.send(
-                f'Aucune page Liquipedia pour "{name}" \u2014 cr\u00e9e la map localement.',
-                ephemeral=True,
+            await interaction.followup.edit_message(
+                progress.id,
+                content=f'Aucune page Liquipedia pour "{name}" \u2014 cr\u00e9e la map localement.',
             )
             return
         from kingdoms.core.services.game_data import NameTakenError
@@ -1190,18 +1206,23 @@ class GamesMapImportModal(discord.ui.Modal):
                 map_type=seed.map_type,
             )
         except NameTakenError as error:
-            await interaction.followup.send(
-                f"Import refusé — {error}. Supprime ou archive la map existante d'abord.",
-                ephemeral=True,
+            await interaction.followup.edit_message(
+                progress.id,
+                content=f"Import refusé — {error}. Supprime ou archive la map existante d'abord.",
             )
             return
         except Exception as exc:
             logger.exception("GAMES ADMIN: map creation failed")
-            await interaction.followup.send(
-                f"Import échoué à l'étape « création » : {exc}", ephemeral=True
+            await interaction.followup.edit_message(
+                progress.id,
+                content=f"Import échoué à l'étape « création » : {exc}",
             )
             return
-        await _finish_map_import(interaction, service, self.game_key, entry, seed)
+
+        async def _final(summary: str) -> None:
+            await interaction.followup.edit_message(progress.id, content=summary)
+
+        await _finish_map_import(interaction, service, self.game_key, entry, seed, _final)
 
 
 ProgressCallback = Callable[[str, bool, str], Awaitable[None]]
