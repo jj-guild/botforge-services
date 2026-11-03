@@ -44,7 +44,6 @@ def _pool_state_badge(state: str) -> str:
     return pool_state_badge(state)
 
 
-
 def _pool_thread_title(pool: Any) -> str:
     """Build the pool's thread title: the state emoji rides the name."""
     from kingdoms.core.services.game_data import POOL_STATE_EMOJIS
@@ -80,19 +79,14 @@ def _pool_post_layout(
         image = m.get("image_url") or m.get("resource_url") or ""
         link = ""
         if m.get("forum_message_id") and m.get("guild_id"):
-            link = (
-                f"https://discord.com/channels/{m['guild_id']}/"
-                f"{m['forum_message_id']}/{m['forum_message_id']}"
-            )
+            link = f"https://discord.com/channels/{m['guild_id']}/{m['forum_message_id']}/{m['forum_message_id']}"
         name = m["name"]
         if m.get("map_type"):
             name += f" — *{m['map_type']}*"
         sections.append((name, link, image))
 
     buttons: list[Any] = [
-        lambda: EntityAdminButton(
-            "pool", pool.id, game_key=str(getattr(pool, "game_key", "")), owned=editable
-        )
+        lambda: EntityAdminButton("pool", pool.id, game_key=str(getattr(pool, "game_key", "")), owned=editable)
     ]
     return pool_card(
         pool_id=pool.id,
@@ -102,7 +96,6 @@ def _pool_post_layout(
         member_sections=tuple(sections),
         buttons=tuple(buttons),
     )
-
 
 
 def _pool_post_content(pool: Any, maps: list[dict[str, Any]]) -> str:
@@ -181,9 +174,6 @@ async def _sync_pools_forum_locked(guild_id: str, bot: Any, service: Any = None)
             continue
         actions += await _sync_game_pools(guild, guild_id, platform, service, game_key, bot)
     return actions
-
-
-
 
 
 async def _refresh_member_map_posts(bot: Any, guild_id: str, wanted: dict[str, Any]) -> None:
@@ -300,9 +290,7 @@ async def _delete_orphan_pool_posts(wanted: dict[str, Any], existing: dict[str, 
     """
     deleted = 0
     for name, thread in existing.items():
-        linked = any(
-            str(getattr(p, "forum_thread_id", "") or "") == str(thread.id) for p in wanted.values()
-        )
+        linked = any(str(getattr(p, "forum_thread_id", "") or "") == str(thread.id) for p in wanted.values())
         if name not in wanted and not linked:
             try:
                 await thread.delete(reason=f"kingdoms: pool {name} no longer visible")
@@ -351,10 +339,12 @@ async def _refresh_pool_post(
 
     from kingdoms.core.services.entity_forum import (
         _content_fingerprint,
+        _edit_pacing_key,
         _last_layout_render,
         _note_stale_edit,
         _remember_layout_render,
         _stagger_stale_edit,
+        pace_channel_edit,
     )
 
     now = time.monotonic()
@@ -375,6 +365,7 @@ async def _refresh_pool_post(
         # a stale comparison re-titled every pool on every sync pass and
         # burned the channel's PATCH budget (the 492s 429 of the test env)
         expected_title = _pool_thread_title(pool)
+        await pace_channel_edit(_edit_pacing_key(thread))
         if thread.name != expected_title:
             await thread.edit(name=expected_title, reason="kingdoms: pool state or name changed")
         await starter.edit(view=_pool_post_layout(pool, maps, editable))

@@ -1,10 +1,10 @@
 """The per-game live dashboard (#147): channels, panels, the /live command.
 
 Generic across games (owner direction, 2026-10-23): every game gets its
-own live dashboard channel (the tree folder ``games/<game_key>`` hosts
-the ``live`` channel and one pinned message, edited in place on every
-state change); the /live command and the aoe2 menu panel render the
-same dashboard ephemerally. A game with no game service configured
+own ``live`` view; the /live command and the aoe2 menu panel render the
+same dashboard ephemerally (owner direction, 2026-11): never pinned,
+never a persistent message — no automatic PATCH loop. A game with no game service
+configured
 degrades to its empty dashboard — the machinery is game-agnostic.
 """
 

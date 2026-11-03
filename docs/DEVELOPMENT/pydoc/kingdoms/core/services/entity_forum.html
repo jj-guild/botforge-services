@@ -119,6 +119,13 @@ Data and other attributes defined here:<br>
 The&nbsp;fingerprints&nbsp;are&nbsp;process-memory&nbsp;change&nbsp;detection;&nbsp;after&nbsp;a&nbsp;guild<br>
 language&nbsp;change&nbsp;the&nbsp;recomputed&nbsp;(translated)&nbsp;content&nbsp;must&nbsp;push&nbsp;even<br>
 when&nbsp;the&nbsp;pre-change&nbsp;pass&nbsp;remembers&nbsp;the&nbsp;same&nbsp;thread.</span></dd></dl>
+ <dl><dt>async <a name="-pace_channel_edit"><strong>pace_channel_edit</strong></a>(channel_id: 'str') -&gt; 'None'</dt><dd><span class="code">Wait&nbsp;so&nbsp;consecutive&nbsp;post&nbsp;edits&nbsp;on&nbsp;one&nbsp;channel&nbsp;stay&nbsp;under&nbsp;~5/5s.<br>
+&nbsp;<br>
+Threads&nbsp;of&nbsp;one&nbsp;forum&nbsp;share&nbsp;the&nbsp;parent&nbsp;channel's&nbsp;key:&nbsp;a&nbsp;sync&nbsp;pass<br>
+edits&nbsp;dozens&nbsp;of&nbsp;posts&nbsp;"in&nbsp;a&nbsp;row"&nbsp;and&nbsp;the&nbsp;pacing&nbsp;is&nbsp;what&nbsp;keeps&nbsp;the<br>
+burst&nbsp;from&nbsp;eating&nbsp;the&nbsp;channel's&nbsp;PATCH&nbsp;budget&nbsp;(the&nbsp;492-second&nbsp;429<br>
+of&nbsp;the&nbsp;test&nbsp;env).&nbsp;Idempotent&nbsp;and&nbsp;best-effort:&nbsp;the&nbsp;pacer&nbsp;never<br>
+raises,&nbsp;it&nbsp;only&nbsp;sleeps.</span></dd></dl>
  <dl><dt><a name="-register_entity_forum_sync"><strong>register_entity_forum_sync</strong></a>(spec: 'EntityForumSpec') -&gt; 'None'</dt><dd><span class="code">Declare&nbsp;one&nbsp;entity&nbsp;forum's&nbsp;mirror&nbsp;sync&nbsp;(the&nbsp;sync&nbsp;button&nbsp;runs&nbsp;it).</span></dd></dl>
  <dl><dt>async <a name="-sync_entity_forum"><strong>sync_entity_forum</strong></a>(guild_id: 'str', bot: 'Any', spec: 'EntityForumSpec') -&gt; 'int'</dt><dd><span class="code">Ensure&nbsp;the&nbsp;forum&nbsp;and&nbsp;one&nbsp;post&nbsp;per&nbsp;entity&nbsp;(idempotent,&nbsp;self-healing).<br>
 &nbsp;<br>
@@ -134,7 +141,8 @@ concurrent&nbsp;syncs&nbsp;never&nbsp;double-create).</span></dd></dl>
     
 <tr><td class="decor data-decor"><span class="code">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span></td><td>&nbsp;</td>
 <td class="singlecolumn"><strong>EDIT_BACKOFF_S</strong> = 82800<br>
+<strong>EDIT_PACING_S</strong> = 0.5<br>
 <strong>GAMES_CATEGORY_NAME</strong> = 'games'<br>
-<strong>__annotations__</strong> = {'_LAST_LAYOUT_RENDER': 'dict[str, str]', '_STALE_EDITS': 'dict[str, float]'}<br>
+<strong>__annotations__</strong> = {'_LAST_LAYOUT_RENDER': 'dict[str, str]', '_STALE_EDITS': 'dict[str, float]', '_last_edit_at': 'dict[str, float]'}<br>
 <strong>logger</strong> = &lt;Logger kingdoms.core.entity_forum (WARNING)&gt;</td></tr></table>
 </body></html>

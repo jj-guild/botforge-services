@@ -296,7 +296,37 @@ Des limites de l'API Discord — hors de notre contrôle.
   message cliqué (`interaction.message.flags`).
 - **Rate limits** globaux (429) : les provisioning de masse (forums,
   pins) s'étalent ; les providers externes ont leurs propres limites
-  (Liquipedia : 1 req/2 s, 1 parse/30 s).
+  (Liquipedia : 1 req/2 s, 1 parse/60 s, batch `action=query` pour le
+  catalogue, backoff exponentiel 30/60/120 s sur 429 en respectant
+  `Retry-After`).
+
+### Le contrat 429 (Discord) — kingdoms-services#276
+
+Quatre règles, toutes mécanisées — une surface qui les contourne est un
+bug :
+
+1. **Édition idempotente** : chaque surface hache le contenu avant de
+   PATCHer (fingerprint, `entity_forum`) ; une édition inchangée ne
+   part jamais, et le retitrage compare au titre attendu (emoji
+   compris).
+2. **Pacing par canal** : `pace_channel_edit` (0,5 s entre deux édits
+   d'un même forum) dans les boucles de sync — Discord alloue ~5
+   PATCH/5 s par canal ; une passe complète sur un forum vierge reste
+   sous le quota. Les threads d'un même forum partagent la clé de
+   pacing (le canal parent) ; les forums pace indépendamment.
+3. **Jamais de gel** : le client porte `max_ratelimit_timeout=60` — un
+   429 dont le `retry_after` dépasse 60 s lève `RateLimited` au lieu
+   d'endormir l'appel (et tous ceux qui partagent le bucket) pendant
+   des minutes ; les syncs rattrapent à leur prochaine passe.
+4. **Monitoring** : `rate_limit_monitor` tape le logger `discord.http`
+   — chaque 429 absorbé par le retry interne de discord.py est
+   ré-émis en WARNING structuré sur `kingdoms.rate_limit` (route,
+   `retry_after`, compteur par route, distinction global). Un pic de
+   429 sur une route est l'empreinte d'une surface qui dérape.
+
+Et la règle d'architecture qui précède tout : **aucune réponse
+ d'interaction ne dépend d'un appel Discord lent ou rate-limité** —
+ l'ack d'abord, le sync best-effort après.
 
 ---
 
