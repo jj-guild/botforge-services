@@ -118,9 +118,7 @@ async def test_import_rolls_back_on_forum_failure(monkeypatch: Any) -> None:
     interaction = _Interaction()
     monkeypatch.setattr(panel, "_games_wiring", lambda: service)
     monkeypatch.setattr("kingdoms.mapsdata.seed.fetch_map_seed", _fake_seed)
-    monkeypatch.setattr(
-        "kingdoms.discord.maps_forum.sync_maps_forum", _FailingForumSync()
-    )
+    monkeypatch.setattr("kingdoms.discord.maps_forum.sync_maps_forum", _FailingForumSync())
     await _run_import(interaction)
     assert "supprimée" in interaction.followup.messages[-1]
     assert service.deleted == ["map:aoe2:public:arabia"]
@@ -133,9 +131,7 @@ async def test_import_orphan_message_when_rollback_fails(monkeypatch: Any) -> No
     interaction = _Interaction()
     monkeypatch.setattr(panel, "_games_wiring", lambda: service)
     monkeypatch.setattr("kingdoms.mapsdata.seed.fetch_map_seed", _fake_seed)
-    monkeypatch.setattr(
-        "kingdoms.discord.maps_forum.sync_maps_forum", _FailingForumSync()
-    )
+    monkeypatch.setattr("kingdoms.discord.maps_forum.sync_maps_forum", _FailingForumSync())
 
     async def failing_delete(entry_id: str) -> bool:
         raise RuntimeError("delete refused")
@@ -143,3 +139,83 @@ async def test_import_orphan_message_when_rollback_fails(monkeypatch: Any) -> No
     monkeypatch.setattr(service, "delete_map", failing_delete)
     await _run_import(interaction)
     assert "orpheline" in interaction.followup.messages[-1]
+
+
+class _OrphanEntry:
+    """An active map with no forum post (the orphan shape)."""
+
+    id = "map:aoe2:public:orphan"
+    name = "Orphan Map"
+    forum_message_id = None
+    archived_at = None
+    owner_guild_id = None
+
+
+class _PostedEntry:
+    """A healthy map (has its forum post)."""
+
+    id = "map:aoe2:public:arabia"
+    name = "Arabia"
+    forum_message_id = "1234"
+    archived_at = None
+    owner_guild_id = None
+
+
+class _OrphanListService:
+    def __init__(self) -> None:
+        self.listed = False
+
+    async def list_maps(self, game_key: str) -> list[Any]:
+        del game_key
+        self.listed = True
+        return [_OrphanEntry(), _PostedEntry()]
+
+
+class _OrphanResponse:
+    def __init__(self) -> None:
+        self.deferred = False
+
+    async def defer(self, **kwargs: Any) -> None:
+        del kwargs
+        self.deferred = True
+
+
+class _OrphanInteraction:
+    """The minimal interaction surface the orphans callback uses."""
+
+    def __init__(self) -> None:
+        self.response = _OrphanResponse()
+        self.edited: list[Any] = []
+
+    async def edit_original_response(self, view: Any = None, **kwargs: Any) -> None:
+        del kwargs
+        self.edited.append(view)
+
+
+async def test_orphans_button_lists_only_postless_maps(monkeypatch: Any) -> None:
+    import kingdoms.discord.admin_panel_games as panel
+
+    service = _OrphanListService()
+    interaction = _OrphanInteraction()
+    monkeypatch.setattr(panel, "_games_wiring", lambda: service)
+
+    async def _allow(interaction: Any) -> bool:
+        del interaction
+        return True
+
+    monkeypatch.setattr("kingdoms.discord.maps_pool_flow._guard_admin", _allow)
+    button = panel.GamesMapOrphansButton("aoe2")
+    await button.callback(interaction)
+    assert service.listed is True
+    assert len(interaction.edited) == 1, "the orphan list must be answered"
+    view = interaction.edited[0]
+
+    def _flat(node: Any) -> str:
+        return " ".join(
+            [_flat(child) for child in getattr(node, "children", [])] + [str(getattr(node, "custom_id", "") or "")]
+        )
+
+    # only the postless map rides the list: its admin button's custom_id
+    flat = _flat(view)
+    assert "map:aoe2:public:orphan" in flat
+    assert "map:aoe2:public:arabia" not in flat
