@@ -150,7 +150,13 @@ class Aoe2LobbyAdapter:
             # stay as raw ids, the summaries still render
             return self._schema
         try:
-            async with websockets.connect(self._schema_ws_url, max_size=self._max_size) as ws:
+            from kingdoms.core.upstream_identity import project_user_agent
+
+            async with websockets.connect(
+                self._schema_ws_url,
+                max_size=self._max_size,
+                user_agent_header=project_user_agent(),
+            ) as ws:
                 raw = await asyncio.wait_for(ws.recv(), timeout=timeout_s)
                 frame = json.loads(raw)
                 while not isinstance(frame, dict) or "schema" not in frame:
@@ -180,9 +186,7 @@ class Aoe2LobbyAdapter:
         # (the only light refresh on this snapshot-only wire); the
         # session itself NEVER closes for a refresh — a close means
         # the server dropped us and the caller reconnects.
-        timer: asyncio.Future[bool] = asyncio.ensure_future(
-            _refresh_timer(self, queue)
-        )
+        timer: asyncio.Future[bool] = asyncio.ensure_future(_refresh_timer(self, queue))
         try:
             while True:
                 item = await queue.get()
@@ -199,8 +203,6 @@ class Aoe2LobbyAdapter:
             reader.cancel()
             sweeper.cancel()
             timer.cancel()
-
-
 
     def current_state_events(self) -> list[dict[str, Any]]:
         """Build the CURRENT world's events (a new consumer's handshake).
@@ -258,11 +260,14 @@ class Aoe2LobbyAdapter:
         """
         while True:
             try:
+                from kingdoms.core.upstream_identity import project_user_agent
+
                 async with websockets.connect(
                     self._ws_url,
                     max_size=self._max_size,
                     ping_interval=self._heartbeat_s,
                     ping_timeout=30.0,
+                    user_agent_header=project_user_agent(),
                 ) as ws:
                     self._ws = ws
                     if not self._schema:
@@ -376,9 +381,7 @@ class Aoe2LobbyAdapter:
                 hits = profiles and enrolled.intersection(profiles)
                 if hits:
                     found.update(hits)
-                    per_match.append(
-                        f"{match_id}[ENROLLED:{','.join(sorted(hits))}]"
-                    )
+                    per_match.append(f"{match_id}[ENROLLED:{','.join(sorted(hits))}]")
                 elif logger.isEnabledFor(logging.DEBUG):
                     per_match.append(str(match_id))
             logger.debug(
@@ -389,8 +392,7 @@ class Aoe2LobbyAdapter:
             )
             if not found and enrolled:
                 logger.debug(
-                    "aoe2lobby DEBUG %s: none of the %d enrolled ids in this "
-                    "snapshot (subscribed: %s)",
+                    "aoe2lobby DEBUG %s: none of the %d enrolled ids in this snapshot (subscribed: %s)",
                     context,
                     len(enrolled),
                     ",".join(sorted(enrolled)[:10]),
@@ -488,9 +490,7 @@ class Aoe2LobbyAdapter:
             return self._record_status(profile_id, STATUS_GAME, match_ref)
         return self._record_status(profile_id, None, match_ref)
 
-    def _record_status(
-        self, profile_id: str, status: str | None, match_ref: str
-    ) -> list[dict[str, Any]]:
+    def _record_status(self, profile_id: str, status: str | None, match_ref: str) -> list[dict[str, Any]]:
         """Record one derived status and emit the transition when it changed."""
         previous = self._player_status.get(profile_id)
         if status is None:
@@ -502,15 +502,11 @@ class Aoe2LobbyAdapter:
             self._cancel_close(profile_id)
             return []
         self._cancel_close(profile_id)
-        event = self._transition_event(
-            profile_id, previous[0] if previous else None, status, match_ref
-        )
+        event = self._transition_event(profile_id, previous[0] if previous else None, status, match_ref)
         self._player_status[profile_id] = (status, match_ref)
         return [event]
 
-    def _apply_context_deltas(
-        self, context: str, frame: dict[str, Any], touched: dict[str, dict[str, Any]]
-    ) -> None:
+    def _apply_context_deltas(self, context: str, frame: dict[str, Any], touched: dict[str, dict[str, Any]]) -> None:
         """Fold one context's deltas into the state, touching the changed matches."""
         if f"{context}_match_all" in frame:
             self._apply_match_all(context, frame.get(f"{context}_match_all"), touched)
@@ -527,9 +523,7 @@ class Aoe2LobbyAdapter:
             for profile_id in player_removes:
                 self._schedule_close(str(profile_id), "", _now_ms())
 
-    def _apply_match_all(
-        self, context: str, payload: object, touched: dict[str, dict[str, Any]]
-    ) -> None:
+    def _apply_match_all(self, context: str, payload: object, touched: dict[str, dict[str, Any]]) -> None:
         """Fold a full snapshot: replace the matches, touch only the CHANGED.
 
         The periodic snapshot is the refresh tick (owner direction): the
@@ -554,9 +548,7 @@ class Aoe2LobbyAdapter:
         self._matches[context] = snapshot
         self._match_payload_fp[context] = new_fingerprints
 
-    def _apply_match_updates(
-        self, context: str, payload: object, touched: dict[str, dict[str, Any]]
-    ) -> None:
+    def _apply_match_updates(self, context: str, payload: object, touched: dict[str, dict[str, Any]]) -> None:
         """Fold one delta batch: touch only the payloads that changed."""
         updates = _as_match_dict(payload)
         self._matches[context].update(updates)
@@ -594,11 +586,7 @@ class Aoe2LobbyAdapter:
                 ):
                     events.append(self._match_updated_event(profile_id, status, match_ref))
                 continue
-            events.append(
-                self._transition_event(
-                    profile_id, previous[0] if previous else None, status, match_ref
-                )
-            )
+            events.append(self._transition_event(profile_id, previous[0] if previous else None, status, match_ref))
             self._player_status[profile_id] = (status, match_ref)
             self._cancel_close(profile_id)
         return events
@@ -617,9 +605,7 @@ class Aoe2LobbyAdapter:
                     return status, match_id
         return None, ""
 
-    def _transition_event(
-        self, profile_id: str, old_status: str | None, status: str, match_ref: str
-    ) -> dict[str, Any]:
+    def _transition_event(self, profile_id: str, old_status: str | None, status: str, match_ref: str) -> dict[str, Any]:
         """Build one normalized transition event in the MatchEvent shape.
 
         The metadata carries the full match summary (map, format, civs,
@@ -646,9 +632,7 @@ class Aoe2LobbyAdapter:
             "metadata": metadata,
         }
 
-    def _match_updated_event(
-        self, profile_id: str, status: str, match_ref: str
-    ) -> dict[str, Any]:
+    def _match_updated_event(self, profile_id: str, status: str, match_ref: str) -> dict[str, Any]:
         """Build one match_updated event (state unchanged, setup changed).
 
         The metadata carries the fresh summary so the dashboards
@@ -817,9 +801,7 @@ class Aoe2LobbyAdapter:
 def _payload_fingerprint(match: dict[str, Any]) -> str:
     """Fingerprint one raw match payload (stable, setup-change sensitive)."""
     try:
-        return hashlib.sha256(
-            json.dumps(match, sort_keys=True, separators=(",", ":")).encode("utf-8")
-        ).hexdigest()
+        return hashlib.sha256(json.dumps(match, sort_keys=True, separators=(",", ":")).encode("utf-8")).hexdigest()
     except (TypeError, ValueError):
         return str(_now_ms())
 
@@ -846,11 +828,7 @@ def _profiles_of(matches: dict[str, dict[str, Any]]) -> set[str]:
         if not isinstance(slots, dict):
             continue
         for slot in slots.values():
-            if (
-                isinstance(slot, dict)
-                and slot.get("status") == 3
-                and slot.get("profileid") not in (None, "")
-            ):
+            if isinstance(slot, dict) and slot.get("status") == 3 and slot.get("profileid") not in (None, ""):
                 profiles.add(str(slot["profileid"]))
     return profiles
 
@@ -897,11 +875,7 @@ async def _refresh_timer(adapter: Aoe2LobbyAdapter, queue: asyncio.Queue[Any]) -
                     "(the wire is snapshot-only — the server pushes no deltas)"
                 )
                 for context in _CONTEXTS:
-                    await ws.send(
-                        json.dumps(
-                            {"action": "subscribe", "type": "matches", "context": context}
-                        )
-                    )
+                    await ws.send(json.dumps({"action": "subscribe", "type": "matches", "context": context}))
             else:
                 queue.put_nowait("")
                 return True
