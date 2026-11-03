@@ -423,6 +423,14 @@ class ContentRefreshButton(
         )
 
 
+# The maps sync cooldown: two clicks minutes apart double the Liquipedia
+# traffic for the same result (and worsen the 429s). One run at a time,
+# and a fresh click within 5 minutes of the last answer is refused with
+# when it may retry. Process-wide: the sync is bot-wide, not per-user.
+_MAPS_SYNC_LAST_DONE = 0.0
+_MAPS_SYNC_COOLDOWN_S = 300.0
+
+
 class MapsSyncButton(
     discord.ui.DynamicItem[discord.ui.Button[Any]],
     template=rf"{_NS}:refresh:maps",
@@ -464,6 +472,21 @@ class MapsSyncButton(
         if not _is_bot_admin(interaction):
             await _deny(interaction)
             return
+        global _MAPS_SYNC_LAST_DONE
+        import time as _time
+
+        if _time.monotonic() - _MAPS_SYNC_LAST_DONE < _MAPS_SYNC_COOLDOWN_S:
+            remaining = int(_MAPS_SYNC_COOLDOWN_S - (_time.monotonic() - _MAPS_SYNC_LAST_DONE))
+            await interaction.response.send_message(
+                f"\u23f3 Une sync maps tourne d\u00e9j\u00e0 (ou vient de finir) \u2014 "
+                f"r\u00e9essaie dans ~{max(remaining // 60, 1)} min.",
+                ephemeral=True,
+            )
+            return
+        # the cooldown clock starts NOW (the run holds it): a second
+        # click while the first still runs — or within 5 minutes of
+        # its answer — is refused, never queued.
+        _MAPS_SYNC_LAST_DONE = _time.monotonic()
         dm_locale = await _dm_locale(interaction)
         await interaction.response.defer(ephemeral=True, thinking=True)
         # The long-running action pattern (skills/discord-ui): acknowledge
@@ -478,6 +501,7 @@ class MapsSyncButton(
             counts = await refresh_aoe2_maps()
         except Exception:
             logger.exception("DM PANEL: maps sync failed")
+            _MAPS_SYNC_LAST_DONE = _time.monotonic()
             await interaction.followup.edit_message(
                 progress.id,
                 content=_dm_tr(interaction, dm_locale, "maps_sync_failed"),
@@ -493,6 +517,7 @@ class MapsSyncButton(
         except Exception:
             logger.warning("DM PANEL: maps forum sync after enrichment failed — best-effort")
         # the result replaces the progress message: same place, as promised.
+        _MAPS_SYNC_LAST_DONE = _time.monotonic()
         await interaction.followup.edit_message(
             progress.id,
             content=_dm_tr(
