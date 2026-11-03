@@ -316,6 +316,15 @@ async def test_remparts_view_shows_patrols_and_the_guard_button() -> None:
     assert "👣 **Patrouille :**" in content  # remparts-etats-titres
     assert "🛡️ **Garde Royale :**" in content  # remparts-etats-titres
     assert "Vous disposez de 1 garde royale" in content  # one guard token in stock
+    # remparts-etats-titres-fix (Drasah 03/11 live report): the 👣
+    # Patrouille title rides BEFORE its slot status lines, and the 🛡️
+    # Garde Royale title before the owned counter + shields.
+    assert (
+        content.index("👣 **Patrouille :**")
+        < content.index("⏲ Votre patrouille [1/2]")
+        < content.index("🛡️ **Garde Royale :**")
+        < content.index("Vous disposez de 1 garde royale")
+    )
     ids = _ids(view)
     assert "kingdoms:remparts:guard" in ids
     # remparts-etats-v1: the 🔎 En savoir more button rides the view

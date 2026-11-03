@@ -1415,6 +1415,14 @@ def _build_patrol(
         )
         lines.append(strings["remparts_ai_level"].format(display, level_name))
         lines.append("")
+    # remparts-etats-titres-fix (Drasah 03/11 live report): the
+    # 👣 Patrouille section title rides BEFORE its status lines —
+    # the live view rendered the two slot lines above the title.
+    lines.append(
+        strings["remparts_patrouille_title_reinforced"]
+        if state.get("reinforced")
+        else strings["remparts_patrouille_title"]
+    )
     # remparts-etats-v1 (Drasah 03/11): one STATUS line per slot —
     # ❌ not owned (market hint), ⚠️ owned but not configured,
     # ⏲ active with its real window ([x/2] on ❌ and ⏲ only).
@@ -1431,17 +1439,6 @@ def _build_patrol(
         else:
             line = strings["remparts_state_missing"].format(slot_no)
         lines.append(line)
-    # remparts-etats-titres (Drasah 03/11 soir): the section titles
-    # ride their own line — 👣 Patrouille (renamed Patrouilles
-    # Renforcées while reinforced, per Drasah's tranche) and 🛡️ Garde
-    # Royale; the 💪 line is GONE from the state face (the rename
-    # carries it).
-    lines.append("")
-    lines.append(
-        strings["remparts_patrouille_title_reinforced"]
-        if state.get("reinforced")
-        else strings["remparts_patrouille_title"]
-    )
     # Gardes Royales — one line per shielded map + the owned count.
     guard_lines: list[str] = []
     for territory in state["territories"]:
