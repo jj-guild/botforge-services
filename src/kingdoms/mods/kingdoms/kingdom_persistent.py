@@ -45,6 +45,8 @@ __all__ = [
     "KingdomMarketTechButton",
     "KingdomProfileButton",
     "KingdomRempartsOpenButton",
+    "KingdomRempartsInfoButton",
+    "KingdomRempartsStateButton",
     "KingdomRequestButton",
     "KingdomRoleInfoButton",
     "KingdomSeigneurieOpenButton",
@@ -214,6 +216,8 @@ def register_kingdoms_persistent_items(bot: discord.Client) -> None:
         KingdomVoliereButton,
         KingdomTheftButton,
         KingdomRempartsOpenButton,
+        KingdomRempartsInfoButton,
+        KingdomRempartsStateButton,
         KingdomSeigneurieOpenButton,
         KingdomSeigneurieButton,
         KingdomSeigneurieSelect,
@@ -2131,6 +2135,143 @@ class KingdomRempartsOpenButton(
         await _open_unique_ephemeral(
             interaction, view=_build_patrol(strings, kingdom, state), ephemeral=True
         )
+
+
+class _KingdomRempartsFaceMixin:
+    """remparts-etats-v1: the shared toggle wiring (🔎 En savoir plus face).
+
+    Both face buttons edit the EPHEMERAL IN PLACE (never a new ephemeral
+    — the single-window registry is re-linked via
+    _register_ephemeral_interaction) and swap the body between the live
+    STATE face (mode="state") and the EXPLANATIONS face (mode="info").
+    """
+
+    _MODE = "state"
+
+    async def _toggle(self, interaction: discord.Interaction) -> None:
+        from kingdoms.mods.kingdoms.kingdom_realm_content import (
+            _build_patrol,
+            _gather_state,
+        )
+
+        locale = str(interaction.locale) if interaction.locale else "en"
+        strings = _strings(locale)
+        wiring = _wiring()
+        if wiring.kingdoms_service is None:
+            await interaction.response.send_message(strings["market_no_service"], ephemeral=True)
+            return
+        lord = await _lord_of(
+            wiring.kingdoms_service, str(interaction.user.id), wiring.bot_admins
+        )
+        if lord is None or getattr(lord, "left", False):
+            await interaction.response.send_message(strings["not_lord"], ephemeral=True)
+            return
+        kingdoms = await wiring.kingdoms_service.kingdoms()
+        kingdom = next(
+            (k for k in kingdoms if str(k.id) == str(getattr(lord, "kingdom_id", None))),
+            None,
+        )
+        if kingdom is None:
+            await interaction.response.send_message(strings["not_lord"], ephemeral=True)
+            return
+        state = await _gather_state(kingdom, wiring)
+        # remparts-etats-v1: keep the 🧱 rempart.png ONLY when the
+        # message already carries it (the Le-Royaume open path does not
+        # attach the file — no phantom attachment on the edit).
+        media = (
+            "attachment://rempart.png"
+            if any(
+                getattr(a, "filename", "") == "rempart.png"
+                for a in getattr(interaction.message, "attachments", []) or []
+            )
+            else None
+        )
+        if self._MODE == "info":
+            from kingdoms.mods.kingdoms.kingdom_lieux import _remparts_info_rows
+
+            rows = _remparts_info_rows(strings, locale)
+        else:
+            from kingdoms.mods.kingdoms.kingdom_lieux import _remparts_rows
+
+            rows = _remparts_rows(strings, state, wiring, locale)
+        await interaction.response.edit_message(
+            view=_build_patrol(
+                strings, kingdom, state, media=media, rows=rows, mode=self._MODE
+            )
+        )
+        # fenetre-unique-royaume-v1: the toggle stays IN PLACE — re-link
+        # the single-window registry onto the edited message.
+        _register_ephemeral_interaction(interaction)
+
+
+class KingdomRempartsInfoButton(
+    _KingdomRempartsFaceMixin,
+    discord.ui.DynamicItem[discord.ui.Button[Any]],
+    template=r"kingdoms:remparts:info$",
+):
+    """« 🔎 En savoir plus » — swap the Remparts view to its info face."""
+
+    _MODE = "info"
+
+    def __init__(self, strings: dict[str, str]) -> None:
+        super().__init__(
+            discord.ui.Button(
+                label=strings["remparts_info_button"][:80],
+                custom_id="kingdoms:remparts:info",
+                style=discord.ButtonStyle.primary,
+            )
+        )
+
+    @classmethod
+    async def from_custom_id(
+        cls,
+        interaction: discord.Interaction,
+        item: discord.ui.Item[Any],
+        match: re.Match[str],
+        /,
+    ) -> KingdomRempartsInfoButton:
+        """Rebuild from the wire (merged strings — leçon Check 30)."""
+        locale = str(interaction.locale) if interaction.locale else "en"
+        return cls(_strings(locale))
+
+    async def callback(self, interaction: discord.Interaction) -> None:
+        """Swap to the EXPLANATIONS face, in place."""
+        await self._toggle(interaction)
+
+
+class KingdomRempartsStateButton(
+    _KingdomRempartsFaceMixin,
+    discord.ui.DynamicItem[discord.ui.Button[Any]],
+    template=r"kingdoms:remparts:state$",
+):
+    """« ✅ Compris » — swap the Remparts view back to its state face."""
+
+    _MODE = "state"
+
+    def __init__(self, strings: dict[str, str]) -> None:
+        super().__init__(
+            discord.ui.Button(
+                label=strings["remparts_state_button"][:80],
+                custom_id="kingdoms:remparts:state",
+                style=discord.ButtonStyle.success,
+            )
+        )
+
+    @classmethod
+    async def from_custom_id(
+        cls,
+        interaction: discord.Interaction,
+        item: discord.ui.Item[Any],
+        match: re.Match[str],
+        /,
+    ) -> KingdomRempartsStateButton:
+        """Rebuild from the wire (merged strings — leçon Check 30)."""
+        locale = str(interaction.locale) if interaction.locale else "en"
+        return cls(_strings(locale))
+
+    async def callback(self, interaction: discord.Interaction) -> None:
+        """Swap back to the live STATE face, in place."""
+        await self._toggle(interaction)
 
 
 class KingdomSeigneurieOpenButton(

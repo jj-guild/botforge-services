@@ -175,12 +175,23 @@ def _strings(locale: str) -> dict[str, str]:
                 " Seigneur (dimanche 23h30 → lundi 10h00)."
             ),
             "patrol_slot": "{0:02d}h00 → {1:02d}h00 (chaque jour)",
-            "remparts_patrouille_slot": "🛡️ **Patrouille {0}**",
-            "remparts_patrouille_unplaced": "débloquée — à poser",
-            "remparts_patrouille_locked": "verrouillée (2 ⚙️ au Marché)",
+            "remparts_state_missing": (
+                "❌ Vous ne disposez pas de patrouille [{0}/2] —"
+                " achat au Marché (2 ⚙️)"
+            ),
+            "remparts_state_unplaced": (
+                "⚠️ Vous disposez d'une patrouille mais vous ne l'avez"
+                " pas encore paramétrée"
+            ),
+            "remparts_state_active": (
+                "⏲ Votre patrouille [{0}/2] est bien active entre"
+                " {1:02d}h00 et {2:02d}h00"
+            ),
+            "remparts_info_button": "🔎 En savoir plus",
+            "remparts_state_button": "✅ Compris",
             "remparts_guard": "Gardes Royales",
             "remparts_guard_none": "aucune",
-            "remparts_guard_line": "🛡️ **{0}** — protégée jusqu'à {1}",
+            "remparts_guard_line": "✅ {0} — protégée jusqu'à {1}",
             "remparts_guard_stock": "En réserve : {0}",
             "remparts_guard_button": "🛡️ Garde Royal",
             "remparts_patrouille_button": "👣 Patrouille {0}",
@@ -468,12 +479,22 @@ def _strings(locale: str) -> dict[str, str]:
             " (Sunday 23:30 → Monday 10:00)."
         ),
         "patrol_slot": "{0:02d}:00 → {1:02d}:00 (daily)",
-        "remparts_patrouille_slot": "🛡️ **Patrol {0}**",
-        "remparts_patrouille_unplaced": "unlocked — to be placed",
-        "remparts_patrouille_locked": "locked (2 ⚙️ at the Market)",
+        "remparts_state_missing": (
+            "❌ You have no patrol [{0}/2] — purchase one at the"
+            " Market (2 ⚙️)"
+        ),
+        "remparts_state_unplaced": (
+            "⚠️ You own a patrol but it is not configured yet"
+        ),
+        "remparts_state_active": (
+            "⏲ Your patrol [{0}/2] is active between {1:02d}:00"
+            " and {2:02d}:00"
+        ),
+        "remparts_info_button": "🔎 Learn more",
+        "remparts_state_button": "✅ Got it",
         "remparts_guard": "Royal Guards",
         "remparts_guard_none": "none",
-        "remparts_guard_line": "🛡️ **{0}** — shielded until {1}",
+        "remparts_guard_line": "✅ {0} — shielded until {1}",
         "remparts_guard_stock": "In reserve: {0}",
         "remparts_guard_button": "🛡️ Royal Guard",
         "remparts_patrouille_button": "👣 Patrol {0}",
@@ -1322,14 +1343,16 @@ def _build_patrol(
     state: dict[str, Any],
     media: str | None = None,
     rows: list[list[Any]] | None = None,
+    mode: str = "state",
 ) -> Any:
-    """Build the 🧱 Remparts view (remparts-v2, Drasah 14/10).
+    """Build the 🧱 Remparts view (remparts-etats-v1, Drasah 03/11).
 
-    The view carries the defence AI level, the Patrouille 1 / 2 slots
-    (placed window, unlocked-but-unplaced, or locked behind a market
-    purchase) and the Garde Royale lines (one per shielded map, the
-    reserve count) — plus the King-only placement buttons (the market
-    sells, Remparts places; ONE 👣 Patrouille cockpit rules both slots).
+    TWO faces: mode="state" (default) shows ONLY the live states
+    (IA level, ❌/⚠️/⏲ patrouille per slot, ✅ Gardes + reserve);
+    mode="info" shows the EXPLANATIONS (the IA training loop, the
+    Patrouille and Garde Royale descriptions, the Lord's-Day
+    redefinition note) — the 🔎 En savoir plus / ✅ Compris buttons
+    toggle between the two faces, in place.
     """
     import discord
 
@@ -1338,11 +1361,32 @@ def _build_patrol(
     now = game_now()
     now_ts = int(now.timestamp())
     lines: list[str] = []
+    if mode == "info":
+        # remparts-etats-v1 (Drasah 03/11): the EXPLANATION face —
+        # the pedagogical IA block (no defender -> the IA defends, a
+        # Jeu d'armes raises it, the max level improves the
+        # Patrouille), the Patrouille and Gardes descriptions, and
+        # the Lord's-Day redefinition note LIVES HERE now.
+        lines.append(strings["remparts_ai_intro"])
+        if state.get("reinforced"):
+            lines.append(strings["remparts_reinforced"])
+        lines.append(strings["remparts_patrouille_intro"])
+        lines.append(strings["remparts_garde_intro"])
+        lines.append("")
+        lines.append(strings["patrol_window"])
+        body = "\n".join(lines)
+        return _panel_view_with_buttons(
+            strings["patrol_title"].format(getattr(kingdom, "name", "")),
+            body,
+            f"{VIEW_MARKER_PREFIX}:patrouille",
+            discord.Colour.teal(),
+            [],
+            media=media,
+            rows=rows or [],
+        )
     if state.get("defense_ai") is not None:
-        # remparts-v3 (Drasah 03/11): the pedagogical IA block — the
-        # training loop spelled out (no defender -> the IA defends, a
-        # Jeu d'armes raises it, the max level improves the Patrouille)
-        # and the level riding Drasah's SHIFTED scale (-1, spelt out).
+        # remparts-etats-v1: the STATE face keeps ONLY the live
+        # level line (the explanations moved to the info face).
         from kingdoms.mods.kingdoms.kingdom_persistent import (
             _traquenard_ai_display,
         )
@@ -1350,27 +1394,26 @@ def _build_patrol(
         display, level_name = _traquenard_ai_display(
             int(state["defense_ai"]), strings
         )
-        lines.append(strings["remparts_ai_intro"])
         lines.append(strings["remparts_ai_level"].format(display, level_name))
         if state.get("reinforced"):
             lines.append(strings["remparts_reinforced"])
-    # remparts-v3 (Drasah 03/11): the pedagogical Patrouille intro —
-    # the line lives HERE, the Lord's-Day note moved to the flow
-    # (the King acts where the information sits).
-    lines.append(strings["remparts_patrouille_intro"])
-    # Patrouille 1 / Patrouille 2 — placed, unlocked or locked (v2).
+        lines.append("")
+    # remparts-etats-v1 (Drasah 03/11): one STATUS line per slot —
+    # ❌ not owned (market hint), ⚠️ owned but not configured,
+    # ⏲ active with its real window ([x/2] on ❌ and ⏲ only).
     for slot_no in (1, 2):
         unlock_key = f"patrouille_unlock_{slot_no}"
         slot_key = f"patrouille_slot_{slot_no}"
         if slot_key in purchases:
-            window = strings["remparts_patrouille_placed"].format(
-                slot_no, int(purchases[slot_key]), int(purchases[slot_key]) + span
+            start = int(purchases[slot_key])
+            line = strings["remparts_state_active"].format(
+                slot_no, start, start + span
             )
         elif unlock_key in purchases:
-            window = strings["remparts_patrouille_unplaced"]
+            line = strings["remparts_state_unplaced"]
         else:
-            window = strings["remparts_patrouille_locked"]
-        lines.append(f"{strings['remparts_patrouille_slot'].format(slot_no)} : {window}")
+            line = strings["remparts_state_missing"].format(slot_no)
+        lines.append(line)
     # Gardes Royales — one line per shielded map + the reserve (v2).
     guard_lines: list[str] = []
     for territory in state["territories"]:
@@ -1385,16 +1428,15 @@ def _build_patrol(
             )
         )
     guard_block = "\n".join(guard_lines) or strings["remparts_guard_none"]
-    # remparts-v3: the pedagogical Garde intro (12h, consumed).
+    lines.append("")
+    # remparts-etats-v1: the Garde intro stays on the STATE face
+    # (Drasah's paste keeps it) — the ✅ lines follow.
     lines.append(strings["remparts_garde_intro"])
     lines.append(f"**{strings['remparts_guard']}** :")
     lines.append(guard_block)
     stock = int(purchases.get("garde_royale_stock", 0) or 0)
     if stock > 0:
         lines.append(strings["remparts_guard_stock"].format(stock))
-    # remparts-v3 (Drasah 03/11): the « 🔄 Redéfinition des créneaux »
-    # line MOVED into the Patrouille button flow (kingdom_persistent)
-    # — it no longer pads the body.
     body = "\n".join(lines)
     from kingdoms.mods.kingdoms.kingdom_attack_panel import (
         KingdomAttackManagerButton,
@@ -1403,6 +1445,7 @@ def _build_patrol(
     from kingdoms.mods.kingdoms.kingdom_persistent import (
         KingdomRempartsGuardButton,
         KingdomRempartsPatrouilleHubButton,
+        KingdomRempartsInfoButton,
     )
 
     return _panel_view_with_buttons(
@@ -1413,6 +1456,7 @@ def _build_patrol(
         [
             KingdomRempartsGuardButton(strings),
             KingdomRempartsPatrouilleHubButton(strings),
+            KingdomRempartsInfoButton(strings),
             # Drasah 18/10: la vue privée du royaume défenseur — qui
             # défend quoi, l'effet de surprise restant public-board-free.
             KingdomDefenseManagerButton(strings.get("defense_manager_button", "🛡️ Gestion de la défense")),

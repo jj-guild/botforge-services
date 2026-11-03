@@ -2497,8 +2497,8 @@ def _remparts_rows(
 ) -> list[list[Any]]:
     """lieux-rows-v1 — the Remparts button rules (Drasah 01/11).
 
-    Line 1: the default war actions (green) + Sortir (red, last).
-    remparts-boutons-v1 (Drasah 03/11): Line 2 order = Jeu d'armes,
+    Line 1: the default war actions (green) + 🔎 En savoir plus (blue)
+    + Sortir (red, last). remparts-boutons-v1 (Drasah 03/11): Line 2 order = Jeu d'armes,
     then ONE 👣 Patrouille cockpit button (it rules BOTH slots),
     Garde Royal last — each green while its stock/unlock is held
     or affordable (gray+disabled otherwise).
@@ -2511,6 +2511,7 @@ def _remparts_rows(
         KingdomMarketTechButton,
         KingdomRempartsGuardButton,
         KingdomRempartsPatrouilleHubButton,
+        KingdomRempartsInfoButton,
     )
 
     purchases = dict(state.get("purchases") or {})
@@ -2525,6 +2526,10 @@ def _remparts_rows(
                 strings.get("attack_manager_button", "⚔️ Gestion d'attaque")
             )
         ),
+        # remparts-etats-v1 (Drasah 03/11): the 🔎 En savoir plus button
+        # (BLUE primary) between the war actions and Sortir — it swaps
+        # the view to its explanations face.
+        KingdomRempartsInfoButton(strings),
         _sortir(locale),
     ]
     guard = _stock_style(
@@ -2552,6 +2557,15 @@ def _remparts_rows(
         _gray(jeu)
     return [row_one, [jeu, patrouille, guard]]
 
+
+
+def _remparts_info_rows(
+    strings: dict[str, Any], locale: str
+) -> list[list[Any]]:
+    """remparts-etats-v1: the En savoir plus face — only Compris + Sortir."""
+    from kingdoms.mods.kingdoms.kingdom_persistent import KingdomRempartsStateButton
+
+    return [[KingdomRempartsStateButton(strings), _sortir(locale)]]
 
 def _paroisse_rows(
     strings: dict[str, Any],
