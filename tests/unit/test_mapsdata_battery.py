@@ -1,6 +1,6 @@
 """Liquipedia external-services battery — unit tests (mocked upstream).
 
-The battery's contract: it SKIPS (never fails) when LIQUIPEDIA_CONTACT
+The battery's contract: it SKIPS (never fails) when PROVIDER_CONTACT
 is unset, and validates the batched query shape — name, source_url,
 resolved image — against a stubbed provider when the contact is there.
 The real upstream access only happens in CI's external-services job.
@@ -36,19 +36,20 @@ async def test_battery_skips_without_contact(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.delenv("LIQUIPEDIA_CONTACT", raising=False)
+    monkeypatch.delenv("PROVIDER_CONTACT", raising=False)
     results = await battery()
     assert len(results) == 1
     result = results[0]
     assert result.provider == PROVIDER
     assert result.skipped is True
     assert result.ok is True  # a skip never fails the CI
-    assert "LIQUIPEDIA_CONTACT" in result.detail
+    assert "PROVIDER_CONTACT" in result.detail
 
 
 async def test_battery_validates_query_shape_with_contact(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setenv("LIQUIPEDIA_CONTACT", "dev@example.com")
+    monkeypatch.setenv("PROVIDER_CONTACT", "dev@example.com")
     maps = {
         "Arabia": SimpleNamespace(
             info=SimpleNamespace(
@@ -67,7 +68,7 @@ async def test_battery_validates_query_shape_with_contact(
 async def test_battery_fails_when_known_map_missing(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setenv("LIQUIPEDIA_CONTACT", "dev@example.com")
+    monkeypatch.setenv("PROVIDER_CONTACT", "dev@example.com")
     _stub_maps_module(monkeypatch, {})  # upstream drift: nothing resolves
     results = await battery()
     assert results[0].ok is False
@@ -81,7 +82,7 @@ def test_report_renders_skipped_separately() -> None:
     report = render_report(
         [
             CheckResult("p", "fine", ok=True),
-            CheckResult(PROVIDER, "maps-query-shape", ok=True, skipped=True, detail="LIQUIPEDIA_CONTACT unset"),
+            CheckResult(PROVIDER, "maps-query-shape", ok=True, skipped=True, detail="PROVIDER_CONTACT unset"),
             CheckResult("p", "broken", ok=False, detail="boom"),
         ]
     )

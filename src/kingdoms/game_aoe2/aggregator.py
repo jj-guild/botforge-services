@@ -234,9 +234,9 @@ PROBE_INTERVAL_S = 60.0
 
 def _liquipedia_user_agent() -> str:
     """Build the compliant User-Agent (liquipedia ToS: project + contact)."""
-    import os
+    from kingdoms.core.upstream_identity import provider_contact
 
-    contact = os.environ.get("LIQUIPEDIA_CONTACT", "")
+    contact = provider_contact()
     ua = "Kingdoms/0.1 (https://github.com/merlin-pinpin-org/kingdoms)"
     return f"{ua}; contact={contact}" if contact else ua
 

@@ -255,8 +255,10 @@ jobs:
           uv sync
           uv run python src/kingdoms/core_process/run_external_checks.py
         env:
-          # The liquipedia battery skips (does not fail) when unset; set the
-          # repo variable LIQUIPEDIA_CONTACT to run it from CI.
+          # The liquipedia battery skips (does not fail) when unset; set
+          # the repo variable PROVIDER_CONTACT (generic, every provider)
+          # to arm it — LIQUIPEDIA_CONTACT stays as the legacy fallback.
+          PROVIDER_CONTACT: ${{ vars.PROVIDER_CONTACT || vars.LIQUIPEDIA_CONTACT }}
           LIQUIPEDIA_CONTACT: ${{ vars.LIQUIPEDIA_CONTACT }}
       - name: Run against the composed ext processes (RPC access)
         run: |

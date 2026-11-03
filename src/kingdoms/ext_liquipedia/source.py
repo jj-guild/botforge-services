@@ -155,13 +155,13 @@ def _descriptor_of(game_key: str, page: str, data: Any) -> dict[str, Any]:
 
 
 def resolve_source(database: Any) -> LiquipediaSource:
-    """Build the source from the environment (LIQUIPEDIA_CONTACT)."""
+    """Build the source from the environment (PROVIDER_CONTACT)."""
     from kingdoms.mapsdata.seed import _user_agent
 
     user_agent = _user_agent()
     if not user_agent:
         raise RuntimeError(
-            "LIQUIPEDIA_CONTACT is not set — the Liquipedia terms of use "
+            "PROVIDER_CONTACT is not set — the Liquipedia terms of use "
             "require an identified User-Agent (https://liquipedia.net/api-terms-of-use)"
         )
     return LiquipediaSource(LiquipediaMapsProvider(user_agent), database)

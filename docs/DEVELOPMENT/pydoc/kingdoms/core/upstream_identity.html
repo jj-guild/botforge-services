@@ -18,10 +18,11 @@ a&nbsp;contact&nbsp;address)&nbsp;—&nbsp;never&nbsp;the&nbsp;library&nbsp;defa
 tell&nbsp;who&nbsp;consumes&nbsp;its&nbsp;API;&nbsp;the&nbsp;Liquipedia&nbsp;terms&nbsp;make&nbsp;it&nbsp;mandatory,<br>
 every&nbsp;other&nbsp;upstream&nbsp;deserves&nbsp;the&nbsp;same&nbsp;courtesy.<br>
 &nbsp;<br>
-The&nbsp;contact&nbsp;part&nbsp;reuses&nbsp;``LIQUIPEDIA_CONTACT``&nbsp;(the&nbsp;operational<br>
-contact&nbsp;address&nbsp;is&nbsp;a&nbsp;project-wide&nbsp;fact,&nbsp;not&nbsp;a&nbsp;per-upstream&nbsp;one);<br>
-``PROVIDER_CONTACT``&nbsp;overrides&nbsp;it&nbsp;when&nbsp;an&nbsp;org&nbsp;wants&nbsp;a&nbsp;distinct<br>
-address&nbsp;for&nbsp;the&nbsp;non-Liquipedia&nbsp;providers.</span></p>
+The&nbsp;contact&nbsp;address&nbsp;is&nbsp;a&nbsp;project-wide&nbsp;fact,&nbsp;not&nbsp;a&nbsp;per-upstream&nbsp;one:<br>
+``PROVIDER_CONTACT``&nbsp;is&nbsp;THE&nbsp;generic&nbsp;variable&nbsp;every&nbsp;provider&nbsp;reads<br>
+(Liquipedia&nbsp;included).&nbsp;``LIQUIPEDIA_CONTACT``&nbsp;stays&nbsp;as&nbsp;a&nbsp;legacy<br>
+fallback&nbsp;so&nbsp;existing&nbsp;deployments&nbsp;keep&nbsp;working&nbsp;while&nbsp;the&nbsp;envs<br>
+migrate.</span></p>
 <p>
 <table class="section">
 <tr class="decor pkg-content-decor heading-text">
@@ -36,5 +37,9 @@ address&nbsp;for&nbsp;the&nbsp;non-Liquipedia&nbsp;providers.</span></p>
     
 <tr><td class="decor functions-decor"><span class="code">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span></td><td>&nbsp;</td>
 <td class="singlecolumn"><dl><dt><a name="-project_user_agent"><strong>project_user_agent</strong></a>() -&gt; 'str'</dt><dd><span class="code">Return&nbsp;the&nbsp;identifying&nbsp;User-Agent&nbsp;for&nbsp;outbound&nbsp;provider&nbsp;requests.</span></dd></dl>
+ <dl><dt><a name="-provider_contact"><strong>provider_contact</strong></a>() -&gt; 'str'</dt><dd><span class="code">Return&nbsp;the&nbsp;operational&nbsp;contact&nbsp;address&nbsp;(``PROVIDER_CONTACT``).<br>
+&nbsp;<br>
+Generic&nbsp;across&nbsp;every&nbsp;upstream;&nbsp;``LIQUIPEDIA_CONTACT``&nbsp;is&nbsp;the<br>
+legacy&nbsp;fallback&nbsp;kept&nbsp;for&nbsp;the&nbsp;envs&nbsp;that&nbsp;have&nbsp;not&nbsp;migrated&nbsp;yet.</span></dd></dl>
 </td></tr></table>
 </body></html>
