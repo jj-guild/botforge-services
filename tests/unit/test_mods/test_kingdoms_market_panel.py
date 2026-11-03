@@ -911,14 +911,20 @@ async def test_use_button_jeu_d_armes_opens_the_confirmation_card() -> None:
     assert economy.jeu_d_armes_levels == 1
     assert economy.jeu_d_armes_tokens == 0
     assert economy.jeu_d_armes_rush == ["111"]
-    assert "1/5" in str((click.response.message or None).content or "")
+    # jeu-darmes-sensations-v1: the activation CLOSES the card window
+    # (the confirmation rides the public 💬 discussions note).
+    assert click.response.deferred is True
+    assert click.original_deleted is True
 
-    # non-cumul: a second Activate (a fresh token) is refused.
+    # non-cumul: a second Activate (a fresh token) is refused and the
+    # card stays open on the refusal note (nothing consumed, nothing
+    # closed).
     economy.jeu_d_armes_tokens = 1
     second: Any = MockInteraction(user=MockUser(id=111), locale="en-US")
     second.message = message
     await activate.callback(second)
     assert economy.jeu_d_armes_tokens == 1  # kept
+    assert second.original_deleted is not True  # the refusal keeps the card
     note = str((second.response.message or None).content or "")
     assert "already" in note.lower()
 

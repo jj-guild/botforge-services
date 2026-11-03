@@ -574,6 +574,11 @@ STRINGS: dict[str, dict[str, Any]] = {
             "your next normal attack."
         ),
         "jeu_darmes_no_stock": "🧪 No Arms mastery in reserve — buy one at the Market.",
+        "jeu_darmes_channel_note": (
+            "🧪 **{0}** has activated an **Arms mastery**: their next "
+            "normal attack declaration rides with a 1-hour cut, valid "
+            "for ONE attack!"
+        ),
         "ffa_join_button": "🗺️ Partir en expédition",
         "ffa_join_note": (
             "✅ **{lord}** holds an Expedition slot — **{time}** (Paris time). "
@@ -1128,6 +1133,11 @@ STRINGS: dict[str, dict[str, Any]] = {
             "prochaine attaque normale."
         ),
         "jeu_darmes_no_stock": "🧪 Aucun Jeu d'armes en réserve — achat au Marché.",
+        "jeu_darmes_channel_note": (
+            "🧪 **{0}** a activé un **Jeu d'armes** : il dispose d'une "
+            "réduction de 1h sur la déclaration de sa prochaine attaque "
+            "normale, valable pour UNE attaque !"
+        ),
         "ffa_join_button": "🗺️ Partir en expédition",
         "ffa_join_note": (
             "✅ **{lord}** tient un créneau de l'Expédition — **{time}** "

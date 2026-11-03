@@ -2370,12 +2370,46 @@ async def _jeu_darmes_open(interaction: discord.Interaction) -> None:
     file = _market_card_file("jeu_d_armes")
     if file is not None:
         embed.set_image(url=f"attachment://{file.filename}")
-    await _open_unique_ephemeral(
-        interaction,
+    # jeu-darmes-sensations-v1 (Drasah 03/11): the card opens as a
+    # SECOND ephemeral — the Remparts (or ledger) window underneath
+    # SURVIVES the click (his ruling: both views stay visible). It
+    # does NOT go through _open_unique_ephemeral (which closes the
+    # previous window); the card just takes over the registry slot.
+    user_id = str(getattr(interaction.user, "id", ""))
+    await interaction.response.send_message(
         embed=embed,
         files=[file] if file is not None else [],
         view=view,
+        ephemeral=True,
     )
+    _EPHEMERAL_WINDOWS[user_id] = (interaction, time.monotonic())
+
+
+async def _jeu_darmes_channel_note(
+    guild: Any,
+    lord: Any,
+    kingdom: Any,
+    strings: dict[str, Any],
+) -> None:
+    """The 💬 Discussions note of the activator's realm — best-effort,
+    never blocks the flow (jeu-darmes-sensations-v1, Drasah 03/11:
+    the activation must be FELT — {mention} rides the public note)."""
+    try:
+        if guild is None or kingdom is None:
+            return
+        from kingdoms.mods.kingdoms.kingdom_lieux import _discussions_channel
+
+        channel = await _discussions_channel(guild, kingdom)
+        if channel is None:
+            return
+        mention = f"<@{str(getattr(lord, 'id', ''))}>"
+        note = str(strings["jeu_darmes_channel_note"]).format(mention)
+        await channel.send(note)
+    except Exception:
+        logger.info(
+            "KINGDOMS: jeu d'armes discussions note failed (ignored)",
+            exc_info=True,
+        )
 
 
 class KingdomJeuDarmesUseButton(
@@ -2493,7 +2527,7 @@ class KingdomJeuDarmesActivateButton(
             )
             return
         try:
-            level, leveled = await economy.use_jeu_d_armes(
+            level, _leveled = await economy.use_jeu_d_armes(
                 str(getattr(kingdom, "id", "") or ""), str(getattr(lord, "id", "") or "")
             )
         except Exception as exc:
@@ -2503,13 +2537,21 @@ class KingdomJeuDarmesActivateButton(
             )
             _register_ephemeral_interaction(interaction)
             return
-        display, level_name = _traquenard_ai_display(level, strings)
-        if leveled:
-            note = str(strings["jeu_darmes_use_ok"]).format(display, level_name)
-        else:
-            note = str(strings["jeu_darmes_use_ok_rush_only"])
-        await interaction.response.edit_message(content=note, view=None)
-        _register_ephemeral_interaction(interaction)
+        # jeu-darmes-sensations-v1 (Drasah 03/11): the activation must
+        # FELT — the card window CLOSES itself and the confirmation
+        # rides the PUBLIC 💬 discussions note (his ruling).
+        await interaction.response.defer()
+        try:
+            await interaction.delete_original_response()
+        except Exception:
+            logger.info(
+                "KINGDOMS: jeu d'armes card close after use failed (ignored)",
+                exc_info=True,
+            )
+        _EPHEMERAL_WINDOWS.pop(str(getattr(interaction.user, "id", "")), None)
+        await _jeu_darmes_channel_note(
+            getattr(interaction, "guild", None), lord, kingdom, strings
+        )
 
 
 class KingdomJeuDarmesCancelButton(
