@@ -192,14 +192,54 @@ def _strings(locale: str) -> dict[str, str]:
                 "✅ Patrouille {0} posée : {1:02d}h00 → {2:02d}h00 (chaque jour)."
             ),
             "traquenard_button": "🪤 Utiliser un Traquenard",
+            "traquenard_fiche_title": "🪤 Traquenard",
+            "traquenard_fiche_desc": (
+                "**Effet**\n"
+                "À l'usage : choisissez un Royaume, l'IA affrontée devient **Facile**"
+                " durant un laps de temps de 2h au moment où Traquenard est activé"
+                " (chaque activation cumulée repousse la fin de 2h).\n"
+                "Augmente les délais de TOUS les verrouillages du royaume ciblé"
+                " de **+2h** uniquement au moment où Traquenard est activé"
+                " (mariages, exploration et boisson de la taverne)."
+            ),
+            "traquenard_forces_button": "👁️ Voir les forces IA",
+            "traquenard_go_button": "🪤 Traquenard",
+            "traquenard_activate_button": "⚔️ Activer",
+            "traquenard_cancel_button": "❌ Annuler",
+            "traquenard_forces_title": "👁️ Forces IA",
+            "traquenard_forces_line": "🏰 **{name}** — IA **{ai}**/5",
+            "traquenard_forces_active": "🪤 état affaibli — se termine {time}",
+            "traquenard_forces_none": "Aucun royaume adverse à afficher.",
+            "traquenard_choose_title": "Choisir le royaume sur lequel utiliser Traquenard",
+            "traquenard_select_placeholder": "Sélectionner un royaume",
+            "traquenard_selected": "🎯 Cible : **{name}** (IA **{ai}**/5)",
+            "traquenard_validate_button": "✅ Valider",
+            "traquenard_modify_button": "📝 Modifier",
             "traquenard_choose": "🪤 Contre quel royaume activer le Traquenard ?",
             "traquenard_done": (
                 "🪤 Traquenard activé contre **{kingdom}** — l'IA de défense devient"
-                " Facile pendant 6h (jusqu'à {time}) et les mariages scellés prennent"
-                " +2h de verrou."
+                " Facile jusqu'à {time} (fenêtre cumulée de 2h) et les verrous"
+                " vivants prennent +2h."
             ),
             "traquenard_failed": "❌ {message}",
             "traquenard_no_target": "❌ Aucun royaume adverse à cibler.",
+            "traquenard_channel_note": (
+                "🪤 **{kingdom}** a utilisé un Traquenard contre **{target}** —"
+                " l'IA de défense est affaiblie {time}."
+            ),
+            "traquenard_dm_tavern": (
+                "🍺 Vous relevez un goût étrange dans votre boisson… Vous avez été"
+                " drogué ! +2h de verrouillage (Traquenard)."
+            ),
+            "traquenard_dm_marriage": (
+                "💍 Une rumeur se fait entendre que vous seriez menacé d'assassinat"
+                " par un malotru… Cela retarde votre mariage. +2h de verrouillage"
+                " (Traquenard)."
+            ),
+            "traquenard_dm_exploration": (
+                "🧭 Des pirates font face à vous, vous ralentissant et vous forçant"
+                " à être prudent. +2h de verrouillage (Traquenard)."
+            ),
             "remparts_ai": "🤖 Bot de défense (IA) : **{0}**/5",
             "remparts_reinforced": "💪 Patrouilles Renforcées (créneaux de 3h)",
             "roster_exploring": "🗺️ exploration jusqu'à {0}",
@@ -400,13 +440,52 @@ def _strings(locale: str) -> dict[str, str]:
             "✅ Patrol {0} placed: {1:02d}:00 → {2:02d}:00 (daily)."
         ),
             "traquenard_button": "🪤 Use a Traquenard",
+            "traquenard_fiche_title": "🪤 Traquenard",
+            "traquenard_fiche_desc": (
+                "**Effect**\n"
+                "On use: choose a Kingdom, the opposing AI turns **Easy** for a"
+                " 2h lapse of time at the moment the Traquenard is activated"
+                " (each stacked activation pushes the end 2h further).\n"
+                "Adds **+2h** to EVERY lockout of the targeted kingdom, only at"
+                " the moment the Traquenard is activated (marriages, exploration"
+                " and tavern drink)."
+            ),
+            "traquenard_forces_button": "👁️ View AI forces",
+            "traquenard_go_button": "🪤 Traquenard",
+            "traquenard_activate_button": "⚔️ Activate",
+            "traquenard_cancel_button": "❌ Cancel",
+            "traquenard_forces_title": "👁️ AI forces",
+            "traquenard_forces_line": "🏰 **{name}** — AI **{ai}**/5",
+            "traquenard_forces_active": "🪤 weakened — ends {time}",
+            "traquenard_forces_none": "No adversary kingdom to display.",
+            "traquenard_choose_title": "Choose the kingdom to use the Traquenard on",
+            "traquenard_select_placeholder": "Select a kingdom",
+            "traquenard_selected": "🎯 Target: **{name}** (AI **{ai}**/5)",
+            "traquenard_validate_button": "✅ Confirm",
+            "traquenard_modify_button": "📝 Change",
             "traquenard_choose": "🪤 Against which kingdom should the Traquenard be activated?",
             "traquenard_done": (
                 "🪤 Traquenard activated against **{kingdom}** — the defense AI turns"
-                " Easy for 6h (until {time}) and sealed marriages gain +2h of lock."
+                " Easy until {time} (2h stacked window) and living locks gain +2h."
             ),
             "traquenard_failed": "❌ {message}",
             "traquenard_no_target": "❌ No adversary kingdom to target.",
+            "traquenard_channel_note": (
+                "🪤 **{kingdom}** used a Traquenard against **{target}** —"
+                " the defense AI is weakened {time}."
+            ),
+            "traquenard_dm_tavern": (
+                "🍺 You notice a strange taste in your drink… You have been"
+                " drugged! +2h of lockout (Traquenard)."
+            ),
+            "traquenard_dm_marriage": (
+                "💍 A rumour spreads that a knave is threatening to assassinate"
+                " you… This delays your wedding. +2h of lockout (Traquenard)."
+            ),
+            "traquenard_dm_exploration": (
+                "🧭 Pirates stand in your way, slowing you down and forcing you"
+                " to be careful. +2h of lockout (Traquenard)."
+            ),
             "remparts_ai": "🤖 Defense bot (AI): **{0}**/5",
             "remparts_reinforced": "💪 Reinforced Patrols (3h slots)",
             "roster_exploring": "🗺️ exploring until {0}",

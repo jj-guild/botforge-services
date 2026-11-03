@@ -297,6 +297,14 @@ def register_kingdoms_persistent_items(bot: discord.Client) -> None:
         KingdomUserSettingsButton,
         KingdomOutgameShowButton,
         KingdomOutgameHideButton,
+        # traquenard-fiche-v1 (Drasah 03/11): the council entry button
+        # (restart-proof NOW — it was never registered before), the
+        # fiche's two tab buttons, the Activer opener and the Annuler.
+        KingdomTraquenardButton,
+        KingdomTraquenardForcesButton,
+        KingdomTraquenardFicheButton,
+        KingdomTraquenardGoButton,
+        KingdomTraquenardCancelButton,
     )
 
 
@@ -2452,52 +2460,116 @@ class KingdomFFAJoinButton(
         await interaction.response.send_message(note, ephemeral=True)
 
 
-async def _traquenard_open_flow(
-    interaction: discord.Interaction,
+def _traquenard_fiche_content(strings: dict[str, Any]) -> str:
+    """traquenard-fiche-v1 (Drasah 03/11): the fiche body — the card's
+    effect, Drasah's own words (the activation rides its own choose
+    window, exactly like the Exploration fiche pattern)."""
+    return "\n".join(
+        [
+            f"## {strings['traquenard_fiche_title']}",
+            "",
+            str(strings["traquenard_fiche_desc"]),
+        ]
+    )
+
+
+async def _traquenard_forces_content(
+    wiring: KingdomsPanelWiring,
+    kingdom_id: str,
+    strings: dict[str, Any],
+    now_ts: int,
+) -> str:
+    """The 👁️ Voir les forces IA tab — every OTHER kingdom of the
+    season (name + defence AI level), plus the weakened state and the
+    remaining delay while a Traquenard window lives on it
+    (traquenard-fiche-v1 — the fiche's per-tab view edits in place)."""
+    lines = [f"## {strings['traquenard_forces_title']}", ""]
+    kingdoms = await wiring.kingdoms_service.kingdoms()
+    attacks = wiring.attacks_service
+    rows: list[tuple[Any, int]] = []
+    for item in kingdoms:
+        if getattr(item, "is_gaia", False) or str(item.kingdom_id) == kingdom_id:
+            continue
+        level = 1
+        if attacks is not None:
+            try:
+                level = int(
+                    await attacks.defense_ai_level(str(item.kingdom_id)) or 1
+                )
+            except Exception:
+                logger.warning(
+                    "KINGDOMS: traquenard AI level read failed for %s (ignored)",
+                    str(item.kingdom_id),
+                )
+        rows.append((item, level))
+    if not rows:
+        lines.append(str(strings["traquenard_forces_none"]))
+        return "\n".join(lines)
+    for item, level in rows:
+        lines.append(
+            str(strings["traquenard_forces_line"]).format(
+                name=str(getattr(item, "name", "") or item.kingdom_id),
+                ai=level,
+            )
+        )
+        until = int(getattr(item, "traquenard_until", 0) or 0)
+        if until > now_ts:
+            lines.append(
+                str(strings["traquenard_forces_active"]).format(
+                    time=f"<t:{until}:R>"
+                )
+            )
+    return "\n".join(lines)
+
+
+def _traquenard_fiche_view(strings: dict[str, Any], *, active: str) -> discord.ui.View:
+    """The fiche's TAB pair — the CURRENT view's button renders grey
+    (secondary, disabled), the other one green (success) — plus the
+    ⚔️ Activer opener and the ❌ Annuler exit (traquenard-fiche-v1)."""
+    view = discord.ui.View(timeout=None)
+    view.add_item(KingdomTraquenardForcesButton(strings, active=active))
+    view.add_item(KingdomTraquenardFicheButton(strings, active=active))
+    view.add_item(KingdomTraquenardGoButton(strings))
+    view.add_item(KingdomTraquenardCancelButton(strings))
+    return view
+
+
+async def _traquenard_close(interaction: discord.Interaction) -> None:
+    """The shared ❌ Annuler — close the ephemeral window the component
+    sits on (type-6 defer + delete), and drop the registry entry."""
+    await interaction.response.defer()
+    try:
+        await interaction.delete_original_response()
+    except Exception:
+        logger.info(
+            "KINGDOMS: traquenard window close failed (ignored)", exc_info=True
+        )
+    _EPHEMERAL_WINDOWS.pop(str(getattr(interaction.user, "id", "")), None)
+
+
+def _traquenard_on_validate(
     wiring: KingdomsPanelWiring,
     strings: dict[str, Any],
     lord: Any,
-) -> None:
-    """Open the ephemeral adversary select of the Traquenard.
+    chosen_id: str,
+    names: dict[str, str],
+) -> Any:
+    """The ✅ Valider factory — the validation ALONE consumes the
+    bought charge. The done note edits the window in place (live
+    ``<t:…:R>`` stamp), then the Discussions note + the themed DMs +
+    the realm refresh follow, all best-effort (traquenard-fiche-v1)."""
 
-    chambre-utiliser-v1 (Drasah 30/10): extracted from the salon
-    button — the 🚀 Utiliser shortcut of the Chambre des comptes
-    rides the SAME flow (the bought charge is consumed at the
-    activation, never by opening the window).
-    """
-    if wiring.attacks_service is None or wiring.kingdoms_service is None:
-        await interaction.response.send_message(strings["market_no_service"], ephemeral=True)
-        return
-    kingdom_id = lord.kingdom_id or ""
-    kingdoms = await wiring.kingdoms_service.kingdoms()
-    options = [
-        discord.SelectOption(label=str(getattr(k, "name", "") or k.kingdom_id)[:100], value=k.kingdom_id[:100])
-        for k in kingdoms
-        if not getattr(k, "is_gaia", False) and k.kingdom_id != kingdom_id
-    ][:25]
-    if not options:
-        await interaction.response.send_message(strings["traquenard_no_target"], ephemeral=True)
-        return
-    select: discord.ui.Select[Any] = discord.ui.Select(
-        custom_id="kingdoms:traquenard:choose",
-        placeholder=str(strings["traquenard_choose"])[:100],
-        options=options,
-    )
-
-    async def on_choose(target: discord.Interaction[Any]) -> None:
-        values = getattr(target, "data", None) or {}
-        chosen = [str(v) for v in values.get("values", [])]
-        if not chosen:
-            return
+    async def _validate(target: discord.Interaction) -> None:
         attacks = wiring.attacks_service
         if attacks is None:
             await target.response.edit_message(
                 content=strings["market_no_service"], view=None
             )
             return
+        kingdom_id = str(getattr(lord, "kingdom_id", "") or "")
         try:
-            victim = await attacks.activate_traquenard(
-                str(target.user.id), chosen[0]
+            result = await attacks.activate_traquenard(
+                str(target.user.id), chosen_id
             )
         except Exception as exc:
             await target.response.edit_message(
@@ -2507,41 +2579,242 @@ async def _traquenard_open_flow(
                 view=None,
             )
             return
-        until = datetime.fromtimestamp(
-            int(getattr(victim, "traquenard_until", 0) or 0),
-            tz=ZoneInfo("Europe/Paris"),
-        )
         note = str(strings["traquenard_done"]).format(
-            kingdom=str(getattr(victim, "name", "") or chosen[0]),
-            time=until.strftime("%d/%m %H:%M"),
+            kingdom=str(getattr(result.target, "name", "") or chosen_id),
+            time=f"<t:{int(result.until)}:R>",
         )
         await target.response.edit_message(content=note, view=None)
-        _market_ttl(interaction, getattr(target, "message", None))
+        _market_ttl(target, getattr(target, "message", None))
+        _EPHEMERAL_WINDOWS.pop(str(getattr(target.user, "id", "")), None)
+        await _traquenard_announce(
+            target.guild, wiring, kingdom_id, result, strings
+        )
+        await _traquenard_dm_lords(target.guild, result, strings)
         await _refresh_realm_views_for_kingdom_safe(target.guild, kingdom_id)
 
-    select.callback = on_choose  # type: ignore[method-assign, assignment]
-    view = discord.ui.View(timeout=600)
-    view.add_item(select)
-    # fenetre-unique-royaume-v1 (Drasah 30/10): the select rides the
-    # shared single-window registry — no stacking under a stale window.
-    await _open_unique_ephemeral(
-        interaction, str(strings["traquenard_choose"]), view=view, ephemeral=True
+    return _validate
+
+
+async def _traquenard_announce(
+    guild: Any,
+    wiring: KingdomsPanelWiring,
+    activator_kingdom_id: str,
+    result: Any,
+    strings: dict[str, Any],
+) -> None:
+    """The 💬 Discussions note of the activator's realm — best-effort,
+    never blocks the flow (traquenard-fiche-v1)."""
+    try:
+        if guild is None or wiring.kingdoms_service is None or not activator_kingdom_id:
+            return
+        activator = await _kingdom_by_id_safe(
+            wiring.kingdoms_service, activator_kingdom_id
+        )
+        if activator is None:
+            return
+        from kingdoms.mods.kingdoms.kingdom_lieux import _discussions_channel
+
+        channel = await _discussions_channel(guild, activator)
+        if channel is None:
+            return
+        note = str(strings["traquenard_channel_note"]).format(
+            kingdom=str(getattr(activator, "name", "") or activator_kingdom_id),
+            target=str(getattr(getattr(result, "target", None), "name", "") or ""),
+            time=f"<t:{int(getattr(result, 'until', 0) or 0)}:R>",
+        )
+        await channel.send(note)
+    except Exception:
+        logger.info(
+            "KINGDOMS: traquenard discussions note failed (ignored)",
+            exc_info=True,
+        )
+
+
+async def _traquenard_dm_lords(guild: Any, result: Any, strings: dict[str, Any]) -> None:
+    """One themed DM per AFFECTED lord of the target — the drugged
+    drink (🍺 tavern), the assassination rumour delaying the wedding
+    (💍 marriage), the pirates slowing the sailing crew (🧭
+    exploration). Best-effort (traquenard-fiche-v1)."""
+    kind_keys = {
+        "tavern": "traquenard_dm_tavern",
+        "marriage": "traquenard_dm_marriage",
+        "exploration": "traquenard_dm_exploration",
+    }
+    for lord_id, kinds in getattr(result, "affected", None) or []:
+        member = None
+        try:
+            if guild is not None:
+                member = guild.get_member(int(lord_id))
+                if member is None:
+                    member = await guild.fetch_member(int(lord_id))
+        except Exception:
+            member = None
+        if member is None:
+            continue
+        for kind in kinds:
+            key = kind_keys.get(str(kind))
+            if key is None:
+                continue
+            try:
+                await member.send(str(strings[key]))
+            except Exception:
+                logger.info(
+                    "KINGDOMS: traquenard DM to %s failed (ignored)", str(lord_id)
+                )
+
+
+def _traquenard_choose_view(
+    wiring: KingdomsPanelWiring,
+    strings: dict[str, Any],
+    lord: Any,
+    options: list[discord.SelectOption],
+    names: dict[str, str],
+) -> discord.ui.View:
+    """The ⚔️ Activer window — the kingdom dropdown (label carries the
+    defence AI level), the choice OVERWRITES the dropdown (the objectif
+    pattern: the selected target rides the sheet), then ✅ Valider /
+    📝 Modifier — grey+disabled WITHOUT a choice, green WITH one — and
+    the red ❌ Annuler (traquenard-fiche-v1, Drasah 03/11)."""
+    view = discord.ui.View(timeout=None)
+    select: discord.ui.Select[Any] = discord.ui.Select(
+        custom_id="kingdoms:traquenard:choose",
+        placeholder=str(strings["traquenard_select_placeholder"])[:100],
+        options=options,
+        min_values=1,
+        max_values=1,
+        row=0,
     )
+
+    async def _on_choose(target: discord.Interaction) -> None:
+        raw = str(select.values[0]) if select.values else ""
+        if not raw:
+            return
+        chosen = discord.ui.View(timeout=None)
+        valider = discord.ui.Button(
+            label=str(strings["traquenard_validate_button"])[:80],
+            style=discord.ButtonStyle.success,
+            row=1,
+        )
+        valider.callback = _traquenard_on_validate(wiring, strings, lord, raw, names)
+        modifier = discord.ui.Button(
+            label=str(strings["traquenard_modify_button"])[:80],
+            style=discord.ButtonStyle.secondary,
+            row=1,
+        )
+
+        async def _reselect(reselect_interaction: discord.Interaction) -> None:
+            await reselect_interaction.response.edit_message(
+                content=str(strings["traquenard_choose_title"]),
+                view=_traquenard_choose_view(wiring, strings, lord, options, names),
+            )
+
+        modifier.callback = _reselect
+        annuler = discord.ui.Button(
+            label=str(strings["traquenard_cancel_button"])[:80],
+            style=discord.ButtonStyle.danger,
+            row=1,
+        )
+        annuler.callback = _traquenard_close
+        chosen.add_item(valider)
+        chosen.add_item(modifier)
+        chosen.add_item(annuler)
+        await target.response.edit_message(
+            content=str(strings["traquenard_selected"]).format(
+                name=str(names.get(raw, raw)),
+                ai=str(next(
+                    (
+                        opt.label.split("IA ")[-1].split("/")[0]
+                        for opt in options
+                        if opt.value == raw
+                    ),
+                    "?",
+                )).strip() or "?",
+            ),
+            view=chosen,
+        )
+
+    select.callback = _on_choose  # type: ignore[method-assign, assignment]
+    # before any choice: the pair rides grey, disabled — Annuler alive.
+    valider = discord.ui.Button(
+        label=str(strings["traquenard_validate_button"])[:80],
+        style=discord.ButtonStyle.secondary,
+        disabled=True,
+        row=1,
+    )
+    modifier = discord.ui.Button(
+        label=str(strings["traquenard_modify_button"])[:80],
+        style=discord.ButtonStyle.secondary,
+        disabled=True,
+        row=1,
+    )
+    annuler = discord.ui.Button(
+        label=str(strings["traquenard_cancel_button"])[:80],
+        style=discord.ButtonStyle.danger,
+        row=1,
+    )
+    annuler.callback = _traquenard_close
+    view.add_item(select)
+    view.add_item(valider)
+    view.add_item(modifier)
+    view.add_item(annuler)
+    return view
+
+
+async def _traquenard_open_flow(
+    interaction: discord.Interaction,
+    wiring: KingdomsPanelWiring,
+    strings: dict[str, Any],
+    lord: Any,
+) -> None:
+    """Open the Traquenard FICHE (traquenard-fiche-v1, Drasah 03/11).
+
+    The fiche rides the clicker's side window (type-7 ack — the
+    council sheet SURVIVES): the card's effect + the two TABS
+    (👁️ Voir les forces IA / 🪤 Traquenard — the current view's tab
+    grey, the other green) + ⚔️ Activer + ❌ Annuler.
+    chambre-utiliser-v1 (Drasah 30/10): the 🚀 Utiliser shortcut of
+    the Chambre des comptes rides the SAME flow (the bought charge is
+    consumed at the validation, never by opening the window).
+    """
+    if wiring.attacks_service is None or wiring.kingdoms_service is None:
+        await interaction.response.send_message(strings["market_no_service"], ephemeral=True)
+        return
+    # type-7 ack — the council sheet (an ephemeral parent) survives.
+    await interaction.response.defer(ephemeral=True, thinking=True)
+    user_id = str(getattr(interaction.user, "id", ""))
+    try:
+        window = await interaction.followup.send(
+            _traquenard_fiche_content(strings),
+            view=_traquenard_fiche_view(strings, active="fiche"),
+            ephemeral=True,
+        )
+    except Exception:
+        # AFTER a defer Discord stays silent on failure — surface a
+        # visible error note instead (the objectif lesson).
+        logger.warning("KINGDOMS: traquenard fiche failed", exc_info=True)
+        await interaction.followup.send(
+            _market_error_note(Exception("traquenard"), strings), ephemeral=True
+        )
+        return
+    _EPHEMERAL_WINDOWS[user_id] = (interaction, time.monotonic(), window)
 
 
 class KingdomTraquenardButton(
     discord.ui.DynamicItem[discord.ui.Button[Any]],
     template=r"kingdoms:traquenard:activate",
 ):
-    """The restart-proof 🪤 Traquenard button of the Le-Royaume view.
+    """The restart-proof 🪤 Traquenard button of the Salle du conseil.
 
     marche-v2 article 2 (recâblage v2, Drasah 14/10): the Traquenard is
-    INDEPENDENT of any declaration — any lord of the kingdom triggers it
-    from the kingdom's own salon. It opens a 6h Facile-AI window on the
-    chosen adversary kingdom (every attack declared in that window faces
-    the level-1 AI) and adds +2h of lock on the target's already-sealed
-    marriages. The button is only rendered while the kingdom holds at
-    least one bought charge.
+    INDEPENDENT of any declaration — ANY lord of the kingdom triggers it
+    (traquenard-fiche-v1, Drasah 03/11 — no longer King-only). The click
+    opens the FICHE (traquenard-fiche-v1): the card's effect + the two
+    tabs + ⚔️ Activer + ❌ Annuler. The validation opens a CUMULATIVE 2h
+    Facile-AI window on the chosen adversary kingdom (every attack
+    declared in that window faces the level-1 AI) and adds +2h ONCE on
+    every living lock of the target (marriage, tavern drink,
+    exploration of the sailing crew). The button is only rendered while
+    the kingdom holds at least one bought charge.
     """
 
     def __init__(self, strings: dict[str, Any]) -> None:
@@ -2578,6 +2851,261 @@ class KingdomTraquenardButton(
             return
         await _traquenard_open_flow(interaction, wiring, strings, lord)
 
+
+class KingdomTraquenardForcesButton(
+    discord.ui.DynamicItem[discord.ui.Button[Any]],
+    template=r"kingdoms:traquenard:forces",
+):
+    """The 👁️ Voir les forces IA tab (traquenard-fiche-v1) — every
+    OTHER kingdom of the season (name + defence AI level), plus the
+    weakened state and remaining delay while a Traquenard window lives
+    on it. The CURRENT view's tab renders grey+disabled, the other one
+    green — the click edits the window IN PLACE."""
+
+    def __init__(self, strings: dict[str, Any], *, active: str = "forces") -> None:
+        super().__init__(
+            discord.ui.Button(
+                label=str(strings["traquenard_forces_button"])[:80],
+                custom_id="kingdoms:traquenard:forces",
+                style=(
+                    discord.ButtonStyle.secondary
+                    if active == "forces"
+                    else discord.ButtonStyle.success
+                ),
+                disabled=active == "forces",
+            )
+        )
+
+    @classmethod
+    async def from_custom_id(
+        cls,
+        interaction: discord.Interaction,
+        item: discord.ui.Item[Any],
+        match: re.Match[str],
+        /,
+    ) -> "KingdomTraquenardForcesButton":
+        """Rebuild from the wire — only the ENABLED tab dispatches."""
+        return cls(_strings(str(interaction.locale) if interaction.locale else "en"))
+
+    async def callback(self, interaction: discord.Interaction) -> None:
+        """Edit the window in place — the forces sheet."""
+        locale = str(interaction.locale) if interaction.locale else "en"
+        strings = _strings(locale)
+        wiring = _wiring()
+        lord = await _lord_of(
+            wiring.kingdoms_service, str(interaction.user.id), wiring.bot_admins
+        )
+        if lord is None or wiring.kingdoms_service is None:
+            await interaction.response.edit_message(
+                content=strings["traquenard_failed"].format(
+                    message=str(strings.get("market_not_king", ""))
+                ),
+                view=None,
+            )
+            return
+        try:
+            content = await _traquenard_forces_content(
+                wiring,
+                str(getattr(lord, "kingdom_id", "") or ""),
+                strings,
+                int(time.time()),
+            )
+        except Exception:
+            logger.warning(
+                "KINGDOMS: traquenard forces sheet failed", exc_info=True
+            )
+            await interaction.response.edit_message(
+                content=strings["traquenard_failed"].format(message="forces IA"),
+                view=None,
+            )
+            return
+        await interaction.response.edit_message(
+            content=content, view=_traquenard_fiche_view(strings, active="forces")
+        )
+
+
+class KingdomTraquenardFicheButton(
+    discord.ui.DynamicItem[discord.ui.Button[Any]],
+    template=r"kingdoms:traquenard:fiche",
+):
+    """The 🪤 Traquenard tab (traquenard-fiche-v1) — back to the FICHE
+    (green from the forces view, grey+disabled on the fiche itself);
+    the click edits the window IN PLACE."""
+
+    def __init__(self, strings: dict[str, Any], *, active: str = "fiche") -> None:
+        super().__init__(
+            discord.ui.Button(
+                label=str(strings["traquenard_go_button"])[:80],
+                custom_id="kingdoms:traquenard:fiche",
+                style=(
+                    discord.ButtonStyle.secondary
+                    if active == "fiche"
+                    else discord.ButtonStyle.success
+                ),
+                disabled=active == "fiche",
+            )
+        )
+
+    @classmethod
+    async def from_custom_id(
+        cls,
+        interaction: discord.Interaction,
+        item: discord.ui.Item[Any],
+        match: re.Match[str],
+        /,
+    ) -> "KingdomTraquenardFicheButton":
+        """Rebuild from the wire — only the ENABLED tab dispatches."""
+        return cls(_strings(str(interaction.locale) if interaction.locale else "en"))
+
+    async def callback(self, interaction: discord.Interaction) -> None:
+        """Edit the window in place — back to the fiche sheet."""
+        locale = str(interaction.locale) if interaction.locale else "en"
+        strings = _strings(locale)
+        await interaction.response.edit_message(
+            content=_traquenard_fiche_content(strings),
+            view=_traquenard_fiche_view(strings, active="fiche"),
+        )
+
+
+class KingdomTraquenardGoButton(
+    discord.ui.DynamicItem[discord.ui.Button[Any]],
+    template=r"kingdoms:traquenard:go",
+):
+    """The ⚔️ Activer button of the fiche (traquenard-fiche-v1) —
+    opens the small ephemeral CHOOSE window: the kingdom dropdown
+    carries each target's defence AI level, the choice OVERWRITES the
+    dropdown, then ✅ Valider / 📝 Modifier (grey without a choice,
+    green with one) and the red ❌ Annuler. The VALIDATION alone
+    consumes the bought charge (usable by EVERY lord)."""
+
+    def __init__(self, strings: dict[str, Any]) -> None:
+        super().__init__(
+            discord.ui.Button(
+                label=str(strings["traquenard_activate_button"])[:80],
+                custom_id="kingdoms:traquenard:go",
+                style=discord.ButtonStyle.success,
+            )
+        )
+
+    @classmethod
+    async def from_custom_id(
+        cls,
+        interaction: discord.Interaction,
+        item: discord.ui.Item[Any],
+        match: re.Match[str],
+        /,
+    ) -> "KingdomTraquenardGoButton":
+        """Rebuild from the wire."""
+        return cls(_strings(str(interaction.locale) if interaction.locale else "en"))
+
+    async def callback(self, interaction: discord.Interaction) -> None:
+        """Open the choose window — it REPLACES the fiche window."""
+        locale = str(interaction.locale) if interaction.locale else "en"
+        strings = _strings(locale)
+        wiring = _wiring()
+        lord = await _lord_of(
+            wiring.kingdoms_service, str(interaction.user.id), wiring.bot_admins
+        )
+        if wiring.attacks_service is None or wiring.kingdoms_service is None:
+            await interaction.response.edit_message(
+                content=strings["market_no_service"], view=None
+            )
+            return
+        if lord is None:
+            await interaction.response.edit_message(
+                content=strings["traquenard_failed"].format(
+                    message=str(strings.get("market_not_king", ""))
+                ),
+                view=None,
+            )
+            return
+        kingdom_id = str(getattr(lord, "kingdom_id", "") or "")
+        # type-7 ack — the council sheet survives the whole flow.
+        await interaction.response.defer(ephemeral=True, thinking=True)
+        kingdoms = await wiring.kingdoms_service.kingdoms()
+        options: list[discord.SelectOption] = []
+        names: dict[str, str] = {}
+        for item in kingdoms:
+            if getattr(item, "is_gaia", False) or str(item.kingdom_id) == kingdom_id:
+                continue
+            kid = str(item.kingdom_id)
+            name = str(getattr(item, "name", "") or kid)
+            names[kid] = name
+            level = 1
+            try:
+                level = int(
+                    await wiring.attacks_service.defense_ai_level(kid) or 1
+                )
+            except Exception:
+                logger.warning(
+                    "KINGDOMS: traquenard AI level read failed for %s (ignored)",
+                    kid,
+                )
+            options.append(
+                discord.SelectOption(
+                    label=f"{name} — IA {level}/5"[:100],
+                    value=kid[:100],
+                    description=None,
+                )
+            )
+        options = options[:25]
+        if not options:
+            await interaction.followup.send(
+                strings["traquenard_no_target"], ephemeral=True
+            )
+            return
+        user_id = str(getattr(interaction.user, "id", ""))
+        try:
+            # the choose window REPLACES the fiche window (the shared
+            # single-window registry — no stacking).
+            await _close_previous_ephemeral(user_id)
+            window = await interaction.followup.send(
+                str(strings["traquenard_choose_title"]),
+                view=_traquenard_choose_view(wiring, strings, lord, options, names),
+                ephemeral=True,
+            )
+        except Exception:
+            logger.warning(
+                "KINGDOMS: traquenard choose window failed", exc_info=True
+            )
+            await interaction.followup.send(
+                _market_error_note(Exception("traquenard"), strings), ephemeral=True
+            )
+            return
+        _EPHEMERAL_WINDOWS[user_id] = (interaction, time.monotonic(), window)
+
+
+class KingdomTraquenardCancelButton(
+    discord.ui.DynamicItem[discord.ui.Button[Any]],
+    template=r"kingdoms:traquenard:cancel",
+):
+    """The ❌ Annuler of the fiche and the choose window
+    (traquenard-fiche-v1) — closes the ephemeral window, nothing else
+    (no charge consumed, no activation)."""
+
+    def __init__(self, strings: dict[str, Any]) -> None:
+        super().__init__(
+            discord.ui.Button(
+                label=str(strings["traquenard_cancel_button"])[:80],
+                custom_id="kingdoms:traquenard:cancel",
+                style=discord.ButtonStyle.danger,
+            )
+        )
+
+    @classmethod
+    async def from_custom_id(
+        cls,
+        interaction: discord.Interaction,
+        item: discord.ui.Item[Any],
+        match: re.Match[str],
+        /,
+    ) -> "KingdomTraquenardCancelButton":
+        """Rebuild from the wire."""
+        return cls(_strings(str(interaction.locale) if interaction.locale else "en"))
+
+    async def callback(self, interaction: discord.Interaction) -> None:
+        """Close the window (the shared traquenard exit)."""
+        await _traquenard_close(interaction)
 
 
 def _market_ledger_text(wiring: KingdomsPanelWiring, kingdom: Any, strings: dict[str, Any]) -> str:

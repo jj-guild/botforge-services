@@ -346,8 +346,10 @@ STRINGS: dict[str, dict[str, Any]] = {
                 "point. Defending an ambush also uses an exceptional defence."
             ),
             "traquenard": (
-                "On use: the AI you face becomes Easy, and the target kingdom's "
-                "active marriages gain a +2h lock."
+                "On use: the AI you face becomes Easy for a cumulative 2h "
+                "window per activation, and the target kingdom's living "
+                "lockouts (marriages, exploration, tavern drink) gain a "
+                "one-shot +2h."
             ),
             "contre_espionnage": (
                 "When attacking, you may declare the attack in the name of "
@@ -432,9 +434,11 @@ STRINGS: dict[str, dict[str, Any]] = {
                 "attack or an ambush."
             ),
             "traquenard": (
-                "Use it from the Chambre des comptes (or the salon button): "
-                "the AI faced becomes Easy and the target kingdom's active "
-                "marriages gain a +2h lock."
+                "Use it from the Salle du conseil (or the Chambre des "
+                "comptes): the AI faced becomes Easy for a cumulative 2h "
+                "window per activation, and the target kingdom's living "
+                "lockouts (marriages, exploration, tavern drink) gain a "
+                "one-shot +2h."
             ),
             "contre_espionnage": (
                 "When declaring the attack, you can use the "
@@ -850,8 +854,10 @@ STRINGS: dict[str, dict[str, Any]] = {
                 "exceptionnelle."
             ),
             "traquenard": (
-                "À l'usage : l'IA affrontée devient Facile, et les mariages "
-                "actifs du royaume ciblé prennent +2h de verrou."
+                "À l'usage : l'IA affrontée devient Facile durant une "
+                "fenêtre cumulée de 2h par activation, et les verrous "
+                "vivants du royaume ciblé (mariages, exploration, boisson "
+                "de taverne) prennent +2h en one-shot."
             ),
             "contre_espionnage": (
                 "Lorsque vous attaquez, vous pouvez la déclarer au nom de "
@@ -938,9 +944,11 @@ STRINGS: dict[str, dict[str, Any]] = {
                 "attaque classique ou une embuscade."
             ),
             "traquenard": (
-                "S'utilise depuis la Chambre des comptes (ou le bouton du "
-                "salon) : l'IA affrontée devient Facile et les mariages actifs "
-                "du royaume ciblé prennent +2h de verrou."
+                "S'utilise depuis la Salle du conseil (ou la Chambre des "
+                "comptes) : l'IA affrontée devient Facile durant une fenêtre "
+                "cumulée de 2h par activation, et les verrous vivants du "
+                "royaume ciblé (mariages, exploration, boisson de taverne) "
+                "prennent +2h en one-shot."
             ),
             "contre_espionnage": (
                 "À la déclaration de l'attaque, vous pouvez utiliser le "

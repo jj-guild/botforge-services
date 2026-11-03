@@ -294,14 +294,23 @@ def _seigneurie_content(
         # exploration-retour-v4 (Drasah 02/11): the ACTIVE locks ride
         # Discord's NATIVE <t:…:R> stamps — the countdown renders and
         # ticks on every player's client, zero re-edit, zero API.
-        for emoji, until in (
-            ("💍", getattr(member, "marriage_locked_until", None)),
-            ("🧭", getattr(member, "exploration_locked_until", None)),
-            ("🎲", getattr(member, "ffa_locked_until", None)),
+        # taverne-boisson-v1 rides the loop too (🍺 — it was missing),
+        # and traquenard-fiche-v1 (Drasah 03/11) appends the « +2h 🪤 »
+        # marker when the lock was extended by an adverse Traquenard
+        # (``traquenard_lock_marks`` holds the extended value — one
+        # single +2h per living lock, the one-shot rule).
+        marks = dict(getattr(member, "traquenard_lock_marks", None) or {})
+        for emoji, kind, until in (
+            ("💍", "marriage", getattr(member, "marriage_locked_until", None)),
+            ("🧭", "exploration", getattr(member, "exploration_locked_until", None)),
+            ("🍺", "tavern", getattr(member, "tavern_locked_until", None)),
+            ("🎲", "ffa", getattr(member, "ffa_locked_until", None)),
         ):
             locked_until = int(until or 0)
             if locked_until > now_ts:
                 line += f" · {emoji} <t:{locked_until}:R>"
+                if int(marks.get(kind, 0) or 0) == locked_until:
+                    line += f" (+2h 🪤)"
         return line
 
     lines = [strings["seigneurie_title"], ""]
