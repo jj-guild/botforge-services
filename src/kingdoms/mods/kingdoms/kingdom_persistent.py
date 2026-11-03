@@ -2349,13 +2349,13 @@ async def _jeu_darmes_open(interaction: discord.Interaction) -> None:
             strings["jeu_darmes_no_stock"], ephemeral=True
         )
         return
-    view = discord.ui.LayoutView(timeout=None)
-    view.add_item(
-        discord.ui.ActionRow(
-            KingdomJeuDarmesActivateButton(strings),
-            KingdomJeuDarmesCancelButton(strings),
-        )
-    )
+    # jeu-darmes-fix (Drasah live report 03/11): a classic View — a
+    # LayoutView rides the IS_COMPONENTS_V2 flag, which FORBIDS the
+    # ``content`` field (Discord 50035) — the card window closed and
+    # never appeared.
+    view = discord.ui.View(timeout=None)
+    view.add_item(KingdomJeuDarmesActivateButton(strings))
+    view.add_item(KingdomJeuDarmesCancelButton(strings))
     await _open_unique_ephemeral(
         interaction, content=_jeu_darmes_card(strings, state), view=view
     )
