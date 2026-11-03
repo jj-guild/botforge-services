@@ -202,7 +202,8 @@ def _strings(locale: str) -> dict[str, str]:
             "traquenard_fiche_title": "🪤 Traquenard",
             "traquenard_fiche_desc": (
                 "**Effet**\n"
-                "À l'usage : choisissez un Royaume, l'IA affrontée devient **Facile**"
+                "À l'usage : choisissez un Royaume, l'IA affrontée devient **Très"
+                " facile**"
                 " durant un laps de temps de 2h au moment où Traquenard est activé"
                 " (chaque activation cumulée repousse la fin de 2h).\n"
                 "Augmente les délais de TOUS les verrouillages du royaume ciblé"
@@ -214,10 +215,10 @@ def _strings(locale: str) -> dict[str, str]:
             "traquenard_activate_button": "⚔️ Activer",
             "traquenard_cancel_button": "❌ Annuler",
             "traquenard_forces_title": "👁️ Forces IA",
-            # traquenard-echelle-v1 (Drasah 03/11) : échelle affichée
-            # DÉCALÉE DE -1 vs moteur (moteur 1 « Facile » → « 0/5 Très
-            # facile »), niveau EN TOUTES LETTRES (échelle Drasah :
-            # 0 Très facile · 1 Standard · 2 Intermédiaire · 3 Difficile
+            # ia-base-zero-v1 (Drasah 03/11) : le moteur EST l'échelle
+            # Drasah (base 0 — une IA neuve = « 0/5 Très facile », cinq
+            # Jeux d'armes = « 5/5 Expert »), niveau EN TOUTES LETTRES
+            # (0 Très facile · 1 Standard · 2 Intermédiaire · 3 Difficile
             # · 4 Plus difficile · 5 Expert), timer en heures+minutes.
             "traquenard_ai_levels": (
                 "Très facile|Standard|Intermédiaire|Difficile|Plus difficile|Expert"
@@ -235,7 +236,7 @@ def _strings(locale: str) -> dict[str, str]:
             "traquenard_minutes": "minutes",
             "traquenard_done": (
                 "🪤 Traquenard activé contre **{kingdom}** — l'IA de défense devient"
-                " Facile jusqu'à {time} (fenêtre cumulée de 2h) et les verrous"
+                " très facile (0/5) jusqu'à {time} (fenêtre cumulée de 2h) et les verrous"
                 " vivants prennent {lock}."
             ),
             "traquenard_failed": "❌ {message}",
@@ -492,7 +493,8 @@ def _strings(locale: str) -> dict[str, str]:
             "traquenard_fiche_title": "🪤 Traquenard",
             "traquenard_fiche_desc": (
                 "**Effect**\n"
-                "On use: choose a Kingdom, the opposing AI turns **Easy** for a"
+                "On use: choose a Kingdom, the opposing AI turns **Very easy**"
+                " for a"
                 " 2h lapse of time at the moment the Traquenard is activated"
                 " (each stacked activation pushes the end 2h further).\n"
                 "Adds **+2h** to EVERY lockout of the targeted kingdom, only at"
@@ -520,7 +522,7 @@ def _strings(locale: str) -> dict[str, str]:
             "traquenard_minutes": "minutes",
             "traquenard_done": (
                 "🪤 Traquenard activated against **{kingdom}** — the defense AI turns"
-                " Easy until {time} (2h stacked window) and living locks gain {lock}."
+                " very easy (0/5) until {time} (2h stacked window) and living locks gain {lock}."
             ),
             "traquenard_failed": "❌ {message}",
             "traquenard_no_target": "❌ No adversary kingdom to target.",

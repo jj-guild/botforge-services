@@ -1575,7 +1575,11 @@ async def _kingdom_select_view(
     if kingdoms_service is None or attacks_service is None:
         return "", None
     now = game_now()
-    base = await attacks_service.base_ai_level()
+    # ia-base-zero-v1 (Drasah 03/11): the patrol widening rides the
+    # DEFENCE bot's base (0), never the season epoch's Gaïa scale.
+    from kingdoms.mods.kingdoms.attacks import DEFENSE_AI_BASE
+
+    base = DEFENSE_AI_BASE
     options, protected = await _kingdom_step_options(wiring, own_kingdom_id, strings, now, base)
     if not options:
         return "", None
@@ -4757,7 +4761,7 @@ async def _run_forfeits_safe(guild: Any, attacks_service: Any, kingdoms_service:
                 strings["reveal_ai"].format(
                     map=attack.map_key,
                     kingdom=await _kingdom_name(kingdoms_service, attack.defender_kingdom_id),
-                    level=attack.effects.get("ai_level", 1) if attack.effects else 1,
+                    level=attack.effects.get("ai_level", 0) if attack.effects else 0,
                 ),
             )
         side = (attack.pickban or {}).get("forfeit_side")
@@ -5065,9 +5069,10 @@ async def _room_body_text(attack: Any, kingdoms_service: Any, strings: dict[str,
 
     attacker_status = _status(attack.attacker_lord_id)
     if attack.ai_defender:
-        # battle-ai-rdv-v1 (Drasah 22/10): the RAW level (1-5, Traquenard
-        # aware) rides the scoreboard — never an invented label.
-        level = int((attack.effects or {}).get("ai_level", 1) or 1)
+        # battle-ai-rdv-v1 (Drasah 22/10): the RAW level (0-5,
+        # ia-base-zero-v1 — the Traquenard forces 0) rides the
+        # scoreboard — never an invented label.
+        level = int((attack.effects or {}).get("ai_level") or 0)
         defender_status = strings["room_side_ai"].format(level=level)
     else:
         defender_status = _status(attack.defender_lord_id)
@@ -5087,7 +5092,7 @@ async def _room_body_text(attack: Any, kingdoms_service: Any, strings: dict[str,
     if attack.ai_defender:
         # battle-ai-rdv-v1 (Drasah 22/10, version courte validée): the
         # multiplayer-ID disclaimer sits right under the scoreboard.
-        level = int((attack.effects or {}).get("ai_level", 1) or 1)
+        level = int((attack.effects or {}).get("ai_level") or 0)
         body += "\n" + strings["room_ai_disclaimer"].format(level=level)
     if score.get("all_ready"):
         body += "\n" + strings["room_scoreboard_footer"]
@@ -5177,7 +5182,7 @@ async def _conquest_detail(kingdoms_service: Any, attack: Any, strings: dict[str
     defender_kingdom = await _kingdom_name(kingdoms_service, attack.defender_kingdom_id)
     lines = [strings["conquest_attacker_line"].format(player=attacker, kingdom=attacker_kingdom)]
     if getattr(attack, "ai_defender", False):
-        level = int((attack.effects or {}).get("ai_level") or 1)
+        level = int((attack.effects or {}).get("ai_level") or 0)
         defender = defender_kingdom
         lines.append(strings["conquest_ai_defense"].format(kingdom=defender_kingdom, level=level))
     else:
