@@ -36,10 +36,11 @@ class CheckResult:
     name: str
     ok: bool
     detail: str = ""
+    skipped: bool = False
 
     def render(self) -> str:
         """One report line for the CI log."""
-        mark = "PASS" if self.ok else "FAIL"
+        mark = "SKIP" if self.skipped else ("PASS" if self.ok else "FAIL")
         line = f"[{mark}] {self.provider} :: {self.name}"
         return f"{line} — {self.detail}" if self.detail else line
 
@@ -84,8 +85,12 @@ async def run_all_batteries() -> list[CheckResult]:
 
 def render_report(results: list[CheckResult]) -> str:
     """Render the aggregated report (CI log + PR summary)."""
-    failed = [r for r in results if not r.ok]
-    header = f"external-services checks: {len(results) - len(failed)}/{len(results)} passed"
+    failed = [r for r in results if not r.ok and not r.skipped]
+    skipped = [r for r in results if r.skipped]
+    passed = len(results) - len(failed) - len(skipped)
+    header = f"external-services checks: {passed}/{len(results)} passed"
+    if skipped:
+        header += f" ({len(skipped)} skipped)"
     lines = [header, *["  " + r.render() for r in results]]
     return "\n".join(lines)
 

@@ -12,9 +12,10 @@ def main() -> int:
     import asyncio
 
     import kingdoms.core_process.content_checks as _content_battery
+    import kingdoms.core_process.mapsdata_checks as _mapsdata_battery
     import kingdoms.core_process.realtime_checks as _realtime_batteries
 
-    del _content_battery, _realtime_batteries
+    del _content_battery, _mapsdata_battery, _realtime_batteries
 
     results = asyncio.run(run_all_batteries())
     print(render_report(results))
