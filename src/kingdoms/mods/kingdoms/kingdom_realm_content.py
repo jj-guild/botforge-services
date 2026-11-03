@@ -669,7 +669,12 @@ def _build_alliances_panel(
         "",  # alliances-panel-v2 : la signature vit en spoiler dans le corps
         discord.Colour.dark_embed(),
         buttons,
-        media="attachment://alliances.png" if hand else None,
+        # blasons-en-bas-v1 (Drasah 03/11, live report) : la mosaïque
+        # ne doit PLUS rendre au-dessus du panel — le slot ``media``
+        # est le slot TOP (illustration-top-v1) ; elle bascule sur
+        # ``extra_medias`` (la galerie SOUS le conteneur, le même rail
+        # que le blason de l'alliance ciblée du conseil).
+        extra_medias=["attachment://alliances.png"] if hand else None,
     )
 
 
