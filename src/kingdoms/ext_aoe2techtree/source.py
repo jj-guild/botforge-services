@@ -119,7 +119,12 @@ class ApiContentSource(UpstreamContentSource):
         self._timeout_s = timeout_s
 
     def _headers(self) -> dict[str, str]:
-        headers: dict[str, str] = {"accept": "application/json"}
+        from kingdoms.core.upstream_identity import project_user_agent
+
+        headers: dict[str, str] = {
+            "accept": "application/json",
+            "User-Agent": project_user_agent(),
+        }
         if self._api_key:
             headers["authorization"] = f"Bearer {self._api_key}"
         return headers

@@ -88,6 +88,16 @@ class LibrematchAdapter:
         self._api_key = api_key
         self._rate_limiter = rate_limiter
 
+    def _client(self) -> httpx.AsyncClient:
+        """One identified, throttled HTTP client (custom User-Agent, #277)."""
+        from kingdoms.core.upstream_identity import project_user_agent
+
+        return httpx.AsyncClient(
+            timeout=self._timeout_s,
+            transport=self._transport,
+            headers={"User-Agent": project_user_agent()},
+        )
+
     async def _allowed(self) -> bool:
         """Consume one throttle slot; no limiter configured means allowed."""
         if self._rate_limiter is None:
@@ -99,7 +109,7 @@ class LibrematchAdapter:
         if not await self._allowed():
             logger.warning("librematch call over rate budget; degrading to empty lobby list")
             return []
-        async with httpx.AsyncClient(timeout=self._timeout_s, transport=self._transport) as client:
+        async with self._client() as client:
             reply = await client.get(
                 urljoin(self._base_url + "/", LOBBIES_PATH.lstrip("/")),
                 params=LOBBIES_QUERY_PARAMS,
@@ -157,7 +167,7 @@ class LibrematchAdapter:
             logger.warning("librematch call over rate budget; degrading stats to None")
             return None
         blocks: list[StatsBlock] = []
-        async with httpx.AsyncClient(timeout=self._timeout_s, transport=self._transport) as client:
+        async with self._client() as client:
             for board_id, board_name in LEADERBOARD_KEYS.items():
                 try:
                     reply = await client.get(
@@ -176,12 +186,7 @@ class LibrematchAdapter:
             return None
         return PlayerStats(profile_id=profile_id, blocks=tuple(blocks))
 
-
-
-
-    async def recent_match_result(
-        self, profile_ids: list[str], since_epoch_s: int
-    ) -> MatchResult | None:
+    async def recent_match_result(self, profile_ids: list[str], since_epoch_s: int) -> MatchResult | None:
         """Fetch the latest finished match of the profiles (WorldsEdge).
 
         ``GetRecentMatchHistory`` lists a profile's recent finished
@@ -201,7 +206,7 @@ class LibrematchAdapter:
         if not await self._allowed():
             logger.warning("librematch call over rate budget; degrading result to None")
             return None
-        async with httpx.AsyncClient(timeout=self._timeout_s, transport=self._transport) as client:
+        async with self._client() as client:
             reply = await client.get(
                 urljoin(self._base_url + "/", RECENT_MATCH_PATH.lstrip("/")),
                 params={"title": "age2", "profile_ids": f'["{probe}"]', "count": "5"},
