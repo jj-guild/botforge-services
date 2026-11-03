@@ -284,6 +284,11 @@ PATROUILLE_HOURS = 2
 PATROUILLE_REINFORCED_HOURS = 3
 PATROUILLE_TZ = "Europe/Paris"
 AI_LEVEL_CAP = 5
+# ia-base-zero-v1 (Drasah 03/11): the KINGDOM defence bot starts at 0
+# on Drasah's scale (0 Très facile … 5 Expert, one Jeu d'armes per
+# step, FIVE useful buys) — the season epoch's ``gaia_ai_level`` stays
+# the GAÏA free-battle scale (D18, untouched).
+DEFENSE_AI_BASE = 0
 TRAQUENARD_LOCK_HOURS = 2
 # traquenard-fiche-v1 (Drasah 03/11): the Facile window is CUMULATIVE —
 # each new activation pushes ``traquenard_until`` 2h further (2h+2h=4h),
@@ -324,9 +329,9 @@ def patrouille_reinforced(state: TechnologyState, base_level: int) -> bool:
     """Whether the kingdom's patrols are Renforcées (marche-v2 art. 5).
 
     The transformation is automatic and free: when the defence bot's AI
-    reaches the ceiling (5, Extrême — the epoch base level plus one per
-    permanent Jeu d'armes purchase), every patrol slot of the kingdom
-    widens from 2h to 3h.
+    reaches the ceiling (5 — the defence base plus one per permanent
+    Jeu d'armes purchase, ia-base-zero-v1: the base is 0), every patrol
+    slot of the kingdom widens from 2h to 3h.
     """
     return min(AI_LEVEL_CAP, base_level + state.purchases.get("jeu_d_armes", 0)) >= AI_LEVEL_CAP
 
@@ -1162,7 +1167,9 @@ class AttackService:
         if patrouille_active_at(
             await self.technology_state(territory.owner_kingdom_id),
             timestamp,
-            base_level=await self.base_ai_level(),
+            # ia-base-zero-v1: the patrol widening rides the DEFENCE
+            # bot's base (0), never the season epoch's Gaïa scale.
+            base_level=DEFENSE_AI_BASE,
         ):
             raise PatrolProtectedError("la patrouille du royaume cible protège ses territoires (D68)")
         # D59/D60: a fresh marriage locks the lord out of combat.
@@ -1736,10 +1743,11 @@ class AttackService:
                 attack.ai_defender = True
                 attack.state = AttackState.DEFENDED
                 # marche-v2 art. 2/5: the level the attacker faces — a
-                # Traquenard forces Facile (1), otherwise the defence
-                # bot's own level (epoch base + Jeu d'armes, ceiling 5).
+                # Traquenard forces 0 (Très facile, ia-base-zero-v1),
+                # otherwise the defence bot's own level (0 + Jeu
+                # d'armes, ceiling 5).
                 attack.effects["ai_level"] = (
-                    1 if attack.traquenard else await self.defense_ai_level(attack.defender_kingdom_id)
+                    0 if attack.traquenard else await self.defense_ai_level(attack.defender_kingdom_id)
                 )
                 # battle-ai-rdv-v1 (Drasah 22/10): even against the bot
                 # AI the DRAFT runs — same DM flow as a human defense
@@ -3480,16 +3488,17 @@ class AttackService:
     async def defense_ai_level(self, kingdom_id: str) -> int:
         """Return the kingdom defence bot's AI level (marche-v2 art. 5).
 
-        The base level is the season epoch's (D18: 1=Facile … 5=Extrême);
-        each permanent Jeu d'armes purchase adds one, ceiling 5. This is
-        the level an ATTACKER faces when the kingdom's bot takes the
-        defense (the old Gaïa-only reading is gone — the defence bot is
-        the kingdom's own, a Traquenard aside).
+        ia-base-zero-v1 (Drasah 03/11): the base is 0 — Drasah's scale
+        (0 Très facile … 5 Expert); each permanent Jeu d'armes purchase
+        adds one, ceiling 5 (five useful buys reach « 5/5 Expert »).
+        This is the level an ATTACKER faces when the kingdom's bot takes
+        the defense (the season epoch's ``gaia_ai_level`` stays the
+        GAÏA free-battle scale, untouched).
         """
         state = await self.technology_state(kingdom_id)
         return min(
             AI_LEVEL_CAP,
-            await self.base_ai_level() + state.purchases.get("jeu_d_armes", 0),
+            DEFENSE_AI_BASE + state.purchases.get("jeu_d_armes", 0),
         )
 
     async def sabotage_civilizations(

@@ -2852,10 +2852,12 @@ async def _traquenard_forces_content(
         kid = str(getattr(item, "id", "") or "")
         if getattr(item, "is_gaia", False) or not kid or kid == str(kingdom_id):
             continue
-        level = 1
+        # ia-base-zero-v1: 0 is a REAL level now (fresh kingdom) —
+        # never `or 1`.
+        level = 0
         if attacks is not None:
             try:
-                level = int(await attacks.defense_ai_level(kid) or 1)
+                level = int(await attacks.defense_ai_level(kid) or 0)
             except Exception:
                 logger.warning(
                     "KINGDOMS: traquenard AI level read failed for %s (ignored)",
@@ -2866,9 +2868,9 @@ async def _traquenard_forces_content(
         lines.append(str(strings["traquenard_forces_none"]))
         return "\n".join(lines)
     for item, level in rows:
-        # traquenard-echelle-v1 (Drasah 03/11): the displayed scale is
-        # the motor's minus one (0 « Très facile » …), name spelt out —
-        # `🏰 aegis — IA : Très facile 0/5`.
+        # ia-base-zero-v1 (Drasah 03/11): the motor scale IS the
+        # displayed one (0 « Très facile » … 5 « Expert »), name spelt
+        # out — `🏰 aegis — IA : Très facile 0/5`.
         display, level_name = _traquenard_ai_display(level, strings)
         lines.append(
             str(strings["traquenard_forces_line"]).format(
@@ -2901,11 +2903,11 @@ def _traquenard_fiche_view(strings: dict[str, Any], *, active: str) -> discord.u
 
 
 def _traquenard_ai_display(level_motor: int, strings: dict[str, Any]) -> tuple[int, str]:
-    """traquenard-echelle-v1 (Drasah 03/11): the DISPLAYED AI scale rides
-    one step below the motor (Drasah's scale starts at 0 « Très facile »
-    — the motor's 1 « Facile »): motor 1 → 0 Très facile, 2 → 1 Standard,
-    … the level name spelt out in full."""
-    display = max(0, int(level_motor) - 1)
+    """ia-base-zero-v1 (Drasah 03/11): the MOTOR scale IS Drasah's scale
+    (the kingdom defence bot now starts at 0 — « 0/5 Très facile », the
+    Traquenard forces 0 too): motor 0 → 0 Très facile, 1 → 1 Standard,
+    … 5 → 5 Expert, the level name spelt out in full."""
+    display = max(0, int(level_motor))
     names = str(strings.get("traquenard_ai_levels", "") or "").split("|")
     name = names[display].strip() if 0 <= display < len(names) else str(display)
     return display, name
@@ -3491,18 +3493,19 @@ class KingdomTraquenardGoButton(
                 continue
             name = str(getattr(item, "name", "") or kid)
             names[kid] = name
-            level = 1
+            # ia-base-zero-v1: 0 is a REAL level now — never `or 1`.
+            level = 0
             try:
                 level = int(
-                    await wiring.attacks_service.defense_ai_level(kid) or 1
+                    await wiring.attacks_service.defense_ai_level(kid) or 0
                 )
             except Exception:
                 logger.warning(
                     "KINGDOMS: traquenard AI level read failed for %s (ignored)",
                     kid,
                 )
-            # traquenard-echelle-v1: the dropdown rides the SAME
-            # displayed scale as the forces view (décalage -1 + nom en
+            # ia-base-zero-v1: the dropdown rides the SAME scale as
+            # the forces view (moteur = échelle Drasah 0-5, nom en
             # toutes lettres) — one scale everywhere.
             display, level_name = _traquenard_ai_display(level, strings)
             options.append(
