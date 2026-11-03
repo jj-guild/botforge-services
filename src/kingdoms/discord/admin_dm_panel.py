@@ -466,14 +466,21 @@ class MapsSyncButton(
             return
         dm_locale = await _dm_locale(interaction)
         await interaction.response.defer(ephemeral=True, thinking=True)
+        # The long-running action pattern (skills/discord-ui): acknowledge
+        # WHAT runs, that it is in progress, and that the result lands in
+        # this very message \u2014 the Liquipedia pacing means minutes.
+        progress: Any = await interaction.followup.send(  # type: ignore[func-returns-value]
+            _dm_tr(interaction, dm_locale, "maps_sync_started"), ephemeral=True
+        )
         try:
             from kingdoms.core.games.aoe2.content_refresh import refresh_aoe2_maps
 
             counts = await refresh_aoe2_maps()
         except Exception:
             logger.exception("DM PANEL: maps sync failed")
-            await interaction.followup.send(
-                _dm_tr(interaction, dm_locale, "maps_sync_failed"), ephemeral=True
+            await interaction.followup.edit_message(
+                progress.id,
+                content=_dm_tr(interaction, dm_locale, "maps_sync_failed"),
             )
             return
         # best-effort: the enriched content shows up on the maps forum
@@ -485,8 +492,10 @@ class MapsSyncButton(
                 await sync_maps_forum(str(guild.id), "aoe2", interaction.client)
         except Exception:
             logger.warning("DM PANEL: maps forum sync after enrichment failed — best-effort")
-        await interaction.followup.send(
-            _dm_tr(
+        # the result replaces the progress message: same place, as promised.
+        await interaction.followup.edit_message(
+            progress.id,
+            content=_dm_tr(
                 interaction,
                 dm_locale,
                 "maps_sync_done",
@@ -495,7 +504,6 @@ class MapsSyncButton(
                 complete=int(counts.get("maps_complete", 0)),
                 total=int(counts.get("maps_total", 0)),
             ),
-            ephemeral=True,
         )
 
 
