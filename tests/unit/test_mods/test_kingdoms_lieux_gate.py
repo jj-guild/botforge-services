@@ -283,11 +283,14 @@ def test_remparts_rows_follow_the_button_rules() -> None:
     rows = _remparts_rows(strings, _minimal_state(), wiring, "fr")
     assert len(rows) == 2
     first, second = (list(row) for row in rows)
-    # line 1: the war actions GREEN + Sortir RED last
-    for button in first[:-1]:
+    # line 1: the war actions GREEN + 🔎 En savoir plus BLUE + Sortir RED
+    assert len(first) == 4
+    for button in first[:2]:
         assert button.item.style == discord.ButtonStyle.success
-    assert first[-1].item.label == _strings("fr")["sortir_button"]
-    assert first[-1].item.style == discord.ButtonStyle.danger
+    assert first[2].item.custom_id == "kingdoms:remparts:info"
+    assert first[2].item.style == discord.ButtonStyle.primary
+    assert first[3].item.label == _strings("fr")["sortir_button"]
+    assert first[3].item.style == discord.ButtonStyle.danger
     # line 2: Garde + Patrouille 1/2 gray+disabled without stock, and
     # the Jeu d'armes card lives HERE (moved out of the Council).
     labels = [str(button.item.label) for button in second]
