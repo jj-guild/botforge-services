@@ -6,26 +6,27 @@ the battery runs the REAL batched ``action=query`` path — the very
 one the maps sync uses — on a couple of well-known pages, in ONE
 paced batch (a handful of light requests, never a crawl).
 
-The battery needs ``LIQUIPEDIA_CONTACT`` (the same variable the
-runtime uses); without it the check SKIPS with a clear detail
+The battery needs ``PROVIDER_CONTACT`` (the generic provider
+contact, legacy ``LIQUIPEDIA_CONTACT`` fallback — the same variable
+the runtime uses); without it the check SKIPS with a clear detail
 instead of failing — an unconfigured org must not see a red CI, and
 Liquipedia must never see an unidentified User-Agent.
 """
 
 from __future__ import annotations
 
-import os
-
 from kingdoms.core_process.external_checks import CheckResult, _run_check, register_battery
 
 PROVIDER = "liquipedia"
 KNOWN_PAGES = ("Arabia", "Dry River")
 KNOWN_PRESENT = "Arabia"
-SKIP_DETAIL = "LIQUIPEDIA_CONTACT unset — set the repo variable to enable the battery"
+SKIP_DETAIL = "PROVIDER_CONTACT unset — set the repo variable to enable the battery"
 
 
 def _contact() -> str:
-    return os.environ.get("LIQUIPEDIA_CONTACT", "").strip()
+    from kingdoms.core.upstream_identity import provider_contact
+
+    return provider_contact()
 
 
 async def _check_maps_query_shape() -> None:

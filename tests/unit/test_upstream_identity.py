@@ -22,10 +22,26 @@ def test_user_agent_names_the_project() -> None:
 def test_user_agent_carries_the_contact_when_configured(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setenv("LIQUIPEDIA_CONTACT", "ops@example.com")
-    monkeypatch.delenv("PROVIDER_CONTACT", raising=False)
+    monkeypatch.setenv("PROVIDER_CONTACT", "ops@example.com")
+    monkeypatch.delenv("LIQUIPEDIA_CONTACT", raising=False)
     ua = project_user_agent()
     assert "ops@example.com" in ua
+
+
+def test_liquipedia_contact_is_the_legacy_fallback(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("PROVIDER_CONTACT", raising=False)
+    monkeypatch.setenv("LIQUIPEDIA_CONTACT", "legacy@example.com")
+    assert "legacy@example.com" in project_user_agent()
+
+
+def test_provider_contact_helper(monkeypatch: pytest.MonkeyPatch) -> None:
+    from kingdoms.core.upstream_identity import provider_contact
+
+    monkeypatch.setenv("PROVIDER_CONTACT", " generic@example.com ")
+    monkeypatch.setenv("LIQUIPEDIA_CONTACT", "other@example.com")
+    assert provider_contact() == "generic@example.com"  # trimmed, generic first
 
 
 def test_provider_contact_overrides(monkeypatch: pytest.MonkeyPatch) -> None:

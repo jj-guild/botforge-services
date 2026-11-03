@@ -135,13 +135,14 @@ async def refresh_aoe2_maps() -> dict[str, int]:
     maps_enriched = 0
     try:
         import asyncio
-        import os
 
-        contact = os.environ.get("LIQUIPEDIA_CONTACT", "")
+        from kingdoms.core.upstream_identity import provider_contact
+
+        contact = provider_contact()
         if not contact:
             from kingdoms.mapsdata.seed import LiquipediaUnconfiguredError
 
-            raise LiquipediaUnconfiguredError("LIQUIPEDIA_CONTACT is not set")
+            raise LiquipediaUnconfiguredError("PROVIDER_CONTACT is not set")
 
         entries = await game_data.list_maps("aoe2")
         pending: list[tuple[Any, str]] = []
@@ -180,9 +181,7 @@ async def refresh_aoe2_maps() -> dict[str, int]:
             )
             maps_enriched += 1
     except Exception:
-        logger.warning(
-            "CONTENT REFRESH: map image enrichment failed — best-effort", exc_info=True
-        )
+        logger.warning("CONTENT REFRESH: map image enrichment failed — best-effort", exc_info=True)
     logger.info(
         "CONTENT REFRESH (maps, on demand): %d/%d maps enriched, %d complete skipped, %d checked",
         maps_enriched,
@@ -238,8 +237,7 @@ def _resolve_map_seeds_batch(contact: str, names: list[str]) -> dict[str, Any]:
                 public=True,
                 game_versions=d.info.game_versions,
                 versions=tuple(
-                    {"name": v.name, "description": v.description, "details": list(v.details)}
-                    for v in d.info.versions
+                    {"name": v.name, "description": v.description, "details": list(v.details)} for v in d.info.versions
                 ),
                 tags=query_tags(d.info),
             )

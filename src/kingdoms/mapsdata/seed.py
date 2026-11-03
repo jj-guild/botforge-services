@@ -45,8 +45,14 @@ def _title_variants(name: str) -> list[str]:
 
 
 def _user_agent() -> str:
-    """Build the identified User-Agent; the contact comes from config."""
-    contact = os.environ.get("LIQUIPEDIA_CONTACT", "")
+    """Build the identified User-Agent; the contact comes from config.
+
+    The generic ``PROVIDER_CONTACT`` (every provider's operational
+    address) with the legacy ``LIQUIPEDIA_CONTACT`` fallback.
+    """
+    from kingdoms.core.upstream_identity import provider_contact
+
+    contact = provider_contact()
     if not contact:
         return ""
     return DEFAULT_USER_AGENT_TEMPLATE.format(contact=contact)
@@ -78,7 +84,7 @@ class LiquipediaUnconfiguredError(RuntimeError):
 
     Raised instead of returning None so the UI can tell the
     game designer "Liquipedia is disabled here" (missing
-    LIQUIPEDIA_CONTACT) from "Liquipedia has no such page".
+    PROVIDER_CONTACT) from "Liquipedia has no such page".
     """
 
 
@@ -92,8 +98,6 @@ async def fetch_map_seed(name: str) -> MapSeed | None:
     Returns None when Liquipedia doesn't know the page. Raises
     :class:`LiquipediaUnconfiguredError` on a configuration gap.
     """
-    import os
-
     provider_uri = os.environ.get("EXT_LIQUIPEDIA_URI", "")
     if provider_uri:
         from kingdoms.core.rpc.content_client import ContentProviderClient
@@ -115,8 +119,8 @@ async def fetch_map_seed(name: str) -> MapSeed | None:
         )
     user_agent = _user_agent()
     if not user_agent:
-        logger.debug("liquipedia seed skipped: LIQUIPEDIA_CONTACT unset")
-        raise LiquipediaUnconfiguredError("LIQUIPEDIA_CONTACT is not set")
+        logger.debug("liquipedia seed skipped: PROVIDER_CONTACT unset")
+        raise LiquipediaUnconfiguredError("PROVIDER_CONTACT is not set")
     name = _extract_page_name(name)
     # The legacy path is a SYNCHRONOUS client: blocking HTTP plus the
     # API-terms rate-limit sleeps (a 30 s parse interval). Running it on
@@ -162,8 +166,7 @@ def _fetch_map_seed_liquipedia(user_agent: str, name: str) -> MapSeed | None:
             public=True,
             game_versions=data.info.game_versions,
             versions=tuple(
-                {"name": v.name, "description": v.description, "details": list(v.details)}
-                for v in data.info.versions
+                {"name": v.name, "description": v.description, "details": list(v.details)} for v in data.info.versions
             ),
             tags=query_tags(data.info),
         )
