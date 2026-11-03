@@ -89,7 +89,16 @@ _STRINGS: dict[str, dict[str, str]] = {
         "quit_button": "🚪 Quitter le navire",
         "unload_button": "🪜 Descendre du navire",
         "sailing_title": "# 🧭 Exploration de {kingdom}",
-        "sailing_line": "⏳ **Retour estimé :** <t:{ends}:f> — le panneau confirme le retour au passage du bot.",
+        # exploration-esthetique-v1 (Drasah 03/11) : la phrase meta
+        # « le panneau confirme le retour au passage du bot »
+        # disparaît — MAIS la date complète reste (exploration-flou-v1,
+        # Drasah 02/11 : PAS de <t:…:R>, il crierait « en retard »
+        # jusqu'à 5 min avant que le tick ne retourne le panneau).
+        "sailing_line": "⏳ **Retour estimé :** <t:{ends}:f>",
+        "sailing_rp": (
+            "⛵ Bon vent et mer calme — le navire reviendra chargé de"
+            " découvertes."
+        ),
         "returned_rp": (
             "*Après de longues semaines en mer, le navire a enfin"
             " accosté. L'équipage descend à quai, une découverte en cale.*"
@@ -101,9 +110,11 @@ _STRINGS: dict[str, dict[str, str]] = {
             "⚓ L'équipage a débarqué — le royaume garde sa découverte,"
             " le salon se referme."
         ),
+        # exploration-esthetique-v1 : la date ne vit QUE dans le panneau
+        # épinglé — la note du salon reste pure RP, sans doublon.
         "sailing_note": (
             "⛵ Les amarres sont lâchées — le jeton 🧭 Explorateur est consommé."
-            " Bon voyage, l'équipage revient <t:{ends}:f>."
+            " Bon vent, le navire reviendra chargé de découvertes !"
         ),
         "depart_announce": (
             "🧭 Le royaume {kingdom} part explorer de"
@@ -178,7 +189,11 @@ _STRINGS: dict[str, dict[str, str]] = {
         "quit_button": "🚪 Leave the ship",
         "unload_button": "🪜 Disembark",
         "sailing_title": "# 🧭 Exploration of {kingdom}",
-        "sailing_line": "⏳ **Back around:** <t:{ends}:f> — the panel confirms the return on the bot's next pass.",
+        "sailing_line": "⏳ **Back around:** <t:{ends}:f>",
+        "sailing_rp": (
+            "⛵ Fair winds and calm seas — the ship will return laden"
+            " with discoveries."
+        ),
         "returned_rp": (
             "*After long weeks at sea, the ship has finally docked. The"
             " crew steps down with a discovery in the hold.*"
@@ -192,7 +207,7 @@ _STRINGS: dict[str, dict[str, str]] = {
         ),
         "sailing_note": (
             "⛵ The lines are cast — the 🧭 Explorateur token is consumed."
-            " Safe travels, the crew returns <t:{ends}:f>."
+            " Fair winds, the ship will return laden with discoveries!"
         ),
         "depart_announce": (
             "🧭 The kingdom {kingdom} sails out to explore new"
@@ -389,10 +404,14 @@ def _panel_text(
             rail,
             "",
             str(strings["chef_line"]).format(name=chef_name),
-            str(strings["crew_line"]).format(names=crew_names),
         ]
+        # exploration-esthetique-v1 (Drasah 03/11) : une expédition en
+        # solo n'affiche plus « ⚓ Équipage : — » — la ligne disparaît.
+        if crew:
+            lines.append(str(strings["crew_line"]).format(names=crew_names))
         if state == "sailing":
             lines.append(str(strings["sailing_line"]).format(ends=ends))
+            lines.append(str(strings["sailing_rp"]))
         else:
             kind = str(doc.get("gain_kind", "") or "")
             value = str(doc.get("gain_value", "") or "")
@@ -417,7 +436,11 @@ def _panel_text(
         rail,
         "",
         str(strings["chef_line"]).format(name=chef_name),
-        str(strings["crew_line"]).format(names=crew_names),
+    ]
+    # exploration-esthetique-v1 : ligne Équipage masquée à vide aussi à quai.
+    if crew:
+        lines.append(str(strings["crew_line"]).format(names=crew_names))
+    lines += [
         str(strings["eta_line"]).format(
             minutes=max(1, round(_expedition_seconds(doc) / 60))
         ),
