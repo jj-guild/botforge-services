@@ -360,15 +360,30 @@ async def _refresh_pool_post(
         starter = await thread.fetch_message(thread.id)
         if _last_layout_render(str(thread.id)) == fingerprint:
             return
-        _remember_layout_render(str(thread.id), fingerprint)
-        # the title compare uses the EXPECTED title (emoji included) —
-        # a stale comparison re-titled every pool on every sync pass and
-        # burned the channel's PATCH budget (the 492s 429 of the test env)
+        # The title edit rides the CHANNEL edit bucket (~2/10 min), a
+        # far stricter quota than message edits: a publish/archive/edit
+        # cycle eats it and Discord answers 429 with a huge retry_after
+        # (the 550 s of the merlin env). The title is therefore
+        # BEST-EFFORT in its own try — a RateLimited there must never
+        # abort the refresh: the VIEW edit (the maps!) still runs, and
+        # the title catches up on a later pass.
         expected_title = _pool_thread_title(pool)
-        await pace_channel_edit(_edit_pacing_key(thread))
         if thread.name != expected_title:
-            await thread.edit(name=expected_title, reason="kingdoms: pool state or name changed")
+            await pace_channel_edit(_edit_pacing_key(thread))
+            try:
+                await thread.edit(name=expected_title, reason="kingdoms: pool state or name changed")
+            except discord.errors.RateLimited:
+                logger.warning(
+                    "pools forum: title edit rate-limited (thread %s) — "
+                    "the view still refreshes, the title catches up later",
+                    thread.id,
+                )
+        await pace_channel_edit(_edit_pacing_key(thread))
         await starter.edit(view=_pool_post_layout(pool, maps, editable))
+        # The fingerprint is remembered ONLY on success: a failed edit
+        # must not mark the post as rendered — the next pass retries
+        # (a remembered-but-failed fingerprint froze the maps).
+        _remember_layout_render(str(thread.id), fingerprint)
     except discord.HTTPException as exc:
         if getattr(exc, "code", None) == 30046:
             _note_stale_edit(str(thread.id), now)

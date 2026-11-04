@@ -239,12 +239,14 @@ async def _refresh_post(thread: Any, content: str, view: Any | None) -> None:
             current = starter.content
         if _content_fingerprint(current or "") == fingerprint:
             return
-        _remember_layout_render(thread.id, fingerprint)
         await pace_channel_edit(_edit_pacing_key(thread))
         if isinstance(view, discord.ui.LayoutView):
             await starter.edit(view=view)
         else:
             await starter.edit(content=truncate_body(content), view=view)
+        # Remember the fingerprint ONLY on success: a failed edit must
+        # not mark the post as rendered — the next pass retries (a
+        # remembered-but-failed fingerprint froze stale posts).
     except discord.HTTPException as exc:
         if getattr(exc, "code", None) == 30046:
             _note_stale_edit(str(thread.id), now)
