@@ -29,7 +29,7 @@ case "${KINGDOMS_PROCESS:-bot}" in
     ;;
   ext-liquipedia)
     : "${MONGO_URI:?MONGO_URI is required}"
-    : "${LIQUIPEDIA_CONTACT:?LIQUIPEDIA_CONTACT is required}"
+    : "${PROVIDER_CONTACT:?PROVIDER_CONTACT is required}"
     exec python -m kingdoms.ext_liquipedia.server
     ;;
   game-aoe2)
