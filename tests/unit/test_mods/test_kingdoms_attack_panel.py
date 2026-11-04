@@ -2460,7 +2460,10 @@ async def test_sabotage_panel_edits_in_place_and_dies_at_passer(
     assert "Choisis la civilisation" in step_content
     assert not (step.response.message.attachments or [])
 
-    # The civ pick edits the SAME panel again — récap 1/2 + done note.
+    # sabotage-visuel-v1 (Drasah 04/11, pattern « le choix écrase le
+    # dropdown ») : the civ pick REPLACES the dropdown — the charge is
+    # NOT consumed yet, the ✏️ Modifier / ✅ Valider / ❌ Annuler row
+    # appears in the SAME panel (no new bubble).
     civ_view = step.response.message.view if step.response.message else None
     assert civ_view is not None
     select = next(c for c in civ_view.children if hasattr(c, "callback"))
@@ -2469,16 +2472,37 @@ async def test_sabotage_panel_edits_in_place_and_dies_at_passer(
     await select.callback(pick)  # type: ignore[arg-type]
     assert pick.followup.messages == []
     fresh = next(a for a in await bundle.attacks.attacks() if a.id == attack.id)
-    assert (fresh.pickban or {}).get("attacker_sabotages") == ["huns"]
+    assert not (fresh.pickban or {}).get("attacker_sabotages")
     pick_content = str(pick.response.message.content or "") if pick.response.message else ""
-    assert "1/2" in pick_content
-    assert "huns" in pick_content
+    assert "0/2" in pick_content  # the panel récap survives the edit
+    assert "huns" in pick_content  # the pick line shows the choice
+    confirm = pick.response.message.view
+    assert confirm is not None
+    labels = [str(getattr(c, "label", "")) for c in confirm.children]
+    assert labels == [
+        strings["sab_modify_button"],
+        strings["sab_validate_button"],
+        strings["sab_cancel_button"],
+    ]
+
+    # The ✅ Valider is the ONLY consumer — récap 1/2 + done note.
+    validate = next(
+        c for c in confirm.children if str(getattr(c, "label", "")) == strings["sab_validate_button"]
+    )
+    val = MockInteraction(user=MockUser(id="king-a"), guild=guild, channel=None, locale="fr")
+    await validate.callback(val)  # type: ignore[arg-type]
+    assert val.followup.messages == []
+    fresh = next(a for a in await bundle.attacks.attacks() if a.id == attack.id)
+    assert (fresh.pickban or {}).get("attacker_sabotages") == ["huns"]
+    val_content = str(val.response.message.content or "") if val.response.message else ""
+    assert "1/2" in val_content
+    assert "huns" in val_content
     # sabotage-consommable-v1: the stock line decrements after the snipe
     # (2 bought charges - 1 used = 1 left, the panel is edited in place).
-    assert "🗡️ Sabotage : 1" in pick_content
+    assert "🗡️ Sabotage : 1" in val_content
     # hygiene-ephemere-v1: the pick re-renders the panel as TEXT only.
     assert mosaic_calls == []
-    assert not (pick.response.message.attachments or [])
+    assert not (val.response.message.attachments or [])
 
     # The ⚔️ Passer click deletes the panel at once.
     passer = KingdomSabotagePassButton(attack.id, "king-a", strings["sab_pass_button"])
@@ -2547,32 +2571,44 @@ async def test_sabotage_panel_fallback_resends_the_whole_panel_through_the_uniqu
     async def _raising_edit(**kwargs: object) -> None:
         raise RuntimeError("the token died")
 
-    # The pick's in-place edit dies — the fallback carries récap + note
-    # in ONE followup, registered as the player's unique window.
+    # The pick opens the confirm row in place (nothing consumed yet).
     select._values = ["huns"]  # type: ignore[attr-defined]
     pick = MockInteraction(user=MockUser(id="king-a"), guild=guild, channel=None, locale="fr")
-    monkeypatch.setattr(pick.response, "edit_message", _raising_edit)
     await select.callback(pick)  # type: ignore[arg-type]
-    assert len(pick.followup.messages) == 1
-    window = pick.followup.messages[0]
+    confirm = pick.response.message.view
+    validate = next(
+        c for c in confirm.children if str(getattr(c, "label", "")) == strings["sab_validate_button"]
+    )
+
+    # The VALIDATE's in-place edit dies — the fallback carries récap +
+    # note in ONE followup, registered as the player's unique window.
+    val = MockInteraction(user=MockUser(id="king-a"), guild=guild, channel=None, locale="fr")
+    monkeypatch.setattr(val.response, "edit_message", _raising_edit)
+    await validate.callback(val)  # type: ignore[arg-type]
+    assert len(val.followup.messages) == 1
+    window = val.followup.messages[0]
     fallback_content = str(window.content or "")
     assert "1/2" in fallback_content  # the récap rides the fallback
     assert "huns" in fallback_content
     assert "retirée du camp adverse" in fallback_content  # …and the note
     assert not (window.files or [])  # hygiene: no mosaic in the panel
     stored = _EPHEMERAL_WINDOWS.get("king-a")
-    assert stored is not None and stored[0] is pick and stored[2] is window
+    assert stored is not None and stored[0] is val and stored[2] is window
 
-    # A SECOND dying pick replaces the first fallback — the stale
+    # A SECOND dying validate replaces the first fallback — the stale
     # window is deleted (fenêtre unique), never stacked.
-    select._values = ["perses"]  # type: ignore[attr-defined]
-    pick2 = MockInteraction(user=MockUser(id="king-a"), guild=guild, channel=None, locale="fr")
-    monkeypatch.setattr(pick2.response, "edit_message", _raising_edit)
-    await select.callback(pick2)  # type: ignore[arg-type]
+    from kingdoms.mods.kingdoms.kingdom_persistent import _wiring as _panel_wiring
+
+    confirm2 = panel._sabotage_confirm_view(
+        _panel_wiring(), str(attack.id), "attacker", "techno", "perses", strings
+    )
+    val2 = MockInteraction(user=MockUser(id="king-a"), guild=guild, channel=None, locale="fr")
+    monkeypatch.setattr(val2.response, "edit_message", _raising_edit)
+    await confirm2.children[1].callback(val2)  # type: ignore[arg-type]  # ✅ Valider
     assert window.deleted is True
-    assert len(pick2.followup.messages) == 1
+    assert len(val2.followup.messages) == 1
     stored2 = _EPHEMERAL_WINDOWS.get("king-a")
-    assert stored2 is not None and stored2[2] is pick2.followup.messages[0]
+    assert stored2 is not None and stored2[2] is val2.followup.messages[0]
     fresh = next(a for a in await bundle.attacks.attacks() if a.id == attack.id)
     assert sorted((fresh.pickban or {}).get("attacker_sabotages") or []) == ["huns", "perses"]
 
@@ -3388,9 +3424,10 @@ def test_reveal_civs_order_is_stable_across_refreshes() -> None:
 async def test_sabotage_dm_button_wears_the_availability(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """sabotage-dm-fresh-v1 (Drasah 30/10): the 🗡️ DM button is BLUE
-    while the side owns a usable charge under the 2 cap, RED once the
-    stock is dry or the cap is reached."""
+    """sabotage-dm-fresh-v1 (Drasah 30/10) + convention couleurs
+    (Drasah 04/11): the 🗡️ DM button is BLUE while the side owns a
+    usable charge under the 2 cap, GREY and DISABLED once the stock
+    is dry or the cap is reached — GRIS = impossible, never red."""
     import discord
 
     from kingdoms.mods.kingdoms import kingdom_attack_panel as panel
@@ -3412,14 +3449,15 @@ async def test_sabotage_dm_button_wears_the_availability(
     view = await panel._sabotage_dm_view(wiring, attack, "attacker", strings)
     assert view.children[0].item.style is discord.ButtonStyle.primary
 
-    # The 2-per-attack cap is reached — the button turns red.
+    # The 2-per-attack cap is reached — the button turns GREY, disabled.
     fresh = next(a for a in await bundle.attacks.attacks() if a.id == attack.id)
     pickban = dict(fresh.pickban)
     pickban["attacker_sabotages"] = ["huns", "perses"]
     fresh.pickban = pickban
     await bundle.store.upsert_attack(fresh.to_mongo())
     view = await panel._sabotage_dm_view(wiring, fresh, "attacker", strings)
-    assert view.children[0].item.style is discord.ButtonStyle.danger
+    assert view.children[0].item.style is discord.ButtonStyle.secondary
+    assert view.children[0].item.disabled is True
 
 
 async def test_sabotage_pick_refreshes_the_reveal_dm_and_asks_again(
@@ -3469,13 +3507,24 @@ async def test_sabotage_pick_refreshes_the_reveal_dm_and_asks_again(
     select.values = ["huns"]
     click = MockInteraction(user=MockUser(id="king-a"), guild=MockGuild(), channel=None, locale="fr")
     await select.callback(click)  # type: ignore[arg-type]
+    # sabotage-visuel-v1 (04/11): the dropdown is REPLACED by the
+    # confirm row — nothing is consumed and the Reveal DM stays
+    # untouched until the ✅ Valider.
+    assert dm_edits == []
+    confirm_row = click.response.message.view
+    validate = next(
+        c for c in confirm_row.children
+        if str(getattr(c, "label", "")) == strings["sab_validate_button"]
+    )
+    val = MockInteraction(user=MockUser(id="king-a"), guild=MockGuild(), channel=None, locale="fr")
+    await validate.callback(val)  # type: ignore[arg-type]
 
     # The Reveal DM was re-edited IN PLACE — the stock went 2 → 1.
     assert len(dm_edits) == 1
     assert dm_edits[0]["ref"] == {"channel_id": 10, "message_id": 11}
     assert "Sabotage : 1" in dm_edits[0]["content"]
     # The panel asks for a 2nd sabotage — green Oui, red Non.
-    content = str(click.response.message.content or "")
+    content = str(val.response.message.content or "")
     assert "1/2" in content
     assert "Veux-tu saboter une autre" in content
     confirm = click.response.message.view
@@ -3536,13 +3585,20 @@ async def test_sabotage_dry_pick_closes_the_panel_without_asking(
     select.values = ["huns"]
     click = MockInteraction(user=MockUser(id="king-a"), guild=MockGuild(), channel=None, locale="fr")
     await select.callback(click)  # type: ignore[arg-type]
+    confirm_row = click.response.message.view
+    validate = next(
+        c for c in confirm_row.children
+        if str(getattr(c, "label", "")) == strings["sab_validate_button"]
+    )
+    val = MockInteraction(user=MockUser(id="king-a"), guild=MockGuild(), channel=None, locale="fr")
+    await validate.callback(val)  # type: ignore[arg-type]
 
     assert len(dm_edits) == 1
     assert "Sabotage : 0" in dm_edits[0]
-    content = str(click.response.message.content or "")
+    content = str(val.response.message.content or "")
     assert "1/2" in content
     assert "Veux-tu saboter une autre" not in content
-    assert click.response.message.view is None
+    assert val.response.message.view is None
     for task in asyncio.all_tasks():
         if task is not asyncio.current_task():
             task.cancel()
@@ -4032,3 +4088,104 @@ async def test_defend_button_refuses_an_engaged_lord_at_the_click() -> None:
     assert "engagé dans une bataille" in str(click.response.message.content)
     fresh = next(a for a in await bundle.attacks.attacks() if a.id == attack.id)
     assert fresh.defender_lord_id is None
+
+
+async def test_sabotage_open_closes_the_previous_panel() -> None:
+    """sabotage-visuel-v1 (Drasah 04/11): a SECOND 🗡️ click DELETES the
+    previous panel FIRST — his live report showed panels stacking side
+    by side (the old registry entry was dropped, never deleted)."""
+    import asyncio
+
+    from kingdoms.mods.kingdoms.kingdom_attack_panel import (
+        _SABOTAGE_PANELS,
+        KingdomSabotageOpenButton,
+        _strings,
+    )
+
+    bundle = ScoreBundle()
+    await bundle.launch_season()
+    await bundle.draw(26)
+    attack, aquitaine, _bourgogne = await bundle.meeting()
+    await bundle.stock(aquitaine, sabotage=2)
+    _wiring(bundle)
+    guild = MockGuild()
+    strings = _strings("fr")
+
+    open_btn = KingdomSabotageOpenButton(attack.id, "king-a", strings["sab_open_button"])
+    first = MockInteraction(user=MockUser(id="king-a"), guild=guild, channel=None, locale="fr")
+    await open_btn.callback(first)  # type: ignore[arg-type]
+    second = MockInteraction(user=MockUser(id="king-a"), guild=guild, channel=None, locale="fr")
+    await open_btn.callback(second)  # type: ignore[arg-type]
+
+    # The previous panel is GONE — one window, replaced in place.
+    assert first.original_deleted is True
+    key = (str(attack.id), "king-a")
+    assert _SABOTAGE_PANELS[key]["interaction"] is second
+
+    _SABOTAGE_PANELS.pop(key, None)
+    for task in asyncio.all_tasks():
+        if task is not asyncio.current_task():
+            task.cancel()
+    await asyncio.sleep(0)
+
+
+async def test_sabotage_refusal_edits_the_mother_panel_in_place(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """sabotage-visuel-v1 (Drasah 04/11): a REFUSED pick (service
+    error) is EDITED INTO the mother panel — the dropdown re-opens
+    under the error line for a retry, NEVER a separate notice bubble
+    stacked next to the panel (fenêtre unique)."""
+    import asyncio
+
+    from kingdoms.mods.kingdoms import kingdom_attack_panel as panel
+    from kingdoms.mods.kingdoms.kingdom_persistent import (
+        _EPHEMERAL_WINDOWS,
+        _wiring as _panel_wiring,
+    )
+
+    bundle = ScoreBundle()
+    await bundle.launch_season()
+    await bundle.draw(26)
+    attack, aquitaine, _bourgogne = await bundle.meeting()
+    await bundle.stock(aquitaine, sabotage=2)
+    _wiring(bundle)
+    wiring = _panel_wiring()
+    guild = MockGuild()
+    strings = panel._strings("fr")
+
+    async def _boom(attack_id: str, player_id: str, civ: str) -> None:
+        raise RuntimeError("cap atteint")
+
+    monkeypatch.setattr(bundle.attacks, "sabotage_techno", _boom)
+
+    view = await panel._sabotage_civ_select_view(wiring, str(attack.id), "attacker", "techno", strings)
+    assert view is not None
+    select = view.children[0]
+    select._values = ["huns"]  # type: ignore[attr-defined]
+    pick = MockInteraction(user=MockUser(id="king-a"), guild=guild, channel=None, locale="fr")
+    await select.callback(pick)  # type: ignore[arg-type]
+    confirm = pick.response.message.view
+    validate = next(
+        c for c in confirm.children if str(getattr(c, "label", "")) == strings["sab_validate_button"]
+    )
+    val = MockInteraction(user=MockUser(id="king-a"), guild=guild, channel=None, locale="fr")
+    await validate.callback(val)  # type: ignore[arg-type]
+
+    # The refusal rides the mother panel — no separate bubble at all.
+    assert val.followup.messages == []
+    assert "king-a" not in _EPHEMERAL_WINDOWS
+    content = str(val.response.message.content or "")
+    assert "cap atteint" in content
+    assert "0/2" in content  # the récap survived the refusal
+    retry = val.response.message.view
+    assert retry is not None and hasattr(retry.children[0], "callback")  # the dropdown is back
+    fresh = next(a for a in await bundle.attacks.attacks() if a.id == attack.id)
+    assert not (fresh.pickban or {}).get("attacker_sabotages")  # nothing consumed
+
+    _EPHEMERAL_WINDOWS.pop("king-a", None)
+    panel._SABOTAGE_PANELS.pop((str(attack.id), "king-a"), None)
+    for task in asyncio.all_tasks():
+        if task is not asyncio.current_task():
+            task.cancel()
+    await asyncio.sleep(0)

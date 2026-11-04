@@ -473,6 +473,10 @@ _STRINGS: dict[str, dict[str, str]] = {
         "sab_faucon": "🦅 Faucon",
         "sab_techno": "🧪 Sabotage",
         "sab_choose": "🎯 **Choisis la civilisation adverse à retirer :**",
+        "sab_pick_line": "🎯 {action} : **{civ}**",
+        "sab_modify_button": "✏️ Modifier",
+        "sab_validate_button": "✅ Valider",
+        "sab_cancel_button": "❌ Annuler",
         "sab_done": "🪶 **{civ}** retirée du camp adverse.",
         "sab_settled": "✅ Ton camp a validé — en attente de l'autre camp…",
         "sab_phase_done": (
@@ -878,6 +882,10 @@ _STRINGS: dict[str, dict[str, str]] = {
         "sab_faucon": "🦅 Faucon",
         "sab_techno": "🧪 Sabotage",
         "sab_choose": "🎯 **Pick the enemy civilization to remove:**",
+        "sab_pick_line": "🎯 {action}: **{civ}**",
+        "sab_modify_button": "✏️ Modify",
+        "sab_validate_button": "✅ Validate",
+        "sab_cancel_button": "❌ Cancel",
         "sab_done": "🪶 **{civ}** removed from the enemy side.",
         "sab_settled": "✅ Your side confirmed — waiting for the other side…",
         "sab_phase_done": (
@@ -4211,10 +4219,11 @@ class KingdomSabotageOpenButton(
 
     def __init__(self, attack_id: str, player_id: str, label: str, *, available: bool = True) -> None:
         key = _ready_key(attack_id, player_id)
-        # sabotage-dm-fresh-v1 (Drasah 30/10): the 🗡️ button carries the
-        # availability — blue (Primary) while the side can still
-        # sabotage, red (Danger) once the stock is dry or the 2-per-
-        # attack cap is reached.
+        # sabotage-dm-fresh-v1 (Drasah 30/10) + convention couleurs
+        # (Drasah 04/11) : the 🗡️ button is BLUE while the side can
+        # still sabotage, GREY and DISABLED once the stock is dry or
+        # the 2-per-attack cap is reached — GRIS = impossible, never
+        # red (red now means cancel/leave only).
         super().__init__(
             discord.ui.Button(
                 label=label[:80],
@@ -4222,8 +4231,9 @@ class KingdomSabotageOpenButton(
                 style=(
                     discord.ButtonStyle.primary
                     if available
-                    else discord.ButtonStyle.danger
+                    else discord.ButtonStyle.secondary
                 ),
+                disabled=not available,
             )
         )
         self.attack_id = attack_id
@@ -4243,7 +4253,23 @@ class KingdomSabotageOpenButton(
         label = _strings(_locale(interaction))["sab_open_button"]
         wiring = _wiring()
         attack_id, player_id = await _resolve_sabotage_key(wiring, match["key"])
-        return cls(attack_id, player_id, label)
+        # convention couleurs (Drasah 04/11): the rebuilt button wears
+        # the SAME grey-disabled state as the fresh render — an
+        # unavailable side can never click (GRIS = impossible).
+        available = True
+        if wiring.attacks_service is not None and attack_id and player_id:
+            try:
+                attack = next(
+                    item
+                    for item in await wiring.attacks_service.attacks()
+                    if str(item.id) == attack_id
+                )
+                side = _room_side_of(attack, player_id)
+                if side:
+                    available = await _sabotage_open_available(wiring, attack, side)
+            except Exception:
+                available = True
+        return cls(attack_id, player_id, label, available=available)
 
     async def callback(self, interaction: discord.Interaction) -> None:
         """Open the ephemeral sabotage menu of this player (or the notice)."""
@@ -4276,19 +4302,21 @@ class KingdomSabotageOpenButton(
         # edited in place at every action — the panel carries the X/2
         # récap, the removed civs and the stock line, and self-destructs
         # at the 15-minute webhook token limit.
-        # sabotage-visuel-v1 (Drasah 29/10, PATCH 1.0 item 2): the panel
-        # rides the enemy-picks MOSAIC (❌ crossed sabotages) and its
-        # opening closes the stale refusal window of the fenêtre unique
-        # registry — the panel itself keeps its own lifecycle
-        # (_SABOTAGE_PANELS) and is never registered.
+        # sabotage-visuel-v1 (Drasah 04/11, live report): a NEW 🗡️
+        # click closes the player's PREVIOUS panel FIRST — panels used
+        # to stack (two, three windows side by side) because the old
+        # registry entry was merely dropped, never deleted.
+        key = (str(attack.id), user_id)
+        await _delete_sabotage_panel(key)
+        # The panel's opening also closes the stale refusal window of
+        # the fenêtre unique registry — the panel itself keeps its own
+        # lifecycle (_SABOTAGE_PANELS) and is never registered.
         await _close_stale_notice(user_id)
         content, _menu, file = await _sabotage_panel_content(wiring, attack, side, strings)
         panel_kwargs: dict[str, Any] = {"view": view}
         if file is not None:
             panel_kwargs["files"] = [file]
         await interaction.response.send_message(content, ephemeral=True, **panel_kwargs)
-        key = (str(attack.id), user_id)
-        _SABOTAGE_PANELS.pop(key, None)
         _SABOTAGE_PANELS[key] = {"interaction": interaction}
         _arm_sabotage_panel_timer(key)
 
@@ -6585,11 +6613,16 @@ async def _sabotage_action_button(
 
 
 async def _sabotage_civ_select_view(
-    wiring: Any, attack_id: str, side: str, action: str, strings: dict[str, str]
+    wiring: Any, attack_id: str, side: str, action: str, strings: dict[str, str], *, note: str = ""
 ) -> discord.ui.View | None:
-    """Build the enemy-civ select of one DM sabotage action (None when empty)."""
-    from kingdoms.mods.kingdoms.kingdom_persistent import _lord_of
+    """Build the enemy-civ select of one DM sabotage action (None when empty).
 
+    sabotage-visuel-v1 (Drasah 04/11, pattern « le choix écrase le
+    dropdown ») : the dropdown no longer CONSUMES — the pick REPLACES
+    it with the chosen-civ line + the ✏️ Modifier / ✅ Valider / ❌
+    Annuler row, everything edited IN the mother panel. ``note``
+    carries an in-panel refusal line shown under the dropdown (retry).
+    """
     try:
         attack = next(item for item in await wiring.attacks_service.attacks() if str(item.id) == attack_id)
     except Exception:
@@ -6618,80 +6651,239 @@ async def _sabotage_civ_select_view(
             await target.response.defer()
             return
         civ = str(select.values[0])
-        try:
-            if action == "faucon":
-                lord = await _lord_of(wiring.kingdoms_service, user_id)
-                kingdom_id = str(getattr(lord, "kingdom_id", "") or "") if lord is not None else ""
-                await wiring.voliere_service.faucon_sabotage(kingdom_id, attack_id, civ, now=datetime.now(UTC))
-            else:
-                await wiring.attacks_service.sabotage_techno(attack_id, user_id, civ)
-        except Exception as exc:
-            message = getattr(exc, "message", None) or str(exc)
-            await _unique_notice(target, strings["failed"].format(message=message))
-            _schedule_error_delete(target)
-            return
-        # sabotage-ux-v1 (Drasah 22/10): the pick edits the SAME panel —
-        # récap X/2 + the removed civ + the stock line, no new bubble.
-        # sabotage-visuel-v1 (Drasah 29/10, PATCH 1.0 item 2): the
-        # panel re-renders its MOSAIC — the freshly sabotaged blason
-        # wears the ❌ at once — and the edit carries the file through
-        # ``attachments`` (the only live-edit path for new files).
-        try:
-            fresh = next(item for item in await wiring.attacks_service.attacks() if str(item.id) == attack_id)
-        except Exception:
-            fresh = attack
-        content, menu, file = await _sabotage_panel_content(wiring, fresh, side, strings)
-        used = len([str(civ2) for civ2 in ((fresh.pickban or {}).get(f"{side}_sabotages") or [])])
-        note = strings["sab_panel_done"].format(civ=civ, used=used)
-        key = (attack_id, user_id)
-        # sabotage-dm-fresh-v1 (Drasah 30/10): the DM Reveal is the ONE
-        # living surface — it is re-edited in place right after the
-        # pick (crossed mosaic + fresh stock), BEFORE the panel moves
-        # on; a dead DM falls back to a NEW DM (option A).
-        await _refresh_sabotage_dm_safe(
-            getattr(target, "client", None), wiring, fresh, side, strings
+        # sabotage-visuel-v1 (Drasah 04/11): the choice REPLACES the
+        # dropdown — the mother panel is edited IN PLACE (never a new
+        # bubble) and the ✅ Valider is the ONLY consumer of the charge.
+        content, _menu, _file = await _sabotage_panel_content(wiring, attack, side, strings)
+        body = "\n".join(
+            [content, strings["sab_pick_line"].format(action=strings[f"sab_{action}"], civ=civ)]
         )
-        more = used < 2 and menu is not None and bool(list(menu.children))
-        if more:
-            # Under the cap and still owning a charge — the panel asks
-            # for a 2nd sabotage IN place: Oui re-opens the action menu,
-            # Non closes the ephemeral for good.
-            body = f"{content}\n\n{note}\n\n{strings['sab_again_ask']}"
-            view: discord.ui.View | None = _sabotage_again_view(wiring, attack_id, side, strings)
-        else:
-            # Cap reached or stock dry — no question, the panel shows
-            # the récap and sweeps itself away (the DM carries on).
-            body = f"{content}\n\n{note}"
-            view = None
+        if note:
+            body = f"{body}\n\n{note}"
+        confirm = _sabotage_confirm_view(wiring, attack_id, side, action, civ, strings)
+        await target.response.edit_message(content=body, view=confirm, attachments=[])
+        _arm_sabotage_panel_timer((attack_id, user_id))
+
+    select.callback = _on_pick  # type: ignore[method-assign,assignment]
+    view.add_item(select)
+    return view
+
+
+def _sabotage_confirm_view(
+    wiring: Any, attack_id: str, side: str, action: str, civ: str, strings: dict[str, str]
+) -> discord.ui.View:
+    """The ✏️ Modifier / ✅ Valider / ❌ Annuler row of a CHOSEN civ.
+
+    sabotage-visuel-v1 (Drasah 04/11): pattern « le choix écrase le
+    dropdown » — every move edits the mother panel in place. The ✅
+    (VERT) is the ONLY consumer, the ✏️ (GRIS) re-opens the dropdown,
+    the ❌ (ROUGE) goes back to the action menu (convention couleurs
+    04/11 : VERT = possible, ROUGE = annuler, GRIS = navigation).
+    """
+    view = discord.ui.View(timeout=300)
+
+    async def _fresh() -> Any:
         try:
-            await target.response.edit_message(
-                content=body,
-                view=view,
-                attachments=[file] if file is not None else [],
+            return next(
+                item for item in await wiring.attacks_service.attacks() if str(item.id) == attack_id
             )
         except Exception:
-            # The edit died (token gap, restarted panel) — the fallback
-            # re-sends the WHOLE panel (récap + note + mosaic), NEVER a
-            # lone note bubble, and rides the fenêtre unique registry so
-            # the flow's next answer closes it (PATCH 1.0 item 2).
-            logger.warning("KINGDOM ATTACK: sabotage panel edit failed", exc_info=True)
-            from kingdoms.mods.kingdoms.kingdom_persistent import _EPHEMERAL_WINDOWS
+            return None
 
-            await _close_stale_notice(user_id)
-            fallback_kwargs: dict[str, Any] = {"view": view, "ephemeral": True}
-            if file is not None:
-                fallback_kwargs["files"] = [file]
-            window = await target.followup.send(body, **fallback_kwargs)
-            _EPHEMERAL_WINDOWS[user_id] = (target, time.monotonic(), window)
+    async def _user_of(target: discord.Interaction) -> str:
+        attack = await _fresh()
+        user_id = (
+            str(attack.attacker_lord_id if side == "attacker" else attack.defender_lord_id)
+            if attack is not None
+            else ""
+        )
+        if not user_id or str(getattr(target.user, "id", "")) != user_id:
+            return ""
+        return user_id
+
+    async def _on_modify(target: discord.Interaction) -> None:
+        user_id = await _user_of(target)
+        if not user_id:
+            await target.response.defer()
+            return
+        attack = await _fresh()
+        retry = (
+            await _sabotage_civ_select_view(wiring, attack_id, side, action, strings)
+            if attack is not None
+            else None
+        )
+        content, menu, _file = await _sabotage_panel_content(wiring, attack, side, strings)
+        if retry is None:
+            # Nothing left to pick — the récap stands, the panel sweeps.
+            await target.response.edit_message(
+                content=f"{content}\n\n{strings['sab_empty']}", view=menu, attachments=[]
+            )
+            _arm_sabotage_panel_timer((attack_id, user_id), seconds=_SABOTAGE_PANEL_SWEEP_SECONDS)
+            return
+        await target.response.edit_message(
+            content=f"{content}\n\n{strings['sab_choose']}", view=retry, attachments=[]
+        )
+        _arm_sabotage_panel_timer((attack_id, user_id))
+
+    async def _on_validate(target: discord.Interaction) -> None:
+        user_id = await _user_of(target)
+        if not user_id:
+            await target.response.defer()
+            return
+        await _sabotage_apply_pick(target, wiring, attack_id, side, action, civ, strings)
+
+    async def _on_cancel(target: discord.Interaction) -> None:
+        user_id = await _user_of(target)
+        if not user_id:
+            await target.response.defer()
+            return
+        attack = await _fresh()
+        menu = (
+            await _sabotage_menu_view(wiring, attack, side, strings) if attack is not None else None
+        )
+        content, _menu, _file = await _sabotage_panel_content(wiring, attack, side, strings)
+        if menu is None or not list(menu.children):
+            # No action left at all — the récap stands, the panel sweeps.
+            await target.response.edit_message(
+                content=f"{content}\n\n{strings['sab_no_resources']}", view=None, attachments=[]
+            )
+            _arm_sabotage_panel_timer((attack_id, user_id), seconds=_SABOTAGE_PANEL_SWEEP_SECONDS)
+            return
+        await target.response.edit_message(content=content, view=menu, attachments=[])
+        _arm_sabotage_panel_timer((attack_id, user_id))
+
+    modify = discord.ui.Button(
+        label=strings["sab_modify_button"][:80], style=discord.ButtonStyle.secondary
+    )
+    validate = discord.ui.Button(
+        label=strings["sab_validate_button"][:80], style=discord.ButtonStyle.success
+    )
+    cancel = discord.ui.Button(
+        label=strings["sab_cancel_button"][:80], style=discord.ButtonStyle.danger
+    )
+    modify.callback = _on_modify  # type: ignore[method-assign,assignment]
+    validate.callback = _on_validate  # type: ignore[method-assign,assignment]
+    cancel.callback = _on_cancel  # type: ignore[method-assign,assignment]
+    view.add_item(modify)
+    view.add_item(validate)
+    view.add_item(cancel)
+    return view
+
+
+async def _sabotage_apply_pick(
+    target: discord.Interaction,
+    wiring: Any,
+    attack_id: str,
+    side: str,
+    action: str,
+    civ: str,
+    strings: dict[str, str],
+) -> None:
+    """Consume ONE sabotage charge (the ✅ Valider path) and render the panel.
+
+    sabotage-visuel-v1 (Drasah 04/11): the ✅ is the ONLY consumer; a
+    refusal (doublon, cap, service error) is EDITED INTO the mother
+    panel with the dropdown re-opened for a retry — NEVER a separate
+    notice bubble next to the panel (fenêtre unique).
+    """
+    from kingdoms.mods.kingdoms.kingdom_persistent import _lord_of
+
+    try:
+        attack = next(item for item in await wiring.attacks_service.attacks() if str(item.id) == attack_id)
+    except Exception:
+        attack = None
+    user_id = (
+        str(attack.attacker_lord_id if side == "attacker" else attack.defender_lord_id)
+        if attack is not None
+        else ""
+    )
+    key = (attack_id, user_id)
+    try:
+        if action == "faucon":
+            lord = await _lord_of(wiring.kingdoms_service, user_id)
+            kingdom_id = str(getattr(lord, "kingdom_id", "") or "") if lord is not None else ""
+            await wiring.voliere_service.faucon_sabotage(kingdom_id, attack_id, civ, now=datetime.now(UTC))
+        else:
+            await wiring.attacks_service.sabotage_techno(attack_id, user_id, civ)
+    except Exception as exc:
+        message = getattr(exc, "message", None) or str(exc)
+        failed = strings["failed"].format(message=message)
+        retry = (
+            await _sabotage_civ_select_view(wiring, attack_id, side, action, strings, note=failed)
+            if attack is not None
+            else None
+        )
+        if retry is None or attack is None:
+            content, menu, _file = await _sabotage_panel_content(wiring, attack, side, strings)
+            await target.response.edit_message(
+                content=f"{content}\n\n{failed}", view=menu, attachments=[]
+            )
+        else:
+            # The refusal rides the MOTHER panel — the dropdown re-opens
+            # under the error line so the player retries in place.
+            content, _menu, _file = await _sabotage_panel_content(wiring, attack, side, strings)
+            await target.response.edit_message(
+                content=f"{content}\n\n{strings['sab_choose']}\n\n{failed}",
+                view=retry,
+                attachments=[],
+            )
+        if key[1]:
+            _arm_sabotage_panel_timer(key)
+        return
+    # sabotage-ux-v1 (Drasah 22/10): the pick edits the SAME panel —
+    # récap X/2 + the removed civ + the stock line, no new bubble.
+    try:
+        fresh = next(item for item in await wiring.attacks_service.attacks() if str(item.id) == attack_id)
+    except Exception:
+        fresh = attack
+    content, menu, file = await _sabotage_panel_content(wiring, fresh, side, strings)
+    used = len([str(civ2) for civ2 in ((fresh.pickban or {}).get(f"{side}_sabotages") or [])])
+    note = strings["sab_panel_done"].format(civ=civ, used=used)
+    # sabotage-dm-fresh-v1 (Drasah 30/10): the DM Reveal is the ONE
+    # living surface — it is re-edited in place right after the pick
+    # (crossed mosaic + fresh stock), BEFORE the panel moves on; a
+    # dead DM falls back to a NEW DM (option A).
+    await _refresh_sabotage_dm_safe(
+        getattr(target, "client", None), wiring, fresh, side, strings
+    )
+    more = used < 2 and menu is not None and bool(list(menu.children))
+    if more:
+        # Under the cap and still owning a charge — the panel asks
+        # for a 2nd sabotage IN place: Oui re-opens the action menu,
+        # Non closes the ephemeral for good.
+        body = f"{content}\n\n{note}\n\n{strings['sab_again_ask']}"
+        view: discord.ui.View | None = _sabotage_again_view(wiring, attack_id, side, strings)
+    else:
+        # Cap reached or stock dry — no question, the panel shows
+        # the récap and sweeps itself away (the DM carries on).
+        body = f"{content}\n\n{note}"
+        view = None
+    try:
+        await target.response.edit_message(
+            content=body,
+            view=view,
+            attachments=[file] if file is not None else [],
+        )
+    except Exception:
+        # The edit died (token gap, restarted panel) — the fallback
+        # re-sends the WHOLE panel (récap + note + mosaic), NEVER a
+        # lone note bubble, and rides the fenêtre unique registry so
+        # the flow's next answer closes it (PATCH 1.0 item 2).
+        logger.warning("KINGDOM ATTACK: sabotage panel edit failed", exc_info=True)
+        from kingdoms.mods.kingdoms.kingdom_persistent import _EPHEMERAL_WINDOWS
+
+        await _close_stale_notice(user_id)
+        fallback_kwargs: dict[str, Any] = {"view": view, "ephemeral": True}
+        if file is not None:
+            fallback_kwargs["files"] = [file]
+        window = await target.followup.send(body, **fallback_kwargs)
+        _EPHEMERAL_WINDOWS[user_id] = (target, time.monotonic(), window)
+    if key[1]:
         if more:
             _arm_sabotage_panel_timer(key)
         else:
             # No action left — sweep the closed panel quickly.
             _arm_sabotage_panel_timer(key, seconds=_SABOTAGE_PANEL_SWEEP_SECONDS)
-
-    select.callback = _on_pick  # type: ignore[method-assign,assignment]
-    view.add_item(select)
-    return view
 
 
 def _sabotage_again_view(
@@ -7262,3 +7454,4 @@ async def _run_noshows_safe(
         # above the scoreboard dies with the meeting.
         await _sweep_reveal_notes_safe(bot, attack)
     return played
+
