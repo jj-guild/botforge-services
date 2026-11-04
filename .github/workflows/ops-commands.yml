@@ -46,7 +46,8 @@ jobs:
       startsWith(github.event.comment.body, '/rollback') ||
       startsWith(github.event.comment.body, '/dump-db') ||
       startsWith(github.event.comment.body, '/reset-env') ||
-      startsWith(github.event.comment.body, '/seed')
+      startsWith(github.event.comment.body, '/seed') ||
+      startsWith(github.event.comment.body, '/clean-env')
     runs-on: ubuntu-latest
     outputs:
       command: ${{ steps.parse.outputs.command }}
@@ -63,7 +64,7 @@ jobs:
           body="$COMMENT_BODY"
           command="$(echo "$body" | awk '{print $1}')"
           case "$command" in
-            /logs|/restart|/start|/stop|/status|/rollback|/dump-db|/reset-env|/seed) ;;
+            /logs|/restart|/start|/stop|/status|/rollback|/dump-db|/reset-env|/seed|/clean-env) ;;
             *) echo "::error::unsupported command: $command"; exit 1 ;;
           esac
           env_name="$(echo "$body" | awk '{print $2}')"
@@ -87,6 +88,7 @@ jobs:
             dump-db)  capability=db-dump ;;
             reset-env) capability=env-reset ;;
             seed)      capability=env-control ;;
+            clean-env) capability=env-control ;;
           esac
           {
             echo "command=${command#/}"
@@ -111,6 +113,7 @@ jobs:
               "dump-db": `**/${cmd} intercepted** — dumping the ${env} databases (mongodump + Redis snapshot), archived on the VPS and uploaded as a private artifact. Checking the roster authority matrix for **@${context.payload.comment.user.login}** (capability \`db-dump\`) — verdict right away.`,
               "reset-env": `**/${cmd} intercepted** — wiping the ${env} data volumes and reseeding from the workflow datasets (destructive: the env's data is lost). Checking the roster authority matrix for **@${context.payload.comment.user.login}** (capability \`env-reset\`: self env only, ops anywhere) — verdict right away.`,
               "seed": `**/${cmd} intercepted** — seeding the ${env} data from the requested source file (idempotent: re-running is safe). Checking the roster authority matrix for **@${context.payload.comment.user.login}** (capability \`env-control\`) — verdict right away.`,
+              "clean-env": `**/${cmd} intercepted** — cleaning the ${env} runner's Docker residue (dangling images, stopped containers, build cache; never the running stack). Checking the roster authority matrix for **@${context.payload.comment.user.login}** (capability \`env-control\`) — verdict right away.`,
             }[cmd];
             await github.rest.issues.createComment({
               owner: context.repo.owner,
@@ -244,6 +247,25 @@ jobs:
                 --repo merlin-pinpin-org/kingdoms-infra \
                 -f environment="$ENVIRONMENT"
               ;;
+            clean-env)
+              # /clean-env [env] [--deep] — clean the env runner's Docker
+              # residue (docker-clean.yml on the infra side, which
+              # re-checks the roster and refuses prod). prune by default;
+              # --deep also drops the unused volumes/images (anything the
+              # running or stopped-but-referenced containers use stays).
+              if [[ "$ENVIRONMENT" == "prod" ]]; then
+                echo "::error::/clean-env is never allowed on prod — refusing before any dispatch" >&2
+                exit 1
+              fi
+              MODE="prune"
+              echo "$COMMENT_BODY" | grep -q -- "--deep" && MODE="deep"
+              gh workflow run docker-clean.yml \
+                --repo merlin-pinpin-org/kingdoms-infra \
+                --ref "deploy/$ENVIRONMENT" \
+                -f environment="$ENVIRONMENT" \
+                -f mode="$MODE" \
+                -f requestor="$REQUESTOR"
+              ;;
           esac
       - name: Record the dispatched workflow for the reporter
         id: route
@@ -255,6 +277,7 @@ jobs:
             logs)          WF="env-logs.yml" ;;
             restart|start|stop|status) WF="env-control.yml" ;;
             dump-db)       WF="db-daily-dump.yml" ;;
+            clean-env)     WF="docker-clean.yml" ;;
             *)             WF="" ;;
           esac
           echo "workflow=${WF}" >> "$GITHUB_OUTPUT"
