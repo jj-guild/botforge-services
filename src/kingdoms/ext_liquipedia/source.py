@@ -21,7 +21,7 @@ import time
 from typing import Any
 
 from kingdoms.ext_liquipedia import (
-    GAME_KEY,
+    GAME_WIKIS,
     MAPS_COLLECTION,
     PAGE_CACHE_TTL_S,
     PAGES_COLLECTION,
@@ -37,9 +37,15 @@ logger = logging.getLogger("kingdoms.ext_liquipedia")
 class LiquipediaSource:
     """The Content source: Liquipedia access + Mongo-backed cache."""
 
-    def __init__(self, provider: LiquipediaMapsProvider, database: Any) -> None:
-        """Wire the upstream access and the provider's own database."""
-        self._provider = provider
+    def __init__(self, providers: dict[str, LiquipediaMapsProvider], database: Any) -> None:
+        """Wire the per-wiki upstream access and the provider's own database.
+
+        The source is game-AGNOSTIC: ``providers`` maps a wiki family
+        (one HTTP endpoint each, the pacing clock stays shared process-
+        wide); the game_key of the request picks the wiki. It never
+        knows who consumes it.
+        """
+        self._providers = providers
         self._db = database
 
     def faction_keys(self) -> list[str]:
@@ -50,13 +56,13 @@ class LiquipediaSource:
         """No faction content on this source."""
         return None
 
-    def map_content(self, key: str, locale: str) -> dict[str, Any] | None:
+    def map_content(self, key: str, locale: str, game_key: str = "aoe2") -> dict[str, Any] | None:
         """Serve one map's localized content (name + attribution link)."""
-        seed = self.map_seed(GAME_KEY, key)
+        seed = self.map_seed(game_key, key)
         if seed is None:
             return None
         return {
-            "entity_id": f"map:{GAME_KEY}:{key}",
+            "entity_id": f"map:{game_key}:{key}",
             "locale": locale or "en",
             "name": str(seed.get("name", key)),
             "summary": str(seed.get("description", "")),
@@ -78,9 +84,12 @@ class LiquipediaSource:
         cached = self._load_descriptor(game_key, name)
         if cached is not None:
             return cached
+        provider = self._providers.get(game_key)
+        if provider is None:
+            return None  # no wiki declared for this game: nothing to serve
         for variant in _title_variants(name):
             try:
-                data = self._provider.map_data(variant)
+                data = provider.map_data(variant)
             except MapLicenseError:
                 raise
             except RuntimeError:
@@ -164,4 +173,8 @@ def resolve_source(database: Any) -> LiquipediaSource:
             "PROVIDER_CONTACT is not set — the Liquipedia terms of use "
             "require an identified User-Agent (https://liquipedia.net/api-terms-of-use)"
         )
-    return LiquipediaSource(LiquipediaMapsProvider(user_agent), database)
+    providers = {
+        game: LiquipediaMapsProvider(user_agent, api_url=f"https://liquipedia.net/{wiki}/api.php")
+        for game, wiki in GAME_WIKIS.items()
+    }
+    return LiquipediaSource(providers, database)

@@ -56,7 +56,7 @@ class _FakeDB:
 async def test_map_seed_fetches_and_persists() -> None:
     upstream = _FakeUpstream()
     db = _FakeDB()
-    source = LiquipediaSource(upstream, db)  # type: ignore[arg-type]
+    source = LiquipediaSource({"aoe2": upstream}, db)  # type: ignore[arg-type]
     seed = source.map_seed("aoe2", "Team Islands")
     assert seed is not None
     assert seed["name"] == "Team Islands"
@@ -66,11 +66,11 @@ async def test_map_seed_fetches_and_persists() -> None:
 
 
 async def test_map_seed_unknown_page_is_none() -> None:
-    source = LiquipediaSource(_FakeUpstream(), _FakeDB())  # type: ignore[arg-type]
+    source = LiquipediaSource({"aoe2": _FakeUpstream()}, _FakeDB())  # type: ignore[arg-type]
     assert source.map_seed("aoe2", "Nonexistent Map") is None
 
 
 def test_faction_surface_is_empty() -> None:
-    source = LiquipediaSource(_FakeUpstream(), _FakeDB())  # type: ignore[arg-type]
+    source = LiquipediaSource({"aoe2": _FakeUpstream()}, _FakeDB())  # type: ignore[arg-type]
     assert source.faction_keys() == []
     assert source.faction_content("Franks", "en") is None

@@ -19,8 +19,12 @@ from __future__ import annotations
 
 PROVIDER_ID = "ext-liquipedia"
 PROVIDER_KEY = "liquipedia"
-GAME_KEY = "aoe2"
 SUPPORTED_LOCALES = ("en",)
+
+# The provider is game-AGNOSTIC: it serves whatever game_key the request
+# carries, and never knows who consumes it. The wiki family is the only
+# game-specific fact — declared here as data (aoe2 -> ageofempires wiki).
+GAME_WIKIS: dict[str, str] = {"aoe2": "ageofempires"}
 
 MAPS_COLLECTION = "liquipedia_maps"
 PAGES_COLLECTION = "liquipedia_pages"

@@ -51,18 +51,23 @@ module&nbsp;never&nbsp;had.</span></p>
 <td class="section-title" colspan=3>&nbsp;<br><a name="LiquipediaSource">class <strong>LiquipediaSource</strong></a>(<a href="builtins.html#object">builtins.object</a>)</td></tr>
     
 <tr><td class="decor title-decor" rowspan=2><span class="code">&nbsp;&nbsp;&nbsp;</span></td>
-<td class="decor title-decor" colspan=2><span class="code"><a href="#LiquipediaSource">LiquipediaSource</a>(provider:&nbsp;'LiquipediaMapsProvider',&nbsp;database:&nbsp;'Any')&nbsp;-&amp;gt;&nbsp;'None'<br>
+<td class="decor title-decor" colspan=2><span class="code"><a href="#LiquipediaSource">LiquipediaSource</a>(providers:&nbsp;'dict[str,&nbsp;LiquipediaMapsProvider]',&nbsp;database:&nbsp;'Any')&nbsp;-&amp;gt;&nbsp;'None'<br>
 &nbsp;<br>
 The&nbsp;Content&nbsp;source:&nbsp;Liquipedia&nbsp;access&nbsp;+&nbsp;Mongo-backed&nbsp;cache.<br>&nbsp;</span></td></tr>
 <tr><td>&nbsp;</td>
 <td class="singlecolumn">Methods defined here:<br>
-<dl><dt><a name="LiquipediaSource-__init__"><strong>__init__</strong></a>(self, provider: 'LiquipediaMapsProvider', database: 'Any') -&gt; 'None'</dt><dd><span class="code">Wire&nbsp;the&nbsp;upstream&nbsp;access&nbsp;and&nbsp;the&nbsp;provider's&nbsp;own&nbsp;database.</span></dd></dl>
+<dl><dt><a name="LiquipediaSource-__init__"><strong>__init__</strong></a>(self, providers: 'dict[str, LiquipediaMapsProvider]', database: 'Any') -&gt; 'None'</dt><dd><span class="code">Wire&nbsp;the&nbsp;per-wiki&nbsp;upstream&nbsp;access&nbsp;and&nbsp;the&nbsp;provider's&nbsp;own&nbsp;database.<br>
+&nbsp;<br>
+The&nbsp;source&nbsp;is&nbsp;game-AGNOSTIC:&nbsp;``providers``&nbsp;maps&nbsp;a&nbsp;wiki&nbsp;family<br>
+(one&nbsp;HTTP&nbsp;endpoint&nbsp;each,&nbsp;the&nbsp;pacing&nbsp;clock&nbsp;stays&nbsp;shared&nbsp;process-<br>
+wide);&nbsp;the&nbsp;game_key&nbsp;of&nbsp;the&nbsp;request&nbsp;picks&nbsp;the&nbsp;wiki.&nbsp;It&nbsp;never<br>
+knows&nbsp;who&nbsp;consumes&nbsp;it.</span></dd></dl>
 
 <dl><dt><a name="LiquipediaSource-faction_content"><strong>faction_content</strong></a>(self, key: 'str', locale: 'str') -&gt; 'dict[str, Any] | None'</dt><dd><span class="code">No&nbsp;faction&nbsp;content&nbsp;on&nbsp;this&nbsp;source.</span></dd></dl>
 
 <dl><dt><a name="LiquipediaSource-faction_keys"><strong>faction_keys</strong></a>(self) -&gt; 'list[str]'</dt><dd><span class="code">Liquipedia&nbsp;serves&nbsp;maps,&nbsp;not&nbsp;factions&nbsp;—&nbsp;the&nbsp;contract&nbsp;degrades.</span></dd></dl>
 
-<dl><dt><a name="LiquipediaSource-map_content"><strong>map_content</strong></a>(self, key: 'str', locale: 'str') -&gt; 'dict[str, Any] | None'</dt><dd><span class="code">Serve&nbsp;one&nbsp;map's&nbsp;localized&nbsp;content&nbsp;(name&nbsp;+&nbsp;attribution&nbsp;link).</span></dd></dl>
+<dl><dt><a name="LiquipediaSource-map_content"><strong>map_content</strong></a>(self, key: 'str', locale: 'str', game_key: 'str' = 'aoe2') -&gt; 'dict[str, Any] | None'</dt><dd><span class="code">Serve&nbsp;one&nbsp;map's&nbsp;localized&nbsp;content&nbsp;(name&nbsp;+&nbsp;attribution&nbsp;link).</span></dd></dl>
 
 <dl><dt><a name="LiquipediaSource-map_seed"><strong>map_seed</strong></a>(self, game_key: 'str', map_key: 'str') -&gt; 'dict[str, Any] | None'</dt><dd><span class="code">Resolve&nbsp;one&nbsp;map&nbsp;name&nbsp;into&nbsp;its&nbsp;full&nbsp;descriptor.<br>
 &nbsp;<br>
@@ -92,7 +97,7 @@ Data descriptors defined here:<br>
 <td class="section-title" colspan=3>&nbsp;<br><strong class="bigsection">Data</strong></td></tr>
     
 <tr><td class="decor data-decor"><span class="code">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span></td><td>&nbsp;</td>
-<td class="singlecolumn"><strong>GAME_KEY</strong> = 'aoe2'<br>
+<td class="singlecolumn"><strong>GAME_WIKIS</strong> = {'aoe2': 'ageofempires'}<br>
 <strong>MAPS_COLLECTION</strong> = 'liquipedia_maps'<br>
 <strong>PAGES_COLLECTION</strong> = 'liquipedia_pages'<br>
 <strong>PAGE_CACHE_TTL_S</strong> = 604800<br>

@@ -34,7 +34,7 @@ async def _serve() -> None:
     from kingdoms.core.models.db import get_database
     from kingdoms.core.rpc.content import ContentServicer, add_content_servicer
     from kingdoms.core.rpc.status import CoreStatus, build_status_server
-    from kingdoms.ext_liquipedia import GAME_KEY, PROVIDER_ID, PROVIDER_KEY, SUPPORTED_LOCALES
+    from kingdoms.ext_liquipedia import GAME_WIKIS, PROVIDER_ID, PROVIDER_KEY, SUPPORTED_LOCALES
     from kingdoms.ext_liquipedia.source import resolve_source
 
     source = resolve_source(get_database())
@@ -45,7 +45,7 @@ async def _serve() -> None:
         server,
         ContentServicer(
             PROVIDER_KEY,
-            GAME_KEY,
+            ",".join(sorted(GAME_WIKIS)),  # the served game scope, as data
             SUPPORTED_LOCALES,
             list_factions=lambda: _wrap(source.faction_keys()),
             faction_content=lambda key, locale: _wrap(source.faction_content(key, locale)),
@@ -57,11 +57,11 @@ async def _serve() -> None:
     server.add_insecure_port(f"[::]:{port}")
     await server.start()
     logging.getLogger("kingdoms.ext").info(
-        "%s_READY port=%s provider=%s game=%s version=%s",
+        "%s_READY port=%s provider=%s games=%s version=%s",
         PROVIDER_ID,
         port,
         PROVIDER_KEY,
-        GAME_KEY,
+        ",".join(sorted(GAME_WIKIS)),
         __version__,
     )
     await server.wait_for_termination()
