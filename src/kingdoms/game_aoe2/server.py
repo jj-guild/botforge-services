@@ -57,7 +57,7 @@ async def _serve() -> None:
     # contract (ListFactions), never the Game ping (UNIMPLEMENTED).
     content_providers = [
         ("ext-aoe2techtree", os.environ.get("EXT_AOE2TECHTREE_URI", "")),
-        ("ext-liquipedia", os.environ.get("EXT_LQUIPEDIA_URI", "")),
+        ("ext-liquipedia", os.environ.get("EXT_LIQUIPEDIA_URI", "")),
     ]
     probe_task = asyncio.ensure_future(
         prober.run_forever(providers, content_providers=content_providers)

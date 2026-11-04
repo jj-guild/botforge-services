@@ -231,15 +231,6 @@ def _offline_state(profile_id: str) -> dict[str, Any]:
 PROBE_INTERVAL_S = 60.0
 
 
-def _liquipedia_user_agent() -> str:
-    """Build the compliant User-Agent (liquipedia ToS: project + contact)."""
-    from kingdoms.core.upstream_identity import provider_contact
-
-    contact = provider_contact()
-    ua = "Kingdoms/0.1 (https://github.com/merlin-pinpin-org/kingdoms)"
-    return f"{ua}; contact={contact}" if contact else ua
-
-
 class ProviderProber:
     """Probe the configured providers periodically and keep the results.
 
@@ -270,13 +261,13 @@ class ProviderProber:
                 content_clients[provider_id] = ContentProviderClient(uri)
             client = content_clients.get(provider_id)
             if client is None:
-                # no URI: the IN-PROCESS providers (the maps import
-                # rides mapsdata.liquipedia — no gRPC service) render
-                # too; their probe checks the real upstream
-                if provider_id.endswith("liquipedia"):
-                    await self._probe_liquipedia(provider_id, game_key)
-                    continue
-                # any other no-URI provider: rendered, marked absent
+                # no URI: not deployed — rendered, marked absent. The
+                # in-process Liquipedia HTTP probe is GONE: it fired a raw
+                # unpaced request every minute from THIS process (the
+                # EXT_LQUIPEDIA_URI typo left the URI empty), doubling the
+                # upstream traffic next to the real ext-liquipedia service
+                # (the 40 consecutive failures of the merlin env). A
+                # provider's health rides its own gRPC service, period.
                 self._results[provider_id] = {
                     "provider_id": provider_id,
                     "game_key": game_key,
@@ -310,53 +301,6 @@ class ProviderProber:
                     "checked_at": _now_ms(),
                     "failures": int(self._results.get(provider_id, {}).get("failures", 0)) + 1,
                 }
-
-    async def _probe_liquipedia(self, provider_id: str, game_key: str) -> None:
-        """Probe the in-process maps provider: the liquipedia API's reachability.
-
-        The maps import runs IN-PROCESS (mapsdata.liquipedia, the HTTP
-        API — no gRPC service to ping); the honest probe is the real
-        upstream, with the compliant User-Agent (ToS: identify + contact).
-        The probe rides the PROVIDER's paced ping (the shared clock, a
-        status-checked siteinfo): a raw unpaced request per minute ate
-        the ToS budget and collided with the live imports from the same
-        IP (the merlin env's 429s); a 429 answer now reports degraded
-        instead of passing as OK.
-        """
-        import asyncio as _asyncio
-
-        def _probe() -> float:
-            from kingdoms.mapsdata.liquipedia import LiquipediaMapsProvider
-
-            provider = LiquipediaMapsProvider(user_agent=_liquipedia_user_agent(), timeout_s=15.0)
-            return provider.ping()
-
-        try:
-            elapsed = await _asyncio.wait_for(_asyncio.to_thread(_probe), timeout=30.0)
-            self._results[provider_id] = {
-                "provider_id": provider_id,
-                "game_key": game_key,
-                "ok": True,
-                "latency_ms": int(elapsed * 1000),
-                "detail": "built-in (in-process) — liquipedia API reachable",
-                "checked_at": _now_ms(),
-                "failures": 0,
-            }
-        except Exception as exc:
-            detail = f"built-in — API unreachable: {type(exc).__name__}"
-            import httpx as _httpx
-
-            if isinstance(exc, _httpx.HTTPStatusError) and getattr(exc.response, "status_code", None) == 429:
-                detail = "built-in — API rate-limited (429): the import backs off, retrying"
-            self._results[provider_id] = {
-                "provider_id": provider_id,
-                "game_key": game_key,
-                "ok": False,
-                "latency_ms": -1,
-                "detail": detail[:200],
-                "checked_at": _now_ms(),
-                "failures": int(self._results.get(provider_id, {}).get("failures", 0)) + 1,
-            }
 
     def results(self, game_key: str = "") -> dict[str, Any]:
         """Serve the last probe results (all games, or one)."""
