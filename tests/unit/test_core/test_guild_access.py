@@ -86,6 +86,26 @@ async def test_duplicate_request_is_refused() -> None:
         pass
 
 
+async def test_ensure_known_creates_default_doc_and_keeps_existing() -> None:
+    """A guild the bot sits in gets a default doc; an existing one is untouched.
+
+    The boot self-heal: after a database reset the panel must list the
+    bot's guilds again, and a guild with explicit grants must not lose
+    them when the boot re-ensures its document.
+    """
+    db = FakeGuildAccessDB()
+    service = _service(db)
+    fresh = await service.ensure_known("123")
+    assert fresh["games"] == []
+    assert fresh["mods"] == []
+    assert fresh["pending"] == {}
+    assert [doc["guild_id"] for doc in await service.list_all()] == ["123"]
+    await service.grant("123", ["game:aoe2"])
+    kept = await service.ensure_known("123")
+    assert kept["games"] == ["aoe2"]
+    assert [doc["guild_id"] for doc in await service.list_all()] == ["123"]
+
+
 async def test_unknown_key_is_refused() -> None:
     service = _service()
     try:

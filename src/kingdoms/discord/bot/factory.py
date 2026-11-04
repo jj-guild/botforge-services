@@ -265,6 +265,12 @@ class KingdomsBot(discord.Client):
 
         _remove(member)
 
+    async def on_guild_join(self, guild: discord.Guild) -> None:
+        """Make the joined guild known to the access store (panel coherence)."""
+        from kingdoms.discord.wiring import sync_known_guilds
+
+        await sync_known_guilds([str(guild.id)])
+
     async def on_ready(self) -> None:
         """Log the ready marker asserted by smoke CI, then sync commands once."""
         logger.info(
@@ -274,6 +280,14 @@ class KingdomsBot(discord.Client):
             self.user,
             len(self.guilds),
         )
+        # the guild_access store is self-healing at boot: a database
+        # reset must not leave the admin DM panel showing 0 servers
+        # while the bot keeps serving its guilds (panel coherence).
+        from kingdoms.discord.wiring import sync_known_guilds
+
+        ensured = await sync_known_guilds(str(guild.id) for guild in self.guilds)
+        if ensured:
+            logger.info("GUILD ACCESS known-guilds ensured (%d)", ensured)
         announce_enabled = self.config.announce_enabled.strip().lower() not in {"0", "false", "no"}
         await announce_startup(
             self,

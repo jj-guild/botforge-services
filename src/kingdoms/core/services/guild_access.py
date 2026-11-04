@@ -213,6 +213,24 @@ class GuildAccessService:
         """List every guild's access document (the admin DM panel's data)."""
         return list(await self._db.list_guild_access())
 
+    async def ensure_known(self, guild_id: str) -> dict[str, Any]:
+        """Make sure one guild the bot sits in has an access document.
+
+        The panel's server list reads the collection, but documents were
+        only ever written by a request or a grant \u2014 a database reset
+        showed 0 servers while the bot kept interacting with its guilds.
+        The boot (and every guild join) re-creates the default document
+        (no grants: the default-open catalog, semantically identical to
+        no document at all), so the stored list and the bot's guilds stay
+        coherent. An existing document is returned untouched.
+        """
+        doc = await self._db.get_guild_access(guild_id)
+        if doc is not None:
+            return doc
+        fresh = {"guild_id": guild_id, "games": [], "mods": [], "pending": {}, "updated_at": int(time.time())}
+        await self._db.upsert_guild_access(self._to_mongo(fresh))
+        return fresh
+
     async def pending_requests(self) -> list[dict[str, Any]]:
         """List every guild's pending requests, flattened for the panel."""
         out: list[dict[str, Any]] = []
