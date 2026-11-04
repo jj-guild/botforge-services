@@ -133,9 +133,7 @@ class GameAoe2Aggregator:
                 upsert=True,
             )
         except Exception:
-            logger.debug(
-                "player state persist skipped (profile %s) — best-effort", profile_id, exc_info=True
-            )
+            logger.debug("player state persist skipped (profile %s) — best-effort", profile_id, exc_info=True)
 
     async def apply_event(self, event: Any) -> None:
         """Fold one provider MatchEvent into the player states."""
@@ -217,6 +215,7 @@ def _summary_of(event: Any) -> dict[str, Any]:
 def _now_ms() -> int:
     """Epoch milliseconds, the repo's timestamp convention."""
     return int(time.time() * 1000)
+
 
 def _offline_state(profile_id: str) -> dict[str, Any]:
     """Build the offline baseline of an enrolled player never seen in a match."""
@@ -318,36 +317,43 @@ class ProviderProber:
         The maps import runs IN-PROCESS (mapsdata.liquipedia, the HTTP
         API — no gRPC service to ping); the honest probe is the real
         upstream, with the compliant User-Agent (ToS: identify + contact).
+        The probe rides the PROVIDER's paced ping (the shared clock, a
+        status-checked siteinfo): a raw unpaced request per minute ate
+        the ToS budget and collided with the live imports from the same
+        IP (the merlin env's 429s); a 429 answer now reports degraded
+        instead of passing as OK.
         """
-        import time as _time
+        import asyncio as _asyncio
 
-        import httpx
+        def _probe() -> float:
+            from kingdoms.mapsdata.liquipedia import LiquipediaMapsProvider
 
-        from kingdoms.mapsdata.liquipedia import AOE_API_URL
+            provider = LiquipediaMapsProvider(user_agent=_liquipedia_user_agent(), timeout_s=15.0)
+            return provider.ping()
 
-        started = _time.monotonic()
         try:
-            async with httpx.AsyncClient(timeout=5) as http:
-                await http.get(
-                    AOE_API_URL + "?action=query&meta=siteinfo&format=json",
-                    headers={"User-Agent": _liquipedia_user_agent()},
-                )
+            elapsed = await _asyncio.wait_for(_asyncio.to_thread(_probe), timeout=30.0)
             self._results[provider_id] = {
                 "provider_id": provider_id,
                 "game_key": game_key,
                 "ok": True,
-                "latency_ms": int((_time.monotonic() - started) * 1000),
+                "latency_ms": int(elapsed * 1000),
                 "detail": "built-in (in-process) — liquipedia API reachable",
                 "checked_at": _now_ms(),
                 "failures": 0,
             }
         except Exception as exc:
+            detail = f"built-in — API unreachable: {type(exc).__name__}"
+            import httpx as _httpx
+
+            if isinstance(exc, _httpx.HTTPStatusError) and getattr(exc.response, "status_code", None) == 429:
+                detail = "built-in — API rate-limited (429): the import backs off, retrying"
             self._results[provider_id] = {
                 "provider_id": provider_id,
                 "game_key": game_key,
                 "ok": False,
-                "latency_ms": int((_time.monotonic() - started) * 1000),
-                "detail": f"built-in — API unreachable: {type(exc).__name__}"[:200],
+                "latency_ms": -1,
+                "detail": detail[:200],
                 "checked_at": _now_ms(),
                 "failures": int(self._results.get(provider_id, {}).get("failures", 0)) + 1,
             }

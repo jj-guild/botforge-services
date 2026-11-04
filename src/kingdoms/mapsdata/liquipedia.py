@@ -121,9 +121,7 @@ def query_tags(info: MapInfo) -> tuple[str, ...]:
     map_type = info.map_type.strip().lower()
     if map_type and map_type != terrain:
         tags.append(f"type:{map_type}")
-    if "water" not in tags and any(
-        value in (terrain, map_type) for value in ("hybrid", "water")
-    ):
+    if "water" not in tags and any(value in (terrain, map_type) for value in ("hybrid", "water")):
         tags.append("water")
     if info.nomad.strip().lower() in ("yes", "true"):
         tags.append("nomad")
@@ -166,7 +164,7 @@ class LiquipediaMapsProvider:
 
     # -- transport ---------------------------------------------------------
 
-    def _rate_limit(self, is_parse: bool) -> None:
+    def _rate_limit(self, is_parse: bool = False) -> None:
         """Sleep until the request is allowed by the API terms of use.
 
         The markers are shared process-wide: every provider instance
@@ -222,6 +220,27 @@ class LiquipediaMapsProvider:
         return payload
 
     # -- API ---------------------------------------------------------------
+
+    def ping(self) -> float:
+        """Probe the API's reachability, PACED like any other request.
+
+        The health probes (the providers panel refreshes every minute)
+        must ride the SAME shared clock as the real fetches — a raw
+        unpaced probe per minute eats the ToS budget and collides with
+        the live imports from the same IP. Raises on 429/5xx/network
+        (the caller reports the probe's outcome); returns the elapsed
+        seconds.
+        """
+        import time as _time
+
+        started = _time.monotonic()
+        self._rate_limit()
+        response = self._client.get(
+            self._api_url,
+            params={"action": "query", "meta": "siteinfo", "format": "json"},
+        )
+        response.raise_for_status()
+        return _time.monotonic() - started
 
     def map_data(self, page_name: str) -> MapData:
         """Return one map's descriptor, from cache when already fetched."""
@@ -389,9 +408,11 @@ class LiquipediaMapsProvider:
         """Build the descriptor from already-fetched wikitext."""
         fields = self._parse_infobox_fields(wikitext)
         name = fields.get("name") or page.replace("_", " ")
-        description = self._lead_paragraph(wikitext) or self._clean_wikitext(
-            fields.get("description", "")
-        ) or (f"Map page on Liquipedia: {LIQUIPEDIA_ATTRIBUTION}{page}")
+        description = (
+            self._lead_paragraph(wikitext)
+            or self._clean_wikitext(fields.get("description", ""))
+            or (f"Map page on Liquipedia: {LIQUIPEDIA_ATTRIBUTION}{page}")
+        )
         return MapInfo(
             name=name,
             description=description,
@@ -475,7 +496,6 @@ class LiquipediaMapsProvider:
         text = re.sub(r"<[^>]+>", "", text)
         return text.strip()
 
-
     @staticmethod
     def _parse_gallery_icon(wikitext: str) -> str:
         """Extract the in-game icon File: name from the Gallery.
@@ -495,10 +515,7 @@ class LiquipediaMapsProvider:
         games; only the tab names are kept (the link pages are the
         wiki's own navigation, not our data).
         """
-        return tuple(
-            cls._clean_wikitext(match.group(2))
-            for match in _GAME_TAB_RE.finditer(wikitext)
-        )
+        return tuple(cls._clean_wikitext(match.group(2)) for match in _GAME_TAB_RE.finditer(wikitext))
 
     @classmethod
     def _parse_versions_section(cls, wikitext: str) -> tuple[MapVersion, ...]:
@@ -520,9 +537,7 @@ class LiquipediaMapsProvider:
         def _attach() -> None:
             if versions and details:
                 last = versions[-1]
-                versions[-1] = MapVersion(
-                    name=last.name, description=last.description, details=tuple(details)
-                )
+                versions[-1] = MapVersion(name=last.name, description=last.description, details=tuple(details))
                 details.clear()
 
         for raw_line in section.group(1).splitlines():

@@ -93,6 +93,15 @@ whose&nbsp;image&nbsp;licence&nbsp;is&nbsp;incompatible&nbsp;is&nbsp;simply&nbsp
 result&nbsp;(the&nbsp;single-map&nbsp;path&nbsp;raises&nbsp;<a href="#MapLicenseError">MapLicenseError</a>&nbsp;instead&nbsp;—<br>
 the&nbsp;batch&nbsp;caller&nbsp;treats&nbsp;"absent"&nbsp;as&nbsp;"no&nbsp;seed").</span></dd></dl>
 
+<dl><dt><a name="LiquipediaMapsProvider-ping"><strong>ping</strong></a>(self) -&gt; 'float'</dt><dd><span class="code">Probe&nbsp;the&nbsp;API's&nbsp;reachability,&nbsp;PACED&nbsp;like&nbsp;any&nbsp;other&nbsp;request.<br>
+&nbsp;<br>
+The&nbsp;health&nbsp;probes&nbsp;(the&nbsp;providers&nbsp;panel&nbsp;refreshes&nbsp;every&nbsp;minute)<br>
+must&nbsp;ride&nbsp;the&nbsp;SAME&nbsp;shared&nbsp;clock&nbsp;as&nbsp;the&nbsp;real&nbsp;fetches&nbsp;—&nbsp;a&nbsp;raw<br>
+unpaced&nbsp;probe&nbsp;per&nbsp;minute&nbsp;eats&nbsp;the&nbsp;ToS&nbsp;budget&nbsp;and&nbsp;collides&nbsp;with<br>
+the&nbsp;live&nbsp;imports&nbsp;from&nbsp;the&nbsp;same&nbsp;IP.&nbsp;Raises&nbsp;on&nbsp;429/5xx/network<br>
+(the&nbsp;caller&nbsp;reports&nbsp;the&nbsp;probe's&nbsp;outcome);&nbsp;returns&nbsp;the&nbsp;elapsed<br>
+seconds.</span></dd></dl>
+
 <hr>
 Data descriptors defined here:<br>
 <dl><dt><strong>__dict__</strong></dt>
