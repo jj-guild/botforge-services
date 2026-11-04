@@ -447,6 +447,9 @@ _STRINGS: dict[str, dict[str, str]] = {
             "❌ Vous ne pouvez pas avoir de doublons dans vos choix de civilisations."
         ),
         "pickban_waiting": "⏳ Picks enregistrés et validés — en attente de l'adversaire.",
+        "pickban_ranked_header": "🎯 **Ton classement :**",
+        "pickban_modify_button": "✏️ Modifier {n}",
+        "pickban_cancel_button": "❌ Annuler",
         "pickban_reveal_adversary": "**Draft de votre adversaire :**",
         "pickban_own_picks_line": "**Tes picks :** {picks}",
         "pickban_reveal_dm": (
@@ -860,6 +863,9 @@ _STRINGS: dict[str, dict[str, str]] = {
         "pickban_missing": "❌ Rank your {count} civilizations first.",
         "pickban_duplicate": "❌ You cannot have duplicates in your civilization choices.",
         "pickban_waiting": "⏳ Picks recorded and validated — waiting for the adversary.",
+        "pickban_ranked_header": "🎯 **Your ranking:**",
+        "pickban_modify_button": "✏️ Modify {n}",
+        "pickban_cancel_button": "❌ Cancel",
         "pickban_reveal_adversary": "**Your adversary's draft:**",
         "pickban_own_picks_line": "**Your picks:** {picks}",
         "pickban_reveal_dm": (
@@ -3837,15 +3843,23 @@ class KingdomAttackInfoButton(
 # ----------------------------------------------------------------------
 # The DM pick & ban view (T-5)
 # ----------------------------------------------------------------------
-class KingdomPickBanView(discord.ui.View):
-    """The ephemeral DM view: ranked picks, one validate button.
+_PICKBAN_RANKS = ("1️⃣", "2️⃣", "3️⃣")
 
-    Drasah 18/10 v2: NO sabotage select anymore (the Sabotage/Faucon
-    moves to the battle room) and a BLIND resolution — the validating
-    player NEVER sees the adversary civilizations (the live beta
-    asymmetry: the second validator knew everything first). When the
-    draft resolves, BOTH DMs are edited (anti-spam) into the ready
-    prompt carrying the « Prêt » button.
+
+class KingdomPickBanView(discord.ui.View):
+    """The ephemeral DM view: the ranked-picks wizard (T-5).
+
+    pickban-ordre-v1 (Drasah 04/11, pattern « le choix écrase le
+    dropdown ») : the THREE stacked selects are GONE — ONE dropdown
+    lists the hand's still-unpicked civs, every pick STACKS the next
+    line of « 1️⃣ X · 2️⃣ Y · 3️⃣ _ » and the DM is edited IN PLACE.
+    ✏️ Modifier PAR LIGNE re-opens that line's dropdown, ✅ Valider
+    (VERT, gris+disabled while the ranking is incomplete) is the ONLY
+    consumer, ❌ Annuler (ROUGE) resets the ranking (convention
+    couleurs 04/11). A duplicate is impossible BY CONSTRUCTION — the
+    dropdown never offers an already-picked civ. The resolution stays
+    BLIND (Drasah 18/10 v2) and the validated DM edit is the only
+    surviving surface.
     """
 
     def __init__(
@@ -3855,50 +3869,142 @@ class KingdomPickBanView(discord.ui.View):
         side: str,
         hand: list[str],
         locale: str,
+        *,
+        picks: list[str] | None = None,
+        editing: int | None = None,
     ) -> None:
         super().__init__(timeout=600)
         self.attack_id = attack_id
         self.player_id = player_id
         self.side = side
-        strings = _strings(locale)
-        self.strings = strings
-        self.rank_selects: list[discord.ui.Select[Any]] = []
-        for index in range(min(3, len(hand))):
-            select: discord.ui.Select[Any] = discord.ui.Select(
-                placeholder=strings["pickban_pick"].format(n=index + 1)[:100],
-                custom_id=f"kingdoms:attack:pickban:pick:{index}",
-                options=[discord.SelectOption(label=str(civ)[:100], value=str(civ)) for civ in hand][:25],
-                min_values=1 if index == 0 else 0,
-                max_values=1,
+        self.hand = [str(civ) for civ in hand]
+        self.locale = locale
+        self.strings = _strings(locale)
+        self.picks = [str(civ) for civ in (picks or [])]
+        self.editing = editing
+        self.count = min(3, len(self.hand))
+        # The dropdown offers ONLY the civs no line holds (a duplicate
+        # is impossible by construction); a line in ✏️ edit mode also
+        # offers its OWN civ — the pick REPLACES that line.
+        if len(self.picks) < self.count:
+            if editing is None:
+                offered = [civ for civ in self.hand if civ not in self.picks]
+            else:
+                offered = [
+                    civ
+                    for civ in self.hand
+                    if civ not in self.picks or civ == self.picks[editing]
+                ]
+            if offered:
+                select: discord.ui.Select[Any] = discord.ui.Select(
+                    placeholder=self.strings["pickban_pick"].format(
+                        n=_PICKBAN_RANKS[editing if editing is not None else len(self.picks)]
+                    )[:100],
+                    options=[
+                        discord.SelectOption(label=str(civ)[:100], value=str(civ))
+                        for civ in offered
+                    ][:25],
+                    min_values=1,
+                    max_values=1,
+                )
+                select.callback = self._make_on_select(select, editing)  # type: ignore[method-assign]
+                self.add_item(select)
+        # ✏️ Modifier PAR LIGNE (1️⃣/2️⃣/3️⃣) — one GRIS button per
+        # filled line, never a global ✏️ (Drasah's 04/11 ruling).
+        for index in range(len(self.picks)):
+            button = discord.ui.Button(
+                label=self.strings["pickban_modify_button"].format(n=_PICKBAN_RANKS[index])[:80],
+                style=discord.ButtonStyle.secondary,
             )
-            select.callback = self._make_on_select()  # type: ignore[method-assign]
-            self.rank_selects.append(select)
-            self.add_item(select)
-        button: discord.ui.Button[discord.ui.View] = discord.ui.Button(
-            label=strings["pickban_validate"][:80],
+            button.callback = self._make_on_modify(index)  # type: ignore[method-assign]
+            self.add_item(button)
+        # ✅ Valider is the ONLY consumer — GRIS+disabled while the
+        # ranking is incomplete (convention couleurs 04/11 : GRIS =
+        # impossible).
+        validate = discord.ui.Button(
+            label=self.strings["pickban_validate"][:80],
             custom_id="kingdoms:attack:pickban:validate",
-            style=discord.ButtonStyle.primary,
+            style=discord.ButtonStyle.success,
+            disabled=len(self.picks) < self.count,
         )
-        button.callback = self._on_validate  # type: ignore[method-assign]
-        self.add_item(button)
+        validate.callback = self._on_validate  # type: ignore[method-assign]
+        self.add_item(validate)
+        # ❌ Annuler (ROUGE = quitter/réinitialiser) resets the ranking
+        # — every line goes back to « _ », the dropdown reopens full.
+        cancel = discord.ui.Button(
+            label=self.strings["pickban_cancel_button"][:80],
+            style=discord.ButtonStyle.danger,
+        )
+        cancel.callback = self._on_cancel  # type: ignore[method-assign]
+        self.add_item(cancel)
 
-    def _make_on_select(self) -> Any:
-        """Ack a select interaction (live beta 18/10 fix).
+    def _ranked_block(self) -> str:
+        """The stacked ranking block « 1️⃣ X · 2️⃣ _ » riding the DM."""
+        lines = []
+        for index in range(self.count):
+            civ = self.picks[index] if index < len(self.picks) else None
+            lines.append(f"{_PICKBAN_RANKS[index]} {civ}" if civ else f"{_PICKBAN_RANKS[index]} _")
+        return self.strings["pickban_ranked_header"] + "\n" + "\n".join(lines)
 
-        The selects had no callback: Discord showed « the application
-        did not respond » and no civilization could ever be picked. The
-        acknowledged interaction refreshes the select values held by
-        THIS view instance — `_on_validate` reads them back at submit
-        time.
-        """
+    async def _rerender(self, interaction: discord.Interaction, *, note: str = "") -> None:
+        """Edit the DM IN PLACE — the running ranking rides the message
+        and the dropdown follows the remaining civs (fenêtre mère, the
+        sabotage 04/11 pattern)."""
+        content = str(getattr(interaction.message, "content", "") or "")
+        base = content.split(self.strings["pickban_ranked_header"])[0].rstrip()
+        block = self._ranked_block()
+        if note:
+            block = f"{block}\n\n{note}"
+        view = KingdomPickBanView(
+            self.attack_id,
+            self.player_id,
+            self.side,
+            self.hand,
+            self.locale,
+            picks=self.picks,
+            editing=self.editing,
+        )
+        try:
+            await interaction.response.edit_message(
+                content=f"{base}\n\n{block}", view=view, attachments=[]
+            )
+        except Exception:
+            logger.warning("KINGDOM ATTACK: pick & ban DM edit failed", exc_info=True)
 
-        async def _on_select(interaction: discord.Interaction) -> None:
-            try:
+    def _make_on_select(self, select: discord.ui.Select[Any], slot: int | None) -> Any:
+        """The dropdown's pick — stacks the next line (or replaces the
+        ✏️-edited one), then re-renders the DM in place (non-consuming)."""
+
+        async def _on_pick(interaction: discord.Interaction) -> None:
+            values = list(getattr(select, "values", None) or [])
+            if not values:
                 await interaction.response.defer()
-            except Exception:
-                logger.warning("KINGDOM ATTACK: pick & ban select ack failed", exc_info=True)
+                return
+            civ = str(values[0])
+            if slot is None:
+                self.picks.append(civ)
+            else:
+                self.picks[slot] = civ
+                self.editing = None
+            await self._rerender(interaction)
 
-        return _on_select
+        return _on_pick
+
+    def _make_on_modify(self, index: int) -> Any:
+        """The ✏️ of ONE line — re-opens the dropdown on that line (its
+        own civ offered again, the pick REPLACES it)."""
+
+        async def _on_modify(interaction: discord.Interaction) -> None:
+            self.editing = index
+            await self._rerender(interaction)
+
+        return _on_modify
+
+    async def _on_cancel(self, interaction: discord.Interaction) -> None:
+        """❌ Annuler — the ranking resets, every line goes « _ »."""
+        self.picks = []
+        self.editing = None
+        await self._rerender(interaction)
 
     async def _on_validate(self, interaction: discord.Interaction) -> None:
         """Submit the ranked picks, then validate (D77, blind)."""
@@ -3909,22 +4015,17 @@ class KingdomPickBanView(discord.ui.View):
         if wiring.attacks_service is None:
             await _unique_notice(interaction, strings["no_service"])
             return
-        picks: list[str] = []
-        for select in self.rank_selects:
-            picks.extend(select.values)
-        # pickban-doublon-v1 (Drasah 28/10): the old single message
-        # answered « classe tes civs » to BOTH a missing pick and a
-        # DUPLICATE — the duplicate case now has its own wording.
-        # PATCH 1.0 item 1 (Drasah 29/10): the refusals ride the fenêtre
-        # unique registry — a new refusal replaces the previous one,
-        # and the corrected validation (below) closes the stale
-        # warning instead of leaving it stacked under the DM.
+        picks = [str(civ) for civ in self.picks]
+        # pickban-doublon-v1 (Drasah 28/10): the split wordings stay as
+        # a SAFETY net — the new wizard makes both refusals impossible
+        # by construction (the dropdown never offers a picked civ and
+        # ✅ Valider is disabled until the ranking is complete).
         if len(set(picks)) != len(picks):
             await _unique_notice(interaction, strings["pickban_duplicate"])
             return
-        if len(picks) != len(self.rank_selects):
+        if len(picks) != self.count:
             await _unique_notice(
-                interaction, strings["pickban_missing"].format(count=len(self.rank_selects))
+                interaction, strings["pickban_missing"].format(count=self.count)
             )
             return
         try:
