@@ -205,6 +205,19 @@ class LiquipediaMapsProvider:
                 attempt + 1,
                 _429_MAX_RETRIES,
             )
+            # DEBUG diagnostics: the full request (URL + params + headers —
+            # is the User-Agent right?) and the response's rate-limit
+            # headers (which bucket, which scope) to diagnose the 429s.
+            logger.debug(
+                "LIQUIPEDIA 429 request: GET %s params=%s headers=%s",
+                self._api_url,
+                params,
+                dict(self._client.headers),
+            )
+            logger.debug(
+                "LIQUIPEDIA 429 response headers: %s",
+                dict(response.headers),
+            )
             self._sleep(wait)
             marker = time.monotonic()
             if is_parse:
