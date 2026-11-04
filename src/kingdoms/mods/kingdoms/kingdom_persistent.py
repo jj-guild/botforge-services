@@ -20,7 +20,7 @@ import re
 import time
 from collections.abc import Callable
 from dataclasses import dataclass
-from datetime import UTC, datetime, time, timedelta
+from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
 from typing import Any, cast
 from zoneinfo import ZoneInfo
@@ -229,6 +229,11 @@ def register_kingdoms_persistent_items(bot: discord.Client) -> None:
         # patrouille-garde-fiche-v1 (Drasah 04/11): the Patrouille /
         # Garde Royale fiche-cards (✅ Utiliser / ❌ Annuler).
         KingdomPatrouilleCardUseButton,
+        # patrouille-fiche-v3 (Drasah 04/11): the card's ✏️ Modifier +
+        # the cockpit's ✅ Valider / ❌ Annuler (restart-proof).
+        KingdomPatrouilleCardModifyButton,
+        KingdomPatrouilleValidateButton,
+        KingdomPatrouilleCancelButton,
         KingdomGardeCardUseButton,
         KingdomTechCardCancelButton,
         KingdomSeigneurieOpenButton,
@@ -2672,12 +2677,13 @@ class KingdomPatrouilleCardUseButton(
     card — the card closes and the both-slots cockpit opens as the
     fresh CV2 window (the slot buttons then edit it in place)."""
 
-    def __init__(self, strings: dict[str, Any]) -> None:
+    def __init__(self, strings: dict[str, Any], *, enabled: bool = True) -> None:
         super().__init__(
             discord.ui.Button(
                 label=str(strings["patrouille_use_button"])[:80],
                 custom_id="kingdoms:patrouille-card:use",
                 style=discord.ButtonStyle.success,
+                disabled=not enabled,
             )
         )
 
@@ -2709,12 +2715,65 @@ class KingdomPatrouilleCardUseButton(
             await _tech_card_note(interaction, str(strings["not_lord"]))
             return
         await _tech_card_close(interaction)
-        wizard_text = str(strings["remparts_patrouille_hub_text"])
-        slots = [KingdomRempartsPatrouilleButton(slot, strings) for slot in (1, 2)]
-        await interaction.followup.send(
-            view=_ephemeral_layout_view(wizard_text, slots), ephemeral=True
+        kingdom_id = str(getattr(lord, "kingdom_id", "") or "")
+        await _patrouille_open_cockpit(interaction, strings, wiring, kingdom_id)
+
+
+class KingdomPatrouilleCardModifyButton(
+    discord.ui.DynamicItem[discord.ui.Button[Any]],
+    template=r"kingdoms:patrouille-card:modify$",
+):
+    """patrouille-fiche-v3 (Drasah 04/11): « ✏️ Modifier » on the
+    Patrouille card — green only when a slot is placed AND the Lord's
+    Day window is open (the callback re-checks the window: it may
+    have closed while the card was open). It opens the SAME cockpit
+    as ✅ Utiliser — the difference is the intent (Utiliser settles
+    the next virgin slot, Modifier retouches a placed one)."""
+
+    def __init__(self, strings: dict[str, Any], *, enabled: bool = True) -> None:
+        super().__init__(
+            discord.ui.Button(
+                label=str(strings["patrouille_modify_button"])[:80],
+                custom_id="kingdoms:patrouille-card:modify",
+                style=discord.ButtonStyle.success,
+                disabled=not enabled,
+            )
         )
-        _register_ephemeral_interaction(interaction)
+
+    @classmethod
+    async def from_custom_id(
+        cls,
+        interaction: discord.Interaction,
+        item: discord.ui.Item[Any],
+        match: re.Match[str],
+        /,
+    ) -> "KingdomPatrouilleCardModifyButton":
+        locale = str(interaction.locale) if interaction.locale else "en"
+        return cls(_strings(locale))
+
+    async def callback(self, interaction: discord.Interaction) -> None:
+        """Refuse outside the Lord's Day; otherwise close the card
+        and open the both-slots cockpit."""
+        locale = str(interaction.locale) if interaction.locale else "en"
+        strings = _strings(locale)
+        wiring = _wiring()
+        if wiring.economy_service is None:
+            await _tech_card_note(interaction, str(strings["market_no_service"]))
+            return
+        lord = await _lord_of(
+            wiring.kingdoms_service, str(interaction.user.id), wiring.bot_admins
+        )
+        if lord is None or getattr(lord, "left", False):
+            await _tech_card_note(interaction, str(strings["not_lord"]))
+            return
+        if not await _patrouille_lords_day_active(wiring):
+            await _tech_card_note(
+                interaction, str(strings["patrouille_lords_day_closed"])
+            )
+            return
+        await _tech_card_close(interaction)
+        kingdom_id = str(getattr(lord, "kingdom_id", "") or "")
+        await _patrouille_open_cockpit(interaction, strings, wiring, kingdom_id)
 
 
 class KingdomGardeCardUseButton(
@@ -2725,12 +2784,13 @@ class KingdomGardeCardUseButton(
     card — the card closes and the map-choice wizard opens as the
     fresh CV2 window (mode cv2: every later face edits it in place)."""
 
-    def __init__(self, strings: dict[str, Any]) -> None:
+    def __init__(self, strings: dict[str, Any], *, enabled: bool = True) -> None:
         super().__init__(
             discord.ui.Button(
                 label=str(strings["garde_use_button"])[:80],
                 custom_id="kingdoms:garde-card:use",
                 style=discord.ButtonStyle.success,
+                disabled=not enabled,
             )
         )
 
@@ -2962,7 +3022,7 @@ class KingdomRempartsGuardButton(
             title=str(strings["garde_card_title"]),
             body=str(strings["garde_card_desc"]).format(stock),
             items=[
-                KingdomGardeCardUseButton(strings),
+                KingdomGardeCardUseButton(strings, enabled=stock > 0),
                 KingdomTechCardCancelButton(strings, "garde"),
             ],
         )
@@ -2982,10 +3042,11 @@ async def _remparts_guard_stock(wiring: Any, kingdom_id: str) -> int:
 
 
 def _remparts_guard_wizard_text(strings: dict[str, Any], stock: int) -> str:
-    """The wizard header: the LIVE reserve + the 12h instruction."""
+    """The wizard header: the 12h instruction, then the LIVE reserve
+    (garde-royale-fiche-v2, Drasah 04/11 — the intro line first)."""
     return "{0}\n{1}".format(
-        str(strings["remparts_guard_wizard_stock"]).format(stock),
         str(strings["remparts_guard_wizard_line"]),
+        str(strings["remparts_guard_wizard_stock"]).format(stock),
     )
 
 
@@ -3070,12 +3131,28 @@ async def _remparts_guard_show_select(
             await _remparts_guard_note(interaction, strings, mode, note)
         return
     text = _remparts_guard_wizard_text(strings, stock)
+    # garde-royale-fiche-v2 (Drasah 04/11): the territories under a
+    # DECLARED attack stay visible but wear 💥 — and refuse the choice.
+    attacked_ids: set[str] = set()
+    attacks_all = getattr(getattr(wiring, "attacks_service", None), "attacks", None)
+    if attacks_all is not None:
+        try:
+            for attack in await attacks_all():
+                if getattr(attack, "is_over", False):
+                    continue
+                attacked_ids.add(str(getattr(attack, "territory_id", "")))
+        except Exception:
+            attacked_ids = set()
     select: discord.ui.Select[Any] = discord.ui.Select(
         custom_id="kingdoms:remparts:choose:guard",
         placeholder=str(strings["remparts_place_guard_choose"])[:100],
         options=[
             discord.SelectOption(
-                label=str(getattr(t, "map_key", t.id))[:100], value=str(t.id)[:100]
+                label=(
+                    ("💥 " if str(t.id) in attacked_ids else "")
+                    + str(getattr(t, "map_key", t.id))
+                )[:100],
+                value=str(t.id)[:100],
             )
             for t in owned[:25]
         ],
@@ -3092,6 +3169,12 @@ async def _remparts_guard_show_select(
             if str(territory.id) == territory_id:
                 map_label = str(getattr(territory, "map_key", territory_id))
                 break
+        if territory_id in attacked_ids:
+            await _remparts_guard_note(
+                target, strings, mode, strings["remparts_guard_attacked"]
+            )
+            _market_ttl(interaction, getattr(target, "message", None))
+            return
         await _remparts_guard_show_choice(
             target, strings, mode, territory_id, map_label, stock
         )
@@ -3353,38 +3436,169 @@ async def _patrouille_lords_day_note(
     minute, hour, weekday = _parse_weekly_cron(events_cfg.cycle_cron)
     local = now.astimezone(tz)
     day = local.date() + timedelta(days=(weekday - local.weekday()) % 7)
-    start = datetime.combine(day, time(hour, minute), tzinfo=tz)
+    start = datetime.combine(day, datetime.time(hour, minute), tzinfo=tz)
     if start <= local:
         start = datetime.combine(
-            day + timedelta(days=7), time(hour, minute), tzinfo=tz
+            day + timedelta(days=7), datetime.time(hour, minute), tzinfo=tz
         )
     end = datetime.combine(
         start.date() + timedelta(days=1),
-        time(getattr(events_cfg, "lords_day_end_hour", 10), 0),
+        datetime.time(getattr(events_cfg, "lords_day_end_hour", 10), 0),
         tzinfo=tz,
     )
     return str(strings["patrouille_lords_day_next"]).format(_fmt(start), _fmt(end))
+
+
+async def _patrouille_lords_day_active(wiring: Any) -> bool:
+    """patrouille-fiche-v3 (Drasah 04/11): whether the Lord's Day
+    window is open RIGHT NOW — the ✏️ Modifier gates and the placed
+    slots' redefinition live on this live check (the service keeps
+    enforcing it anyway; the UI just refuses earlier and politer)."""
+    from kingdoms.mods.kingdoms.events import (
+        active_lords_day_window,
+        lords_day_window,
+    )
+
+    service = getattr(wiring, "kingdoms_service", None)
+    config = getattr(service, "config", None)
+    now = datetime.now(UTC)
+    season = None
+    if service is not None:
+        try:
+            season = await service.current_season()
+        except Exception:
+            season = None
+    if season is not None:
+        try:
+            return active_lords_day_window(config, season, now) is not None
+        except Exception:
+            return False
+    try:
+        return lords_day_window(config, now) is not None
+    except Exception:
+        return False
+
+
+async def _patrouille_slot_states(wiring: Any, kingdom_id: str) -> list[dict[str, Any]]:
+    """The kingdom's two patrol slots, live: unlocked? placed? start?"""
+    service = getattr(wiring, "attacks_service", None)
+    states: list[dict[str, Any]] = []
+    for no in (1, 2):
+        slot: dict[str, Any] = {"no": no, "unlocked": False, "placed": False, "start": None}
+        if service is not None and hasattr(service, "technology_state"):
+            try:
+                tech = await service.technology_state(kingdom_id)
+                purchases = dict(getattr(tech, "purchases", {}) or {})
+            except Exception:
+                purchases = {}
+            slot["unlocked"] = f"patrouille_unlock_{no}" in purchases
+            start = purchases.get(f"patrouille_slot_{no}")
+            if start is not None:
+                slot["placed"] = True
+                slot["start"] = int(start)
+        states.append(slot)
+    return states
+
+
+async def _patrouille_reinforced(wiring: Any, kingdom_id: str) -> bool:
+    """Whether the kingdom's patrols are Renforcées (3h slots)."""
+    from kingdoms.mods.kingdoms.attacks import DEFENSE_AI_BASE, patrouille_reinforced
+
+    service = getattr(wiring, "attacks_service", None)
+    if service is None or not hasattr(service, "technology_state"):
+        return False
+    try:
+        state = await service.technology_state(kingdom_id)
+        return bool(patrouille_reinforced(state, DEFENSE_AI_BASE))
+    except Exception:
+        return False
+
+
+def _patrouille_slot_status_label(
+    strings: dict[str, Any], slot: dict[str, Any], reinforced: bool
+) -> str:
+    """The slot's status line: locked / unset / EFFECTIVE window (3h
+    when Renforcée — Drasah 04/11: the fiche shows the real span)."""
+    if not slot["unlocked"]:
+        label = str(strings["patrouille_slot_locked"])
+    elif not slot["placed"]:
+        label = str(strings["patrouille_slot_unset"])
+    else:
+        hours = 3 if reinforced else 2
+        label = str(strings["market_slot_line"]).format(
+            int(slot["start"]), int(slot["start"]) + hours
+        )
+    return str(strings["patrouille_slot_status"]).format(int(slot["no"]), label)
+
+
+async def _patrouille_open_cockpit(
+    interaction: discord.Interaction,
+    strings: dict[str, Any],
+    wiring: Any,
+    kingdom_id: str,
+) -> None:
+    """patrouille-fiche-v3 (Drasah 04/11): the both-slots cockpit — a
+    DISABLED status button per slot (the EFFECTIVE window) plus a
+    ✏️ Modifier button per slot (green when the slot is virgin, or
+    placed with the Lord's Day open; grey otherwise). Opened as the
+    fresh CV2 window after the card closed."""
+    slots = await _patrouille_slot_states(wiring, kingdom_id)
+    reinforced = await _patrouille_reinforced(wiring, kingdom_id)
+    lords_day = await _patrouille_lords_day_active(wiring)
+    items: list[Any] = []
+    for slot in slots:
+        enabled = (slot["unlocked"] and not slot["placed"]) or (
+            slot["placed"] and lords_day
+        )
+        items.append(
+            discord.ui.Button(
+                label=_patrouille_slot_status_label(strings, slot, reinforced)[:80],
+                custom_id=f"kingdoms:patrouille-slot:status:{int(slot['no'])}",
+                style=discord.ButtonStyle.secondary,
+                disabled=True,
+            )
+        )
+        items.append(
+            KingdomRempartsPatrouilleButton(
+                int(slot["no"]), strings, enabled=enabled
+            )
+        )
+    wizard_text = str(strings["remparts_patrouille_hub_text"])
+    await interaction.followup.send(
+        view=_ephemeral_layout_view(wizard_text, items), ephemeral=True
+    )
+    _register_ephemeral_interaction(interaction)
 
 
 class KingdomRempartsPatrouilleButton(
     discord.ui.DynamicItem[discord.ui.Button[Any]],
     template=r"kingdoms:remparts:patrouille:(?P<slot>[12])",
 ):
-    """The restart-proof 🛡️ « Placer Patrouille 1 / 2 » button (remparts-v2).
+    """The restart-proof « ✏️ Modifier » slot button of the cockpit.
 
     remparts-v2 (Drasah 14/10): the patrols are a SKILL — the Marché
-    unlocks the slot (1 then 2), the King POSSES the daily 2h window
-    here. The window stays FIXED for the whole cycle and may only be
-    REDEFINED during the Jour du Seigneur (the service enforces the
-    window). King only.
+    unlocks the slot (1 then 2), the kingdom poses the daily window
+    here. patrouille-fiche-v2 (Drasah 04/11): every lord of the
+    kingdom may set the patrols. patrouille-fiche-v3 (Drasah 04/11):
+    the button is GREEN when the slot is virgin (first setting, any
+    time — the service allows it) or placed with the Lord's Day open,
+    GREY otherwise; the choice now goes through a ✅ Valider / ❌
+    Annuler confirmation face before the window freezes.
     """
 
-    def __init__(self, slot: int, strings: dict[str, Any]) -> None:
+    def __init__(
+        self, slot: int, strings: dict[str, Any], *, enabled: bool = True
+    ) -> None:
         super().__init__(
             discord.ui.Button(
-                label=str(strings["remparts_patrouille_button"]).format(slot)[:80],
+                label=str(strings["patrouille_modify_button"])[:80],
                 custom_id=f"kingdoms:remparts:patrouille:{slot}",
-                style=discord.ButtonStyle.secondary,
+                style=(
+                    discord.ButtonStyle.success
+                    if enabled
+                    else discord.ButtonStyle.secondary
+                ),
+                disabled=not enabled,
             )
         )
         self.slot = int(slot)
@@ -3397,18 +3611,13 @@ class KingdomRempartsPatrouilleButton(
         match: re.Match[str],
         /,
     ) -> KingdomRempartsPatrouilleButton:
-        """Rebuild the patrol button from the wire."""
+        """Rebuild the slot button from the wire."""
         locale = str(interaction.locale) if interaction.locale else "en"
         return cls(int(match.group("slot")), _strings(locale))
 
     async def callback(self, interaction: discord.Interaction) -> None:
-        """Open the King-only tranche select and place the patrol window.
-
-        remparts-v3 (Drasah 03/11): the « 🔄 Redéfinition des créneaux »
-        line MOVED here (the King acts where the information sits) and
-        clicked from the player's ephemeral window the flow takes the
-        window IN PLACE (remparts-fenetre-v1).
-        """
+        """Open the tranche select; the choice becomes a confirmation
+        face (patrouille-fiche-v3) — nothing freezes before ✅ Valider."""
         locale = str(interaction.locale) if interaction.locale else "en"
         strings = _strings(locale)
         wiring = _wiring()
@@ -3425,6 +3634,38 @@ class KingdomRempartsPatrouilleButton(
             return
         kingdom_id = str(getattr(lord, "kingdom_id", "") or "")
         mode = "cv2" if _is_ephemeral_parent(interaction) else "win"
+        slots = await _patrouille_slot_states(wiring, kingdom_id)
+        mine = next(
+            (
+                slot
+                for slot in slots
+                if int(slot["no"]) == self.slot
+            ),
+            {"no": self.slot, "unlocked": False, "placed": False, "start": None},
+        )
+        # patrouille-fiche-v3: a placed slot only moves during the
+        # Lord's Day — the UI refuses early with the dedicated note.
+        if mine["placed"] and not await _patrouille_lords_day_active(wiring):
+            await _remparts_guard_note(
+                interaction, strings, mode, strings["patrouille_lords_day_closed"]
+            )
+            return
+        if not mine["unlocked"]:
+            await _remparts_guard_note(
+                interaction,
+                strings,
+                mode,
+                str(strings["remparts_state_missing"]).format(self.slot),
+            )
+            return
+        reinforced = await _patrouille_reinforced(wiring, kingdom_id)
+        hours = 3 if reinforced else 2
+        covered: set[int] = set()
+        for other in slots:
+            if int(other["no"]) != self.slot and other["placed"]:
+                covered.update(
+                    range(int(other["start"]), int(other["start"]) + hours)
+                )
         # remparts-v3: the Lord's-Day note rides the flow, not the body.
         wizard_text = str(strings["patrol_window"])
         select: discord.ui.Select[Any] = discord.ui.Select(
@@ -3432,10 +3673,11 @@ class KingdomRempartsPatrouilleButton(
             placeholder=str(strings["market_choose_slot"])[:100],
             options=[
                 discord.SelectOption(
-                    label=str(strings["market_slot_line"]).format(start, start + 2),
+                    label=str(strings["market_slot_line"]).format(start, start + hours),
                     value=str(start),
                 )
                 for start in range(0, 24, 2)
+                if start not in covered
             ],
         )
 
@@ -3444,32 +3686,28 @@ class KingdomRempartsPatrouilleButton(
             chosen = [str(v) for v in values.get("values", [])]
             if not chosen:
                 return
-            economy = wiring.economy_service
-            if economy is None:
-                await _remparts_guard_note(
-                    target, strings, mode, strings["market_no_service"]
-                )
-                return
-            slot = int(chosen[0])
-            try:
-                await economy.place_patrouille(kingdom_id, self.slot, slot)
-            except Exception as exc:
-                await _remparts_guard_note(
-                    target, strings, mode, _market_error_note(exc, strings)
-                )
-                _market_ttl(interaction, getattr(target, "message", None))
-                return
-            note = str(strings["remparts_patrouille_placed"]).format(
-                self.slot, slot, slot + 2
+            start = int(chosen[0])
+            # patrouille-fiche-v3 (Drasah 04/11): the choice becomes a
+            # ✅ Valider / ❌ Annuler confirmation face — the window only
+            # freezes on Valider (it is only movable during the Lord's
+            # Day, so the freeze deserves a confirmation).
+            text = str(strings["patrouille_confirm_text"]).format(
+                self.slot, start, start + hours
             )
+            items: list[Any] = [
+                KingdomPatrouilleValidateButton(mode, self.slot, start, strings),
+                KingdomPatrouilleCancelButton(mode, strings),
+            ]
             if mode == "cv2":
-                # The window is a Components V2 message (opened in place
-                # from the Remparts view): the note replaces its VIEW.
-                await _replace_ephemeral_window(target, note)
+                await target.response.edit_message(
+                    view=_ephemeral_layout_view(text, items)
+                )
             else:
-                await target.response.edit_message(content=note, view=None)
-            _market_ttl(interaction, getattr(target, "message", None))
-            await _refresh_realm_views_for_kingdom_safe(target.guild, kingdom_id)
+                view = discord.ui.View(timeout=600)
+                for item in items:
+                    view.add_item(item)
+                await target.response.edit_message(content=text, view=view)
+            _register_ephemeral_interaction(target)
 
         select.callback = on_choose  # type: ignore[method-assign, assignment]
         # fenetre-unique-globale-v1 (Drasah 30/10): the fresh-window
@@ -3490,6 +3728,156 @@ class KingdomRempartsPatrouilleButton(
             view=view,
             ephemeral=True,
         )
+
+
+class KingdomPatrouilleValidateButton(
+    discord.ui.DynamicItem[discord.ui.Button[Any]],
+    template=r"kingdoms:remparts:patrouille:validate:(?P<mode>cv2|win):(?P<slot>[12]):(?P<start>\d+)",
+):
+    """patrouille-fiche-v3 (Drasah 04/11): « ✅ Valider » — freezes the
+    chosen tranche (the window only moves during the Lord's Day, so
+    the choice deserves a confirmation). « ❌ Annuler » closes without
+    touching anything."""
+
+    def __init__(
+        self, mode: str, slot: int, start: int, strings: dict[str, Any]
+    ) -> None:
+        self.mode = str(mode)
+        self.slot = int(slot)
+        self.start = int(start)
+        super().__init__(
+            discord.ui.Button(
+                label=str(strings["patrouille_validate_button"])[:80],
+                custom_id=(
+                    f"kingdoms:remparts:patrouille:validate:{self.mode}:"
+                    f"{self.slot}:{self.start}"
+                ),
+                style=discord.ButtonStyle.success,
+            )
+        )
+
+    @classmethod
+    async def from_custom_id(
+        cls,
+        interaction: discord.Interaction,
+        item: discord.ui.Item[Any],
+        match: re.Match[str],
+        /,
+    ) -> KingdomPatrouilleValidateButton:
+        locale = str(interaction.locale) if interaction.locale else "en"
+        return cls(
+            match.group("mode"),
+            int(match.group("slot")),
+            int(match.group("start")),
+            _strings(locale),
+        )
+
+    async def callback(self, interaction: discord.Interaction) -> None:
+        """Place the patrol window — in place, back to the Remparts."""
+        locale = str(interaction.locale) if interaction.locale else "en"
+        strings = _strings(locale)
+        wiring = _wiring()
+        if wiring.economy_service is None:
+            await _remparts_guard_note(
+                interaction, strings, self.mode, strings["market_no_service"]
+            )
+            return
+        lord = await _lord_of(
+            wiring.kingdoms_service, str(interaction.user.id), wiring.bot_admins
+        )
+        if lord is None or getattr(lord, "left", False):
+            await _remparts_guard_note(
+                interaction, strings, self.mode, strings["not_lord"]
+            )
+            return
+        kingdom_id = str(getattr(lord, "kingdom_id", "") or "")
+        try:
+            await wiring.economy_service.place_patrouille(
+                kingdom_id, self.slot, self.start
+            )
+        except Exception as exc:
+            if "patrol window is fixed" in str(exc):
+                # The Lord's Day closed between the select and the
+                # confirm — the dedicated note, not a raw error.
+                await _remparts_guard_note(
+                    interaction,
+                    strings,
+                    self.mode,
+                    strings["patrouille_lords_day_closed"],
+                )
+            else:
+                await _remparts_guard_note(
+                    interaction, strings, self.mode, _market_error_note(exc, strings)
+                )
+            _market_ttl(interaction, getattr(interaction, "message", None))
+            return
+        reinforced = await _patrouille_reinforced(wiring, kingdom_id)
+        hours = 3 if reinforced else 2
+        note = str(strings["remparts_patrouille_placed"]).format(
+            self.slot, self.start, self.start + hours
+        )
+        if self.mode == "cv2":
+            # remparts-fenetre-v1: the wizard exits onto the Remparts
+            # view IN PLACE — the fresh patrol line is the confirmation.
+            from kingdoms.mods.kingdoms.kingdom_lieux import edit_remparts_view
+
+            if await edit_remparts_view(interaction):
+                await _refresh_realm_views_for_kingdom_safe(
+                    interaction.guild, kingdom_id
+                )
+                return
+            await _replace_ephemeral_window(interaction, note)
+        else:
+            await interaction.response.edit_message(content=note, view=None)
+        _market_ttl(interaction, getattr(interaction, "message", None))
+        await _refresh_realm_views_for_kingdom_safe(interaction.guild, kingdom_id)
+
+
+class KingdomPatrouilleCancelButton(
+    discord.ui.DynamicItem[discord.ui.Button[Any]],
+    template=r"kingdoms:remparts:patrouille:cancel:(?P<mode>cv2|win)",
+):
+    """patrouille-fiche-v3 (Drasah 04/11): « ❌ Annuler » — closes the
+    confirmation face: back to the Remparts view in place (cv2), or
+    the fresh window simply goes away (win). Nothing is placed."""
+
+    def __init__(self, mode: str, strings: dict[str, Any]) -> None:
+        self.mode = str(mode)
+        super().__init__(
+            discord.ui.Button(
+                label=str(strings["patrouille_cancel_button"])[:80],
+                custom_id=f"kingdoms:remparts:patrouille:cancel:{self.mode}",
+                style=discord.ButtonStyle.danger,
+            )
+        )
+
+    @classmethod
+    async def from_custom_id(
+        cls,
+        interaction: discord.Interaction,
+        item: discord.ui.Item[Any],
+        match: re.Match[str],
+        /,
+    ) -> KingdomPatrouilleCancelButton:
+        locale = str(interaction.locale) if interaction.locale else "en"
+        return cls(match.group("mode"), _strings(locale))
+
+    async def callback(self, interaction: discord.Interaction) -> None:
+        """Close the confirmation face — nothing is placed."""
+        if self.mode == "cv2":
+            from kingdoms.mods.kingdoms.kingdom_lieux import edit_remparts_view
+
+            if await edit_remparts_view(interaction):
+                return
+        await interaction.response.defer()
+        try:
+            await interaction.delete_original_response()
+        except Exception:
+            logger.info(
+                "KINGDOMS: remparts patrouille close failed (ignored)",
+                exc_info=True,
+            )
+        _EPHEMERAL_WINDOWS.pop(str(getattr(interaction.user, "id", "")), None)
 
 
 class KingdomRempartsPatrouilleHubButton(
@@ -3552,6 +3940,14 @@ class KingdomRempartsPatrouilleHubButton(
         # both-slots cockpit only opens on ✅ Utiliser.
         # patrouille-fiche-v2 (Drasah 04/11): the card carries a
         # dynamic reminder of the Lord's Day window.
+        # patrouille-fiche-v3 (Drasah 04/11): ✅ Utiliser is grey until
+        # a slot is virgin; ✏️ Modifier is green only when a slot is
+        # placed AND the Lord's Day window is open.
+        kingdom_id = str(getattr(lord, "kingdom_id", "") or "")
+        slots = await _patrouille_slot_states(wiring, kingdom_id)
+        any_virgin = any(slot["unlocked"] and not slot["placed"] for slot in slots)
+        any_placed = any(slot["placed"] for slot in slots)
+        lords_day_open = await _patrouille_lords_day_active(wiring)
         lords_day = await _patrouille_lords_day_note(wiring, locale, strings)
         await _tech_card_open(
             interaction,
@@ -3559,7 +3955,10 @@ class KingdomRempartsPatrouilleHubButton(
             title=str(strings["patrouille_card_title"]),
             body=str(strings["patrouille_card_desc"]).format(lords_day=lords_day),
             items=[
-                KingdomPatrouilleCardUseButton(strings),
+                KingdomPatrouilleCardUseButton(strings, enabled=any_virgin),
+                KingdomPatrouilleCardModifyButton(
+                    strings, enabled=any_placed and lords_day_open
+                ),
                 KingdomTechCardCancelButton(strings, "patrouille"),
             ],
         )

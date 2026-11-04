@@ -102,6 +102,9 @@ def test_the_patrouille_garde_fiche_card_buttons_are_registered() -> None:
 
     for name in (
         "KingdomPatrouilleCardUseButton",
+        "KingdomPatrouilleCardModifyButton",
+        "KingdomPatrouilleValidateButton",
+        "KingdomPatrouilleCancelButton",
         "KingdomGardeCardUseButton",
         "KingdomTechCardCancelButton",
     ):

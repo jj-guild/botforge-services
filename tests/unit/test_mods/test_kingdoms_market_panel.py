@@ -11,6 +11,7 @@ special-action selects resolve real territories.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from types import SimpleNamespace
 from typing import Any
 
 import discord
@@ -27,7 +28,10 @@ from kingdoms.mods.kingdoms.kingdom_persistent import (
     KingdomMarketCardInfoButton,
     KingdomMarketTechButton,
     KingdomMarketUseButton,
+    KingdomPatrouilleCardModifyButton,
     KingdomPatrouilleCardUseButton,
+    KingdomPatrouilleCancelButton,
+    KingdomPatrouilleValidateButton,
     KingdomRempartsGuardButton,
     KingdomRempartsPatrouilleButton,
     KingdomRempartsPatrouilleHubButton,
@@ -105,9 +109,14 @@ class FakeAttacksService:
 
     def __init__(self) -> None:
         self._states: dict[str, _FakeTechState] = {}
+        self.attacks_list: list[Any] = []
 
     async def technology_state(self, kingdom_id: str) -> _FakeTechState:
         return self._states.setdefault(kingdom_id, _FakeTechState())
+
+    async def attacks(self) -> list[Any]:
+        """garde-royale-fiche-v2: the live attack list (💥 filtering)."""
+        return list(self.attacks_list)
 
 
 class FakeKingdomsService:
@@ -287,6 +296,21 @@ def _find_by_id(node: Any, custom_id: str) -> Any:
         if found is not None:
             return found
     return None
+
+
+def _btn(node: Any, custom_id: str) -> Any:
+    """_find_by_id, but returning the raw item (the `.item` wrapper unwrapped)."""
+    found = _find_by_id(node, custom_id)
+    return getattr(found, "item", found) if found is not None else None
+
+
+def _layout_texts(message: Any) -> str:
+    """The text of a Components V2 face (one TextDisplay per line)."""
+    parts: list[str] = []
+    for comp in getattr(message, "components", None) or []:
+        text = getattr(comp, "content", None)
+        parts.append(str(text) if text is not None else repr(comp))
+    return " ".join(parts)
 
 
 def _custom_ids(item: Any) -> list[str]:
@@ -605,20 +629,17 @@ async def test_remparts_patrouille_button_places_the_window() -> None:
     patrouille-fiche-v2 (Drasah 04/11): a plain LORD may set the patrol
     window — the patrouille chain is not King-gated anymore."""
     economy = FakeEconomyService()
+    attacks = FakeAttacksService()
+    tech = await attacks.technology_state("k1")
+    tech.purchases["patrouille_unlock_1"] = 1
     _wiring(
         lords=[FakeLord(id="111", role="lord", kingdom_id="k1")],
         economy=economy,
+        attacks=attacks,
     )
+    strings = _kp_strings("en")
     interaction: Any = MockInteraction(user=MockUser(id=111), locale="en-US")
-    button = KingdomRempartsPatrouilleButton(
-        1,
-        {
-            "remparts_patrouille_button": "🛡️ Placer Patrouille {0}",
-            "market_choose_slot": "Choose the slot:",
-            "market_slot_line": "{0}h → {1}h",
-            "remparts_patrouille_placed": "Patrouille {0} placée : {1}h → {2}h",
-        },
-    )
+    button = KingdomRempartsPatrouilleButton(1, strings)
     await button.callback(interaction)
     message = interaction.response.message
     assert message is not None and message.view is not None
@@ -628,7 +649,42 @@ async def test_remparts_patrouille_button_places_the_window() -> None:
     choice: Any = MockInteraction(user=MockUser(id=111), data={"values": ["2"]}, locale="en-US")
     choice.message = message
     await select.callback(choice)
+    # patrouille-fiche-v3: the choice becomes a ✅ Valider / ❌ Annuler
+    # confirmation face — nothing is placed before ✅ Valider.
+    confirm = choice.response.message
+    assert confirm is not None and confirm.view is not None
+    ids = _custom_ids(confirm.view)
+    assert "kingdoms:remparts:patrouille:validate:win:1:2" in ids
+    assert "kingdoms:remparts:patrouille:cancel:win" in ids
+    assert economy.placed_patrols == []
+    validate: Any = MockInteraction(user=MockUser(id=111), locale="en-US")
+    validate.message = confirm
+    await KingdomPatrouilleValidateButton("win", 1, 2, strings).callback(validate)
     assert economy.placed_patrols == [("k1", 1, 2)]
+
+
+async def test_patrouille_select_filters_the_other_slots_tranches() -> None:
+    """patrouille-fiche-v3 (Drasah 04/11): the tranches covered by the
+    OTHER placed slot never appear in the select."""
+    economy = FakeEconomyService()
+    attacks = FakeAttacksService()
+    tech = await attacks.technology_state("k1")
+    tech.purchases["patrouille_unlock_1"] = 1
+    tech.purchases["patrouille_unlock_2"] = 1
+    tech.purchases["patrouille_slot_1"] = 2
+    _wiring(
+        lords=[FakeLord(id="111", role="lord", kingdom_id="k1")],
+        economy=economy,
+        attacks=attacks,
+    )
+    strings = _kp_strings("en")
+    interaction: Any = MockInteraction(user=MockUser(id=111), locale="en-US")
+    button = KingdomRempartsPatrouilleButton(2, strings)
+    await button.callback(interaction)
+    message = interaction.response.message
+    assert message is not None and message.view is not None
+    select = next(iter(message.view.children))
+    assert "2" not in [opt.value for opt in select.options]
 
 
 async def test_use_button_corruption_answers_no_options_when_empty() -> None:
@@ -686,8 +742,13 @@ async def test_remparts_guard_button_opens_the_card_then_the_map_select() -> Non
     assert "kingdoms:garde-card:cancel" in ids
     assert len(card.embeds) == 1
     body = str(card.embeds[0].description or "")
-    assert "12h of immunity" in body
+    # garde-royale-fiche-v2 (Drasah 04/11): the validated wording —
+    # 12h against the three attack kinds, the no-guard-under-attack
+    # rule, the LIVE reserve; the ✅ Utiliser hint line is gone.
+    assert "12h" in body
+    assert "cannot be placed on a territory under attack" in body
     assert "Royal Guard available: **1**" in body
+    assert "Click ✅ Use" not in body
     # --- ✅ Utiliser: the card closes, the owned-map select opens.
     use: Any = MockInteraction(user=MockUser(id=111), locale="en-US")
     await KingdomGardeCardUseButton(strings).callback(use)
@@ -708,6 +769,47 @@ async def test_remparts_guard_button_opens_the_card_then_the_map_select() -> Non
     assert choice.response.message is not None
     # garde-royale-v2: the choice face carries Valider / Modifier / Annuler.
     assert "kingdoms:remparts:guard:validate:cv2:t2" in _custom_ids(choice.response.message.view)
+
+
+async def test_guard_select_refuses_a_territory_under_attack() -> None:
+    """garde-royale-fiche-v2 (Drasah 04/11): a territory under a
+    declared attack wears 💥 in the select and refuses the choice —
+    nothing is consumed."""
+    economy = FakeEconomyService()
+    attacks = FakeAttacksService()
+    tech = await attacks.technology_state("k1")
+    tech.purchases["garde_royale_stock"] = 1
+    attacks.attacks_list.append(SimpleNamespace(territory_id="t2", is_over=False))
+    territories = FakeTerritoryService(
+        territories=[FakeTerritory(id="t2", map_key="islands", owner_kingdom_id="k1")]
+    )
+    _wiring(
+        lords=[FakeLord(id="111", role="king", kingdom_id="k1")],
+        economy=economy,
+        territories=territories,
+        attacks=attacks,
+    )
+    strings = _kp_strings("en")
+    interaction: Any = MockInteraction(user=MockUser(id=111), locale="en-US")
+    button = KingdomRempartsGuardButton({"remparts_guard_button": "💂 Placer un Garde Royal"})
+    await button.callback(interaction)
+    card = interaction.response.message
+    assert card is not None and card.view is not None
+    use: Any = MockInteraction(user=MockUser(id=111), locale="en-US")
+    await KingdomGardeCardUseButton(strings).callback(use)
+    assert use.followup.messages
+    wizard = use.followup.messages[-1]
+    select = _find_by_id(wizard.view, "kingdoms:remparts:choose:guard")
+    assert select is not None
+    # The attacked map stays visible but wears 💥.
+    assert [opt.label for opt in select.options] == ["💥 islands"]
+    choice: Any = MockInteraction(user=MockUser(id=111), data={"values": ["t2"]}, locale="en-US")
+    choice.message = wizard
+    await select.callback(choice)
+    # The refusal replaces the wizard — nothing is consumed.
+    assert "cannot shield" in _layout_texts(choice.response.message)
+    assert economy.guarded == []
+    assert tech.purchases["garde_royale_stock"] == 1
 
 
 async def test_patrouille_hub_button_opens_the_card_first() -> None:
@@ -731,6 +833,7 @@ async def test_patrouille_hub_button_opens_the_card_first() -> None:
     assert card is not None and card.view is not None
     ids = _custom_ids(card.view)
     assert "kingdoms:patrouille-card:use" in ids
+    assert "kingdoms:patrouille-card:modify" in ids
     assert "kingdoms:patrouille-card:cancel" in ids
     assert len(card.embeds) == 1
     body = str(card.embeds[0].description or "")
@@ -740,6 +843,12 @@ async def test_patrouille_hub_button_opens_the_card_first() -> None:
     assert "Lord's Day" in body
     assert "King only" not in body
     assert "Click ✅ Use" not in body
+    # patrouille-fiche-v3: no unlocked slot → Utiliser grey; no placed
+    # slot with the Lord's Day open → Modifier grey.
+    use_button = _btn(card.view, "kingdoms:patrouille-card:use")
+    modify_button = _btn(card.view, "kingdoms:patrouille-card:modify")
+    assert use_button is not None and use_button.disabled
+    assert modify_button is not None and modify_button.disabled
 
 
 async def test_patrouille_card_use_opens_the_cockpit_and_cancel_consumes_nothing() -> None:
@@ -762,12 +871,41 @@ async def test_patrouille_card_use_opens_the_cockpit_and_cancel_consumes_nothing
     cockpit = use.followup.messages[-1]
     assert cockpit.view is not None
     ids = _custom_ids(cockpit.view)
+    # patrouille-fiche-v3: a DISABLED status button + a ✏️ Modifier
+    # button per slot — the EFFECTIVE window rides the status line.
+    assert "kingdoms:patrouille-slot:status:1" in ids
+    assert "kingdoms:patrouille-slot:status:2" in ids
     assert "kingdoms:remparts:patrouille:1" in ids
     assert "kingdoms:remparts:patrouille:2" in ids
+    status_one = _btn(cockpit.view, "kingdoms:patrouille-slot:status:1")
+    assert status_one is not None and status_one.disabled
     # ❌ Annuler: the card window goes away, no service call happened.
     cancel: Any = MockInteraction(user=MockUser(id=111), locale="en-US")
     await KingdomTechCardCancelButton(strings, "patrouille").callback(cancel)
     assert cancel.original_deleted
+    assert economy.placed_patrols == []
+
+
+async def test_patrouille_card_modify_refuses_outside_the_lords_day() -> None:
+    """patrouille-fiche-v3 (Drasah 04/11): ✏️ Modifier re-checks the
+    Lord's Day at click time — outside the window the card closes on
+    the dedicated note and no cockpit opens."""
+    economy = FakeEconomyService()
+    attacks = FakeAttacksService()
+    tech = await attacks.technology_state("k1")
+    tech.purchases["patrouille_unlock_1"] = 1
+    tech.purchases["patrouille_slot_1"] = 14
+    _wiring(
+        lords=[FakeLord(id="111", role="lord", kingdom_id="k1")],
+        economy=economy,
+        attacks=attacks,
+    )
+    strings = _kp_strings("en")
+    modify: Any = MockInteraction(user=MockUser(id=111), locale="en-US")
+    await KingdomPatrouilleCardModifyButton(strings).callback(modify)
+    assert modify.original_deleted  # the card window is gone
+    assert modify.followup.messages  # the note window opened
+    assert "window is closed" in _layout_texts(modify.followup.messages[-1])
     assert economy.placed_patrols == []
 
 

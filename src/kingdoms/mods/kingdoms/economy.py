@@ -1212,6 +1212,19 @@ class EconomyService:
         guard_key = f"{GUARD_TERRITORY_PREFIX}{territory.id}"
         if int(state.purchases.get(guard_key, 0) or 0) > int(timestamp.timestamp()):
             raise GuardAlreadyActiveError("a royal guard already shields this territory")
+        # garde-royale-fiche-v2 (Drasah 04/11): a declared attack cannot
+        # be cancelled — no guard on a territory under attack. Engine
+        # backstop (the wizard already refuses with 💥); the getter is
+        # optional because the test stands-ins expose no attacks().
+        attacks_all = getattr(self._attacks, "attacks", None)
+        if attacks_all is not None:
+            for attack in await attacks_all():
+                if str(getattr(attack, "territory_id", "")) == str(territory.id) and not getattr(
+                    attack, "is_over", False
+                ):
+                    raise EconomyError(
+                        "the territory is under attack — the guard cannot be placed"
+                    )
         state.purchases[GARDE_ROYALE_STOCK] = stock - 1
         await self._record_action(
             kingdom_id, GARDE_ROYALE, f"map {territory.map_key} placé"

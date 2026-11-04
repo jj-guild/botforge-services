@@ -155,7 +155,7 @@ def _strings(locale: str) -> dict[str, str]:
             "civilizations": "Civilisations",
             "marriages": "Mariages actifs",
             "patrol": "Patrouille",
-            "royal_guard": "Garde royale",
+            "royal_guard": "Garde Royal",
             "parish": "Paroisse",
             "parish_placeholder": "⛪ Chapelle (palier 1/3) — paliers D64 à venir",
             "ledger_button": "🏛️ Chambre des comptes",
@@ -189,11 +189,11 @@ def _strings(locale: str) -> dict[str, str]:
             ),
             "remparts_info_button": "🔎 En savoir plus",
             "remparts_state_button": "✅ Compris",
-            "remparts_guard": "Gardes Royales",
+            "remparts_guard": "Gardes Royaux",
             "remparts_guard_none": "aucune",
             "remparts_guard_line": "✅ {0} — protégée jusqu'à {1}",
             "remparts_guard_stock": "En réserve : {0}",
-            "remparts_guard_button": "🛡️ Garde Royal",
+            "remparts_guard_button": "💂 Garde Royal",
             "remparts_patrouille_button": "👣 Patrouille {0}",
             "remparts_patrouille_hub_button": "👣 Patrouille",
             "remparts_patrouille_hub_text": "Choisis le créneau de patrouille à régler :",
@@ -212,9 +212,28 @@ def _strings(locale: str) -> dict[str, str]:
                 "lieu de 2h.\n\n"
                 "Lorsqu'une patrouille est obtenue, elle est acquise pour "
                 "toute la saison, ne se consomme pas et est limitée à deux "
-                "par royaume."
+                "par royaume.\n\n"
+                "⚠ La patrouille n'annule pas une attaque déjà déclarée."
             ),
             "patrouille_use_button": "✅ Utiliser",
+            # patrouille-fiche-v3 (Drasah 04/11) : cockpit 4 boutons (état +
+            # ✏️ Modifier par créneau), confirmation ✅ Valider/❌ Annuler,
+            # créneau EFFECTIF affiché (3h si Renforcée).
+            "patrouille_modify_button": "✏️ Modifier",
+            "patrouille_slot_status": "Patrouille [{0}/2] — {1}",
+            "patrouille_slot_unset": "non réglée",
+            "patrouille_slot_locked": "non débloquée (Marché)",
+            "patrouille_confirm_text": (
+                "Patrouille {0} — créneau {1:02d}h00 → {2:02d}h00 (chaque jour).\n"
+                "Valide pour figer le créneau : il ne changera plus avant "
+                "le prochain Jour du Seigneur."
+            ),
+            "patrouille_validate_button": "✅ Valider",
+            "patrouille_cancel_button": "❌ Annuler",
+            "patrouille_lords_day_closed": (
+                "⏳ La fenêtre du Jour du Seigneur est terminée — le "
+                "créneau ne peut plus être modifié."
+            ),
             # patrouille-fiche-v2 (Drasah 04/11) : rappel dynamique de la
             # fenêtre du Jour du Seigneur greffé dans la fiche.
             "patrouille_lords_day_active": "fenêtre en cours, jusqu'au {0}",
@@ -225,26 +244,34 @@ def _strings(locale: str) -> dict[str, str]:
             "patrouille_lords_day_plain": (
                 "la fenêtre hebdomadaire annoncée par le bot"
             ),
-            "garde_card_title": "🛡️ Garde Royale",
+            "garde_card_title": "💂 Garde Royal",
             "garde_card_desc": (
                 "**Effet :**\n"
-                "12h d'immunité sur UNE map au choix — une Garde par map, "
-                "non rétroactive. Roi uniquement.\n\n"
-                "🛡️ Garde Royale disponible : **{0}** (réserve)\n\n"
-                "Clique sur ✅ Utiliser puis choisis la map à protéger."
+                "Permet de protéger une map acquise à son Royaume durant 12h "
+                "d'une attaque Classique, Exceptionnelle et Technologique.\n"
+                "Il n'est pas possible d'annuler une déclaration d'attaque "
+                "subie, et donc de poser un Garde Royal sur un territoire "
+                "attaqué.\n\n"
+                "💂 Garde Royal disponible : **{0}** (réserve)"
             ),
             "garde_use_button": "✅ Utiliser",
             "tech_card_cancel_button": "❌ Annuler",
-            "remparts_place_guard_choose": "🛡️ Choisis la map à protéger :",
-            "remparts_guard_wizard_stock": "🛡️ Garde Royale disponible : **{0}** (réserve)",
-            "remparts_guard_wizard_line": "🛡️ Choisis la map à protéger pour une durée de 12h :",
-            "remparts_guard_wizard_chosen": "🛡️ Map choisie : **{0}**",
+            "remparts_place_guard_choose": "💂 Choisis la map à protéger :",
+            "remparts_guard_wizard_stock": "💂 Garde Royal disponible : **{0}** (réserve)",
+            "remparts_guard_wizard_line": "Choisis la map à protéger pour une durée de 12h :",
+            "remparts_guard_wizard_chosen": "💂 Map choisie : **{0}**",
             "remparts_guard_validate_button": "✅ Valider",
             "remparts_guard_modify_button": "✏️ Modifier",
             "remparts_guard_cancel_button": "❌ Annuler",
-            "remparts_guard_no_stock": "⚠️ Aucune Garde Royale en réserve — le Marché en vend.",
+            "remparts_guard_no_stock": "⚠️ Aucun Garde Royal en réserve — le Marché en vend.",
             "remparts_guard_placed": (
-                "🛡️ La Garde Royale protège **{0}** jusqu'au {1} (heure de Paris)."
+                "💂 Le Garde Royal protège **{0}** jusqu'au {1} (heure de Paris)."
+            ),
+            # garde-royale-fiche-v2 (Drasah 04/11) : refus explicite d'un
+            # territoire sous attaque déclarée (💥 dans le sélecteur).
+            "remparts_guard_attacked": (
+                "💥 Vous ne pouvez pas protéger ce territoire "
+                "actuellement : il est déclaré attaqué."
             ),
             "remparts_patrouille_placed": (
                 "✅ Patrouille {0} posée : {1:02d}h00 → {2:02d}h00 (chaque jour)."
@@ -333,17 +360,17 @@ def _strings(locale: str) -> dict[str, str]:
                 " durée de toute la saison."
             ),
             "remparts_garde_intro": (
-                "🛡️ **Gardes Royales :**\n"
+                "💂 **Gardes Royaux :**\n"
                 "Permet de protéger un territoire de toute attaque — normale,"
-                " exceptionnelle et technologique — pour une durée de 12h. La"
-                " Garde Royale se consomme."
+                " exceptionnelle et technologique — pour une durée de 12h. Le"
+                " Garde Royal se consomme."
             ),
             "remparts_patrouille_title": "👣 **Patrouille :**",
             "remparts_patrouille_title_reinforced": "👣 **Patrouilles Renforcées :**",
-            "remparts_garde_title": "🛡️ **Garde Royale :**",
-            "remparts_garde_owned_one": "Vous disposez de {0} garde royale",
-            "remparts_garde_owned_many": "Vous disposez de {0} gardes royales",
-            "remparts_garde_owned_none": "Vous ne disposez d'aucune Garde Royale",
+            "remparts_garde_title": "💂 **Garde Royal :**",
+            "remparts_garde_owned_one": "Vous disposez de {0} garde royal",
+            "remparts_garde_owned_many": "Vous disposez de {0} gardes royaux",
+            "remparts_garde_owned_none": "Vous ne disposez d'aucun Garde Royal",
             "roster_exploring": "🗺️ exploration jusqu'à {0}",
             "roster_marriage_lock": "🔒 verrou mariage jusqu'à {0}",
             "roster_ffa_lock": "🚫 FFA verrouillé jusqu'à {0}",
@@ -356,7 +383,7 @@ def _strings(locale: str) -> dict[str, str]:
             # restructuration-serveur-v1 c (Drasah 19/10): le salon
             # Patrouille disparaît — le niveau de l'IA vit ici.
             "gaia_ai_level": "🤖 Niveau de l'IA Gaïa : {0}/5",
-            "territory_guard": "🛡️ protégée jusqu'à {0}",
+            "territory_guard": "💂 protégée jusqu'à {0}",
             "territory_note": "La Corruption transfère le territoire de salon (D58).",
             "territory_pending_body": (
                 "La carte reste secrète pour l'instant.\n"
@@ -505,7 +532,7 @@ def _strings(locale: str) -> dict[str, str]:
         "civilizations": "Civilizations",
         "marriages": "Active marriages",
         "patrol": "Patrol",
-        "royal_guard": "Royal guard",
+        "royal_guard": "Royal Guard",
         "parish": "Parish",
         "parish_placeholder": "⛪ Chapel (tier 1/3) — D64 tiers coming soon",
         "ledger_button": "🏛️ Chambre des comptes",
@@ -542,7 +569,7 @@ def _strings(locale: str) -> dict[str, str]:
         "remparts_guard_none": "none",
         "remparts_guard_line": "✅ {0} — shielded until {1}",
         "remparts_guard_stock": "In reserve: {0}",
-        "remparts_guard_button": "🛡️ Royal Guard",
+        "remparts_guard_button": "💂 Royal Guard",
         "remparts_patrouille_button": "👣 Patrol {0}",
         "remparts_patrouille_hub_button": "👣 Patrol",
         "remparts_patrouille_hub_text": "Choose the patrol slot to set:",
@@ -559,9 +586,28 @@ def _strings(locale: str) -> dict[str, str]:
             "If your AI is at max level (Jeu d'armes), the patrol is "
             "reinforced by one hour, offering 3h instead of 2h.\n\n"
             "Once obtained, a patrol is acquired for the whole season, is "
-            "not consumed and is limited to two per kingdom."
+            "not consumed and is limited to two per kingdom.\n\n"
+            "⚠ The patrol does not cancel an attack already declared."
         ),
         "patrouille_use_button": "✅ Use",
+        # patrouille-fiche-v3 (Drasah 04/11): 4-button cockpit (status +
+        # ✏️ Modify per slot), ✅ Confirm/❌ Cancel face, EFFECTIVE window
+        # shown (3h when Reinforced).
+        "patrouille_modify_button": "✏️ Modify",
+        "patrouille_slot_status": "Patrol [{0}/2] — {1}",
+        "patrouille_slot_unset": "not set",
+        "patrouille_slot_locked": "not unlocked (Market)",
+        "patrouille_confirm_text": (
+            "Patrol {0} — window {1:02d}:00 → {2:02d}:00 (daily).\n"
+            "Confirm to freeze the window: it will not change again "
+            "before the next Lord's Day."
+        ),
+        "patrouille_validate_button": "✅ Confirm",
+        "patrouille_cancel_button": "❌ Cancel",
+        "patrouille_lords_day_closed": (
+            "⏳ The Lord's Day window is closed — the window can no "
+            "longer be changed."
+        ),
         # patrouille-fiche-v2 (Drasah 04/11): dynamic Lord's Day window
         # reminder grafted into the card.
         "patrouille_lords_day_active": "window open until {0}",
@@ -572,26 +618,33 @@ def _strings(locale: str) -> dict[str, str]:
         "patrouille_lords_day_plain": (
             "the weekly window announced by the bot"
         ),
-        "garde_card_title": "🛡️ Royal Guard",
+        "garde_card_title": "💂 Royal Guard",
         "garde_card_desc": (
             "**Effect:**\n"
-            "12h of immunity on ONE chosen map — one guard per map, "
-            "non-retroactive. King only.\n\n"
-            "🛡️ Royal Guard available: **{0}** (in reserve)\n\n"
-            "Click ✅ Use, then pick the map to shield."
+            "Shields a map owned by your Kingdom for 12h against Classic,"
+            " Exceptional and Technological attacks.\n"
+            "A declared attack cannot be cancelled, so a Royal Guard"
+            " cannot be placed on a territory under attack.\n\n"
+            "💂 Royal Guard available: **{0}** (in reserve)"
         ),
         "garde_use_button": "✅ Use",
         "tech_card_cancel_button": "❌ Cancel",
-        "remparts_place_guard_choose": "🛡️ Choose the map to shield:",
-        "remparts_guard_wizard_stock": "🛡️ Royal Guard available: **{0}** (in reserve)",
-        "remparts_guard_wizard_line": "🛡️ Choose the map to shield for 12 hours:",
-        "remparts_guard_wizard_chosen": "🛡️ Chosen map: **{0}**",
+        "remparts_place_guard_choose": "💂 Choose the map to shield:",
+        "remparts_guard_wizard_stock": "💂 Royal Guard available: **{0}** (in reserve)",
+        "remparts_guard_wizard_line": "Choose the map to shield for 12 hours:",
+        "remparts_guard_wizard_chosen": "💂 Chosen map: **{0}**",
         "remparts_guard_validate_button": "✅ Confirm",
         "remparts_guard_modify_button": "✏️ Change",
         "remparts_guard_cancel_button": "❌ Cancel",
         "remparts_guard_no_stock": "⚠️ No Royal Guard in reserve — the Market sells them.",
         "remparts_guard_placed": (
-            "🛡️ The Royal Guard shields **{0}** until {1} (Paris time)."
+            "💂 The Royal Guard shields **{0}** until {1} (Paris time)."
+        ),
+        # garde-royale-fiche-v2 (Drasah 04/11): explicit refusal for a
+        # territory under a declared attack (💥 in the selector).
+        "remparts_guard_attacked": (
+            "💥 You cannot shield this territory right now: an attack"
+            " is declared on it."
         ),
         "remparts_patrouille_placed": (
             "✅ Patrol {0} placed: {1:02d}:00 → {2:02d}:00 (daily)."
@@ -667,13 +720,13 @@ def _strings(locale: str) -> dict[str, str]:
                 " patrols per kingdom, usable for the whole season."
             ),
             "remparts_garde_intro": (
-                "🛡️ **Royal Guards:**\n"
+                "💂 **Royal Guards:**\n"
                 "Shields one territory from every attack — normal, exceptional"
                 " and technological — for 12 hours. The Royal Guard is consumed."
             ),
             "remparts_patrouille_title": "👣 **Patrol:**",
             "remparts_patrouille_title_reinforced": "👣 **Reinforced Patrols:**",
-            "remparts_garde_title": "🛡️ **Royal Guard:**",
+            "remparts_garde_title": "💂 **Royal Guard:**",
             "remparts_garde_owned_one": "You own {0} Royal Guard",
             "remparts_garde_owned_many": "You own {0} Royal Guards",
             "remparts_garde_owned_none": "You do not own any Royal Guard",
@@ -689,7 +742,7 @@ def _strings(locale: str) -> dict[str, str]:
         # restructuration-serveur-v1 c (Drasah 19/10): the Patrouille
         # salon disappears — the AI level lives here.
         "gaia_ai_level": "🤖 Gaïa AI level: {0}/5",
-        "territory_guard": "🛡️ shielded until {0}",
+        "territory_guard": "💂 shielded until {0}",
         "territory_note": "Corruption moves the territory across salons (D58).",
         "territory_pending_body": (
             "The map stays secret for now.\n"
