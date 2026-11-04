@@ -4189,3 +4189,199 @@ async def test_sabotage_refusal_edits_the_mother_panel_in_place(
         if task is not asyncio.current_task():
             task.cancel()
     await asyncio.sleep(0)
+
+
+async def test_gestion_sheets_edit_the_remparts_window_in_place() -> None:
+    """gestion-inplace-v1 (Drasah 04/11, bloc 11+12): clicked from the
+    player's ephemeral Remparts window the ⚔️ Gestion d'attaque / 🛡️
+    Gestion de la défense sheets take the window IN PLACE — the sheet
+    wears the ↩️ Remparts back and NO second window is opened."""
+    import types
+
+    from kingdoms.mods.kingdoms import attacks as attacks_module
+    from kingdoms.mods.kingdoms.kingdom_attack_panel import (
+        KingdomAttackManagerButton,
+        KingdomDefenseManagerButton,
+        _strings,
+    )
+    from tests.mocks.discord_mock import MockMessage
+
+    def _ephemeral_parent(user_id: str) -> MockInteraction:
+        click = MockInteraction(user=MockUser(id=user_id), locale="fr")  # type: ignore[arg-type]
+        parent = MockMessage(view=None)
+        parent.flags = types.SimpleNamespace(ephemeral=True)  # type: ignore[attr-defined]
+        click.message = parent  # type: ignore[attr-defined]
+        return click
+
+    bundle = PhasesBundle()
+    await bundle.launch_season()
+    await bundle.draw(24)
+    attack = await bundle.fresh_attack()
+    attacks_module._now = lambda: datetime(2026, 10, 11, 12, 30, tzinfo=UTC)
+    _wiring(bundle)
+    # The defense-manager sheet EDITS the Remparts window in place
+    # (edit_message — response.ephemeral stays False, no send at all).
+    defense = KingdomDefenseManagerButton(_strings("fr")["defense_manager_button"])
+    click = _ephemeral_parent("lord-b")
+    await defense.callback(click)  # type: ignore[arg-type]
+    assert click.response.message is not None
+    assert click.response.ephemeral is False  # edit_message, never send_message
+    assert not click.followup.messages  # no stacked second window
+    ids = [str(getattr(i, "custom_id", "") or "") for i in click.response.message.components]
+    assert "kingdoms:remparts:back" in ids
+    # The attack-manager sheet walks the same in-place path.
+    manager = KingdomAttackManagerButton(_strings("fr")["plan_manager_button"])
+    click2 = _ephemeral_parent("lord-b")
+    await manager.callback(click2)  # type: ignore[arg-type]
+    assert click2.response.message is not None
+    assert click2.response.ephemeral is False
+    assert not click2.followup.messages
+    ids2 = [str(getattr(i, "custom_id", "") or "") for i in click2.response.message.components]
+    assert "kingdoms:remparts:back" in ids2
+    # The fresh face (no ephemeral parent) still opens through the
+    # fenêtre unique AND wears the back button.
+    fresh = MockInteraction(user=MockUser(id="lord-b"), locale="fr")  # type: ignore[arg-type]
+    await defense.callback(fresh)  # type: ignore[arg-type]
+    assert fresh.response.ephemeral is True
+    ids3 = [str(getattr(i, "custom_id", "") or "") for i in (fresh.response.message.components if fresh.response.message else [])]
+    assert "kingdoms:remparts:back" in ids3
+
+
+async def test_cancel_defense_edits_the_sheet_in_place() -> None:
+    """gestion-inplace-v1 (Drasah 04/11): the ↩️ Retirer ma défense of the
+    defense-manager sheet withdraws AND re-renders the sheet IN PLACE —
+    the defended row becomes « en attente », the done note rides the
+    sheet, NEVER a follow-up bubble (the non-ephemeral edge keeps the
+    old defer+followup path)."""
+    import types
+
+    from kingdoms.mods.kingdoms import attacks as attacks_module
+    from kingdoms.mods.kingdoms.kingdom_attack_panel import (
+        KingdomCancelDefenseButton,
+        _strings,
+    )
+    from tests.mocks.discord_mock import MockMessage
+
+    bundle = PhasesBundle()
+    await bundle.launch_season()
+    await bundle.draw(24)
+    attack = await bundle.fresh_attack()
+    attacks_module._now = lambda: datetime(2026, 10, 11, 12, 30, tzinfo=UTC)
+    _wiring(bundle)
+    await bundle.attacks.respond_defense(attack.id, "lord-b")
+
+    def _sheet_text(message: Any) -> str:
+        parts: list[str] = []
+        for child in getattr(message, "components", []) or []:
+            text = getattr(child, "content", None)
+            if not text:
+                data = getattr(child, "data", None)
+                if isinstance(data, dict):
+                    text = data.get("content") or data.get("label")
+            if text:
+                parts.append(str(text))
+        return "\n".join(parts)
+
+    button = KingdomCancelDefenseButton(attack.id, _strings("fr")["cancel_defense_button"])
+    click = MockInteraction(user=MockUser(id="lord-b"), locale="fr")  # type: ignore[arg-type]
+    parent = MockMessage(view=None)
+    parent.flags = types.SimpleNamespace(ephemeral=True)  # type: ignore[attr-defined]
+    click.message = parent  # type: ignore[attr-defined]
+    await button.callback(click)  # type: ignore[arg-type]
+    # In-place: the sheet itself is edited, no follow-up bubble.
+    assert click.response.ephemeral is False
+    assert not click.followup.messages
+    sheet = _sheet_text(click.response.message)
+    assert "Défense retirée" in sheet
+    assert "en attente de défenseur" in sheet
+    # The withdrawn defense is gone from the attack itself.
+    fresh = next(a for a in await bundle.attacks.attacks() if a.id == attack.id)
+    assert fresh.defender_lord_id is None
+    # The non-ephemeral edge (a restarted flow without the sheet)
+    # keeps the legacy defer + followup answer.
+    await bundle.attacks.respond_defense(attack.id, "lord-b")
+    plain = MockInteraction(user=MockUser(id="lord-b"), locale="fr")  # type: ignore[arg-type]
+    await button.callback(plain)  # type: ignore[arg-type]
+    assert plain.followup.messages
+    assert "Défense retirée" in (plain.followup.messages[0].content or "")
+
+
+async def test_remparts_back_button_walks_the_window_home(monkeypatch: pytest.MonkeyPatch) -> None:
+    """gestion-inplace-v1 (Drasah 04/11): the ↩️ Remparts back re-edits
+    the player's window into the LIVE Remparts view (never a stacked
+    second window); a rebuild failure keeps the sheet with the honest
+    note instead of dying silently."""
+    import types
+
+    from kingdoms.mods.kingdoms import kingdom_lieux as lieux_module
+    from kingdoms.mods.kingdoms.kingdom_attack_panel import (
+        KingdomRempartsBackButton,
+        _strings,
+    )
+    from tests.mocks.discord_mock import MockMessage
+
+    def _ephemeral_parent() -> MockInteraction:
+        click = MockInteraction(user=MockUser(id="lord-b"), locale="fr")  # type: ignore[arg-type]
+        parent = MockMessage(view=None)
+        parent.flags = types.SimpleNamespace(ephemeral=True)  # type: ignore[attr-defined]
+        click.message = parent  # type: ignore[attr-defined]
+        return click
+
+    walked: list[bool] = []
+
+    async def _fake_walk_home(interaction: Any) -> bool:
+        walked.append(True)
+        await interaction.response.edit_message(view=None)
+        return True
+
+    monkeypatch.setattr(lieux_module, "edit_remparts_view", _fake_walk_home)
+    button = KingdomRempartsBackButton(_strings("fr")["remparts_back_button"])
+    click = _ephemeral_parent()
+    await button.callback(click)  # type: ignore[arg-type]
+    assert walked == [True]
+    assert click.response.ephemeral is False  # the window was edited, not re-sent
+    assert not click.followup.messages
+
+    # The rebuild fails — the sheet STAYS with the honest note.
+    async def _fake_broken(interaction: Any) -> bool:
+        return False
+
+    monkeypatch.setattr(lieux_module, "edit_remparts_view", _fake_broken)
+    stuck = _ephemeral_parent()
+    await button.callback(stuck)  # type: ignore[arg-type]
+    assert stuck.response.message is not None
+    assert stuck.response.ephemeral is False
+    assert not stuck.followup.messages
+    parts: list[str] = []
+    for child in (stuck.response.message.components or []):
+        text = getattr(child, "content", None)
+        if not text:
+            data = getattr(child, "data", None)
+            if isinstance(data, dict):
+                text = data.get("content") or data.get("label")
+        if text:
+            parts.append(str(text))
+    assert "Impossible de rouvrir les Remparts" in "\n".join(parts)
+
+
+def test_gestion_items_are_registered_on_the_bot() -> None:
+    """gestion-inplace-v1 (Drasah 04/11): the ↩️ Retirer ma défense and
+    ↩️ Remparts back DynamicItems MUST sit in the registration list —
+    the withdraw button was missing (dead after every restart)."""
+    from kingdoms.mods.kingdoms.kingdom_attack_panel import (
+        KingdomCancelDefenseButton,
+        KingdomRempartsBackButton,
+    )
+    from kingdoms.mods.kingdoms.kingdom_persistent import register_kingdoms_persistent_items
+
+    class _RecordingBot:
+        def __init__(self) -> None:
+            self.items: list[Any] = []
+
+        def add_dynamic_items(self, *items: Any) -> None:
+            self.items.extend(items)
+
+    bot = _RecordingBot()
+    register_kingdoms_persistent_items(bot)  # type: ignore[arg-type]
+    assert KingdomCancelDefenseButton in bot.items
+    assert KingdomRempartsBackButton in bot.items

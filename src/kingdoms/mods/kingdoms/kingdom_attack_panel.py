@@ -265,6 +265,8 @@ _STRINGS: dict[str, dict[str, str]] = {
         ),
         "cancel_defense_button": "↩️ Retirer ma défense",
         "cancel_defense_done": "🛡️ Défense retirée — budget de défense remboursé.",
+        "remparts_back_button": "↩️ Remparts",
+        "remparts_back_failed": "❌ Impossible de rouvrir les Remparts — réouvre-les depuis l'Entrée du royaume.",
         "defend_wrong_kingdom": "❌ Vous ne pouvez défendre ce territoire.",
         "defend_already": "❌ Le royaume est déjà défendu.",
         "room_not_player": "❌ Seuls les deux joueurs du match peuvent agir ici.",
@@ -682,6 +684,8 @@ _STRINGS: dict[str, dict[str, str]] = {
         ),
         "cancel_defense_button": "↩️ Withdraw my defense",
         "cancel_defense_done": "🛡️ Defense withdrawn — defense budget refunded.",
+        "remparts_back_button": "↩️ Ramparts",
+        "remparts_back_failed": "❌ Could not reopen the Ramparts — reopen them from the realm's Entrance.",
         "defend_wrong_kingdom": "❌ You cannot defend this territory.",
         "defend_already": "❌ The kingdom is already defended.",
         "room_not_player": "❌ Only the two players of the match may act here.",
@@ -2541,64 +2545,97 @@ class KingdomDefenseManagerButton(
         if lord is None or getattr(lord, "kingdom_id", None) is None:
             await _open_unique_ephemeral(interaction, strings["defense_manager_not_defender"])
             return
-        kingdom_id = str(lord.kingdom_id)
-        kingdom_name = await _kingdom_name(wiring.kingdoms_service, kingdom_id)
-        rows: list[str] = []
-        try:
-            ongoing = [
-                a
-                for a in await wiring.attacks_service.attacks()
-                if not a.is_over and str(getattr(a, "defender_kingdom_id", "")) == kingdom_id
-            ]
-        except Exception:
-            ongoing = []
-        from kingdoms.mods.kingdoms.models import AttackState
+        # gestion-inplace-v1 (Drasah 04/11): the sheet build moved to
+        # ``_defense_manager_payload`` — the ↩️ Retirer ma défense
+        # withdrawal RE-RENDERS the very same sheet in place (the row
+        # and its button vanish at once), instead of stacking a
+        # follow-up bubble next to the window (fenêtre mère).
+        await _defense_manager_render(interaction, wiring, lord, strings)
 
-        for attack in ongoing:
-            if getattr(attack, "state", None) is AttackState.DEFENDED and not attack.ai_defender:
-                defender = await _lord_name(wiring.kingdoms_service, attack.defender_lord_id)
-                state = strings["defense_manager_defended"].format(lord=defender)
-            else:
-                state = strings["defense_manager_waiting"]
-            rows.append(
-                strings["defense_manager_row"].format(
-                    map=attack.map_key, time=_fmt_paris(attack.expires_at), state=state
-                )
+
+async def _defense_manager_payload(
+    wiring: Any, lord: Any, strings: dict[str, str]
+) -> tuple[str, list[Any]]:
+    """Build the defense-manager sheet: title + rows + withdraw buttons.
+
+    gestion-inplace-v1 (Drasah 04/11): shared by the manager ENTRY and
+    the in-place re-renders (a withdrawal edits the SAME window, never
+    a follow-up bubble).
+    """
+    from kingdoms.mods.kingdoms.models import AttackState
+
+    kingdom_id = str(lord.kingdom_id)
+    kingdom_name = await _kingdom_name(wiring.kingdoms_service, kingdom_id)
+    rows: list[str] = []
+    try:
+        ongoing = [
+            a
+            for a in await wiring.attacks_service.attacks()
+            if not a.is_over and str(getattr(a, "defender_kingdom_id", "")) == kingdom_id
+        ]
+    except Exception:
+        ongoing = []
+    for attack in ongoing:
+        if getattr(attack, "state", None) is AttackState.DEFENDED and not attack.ai_defender:
+            defender = await _lord_name(wiring.kingdoms_service, attack.defender_lord_id)
+            state = strings["defense_manager_defended"].format(lord=defender)
+        else:
+            state = strings["defense_manager_waiting"]
+        rows.append(
+            strings["defense_manager_row"].format(
+                map=attack.map_key, time=_fmt_paris(attack.expires_at), state=state
             )
-        body = "\n".join(rows) if rows else strings["defense_manager_empty"]
-        text = strings["defense_manager_title"].format(kingdom=kingdom_name) + "\n" + body
-        # restructuration-serveur-v1 b: the defender may WITHDRAW their
-        # own defense — one ↩️ button per attack THIS lord defends (the
-        # draft-start threshold lives service side, ``pick_ban_lead_minutes``).
-        cancels: list[Any] = []
-        for attack in ongoing:
-            if (
-                not getattr(attack, "revealed", False)
-                and getattr(attack, "state", None) is AttackState.DEFENDED
-                and str(getattr(attack, "defender_lord_id", "") or "") == str(lord.id)
-            ):
-                cancels.append(
-                    KingdomCancelDefenseButton(str(attack.id), strings["cancel_defense_button"])
-                )
-        # remparts-fenetre-v1 (Drasah 03/11): clicked from the player's
-        # ephemeral window (the 🧱 Remparts view) the sheet takes the
-        # window IN PLACE — the previous view is never quit.
-        from kingdoms.mods.kingdoms.kingdom_persistent import (
-            _is_ephemeral_parent,
-            _replace_ephemeral_window,
         )
+    body = "\n".join(rows) if rows else strings["defense_manager_empty"]
+    text = strings["defense_manager_title"].format(kingdom=kingdom_name) + "\n" + body
+    # restructuration-serveur-v1 b: the defender may WITHDRAW their
+    # own defense — one ↩️ button per attack THIS lord defends (the
+    # draft-start threshold lives service side, ``pick_ban_lead_minutes``).
+    cancels: list[Any] = []
+    for attack in ongoing:
+        if (
+            not getattr(attack, "revealed", False)
+            and getattr(attack, "state", None) is AttackState.DEFENDED
+            and str(getattr(attack, "defender_lord_id", "") or "") == str(lord.id)
+        ):
+            cancels.append(
+                KingdomCancelDefenseButton(str(attack.id), strings["cancel_defense_button"])
+            )
+    return text, cancels
 
-        if _is_ephemeral_parent(interaction):
-            await _replace_ephemeral_window(interaction, text, cancels or None)
-            return
-        view = discord.ui.View(timeout=600)
-        for button in cancels:
-            view.add_item(button)
-        await _open_unique_ephemeral(
-            interaction,
-            text,
-            view=view if list(view.children) else None,  # type: ignore[arg-type]
-        )
+
+async def _defense_manager_render(
+    interaction: discord.Interaction,
+    wiring: Any,
+    lord: Any,
+    strings: dict[str, str],
+    *,
+    note: str = "",
+) -> None:
+    """Render the defense-manager sheet as the player's ONE window.
+
+    gestion-inplace-v1 (Drasah 04/11): edited IN PLACE when the click
+    rides an ephemeral parent (remparts-fenetre-v1) — the sheet wears
+    the ↩️ Remparts back and ``note`` rides the sheet itself (in-panel
+    done/refusal line, the sabotage 04/11 pattern).
+    """
+    from kingdoms.mods.kingdoms.kingdom_persistent import (
+        _is_ephemeral_parent,
+        _open_unique_ephemeral,
+        _replace_ephemeral_window,
+    )
+
+    text, cancels = await _defense_manager_payload(wiring, lord, strings)
+    if note:
+        text = f"{text}\n\n{note}"
+    items = [*cancels, KingdomRempartsBackButton(strings["remparts_back_button"])]
+    if _is_ephemeral_parent(interaction):
+        await _replace_ephemeral_window(interaction, text, items)
+        return
+    view = discord.ui.View(timeout=600)
+    for button in items:
+        view.add_item(button)
+    await _open_unique_ephemeral(interaction, text, view=view)
 
 
 # ----------------------------------------------------------------------
@@ -3212,10 +3249,16 @@ class KingdomAttackManagerButton(
             _replace_ephemeral_window,
         )
 
+        # gestion-inplace-v1 (Drasah 04/11): the sheet wears the ↩️
+        # Remparts back on BOTH faces — the player walks home from the
+        # war room without reopening the Entrée.
+        back = KingdomRempartsBackButton(strings["remparts_back_button"])
         if _is_ephemeral_parent(interaction):
-            await _replace_ephemeral_window(interaction, "\n".join(sections))
+            await _replace_ephemeral_window(interaction, "\n".join(sections), [back])
             return
-        await _open_unique_ephemeral(interaction, "\n".join(sections))
+        view = discord.ui.View(timeout=600)
+        view.add_item(back)
+        await _open_unique_ephemeral(interaction, "\n".join(sections), view=view)
 
 
 async def _update_plan_dm_safe(bot: Any, plan: Any, content: str) -> bool:
@@ -3473,6 +3516,60 @@ class KingdomAttackCancelButton(
         await interaction.followup.send(note, ephemeral=True)
 
 
+class KingdomRempartsBackButton(
+    discord.ui.DynamicItem[discord.ui.Button[Any]],
+    template=r"kingdoms:remparts:back$",
+):
+    """The ↩️ « Remparts » back of the gestion sheets (gestion-inplace-v1).
+
+    Drasah 04/11 (bloc 11+12): the ⚔️ Gestion d'attaque / 🛡️ Gestion de
+    la défense sheets REPLACE the Remparts window in place
+    (remparts-fenetre-v1) — the back walks the player HOME the same
+    way: the sheet's window is re-edited into the LIVE Remparts view,
+    never a stacked second window.
+    """
+
+    def __init__(self, label: str) -> None:
+        super().__init__(
+            discord.ui.Button(
+                label=label[:80],
+                custom_id="kingdoms:remparts:back",
+                style=discord.ButtonStyle.secondary,
+            )
+        )
+
+    @classmethod
+    async def from_custom_id(
+        cls,
+        interaction: discord.Interaction,
+        item: discord.ui.Item[Any],
+        match: re.Match[str],
+        /,
+    ) -> KingdomRempartsBackButton:
+        """Rebuild the button from the wire — THIS module's strings only."""
+        return cls(_strings(_locale(interaction))["remparts_back_button"])
+
+    async def callback(self, interaction: discord.Interaction) -> None:
+        """Walk the player's window back to the live Remparts view."""
+        from kingdoms.mods.kingdoms.kingdom_lieux import edit_remparts_view
+        from kingdoms.mods.kingdoms.kingdom_persistent import _replace_ephemeral_window
+
+        strings = _strings(_locale(interaction))
+        walked = False
+        try:
+            walked = await edit_remparts_view(interaction)
+        except Exception:
+            walked = False
+        if walked:
+            return
+        # The Remparts view could not be rebuilt (no service/kingdom) —
+        # the sheet stays, dressed with the honest note (best effort).
+        try:
+            await _replace_ephemeral_window(interaction, strings["remparts_back_failed"])
+        except Exception:
+            logger.debug("kingdoms: remparts back fallback failed", exc_info=True)
+
+
 class KingdomCancelDefenseButton(
     discord.ui.DynamicItem[discord.ui.Button[Any]],
     template=r"kingdoms:attack:defend:cancel:(?P<key>[0-9a-f]{16})",
@@ -3511,12 +3608,40 @@ class KingdomCancelDefenseButton(
 
     async def callback(self, interaction: discord.Interaction) -> None:
         """Withdraw the defense — budget refunded (ephemeral confirm)."""
-        from kingdoms.mods.kingdoms.kingdom_persistent import _open_unique_ephemeral, _wiring
+        from kingdoms.mods.kingdoms.kingdom_persistent import (
+            _is_ephemeral_parent,
+            _lord_of,
+            _open_unique_ephemeral,
+            _wiring,
+        )
 
         strings = _strings(_locale(interaction))
         wiring = _wiring()
         if wiring.attacks_service is None or not self.attack_id:
             await _open_unique_ephemeral(interaction, strings["no_service"])
+            return
+        # gestion-inplace-v1 (Drasah 04/11): clicked from the ephemeral
+        # defense-manager sheet the withdrawal EDITS THE SHEET IN
+        # PLACE — the withdrawn row and its ↩️ button vanish at once,
+        # the done note rides the sheet itself (fenêtre mère, the
+        # sabotage 04/11 pattern); a refusal also rides the sheet with
+        # the retry button still there. NEVER a follow-up bubble.
+        lord = await _lord_of(
+            wiring.kingdoms_service, str(interaction.user.id), wiring.bot_admins
+        )
+        if _is_ephemeral_parent(interaction) and lord is not None and wiring.kingdoms_service is not None:
+            try:
+                await wiring.attacks_service.cancel_defense(self.attack_id, str(interaction.user.id))
+            except Exception as exc:
+                message = getattr(exc, "message", None) or str(exc)
+                await _defense_manager_render(
+                    interaction, wiring, lord, strings,
+                    note=strings["failed"].format(message=message),
+                )
+                return
+            await _defense_manager_render(
+                interaction, wiring, lord, strings, note=strings["cancel_defense_done"]
+            )
             return
         await interaction.response.defer(ephemeral=True)
         try:

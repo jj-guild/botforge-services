@@ -147,10 +147,12 @@ def register_kingdoms_persistent_items(bot: discord.Client) -> None:
         KingdomAttackJoinButton,
         KingdomAttackInfoButton,
         KingdomAttackManagerButton,
+        KingdomCancelDefenseButton,
         KingdomDefenseManagerButton,
         KingdomDraftViewButton,
         KingdomPlanButton,
         KingdomPlanCancelButton,
+        KingdomRempartsBackButton,
         KingdomRoomResultButton,
         KingdomRoomUrlButton,
         KingdomSabotageOpenButton,
@@ -233,6 +235,12 @@ def register_kingdoms_persistent_items(bot: discord.Client) -> None:
         KingdomAttackInfoButton,
         KingdomAttackManagerButton,
         KingdomDefenseManagerButton,
+        # gestion-inplace-v1 (Drasah 04/11, bloc 11+12): the ↩️ Retirer ma
+        # défense button of the defense-manager sheet was NEVER in this
+        # list — dead after every restart — and the sheets now wear the
+        # ↩️ Remparts back (both restart-proof, like every DynamicItem).
+        KingdomCancelDefenseButton,
+        KingdomRempartsBackButton,
         KingdomDraftViewButton,
         # planification-attaque-v1 (Drasah 23/10): the planning
         # wizard, the kingdom's plan list and the plan cancel.
