@@ -91,3 +91,18 @@ def test_the_jeu_darmes_buttons_are_registered() -> None:
         "KingdomJeuDarmesCancelButton",
     ):
         assert any(item.__name__ == name for item in bot.registered), name
+
+
+def test_the_patrouille_garde_fiche_card_buttons_are_registered() -> None:
+    """patrouille-garde-fiche-v1 (Drasah 04/11): the Patrouille / Garde
+    Royale fiche-cards (✅ Utiliser / ❌ Annuler) must survive a restart."""
+    bot = _RecordingBot()
+
+    register_kingdoms_persistent_items(bot)  # type: ignore[arg-type]
+
+    for name in (
+        "KingdomPatrouilleCardUseButton",
+        "KingdomGardeCardUseButton",
+        "KingdomTechCardCancelButton",
+    ):
+        assert any(item.__name__ == name for item in bot.registered), name

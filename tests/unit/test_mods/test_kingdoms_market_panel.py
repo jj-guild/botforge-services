@@ -22,12 +22,16 @@ from kingdoms.mods.kingdoms.kingdom_panels import (
     deploy_panels,
 )
 from kingdoms.mods.kingdoms.kingdom_persistent import (
+    KingdomGardeCardUseButton,
     KingdomMarketActionButton,
     KingdomMarketCardInfoButton,
     KingdomMarketTechButton,
     KingdomMarketUseButton,
+    KingdomPatrouilleCardUseButton,
     KingdomRempartsGuardButton,
     KingdomRempartsPatrouilleButton,
+    KingdomRempartsPatrouilleHubButton,
+    KingdomTechCardCancelButton,
     KingdomsPanelWiring,
     register_kingdoms_panel_wiring,
 )
@@ -644,11 +648,17 @@ async def test_use_button_corruption_answers_no_options_when_empty() -> None:
     assert "No option" in (message.content or "")
 
 
-async def test_remparts_guard_button_opens_the_owned_map_select_and_places() -> None:
-    """remparts-v2: the Marché sells guard TOKENS; the King POSSES them
-    from the Remparts salon on one of his own maps."""
+async def test_remparts_guard_button_opens_the_card_then_the_map_select() -> None:
+    """patrouille-garde-fiche-v1 (Drasah 04/11): the 🛡️ Garde Royale
+    opener shows the CARD first (Jeu d'armes architecture) — the map
+    select only opens on ✅ Utiliser. NB: the pre-existing face of
+    this test predated garde-royale-v2 (it asserted the select placed
+    the guard directly) and never ran on the branch's Docker CI."""
     economy = FakeEconomyService()
     economy.guard_tokens = 1  # the token was bought at the market
+    attacks = FakeAttacksService()
+    tech = await attacks.technology_state("k1")
+    tech.purchases["garde_royale_stock"] = 1
     territories = FakeTerritoryService(
         territories=[
             FakeTerritory(id="t1", map_key="arabia", owner_kingdom_id="k2"),
@@ -659,22 +669,90 @@ async def test_remparts_guard_button_opens_the_owned_map_select_and_places() -> 
         lords=[FakeLord(id="111", role="king", kingdom_id="k1")],
         economy=economy,
         territories=territories,
+        attacks=attacks,
     )
+    strings = _kp_strings("en")
     interaction: Any = MockInteraction(user=MockUser(id=111), locale="en-US")
     button = KingdomRempartsGuardButton({"remparts_guard_button": "🛡️ Placer un Garde Royal"})
     await button.callback(interaction)
-    message = interaction.response.message
-    assert message is not None and message.view is not None
-    select = next(iter(message.view.children))
+    # --- the CARD first: embed (art + live reserve) + the button row.
+    card = interaction.response.message
+    assert card is not None and card.view is not None
+    ids = _custom_ids(card.view)
+    assert "kingdoms:garde-card:use" in ids
+    assert "kingdoms:garde-card:cancel" in ids
+    assert len(card.embeds) == 1
+    body = str(card.embeds[0].description or "")
+    assert "12h of immunity" in body
+    assert "Royal Guard available: **1**" in body
+    # --- ✅ Utiliser: the card closes, the owned-map select opens.
+    use: Any = MockInteraction(user=MockUser(id=111), locale="en-US")
+    await KingdomGardeCardUseButton(strings).callback(use)
+    assert use.original_deleted  # the card window is gone
+    assert use.followup.messages  # the wizard window opened
+    wizard = use.followup.messages[-1]
+    assert wizard.view is not None
+    select = _find_by_id(wizard.view, "kingdoms:remparts:choose:guard")
+    assert select is not None
     # Only the kingdom's own maps are shieldable (enemy map filtered out).
     assert [opt.value for opt in select.options] == ["t2"]
+    # Nothing is consumed by browsing: the token still sits in reserve.
+    assert economy.guard_tokens == 1
 
     choice: Any = MockInteraction(user=MockUser(id=111), data={"values": ["t2"]}, locale="en-US")
-    choice.message = message
+    choice.message = wizard
     await select.callback(choice)
-    assert economy.guarded == [("k1", "t2")]
-    assert economy.guard_tokens == 0  # the token was consumed
     assert choice.response.message is not None
+    # garde-royale-v2: the choice face carries Valider / Modifier / Annuler.
+    assert "kingdoms:remparts:guard:validate:cv2:t2" in _custom_ids(choice.response.message.view)
+
+
+async def test_patrouille_hub_button_opens_the_card_first() -> None:
+    """patrouille-garde-fiche-v1: the 👣 Patrouille opener shows the
+    CARD first (Jeu d'armes architecture) — the cockpit only opens on
+    ✅ Utiliser."""
+    economy = FakeEconomyService()
+    _wiring(
+        lords=[FakeLord(id="111", role="king", kingdom_id="k1")],
+        economy=economy,
+    )
+    strings = _kp_strings("en")
+    interaction: Any = MockInteraction(user=MockUser(id=111), locale="en-US")
+    button = KingdomRempartsPatrouilleHubButton({"remparts_patrouille_hub_button": "👣 Patrol"})
+    await button.callback(interaction)
+    card = interaction.response.message
+    assert card is not None and card.view is not None
+    ids = _custom_ids(card.view)
+    assert "kingdoms:patrouille-card:use" in ids
+    assert "kingdoms:patrouille-card:cancel" in ids
+    assert len(card.embeds) == 1
+    assert "Effect:" in str(card.embeds[0].description or "")
+
+
+async def test_patrouille_card_use_opens_the_cockpit_and_cancel_consumes_nothing() -> None:
+    """patrouille-garde-fiche-v1: ✅ Utiliser closes the card and opens
+    the both-slots cockpit; ❌ Annuler closes the card and nothing is
+    consumed."""
+    economy = FakeEconomyService()
+    _wiring(
+        lords=[FakeLord(id="111", role="king", kingdom_id="k1")],
+        economy=economy,
+    )
+    strings = _kp_strings("en")
+    use: Any = MockInteraction(user=MockUser(id=111), locale="en-US")
+    await KingdomPatrouilleCardUseButton(strings).callback(use)
+    assert use.original_deleted
+    assert use.followup.messages
+    cockpit = use.followup.messages[-1]
+    assert cockpit.view is not None
+    ids = _custom_ids(cockpit.view)
+    assert "kingdoms:remparts:patrouille:1" in ids
+    assert "kingdoms:remparts:patrouille:2" in ids
+    # ❌ Annuler: the card window goes away, no service call happened.
+    cancel: Any = MockInteraction(user=MockUser(id=111), locale="en-US")
+    await KingdomTechCardCancelButton(strings, "patrouille").callback(cancel)
+    assert cancel.original_deleted
+    assert economy.placed_patrols == []
 
 
 async def test_remparts_guard_button_refuses_non_kings() -> None:
