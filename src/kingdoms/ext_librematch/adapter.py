@@ -31,8 +31,12 @@ from kingdoms.core.models.game import (
 )
 from kingdoms.core.rpc.rate_limit import ProviderRateLimiter
 from kingdoms.core.services.provider_endpoints import provider_url
+from kingdoms.core.upstream_stats import StatsRegistry
 
 logger = logging.getLogger(__name__)
+
+# The process-wide upstream call stats — served over the Status contract.
+STATS = StatsRegistry()
 
 
 DEFAULT_BASE_URL = provider_url("librematch", "api_url")
@@ -109,13 +113,14 @@ class LibrematchAdapter:
         if not await self._allowed():
             logger.warning("librematch call over rate budget; degrading to empty lobby list")
             return []
-        async with self._client() as client:
-            reply = await client.get(
-                urljoin(self._base_url + "/", LOBBIES_PATH.lstrip("/")),
-                params=LOBBIES_QUERY_PARAMS,
-            )
-            reply.raise_for_status()
-            payload = reply.json()
+        with STATS.register("librematch"):
+            async with self._client() as client:
+                reply = await client.get(
+                    urljoin(self._base_url + "/", LOBBIES_PATH.lstrip("/")),
+                    params=LOBBIES_QUERY_PARAMS,
+                )
+                reply.raise_for_status()
+                payload = reply.json()
         if isinstance(payload, list):
             items = payload
         else:
@@ -167,21 +172,22 @@ class LibrematchAdapter:
             logger.warning("librematch call over rate budget; degrading stats to None")
             return None
         blocks: list[StatsBlock] = []
-        async with self._client() as client:
-            for board_id, board_name in LEADERBOARD_KEYS.items():
-                try:
-                    reply = await client.get(
-                        urljoin(self._base_url + "/", PERSONAL_STAT_PATH.lstrip("/")),
-                        params={"title": "age2", "profile_ids": f'["{profile_id}"]', "leaderboard_id": board_id},
-                    )
-                    reply.raise_for_status()
-                    payload = reply.json()
-                except Exception:
-                    logger.warning("leaderboard fetch failed (board %s)", board_id, exc_info=True)
-                    continue
-                entries = self._parse_leaderboard_entry(payload, profile_id)
-                if entries:
-                    blocks.append(StatsBlock(name=board_name, entries=tuple(entries)))
+        with STATS.register("librematch"):
+            async with self._client() as client:
+                for board_id, board_name in LEADERBOARD_KEYS.items():
+                    try:
+                        reply = await client.get(
+                            urljoin(self._base_url + "/", PERSONAL_STAT_PATH.lstrip("/")),
+                            params={"title": "age2", "profile_ids": f'["{profile_id}"]', "leaderboard_id": board_id},
+                        )
+                        reply.raise_for_status()
+                        payload = reply.json()
+                    except Exception:
+                        logger.warning("leaderboard fetch failed (board %s)", board_id, exc_info=True)
+                        continue
+                    entries = self._parse_leaderboard_entry(payload, profile_id)
+                    if entries:
+                        blocks.append(StatsBlock(name=board_name, entries=tuple(entries)))
         if not blocks:
             return None
         return PlayerStats(profile_id=profile_id, blocks=tuple(blocks))
@@ -206,13 +212,14 @@ class LibrematchAdapter:
         if not await self._allowed():
             logger.warning("librematch call over rate budget; degrading result to None")
             return None
-        async with self._client() as client:
-            reply = await client.get(
-                urljoin(self._base_url + "/", RECENT_MATCH_PATH.lstrip("/")),
-                params={"title": "age2", "profile_ids": f'["{probe}"]', "count": "5"},
-            )
-            reply.raise_for_status()
-            payload = reply.json()
+        with STATS.register("librematch"):
+            async with self._client() as client:
+                reply = await client.get(
+                    urljoin(self._base_url + "/", RECENT_MATCH_PATH.lstrip("/")),
+                    params={"title": "age2", "profile_ids": f'["{probe}"]', "count": "5"},
+                )
+                reply.raise_for_status()
+                payload = reply.json()
         matches = payload.get("matchHistoryStats") or []
         wanted = {str(pid) for pid in profile_ids}
         best: dict[str, Any] | None = None

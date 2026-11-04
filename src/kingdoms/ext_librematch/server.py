@@ -24,6 +24,9 @@ def main() -> None:
     )
     from kingdoms.core.rpc.rate_limit import ProviderRateLimiter
     from kingdoms.core_process.ext_server import serve_game_provider
+    from kingdoms.ext_librematch.adapter import STATS
+
+    _stats_snapshot = STATS.snapshot
     from kingdoms.ext_librematch import DECLARED_CAPABILITIES, PROVIDER_ID
     from kingdoms.ext_librematch.adapter import DEFAULT_BASE_URL, LibrematchAdapter
 
@@ -72,6 +75,7 @@ def main() -> None:
             list_maps=list_maps,
             player_stats=player_stats,
             match_result=match_result,
+            stats_provider=_stats_snapshot,
         )
     )
 

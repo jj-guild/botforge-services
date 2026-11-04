@@ -605,9 +605,12 @@ fr:
       <@{user_id}> — **{verb}** par <@{decided_by}>.'
   providers:
     title: 🛠 Providers — Age of Empires II
-    subtitle: Santé des providers du service game-{game} — ping, capacités, rafraîchi chaque minute.
-    latency: 'Ping : {ms} ms'
+    subtitle: Statistiques d'appels upstream de chaque provider — dernier appel, échecs, dernière minute.
+    latency: 'Latence moyenne : {ms} ms'
     failures: 'Échecs consécutifs : {count}'
+    last_call: 'Dernière minute : {calls} appel(s), {errors} erreur(s) — dernier appel {when}'
+    unreachable: injoignable
+    no_calls: aucun appel
     features: Fonctionnalités
     no_features: —
     status_in_use: en service

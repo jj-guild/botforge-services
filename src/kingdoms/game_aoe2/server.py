@@ -39,29 +39,17 @@ async def _serve() -> None:
 
     aggregator = GameAoe2Aggregator()
     enrollments = _EnrollmentPusher(aggregator)
-    from kingdoms.game_aoe2.aggregator import ProviderProber
-
-    prober = ProviderProber()
     server = build_status_server(
         lambda: CoreStatus(version=__version__, process=PROCESS_LABEL),
     )
-    add_gamedata_servicer(server, GameDataServicer(aggregator, enrollments=enrollments, prober=prober))
+    add_gamedata_servicer(server, GameDataServicer(aggregator, enrollments=enrollments))
 
     consumer = asyncio.ensure_future(_consume_providers(aggregator))
-    providers = [
-        ("ext-aoe2lobby", os.environ.get("EXT_AOE2LOBBY_URI", "")),
-        ("ext-librematch", os.environ.get("EXT_LIBREMATCH_URI", "")),
-    ]
-    # The content providers the game uses (owner direction 2026-10-31):
-    # they ride the providers panel too — probed through their OWN
-    # contract (ListFactions), never the Game ping (UNIMPLEMENTED).
-    content_providers = [
-        ("ext-aoe2techtree", os.environ.get("EXT_AOE2TECHTREE_URI", "")),
-        ("ext-liquipedia", os.environ.get("EXT_LIQUIPEDIA_URI", "")),
-    ]
-    probe_task = asyncio.ensure_future(
-        prober.run_forever(providers, content_providers=content_providers)
-    )
+    # The active prober is GONE (owner direction 2026-11-04): a synthetic
+    # ping every minute was indistinguishable from real traffic for the
+    # rate-limited upstreams. The providers panel reads each provider's
+    # OWN call statistics (GetUpstreamStats on the Status contract) —
+    # the provider process is the only place that sees the calls.
 
     port = os.environ.get("GAME_GRPC_PORT", "50071")
     bind = f"[::]:{port}"
@@ -72,7 +60,6 @@ async def _serve() -> None:
         await server.wait_for_termination()
     finally:
         consumer.cancel()
-        probe_task.cancel()
 
 
 class _EnrollmentPusher:

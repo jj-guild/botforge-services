@@ -28,7 +28,10 @@ if _version_not_supported:
 class StatusStub:
     """Status service — the bootstrap seam of the ADR-0020 process split.
     The bot-discord process queries svc-core for its identity/version so
-    the deployment battery can assert cross-process wiring.
+    the deployment battery can assert cross-process wiring. Every process
+    binds this service; GetUpstreamStats serves the process's own call
+    statistics (the provider-owned health signal — no synthetic probe
+    ever touches an upstream, owner direction 2026-11-04).
 
     """
 
@@ -43,16 +46,30 @@ class StatusStub:
                 request_serializer=kingdoms_dot_v1_dot_status__pb2.CoreStatusRequest.SerializeToString,
                 response_deserializer=kingdoms_dot_v1_dot_status__pb2.CoreStatus.FromString,
                 _registered_method=True)
+        self.GetUpstreamStats = channel.unary_unary(
+                '/kingdoms.v1.Status/GetUpstreamStats',
+                request_serializer=kingdoms_dot_v1_dot_status__pb2.UpstreamStatsRequest.SerializeToString,
+                response_deserializer=kingdoms_dot_v1_dot_status__pb2.UpstreamStatsReply.FromString,
+                _registered_method=True)
 
 
 class StatusServicer:
     """Status service — the bootstrap seam of the ADR-0020 process split.
     The bot-discord process queries svc-core for its identity/version so
-    the deployment battery can assert cross-process wiring.
+    the deployment battery can assert cross-process wiring. Every process
+    binds this service; GetUpstreamStats serves the process's own call
+    statistics (the provider-owned health signal — no synthetic probe
+    ever touches an upstream, owner direction 2026-11-04).
 
     """
 
     def GetCoreStatus(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def GetUpstreamStats(self, request, context):
         """Missing associated documentation comment in .proto file."""
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
@@ -66,6 +83,11 @@ def add_StatusServicer_to_server(servicer, server):
                     request_deserializer=kingdoms_dot_v1_dot_status__pb2.CoreStatusRequest.FromString,
                     response_serializer=kingdoms_dot_v1_dot_status__pb2.CoreStatus.SerializeToString,
             ),
+            'GetUpstreamStats': grpc.unary_unary_rpc_method_handler(
+                    servicer.GetUpstreamStats,
+                    request_deserializer=kingdoms_dot_v1_dot_status__pb2.UpstreamStatsRequest.FromString,
+                    response_serializer=kingdoms_dot_v1_dot_status__pb2.UpstreamStatsReply.SerializeToString,
+            ),
     }
     generic_handler = grpc.method_handlers_generic_handler(
             'kingdoms.v1.Status', rpc_method_handlers)
@@ -77,7 +99,10 @@ def add_StatusServicer_to_server(servicer, server):
 class Status:
     """Status service — the bootstrap seam of the ADR-0020 process split.
     The bot-discord process queries svc-core for its identity/version so
-    the deployment battery can assert cross-process wiring.
+    the deployment battery can assert cross-process wiring. Every process
+    binds this service; GetUpstreamStats serves the process's own call
+    statistics (the provider-owned health signal — no synthetic probe
+    ever touches an upstream, owner direction 2026-11-04).
 
     """
 
@@ -98,6 +123,33 @@ class Status:
             '/kingdoms.v1.Status/GetCoreStatus',
             kingdoms_dot_v1_dot_status__pb2.CoreStatusRequest.SerializeToString,
             kingdoms_dot_v1_dot_status__pb2.CoreStatus.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def GetUpstreamStats(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/kingdoms.v1.Status/GetUpstreamStats',
+            kingdoms_dot_v1_dot_status__pb2.UpstreamStatsRequest.SerializeToString,
+            kingdoms_dot_v1_dot_status__pb2.UpstreamStatsReply.FromString,
             options,
             channel_credentials,
             insecure,

@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass
+from typing import Any
 
 import grpc
 
@@ -51,3 +52,87 @@ async def fetch_core_status(core_uri: str) -> CoreStatus:
         stub = status_pb2_grpc.StatusStub(channel)
         reply = await stub.GetCoreStatus(status_pb2.CoreStatusRequest(), timeout=5.0)
         return CoreStatus(version=reply.version, process=reply.process)
+
+
+class _StatusServicerUpstream(_StatusServicer):
+    """The Status servicer extended with the process's upstream stats.
+
+    ``build_status_server`` stays the single binding point: a process
+    that records its upstream calls passes a ``stats_provider`` and its
+    stats ride the same port as its identity.
+    """
+
+    def __init__(
+        self,
+        status_provider: Callable[[], CoreStatus],
+        stats_provider: Callable[[], list[dict[str, Any]]] | None = None,
+    ) -> None:
+        super().__init__(status_provider)
+        self._stats_provider = stats_provider
+
+    async def GetUpstreamStats(
+        self,
+        request: status_pb2.UpstreamStatsRequest,
+        context: grpc.aio.ServicerContext,
+    ) -> status_pb2.UpstreamStatsReply:
+        """Serve the process's own upstream call statistics."""
+        entries = self._stats_provider() if self._stats_provider else []
+        return status_pb2.UpstreamStatsReply(
+            entries=[
+                status_pb2.UpstreamStatEntry(
+                    upstream=str(e.get("upstream", "")),
+                    ok=bool(e.get("ok", False)),
+                    never_called=bool(e.get("never_called", False)),
+                    total_calls=int(e.get("total_calls", 0)),
+                    total_errors=int(e.get("total_errors", 0)),
+                    consecutive_failures=int(e.get("consecutive_failures", 0)),
+                    last_call_at=int(e.get("last_call_at", 0)),
+                    last_ok_at=int(e.get("last_ok_at", 0)),
+                    calls_last_minute=int(e.get("calls_last_minute", 0)),
+                    errors_last_minute=int(e.get("errors_last_minute", 0)),
+                    avg_latency_ms=int(e.get("avg_latency_ms", 0)),
+                    last_error=str(e.get("last_error", "")),
+                )
+                for e in entries
+            ]
+        )
+
+
+def build_status_server_with_stats(
+    status_provider: Callable[[], CoreStatus],
+    stats_provider: Callable[[], list[dict[str, Any]]] | None = None,
+) -> grpc.aio.Server:
+    """Build the aio gRPC server with the Status service (stats optional)."""
+    server = grpc.aio.server()
+    status_pb2_grpc.add_StatusServicer_to_server(
+        _StatusServicerUpstream(status_provider, stats_provider), server
+    )
+    return server
+
+
+async def fetch_upstream_stats(uri: str, timeout_s: float = 5.0) -> list[dict[str, Any]]:
+    """Fetch one process's upstream call stats over the Status contract.
+
+    The generic client of the providers panel: any process that binds
+    the Status service answers (an empty list when it records nothing).
+    """
+    async with grpc.aio.insecure_channel(uri) as channel:
+        stub = status_pb2_grpc.StatusStub(channel)
+        reply = await stub.GetUpstreamStats(status_pb2.UpstreamStatsRequest(), timeout=timeout_s)
+        return [
+            {
+                "upstream": e.upstream,
+                "ok": e.ok,
+                "never_called": e.never_called,
+                "total_calls": e.total_calls,
+                "total_errors": e.total_errors,
+                "consecutive_failures": e.consecutive_failures,
+                "last_call_at": e.last_call_at,
+                "last_ok_at": e.last_ok_at,
+                "calls_last_minute": e.calls_last_minute,
+                "errors_last_minute": e.errors_last_minute,
+                "avg_latency_ms": e.avg_latency_ms,
+                "last_error": e.last_error,
+            }
+            for e in reply.entries
+        ]

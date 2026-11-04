@@ -43,8 +43,12 @@ import websockets
 
 from kingdoms.core.games.aoe2.grace import GRACE_PERIOD_S, LobbyClosedGrace
 from kingdoms.core.services.provider_endpoints import provider_url as _provider_url
+from kingdoms.core.upstream_stats import StatsRegistry
 
 logger = logging.getLogger(__name__)
+
+# The process-wide upstream call stats — served over the Status contract.
+STATS = StatsRegistry()
 
 
 DEFAULT_WS_URL = _provider_url("aoe2lobby", "ws_url")
@@ -262,26 +266,27 @@ class Aoe2LobbyAdapter:
             try:
                 from kingdoms.core.upstream_identity import project_user_agent
 
-                async with websockets.connect(
-                    self._ws_url,
-                    max_size=self._max_size,
-                    ping_interval=self._heartbeat_s,
-                    ping_timeout=30.0,
-                    user_agent_header=project_user_agent(),
-                ) as ws:
-                    self._ws = ws
-                    if not self._schema:
-                        await self.fetch_schema()
-                    logger.info("aoe2lobby ws OPEN: %s", self._ws_url)
-                    await self._subscribe_all(ws)
-                    async for event in self._run_session(ws):
-                        yield event
-                    # normal exit: the SERVER closed (the client never
-                    # closes first — a close is always its decision)
-                    logger.warning(
-                        "aoe2lobby ws CLOSED by the server; reconnecting in %ss",
-                        self._reconnect_delay_s,
-                    )
+                with STATS.register("aoe2lobby:ws"):
+                    async with websockets.connect(
+                        self._ws_url,
+                        max_size=self._max_size,
+                        ping_interval=self._heartbeat_s,
+                        ping_timeout=30.0,
+                        user_agent_header=project_user_agent(),
+                    ) as ws:
+                        self._ws = ws
+                        if not self._schema:
+                            await self.fetch_schema()
+                        logger.info("aoe2lobby ws OPEN: %s", self._ws_url)
+                        await self._subscribe_all(ws)
+                        async for event in self._run_session(ws):
+                            yield event
+                        # normal exit: the SERVER closed (the client never
+                        # closes first — a close is always its decision)
+                        logger.warning(
+                            "aoe2lobby ws CLOSED by the server; reconnecting in %ss",
+                            self._reconnect_delay_s,
+                        )
             except (TimeoutError, websockets.WebSocketException, OSError):
                 logger.warning("aoe2lobby ws FAILED; retrying in %ss", self._reconnect_delay_s)
             except Exception:

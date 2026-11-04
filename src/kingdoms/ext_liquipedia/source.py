@@ -20,6 +20,7 @@ import logging
 import time
 from typing import Any
 
+from kingdoms.core.upstream_stats import StatsRegistry
 from kingdoms.ext_liquipedia import (
     GAME_WIKIS,
     MAPS_COLLECTION,
@@ -32,6 +33,11 @@ from kingdoms.mapsdata.liquipedia import (
 )
 
 logger = logging.getLogger("kingdoms.ext_liquipedia")
+
+
+# The process-wide upstream call stats — served over the Status
+# contract (GetUpstreamStats); the providers panel reads them on demand.
+STATS = StatsRegistry()
 
 
 class LiquipediaSource:
@@ -89,7 +95,8 @@ class LiquipediaSource:
             return None  # no wiki declared for this game: nothing to serve
         for variant in _title_variants(name):
             try:
-                data = provider.map_data(variant)
+                with STATS.register(f"liquipedia:{game_key}"):
+                    data = provider.map_data(variant)
             except MapLicenseError:
                 raise
             except RuntimeError:

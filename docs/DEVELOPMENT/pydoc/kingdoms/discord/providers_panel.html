@@ -31,7 +31,13 @@ never&nbsp;from&nbsp;the&nbsp;providers&nbsp;directly&nbsp;(the&nbsp;bot&nbsp;ne
 <td class="section-title" colspan=3>&nbsp;<br><strong class="bigsection">Functions</strong></td></tr>
     
 <tr><td class="decor functions-decor"><span class="code">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span></td><td>&nbsp;</td>
-<td class="singlecolumn"><dl><dt>async <a name="-view_providers"><strong>view_providers</strong></a>(interaction: 'discord.Interaction') -&gt; 'None'</dt><dd><span class="code">Render&nbsp;the&nbsp;providers&nbsp;panel&nbsp;(ephemeral,&nbsp;admin-guarded).</span></dd></dl>
+<td class="singlecolumn"><dl><dt>async <a name="-view_providers"><strong>view_providers</strong></a>(interaction: 'discord.Interaction') -&gt; 'None'</dt><dd><span class="code">Render&nbsp;the&nbsp;providers&nbsp;panel&nbsp;(ephemeral,&nbsp;admin-guarded).<br>
+&nbsp;<br>
+No&nbsp;synthetic&nbsp;probe&nbsp;(owner&nbsp;direction&nbsp;2026-11-04):&nbsp;the&nbsp;panel&nbsp;ASKS&nbsp;each<br>
+provider&nbsp;process&nbsp;for&nbsp;its&nbsp;OWN&nbsp;call&nbsp;statistics&nbsp;(GetUpstreamStats&nbsp;on&nbsp;the<br>
+Status&nbsp;contract)&nbsp;—&nbsp;the&nbsp;last&nbsp;call,&nbsp;the&nbsp;consecutive&nbsp;failures,&nbsp;the<br>
+calls/errors&nbsp;of&nbsp;the&nbsp;last&nbsp;minute.&nbsp;The&nbsp;provider&nbsp;is&nbsp;the&nbsp;only&nbsp;place<br>
+that&nbsp;sees&nbsp;its&nbsp;calls;&nbsp;reading&nbsp;it&nbsp;never&nbsp;touches&nbsp;any&nbsp;upstream.</span></dd></dl>
 </td></tr></table><p>
 <table class="section">
 <tr class="decor data-decor heading-text">

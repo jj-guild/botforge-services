@@ -8,8 +8,6 @@ civs, aoe2lobby join/spectate URLs, aoe2de deep link).
 
 from __future__ import annotations
 
-import asyncio
-from collections.abc import AsyncIterator
 from typing import Any
 
 import grpc
@@ -211,55 +209,14 @@ class GameDataServicer(gamedata_pb2_grpc.GameDataServicer):
 
     async def GetProviderTests(
         self,
-        request: gamedata_pb2.ProviderTestsRequest,
+        request: Any,
         context: grpc.aio.ServicerContext,
-    ) -> gamedata_pb2.ProviderTests:
-        """Serve the providers' last probe results for a game."""
-        if self._prober is None:
-            await context.abort(grpc.StatusCode.UNIMPLEMENTED, "provider tests not wired")
-        results = self._prober.results(request.game_key)
-        return gamedata_pb2.ProviderTests(
-            tests=[
-                gamedata_pb2.ProviderTest(
-                    provider_id=str(result.get("provider_id", "")),
-                    game_key=str(result.get("game_key", "")),
-                    ok=bool(result.get("ok", False)),
-                    latency_ms=int(result.get("latency_ms", 0)),
-                    detail=str(result.get("detail", "")),
-                    checked_at=int(result.get("checked_at", 0)),
-                    failures=int(result.get("failures", 0)),
-                )
-                for result in results["tests"].values()
-            ],
-            checked_at=int(results.get("checked_at", 0)),
+    ) -> Any:
+        """Gone: the providers panel reads each provider's own call stats."""
+        await context.abort(
+            grpc.StatusCode.UNIMPLEMENTED,
+            "provider tests are gone — read GetUpstreamStats on each provider",
         )
-
-    async def WatchDashboard(
-        self,
-        request: gamedata_pb2.WatchGameDataRequest,
-        context: grpc.aio.ServicerContext,
-    ) -> AsyncIterator[gamedata_pb2.GameDashboard]:
-        """Stream snapshots: one immediately, then one per effective change."""
-        last: bytes | None = None
-        while True:
-            wire = dashboard_to_wire(self._aggregator.snapshot())
-            payload = wire.SerializeToString()
-            if payload != last:
-                yield wire
-                last = payload
-            await asyncio.sleep(self._poll_interval_s)
-
-    async def WatchPlayerEvents(
-        self,
-        request: gamedata_pb2.WatchGameDataRequest,
-        context: grpc.aio.ServicerContext,
-    ) -> AsyncIterator[gamedata_pb2.GamePlayerEvent]:
-        """Stream normalized transitions as the aggregator queues them."""
-        while True:
-            transition = await self._aggregator.next_transition()
-            if request.since and transition.get("occurred_at", 0) < request.since:
-                continue
-            yield event_to_wire(transition)
 
 
 def add_gamedata_servicer(server: grpc.aio.Server, servicer: GameDataServicer) -> None:
