@@ -266,6 +266,7 @@ _STRINGS: dict[str, dict[str, str]] = {
         "cancel_defense_button": "↩️ Retirer ma défense",
         "cancel_defense_done": "🛡️ Défense retirée — budget de défense remboursé.",
         "remparts_back_button": "↩️ Remparts",
+        "remparts_sheet_title": "🧱 Remparts — {kingdom}",
         "remparts_back_failed": "❌ Impossible de rouvrir les Remparts — réouvre-les depuis l'Entrée du royaume.",
         "defend_wrong_kingdom": "❌ Vous ne pouvez défendre ce territoire.",
         "defend_already": "❌ Le royaume est déjà défendu.",
@@ -686,6 +687,7 @@ _STRINGS: dict[str, dict[str, str]] = {
         "cancel_defense_button": "↩️ Withdraw my defense",
         "cancel_defense_done": "🛡️ Defense withdrawn — defense budget refunded.",
         "remparts_back_button": "↩️ Ramparts",
+        "remparts_sheet_title": "🧱 Ramparts — {kingdom}",
         "remparts_back_failed": "❌ Could not reopen the Ramparts — reopen them from the realm's Entrance.",
         "defend_wrong_kingdom": "❌ You cannot defend this territory.",
         "defend_already": "❌ The kingdom is already defended.",
@@ -2603,7 +2605,62 @@ async def _defense_manager_payload(
             cancels.append(
                 KingdomCancelDefenseButton(str(attack.id), strings["cancel_defense_button"])
             )
-    return text, cancels
+    return text, cancels, kingdom_name
+
+
+async def _edit_gestion_face(
+    interaction: discord.Interaction,
+    body: str,
+    items: list[Any],
+    kingdom_name: str,
+) -> None:
+    """gestion-entete-v1 (Drasah 04/11): the gestion sheets keep the
+    Remparts IDENTITY — the big « 🧱 Remparts — {kingdom} » title and
+    the rempart.png illustration ride the in-place CV2 face (the
+    gestion title stays the FIRST line of the body under it).
+
+    Live report 04/11: clicking ⚔️ Gestion d'attaque / 🛡️ Gestion de
+    la défense dropped the player into a bare text sheet — the title
+    and the picture vanished, « c'est trop étrange ». The face now
+    mirrors the Remparts panel structure (illustration TOP, container
+    with the big title, the gestion body, the back row). Fallback:
+    the old bare face when the asset is missing or the build fails.
+    """
+    from kingdoms.mods.kingdoms.kingdom_lieux import _lieu_files
+    from kingdoms.mods.kingdoms.kingdom_persistent import (
+        _register_ephemeral_interaction,
+        _replace_ephemeral_window,
+    )
+
+    files = _lieu_files("Rempart.png", "rempart.png")
+    if files:
+        try:
+            strings = _strings(_locale(interaction))
+            view = discord.ui.LayoutView(timeout=None)
+            container: Any = discord.ui.Container(
+                discord.ui.TextDisplay(
+                    f"# {strings['remparts_sheet_title'].format(kingdom=kingdom_name)}"
+                ),
+                discord.ui.Separator(),
+                discord.ui.TextDisplay(body),
+                discord.ui.Separator(),
+                accent_colour=discord.Colour.teal(),
+            )
+            if items:
+                container.add_item(discord.ui.ActionRow(*items))
+            # illustration-top-v1: the image rides ABOVE the panel.
+            view.add_item(
+                discord.ui.MediaGallery(
+                    discord.MediaGalleryItem(media="attachment://rempart.png")
+                )
+            )
+            view.add_item(container)
+            await interaction.response.edit_message(view=view, attachments=files)
+            _register_ephemeral_interaction(interaction)
+            return
+        except Exception:
+            logger.debug("kingdoms: gestion remparts face failed", exc_info=True)
+    await _replace_ephemeral_window(interaction, body, items)
 
 
 async def _defense_manager_render(
@@ -2627,12 +2684,14 @@ async def _defense_manager_render(
         _replace_ephemeral_window,
     )
 
-    text, cancels = await _defense_manager_payload(wiring, lord, strings)
+    text, cancels, kingdom_name = await _defense_manager_payload(wiring, lord, strings)
     if note:
         text = f"{text}\n\n{note}"
     items = [*cancels, KingdomRempartsBackButton(strings["remparts_back_button"])]
     if _is_ephemeral_parent(interaction):
-        await _replace_ephemeral_window(interaction, text, items)
+        # gestion-entete-v1: the sheet KEEPS the big Remparts title and
+        # the illustration (never a bare text face on the live path).
+        await _edit_gestion_face(interaction, text, items, kingdom_name)
         return
     view = discord.ui.View(timeout=600)
     for button in items:
@@ -3256,7 +3315,8 @@ class KingdomAttackManagerButton(
         # war room without reopening the Entrée.
         back = KingdomRempartsBackButton(strings["remparts_back_button"])
         if _is_ephemeral_parent(interaction):
-            await _replace_ephemeral_window(interaction, "\n".join(sections), [back])
+            # gestion-entete-v1: same Remparts-identity face.
+            await _edit_gestion_face(interaction, "\n".join(sections), [back], kingdom_name)
             return
         view = discord.ui.View(timeout=600)
         view.add_item(back)

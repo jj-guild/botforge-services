@@ -4224,6 +4224,19 @@ async def test_gestion_sheets_edit_the_remparts_window_in_place() -> None:
         click.message = parent  # type: ignore[attr-defined]
         return click
 
+    def _sheet_texts(message: Any) -> list[str]:
+        parts: list[str] = []
+        for child in getattr(message, "components", []) or []:
+            for attr in ("content", "label"):
+                value = getattr(child, attr, None)
+                if value:
+                    parts.append(str(value))
+            for item in getattr(child, "items", None) or []:
+                media = getattr(item, "media", None)
+                if media:
+                    parts.append(str(media))
+        return parts
+
     bundle = PhasesBundle()
     await bundle.launch_season()
     await bundle.draw(24)
@@ -4240,6 +4253,16 @@ async def test_gestion_sheets_edit_the_remparts_window_in_place() -> None:
     assert not click.followup.messages  # no stacked second window
     ids = [str(getattr(i, "custom_id", "") or "") for i in click.response.message.components]
     assert "kingdoms:remparts:back" in ids
+    # gestion-entete-v1 (Drasah 04/11): the sheet KEEPS the Remparts
+    # IDENTITY — the big title and the illustration ride the face.
+    sheet = "\n".join(_sheet_texts(click.response.message))
+    assert "🧱 Remparts —" in sheet  # the big title survives the click
+    assert "Gestion de la défense" in sheet  # the gestion body under it
+    assert "attachment://rempart.png" in sheet  # the illustration is referenced
+    assert any(
+        str(getattr(a, "filename", "") or "") == "rempart.png"
+        for a in (click.response.message.attachments or [])
+    )
     # The attack-manager sheet walks the same in-place path.
     manager = KingdomAttackManagerButton(_strings("fr")["plan_manager_button"])
     click2 = _ephemeral_parent("lord-b")
@@ -4249,6 +4272,9 @@ async def test_gestion_sheets_edit_the_remparts_window_in_place() -> None:
     assert not click2.followup.messages
     ids2 = [str(getattr(i, "custom_id", "") or "") for i in click2.response.message.components]
     assert "kingdoms:remparts:back" in ids2
+    sheet2 = "\n".join(_sheet_texts(click2.response.message))
+    assert "🧱 Remparts —" in sheet2  # the big title survives here too
+    assert "Gestion d'attaque" in sheet2
     # The fresh face (no ephemeral parent) still opens through the
     # fenêtre unique AND wears the back button.
     fresh = MockInteraction(user=MockUser(id="lord-b"), locale="fr")  # type: ignore[arg-type]
@@ -4256,6 +4282,55 @@ async def test_gestion_sheets_edit_the_remparts_window_in_place() -> None:
     assert fresh.response.ephemeral is True
     ids3 = [str(getattr(i, "custom_id", "") or "") for i in (fresh.response.message.components if fresh.response.message else [])]
     assert "kingdoms:remparts:back" in ids3
+
+
+async def test_gestion_face_falls_back_when_the_illustration_is_missing(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """gestion-entete-v1: the Remparts-identity face is cosmetic — when
+    the rempart.png asset is missing the sheet still edits IN PLACE on
+    the old bare face (title + body + back, never a dead click)."""
+    import types
+
+    from kingdoms.mods.kingdoms import kingdom_lieux as lieux_module
+    from kingdoms.mods.kingdoms.kingdom_attack_panel import (
+        KingdomDefenseManagerButton,
+        _strings,
+    )
+    from tests.mocks.discord_mock import MockMessage
+
+    monkeypatch.setattr(lieux_module, "_lieu_files", lambda *_a, **_k: [])
+
+    def _ephemeral_parent(user_id: str) -> MockInteraction:
+        click = MockInteraction(user=MockUser(id=user_id), locale="fr")  # type: ignore[arg-type]
+        parent = MockMessage(view=None)
+        parent.flags = types.SimpleNamespace(ephemeral=True)  # type: ignore[attr-defined]
+        click.message = parent  # type: ignore[attr-defined]
+        return click
+
+    bundle = PhasesBundle()
+    await bundle.launch_season()
+    await bundle.draw(24)
+    await bundle.fresh_attack()
+    _wiring(bundle)
+    defense = KingdomDefenseManagerButton(_strings("fr")["defense_manager_button"])
+    click = _ephemeral_parent("lord-b")
+    await defense.callback(click)  # type: ignore[arg-type]
+    assert click.response.message is not None
+    assert click.response.ephemeral is False  # still an in-place edit
+    assert not click.followup.messages
+    parts: list[str] = []
+    for child in (click.response.message.components or []):
+        text = getattr(child, "content", None)
+        if not text:
+            data = getattr(child, "data", None)
+            if isinstance(data, dict):
+                text = data.get("content") or data.get("label")
+        if text:
+            parts.append(str(text))
+    assert "Gestion de la défense" in "\n".join(parts)  # the sheet body survives
+    ids = [str(getattr(i, "custom_id", "") or "") for i in click.response.message.components]
+    assert "kingdoms:remparts:back" in ids  # the back survives too
 
 
 async def test_cancel_defense_edits_the_sheet_in_place() -> None:
