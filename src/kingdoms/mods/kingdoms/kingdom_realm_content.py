@@ -197,6 +197,28 @@ def _strings(locale: str) -> dict[str, str]:
             "remparts_patrouille_button": "👣 Patrouille {0}",
             "remparts_patrouille_hub_button": "👣 Patrouille",
             "remparts_patrouille_hub_text": "Choisis le créneau de patrouille à régler :",
+            # patrouille-garde-fiche-v1 (Drasah 04/11) : la fiche-carte
+            # Patrouille/Garde Royale (architecture Jeu d'armes).
+            "patrouille_card_title": "👣 Patrouille",
+            "patrouille_card_desc": (
+                "**Effet :**\n"
+                "Pose le créneau quotidien de patrouille (2h, heure de Paris) "
+                "sur un emplacement débloqué — figé pour le cycle, "
+                "redéfinissable le Jour du Seigneur (3h si Renforcée). "
+                "Roi uniquement.\n\n"
+                "Clique sur ✅ Utiliser puis choisis l'emplacement à régler."
+            ),
+            "patrouille_use_button": "✅ Utiliser",
+            "garde_card_title": "🛡️ Garde Royale",
+            "garde_card_desc": (
+                "**Effet :**\n"
+                "12h d'immunité sur UNE map au choix — une Garde par map, "
+                "non rétroactive. Roi uniquement.\n\n"
+                "🛡️ Garde Royale disponible : **{0}** (réserve)\n\n"
+                "Clique sur ✅ Utiliser puis choisis la map à protéger."
+            ),
+            "garde_use_button": "✅ Utiliser",
+            "tech_card_cancel_button": "❌ Annuler",
             "remparts_place_guard_choose": "🛡️ Choisis la map à protéger :",
             "remparts_guard_wizard_stock": "🛡️ Garde Royale disponible : **{0}** (réserve)",
             "remparts_guard_wizard_line": "🛡️ Choisis la map à protéger pour une durée de 12h :",
@@ -508,6 +530,27 @@ def _strings(locale: str) -> dict[str, str]:
         "remparts_patrouille_button": "👣 Patrol {0}",
         "remparts_patrouille_hub_button": "👣 Patrol",
         "remparts_patrouille_hub_text": "Choose the patrol slot to set:",
+        # patrouille-garde-fiche-v1 (Drasah 04/11): the Patrouille /
+        # Garde Royale fiche-cards (Jeu d'armes architecture).
+        "patrouille_card_title": "👣 Patrol",
+        "patrouille_card_desc": (
+            "**Effect:**\n"
+            "Sets the daily patrol window (2h, Paris time) on an unlocked "
+            "slot — fixed for the cycle, redefinable on the Lord's Day "
+            "(3h when Reinforced). King only.\n\n"
+            "Click ✅ Use, then pick the slot to set."
+        ),
+        "patrouille_use_button": "✅ Use",
+        "garde_card_title": "🛡️ Royal Guard",
+        "garde_card_desc": (
+            "**Effect:**\n"
+            "12h of immunity on ONE chosen map — one guard per map, "
+            "non-retroactive. King only.\n\n"
+            "🛡️ Royal Guard available: **{0}** (in reserve)\n\n"
+            "Click ✅ Use, then pick the map to shield."
+        ),
+        "garde_use_button": "✅ Use",
+        "tech_card_cancel_button": "❌ Cancel",
         "remparts_place_guard_choose": "🛡️ Choose the map to shield:",
         "remparts_guard_wizard_stock": "🛡️ Royal Guard available: **{0}** (in reserve)",
         "remparts_guard_wizard_line": "🛡️ Choose the map to shield for 12 hours:",

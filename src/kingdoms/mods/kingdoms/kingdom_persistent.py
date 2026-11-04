@@ -226,6 +226,11 @@ def register_kingdoms_persistent_items(bot: discord.Client) -> None:
         KingdomJeuDarmesUseButton,
         KingdomJeuDarmesActivateButton,
         KingdomJeuDarmesCancelButton,
+        # patrouille-garde-fiche-v1 (Drasah 04/11): the Patrouille /
+        # Garde Royale fiche-cards (✅ Utiliser / ❌ Annuler).
+        KingdomPatrouilleCardUseButton,
+        KingdomGardeCardUseButton,
+        KingdomTechCardCancelButton,
         KingdomSeigneurieOpenButton,
         KingdomSeigneurieButton,
         KingdomSeigneurieSelect,
@@ -2599,6 +2604,202 @@ class KingdomJeuDarmesCancelButton(
         _EPHEMERAL_WINDOWS.pop(str(getattr(interaction.user, "id", "")), None)
 
 
+async def _tech_card_open(
+    interaction: discord.Interaction,
+    *,
+    item: str,
+    title: str,
+    body: str,
+    items: list[Any],
+) -> None:
+    """patrouille-garde-fiche-v1 (Drasah 04/11): open the technology
+    CARD first — the exact Jeu d'armes confirmation-card architecture:
+    a classic View (a LayoutView would forbid the embed), an embed
+    carrying the TCG art as an attachment (missing art stays
+    cosmetic), and the ✅ Utiliser / ❌ Annuler row. The card opens as
+    the player's SECOND window — the Remparts view underneath
+    SURVIVES the click (jeu-darmes-sensations-v1 ruling) — and takes
+    over the single-window registry slot."""
+    view = discord.ui.View(timeout=None)
+    for button in items:
+        view.add_item(button)
+    embed = discord.Embed(
+        title=str(title)[:256],
+        description=str(body),
+        colour=discord.Colour.teal(),
+    )
+    file = _market_card_file(item)
+    if file is not None:
+        embed.set_image(url=f"attachment://{file.filename}")
+    user_id = str(getattr(interaction.user, "id", ""))
+    await interaction.response.send_message(
+        embed=embed,
+        files=[file] if file is not None else [],
+        view=view,
+        ephemeral=True,
+    )
+    _EPHEMERAL_WINDOWS[user_id] = (interaction, time.monotonic())
+
+
+async def _tech_card_close(interaction: discord.Interaction) -> None:
+    """Close the card window: deferred update + delete of the card
+    message (the Jeu d'armes activation path). The registry slot is
+    freed — the flow face that follows re-binds it."""
+    await interaction.response.defer()
+    try:
+        await interaction.delete_original_response()
+    except Exception:
+        logger.info("KINGDOMS: tech card close failed (ignored)", exc_info=True)
+    _EPHEMERAL_WINDOWS.pop(str(getattr(interaction.user, "id", "")), None)
+
+
+async def _tech_card_note(interaction: discord.Interaction, note: str) -> None:
+    """A refusal at ✅-Utiliser time: the card closes and the note
+    opens as the fresh CV2 window (the card itself is NEVER edited in
+    place — no CV2-on-embed or content-on-CV2 traps)."""
+    await _tech_card_close(interaction)
+    await interaction.followup.send(
+        view=_ephemeral_layout_view(note), ephemeral=True
+    )
+    _register_ephemeral_interaction(interaction)
+
+
+class KingdomPatrouilleCardUseButton(
+    discord.ui.DynamicItem[discord.ui.Button[Any]],
+    template=r"kingdoms:patrouille-card:use$",
+):
+    """patrouille-garde-fiche-v1: « ✅ Utiliser » on the Patrouille
+    card — the card closes and the both-slots cockpit opens as the
+    fresh CV2 window (the slot buttons then edit it in place)."""
+
+    def __init__(self, strings: dict[str, Any]) -> None:
+        super().__init__(
+            discord.ui.Button(
+                label=str(strings["patrouille_use_button"])[:80],
+                custom_id="kingdoms:patrouille-card:use",
+                style=discord.ButtonStyle.success,
+            )
+        )
+
+    @classmethod
+    async def from_custom_id(
+        cls,
+        interaction: discord.Interaction,
+        item: discord.ui.Item[Any],
+        match: re.Match[str],
+        /,
+    ) -> "KingdomPatrouilleCardUseButton":
+        locale = str(interaction.locale) if interaction.locale else "en"
+        return cls(_strings(locale))
+
+    async def callback(self, interaction: discord.Interaction) -> None:
+        """Close the card, then open the both-slots cockpit."""
+        locale = str(interaction.locale) if interaction.locale else "en"
+        strings = _strings(locale)
+        wiring = _wiring()
+        if wiring.economy_service is None:
+            await _tech_card_note(interaction, str(strings["market_no_service"]))
+            return
+        king = await _king_of(
+            wiring.kingdoms_service, str(interaction.user.id), wiring.bot_admins
+        )
+        if king is None:
+            await _tech_card_note(interaction, str(strings["market_not_king"]))
+            return
+        await _tech_card_close(interaction)
+        wizard_text = str(strings["remparts_patrouille_hub_text"])
+        slots = [KingdomRempartsPatrouilleButton(slot, strings) for slot in (1, 2)]
+        await interaction.followup.send(
+            view=_ephemeral_layout_view(wizard_text, slots), ephemeral=True
+        )
+        _register_ephemeral_interaction(interaction)
+
+
+class KingdomGardeCardUseButton(
+    discord.ui.DynamicItem[discord.ui.Button[Any]],
+    template=r"kingdoms:garde-card:use$",
+):
+    """patrouille-garde-fiche-v1: « ✅ Utiliser » on the Garde Royale
+    card — the card closes and the map-choice wizard opens as the
+    fresh CV2 window (mode cv2: every later face edits it in place)."""
+
+    def __init__(self, strings: dict[str, Any]) -> None:
+        super().__init__(
+            discord.ui.Button(
+                label=str(strings["garde_use_button"])[:80],
+                custom_id="kingdoms:garde-card:use",
+                style=discord.ButtonStyle.success,
+            )
+        )
+
+    @classmethod
+    async def from_custom_id(
+        cls,
+        interaction: discord.Interaction,
+        item: discord.ui.Item[Any],
+        match: re.Match[str],
+        /,
+    ) -> "KingdomGardeCardUseButton":
+        locale = str(interaction.locale) if interaction.locale else "en"
+        return cls(_strings(locale))
+
+    async def callback(self, interaction: discord.Interaction) -> None:
+        """Close the card, then open the owned-map select wizard."""
+        locale = str(interaction.locale) if interaction.locale else "en"
+        strings = _strings(locale)
+        wiring = _wiring()
+        if wiring.economy_service is None or wiring.territories_service is None:
+            await _tech_card_note(interaction, str(strings["market_no_service"]))
+            return
+        king = await _king_of(
+            wiring.kingdoms_service, str(interaction.user.id), wiring.bot_admins
+        )
+        if king is None:
+            await _tech_card_note(interaction, str(strings["market_not_king"]))
+            return
+        await _tech_card_close(interaction)
+        await _remparts_guard_show_select(
+            interaction, strings, wiring, king, mode="cv2", fresh=False, followup=True
+        )
+
+
+class KingdomTechCardCancelButton(
+    discord.ui.DynamicItem[discord.ui.Button[Any]],
+    template=r"kingdoms:(?P<kind>patrouille|garde)-card:cancel$",
+):
+    """patrouille-garde-fiche-v1: « ❌ Annuler » — the card window
+    simply goes away, nothing is consumed (the Jeu d'armes cancel)."""
+
+    def __init__(self, strings: dict[str, Any], kind: str = "patrouille") -> None:
+        super().__init__(
+            discord.ui.Button(
+                label=str(strings["tech_card_cancel_button"])[:80],
+                custom_id=f"kingdoms:{kind}-card:cancel",
+                style=discord.ButtonStyle.danger,
+            )
+        )
+
+    @classmethod
+    async def from_custom_id(
+        cls,
+        interaction: discord.Interaction,
+        item: discord.ui.Item[Any],
+        match: re.Match[str],
+        /,
+    ) -> "KingdomTechCardCancelButton":
+        locale = str(interaction.locale) if interaction.locale else "en"
+        return cls(_strings(locale), match.group("kind"))
+
+    async def callback(self, interaction: discord.Interaction) -> None:
+        """Close the card — nothing is consumed."""
+        await interaction.response.defer()
+        try:
+            await interaction.delete_original_response()
+        except Exception:
+            logger.info("KINGDOMS: tech card close failed (ignored)", exc_info=True)
+        _EPHEMERAL_WINDOWS.pop(str(getattr(interaction.user, "id", "")), None)
+
+
 class KingdomSeigneurieOpenButton(
     discord.ui.DynamicItem[discord.ui.Button[Any]],
     template=r"kingdoms:seigneurie:open",
@@ -2750,12 +2951,18 @@ class KingdomRempartsGuardButton(
             else:
                 await _open_unique_ephemeral(interaction, note)
             return
-        mode = "cv2" if _is_ephemeral_parent(interaction) else "win"
-        # fenetre-unique-globale-v1 (Drasah 30/10): the fresh-window
-        # face joins the shared single-window registry — no stacking
-        # with the player's previous ephemeral view.
-        await _remparts_guard_show_select(
-            interaction, strings, wiring, king, mode, fresh=(mode == "win")
+        # patrouille-garde-fiche-v1 (Drasah 04/11): the 🛡️ Garde
+        # Royale opener shows the CARD first (Jeu d'armes architecture)
+        # — the map-choice wizard only opens on ✅ Utiliser.
+        await _tech_card_open(
+            interaction,
+            item="garde_royale",
+            title=str(strings["garde_card_title"]),
+            body=str(strings["garde_card_desc"]).format(stock),
+            items=[
+                KingdomGardeCardUseButton(strings),
+                KingdomTechCardCancelButton(strings, "garde"),
+            ],
         )
 
 
@@ -2830,8 +3037,15 @@ async def _remparts_guard_show_select(
     king: Any,
     mode: str,
     fresh: bool,
+    *,
+    followup: bool = False,
 ) -> None:
-    """The wizard's select face (the entry + the Modifier re-open)."""
+    """The wizard's select face (the entry + the Modifier re-open).
+
+    patrouille-garde-fiche-v1: ``followup=True`` opens the face on a
+    followup webhook AFTER the tech card was closed (defer +
+    delete_original_response already consumed the response) — the
+    fresh CV2 wizard window of the ✅ Utiliser transition."""
     kingdom_id = king.kingdom_id or ""
     owned = [
         t
@@ -2843,7 +3057,12 @@ async def _remparts_guard_show_select(
         note = str(
             strings["remparts_guard_no_stock" if stock <= 0 else "market_no_options"]
         )
-        if fresh:
+        if followup:
+            await interaction.followup.send(
+                view=_ephemeral_layout_view(note), ephemeral=True
+            )
+            _register_ephemeral_interaction(interaction)
+        elif fresh:
             await _open_unique_ephemeral(interaction, note)
         else:
             await _remparts_guard_note(interaction, strings, mode, note)
@@ -2876,6 +3095,12 @@ async def _remparts_guard_show_select(
         )
 
     select.callback = on_choose  # type: ignore[method-assign, assignment]
+    if followup:
+        await interaction.followup.send(
+            view=_ephemeral_layout_view(text, [select]), ephemeral=True
+        )
+        _register_ephemeral_interaction(interaction)
+        return
     if fresh:
         view = discord.ui.View(timeout=600)
         view.add_item(select)
@@ -3206,9 +3431,10 @@ class KingdomRempartsPatrouilleHubButton(
     """The restart-proof 👣 « Patrouille » cockpit button (remparts-boutons-v1).
 
     remparts-boutons-v1 (Drasah 03/11): ONE Patrouille button on the
-    Remparts row — the click opens the BOTH-slots cockpit; each slot
-    then keeps its own select flow (KingdomRempartsPatrouilleButton).
-    King only.
+    Remparts row. patrouille-garde-fiche-v1 (Drasah 04/11): the click
+    opens the fiche-CARD first (Jeu d'armes architecture) — the
+    BOTH-slots cockpit opens on ✅ Utiliser; each slot then keeps its
+    own select flow (KingdomRempartsPatrouilleButton). King only.
     """
 
     def __init__(self, strings: dict[str, Any]) -> None:
@@ -3233,7 +3459,8 @@ class KingdomRempartsPatrouilleHubButton(
         return cls(_strings(locale))
 
     async def callback(self, interaction: discord.Interaction) -> None:
-        """Open the both-slots Patrouille cockpit (Drasah 03/11)."""
+        """Open the Patrouille fiche-card (Drasah 04/11) — the
+        both-slots cockpit now only opens on ✅ Utiliser."""
         locale = str(interaction.locale) if interaction.locale else "en"
         strings = _strings(locale)
         wiring = _wiring()
@@ -3250,25 +3477,18 @@ class KingdomRempartsPatrouilleHubButton(
                 strings["market_not_king"], ephemeral=True
             )
             return
-        mode = "cv2" if _is_ephemeral_parent(interaction) else "win"
-        wizard_text = str(strings["remparts_patrouille_hub_text"])
-        slots = [KingdomRempartsPatrouilleButton(slot, strings) for slot in (1, 2)]
-        if mode == "cv2":
-            # In-place face (remparts-fenetre-v1): the cockpit replaces
-            # the Remparts window's view.
-            await interaction.response.edit_message(
-                view=_ephemeral_layout_view(wizard_text, slots)
-            )
-            _register_ephemeral_interaction(interaction)
-            return
-        view = discord.ui.View(timeout=600)
-        for button in slots:
-            view.add_item(button)
-        await _open_unique_ephemeral(
+        # patrouille-garde-fiche-v1 (Drasah 04/11): the 👣 Patrouille
+        # opener shows the CARD first (Jeu d'armes architecture) — the
+        # both-slots cockpit only opens on ✅ Utiliser.
+        await _tech_card_open(
             interaction,
-            wizard_text,
-            view=view,
-            ephemeral=True,
+            item="patrouille",
+            title=str(strings["patrouille_card_title"]),
+            body=str(strings["patrouille_card_desc"]),
+            items=[
+                KingdomPatrouilleCardUseButton(strings),
+                KingdomTechCardCancelButton(strings, "patrouille"),
+            ],
         )
 
 
