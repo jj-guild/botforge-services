@@ -35,7 +35,6 @@ def _stub_maps_module(monkeypatch: pytest.MonkeyPatch, maps: dict[str, Any]) -> 
 async def test_battery_skips_without_contact(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.delenv("LIQUIPEDIA_CONTACT", raising=False)
     monkeypatch.delenv("PROVIDER_CONTACT", raising=False)
     results = await battery()
     assert len(results) == 1

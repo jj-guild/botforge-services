@@ -333,7 +333,7 @@ fr:
     creation_failed: Création impossible (nom déjà pris ?).
     edit_failed: Modification impossible (voir les logs).
     import_failed: Import échoué (nom déjà pris ? voir les logs).
-    liquipedia_unconfigured: 'Import Liquipedia désactivé : la variable LIQUIPEDIA_CONTACT manque sur
+    liquipedia_unconfigured: 'Import Liquipedia désactivé : la variable PROVIDER_CONTACT manque sur
       l’environnement.'
     pool_locked: Ce pool est verrouillé — dupliquez-le pour l'éditer.
     no_maps_to_compose: Aucune map disponible pour l'instant — créez ou importez des maps d'abord.

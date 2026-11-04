@@ -333,7 +333,7 @@ en:
     creation_failed: Creation failed (name already taken?).
     edit_failed: Edit failed (see the logs).
     import_failed: Import failed (name already taken? see the logs).
-    liquipedia_unconfigured: Liquipedia import disabled — the LIQUIPEDIA_CONTACT variable is missing on
+    liquipedia_unconfigured: Liquipedia import disabled — the PROVIDER_CONTACT variable is missing on
       this environment.
     pool_locked: This pool is locked — duplicate it to edit.
     no_maps_to_compose: No maps available yet — create or import maps first.

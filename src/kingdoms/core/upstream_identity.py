@@ -8,10 +8,8 @@ tell who consumes its API; the Liquipedia terms make it mandatory,
 every other upstream deserves the same courtesy.
 
 The contact address is a project-wide fact, not a per-upstream one:
-``PROVIDER_CONTACT`` is THE generic variable every provider reads
-(Liquipedia included). ``LIQUIPEDIA_CONTACT`` stays as a legacy
-fallback so existing deployments keep working while the envs
-migrate.
+``PROVIDER_CONTACT`` is THE one variable every provider reads
+(Liquipedia included).
 """
 
 from __future__ import annotations
@@ -22,14 +20,8 @@ _PROJECT_URL = "https://github.com/merlin-pinpin-org/kingdoms"
 
 
 def provider_contact() -> str:
-    """Return the operational contact address (``PROVIDER_CONTACT``).
-
-    Generic across every upstream; ``LIQUIPEDIA_CONTACT`` is the
-    legacy fallback kept for the envs that have not migrated yet.
-    """
-    return os.environ.get("PROVIDER_CONTACT", "").strip() or os.environ.get(
-        "LIQUIPEDIA_CONTACT", ""
-    ).strip()
+    """Return the operational contact address (``PROVIDER_CONTACT``)."""
+    return os.environ.get("PROVIDER_CONTACT", "").strip()
 
 
 def project_user_agent() -> str:

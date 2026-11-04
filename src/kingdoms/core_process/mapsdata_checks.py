@@ -7,8 +7,8 @@ one the maps sync uses — on a couple of well-known pages, in ONE
 paced batch (a handful of light requests, never a crawl).
 
 The battery needs ``PROVIDER_CONTACT`` (the generic provider
-contact, legacy ``LIQUIPEDIA_CONTACT`` fallback — the same variable
-the runtime uses); without it the check SKIPS with a clear detail
+contact — the same variable the runtime uses); without it the check
+SKIPS with a clear detail
 instead of failing — an unconfigured org must not see a red CI, and
 Liquipedia must never see an unidentified User-Agent.
 """

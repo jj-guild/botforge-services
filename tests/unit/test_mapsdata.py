@@ -327,7 +327,7 @@ async def test_fetch_map_seed_runs_off_the_event_loop(monkeypatch: pytest.Monkey
 
     from kingdoms.mapsdata.seed import fetch_map_seed
 
-    monkeypatch.setenv("LIQUIPEDIA_CONTACT", "dev@example.com")
+    monkeypatch.setenv("PROVIDER_CONTACT", "dev@example.com")
     monkeypatch.delenv("EXT_LIQUIPEDIA_URI", raising=False)
 
     loop_thread = threading.get_ident()

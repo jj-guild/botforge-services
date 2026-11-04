@@ -47,8 +47,8 @@ def _title_variants(name: str) -> list[str]:
 def _user_agent() -> str:
     """Build the identified User-Agent; the contact comes from config.
 
-    The generic ``PROVIDER_CONTACT`` (every provider's operational
-    address) with the legacy ``LIQUIPEDIA_CONTACT`` fallback.
+    The generic ``PROVIDER_CONTACT`` — every provider's operational
+    address.
     """
     from kingdoms.core.upstream_identity import provider_contact
 

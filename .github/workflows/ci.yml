@@ -257,9 +257,8 @@ jobs:
         env:
           # The liquipedia battery skips (does not fail) when unset; set
           # the repo variable PROVIDER_CONTACT (generic, every provider)
-          # to arm it — LIQUIPEDIA_CONTACT stays as the legacy fallback.
-          PROVIDER_CONTACT: ${{ vars.PROVIDER_CONTACT || vars.LIQUIPEDIA_CONTACT }}
-          LIQUIPEDIA_CONTACT: ${{ vars.LIQUIPEDIA_CONTACT }}
+          # to arm it.
+          PROVIDER_CONTACT: ${{ vars.PROVIDER_CONTACT }}
       - name: Run against the composed ext processes (RPC access)
         run: |
           # The compose job runs the ext processes; this pass points the
