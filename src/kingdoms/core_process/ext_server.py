@@ -51,7 +51,15 @@ async def serve_game_provider(
     bind = f"[::]:{port}"
     server.add_insecure_port(bind)
     await server.start()
-    logger.info("%s_READY port=%s provider=%s", process_label, port, capabilities.provider_id)
+    from kingdoms import __version__
+
+    logger.info(
+        "%s_READY port=%s provider=%s version=%s",
+        process_label,
+        port,
+        capabilities.provider_id,
+        __version__,
+    )
     await server.wait_for_termination()
 
 

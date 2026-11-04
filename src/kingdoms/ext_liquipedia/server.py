@@ -57,7 +57,12 @@ async def _serve() -> None:
     server.add_insecure_port(f"[::]:{port}")
     await server.start()
     logging.getLogger("kingdoms.ext").info(
-        "%s_READY port=%s provider=%s game=%s", PROVIDER_ID, port, PROVIDER_KEY, GAME_KEY
+        "%s_READY port=%s provider=%s game=%s version=%s",
+        PROVIDER_ID,
+        port,
+        PROVIDER_KEY,
+        GAME_KEY,
+        __version__,
     )
     await server.wait_for_termination()
 
