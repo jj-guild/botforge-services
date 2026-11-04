@@ -1143,11 +1143,12 @@ async def test_scheduler_reveal_clears_the_whole_false_flag() -> None:
     assert "La couverture tombe" in content
 
 
-async def test_pickban_view_offers_one_dropdown_and_a_disabled_validate() -> None:
-    """pickban-ordre-v1 (Drasah 04/11, pattern « le choix écrase le
-    dropdown ») : the THREE stacked selects are GONE — ONE dropdown
-    (the whole hand), a GRIS+disabled ✅ Valider until the ranking is
-    complete and a ROUGE ❌ Annuler that resets it."""
+async def test_pickban_view_offers_three_dropdowns_and_a_disabled_validate() -> None:
+    """pickban-ordre-v2 (Drasah 04/11, live beta 19:32 — « le système
+    Objectifs ») : THREE dropdowns directly (« Choix 1/2/3 », the whole
+    hand in each), a GRIS+disabled ✏️ Modifier while no choice is
+    made, a GRIS+disabled ✅ Valider until 3/3 — and ❌ Annuler is
+    GONE (« annulé ici ne sert à rien »)."""
     import discord
 
     from kingdoms.mods.kingdoms.kingdom_attack_panel import KingdomPickBanView
@@ -1156,19 +1157,24 @@ async def test_pickban_view_offers_one_dropdown_and_a_disabled_validate() -> Non
         "s-20261018-015707-a-t-steppe-king-a-1791720000",
         "king-a",
         "attacker",
-        ["francs", "bretons", "goths"],
+        ["francs", "bretons", "goths", "mayas"],
         "fr",
     )
     selects = [c for c in view.children if isinstance(c, discord.ui.Select)]
-    assert len(selects) == 1  # ONE dropdown — never three stacked selects
-    assert [o.value for o in selects[0].options] == ["francs", "bretons", "goths"]
-    assert callable(selects[0].callback)  # « the application did not respond » fix
+    assert len(selects) == 3  # THREE dropdowns directly — never a single wizard one
+    for rank, select in enumerate(selects):
+        assert str(select.placeholder).startswith(f"Choix {("1️⃣", "2️⃣", "3️⃣")[rank]}")
+        assert [o.value for o in select.options] == ["francs", "bretons", "goths", "mayas"]
+        assert callable(select.callback)  # « the application did not respond » fix
     validate = next(c for c in view.children if getattr(c, "custom_id", "") == "kingdoms:attack:pickban:validate")
     assert callable(validate.callback)
     assert validate.disabled is True  # GRIS — the ONLY consumer, inert while incomplete
     assert validate.style is discord.ButtonStyle.success
-    cancel = next(c for c in view.children if str(getattr(c, "label", "") or "") == "❌ Annuler")
-    assert cancel.style is discord.ButtonStyle.danger
+    modify = next(c for c in view.children if str(getattr(c, "label", "") or "") == "✏️ Modifier")
+    assert modify.style is discord.ButtonStyle.secondary  # GRIS while no choice
+    assert modify.disabled is True
+    # ❌ Annuler is GONE — Modifier resets the picks, Cancel never comes back.
+    assert not [c for c in view.children if str(getattr(c, "label", "") or "").startswith("❌")]
     # Drasah 18/10 v2: no sabotage select anymore — the moves ride the
     # battle room, and the resolution is BLIND (no adversary hand here).
     assert not [c for c in view.children if "sabotage" in str(getattr(c, "custom_id", ""))]
@@ -1176,9 +1182,9 @@ async def test_pickban_view_offers_one_dropdown_and_a_disabled_validate() -> Non
 
 async def test_pickban_validate_rejects_duplicates_and_missing_picks() -> None:
     """pickban-doublon-v1 (Drasah 28/10): the split wordings survive as
-    a SAFETY net — the new wizard (pickban-ordre-v1) makes both refusals
-    impossible by construction (the dropdown never offers a picked civ,
-    ✅ Valider stays disabled until the ranking is complete)."""
+    a SAFETY net — the wizard (pickban-ordre-v2) makes both refusals
+    impossible by construction (a picked civ leaves the two other
+    dropdowns, ✅ Valider stays disabled until the ranking is complete)."""
     from kingdoms.mods.kingdoms.kingdom_attack_panel import KingdomPickBanView
     from kingdoms.mods.kingdoms.kingdom_persistent import (
         KingdomsPanelWiring,
@@ -4392,11 +4398,11 @@ def test_gestion_items_are_registered_on_the_bot() -> None:
     assert KingdomRempartsBackButton in bot.items
 
 
-async def test_pickban_order_stacks_lines_and_the_choice_replaces_the_dropdown() -> None:
-    """pickban-ordre-v1 : every pick STACKS the next line of the DM's
-    ranking block (edited IN PLACE, the DM base survives), the dropdown
-    only offers the remaining civs, one ✏️ rides each filled line and
-    ✅ Valider wakes up when the 3 lines are complete."""
+async def test_pickban_three_dropdowns_exclude_picked_civs_and_validate_wakes_up() -> None:
+    """pickban-ordre-v2 : a pick in ONE dropdown lands on its own slot
+    only and REMOVES the civ from the two others (duplicate impossible
+    by construction), the DM edit is VIEW-ONLY (``content`` is NEVER
+    passed — the DM text survives) and ✅ Valider wakes up at 3/3."""
     import discord
 
     from kingdoms.mods.kingdoms.kingdom_attack_panel import KingdomPickBanView
@@ -4406,50 +4412,65 @@ async def test_pickban_order_stacks_lines_and_the_choice_replaces_the_dropdown()
     view = KingdomPickBanView("a-1", "king-a", "attacker", hand, "fr")
     dm_text = "⚔️ **Pick & ban — fort**\nTa main : francs, bretons, goths, mayas"
 
-    def _select_of(v: Any) -> Any:
-        return next(c for c in v.children if isinstance(c, discord.ui.Select))
+    def _selects(v: Any) -> list[Any]:
+        return [c for c in v.children if isinstance(c, discord.ui.Select)]
 
-    def _buttons(v: Any, prefix: str) -> list[Any]:
-        return [c for c in v.children if str(getattr(c, "label", "") or "").startswith(prefix)]
+    def _button(v: Any, label: str) -> Any:
+        return next(c for c in v.children if str(getattr(c, "label", "") or "") == label)
 
-    # Pick 1 — the DM is edited IN PLACE, the ranking block rides it.
-    select = _select_of(view)
-    select.values = ["mayas"]
-    click = MockInteraction(user=MockUser(id="king-a"), locale="fr")  # type: ignore[arg-type]
-    click.message = MockMessage(content=dm_text)  # type: ignore[arg-type]
-    await select.callback(click)  # type: ignore[arg-type]
-    message = click.response.message
-    assert message is not None
-    assert "1️⃣ mayas" in str(message.content)
-    assert "2️⃣ _" in str(message.content)
-    assert "Ta main" in str(message.content)  # the DM base survives the edit
-    assert not click.followup.messages  # never a second bubble
-    view2 = message.view
-    assert [o.value for o in _select_of(view2).options] == ["francs", "bretons", "goths"]
-    assert len(_buttons(view2, "✏️")) == 1  # one ✏️ PER line
-    validate2 = next(c for c in view2.children if getattr(c, "custom_id", "") == "kingdoms:attack:pickban:validate")
-    assert validate2.disabled is True
-    # Picks 2 and 3 — the ranking stacks to completeness.
-    for civ, line in (("francs", "2️⃣ francs"), ("goths", "3️⃣ goths")):
-        select2 = _select_of(view2)
-        select2.values = [civ]
-        click2 = MockInteraction(user=MockUser(id="king-a"), locale="fr")  # type: ignore[arg-type]
-        click2.message = MockMessage(content=str(message.content))  # type: ignore[arg-type]
-        await select2.callback(click2)  # type: ignore[arg-type]
-        message = click2.response.message
-        assert line in str(message.content)
-        view2 = message.view
-    validate3 = next(c for c in view2.children if getattr(c, "custom_id", "") == "kingdoms:attack:pickban:validate")
-    assert validate3.disabled is False  # complete — the ONLY consumer wakes up
-    assert len(_buttons(view2, "✏️")) == 3  # one ✏️ PER LINE, never a global one
-    assert not [c for c in view2.children if isinstance(c, discord.ui.Select)]  # nothing left to pick
+    async def _pick(v: Any, index: int, civ: str, dm: str) -> tuple[dict[str, Any], Any]:
+        click = MockInteraction(user=MockUser(id="king-a"), locale="fr", data={"values": [civ]})  # type: ignore[arg-type]
+        click.message = MockMessage(content=dm)  # type: ignore[arg-type]
+        captured: dict[str, Any] = {}
+        real_edit = click.response.edit_message
+
+        async def _edit(**kwargs: Any) -> Any:
+            captured.update(kwargs)
+            return await real_edit(**kwargs)
+
+        click.response.edit_message = _edit  # type: ignore[method-assign]
+        await _selects(v)[index].callback(click)  # type: ignore[arg-type]
+        return captured, captured.get("view")
+
+    # Fresh view : three dropdowns, the whole hand everywhere.
+    assert len(_selects(view)) == 3
+    for select in _selects(view):
+        assert [o.value for o in select.options] == hand
+
+    # Pick 1 — view-only edit, the civ leaves the two other dropdowns.
+    captured, view2 = _pick(view, 0, "mayas", dm_text)
+    assert "content" not in captured  # the DM text NEVER changes
+    assert view2.picks == ["mayas", "", ""]
+    s0, s1, s2 = _selects(view2)
+    assert sorted(o.value for o in s0.options) == hand  # its own pick stays offered (default)
+    assert next(o for o in s0.options if o.value == "mayas").default is True
+    assert sorted(o.value for o in s1.options) == ["bretons", "francs", "goths"]
+    assert sorted(o.value for o in s2.options) == ["bretons", "francs", "goths"]
+    modify = _button(view2, "✏️ Modifier")
+    assert modify.disabled is False and modify.style is discord.ButtonStyle.success  # VERT from the FIRST pick
+    validate = next(c for c in view2.children if getattr(c, "custom_id", "") == "kingdoms:attack:pickban:validate")
+    assert validate.disabled is True  # 1/3 — still GRIS
+
+    # Picks 2 and 3 — every dropdown keeps its own pick default-shown.
+    _c2, view3 = _pick(view2, 1, "francs", dm_text)
+    _c3, view4 = _pick(view3, 2, "goths", dm_text)
+    assert "content" not in _c2 and "content" not in _c3
+    assert view4.picks == ["mayas", "francs", "goths"]
+    for index, civ in enumerate(view4.picks):
+        select = _selects(view4)[index]
+        assert next(o for o in select.options if o.value == civ).default is True
+        others = [c for c in view4.picks if c != civ]
+        assert not [o for o in select.options if o.value in others]  # no duplicate offered
+    validate4 = next(c for c in view4.children if getattr(c, "custom_id", "") == "kingdoms:attack:pickban:validate")
+    assert validate4.disabled is False  # 3/3 — the ONLY consumer wakes up
+    assert not [c for c in view4.children if str(getattr(c, "label", "") or "").startswith("🎯")]
 
 
-async def test_pickban_modify_reopens_one_line_and_cancel_resets() -> None:
-    """pickban-ordre-v1 : the ✏️ of ONE line re-opens the dropdown on
-    that line (its own civ offered again — the pick REPLACES it) and
-    the ❌ Annuler resets the whole ranking (every line « _ », the
-    dropdown full again, ✅ back to GRIS+disabled)."""
+async def test_pickban_modify_resets_all_three_dropdowns() -> None:
+    """pickban-ordre-v2 : ✏️ Modifier is GLOBAL — VERT as soon as one
+    choice exists, one click resets the THREE dropdowns (the whole hand
+    offered again, ✅ back to GRIS+disabled) and the DM text never
+    changes (view-only edit). ❌ Annuler does not exist anymore."""
     import discord
 
     from kingdoms.mods.kingdoms.kingdom_attack_panel import KingdomPickBanView
@@ -4459,40 +4480,43 @@ async def test_pickban_modify_reopens_one_line_and_cancel_resets() -> None:
     view = KingdomPickBanView(
         "a-1", "king-a", "attacker", hand, "fr", picks=["mayas", "francs", "goths"]
     )
-    dm_text = "⚔️ **Pick & ban — fort**\n\n🎯 **Ton classement :**\n1️⃣ mayas\n2️⃣ francs\n3️⃣ goths"
+    dm_text = "⚔️ **Pick & ban — fort**\nTa main : francs, bretons, goths, mayas"
 
-    def _select_of(v: Any) -> Any:
-        return next(c for c in v.children if isinstance(c, discord.ui.Select))
+    def _selects(v: Any) -> list[Any]:
+        return [c for c in v.children if isinstance(c, discord.ui.Select)]
 
-    # ✏️ of line 1 — the dropdown offers the line's civ + the remains.
-    modify_buttons = [c for c in view.children if str(getattr(c, "label", "") or "").startswith("✏️")]
-    assert len(modify_buttons) == 3
+    # A complete ranking — Modifier is VERT and enabled.
+    modify = next(c for c in view.children if str(getattr(c, "label", "") or "") == "✏️ Modifier")
+    assert modify.disabled is False and modify.style is discord.ButtonStyle.success
+    validate = next(c for c in view.children if getattr(c, "custom_id", "") == "kingdoms:attack:pickban:validate")
+    assert validate.disabled is False
+    # No Cancel button anywhere.
+    assert not [c for c in view.children if str(getattr(c, "label", "") or "").startswith("❌")]
+    # Each dropdown offers its own pick + the unpicked remainder only.
+    for index, civ in enumerate(["mayas", "francs", "goths"]):
+        offered = sorted(o.value for o in _selects(view)[index].options)
+        assert offered == sorted([civ, "bretons"])
+
+    # One click on Modifier — the view re-renders, the picks are wiped.
     click = MockInteraction(user=MockUser(id="king-a"), locale="fr")  # type: ignore[arg-type]
     click.message = MockMessage(content=dm_text)  # type: ignore[arg-type]
-    await modify_buttons[0].callback(click)  # type: ignore[arg-type]
-    view2 = click.response.message.view
-    select = _select_of(view2)
-    assert sorted(o.value for o in select.options) == ["bretons", "mayas"]
-    # The pick REPLACES line 1 only — the other lines never move.
-    select.values = ["bretons"]
-    click2 = MockInteraction(user=MockUser(id="king-a"), locale="fr")  # type: ignore[arg-type]
-    click2.message = MockMessage(content=str(click.response.message.content))  # type: ignore[arg-type]
-    await select.callback(click2)  # type: ignore[arg-type]
-    content = str(click2.response.message.content)
-    assert "1️⃣ bretons" in content
-    assert "2️⃣ francs" in content and "3️⃣ goths" in content
-    # ❌ Annuler resets the ranking.
-    cancel = next(
-        c
-        for c in click2.response.message.view.children
-        if str(getattr(c, "label", "") or "") == "❌ Annuler"
-    )
-    click3 = MockInteraction(user=MockUser(id="king-a"), locale="fr")  # type: ignore[arg-type]
-    click3.message = MockMessage(content=content)  # type: ignore[arg-type]
-    await cancel.callback(click3)  # type: ignore[arg-type]
-    reset = str(click3.response.message.content)
-    assert "1️⃣ _" in reset and "2️⃣ _" in reset and "3️⃣ _" in reset
-    view4 = click3.response.message.view
-    assert [o.value for o in _select_of(view4).options] == hand  # the whole hand again
-    validate4 = next(c for c in view4.children if getattr(c, "custom_id", "") == "kingdoms:attack:pickban:validate")
-    assert validate4.disabled is True  # back to GRIS
+    captured: dict[str, Any] = {}
+    real_edit = click.response.edit_message
+
+    async def _edit(**kwargs: Any) -> Any:
+        captured.update(kwargs)
+        return await real_edit(**kwargs)
+
+    click.response.edit_message = _edit  # type: ignore[method-assign]
+    await modify.callback(click)  # type: ignore[arg-type]
+    assert "content" not in captured  # the DM text NEVER changes
+    view2 = captured.get("view")
+    assert view2 is not None
+    assert view2.picks == ["", "", ""]  # the whole ranking reset
+    for select in _selects(view2):
+        assert [o.value for o in select.options] == hand  # the whole hand again
+        assert not [o for o in select.options if o.default]
+    modify2 = next(c for c in view2.children if str(getattr(c, "label", "") or "") == "✏️ Modifier")
+    assert modify2.disabled is True and modify2.style is discord.ButtonStyle.secondary  # back to GRIS
+    validate2 = next(c for c in view2.children if getattr(c, "custom_id", "") == "kingdoms:attack:pickban:validate")
+    assert validate2.disabled is True  # back to GRIS
