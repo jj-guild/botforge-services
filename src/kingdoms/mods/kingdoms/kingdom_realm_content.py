@@ -202,13 +202,29 @@ def _strings(locale: str) -> dict[str, str]:
             "patrouille_card_title": "👣 Patrouille",
             "patrouille_card_desc": (
                 "**Effet :**\n"
-                "Pose le créneau quotidien de patrouille (2h, heure de Paris) "
-                "sur un emplacement débloqué — figé pour le cycle, "
-                "redéfinissable le Jour du Seigneur (3h si Renforcée). "
-                "Roi uniquement.\n\n"
-                "Clique sur ✅ Utiliser puis choisis l'emplacement à régler."
+                "Pose un créneau quotidien de patrouille de 2h permettant, "
+                "durant ce laps de temps, d'être protégé de tout type "
+                "d'attaque (Classique, Exceptionnel et Technologique).\n"
+                "Le créneau est redéfinissable durant le Jour du Seigneur "
+                "({lords_day}).\n"
+                "Si le niveau de votre IA est au niveau max (Jeu d'armes), "
+                "votre patrouille se renforce d'une heure, offrant 3h au "
+                "lieu de 2h.\n\n"
+                "Lorsqu'une patrouille est obtenue, elle est acquise pour "
+                "toute la saison, ne se consomme pas et est limitée à deux "
+                "par royaume."
             ),
             "patrouille_use_button": "✅ Utiliser",
+            # patrouille-fiche-v2 (Drasah 04/11) : rappel dynamique de la
+            # fenêtre du Jour du Seigneur greffé dans la fiche.
+            "patrouille_lords_day_active": "fenêtre en cours, jusqu'au {0}",
+            "patrouille_lords_day_next": "prochaine fenêtre : {0} → {1}",
+            "patrouille_lords_day_beta": (
+                "fenêtre courte ouverte après chaque bascule de cycle"
+            ),
+            "patrouille_lords_day_plain": (
+                "la fenêtre hebdomadaire annoncée par le bot"
+            ),
             "garde_card_title": "🛡️ Garde Royale",
             "garde_card_desc": (
                 "**Effet :**\n"
@@ -535,12 +551,27 @@ def _strings(locale: str) -> dict[str, str]:
         "patrouille_card_title": "👣 Patrol",
         "patrouille_card_desc": (
             "**Effect:**\n"
-            "Sets the daily patrol window (2h, Paris time) on an unlocked "
-            "slot — fixed for the cycle, redefinable on the Lord's Day "
-            "(3h when Reinforced). King only.\n\n"
-            "Click ✅ Use, then pick the slot to set."
+            "Sets a daily 2h patrol window, during which the kingdom is "
+            "protected from every attack type (Classic, Exceptional and "
+            "Technological).\n"
+            "The window can be redefined during the Lord's Day "
+            "({lords_day}).\n"
+            "If your AI is at max level (Jeu d'armes), the patrol is "
+            "reinforced by one hour, offering 3h instead of 2h.\n\n"
+            "Once obtained, a patrol is acquired for the whole season, is "
+            "not consumed and is limited to two per kingdom."
         ),
         "patrouille_use_button": "✅ Use",
+        # patrouille-fiche-v2 (Drasah 04/11): dynamic Lord's Day window
+        # reminder grafted into the card.
+        "patrouille_lords_day_active": "window open until {0}",
+        "patrouille_lords_day_next": "next window: {0} → {1}",
+        "patrouille_lords_day_beta": (
+            "short window opened after each cycle switch"
+        ),
+        "patrouille_lords_day_plain": (
+            "the weekly window announced by the bot"
+        ),
         "garde_card_title": "🛡️ Royal Guard",
         "garde_card_desc": (
             "**Effect:**\n"

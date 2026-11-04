@@ -600,10 +600,13 @@ async def test_garde_royale_market_button_buys_a_token() -> None:
 
 
 async def test_remparts_patrouille_button_places_the_window() -> None:
-    """remparts-v2: the Remparts button places the unlocked slot's 2h window."""
+    """remparts-v2: the Remparts button places the unlocked slot's 2h window.
+
+    patrouille-fiche-v2 (Drasah 04/11): a plain LORD may set the patrol
+    window — the patrouille chain is not King-gated anymore."""
     economy = FakeEconomyService()
     _wiring(
-        lords=[FakeLord(id="111", role="king", kingdom_id="k1")],
+        lords=[FakeLord(id="111", role="lord", kingdom_id="k1")],
         economy=economy,
     )
     interaction: Any = MockInteraction(user=MockUser(id=111), locale="en-US")
@@ -710,10 +713,14 @@ async def test_remparts_guard_button_opens_the_card_then_the_map_select() -> Non
 async def test_patrouille_hub_button_opens_the_card_first() -> None:
     """patrouille-garde-fiche-v1: the 👣 Patrouille opener shows the
     CARD first (Jeu d'armes architecture) — the cockpit only opens on
-    ✅ Utiliser."""
+    ✅ Utiliser.
+
+    patrouille-fiche-v2 (Drasah 04/11): a plain LORD opens the card, the
+    body carries the dynamic Lord's Day reminder and the King-only line
+    is gone."""
     economy = FakeEconomyService()
     _wiring(
-        lords=[FakeLord(id="111", role="king", kingdom_id="k1")],
+        lords=[FakeLord(id="111", role="lord", kingdom_id="k1")],
         economy=economy,
     )
     strings = _kp_strings("en")
@@ -726,16 +733,25 @@ async def test_patrouille_hub_button_opens_the_card_first() -> None:
     assert "kingdoms:patrouille-card:use" in ids
     assert "kingdoms:patrouille-card:cancel" in ids
     assert len(card.embeds) == 1
-    assert "Effect:" in str(card.embeds[0].description or "")
+    body = str(card.embeds[0].description or "")
+    assert "Effect:" in body
+    # patrouille-fiche-v2: the Lord's Day reminder is grafted in, the
+    # King-only wording and the ✅ Utiliser hint line are gone.
+    assert "Lord's Day" in body
+    assert "King only" not in body
+    assert "Click ✅ Use" not in body
 
 
 async def test_patrouille_card_use_opens_the_cockpit_and_cancel_consumes_nothing() -> None:
     """patrouille-garde-fiche-v1: ✅ Utiliser closes the card and opens
     the both-slots cockpit; ❌ Annuler closes the card and nothing is
-    consumed."""
+    consumed.
+
+    patrouille-fiche-v2 (Drasah 04/11): a plain LORD gets there too —
+    the patrouille chain is not King-gated anymore."""
     economy = FakeEconomyService()
     _wiring(
-        lords=[FakeLord(id="111", role="king", kingdom_id="k1")],
+        lords=[FakeLord(id="111", role="lord", kingdom_id="k1")],
         economy=economy,
     )
     strings = _kp_strings("en")

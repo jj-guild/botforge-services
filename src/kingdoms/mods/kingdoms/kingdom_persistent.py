@@ -20,7 +20,7 @@ import re
 import time
 from collections.abc import Callable
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import UTC, datetime, time, timedelta
 from types import SimpleNamespace
 from typing import Any, cast
 from zoneinfo import ZoneInfo
@@ -2700,11 +2700,13 @@ class KingdomPatrouilleCardUseButton(
         if wiring.economy_service is None:
             await _tech_card_note(interaction, str(strings["market_no_service"]))
             return
-        king = await _king_of(
+        # patrouille-fiche-v2 (Drasah 04/11): every lord may use the
+        # patrols — not the King only anymore.
+        lord = await _lord_of(
             wiring.kingdoms_service, str(interaction.user.id), wiring.bot_admins
         )
-        if king is None:
-            await _tech_card_note(interaction, str(strings["market_not_king"]))
+        if lord is None or getattr(lord, "left", False):
+            await _tech_card_note(interaction, str(strings["not_lord"]))
             return
         await _tech_card_close(interaction)
         wizard_text = str(strings["remparts_patrouille_hub_text"])
@@ -3300,6 +3302,70 @@ class KingdomRempartsGuardCancelButton(
         _EPHEMERAL_WINDOWS.pop(str(getattr(interaction.user, "id", "")), None)
 
 
+async def _patrouille_lords_day_note(
+    wiring: Any, locale: str, strings: dict[str, Any]
+) -> str:
+    """patrouille-fiche-v2 (Drasah 04/11): the card reminds the player of
+    the Lord's Day window — the ACTIVE window when one is open, the NEXT
+    calendar window otherwise (beta seasons: the short post-cycle window
+    announced by the bot instead, since the weekly cron does not apply)."""
+    from kingdoms.mods.kingdoms.events import (
+        _parse_weekly_cron,
+        _schedule_timezone,
+        active_lords_day_window,
+        lords_day_window,
+    )
+
+    service = wiring.kingdoms_service
+    config = getattr(service, "config", None)
+    events_cfg = getattr(config, "events", None)
+    if events_cfg is None or getattr(events_cfg, "cycle_cron", None) is None:
+        return str(strings["patrouille_lords_day_plain"])
+
+    def _fmt(moment: datetime) -> str:
+        pattern = "%d/%m %Hh%M" if locale.startswith("fr") else "%d/%m %H:%M"
+        return moment.astimezone(tz).strftime(pattern)
+
+    tz = _schedule_timezone(config)
+    now = datetime.now(UTC)
+    season = None
+    if service is not None:
+        try:
+            season = await service.current_season()
+        except Exception:
+            season = None
+    window = None
+    if season is not None:
+        try:
+            window = active_lords_day_window(config, season, now)
+        except Exception:
+            window = None
+        if window is None and getattr(season, "beta_name", None):
+            return str(strings["patrouille_lords_day_beta"])
+    else:
+        try:
+            window = lords_day_window(config, now)
+        except Exception:
+            window = None
+    if window is not None:
+        return str(strings["patrouille_lords_day_active"]).format(_fmt(window[1]))
+    # No open window: the next calendar window from the weekly cron.
+    minute, hour, weekday = _parse_weekly_cron(events_cfg.cycle_cron)
+    local = now.astimezone(tz)
+    day = local.date() + timedelta(days=(weekday - local.weekday()) % 7)
+    start = datetime.combine(day, time(hour, minute), tzinfo=tz)
+    if start <= local:
+        start = datetime.combine(
+            day + timedelta(days=7), time(hour, minute), tzinfo=tz
+        )
+    end = datetime.combine(
+        start.date() + timedelta(days=1),
+        time(getattr(events_cfg, "lords_day_end_hour", 10), 0),
+        tzinfo=tz,
+    )
+    return str(strings["patrouille_lords_day_next"]).format(_fmt(start), _fmt(end))
+
+
 class KingdomRempartsPatrouilleButton(
     discord.ui.DynamicItem[discord.ui.Button[Any]],
     template=r"kingdoms:remparts:patrouille:(?P<slot>[12])",
@@ -3349,13 +3415,15 @@ class KingdomRempartsPatrouilleButton(
         if wiring.economy_service is None:
             await interaction.response.send_message(strings["market_no_service"], ephemeral=True)
             return
-        king = await _king_of(
+        # patrouille-fiche-v2 (Drasah 04/11): every lord of the kingdom
+        # may use and set the patrols — not the King only anymore.
+        lord = await _lord_of(
             wiring.kingdoms_service, str(interaction.user.id), wiring.bot_admins
         )
-        if king is None:
-            await interaction.response.send_message(strings["market_not_king"], ephemeral=True)
+        if lord is None or getattr(lord, "left", False):
+            await interaction.response.send_message(strings["not_lord"], ephemeral=True)
             return
-        kingdom_id = king.kingdom_id or ""
+        kingdom_id = str(getattr(lord, "kingdom_id", "") or "")
         mode = "cv2" if _is_ephemeral_parent(interaction) else "win"
         # remparts-v3: the Lord's-Day note rides the flow, not the body.
         wizard_text = str(strings["patrol_window"])
@@ -3469,22 +3537,27 @@ class KingdomRempartsPatrouilleHubButton(
                 strings["market_no_service"], ephemeral=True
             )
             return
-        king = await _king_of(
+        # patrouille-fiche-v2 (Drasah 04/11): every lord of the kingdom
+        # may open the Patrouille card — not the King only anymore.
+        lord = await _lord_of(
             wiring.kingdoms_service, str(interaction.user.id), wiring.bot_admins
         )
-        if king is None:
+        if lord is None or getattr(lord, "left", False):
             await interaction.response.send_message(
-                strings["market_not_king"], ephemeral=True
+                strings["not_lord"], ephemeral=True
             )
             return
         # patrouille-garde-fiche-v1 (Drasah 04/11): the 👣 Patrouille
         # opener shows the CARD first (Jeu d'armes architecture) — the
         # both-slots cockpit only opens on ✅ Utiliser.
+        # patrouille-fiche-v2 (Drasah 04/11): the card carries a
+        # dynamic reminder of the Lord's Day window.
+        lords_day = await _patrouille_lords_day_note(wiring, locale, strings)
         await _tech_card_open(
             interaction,
             item="patrouille",
             title=str(strings["patrouille_card_title"]),
-            body=str(strings["patrouille_card_desc"]),
+            body=str(strings["patrouille_card_desc"]).format(lords_day=lords_day),
             items=[
                 KingdomPatrouilleCardUseButton(strings),
                 KingdomTechCardCancelButton(strings, "patrouille"),
