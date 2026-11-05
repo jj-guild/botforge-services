@@ -34,6 +34,22 @@ class RegistrationDatabase(Protocol):
         """List the game-profile bindings of a user (all games)."""
         ...
 
+    async def find_bindings_by_profiles(
+        self, game_key: str, profile_ids: list[str]
+    ) -> list[dict[str, Any]]:
+        """Read many profiles' bindings in ONE batch (the panel's path).
+
+        Rule 5: ``profile_bindings`` is THIS service's collection — the
+        callers (the bot's panels) go through the service, never the
+        raw database.
+        """
+        if not profile_ids:
+            return []
+        cursor = self._database["profile_bindings"].find(
+            {"game_key": game_key, "profile_id": {"$in": list(profile_ids)}}
+        )
+        return [dict(doc) async for doc in cursor]
+
     async def find_binding_by_profile(self, game_key: str, profile_id: str) -> dict[str, Any] | None:
         """Return the binding owning a profile; None when unbound."""
         ...

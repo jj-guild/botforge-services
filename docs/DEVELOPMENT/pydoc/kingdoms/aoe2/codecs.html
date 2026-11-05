@@ -2,13 +2,13 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>Python: kingdoms.core.codecs</title>
+<title>Python: kingdoms.aoe2.codecs</title>
 </head><body>
 
 <table class="heading">
 <tr class="heading-text decor">
-<td class="title">&nbsp;<br><strong class="title"><a href="kingdoms.html" class="white">kingdoms</a>.<a href="kingdoms.core.html" class="white">core</a>.codecs</strong></td>
-<td class="extra"><a href=".">index</a><br><a href="file:SOURCE_ROOT/core/codecs.py">SOURCE_ROOT/core/codecs.py</a></td></tr></table>
+<td class="title">&nbsp;<br><strong class="title"><a href="kingdoms.html" class="white">kingdoms</a>.<a href="kingdoms.aoe2.html" class="white">aoe2</a>.codecs</strong></td>
+<td class="extra"><a href=".">index</a><br><a href="file:SOURCE_ROOT/aoe2/codecs.py">SOURCE_ROOT/aoe2/codecs.py</a></td></tr></table>
     <p><span class="code">AoE2&nbsp;payload&nbsp;blob&nbsp;decoding:&nbsp;base64&nbsp;+&nbsp;zlib&nbsp;(slotinfo&nbsp;/&nbsp;options).<br>
 &nbsp;<br>
 The&nbsp;Worlds&nbsp;Edge&nbsp;Link&nbsp;payloads&nbsp;embed&nbsp;the&nbsp;real&nbsp;match&nbsp;parameters&nbsp;as<br>
@@ -17,15 +17,16 @@ community&nbsp;sites&nbsp;show&nbsp;(aoe2insights)&nbsp;that&nbsp;the&nbsp;raw&n
 does&nbsp;not&nbsp;decode:&nbsp;per-slot&nbsp;civs,&nbsp;teams,&nbsp;and&nbsp;the&nbsp;game&nbsp;options&nbsp;(map&nbsp;size,<br>
 speed,&nbsp;victory&nbsp;condition,&nbsp;...).<br>
 &nbsp;<br>
-This&nbsp;module&nbsp;is&nbsp;the&nbsp;archaic-but-necessary&nbsp;decoder.&nbsp;It&nbsp;is&nbsp;game-module<br>
-code,&nbsp;not&nbsp;core:&nbsp;only&nbsp;the&nbsp;decoded,&nbsp;structured&nbsp;result&nbsp;crosses&nbsp;into<br>
+This&nbsp;module&nbsp;is&nbsp;the&nbsp;archaic-but-necessary&nbsp;decoder&nbsp;—&nbsp;AoE2's&nbsp;own<br>
+format,&nbsp;shared&nbsp;by&nbsp;the&nbsp;game's&nbsp;providers&nbsp;and&nbsp;the&nbsp;game&nbsp;service<br>
+(kingdoms.aoe2,&nbsp;owner&nbsp;direction&nbsp;2026-11-05):&nbsp;only&nbsp;the&nbsp;decoded,&nbsp;structured&nbsp;result&nbsp;crosses&nbsp;into<br>
 ``MatchDetails``.<br>
 &nbsp;<br>
 Format&nbsp;references&nbsp;(community&nbsp;reverse-engineering,&nbsp;none&nbsp;of&nbsp;it<br>
 documented&nbsp;by&nbsp;World's&nbsp;Edge):<br>
 &nbsp;<br>
-*&nbsp;librematch-collector&nbsp;—&nbsp;slotinfo/options&nbsp;parsers,&nbsp;option&nbsp;id&nbsp;maps:<br>
-&nbsp;&nbsp;<a href="https://github.com/librematch/librematch-collector">https://github.com/librematch/librematch-collector</a><br>
+*&nbsp;the&nbsp;community&nbsp;collector&nbsp;projects&nbsp;—&nbsp;slotinfo/options&nbsp;parsers,<br>
+&nbsp;&nbsp;option&nbsp;id&nbsp;maps&nbsp;(the&nbsp;upstream&nbsp;reverse-engineering&nbsp;references)<br>
 &nbsp;&nbsp;(collector/src/parser/{slotinfo,options}.ts)<br>
 *&nbsp;aoe2-apis&nbsp;—&nbsp;live&nbsp;lobby&nbsp;payloads&nbsp;and&nbsp;the&nbsp;Worlds&nbsp;Edge&nbsp;Link&nbsp;community<br>
 &nbsp;&nbsp;API:&nbsp;<a href="https://github.com/ustacode/aoe2-apis">https://github.com/ustacode/aoe2-apis</a><br>
@@ -56,7 +57,7 @@ documented&nbsp;by&nbsp;World's&nbsp;Edge):<br>
 <dt class="heading-text"><a href="builtins.html#ValueError">builtins.ValueError</a>(<a href="builtins.html#Exception">builtins.Exception</a>)
 </dt><dd>
 <dl>
-<dt class="heading-text"><a href="kingdoms.core.codecs.html#BlobDecodeError">BlobDecodeError</a>
+<dt class="heading-text"><a href="kingdoms.aoe2.codecs.html#BlobDecodeError">BlobDecodeError</a>
 </dt></dl>
 </dd>
 </dl>
@@ -69,7 +70,7 @@ documented&nbsp;by&nbsp;World's&nbsp;Edge):<br>
 <td class="decor title-decor" colspan=2><span class="code">The&nbsp;blob&nbsp;is&nbsp;not&nbsp;a&nbsp;decodable&nbsp;base64+zlib&nbsp;payload.<br>&nbsp;</span></td></tr>
 <tr><td>&nbsp;</td>
 <td class="singlecolumn"><dl><dt>Method resolution order:</dt>
-<dd><a href="kingdoms.core.codecs.html#BlobDecodeError">BlobDecodeError</a></dd>
+<dd><a href="kingdoms.aoe2.codecs.html#BlobDecodeError">BlobDecodeError</a></dd>
 <dd><a href="builtins.html#ValueError">builtins.ValueError</a></dd>
 <dd><a href="builtins.html#Exception">builtins.Exception</a></dd>
 <dd><a href="builtins.html#BaseException">builtins.BaseException</a></dd>

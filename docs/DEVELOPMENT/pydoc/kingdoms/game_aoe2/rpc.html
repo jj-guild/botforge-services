@@ -58,6 +58,11 @@ Serve&nbsp;the&nbsp;kingdoms.v1.GameData&nbsp;contract&nbsp;from&nbsp;the&nbsp;a
 Methods defined here:<br>
 <dl><dt>async <a name="GameDataServicer-GetCoverage"><strong>GetCoverage</strong></a>(self, request: 'gamedata_pb2.CoverageRequest', context: 'grpc.aio.ServicerContext') -&gt; 'gamedata_pb2.GameCoverage'</dt><dd><span class="code">Serve&nbsp;the&nbsp;games&nbsp;this&nbsp;process&nbsp;covers&nbsp;and&nbsp;its&nbsp;health.</span></dd></dl>
 
+<dl><dt>async <a name="GameDataServicer-GetLastCompletedTimes"><strong>GetLastCompletedTimes</strong></a>(self, request: 'Any', context: 'grpc.aio.ServicerContext') -&gt; 'Any'</dt><dd><span class="code">Aggregate&nbsp;the&nbsp;profiles'&nbsp;last&nbsp;completed-match&nbsp;times&nbsp;(rule&nbsp;5).<br>
+&nbsp;<br>
+``matches``&nbsp;is&nbsp;the&nbsp;GAME's&nbsp;collection&nbsp;—&nbsp;the&nbsp;aggregation&nbsp;runs<br>
+here,&nbsp;in&nbsp;the&nbsp;owner's&nbsp;process;&nbsp;the&nbsp;callers&nbsp;never&nbsp;read&nbsp;it&nbsp;raw.</span></dd></dl>
+
 <dl><dt>async <a name="GameDataServicer-GetMatchResult"><strong>GetMatchResult</strong></a>(self, request: 'Any', context: 'grpc.aio.ServicerContext') -&gt; 'Any'</dt><dd><span class="code">Proxy&nbsp;a&nbsp;finished&nbsp;match's&nbsp;outcome&nbsp;(the&nbsp;activity&nbsp;feed's&nbsp;cards).</span></dd></dl>
 
 <dl><dt>async <a name="GameDataServicer-GetProfileStats"><strong>GetProfileStats</strong></a>(self, request: 'Any', context: 'grpc.aio.ServicerContext') -&gt; 'Any'</dt><dd><span class="code">Proxy&nbsp;the&nbsp;profile&nbsp;stats&nbsp;through&nbsp;the&nbsp;game's&nbsp;stats&nbsp;provider.<br>

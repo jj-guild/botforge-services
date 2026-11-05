@@ -32,6 +32,17 @@ message SyncContentReply {
   repeated string new_factions = 4;
 }
 
+// The last-completed times: one answer for the whole batch (the panel
+// is immediate). Zero means no completed match yet.
+message GetLastCompletedTimesRequest {
+  string game_key = 1;
+  repeated string profile_ids = 2;
+}
+
+message GetLastCompletedTimesReply {
+  map<string, int64> times_ms = 1;  // profile_id -> epoch ms (0: none)
+}
+
 service GameData {
   // Declare which games this service covers and per-game capabilities.
   rpc GetCoverage(CoverageRequest) returns (GameCoverage);
@@ -59,6 +70,9 @@ service GameData {
   rpc GetProfileStats(kingdoms.v1.GetPlayerStatsRequest) returns (kingdoms.v1.PlayerStats);
   rpc GetMatchResult(kingdoms.v1.GetMatchResultRequest) returns (kingdoms.v1.MatchResult);
   rpc GetProviderCapabilities(kingdoms.v1.CapabilitiesRequest) returns (kingdoms.v1.Capabilities);
+  // The profiles' most recent completed-match times (epoch ms) — the
+  // game's OWN matches collection answers, never the caller's raw read.
+  rpc GetLastCompletedTimes(GetLastCompletedTimesRequest) returns (GetLastCompletedTimesReply);
 
 
   // The providers' health-test results for a game: the game service

@@ -18,7 +18,7 @@ from urllib.parse import urljoin
 
 import httpx
 
-from kingdoms.core.codecs import BlobDecodeError, decode_blob
+from kingdoms.aoe2.codecs import BlobDecodeError, decode_blob
 from kingdoms.core.debug import capture
 from kingdoms.core.models.game import (
     GameMap,
@@ -30,7 +30,7 @@ from kingdoms.core.models.game import (
     StatsEntry,
 )
 from kingdoms.core.rpc.rate_limit import ProviderRateLimiter
-from kingdoms.core.services.provider_endpoints import provider_url
+from kingdoms.core_process.provider_endpoints import provider_url
 
 logger = logging.getLogger(__name__)
 

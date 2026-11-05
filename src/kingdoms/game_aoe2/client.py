@@ -118,6 +118,23 @@ class GameDataClient:
             )
         return capabilities_from_wire(reply)
 
+    async def get_last_completed_times(
+        self, profile_ids: list[str], timeout_s: float = 15.0
+    ) -> dict[str, int]:
+        """Fetch the profiles' last completed-match times (the game's matches)."""
+        from kingdoms.core.rpc.client import build_channel
+        from kingdoms.rpc_generated.kingdoms.v1 import gamedata_pb2, gamedata_pb2_grpc
+
+        async with build_channel(self._uri) as channel:
+            stub = gamedata_pb2_grpc.GameDataStub(channel)
+            reply = await stub.GetLastCompletedTimes(
+                gamedata_pb2.GetLastCompletedTimesRequest(
+                    game_key="aoe2", profile_ids=list(profile_ids)
+                ),
+                timeout=timeout_s,
+            )
+        return {key: int(value) for key, value in reply.times_ms.items()}
+
     async def watch(self, game_key: str, timeout_s: float = 5.0) -> dict[str, Any]:
         """Fetch the current dashboard snapshot (first stream frame)."""
         from kingdoms.core.rpc.client import build_channel

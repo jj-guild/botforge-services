@@ -3,7 +3,7 @@
 Page-name extraction from URLs and the title-casing variants a wiki
 resolves case-sensitively. Extracted from the legacy in-process seed
 so the ext providers import a PUBLIC util, never a private symbol
-(architecture rule R1 — the audit's ext_liquipedia → mapsdata.seed
+(architecture rule R1 — the audit's wiki provider → mapsdata.seed
 private imports).
 """
 
@@ -15,12 +15,12 @@ DEFAULT_USER_AGENT_TEMPLATE = "KingdomsBot/1.0 (https://github.com/merlin-pinpin
 def extract_page_name(name: str) -> str:
     """Extract the page title from a name or a full wiki URL.
 
-    "https://liquipedia.net/ageofempires/Team_Islands" -> "Team
-    Islands"; query strings and trailing paths drop.
+    "https://<wiki-host>/<segment>/Team_Islands" -> "Team Islands";
+    query strings and trailing paths drop.
     """
     name = name.strip()
-    if "liquipedia.net" in name:
-        tail = name.split("/ageofempires/")[-1]
+    if "://" in name:  # a pasted wiki URL, not a bare name
+        tail = name.split("/")[-1]
         tail = tail.split("?")[0].split("#")[0].strip("/")
         return tail.replace("_", " ")
     return name

@@ -34,10 +34,9 @@ _SHARED_UTILS = (
     "kingdoms.core.upstream_identity",
     "kingdoms.core.rpc",
     "kingdoms.core.models",
-    "kingdoms.core.codecs",
-    "kingdoms.core.timing",
+    "kingdoms.aoe2",
     "kingdoms.core.wiki_names",
-    "kingdoms.core.services.provider_endpoints",
+    "kingdoms.core_process.provider_endpoints",
     "kingdoms.core_process",
 )
 
@@ -95,17 +94,7 @@ ALLOWLIST_R1 = (
 )
 
 ALLOWLIST_R3 = (
-    "kingdoms/core/codecs.py mentions 'librematch'",
-    "kingdoms/core/games/game_content.py mentions 'aoe2techtree'",
-    "kingdoms/core/rpc/content.py mentions 'aoe2techtree'",
-    "kingdoms/core/rpc/content_client.py mentions 'aoe2techtree'",
-    "kingdoms/core/rpc/game.py mentions 'aoe2lobby'",
-    "kingdoms/core/rpc/game.py mentions 'librematch'",
-    "kingdoms/core/services/profile_stats.py mentions 'librematch'",
-    "kingdoms/core/services/provider_endpoints.py mentions 'aoe2lobby'",
-    "kingdoms/core/services/provider_endpoints.py mentions 'librematch'",
-    "kingdoms/core/services/provider_mapping.py mentions 'aoe2techtree'",
-    "kingdoms/core/wiki_names.py mentions 'liquipedia'",
+
 )
 
 ALLOWLIST_R4 = (

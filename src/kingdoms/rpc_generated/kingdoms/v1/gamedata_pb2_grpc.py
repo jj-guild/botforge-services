@@ -75,6 +75,11 @@ class GameDataStub:
                 request_serializer=kingdoms_dot_v1_dot_game__pb2.CapabilitiesRequest.SerializeToString,
                 response_deserializer=kingdoms_dot_v1_dot_game__pb2.Capabilities.FromString,
                 _registered_method=True)
+        self.GetLastCompletedTimes = channel.unary_unary(
+                '/kingdoms.v1.GameData/GetLastCompletedTimes',
+                request_serializer=kingdoms_dot_v1_dot_gamedata__pb2.GetLastCompletedTimesRequest.SerializeToString,
+                response_deserializer=kingdoms_dot_v1_dot_gamedata__pb2.GetLastCompletedTimesReply.FromString,
+                _registered_method=True)
 
 
 class GameDataServicer:
@@ -142,6 +147,14 @@ class GameDataServicer:
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
+    def GetLastCompletedTimes(self, request, context):
+        """The profiles' most recent completed-match times (epoch ms) — the
+        game's OWN matches collection answers, never the caller's raw read.
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
 
 def add_GameDataServicer_to_server(servicer, server):
     rpc_method_handlers = {
@@ -184,6 +197,11 @@ def add_GameDataServicer_to_server(servicer, server):
                     servicer.GetProviderCapabilities,
                     request_deserializer=kingdoms_dot_v1_dot_game__pb2.CapabilitiesRequest.FromString,
                     response_serializer=kingdoms_dot_v1_dot_game__pb2.Capabilities.SerializeToString,
+            ),
+            'GetLastCompletedTimes': grpc.unary_unary_rpc_method_handler(
+                    servicer.GetLastCompletedTimes,
+                    request_deserializer=kingdoms_dot_v1_dot_gamedata__pb2.GetLastCompletedTimesRequest.FromString,
+                    response_serializer=kingdoms_dot_v1_dot_gamedata__pb2.GetLastCompletedTimesReply.SerializeToString,
             ),
     }
     generic_handler = grpc.method_handlers_generic_handler(
@@ -402,6 +420,33 @@ class GameData:
             '/kingdoms.v1.GameData/GetProviderCapabilities',
             kingdoms_dot_v1_dot_game__pb2.CapabilitiesRequest.SerializeToString,
             kingdoms_dot_v1_dot_game__pb2.Capabilities.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def GetLastCompletedTimes(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/kingdoms.v1.GameData/GetLastCompletedTimes',
+            kingdoms_dot_v1_dot_gamedata__pb2.GetLastCompletedTimesRequest.SerializeToString,
+            kingdoms_dot_v1_dot_gamedata__pb2.GetLastCompletedTimesReply.FromString,
             options,
             channel_credentials,
             insecure,

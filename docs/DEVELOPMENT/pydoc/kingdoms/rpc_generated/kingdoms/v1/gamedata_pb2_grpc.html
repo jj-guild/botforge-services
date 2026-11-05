@@ -47,6 +47,8 @@
 <td class="singlecolumn">Static methods defined here:<br>
 <dl><dt><a name="GameData-GetCoverage"><strong>GetCoverage</strong></a>(request, target, options=(), channel_credentials=None, call_credentials=None, insecure=False, compression=None, wait_for_ready=None, timeout=None, metadata=None)</dt></dl>
 
+<dl><dt><a name="GameData-GetLastCompletedTimes"><strong>GetLastCompletedTimes</strong></a>(request, target, options=(), channel_credentials=None, call_credentials=None, insecure=False, compression=None, wait_for_ready=None, timeout=None, metadata=None)</dt></dl>
+
 <dl><dt><a name="GameData-GetMatchResult"><strong>GetMatchResult</strong></a>(request, target, options=(), channel_credentials=None, call_credentials=None, insecure=False, compression=None, wait_for_ready=None, timeout=None, metadata=None)</dt></dl>
 
 <dl><dt><a name="GameData-GetProfileStats"><strong>GetProfileStats</strong></a>(request, target, options=(), channel_credentials=None, call_credentials=None, insecure=False, compression=None, wait_for_ready=None, timeout=None, metadata=None)</dt></dl>
@@ -79,6 +81,9 @@ Data descriptors defined here:<br>
 <tr><td>&nbsp;</td>
 <td class="singlecolumn">Methods defined here:<br>
 <dl><dt><a name="GameDataServicer-GetCoverage"><strong>GetCoverage</strong></a>(self, request, context)</dt><dd><span class="code">Declare&nbsp;which&nbsp;games&nbsp;this&nbsp;service&nbsp;covers&nbsp;and&nbsp;per-game&nbsp;capabilities.</span></dd></dl>
+
+<dl><dt><a name="GameDataServicer-GetLastCompletedTimes"><strong>GetLastCompletedTimes</strong></a>(self, request, context)</dt><dd><span class="code">The&nbsp;profiles'&nbsp;most&nbsp;recent&nbsp;completed-match&nbsp;times&nbsp;(epoch&nbsp;ms)&nbsp;—&nbsp;the<br>
+game's&nbsp;OWN&nbsp;matches&nbsp;collection&nbsp;answers,&nbsp;never&nbsp;the&nbsp;caller's&nbsp;raw&nbsp;read.</span></dd></dl>
 
 <dl><dt><a name="GameDataServicer-GetMatchResult"><strong>GetMatchResult</strong></a>(self, request, context)</dt><dd><span class="code">Missing&nbsp;associated&nbsp;documentation&nbsp;comment&nbsp;in&nbsp;.proto&nbsp;file.</span></dd></dl>
 

@@ -1,6 +1,6 @@
 """Game content RPC seam — server side (kingdoms.v1.Content).
 
-A game content provider process (ext-aoe2techtree, ...) serves localized
+A game content provider process serves localized
 game catalog data (factions, maps) through this servicer. The seam keeps
 the upstream concern out of the core: it only translates between the
 wire contract and the plain content descriptors. The upstream the ext

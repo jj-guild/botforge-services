@@ -23,7 +23,7 @@ from typing import Any
 
 import yaml
 
-_DEFAULT_CONFIG = Path(__file__).resolve().parents[4] / "config" / "services.yaml"
+_DEFAULT_CONFIG = Path(__file__).resolve().parents[3] / "config" / "services.yaml"
 
 _ENV_OVERRIDE = {
     ("aoe2lobby", "ws_url"): "AOE2LOBBY_WS_URL",

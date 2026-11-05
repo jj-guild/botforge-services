@@ -1,7 +1,7 @@
 """Generic game content source seam (game-agnostic).
 
 Every game-specific content provider (aoe2: the vendored techtree dataset
-or the ext-aoe2techtree process) implements **a part** of this generic
+or any content provider process) implements **a part** of this generic
 game data provider contract. The core consumes content through this seam
 only: nothing aoe2-specific (or any other game-specific concern) leaks
 here, so the same seam serves the next game's provider unchanged.

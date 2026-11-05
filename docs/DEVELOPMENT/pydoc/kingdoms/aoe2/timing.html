@@ -2,21 +2,21 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>Python: kingdoms.core.timing</title>
+<title>Python: kingdoms.aoe2.timing</title>
 </head><body>
 
 <table class="heading">
 <tr class="heading-text decor">
-<td class="title">&nbsp;<br><strong class="title"><a href="kingdoms.html" class="white">kingdoms</a>.<a href="kingdoms.core.html" class="white">core</a>.timing</strong></td>
-<td class="extra"><a href=".">index</a><br><a href="file:SOURCE_ROOT/core/timing.py">SOURCE_ROOT/core/timing.py</a></td></tr></table>
+<td class="title">&nbsp;<br><strong class="title"><a href="kingdoms.html" class="white">kingdoms</a>.<a href="kingdoms.aoe2.html" class="white">aoe2</a>.timing</strong></td>
+<td class="extra"><a href=".">index</a><br><a href="file:SOURCE_ROOT/aoe2/timing.py">SOURCE_ROOT/aoe2/timing.py</a></td></tr></table>
     <p><span class="code">AoE2&nbsp;lobby-closed&nbsp;grace&nbsp;period&nbsp;(reference&nbsp;5.2,&nbsp;known&nbsp;trap).<br>
 &nbsp;<br>
 The&nbsp;AoE2&nbsp;lobby&nbsp;always&nbsp;closes&nbsp;a&nbsp;few&nbsp;moments&nbsp;before&nbsp;the&nbsp;game&nbsp;starts:&nbsp;a<br>
 ``lobby_closed``&nbsp;event&nbsp;in&nbsp;LOBBY&nbsp;status&nbsp;must&nbsp;wait&nbsp;out&nbsp;a&nbsp;grace&nbsp;period<br>
 (15&nbsp;s&nbsp;default,&nbsp;configurable&nbsp;adapter-side)&nbsp;before&nbsp;any&nbsp;downgrade,&nbsp;because<br>
 a&nbsp;``game_started``&nbsp;may&nbsp;arrive&nbsp;in&nbsp;between.&nbsp;This&nbsp;module&nbsp;holds&nbsp;the&nbsp;rule<br>
-once,&nbsp;in&nbsp;the&nbsp;game&nbsp;module&nbsp;—&nbsp;both&nbsp;providers&nbsp;and&nbsp;the&nbsp;ladder&nbsp;core&nbsp;consume<br>
-it,&nbsp;none&nbsp;re-implements&nbsp;it.</span></p>
+once&nbsp;—&nbsp;the&nbsp;game's&nbsp;providers&nbsp;and&nbsp;the&nbsp;game&nbsp;service&nbsp;consume&nbsp;it,&nbsp;none<br>
+re-implements&nbsp;it&nbsp;(kingdoms.aoe2,&nbsp;owner&nbsp;direction&nbsp;2026-11-05).</span></p>
 <p>
 <table class="section">
 <tr class="decor pkg-content-decor heading-text">
@@ -34,7 +34,7 @@ it,&nbsp;none&nbsp;re-implements&nbsp;it.</span></p>
 <dt class="heading-text"><a href="builtins.html#object">builtins.object</a>
 </dt><dd>
 <dl>
-<dt class="heading-text"><a href="kingdoms.core.timing.html#LobbyClosedGrace">LobbyClosedGrace</a>
+<dt class="heading-text"><a href="kingdoms.aoe2.timing.html#LobbyClosedGrace">LobbyClosedGrace</a>
 </dt></dl>
 </dd>
 </dl>

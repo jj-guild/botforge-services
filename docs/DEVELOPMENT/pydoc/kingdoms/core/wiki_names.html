@@ -14,7 +14,7 @@
 Page-name&nbsp;extraction&nbsp;from&nbsp;URLs&nbsp;and&nbsp;the&nbsp;title-casing&nbsp;variants&nbsp;a&nbsp;wiki<br>
 resolves&nbsp;case-sensitively.&nbsp;Extracted&nbsp;from&nbsp;the&nbsp;legacy&nbsp;in-process&nbsp;seed<br>
 so&nbsp;the&nbsp;ext&nbsp;providers&nbsp;import&nbsp;a&nbsp;PUBLIC&nbsp;util,&nbsp;never&nbsp;a&nbsp;private&nbsp;symbol<br>
-(architecture&nbsp;rule&nbsp;R1&nbsp;—&nbsp;the&nbsp;audit's&nbsp;ext_liquipedia&nbsp;→&nbsp;mapsdata.seed<br>
+(architecture&nbsp;rule&nbsp;R1&nbsp;—&nbsp;the&nbsp;audit's&nbsp;wiki&nbsp;provider&nbsp;→&nbsp;mapsdata.seed<br>
 private&nbsp;imports).</span></p>
 <p>
 <table class="section">
@@ -24,8 +24,8 @@ private&nbsp;imports).</span></p>
 <tr><td class="decor functions-decor"><span class="code">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span></td><td>&nbsp;</td>
 <td class="singlecolumn"><dl><dt><a name="-extract_page_name"><strong>extract_page_name</strong></a>(name: 'str') -&gt; 'str'</dt><dd><span class="code">Extract&nbsp;the&nbsp;page&nbsp;title&nbsp;from&nbsp;a&nbsp;name&nbsp;or&nbsp;a&nbsp;full&nbsp;wiki&nbsp;URL.<br>
 &nbsp;<br>
-"<a href="https://liquipedia.net/ageofempires/Team_Islands">https://liquipedia.net/ageofempires/Team_Islands</a>"&nbsp;-&gt;&nbsp;"Team<br>
-Islands";&nbsp;query&nbsp;strings&nbsp;and&nbsp;trailing&nbsp;paths&nbsp;drop.</span></dd></dl>
+"<a href="https://&lt;wiki-host&gt;/&lt;segment&gt;/Team_Islands">https://&lt;wiki-host&gt;/&lt;segment&gt;/Team_Islands</a>"&nbsp;-&gt;&nbsp;"Team&nbsp;Islands";<br>
+query&nbsp;strings&nbsp;and&nbsp;trailing&nbsp;paths&nbsp;drop.</span></dd></dl>
  <dl><dt><a name="-title_variants"><strong>title_variants</strong></a>(name: 'str') -&gt; 'list[str]'</dt><dd><span class="code">Return&nbsp;the&nbsp;casings&nbsp;to&nbsp;try,&nbsp;in&nbsp;order:&nbsp;as-given,&nbsp;then&nbsp;title-cased.<br>
 &nbsp;<br>
 MediaWiki&nbsp;resolves&nbsp;page&nbsp;titles&nbsp;case-sensitively;&nbsp;a&nbsp;lowercase&nbsp;catalog<br>
