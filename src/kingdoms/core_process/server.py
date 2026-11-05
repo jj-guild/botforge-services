@@ -13,9 +13,10 @@ the game service's streams.
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import os
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from kingdoms import __version__
 from kingdoms.core.rpc.status import CoreStatus, build_status_server
@@ -47,11 +48,55 @@ async def _serve(port: str) -> None:
     # state has ONE owner — the game service's aggregator. The core's
     # duplicate fold (core.services.live) is deleted; the core serves
     # the platform's own surfaces only.
+    #
+    # The ENROLLMENT PUSH stays (the dashboard's roster depends on it):
+    # the platform's bound profiles ride down to the game service
+    # (UpdateEnrollments) — the game reconciles its provider's
+    # subscriptions; core never talks to a provider, in either direction.
+    enrollments = asyncio.ensure_future(_sync_game_enrollments())
     bind = f"[::]:{port}"
     server.add_insecure_port(bind)
     await server.start()
     logger.info("SVC_CORE_READY port=%s version=%s", port, __version__)
-    await server.wait_for_termination()
+    try:
+        await server.wait_for_termination()
+    finally:
+        enrollments.cancel()
+
+
+async def _sync_game_enrollments() -> None:
+    """Push the platform's enrolled profile ids to the game service.
+
+    Reloads the profile bindings periodically (``profile_bindings`` is
+    CORE's own collection — rule 5: the owner reads it) and hands the
+    list to the game service (``UpdateEnrollments``): the game service
+    reconciles its realtime provider's subscriptions in place.
+    """
+    interval_s = float(os.environ.get("GAME_ENROLLMENTS_INTERVAL_S", "30"))
+    uri = os.environ.get("GAME_AOE2_URI", "")
+    client: Any = None
+    last_ids: list[str] | None = None
+    while True:
+        try:
+            from kingdoms.core.models.db import get_async_database
+
+            database = get_async_database()
+            profile_ids: list[str] = []
+            user_ids: list[str] = []
+            async for binding in database["profile_bindings"].find({"game_key": "aoe2"}):
+                profile_ids.append(str(binding.get("profile_id", "")))
+                user_ids.append(str(binding.get("user_id", "")))
+            profile_ids_sorted = sorted(profile_ids)
+            if profile_ids_sorted != last_ids and uri:
+                if client is None:
+                    client = _GameDataClient(uri)
+                applied = await client.update_enrollments("aoe2", profile_ids_sorted, user_ids)
+                if applied:
+                    last_ids = profile_ids_sorted
+                    logger.info("GAME ENROLLMENTS pushed: %d profiles", len(profile_ids_sorted))
+        except Exception:
+            logger.warning("game enrollments sync failed — retrying", exc_info=True)
+        await asyncio.sleep(interval_s)
 
 
 class _GameDataClient:
