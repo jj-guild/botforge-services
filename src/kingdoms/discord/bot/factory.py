@@ -977,7 +977,7 @@ def create_bot(config: BotConfig | None = None) -> KingdomsBot:
 
     bot.home_service = HomeService(registry, _DiscordModHomeViews(bot.mod_home_builders))
     bot._registration_database = _build_registration_database(resolved)
-    bot._home_providers = {"aoe2": _build_home_provider(resolved)} if _build_home_provider(resolved) else {}
+    bot._home_providers = {}
     import os as _os
 
     _core_uri = _os.environ.get("CORE_URI", "")
@@ -1060,18 +1060,6 @@ def _build_registration_database(config: BotConfig) -> Any | None:
         from kingdoms.discord.registration_platform import MongoRegistrationDatabase
 
         return MongoRegistrationDatabase(get_async_database())
-    except Exception:
-        return None
-
-
-def _build_home_provider(config: BotConfig) -> Any | None:
-    """Return the AoE2 live adapter for the games view, None unwired."""
-    if not config.redis_uri:
-        return None
-    try:
-        from kingdoms.ext_librematch.adapter import LibrematchAdapter
-
-        return LibrematchAdapter(api_key=os.environ.get("AOE2_API_KEY", ""))
     except Exception:
         return None
 

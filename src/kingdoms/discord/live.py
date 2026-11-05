@@ -434,12 +434,12 @@ async def collect_profile_stats(
     enriched: dict[str, dict[str, Any]] = {}
     bindings = database["profile_bindings"]
     matches = database["matches"]
-    provider_uri = os.environ.get("EXT_LIBREMATCH_URI", "")
+    provider_uri = os.environ.get("GAME_AOE2_URI", "")
     provider = None
     if provider_uri:
-        from kingdoms.core.rpc.game_client import GameProviderClient
+        from kingdoms.game_aoe2.client import GameDataClient
 
-        provider = GameProviderClient(provider_uri, "ext-librematch", game_key)
+        provider = GameDataClient(provider_uri)
     redis_client = None
     redis_uri = os.environ.get("REDIS_URI", "")
     if redis_uri:

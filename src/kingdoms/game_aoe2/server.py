@@ -39,10 +39,21 @@ async def _serve() -> None:
 
     aggregator = GameAoe2Aggregator()
     enrollments = _EnrollmentPusher(aggregator)
+    # The stats proxy: the game service owns its librematch provider
+    # (rule 4 — the bot and the mods ask the service, never the ext).
+    stats_provider = None
+    stats_uri = os.environ.get("EXT_LIBREMATCH_URI", "")
+    if stats_uri:
+        from kingdoms.core.rpc.game_client import GameProviderClient
+
+        stats_provider = GameProviderClient(stats_uri, "ext-librematch", GAME_KEY)
     server = build_status_server(
         lambda: CoreStatus(version=__version__, process=PROCESS_LABEL),
     )
-    add_gamedata_servicer(server, GameDataServicer(aggregator, enrollments=enrollments))
+    add_gamedata_servicer(
+        server,
+        GameDataServicer(aggregator, enrollments=enrollments, stats_provider=stats_provider),
+    )
 
     consumer = asyncio.ensure_future(_consume_providers(aggregator))
     # No synthetic probe (owner direction 2026-11-05): a probe every

@@ -44,6 +44,15 @@ Typed&nbsp;client&nbsp;for&nbsp;the&nbsp;kingdoms.v1.GameData&nbsp;service&nbsp;
 <td class="singlecolumn">Methods defined here:<br>
 <dl><dt><a name="GameDataClient-__init__"><strong>__init__</strong></a>(self, uri: 'str') -&gt; 'None'</dt><dd><span class="code">Keep&nbsp;the&nbsp;service&nbsp;address;&nbsp;channels&nbsp;are&nbsp;per-call&nbsp;(ADR-0020).</span></dd></dl>
 
+<dl><dt>async <a name="GameDataClient-get_capabilities"><strong>get_capabilities</strong></a>(self) -&gt; 'Any'</dt><dd><span class="code">Fetch&nbsp;the&nbsp;stats&nbsp;provider's&nbsp;declared&nbsp;capabilities&nbsp;(proxied).</span></dd></dl>
+
+<dl><dt>async <a name="GameDataClient-get_match_result"><strong>get_match_result</strong></a>(self, profile_ids: 'list[str]', started_after: 'int') -&gt; 'Any | None'</dt><dd><span class="code">Fetch&nbsp;a&nbsp;finished&nbsp;match's&nbsp;outcome&nbsp;through&nbsp;the&nbsp;game&nbsp;service.</span></dd></dl>
+
+<dl><dt>async <a name="GameDataClient-get_player_stats"><strong>get_player_stats</strong></a>(self, profile_id: 'str') -&gt; 'Any | None'</dt><dd><span class="code">Fetch&nbsp;a&nbsp;profile's&nbsp;stats&nbsp;blocks&nbsp;through&nbsp;the&nbsp;game&nbsp;service.<br>
+&nbsp;<br>
+The&nbsp;service&nbsp;proxies&nbsp;its&nbsp;stats&nbsp;provider&nbsp;—&nbsp;the&nbsp;caller&nbsp;never&nbsp;sees<br>
+one&nbsp;(rule&nbsp;4).&nbsp;Degrades&nbsp;to&nbsp;None&nbsp;when&nbsp;the&nbsp;profile&nbsp;has&nbsp;no&nbsp;stats.</span></dd></dl>
+
 <dl><dt>async <a name="GameDataClient-stream_player_events"><strong>stream_player_events</strong></a>(self, game_key: 'str' = '')</dt><dd><span class="code">Yield&nbsp;normalized&nbsp;player&nbsp;transitions&nbsp;continuously,&nbsp;forever.</span></dd></dl>
 
 <dl><dt>async <a name="GameDataClient-stream_snapshots"><strong>stream_snapshots</strong></a>(self, game_key: 'str')</dt><dd><span class="code">Yield&nbsp;dashboard&nbsp;snapshots&nbsp;continuously:&nbsp;one&nbsp;per&nbsp;effective&nbsp;change.</span></dd></dl>

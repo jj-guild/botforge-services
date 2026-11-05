@@ -163,7 +163,7 @@ class Aoe2ProfileValidationSeam:
     validation is the whole point of the binding (reference §0/§6).
     """
 
-    DEFAULT_PROVIDER_URI = "kingdoms-ext-librematch:50061"
+    DEFAULT_PROVIDER_URI = "kingdoms-game-aoe2:50071"
 
     def __init__(self, provider_uri: str | None = None) -> None:
         """Read the provider address from the environment by default.
@@ -173,7 +173,9 @@ class Aoe2ProfileValidationSeam:
         always carries the provider, and an empty URI made the seam
         reject every profile silently (the 2026-10-16 test findings).
         """
-        self._provider_uri = provider_uri or os.environ.get("EXT_LIBREMATCH_URI", "") or self.DEFAULT_PROVIDER_URI
+        self._provider_uri = (
+            provider_uri or os.environ.get("GAME_AOE2_URI", "") or self.DEFAULT_PROVIDER_URI
+        )
         logging.getLogger("kingdoms.registration.seam").info(
             "AOE2 PROFILE SEAM provider_uri=%s", self._provider_uri
         )
@@ -187,9 +189,9 @@ class Aoe2ProfileValidationSeam:
         id to the relic id and the validation retries \u2014 the binding
         always stores the relic id.
         """
-        from kingdoms.core.rpc.game_client import GameProviderClient
+        from kingdoms.game_aoe2.client import GameDataClient
 
-        client = GameProviderClient(self._provider_uri, "ext-librematch", "aoe2")
+        client = GameDataClient(self._provider_uri)
         capabilities = await client.get_capabilities()
         if not capabilities.player_stats:
             raise ProviderStatsUnavailableError(

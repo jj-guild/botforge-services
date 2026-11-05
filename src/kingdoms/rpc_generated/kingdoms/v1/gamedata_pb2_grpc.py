@@ -3,6 +3,7 @@
 import grpc
 import warnings
 
+from kingdoms.rpc_generated.kingdoms.v1 import game_pb2 as kingdoms_dot_v1_dot_game__pb2
 from kingdoms.rpc_generated.kingdoms.v1 import gamedata_pb2 as kingdoms_dot_v1_dot_gamedata__pb2
 
 GRPC_GENERATED_VERSION = '1.84.0'
@@ -59,6 +60,21 @@ class GameDataStub:
                 request_serializer=kingdoms_dot_v1_dot_gamedata__pb2.SyncContentRequest.SerializeToString,
                 response_deserializer=kingdoms_dot_v1_dot_gamedata__pb2.SyncContentReply.FromString,
                 _registered_method=True)
+        self.GetProfileStats = channel.unary_unary(
+                '/kingdoms.v1.GameData/GetProfileStats',
+                request_serializer=kingdoms_dot_v1_dot_game__pb2.GetPlayerStatsRequest.SerializeToString,
+                response_deserializer=kingdoms_dot_v1_dot_game__pb2.PlayerStats.FromString,
+                _registered_method=True)
+        self.GetMatchResult = channel.unary_unary(
+                '/kingdoms.v1.GameData/GetMatchResult',
+                request_serializer=kingdoms_dot_v1_dot_game__pb2.GetMatchResultRequest.SerializeToString,
+                response_deserializer=kingdoms_dot_v1_dot_game__pb2.MatchResult.FromString,
+                _registered_method=True)
+        self.GetProviderCapabilities = channel.unary_unary(
+                '/kingdoms.v1.GameData/GetProviderCapabilities',
+                request_serializer=kingdoms_dot_v1_dot_game__pb2.CapabilitiesRequest.SerializeToString,
+                response_deserializer=kingdoms_dot_v1_dot_game__pb2.Capabilities.FromString,
+                _registered_method=True)
 
 
 class GameDataServicer:
@@ -105,6 +121,27 @@ class GameDataServicer:
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
+    def GetProfileStats(self, request, context):
+        """The provider surfaces, PROXIED by the game service (rule 4: the
+        mods and the bot talk to the game service, never to an ext). The
+        wire messages are the Game contract's own — one shape, no copy.
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def GetMatchResult(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def GetProviderCapabilities(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
 
 def add_GameDataServicer_to_server(servicer, server):
     rpc_method_handlers = {
@@ -132,6 +169,21 @@ def add_GameDataServicer_to_server(servicer, server):
                     servicer.SyncContent,
                     request_deserializer=kingdoms_dot_v1_dot_gamedata__pb2.SyncContentRequest.FromString,
                     response_serializer=kingdoms_dot_v1_dot_gamedata__pb2.SyncContentReply.SerializeToString,
+            ),
+            'GetProfileStats': grpc.unary_unary_rpc_method_handler(
+                    servicer.GetProfileStats,
+                    request_deserializer=kingdoms_dot_v1_dot_game__pb2.GetPlayerStatsRequest.FromString,
+                    response_serializer=kingdoms_dot_v1_dot_game__pb2.PlayerStats.SerializeToString,
+            ),
+            'GetMatchResult': grpc.unary_unary_rpc_method_handler(
+                    servicer.GetMatchResult,
+                    request_deserializer=kingdoms_dot_v1_dot_game__pb2.GetMatchResultRequest.FromString,
+                    response_serializer=kingdoms_dot_v1_dot_game__pb2.MatchResult.SerializeToString,
+            ),
+            'GetProviderCapabilities': grpc.unary_unary_rpc_method_handler(
+                    servicer.GetProviderCapabilities,
+                    request_deserializer=kingdoms_dot_v1_dot_game__pb2.CapabilitiesRequest.FromString,
+                    response_serializer=kingdoms_dot_v1_dot_game__pb2.Capabilities.SerializeToString,
             ),
     }
     generic_handler = grpc.method_handlers_generic_handler(
@@ -269,6 +321,87 @@ class GameData:
             '/kingdoms.v1.GameData/SyncContent',
             kingdoms_dot_v1_dot_gamedata__pb2.SyncContentRequest.SerializeToString,
             kingdoms_dot_v1_dot_gamedata__pb2.SyncContentReply.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def GetProfileStats(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/kingdoms.v1.GameData/GetProfileStats',
+            kingdoms_dot_v1_dot_game__pb2.GetPlayerStatsRequest.SerializeToString,
+            kingdoms_dot_v1_dot_game__pb2.PlayerStats.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def GetMatchResult(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/kingdoms.v1.GameData/GetMatchResult',
+            kingdoms_dot_v1_dot_game__pb2.GetMatchResultRequest.SerializeToString,
+            kingdoms_dot_v1_dot_game__pb2.MatchResult.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def GetProviderCapabilities(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/kingdoms.v1.GameData/GetProviderCapabilities',
+            kingdoms_dot_v1_dot_game__pb2.CapabilitiesRequest.SerializeToString,
+            kingdoms_dot_v1_dot_game__pb2.Capabilities.FromString,
             options,
             channel_credentials,
             insecure,

@@ -241,17 +241,17 @@ async def _resolve_map_seeds(contact: str, names: list[str]) -> dict[str, Any]:
                 terrain=str(descriptor.get("terrain", "")),
                 size=str(descriptor.get("size", "")),
                 map_type=str(descriptor.get("map_type", "")),
-                walls=bool(descriptor.get("walls", False)),
-                nomad=bool(descriptor.get("nomad", False)),
-                tc=bool(descriptor.get("tc", False)),
+                walls=str(descriptor.get("walls", "") or ""),
+                nomad=str(descriptor.get("nomad", "") or ""),
+                tc=str(descriptor.get("tc", "") or ""),
                 public=True,
-                game_versions=list(descriptor.get("game_versions", ()) or ()),
+                game_versions=tuple(str(v) for v in descriptor.get("game_versions", ()) or ()),
                 versions=tuple(
                     {"name": v.get("name", ""), "description": v.get("description", ""),
                      "details": list(v.get("details", ()) or ())}
                     for v in descriptor.get("versions", ()) or ()
                 ),
-                tags=list(descriptor.get("tags", ()) or ()),
+                tags=tuple(str(t) for t in descriptor.get("tags", ()) or ()),
             ),
         )
 
