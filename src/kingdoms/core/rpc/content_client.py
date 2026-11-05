@@ -1,6 +1,6 @@
 """Game content RPC seam — client side (kingdoms.v1.Content).
 
-svc-core consumes a content provider process (ext-aoe2techtree)
+A consumer talks to a content provider process
 through these typed helpers. Every call degrades cleanly: an
 unreachable provider or an unknown key yields None/empty so the
 caller (content refresh) falls back to the local dataset source.

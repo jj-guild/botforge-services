@@ -6,15 +6,16 @@ community sites show (aoe2insights) that the raw LibreMatch payload
 does not decode: per-slot civs, teams, and the game options (map size,
 speed, victory condition, ...).
 
-This module is the archaic-but-necessary decoder. It is game-module
-code, not core: only the decoded, structured result crosses into
+This module is the archaic-but-necessary decoder — AoE2's own
+format, shared by the game's providers and the game service
+(kingdoms.aoe2, owner direction 2026-11-05): only the decoded, structured result crosses into
 ``MatchDetails``.
 
 Format references (community reverse-engineering, none of it
 documented by World's Edge):
 
-* librematch-collector — slotinfo/options parsers, option id maps:
-  https://github.com/librematch/librematch-collector
+* the community collector projects — slotinfo/options parsers,
+  option id maps (the upstream reverse-engineering references)
   (collector/src/parser/{slotinfo,options}.ts)
 * aoe2-apis — live lobby payloads and the Worlds Edge Link community
   API: https://github.com/ustacode/aoe2-apis

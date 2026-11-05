@@ -4,8 +4,8 @@ The AoE2 lobby always closes a few moments before the game starts: a
 ``lobby_closed`` event in LOBBY status must wait out a grace period
 (15 s default, configurable adapter-side) before any downgrade, because
 a ``game_started`` may arrive in between. This module holds the rule
-once, in the game module — both providers and the ladder core consume
-it, none re-implements it.
+once — the game's providers and the game service consume it, none
+re-implements it (kingdoms.aoe2, owner direction 2026-11-05).
 """
 
 from __future__ import annotations

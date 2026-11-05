@@ -46,6 +46,8 @@ Typed&nbsp;client&nbsp;for&nbsp;the&nbsp;kingdoms.v1.GameData&nbsp;service&nbsp;
 
 <dl><dt>async <a name="GameDataClient-get_capabilities"><strong>get_capabilities</strong></a>(self) -&gt; 'Any'</dt><dd><span class="code">Fetch&nbsp;the&nbsp;stats&nbsp;provider's&nbsp;declared&nbsp;capabilities&nbsp;(proxied).</span></dd></dl>
 
+<dl><dt>async <a name="GameDataClient-get_last_completed_times"><strong>get_last_completed_times</strong></a>(self, profile_ids: 'list[str]', timeout_s: 'float' = 15.0) -&gt; 'dict[str, int]'</dt><dd><span class="code">Fetch&nbsp;the&nbsp;profiles'&nbsp;last&nbsp;completed-match&nbsp;times&nbsp;(the&nbsp;game's&nbsp;matches).</span></dd></dl>
+
 <dl><dt>async <a name="GameDataClient-get_match_result"><strong>get_match_result</strong></a>(self, profile_ids: 'list[str]', started_after: 'int') -&gt; 'Any | None'</dt><dd><span class="code">Fetch&nbsp;a&nbsp;finished&nbsp;match's&nbsp;outcome&nbsp;through&nbsp;the&nbsp;game&nbsp;service.</span></dd></dl>
 
 <dl><dt>async <a name="GameDataClient-get_player_stats"><strong>get_player_stats</strong></a>(self, profile_id: 'str') -&gt; 'Any | None'</dt><dd><span class="code">Fetch&nbsp;a&nbsp;profile's&nbsp;stats&nbsp;blocks&nbsp;through&nbsp;the&nbsp;game&nbsp;service.<br>

@@ -356,6 +356,22 @@ class GameDataServicer(gamedata_pb2_grpc.GameDataServicer):
         caps = await self._stats_provider.get_capabilities()
         return capabilities_to_wire(caps)
 
+    async def GetLastCompletedTimes(
+        self,
+        request: Any,
+        context: grpc.aio.ServicerContext,
+    ) -> Any:
+        """Aggregate the profiles' last completed-match times (rule 5).
+
+        ``matches`` is the GAME's collection — the aggregation runs
+        here, in the owner's process; the callers never read it raw.
+        """
+        from kingdoms.core.models.db import get_async_database
+
+        database = get_async_database()
+        times = await _last_completed_matches_ms(database, list(request.profile_ids))
+        return gamedata_pb2.GetLastCompletedTimesReply(times_ms=times)
+
     async def UpdateEnrollments(
         self,
         request: gamedata_pb2.UpdateEnrollmentsRequest,
@@ -373,3 +389,40 @@ class GameDataServicer(gamedata_pb2_grpc.GameDataServicer):
 def add_gamedata_servicer(server: grpc.aio.Server, servicer: GameDataServicer) -> None:
     """Bind the GameData servicer onto the server."""
     gamedata_pb2_grpc.add_GameDataServicer_to_server(servicer, server)
+
+
+async def _last_completed_matches_ms(database: Any, profile_ids: list[str]) -> dict[str, int]:
+    """Aggregate every profile's most recent completed-match time.
+
+    ONE aggregation over the whole batch (the panel is immediate): the
+    completed matches group by profile, the max completion time rides
+    one reply. Zero means no completed match yet. ``matches`` is the
+    GAME's collection (rule 5) — the aggregation lives with its owner.
+    """
+    if not profile_ids:
+        return {}
+    pipeline: list[dict[str, Any]] = [
+        {"$match": {"status": {"$regex": "^completed$", "$options": "i"},
+                    "$or": [{"host_profile_id": {"$in": profile_ids}},
+                            {"guest_profile_id": {"$in": profile_ids}}]}},
+        {"$project": {"host": "$host_profile_id", "guest": "$guest_profile_id",
+                      "times": [{"$ifNull": ["$completed_at", 0]},
+                                 {"$ifNull": ["$game_completed_at", 0]}]}},
+        {"$project": {"sides": ["$host", "$guest"],
+                      "time": {"$max": "$times"}}},
+        {"$unwind": "$sides"},
+        {"$match": {"sides": {"$in": profile_ids}}},
+        {"$group": {"_id": {"$toString": "$sides"}, "last": {"$max": "$time"}}},
+    ]
+    results: dict[str, int] = {}
+    try:
+        cursor: Any = await database["matches"].aggregate(pipeline)
+        async for doc in cursor:
+            value = doc.get("last")
+            if isinstance(value, str) and value.isdigit():
+                value = int(value)
+            if isinstance(value, int) and value > 0:
+                results[str(doc.get("_id", ""))] = value
+    except Exception:
+        logger.warning("last-completed aggregation failed", exc_info=True)
+    return results

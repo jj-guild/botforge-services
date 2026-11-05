@@ -15,7 +15,7 @@ import zlib
 
 import pytest
 
-from kingdoms.core.codecs import (
+from kingdoms.aoe2.codecs import (
     BlobDecodeError,
     decode_blob,
     decode_options,

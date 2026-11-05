@@ -1,6 +1,6 @@
 """Game provider RPC seam — server side (kingdoms.v1.Game).
 
-A game provider process (ext-librematch, ext-aoe2lobby) builds its gRPC
+A game provider process builds its gRPC
 server from these servicers, backed by its own adapters to the external
 APIs. The seam keeps provider code out of the core: it only translates
 between the wire contract and plain core models.
@@ -263,7 +263,7 @@ class GameServicer(game_pb2_grpc.GameServicer):
         """Serve a finished match's outcome when the provider has it.
 
         The correlation rides the profile ids and the time window
-        (the upstream's match id is not the aoe2lobby ref). The
+        (the upstream's match id is not the platform's ref). The
         provider answers None while the upstream has not recorded
         the match yet — ``found=False`` on the wire, the caller
         retries with a backoff.

@@ -55,6 +55,14 @@ async def _serve() -> None:
         GameDataServicer(aggregator, enrollments=enrollments, stats_provider=stats_provider),
     )
 
+    # The game's collections are ITS OWN (rule 5): the indexes are
+    # ensured here, at the game service's boot.
+    from kingdoms.core.models.db import get_async_database
+
+    from .db_indexes import ensure_game_indexes
+
+    await ensure_game_indexes(get_async_database())
+
     consumer = asyncio.ensure_future(_consume_providers(aggregator))
     # No synthetic probe (owner direction 2026-11-05): a probe every
     # minute is indistinguishable from real traffic for the rate-limited
