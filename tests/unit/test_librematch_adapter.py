@@ -15,8 +15,8 @@ from typing import Any
 
 import httpx
 import pytest
-from kingdoms.core.codecs import decode_blob, decode_options, decode_slotinfo  # noqa: F401
 
+from kingdoms.core.codecs import decode_blob, decode_options, decode_slotinfo  # noqa: F401
 from kingdoms.core.models.game import MatchDetails, Slot
 from kingdoms.ext_librematch.adapter import LibrematchAdapter
 

@@ -1,4 +1,4 @@
-"""Content refresh CLI: reconcile the catalog with the vendored dataset.
+"""Content refresh CLI: reconcile the catalog with the aoe2techtree provider.
 
 Usage: ``python -m kingdoms.game_aoe2.content_refresh_cli``
 

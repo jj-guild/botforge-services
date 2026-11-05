@@ -48,6 +48,13 @@ Typed&nbsp;client&nbsp;for&nbsp;the&nbsp;kingdoms.v1.GameData&nbsp;service&nbsp;
 
 <dl><dt>async <a name="GameDataClient-stream_snapshots"><strong>stream_snapshots</strong></a>(self, game_key: 'str')</dt><dd><span class="code">Yield&nbsp;dashboard&nbsp;snapshots&nbsp;continuously:&nbsp;one&nbsp;per&nbsp;effective&nbsp;change.</span></dd></dl>
 
+<dl><dt>async <a name="GameDataClient-sync_content"><strong>sync_content</strong></a>(self, game_key: 'str', what: 'str', timeout_s: 'float' = 900.0) -&gt; 'dict[str, Any]'</dt><dd><span class="code">Ask&nbsp;the&nbsp;game&nbsp;service&nbsp;to&nbsp;run&nbsp;a&nbsp;content&nbsp;sync&nbsp;(civs,&nbsp;maps).<br>
+&nbsp;<br>
+The&nbsp;service&nbsp;runs&nbsp;it&nbsp;against&nbsp;ITS&nbsp;providers&nbsp;—&nbsp;the&nbsp;caller&nbsp;never<br>
+touches&nbsp;one.&nbsp;The&nbsp;reply&nbsp;carries&nbsp;the&nbsp;counts&nbsp;or&nbsp;a&nbsp;FUNCTIONAL&nbsp;error<br>
+the&nbsp;UI&nbsp;shows&nbsp;as-is.&nbsp;The&nbsp;timeout&nbsp;is&nbsp;long&nbsp;BY&nbsp;DESIGN:&nbsp;the&nbsp;maps<br>
+enrichment&nbsp;rides&nbsp;the&nbsp;Liquipedia&nbsp;pacing&nbsp;(minutes).</span></dd></dl>
+
 <dl><dt>async <a name="GameDataClient-watch"><strong>watch</strong></a>(self, game_key: 'str', timeout_s: 'float' = 5.0) -&gt; 'dict[str, Any]'</dt><dd><span class="code">Fetch&nbsp;the&nbsp;current&nbsp;dashboard&nbsp;snapshot&nbsp;(first&nbsp;stream&nbsp;frame).</span></dd></dl>
 
 <hr>

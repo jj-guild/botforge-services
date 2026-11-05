@@ -18,6 +18,7 @@ click has exactly one dispatch path.
 from __future__ import annotations
 
 import logging
+import os
 import re
 from typing import Any, ClassVar
 
@@ -399,16 +400,31 @@ class ContentRefreshButton(
             return
         dm_locale = await _dm_locale(interaction)
         await interaction.response.defer(ephemeral=True)
+        # The civs sync rides the GAME SERVICE (the provider isolation:
+        # the bot asks the service, the service asks its providers).
         try:
-            from kingdoms.game_aoe2.content_refresh import refresh_aoe2_content
+            from kingdoms.game_aoe2.client import GameDataClient
 
-            counts = await refresh_aoe2_content()
-        except Exception:
+            game_uri = os.environ.get("GAME_AOE2_URI", "")
+            if not game_uri:
+                raise RuntimeError("GAME_AOE2_URI is not configured")
+            result = await GameDataClient(game_uri).sync_content("aoe2", "factions")
+        except Exception as exc:
             logger.exception("DM PANEL: content refresh failed")
-            await interaction.followup.send(_dm_tr(interaction, dm_locale, "refresh_failed"), ephemeral=True)
+            await interaction.followup.send(
+                f"{_dm_tr(interaction, dm_locale, 'refresh_failed')}\n`{exc}`",
+                ephemeral=True,
+            )
             return
-        raw_new_factions = counts.get("new_factions") or []
-        new_factions: list[str] = raw_new_factions if isinstance(raw_new_factions, list) else []
+        if not result.get("ok"):
+            # a FUNCTIONAL provider error: shown as-is, never a crash
+            await interaction.followup.send(
+                f"⚠️ {result.get('error', 'unknown error')}",
+                ephemeral=True,
+            )
+            return
+        counts = result.get("counts") or {}
+        new_factions = [str(n) for n in result.get("new_factions") or []]
         new_line = (
             _dm_tr(interaction, dm_locale, "new_civs_line", names=", ".join(new_factions))
             if new_factions else ""
@@ -499,9 +515,15 @@ class MapsSyncButton(
             _dm_tr(interaction, dm_locale, "maps_sync_started"), ephemeral=True
         )
         try:
-            from kingdoms.game_aoe2.content_refresh import refresh_aoe2_maps
+            from kingdoms.game_aoe2.client import GameDataClient
 
-            counts = await refresh_aoe2_maps()
+            game_uri = os.environ.get("GAME_AOE2_URI", "")
+            if not game_uri:
+                raise RuntimeError("GAME_AOE2_URI is not configured")
+            result = await GameDataClient(game_uri).sync_content("aoe2", "maps")
+            if not result.get("ok"):
+                raise RuntimeError(str(result.get("error", "unknown error")))
+            counts = result.get("counts") or {}
         except Exception:
             logger.exception("DM PANEL: maps sync failed")
             _MAPS_SYNC_LAST_DONE = _time.monotonic()
