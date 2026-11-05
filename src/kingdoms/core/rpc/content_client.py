@@ -103,4 +103,13 @@ class ContentProviderClient:
             "map_type": reply.map_type,
             "licence_ok": reply.licence_ok,
             "licence_note": reply.licence_note,
+            "walls": reply.walls,
+            "nomad": reply.nomad,
+            "tc": reply.tc,
+            "game_versions": list(reply.game_versions),
+            "versions": [
+                {"name": v.name, "description": v.description, "details": list(v.details)}
+                for v in reply.versions
+            ],
+            "tags": list(reply.tags),
         }

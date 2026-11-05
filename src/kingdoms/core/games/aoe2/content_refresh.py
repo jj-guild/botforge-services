@@ -17,6 +17,7 @@ or manual catalog additions are never archived by a refresh.
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from pathlib import Path
 from typing import Any
@@ -134,8 +135,6 @@ async def refresh_aoe2_maps() -> dict[str, int]:
     maps_checked = 0
     maps_enriched = 0
     try:
-        import asyncio
-
         from kingdoms.core.upstream_identity import provider_contact
 
         contact = provider_contact()
@@ -154,7 +153,7 @@ async def refresh_aoe2_maps() -> dict[str, int]:
                 continue
             maps_checked += 1
             pending.append((entry, entry.name))
-        seeds = await asyncio.to_thread(_resolve_map_seeds_batch, contact, [n for _, n in pending])
+        seeds = await _resolve_map_seeds(contact, [n for _, n in pending])
         for entry, name in pending:
             seed = seeds.get(_title_variants_key(name))
             if seed is None:
@@ -200,6 +199,71 @@ async def refresh_aoe2_maps() -> dict[str, int]:
 def _title_variants_key(name: str) -> str:
     """Return the canonical cache key of a map name (spaces -> underscores)."""
     return name.strip().replace(" ", "_")
+
+
+async def _resolve_map_seeds(contact: str, names: list[str]) -> dict[str, Any]:
+    """Resolve many map seeds — through the ext-liquipedia provider.
+
+    The provider owns the Liquipedia access (ADR-0020): ONE client per
+    environment. Its seed worker COALESCES every concurrent request —
+    this refresh's whole batch lands in a few batched ``action=query``
+    calls at the light pacing, behind the circuit breaker. The
+    in-process provider remains the transition fallback (no URI).
+    Returns {cache_key: seed}; a rate-limited upstream raises the
+    circuit error to the caller.
+    """
+    import os
+
+    from kingdoms.mapsdata.seed import MapSeed
+
+    provider_uri = os.environ.get("EXT_LIQUIPEDIA_URI", "")
+    if not provider_uri:
+        return await asyncio.to_thread(_resolve_map_seeds_batch, contact, names)
+
+    from kingdoms.core.rpc.content_client import ContentProviderClient
+
+    client: Any = ContentProviderClient(provider_uri)
+
+    async def _one(name: str) -> tuple[str, Any] | None:
+        try:
+            descriptor = await client.get_map_seed("aoe2", name)
+        except Exception:
+            return None  # a missing page degrades to no seed, per map
+        if descriptor is None:
+            return None
+        return (
+            name,
+            MapSeed(
+                name=str(descriptor.get("name", name)),
+                description=str(descriptor.get("description", "")),
+                resource_url=str(descriptor.get("resource_url", "")),
+                image_url=str(descriptor.get("image_url", "")),
+                icon_url=str(descriptor.get("icon_url", "")),
+                terrain=str(descriptor.get("terrain", "")),
+                size=str(descriptor.get("size", "")),
+                map_type=str(descriptor.get("map_type", "")),
+                walls=bool(descriptor.get("walls", False)),
+                nomad=bool(descriptor.get("nomad", False)),
+                tc=bool(descriptor.get("tc", False)),
+                public=True,
+                game_versions=list(descriptor.get("game_versions", ()) or ()),
+                versions=tuple(
+                    {"name": v.get("name", ""), "description": v.get("description", ""),
+                     "details": list(v.get("details", ()) or ())}
+                    for v in descriptor.get("versions", ()) or ()
+                ),
+                tags=list(descriptor.get("tags", ()) or ()),
+            ),
+        )
+
+    results = await asyncio.gather(*[_one(n) for n in names])
+    out: dict[str, Any] = {}
+    for result in results:
+        if result is None:
+            continue
+        name, seed = result
+        out[_title_variants_key(name)] = seed
+    return out
 
 
 def _resolve_map_seeds_batch(contact: str, names: list[str]) -> dict[str, Any]:

@@ -117,6 +117,19 @@ class ContentServicer(content_pb2_grpc.ContentServicer):
             map_type=str(seed.get("map_type", "")),
             licence_ok=licence_ok,
             licence_note=str(seed.get("licence_note", "")),
+            walls=bool(seed.get("walls", False)),
+            nomad=bool(seed.get("nomad", False)),
+            tc=bool(seed.get("tc", False)),
+            game_versions=[str(v) for v in seed.get("game_versions", ()) or ()],
+            versions=[
+                content_pb2.MapSeedVersion(
+                    name=str(v.get("name", "")),
+                    description=str(v.get("description", "")),
+                    details=[str(d) for d in v.get("details", ()) or ()],
+                )
+                for v in seed.get("versions", ()) or ()
+            ],
+            tags=[str(t) for t in seed.get("tags", ()) or ()],
         )
 
     async def ListFactions(

@@ -25,12 +25,23 @@ class _FakeData:
 class _FakeUpstream:
     def __init__(self) -> None:
         self.calls: list[str] = []
+        self.batch_calls: list[list[str]] = []
 
     def map_data(self, page: str) -> Any:
         self.calls.append(page)
         if "Team Islands" in page:
             return _FakeData()
         raise RuntimeError("no such page")
+
+    def map_data_batch(self, pages: list[str]) -> dict[str, Any]:
+        """The batched contract the seed worker rides (<=50 per call)."""
+        self.batch_calls.append(list(pages))
+        result: dict[str, Any] = {}
+        for page in pages:
+            if "Team Islands" in page:
+                key = page.strip().replace(" ", "_")
+                result[key] = _FakeData()
+        return result
 
 
 class _FakeCollection:
