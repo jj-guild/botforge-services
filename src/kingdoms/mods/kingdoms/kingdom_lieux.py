@@ -2791,11 +2791,26 @@ class KingdomLieuHistButton(
                             when,
                         )
                     )
+        # comptes-illustration-v1 (Drasah 05/11): the history windows
+        # REPLACE the comptes window (fenêtre unique) — they keep the
+        # Chambre des comptes illustration in the header so the window
+        # never loses its dressing mid-navigation.
         view = discord.ui.LayoutView(timeout=None)
+        # NB: MediaGalleryItem is TOP-LEVEL discord.MediaGalleryItem
+        # (the deployed discord.py 2.7.1 has no discord.ui variant).
+        view.add_item(
+            discord.ui.MediaGallery(
+                discord.MediaGalleryItem(media="attachment://chambre_des_comptes.png")
+            )
+        )
         view.add_item(discord.ui.TextDisplay(f"# {title}"))
         view.add_item(discord.ui.TextDisplay("\n".join(body_lines)))
         view.add_item(discord.ui.ActionRow(_sortir(locale)))
-        await _open_unique_ephemeral(interaction, view=view)
+        await _open_unique_ephemeral(
+            interaction,
+            view=view,
+            files=_lieu_files("chambre des comptes.png", "chambre_des_comptes.png"),
+        )
 
 
 class KingdomLieuCardInfoButton(
