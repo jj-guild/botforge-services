@@ -26,6 +26,11 @@ def main() -> None:
         level=os.environ.get("LOG_LEVEL", "INFO").upper(),
         format="%(asctime)s %(levelname)s %(name)s %(message)s",
     )
+    # Under DEBUG the drivers drown the signal (pymongo heartbeats every
+    # 10 s, httpcore frames): keep them at WARNING — the 429 diagnostics
+    # ride the kingdoms.mapsdata logger.
+    for noisy in ("pymongo", "httpcore", "httpx"):
+        logging.getLogger(noisy).setLevel(logging.WARNING)
     asyncio.run(_serve())
 
 

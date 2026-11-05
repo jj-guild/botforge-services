@@ -232,15 +232,19 @@ class GamesMapCreateModal(discord.ui.Modal):
         bot admins may create global ones (``None`` scope), so a global
         map is modifiable by admins alone.
         """
+        # DEFER FIRST: the Liquipedia enrichment can take minutes (the
+        # 429 backoffs); an interaction that answers after ~3 s shows
+        # 'the application did not respond' (the merlin Socotra import).
+        await interaction.response.defer(ephemeral=True, thinking=True)
         service = _games_wiring()
         if service is None:
-            await interaction.response.send_message(
+            await interaction.followup.send(
                 await reply(interaction, "replies_shared.wiring_unavailable"), ephemeral=True
             )
             return
         name = str(self.name.value or "").strip()
         if not name:
-            await interaction.response.send_message(
+            await interaction.followup.send(
                 await reply(interaction, "replies_shared.name_required"), ephemeral=True
             )
             return
@@ -300,11 +304,11 @@ class GamesMapCreateModal(discord.ui.Modal):
                     )
         except Exception:
             logger.exception("GAMES ADMIN: map creation failed")
-            await interaction.response.send_message(
+            await interaction.followup.send(
                 await reply(interaction, "replies_shared.import_failed"), ephemeral=True
             )
             return
-        await interaction.response.send_message(
+        await interaction.followup.send(
             f"Map **{entry.name}** creee - elle apparaitra dans le forum maps.{circuit_note}",
             ephemeral=True,
         )
