@@ -13,9 +13,9 @@ from __future__ import annotations
 
 import os
 
-from kingdoms.core.games.aoe2.faction_content import TechtreeContentProvider
 from kingdoms.core.games.game_content import GameContentSource, LocalProviderSource
 from kingdoms.core.games.game_content import LocalizedContent as _LocalizedContent
+from kingdoms.game_aoe2.faction_content import TechtreeContentProvider
 
 __all__ = ["LocalizedContent", "resolve_aoe2_content_source"]
 

@@ -38,14 +38,14 @@ async def refresh_aoe2_content(dataset_dir: Path = DATASET_DIR) -> dict[str, int
     here: their Liquipedia enrichment is on demand only
     (:func:`refresh_aoe2_maps`).
     """
-    from kingdoms.core.games.aoe2.content_source import resolve_aoe2_content_source
-    from kingdoms.core.games.aoe2.faction_content import (
-        SUPPORTED_LOCALES,
-        TechtreeContentProvider,
-    )
     from kingdoms.core.models.db import get_async_database
     from kingdoms.core.services.faction_content import FactionContentService
     from kingdoms.core.services.game_data import GameDataService
+    from kingdoms.game_aoe2.content_source import resolve_aoe2_content_source
+    from kingdoms.game_aoe2.faction_content import (
+        SUPPORTED_LOCALES,
+        TechtreeContentProvider,
+    )
 
     from .seed import MongoAoE2Database
 

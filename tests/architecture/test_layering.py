@@ -96,14 +96,6 @@ ALLOWLIST_R1 = (
 
 ALLOWLIST_R3 = (
     "kingdoms/core/codecs.py mentions 'librematch'",
-    "kingdoms/core/games/aoe2/blobs.py mentions 'librematch'",
-    "kingdoms/core/games/aoe2/content_refresh.py mentions 'liquipedia'",
-    "kingdoms/core/games/aoe2/content_refresh.py mentions 'aoe2techtree'",
-    "kingdoms/core/games/aoe2/content_source.py mentions 'aoe2techtree'",
-    "kingdoms/core/games/aoe2/faction_content.py mentions 'liquipedia'",
-    "kingdoms/core/games/aoe2/faction_content.py mentions 'aoe2techtree'",
-    "kingdoms/core/games/aoe2/faction_content_cli.py mentions 'aoe2techtree'",
-    "kingdoms/core/games/aoe2/grace.py mentions 'aoe2lobby'",
     "kingdoms/core/games/game_content.py mentions 'aoe2techtree'",
     "kingdoms/core/rpc/content.py mentions 'aoe2techtree'",
     "kingdoms/core/rpc/content_client.py mentions 'aoe2techtree'",

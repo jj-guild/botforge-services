@@ -2,13 +2,13 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>Python: kingdoms.core.games.aoe2.content_refresh</title>
+<title>Python: kingdoms.game_aoe2.content_refresh</title>
 </head><body>
 
 <table class="heading">
 <tr class="heading-text decor">
-<td class="title">&nbsp;<br><strong class="title"><a href="kingdoms.html" class="white">kingdoms</a>.<a href="kingdoms.core.html" class="white">core</a>.<a href="kingdoms.core.games.html" class="white">games</a>.<a href="kingdoms.core.games.aoe2.html" class="white">aoe2</a>.content_refresh</strong></td>
-<td class="extra"><a href=".">index</a><br><a href="file:SOURCE_ROOT/core/games/aoe2/content_refresh.py">SOURCE_ROOT/core/games/aoe2/content_refresh.py</a></td></tr></table>
+<td class="title">&nbsp;<br><strong class="title"><a href="kingdoms.html" class="white">kingdoms</a>.<a href="kingdoms.game_aoe2.html" class="white">game_aoe2</a>.content_refresh</strong></td>
+<td class="extra"><a href=".">index</a><br><a href="file:SOURCE_ROOT/game_aoe2/content_refresh.py">SOURCE_ROOT/game_aoe2/content_refresh.py</a></td></tr></table>
     <p><span class="code">Dataset&nbsp;refresh:&nbsp;keep&nbsp;the&nbsp;AoE2&nbsp;catalog&nbsp;and&nbsp;content&nbsp;in&nbsp;sync&nbsp;with&nbsp;updates.<br>
 &nbsp;<br>
 Game&nbsp;updates&nbsp;evolve&nbsp;the&nbsp;data:&nbsp;new&nbsp;civs&nbsp;(The&nbsp;Viking&nbsp;Sagas),&nbsp;changed<br>
@@ -38,7 +38,7 @@ or&nbsp;manual&nbsp;catalog&nbsp;additions&nbsp;are&nbsp;never&nbsp;archived&nbs
 <td class="section-title" colspan=3>&nbsp;<br><strong class="bigsection">Functions</strong></td></tr>
     
 <tr><td class="decor functions-decor"><span class="code">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span></td><td>&nbsp;</td>
-<td class="singlecolumn"><dl><dt>async <a name="-refresh_aoe2_content"><strong>refresh_aoe2_content</strong></a>(dataset_dir: 'Path' = PosixPath('REPO_ROOT/data/core/aoe2techtree')) -&gt; 'dict[str, int | list[str]]'</dt><dd><span class="code">Reconcile&nbsp;the&nbsp;catalog&nbsp;and&nbsp;per-locale&nbsp;content&nbsp;with&nbsp;the&nbsp;dataset.<br>
+<td class="singlecolumn"><dl><dt>async <a name="-refresh_aoe2_content"><strong>refresh_aoe2_content</strong></a>(dataset_dir: 'Path' = PosixPath('/data/core/aoe2techtree')) -&gt; 'dict[str, int | list[str]]'</dt><dd><span class="code">Reconcile&nbsp;the&nbsp;catalog&nbsp;and&nbsp;per-locale&nbsp;content&nbsp;with&nbsp;the&nbsp;dataset.<br>
 &nbsp;<br>
 Returns&nbsp;the&nbsp;per-section&nbsp;counts&nbsp;(``factions``&nbsp;created,&nbsp;``content_docs``<br>
 upserted).&nbsp;Raises&nbsp;when&nbsp;the&nbsp;dataset&nbsp;or&nbsp;Mongo&nbsp;is&nbsp;unreachable&nbsp;—&nbsp;the<br>
@@ -60,6 +60,6 @@ that&nbsp;qualified).</span></dd></dl>
 <td class="section-title" colspan=3>&nbsp;<br><strong class="bigsection">Data</strong></td></tr>
     
 <tr><td class="decor data-decor"><span class="code">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span></td><td>&nbsp;</td>
-<td class="singlecolumn"><strong>DATASET_DIR</strong> = PosixPath('REPO_ROOT/data/core/aoe2techtree')<br>
+<td class="singlecolumn"><strong>DATASET_DIR</strong> = PosixPath('/data/core/aoe2techtree')<br>
 <strong>logger</strong> = &lt;Logger kingdoms.core.content_refresh (WARNING)&gt;</td></tr></table>
 </body></html>

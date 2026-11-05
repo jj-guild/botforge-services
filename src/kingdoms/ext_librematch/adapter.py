@@ -4,7 +4,7 @@ Source of truth for AoE2 reference data (developer direction): lobby
 listings come from the public Community API endpoint documented by the
 LibreMatch wiki (``GET /community/advertisement/findAdvertisements``).
 The slotinfo/options fields of each lobby are base64+zlib blobs decoded
-by the game module (``kingdoms.core.games.aoe2.blobs``).
+by the game module (``kingdoms.game_aoe2.blobs``).
 
 Conservative by design: on any decode or transport failure the adapter
 serves what it has and degrades — never fails the provider process.

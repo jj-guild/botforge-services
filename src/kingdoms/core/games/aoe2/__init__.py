@@ -1,9 +1,22 @@
-"""games/aoe2 — the AoE2 game module (first game domain implementation).
+"""Transition shim: the AoE2 game module lives in kingdoms.game_aoe2.
 
-Declares the game identity; all AoE2-specific decoding lives here
-(payload blobs), while provider transport stays in the ext-*
-processes. Nothing leaks into core collections beyond the opaque
-``game_key`` (reference: ladder spec 6).
+The game code NEVER lived in core (rule 3 — core knows the games by
+their gRPC services, not their code). This shim keeps the old import
+path alive while the call sites migrate; it dies with the last one.
 """
 
-GAME_KEY = "aoe2"
+from __future__ import annotations
+
+from kingdoms.game_aoe2.content_refresh import (  # noqa: F401
+    DATASET_DIR,
+    refresh_aoe2_content,
+    refresh_aoe2_maps,
+)
+from kingdoms.game_aoe2.faction_content import (  # noqa: F401
+    PROVIDER_KEY,
+    SUPPORTED_LOCALES,
+    TechtreeContentProvider,
+)
+from kingdoms.game_aoe2.seed import (  # noqa: F401
+    MongoAoE2Database,
+)
