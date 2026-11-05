@@ -93,7 +93,19 @@ def start_player_status_stream(bot: Any) -> asyncio.Task[None] | None:
                         )
             except asyncio.CancelledError:
                 raise
-            except Exception:
+            except Exception as exc:
+                # UNIMPLEMENTED is not a failure: the game service simply
+                # does not serve this stream yet. Retrying every 5 s
+                # forever is pure log spam on BOTH sides (the server logs
+                # a traceback per poll) — log once and stop; the stream
+                # returns when the service implements it (a restart).
+                code = getattr(exc, "code", None)
+                if code is not None and getattr(code(), "name", "") == "UNIMPLEMENTED":
+                    logger.info(
+                        "player status stream: the GameData contract does not serve "
+                        "WatchPlayerEvents yet — the bridge stays idle"
+                    )
+                    return
                 logger.warning("player status stream failed — retrying in 5s", exc_info=True)
                 await asyncio.sleep(5)
 

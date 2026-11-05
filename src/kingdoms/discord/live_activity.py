@@ -76,7 +76,14 @@ def start_live_activity_feed(bot: discord.Client) -> asyncio.Task[None] | None:
                     await _deliver_event(bot, event)
             except asyncio.CancelledError:
                 raise
-            except Exception:
+            except Exception as exc:
+                # UNIMPLEMENTED: the game service does not serve the
+                # stream yet — retrying every 5 s forever spams both
+                # logs; log once and stay idle (a restart picks it up).
+                code = getattr(exc, "code", None)
+                if code is not None and getattr(code(), "name", "") == "UNIMPLEMENTED":
+                    logger.info("live activity feed: the stream is not served yet — staying idle")
+                    return
                 logger.warning("live activity feed: stream broke — reconnecting", exc_info=True)
                 await asyncio.sleep(5)
 

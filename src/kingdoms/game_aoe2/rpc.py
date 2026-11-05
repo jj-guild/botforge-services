@@ -174,13 +174,11 @@ class GameDataServicer(gamedata_pb2_grpc.GameDataServicer):
         aggregator: Any,
         poll_interval_s: float = 2.0,
         enrollments: Any = None,
-        prober: Any = None,
     ) -> None:
         """Wire the aggregator, the refresh interval, the enrollments pusher and the prober."""
         self._aggregator = aggregator
         self._poll_interval_s = poll_interval_s
         self._enrollments = enrollments
-        self._prober = prober
 
     async def GetCoverage(
         self,
@@ -206,17 +204,6 @@ class GameDataServicer(gamedata_pb2_grpc.GameDataServicer):
             request.game_key, list(request.profile_ids), list(request.user_ids)
         )
         return gamedata_pb2.UpdateEnrollmentsResponse(subscribed=subscribed, applied=applied)
-
-    async def GetProviderTests(
-        self,
-        request: Any,
-        context: grpc.aio.ServicerContext,
-    ) -> Any:
-        """Gone: the providers panel reads each provider's own call stats."""
-        await context.abort(
-            grpc.StatusCode.UNIMPLEMENTED,
-            "provider tests are gone — read GetUpstreamStats on each provider",
-        )
 
 
 def add_gamedata_servicer(server: grpc.aio.Server, servicer: GameDataServicer) -> None:
