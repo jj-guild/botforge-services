@@ -133,31 +133,29 @@ async def _aggregate_provider_stats() -> list[dict[str, Any]]:
         ("ext-aoe2techtree", os.environ.get("EXT_AOE2TECHTREE_URI", "")),
         ("ext-liquipedia", os.environ.get("EXT_LIQUIPEDIA_URI", "")),
     ]
-    entries: list[dict[str, Any]] = []
-    for provider_id, uri in providers:
+    async def _one(provider_id: str, uri: str) -> list[dict[str, Any]]:
         if not uri:
-            entries.append(
-                {"provider_id": provider_id, "upstream": provider_id,
-                 "never_called": True, "detail": "not deployed"}
-            )
-            continue
+            return [{"provider_id": provider_id, "upstream": provider_id,
+                     "never_called": True, "detail": "not deployed"}]
         try:
-            stats = await fetch_upstream_stats(uri, timeout_s=5.0)
+            # CONCURRENT, short timeout per provider: the panel waits 15 s
+            # for this whole answer — four sequential 5 s fetches could
+            # exceed it and the panel rendered nothing.
+            stats = await fetch_upstream_stats(uri, timeout_s=3.0)
         except Exception as exc:
-            entries.append(
-                {"provider_id": provider_id, "upstream": provider_id,
-                 "never_called": True, "detail": f"unreachable: {type(exc).__name__}"}
-            )
-            continue
+            return [{"provider_id": provider_id, "upstream": provider_id,
+                     "never_called": True, "detail": f"unreachable: {type(exc).__name__}"}]
         if not stats:
-            entries.append(
-                {"provider_id": provider_id, "upstream": provider_id,
-                 "never_called": True, "detail": "no calls yet"}
-            )
-            continue
+            return [{"provider_id": provider_id, "upstream": provider_id,
+                     "never_called": True, "detail": "no calls yet"}]
         for entry in stats:
             entry["provider_id"] = provider_id
-        entries.extend(stats)
+        return stats
+
+    batches = await asyncio.gather(*(_one(pid, uri) for pid, uri in providers))
+    entries: list[dict[str, Any]] = []
+    for batch in batches:
+        entries.extend(batch)
     return entries
 
 
