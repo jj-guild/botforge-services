@@ -1343,9 +1343,11 @@ async def _bulk_import_maps(
         if on_result is not None:
             await on_result(name, ok, reason)
 
+    from kingdoms.mapsdata.liquipedia import LiquipediaCircuitOpenError
+
     created: list[Any] = []
     failures: list[tuple[str, str]] = []
-    for p in parsed:
+    for index, p in enumerate(parsed):
         try:
             from kingdoms.core.ids import map_entry_id
 
@@ -1389,6 +1391,16 @@ async def _bulk_import_maps(
                 )
             created.append(entry)
             await _report(p.page_name, True)
+        except LiquipediaCircuitOpenError as exc:
+            # The API is rate-limiting this IP and the circuit is open:
+            # the remaining lines are REPORTED, not attempted — the batch
+            # never turns into a burst against a banned upstream.
+            failures.append((p.page_name, f"Liquipedia limite les appels (429) — {exc}"))
+            await _report(p.page_name, False, "Liquipedia limite les appels (429), réessaie plus tard")
+            for rest in parsed[index + 1 :]:
+                failures.append((rest.page_name, "reporté — Liquipedia en pause (429)"))
+                await _report(rest.page_name, False, "reporté — Liquipedia en pause (429)")
+            break
         except Exception as exc:
             logger.exception("GAMES ADMIN: bulk import failed on %s", p.page_name)
             failures.append((p.page_name, str(exc)))
