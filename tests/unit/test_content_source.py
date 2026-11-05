@@ -7,12 +7,12 @@ degradation of the RPC source (unknown faction -> None).
 
 from __future__ import annotations
 
-from kingdoms.core.games.aoe2.content_source import resolve_aoe2_content_source
-from kingdoms.core.games.aoe2.faction_content import TechtreeContentProvider
 from kingdoms.core.games.game_content import (
     LocalProviderSource,
     RpcContentSource,
 )
+from kingdoms.game_aoe2.content_source import resolve_aoe2_content_source
+from kingdoms.game_aoe2.faction_content import TechtreeContentProvider
 
 
 def _provider() -> TechtreeContentProvider:

@@ -5,7 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from kingdoms.core.games.aoe2.content_refresh import refresh_aoe2_content
+from kingdoms.game_aoe2.content_refresh import refresh_aoe2_content
 
 DATASET_DIR = Path(__file__).resolve().parents[3] / "data" / "core" / "aoe2techtree"
 

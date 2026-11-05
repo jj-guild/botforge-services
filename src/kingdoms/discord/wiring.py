@@ -93,9 +93,9 @@ def build_games_service() -> Any | None:
     if not os.environ.get("MONGO_URI"):
         return None
     try:
-        from kingdoms.core.games.aoe2.seed import MongoAoE2Database
         from kingdoms.core.models.db import get_async_database
         from kingdoms.core.services.game_data import GameDataService
+        from kingdoms.game_aoe2.seed import MongoAoE2Database
 
         _GAMES_SERVICE = GameDataService(MongoAoE2Database(get_async_database()))
     except Exception:

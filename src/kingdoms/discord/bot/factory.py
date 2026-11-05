@@ -435,7 +435,7 @@ class KingdomsBot(discord.Client):
             await self._ensure_all_pins(guild_id)
             if not maps_forum_wiring_ready():
                 return
-            from kingdoms.core.games.aoe2.content_refresh import refresh_aoe2_content
+            from kingdoms.game_aoe2.content_refresh import refresh_aoe2_content
 
             try:
                 await refresh_aoe2_content()

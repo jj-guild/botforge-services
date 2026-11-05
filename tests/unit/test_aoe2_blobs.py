@@ -14,8 +14,7 @@ import struct
 import zlib
 
 import pytest
-
-from kingdoms.core.games.aoe2.blobs import (
+from kingdoms.core.codecs import (
     BlobDecodeError,
     decode_blob,
     decode_options,

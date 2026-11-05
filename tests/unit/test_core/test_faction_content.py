@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from kingdoms.core.games.aoe2.faction_content import (
+from kingdoms.game_aoe2.faction_content import (
     PROVIDER_KEY,
     SUPPORTED_LOCALES,
     TechtreeContentProvider,

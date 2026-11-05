@@ -400,7 +400,7 @@ class ContentRefreshButton(
         dm_locale = await _dm_locale(interaction)
         await interaction.response.defer(ephemeral=True)
         try:
-            from kingdoms.core.games.aoe2.content_refresh import refresh_aoe2_content
+            from kingdoms.game_aoe2.content_refresh import refresh_aoe2_content
 
             counts = await refresh_aoe2_content()
         except Exception:
@@ -499,7 +499,7 @@ class MapsSyncButton(
             _dm_tr(interaction, dm_locale, "maps_sync_started"), ephemeral=True
         )
         try:
-            from kingdoms.core.games.aoe2.content_refresh import refresh_aoe2_maps
+            from kingdoms.game_aoe2.content_refresh import refresh_aoe2_maps
 
             counts = await refresh_aoe2_maps()
         except Exception:
