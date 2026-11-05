@@ -2407,6 +2407,15 @@ async def deploy_panels(
     from kingdoms.mods.kingdoms.kingdom_content import refresh_salons_content
 
     report.update(await refresh_salons_content(guild, locale, kingdoms_service))
+    # laboratoire-v1 (Drasah 05/11): the 🧪 Labo cockpit rides the same
+    # deployment pass — best-effort, the lab never blocks the others.
+    try:
+        from kingdoms.mods.kingdoms.kingdom_lab import deploy_lab_panel
+
+        if await deploy_lab_panel(guild, locale):
+            report["labo"] = "deployed"
+    except Exception:
+        logger.warning("KINGDOM PANELS: lab cockpit deployment failed", exc_info=True)
     return report
 
 

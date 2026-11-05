@@ -341,6 +341,13 @@ def register_kingdoms_persistent_items(bot: discord.Client) -> None:
         KingdomTraquenardCancelButton,
     )
 
+    # laboratoire-v1 (Drasah 05/11): the lab cockpit's items — the
+    # multi-selection, the presets, the version select, the vitrine,
+    # the sweep and the refresh (restart-proof, like every item).
+    from kingdoms.mods.kingdoms.kingdom_lab import register_kingdom_lab_items
+
+    register_kingdom_lab_items(bot)
+
 
 def _is_admin(interaction: discord.Interaction, bot_admins: tuple[str, ...]) -> bool:
     user_id = getattr(interaction.user, "id", None)

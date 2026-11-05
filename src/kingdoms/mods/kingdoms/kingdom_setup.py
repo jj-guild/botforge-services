@@ -126,6 +126,9 @@ _CHARTE_CATEGORY_DISPLAY: dict[str, str] = {
     # is renamed « Kingdoms-Gaia » (the Taverne is born here too).
     "kingdoms": "🏰 ᴋɪɴɢᴅᴏᴍs-ɢᴀɪᴀ",
     "champs-de-bataille": "⚔️ ᴄʜᴀᴍᴘs ᴅᴇ ʙᴀᴛᴀɪʟʟᴇ",
+    # laboratoire-v1 (Drasah 05/11): the visual-validation lab sits
+    # JUST ABOVE Admin — the staff zone's porch, admin-only.
+    "laboratoire": "🧪 ʟᴀʙᴏʀᴀᴛᴏɪʀᴇ",
     "admin": "⚙️ ᴀᴅᴍɪɴ",
 }
 """ordre-salons-v1 (Drasah 19/10): the grimoire charte — categories in
@@ -156,6 +159,8 @@ _CHARTE_CHANNEL_DISPLAY: dict[str, str] = {
     # slug sits in LEGACY_SALON_SLUGS).
     "machine-a-temps": "⏱️ machine à temps",
     "distributeur": "🎁 distributeur",
+    # laboratoire-v1 (Drasah 05/11): the Labo salon carries the cockpit.
+    "labo": "🧪 labo",
     # console-removal-v1 (Drasah 25/10): the 🛠 console-admin salon is
     # RETIRED — the listener never booted in prod (no add_listener),
     # the live flows live on the ⚙️ Paramètres panel. The slug joins
@@ -520,6 +525,10 @@ async def _enforce_category_order(guild: discord.Guild) -> None:
     # (« 🍺 Taverne » → « taverne »), skipped silently when absent.
     if "taverne" in by_slug:
         ordered.append(by_slug["taverne"])
+    # laboratoire-v1 (Drasah 05/11): the lab reads JUST ABOVE Admin —
+    # behind the realms like the staff porch it is (admin-only anyway).
+    if "laboratoire" in by_slug:
+        ordered.append(by_slug["laboratoire"])
     if "admin" in by_slug:
         ordered.append(by_slug["admin"])  # ALWAYS behind the last realm
     for position, category in enumerate(ordered):
