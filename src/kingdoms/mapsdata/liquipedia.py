@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import logging
 import re
+import threading
 import time
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -53,6 +54,12 @@ _CIRCUIT_WINDOW_MAX_S = 12 * 3600.0
 # pacing clock — a fresh provider per map must not reset it).
 _shared_circuit_open_until = 0.0
 _shared_circuit_streak = 0
+
+# THE pacer lock: the markers are shared, but the read-sleep-write was
+# RACY — two concurrent callers could read the same marker and fire
+# together (a burst the ToS punishes with a VPS-wide ban). Every pacing
+# decision happens under this lock.
+_shared_pacing_lock = threading.Lock()
 
 
 class LiquipediaCircuitOpenError(RuntimeError):
@@ -201,17 +208,18 @@ class LiquipediaMapsProvider:
         batch, never per instance.
         """
         global _shared_last_request_at, _shared_last_parse_at
-        now = time.monotonic()
-        interval = _PARSE_INTERVAL_S if is_parse else _MIN_REQUEST_INTERVAL_S
-        last = _shared_last_parse_at if is_parse else _shared_last_request_at
-        wait = last + interval - now
-        if wait > 0:
-            self._sleep(wait)
-        marker = time.monotonic()
-        if is_parse:
-            _shared_last_parse_at = marker
-        else:
-            _shared_last_request_at = marker
+        with _shared_pacing_lock:
+            now = time.monotonic()
+            interval = _PARSE_INTERVAL_S if is_parse else _MIN_REQUEST_INTERVAL_S
+            last = _shared_last_parse_at if is_parse else _shared_last_request_at
+            wait = last + interval - now
+            if wait > 0:
+                self._sleep(wait)
+            marker = time.monotonic()
+            if is_parse:
+                _shared_last_parse_at = marker
+            else:
+                _shared_last_request_at = marker
 
     def _get_json(self, params: dict[str, str], is_parse: bool = False) -> dict[str, Any]:
         global _shared_circuit_open_until, _shared_circuit_streak

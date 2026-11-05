@@ -192,6 +192,60 @@ class GameDataServicer(gamedata_pb2_grpc.GameDataServicer):
             degraded=self._aggregator.snapshot()["degraded"],
         )
 
+    async def WatchDashboard(
+        self,
+        request: gamedata_pb2.WatchGameDataRequest,
+        context: grpc.aio.ServicerContext,
+    ) -> Any:
+        """Stream snapshots: one immediately, then one per effective change.
+
+        The aggregator folds the provider (aoe2lobby) events in the
+        background consumer; this stream polls its snapshot, emitting
+        only when the payload changed so the channel never spams.
+        """
+        import asyncio
+
+        last: Any = None
+        while True:
+            snapshot = self._aggregator.snapshot()
+            if last is None or snapshot["players"] != last:
+                last = snapshot["players"]
+                yield dashboard_to_wire(snapshot)
+            await asyncio.sleep(self._poll_interval_s)
+
+    async def WatchPlayerEvents(
+        self,
+        request: gamedata_pb2.WatchGameDataRequest,
+        context: grpc.aio.ServicerContext,
+    ) -> Any:
+        """Stream the player transitions to every subscriber (fan-out).
+
+        The service subscribes to its provider (aoe2lobby) in its
+        background consumer, maintains the coherent player state (the
+        aggregator) and serves its subscribers — a mod, the bot: each
+        stream owns its queue, one consumer never starves another.
+        """
+        queue = self._aggregator.subscribe()
+        try:
+            while True:
+                transition = await queue.get()
+                if request.game_key and transition.get("game_key") != request.game_key:
+                    continue
+                if request.since and int(transition.get("occurred_at", 0)) < request.since:
+                    continue
+                match = transition.get("match") or {}
+                yield gamedata_pb2.GamePlayerEvent(
+                    game_key=str(transition.get("game_key", "")),
+                    profile_id=str(transition.get("profile_id", "")),
+                    user_id=str(transition.get("user_id", "")),
+                    old_status=str(transition.get("old_status", "")),
+                    new_status=str(transition.get("new_status", "")),
+                    occurred_at=int(transition.get("occurred_at", 0)),
+                    match=summary_to_wire(match) if match else None,
+                )
+        finally:
+            self._aggregator.unsubscribe(queue)
+
     async def UpdateEnrollments(
         self,
         request: gamedata_pb2.UpdateEnrollmentsRequest,
