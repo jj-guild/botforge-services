@@ -842,8 +842,13 @@ def build_lab_cockpit(locale: str) -> discord.ui.LayoutView:
             _LabPresetButton("chantier", strings["preset_chantier"]),
         )
     )
-    view.add_item(KingdomLabViewSelect(locale))
-    view.add_item(KingdomLabVersionSelect(locale))
+    # laboratoire-v1 fix (Drasah 05/11, live 50035): a LayoutView does
+    # NOT wrap a bare Select into an ActionRow at send time — Discord
+    # rejected the cockpit with « In components.3/4: type must be one
+    # of (1, 9, 10, 12, 13, 14, 17) ». Every interactive item rides
+    # inside an explicit ActionRow (one select per row, Discord's rule).
+    view.add_item(discord.ui.ActionRow(KingdomLabViewSelect(locale)))
+    view.add_item(discord.ui.ActionRow(KingdomLabVersionSelect(locale)))
     view.add_item(
         discord.ui.ActionRow(
             KingdomLabVitrineButton(strings["vitrine_button"]),

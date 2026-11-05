@@ -141,6 +141,30 @@ def test_cockpit_carries_every_control() -> None:
     assert LAB_PANEL_MARKER in _view_text(view)
 
 
+def test_cockpit_top_level_children_are_layout_components() -> None:
+    """Live 50035 (Drasah 05/11): Discord rejects a bare interactive item
+    at the root of a LayoutView (« In components.N: type must be one of
+    (1, 9, 10, 12, 13, 14, 17) ») — the cockpit send failed silently
+    (best-effort) and the Labo salon stayed empty. Every top-level
+    child must be a layout component; interactive items ride INSIDE an
+    ActionRow."""
+    view = build_lab_cockpit("fr")
+    interactive = (
+        discord.ui.Button,
+        discord.ui.Select,
+        discord.ui.TextInput,
+    )
+    for child in view.children:
+        assert not isinstance(
+            child, interactive
+        ), f"bare interactive component at the LayoutView root: {type(child).__name__}"
+    rows = [c for c in view.children if isinstance(c, discord.ui.ActionRow)]
+    selects = [i for i in _walk(view.children) if isinstance(i, discord.ui.Select)]
+    assert len(selects) == 2
+    for select in selects:
+        assert any(select in row._children for row in rows)
+
+
 def test_presets_are_journey_ordered_subsets() -> None:
     for keys in LAB_PRESETS.values():
         assert keys and all(k in LAB_VIEWS for k in keys)
