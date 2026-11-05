@@ -8,11 +8,14 @@ civs, aoe2lobby join/spectate URLs, aoe2de deep link).
 
 from __future__ import annotations
 
+import logging
 from typing import Any
 
 import grpc
 
 from kingdoms.rpc_generated.kingdoms.v1 import gamedata_pb2, gamedata_pb2_grpc
+
+logger = logging.getLogger("kingdoms.game_aoe2")
 
 
 def summary_to_wire(summary: dict[str, Any]) -> gamedata_pb2.GameMatchSummary:
@@ -245,6 +248,58 @@ class GameDataServicer(gamedata_pb2_grpc.GameDataServicer):
                 )
         finally:
             self._aggregator.unsubscribe(queue)
+
+    async def SyncContent(
+        self,
+        request: gamedata_pb2.SyncContentRequest,
+        context: grpc.aio.ServicerContext,
+    ) -> gamedata_pb2.SyncContentReply:
+        """Run the content sync against the game's providers, in here.
+
+        The civs sync rides the aoe2techtree content provider, the maps
+        enrichment rides the liquipedia provider — the game service owns
+        both (the bot never touches a provider, it asks this service).
+        A provider failure comes back as a FUNCTIONAL error the UI shows
+        as-is; it never crashes the servicer.
+        """
+        from kingdoms.game_aoe2.content_refresh import (
+            refresh_aoe2_content,
+            refresh_aoe2_maps,
+        )
+
+        try:
+            if request.what == "factions":
+                result = await refresh_aoe2_content()
+            elif request.what == "maps":
+                result = await refresh_aoe2_maps()
+            else:
+                await context.abort(
+                    grpc.StatusCode.INVALID_ARGUMENT,
+                    f"unknown sync target: {request.what!r}",
+                )
+                raise AssertionError  # abort never returns
+        except Exception as exc:  # a functional error, not a crash
+            logger.warning("SyncContent(%s) failed: %s", request.what, exc)
+            return gamedata_pb2.SyncContentReply(
+                ok=False,
+                error=f"{type(exc).__name__}: {exc}"[:400],
+            )
+        counts = {
+            key: int(value)
+            for key, value in result.items()
+            if isinstance(value, int)
+        }
+        raw_new = result.get("new_factions", ())
+        new_factions = (
+            [str(name) for name in raw_new if isinstance(name, str)]
+            if isinstance(raw_new, (list, tuple))
+            else []
+        )
+        return gamedata_pb2.SyncContentReply(
+            ok=True,
+            counts=counts,
+            new_factions=new_factions,
+        )
 
     async def UpdateEnrollments(
         self,

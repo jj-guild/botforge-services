@@ -14,6 +14,22 @@ package kingdoms.v1;
 // The contract is game-generic: the game is a parameter, so a future
 // game-aoe4 process serves the same contract with game_key = "aoe4".
 
+// The content sync: "factions" (the civs catalog + content docs) or
+// "maps" (the Liquipedia enrichment). The reply carries the counts, the
+// newly created factions, or a FUNCTIONAL error the UI shows as-is
+// (a provider is down, rate-limited, or not configured).
+message SyncContentRequest {
+  string game_key = 1;
+  string what = 2;  // "factions" | "maps"
+}
+
+message SyncContentReply {
+  bool ok = 1;
+  string error = 2;  // the functional error, empty when ok
+  map<string, int64> counts = 3;
+  repeated string new_factions = 4;
+}
+
 service GameData {
   // Declare which games this service covers and per-game capabilities.
   rpc GetCoverage(CoverageRequest) returns (GameCoverage);
@@ -31,6 +47,9 @@ service GameData {
   // Push the platform's enrolled profile ids for a game. The service
   // reconciles its providers' subscriptions in place (no teardown).
   rpc UpdateEnrollments(UpdateEnrollmentsRequest) returns (UpdateEnrollmentsResponse);
+  // The content sync (civs, maps): the game service runs it against ITS
+  // providers — the bot never touches a provider, it asks the service.
+  rpc SyncContent(SyncContentRequest) returns (SyncContentReply);
 
 
   // The providers' health-test results for a game: the game service

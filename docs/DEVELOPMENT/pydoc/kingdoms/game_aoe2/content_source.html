@@ -32,6 +32,12 @@ This&nbsp;module&nbsp;resolves&nbsp;AoE2's&nbsp;concrete&nbsp;sources:<br>
     
 <tr><td class="decor index-decor"><span class="code">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span></td><td>&nbsp;</td>
 <td class="singlecolumn"><dl>
+<dt class="heading-text"><a href="builtins.html#RuntimeError">builtins.RuntimeError</a>(<a href="builtins.html#Exception">builtins.Exception</a>)
+</dt><dd>
+<dl>
+<dt class="heading-text"><a href="kingdoms.game_aoe2.content_source.html#ProviderUnavailableError">ProviderUnavailableError</a>
+</dt></dl>
+</dd>
 <dt class="heading-text"><a href="builtins.html#object">builtins.object</a>
 </dt><dd>
 <dl>
@@ -93,22 +99,88 @@ Data and other attributes defined here:<br>
 
 <dl><dt><strong>__match_args__</strong> = ('entity_id', 'locale', 'name', 'summary', 'source_url', 'image_url')</dl>
 
+</td></tr></table> <p>
+<table class="section">
+<tr class="decor title-decor heading-text">
+<td class="section-title" colspan=3>&nbsp;<br><a name="ProviderUnavailableError">class <strong>ProviderUnavailableError</strong></a>(<a href="builtins.html#RuntimeError">builtins.RuntimeError</a>)</td></tr>
+    
+<tr><td class="decor title-decor" rowspan=2><span class="code">&nbsp;&nbsp;&nbsp;</span></td>
+<td class="decor title-decor" colspan=2><span class="code">A&nbsp;provider&nbsp;the&nbsp;game&nbsp;needs&nbsp;is&nbsp;not&nbsp;configured&nbsp;or&nbsp;unreachable.<br>
+&nbsp;<br>
+A&nbsp;FUNCTIONAL&nbsp;error:&nbsp;the&nbsp;UI&nbsp;shows&nbsp;it&nbsp;as-is&nbsp;to&nbsp;the&nbsp;admin&nbsp;(the<br>
+provider&nbsp;is&nbsp;down,&nbsp;the&nbsp;sync&nbsp;cannot&nbsp;run)&nbsp;—&nbsp;never&nbsp;a&nbsp;crash.<br>&nbsp;</span></td></tr>
+<tr><td>&nbsp;</td>
+<td class="singlecolumn"><dl><dt>Method resolution order:</dt>
+<dd><a href="kingdoms.game_aoe2.content_source.html#ProviderUnavailableError">ProviderUnavailableError</a></dd>
+<dd><a href="builtins.html#RuntimeError">builtins.RuntimeError</a></dd>
+<dd><a href="builtins.html#Exception">builtins.Exception</a></dd>
+<dd><a href="builtins.html#BaseException">builtins.BaseException</a></dd>
+<dd><a href="builtins.html#object">builtins.object</a></dd>
+</dl>
+<hr>
+Data descriptors defined here:<br>
+<dl><dt><strong>__weakref__</strong></dt>
+<dd><span class="code">list&nbsp;of&nbsp;weak&nbsp;references&nbsp;to&nbsp;the&nbsp;object</span></dd>
+</dl>
+<hr>
+Methods inherited from <a href="builtins.html#RuntimeError">builtins.RuntimeError</a>:<br>
+<dl><dt><a name="ProviderUnavailableError-__init__"><strong>__init__</strong></a>(self, /, *args, **kwargs)</dt><dd><span class="code">Initialize&nbsp;self.&nbsp;&nbsp;See&nbsp;help(type(self))&nbsp;for&nbsp;accurate&nbsp;signature.</span></dd></dl>
+
+<hr>
+Static methods inherited from <a href="builtins.html#RuntimeError">builtins.RuntimeError</a>:<br>
+<dl><dt><a name="ProviderUnavailableError-__new__"><strong>__new__</strong></a>(*args, **kwargs)<span class="grey"><span class="heading-text"> class method of <a href="builtins.html#RuntimeError">builtins.RuntimeError</a></span></span></dt><dd><span class="code">Create&nbsp;and&nbsp;return&nbsp;a&nbsp;new&nbsp;<a href="builtins.html#object">object</a>.&nbsp;&nbsp;See&nbsp;help(type)&nbsp;for&nbsp;accurate&nbsp;signature.</span></dd></dl>
+
+<hr>
+Methods inherited from <a href="builtins.html#BaseException">builtins.BaseException</a>:<br>
+<dl><dt><a name="ProviderUnavailableError-__getattribute__"><strong>__getattribute__</strong></a>(self, name, /)</dt><dd><span class="code">Return&nbsp;getattr(self,&nbsp;name).</span></dd></dl>
+
+<dl><dt><a name="ProviderUnavailableError-__reduce__"><strong>__reduce__</strong></a>(...)</dt><dd><span class="code">Helper&nbsp;for&nbsp;pickle.</span></dd></dl>
+
+<dl><dt><a name="ProviderUnavailableError-__repr__"><strong>__repr__</strong></a>(self, /)</dt><dd><span class="code">Return&nbsp;repr(self).</span></dd></dl>
+
+<dl><dt><a name="ProviderUnavailableError-__setstate__"><strong>__setstate__</strong></a>(...)</dt></dl>
+
+<dl><dt><a name="ProviderUnavailableError-__str__"><strong>__str__</strong></a>(self, /)</dt><dd><span class="code">Return&nbsp;str(self).</span></dd></dl>
+
+<dl><dt><a name="ProviderUnavailableError-add_note"><strong>add_note</strong></a>(...)</dt><dd><span class="code">Exception.<a href="#ProviderUnavailableError-add_note">add_note</a>(note)&nbsp;--<br>
+add&nbsp;a&nbsp;note&nbsp;to&nbsp;the&nbsp;exception</span></dd></dl>
+
+<dl><dt><a name="ProviderUnavailableError-with_traceback"><strong>with_traceback</strong></a>(...)</dt><dd><span class="code">Exception.<a href="#ProviderUnavailableError-with_traceback">with_traceback</a>(tb)&nbsp;--<br>
+set&nbsp;self.<strong>__traceback__</strong>&nbsp;to&nbsp;tb&nbsp;and&nbsp;return&nbsp;self.</span></dd></dl>
+
+<hr>
+Data descriptors inherited from <a href="builtins.html#BaseException">builtins.BaseException</a>:<br>
+<dl><dt><strong>__cause__</strong></dt>
+<dd><span class="code">exception&nbsp;cause</span></dd>
+</dl>
+<dl><dt><strong>__context__</strong></dt>
+<dd><span class="code">exception&nbsp;context</span></dd>
+</dl>
+<dl><dt><strong>__dict__</strong></dt>
+</dl>
+<dl><dt><strong>__suppress_context__</strong></dt>
+</dl>
+<dl><dt><strong>__traceback__</strong></dt>
+</dl>
+<dl><dt><strong>args</strong></dt>
+</dl>
 </td></tr></table></td></tr></table><p>
 <table class="section">
 <tr class="decor functions-decor heading-text">
 <td class="section-title" colspan=3>&nbsp;<br><strong class="bigsection">Functions</strong></td></tr>
     
 <tr><td class="decor functions-decor"><span class="code">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span></td><td>&nbsp;</td>
-<td class="singlecolumn"><dl><dt><a name="-resolve_aoe2_content_source"><strong>resolve_aoe2_content_source</strong></a>(provider: 'TechtreeContentProvider', env: 'dict[str, str] | None' = None) -&gt; 'GameContentSource'</dt><dd><span class="code">Resolve&nbsp;AoE2's&nbsp;content&nbsp;source&nbsp;from&nbsp;the&nbsp;environment.<br>
+<td class="singlecolumn"><dl><dt><a name="-resolve_aoe2_content_source"><strong>resolve_aoe2_content_source</strong></a>(provider: 'Any' = None, env: 'dict[str, str] | None' = None) -&gt; 'GameContentSource'</dt><dd><span class="code">Resolve&nbsp;AoE2's&nbsp;content&nbsp;source:&nbsp;the&nbsp;aoe2techtree&nbsp;provider&nbsp;process.<br>
 &nbsp;<br>
 ``EXT_AOE2TECHTREE_URI``&nbsp;set&nbsp;→&nbsp;the&nbsp;ext-aoe2techtree&nbsp;gRPC&nbsp;process;<br>
-unset&nbsp;→&nbsp;the&nbsp;vendored&nbsp;dataset&nbsp;read&nbsp;in-process.&nbsp;The&nbsp;generic&nbsp;seam&nbsp;does<br>
-the&nbsp;picking;&nbsp;only&nbsp;the&nbsp;env&nbsp;name&nbsp;and&nbsp;the&nbsp;provider&nbsp;are&nbsp;AoE2's.</span></dd></dl>
+unset&nbsp;→&nbsp;a&nbsp;FUNCTIONAL&nbsp;error&nbsp;(owner&nbsp;direction&nbsp;2026-11-05:&nbsp;no&nbsp;vendored<br>
+data,&nbsp;the&nbsp;civs&nbsp;come&nbsp;from&nbsp;the&nbsp;provider&nbsp;—&nbsp;a&nbsp;missing&nbsp;provider&nbsp;is&nbsp;an<br>
+operational&nbsp;gap&nbsp;to&nbsp;report,&nbsp;never&nbsp;a&nbsp;silent&nbsp;local&nbsp;fallback).</span></dd></dl>
 </td></tr></table><p>
 <table class="section">
 <tr class="decor data-decor heading-text">
 <td class="section-title" colspan=3>&nbsp;<br><strong class="bigsection">Data</strong></td></tr>
     
 <tr><td class="decor data-decor"><span class="code">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span></td><td>&nbsp;</td>
-<td class="singlecolumn"><strong>__all__</strong> = ['LocalizedContent', 'resolve_aoe2_content_source']</td></tr></table>
+<td class="singlecolumn"><strong>__all__</strong> = ['LocalizedContent', 'ProviderUnavailableError', 'resolve_aoe2_content_source']</td></tr></table>
 </body></html>

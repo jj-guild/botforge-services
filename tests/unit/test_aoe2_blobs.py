@@ -14,6 +14,7 @@ import struct
 import zlib
 
 import pytest
+
 from kingdoms.core.codecs import (
     BlobDecodeError,
     decode_blob,

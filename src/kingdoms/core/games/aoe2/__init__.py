@@ -15,7 +15,6 @@ from kingdoms.game_aoe2.content_refresh import (  # noqa: F401
 from kingdoms.game_aoe2.faction_content import (  # noqa: F401
     PROVIDER_KEY,
     SUPPORTED_LOCALES,
-    TechtreeContentProvider,
 )
 from kingdoms.game_aoe2.seed import (  # noqa: F401
     MongoAoE2Database,

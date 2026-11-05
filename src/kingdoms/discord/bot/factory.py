@@ -457,10 +457,16 @@ class KingdomsBot(discord.Client):
             await self._ensure_all_pins(guild_id)
             if not maps_forum_wiring_ready():
                 return
-            from kingdoms.game_aoe2.content_refresh import refresh_aoe2_content
-
+            # The civs sync rides the GAME SERVICE (the bot never runs
+            # game code nor touches a provider): best-effort at boot, the
+            # DM panel's button re-runs it on demand.
             try:
-                await refresh_aoe2_content()
+                from kingdoms.game_aoe2.client import GameDataClient
+
+                game_uri = os.environ.get("GAME_AOE2_URI", "")
+                if game_uri:
+                    client = GameDataClient(game_uri)
+                    await client.sync_content("aoe2", "factions", timeout_s=300.0)
             except Exception:
                 logger.warning("CONTENT REFRESH at boot failed — best-effort", exc_info=True)
             await sync_maps_forum(guild_id, "aoe2", self)

@@ -22,6 +22,32 @@ class GameDataClient:
         """Keep the service address; channels are per-call (ADR-0020)."""
         self._uri = uri
 
+    async def sync_content(
+        self, game_key: str, what: str, timeout_s: float = 900.0
+    ) -> dict[str, Any]:
+        """Ask the game service to run a content sync (civs, maps).
+
+        The service runs it against ITS providers — the caller never
+        touches one. The reply carries the counts or a FUNCTIONAL error
+        the UI shows as-is. The timeout is long BY DESIGN: the maps
+        enrichment rides the Liquipedia pacing (minutes).
+        """
+        from kingdoms.core.rpc.client import build_channel
+        from kingdoms.rpc_generated.kingdoms.v1 import gamedata_pb2, gamedata_pb2_grpc
+
+        async with build_channel(self._uri) as channel:
+            stub = gamedata_pb2_grpc.GameDataStub(channel)
+            reply = await stub.SyncContent(
+                gamedata_pb2.SyncContentRequest(game_key=game_key, what=what),
+                timeout=timeout_s,
+            )
+        return {
+            "ok": reply.ok,
+            "error": reply.error,
+            "counts": dict(reply.counts),
+            "new_factions": list(reply.new_factions),
+        }
+
     async def watch(self, game_key: str, timeout_s: float = 5.0) -> dict[str, Any]:
         """Fetch the current dashboard snapshot (first stream frame)."""
         from kingdoms.core.rpc.client import build_channel

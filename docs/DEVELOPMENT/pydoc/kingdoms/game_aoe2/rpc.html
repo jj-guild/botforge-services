@@ -24,7 +24,8 @@ civs,&nbsp;aoe2lobby&nbsp;join/spectate&nbsp;URLs,&nbsp;aoe2de&nbsp;deep&nbsp;li
 <td class="singlecolumn"><table><tr><td class="multicolumn"><a href="kingdoms.rpc_generated.kingdoms.v1.gamedata_pb2.html">kingdoms.rpc_generated.kingdoms.v1.gamedata_pb2</a><br>
 </td><td class="multicolumn"><a href="kingdoms.rpc_generated.kingdoms.v1.gamedata_pb2_grpc.html">kingdoms.rpc_generated.kingdoms.v1.gamedata_pb2_grpc</a><br>
 </td><td class="multicolumn"><a href="grpc.html">grpc</a><br>
-</td><td class="multicolumn"></td></tr></table></td></tr></table><p>
+</td><td class="multicolumn"><a href="logging.html">logging</a><br>
+</td></tr></table></td></tr></table><p>
 <table class="section">
 <tr class="decor index-decor heading-text">
 <td class="section-title" colspan=3>&nbsp;<br><strong class="bigsection">Classes</strong></td></tr>
@@ -56,6 +57,14 @@ Serve&nbsp;the&nbsp;kingdoms.v1.GameData&nbsp;contract&nbsp;from&nbsp;the&nbsp;a
 <hr>
 Methods defined here:<br>
 <dl><dt>async <a name="GameDataServicer-GetCoverage"><strong>GetCoverage</strong></a>(self, request: 'gamedata_pb2.CoverageRequest', context: 'grpc.aio.ServicerContext') -&gt; 'gamedata_pb2.GameCoverage'</dt><dd><span class="code">Serve&nbsp;the&nbsp;games&nbsp;this&nbsp;process&nbsp;covers&nbsp;and&nbsp;its&nbsp;health.</span></dd></dl>
+
+<dl><dt>async <a name="GameDataServicer-SyncContent"><strong>SyncContent</strong></a>(self, request: 'gamedata_pb2.SyncContentRequest', context: 'grpc.aio.ServicerContext') -&gt; 'gamedata_pb2.SyncContentReply'</dt><dd><span class="code">Run&nbsp;the&nbsp;content&nbsp;sync&nbsp;against&nbsp;the&nbsp;game's&nbsp;providers,&nbsp;in&nbsp;here.<br>
+&nbsp;<br>
+The&nbsp;civs&nbsp;sync&nbsp;rides&nbsp;the&nbsp;aoe2techtree&nbsp;content&nbsp;provider,&nbsp;the&nbsp;maps<br>
+enrichment&nbsp;rides&nbsp;the&nbsp;liquipedia&nbsp;provider&nbsp;—&nbsp;the&nbsp;game&nbsp;service&nbsp;owns<br>
+both&nbsp;(the&nbsp;bot&nbsp;never&nbsp;touches&nbsp;a&nbsp;provider,&nbsp;it&nbsp;asks&nbsp;this&nbsp;service).<br>
+A&nbsp;provider&nbsp;failure&nbsp;comes&nbsp;back&nbsp;as&nbsp;a&nbsp;FUNCTIONAL&nbsp;error&nbsp;the&nbsp;UI&nbsp;shows<br>
+as-is;&nbsp;it&nbsp;never&nbsp;crashes&nbsp;the&nbsp;servicer.</span></dd></dl>
 
 <dl><dt>async <a name="GameDataServicer-UpdateEnrollments"><strong>UpdateEnrollments</strong></a>(self, request: 'gamedata_pb2.UpdateEnrollmentsRequest', context: 'grpc.aio.ServicerContext') -&gt; 'gamedata_pb2.UpdateEnrollmentsResponse'</dt><dd><span class="code">Forward&nbsp;the&nbsp;platform's&nbsp;enrollments&nbsp;to&nbsp;the&nbsp;realtime&nbsp;provider.</span></dd></dl>
 
@@ -101,5 +110,11 @@ The&nbsp;summary's&nbsp;``players``&nbsp;field&nbsp;rides&nbsp;as&nbsp;the&nbsp;
 ``Name(Civ),Name(Civ)``&nbsp;string&nbsp;(the&nbsp;adapter's&nbsp;metadata&nbsp;shape);&nbsp;it&nbsp;is<br>
 parsed&nbsp;into&nbsp;the&nbsp;structured&nbsp;slots&nbsp;here&nbsp;so&nbsp;the&nbsp;wire&nbsp;stays&nbsp;typed,&nbsp;and<br>
 rejoined&nbsp;on&nbsp;the&nbsp;way&nbsp;back&nbsp;(round-trip&nbsp;stable).</span></dd></dl>
-</td></tr></table>
+</td></tr></table><p>
+<table class="section">
+<tr class="decor data-decor heading-text">
+<td class="section-title" colspan=3>&nbsp;<br><strong class="bigsection">Data</strong></td></tr>
+    
+<tr><td class="decor data-decor"><span class="code">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span></td><td>&nbsp;</td>
+<td class="singlecolumn"><strong>logger</strong> = &lt;Logger kingdoms.game_aoe2 (WARNING)&gt;</td></tr></table>
 </body></html>

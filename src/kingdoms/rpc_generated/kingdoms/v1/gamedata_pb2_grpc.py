@@ -26,17 +26,7 @@ if _version_not_supported:
 
 
 class GameDataStub:
-    """Game data service (direction développeur, architecture cible):
-    one process per game (game-aoe2), the ONLY consumer of the external
-    providers (ext-librematch, ext-aoe2lobby, ...) for that game. It owns
-    the game domain tables (matches, players, stats), exploits the raw
-    provider data, and serves the consolidated state to svc-core and the
-    bot. svc-core never talks to the providers, and vice versa.
-
-    The contract is game-generic: the game is a parameter, so a future
-    game-aoe4 process serves the same contract with game_key = "aoe4".
-
-    """
+    """Missing associated documentation comment in .proto file."""
 
     def __init__(self, channel):
         """Constructor.
@@ -64,20 +54,15 @@ class GameDataStub:
                 request_serializer=kingdoms_dot_v1_dot_gamedata__pb2.UpdateEnrollmentsRequest.SerializeToString,
                 response_deserializer=kingdoms_dot_v1_dot_gamedata__pb2.UpdateEnrollmentsResponse.FromString,
                 _registered_method=True)
+        self.SyncContent = channel.unary_unary(
+                '/kingdoms.v1.GameData/SyncContent',
+                request_serializer=kingdoms_dot_v1_dot_gamedata__pb2.SyncContentRequest.SerializeToString,
+                response_deserializer=kingdoms_dot_v1_dot_gamedata__pb2.SyncContentReply.FromString,
+                _registered_method=True)
 
 
 class GameDataServicer:
-    """Game data service (direction développeur, architecture cible):
-    one process per game (game-aoe2), the ONLY consumer of the external
-    providers (ext-librematch, ext-aoe2lobby, ...) for that game. It owns
-    the game domain tables (matches, players, stats), exploits the raw
-    provider data, and serves the consolidated state to svc-core and the
-    bot. svc-core never talks to the providers, and vice versa.
-
-    The contract is game-generic: the game is a parameter, so a future
-    game-aoe4 process serves the same contract with game_key = "aoe4".
-
-    """
+    """Missing associated documentation comment in .proto file."""
 
     def GetCoverage(self, request, context):
         """Declare which games this service covers and per-game capabilities.
@@ -112,6 +97,14 @@ class GameDataServicer:
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
+    def SyncContent(self, request, context):
+        """The content sync (civs, maps): the game service runs it against ITS
+        providers — the bot never touches a provider, it asks the service.
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
 
 def add_GameDataServicer_to_server(servicer, server):
     rpc_method_handlers = {
@@ -135,6 +128,11 @@ def add_GameDataServicer_to_server(servicer, server):
                     request_deserializer=kingdoms_dot_v1_dot_gamedata__pb2.UpdateEnrollmentsRequest.FromString,
                     response_serializer=kingdoms_dot_v1_dot_gamedata__pb2.UpdateEnrollmentsResponse.SerializeToString,
             ),
+            'SyncContent': grpc.unary_unary_rpc_method_handler(
+                    servicer.SyncContent,
+                    request_deserializer=kingdoms_dot_v1_dot_gamedata__pb2.SyncContentRequest.FromString,
+                    response_serializer=kingdoms_dot_v1_dot_gamedata__pb2.SyncContentReply.SerializeToString,
+            ),
     }
     generic_handler = grpc.method_handlers_generic_handler(
             'kingdoms.v1.GameData', rpc_method_handlers)
@@ -144,17 +142,7 @@ def add_GameDataServicer_to_server(servicer, server):
 
  # This class is part of an EXPERIMENTAL API.
 class GameData:
-    """Game data service (direction développeur, architecture cible):
-    one process per game (game-aoe2), the ONLY consumer of the external
-    providers (ext-librematch, ext-aoe2lobby, ...) for that game. It owns
-    the game domain tables (matches, players, stats), exploits the raw
-    provider data, and serves the consolidated state to svc-core and the
-    bot. svc-core never talks to the providers, and vice versa.
-
-    The contract is game-generic: the game is a parameter, so a future
-    game-aoe4 process serves the same contract with game_key = "aoe4".
-
-    """
+    """Missing associated documentation comment in .proto file."""
 
     @staticmethod
     def GetCoverage(request,
@@ -254,6 +242,33 @@ class GameData:
             '/kingdoms.v1.GameData/UpdateEnrollments',
             kingdoms_dot_v1_dot_gamedata__pb2.UpdateEnrollmentsRequest.SerializeToString,
             kingdoms_dot_v1_dot_gamedata__pb2.UpdateEnrollmentsResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def SyncContent(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/kingdoms.v1.GameData/SyncContent',
+            kingdoms_dot_v1_dot_gamedata__pb2.SyncContentRequest.SerializeToString,
+            kingdoms_dot_v1_dot_gamedata__pb2.SyncContentReply.FromString,
             options,
             channel_credentials,
             insecure,

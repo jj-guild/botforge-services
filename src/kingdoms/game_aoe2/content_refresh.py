@@ -19,17 +19,15 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from pathlib import Path
 from typing import Any
 
 from kingdoms.core.ids import slug_id
 
 logger = logging.getLogger("kingdoms.core.content_refresh")
 
-DATASET_DIR = Path(__file__).resolve().parents[5] / "data" / "core" / "aoe2techtree"
 
 
-async def refresh_aoe2_content(dataset_dir: Path = DATASET_DIR) -> dict[str, int | list[str]]:
+async def refresh_aoe2_content() -> dict[str, int | list[str]]:
     """Reconcile the catalog and per-locale content with the dataset.
 
     Returns the per-section counts (``factions`` created, ``content_docs``
@@ -42,18 +40,14 @@ async def refresh_aoe2_content(dataset_dir: Path = DATASET_DIR) -> dict[str, int
     from kingdoms.core.services.faction_content import FactionContentService
     from kingdoms.core.services.game_data import GameDataService
     from kingdoms.game_aoe2.content_source import resolve_aoe2_content_source
-    from kingdoms.game_aoe2.faction_content import (
-        SUPPORTED_LOCALES,
-        TechtreeContentProvider,
-    )
+    from kingdoms.game_aoe2.faction_content import SUPPORTED_LOCALES
 
     from .seed import MongoAoE2Database
 
-    provider = TechtreeContentProvider.from_files(
-        (dataset_dir / "data.json").read_text(encoding="utf-8"),
-        {lng: (dataset_dir / f"strings-{lng}.json").read_text(encoding="utf-8") for lng in SUPPORTED_LOCALES},
-    )
-    source = resolve_aoe2_content_source(provider)
+    # NO vendored data (owner direction 2026-11-05): the civs come from
+    # the aoe2techtree provider process, over the Content contract. The
+    # dataset files are gone; a missing provider is a FUNCTIONAL error.
+    source = resolve_aoe2_content_source(None)
     database = get_async_database()
     game_data = GameDataService(MongoAoE2Database(database))
     content = FactionContentService(database)
@@ -205,20 +199,25 @@ async def _resolve_map_seeds(contact: str, names: list[str]) -> dict[str, Any]:
     """Resolve many map seeds — through the ext-liquipedia provider.
 
     The provider owns the Liquipedia access (ADR-0020): ONE client per
-    environment. Its seed worker COALESCES every concurrent request —
-    this refresh's whole batch lands in a few batched ``action=query``
-    calls at the light pacing, behind the circuit breaker. The
-    in-process provider remains the transition fallback (no URI).
+    environment, no in-process fallback (owner direction 2026-11-05:
+    no external call outside the providers). Its seed worker COALESCES
+    every concurrent request — this refresh's whole batch lands in a
+    few batched ``action=query`` calls at the light pacing, behind the
+    circuit breaker. A missing provider is a FUNCTIONAL error.
     Returns {cache_key: seed}; a rate-limited upstream raises the
     circuit error to the caller.
     """
     import os
 
+    from kingdoms.game_aoe2.content_source import ProviderUnavailableError
     from kingdoms.mapsdata.seed import MapSeed
 
     provider_uri = os.environ.get("EXT_LIQUIPEDIA_URI", "")
     if not provider_uri:
-        return await asyncio.to_thread(_resolve_map_seeds_batch, contact, names)
+        raise ProviderUnavailableError(
+            "the liquipedia provider is not configured "
+            "(EXT_LIQUIPEDIA_URI) — the maps enrichment cannot run"
+        )
 
     from kingdoms.core.rpc.content_client import ContentProviderClient
 
@@ -264,51 +263,6 @@ async def _resolve_map_seeds(contact: str, names: list[str]) -> dict[str, Any]:
         name, seed = result
         out[_title_variants_key(name)] = seed
     return out
-
-
-def _resolve_map_seeds_batch(contact: str, names: list[str]) -> dict[str, Any]:
-    """Resolve many map seeds in a few BATCHED Liquipedia calls.
-
-    Runs in a worker thread (the client is synchronous): one
-    ``map_data_batch`` covers up to 50 pages per ``action=query``
-    request at the light 2 s pacing \u2014 instead of one
-    ``action=parse`` per map at 30 s each (the API terms,
-    https://liquipedia.net/api-terms-of-use). Returns {cache_key: seed}
-    for the pages Liquipedia knows; a refused image licence simply
-    leaves the page absent.
-    """
-    from kingdoms.mapsdata.liquipedia import LiquipediaMapsProvider, query_tags
-    from kingdoms.mapsdata.seed import MapSeed
-
-    user_agent = f"KingdomsBot/1.0 (https://github.com/merlin-pinpin-org/kingdoms; {contact})"
-    provider = LiquipediaMapsProvider(user_agent)
-    out: dict[str, MapSeed] = {}
-    try:
-        data = provider.map_data_batch(names)
-        for key, d in data.items():
-            out[key] = MapSeed(
-                name=d.info.name,
-                description=d.info.description,
-                resource_url=d.info.source_url,
-                image_url=d.image_url,
-                icon_url=d.icon_url,
-                terrain=d.info.terrain,
-                nomad=d.info.nomad,
-                walls=d.info.walls,
-                tc=d.info.tc,
-                size=d.info.size,
-                map_type=d.info.map_type,
-                public=True,
-                game_versions=d.info.game_versions,
-                versions=tuple(
-                    {"name": v.name, "description": v.description, "details": list(v.details)} for v in d.info.versions
-                ),
-                tags=query_tags(d.info),
-            )
-    finally:
-        provider.close()
-    return out
-
 
 async def _legacy_renames(database: Any, collections: tuple[tuple[str, str], ...]) -> dict[str, str]:
     """Scan the collections for legacy ids worth renaming.
