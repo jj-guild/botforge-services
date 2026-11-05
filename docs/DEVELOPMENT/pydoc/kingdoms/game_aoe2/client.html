@@ -48,6 +48,13 @@ Typed&nbsp;client&nbsp;for&nbsp;the&nbsp;kingdoms.v1.GameData&nbsp;service&nbsp;
 
 <dl><dt>async <a name="GameDataClient-get_last_completed_times"><strong>get_last_completed_times</strong></a>(self, profile_ids: 'list[str]', timeout_s: 'float' = 15.0) -&gt; 'dict[str, int]'</dt><dd><span class="code">Fetch&nbsp;the&nbsp;profiles'&nbsp;last&nbsp;completed-match&nbsp;times&nbsp;(the&nbsp;game's&nbsp;matches).</span></dd></dl>
 
+<dl><dt>async <a name="GameDataClient-get_map_seed"><strong>get_map_seed</strong></a>(self, map_key: 'str', timeout_s: 'float' = 120.0) -&gt; 'Any | None'</dt><dd><span class="code">Resolve&nbsp;one&nbsp;map's&nbsp;seed&nbsp;through&nbsp;the&nbsp;game&nbsp;service&nbsp;(the&nbsp;import&nbsp;flow).<br>
+&nbsp;<br>
+The&nbsp;service&nbsp;proxies&nbsp;its&nbsp;liquipedia&nbsp;provider&nbsp;—&nbsp;the&nbsp;seed&nbsp;worker's<br>
+coalescing,&nbsp;pacing&nbsp;and&nbsp;circuit&nbsp;breaker&nbsp;apply.&nbsp;The&nbsp;timeout&nbsp;is<br>
+long&nbsp;BY&nbsp;DESIGN&nbsp;(the&nbsp;provider&nbsp;may&nbsp;back&nbsp;off&nbsp;on&nbsp;a&nbsp;rate-limited<br>
+upstream);&nbsp;a&nbsp;circuit-open&nbsp;provider&nbsp;raises&nbsp;the&nbsp;functional&nbsp;error.</span></dd></dl>
+
 <dl><dt>async <a name="GameDataClient-get_match_result"><strong>get_match_result</strong></a>(self, profile_ids: 'list[str]', started_after: 'int') -&gt; 'Any | None'</dt><dd><span class="code">Fetch&nbsp;a&nbsp;finished&nbsp;match's&nbsp;outcome&nbsp;through&nbsp;the&nbsp;game&nbsp;service.</span></dd></dl>
 
 <dl><dt>async <a name="GameDataClient-get_player_stats"><strong>get_player_stats</strong></a>(self, profile_id: 'str') -&gt; 'Any | None'</dt><dd><span class="code">Fetch&nbsp;a&nbsp;profile's&nbsp;stats&nbsp;blocks&nbsp;through&nbsp;the&nbsp;game&nbsp;service.<br>

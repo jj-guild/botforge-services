@@ -183,12 +183,14 @@ class GameDataServicer(gamedata_pb2_grpc.GameDataServicer):
         poll_interval_s: float = 2.0,
         enrollments: Any = None,
         stats_provider: Any = None,
+        map_seeds: Any = None,
     ) -> None:
         """Wire the aggregator, the poll interval, the enrollments and the stats proxy."""
         self._aggregator = aggregator
         self._poll_interval_s = poll_interval_s
         self._enrollments = enrollments
         self._stats_provider = stats_provider
+        self._map_seeds = map_seeds
 
     async def GetCoverage(
         self,
@@ -372,6 +374,28 @@ class GameDataServicer(gamedata_pb2_grpc.GameDataServicer):
         times = await _last_completed_matches_ms(database, list(request.profile_ids))
         return gamedata_pb2.GetLastCompletedTimesReply(times_ms=times)
 
+    async def GetMapSeed(
+        self,
+        request: Any,
+        context: grpc.aio.ServicerContext,
+    ) -> Any:
+        """Proxy the map seed lookup through the game's liquipedia provider.
+
+        The import flow (the admin's map creation) asks the GAME SERVICE;
+        the service asks its content provider — the caller never sees
+        the provider (rule 4), and the seed worker's coalescing, pacing
+        and circuit breaker apply as one.
+        """
+        if self._map_seeds is None:
+            await context.abort(grpc.StatusCode.UNIMPLEMENTED, "map seed provider not wired")
+            raise AssertionError
+        from kingdoms.rpc_generated.kingdoms.v1 import content_pb2
+
+        descriptor = await self._map_seeds.get_map_seed(request.game_key, request.map_key)
+        if descriptor is None:
+            return content_pb2.MapSeedReply(found=False)
+        return _map_seed_reply_of(descriptor)
+
     async def UpdateEnrollments(
         self,
         request: gamedata_pb2.UpdateEnrollmentsRequest,
@@ -426,3 +450,35 @@ async def _last_completed_matches_ms(database: Any, profile_ids: list[str]) -> d
     except Exception:
         logger.warning("last-completed aggregation failed", exc_info=True)
     return results
+
+
+def _map_seed_reply_of(descriptor: dict[str, Any]) -> Any:
+    """Serialize one map seed descriptor into the Content wire reply."""
+    from kingdoms.rpc_generated.kingdoms.v1 import content_pb2
+
+    return content_pb2.MapSeedReply(
+        found=True,
+        name=str(descriptor.get("name", "")),
+        description=str(descriptor.get("description", "")),
+        resource_url=str(descriptor.get("resource_url", "")),
+        image_url=str(descriptor.get("image_url", "")),
+        icon_url=str(descriptor.get("icon_url", "")),
+        terrain=str(descriptor.get("terrain", "")),
+        size=str(descriptor.get("size", "")),
+        map_type=str(descriptor.get("map_type", "")),
+        licence_ok=bool(descriptor.get("licence_ok", True)),
+        licence_note=str(descriptor.get("licence_note", "")),
+        walls=bool(descriptor.get("walls", False)),
+        nomad=bool(descriptor.get("nomad", False)),
+        tc=bool(descriptor.get("tc", False)),
+        game_versions=[str(v) for v in descriptor.get("game_versions", ()) or ()],
+        versions=[
+            content_pb2.MapSeedVersion(
+                name=str(v.get("name", "")),
+                description=str(v.get("description", "")),
+                details=[str(d) for d in v.get("details", ()) or ()],
+            )
+            for v in descriptor.get("versions", ()) or ()
+        ],
+        tags=[str(t) for t in descriptor.get("tags", ()) or ()],
+    )

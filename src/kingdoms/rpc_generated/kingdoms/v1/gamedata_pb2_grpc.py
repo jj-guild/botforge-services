@@ -3,6 +3,7 @@
 import grpc
 import warnings
 
+from kingdoms.rpc_generated.kingdoms.v1 import content_pb2 as kingdoms_dot_v1_dot_content__pb2
 from kingdoms.rpc_generated.kingdoms.v1 import game_pb2 as kingdoms_dot_v1_dot_game__pb2
 from kingdoms.rpc_generated.kingdoms.v1 import gamedata_pb2 as kingdoms_dot_v1_dot_gamedata__pb2
 
@@ -80,6 +81,11 @@ class GameDataStub:
                 request_serializer=kingdoms_dot_v1_dot_gamedata__pb2.GetLastCompletedTimesRequest.SerializeToString,
                 response_deserializer=kingdoms_dot_v1_dot_gamedata__pb2.GetLastCompletedTimesReply.FromString,
                 _registered_method=True)
+        self.GetMapSeed = channel.unary_unary(
+                '/kingdoms.v1.GameData/GetMapSeed',
+                request_serializer=kingdoms_dot_v1_dot_content__pb2.MapSeedRequest.SerializeToString,
+                response_deserializer=kingdoms_dot_v1_dot_content__pb2.MapSeedReply.FromString,
+                _registered_method=True)
 
 
 class GameDataServicer:
@@ -155,6 +161,14 @@ class GameDataServicer:
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
+    def GetMapSeed(self, request, context):
+        """The map seed lookup (the import flow): the game service proxies its
+        liquipedia content provider — the Content contract's own wire.
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
 
 def add_GameDataServicer_to_server(servicer, server):
     rpc_method_handlers = {
@@ -202,6 +216,11 @@ def add_GameDataServicer_to_server(servicer, server):
                     servicer.GetLastCompletedTimes,
                     request_deserializer=kingdoms_dot_v1_dot_gamedata__pb2.GetLastCompletedTimesRequest.FromString,
                     response_serializer=kingdoms_dot_v1_dot_gamedata__pb2.GetLastCompletedTimesReply.SerializeToString,
+            ),
+            'GetMapSeed': grpc.unary_unary_rpc_method_handler(
+                    servicer.GetMapSeed,
+                    request_deserializer=kingdoms_dot_v1_dot_content__pb2.MapSeedRequest.FromString,
+                    response_serializer=kingdoms_dot_v1_dot_content__pb2.MapSeedReply.SerializeToString,
             ),
     }
     generic_handler = grpc.method_handlers_generic_handler(
@@ -447,6 +466,33 @@ class GameData:
             '/kingdoms.v1.GameData/GetLastCompletedTimes',
             kingdoms_dot_v1_dot_gamedata__pb2.GetLastCompletedTimesRequest.SerializeToString,
             kingdoms_dot_v1_dot_gamedata__pb2.GetLastCompletedTimesReply.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def GetMapSeed(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/kingdoms.v1.GameData/GetMapSeed',
+            kingdoms_dot_v1_dot_content__pb2.MapSeedRequest.SerializeToString,
+            kingdoms_dot_v1_dot_content__pb2.MapSeedReply.FromString,
             options,
             channel_credentials,
             insecure,

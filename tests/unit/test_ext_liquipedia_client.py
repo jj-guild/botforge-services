@@ -14,7 +14,7 @@ from typing import Any, ClassVar
 import httpx
 import pytest
 
-from kingdoms.mapsdata import (
+from kingdoms.ext_liquipedia.liquipedia import (
     LiquipediaMapsProvider,
     MapLicenseError,
 )
@@ -220,7 +220,7 @@ def test_versions_absent_section_yields_no_variants() -> None:
 
 def test_query_tags_normalize_info() -> None:
     """Tags are stable, lowercase, and water derives from hybrid/water."""
-    from kingdoms.mapsdata.liquipedia import query_tags
+    from kingdoms.ext_liquipedia.liquipedia import query_tags
 
     provider = _make_provider(_mock_transport(ARABIA_WIKITEXT))
     info = provider.map_data("Arabia").info
@@ -242,7 +242,7 @@ def test_pacing_is_shared_across_provider_instances(monkeypatch: pytest.MonkeyPa
     hammered the API into 429s. The markers are module-level: a second
     provider paces against the first one's last parse.
     """
-    import kingdoms.mapsdata.liquipedia as lp
+    import kingdoms.ext_liquipedia.liquipedia as lp
 
     sleeps: list[float] = []
     calls: list[str] = []
@@ -284,7 +284,7 @@ def test_pacing_is_shared_across_provider_instances(monkeypatch: pytest.MonkeyPa
 
 def test_429_honors_retry_after_then_retries(monkeypatch: pytest.MonkeyPatch) -> None:
     """A 429 is 'later', not 'no such page' — retry once after Retry-After."""
-    import kingdoms.mapsdata.liquipedia as lp
+    import kingdoms.ext_liquipedia.liquipedia as lp
 
     attempts: list[int] = []
     sleeps: list[float] = []
@@ -313,53 +313,6 @@ def test_429_honors_retry_after_then_retries(monkeypatch: pytest.MonkeyPatch) ->
 
 
 @pytest.mark.asyncio
-async def test_fetch_map_seed_runs_off_the_event_loop(monkeypatch: pytest.MonkeyPatch) -> None:
-    """The legacy seed path never blocks the event loop (kingdoms-services#295).
-
-    The sync Liquipedia client sleeps for API rate limits: on the loop it
-    froze the gateway heartbeat during bulk imports. A slow seed must
-    therefore ride a worker thread — the loop stays responsive while it
-    runs.
-    """
-    import asyncio
-    import threading
-    import time
-
-    from kingdoms.mapsdata.seed import fetch_map_seed
-
-    monkeypatch.setenv("PROVIDER_CONTACT", "dev@example.com")
-    monkeypatch.delenv("EXT_LIQUIPEDIA_URI", raising=False)
-
-    loop_thread = threading.get_ident()
-    provider_threads: list[int] = []
-
-    class _SlowProvider:
-        def __init__(self, user_agent: str) -> None:
-            provider_threads.append(threading.get_ident())
-
-        def map_data(self, page: str) -> None:
-            time.sleep(0.4)  # the blocking rate-limit wait, condensed
-            raise RuntimeError("no page")
-
-        def close(self) -> None:
-            pass
-
-    monkeypatch.setattr(
-        "kingdoms.mapsdata.liquipedia.LiquipediaMapsProvider", _SlowProvider, raising=False
-    )
-
-    async def _heartbeat() -> None:
-        await asyncio.sleep(0.05)
-
-    heartbeat = asyncio.create_task(_heartbeat())
-    seed = await fetch_map_seed("Arabia")
-    assert seed is None  # unknown page degrades to None
-    assert provider_threads, "the provider ran"
-    # The blocking client ran off the event loop's thread — the heartbeat
-    # stayed serviced while it slept.
-    assert provider_threads[0] != loop_thread, "the sync Liquipedia client ran on the event loop"
-    assert heartbeat.done(), "the event loop stayed responsive during seeding"
-
 
 def test_map_data_batch_resolves_pages_and_images_in_few_requests(
     monkeypatch: pytest.MonkeyPatch,
@@ -370,7 +323,7 @@ def test_map_data_batch_resolves_pages_and_images_in_few_requests(
     the batch rides action=query (2 s pacing) and carries up to 50
     pages per call \u2014 a whole catalog in a handful of requests.
     """
-    import kingdoms.mapsdata.liquipedia as lp
+    import kingdoms.ext_liquipedia.liquipedia as lp
 
     calls: list[str] = []
 
@@ -450,7 +403,7 @@ def test_liquipedia_circuit_opens_after_exhausted_429s() -> None:
     """Exhausted 429 retries OPEN the circuit: every further call fails
     fast, zero HTTP traffic, until the window lapses."""
 
-    from kingdoms.mapsdata import liquipedia as lp
+    from kingdoms.ext_liquipedia import liquipedia as lp
 
     class _Always429:
         status_code = 429
@@ -501,7 +454,7 @@ def test_liquipedia_circuit_opens_after_exhausted_429s() -> None:
 
 def test_liquipedia_circuit_success_resets_the_streak() -> None:
 
-    from kingdoms.mapsdata import liquipedia as lp
+    from kingdoms.ext_liquipedia import liquipedia as lp
 
     class _Ok:
         status_code = 200

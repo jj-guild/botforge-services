@@ -1,6 +1,6 @@
 """ext-liquipedia source: Liquipedia access + the provider's own tables.
 
-The ``LiquipediaMapsProvider`` (moved from ``kingdoms.mapsdata``)
+The ``LiquipediaMapsProvider`` (the provider-owned HTTP client)
 carries the MediaWiki access with its terms-of-use compliance (custom
 User-Agent, rate limits, licence guard). This module wraps it with the
 provider's persistence: every fetched page is stored raw in Mongo
@@ -29,10 +29,10 @@ from kingdoms.ext_liquipedia import (
     PAGE_CACHE_TTL_S,
     PAGES_COLLECTION,
 )
-from kingdoms.mapsdata.liquipedia import (
+from kingdoms.ext_liquipedia.liquipedia import (
     LiquipediaMapsProvider,
 )
-from kingdoms.mapsdata.liquipedia import (
+from kingdoms.ext_liquipedia.liquipedia import (
     query_tags as _query_tags,
 )
 

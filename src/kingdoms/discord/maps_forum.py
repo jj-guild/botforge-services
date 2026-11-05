@@ -398,9 +398,18 @@ async def _migrate_stale_map_doc(
 ) -> dict[str, Any] | None:
     """Re-resolve a stale Liquipedia map doc and store the new keys."""
     try:
-        from kingdoms.mapsdata.seed import LiquipediaUnconfiguredError, fetch_map_seed
+        import os as _os
 
-        seed = await fetch_map_seed(str(doc.get("name") or entity_id.rsplit(":", 1)[-1]))
+        from kingdoms.aoe2.map_seed import LiquipediaUnconfiguredError
+        from kingdoms.game_aoe2.client import GameDataClient
+
+        _uri = _os.environ.get("GAME_AOE2_URI", "")
+        _client = GameDataClient(_uri) if _uri else None
+        seed = (
+            await _client.get_map_seed(str(doc.get("name") or entity_id.rsplit(":", 1)[-1]))
+            if _client is not None
+            else None
+        )
     except LiquipediaUnconfiguredError:
         return None
     except Exception:

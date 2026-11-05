@@ -28,7 +28,7 @@ def main() -> None:
     )
     # Under DEBUG the drivers drown the signal (pymongo heartbeats every
     # 10 s, httpcore frames): keep them at WARNING — the 429 diagnostics
-    # ride the kingdoms.mapsdata logger.
+    # ride the kingdoms.ext_liquipedia logger.
     for noisy in ("pymongo", "httpcore", "httpx"):
         logging.getLogger(noisy).setLevel(logging.WARNING)
     asyncio.run(_serve())

@@ -133,7 +133,7 @@ async def refresh_aoe2_maps() -> dict[str, int]:
 
         contact = provider_contact()
         if not contact:
-            from kingdoms.mapsdata.seed import LiquipediaUnconfiguredError
+            from kingdoms.aoe2.map_seed import LiquipediaUnconfiguredError
 
             raise LiquipediaUnconfiguredError("PROVIDER_CONTACT is not set")
 
@@ -209,8 +209,8 @@ async def _resolve_map_seeds(contact: str, names: list[str]) -> dict[str, Any]:
     """
     import os
 
+    from kingdoms.aoe2.map_seed import MapSeed
     from kingdoms.game_aoe2.content_source import ProviderUnavailableError
-    from kingdoms.mapsdata.seed import MapSeed
 
     provider_uri = os.environ.get("EXT_LIQUIPEDIA_URI", "")
     if not provider_uri:

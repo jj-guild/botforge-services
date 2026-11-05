@@ -259,11 +259,11 @@ class GamesMapCreateModal(discord.ui.Modal):
         seed = None
         circuit_note = ""
         if owner_guild_id is not None:
-            from kingdoms.mapsdata.liquipedia import LiquipediaCircuitOpenError
-            from kingdoms.mapsdata.seed import LiquipediaUnconfiguredError, fetch_map_seed
+            from kingdoms.aoe2.map_seed import LiquipediaCircuitOpenError, LiquipediaUnconfiguredError
 
             try:
-                seed = await fetch_map_seed(name)
+                client = _game_seed_client()
+                seed = await client.get_map_seed(name) if client is not None else None
             except LiquipediaUnconfiguredError:
                 seed = None
             except LiquipediaCircuitOpenError as exc:
@@ -1270,9 +1270,10 @@ class GamesMapImportModal(discord.ui.Modal):
             "Le r\u00e9sultat sera post\u00e9 dans ce message.",
             ephemeral=True,
         )
-        from kingdoms.mapsdata.seed import LiquipediaUnconfiguredError, fetch_map_seed
+        from kingdoms.aoe2.map_seed import LiquipediaUnconfiguredError
         try:
-            seed = await fetch_map_seed(name)
+            client = _game_seed_client()
+            seed = await client.get_map_seed(name) if client is not None else None
         except LiquipediaUnconfiguredError:
             await interaction.followup.edit_message(
                 progress.id,
@@ -1337,13 +1338,12 @@ async def _bulk_import_maps(
     is awaited after every line so the caller can stream the batch's
     progress in real time.
     """
-    from kingdoms.mapsdata.seed import fetch_map_seed
 
     async def _report(name: str, ok: bool, reason: str = "") -> None:
         if on_result is not None:
             await on_result(name, ok, reason)
 
-    from kingdoms.mapsdata.liquipedia import LiquipediaCircuitOpenError
+    from kingdoms.aoe2.map_seed import LiquipediaCircuitOpenError
 
     created: list[Any] = []
     failures: list[tuple[str, str]] = []
@@ -1355,7 +1355,8 @@ async def _bulk_import_maps(
             if existing is not None and existing.archived_at is None:
                 await _report(p.page_name, True, "déjà présente")
                 continue
-            seed = await fetch_map_seed(p.page_name)
+            client = _game_seed_client()
+            seed = await client.get_map_seed(p.page_name) if client is not None else None
             if seed is None:
                 failures.append((p.page_name, "aucune page Liquipedia"))
                 await _report(p.page_name, False, "aucune page Liquipedia")
@@ -1542,7 +1543,7 @@ class GamesBulkImportModal(discord.ui.Modal):
         # rate limits) — the user sees the import working instead of a
         # silent wait.
         await interaction.response.defer(ephemeral=True, thinking=True)
-        from kingdoms.mapsdata.bulk_import import parse_import_line
+        from kingdoms.aoe2.bulk_import import parse_import_line
 
         parsed = [parse_import_line(item) for item in str(self.lines.value or "").splitlines()]
         parsed = [p for p in parsed if p.raw]
@@ -1700,3 +1701,13 @@ def register_games_admin_items(bot: discord.Client) -> None:
         GamesPoolPublishButton,
         GamesPoolHardDeleteButton,
     )
+
+
+def _game_seed_client() -> Any | None:
+    """Return the game service's client for the map seed lookups (rule 4)."""
+    import os
+
+    from kingdoms.game_aoe2.client import GameDataClient
+
+    uri = os.environ.get("GAME_AOE2_URI", "")
+    return GameDataClient(uri) if uri else None

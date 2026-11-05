@@ -47,12 +47,25 @@ async def _serve() -> None:
         from kingdoms.core.rpc.game_client import GameProviderClient
 
         stats_provider = GameProviderClient(stats_uri, "ext-librematch", GAME_KEY)
+    # The map seed door: the game's liquipedia content provider (the
+    # import flow's enrichment rides it through the GetMapSeed proxy).
+    map_seeds = None
+    seeds_uri = os.environ.get("EXT_LIQUIPEDIA_URI", "")
+    if seeds_uri:
+        from kingdoms.core.rpc.content_client import ContentProviderClient
+
+        map_seeds = ContentProviderClient(seeds_uri)
     server = build_status_server(
         lambda: CoreStatus(version=__version__, process=PROCESS_LABEL),
     )
     add_gamedata_servicer(
         server,
-        GameDataServicer(aggregator, enrollments=enrollments, stats_provider=stats_provider),
+        GameDataServicer(
+            aggregator,
+            enrollments=enrollments,
+            stats_provider=stats_provider,
+            map_seeds=map_seeds,
+        ),
     )
 
     # The game's collections are ITS OWN (rule 5): the indexes are
