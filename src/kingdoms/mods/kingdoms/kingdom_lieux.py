@@ -2622,25 +2622,60 @@ def _strip_purchases(content: str, strings: dict[str, Any]) -> str:
 
 
 def _comptes_canary_view(
+    body: str,
     strings: dict[str, Any],
     locale: str,
     held: list[tuple[str, str, int]],
     selected_card: str | None = None,
+    card_media: str | None = None,
 ) -> Any:
-    """Line 1 of the canary comptes view: 🚀 Utiliser (ONLY while the
-    SELECTED card is a usable one) · 📜 Historique achats · ⚔️
-    Historique actions · 🚪 Sortir (red) — the card buttons ride the
-    rows below, five per row."""
+    """comptes-cv2-v1 (Drasah 05/11): the Chambre des comptes sheet is
+    a Components V2 window on the PROVEN remarts gabarit — the chambre
+    illustration rides ABOVE the panel (top-level MediaGallery), the
+    Container holds the body text, the card image (the dos de carte by
+    default, the revealed art while a card is selected) and the
+    buttons. Line 1 = 🚀 Utiliser (ONLY while the SELECTED card is a
+    usable one) · 📜 Historique achats · ⚔️ Historique actions · 🚪
+    Sortir (red) — the card buttons ride the rows below, five per row."""
     from kingdoms.mods.kingdoms.kingdom_persistent import KingdomMarketUseButton
 
-    view = discord.ui.View(timeout=None)
+    container: discord.ui.Container[Any] = discord.ui.Container(
+        discord.ui.TextDisplay(body),
+        accent_colour=discord.Colour.gold(),
+    )
+    # comptes-cv2-v1: the card image lives INSIDE the container, under
+    # the body — the dos de carte (or the revealed art) keeps its own
+    # gallery and NEVER sits side by side with the illustration
+    # (Drasah 05/11: l'illustration est INTERDITE dans la zone carte,
+    # elle vit uniquement en tête de fenêtre).
+    if card_media:
+        container.add_item(
+            discord.ui.MediaGallery(discord.MediaGalleryItem(media=card_media))
+        )
+    row1: list[Any] = []
     if selected_card is not None and _card_is_usable(selected_card):
-        view.add_item(KingdomMarketUseButton(selected_card, strings, row=0))
-    view.add_item(KingdomLieuHistButton("achats", strings, row=0))
-    view.add_item(KingdomLieuHistButton("actions", strings, row=0))
-    view.add_item(_sortir(locale, row=0))
-    for offset, (key, _line, _stock) in enumerate(held):
-        view.add_item(KingdomLieuCardInfoButton(key, strings, row=1 + offset // 5))
+        row1.append(KingdomMarketUseButton(selected_card, strings))
+    row1.append(KingdomLieuHistButton("achats", strings))
+    row1.append(KingdomLieuHistButton("actions", strings))
+    row1.append(_sortir(locale))
+    rows: list[list[Any]] = [row1]
+    current: list[Any] = []
+    for key, _line, _stock in held:
+        current.append(KingdomLieuCardInfoButton(key, strings))
+        if len(current) == 5:
+            rows.append(current)
+            current = []
+    if current:
+        rows.append(current)
+    for row in rows:
+        container.add_item(discord.ui.ActionRow(*row))
+    view = discord.ui.LayoutView(timeout=None)
+    view.add_item(
+        discord.ui.MediaGallery(
+            discord.MediaGalleryItem(media="attachment://chambre_des_comptes.png")
+        )
+    )
+    view.add_item(container)
     return view
 
 
@@ -2657,22 +2692,53 @@ async def _comptes_canary(
     strings: dict[str, Any],
     locale: str,
     selected_card: str | None = None,
-) -> tuple[str, list[Any], Any]:
-    """Build the CANARY Chambre des comptes sheet (comptes-rows-v1):
-    balance + cards in hand only, the canary line-1 view, the purchases
-    and the uses living behind their history buttons."""
+    extra_text: str | None = None,
+) -> tuple[Any, list[Any]]:
+    """Build the CANARY Chambre des comptes sheet (comptes-cv2-v1,
+    Drasah 05/11): balance + cards in hand only, the purchases and the
+    uses living behind their history buttons. Returns (LayoutView,
+    files) — the window is a Components V2 message: the chambre
+    illustration rides in the TOP gallery (au-dessus de la vue,
+    Drasah 05/11), the card image (dos de carte, or the revealed art)
+    in the container gallery, the body (+ fiche) text in TextDisplays.
+    A CV2 attachment that no component references does NOT render at
+    all — every file sent must be referenced by a gallery."""
     from kingdoms.mods.kingdoms.kingdom_persistent import (
+        _market_card_back_file,
+        _market_card_file,
         _market_ledger_cards,
         _market_ledger_content,
     )
 
-    content, card_files, _classic_view = await _market_ledger_content(
+    content, _card_files, _classic_view = await _market_ledger_content(
         wiring, kingdom, strings
     )
     held = await _market_ledger_cards(wiring, str(getattr(kingdom, "id", "")), strings)
     content = _strip_purchases(content, strings)
-    view = _comptes_canary_view(strings, locale, held, selected_card)
-    return content, list(card_files or []), view
+    if extra_text:
+        # keep the v6 blank line between the body and the fiche block
+        content = "\n\n".join([content, extra_text])
+    # comptes-cv2-v1: the card image keeps its v6 behaviour (Drasah:
+    # « la partie carte est bien codée » — dos de carte par défaut,
+    # art de la carte sélectionnée à la révélation, pas de retour au
+    # dos). The unreferenced held-card arts of the classic sheet no
+    # longer travel — the container gallery is the single card image.
+    if selected_card is not None:
+        card_file = _market_card_file(selected_card) or _market_card_back_file()
+    else:
+        card_file = _market_card_back_file()
+    files: list[Any] = []
+    card_media: str | None = None
+    if card_file is not None:
+        files.append(card_file)
+        card_media = f"attachment://{card_file.filename}"
+    # The chambre illustration ALWAYS rides along — the top gallery
+    # references it (mandatory in CV2).
+    files.extend(_lieu_files("chambre des comptes.png", "chambre_des_comptes.png"))
+    view = _comptes_canary_view(
+        content, strings, locale, held, selected_card, card_media
+    )
+    return view, files
 
 
 class KingdomLieuHistButton(
@@ -2865,10 +2931,9 @@ class KingdomLieuCardInfoButton(
 
     async def callback(self, interaction: discord.Interaction) -> None:
         from kingdoms.mods.kingdoms.kingdom_persistent import (
+            _EPHEMERAL_WINDOWS,
             _kingdom_by_id_safe,
             _lord_of,
-            _market_card_back_file,
-            _market_card_file,
             _market_label,
             _strings as _merged,
             _wiring,
@@ -2894,12 +2959,8 @@ class KingdomLieuCardInfoButton(
         # Type-6 defer on the window's own component: the edit below
         # lands on the ledger window itself (the classic v6 semantics).
         await interaction.response.defer()
-        content, _files, view = await _comptes_canary(
-            wiring, kingdom, strings, locale, selected_card=self.card
-        )
         emojis = strings.get("market_ledger_emoji") or {}
         fiche = [
-            "",
             f"## {emojis.get(self.card, '•')} "
             f"{_market_label(self.card, strings)}",
             str(strings["market_card_effect"]).format(
@@ -2909,13 +2970,35 @@ class KingdomLieuCardInfoButton(
                 (strings.get("market_usage") or {}).get(self.card, "")
             ),
         ]
-        file = _market_card_file(self.card) or _market_card_back_file()
-        files = [file] if file is not None else []
-        await interaction.edit_original_response(
-            content="\n".join([content, *fiche]),
-            attachments=files,
-            view=view,
+        view, files = await _comptes_canary(
+            wiring,
+            kingdom,
+            strings,
+            locale,
+            selected_card=self.card,
+            extra_text="\n".join(fiche),
         )
+        try:
+            await interaction.edit_original_response(view=view, attachments=files)
+        except Exception:
+            # comptes-cv2-v1: PATCHing a CV2 media gallery plus fresh
+            # attachments is a known-shaky Discord edit path — fall
+            # back to a fresh ephemeral window (the sheet still lands,
+            # never a dead click).
+            from time import monotonic
+
+            logger.warning(
+                "KINGDOM LIEUX: comptes cardinfo edit failed — fresh window",
+                exc_info=True,
+            )
+            window = await interaction.followup.send(
+                view=view, files=files, ephemeral=True
+            )
+            _EPHEMERAL_WINDOWS[str(getattr(interaction.user, "id", ""))] = (
+                interaction,
+                monotonic(),
+                window,
+            )
 
 
 async def _open_comptes(
@@ -2932,7 +3015,12 @@ async def _open_comptes(
     achats, the card uses behind ⚔️ Historique actions, line 1 reads
     [Utiliser (selected usable card) · hist achats · hist actions ·
     Sortir]. Mirrors the ledger button (defer, heavy paint, followup
-    window) with the lieu illustration riding along the attachments.
+    window).
+
+    comptes-cv2-v1 (Drasah 05/11): the window is a Components V2
+    message — the chambre illustration rides ABOVE the panel, the dos
+    de carte (or the revealed art) in its own gallery under the body,
+    never side by side with the illustration.
     """
     from time import monotonic
 
@@ -2944,22 +3032,19 @@ async def _open_comptes(
 
     await interaction.response.defer(ephemeral=True)
     try:
-        content, card_files, view = await _comptes_canary(
-            wiring, kingdom, strings, locale
-        )
+        view, files = await _comptes_canary(wiring, kingdom, strings, locale)
     except Exception:
         logger.warning("KINGDOM LIEUX: ledger sheet build failed", exc_info=True)
         await interaction.followup.send(
             _market_error_note(Exception("ledger"), strings), ephemeral=True
         )
         return
-    files = list(card_files or []) + _lieu_files(
-        "chambre des comptes.png", "chambre_des_comptes.png"
-    )
     user_id = str(getattr(interaction.user, "id", ""))
     await _close_previous_ephemeral(user_id)
+    # comptes-cv2-v1: the window is a Components V2 message — no
+    # content kwarg (the body lives in the container's TextDisplay).
     window = await interaction.followup.send(
-        content, files=files, view=view, ephemeral=True
+        view=view, files=files, ephemeral=True
     )
     _EPHEMERAL_WINDOWS[user_id] = (interaction, monotonic(), window)
 

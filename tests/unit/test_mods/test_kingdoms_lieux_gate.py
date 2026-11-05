@@ -389,6 +389,21 @@ def _view_buttons(view: Any) -> list[Any]:
     return list(getattr(view, "children", []) or [])
 
 
+def _cv2_buttons(view: Any) -> list[Any]:
+    """comptes-cv2-v1: every Button of a LayoutView, whatever the depth
+    (top-level galleries, containers, action rows)."""
+    out: list[Any] = []
+
+    def _walk(children: list[Any]) -> None:
+        for child in children:
+            if isinstance(child, discord.ui.Button):
+                out.append(child)
+            _walk(list(getattr(child, "children", []) or []))
+
+    _walk(list(getattr(view, "children", []) or []))
+    return out
+
+
 def test_canary_comptes_strip_removes_the_purchases_section() -> None:
     from kingdoms.mods.kingdoms.kingdom_lieux import _strip_purchases
 
@@ -418,8 +433,29 @@ def test_canary_comptes_view_hides_purchases_and_adds_history_buttons() -> None:
         ("traquenard", "🪤 Traquenard — ×1", 1),
         ("explorateur", "🛡️ Explorateur — ×3", 3),
     ]
-    view = _comptes_canary_view(strings, "fr", held, None)
-    buttons = _view_buttons(view)
+    # comptes-cv2-v1 (Drasah 05/11): the sheet is a LayoutView — the
+    # chambre illustration rides ABOVE the panel, the card image in
+    # its own gallery INSIDE the container, the buttons in rows.
+    view = _comptes_canary_view(
+        "# Chambre des comptes — Nilrem",
+        strings,
+        "fr",
+        held,
+        None,
+        "attachment://Dos_de_carte.png",
+    )
+    assert isinstance(view.children[0], discord.MediaGallery)
+    assert view.children[0].items[0].media == "attachment://chambre_des_comptes.png"
+    assert isinstance(view.children[1], discord.ui.Container)
+    container = view.children[1]
+    assert isinstance(container.children[0], discord.ui.TextDisplay)
+    assert "# Chambre des comptes — Nilrem" in str(container.children[0].content)
+    card_galleries = [
+        c for c in container.children if isinstance(c, discord.MediaGallery)
+    ]
+    assert card_galleries, "the card image rides its own gallery in the container"
+    assert card_galleries[0].items[0].media == "attachment://Dos_de_carte.png"
+    buttons = _cv2_buttons(view)
     labels = [str(b.label) for b in buttons]
     custom_ids = [str(b.custom_id) for b in buttons]
     # line 1: the two history buttons + the red Sortir (no Utiliser —
@@ -430,15 +466,12 @@ def test_canary_comptes_view_hides_purchases_and_adds_history_buttons() -> None:
     assert "kingdoms:lieux:hist:actions" in custom_ids
     assert "kingdoms:lieux:sortir" in custom_ids
     assert not any(cid.startswith("kingdoms:market:use:") for cid in custom_ids)
-    for cid in ("kingdoms:lieux:hist:achats", "kingdoms:lieux:hist:actions", "kingdoms:lieux:sortir"):
-        assert [b for b in buttons if str(b.custom_id) == cid][0].row == 0
-    # the cards ride the rows below, one canary cardinfo button each
+    # the cards ride the rows BELOW line 1, one canary cardinfo button each
     assert "kingdoms:lieux:cardinfo:traquenard" in custom_ids
     assert "kingdoms:lieux:cardinfo:explorateur" in custom_ids
-    card_rows = sorted(
-        b.row for b in buttons if str(b.custom_id).startswith("kingdoms:lieux:cardinfo:")
+    assert custom_ids.index("kingdoms:lieux:hist:achats") < custom_ids.index(
+        "kingdoms:lieux:cardinfo:traquenard"
     )
-    assert card_rows[0] >= 1
 
 
 def test_canary_comptes_utiliser_rides_line_one_for_a_usable_card() -> None:
@@ -446,15 +479,28 @@ def test_canary_comptes_utiliser_rides_line_one_for_a_usable_card() -> None:
 
     strings = _merged_fr()
     held = [("traquenard", "🪤 Traquenard — ×1", 1)]
-    view = _comptes_canary_view(strings, "fr", held, "traquenard")
-    buttons = _view_buttons(view)
+    view = _comptes_canary_view(
+        "# Chambre des comptes — Nilrem",
+        strings,
+        "fr",
+        held,
+        "traquenard",
+        "attachment://Traquenard.png",
+    )
+    buttons = _cv2_buttons(view)
     custom_ids = [str(b.custom_id) for b in buttons]
     use = [b for b in buttons if str(b.custom_id) == "kingdoms:market:use:traquenard"]
     assert use, "the selected usable card adds the Utiliser button"
     assert use[0].style == discord.ButtonStyle.success
-    assert use[0].row == 0
     # Utiliser is the FIRST button of the view (line 1, slot 1)
     assert custom_ids[0] == "kingdoms:market:use:traquenard"
+    # the revealed art replaces the dos de carte in the container gallery
+    container = view.children[1]
+    card_galleries = [
+        c for c in container.children if isinstance(c, discord.MediaGallery)
+    ]
+    assert card_galleries
+    assert card_galleries[0].items[0].media == "attachment://Traquenard.png"
 
 
 def test_history_button_labels_styles_and_registration() -> None:

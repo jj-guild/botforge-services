@@ -1971,12 +1971,19 @@ MARKET_SECTIONS: tuple[tuple[str, tuple[str, ...]], ...] = (
 async def build_market_panel(
     locale: str,
     kingdoms_service: Any = None,
+    banner_filename: str | None = None,
 ) -> discord.ui.LayoutView:
     """Build the Marché panel: the King's technology & action shop (§20).
 
     Buttons only — every purchase is confirmed through an ephemeral
     answer at click time, so the panel itself carries no state and is
     restart-proof (custom_id rebuild, §3b).
+
+    marche-banner-v3 (Drasah 05/11): ``banner_filename`` exposes the
+    merchant banner through a TOP-LEVEL MediaGallery — a CV2 message
+    hides every attachment no component references (the banner was
+    uploaded since marche-visuel-v2 but NEVER rendered: same root
+    cause as the Chambre des comptes illustration).
     """
     strings = _strings(locale)
     from kingdoms.mods.kingdoms.kingdom_persistent import (
@@ -2029,6 +2036,16 @@ async def build_market_panel(
         shelf_items.append(row)
 
     view = discord.ui.LayoutView(timeout=None)
+    # marche-banner-v3 (Drasah 05/11): the banner rides ABOVE the
+    # panel — a top-level MediaGallery referencing the attachment is
+    # the ONLY way a CV2 message shows an uploaded file. Without it the
+    # banner stays invisible (its state since marche-visuel-v2).
+    if banner_filename:
+        view.add_item(
+            discord.ui.MediaGallery(
+                discord.MediaGalleryItem(media=f"attachment://{banner_filename}")
+            )
+        )
     view.add_item(
         discord.ui.Container(
             discord.ui.TextDisplay(f"# {strings['market_title']}"),
@@ -2054,12 +2071,18 @@ async def _deploy_market_panel(
     """Edit the market panel in place, or pin a fresh one (vues-silencieuses-v1)."""
     from kingdoms.mods.kingdoms.marche_art import banner_file
 
-    view = await build_market_panel(locale, kingdoms_service)
     # marche-visuel-v2: the banner (generated crier scene) rides as an
     # attachment on the pinned panel message — attached on the first
     # edit after upload, kept afterwards (never re-uploaded in steady
     # state, and no drop when the asset is absent).
+    # marche-banner-v3 (Drasah 05/11): the banner must ALSO be exposed
+    # by the view's top-level MediaGallery — otherwise the CV2 message
+    # never renders it (attachment uploaded but unreferenced).
     banner = banner_file()
+    banner_filename = (
+        f"marche_banner{banner.suffix.lower()}" if banner is not None else None
+    )
+    view = await build_market_panel(locale, kingdoms_service, banner_filename)
     marked: list[Any] = [
         message
         for message in await channel_messages(channel)
@@ -2074,7 +2097,14 @@ async def _deploy_market_panel(
         existing = marked[0]
         text_converged = message_text_squashed(existing) == view_text(view)
         banner_missing = banner is not None and not existing.attachments
-        if text_converged and not banner_missing:
+        # marche-banner-v3: a panel painted BEFORE the gallery also
+        # needs the one-time edit that adds it (the text alone is
+        # converged, the banner would stay invisible forever).
+        gallery_missing = banner is not None and not any(
+            getattr(component, "type", None) == discord.ComponentType.media_gallery
+            for component in existing.components
+        )
+        if text_converged and not banner_missing and not gallery_missing:
             return
         try:
             if banner is not None:
