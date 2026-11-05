@@ -161,6 +161,11 @@ _CHARTE_CHANNEL_DISPLAY: dict[str, str] = {
     "distributeur": "🎁 distributeur",
     # laboratoire-v1 (Drasah 05/11): the Labo salon carries the cockpit.
     "labo": "🧪 labo",
+    # laboratoire-v2 (Drasah 05/11): every lab test DISPATCHES into two
+    # version salons — the deployed code's render (original) and the
+    # pending version's render (travaux), compared side by side.
+    "original": "📜 original",
+    "travaux": "🚧 travaux",
     # console-removal-v1 (Drasah 25/10): the 🛠 console-admin salon is
     # RETIRED — the listener never booted in prod (no add_listener),
     # the live flows live on the ⚙️ Paramètres panel. The slug joins

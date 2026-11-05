@@ -1,29 +1,34 @@
-"""Kingdoms mod — the 🧪 Laboratoire (laboratoire-v1, Drasah 05/11).
+"""Kingdoms mod — the 🧪 Laboratoire (laboratoire-v2, Drasah 05/11).
 
 Drasah's rule (2026-11-05): a visual-validation lab — ONE admin-only
-category « 🧪 Laboratoire » with ONE salon « 🧪 Labo » whose pinned
-COCKPIT panel renders the mod's real views in the salon, so every
-change is judged BEFORE (or right after) a deployment, without
-touching the game salons and without replaying the player flows.
+category « 🧪 Laboratoire » with THREE salons:
 
-- a MULTI-SELECTION « 🔬 Vues à tester » select — several views checked
-  in one open, rendered in sequence (the player-journey order), each
-  one labelled — no more one-by-one (Drasah 05/11);
-- four one-click PROGRAMMES (presets): 🎞️ Tout dérouler, 🏰 Lieux,
-  🃏 Marché & cartes, 🧾 Chantier du jour — the last one is an
-  editable constant pointed at the current patch's validation scope;
-- a version selector with 📜 Original / 🆕 Version 1 (V2/V3 slots
-  reserved) — Version 1 answers « not yet » until a refonte lands;
-- 🖼️ Vitrine assets — the live asset inventory (weight + size), the
-  hook where the compression before/after pairs will land;
-- 🧹 Nettoyer — sweeps the bot's vitrine messages, the cockpit spared.
+- 🧪 labo — the COCKPIT: a dropdown of the tests to run (each entry
+  says WHAT to test and WHY — the « chantier » entry is the editable
+  per-patch scope) and, after every test, a TEST CARD carrying the
+  feedback panel: ✅ Valider · ✏️ Modifier · ❌ Annuler. Drasah checks
+  BEFORE confirming to Mistral — the work resumes from his verdict and
+  his written remarks (laboratoire-v2, Drasah 05/11);
+- 📜 original — the renders of the DEPLOYED code (the reference);
+- 🚧 travaux — the renders of the WORK-IN-PROGRESS version. Today the
+  « travaux » variant renders the same builders (no optimization is
+  pending yet); the variant seam lives in ``_build_lab_view`` and the
+  first real variant will be the asset recompression.
+
+A test DISPATCHES its render into BOTH salons at once — the
+side-by-side comparison Drasah asked for. The verdicts are stateless:
+the test key rides the button custom_id, each verdict freezes its
+card in labo and logs a dedicated INFO line (« KINGDOM LAB: test …
+VALIDATED / MODIFIED (remarks) / CANCELLED ») retrievable via /logs.
+🧹 Nettoyer sweeps the two render salons — the cockpit and the verdict
+cards are kept.
 
 INDEPENDENCE (Drasah's key rule): every render rides the Nilrem test
-kingdom's data (read-only), posts in the Labo salon ONLY, and the
-rendered components are NEUTRALIZED (every button/select disabled) —
-the vitrine is a maquette, not a clone: nothing can be consumed,
-clicked or written from the lab. Every label is rebuilt from THIS
-module's strings at ``from_custom_id`` time (the Check 30 lesson).
+kingdom's data (read-only), and the rendered components are NEUTRALIZED
+(every button/select disabled) — the vitrine is a maquette, not a
+clone: nothing can be consumed, clicked or written from the lab. Every
+label is rebuilt from THIS module's strings at ``from_custom_id``
+time (the Check 30 lesson).
 """
 from __future__ import annotations
 
@@ -44,53 +49,79 @@ from kingdoms.mods.kingdoms.panel_messages import (
 logger = logging.getLogger("kingdoms.kingdom_lab")
 
 LAB_CHANNEL_SLUG = "labo"
+LAB_ORIGINAL_SLUG = "original"
+LAB_TRAVAUX_SLUG = "travaux"
 LAB_PANEL_MARKER = "kingdoms:lab:cockpit"
 
 STRINGS: dict[str, dict[str, str]] = {
     "fr": {
-        "cockpit_title": "🧪 Laboratoire — cockpit de validation visuelle",
+        "cockpit_title": "🧪 Laboratoire — poste de validation des versions",
         "cockpit_intro": (
-            "Choisis les vues à tester ci-dessous (plusieurs choix possibles), "
-            "ou clique un programme. Chaque vue est rendue dans CE salon à partir "
-            "du royaume test **Nilrem** — aucune interaction n'est possible, "
-            "aucun salon de jeu n'est touché.\n"
-            "• 📜 **Original** = le rendu du code déployé (l'unique version pour l'instant)\n"
-            "• 🧹 **Nettoyer** efface les vitrines (ce panel survit)"
+            "Choisis le test à lancer ci-dessous — le rendu est **dispatché dans "
+            "les deux salons** : 📜 **original** (code déployé) et 🚧 **travaux** "
+            "(version en cours), à comparer côte à côte.\n"
+            "Une **fiche de test** apparaît ici après chaque envoi : "
+            "✅ **Valider** · ✏️ **Modifier** (avec tes remarques) · "
+            "❌ **Annuler** — Mistral reprend le travail depuis ton verdict.\n"
+            "• Données du royaume test **Nilrem**, lecture seule — aucun salon de jeu n'est touché.\n"
+            "• 🧹 **Nettoyer** vide les deux salons de rendus (ce cockpit et tes fiches sont conservés)."
         ),
-        "select_placeholder": "🔬 Vues à tester (choix multiples)",
-        "preset_all": "🎞️ Tout dérouler",
-        "preset_lieux": "🏰 Lieux",
-        "preset_marche": "🃏 Marché & cartes",
-        "preset_chantier": "🧾 Chantier du jour",
+        "test_placeholder": "🧪 Que veux-tu tester ?",
+        "test_tout": "🎞️ Tout le parcours",
+        "test_why_tout": "Le parcours joueur complet, de bout en bout",
+        "test_lieux": "🏰 Lieux",
+        "test_why_lieux": "Hub, conseil, remparts, comptes, paroisse, volière",
+        "test_marche": "🃏 Marché & cartes",
+        "test_why_marche": "Le panneau du marché et la bannière marchand",
+        "test_chantier": "🧾 Chantier du jour",
+        "test_why_chantier": "EDITABLE — le scope du patch en cours : comptes, hub, marché",
         "vitrine_button": "🖼️ Vitrine assets",
         "clean_button": "🧹 Nettoyer",
         "refresh_button": "♻️ Actualiser",
-        "version_placeholder": "Version à afficher",
-        "version_original": "📜 Original",
-        "version_v1": "🆕 Version 1",
         "not_allowed": "Le Laboratoire est réservé aux admins.",
         "no_service": "Le service Kingdoms n'est pas câblé.",
         "no_channel": "Le salon 🧪 Labo est introuvable — relance 🚀 Déployer.",
+        "no_render_channel": (
+            "Le salon {channel} est introuvable — relance 🚀 Déployer pour "
+            "provisionner le laboratoire complet."
+        ),
         "no_test_kingdom": (
             "Le royaume test **Nilrem** est introuvable — crée-le avec le bouton "
             "🧪 du Distributeur, puis relance."
         ),
-        "version_unavailable": (
-            "ℹ️ Aucune Version 1 en attente — 📜 Original est le rendu du code déployé."
-        ),
-        "version_original_note": (
-            "ℹ️ Original est le rendu actif — les vues rendues l'utilisent déjà."
-        ),
-        "posted": "✅ {count} vue(s) rendue(s) dans le salon Labo{errors}.",
+        "dispatched": "✅ {count} vue(s) rendue(s) dans 📜 original et 🚧 travaux{errors}.",
         "posted_errors": " — échecs : {keys}",
+        "card_title": "🧪 Test : {title}",
+        "card_dispatched": (
+            "→ rendu dispatché dans 📜 **original** et 🚧 **travaux** — "
+            "compare côte à côte, puis tranche :"
+        ),
+        "verdict_validate": "✅ Valider",
+        "verdict_modify": "✏️ Modifier",
+        "verdict_cancel": "❌ Annuler",
+        "verdict_validated": (
+            "✅ **Version validée.** Tu peux la confirmer à Mistral "
+            "(« ok version validée ») — le travail reprend à partir de ce verdict."
+        ),
+        "verdict_modified": "📝 **Version à modifier** — remarques enregistrées :",
+        "verdict_cancelled": (
+            "🗄️ **Version annulée** — mise de côté (archivée, consultable ici)."
+        ),
+        "remarks_title": "Remarques sur la version travaux",
+        "remarks_label": "Écris tes remarques — elles seront enregistrées avec le test",
+        "remarks_done": "📝 Remarques enregistrées.",
+        "vitrine_posted": "✅ Vitrine affichée dans le salon Labo.",
         "vitrine_title": "🖼️ Vitrine des assets",
         "vitrine_intro": (
             "Inventaire en direct des illustrations (poids · dimensions). "
-            "Les paires Original | Version 1 s'afficheront ici dès la "
+            "Les paires Original | Version travaux s'afficheront ici dès la "
             "recompression validée."
         ),
         "vitrine_missing": "⚠️ Le dossier d'assets est introuvable sur ce déploiement.",
-        "cleaned": "🧹 {count} message(s) supprimé(s) — le cockpit est conservé.",
+        "cleaned": (
+            "🧹 {count} message(s) supprimé(s) dans 📜 original et 🚧 travaux — "
+            "le cockpit et tes fiches sont conservés."
+        ),
         "clean_none": "🧹 Rien à nettoyer.",
         "failed": "⚠️ L'action Laboratoire a échoué : `{error}`.",
         "view_hub": "🏰 Le-Royaume — hub château",
@@ -105,48 +136,72 @@ STRINGS: dict[str, dict[str, str]] = {
         "view_taverne": "🍺 Taverne",
     },
     "en": {
-        "cockpit_title": "🧪 Laboratory — visual validation cockpit",
+        "cockpit_title": "🧪 Laboratory — version validation station",
         "cockpit_intro": (
-            "Pick the views to test below (multiple choices allowed), or click "
-            "a programme. Every view renders in THIS channel from the **Nilrem** "
-            "test kingdom — no interaction is possible, no game channel is "
-            "touched.\n"
-            "• 📜 **Original** = the deployed code's render (the only version for now)\n"
-            "• 🧹 **Clean** sweeps the showcases (this panel survives)"
+            "Pick the test to run below — the render is DISPATCHED into both "
+            "channels: 📜 **original** (the deployed code) and 🚧 **work in "
+            "progress**, side by side.\n"
+            "A **test card** appears here after every dispatch: "
+            "✅ **Validate** · ✏️ **Modify** (with your remarks) · "
+            "❌ **Cancel** — Mistral resumes the work from your verdict.\n"
+            "• Data from the **Nilrem** test kingdom, read-only — no game channel is touched.\n"
+            "• 🧹 **Clean** empties the two render channels (this cockpit and your cards are kept)."
         ),
-        "select_placeholder": "🔬 Views to test (multiple choice)",
-        "preset_all": "🎞️ Unroll everything",
-        "preset_lieux": "🏰 Places",
-        "preset_marche": "🃏 Market & cards",
-        "preset_chantier": "🧾 Today's work",
+        "test_placeholder": "🧪 What do you want to test?",
+        "test_tout": "🎞️ Whole walkthrough",
+        "test_why_tout": "The complete player journey, end to end",
+        "test_lieux": "🏰 Places",
+        "test_why_lieux": "Hub, council, ramparts, accounts, parish, aviary",
+        "test_marche": "🃏 Market & cards",
+        "test_why_marche": "The market panel and the merchant banner",
+        "test_chantier": "🧾 Today's work",
+        "test_why_chantier": "EDITABLE — the current patch's scope: accounts, hub, market",
         "vitrine_button": "🖼️ Asset showcase",
         "clean_button": "🧹 Clean",
         "refresh_button": "♻️ Refresh",
-        "version_placeholder": "Version to display",
-        "version_original": "📜 Original",
-        "version_v1": "🆕 Version 1",
         "not_allowed": "The Laboratory is admin-only.",
         "no_service": "The Kingdoms service is not wired.",
         "no_channel": "The 🧪 Lab channel is missing — run 🚀 Deploy again.",
+        "no_render_channel": (
+            "The {channel} channel is missing — run 🚀 Deploy again to "
+            "provision the full laboratory."
+        ),
         "no_test_kingdom": (
             "The **Nilrem** test kingdom is missing — create it with the "
             "Distributor's 🧪 button, then retry."
         ),
-        "version_unavailable": (
-            "ℹ️ No Version 1 pending — 📜 Original is the deployed code's render."
-        ),
-        "version_original_note": (
-            "ℹ️ Original is the active render — the rendered views already use it."
-        ),
-        "posted": "✅ {count} view(s) rendered in the Lab channel{errors}.",
+        "dispatched": "✅ {count} view(s) rendered into 📜 original and 🚧 travaux{errors}.",
         "posted_errors": " — failures: {keys}",
+        "card_title": "🧪 Test: {title}",
+        "card_dispatched": (
+            "→ render dispatched into 📜 **original** and 🚧 **work in "
+            "progress** — compare side by side, then decide:"
+        ),
+        "verdict_validate": "✅ Validate",
+        "verdict_modify": "✏️ Modify",
+        "verdict_cancel": "❌ Cancel",
+        "verdict_validated": (
+            "✅ **Version validated.** Confirm it to Mistral "
+            "(“ok version validated”) — the work resumes from this verdict."
+        ),
+        "verdict_modified": "📝 **Version to modify** — remarks recorded:",
+        "verdict_cancelled": (
+            "🗄️ **Version cancelled** — set aside (archived, readable here)."
+        ),
+        "remarks_title": "Remarks on the work-in-progress version",
+        "remarks_label": "Write your remarks — they will be recorded with the test",
+        "remarks_done": "📝 Remarks recorded.",
+        "vitrine_posted": "✅ Showcase rendered in the Lab channel.",
         "vitrine_title": "🖼️ Asset showcase",
         "vitrine_intro": (
             "Live inventory of the illustrations (weight · size). The Original | "
-            "Version 1 pairs will render here once the recompression is approved."
+            "work-in-progress pairs will render here once the recompression is approved."
         ),
         "vitrine_missing": "⚠️ The asset folder is missing on this deployment.",
-        "cleaned": "🧹 {count} message(s) deleted — the cockpit is kept.",
+        "cleaned": (
+            "🧹 {count} message(s) deleted in 📜 original and 🚧 travaux — "
+            "the cockpit and your cards are kept."
+        ),
         "clean_none": "🧹 Nothing to clean.",
         "failed": "⚠️ The Laboratory action failed: `{error}`.",
         "view_hub": "🏰 The-Realm — castle hub",
@@ -173,9 +228,8 @@ def _locale(interaction: discord.Interaction) -> str:
     return "fr" if locale is None or str(locale).startswith("fr") else "en"
 
 
-# The renderable views, in the player-journey order (Drasah 05/11: the
-# multi-selection renders in THIS sequence so the salon reads like a
-# walkthrough).
+# The renderable views, in the player-journey order (the walkthrough
+# reads like the game).
 LAB_VIEWS: tuple[str, ...] = (
     "hub",
     "conseil",
@@ -189,28 +243,46 @@ LAB_VIEWS: tuple[str, ...] = (
     "taverne",
 )
 
-LAB_PRESETS: dict[str, tuple[str, ...]] = {
-    "all": LAB_VIEWS,
-    "lieux": ("hub", "conseil", "remparts", "comptes", "paroisse", "voliere"),
-    "marche": ("marche",),
-    # laboratoire-v1: EDITABLE — point this at the current patch's
-    # validation scope (currently the comptes-cv2 beta). Update the
-    # tuple at each patch, never the cockpit code.
-    "chantier": ("comptes", "hub", "marche"),
+# laboratoire-v2 (Drasah 05/11): the dropdown's test registry — WHAT
+# to test and WHY, each entry dispatching its views into BOTH salons.
+LAB_TEST_ITEMS: dict[str, dict[str, Any]] = {
+    "tout": {
+        "title_key": "test_tout",
+        "why_key": "test_why_tout",
+        "views": list(LAB_VIEWS),
+    },
+    "lieux": {
+        "title_key": "test_lieux",
+        "why_key": "test_why_lieux",
+        "views": ["hub", "conseil", "remparts", "comptes", "paroisse", "voliere"],
+    },
+    "marche": {
+        "title_key": "test_marche",
+        "why_key": "test_why_marche",
+        "views": ["marche"],
+    },
+    # laboratoire-v2: EDITABLE — the per-patch validation scope. Point
+    # ``views`` at the surfaces the current patch touches and say WHY in
+    # ``test_why_chantier`` — update both at each patch, never the code.
+    "chantier": {
+        "title_key": "test_chantier",
+        "why_key": "test_why_chantier",
+        "views": ["comptes", "hub", "marche"],
+    },
 }
 
 _LIEUX_ASSETS = Path(__file__).resolve().parent / "assets" / "lieux"
 _MARCHE_ASSETS = Path(__file__).resolve().parent / "assets" / "marche"
 
 
-def _find_lab_channel(guild: discord.Guild | None) -> Any | None:
-    """Find the 🧪 Labo salon by its decoration-blind slug (read-only)."""
+def _find_lab_channel(guild: discord.Guild | None, slug: str = LAB_CHANNEL_SLUG) -> Any | None:
+    """Find a lab salon by its decoration-blind slug (read-only)."""
     from kingdoms.mods.kingdoms.kingdom_setup import _slug
 
     if guild is None:
         return None
     for channel in getattr(guild, "text_channels", []) or []:
-        if _slug(getattr(channel, "name", "")) == LAB_CHANNEL_SLUG:
+        if _slug(getattr(channel, "name", "")) == slug:
             return channel
     return None
 
@@ -379,8 +451,17 @@ async def _build_lab_view(
     wiring: Any,
     kingdom: Any,
     state: dict[str, Any],
+    variant: str = "original",
 ) -> tuple[Any, list[Any] | None]:
-    """Build ONE lab view through the real mod builders (read-only)."""
+    """Build ONE lab view through the real mod builders (read-only).
+
+    laboratoire-v2 (Drasah 05/11): ``variant`` is the ORIGINAL/TRAVAUX
+    seam — « original » renders the deployed code, « travaux » renders
+    the work-in-progress version. No optimization is pending yet, so
+    « travaux » rides the very same builders today; the first real
+    variant (the asset recompression) will branch here without
+    touching any other code.
+    """
     from kingdoms.mods.kingdoms.kingdom_persistent import _strings as _merged_strings
 
     strings = _merged_strings(locale)
@@ -432,8 +513,9 @@ async def render_lab_views(
     wiring: Any,
     kingdom: Any,
     keys: list[str],
+    variant: str = "original",
 ) -> tuple[int, list[str]]:
-    """Render the selected views into the Labo salon (each one a fresh message)."""
+    """Render the selected views into a salon (each one a fresh message)."""
     from kingdoms.mods.kingdoms.kingdom_realm_content import _gather_state
 
     state = await _gather_state(kingdom, wiring)
@@ -443,7 +525,9 @@ async def render_lab_views(
         if key not in LAB_VIEWS:
             continue
         try:
-            view, files = await _build_lab_view(key, locale, wiring, kingdom, state)
+            view, files = await _build_lab_view(
+                key, locale, wiring, kingdom, state, variant
+            )
             neutralize_view(view)
             # the étiquette rides FIRST (the walkthrough reads in order) —
             # ``children`` returns a copy, so the view is rebuilt around it.
@@ -505,20 +589,36 @@ async def _guard(interaction: discord.Interaction, locale: str) -> Any | None:
     return wiring
 
 
-async def _render_and_report(
+async def _dispatch_and_report(
     interaction: discord.Interaction,
     locale: str,
-    keys: list[str],
+    item_key: str,
 ) -> None:
-    """Deferred render path: Nilrem data → Labo salon → summary answer."""
+    """Deferred dispatch path: renders → 📜 original + 🚧 travaux → card.
+
+    laboratoire-v2 (Drasah 05/11): ONE test renders into BOTH salons at
+    once (the side-by-side comparison), then the feedback test card is
+    posted in 🧪 labo carrying the three verdict buttons.
+    """
     strings = _strings(locale)
     wiring = await _guard(interaction, locale)
     if wiring is None:
         return
     await interaction.response.defer(ephemeral=True)
-    channel = _find_lab_channel(getattr(interaction, "guild", None))
-    if channel is None:
+    guild = getattr(interaction, "guild", None)
+    labo = _find_lab_channel(guild)
+    original = _find_lab_channel(guild, LAB_ORIGINAL_SLUG)
+    travaux = _find_lab_channel(guild, LAB_TRAVAUX_SLUG)
+    if labo is None:
         await interaction.followup.send(strings["no_channel"], ephemeral=True)
+        return
+    if original is None or travaux is None:
+        await interaction.followup.send(
+            strings["no_render_channel"].format(
+                channel="📜 original" if original is None else "🚧 travaux"
+            ),
+            ephemeral=True,
+        )
         return
     if getattr(wiring, "kingdoms_service", None) is None:
         await interaction.followup.send(strings["no_service"], ephemeral=True)
@@ -534,112 +634,92 @@ async def _render_and_report(
     if kingdom is None:
         await interaction.followup.send(strings["no_test_kingdom"], ephemeral=True)
         return
-    rendered, failures = await render_lab_views(channel, locale, wiring, kingdom, keys)
+    item = LAB_TEST_ITEMS.get(item_key) or LAB_TEST_ITEMS["tout"]
+    keys = list(item["views"])
+    rendered_original, failed_original = await render_lab_views(
+        original, locale, wiring, kingdom, keys, variant="original"
+    )
+    rendered_travaux, failed_travaux = await render_lab_views(
+        travaux, locale, wiring, kingdom, keys, variant="travaux"
+    )
+    failures = sorted(set(failed_original) | set(failed_travaux))
     errors = ""
     if failures:
         errors = strings["posted_errors"].format(keys=", ".join(failures))
+    try:
+        await labo.send(
+            view=_test_card_view(locale, item_key), allowed_mentions=NO_MENTIONS
+        )
+    except Exception:
+        logger.warning("KINGDOM LAB: test card send failed", exc_info=True)
+    logger.info(
+        "KINGDOM LAB: test %s dispatched — original=%d travaux=%d",
+        item_key,
+        rendered_original,
+        rendered_travaux,
+    )
     await interaction.followup.send(
-        strings["posted"].format(count=rendered, errors=errors), ephemeral=True
+        strings["dispatched"].format(
+            count=rendered_original + rendered_travaux, errors=errors
+        ),
+        ephemeral=True,
     )
 
 
-class _LabPresetButton(
-    discord.ui.DynamicItem[discord.ui.Button[Any]], template=r"kingdoms:lab:preset:(\w+)"
-):
-    """A one-click programme — a frozen list of views, rendered in order."""
+def _test_card_view(
+    locale: str,
+    item_key: str,
+    status_key: str | None = None,
+    remarks: str | None = None,
+) -> discord.ui.LayoutView:
+    """Build a test card — the feedback panel that follows every dispatch.
 
-    def __init__(self, preset: str, label: str) -> None:
-        super().__init__(
-            discord.ui.Button(
-                label=label[:80],
-                custom_id=f"kingdoms:lab:preset:{preset}",
-                style=discord.ButtonStyle.primary,
-            )
+    Fresh card: the three live verdict buttons. After a verdict the card
+    FREEEZES: the buttons are disabled, the status (and the remarks)
+    join the card — the verdict stays readable in labo forever.
+    """
+    strings = _strings(locale)
+    item = LAB_TEST_ITEMS.get(item_key) or LAB_TEST_ITEMS["tout"]
+    title = strings[item["title_key"]]
+    view = discord.ui.LayoutView(timeout=None)
+    view.add_item(discord.ui.TextDisplay(f"## {strings['card_title'].format(title=title)}"))
+    view.add_item(discord.ui.TextDisplay(strings[item["why_key"]]))
+    if status_key is None:
+        view.add_item(discord.ui.TextDisplay(strings["card_dispatched"]))
+    view.add_item(
+        discord.ui.ActionRow(
+            KingdomLabVerdictButton("validate", item_key, locale, disabled=status_key is not None),
+            KingdomLabVerdictButton("modify", item_key, locale, disabled=status_key is not None),
+            KingdomLabVerdictButton("cancel", item_key, locale, disabled=status_key is not None),
         )
-
-    @classmethod
-    async def from_custom_id(
-        cls,
-        interaction: discord.Interaction,
-        item: discord.ui.Item[Any],
-        match: re.Match[str],
-        /,
-    ) -> _LabPresetButton:
-        """Rebuild from the wire — THIS module's strings only."""
-        preset = match.group(1)
-        key = {
-            "all": "preset_all",
-            "lieux": "preset_lieux",
-            "marche": "preset_marche",
-            "chantier": "preset_chantier",
-        }.get(preset, "preset_all")
-        return cls(preset, _strings(_locale(interaction))[key])
-
-    async def callback(self, interaction: discord.Interaction) -> None:
-        """Render the preset's views (deferred, one summary answer)."""
-        preset = re.search(r"kingdoms:lab:preset:(\w+)$", self.item.custom_id or "")
-        keys = list(LAB_PRESETS.get(preset.group(1) if preset else "all", LAB_VIEWS))
-        await _render_and_report(interaction, _locale(interaction), keys)
+    )
+    if status_key is not None:
+        view.add_item(discord.ui.TextDisplay(strings[status_key]))
+        if remarks:
+            view.add_item(discord.ui.TextDisplay(f"> {remarks}"))
+    return view
 
 
-class KingdomLabViewSelect(
-    discord.ui.DynamicItem[discord.ui.Select], template=r"kingdoms:lab:views"
+class KingdomLabTestSelect(
+    discord.ui.DynamicItem[discord.ui.Select], template=r"kingdoms:lab:test"
 ):
-    """The multi-selection « vues à tester » — several views in one open."""
+    """The test dropdown — WHAT to test and WHY (single choice)."""
 
     def __init__(self, locale: str) -> None:
         strings = _strings(locale)
         options = [
-            discord.SelectOption(label=strings[f"view_{key}"][:100], value=key)
-            for key in LAB_VIEWS
+            discord.SelectOption(
+                label=strings[item["title_key"]][:100],
+                value=key,
+                description=strings[item["why_key"]][:100],
+            )
+            for key, item in LAB_TEST_ITEMS.items()
         ]
         super().__init__(
             discord.ui.Select(
                 options=options,
-                custom_id="kingdoms:lab:views",
-                placeholder=strings["select_placeholder"],
-                min_values=1,
-                max_values=len(options),
-            )
-        )
-
-    @classmethod
-    async def from_custom_id(
-        cls,
-        interaction: discord.Interaction,
-        item: discord.ui.Item[Any],
-        match: re.Match[str],
-        /,
-    ) -> KingdomLabViewSelect:
-        """Rebuild from the wire — THIS module's strings only."""
-        return cls(_locale(interaction))
-
-    async def callback(self, interaction: discord.Interaction) -> None:
-        """Render every selected view, journey-ordered (deferred)."""
-        keys = [v for v in list(self.item.values or []) if v in LAB_VIEWS]
-        # the salon reads in the player-journey order whatever the order
-        # the clicks happened in (Drasah 05/11).
-        keys = [k for k in LAB_VIEWS if k in keys] or list(LAB_VIEWS)
-        await _render_and_report(interaction, _locale(interaction), keys)
-
-
-class KingdomLabVersionSelect(
-    discord.ui.DynamicItem[discord.ui.Select], template=r"kingdoms:lab:version"
-):
-    """The version selector — Original now, the V2/V3 slots reserved."""
-
-    def __init__(self, locale: str) -> None:
-        strings = _strings(locale)
-        super().__init__(
-            discord.ui.Select(
-                options=[
-                    discord.SelectOption(
-                        label=strings["version_original"], value="original", default=True
-                    ),
-                    discord.SelectOption(label=strings["version_v1"], value="v1"),
-                ],
-                custom_id="kingdoms:lab:version",
-                placeholder=strings["version_placeholder"],
+                custom_id="kingdoms:lab:test",
+                placeholder=strings["test_placeholder"],
                 min_values=1,
                 max_values=1,
             )
@@ -652,22 +732,164 @@ class KingdomLabVersionSelect(
         item: discord.ui.Item[Any],
         match: re.Match[str],
         /,
-    ) -> KingdomLabVersionSelect:
+    ) -> KingdomLabTestSelect:
         """Rebuild from the wire — THIS module's strings only."""
         return cls(_locale(interaction))
 
     async def callback(self, interaction: discord.Interaction) -> None:
-        """Answer the version question (Original is the only one for now)."""
-        strings = _strings(_locale(interaction))
-        value = (list(self.item.values or []) or ["original"])[0]
-        if value == "v1":
+        """Dispatch the selected test into both salons (deferred)."""
+        values = [v for v in list(self.item.values or []) if v in LAB_TEST_ITEMS]
+        await _dispatch_and_report(
+            interaction, _locale(interaction), (values or ["tout"])[0]
+        )
+
+
+class KingdomLabVerdictButton(
+    discord.ui.DynamicItem[discord.ui.Button[Any]],
+    template=r"kingdoms:lab:verdict:(validate|modify|cancel):(\w+)",
+):
+    """One verdict button — Valider / Modifier / Annuler the travaux version.
+
+    Statelesss by design: the test key rides the custom_id, so a
+    restart cannot orphan a verdict. Each verdict freezes its card and
+    logs a dedicated INFO line retrievable via /logs.
+    """
+
+    def __init__(
+        self, action: str, item_key: str, locale: str, *, disabled: bool = False
+    ) -> None:
+        strings = _strings(locale)
+        styles = {
+            "validate": discord.ButtonStyle.success,
+            "modify": discord.ButtonStyle.primary,
+            "cancel": discord.ButtonStyle.danger,
+        }
+        super().__init__(
+            discord.ui.Button(
+                label=strings[f"verdict_{action}"][:80],
+                custom_id=f"kingdoms:lab:verdict:{action}:{item_key}",
+                style=styles.get(action, discord.ButtonStyle.secondary),
+                disabled=disabled,
+            )
+        )
+
+    @classmethod
+    async def from_custom_id(
+        cls,
+        interaction: discord.Interaction,
+        item: discord.ui.Item[Any],
+        match: re.Match[str],
+        /,
+    ) -> KingdomLabVerdictButton:
+        """Rebuild from the wire — THIS module's strings only."""
+        return cls(match.group(1), match.group(2), _locale(interaction))
+
+    async def callback(self, interaction: discord.Interaction) -> None:
+        """Apply the verdict: freeze the card, log the INFO line."""
+        from kingdoms.mods.kingdoms.kingdom_persistent import _is_admin, _wiring
+
+        locale = _locale(interaction)
+        strings = _strings(locale)
+        wiring = _wiring()
+        if not _is_admin(interaction, wiring.bot_admins):
             await interaction.response.send_message(
-                strings["version_unavailable"], ephemeral=True
+                strings["not_allowed"], ephemeral=True
             )
             return
-        await interaction.response.send_message(
-            strings["version_original_note"], ephemeral=True
+        match = re.search(
+            r"kingdoms:lab:verdict:(validate|modify|cancel):(\w+)$",
+            self.item.custom_id or "",
         )
+        action = match.group(1) if match else "validate"
+        item_key = match.group(2) if match else "tout"
+        if action == "modify":
+            await interaction.response.send_modal(LabRemarksModal(locale, item_key))
+            return
+        status_key = "verdict_validated" if action == "validate" else "verdict_cancelled"
+        logger.info(
+            "KINGDOM LAB: test %s %s by user %s",
+            item_key,
+            "VALIDATED" if action == "validate" else "CANCELLED",
+            getattr(getattr(interaction, "user", None), "id", None),
+        )
+        try:
+            await interaction.response.edit_message(
+                view=_test_card_view(locale, item_key, status_key)
+            )
+        except Exception:
+            logger.warning("KINGDOM LAB: verdict card edit failed", exc_info=True)
+            await interaction.response.send_message(
+                strings[status_key], ephemeral=True
+            )
+            return
+        try:
+            await interaction.followup.send(strings[status_key], ephemeral=True)
+        except Exception:
+            logger.warning("KINGDOM LAB: verdict followup failed", exc_info=True)
+
+
+class LabRemarksModal(discord.ui.Modal):
+    """The ✏️ Modifier remark sheet — Drasah's notes ride the verdict.
+
+    The remarks are frozen onto the card AND logged on the dedicated
+    KINGDOM LAB INFO line, so Mistral reads them back via /logs when
+    Drasah says « reprends avec les remarques ».
+    """
+
+    def __init__(self, locale: str, item_key: str) -> None:
+        strings = _strings(locale)
+        super().__init__(title=strings["remarks_title"][:45])
+        self._locale = locale
+        self._item_key = item_key
+        self.remarks = discord.ui.TextInput(
+            label=strings["remarks_label"][:45],
+            style=discord.TextStyle.paragraph,
+            max_length=1000,
+            required=True,
+        )
+        self.add_item(self.remarks)
+
+    async def on_submit(self, interaction: discord.Interaction) -> None:
+        """Freeze the card with the remarks, log them, confirm."""
+        from kingdoms.mods.kingdoms.kingdom_persistent import _is_admin, _wiring
+
+        locale = self._locale
+        strings = _strings(locale)
+        wiring = _wiring()
+        if not _is_admin(interaction, wiring.bot_admins):
+            await interaction.response.send_message(
+                strings["not_allowed"], ephemeral=True
+            )
+            return
+        remarks = str(self.remarks.value or "").strip()
+        user = getattr(getattr(interaction, "user", None), "id", None)
+        logger.info(
+            "KINGDOM LAB: test %s MODIFIED by user %s — remarks: %s",
+            self._item_key,
+            user,
+            remarks,
+        )
+        acknowledged = False
+        try:
+            await interaction.response.edit_message(
+                view=_test_card_view(
+                    locale, self._item_key, "verdict_modified", remarks
+                )
+            )
+            acknowledged = True
+        except Exception:
+            logger.warning("KINGDOM LAB: remarks card edit failed", exc_info=True)
+        try:
+            if acknowledged:
+                await interaction.followup.send(
+                    strings["remarks_done"], ephemeral=True
+                )
+            else:
+                await interaction.response.send_message(
+                    strings["remarks_done"], ephemeral=True
+                )
+        except Exception:
+            logger.warning("KINGDOM LAB: remarks confirm failed", exc_info=True)
 
 
 class KingdomLabVitrineButton(
@@ -721,15 +943,13 @@ class KingdomLabVitrineButton(
             view.add_item(discord.ui.TextDisplay(strings["vitrine_intro"]))
             view.add_item(discord.ui.TextDisplay("\n".join(lines)))
         await channel.send(view=view, allowed_mentions=NO_MENTIONS)
-        await interaction.followup.send(
-            strings["posted"].format(count=1, errors=""), ephemeral=True
-        )
+        await interaction.followup.send(strings["vitrine_posted"], ephemeral=True)
 
 
 class KingdomLabCleanButton(
     discord.ui.DynamicItem[discord.ui.Button[Any]], template=r"kingdoms:lab:clean"
 ):
-    """The 🧹 sweep — the bot's vitrine messages go, the cockpit stays."""
+    """The 🧹 sweep — the render salons go, the cockpit and cards stay."""
 
     def __init__(self, label: str) -> None:
         super().__init__(
@@ -752,7 +972,12 @@ class KingdomLabCleanButton(
         return cls(_strings(_locale(interaction))["clean_button"])
 
     async def callback(self, interaction: discord.Interaction) -> None:
-        """Sweep the bot's vitrine messages, the cockpit spared."""
+        """Sweep the bot's render messages in 📜 original and 🚧 travaux.
+
+        laboratoire-v2 (Drasah 05/11): the renders live in the two
+        version salons — labo (cockpit, test cards, verdicts) is NEVER
+        touched by the sweep.
+        """
         from kingdoms.mods.kingdoms.kingdom_persistent import _is_admin, _wiring
 
         locale = _locale(interaction)
@@ -764,24 +989,25 @@ class KingdomLabCleanButton(
             )
             return
         await interaction.response.defer(ephemeral=True)
-        channel = _find_lab_channel(getattr(interaction, "guild", None))
-        if channel is None:
-            await interaction.followup.send(strings["no_channel"], ephemeral=True)
-            return
-        deleted = 0
+        guild = getattr(interaction, "guild", None)
         client_user = getattr(getattr(interaction, "client", None), "user", None)
         bot_id = getattr(client_user, "id", None)
-        for message in await channel_messages(channel):
-            if LAB_PANEL_MARKER in message_text(message):
+        deleted = 0
+        for slug in (LAB_ORIGINAL_SLUG, LAB_TRAVAUX_SLUG):
+            channel = _find_lab_channel(guild, slug)
+            if channel is None:
                 continue
-            author_id = getattr(getattr(message, "author", None), "id", None)
-            if author_id is not None and bot_id is not None and author_id != bot_id:
-                continue
-            try:
-                await message.delete()
-                deleted += 1
-            except Exception:
-                logger.warning("KINGDOM LAB: message delete failed", exc_info=True)
+            for message in await channel_messages(channel):
+                author_id = getattr(getattr(message, "author", None), "id", None)
+                if author_id is not None and bot_id is not None and author_id != bot_id:
+                    continue
+                try:
+                    await message.delete()
+                    deleted += 1
+                except Exception:
+                    logger.warning(
+                        "KINGDOM LAB: message delete failed", exc_info=True
+                    )
         if deleted:
             await interaction.followup.send(
                 strings["cleaned"].format(count=deleted), ephemeral=True
@@ -834,21 +1060,12 @@ def build_lab_cockpit(locale: str) -> discord.ui.LayoutView:
     view = discord.ui.LayoutView(timeout=None)
     view.add_item(discord.ui.TextDisplay(f"## {strings['cockpit_title']}"))
     view.add_item(discord.ui.TextDisplay(strings["cockpit_intro"]))
-    view.add_item(
-        discord.ui.ActionRow(
-            _LabPresetButton("all", strings["preset_all"]),
-            _LabPresetButton("lieux", strings["preset_lieux"]),
-            _LabPresetButton("marche", strings["preset_marche"]),
-            _LabPresetButton("chantier", strings["preset_chantier"]),
-        )
-    )
     # laboratoire-v1 fix (Drasah 05/11, live 50035): a LayoutView does
     # NOT wrap a bare Select into an ActionRow at send time — Discord
-    # rejected the cockpit with « In components.3/4: type must be one
+    # rejected the cockpit with « In components.N: type must be one
     # of (1, 9, 10, 12, 13, 14, 17) ». Every interactive item rides
     # inside an explicit ActionRow (one select per row, Discord's rule).
-    view.add_item(discord.ui.ActionRow(KingdomLabViewSelect(locale)))
-    view.add_item(discord.ui.ActionRow(KingdomLabVersionSelect(locale)))
+    view.add_item(discord.ui.ActionRow(KingdomLabTestSelect(locale)))
     view.add_item(
         discord.ui.ActionRow(
             KingdomLabVitrineButton(strings["vitrine_button"]),
@@ -903,9 +1120,8 @@ async def deploy_lab_panel(guild: discord.Guild | None, locale: str) -> bool:
 def register_kingdom_lab_items(bot: discord.Client) -> None:
     """Re-register every lab component on the bot (restart-proof)."""
     bot.add_dynamic_items(
-        _LabPresetButton,
-        KingdomLabViewSelect,
-        KingdomLabVersionSelect,
+        KingdomLabTestSelect,
+        KingdomLabVerdictButton,
         KingdomLabVitrineButton,
         KingdomLabCleanButton,
         KingdomLabRefreshButton,

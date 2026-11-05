@@ -1,10 +1,11 @@
-"""laboratoire-v1 (Drasah 05/11) — the 🧪 Laboratoire cockpit.
+"""laboratoire-v2 (Drasah 05/11) — the 🧪 Laboratoire validation station.
 
 Drasah's rule: the lab is INDEPENDENT — every render rides the Nilrem
-test data, posts in the Labo salon only, and carries NO interactive
-component (everything disabled). The multi-selection renders the
-player-journey order; the presets are one-click programmes; the
-🧾 Chantier du jour preset is the editable per-patch scope.
+test data, and carries NO interactive component (everything disabled).
+The test dropdown says WHAT to test and WHY; ONE test dispatches its
+render into BOTH version salons (📜 original + 🚧 travaux) and posts a
+feedback test card in 🧪 labo — ✅ Valider · ✏️ Modifier · ❌ Annuler —
+the verdicts freeze the card and log the dedicated KINGDOM LAB line.
 """
 from __future__ import annotations
 
@@ -16,15 +17,18 @@ from typing import Any
 import discord
 
 from kingdoms.mods.kingdoms.kingdom_lab import (
+    LAB_ORIGINAL_SLUG,
     LAB_PANEL_MARKER,
-    LAB_PRESETS,
+    LAB_TEST_ITEMS,
+    LAB_TRAVAUX_SLUG,
     LAB_VIEWS,
     KingdomLabCleanButton,
     KingdomLabRefreshButton,
-    KingdomLabVersionSelect,
-    KingdomLabViewSelect,
+    KingdomLabTestSelect,
+    KingdomLabVerdictButton,
     KingdomLabVitrineButton,
-    _LabPresetButton,
+    _dispatch_and_report,
+    _test_card_view,
     build_lab_cockpit,
     deploy_lab_panel,
     neutralize_view,
@@ -55,6 +59,10 @@ def _view_text(view: Any) -> str:
     )
 
 
+def _buttons(view: Any) -> list[Any]:
+    return [i for i in _walk(view.children) if isinstance(i, discord.ui.Button)]
+
+
 class _FakeBot:
     def __init__(self) -> None:
         self._dynamic_items: set[type] = set()
@@ -66,8 +74,8 @@ class _FakeBot:
 class _SendChannel:
     """A mock with the ``.messages`` cache the shared helpers expect."""
 
-    def __init__(self) -> None:
-        self.name = "🧪 labo"
+    def __init__(self, name: str = "🧪 labo") -> None:
+        self.name = name
         self.messages: list[Any] = []
         self.sent: int = 0
 
@@ -113,27 +121,27 @@ def _make_delete(message: Any) -> Any:
     return delete
 
 
+def _scan_channel_messages(channel: Any) -> Any:
+    """An async ``channel_messages`` stand-in over the mock's cache."""
+
+    async def scan() -> list[Any]:
+        return list(channel.messages)
+
+    return scan()
+
+
 def test_cockpit_carries_every_control() -> None:
     view = build_lab_cockpit("fr")
     items = _walk(view.children)
     selects = [i for i in items if isinstance(i, discord.ui.Select)]
-    multi = [s for s in selects if s.custom_id == "kingdoms:lab:views"]
-    assert len(multi) == 1
-    assert multi[0].min_values == 1
-    assert multi[0].max_values == len(LAB_VIEWS)  # MULTI-selection, no 1-by-1
-    versions = [s for s in selects if s.custom_id == "kingdoms:lab:version"]
-    assert len(versions) == 1
-    assert [o.value for o in versions[0].options] == ["original", "v1"]
-    custom_ids = {
-        b.custom_id
-        for b in items
-        if isinstance(b, discord.ui.Button)
-    }
-    assert custom_ids == {
-        "kingdoms:lab:preset:all",
-        "kingdoms:lab:preset:lieux",
-        "kingdoms:lab:preset:marche",
-        "kingdoms:lab:preset:chantier",
+    assert len(selects) == 1  # ONE test dropdown, single choice
+    select = selects[0]
+    assert select.custom_id == "kingdoms:lab:test"
+    assert (select.min_values, select.max_values) == (1, 1)
+    assert [o.value for o in select.options] == list(LAB_TEST_ITEMS)
+    # every option carries the WHY — Drasah reads what a test is for.
+    assert all(o.description for o in select.options)
+    assert {b.custom_id for b in items if isinstance(b, discord.ui.Button)} == {
         "kingdoms:lab:vitrine",
         "kingdoms:lab:clean",
         "kingdoms:lab:refresh",
@@ -148,96 +156,73 @@ def test_cockpit_top_level_children_are_layout_components() -> None:
     (best-effort) and the Labo salon stayed empty. Every top-level
     child must be a layout component; interactive items ride INSIDE an
     ActionRow."""
-    view = build_lab_cockpit("fr")
-    interactive = (
-        discord.ui.Button,
-        discord.ui.Select,
-        discord.ui.TextInput,
-    )
-    for child in view.children:
-        assert not isinstance(
-            child, interactive
-        ), f"bare interactive component at the LayoutView root: {type(child).__name__}"
-    rows = [c for c in view.children if isinstance(c, discord.ui.ActionRow)]
-    selects = [i for i in _walk(view.children) if isinstance(i, discord.ui.Select)]
-    assert len(selects) == 2
-    for select in selects:
-        assert any(select in row._children for row in rows)
+    for view in (
+        build_lab_cockpit("fr"),
+        _test_card_view("fr", "chantier"),
+        _test_card_view("fr", "chantier", "verdict_validated"),
+    ):
+        interactive = (
+            discord.ui.Button,
+            discord.ui.Select,
+            discord.ui.TextInput,
+        )
+        for child in view.children:
+            assert not isinstance(
+                child, interactive
+            ), f"bare interactive component at the LayoutView root: {type(child).__name__}"
+        rows = [c for c in view.children if isinstance(c, discord.ui.ActionRow)]
+        wrappers = [c for row in rows for c in row._children]
+        for item in _walk(view.children):
+            if isinstance(item, (discord.ui.Button, discord.ui.Select)):
+                # _walk also yields the bare inner component of DynamicItem
+                # wrappers; ActionRow stores the wrapper, so accept either.
+                assert any(
+                    item is w or item is getattr(w, "item", None) for w in wrappers
+                ), item
 
 
-def test_presets_are_journey_ordered_subsets() -> None:
-    for keys in LAB_PRESETS.values():
-        assert keys and all(k in LAB_VIEWS for k in keys)
-    # the walkthrough presets follow the player-journey order; the
-    # editable « chantier » scope keeps its own curated order.
-    for name in ("all", "lieux"):
-        keys = LAB_PRESETS[name]
-        assert list(keys) == [k for k in LAB_VIEWS if k in keys]
-    assert LAB_PRESETS["all"] == LAB_VIEWS
-    assert LAB_PRESETS["lieux"] == (
-        "hub",
-        "conseil",
-        "remparts",
-        "comptes",
-        "paroisse",
-        "voliere",
-    )
-    # the per-patch editable scope — currently the comptes-cv2 beta.
-    assert "comptes" in LAB_PRESETS["chantier"]
+def test_items_are_journey_ordered_subsets() -> None:
+    for item in LAB_TEST_ITEMS.values():
+        views = item["views"]
+        assert views and all(v in LAB_VIEWS for v in views)
+        assert item["title_key"] and item["why_key"]
+    assert LAB_TEST_ITEMS["tout"]["views"] == list(LAB_VIEWS)
+    assert LAB_TEST_ITEMS["lieux"]["views"] == [
+        v for v in LAB_VIEWS if v in LAB_TEST_ITEMS["lieux"]["views"]
+    ]
+    # the per-patch editable scope — the current patch's surfaces.
+    assert "comptes" in LAB_TEST_ITEMS["chantier"]["views"]
 
 
 def test_every_label_rebuilds_after_a_restart() -> None:
     interaction = SimpleNamespace(locale="fr")
-    for preset in ("all", "lieux", "marche", "chantier"):
-        match = re.search(r"(\w+)$", f"kingdoms:lab:preset:{preset}")
-        rebuilt = _run(_LabPresetButton.from_custom_id(interaction, None, match))
+    select = _run(
+        KingdomLabTestSelect.from_custom_id(interaction, None, re.search("x", "x"))
+    )
+    assert select.item.options[0].value == "tout"
+    for action in ("validate", "modify", "cancel"):
+        cid = f"kingdoms:lab:verdict:{action}:chantier"
+        match = re.search(r"kingdoms:lab:verdict:(validate|modify|cancel):(\w+)$", cid)
+        rebuilt = _run(KingdomLabVerdictButton.from_custom_id(interaction, None, match))
         assert rebuilt.item.label
-        assert rebuilt.item.custom_id == f"kingdoms:lab:preset:{preset}"
-    assert (
-        _run(
-            KingdomLabViewSelect.from_custom_id(interaction, None, re.search("x", "x"))
-        ).item.max_values
-        == len(LAB_VIEWS)
-    )
-    assert (
-        _run(
-            KingdomLabVersionSelect.from_custom_id(
-                interaction, None, re.search("x", "x")
-            )
-        ).item.options[0].value
-        == "original"
-    )
-    assert (
-        _run(
-            KingdomLabVitrineButton.from_custom_id(
-                interaction, None, re.search("x", "x")
-            )
-        ).item.label
-        == "🖼️ Vitrine assets"
-    )
-    assert (
-        _run(
-            KingdomLabCleanButton.from_custom_id(interaction, None, re.search("x", "x"))
-        ).item.label
-        == "🧹 Nettoyer"
-    )
-    assert (
-        _run(
-            KingdomLabRefreshButton.from_custom_id(
-                interaction, None, re.search("x", "x")
-            )
-        ).item.label
-        == "♻️ Actualiser"
-    )
+        assert rebuilt.item.custom_id == cid
+    for cls, label in (
+        (KingdomLabVitrineButton, "🖼️ Vitrine assets"),
+        (KingdomLabCleanButton, "🧹 Nettoyer"),
+        (KingdomLabRefreshButton, "♻️ Actualiser"),
+    ):
+        assert (
+            _run(cls.from_custom_id(interaction, None, re.search("x", "x"))).item.label
+            == label
+        )
 
 
 def test_registration_is_restart_proof() -> None:
     bot = _FakeBot()
     register_kingdom_lab_items(bot)
     assert bot._dynamic_items == {
-        _LabPresetButton,
-        KingdomLabViewSelect,
-        KingdomLabVersionSelect,
+        KingdomLabTestSelect,
+        KingdomLabVerdictButton,
         KingdomLabVitrineButton,
         KingdomLabCleanButton,
         KingdomLabRefreshButton,
@@ -307,9 +292,7 @@ def test_render_posts_labelled_neutralized_views() -> None:
 def test_render_failure_is_isolated() -> None:
     channel = _SendChannel()
     rendered, failures = _run(
-        render_lab_views(
-            channel, "fr", _fake_wiring(), _fake_kingdom(), ["comptes"]
-        )
+        render_lab_views(channel, "fr", _fake_wiring(), _fake_kingdom(), ["comptes"])
     )
     assert isinstance(rendered, int) and isinstance(failures, list)
 
@@ -322,3 +305,127 @@ def test_cockpit_deploys_once_then_edits_in_place() -> None:
     assert _run(deploy_lab_panel(guild, "fr")) is True
     assert channel.sent == 1  # edited in place, never duplicated
     assert channel.messages[0].edits == 1
+
+
+def _dispatch_interaction(guild: Any) -> Any:
+    """A mock interaction recording the responses (_dispatch path)."""
+    responses: list[dict[str, Any]] = []
+    followups: list[str] = []
+
+    async def defer(*args: Any, **kwargs: Any) -> None:
+        responses.append({"deferred": True})
+
+    async def followup_send(*args: Any, **kwargs: Any) -> None:
+        followups.append(str(args[0] if args else kwargs.get("content", "")))
+
+    interaction = SimpleNamespace(
+        locale="fr",
+        guild=guild,
+        response=SimpleNamespace(defer=defer),
+        followup=SimpleNamespace(send=followup_send),
+        client=SimpleNamespace(user=SimpleNamespace(id=1)),
+    )
+    interaction._responses = responses  # type: ignore[attr-defined]
+    interaction._followups = followups  # type: ignore[attr-defined]
+    return interaction
+
+
+def _patched_dispatch(monkeypatch: Any, renders: dict[str, list[str]]) -> None:
+    """Stub the render into a recorder (the builders need live data)."""
+
+    async def fake_render(channel, locale, wiring, kingdom, keys, variant="original"):
+        renders.setdefault(variant, []).extend(keys)
+        return len(keys), []
+
+    monkeypatch.setattr(
+        "kingdoms.mods.kingdoms.kingdom_lab.render_lab_views", fake_render
+    )
+
+    async def fake_kingdom(wiring: Any) -> Any:
+        return _fake_kingdom()
+
+    monkeypatch.setattr(
+        "kingdoms.mods.kingdoms.kingdom_lab._test_kingdom",
+        fake_kingdom,
+    )
+    from kingdoms.mods.kingdoms import kingdom_persistent
+
+    wiring = SimpleNamespace(bot_admins=(), kingdoms_service=object())
+    monkeypatch.setattr(kingdom_persistent, "_wiring", lambda: wiring)
+    monkeypatch.setattr(kingdom_persistent, "_is_admin", lambda *a, **k: True)
+
+
+def test_dispatch_renders_both_salons_and_posts_the_card(monkeypatch) -> None:
+    """laboratoire-v2 core: ONE test → BOTH version salons + feedback card."""
+    renders: dict[str, list[str]] = {}
+    _patched_dispatch(monkeypatch, renders)
+    labo = _SendChannel("🧪 labo")
+    original = _SendChannel("📜 original")
+    travaux = _SendChannel("🚧 travaux")
+    guild = SimpleNamespace(text_channels=[labo, original, travaux])
+    interaction = _dispatch_interaction(guild)
+    _run(_dispatch_and_report(interaction, "fr", "chantier"))
+    # the render hit BOTH salons, on the item's journey-ordered views.
+    assert renders["original"] == renders["travaux"] == LAB_TEST_ITEMS["chantier"]["views"]
+    # the feedback card rides in labo with the three verdict buttons.
+    assert labo.sent == 1
+    card = labo.messages[0].view
+    assert {b.custom_id for b in _buttons(card)} == {
+        "kingdoms:lab:verdict:validate:chantier",
+        "kingdoms:lab:verdict:modify:chantier",
+        "kingdoms:lab:verdict:cancel:chantier",
+    }
+    # the summary answers the admin.
+    assert interaction._followups
+
+
+def test_verdict_freezes_the_card_with_the_status() -> None:
+    fresh = _test_card_view("fr", "chantier")
+    assert all(b.disabled is False for b in _buttons(fresh))
+    for status in ("verdict_validated", "verdict_cancelled", "verdict_modified"):
+        frozen = _test_card_view("fr", "chantier", status)
+        assert all(b.disabled is True for b in _buttons(frozen))
+        assert status.replace("_", " ") not in _view_text(frozen)  # raw key never leaks
+    with_remarks = _test_card_view("fr", "chantier", "verdict_modified", "dos rogné")
+    assert "dos rogné" in _view_text(with_remarks)
+
+
+def test_clean_sweeps_the_render_salons_only(monkeypatch) -> None:
+    """laboratoire-v2: 🧹 empties 📜 original + 🚧 travaux — labo is kept."""
+
+    class _CleanChannel(_SendChannel):
+        def __init__(self, name: str) -> None:
+            super().__init__(name)
+            self.scanned = False
+
+        async def _scan(self) -> list[Any]:
+            self.scanned = True
+            return list(self.messages)
+
+    labo = _CleanChannel("🧪 labo")
+    original = _CleanChannel("📜 original")
+    travaux = _CleanChannel("🚧 travaux")
+    for channel in (labo, original, travaux):
+        channel.send(view=None)
+    guild = SimpleNamespace(text_channels=[labo, original, travaux])
+    monkeypatch.setattr(
+        "kingdoms.mods.kingdoms.panel_messages.channel_messages",
+        _scan_channel_messages,
+    )
+    from kingdoms.mods.kingdoms import kingdom_persistent
+
+    wiring = SimpleNamespace(bot_admins=())
+    monkeypatch.setattr(kingdom_persistent, "_wiring", lambda: wiring)
+    monkeypatch.setattr(kingdom_persistent, "_is_admin", lambda *a, **k: True)
+    interaction = _dispatch_interaction(guild)
+
+    async def defer(*args: Any, **kwargs: Any) -> None:
+        pass
+
+    interaction.response = SimpleNamespace(defer=defer)
+    button = KingdomLabCleanButton("🧹 Nettoyer")
+    _run(button.callback(interaction))
+    # the two render salons are swept, labo keeps its messages.
+    assert all(m.deleted for m in original.messages)
+    assert all(m.deleted for m in travaux.messages)
+    assert all(not m.deleted for m in labo.messages)

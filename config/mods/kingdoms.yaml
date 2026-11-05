@@ -180,6 +180,26 @@ channels:
     access:
       everyone_view: false
       view: [Kingdoms Admin]
+  # laboratoire-v2 (Drasah 05/11): the lab DISPATCHES every test into
+  # two version salons — 📜 original (the deployed code's render) and
+  # 🚧 travaux (the work-in-progress render) — the side-by-side
+  # comparison Drasah validates before confirming to Mistral.
+  - key: lab_original
+    display_name: 📜 original
+    description: The lab's original-version renders — the deployed code (admin only)
+    group: laboratoire
+    admin_only: true
+    access:
+      everyone_view: false
+      view: [Kingdoms Admin]
+  - key: lab_travaux
+    display_name: 🚧 travaux
+    description: The lab's work-in-progress renders — the pending version (admin only)
+    group: laboratoire
+    admin_only: true
+    access:
+      everyone_view: false
+      view: [Kingdoms Admin]
   # ordre-salons-v1 (Drasah 19/10): the Support group (question /
   # signaler-un-bug forums) is RETIRED — it read as a duplicate of the
   # admin salons; the anonymous Pigeon already handles a missing
