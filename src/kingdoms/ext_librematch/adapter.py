@@ -18,8 +18,8 @@ from urllib.parse import urljoin
 
 import httpx
 
+from kingdoms.core.codecs import BlobDecodeError, decode_blob
 from kingdoms.core.debug import capture
-from kingdoms.core.games.aoe2.blobs import BlobDecodeError, decode_blob
 from kingdoms.core.models.game import (
     GameMap,
     MatchDetails,

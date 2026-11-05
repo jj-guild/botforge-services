@@ -91,13 +91,11 @@ def _assert_allowed(offenders: list[str], allowlist: tuple[str, ...], rule: str)
 
 
 ALLOWLIST_R1 = (
-    "kingdoms/ext_aoe2lobby/adapter.py -> kingdoms.core.games.aoe2.grace",
-    "kingdoms/ext_librematch/adapter.py -> kingdoms.core.games.aoe2.blobs",
     "kingdoms/ext_liquipedia/source.py -> kingdoms.mapsdata.liquipedia",
-    "kingdoms/ext_liquipedia/source.py -> kingdoms.mapsdata.seed",
 )
 
 ALLOWLIST_R3 = (
+    "kingdoms/core/codecs.py mentions 'librematch'",
     "kingdoms/core/games/aoe2/blobs.py mentions 'librematch'",
     "kingdoms/core/games/aoe2/content_refresh.py mentions 'liquipedia'",
     "kingdoms/core/games/aoe2/content_refresh.py mentions 'aoe2techtree'",
@@ -105,6 +103,7 @@ ALLOWLIST_R3 = (
     "kingdoms/core/games/aoe2/faction_content.py mentions 'liquipedia'",
     "kingdoms/core/games/aoe2/faction_content.py mentions 'aoe2techtree'",
     "kingdoms/core/games/aoe2/faction_content_cli.py mentions 'aoe2techtree'",
+    "kingdoms/core/games/aoe2/grace.py mentions 'aoe2lobby'",
     "kingdoms/core/games/game_content.py mentions 'aoe2techtree'",
     "kingdoms/core/rpc/content.py mentions 'aoe2techtree'",
     "kingdoms/core/rpc/content_client.py mentions 'aoe2techtree'",
@@ -116,6 +115,7 @@ ALLOWLIST_R3 = (
     "kingdoms/core/services/provider_endpoints.py mentions 'aoe2lobby'",
     "kingdoms/core/services/provider_endpoints.py mentions 'librematch'",
     "kingdoms/core/services/provider_mapping.py mentions 'aoe2techtree'",
+    "kingdoms/core/wiki_names.py mentions 'liquipedia'",
 )
 
 ALLOWLIST_R4 = (
