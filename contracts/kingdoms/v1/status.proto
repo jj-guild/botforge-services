@@ -28,6 +28,7 @@ message UpstreamStatsReply {
 }
 
 message UpstreamStatEntry {
+  string provider_id = 13;  // the provider process this entry describes
   string upstream = 1;
   bool ok = 2;
   bool never_called = 3;

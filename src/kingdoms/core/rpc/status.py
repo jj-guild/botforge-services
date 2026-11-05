@@ -65,7 +65,7 @@ class _StatusServicerUpstream(_StatusServicer):
     def __init__(
         self,
         status_provider: Callable[[], CoreStatus],
-        stats_provider: Callable[[], list[dict[str, Any]]] | None = None,
+        stats_provider: Callable[[], Any] | None = None,
     ) -> None:
         super().__init__(status_provider)
         self._stats_provider = stats_provider
@@ -75,11 +75,20 @@ class _StatusServicerUpstream(_StatusServicer):
         request: status_pb2.UpstreamStatsRequest,
         context: grpc.aio.ServicerContext,
     ) -> status_pb2.UpstreamStatsReply:
-        """Serve the process's own upstream call statistics."""
+        """Serve the process's upstream call statistics.
+
+        The stats_provider may be sync or async (an aggregator that
+        fetches its providers' own stats on demand).
+        """
+        import inspect
+
         entries = self._stats_provider() if self._stats_provider else []
+        if inspect.isawaitable(entries):
+            entries = await entries
         return status_pb2.UpstreamStatsReply(
             entries=[
                 status_pb2.UpstreamStatEntry(
+                    provider_id=str(e.get("provider_id", "")),
                     upstream=str(e.get("upstream", "")),
                     ok=bool(e.get("ok", False)),
                     never_called=bool(e.get("never_called", False)),
@@ -100,7 +109,7 @@ class _StatusServicerUpstream(_StatusServicer):
 
 def build_status_server_with_stats(
     status_provider: Callable[[], CoreStatus],
-    stats_provider: Callable[[], list[dict[str, Any]]] | None = None,
+    stats_provider: Callable[[], Any] | None = None,
 ) -> grpc.aio.Server:
     """Build the aio gRPC server with the Status service (stats optional)."""
     server = grpc.aio.server()
@@ -121,6 +130,7 @@ async def fetch_upstream_stats(uri: str, timeout_s: float = 5.0) -> list[dict[st
         reply = await stub.GetUpstreamStats(status_pb2.UpstreamStatsRequest(), timeout=timeout_s)
         return [
             {
+                "provider_id": e.provider_id,
                 "upstream": e.upstream,
                 "ok": e.ok,
                 "never_called": e.never_called,

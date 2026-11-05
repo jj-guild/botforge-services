@@ -35,41 +35,32 @@ async def view_providers(interaction: discord.Interaction) -> None:
 
     if not await guard_admin(interaction):
         return
+    game_uri = os.environ.get("GAME_AOE2_URI", "")
     await interaction.response.defer(ephemeral=True)
+    if not game_uri:
+        await interaction.followup.send(
+            "Providers panel unavailable: GAME_AOE2_URI is not configured "
+            "(the game-aoe2 service owns the providers).",
+            ephemeral=True,
+        )
+        return
     from kingdoms.core.rpc.status import fetch_upstream_stats
 
-    # every provider the bot knows by URI (the ext processes + the game
-    # service); a provider without a URI renders 'not deployed'
-    targets: list[tuple[str, str]] = [
-        ("ext-librematch", os.environ.get("EXT_LIBREMATCH_URI", "")),
-        ("ext-aoe2lobby", os.environ.get("EXT_AOE2LOBBY_URI", "")),
-        ("ext-aoe2techtree", os.environ.get("EXT_AOE2TECHTREE_URI", "")),
-        ("ext-liquipedia", os.environ.get("EXT_LIQUIPEDIA_URI", "")),
-        ("game-aoe2", os.environ.get("GAME_AOE2_URI", "")),
-    ]
-    entries: dict[str, dict[str, Any]] = {}
-    unreachable: list[str] = []
-    for provider_id, uri in targets:
-        if not uri:
-            entries[provider_id] = {"upstream": provider_id, "never_called": True, "detail": "not deployed"}
-            continue
-        try:
-            stats = await fetch_upstream_stats(uri, timeout_s=5.0)
-            if stats:
-                entries[provider_id] = stats[0]  # one upstream per provider today
-            else:
-                entries[provider_id] = {"upstream": provider_id, "never_called": True, "detail": "no calls yet"}
-        except Exception:
-            unreachable.append(provider_id)
-    if unreachable and not entries:
+    # The game service OWNS its providers (owner direction 2026-11-05):
+    # the bot never interrogates a provider — it asks the game service,
+    # which answers with every provider's stats (its own aggregation).
+    try:
+        entries = await fetch_upstream_stats(game_uri, timeout_s=15.0)
+    except Exception:
+        logger.warning("providers panel fetch failed", exc_info=True)
         await interaction.followup.send(
-            "Providers panel unavailable: no provider is responding.",
+            "Providers panel unavailable: the game-aoe2 service is not responding.",
             ephemeral=True,
         )
         return
     locale = str(interaction.locale) if interaction.locale else "fr"
     await interaction.followup.send(
-        view=_render_view({"entries": entries, "unreachable": unreachable}, interaction.client, locale),
+        view=_render_view({"entries": entries}, interaction.client, locale),
         ephemeral=True,
     )
 
@@ -113,8 +104,12 @@ def _render_view(results: dict[str, Any], bot: Any = None, locale: str = "fr") -
     DECLARED features (config/games/aoe2/providers.yaml). The view id
     rides the last line (the SDK's build_view).
     """
-    entries = results.get("entries") or {}
-    unreachable = [str(u) for u in (results.get("unreachable") or [])]
+    entries_list = results.get("entries") or []
+    # group by provider (a provider may own several upstreams)
+    entries: dict[str, dict[str, Any]] = {}
+    for entry in entries_list:
+        provider_id = str(entry.get("provider_id", "")) or str(entry.get("upstream", "?"))
+        entries.setdefault(provider_id, entry)
     from kingdoms.discord.ui.view_footer import build_view, require_declared_view_id
 
     require_declared_view_id("panel:game:aoe2:providers")
@@ -141,13 +136,18 @@ def _render_view(results: dict[str, Any], bot: Any = None, locale: str = "fr") -
         )
     for provider_id, entry in entries.items():
         upstream = str(entry.get("upstream", provider_id))
-        if provider_id in unreachable:
+        detail = str(entry.get("detail", ""))
+        if detail.startswith("unreachable"):
             icon = "\u26d4"
             state = _tr(bot, locale, "unreachable", "injoignable")
             block = [f"{icon} **{provider_id} {state}**"]
         elif entry.get("never_called"):
             icon = "\u2796"
-            state = _tr(bot, locale, "no_calls", "aucun appel")
+            state = (
+                _tr(bot, locale, "not_deployed", "pas d\u00e9ploy\u00e9")
+                if entry.get("detail") == "not deployed"
+                else _tr(bot, locale, "no_calls", "aucun appel")
+            )
             block = [f"{icon} **{provider_id} {state}**"]
         else:
             ok = bool(entry.get("ok", False))
@@ -184,7 +184,7 @@ def _render_view(results: dict[str, Any], bot: Any = None, locale: str = "fr") -
             block.append(f"*{feats}:*")
             for label in labels:
                 block.append(f"- {label}")
-        ok = provider_id not in unreachable and not entry.get("never_called") and bool(entry.get("ok", False))
+        ok = not entry.get("never_called") and bool(entry.get("ok", False))
         items.append(
             discord.ui.Container(
                 discord.ui.TextDisplay("\n".join(block)),

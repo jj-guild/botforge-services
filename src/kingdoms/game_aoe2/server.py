@@ -18,6 +18,12 @@ import logging
 import os
 from typing import Any
 
+from kingdoms.core.upstream_stats import StatsRegistry
+
+# The process-wide upstream call stats — the provider streams this
+# process consumes, served over the Status contract.
+STATS = StatsRegistry()
+
 logger = logging.getLogger("kingdoms.game_aoe2")
 
 
@@ -32,15 +38,16 @@ def main() -> None:
 
 async def _serve() -> None:
     from kingdoms import __version__
-    from kingdoms.core.rpc.status import CoreStatus, build_status_server
+    from kingdoms.core.rpc.status import CoreStatus, build_status_server_with_stats
     from kingdoms.game_aoe2 import GAME_KEY, PROCESS_LABEL
     from kingdoms.game_aoe2.aggregator import GameAoe2Aggregator
     from kingdoms.game_aoe2.rpc import GameDataServicer, add_gamedata_servicer
 
     aggregator = GameAoe2Aggregator()
     enrollments = _EnrollmentPusher(aggregator)
-    server = build_status_server(
+    server = build_status_server_with_stats(
         lambda: CoreStatus(version=__version__, process=PROCESS_LABEL),
+        stats_provider=_aggregate_provider_stats,
     )
     add_gamedata_servicer(server, GameDataServicer(aggregator, enrollments=enrollments))
 
@@ -109,6 +116,55 @@ class _EnrollmentPusher:
             return len(profile_ids), False
 
 
+async def _aggregate_provider_stats() -> list[dict[str, Any]]:
+    """Fetch the game service's providers' stats on demand.
+
+    The game service OWNS its providers (owner direction 2026-11-05):
+    the bot never interrogates them. When the panel asks, this process
+    fetches each provider's own call statistics over the Status
+    contract and merges its own stream-consumption stats — one answer,
+    every provider.
+    """
+    from kingdoms.core.rpc.status import fetch_upstream_stats
+
+    providers = [
+        ("ext-librematch", os.environ.get("EXT_LIBREMATCH_URI", "")),
+        ("ext-aoe2lobby", os.environ.get("EXT_AOE2LOBBY_URI", "")),
+        ("ext-aoe2techtree", os.environ.get("EXT_AOE2TECHTREE_URI", "")),
+        ("ext-liquipedia", os.environ.get("EXT_LIQUIPEDIA_URI", "")),
+    ]
+    entries: list[dict[str, Any]] = []
+    for provider_id, uri in providers:
+        if not uri:
+            entries.append(
+                {"provider_id": provider_id, "upstream": provider_id,
+                 "never_called": True, "detail": "not deployed"}
+            )
+            continue
+        try:
+            stats = await fetch_upstream_stats(uri, timeout_s=5.0)
+        except Exception as exc:
+            entries.append(
+                {"provider_id": provider_id, "upstream": provider_id,
+                 "never_called": True, "detail": f"unreachable: {type(exc).__name__}"}
+            )
+            continue
+        if not stats:
+            entries.append(
+                {"provider_id": provider_id, "upstream": provider_id,
+                 "never_called": True, "detail": "no calls yet"}
+            )
+            continue
+        for entry in stats:
+            entry["provider_id"] = provider_id
+        entries.extend(stats)
+    # this process's own stream consumption rides along
+    for entry in STATS.snapshot():
+        entry["provider_id"] = "game-aoe2"
+        entries.append(entry)
+    return entries
+
+
 async def _consume_providers(aggregator: Any) -> None:
     """Fold every configured provider's event stream into the aggregator."""
     providers = [
@@ -132,12 +188,15 @@ async def _consume_one(aggregator: Any, provider_id: str, uri: str) -> None:
 
     client = GameProviderClient(uri, provider_id, "aoe2")
     health = asyncio.ensure_future(_watch_provider_health(aggregator, client))
+    stats = STATS.register(f"provider:{provider_id}")
     try:
         while True:
             try:
                 async for event in client.stream_match_events(since=0):
                     await aggregator.apply_event(event)
-            except Exception:
+                stats.record(True, 0)  # a stream: no per-call latency
+            except Exception as exc:
+                stats.record(False, 0, f"{type(exc).__name__}: {exc}")
                 logger.warning("provider %s stream lost; retrying in 5s", provider_id)
                 await asyncio.sleep(5)
             await asyncio.sleep(1)

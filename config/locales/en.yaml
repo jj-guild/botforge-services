@@ -608,6 +608,7 @@ en:
     failures: 'Consecutive failures: {count}'
     last_call: 'Last minute: {calls} call(s), {errors} error(s) — last call {when}'
     unreachable: unreachable
+    not_deployed: not deployed
     no_calls: no calls
     features: Features
     no_features: —

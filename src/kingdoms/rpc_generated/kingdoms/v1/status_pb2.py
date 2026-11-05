@@ -24,7 +24,7 @@ _sym_db = _symbol_database.Default()
 
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x18kingdoms/v1/status.proto\x12\x0bkingdoms.v1\"\x13\n\x11\x43oreStatusRequest\".\n\nCoreStatus\x12\x0f\n\x07version\x18\x01 \x01(\t\x12\x0f\n\x07process\x18\x02 \x01(\t\"\x16\n\x14UpstreamStatsRequest\"E\n\x12UpstreamStatsReply\x12/\n\x07\x65ntries\x18\x01 \x03(\x0b\x32\x1e.kingdoms.v1.UpstreamStatEntry\"\x9d\x02\n\x11UpstreamStatEntry\x12\x10\n\x08upstream\x18\x01 \x01(\t\x12\n\n\x02ok\x18\x02 \x01(\x08\x12\x14\n\x0cnever_called\x18\x03 \x01(\x08\x12\x13\n\x0btotal_calls\x18\x04 \x01(\x05\x12\x14\n\x0ctotal_errors\x18\x05 \x01(\x05\x12\x1c\n\x14\x63onsecutive_failures\x18\x06 \x01(\x05\x12\x14\n\x0clast_call_at\x18\x07 \x01(\x03\x12\x12\n\nlast_ok_at\x18\x08 \x01(\x03\x12\x19\n\x11\x63\x61lls_last_minute\x18\t \x01(\x05\x12\x1a\n\x12\x65rrors_last_minute\x18\n \x01(\x05\x12\x16\n\x0e\x61vg_latency_ms\x18\x0b \x01(\x05\x12\x12\n\nlast_error\x18\x0c \x01(\t2\xaa\x01\n\x06Status\x12H\n\rGetCoreStatus\x12\x1e.kingdoms.v1.CoreStatusRequest\x1a\x17.kingdoms.v1.CoreStatus\x12V\n\x10GetUpstreamStats\x12!.kingdoms.v1.UpstreamStatsRequest\x1a\x1f.kingdoms.v1.UpstreamStatsReplyb\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x18kingdoms/v1/status.proto\x12\x0bkingdoms.v1\"\x13\n\x11\x43oreStatusRequest\".\n\nCoreStatus\x12\x0f\n\x07version\x18\x01 \x01(\t\x12\x0f\n\x07process\x18\x02 \x01(\t\"\x16\n\x14UpstreamStatsRequest\"E\n\x12UpstreamStatsReply\x12/\n\x07\x65ntries\x18\x01 \x03(\x0b\x32\x1e.kingdoms.v1.UpstreamStatEntry\"\xb2\x02\n\x11UpstreamStatEntry\x12\x13\n\x0bprovider_id\x18\r \x01(\t\x12\x10\n\x08upstream\x18\x01 \x01(\t\x12\n\n\x02ok\x18\x02 \x01(\x08\x12\x14\n\x0cnever_called\x18\x03 \x01(\x08\x12\x13\n\x0btotal_calls\x18\x04 \x01(\x05\x12\x14\n\x0ctotal_errors\x18\x05 \x01(\x05\x12\x1c\n\x14\x63onsecutive_failures\x18\x06 \x01(\x05\x12\x14\n\x0clast_call_at\x18\x07 \x01(\x03\x12\x12\n\nlast_ok_at\x18\x08 \x01(\x03\x12\x19\n\x11\x63\x61lls_last_minute\x18\t \x01(\x05\x12\x1a\n\x12\x65rrors_last_minute\x18\n \x01(\x05\x12\x16\n\x0e\x61vg_latency_ms\x18\x0b \x01(\x05\x12\x12\n\nlast_error\x18\x0c \x01(\t2\xaa\x01\n\x06Status\x12H\n\rGetCoreStatus\x12\x1e.kingdoms.v1.CoreStatusRequest\x1a\x17.kingdoms.v1.CoreStatus\x12V\n\x10GetUpstreamStats\x12!.kingdoms.v1.UpstreamStatsRequest\x1a\x1f.kingdoms.v1.UpstreamStatsReplyb\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
@@ -40,7 +40,7 @@ if not _descriptor._USE_C_DESCRIPTORS:
   _globals['_UPSTREAMSTATSREPLY']._serialized_start=134
   _globals['_UPSTREAMSTATSREPLY']._serialized_end=203
   _globals['_UPSTREAMSTATENTRY']._serialized_start=206
-  _globals['_UPSTREAMSTATENTRY']._serialized_end=491
-  _globals['_STATUS']._serialized_start=494
-  _globals['_STATUS']._serialized_end=664
+  _globals['_UPSTREAMSTATENTRY']._serialized_end=512
+  _globals['_STATUS']._serialized_start=515
+  _globals['_STATUS']._serialized_end=685
 # @@protoc_insertion_point(module_scope)

@@ -610,6 +610,7 @@ fr:
     failures: 'Échecs consécutifs : {count}'
     last_call: 'Dernière minute : {calls} appel(s), {errors} erreur(s) — dernier appel {when}'
     unreachable: injoignable
+    not_deployed: pas déployé
     no_calls: aucun appel
     features: Fonctionnalités
     no_features: —
