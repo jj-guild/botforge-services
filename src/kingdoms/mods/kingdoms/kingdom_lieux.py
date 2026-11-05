@@ -99,13 +99,26 @@ STRINGS: dict[str, dict[str, str]] = {
         "objectif_quit_button": "🚪 Quit",
         "objectif_change_button": "✏️ {0}",
         "objectif_undefined": "— undefined",
+        # synfoni-v1 (Drasah 06/11): readability of the goals picker —
+        # an explainer, named flip buttons, a page indicator and an
+        # alphabetical range in the dropdown placeholder.
+        "objectif_explainer": (
+            "Objectives exist to **communicate your kingdom's"
+            " expectations** to all its members. The three objectives"
+            " are **independent** — set none, one, two or all three."
+        ),
+        "objectif_flip_prev": "◀️ Previous",
+        "objectif_flip_next": "▶️ Next",
+        "objectif_flip_pages": "Page {0}/{1}",
+        "objectif_range_connector": "to",
         "objectif_read_hint": (
-            "-# Indicative objectives set by the King — ✏️ Edit to change"
-            " them, 🚪 Quit to close."
+            "-# Indicative objectives set by the King, shown to the realm"
+            " — ✏️ Edit to change them, 🚪 Quit to close."
         ),
         "objectif_edit_hint": (
-            "-# Each menu picked becomes your objective — ✅ Apply to save,"
-            " 🚪 Quit to close without saving."
+            "-# Each menu picked becomes an objective, shown to your"
+            " members — ◀️ Previous / ▶️ Next browse the list pages,"
+            " ✅ Apply to save, 🚪 Quit to close without saving."
         ),
         "objectif_save_failed": "⚠️ Save failed — try again in a moment.",
         "conseil_objectifs_title": "🎯 Objectives",
@@ -229,13 +242,25 @@ STRINGS: dict[str, dict[str, str]] = {
         "objectif_quit_button": "🚪 Quitter",
         "objectif_change_button": "✏️ {0}",
         "objectif_undefined": "— non défini",
+        # synfoni-v1 (Drasah 06/11) : lisibilité du sélecteur d'objectifs.
+        "objectif_explainer": (
+            "Les objectifs servent à **communiquer les attentes de ton"
+            " royaume** à tous tes membres. Les trois objectifs sont"
+            " **indépendants** — fixe-en zéro, un, deux ou trois."
+        ),
+        "objectif_flip_prev": "◀️ Précédent",
+        "objectif_flip_next": "▶️ Suivant",
+        "objectif_flip_pages": "Page {0}/{1}",
+        "objectif_range_connector": "à",
         "objectif_read_hint": (
-            "-# Objectifs indicatifs fixés par le Roi — ✏️ Modifier pour les"
-            " changer, 🚪 Quitter pour fermer."
+            "-# Objectifs indicatifs fixés par le Roi, affichés aux membres"
+            " — ✏️ Modifier pour les changer, 🚪 Quitter pour fermer."
         ),
         "objectif_edit_hint": (
-            "-# Chaque menu choisi devient ton objectif — ✅ Valider pour"
-            " sauvegarder, 🚪 Quitter pour fermer sans sauvegarder."
+            "-# Chaque menu choisi devient un objectif, affiché à tes"
+            " membres — ◀️ Précédent / ▶️ Suivant feuillettent les pages de"
+            " la liste, ✅ Valider pour sauvegarder, 🚪 Quitter pour fermer"
+            " sans sauvegarder."
         ),
         "objectif_save_failed": "⚠️ Sauvegarde échouée — réessaie dans un instant.",
         "conseil_objectifs_title": "🎯 Objectifs",
@@ -809,7 +834,12 @@ def _objectif_page_options(
         options.append(
             discord.SelectOption(label=f"✅ {catalog[current]}"[:100], value=current)
         )
-    keys = [key for key in catalog if key != current]
+    # synfoni-v1 (Drasah 06/11): the catalog slices are now ALPHABETICAL
+    # so the page ranges shown in the placeholder stay truthful.
+    keys = sorted(
+        (key for key in catalog if key != current),
+        key=lambda key: _objectif_sort_key(str(catalog[key])),
+    )
     window = keys[
         offset * _OBJECTIF_PAGE_SIZE : (offset + 1) * _OBJECTIF_PAGE_SIZE
     ]
@@ -818,6 +848,38 @@ def _objectif_page_options(
             discord.SelectOption(label=str(catalog[key])[:100], value=key)
         )
     return options[:25]
+
+
+def _objectif_sort_key(label: str) -> tuple[Any, ...]:
+    """Case-folded alphabetical order (accents fold along)."""
+    import unicodedata
+
+    folded = unicodedata.normalize("NFKD", label).encode("ascii", "ignore")
+    return (folded.lower(), label.casefold())
+
+
+def _objectif_page_range(
+    locale: str, catalog: dict[str, str], page: int
+) -> str | None:
+    """synfoni-v1: the alphabetical range of one dropdown page (« A à K »).
+
+    None when the catalog fits a single page (no range to advertise).
+    """
+    lieu = _strings(locale)
+    if _objectif_max_page(catalog) <= 0 or not catalog:
+        return None
+    labels = sorted(
+        (str(label) for label in catalog.values()),
+        key=lambda label: _objectif_sort_key(label),
+    )
+    window = labels[
+        page * _OBJECTIF_PAGE_SIZE : (page + 1) * _OBJECTIF_PAGE_SIZE
+    ]
+    if not window:
+        return None
+    first = (window[0].strip()[:1] or "?").upper()
+    last = (window[-1].strip()[:1] or "?").upper()
+    return f"{first} {lieu['objectif_range_connector']} {last}"
 
 
 _OBJECTIF_KINDS = (
@@ -840,15 +902,21 @@ _OBJECTIF_KINDS = (
 def _objectifs_lines(
     locale: str, goals: dict[str, Any], undefined: bool = False
 ) -> list[str]:
-    """The three goal lines — one display line per kind."""
+    """The three goal lines — one display line per kind.
+
+    synfoni-v1 (Drasah 06/11): each line is NUMBERED after its kind's
+    fixed position, so the sheet reads as three independent slots.
+    """
     lieu = _strings(locale)
     lines: list[str] = []
-    for kind, _emoji, _select, template in _OBJECTIF_KINDS:
+    for index, (kind, _emoji, _select, template) in enumerate(
+        _OBJECTIF_KINDS, start=1
+    ):
         label = str(goals.get(f"{kind}_label") or "").strip()
         if not label and undefined:
             label = lieu["objectif_undefined"]
         if label:
-            lines.append(lieu[template].format(label))
+            lines.append(f"{index}. {lieu[template].format(label)}")
     return lines
 
 
@@ -1017,7 +1085,9 @@ async def _objectifs_display_lines(
     lieu = _strings(locale)
     goals = dict(getattr(kingdom, "council_objectives", {}) or {})
     lines: list[str] = []
-    for kind, _emoji, _select, template in _OBJECTIF_KINDS:
+    for index, (kind, _emoji, _select, template) in enumerate(
+        _OBJECTIF_KINDS, start=1
+    ):
         label = str(goals.get(f"{kind}_label") or "").strip()
         if not label:
             continue
@@ -1030,12 +1100,18 @@ async def _objectifs_display_lines(
             if kind == "target_territory" and await _territory_owned_by_kingdom(
                 wiring, kingdom, str(goals.get("target_territory") or "")
             ):
-                lines.append(lieu["objectif_map_defend_line"].format(label))
+                lines.append(
+                    f"{index}. "
+                    + lieu["objectif_map_defend_line"].format(label)
+                )
                 continue
             if kind == "target_alliance" and _kingdom_holds_civ(
                 kingdom, str(goals.get("target_alliance") or "")
             ):
-                lines.append(lieu["objectif_alliance_marry_line"].format(label))
+                lines.append(
+                    f"{index}. "
+                    + lieu["objectif_alliance_marry_line"].format(label)
+                )
                 continue
         text = lieu[template].format(label)
         if wiring is not None:
@@ -1050,7 +1126,7 @@ async def _objectifs_display_lines(
                     str(goals.get("target_alliance") or ""),
                     label,
                 )
-        lines.append(text)
+        lines.append(f"{index}. {text}")
     return lines
 
 
@@ -1063,6 +1139,10 @@ async def _objectifs_read_content(
     return "\n".join(
         [
             f"## {lieu['objectif_picker_title'].format(getattr(kingdom, 'name', ''))}",
+            "",
+            # synfoni-v1 (Drasah 06/11): the explainer first — the
+            # goals exist to TELL the realm what the kingdom expects.
+            lieu["objectif_explainer"],
             "",
             *(lines or [lieu["conseil_objectifs_none"]]),
             "",
@@ -1080,6 +1160,8 @@ def _objectifs_edit_content(
     return "\n".join(
         [
             f"## {lieu['objectif_picker_title'].format(getattr(kingdom, 'name', ''))}",
+            "",
+            lieu["objectif_explainer"],
             "",
             *lines,
             "",
@@ -1582,1487 +1664,3 @@ def _objectifs_picker(
             # the sentinel maps back to « clear the goal »
             value = "" if raw == _OBJECTIF_NONE_VALUE else raw
             new_staged = dict(staged)
-            new_staged[kind] = value
-            new_staged[f"{kind}_label"] = str(
-                catalog.get(value, "") if value else ""
-            )
-            await _rerender(
-                interaction, new_staged, new_reveal=tuple(set(reveal) - {kind})
-            )()
-
-        return _choose
-
-    def _on_change(kind: str) -> Any:
-        async def _change(interaction: discord.Interaction) -> None:
-            # « changer » — the dropdown of that goal comes back
-            await _rerender(
-                interaction, staged, new_reveal=tuple(set(reveal) | {kind})
-            )()
-
-        return _change
-
-    def _on_flip(which: str, delta: int) -> Any:
-        async def _flip(interaction: discord.Interaction) -> None:
-            if which == "target_territory":
-                await _rerender(
-                    interaction,
-                    staged,
-                    map_p=min(
-                        max(map_page + delta, 0),
-                        _objectif_max_page(maps_catalog),
-                    ),
-                )()
-            else:
-                await _rerender(
-                    interaction,
-                    staged,
-                    civ_p=min(
-                        max(civ_page + delta, 0),
-                        _objectif_max_page(civs_catalog),
-                    ),
-                )()
-
-        return _flip
-
-    rows = {
-        "target_kingdom": 0,
-        "target_territory": 1,
-        # the alliance select rides row 3 (its flips share row 4
-        # with Valider/Quitter) — row 2 belongs to the maps flips.
-        "target_alliance": 3,
-    }
-    for kind, emoji, select_key, _template in _OBJECTIF_KINDS:
-        staged_key = str(staged.get(kind) or "")
-        if staged_key and kind not in reveal:
-            change = discord.ui.Button(
-                label=lieu["objectif_change_button"]
-                .format(
-                    f"{emoji} {staged.get(f'{kind}_label') or staged_key}"
-                )[:80],
-                style=discord.ButtonStyle.secondary,
-                row=rows[kind],
-            )
-            change.callback = _on_change(kind)
-            view.add_item(change)
-            continue
-        catalog, page = (
-            (kingdoms_catalog, 0)
-            if kind == "target_kingdom"
-            else (maps_catalog, map_page)
-            if kind == "target_territory"
-            else (civs_catalog, civ_page)
-        )
-        select = discord.ui.Select(
-            placeholder=lieu[select_key],
-            options=_objectif_page_options(locale, catalog, staged_key, page),
-            min_values=1,
-            max_values=1,
-            row=rows[kind],
-        )
-        select.callback = _on_pick(kind, catalog, select)
-        view.add_item(select)
-        # objectif-select-rows-fix (Drasah 01/11): Discord requires a
-        # select ALONE in its action row — the ◀️▶️ flips rode the
-        # selects' rows and the map/alliance dropdowns went dead (his
-        # live report: only the kingdom dropdown answered). The maps
-        # flips own row 2; the civs flips share row 4 with Valider +
-        # Quitter so the view stays within Discord's five rows.
-        if kind != "target_kingdom" and _objectif_max_page(catalog) > 0:
-            flip_row = 2 if kind == "target_territory" else 4
-            prev = discord.ui.Button(
-                emoji="◀️", row=flip_row, disabled=page <= 0
-            )
-            prev.callback = _on_flip(kind, -1)
-            view.add_item(prev)
-            nxt = discord.ui.Button(
-                emoji="▶️",
-                row=flip_row,
-                disabled=page >= _objectif_max_page(catalog),
-            )
-            nxt.callback = _on_flip(kind, 1)
-            view.add_item(nxt)
-
-    async def _validate(interaction: discord.Interaction) -> None:
-        # conseil-rafraichi-v1 (Drasah 02/11): the council sheet the
-        # picker was opened from is RE-RENDERED in place at the save —
-        # his live report: validating left the sheet showing the STALE
-        # goals. The parent rides the registry entry's 4th slot (the
-        # CHILD back-reference), captured BEFORE the close pops it.
-        from kingdoms.mods.kingdoms.kingdom_persistent import _EPHEMERAL_WINDOWS
-
-        _entry = _EPHEMERAL_WINDOWS.get(str(getattr(interaction.user, "id", "")))
-        parent = _entry[3] if _entry is not None and len(_entry) > 3 else None
-        saved = await _save_objectives(wiring, kingdom, staged)
-        if not saved:
-            # the window STAYS open — the ⚠️ note rides the edit sheet
-            # so the King retries without losing his staging.
-            await interaction.response.edit_message(
-                content=(
-                    f"{_objectifs_edit_content(locale, kingdom, staged)}"
-                    f"\n{lieu['objectif_save_failed']}"
-                ),
-                view=_objectifs_picker(
-                    wiring,
-                    kingdom,
-                    locale,
-                    kingdoms_catalog,
-                    maps_catalog,
-                    civs_catalog,
-                    staged,
-                    map_page,
-                    civ_page,
-                    reveal,
-                ),
-            )
-            return
-        # conseil-objectif-axe2 (Drasah 01/11): a valid save CLOSES the
-        # window — no read sheet back, no note: the council sheet above
-        # already shows the fresh goals (his « comportement plus
-        # naturel » wish).
-        await _close_ephemeral_window(interaction)
-        # objectif-annonces-v1 (Drasah 02/11): the pinned recap of the
-        # Discussions salon follows the save — one pinned message,
-        # edited in place, never a stack.
-        try:
-            await refresh_objectifs_pin_safe(
-                interaction.guild, wiring, kingdom, locale
-            )
-        except Exception:
-            logger.warning(
-                "KINGDOM LIEUX: objectives pin refresh failed", exc_info=True
-            )
-        if parent is not None:
-            await _refresh_council_parent_safe(
-                wiring, kingdom, locale, parent
-            )
-
-    validate = discord.ui.Button(
-        label=lieu["objectif_validate_button"],
-        style=discord.ButtonStyle.success,
-        row=4,
-    )
-    validate.callback = _validate
-    view.add_item(validate)
-    view.add_item(_objectif_quit_button(lieu, row=4))
-    return view
-
-
-class KingdomLieuObjectifButton(
-    discord.ui.DynamicItem[discord.ui.Button[Any]],
-    template=r"kingdoms:lieux:objectif",
-):
-    """conseil-objectif-v3 (Drasah 01/11): the King's 🎯 Objectif button
-    of the Salle du conseil — line 1, RIGHT of Seigneurie. The window
-    opens as a READ sheet of the realm's INDICATIVE goals (the catalogs,
-    never free text); ✏️ Modifier turns each goal into a dropdown that
-    TRANSFORMS into the chosen value, ✅ Valider saves all at once and
-    🚪 Quitter closes the window — the council sheet survives (coexist).
-    Green for the King, red+disabled for everyone else (never hidden)."""
-
-    def __init__(self, label: str, enabled: bool = True) -> None:
-        super().__init__(
-            discord.ui.Button(
-                label=label[:80],
-                custom_id="kingdoms:lieux:objectif",
-                style=(
-                    discord.ButtonStyle.success
-                    if enabled
-                    else discord.ButtonStyle.danger
-                ),
-                disabled=not enabled,
-            )
-        )
-
-    @classmethod
-    async def from_custom_id(
-        cls,
-        interaction: discord.Interaction,
-        item: discord.ui.Item[Any],
-        match: re.Match[str],
-        /,
-    ) -> "KingdomLieuObjectifButton":
-        """Rebuild from the wire (the crown check re-runs on click)."""
-        return cls(_strings(_locale(interaction))["objectif_button"])
-
-    async def callback(self, interaction: discord.Interaction) -> None:
-        from time import monotonic
-
-        from kingdoms.mods.kingdoms.kingdom_realm_content import _catalog_names
-        from kingdoms.mods.kingdoms.kingdom_persistent import (
-            _EPHEMERAL_WINDOWS,
-            _close_previous_ephemeral,
-            _kingdom_by_id_safe,
-            _lord_of,
-            _wiring,
-        )
-
-        locale = _locale(interaction)
-        lieu = _strings(locale)
-        wiring = _wiring()
-        if wiring.kingdoms_service is None:
-            await interaction.response.send_message(
-                lieu["no_service"], ephemeral=True
-            )
-            return
-        lord = await _lord_of(
-            wiring.kingdoms_service, str(interaction.user.id), wiring.bot_admins
-        )
-        if lord is None or getattr(lord, "left", False):
-            await interaction.response.send_message(lieu["not_lord"], ephemeral=True)
-            return
-        if str(getattr(lord, "role", "")) != "king":
-            await interaction.response.send_message(
-                lieu["objectif_king_only"], ephemeral=True
-            )
-            return
-        kingdom = await _kingdom_by_id_safe(
-            wiring.kingdoms_service, str(getattr(lord, "kingdom_id", "") or "")
-        )
-        if kingdom is None:
-            await interaction.response.send_message(lieu["not_lord"], ephemeral=True)
-            return
-        # objectif-coexist-type7-fix (Drasah 01/11): a bare
-        # defer(ephemeral=True) on a component rides a TYPE-6 ack —
-        # "DEFERRED UPDATE of the message the button sits on". On an
-        # EPHEMERAL parent (the council sheet) the client then drops
-        # the sheet waiting for an update that never comes — his live
-        # report: one Objectif click and EVERYTHING vanished. The
-        # window flow needs the TYPE-7 ack (deferred NEW message):
-        # thinking=True.
-        await interaction.response.defer(ephemeral=True, thinking=True)
-        # the three catalogs — the kingdoms minus one's own realm, the
-        # full map cadastre, the full civilization catalog.
-        kingdoms_catalog: dict[str, str] = {}
-        try:
-            kingdoms_catalog = {
-                str(item.id): str(item.name)
-                for item in await wiring.kingdoms_service.kingdoms()
-                if not getattr(item, "is_gaia", False)
-                and str(item.id) != str(getattr(kingdom, "id", ""))
-            }
-        except Exception:
-            logger.warning(
-                "KINGDOM LIEUX: objectives kingdom catalog failed",
-                exc_info=True,
-            )
-        user_id = str(getattr(interaction.user, "id", ""))
-        try:
-            maps_catalog = _catalog_names(wiring.kingdoms_service, "maps")
-            civs_catalog = _catalog_names(
-                wiring.kingdoms_service, "civilizations"
-            )
-            content = await _objectifs_read_content(locale, kingdom, wiring)
-            view = _objectifs_read_view(
-                wiring,
-                kingdom,
-                locale,
-                kingdoms_catalog,
-                maps_catalog,
-                civs_catalog,
-            )
-            # objectif-fenetre-coexist-v1: the council sheet
-            # SURVIVES the click — only a previous PICKER is replaced.
-            if _objectif_replaces_previous(_EPHEMERAL_WINDOWS.get(user_id)):
-                await _close_previous_ephemeral(user_id)
-            window = await interaction.followup.send(
-                content, view=view, ephemeral=True
-            )
-        except Exception:
-            # AFTER a type-6 defer Discord stays SILENT on failure —
-            # the King would see nothing at all (his 01/11 live report
-            # on the v2 rollout). Surface a visible error note instead.
-            logger.warning(
-                "KINGDOM LIEUX: objectives picker failed", exc_info=True
-            )
-            from kingdoms.mods.kingdoms.kingdom_persistent import (
-                _market_error_note,
-                _strings as _merged_strings,
-            )
-
-            await interaction.followup.send(
-                _market_error_note(
-                    Exception("objectif"), _merged_strings(locale)
-                ),
-                ephemeral=True,
-            )
-            return
-        # conseil-rafraichi-v1 (Drasah 02/11): a 4th slot carries the
-        # EPHEMERAL PARENT back-reference (the council sheet the button
-        # sits on) so the validate re-renders it in place. The
-        # Discussions ANNOUNCE is a channel message, never an ephemeral
-        # parent — no back-reference there.
-        _parent = getattr(interaction, "message", None)
-        if not bool(
-            getattr(getattr(_parent, "flags", None), "ephemeral", False)
-        ):
-            _parent = None
-        _EPHEMERAL_WINDOWS[user_id] = (interaction, monotonic(), window, _parent)
-
-
-_RANK_MEDALS = {1: "🥇", 2: "🥈", 3: "🥉"}
-
-
-def _rank_medal(rank: int) -> str:
-    """The rank's emoji — the podium medals, 🏰 beyond (axe4, Drasah
-    01/11): « Classement : 🥈 2/3 » and the ranking view lines."""
-    rank = int(rank or 0)
-    if rank in _RANK_MEDALS:
-        return _RANK_MEDALS[rank]
-    return "🏰" if rank >= 4 else ""
-
-
-async def _classement_rows(wiring: Any) -> list[tuple[Any, int, int]]:
-    """The season ranking rows — (kingdom, territories, alliances),
-    sorted territories desc, ties by alliances then tech points (the
-    shared engine of the Classement line AND the ranking view)."""
-    service = getattr(wiring, "kingdoms_service", None)
-    territories_service = getattr(wiring, "territories_service", None)
-    if service is None:
-        return []
-    try:
-        kingdoms = [
-            item
-            for item in await service.kingdoms()
-            if not getattr(item, "is_gaia", False)
-        ]
-        counts: dict[str, int] = {str(item.id): 0 for item in kingdoms}
-        if territories_service is not None:
-            for territory in await territories_service.territories():
-                owner = str(getattr(territory, "owner_kingdom_id", ""))
-                if owner in counts:
-                    counts[owner] += 1
-        rows = [
-            (
-                item,
-                counts[str(item.id)],
-                len(getattr(item, "civilizations", []) or []),
-            )
-            for item in kingdoms
-        ]
-        rows.sort(
-            key=lambda row: (
-                -row[1],
-                -row[2],
-                -int(getattr(row[0], "tech_points_bank", 0) or 0),
-            )
-        )
-        return rows
-    except Exception:
-        logger.warning("KINGDOM LIEUX: classement rows failed", exc_info=True)
-        return []
-
-
-async def _conseil_rank(wiring: Any, kingdom: Any) -> tuple[int, int]:
-    """The kingdom's Classement — territories first, ties broken by
-    alliances then technology points (conseil-objectif-v1, Drasah
-    01/11). Defensive: (0, 0) renders the line as « — »."""
-    rows = await _classement_rows(wiring)
-    if not rows:
-        return (0, 0)
-    ids = [str(getattr(row[0], "id", "")) for row in rows]
-    kid = str(getattr(kingdom, "id", ""))
-    if kid not in ids:
-        return (0, len(ids))
-    return (ids.index(kid) + 1, len(ids))
-
-
-def _classement_content(locale: str, rows: list[tuple[Any, int, int]]) -> str:
-    """conseil-objectif-axe3 (Drasah 01/11): the ephemeral Classement —
-    one line per kingdom, 🥇🥈🥉 for the podium, 🏰 beyond, a BLANK
-    line between the 3rd and the 4th so the podium stands out."""
-    lieu = _strings(locale)
-    lines = [lieu["classement_title"], ""]
-    for index, (kingdom, territories, alliances) in enumerate(rows, start=1):
-        if index == 4:
-            lines.append("")
-        lines.append(
-            lieu["classement_line"].format(
-                _rank_medal(index),
-                index,
-                str(getattr(kingdom, "name", "?")),
-                territories,
-                alliances,
-            )
-        )
-    lines += ["", lieu["conseil_classement_hint"]]
-    return "\n".join(lines)
-
-
-def _classement_view(locale: str) -> discord.ui.View:
-    """The Classement view — one 🚪 Sortir that OVERWRITES the window
-    with the Entrée hub (exploration-retour-v4, Drasah 02/11 — the old
-    plain close left a dead end, the player could not redirect)."""
-    lieu = _strings(locale)
-    view = discord.ui.View(timeout=None)
-    view.add_item(
-        _objectif_quit_button(
-            lieu, row=0, label=lieu["sortir_button"]
-        )
-    )
-    return view
-
-
-class KingdomLieuClassementButton(
-    discord.ui.DynamicItem[discord.ui.Button[Any]],
-    template=r"kingdoms:lieux:classement",
-):
-    """conseil-objectif-axe3 (Drasah 01/11): the 🏆 Classement button of
-    the Salle du conseil — line 1, between 🎯 Objectif and 🚪 Sortir.
-    Opens the season ranking as an ephemeral window (type-7 ack + a
-    followup so the council sheet SURVIVES, coexist), with a 🚪 Sortir
-    that simply closes it. Open to every lord of the realm."""
-
-    def __init__(self, label: str) -> None:
-        super().__init__(
-            discord.ui.Button(
-                label=label[:80],
-                custom_id="kingdoms:lieux:classement",
-                style=discord.ButtonStyle.primary,
-            )
-        )
-
-    @classmethod
-    async def from_custom_id(
-        cls,
-        interaction: discord.Interaction,
-        item: discord.ui.Item[Any],
-        match: re.Match[str],
-        /,
-    ) -> "KingdomLieuClassementButton":
-        """Rebuild from the wire."""
-        return cls(_strings(_locale(interaction))["classement_button"])
-
-    async def callback(self, interaction: discord.Interaction) -> None:
-        from time import monotonic
-
-        from kingdoms.mods.kingdoms.kingdom_persistent import (
-            _EPHEMERAL_WINDOWS,
-            _close_previous_ephemeral,
-            _market_error_note,
-            _strings as _merged_strings,
-            _wiring,
-        )
-
-        locale = _locale(interaction)
-        lieu = _strings(locale)
-        wiring = _wiring()
-        if wiring.kingdoms_service is None:
-            await interaction.response.send_message(
-                lieu["no_service"], ephemeral=True
-            )
-            return
-        rows = await _classement_rows(wiring)
-        if not rows:
-            await interaction.response.send_message(
-                lieu["classement_empty"], ephemeral=True
-            )
-            return
-        # type-7 ack — the council sheet (an ephemeral parent) survives.
-        await interaction.response.defer(ephemeral=True, thinking=True)
-        user_id = str(getattr(interaction.user, "id", ""))
-        try:
-            if _objectif_replaces_previous(_EPHEMERAL_WINDOWS.get(user_id)):
-                await _close_previous_ephemeral(user_id)
-            window = await interaction.followup.send(
-                _classement_content(locale, rows),
-                view=_classement_view(locale),
-                ephemeral=True,
-            )
-        except Exception:
-            logger.warning(
-                "KINGDOM LIEUX: classement window failed", exc_info=True
-            )
-            await interaction.followup.send(
-                _market_error_note(
-                    Exception("classement"), _merged_strings(locale)
-                ),
-                ephemeral=True,
-            )
-            return
-        _EPHEMERAL_WINDOWS[user_id] = (interaction, monotonic(), window)
-
-
-# ---------------------------------------------------------------------------
-# conseil-exploration-v1 (Drasah 01/11) — the 🧭 Exploration action card.
-# ---------------------------------------------------------------------------
-
-
-def _exploration_fiche_content(locale: str) -> str:
-    """The fiche body — the card's effect and prerequisite, Drasah's own
-    words (the boarding flow itself stays the salon's business)."""
-    lieu = _strings(locale)
-    return "\n".join(
-        [
-            f"## {lieu['exploration_fiche_title']}",
-            "",
-            f"**{lieu['exploration_effect_title']}**",
-            lieu["exploration_effect_l1"],
-            lieu["exploration_effect_l2"],
-            lieu["exploration_effect_l3"],
-            lieu["exploration_effect_l4"],
-            "",
-            f"**{lieu['exploration_prerequis_title']}**",
-            lieu["exploration_prerequis"],
-        ]
-    )
-
-
-def _exploration_capitaine(
-    wiring: Any, kingdom: Any, lord: Any, locale: str
-) -> Any:
-    """The 🧭 Devenir capitaine callback factory — exploration-refonte-v1
-    (Drasah 02/11): the defence point 🛡️ is verified BEFORE anything
-    else (``captain_expedition`` checks it first). No eligible clicker →
-    NO salon at all, the note « Pré-requis du point de défense possédé
-    non respecté » rides alone. On success one click CREATES the 🧭
-    exploration salon and enrolls the clicker as CAPITAINE."""
-
-    from time import monotonic
-
-    async def _go(interaction: discord.Interaction) -> None:
-        from kingdoms.mods.kingdoms.kingdom_expedition_panel import (
-            _map_error,
-            _strings as _expe_strings,
-            open_expedition_salon_safe,
-            refresh_expedition_panel_safe,
-            returned_refusal_note_and_view,
-        )
-        from kingdoms.mods.kingdoms.kingdom_persistent import _EPHEMERAL_WINDOWS
-
-        expe = _expe_strings(locale)
-        lieu = _strings(locale)
-        user_id = str(getattr(interaction.user, "id", ""))
-        # the fiche closes — the note replaces it (the interaction's
-        # original response is the fiche window itself).
-        await interaction.response.defer(ephemeral=True)
-        _EPHEMERAL_WINDOWS.pop(user_id, None)
-        try:
-            await interaction.delete_original_response()
-        except Exception:
-            logger.info(
-                "KINGDOM LIEUX: exploration fiche close failed (ignored)",
-                exc_info=True,
-            )
-        economy = getattr(wiring, "economy_service", None)
-        view = None
-        if economy is None:
-            note = expe["no_service"]
-        else:
-            try:
-                await economy.captain_expedition(str(kingdom.id), str(lord.id))
-            except Exception as exc:
-                # the defence point FIRST — no salon opens without it.
-                if "defence point" in str(exc):
-                    note = lieu["exploration_no_defense"]
-                elif "is back" in str(exc):
-                    # returned-orphan-soupape-v1 (Drasah 02/11): his
-                    # live report — this very flow said « descendez du
-                    # navire » with NOWHERE to do it (the salon was
-                    # swept, the bubble carried no button). The note
-                    # names who is back AND carries the 🪜 unload.
-                    doc = {}
-                    try:
-                        doc = await economy.expedition(str(kingdom.id))
-                    except Exception:
-                        logger.warning(
-                            "KINGDOM LIEUX: returned refusal doc read failed",
-                            exc_info=True,
-                        )
-                    note, view = returned_refusal_note_and_view(expe, doc)
-                else:
-                    note = _map_error(expe, exc)
-            else:
-                channel = await open_expedition_salon_safe(
-                    interaction.guild, wiring, kingdom
-                )
-                if channel is None:
-                    note = expe["open_failed"]
-                else:
-                    note = str(expe["open_note"]).format(
-                        channel=f"<#{int(channel.id)}>"
-                    )
-                    try:
-                        await refresh_expedition_panel_safe(
-                            interaction.guild, wiring, str(kingdom.id)
-                        )
-                    except Exception:
-                        logger.warning(
-                            "KINGDOM LIEUX: exploration panel refresh failed",
-                            exc_info=True,
-                        )
-        try:
-            message = await interaction.followup.send(
-                note, view=view, ephemeral=True
-            )
-            _EPHEMERAL_WINDOWS[user_id] = (interaction, monotonic(), message)
-        except Exception:
-            logger.warning(
-                "KINGDOM LIEUX: exploration capitaine note failed",
-                exc_info=True,
-            )
-
-    return _go
-
-
-def _exploration_fiche_view(
-    wiring: Any, kingdom: Any, lord: Any, locale: str
-) -> discord.ui.View:
-    """The fiche's two buttons — 🧭 Devenir capitaine (green) and
-    Annuler (secondary) which closes the window, nothing else."""
-    lieu = _strings(locale)
-    view = discord.ui.View(timeout=None)
-    capitaine = discord.ui.Button(
-        label=lieu["exploration_capitaine_button"],
-        style=discord.ButtonStyle.success,
-        row=0,
-    )
-    capitaine.callback = _exploration_capitaine(wiring, kingdom, lord, locale)
-    annuler = discord.ui.Button(
-        label=lieu["exploration_annuler_button"],
-        style=discord.ButtonStyle.secondary,
-        row=0,
-    )
-    # Annuler simply closes the fiche — the shared ephemeral exit.
-    annuler.callback = _close_ephemeral_window
-    view.add_item(capitaine)
-    view.add_item(annuler)
-    return view
-
-
-class KingdomLieuExplorationButton(
-    discord.ui.DynamicItem[discord.ui.Button[Any]],
-    template=r"kingdoms:lieux:exploration",
-):
-    """conseil-exploration-v1 (Drasah 01/11): the 🧭 Exploration action
-    card of the Salle du conseil — line 2, green while an Explorateur
-    token is held (gray+disabled otherwise, never hidden). The click
-    opens the FICHE as the clicker's side window (type-7 ack: the
-    council sheet SURVIVES, coexist) — the card's art + its effect +
-    its prerequisite, with two buttons: 🧭 Devenir capitaine checks the
-    defence point FIRST (no salon on refusal), then CREATES the
-    exploration salon and enrolls the clicker as CAPITAINE; Annuler
-    closes the window, nothing else."""
-
-    def __init__(self, label: str) -> None:
-        super().__init__(
-            discord.ui.Button(
-                label=label[:80],
-                custom_id="kingdoms:lieux:exploration",
-                style=discord.ButtonStyle.primary,
-            )
-        )
-
-    @classmethod
-    async def from_custom_id(
-        cls,
-        interaction: discord.Interaction,
-        item: discord.ui.Item[Any],
-        match: re.Match[str],
-        /,
-    ) -> "KingdomLieuExplorationButton":
-        """Rebuild from the wire — THIS module's strings only."""
-        return cls(_strings(_locale(interaction))["exploration_button"])
-
-    async def callback(self, interaction: discord.Interaction) -> None:
-        from time import monotonic
-
-        from kingdoms.mods.kingdoms.kingdom_persistent import (
-            _EPHEMERAL_WINDOWS,
-            _close_previous_ephemeral,
-            _market_card_back_file,
-            _market_card_file,
-            _market_error_note,
-            _strings as _merged_strings,
-            _wiring,
-        )
-
-        locale = _locale(interaction)
-        lieu = _strings(locale)
-        wiring = _wiring()
-        if wiring.kingdoms_service is None:
-            await interaction.response.send_message(
-                lieu["no_service"], ephemeral=True
-            )
-            return
-        lord, kingdom = await _require_lord_kingdom(interaction, wiring, lieu)
-        if lord is None or kingdom is None:
-            return
-        # type-7 ack — the council sheet (an ephemeral parent) survives
-        # (objectif-coexist-type7-fix lesson).
-        await interaction.response.defer(ephemeral=True, thinking=True)
-        user_id = str(getattr(interaction.user, "id", ""))
-        try:
-            content = _exploration_fiche_content(locale)
-            view = _exploration_fiche_view(wiring, kingdom, lord, locale)
-            # the card's own art rides the fiche (fallback: the back).
-            file = _market_card_file("explorateur") or _market_card_back_file()
-            files = [file] if file is not None else None
-            if _objectif_replaces_previous(_EPHEMERAL_WINDOWS.get(user_id)):
-                await _close_previous_ephemeral(user_id)
-            window = await interaction.followup.send(
-                content, view=view, files=files, ephemeral=True
-            )
-        except Exception:
-            # AFTER a defer Discord stays silent on failure — surface a
-            # visible error note instead (the v2-fix lesson).
-            logger.warning(
-                "KINGDOM LIEUX: exploration fiche failed", exc_info=True
-            )
-            await interaction.followup.send(
-                _market_error_note(
-                    Exception("exploration"), _merged_strings(locale)
-                ),
-                ephemeral=True,
-            )
-            return
-        _EPHEMERAL_WINDOWS[user_id] = (interaction, monotonic(), window)
-
-
-async def _traquenard_status_lines(locale: str, kingdom: Any, wiring: Any) -> list[str]:
-    """traquenard-echelle-v1 (Drasah 03/11): the LIVE Traquenard status
-    of the council sheet — a BLANK line, the « 🪤 Traquenard » title,
-    then one line per STILL-OPEN Facile window the realm opened
-    (``traquenard_uses``), delay in hours+minutes (« 2h05 »); the block
-    simply disappears once every window expires."""
-    from time import time as _time
-
-    lieu = _strings(locale)
-    uses = dict(getattr(kingdom, "traquenard_uses", None) or {})
-    now_ts = int(_time())
-    live = {
-        str(target_id): int(until or 0)
-        for target_id, until in uses.items()
-        if int(until or 0) > now_ts
-    }
-    if not live:
-        return []
-    names: dict[str, str] = {}
-    service = getattr(wiring, "kingdoms_service", None)
-    if service is not None:
-        try:
-            for item in await service.kingdoms():
-                # kingdom-id-fix (Drasah live report 03/11): the
-                # kingdom doc carries ``id`` — ``kingdom_id`` is a
-                # LORD field, the lookup never matched.
-                kid = str(getattr(item, "id", "") or "")
-                if kid in live:
-                    names[kid] = str(getattr(item, "name", "") or kid)
-        except Exception:
-            logger.warning(
-                "KINGDOM LIEUX: traquenard status lookup failed (ignored)",
-                exc_info=True,
-            )
-    # traquenard-echelle-v1: delay en heures+minutes (Drasah 03/11 —
-    # « 2h05 », plus de <t:…:R> « dans 2 heures »).
-    lines = ["", str(lieu["conseil_traquenard_title"])]
-    for target_id, until in sorted(live.items()):
-        remaining = max(0, int(until) - now_ts)
-        lines.append(
-            str(lieu["conseil_traquenard_line"]).format(
-                names.get(str(target_id), str(target_id)),
-                f"{remaining // 3600}h{(remaining % 3600) // 60:02d}",
-            )
-        )
-    return lines
-
-
-async def build_conseil_view(
-    strings: dict[str, Any],
-    kingdom: Any,
-    state: dict[str, Any],
-    wiring: Any,
-    locale: str,
-    rank: tuple[int, int] = (0, 0),
-    viewer_is_king: bool = False,
-) -> tuple[Any, list[discord.File]]:
-    """The ⚔️ Salle du conseil — the realm's state + action cards.
-
-    conseil-objectif-v2 (Drasah 01/11): the base body is the
-    orientation sheet — the intro, the Classement (territories, ties
-    broken by alliances then technology points), the
-    Trésorerie/Territoires/Alliances line and NOW the 🎯 Objectifs —
-    the King's goals, one pipe-separated line, with the targeted
-    alliance's blason attached under the panel (they no longer render
-    in the Discussions salon). The 🎯 Objectif button rides line 1
-    RIGHT of Seigneurie: green for the King, red+disabled for everyone
-    else (never hidden).
-    """
-    import discord
-
-    from kingdoms.mods.kingdoms.kingdom_realm_content import (
-        _panel_view_with_buttons,
-    )
-    from kingdoms.mods.kingdoms.kingdom_persistent import KingdomSeigneurieOpenButton
-
-    lieu = _strings(locale)
-    rank_display = (
-        f"{_rank_medal(int(rank[0]))} {int(rank[0])}/{int(rank[1])}".strip()
-        if int(rank[0] or 0) > 0 and int(rank[1] or 0) > 0
-        else "—"
-    )
-    classement = lieu["conseil_classement"].format(rank_display)
-    # conseil-objectif-axe1 (Drasah 01/11): the goal lines ride the sheet
-    # ENRICHED — the territory's owner (or « Destination inconnue »),
-    # the alliance's marriage lord / acquisition condition (+ mercenary
-    # note). Wiring failures keep the plain lines.
-    goal_parts = await _objectifs_display_lines(locale, kingdom, wiring)
-    objectives = dict(getattr(kingdom, "council_objectives", {}) or {})
-    # conseil-objectif-lignes-fix (Drasah 01/11): one goal per line —
-    # the pipe-separated line read badly (his live report).
-    goals_line = (
-        "\n".join(goal_parts) if goal_parts else lieu["conseil_objectifs_none"]
-    )
-    # traquenard-fiche-v1 (Drasah 03/11): the LIVE Traquenard status —
-    # one line per still-open window, right under the Objectifs block.
-    traquenard_lines = await _traquenard_status_lines(locale, kingdom, wiring)
-    body = "\n".join(
-        [
-            lieu["conseil_intro_l1"],
-            lieu["conseil_intro_l2"],
-            lieu["conseil_intro_l3"],
-            "",
-            classement,
-            lieu["conseil_stats"].format(
-                int(state.get("wallet", 0) or 0),
-                len(state.get("territories") or []),
-                len(getattr(kingdom, "civilizations", []) or []),
-            ),
-            lieu["conseil_classement_hint"],
-            "",
-            f"## {lieu['conseil_objectifs_title']}",
-            goals_line,
-            *traquenard_lines,
-            "",
-            f"## {lieu['conseil_actions']}",
-        ]
-    )
-    purchases = dict(state.get("purchases") or {})
-    # lieux-rows-v1 (Drasah 01/11) — the council button RULES:
-    # line 1 = the default action (green) + the King's 🎯 Objectif +
-    # Sortir (red, last), line 2 = the technology cards, ALWAYS
-    # visible — green while held, gray+disabled while out of stock.
-    from kingdoms.mods.kingdoms.kingdom_persistent import KingdomTraquenardButton
-
-    row_one = [
-        _green(KingdomSeigneurieOpenButton(strings["seigneurie_open_button"])),
-        KingdomLieuObjectifButton(lieu["objectif_button"], enabled=viewer_is_king),
-        # conseil-objectif-axe3: the Classement rides line 1, between
-        # Objectif and Sortir — the ranking is EVERY lord's business.
-        KingdomLieuClassementButton(lieu["classement_button"]),
-        _sortir(locale),
-    ]
-    row_two = [
-        # conseil-exploration-v1 (Drasah 01/11): the Exploration card
-        # opens the FICHE first — the reminder + the effect + the two
-        # buttons (🧭 Devenir capitaine / Annuler).
-        _stock_style(
-            KingdomLieuExplorationButton(lieu["exploration_button"]),
-            int(purchases.get("explorateur_stock", 0) or 0) > 0,
-        ),
-        _stock_style(
-            KingdomTraquenardButton(strings),
-            int(purchases.get("traquenard", 0) or 0) > 0,
-        ),
-    ]
-    # the targeted alliance's blason rides as a REFERENCED attachment —
-    # Components V2 never renders an unreferenced file.
-    files = list(_lieu_files("salle du conseil.png", "salle_du_conseil.png"))
-    civ_key = str(objectives.get("target_alliance") or "").strip()
-    extra_medias: list[str] | None = None
-    if civ_key:
-        from kingdoms.mods.kingdoms.civ_crests import civ_crest_files
-
-        crest_files = await civ_crest_files([civ_key])
-        if crest_files:
-            files = files + list(crest_files)
-            extra_medias = [f"attachment://{civ_key}.png"]
-    view = _panel_view_with_buttons(
-        lieu["conseil_title"].format(getattr(kingdom, "name", "")),
-        body,
-        "kingdoms:realm:view:lieu-conseil",
-        discord.Colour.gold(),
-        row_one,
-        media="attachment://salle_du_conseil.png",
-        rows=[row_one, row_two],
-        extra_medias=extra_medias,
-    )
-    return view, files
-
-
-def _remparts_rows(
-    strings: dict[str, Any],
-    state: dict[str, Any],
-    wiring: Any,
-    locale: str,
-) -> list[list[Any]]:
-    """lieux-rows-v1 — the Remparts button rules (Drasah 01/11).
-
-    Line 1: the default war actions (green) + 🔎 En savoir plus (blue)
-    + Sortir (red, last). remparts-boutons-v1 (Drasah 03/11): Line 2 order = Jeu d'armes,
-    then ONE 👣 Patrouille cockpit button (it rules BOTH slots),
-    Garde Royal last — each green while its stock/unlock is held
-    (gray+disabled otherwise). jeu-darmes-bonus-v1 (Drasah 03/11):
-    the Jeu d'armes button opens the CONFIRMATION CARD — green when a
-    token is HELD (stock > 0), gray+disabled otherwise (the wallet no
-    longer rules it).
-    """
-    from kingdoms.mods.kingdoms.kingdom_attack_panel import (
-        KingdomAttackManagerButton,
-        KingdomDefenseManagerButton,
-    )
-    from kingdoms.mods.kingdoms.kingdom_persistent import (
-        KingdomRempartsGuardButton,
-        KingdomRempartsPatrouilleHubButton,
-        KingdomRempartsInfoButton,
-        KingdomJeuDarmesUseButton,
-    )
-
-    purchases = dict(state.get("purchases") or {})
-    row_one = [
-        _green(
-            KingdomDefenseManagerButton(
-                strings.get("defense_manager_button", "🛡️ Gestion de la défense")
-            )
-        ),
-        _green(
-            KingdomAttackManagerButton(
-                strings.get("attack_manager_button", "⚔️ Gestion d'attaque")
-            )
-        ),
-        # remparts-etats-v1 (Drasah 03/11): the 🔎 En savoir plus button
-        # (BLUE primary) between the war actions and Sortir — it swaps
-        # the view to its explanations face.
-        KingdomRempartsInfoButton(strings),
-        _sortir(locale),
-    ]
-    guard = _stock_style(
-        KingdomRempartsGuardButton(strings),
-        int(purchases.get("garde_royale_stock", 0) or 0) > 0,
-    )
-    patrouille_unlocked = any(
-        f"patrouille_unlock_{slot_no}" in purchases
-        or f"patrouille_slot_{slot_no}" in purchases
-        for slot_no in (1, 2)
-    )
-    patrouille = _stock_style(
-        KingdomRempartsPatrouilleHubButton(strings),
-        patrouille_unlocked,
-    )
-    # jeu-darmes-bonus-v1 (Drasah 03/11): the button opens the 🧪
-    # confirmation card — green while the kingdom HOLDS a token,
-    # gray+disabled otherwise (never hidden, wallet no longer rules).
-    jeu = KingdomJeuDarmesUseButton(
-        strings, enabled=int(purchases.get("jeu_d_armes_stock", 0) or 0) > 0
-    )
-    return [row_one, [jeu, patrouille, guard]]
-
-
-
-def _remparts_info_rows(
-    strings: dict[str, Any], locale: str
-) -> list[list[Any]]:
-    """remparts-etats-v1: the En savoir plus face — only Compris + Sortir."""
-    from kingdoms.mods.kingdoms.kingdom_persistent import KingdomRempartsStateButton
-
-    return [[KingdomRempartsStateButton(strings), _sortir(locale)]]
-
-def _paroisse_rows(
-    strings: dict[str, Any],
-    kingdom: Any,
-    state: dict[str, Any],
-    locale: str,
-) -> list[list[Any]]:
-    """lieux-rows-v1 — the Paroisse button rules (Drasah 01/11).
-
-    Line 1: the parish's default actions (green) + Sortir (red, last).
-    Line 2: the 💒 Mariage arrangé card, ALWAYS visible — green from the
-    Église palier while a token is held, gray+disabled otherwise.
-    """
-    from kingdoms.mods.kingdoms.kingdom_realm_content import _church_buttons
-
-    base = _church_buttons(strings, kingdom, state)
-    arrange: Any = None
-    others: list[Any] = []
-    for button in base:
-        if str(getattr(button.item, "custom_id", "")) == "kingdoms:church:arrange":
-            arrange = button
-        else:
-            others.append(button)
-    row_one: list[Any] = []
-    for button in others:
-        # The max-palier Améliorer stays disabled (its own convention).
-        if not button.item.disabled:
-            _green(button)
-        row_one.append(button)
-    row_one.append(_sortir(locale))
-    parish = state.get("parish") or {}
-    tier = int(parish.get("tier", 1) or 1)
-    stock = int(getattr(kingdom, "arranged_marriage_stock", 0) or 0)
-    if arrange is None:
-        from kingdoms.mods.kingdoms.kingdom_persistent import (
-            KingdomChurchArrangeButton,
-        )
-
-        arrange = KingdomChurchArrangeButton(strings, 0)
-    _stock_style(arrange, tier >= 2 and stock > 0)
-    return [row_one, [arrange]]
-
-
-
-
-def _strip_purchases(content: str, strings: dict[str, Any]) -> str:
-    """comptes-rows-v1 (Drasah 01/11): the canary Chambre des comptes
-    keeps the balance + the cards in hand ONLY — the purchases section
-    moves behind the 📜 Historique achats button."""
-    start = content.find(f"## {strings['market_ledger_purchases_title']}")
-    cards = content.find(f"## {strings['market_ledger_cards_title']}")
-    if start == -1 or cards == -1 or start > cards:
-        return content
-    return content[:start].rstrip("\n") + "\n\n" + content[cards:]
-
-
-def _comptes_canary_view(
-    body: str,
-    strings: dict[str, Any],
-    locale: str,
-    held: list[tuple[str, str, int]],
-    selected_card: str | None = None,
-    card_media: str | None = None,
-) -> Any:
-    """comptes-cv2-v1 (Drasah 05/11): the Chambre des comptes sheet is
-    a Components V2 window on the PROVEN remarts gabarit — the chambre
-    illustration rides ABOVE the panel (top-level MediaGallery), the
-    Container holds the body text, the card image (the dos de carte by
-    default, the revealed art while a card is selected) and the
-    buttons. Line 1 = 🚀 Utiliser (ONLY while the SELECTED card is a
-    usable one) · 📜 Historique achats · ⚔️ Historique actions · 🚪
-    Sortir (red) — the card buttons ride the rows below, five per row."""
-    from kingdoms.mods.kingdoms.kingdom_persistent import KingdomMarketUseButton
-
-    container: discord.ui.Container[Any] = discord.ui.Container(
-        discord.ui.TextDisplay(body),
-        accent_colour=discord.Colour.gold(),
-    )
-    # comptes-cv2-v1: the card image lives INSIDE the container, under
-    # the body — the dos de carte (or the revealed art) keeps its own
-    # gallery and NEVER sits side by side with the illustration
-    # (Drasah 05/11: l'illustration est INTERDITE dans la zone carte,
-    # elle vit uniquement en tête de fenêtre).
-    if card_media:
-        container.add_item(
-            discord.ui.MediaGallery(discord.MediaGalleryItem(media=card_media))
-        )
-    row1: list[Any] = []
-    if selected_card is not None and _card_is_usable(selected_card):
-        row1.append(KingdomMarketUseButton(selected_card, strings))
-    row1.append(KingdomLieuHistButton("achats", strings))
-    row1.append(KingdomLieuHistButton("actions", strings))
-    row1.append(_sortir(locale))
-    rows: list[list[Any]] = [row1]
-    current: list[Any] = []
-    for key, _line, _stock in held:
-        current.append(KingdomLieuCardInfoButton(key, strings))
-        if len(current) == 5:
-            rows.append(current)
-            current = []
-    if current:
-        rows.append(current)
-    for row in rows:
-        container.add_item(discord.ui.ActionRow(*row))
-    view = discord.ui.LayoutView(timeout=None)
-    view.add_item(
-        discord.ui.MediaGallery(
-            discord.MediaGalleryItem(media="attachment://chambre_des_comptes.png")
-        )
-    )
-    view.add_item(container)
-    return view
-
-
-def _card_is_usable(card: str) -> bool:
-    """The cards carrying the 🚀 Utiliser button (chambre-utiliser-v1)."""
-    from kingdoms.mods.kingdoms.kingdom_persistent import _MARKET_USABLE_CARDS
-
-    return card in _MARKET_USABLE_CARDS
-
-
-async def _comptes_canary(
-    wiring: Any,
-    kingdom: Any,
-    strings: dict[str, Any],
-    locale: str,
-    selected_card: str | None = None,
-    extra_text: str | None = None,
-) -> tuple[Any, list[Any]]:
-    """Build the CANARY Chambre des comptes sheet (comptes-cv2-v1,
-    Drasah 05/11): balance + cards in hand only, the purchases and the
-    uses living behind their history buttons. Returns (LayoutView,
-    files) — the window is a Components V2 message: the chambre
-    illustration rides in the TOP gallery (au-dessus de la vue,
-    Drasah 05/11), the card image (dos de carte, or the revealed art)
-    in the container gallery, the body (+ fiche) text in TextDisplays.
-    A CV2 attachment that no component references does NOT render at
-    all — every file sent must be referenced by a gallery."""
-    from kingdoms.mods.kingdoms.kingdom_persistent import (
-        _market_card_back_file,
-        _market_card_file,
-        _market_ledger_cards,
-        _market_ledger_content,
-    )
-
-    content, _card_files, _classic_view = await _market_ledger_content(
-        wiring, kingdom, strings
-    )
-    held = await _market_ledger_cards(wiring, str(getattr(kingdom, "id", "")), strings)
-    content = _strip_purchases(content, strings)
-    if extra_text:
-        # keep the v6 blank line between the body and the fiche block
-        content = "\n\n".join([content, extra_text])
-    # comptes-cv2-v1: the card image keeps its v6 behaviour (Drasah:
-    # « la partie carte est bien codée » — dos de carte par défaut,
-    # art de la carte sélectionnée à la révélation, pas de retour au
-    # dos). The unreferenced held-card arts of the classic sheet no
-    # longer travel — the container gallery is the single card image.
-    if selected_card is not None:
-        card_file = _market_card_file(selected_card) or _market_card_back_file()
-    else:
-        card_file = _market_card_back_file()
-    files: list[Any] = []
-    card_media: str | None = None
-    if card_file is not None:
-        files.append(card_file)
-        card_media = f"attachment://{card_file.filename}"
-    # The chambre illustration ALWAYS rides along — the top gallery
-    # references it (mandatory in CV2).
-    files.extend(_lieu_files("chambre des comptes.png", "chambre_des_comptes.png"))
-    view = _comptes_canary_view(
-        content, strings, locale, held, selected_card, card_media
-    )
-    return view, files
-
-
-class KingdomLieuHistButton(
-    discord.ui.DynamicItem[discord.ui.Button[Any]],
-    template=r"kingdoms:lieux:hist:(?P<kind>achats|actions)",
-):
-    """comptes-rows-v1 (Drasah 01/11): the 📜 Historique achats and ⚔️
-    Historique actions buttons of the canary Chambre des comptes — the
-    base window keeps the balance + the cards in hand, the histories
-    open on click as the player's single ephemeral window (fenêtre
-    unique) with the red 🚪 Sortir riding along. Restart-proof."""
-
-    def __init__(
-        self, kind: str, strings: dict[str, Any], row: int | None = None
-    ) -> None:
-        key = (
-            "market_hist_achats_button" if kind == "achats" else "market_hist_actions_button"
-        )
-        super().__init__(
-            discord.ui.Button(
-                label=str(strings[key])[:80],
-                custom_id=f"kingdoms:lieux:hist:{kind}",
-                style=discord.ButtonStyle.success,
-                row=row,
-            )
-        )
-        self.kind = str(kind)
-
-    @classmethod
-    async def from_custom_id(
-        cls,
-        interaction: discord.Interaction,
-        item: discord.ui.Item[Any],
-        match: re.Match[str],
-        /,
-    ) -> "KingdomLieuHistButton":
-        """Rebuild from the wire — THIS module's strings only."""
-        return cls(match["kind"], _merged_strings(_locale(interaction)))
-
-    async def callback(self, interaction: discord.Interaction) -> None:
-        from datetime import datetime
-        from zoneinfo import ZoneInfo
-
-        from kingdoms.mods.kingdoms.kingdom_persistent import (
-            _kingdom_by_id_safe,
-            _lord_of,
-            _market_label,
-            _open_unique_ephemeral,
-            _strings as _merged,
-            _wiring,
-        )
-
-        locale = _locale(interaction)
-        strings = _merged(locale)
-        wiring = _wiring()
-        lord = await _lord_of(
-            wiring.kingdoms_service, str(interaction.user.id), wiring.bot_admins
-        )
-        kingdom_id = str(getattr(lord, "kingdom_id", "") or "") if lord else ""
-        kingdom = (
-            await _kingdom_by_id_safe(wiring.kingdoms_service, kingdom_id)
-            if kingdom_id
-            else None
-        )
-        if kingdom is None:
-            await interaction.response.send_message(
-                strings["church_marry_kingdom_none"], ephemeral=True
-            )
-            return
-        if self.kind == "achats":
-            title = str(strings["market_hist_achats_title"])
-            registry = list(getattr(kingdom, "market_registry", None) or [])
-            if not registry:
-                body_lines = [str(strings["market_ledger_empty"])]
-            else:
-                emojis = strings.get("market_ledger_emoji") or {}
-                body_lines = []
-                for entry in sorted(
-                    registry, key=lambda e: int(e.get("at", 0) or 0), reverse=True
-                ):
-                    item = str(entry.get("item", ""))
-                    at = int(entry.get("at", 0) or 0)
-                    when = datetime.fromtimestamp(
-                        at, tz=ZoneInfo("Europe/Paris")
-                    ).strftime("%d/%m %H:%M")
-                    body_lines.append(
-                        str(strings["market_ledger_line"]).format(
-                            emojis.get(item, "•"),
-                            _market_label(item, strings),
-                            str(entry.get("detail", "")),
-                            int(entry.get("cost", 0) or 0),
-                            when,
-                        )
-                    )
-        else:
-            title = str(strings["market_hist_actions_title"])
-            actions = list(getattr(kingdom, "market_actions", None) or [])
-            if not actions:
-                body_lines = [str(strings["market_hist_actions_empty"])]
-            else:
-                emojis = strings.get("market_ledger_emoji") or {}
-                body_lines = []
-                for entry in sorted(
-                    actions, key=lambda e: int(e.get("at", 0) or 0), reverse=True
-                ):
-                    item = str(entry.get("item", ""))
-                    at = int(entry.get("at", 0) or 0)
-                    when = datetime.fromtimestamp(
-                        at, tz=ZoneInfo("Europe/Paris")
-                    ).strftime("%d/%m %H:%M")
-                    body_lines.append(
-                        str(strings["market_action_line"]).format(
-                            emojis.get(item, "•"),
-                            _market_label(item, strings),
-                            str(entry.get("detail", "")),
-                            when,
-                        )
-                    )
-        # comptes-illustration-v1 (Drasah 05/11): the history windows
-        # REPLACE the comptes window (fenêtre unique) — they keep the
-        # Chambre des comptes illustration in the header so the window
-        # never loses its dressing mid-navigation.
-        view = discord.ui.LayoutView(timeout=None)
-        # comptes-illustration-v2 (Drasah 05/11): the history window now
-        # mirrors the PROVEN remarts gabarit — a top-level MediaGallery
-        # riding ABOVE a Container holding the title, the body and the
-        # Sortir row. The v1 attempt placed BARE top-level TextDisplays
-        # and an ActionRow next to the gallery: the API accepted the
-        # message but the Discord client refused to render it (live
-        # 09:10 — « Le message n'a pas pu être chargé »). Structure-only
-        # change: same strings, same behaviour, same asset.
-        # NB: MediaGalleryItem is TOP-LEVEL discord.MediaGalleryItem
-        # (the deployed discord.py 2.7.1 has no discord.ui variant).
-        view.add_item(
-            discord.ui.MediaGallery(
-                discord.MediaGalleryItem(media="attachment://chambre_des_comptes.png")
-            )
-        )
-        container: discord.ui.Container[Any] = discord.ui.Container(
-            discord.ui.TextDisplay(f"# {title}"),
-            discord.ui.Separator(),
-            discord.ui.TextDisplay("\n".join(body_lines)),
-            accent_colour=discord.Colour.gold(),
-        )
-        container.add_item(discord.ui.ActionRow(_sortir(locale)))
-        view.add_item(container)
-        await _open_unique_ephemeral(
-            interaction,
-            view=view,
-            files=_lieu_files("chambre des comptes.png", "chambre_des_comptes.png"),
-        )
-
-
-class KingdomLieuCardInfoButton(
-    discord.ui.DynamicItem[discord.ui.Button[Any]],
-    template=r"kingdoms:lieux:cardinfo:(?P<card>[a-z_]+)",
-):
-    """comptes-rows-v1 (Drasah 01/11): the canary card-reveal button of
-    the Chambre des comptes — clicking EDITS the window in place (the
-    card's art + Effet + Usage) and line 1 gains the 🚀 Utiliser button
-    FIRST while the selected card is a usable one. Mirrors the classic
-    KingdomMarketCardInfoButton, never replaces it."""
-
-    def __init__(
-        self, card: str, strings: dict[str, Any], row: int | None = None
-    ) -> None:
-        from kingdoms.mods.kingdoms.kingdom_persistent import _market_label
-
-        label = _market_label(card, strings)
-        super().__init__(
-            discord.ui.Button(
-                label=label[:80],
-                custom_id=f"kingdoms:lieux:cardinfo:{card}",
-                style=discord.ButtonStyle.secondary,
-                row=row,
-            )
-        )
-        self.card = str(card)
-
-    @classmethod
-    async def from_custom_id(
-        cls,
-        interaction: discord.Interaction,
-        item: discord.ui.Item[Any],
-        match: re.Match[str],
-        /,
-    ) -> "KingdomLieuCardInfoButton":
-        """Rebuild from the wire — THIS module's strings only."""
-        return cls(match["card"], _merged_strings(_locale(interaction)))
-
-    async def callback(self, interaction: discord.Interaction) -> None:
-        from kingdoms.mods.kingdoms.kingdom_persistent import (
-            _EPHEMERAL_WINDOWS,
-            _kingdom_by_id_safe,
-            _lord_of,
-            _market_label,
-            _strings as _merged,
-            _wiring,
-        )
-
-        locale = _locale(interaction)
-        strings = _merged(locale)
-        wiring = _wiring()
-        lord = await _lord_of(
-            wiring.kingdoms_service, str(interaction.user.id), wiring.bot_admins
-        )
-        kingdom_id = str(getattr(lord, "kingdom_id", "") or "") if lord else ""
-        kingdom = (
-            await _kingdom_by_id_safe(wiring.kingdoms_service, kingdom_id)
-            if kingdom_id
-            else None
-        )
-        if kingdom is None:
-            await interaction.response.send_message(
-                strings["church_marry_kingdom_none"], ephemeral=True
-            )
-            return
-        # Type-6 defer on the window's own component: the edit below
-        # lands on the ledger window itself (the classic v6 semantics).
-        await interaction.response.defer()
-        emojis = strings.get("market_ledger_emoji") or {}
-        fiche = [
-            f"## {emojis.get(self.card, '•')} "
-            f"{_market_label(self.card, strings)}",
-            str(strings["market_card_effect"]).format(
-                (strings.get("market_effect") or {}).get(self.card, "")
-            ),
-            str(strings["market_card_usage"]).format(
-                (strings.get("market_usage") or {}).get(self.card, "")
-            ),
-        ]
-        view, files = await _comptes_canary(
-            wiring,
-            kingdom,
-            strings,
-            locale,
-            selected_card=self.card,
-            extra_text="\n".join(fiche),
-        )
-        try:
-            await interaction.edit_original_response(view=view, attachments=files)
-        except Exception:
-            # comptes-cv2-v1: PATCHing a CV2 media gallery plus fresh
-            # attachments is a known-shaky Discord edit path — fall
-            # back to a fresh ephemeral window (the sheet still lands,
-            # never a dead click).
-            from time import monotonic
-
-            logger.warning(
-                "KINGDOM LIEUX: comptes cardinfo edit failed — fresh window",
-                exc_info=True,
-            )
-            window = await interaction.followup.send(
-                view=view, files=files, ephemeral=True
-            )
-            _EPHEMERAL_WINDOWS[str(getattr(interaction.user, "id", ""))] = (
-                interaction,
-                monotonic(),
-                window,
-            )
-
-
-async def _open_comptes(
-    interaction: discord.Interaction,
-    wiring: Any,
-    kingdom: Any,
-    strings: dict[str, Any],
-    locale: str,
-) -> None:
-    """The 🏛️ Chambre des comptes — the ledger sheet + illustration.
-
-    comptes-rows-v1 (Drasah 01/11): the CANARY sheet keeps the balance
-    + the cards in hand only — the purchases live behind 📜 Historique
-    achats, the card uses behind ⚔️ Historique actions, line 1 reads
-    [Utiliser (selected usable card) · hist achats · hist actions ·
-    Sortir]. Mirrors the ledger button (defer, heavy paint, followup
-    window).
-
-    comptes-cv2-v1 (Drasah 05/11): the window is a Components V2
-    message — the chambre illustration rides ABOVE the panel, the dos
-    de carte (or the revealed art) in its own gallery under the body,
-    never side by side with the illustration.
-    """
-    from time import monotonic
-
-    from kingdoms.mods.kingdoms.kingdom_persistent import (
-        _EPHEMERAL_WINDOWS,
-        _close_previous_ephemeral,
-        _market_error_note,
-    )
-
-    await interaction.response.defer(ephemeral=True)
-    try:
-        view, files = await _comptes_canary(wiring, kingdom, strings, locale)
-    except Exception:
-        logger.warning("KINGDOM LIEUX: ledger sheet build failed", exc_info=True)
-        await interaction.followup.send(
-            _market_error_note(Exception("ledger"), strings), ephemeral=True
-        )
-        return
-    user_id = str(getattr(interaction.user, "id", ""))
-    await _close_previous_ephemeral(user_id)
-    # comptes-cv2-v1: the window is a Components V2 message — no
-    # content kwarg (the body lives in the container's TextDisplay).
-    window = await interaction.followup.send(
-        view=view, files=files, ephemeral=True
-    )
-    _EPHEMERAL_WINDOWS[user_id] = (interaction, monotonic(), window)
-
-
-def register_kingdom_lieux_items(bot: discord.Client) -> None:
-    """Re-register the lieu hub doors on the bot (restart-proof)."""
-    bot.add_dynamic_items(
-        KingdomLieuSortirButton,
-        KingdomLieuObjectifButton,
-        KingdomLieuClassementButton,
-        KingdomLieuExplorationButton,
-        KingdomLieuHistButton,
-        KingdomLieuCardInfoButton,
-        KingdomLieuEntreeButton,
-        KingdomLieuConseilButton,
-        KingdomLieuRempartsButton,
-        KingdomLieuComptesButton,
-        KingdomLieuParoisseButton,
-        KingdomLieuVoliereButton,
-    )
-

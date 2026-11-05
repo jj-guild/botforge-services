@@ -752,9 +752,10 @@ def test_objectif_picker_pages_and_options() -> None:
         rows_used[child.row or 0] = rows_used.get(child.row or 0, 0) + 1
     assert rows_used[0] == 1  # kingdom select
     assert rows_used[1] == 1  # map select
-    assert rows_used[2] == 2  # maps ◀️▶️
+    # synfoni-v1: named flips + a disabled page indicator between them
+    assert rows_used[2] == 3  # maps ◀️ + indicator + ▶️
     assert rows_used[3] == 1  # civ select
-    assert rows_used[4] == 4  # civs ◀️▶️ + Valider + Quitter
+    assert rows_used[4] == 5  # civs ◀️ + indicator + ▶️ + Valider + Quitter
     buttons = [
         c for c in view_revealed.children if isinstance(c, discord.ui.Button)
     ]
@@ -763,12 +764,23 @@ def test_objectif_picker_pages_and_options() -> None:
         lieu["objectif_validate_button"],
         lieu["objectif_quit_button"],
     ]
-    flips = [b for b in buttons if b.label is None]
+    flips = [
+        b
+        for b in buttons
+        if str(b.label) in (lieu["objectif_flip_prev"], lieu["objectif_flip_next"])
+    ]
     assert len(flips) == 4
     assert flips[0].disabled is True  # maps ◀ on page 0
     assert flips[1].disabled is False
     assert flips[2].disabled is True  # civs ◀ on page 0
     assert flips[3].disabled is False
+    # the synfoni-v1 page indicator rides BETWEEN the flips, disabled
+    indicators = [b for b in buttons if str(b.label).startswith("Page ")]
+    assert len(indicators) == 2
+    assert all(i.disabled for i in indicators)
+    # multi-page placeholders carry their alphabetical range (« à »)
+    assert "à" in str(selects[1].placeholder)
+    assert str(selects[1].placeholder).startswith("🗺️")
     # page two serves the NEXT slice of maps, the goal stays pinned
     view_two = _objectifs_picker(
         wiring,
@@ -783,7 +795,9 @@ def test_objectif_picker_pages_and_options() -> None:
     )
     selects_two = [c for c in view_two.children if isinstance(c, discord.ui.Select)]
     page_one_values = {o.value for o in selects_two[1].options}
-    assert "map-25" in page_one_values
+    # synfoni-v1: the catalog pages are ALPHABETICAL — « Map 40 » rides
+    # page 1 (sorted order), « Map 1 » stays on page 0.
+    assert "map-40" in page_one_values
     assert "map-1" not in page_one_values
     assert selects_two[1].options[1].value == "map-7"
 
@@ -1097,9 +1111,9 @@ def test_goal_lines_carry_live_details() -> None:
     lines = asyncio.run(
         _objectifs_display_lines("fr", kingdom, _enrichment_wiring())
     )
-    # the territory rides its OWNER (live — a change of hands moves it)
+    # synfoni-v1: the territory rides its OWNER and its NUMBERED slot
     assert any(
-        line.startswith(lieu["conseil_objectif_map"].format("Ile du Pacifique"))
+        line.startswith(f"2. {lieu['conseil_objectif_map'].format('Ile du Pacifique')}")
         and "HeN" in line
         for line in lines
     )
@@ -1178,8 +1192,9 @@ def test_goal_lines_survive_a_dead_wiring() -> None:
             ),
         )
     )
+    # synfoni-v1: the line keeps its NUMBERED slot prefix (2.)
     assert lines == [
-        _strings("fr")["conseil_objectif_map"].format("Ile du Pacifique")
+        f"2. {_strings('fr')['conseil_objectif_map'].format('Ile du Pacifique')}"
     ]
 
 

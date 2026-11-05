@@ -103,6 +103,18 @@ STRINGS: dict[str, dict[str, str]] = {
         "realms_delete_cancel_button": "Cancel",
         "realms_cancelled": "Cancelled.",
         "realms_deleted": "Kingdom deleted.",
+        # synfoni-v1 (Drasah 06/11): the acceptance is finally TOLD —
+        # her beta report: a validated kingdom left its King in
+        # total silence.
+        "kingdom_accepted_dm": (
+            "👑 Good news — your kingdom **{kingdom}** has been"
+            " **accepted**! Its salons are ready: head to the"
+            " 🏰 Entrée du royaume to get started. Good conquest!"
+        ),
+        "kingdom_accepted_note": (
+            "👑 The kingdom **{kingdom}** has been validated —"
+            " welcome to its members!"
+        ),
     },
     "fr": {
         "realms_title": "🏰 Validation des royaumes",
@@ -132,6 +144,16 @@ STRINGS: dict[str, dict[str, str]] = {
         "realms_delete_cancel_button": "Annuler",
         "realms_cancelled": "Annulé.",
         "realms_deleted": "Royaume supprimé.",
+        # synfoni-v1 (Drasah 06/11) : l'acceptation est enfin ANNONCÉE.
+        "kingdom_accepted_dm": (
+            "👑 Bonne nouvelle — ton royaume **{kingdom}** a été"
+            " **accepté** ! Ses salons sont prêts : direction l'"
+            " 🏰 Entrée du royaume pour commencer. Bonne conquête !"
+        ),
+        "kingdom_accepted_note": (
+            "👑 Le royaume **{kingdom}** a été validé — bienvenue à"
+            " ses membres !"
+        ),
     },
 }
 
