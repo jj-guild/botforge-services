@@ -141,3 +141,52 @@ def test_r4_discord_never_touches_providers() -> None:
             for env in sorted(_env_reads(path))
         )
     _assert_allowed(offenders, ALLOWLIST_R4, "discord touches providers directly")
+
+
+# ---------------------------------------------------------------------------
+# R2 — a game service knows its providers by NAME, never by URL: no
+# upstream API endpoint hardcoded in a game package (the wiring is the
+# process environment). Attribution LINKS (a map's source page) are UI
+# data, not endpoints — they ride the provider's data.
+# ---------------------------------------------------------------------------
+_UPSTREAM_ENDPOINT_RE = re.compile(r"(api[.]php|wss?://)")
+
+
+def test_r2_game_code_hardcodes_no_upstream_endpoint() -> None:
+    """R2: no upstream API endpoint inside the game packages."""
+    offenders: list[str] = []
+    for path in _python_files("game_aoe2"):
+        for match in _UPSTREAM_ENDPOINT_RE.finditer(path.read_text(encoding="utf-8")):
+            offenders.append(f"{path.relative_to(SRC.parent)} hardcodes {match.group(0)!r}")
+    _assert_allowed(offenders, ALLOWLIST_R2, "game code hardcodes an upstream endpoint")
+
+
+ALLOWLIST_R2: tuple[str, ...] = ()
+
+
+# ---------------------------------------------------------------------------
+# R5 — every Mongo collection has ONE owner: the bot never touches a
+# collection raw; it goes through the owning service (in-process for the
+# platform's own, gRPC for the game's).
+# ---------------------------------------------------------------------------
+_RAW_COLLECTION_RE = re.compile(r"(?:database|db)\[")
+
+
+def test_r5_discord_reads_no_collection_raw() -> None:
+    """R5: no raw collection access in discord — the services own them."""
+    offenders: list[str] = []
+    for path in _python_files("discord"):
+        if _RAW_COLLECTION_RE.search(path.read_text(encoding="utf-8")):
+            offenders.append(f"{path.relative_to(SRC.parent)} touches a collection raw")
+    _assert_allowed(offenders, ALLOWLIST_R5, "discord reads a collection raw")
+
+
+# The dated, documented gaps (the audit trail — every chantier shrinks it):
+ALLOWLIST_R5: tuple[str, ...] = (
+    "kingdoms/discord/catalog_purge.py touches a collection raw",
+    "kingdoms/discord/identity_platform.py touches a collection raw",
+    "kingdoms/discord/logs_platform.py touches a collection raw",
+    "kingdoms/discord/messages_platform.py touches a collection raw",
+    "kingdoms/discord/registration_platform.py touches a collection raw",
+    "kingdoms/discord/roles_platform.py touches a collection raw",
+)
