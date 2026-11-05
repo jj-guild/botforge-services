@@ -2796,6 +2796,14 @@ class KingdomLieuHistButton(
         # Chambre des comptes illustration in the header so the window
         # never loses its dressing mid-navigation.
         view = discord.ui.LayoutView(timeout=None)
+        # comptes-illustration-v2 (Drasah 05/11): the history window now
+        # mirrors the PROVEN remarts gabarit — a top-level MediaGallery
+        # riding ABOVE a Container holding the title, the body and the
+        # Sortir row. The v1 attempt placed BARE top-level TextDisplays
+        # and an ActionRow next to the gallery: the API accepted the
+        # message but the Discord client refused to render it (live
+        # 09:10 — « Le message n'a pas pu être chargé »). Structure-only
+        # change: same strings, same behaviour, same asset.
         # NB: MediaGalleryItem is TOP-LEVEL discord.MediaGalleryItem
         # (the deployed discord.py 2.7.1 has no discord.ui variant).
         view.add_item(
@@ -2803,9 +2811,14 @@ class KingdomLieuHistButton(
                 discord.MediaGalleryItem(media="attachment://chambre_des_comptes.png")
             )
         )
-        view.add_item(discord.ui.TextDisplay(f"# {title}"))
-        view.add_item(discord.ui.TextDisplay("\n".join(body_lines)))
-        view.add_item(discord.ui.ActionRow(_sortir(locale)))
+        container: discord.ui.Container[Any] = discord.ui.Container(
+            discord.ui.TextDisplay(f"# {title}"),
+            discord.ui.Separator(),
+            discord.ui.TextDisplay("\n".join(body_lines)),
+            accent_colour=discord.Colour.gold(),
+        )
+        container.add_item(discord.ui.ActionRow(_sortir(locale)))
+        view.add_item(container)
         await _open_unique_ephemeral(
             interaction,
             view=view,
