@@ -429,3 +429,149 @@ def test_clean_sweeps_the_render_salons_only(monkeypatch) -> None:
     assert all(m.deleted for m in original.messages)
     assert all(m.deleted for m in travaux.messages)
     assert all(not m.deleted for m in labo.messages)
+
+
+# --- laboratoire-v2 travaux variant: the MEDIANCUT-256 recompression ---
+
+import io  # noqa: E402
+import struct  # noqa: E402
+import zlib  # noqa: E402
+
+from kingdoms.mods.kingdoms import kingdom_lab_compress  # noqa: E402
+from kingdoms.mods.kingdoms.kingdom_lab import _label_header  # noqa: E402
+
+
+def _make_png(w: int, h: int, painter: Any) -> bytes:
+    """A minimal 8-bit RGBA PNG builder (pure stdlib, no dependency)."""
+    rows = bytearray()
+    for y in range(h):
+        rows.append(0)  # filter 0
+        for x in range(w):
+            rows += bytes(painter(x, y))
+
+    def chunk(ctype: bytes, payload: bytes) -> bytes:
+        return (
+            len(payload).to_bytes(4, "big")
+            + ctype
+            + payload
+            + zlib.crc32(ctype + payload).to_bytes(4, "big")
+        )
+
+    return (
+        b"\x89PNG\r\n\x1a\n"
+        + chunk(b"IHDR", struct.pack(">IIBBBBB", w, h, 8, 6, 0, 0, 0))
+        + chunk(b"IDAT", zlib.compress(bytes(rows), 6))
+        + chunk(b"IEND", b"")
+    )
+
+
+_NOISY_PNG = _make_png(
+    96, 64, lambda x, y: (x * 7 % 256, y * 11 % 256, (x + y) * 3 % 256, 255)
+)
+
+
+def test_compress_png_bytes_shrinks_and_stays_a_valid_palette_png() -> None:
+    out = kingdom_lab_compress.compress_png_bytes(_NOISY_PNG)
+    assert out is not None and len(out) < len(_NOISY_PNG)
+    assert out[:8] == b"\x89PNG\r\n\x1a\n"
+    assert out[25] == 3  # color type 3 — indexed
+    # re-decodes to the SAME dimensions (the multi-row decode regression
+    # — offsets used to restart at every row — stays fixed).
+    decoded = kingdom_lab_compress._decode_png(out)
+    assert decoded is not None
+    width, height, _rgba, _bpp = decoded
+    assert (width, height) == (96, 64)
+
+
+def test_compress_png_bytes_declines_garbage_and_growing_output() -> None:
+    assert kingdom_lab_compress.compress_png_bytes(b"") is None
+    assert kingdom_lab_compress.compress_png_bytes(b"not a png at all") is None
+    # a tiny uniform PNG: indexed encoding cannot beat it — decline, the
+    # lab keeps the original bytes rather than shipping a bigger file.
+    tiny = _make_png(2, 2, lambda x, y: (255, 0, 0, 255))
+    out = kingdom_lab_compress.compress_png_bytes(tiny)
+    assert out is None or len(out) < len(tiny)
+
+
+def test_compress_discord_file_recompresses_or_falls_back() -> None:
+    import discord as _discord
+
+    # a real PNG asset → a NEW file, same filename, compressed bytes
+    src = _discord.File(io.BytesIO(_NOISY_PNG), filename="rempart.png")
+    compressed = kingdom_lab_compress.compress_discord_file(src)
+    assert compressed is not src
+    assert compressed.filename == "rempart.png"
+    compressed.fp.seek(0)
+    payload = compressed.fp.read()
+    expected = kingdom_lab_compress.compress_png_bytes(_NOISY_PNG)
+    assert payload == expected
+    # a non-PNG attachment → the ORIGINAL file object, untouched.
+    src2 = _discord.File(io.BytesIO(b"jpeg-ish bytes here"), filename="x.jpg")
+    assert kingdom_lab_compress.compress_discord_file(src2) is src2
+
+
+def test_travaux_render_compresses_assets_original_does_not(monkeypatch) -> None:
+    """The variant seam: travaux rides the recompression, original never."""
+    from kingdoms.mods.kingdoms import kingdom_lab
+
+    async def fake_build(key, locale, wiring, kingdom, state, variant="original"):
+        view = discord.ui.LayoutView(timeout=None)
+        view.add_item(discord.ui.TextDisplay(f"## {key}"))
+        file = discord.File(io.BytesIO(_NOISY_PNG), filename="rempart.png")
+        return view, [file]
+
+    async def fake_state(kingdom, wiring):
+        return {}
+
+    monkeypatch.setattr(kingdom_lab, "_build_lab_view", fake_build)
+    monkeypatch.setattr(
+        "kingdoms.mods.kingdoms.kingdom_realm_content._gather_state", fake_state
+    )
+    original_channel, travaux_channel = _SendChannel("📜 original"), _SendChannel(
+        "🚧 travaux"
+    )
+    rendered, failures = _run(
+        kingdom_lab.render_lab_views(
+            travaux_channel, "fr", _fake_wiring(), _fake_kingdom(), ["remparts"],
+            variant="travaux",
+        )
+    )
+    assert rendered == 1 and failures == []
+    travaux_file = travaux_channel.messages[0].attachments[0]
+    travaux_file.fp.seek(0)
+    travaux_bytes = travaux_file.fp.read()
+    assert travaux_bytes != _NOISY_PNG
+    assert travaux_bytes == kingdom_lab_compress.compress_png_bytes(_NOISY_PNG)
+    assert travaux_file.filename == "rempart.png"
+    # the étiquette says WHAT the variant is.
+    text = _view_text(travaux_channel.messages[0].view)
+    assert "MEDIANCUT" in text
+    # original: the deployed bytes ride untouched.
+    rendered, failures = _run(
+        kingdom_lab.render_lab_views(
+            original_channel, "fr", _fake_wiring(), _fake_kingdom(), ["remparts"],
+            variant="original",
+        )
+    )
+    assert rendered == 1 and failures == []
+    original_file = original_channel.messages[0].attachments[0]
+    original_file.fp.seek(0)
+    assert original_file.fp.read() == _NOISY_PNG
+    assert "MEDIANCUT" not in _view_text(original_channel.messages[0].view)
+
+
+def test_label_header_variant() -> None:
+    plain = _label_header("remparts", "fr", "original")
+    assert "MEDIANCUT" not in plain.content
+    travaux = _label_header("remparts", "fr", "travaux")
+    assert "MEDIANCUT" in travaux.content
+
+
+def test_inventory_lines_show_cached_pairs(monkeypatch) -> None:
+    from kingdoms.mods.kingdoms import kingdom_lab
+
+    monkeypatch.setattr(
+        kingdom_lab_compress, "compressed_size", lambda path: 4096, raising=True
+    )
+    lines = kingdom_lab._inventory_lines()
+    assert any("travaux" in line and "−" in line for line in lines) or lines == []

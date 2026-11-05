@@ -10,10 +10,11 @@ category « 🧪 Laboratoire » with THREE salons:
   BEFORE confirming to Mistral — the work resumes from his verdict and
   his written remarks (laboratoire-v2, Drasah 05/11);
 - 📜 original — the renders of the DEPLOYED code (the reference);
-- 🚧 travaux — the renders of the WORK-IN-PROGRESS version. Today the
-  « travaux » variant renders the same builders (no optimization is
-  pending yet); the variant seam lives in ``_build_lab_view`` and the
-  first real variant will be the asset recompression.
+- 🚧 travaux — the renders of the WORK-IN-PROGRESS version. The first
+  real variant is LIVE (Drasah 05/11): every attached asset rides the
+  MEDIANCUT-256 recompression (``kingdom_lab_compress`` — pure stdlib,
+  best-effort decline to the original bytes); the variant seam lives in
+  ``_build_lab_view`` + ``render_lab_views`` (variant="travaux").
 
 A test DISPATCHES its render into BOTH salons at once — the
 side-by-side comparison Drasah asked for. The verdicts are stateless:
@@ -113,10 +114,11 @@ STRINGS: dict[str, dict[str, str]] = {
         "vitrine_posted": "✅ Vitrine affichée dans le salon Labo.",
         "vitrine_title": "🖼️ Vitrine des assets",
         "vitrine_intro": (
-            "Inventaire en direct des illustrations (poids · dimensions). "
-            "Les paires Original | Version travaux s'afficheront ici dès la "
-            "recompression validée."
+            "Inventaire en direct des illustrations (poids · dimensions) avec la "
+            "recompression MEDIANCUT 256 en cours de validation — chaque ligne "
+            "montre la paire déployé → travaux (−gain %) quand elle est calculée."
         ),
+        "travaux_label": "🚧 version en travaux — recompression MEDIANCUT 256",
         "vitrine_missing": "⚠️ Le dossier d'assets est introuvable sur ce déploiement.",
         "cleaned": (
             "🧹 {count} message(s) supprimé(s) dans 📜 original et 🚧 travaux — "
@@ -194,9 +196,11 @@ STRINGS: dict[str, dict[str, str]] = {
         "vitrine_posted": "✅ Showcase rendered in the Lab channel.",
         "vitrine_title": "🖼️ Asset showcase",
         "vitrine_intro": (
-            "Live inventory of the illustrations (weight · size). The Original | "
-            "work-in-progress pairs will render here once the recompression is approved."
+            "Live inventory of the illustrations (weight · size) with the MEDIANCUT-256 "
+            "recompression under validation — each line shows the deployed → travaux "
+            "pair (−gain %) once computed."
         ),
+        "travaux_label": "🚧 work-in-progress version — MEDIANCUT-256 recompression",
         "vitrine_missing": "⚠️ The asset folder is missing on this deployment.",
         "cleaned": (
             "🧹 {count} message(s) deleted in 📜 original and 🚧 travaux — "
@@ -311,8 +315,13 @@ def neutralize_view(view: Any) -> None:
         _disable_every_interactive(child)
 
 
-def _label_header(key: str, locale: str) -> discord.ui.TextDisplay:
-    return discord.ui.TextDisplay(f"## {_strings(locale)[f'view_{key}']}")
+def _label_header(key: str, locale: str, variant: str = "original") -> discord.ui.TextDisplay:
+    """The view's étiquette — travaux renders say WHAT the variant is."""
+    strings = _strings(locale)
+    title = f"## {strings[f'view_{key}']}"
+    if variant == "travaux":
+        title += f"\n-# {strings['travaux_label']}"
+    return discord.ui.TextDisplay(title)
 
 
 async def _build_lieu_window_lab(
@@ -529,12 +538,22 @@ async def render_lab_views(
                 key, locale, wiring, kingdom, state, variant
             )
             neutralize_view(view)
+            # laboratoire-v2 travaux variant (Drasah 05/11): the FIRST real
+            # optimization — every attached asset rides the MEDIANCUT-256
+            # recompression (pure stdlib, cached per content hash). Any
+            # decline falls back to the original bytes untouched.
+            if variant == "travaux" and files:
+                from kingdoms.mods.kingdoms.kingdom_lab_compress import (
+                    compress_discord_file,
+                )
+
+                files = [compress_discord_file(f) for f in files]
             # the étiquette rides FIRST (the walkthrough reads in order) —
             # ``children`` returns a copy, so the view is rebuilt around it.
             try:
                 children = list(view.children)
                 view.clear_items()
-                view.add_item(_label_header(key, locale))
+                view.add_item(_label_header(key, locale, variant))
                 for child in children:
                     view.add_item(child)
             except Exception:
@@ -565,15 +584,29 @@ def _png_size(path: Path) -> str:
 
 
 def _inventory_lines() -> list[str]:
-    """Return the live asset inventory (lieux illustrations + market cards)."""
+    """Return the live asset inventory (lieux illustrations + market cards).
+
+    laboratoire-v2 travaux variant: when a MEDIANCUT-256 pair is already
+    cached (a previous dispatch compressed it), the line shows the
+    deployed → travaux weights (−gain %) — the pairs Drasah compares.
+    """
+    from kingdoms.mods.kingdoms.kingdom_lab_compress import compressed_size
+
     lines: list[str] = []
     for base, label in ((_LIEUX_ASSETS, "lieux"), (_MARCHE_ASSETS, "marché")):
         if not base.is_dir():
             continue
         for path in sorted(base.glob("*.png")):
-            lines.append(
-                f"• `{path.name}` — {path.stat().st_size / 1024:.0f} Ko · {_png_size(path)} ({label})"
+            line = (
+                f"• `{path.name}` — {path.stat().st_size / 1024:.0f} Ko · "
+                f"{_png_size(path)} ({label})"
             )
+            compressed = compressed_size(path)
+            if compressed is not None:
+                original = path.stat().st_size
+                gain = 100 - 100 * compressed / original
+                line += f" → {compressed / 1024:.0f} Ko travaux (−{gain:.0f} %)"
+            lines.append(line)
     return lines
 
 
