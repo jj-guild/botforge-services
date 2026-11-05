@@ -4,7 +4,7 @@ Registered into the /admin panel's Mods select under the ``games`` key:
 the section manages the game catalogs — the maps (archive = disable,
 the maps forum sync picks it up) and the map pools (create, rename,
 edit the map list, archive). Everything goes through
-``GameDataService`` (validated + audited); the section only renders
+the catalog service (validated + audited); the section only renders
 and collects input.
 
 Namespace discipline: every component rides ``admin:pin:modgames:``
@@ -291,7 +291,7 @@ class GamesMapCreateModal(discord.ui.Modal):
 
                 content = content_service()
                 if content is not None:
-                    await content.store(
+                    await content.content_store(
                         {
                             "entity_id": entry.id,
                             "locale": "en",
@@ -1169,7 +1169,7 @@ async def _finish_map_import(
 
         content = content_service()
         if content is not None:
-            await content.store(
+            await content.content_store(
                 {
                     "entity_id": entry.id,
                     "locale": "en",
@@ -1374,7 +1374,7 @@ async def _bulk_import_maps(
 
             content = content_service()
             if content is not None:
-                await content.store(
+                await content.content_store(
                     {
                         "entity_id": entry.id,
                         "locale": "en",

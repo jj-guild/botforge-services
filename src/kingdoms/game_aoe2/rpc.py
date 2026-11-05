@@ -184,6 +184,7 @@ class GameDataServicer(gamedata_pb2_grpc.GameDataServicer):
         enrollments: Any = None,
         stats_provider: Any = None,
         map_seeds: Any = None,
+        catalog: Any = None,
     ) -> None:
         """Wire the aggregator, the poll interval, the enrollments and the stats proxy."""
         self._aggregator = aggregator
@@ -191,6 +192,7 @@ class GameDataServicer(gamedata_pb2_grpc.GameDataServicer):
         self._enrollments = enrollments
         self._stats_provider = stats_provider
         self._map_seeds = map_seeds
+        self._catalog = catalog
 
     async def GetCoverage(
         self,
@@ -396,6 +398,44 @@ class GameDataServicer(gamedata_pb2_grpc.GameDataServicer):
             return content_pb2.MapSeedReply(found=False)
         return _map_seed_reply_of(descriptor)
 
+    async def Call(
+        self,
+        request: Any,
+        context: grpc.aio.ServicerContext,
+    ) -> Any:
+        """Dispatch one catalog op over the game's service (the gateway).
+
+        The game's collections (maps, pools, packs, factions, content)
+        answer from the OWNER's process (rule 5). The service's
+        validation, audit and lifecycle logic stay THE logic — the
+        gateway is a thin, allowlisted dispatch; an unknown op is a
+        protocol error, a service error a functional reply.
+        """
+        import json
+
+        if self._catalog is None:
+            await context.abort(grpc.StatusCode.UNIMPLEMENTED, "catalog not wired")
+            raise AssertionError
+        op = request.op
+        if op not in _CATALOG_OPS:
+            await context.abort(grpc.StatusCode.INVALID_ARGUMENT, f"unknown op {op!r}")
+            raise AssertionError
+        method = getattr(self._catalog, op)
+        try:
+            kwargs = json.loads(request.payload_json) if request.payload_json else {}
+            result = await method(**kwargs)
+        except Exception as exc:
+            logger.warning("catalog op %s failed: %s", op, exc)
+            return gamedata_pb2.GameDataCallReply(
+                ok=False,
+                error_kind=type(exc).__name__,
+                error=str(exc)[:400],
+            )
+        return gamedata_pb2.GameDataCallReply(
+            ok=True,
+            result_json=json.dumps(_jsonable(result)),
+        )
+
     async def UpdateEnrollments(
         self,
         request: gamedata_pb2.UpdateEnrollmentsRequest,
@@ -482,3 +522,54 @@ def _map_seed_reply_of(descriptor: dict[str, Any]) -> Any:
         ],
         tags=[str(t) for t in descriptor.get("tags", ()) or ()],
     )
+
+
+# The allowlisted catalog ops (the GameDataService surface the bot uses).
+# An op outside this table answers INVALID_ARGUMENT — the gateway is a
+# door, never an open getattr.
+_CATALOG_OPS: frozenset[str] = frozenset(
+    {
+        "list_factions",
+        "list_maps",
+        "list_map_pools",
+        "list_all_map_pools",
+        "list_game_keys",
+        "get_map",
+        "get_map_pool",
+        "get_map_pack",
+        "create_map",
+        "create_map_pool",
+        "create_map_pack",
+        "update_map",
+        "update_map_pool",
+        "delete_map",
+        "archive_map",
+        "archive_map_pool",
+        "archive_map_pack",
+        "set_map_forum_message",
+        "set_pool_forum_thread",
+        "hard_delete_map_pool",
+        "duplicate_map_pool",
+        "resolve_pool_map_ids",
+        "send_map_pool_to_guild",
+        "content_store",
+        "content_get",
+    }
+)
+
+
+def _jsonable(value: Any) -> Any:
+    """Serialize a service result into JSON-safe data.
+
+    The catalog models are pydantic: ``model_dump`` carries the wire
+    shape (aliases included); tuples become lists; the rest passes.
+    """
+    if value is None or isinstance(value, (bool, int, float, str)):
+        return value
+    if hasattr(value, "model_dump"):
+        return value.model_dump(by_alias=True, mode="json")
+    if isinstance(value, (list, tuple)):
+        return [_jsonable(item) for item in value]
+    if isinstance(value, dict):
+        return {key: _jsonable(item) for key, item in value.items()}
+    return str(value)

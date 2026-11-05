@@ -37,12 +37,12 @@ def liquipedia_map_url(name: str) -> str:
 
 
 def maps_forum_wiring_ready() -> bool:
-    """Whether the maps forum wiring can be built (Mongo configured)."""
-    return bool(os.environ.get("MONGO_URI"))
+    """Whether the maps forum wiring can be built (the game service configured)."""
+    return bool(os.environ.get("GAME_AOE2_URI"))
 
 
 def _build_service() -> Any:
-    """Build the GameDataService over the shared Mongo adapter."""
+    """Build the catalog service over the GAME SERVICE (rule 5)."""
     from kingdoms.discord.wiring import build_games_service
 
     return build_games_service()
