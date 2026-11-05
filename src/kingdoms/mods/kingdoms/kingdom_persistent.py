@@ -7065,8 +7065,23 @@ async def _run_start_beta(interaction: discord.Interaction, strings: dict[str, A
     from kingdoms.mods.kingdoms.beta_panel import _strings as beta_strings
 
     beta_s = beta_strings(locale)
+    # saison-mode-lock-v1 (Drasah 05/11): the format of a started
+    # season is frozen — the refusal offers the season relaunch.
+    from kingdoms.mods.kingdoms.beta_panel import beta_mode_locked_answer
+    from kingdoms.mods.kingdoms.events import BetaSeasonStartedError
+
+    console_shim = SimpleNamespace(
+        bot=SimpleNamespace(
+            kingdoms_events_service=events,
+            kingdoms_service=wiring.kingdoms_service,
+        )
+    )
     try:
         report = await events.activate_beta("now", start_at=game_now())
+    except BetaSeasonStartedError:
+        locked_content, locked_view = beta_mode_locked_answer(console_shim, locale)
+        await interaction.followup.send(locked_content, view=locked_view, ephemeral=True)
+        return
     except Exception as exc:
         await interaction.followup.send(
             strings["start_beta_failed"].format(type(exc).__name__), ephemeral=True

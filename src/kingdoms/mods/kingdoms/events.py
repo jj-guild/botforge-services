@@ -203,6 +203,17 @@ class SeasonExhaustedError(MapPoolExhaustedError):
     message_key = "kingdoms.errors.season_exhausted"
 
 
+class BetaSeasonStartedError(ValueError):
+    """Raised when a beta is armed on a season that already started.
+
+    saison-mode-lock-v1 (Drasah 05/11, live report « attaque synfoni
+    en retard »): the format of a season is FROZEN once it starts —
+    arming a beta mid-season left the attacks declared before the arm
+    at the normal pace and the ones after at the beta pace. Changing
+    the format requires restarting the season from scratch.
+    """
+
+
 class EventService:
     """The weekly event orchestrator (reference §15-§17)."""
 
@@ -632,6 +643,14 @@ class EventService:
         season = await self._require_season()
         if season.finished:
             raise ValueError("la saison est terminée — la beta se lance sur une saison en cours")
+        # saison-mode-lock-v1 (Drasah 05/11): the format is frozen once
+        # the season starts — a beta rides ONLY a fresh (setup) season.
+        if str(getattr(season, "phase", "setup")) != "setup":
+            raise BetaSeasonStartedError(
+                "la saison est déjà démarrée — son format est figé ; "
+                "pour changer de format il faut repartir du début de saison "
+                "(mettre fin à la saison, puis relancer et re-choisir le format)"
+            )
         timestamp = now or game_now()
         if start_at.tzinfo is None:
             start_at = start_at.replace(tzinfo=UTC)

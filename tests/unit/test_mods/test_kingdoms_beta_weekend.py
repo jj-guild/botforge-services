@@ -21,6 +21,7 @@ from kingdoms.mods.kingdoms.beta_weekend import (
     beta_started,
     parse_beta_start,
     plan_beta_slots,
+    restore_normal_config,
 )
 from kingdoms.mods.kingdoms.config import KingdomsSeasonConfig, default_season_config
 from kingdoms.mods.kingdoms.events import EventService, active_lords_day_window
@@ -265,3 +266,88 @@ async def test_beta_plan_survives_the_naive_mongo_round_trip() -> None:
     assert after is not None
     assert after.current_age_key == "feudal_age"
     assert after.current_cycle == 2
+
+
+# --- saison-mode-lock-v1 (Drasah 05/11, live report « attaque synfoni
+# en retard ») — one season, one format; a launch overwrites the other
+# choice and restores the pristine normal pace. ---
+
+
+def test_beta_config_restore_returns_the_normal_pace() -> None:
+    """apply_beta_preset → restore_normal_config = the Season II pace."""
+    config = default_season_config()
+    apply_beta_preset(config, "now")
+    assert config.attacks.player_attack_delay_minutes == 10
+    assert config.attacks.attacks_per_week == 10
+    assert config.kingdoms_count == 10
+    restore_normal_config(config)
+    assert config.attacks.player_attack_delay_minutes == 360
+    assert config.attacks.attacks_per_week == 1
+    assert config.kingdoms_count == 2
+    assert [age.key for age in config.ages] == [
+        "dark_age",
+        "feudal_age",
+        "castle_age",
+        "imperial_age",
+    ]
+
+
+def test_the_normal_reference_stays_pristine_across_re_arms() -> None:
+    """Re-arming (a second apply) never lets the beta pace leak into
+    the remembered normal reference — the restore is stable."""
+    config = default_season_config()
+    apply_beta_preset(config, "now")
+    apply_beta_preset(config, "now")  # re-arm: the reference stays normal
+    restore_normal_config(config)
+    assert config.attacks.player_attack_delay_minutes == 360
+
+
+async def test_activate_beta_refuses_a_started_season() -> None:
+    """The format is frozen once the season starts — arming a beta on
+    a started season raises BetaSeasonStartedError (the refusal offers
+    the season relaunch on the Discord surface)."""
+    from kingdoms.mods.kingdoms.events import BetaSeasonStartedError
+
+    bundle = Bundle()
+    await bundle.kingdoms.launch()
+    season = await bundle.kingdoms.current_season()
+    assert season is not None and season.phase == "setup"
+    # a fresh (setup) season accepts the arm —
+    report = await bundle.events.activate_beta(
+        "now", start_at=datetime(2026, 11, 5, 12, 0, tzinfo=UTC)
+    )
+    assert report["name"] == "now"
+    # — but a STARTED season never does (saison-mode-lock-v1).
+    await bundle.kingdoms.start_season()
+    with pytest.raises(BetaSeasonStartedError):
+        await bundle.events.activate_beta(
+            "now", start_at=datetime(2026, 11, 5, 13, 0, tzinfo=UTC)
+        )
+
+
+async def test_launch_after_a_beta_restores_the_normal_pace() -> None:
+    """A launch OVERWRITES the other format: after a beta ran, the new
+    season starts at the pristine normal pace — the compressed delays
+    never leak into the next season (they are read at declare time)."""
+    bundle = Bundle()
+    apply_beta_preset(bundle.config, "now")
+    assert bundle.config.attacks.player_attack_delay_minutes == 10
+    await bundle.kingdoms.launch()
+    assert bundle.config.attacks.player_attack_delay_minutes == 360
+    assert bundle.config.attacks.attacks_per_week == 1
+    season = await bundle.kingdoms.current_season()
+    assert season is not None
+    assert getattr(season, "beta_name", None) is None
+    assert season.phase == "setup"
+
+
+def test_launch_without_any_beta_never_touches_the_config() -> None:
+    """A config a beta never mutated (no reference stored) is left
+    EXACTLY as loaded by a launch — a custom kingdoms_count or delay
+    survives the restore no-op (never a silent default overwrite)."""
+    config = default_season_config()
+    config.kingdoms_count = 7
+    config.attacks.player_attack_delay_minutes = 42
+    restore_normal_config(config)
+    assert config.kingdoms_count == 7
+    assert config.attacks.player_attack_delay_minutes == 42

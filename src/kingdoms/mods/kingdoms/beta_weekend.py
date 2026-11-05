@@ -135,6 +135,43 @@ def beta_preset_names() -> tuple[str, ...]:
     return names
 
 
+# saison-mode-lock-v1 (Drasah 05/11, live report « attaque synfoni en
+# retard »): apply_beta_preset mutates the SHARED config in place and
+# nothing ever restored it — a normal season launched after a beta
+# kept running at beta pace until the next bot restart, and a restart
+# then flipped a beta-launched season to the normal pace (the attack
+# delays are read from the config AT DECLARE time). The pristine
+# normal config is remembered ON THE CONFIG OBJECT ITSELF (never a
+# module global — several configs live in the test process), and every
+# season launch restores it — one season, one format, no ghost state.
+_REFERENCE_ATTR = "_kingdoms_normal_reference"
+
+
+def remember_normal_config(config: KingdomsSeasonConfig) -> None:
+    """Snapshot the pristine (yaml-loaded) config once, before any
+    beta mutation. Idempotent — the first snapshot wins; stored ON the
+    object (bypassing pydantic) so no global state ever leaks between
+    configs."""
+    if getattr(config, _REFERENCE_ATTR, None) is None:
+        object.__setattr__(config, _REFERENCE_ATTR, config.model_copy(deep=True))
+
+
+def restore_normal_config(config: KingdomsSeasonConfig) -> None:
+    """Copy the remembered normal values back into the shared config.
+
+    Mutates the object IN PLACE (every service holds the same
+    reference). With no snapshot on THIS config (never mutated by a
+    beta) it is a NO-OP — never a crash, never a silent overwrite of
+    a config a beta never touched."""
+    reference = getattr(config, _REFERENCE_ATTR, None)
+    if reference is None:
+        return
+    for field in ("attacks", "voliere", "events", "parish", "technologies"):
+        setattr(config, field, getattr(reference, field).model_copy(deep=True))
+    config.ages = tuple(reference.ages)
+    config.kingdoms_count = reference.kingdoms_count
+
+
 def apply_beta_preset(config: KingdomsSeasonConfig, name: str) -> None:
     """Mutate the shared season config in place onto the preset.
 
@@ -147,6 +184,9 @@ def apply_beta_preset(config: KingdomsSeasonConfig, name: str) -> None:
     preset = BETA_PRESETS.get(name)
     if preset is None:
         raise ValueError(f"preset beta inconnu : {name!r} (disponibles : {', '.join(beta_preset_names())})")
+    # saison-mode-lock-v1: the first mutation snapshots the pristine
+    # config — the launch-side restore always has a true reference.
+    remember_normal_config(config)
     config.attacks = AttackSettings(**{**config.attacks.model_dump(), **preset["attacks"]})
     config.voliere = VoliereSettings(**{**config.voliere.model_dump(), **preset["voliere"]})
     config.events = EventSettings(**{**config.events.model_dump(), **preset["events"]})

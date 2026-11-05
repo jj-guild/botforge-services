@@ -195,6 +195,15 @@ class KingdomsService:
             phase="setup",
         )
         await self._store.upsert_season(season.to_mongo())
+        # saison-mode-lock-v1 (Drasah 05/11, live report « attaque
+        # synfoni en retard »): a launch OVERWRITES the other format's
+        # choice. The fresh season doc carries no beta fields and the
+        # shared config is restored to the pristine normal values — a
+        # beta that ran before must never leak its compressed delays
+        # into the next normal season (they are read at declare time).
+        from kingdoms.mods.kingdoms.beta_weekend import restore_normal_config
+
+        restore_normal_config(self._config)
         kingdoms = [self._new_kingdom(GAIA_KINGDOM_KEY, KingdomType.GAIA, season.id, name_approved=True)]
         for index, name in enumerate(names):
             kingdoms.append(self._new_kingdom(f"k-{index + 1}", KingdomType.PLAYER, season.id, name=name))

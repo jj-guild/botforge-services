@@ -58,6 +58,12 @@ def _build_services(config: Any) -> tuple[Any, ...] | None:
         from kingdoms.mods.kingdoms.voliere import VoliereService
 
         season_config = load_season_config(config.config_dir)
+        # saison-mode-lock-v1 (Drasah 05/11): snapshot the pristine
+        # yaml-loaded config BEFORE anything can mutate it — the
+        # launch-side normal restore always has the true reference.
+        from kingdoms.mods.kingdoms.beta_weekend import remember_normal_config
+
+        remember_normal_config(season_config)
         store = MongoKingdomsStore(get_async_database())
         kingdoms = KingdomsService(store, season_config)
         territories = TerritoryService(store, season_config, kingdoms)

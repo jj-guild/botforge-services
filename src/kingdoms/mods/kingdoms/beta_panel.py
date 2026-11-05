@@ -18,6 +18,7 @@ from typing import Any
 import discord
 
 from kingdoms.mods.kingdoms.beta_weekend import parse_beta_start
+from kingdoms.mods.kingdoms.events import BetaSeasonStartedError
 from kingdoms.mods.kingdoms.game_clock import game_now
 
 logger = logging.getLogger("kingdoms.mods.kingdoms")
@@ -42,6 +43,22 @@ _STRINGS = {
         "auto_already": "ℹ️ La saison était déjà lancée — rien à faire.",
         "auto_failed": "⚠️ Lancement automatique de la saison échoué (`{error}`) — utilise « Démarrer la saison » sur ⚙️ Paramètres.",
         "auto_no_service": "⚠️ Lancement automatique impossible — le service saisons n'est pas branché (utilise « Démarrer la saison »).",
+        "mode_locked": (
+            "⚠️ La saison est déjà démarrée — son format est figé.\n"
+            "Pour changer de format, il faut **repartir du début de saison** :\n"
+            "mettre fin à la saison actuelle (archivée), puis relancer et "
+            "re-choisir le format (beta ou saison normale)."
+        ),
+        "relaunch_label": "🔄 Repartir du début de saison",
+        "relaunch_help": "Termine la saison actuelle et repart du début, puis tu re-choisis le format",
+        "relaunch_cancel": "Annuler",
+        "relaunch_cancelled": "ℹ️ Annulé — la saison en cours continue telle quelle.",
+        "relaunch_started": (
+            "✅ Saison repartie du début (l'ancienne est archivée, rythme "
+            "normal restauré). Tu peux maintenant re-choisir le format : "
+            "« Démarrer la beta » ou « Démarrer la saison »."
+        ),
+        "relaunch_failed": "⚠️ Relance impossible (`{error}`).",
     },
     "en": {
         "panel_title": "🚀 Beta “now” — start definition",
@@ -62,6 +79,22 @@ _STRINGS = {
         "auto_already": "ℹ️ The season was already started — nothing to do.",
         "auto_failed": "⚠️ Automatic season start failed (`{error}`) — use « Start the season » on ⚙️ Settings.",
         "auto_no_service": "⚠️ Automatic start impossible — the season service is not wired (use « Start the season »).",
+        "mode_locked": (
+            "⚠️ The season already started — its format is frozen.\n"
+            "To change the format you must **restart the season from "
+            "scratch**: end the current season (archived), relaunch, then "
+            "pick the format again (beta or normal season)."
+        ),
+        "relaunch_label": "🔄 Restart the season from scratch",
+        "relaunch_help": "Ends the current season and starts over, then you pick the format again",
+        "relaunch_cancel": "Cancel",
+        "relaunch_cancelled": "ℹ️ Cancelled — the running season continues as is.",
+        "relaunch_started": (
+            "✅ Season restarted from scratch (the old one is archived, "
+            "normal pace restored). You can now pick the format again: "
+            "« Start the beta » or « Start the season »."
+        ),
+        "relaunch_failed": "⚠️ Relaunch impossible (`{error}`).",
     },
 }
 
@@ -186,6 +219,11 @@ class BetaStartModal(discord.ui.Modal):
         try:
             start = parse_beta_start(str(self.start_input.value or ""), game_now())
             report = await events.activate_beta("now", start_at=start)
+        except BetaSeasonStartedError:
+            # saison-mode-lock-v1: the format is frozen once started.
+            content, view = beta_mode_locked_answer(self._console, interaction.locale)
+            await interaction.response.send_message(content, view=view, ephemeral=True)
+            return
         except ValueError as error:
             await interaction.response.send_message(self._strings["bad_start"].format(error=error), ephemeral=True)
             return
@@ -217,7 +255,13 @@ class BetaStartView(discord.ui.View):
             err = self._strings["bad_start"].format(error="mod non câblé")
             await interaction.response.send_message(err, ephemeral=True)
             return
-        report = await events.activate_beta("now", start_at=game_now())
+        try:
+            report = await events.activate_beta("now", start_at=game_now())
+        except BetaSeasonStartedError:
+            # saison-mode-lock-v1: the format is frozen once started.
+            content, view = beta_mode_locked_answer(self._console, interaction.locale)
+            await interaction.response.send_message(content, view=view, ephemeral=True)
+            return
         await interaction.response.send_message(beta_start_report(report))
         # beta-auto-season-v1: the season starts on its own — no second
         # click on « Démarrer la saison ».
@@ -238,3 +282,66 @@ def beta_start_panel(console: Any, locale: Any = None) -> tuple[str, BetaStartVi
     """Return (content, view) for the console's ``lancer_beta now`` answer."""
     strings = _strings(locale)
     return strings["panel_body"], BetaStartView(console, locale)
+
+
+class BetaRelaunchView(discord.ui.View):
+    """saison-mode-lock-v1 (Drasah 05/11): the refusal answer when a
+    beta is armed on a season that already started — the format is
+    frozen, and the only way out is restarting the season from
+    scratch (end + relaunch, archives kept), then re-choosing the
+    format. The view lives 15 minutes like the start panel."""
+
+    def __init__(self, console: Any, locale: Any = None) -> None:
+        """Store the console seam (the seasons service rides the bot)."""
+        super().__init__(timeout=900)
+        self._console = console
+        self._strings = _strings(locale)
+
+    @discord.ui.button(label="🔄", style=discord.ButtonStyle.red)
+    async def relaunch(self, interaction: discord.Interaction, button: discord.ui.Button[Any]) -> None:
+        """End + relaunch the season (archive, wipe, fresh setup)."""
+        del button
+        kingdoms = getattr(self._console.bot, "kingdoms_service", None)
+        if kingdoms is None:
+            await interaction.response.send_message(
+                self._strings["relaunch_failed"].format(error="service saisons non câblé"),
+                ephemeral=True,
+            )
+            return
+        await interaction.response.defer(ephemeral=True)
+        try:
+            await kingdoms.launch()
+        except Exception as exc:
+            await interaction.followup.send(
+                self._strings["relaunch_failed"].format(
+                    error=getattr(exc, "message", None) or type(exc).__name__
+                ),
+                ephemeral=True,
+            )
+            return
+        guild = getattr(interaction, "guild", None)
+        locale = str(interaction.locale) if interaction.locale else "en"
+        try:
+            from kingdoms.mods.kingdoms.kingdom_persistent import (
+                _ensure_realms_after_launch,
+                _refresh_season_status_safe,
+            )
+
+            if guild is not None:
+                await _ensure_realms_after_launch(guild, locale)
+                await _refresh_season_status_safe(guild, locale)
+        except Exception:
+            logger.warning("BETA PANEL: post-relaunch refresh skipped", exc_info=True)
+        await interaction.followup.send(self._strings["relaunch_started"], ephemeral=True)
+
+    @discord.ui.button(label="❌", style=discord.ButtonStyle.grey)
+    async def cancel(self, interaction: discord.Interaction, button: discord.ui.Button[Any]) -> None:
+        """Keep the running season exactly as it is."""
+        del button
+        await interaction.response.send_message(self._strings["relaunch_cancelled"], ephemeral=True)
+
+
+def beta_mode_locked_answer(console: Any, locale: Any = None) -> tuple[str, BetaRelaunchView]:
+    """Return (content, view) for the mode-lock refusal (saison-mode-lock-v1)."""
+    strings = _strings(locale)
+    return strings["mode_locked"], BetaRelaunchView(console, locale)
