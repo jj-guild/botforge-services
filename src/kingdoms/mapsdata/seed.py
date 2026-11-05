@@ -103,7 +103,17 @@ async def fetch_map_seed(name: str) -> MapSeed | None:
         from kingdoms.core.rpc.content_client import ContentProviderClient
 
         client = ContentProviderClient(provider_uri)
-        descriptor = await client.get_map_seed("aoe2", name)
+        try:
+            descriptor = await client.get_map_seed("aoe2", name)
+        except Exception as exc:
+            # the provider surfaces the open circuit in the gRPC details:
+            # map it back so the callers see LIQUIPEDIA IS RATE-LIMITED,
+            # not a generic failure (nor "map not found").
+            if "circuit" in str(exc).lower():
+                from kingdoms.mapsdata.liquipedia import LiquipediaCircuitOpenError
+
+                raise LiquipediaCircuitOpenError(str(exc)) from exc
+            raise
         if descriptor is None:
             return None
         return MapSeed(

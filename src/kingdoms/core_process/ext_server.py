@@ -27,7 +27,6 @@ async def serve_game_provider(
     player_stats: object | None = None,
     update_subscriptions: object | None = None,
     match_result: object | None = None,
-    stats_provider: object | None = None,
 ) -> None:
     """Serve the kingdoms.v1.Game contract until terminated.
 
@@ -35,13 +34,7 @@ async def serve_game_provider(
     adapter yet still serve GetCapabilities — the declared capabilities
     are the provider's single source of truth.
     """
-    from kingdoms import __version__
-    from kingdoms.core.rpc.status import CoreStatus, build_status_server_with_stats
-
-    server = build_status_server_with_stats(
-        lambda: CoreStatus(version=__version__, process=process_label),
-        stats_provider=stats_provider,
-    )
+    server = grpc.aio.server()
     game_pb2_grpc_add(
         GameServicer(
             lambda: capabilities,
@@ -58,6 +51,7 @@ async def serve_game_provider(
     bind = f"[::]:{port}"
     server.add_insecure_port(bind)
     await server.start()
+    from kingdoms import __version__
 
     logger.info(
         "%s_READY port=%s provider=%s version=%s",

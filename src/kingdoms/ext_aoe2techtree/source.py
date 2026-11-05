@@ -23,12 +23,8 @@ from typing import Any
 import httpx
 
 from kingdoms.core.ids import slug_id
-from kingdoms.core.upstream_stats import StatsRegistry
 
 logger = logging.getLogger("kingdoms.ext_aoe2techtree")
-
-# The process-wide upstream call stats — served over the Status contract.
-STATS = StatsRegistry()
 
 DEFAULT_DATASET_DIR = Path(__file__).resolve().parents[3] / "data" / "core" / "aoe2techtree"
 SUPPORTED_LOCALES = ("en", "fr")
@@ -77,10 +73,6 @@ class DatasetContentSource(UpstreamContentSource):
 
     def faction_content(self, faction_key: str, locale: str) -> dict[str, str | bool] | None:
         """Resolve a civ's localized name + help text from the dataset."""
-        with STATS.register("aoe2techtree:dataset"):
-            return self._faction_content(faction_key, locale)
-
-    def _faction_content(self, faction_key: str, locale: str) -> dict[str, str | bool] | None:
         self._load()
         civ = (self._dataset.get("civs") or {}).get(faction_key)
         if civ is None:
@@ -100,10 +92,6 @@ class DatasetContentSource(UpstreamContentSource):
 
     def map_content(self, map_key: str, locale: str) -> dict[str, str | bool] | None:
         """Serve a map's descriptor (name-only: the dataset has no map help)."""
-        with STATS.register("aoe2techtree:dataset"):
-            return self._map_content(map_key, locale)
-
-    def _map_content(self, map_key: str, locale: str) -> dict[str, str | bool] | None:
         del locale
         return {
             "entity_id": f"map:aoe2:public:{slug_id(map_key)}",

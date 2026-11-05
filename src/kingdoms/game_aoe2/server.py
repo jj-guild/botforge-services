@@ -18,12 +18,6 @@ import logging
 import os
 from typing import Any
 
-from kingdoms.core.upstream_stats import StatsRegistry
-
-# The process-wide upstream call stats — the provider streams this
-# process consumes, served over the Status contract.
-STATS = StatsRegistry()
-
 logger = logging.getLogger("kingdoms.game_aoe2")
 
 
@@ -38,25 +32,36 @@ def main() -> None:
 
 async def _serve() -> None:
     from kingdoms import __version__
-    from kingdoms.core.rpc.status import CoreStatus, build_status_server_with_stats
+    from kingdoms.core.rpc.status import CoreStatus, build_status_server
     from kingdoms.game_aoe2 import GAME_KEY, PROCESS_LABEL
     from kingdoms.game_aoe2.aggregator import GameAoe2Aggregator
     from kingdoms.game_aoe2.rpc import GameDataServicer, add_gamedata_servicer
 
     aggregator = GameAoe2Aggregator()
     enrollments = _EnrollmentPusher(aggregator)
-    server = build_status_server_with_stats(
+    from kingdoms.game_aoe2.aggregator import ProviderProber
+
+    prober = ProviderProber()
+    server = build_status_server(
         lambda: CoreStatus(version=__version__, process=PROCESS_LABEL),
-        stats_provider=_aggregate_provider_stats,
     )
-    add_gamedata_servicer(server, GameDataServicer(aggregator, enrollments=enrollments))
+    add_gamedata_servicer(server, GameDataServicer(aggregator, enrollments=enrollments, prober=prober))
 
     consumer = asyncio.ensure_future(_consume_providers(aggregator))
-    # The active prober is GONE (owner direction 2026-11-04): a synthetic
-    # ping every minute was indistinguishable from real traffic for the
-    # rate-limited upstreams. The providers panel reads each provider's
-    # OWN call statistics (GetUpstreamStats on the Status contract) —
-    # the provider process is the only place that sees the calls.
+    providers = [
+        ("ext-aoe2lobby", os.environ.get("EXT_AOE2LOBBY_URI", "")),
+        ("ext-librematch", os.environ.get("EXT_LIBREMATCH_URI", "")),
+    ]
+    # The content providers the game uses (owner direction 2026-10-31):
+    # they ride the providers panel too — probed through their OWN
+    # contract (ListFactions), never the Game ping (UNIMPLEMENTED).
+    content_providers = [
+        ("ext-aoe2techtree", os.environ.get("EXT_AOE2TECHTREE_URI", "")),
+        ("ext-liquipedia", os.environ.get("EXT_LIQUIPEDIA_URI", "")),
+    ]
+    probe_task = asyncio.ensure_future(
+        prober.run_forever(providers, content_providers=content_providers)
+    )
 
     port = os.environ.get("GAME_GRPC_PORT", "50071")
     bind = f"[::]:{port}"
@@ -67,6 +72,7 @@ async def _serve() -> None:
         await server.wait_for_termination()
     finally:
         consumer.cancel()
+        probe_task.cancel()
 
 
 class _EnrollmentPusher:
@@ -116,49 +122,6 @@ class _EnrollmentPusher:
             return len(profile_ids), False
 
 
-async def _aggregate_provider_stats() -> list[dict[str, Any]]:
-    """Fetch the game service's providers' stats on demand.
-
-    The game service OWNS its providers (owner direction 2026-11-05):
-    the bot never interrogates them. When the panel asks, this process
-    fetches each provider's own call statistics over the Status
-    contract and merges its own stream-consumption stats — one answer,
-    every provider.
-    """
-    from kingdoms.core.rpc.status import fetch_upstream_stats
-
-    providers = [
-        ("ext-librematch", os.environ.get("EXT_LIBREMATCH_URI", "")),
-        ("ext-aoe2lobby", os.environ.get("EXT_AOE2LOBBY_URI", "")),
-        ("ext-aoe2techtree", os.environ.get("EXT_AOE2TECHTREE_URI", "")),
-        ("ext-liquipedia", os.environ.get("EXT_LIQUIPEDIA_URI", "")),
-    ]
-    async def _one(provider_id: str, uri: str) -> list[dict[str, Any]]:
-        if not uri:
-            return [{"provider_id": provider_id, "upstream": provider_id,
-                     "never_called": True, "detail": "not deployed"}]
-        try:
-            # CONCURRENT, short timeout per provider: the panel waits 15 s
-            # for this whole answer — four sequential 5 s fetches could
-            # exceed it and the panel rendered nothing.
-            stats = await fetch_upstream_stats(uri, timeout_s=3.0)
-        except Exception as exc:
-            return [{"provider_id": provider_id, "upstream": provider_id,
-                     "never_called": True, "detail": f"unreachable: {type(exc).__name__}"}]
-        if not stats:
-            return [{"provider_id": provider_id, "upstream": provider_id,
-                     "never_called": True, "detail": "no calls yet"}]
-        for entry in stats:
-            entry["provider_id"] = provider_id
-        return stats
-
-    batches = await asyncio.gather(*(_one(pid, uri) for pid, uri in providers))
-    entries: list[dict[str, Any]] = []
-    for batch in batches:
-        entries.extend(batch)
-    return entries
-
-
 async def _consume_providers(aggregator: Any) -> None:
     """Fold every configured provider's event stream into the aggregator."""
     providers = [
@@ -182,21 +145,12 @@ async def _consume_one(aggregator: Any, provider_id: str, uri: str) -> None:
 
     client = GameProviderClient(uri, provider_id, "aoe2")
     health = asyncio.ensure_future(_watch_provider_health(aggregator, client))
-    stats = STATS.register(f"provider:{provider_id}")
     try:
         while True:
-            established = False
             try:
                 async for event in client.stream_match_events(since=0):
-                    if not established:
-                        # RECORD AT ESTABLISHMENT: a long-lived session
-                        # must count as a live call the moment it exists,
-                        # not when it eventually closes.
-                        stats.record(True, 0)
-                        established = True
                     await aggregator.apply_event(event)
-            except Exception as exc:
-                stats.record(False, 0, f"{type(exc).__name__}: {exc}")
+            except Exception:
                 logger.warning("provider %s stream lost; retrying in 5s", provider_id)
                 await asyncio.sleep(5)
             await asyncio.sleep(1)

@@ -39,6 +39,34 @@ _PARSE_INTERVAL_S = 60.0
 _429_BACKOFF_BASE_S = 30.0
 _429_MAX_RETRIES = 3
 
+# The circuit breaker (the branch's subject: STOP taking 429s): after
+# the 429 retries are exhausted the API is telling us, loudly, that
+# this IP is unwelcome for a while. Continuing to retry every import
+# is pure spam — the circuit OPENS and every call fails fast, zero
+# HTTP traffic, until the window lapses. Each consecutive opening
+# doubles the window (30 min, 1 h, 2 h... capped at 12 h); one
+# successful call resets the streak.
+_CIRCUIT_WINDOW_BASE_S = 30 * 60.0
+_CIRCUIT_WINDOW_MAX_S = 12 * 3600.0
+
+# Shared circuit state: one breaker per PROCESS (same rationale as the
+# pacing clock — a fresh provider per map must not reset it).
+_shared_circuit_open_until = 0.0
+_shared_circuit_streak = 0
+
+
+class LiquipediaCircuitOpenError(RuntimeError):
+    """The Liquipedia circuit is open: the API is rate-limiting this IP.
+
+    Every call fails fast while the window is open — no HTTP traffic.
+    Retry later; the window doubles on each consecutive opening.
+    """
+
+    @classmethod
+    def retry_in_s(cls) -> float:
+        """Seconds left before the circuit closes (0 when closed)."""
+        return max(0.0, _shared_circuit_open_until - time.monotonic())
+
 # Shared pacing state: one clock per PROCESS, not per provider instance.
 # fetch_map_seed builds a fresh provider per map (bulk imports, the maps
 # sync) \u2014 instance-level markers would reset every time and the
@@ -186,6 +214,14 @@ class LiquipediaMapsProvider:
             _shared_last_request_at = marker
 
     def _get_json(self, params: dict[str, str], is_parse: bool = False) -> dict[str, Any]:
+        global _shared_circuit_open_until, _shared_circuit_streak
+        if LiquipediaCircuitOpenError.retry_in_s() > 0:
+            # FAIL FAST: while the circuit is open, not a single request
+            # leaves this process — the API asked for silence, it gets it.
+            raise LiquipediaCircuitOpenError(
+                "Liquipedia circuit open — the API is rate-limiting this IP; "
+                f"retry in {LiquipediaCircuitOpenError.retry_in_s():.0f} s"
+            )
         self._rate_limit(is_parse=is_parse)
         response = self._client.get(self._api_url, params=params)
         for attempt in range(_429_MAX_RETRIES):
@@ -226,6 +262,25 @@ class LiquipediaMapsProvider:
                 _shared_last_request_at = marker
             self._rate_limit(is_parse=is_parse)
             response = self._client.get(self._api_url, params=params)
+        if response.status_code == 429:
+            # The retries are exhausted: the circuit OPENS. Every further
+            # call fails fast until the window lapses — no more 429s.
+            _shared_circuit_streak += 1
+            window = min(
+                _CIRCUIT_WINDOW_BASE_S * (2 ** (_shared_circuit_streak - 1)),
+                _CIRCUIT_WINDOW_MAX_S,
+            )
+            _shared_circuit_open_until = time.monotonic() + window
+            logger.warning(
+                "LIQUIPEDIA 429 exhausted %d retries — CIRCUIT OPEN for %.0f min "
+                "(streak %d): every call fails fast until then",
+                _429_MAX_RETRIES,
+                window / 60.0,
+                _shared_circuit_streak,
+            )
+        elif _shared_circuit_streak:
+            # A healthy call after open windows: the streak resets.
+            _shared_circuit_streak = 0
         response.raise_for_status()
         payload: dict[str, Any] = response.json()
         if "error" in payload:

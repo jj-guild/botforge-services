@@ -21,15 +21,16 @@ one-liners,&nbsp;mirroring&nbsp;the&nbsp;Game&nbsp;provider&nbsp;loop&nbsp;(ADR-
 <td class="section-title" colspan=3>&nbsp;<br><strong class="bigsection">Modules</strong></td></tr>
     
 <tr><td class="decor pkg-content-decor"><span class="code">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span></td><td>&nbsp;</td>
-<td class="singlecolumn"><table><tr><td class="multicolumn"><a href="logging.html">logging</a><br>
+<td class="singlecolumn"><table><tr><td class="multicolumn"><a href="grpc.html">grpc</a><br>
+</td><td class="multicolumn"><a href="logging.html">logging</a><br>
 </td><td class="multicolumn"><a href="os.html">os</a><br>
-</td><td class="multicolumn"></td><td class="multicolumn"></td></tr></table></td></tr></table><p>
+</td><td class="multicolumn"></td></tr></table></td></tr></table><p>
 <table class="section">
 <tr class="decor functions-decor heading-text">
 <td class="section-title" colspan=3>&nbsp;<br><strong class="bigsection">Functions</strong></td></tr>
     
 <tr><td class="decor functions-decor"><span class="code">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span></td><td>&nbsp;</td>
-<td class="singlecolumn"><dl><dt>async <a name="-serve_content_provider"><strong>serve_content_provider</strong></a>(provider_key: 'str', game_key: 'str', locales: 'tuple[str, ...]', process_label: 'str', source: 'Any', stats_provider: 'Any' = None) -&gt; 'None'</dt><dd><span class="code">Serve&nbsp;the&nbsp;kingdoms.v1.Content&nbsp;contract&nbsp;until&nbsp;terminated.<br>
+<td class="singlecolumn"><dl><dt>async <a name="-serve_content_provider"><strong>serve_content_provider</strong></a>(provider_key: 'str', game_key: 'str', locales: 'tuple[str, ...]', process_label: 'str', source: 'Any') -&gt; 'None'</dt><dd><span class="code">Serve&nbsp;the&nbsp;kingdoms.v1.Content&nbsp;contract&nbsp;until&nbsp;terminated.<br>
 &nbsp;<br>
 Reads&nbsp;``EXT_GRPC_PORT``&nbsp;(default&nbsp;50063&nbsp;for&nbsp;the&nbsp;content&nbsp;family).&nbsp;The<br>
 upstream&nbsp;source&nbsp;is&nbsp;opaque&nbsp;here:&nbsp;it&nbsp;only&nbsp;needs&nbsp;the&nbsp;faction/map<br>

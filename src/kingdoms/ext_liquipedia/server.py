@@ -33,16 +33,13 @@ async def _serve() -> None:
     from kingdoms import __version__
     from kingdoms.core.models.db import get_database
     from kingdoms.core.rpc.content import ContentServicer, add_content_servicer
-    from kingdoms.core.rpc.status import CoreStatus, build_status_server_with_stats
+    from kingdoms.core.rpc.status import CoreStatus, build_status_server
     from kingdoms.ext_liquipedia import GAME_WIKIS, PROVIDER_ID, PROVIDER_KEY, SUPPORTED_LOCALES
     from kingdoms.ext_liquipedia.source import resolve_source
 
     source = resolve_source(get_database())
-    from kingdoms.ext_liquipedia.source import STATS
-
-    server = build_status_server_with_stats(
+    server = build_status_server(
         lambda: CoreStatus(version=__version__, process=PROVIDER_ID),
-        stats_provider=STATS.snapshot,
     )
     add_content_servicer(
         server,

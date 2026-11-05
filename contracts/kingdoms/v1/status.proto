@@ -4,14 +4,10 @@ package kingdoms.v1;
 
 // Status service — the bootstrap seam of the ADR-0020 process split.
 // The bot-discord process queries svc-core for its identity/version so
-// the deployment battery can assert cross-process wiring. Every process
-// binds this service; GetUpstreamStats serves the process's own call
-// statistics (the provider-owned health signal — no synthetic probe
-// ever touches an upstream, owner direction 2026-11-04).
+// the deployment battery can assert cross-process wiring.
 
 service Status {
   rpc GetCoreStatus(CoreStatusRequest) returns (CoreStatus);
-  rpc GetUpstreamStats(UpstreamStatsRequest) returns (UpstreamStatsReply);
 }
 
 message CoreStatusRequest {}
@@ -19,26 +15,4 @@ message CoreStatusRequest {}
 message CoreStatus {
   string version = 1;
   string process = 2;
-}
-
-message UpstreamStatsRequest {}
-
-message UpstreamStatsReply {
-  repeated UpstreamStatEntry entries = 1;
-}
-
-message UpstreamStatEntry {
-  string provider_id = 13;  // the provider process this entry describes
-  string upstream = 1;
-  bool ok = 2;
-  bool never_called = 3;
-  int32 total_calls = 4;
-  int32 total_errors = 5;
-  int32 consecutive_failures = 6;
-  int64 last_call_at = 7;  // epoch ms
-  int64 last_ok_at = 8;     // epoch ms
-  int32 calls_last_minute = 9;
-  int32 errors_last_minute = 10;
-  int32 avg_latency_ms = 11;
-  string last_error = 12;
 }

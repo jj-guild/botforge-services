@@ -21,9 +21,6 @@ def main() -> None:
         format="%(asctime)s %(levelname)s %(name)s %(message)s",
     )
     from kingdoms.core_process.content_server import serve_content_provider
-    from kingdoms.ext_aoe2techtree.source import STATS
-
-    _stats_snapshot = STATS.snapshot
     from kingdoms.ext_aoe2techtree import PROVIDER_ID
     from kingdoms.ext_aoe2techtree.source import (
         DEFAULT_DATASET_DIR,
@@ -44,7 +41,6 @@ def main() -> None:
             SUPPORTED_LOCALES,
             PROVIDER_ID,
             source,
-            stats_provider=_stats_snapshot,
         )
     )
 

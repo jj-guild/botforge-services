@@ -89,11 +89,6 @@ Data and other attributes defined here:<br>
     
 <tr><td class="decor functions-decor"><span class="code">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span></td><td>&nbsp;</td>
 <td class="singlecolumn"><dl><dt><a name="-build_status_server"><strong>build_status_server</strong></a>(status_provider: 'Callable[[], CoreStatus]') -&gt; 'grpc.aio.Server'</dt><dd><span class="code">Build&nbsp;the&nbsp;aio&nbsp;gRPC&nbsp;server&nbsp;with&nbsp;the&nbsp;Status&nbsp;service&nbsp;bound.</span></dd></dl>
- <dl><dt><a name="-build_status_server_with_stats"><strong>build_status_server_with_stats</strong></a>(status_provider: 'Callable[[], CoreStatus]', stats_provider: 'Callable[[], Any] | None' = None) -&gt; 'grpc.aio.Server'</dt><dd><span class="code">Build&nbsp;the&nbsp;aio&nbsp;gRPC&nbsp;server&nbsp;with&nbsp;the&nbsp;Status&nbsp;service&nbsp;(stats&nbsp;optional).</span></dd></dl>
  <dl><dt>async <a name="-fetch_core_status"><strong>fetch_core_status</strong></a>(core_uri: 'str') -&gt; 'CoreStatus'</dt><dd><span class="code">Fetch&nbsp;svc-core&nbsp;status&nbsp;over&nbsp;the&nbsp;wire&nbsp;(used&nbsp;by&nbsp;tests&nbsp;and&nbsp;preflight).</span></dd></dl>
- <dl><dt>async <a name="-fetch_upstream_stats"><strong>fetch_upstream_stats</strong></a>(uri: 'str', timeout_s: 'float' = 5.0) -&gt; 'list[dict[str, Any]]'</dt><dd><span class="code">Fetch&nbsp;one&nbsp;process's&nbsp;upstream&nbsp;call&nbsp;stats&nbsp;over&nbsp;the&nbsp;Status&nbsp;contract.<br>
-&nbsp;<br>
-The&nbsp;generic&nbsp;client&nbsp;of&nbsp;the&nbsp;providers&nbsp;panel:&nbsp;any&nbsp;process&nbsp;that&nbsp;binds<br>
-the&nbsp;Status&nbsp;service&nbsp;answers&nbsp;(an&nbsp;empty&nbsp;list&nbsp;when&nbsp;it&nbsp;records&nbsp;nothing).</span></dd></dl>
 </td></tr></table>
 </body></html>

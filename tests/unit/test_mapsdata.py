@@ -9,7 +9,7 @@ asserting that pacing happens.
 from __future__ import annotations
 
 import json
-from typing import Any
+from typing import Any, ClassVar
 
 import httpx
 import pytest
@@ -444,3 +444,89 @@ def test_map_data_batch_resolves_pages_and_images_in_few_requests(
     assert set(again) == {"Arabia", "Black_Forest"}
     assert calls == []
     provider.close()
+
+
+def test_liquipedia_circuit_opens_after_exhausted_429s() -> None:
+    """Exhausted 429 retries OPEN the circuit: every further call fails
+    fast, zero HTTP traffic, until the window lapses."""
+
+    from kingdoms.mapsdata import liquipedia as lp
+
+    class _Always429:
+        status_code = 429
+        headers: ClassVar[dict] = {"Retry-After": "0"}
+
+        def raise_for_status(self) -> None:
+            raise httpx.HTTPStatusError(
+                "429 Too Many Requests",
+                request=httpx.Request("GET", "https://liquipedia.net/api.php"),
+                response=httpx.Response(429),
+            )
+
+    class _Client:
+        headers: ClassVar[dict] = {}
+
+        def __init__(self) -> None:
+            self.calls = 0
+
+        def get(self, url: str, params: dict | None = None) -> Any:
+            self.calls += 1
+            return _Always429()
+
+    provider = lp.LiquipediaMapsProvider(user_agent="test <t@example>")
+    provider._client = _Client()  # type: ignore[attr-defined]
+    provider._sleep = lambda s: None  # type: ignore[method-assign]
+    lp._shared_circuit_open_until = 0.0
+    lp._shared_circuit_streak = 0
+    try:
+        with pytest.raises(httpx.HTTPStatusError):
+            provider._get_json({"action": "query"})
+        # the circuit is OPEN now
+        assert lp.LiquipediaCircuitOpenError.retry_in_s() > 0
+        # a fail-fast call makes ZERO HTTP requests
+        calls_before = provider._client.calls  # type: ignore[attr-defined]
+        with pytest.raises(lp.LiquipediaCircuitOpenError):
+            provider._get_json({"action": "query"})
+        assert provider._client.calls == calls_before  # type: ignore[attr-defined]
+        # the window doubles on consecutive openings
+        first_window = lp.LiquipediaCircuitOpenError.retry_in_s()
+        lp._shared_circuit_open_until = 0.0  # simulate the window lapsing
+        with pytest.raises(httpx.HTTPStatusError):
+            provider._get_json({"action": "query"})
+        assert lp.LiquipediaCircuitOpenError.retry_in_s() > first_window
+    finally:
+        lp._shared_circuit_open_until = 0.0
+        lp._shared_circuit_streak = 0
+
+
+def test_liquipedia_circuit_success_resets_the_streak() -> None:
+
+    from kingdoms.mapsdata import liquipedia as lp
+
+    class _Ok:
+        status_code = 200
+        headers: ClassVar[dict] = {}
+
+        def raise_for_status(self) -> None:
+            return None
+
+        def json(self) -> dict:
+            return {}
+
+    class _Client:
+        headers: ClassVar[dict] = {}
+
+        def get(self, url: str, params: dict | None = None) -> Any:
+            return _Ok()
+
+    provider = lp.LiquipediaMapsProvider(user_agent="test <t@example>")
+    provider._client = _Client()  # type: ignore[attr-defined]
+    provider._sleep = lambda s: None  # type: ignore[method-assign]
+    lp._shared_circuit_open_until = 0.0
+    lp._shared_circuit_streak = 2  # a streak from earlier openings
+    try:
+        provider._get_json({"action": "query"})
+        assert lp._shared_circuit_streak == 0  # a healthy call resets it
+    finally:
+        lp._shared_circuit_open_until = 0.0
+        lp._shared_circuit_streak = 0

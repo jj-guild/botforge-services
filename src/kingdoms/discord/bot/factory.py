@@ -642,9 +642,7 @@ class KingdomsBot(discord.Client):
         wire_view("panel:status", home._view_status)
         wire_view("panel:game:aoe2:live", home._view_live)
         wire_view("panel:game:aoe2:players", home._view_users_for_game("aoe2"))
-        from kingdoms.discord.providers_panel import view_providers
 
-        wire_view("panel:game:aoe2:providers", view_providers)
 
         async def _import_map(interaction: discord.Interaction) -> None:
             """Open the Liquipedia import (name/URL/ID, local fallback)."""

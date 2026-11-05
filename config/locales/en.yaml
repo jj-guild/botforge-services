@@ -486,7 +486,6 @@ en:
       heading_actions: 🎩 Actions
       btn_add_map: Add a map
       btn_create_pool: Create a map pool
-      btn_providers: Providers (health & tests)
       btn_ensure: Create missing channels
       bot_home_description: The bot's operation — logs, administration, decisions.
       btn_sync: Sync now
@@ -601,29 +600,3 @@ en:
     decided: '## 🛡 Staff application **{mod}**
 
       <@{user_id}> — **{verb}** by <@{decided_by}>.'
-  providers:
-    title: 🛠 Providers — Age of Empires II
-    subtitle: Upstream call statistics of each provider — last call, failures, last minute.
-    latency: 'Average latency: {ms} ms'
-    failures: 'Consecutive failures: {count}'
-    last_call: 'Last minute: {calls} call(s), {errors} error(s) — last call {when}'
-    unreachable: unreachable
-    not_deployed: not deployed
-    no_calls: no calls
-    features: Features
-    no_features: —
-    status_in_use: in use
-    status_planned: planned
-    features_labels:
-      map_descriptions: Map descriptions and images (English only)
-      civ_descriptions: Civilization descriptions
-      civ_tech_tree: Civ tech trees
-      multilingual_content: Multilingual content
-      realtime_user_state: Users' realtime state
-      lobby_settings: Lobby settings
-      match_settings: Match settings
-      leaderboards: Leaderboards
-      match_history: Match history/results
-      player_profiles: Player profiles
-    probe_ok: OK
-    probe_ko: KO

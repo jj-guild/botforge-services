@@ -253,12 +253,22 @@ class GamesMapCreateModal(discord.ui.Modal):
         description = str(self.description.value or "").strip()
         filename = str(self.filename.value or "").strip() or name
         seed = None
+        circuit_note = ""
         if owner_guild_id is not None:
+            from kingdoms.mapsdata.liquipedia import LiquipediaCircuitOpenError
             from kingdoms.mapsdata.seed import LiquipediaUnconfiguredError, fetch_map_seed
 
             try:
                 seed = await fetch_map_seed(name)
             except LiquipediaUnconfiguredError:
+                seed = None
+            except LiquipediaCircuitOpenError as exc:
+                # the API is rate-limiting: the map is still created with
+                # the admin's fields, the enrichment can be redone later
+                circuit_note = (
+                    f"\n\u26a0\ufe0f Liquipedia limite les appels (429) — "
+                    f"l'enrichissement est en pause. {exc}"
+                )
                 seed = None
             if seed is not None:
                 description = description or seed.description
@@ -295,7 +305,8 @@ class GamesMapCreateModal(discord.ui.Modal):
             )
             return
         await interaction.response.send_message(
-            f"Map **{entry.name}** creee - elle apparaitra dans le forum maps.", ephemeral=True
+            f"Map **{entry.name}** creee - elle apparaitra dans le forum maps.{circuit_note}",
+            ephemeral=True,
         )
 
 

@@ -55,9 +55,6 @@ def main() -> None:
     )
     from kingdoms.core.models.game import MatchEvent
     from kingdoms.core_process.ext_server import serve_game_provider
-    from kingdoms.ext_aoe2lobby.adapter import STATS
-
-    _stats_snapshot = STATS.snapshot
     from kingdoms.ext_aoe2lobby import DECLARED_CAPABILITIES, PROVIDER_ID
     from kingdoms.ext_aoe2lobby.adapter import Aoe2LobbyAdapter
 
@@ -109,7 +106,6 @@ def main() -> None:
             PROVIDER_ID,
             match_events=match_events,
             update_subscriptions=update_subscriptions,
-            stats_provider=_stats_snapshot,
         )
 
     asyncio.run(_boot())

@@ -12,6 +12,8 @@ import logging
 import os
 from typing import Any
 
+import grpc
+
 from kingdoms.core.rpc.content import ContentServicer, add_content_servicer
 
 logger = logging.getLogger("kingdoms.ext")
@@ -23,7 +25,6 @@ async def serve_content_provider(
     locales: tuple[str, ...],
     process_label: str,
     source: Any,
-    stats_provider: Any = None,
 ) -> None:
     """Serve the kingdoms.v1.Content contract until terminated.
 
@@ -31,12 +32,7 @@ async def serve_content_provider(
     upstream source is opaque here: it only needs the faction/map
     descriptor interface, so a dataset or an HTTP API serve identically.
     """
-    from kingdoms.core.rpc.status import CoreStatus, build_status_server_with_stats
-
-    server = build_status_server_with_stats(
-        lambda: CoreStatus(version=__import__("kingdoms").__version__, process=process_label),
-        stats_provider=stats_provider,
-    )
+    server = grpc.aio.server()
     add_content_servicer(
         server,
         ContentServicer(

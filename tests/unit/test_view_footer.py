@@ -9,10 +9,10 @@ def test_build_view_appends_the_id_footer() -> None:
 
     from kingdoms.discord.ui.view_footer import build_view
 
-    view = build_view("panel:game:aoe2:providers", discord.ui.TextDisplay("body"))
+    view = build_view("panel:game:aoe2:live", discord.ui.TextDisplay("body"))
     comps = view.to_components()
     assert len(comps) == 2  # the body + the id line
-    assert "panel:game:aoe2:providers" in comps[-1]["content"]
+    assert "panel:game:aoe2:live" in comps[-1]["content"]
 
 
 def test_require_declared_view_id_rejects_unknown() -> None:
