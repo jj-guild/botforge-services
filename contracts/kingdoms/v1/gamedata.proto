@@ -44,6 +44,21 @@ message GetLastCompletedTimesReply {
   map<string, int64> times_ms = 1;  // profile_id -> epoch ms (0: none)
 }
 
+// One catalog operation: the op name (a GameDataService method), the
+// kwargs as JSON. The reply carries the result as JSON, or a functional
+// error with its kind (the caller re-raises the typed exception).
+message GameDataCallRequest {
+  string op = 1;
+  string payload_json = 2;
+}
+
+message GameDataCallReply {
+  bool ok = 1;
+  string error_kind = 2;  // the exception class name ("" when ok)
+  string error = 3;       // the functional message
+  string result_json = 4;
+}
+
 service GameData {
   // Declare which games this service covers and per-game capabilities.
   rpc GetCoverage(CoverageRequest) returns (GameCoverage);
@@ -77,6 +92,10 @@ service GameData {
   // The map seed lookup (the import flow): the game service proxies its
   // liquipedia content provider — the Content contract's own wire.
   rpc GetMapSeed(kingdoms.v1.MapSeedRequest) returns (kingdoms.v1.MapSeedReply);
+  // The catalog gateway: one op dispatch (rule 5 — the game's collections
+  // answer from the owner's process). The payload/result are JSON; the
+  // service's validation, audit and lifecycle logic stay THE logic.
+  rpc Call(GameDataCallRequest) returns (GameDataCallReply);
 
 
   // The providers' health-test results for a game: the game service

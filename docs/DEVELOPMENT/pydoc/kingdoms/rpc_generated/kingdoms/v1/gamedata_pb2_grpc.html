@@ -46,6 +46,8 @@
 <td class="decor title-decor" colspan=2><span class="code">Missing&nbsp;associated&nbsp;documentation&nbsp;comment&nbsp;in&nbsp;.proto&nbsp;file.<br>&nbsp;</span></td></tr>
 <tr><td>&nbsp;</td>
 <td class="singlecolumn">Static methods defined here:<br>
+<dl><dt><a name="GameData-Call"><strong>Call</strong></a>(request, target, options=(), channel_credentials=None, call_credentials=None, insecure=False, compression=None, wait_for_ready=None, timeout=None, metadata=None)</dt></dl>
+
 <dl><dt><a name="GameData-GetCoverage"><strong>GetCoverage</strong></a>(request, target, options=(), channel_credentials=None, call_credentials=None, insecure=False, compression=None, wait_for_ready=None, timeout=None, metadata=None)</dt></dl>
 
 <dl><dt><a name="GameData-GetLastCompletedTimes"><strong>GetLastCompletedTimes</strong></a>(request, target, options=(), channel_credentials=None, call_credentials=None, insecure=False, compression=None, wait_for_ready=None, timeout=None, metadata=None)</dt></dl>
@@ -83,6 +85,10 @@ Data descriptors defined here:<br>
 <td class="decor title-decor" colspan=2><span class="code">Missing&nbsp;associated&nbsp;documentation&nbsp;comment&nbsp;in&nbsp;.proto&nbsp;file.<br>&nbsp;</span></td></tr>
 <tr><td>&nbsp;</td>
 <td class="singlecolumn">Methods defined here:<br>
+<dl><dt><a name="GameDataServicer-Call"><strong>Call</strong></a>(self, request, context)</dt><dd><span class="code">The&nbsp;catalog&nbsp;gateway:&nbsp;one&nbsp;op&nbsp;dispatch&nbsp;(rule&nbsp;5&nbsp;—&nbsp;the&nbsp;game's&nbsp;collections<br>
+answer&nbsp;from&nbsp;the&nbsp;owner's&nbsp;process).&nbsp;The&nbsp;payload/result&nbsp;are&nbsp;JSON;&nbsp;the<br>
+service's&nbsp;validation,&nbsp;audit&nbsp;and&nbsp;lifecycle&nbsp;logic&nbsp;stay&nbsp;THE&nbsp;logic.</span></dd></dl>
+
 <dl><dt><a name="GameDataServicer-GetCoverage"><strong>GetCoverage</strong></a>(self, request, context)</dt><dd><span class="code">Declare&nbsp;which&nbsp;games&nbsp;this&nbsp;service&nbsp;covers&nbsp;and&nbsp;per-game&nbsp;capabilities.</span></dd></dl>
 
 <dl><dt><a name="GameDataServicer-GetLastCompletedTimes"><strong>GetLastCompletedTimes</strong></a>(self, request, context)</dt><dd><span class="code">The&nbsp;profiles'&nbsp;most&nbsp;recent&nbsp;completed-match&nbsp;times&nbsp;(epoch&nbsp;ms)&nbsp;—&nbsp;the<br>

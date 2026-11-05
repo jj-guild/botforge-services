@@ -86,6 +86,11 @@ class GameDataStub:
                 request_serializer=kingdoms_dot_v1_dot_content__pb2.MapSeedRequest.SerializeToString,
                 response_deserializer=kingdoms_dot_v1_dot_content__pb2.MapSeedReply.FromString,
                 _registered_method=True)
+        self.Call = channel.unary_unary(
+                '/kingdoms.v1.GameData/Call',
+                request_serializer=kingdoms_dot_v1_dot_gamedata__pb2.GameDataCallRequest.SerializeToString,
+                response_deserializer=kingdoms_dot_v1_dot_gamedata__pb2.GameDataCallReply.FromString,
+                _registered_method=True)
 
 
 class GameDataServicer:
@@ -169,6 +174,15 @@ class GameDataServicer:
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
+    def Call(self, request, context):
+        """The catalog gateway: one op dispatch (rule 5 — the game's collections
+        answer from the owner's process). The payload/result are JSON; the
+        service's validation, audit and lifecycle logic stay THE logic.
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
 
 def add_GameDataServicer_to_server(servicer, server):
     rpc_method_handlers = {
@@ -221,6 +235,11 @@ def add_GameDataServicer_to_server(servicer, server):
                     servicer.GetMapSeed,
                     request_deserializer=kingdoms_dot_v1_dot_content__pb2.MapSeedRequest.FromString,
                     response_serializer=kingdoms_dot_v1_dot_content__pb2.MapSeedReply.SerializeToString,
+            ),
+            'Call': grpc.unary_unary_rpc_method_handler(
+                    servicer.Call,
+                    request_deserializer=kingdoms_dot_v1_dot_gamedata__pb2.GameDataCallRequest.FromString,
+                    response_serializer=kingdoms_dot_v1_dot_gamedata__pb2.GameDataCallReply.SerializeToString,
             ),
     }
     generic_handler = grpc.method_handlers_generic_handler(
@@ -493,6 +512,33 @@ class GameData:
             '/kingdoms.v1.GameData/GetMapSeed',
             kingdoms_dot_v1_dot_content__pb2.MapSeedRequest.SerializeToString,
             kingdoms_dot_v1_dot_content__pb2.MapSeedReply.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def Call(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/kingdoms.v1.GameData/Call',
+            kingdoms_dot_v1_dot_gamedata__pb2.GameDataCallRequest.SerializeToString,
+            kingdoms_dot_v1_dot_gamedata__pb2.GameDataCallReply.FromString,
             options,
             channel_credentials,
             insecure,
