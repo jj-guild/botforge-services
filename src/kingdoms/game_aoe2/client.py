@@ -135,6 +135,47 @@ class GameDataClient:
             )
         return {key: int(value) for key, value in reply.times_ms.items()}
 
+    async def get_map_seed(self, map_key: str, timeout_s: float = 120.0) -> Any | None:
+        """Resolve one map's seed through the game service (the import flow).
+
+        The service proxies its liquipedia provider — the seed worker's
+        coalescing, pacing and circuit breaker apply. The timeout is
+        long BY DESIGN (the provider may back off on a rate-limited
+        upstream); a circuit-open provider raises the functional error.
+        """
+        from kingdoms.core.rpc.client import build_channel
+        from kingdoms.rpc_generated.kingdoms.v1 import content_pb2, gamedata_pb2_grpc
+
+        async with build_channel(self._uri) as channel:
+            stub = gamedata_pb2_grpc.GameDataStub(channel)
+            reply = await stub.GetMapSeed(
+                content_pb2.MapSeedRequest(game_key="aoe2", map_key=map_key),
+                timeout=timeout_s,
+            )
+        if not reply.found:
+            return None
+        from kingdoms.aoe2.map_seed import MapSeed
+
+        return MapSeed(
+            name=reply.name,
+            description=reply.description,
+            resource_url=reply.resource_url,
+            image_url=reply.image_url,
+            icon_url=reply.icon_url,
+            terrain=reply.terrain,
+            size=reply.size,
+            map_type=reply.map_type,
+            walls=str(reply.walls),
+            nomad=str(reply.nomad),
+            tc=str(reply.tc),
+            game_versions=tuple(reply.game_versions),
+            versions=tuple(
+                {"name": v.name, "description": v.description, "details": list(v.details)}
+                for v in reply.versions
+            ),
+            tags=tuple(reply.tags),
+        )
+
     async def watch(self, game_key: str, timeout_s: float = 5.0) -> dict[str, Any]:
         """Fetch the current dashboard snapshot (first stream frame)."""
         from kingdoms.core.rpc.client import build_channel

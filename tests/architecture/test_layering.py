@@ -90,7 +90,7 @@ def _assert_allowed(offenders: list[str], allowlist: tuple[str, ...], rule: str)
 
 
 ALLOWLIST_R1 = (
-    "kingdoms/ext_liquipedia/source.py -> kingdoms.mapsdata.liquipedia",
+
 )
 
 ALLOWLIST_R3 = (

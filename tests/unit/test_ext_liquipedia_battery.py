@@ -19,7 +19,7 @@ from kingdoms.core_process.mapsdata_checks import PROVIDER, battery
 
 def _stub_maps_module(monkeypatch: pytest.MonkeyPatch, maps: dict[str, Any]) -> None:
     """Replace the real provider with one returning the given maps."""
-    import kingdoms.mapsdata.liquipedia as lp
+    import kingdoms.ext_liquipedia.liquipedia as lp
 
     class _StubProvider:
         def __init__(self, *args: Any, **kwargs: Any) -> None:

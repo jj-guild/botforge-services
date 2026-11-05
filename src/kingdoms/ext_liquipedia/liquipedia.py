@@ -28,7 +28,7 @@ from typing import Any
 
 import httpx
 
-logger = logging.getLogger("kingdoms.mapsdata")
+logger = logging.getLogger("kingdoms.ext_liquipedia")
 
 AOE_API_URL = "https://liquipedia.net/ageofempires/api.php"
 LICENSE_TERMS_URL = "https://liquipedia.net/api-terms-of-use"

@@ -1,6 +1,7 @@
 syntax = "proto3";
 
 import "kingdoms/v1/game.proto";
+import "kingdoms/v1/content.proto";
 
 package kingdoms.v1;
 
@@ -73,6 +74,9 @@ service GameData {
   // The profiles' most recent completed-match times (epoch ms) — the
   // game's OWN matches collection answers, never the caller's raw read.
   rpc GetLastCompletedTimes(GetLastCompletedTimesRequest) returns (GetLastCompletedTimesReply);
+  // The map seed lookup (the import flow): the game service proxies its
+  // liquipedia content provider — the Content contract's own wire.
+  rpc GetMapSeed(kingdoms.v1.MapSeedRequest) returns (kingdoms.v1.MapSeedReply);
 
 
   // The providers' health-test results for a game: the game service

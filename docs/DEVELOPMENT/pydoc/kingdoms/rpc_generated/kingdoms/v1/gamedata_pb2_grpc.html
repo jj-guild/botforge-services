@@ -17,10 +17,11 @@
     
 <tr><td class="decor pkg-content-decor"><span class="code">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span></td><td>&nbsp;</td>
 <td class="singlecolumn"><table><tr><td class="multicolumn"><a href="grpc.html">grpc</a><br>
+<a href="kingdoms.rpc_generated.kingdoms.v1.content_pb2.html">kingdoms.rpc_generated.kingdoms.v1.content_pb2</a><br>
 </td><td class="multicolumn"><a href="kingdoms.rpc_generated.kingdoms.v1.game_pb2.html">kingdoms.rpc_generated.kingdoms.v1.game_pb2</a><br>
-</td><td class="multicolumn"><a href="kingdoms.rpc_generated.kingdoms.v1.gamedata_pb2.html">kingdoms.rpc_generated.kingdoms.v1.gamedata_pb2</a><br>
+<a href="kingdoms.rpc_generated.kingdoms.v1.gamedata_pb2.html">kingdoms.rpc_generated.kingdoms.v1.gamedata_pb2</a><br>
 </td><td class="multicolumn"><a href="warnings.html">warnings</a><br>
-</td></tr></table></td></tr></table><p>
+</td><td class="multicolumn"></td></tr></table></td></tr></table><p>
 <table class="section">
 <tr class="decor index-decor heading-text">
 <td class="section-title" colspan=3>&nbsp;<br><strong class="bigsection">Classes</strong></td></tr>
@@ -48,6 +49,8 @@
 <dl><dt><a name="GameData-GetCoverage"><strong>GetCoverage</strong></a>(request, target, options=(), channel_credentials=None, call_credentials=None, insecure=False, compression=None, wait_for_ready=None, timeout=None, metadata=None)</dt></dl>
 
 <dl><dt><a name="GameData-GetLastCompletedTimes"><strong>GetLastCompletedTimes</strong></a>(request, target, options=(), channel_credentials=None, call_credentials=None, insecure=False, compression=None, wait_for_ready=None, timeout=None, metadata=None)</dt></dl>
+
+<dl><dt><a name="GameData-GetMapSeed"><strong>GetMapSeed</strong></a>(request, target, options=(), channel_credentials=None, call_credentials=None, insecure=False, compression=None, wait_for_ready=None, timeout=None, metadata=None)</dt></dl>
 
 <dl><dt><a name="GameData-GetMatchResult"><strong>GetMatchResult</strong></a>(request, target, options=(), channel_credentials=None, call_credentials=None, insecure=False, compression=None, wait_for_ready=None, timeout=None, metadata=None)</dt></dl>
 
@@ -84,6 +87,9 @@ Data descriptors defined here:<br>
 
 <dl><dt><a name="GameDataServicer-GetLastCompletedTimes"><strong>GetLastCompletedTimes</strong></a>(self, request, context)</dt><dd><span class="code">The&nbsp;profiles'&nbsp;most&nbsp;recent&nbsp;completed-match&nbsp;times&nbsp;(epoch&nbsp;ms)&nbsp;—&nbsp;the<br>
 game's&nbsp;OWN&nbsp;matches&nbsp;collection&nbsp;answers,&nbsp;never&nbsp;the&nbsp;caller's&nbsp;raw&nbsp;read.</span></dd></dl>
+
+<dl><dt><a name="GameDataServicer-GetMapSeed"><strong>GetMapSeed</strong></a>(self, request, context)</dt><dd><span class="code">The&nbsp;map&nbsp;seed&nbsp;lookup&nbsp;(the&nbsp;import&nbsp;flow):&nbsp;the&nbsp;game&nbsp;service&nbsp;proxies&nbsp;its<br>
+liquipedia&nbsp;content&nbsp;provider&nbsp;—&nbsp;the&nbsp;Content&nbsp;contract's&nbsp;own&nbsp;wire.</span></dd></dl>
 
 <dl><dt><a name="GameDataServicer-GetMatchResult"><strong>GetMatchResult</strong></a>(self, request, context)</dt><dd><span class="code">Missing&nbsp;associated&nbsp;documentation&nbsp;comment&nbsp;in&nbsp;.proto&nbsp;file.</span></dd></dl>
 
