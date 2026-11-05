@@ -12,53 +12,25 @@ from __future__ import annotations
 
 import logging
 import os
-from dataclasses import dataclass
+
+# Transition re-exports: the PUBLIC util (kingdoms.core.wiki_names) is
+# the home now — the private names stay importable while the callers
+# migrate (removed with the in-process path's death).
+from kingdoms.core.wiki_names import (  # noqa: F401
+    DEFAULT_USER_AGENT_TEMPLATE,
+)
+from kingdoms.core.wiki_names import (
+    extract_page_name as _extract_page_name,
+)
+from kingdoms.core.wiki_names import (
+    title_variants as _title_variants,
+)
+from kingdoms.core.wiki_names import (
+    wiki_user_agent as _user_agent,
+)
 
 logger = logging.getLogger("kingdoms.mapsdata")
 
-DEFAULT_USER_AGENT_TEMPLATE = "KingdomsBot/1.0 (https://github.com/merlin-pinpin-org/kingdoms; {contact})"
-
-
-def _extract_page_name(name: str) -> str:
-    """Extract the page title from a name or a full Liquipedia URL.
-
-    "https://liquipedia.net/ageofempires/Team_Islands" ->
-    "Team Islands"; query strings and trailing paths drop.
-    """
-    name = name.strip()
-    if "liquipedia.net" in name:
-        tail = name.split("/ageofempires/")[-1]
-        tail = tail.split("?")[0].split("#")[0].strip("/")
-        return tail.replace("_", " ")
-    return name
-
-
-def _title_variants(name: str) -> list[str]:
-    """Return the casings to try, in order: as-given, then title-cased.
-
-    MediaWiki resolves page titles case-sensitively; a lowercase
-    catalog name ("team islands") misses the cased wiki title ("Team
-    Islands") — both casings are tried, first hit wins.
-    """
-    title = " ".join(w[:1].upper() + w[1:] for w in name.split())
-    return [name] if name == title else [name, title]
-
-
-def _user_agent() -> str:
-    """Build the identified User-Agent; the contact comes from config.
-
-    The generic ``PROVIDER_CONTACT`` — every provider's operational
-    address.
-    """
-    from kingdoms.core.upstream_identity import provider_contact
-
-    contact = provider_contact()
-    if not contact:
-        return ""
-    return DEFAULT_USER_AGENT_TEMPLATE.format(contact=contact)
-
-
-@dataclass(frozen=True)
 class MapSeed:
     """The fields a provider resolves for one map name."""
 

@@ -59,17 +59,20 @@ Methods defined here:<br>
 
 <dl><dt>async <a name="GameDataServicer-UpdateEnrollments"><strong>UpdateEnrollments</strong></a>(self, request: 'gamedata_pb2.UpdateEnrollmentsRequest', context: 'grpc.aio.ServicerContext') -&gt; 'gamedata_pb2.UpdateEnrollmentsResponse'</dt><dd><span class="code">Forward&nbsp;the&nbsp;platform's&nbsp;enrollments&nbsp;to&nbsp;the&nbsp;realtime&nbsp;provider.</span></dd></dl>
 
+<dl><dt>async <a name="GameDataServicer-WatchDashboard"><strong>WatchDashboard</strong></a>(self, request: 'gamedata_pb2.WatchGameDataRequest', context: 'grpc.aio.ServicerContext') -&gt; 'Any'</dt><dd><span class="code">Stream&nbsp;snapshots:&nbsp;one&nbsp;immediately,&nbsp;then&nbsp;one&nbsp;per&nbsp;effective&nbsp;change.<br>
+&nbsp;<br>
+The&nbsp;aggregator&nbsp;folds&nbsp;the&nbsp;provider&nbsp;(aoe2lobby)&nbsp;events&nbsp;in&nbsp;the<br>
+background&nbsp;consumer;&nbsp;this&nbsp;stream&nbsp;polls&nbsp;its&nbsp;snapshot,&nbsp;emitting<br>
+only&nbsp;when&nbsp;the&nbsp;payload&nbsp;changed&nbsp;so&nbsp;the&nbsp;channel&nbsp;never&nbsp;spams.</span></dd></dl>
+
+<dl><dt>async <a name="GameDataServicer-WatchPlayerEvents"><strong>WatchPlayerEvents</strong></a>(self, request: 'gamedata_pb2.WatchGameDataRequest', context: 'grpc.aio.ServicerContext') -&gt; 'Any'</dt><dd><span class="code">Stream&nbsp;the&nbsp;player&nbsp;transitions&nbsp;to&nbsp;every&nbsp;subscriber&nbsp;(fan-out).<br>
+&nbsp;<br>
+The&nbsp;service&nbsp;subscribes&nbsp;to&nbsp;its&nbsp;provider&nbsp;(aoe2lobby)&nbsp;in&nbsp;its<br>
+background&nbsp;consumer,&nbsp;maintains&nbsp;the&nbsp;coherent&nbsp;player&nbsp;state&nbsp;(the<br>
+aggregator)&nbsp;and&nbsp;serves&nbsp;its&nbsp;subscribers&nbsp;—&nbsp;a&nbsp;mod,&nbsp;the&nbsp;bot:&nbsp;each<br>
+stream&nbsp;owns&nbsp;its&nbsp;queue,&nbsp;one&nbsp;consumer&nbsp;never&nbsp;starves&nbsp;another.</span></dd></dl>
+
 <dl><dt><a name="GameDataServicer-__init__"><strong>__init__</strong></a>(self, aggregator: 'Any', poll_interval_s: 'float' = 2.0, enrollments: 'Any' = None) -&gt; 'None'</dt><dd><span class="code">Wire&nbsp;the&nbsp;aggregator,&nbsp;the&nbsp;refresh&nbsp;interval,&nbsp;the&nbsp;enrollments&nbsp;pusher&nbsp;and&nbsp;the&nbsp;prober.</span></dd></dl>
-
-<hr>
-Methods inherited from <a href="kingdoms.rpc_generated.kingdoms.v1.gamedata_pb2_grpc.html#GameDataServicer">kingdoms.rpc_generated.kingdoms.v1.gamedata_pb2_grpc.GameDataServicer</a>:<br>
-<dl><dt><a name="GameDataServicer-WatchDashboard"><strong>WatchDashboard</strong></a>(self, request, context)</dt><dd><span class="code">Server-stream&nbsp;the&nbsp;live&nbsp;dashboard&nbsp;state&nbsp;for&nbsp;a&nbsp;game:&nbsp;linked&nbsp;players,<br>
-their&nbsp;status&nbsp;(in_lobby/in_game),&nbsp;and&nbsp;the&nbsp;enriched&nbsp;match&nbsp;summary<br>
-(map,&nbsp;civilization,&nbsp;format,&nbsp;join/spectate&nbsp;links).</span></dd></dl>
-
-<dl><dt><a name="GameDataServicer-WatchPlayerEvents"><strong>WatchPlayerEvents</strong></a>(self, request, context)</dt><dd><span class="code">Server-stream&nbsp;player&nbsp;status&nbsp;transitions&nbsp;for&nbsp;a&nbsp;game&nbsp;(the&nbsp;generic<br>
-mod-notification&nbsp;feed):&nbsp;each&nbsp;transition&nbsp;carries&nbsp;the&nbsp;full&nbsp;match<br>
-summary&nbsp;so&nbsp;mods&nbsp;render&nbsp;rich&nbsp;notifications&nbsp;without&nbsp;extra&nbsp;calls.</span></dd></dl>
 
 <hr>
 Data descriptors inherited from <a href="kingdoms.rpc_generated.kingdoms.v1.gamedata_pb2_grpc.html#GameDataServicer">kingdoms.rpc_generated.kingdoms.v1.gamedata_pb2_grpc.GameDataServicer</a>:<br>

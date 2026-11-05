@@ -105,16 +105,16 @@ class LiquipediaSource:
         calls). A page absent upstream answers None (the caller falls
         back to admin-entered fields).
         """
-        from kingdoms.mapsdata.seed import _extract_page_name, _title_variants
+        from kingdoms.core.wiki_names import extract_page_name, title_variants
 
-        name = _extract_page_name(map_key)
+        name = extract_page_name(map_key)
         cached = self._load_descriptor(game_key, name)
         if cached is not None:
             return cached
         if game_key not in self._providers:
             return None  # no wiki declared for this game: nothing to serve
         future: Future[dict[str, Any] | None] = Future()
-        self._seed_queue.put((game_key, tuple(_title_variants(name)), future))
+        self._seed_queue.put((game_key, tuple(title_variants(name)), future))
         return future.result()
 
     def _seed_worker_loop(self) -> None:
@@ -143,15 +143,25 @@ class LiquipediaSource:
                 # own futures, the next one starts clean
                 logger.exception("liquipedia seed worker: batch failed")
 
-    def _serve_seed_batch(
-        self, batch: list[_SeedRequest]
-    ) -> None:
-        """One batched fetch per game_key; every future gets its answer."""
-        by_game: dict[str, list[_SeedRequest]] = {}
-        for entry in batch:
-            by_game.setdefault(entry[0], []).append(entry)
-        for game_key, requests in by_game.items():
-            self._serve_seed_batch_for_game(game_key, requests)
+    def _serve_seed_batch(self, batch: list[_SeedRequest]) -> None:
+        """One batched fetch per game_key; every future gets its answer.
+
+        WHATEVER happens: an unexpected error in the descriptor build or
+        the persistence must never leave a future unresolved — a waiting
+        map_seed call would block forever. The catch-all fails every
+        unfinished future of the batch; the worker lives on.
+        """
+        futures = [future for _, _, future in batch]
+        try:
+            by_game: dict[str, list[_SeedRequest]] = {}
+            for entry in batch:
+                by_game.setdefault(entry[0], []).append(entry)
+            for game_key, requests in by_game.items():
+                self._serve_seed_batch_for_game(game_key, requests)
+        except BaseException as exc:
+            for future in futures:
+                if not future.done():
+                    future.set_exception(exc)
 
     def _serve_seed_batch_for_game(
         self,
@@ -241,28 +251,52 @@ class LiquipediaSource:
             logger.warning("liquipedia persist failed (page %s) — best-effort", page, exc_info=True)
 
 
+class _EmptyInfo:
+    """A shapeless page's info: every field empty, nothing crashes."""
+
+
 def _descriptor_of(game_key: str, page: str, data: Any) -> dict[str, Any]:
-    """Flatten one MapData into the wire-shaped descriptor dict."""
+    """Flatten one MapData into the wire-shaped descriptor dict.
+
+    Defensive per field: a page with an odd shape degrades to defaults,
+    never an exception (one malformed page must not fail its batch's
+    other requests).
+    """
+    def _safe(build: Any) -> Any:
+        try:
+            return build()
+        except Exception:
+            return ""
+
+    def _safe_list(build: Any) -> list[Any]:
+        try:
+            return list(build())
+        except Exception:
+            return []
+
+    info: Any = getattr(data, "info", None) or _EmptyInfo()
     return {
-        "name": str(data.info.name),
-        "description": str(data.info.description),
-        "resource_url": str(data.info.source_url),
-        "image_url": str(data.image_url),
-        "icon_url": str(data.icon_url),
-        "terrain": str(data.info.terrain),
-        "size": str(data.info.size),
-        "map_type": str(data.info.map_type),
+        "name": _safe(lambda: str(info.name)),
+        "description": _safe(lambda: str(info.description)),
+        "resource_url": _safe(lambda: str(info.source_url)),
+        "image_url": _safe(lambda: str(data.image_url)),
+        "icon_url": _safe(lambda: str(data.icon_url)),
+        "terrain": _safe(lambda: str(info.terrain)),
+        "size": _safe(lambda: str(info.size)),
+        "map_type": _safe(lambda: str(info.map_type)),
         # the enrichment surface: the maps sync rides the provider too
         # (one Liquipedia client per env — never a second in the bot)
-        "walls": bool(getattr(data.info, "walls", False)),
-        "nomad": bool(getattr(data.info, "nomad", False)),
-        "tc": bool(getattr(data.info, "tc", False)),
-        "game_versions": list(getattr(data.info, "game_versions", ()) or ()),
-        "versions": [
-            {"name": v.name, "description": v.description, "details": list(v.details)}
-            for v in getattr(data.info, "versions", ()) or ()
-        ],
-        "tags": list(_query_tags(data.info)),
+        "walls": bool(getattr(info, "walls", False)),
+        "nomad": bool(getattr(info, "nomad", False)),
+        "tc": bool(getattr(info, "tc", False)),
+        "game_versions": _safe_list(lambda: list(getattr(info, "game_versions", ()) or ())),
+        "versions": _safe_list(
+            lambda: [
+                {"name": v.name, "description": v.description, "details": list(v.details)}
+                for v in getattr(info, "versions", ()) or ()
+            ]
+        ),
+        "tags": _safe_list(lambda: list(_query_tags(info))),
         "licence_ok": True,
         "licence_note": "",
     }
@@ -270,7 +304,7 @@ def _descriptor_of(game_key: str, page: str, data: Any) -> dict[str, Any]:
 
 def resolve_source(database: Any) -> LiquipediaSource:
     """Build the source from the environment (PROVIDER_CONTACT)."""
-    from kingdoms.mapsdata.seed import _user_agent
+    from kingdoms.core.wiki_names import wiki_user_agent as _user_agent
 
     user_agent = _user_agent()
     if not user_agent:
