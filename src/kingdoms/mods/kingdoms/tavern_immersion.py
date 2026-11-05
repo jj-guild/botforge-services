@@ -62,6 +62,16 @@ REVEAL_CUSTOM_ID = "kingdoms:tavern:soudoyeur:reveal"
 _EPHEMERAL_SECONDS = 10.0
 _EPHEMERAL_TASKS: dict[int, asyncio.Task[None]] = {}
 _EPHEMERAL_MESSAGES: dict[int, int] = {}
+# taverne-exit-fix-v1 (Drasah 05/11, beta synfoni): the realm view of a
+# player IS a member-level ALLOW on his kingdom's category — the entry
+# deny REPLACED it (a whole-overwrite write, never a merge) and the exit
+# then dropped the row to None: the player left the taverne with his
+# kingdom INVISIBLE and nothing re-posed the allow until the next
+# provisioning. The entry now SNAPSHOTS whatever member overwrite was
+# there before the deny; the exit RESTORES the snapshot instead of
+# writing None. In-memory only — a restart mid-stay falls back to the
+# realm re-pose (restore_realm_member_allow_safe).
+_MEMBER_SNAPSHOT: dict[tuple[int | None, int | None], Any] = {}
 
 _STRINGS: dict[str, dict[str, str]] = {
     "fr": {
@@ -301,10 +311,20 @@ def _member_overwrite(target: Any, member: Any) -> Any:
 
 
 async def _deny_member_view(target: Any, member: Any) -> None:
-    """Member-level view deny — overrides every role ALLOW (the fix)."""
+    """Member-level view deny — overrides every role ALLOW (the fix).
+
+    taverne-exit-fix-v1: set_permissions REPLACES the whole overwrite —
+    a pre-existing member ALLOW (the realm view grant of
+    kingdom_realms, the outgame toggle of kingdom_immersion) would be
+    DESTROYED by the deny and lost forever. Snapshot it first.
+    """
     overwrite = _member_overwrite(target, member)
     if overwrite is not None and overwrite.view_channel is False:
         return  # already converged
+    if overwrite is not None:
+        key = (getattr(target, "id", None), getattr(member, "id", None))
+        if key not in _MEMBER_SNAPSHOT:
+            _MEMBER_SNAPSHOT[key] = overwrite
     try:
         await target.set_permissions(
             member, overwrite=discord.PermissionOverwrite(view_channel=False)
@@ -319,13 +339,22 @@ async def _deny_member_view(target: Any, member: Any) -> None:
 
 
 async def _clear_member_view_deny(target: Any, member: Any) -> None:
-    """Drop OUR member deny (a member ALLOW — e.g. the immersion-v1
-    outgame toggle — is never touched)."""
+    """Drop OUR member deny — RESTORING what was there before it.
+
+    taverne-exit-fix-v1 (Drasah 05/11, beta synfoni): writing None
+    deleted the whole row — including the member ALLOW that granted the
+    realm view — and the player left the taverne with his kingdom
+    invisible. The entry-time snapshot is restored; with no snapshot
+    (a restart mid-stay, a legacy deny) the row falls back to None and
+    the caller re-poses the realm allow (restore_realm_member_allow_safe).
+    """
     overwrite = _member_overwrite(target, member)
     if overwrite is None or overwrite.view_channel is not False:
         return
+    key = (getattr(target, "id", None), getattr(member, "id", None))
+    snapshot = _MEMBER_SNAPSHOT.pop(key, None)
     try:
-        await target.set_permissions(member, overwrite=None)
+        await target.set_permissions(member, overwrite=snapshot)
     except Exception:
         logger.warning(
             "KINGDOMS TAVERN: member deny cleanup failed on %r for %s",
@@ -381,6 +410,7 @@ async def _sweep_member_denies_by_overwrite_safe(
             len(unresolved),
             getattr(guild, "id", "?"),
         )
+    cleared: dict[int, Any] = {}
     for target in targets:
         for user_id in _member_overwrite_ids(target, bot_id):
             member = resolved.get(user_id)
@@ -390,6 +420,17 @@ async def _sweep_member_denies_by_overwrite_safe(
                 await _deny_member_view(target, member)
             else:
                 await _clear_member_view_deny(target, member)
+                cleared[user_id] = member
+    # taverne-exit-fix-v1: a cleared deny without snapshot (a restart
+    # mid-stay, a legacy deny) fell back to None — re-pose each cleared
+    # member's realm allow so the kingdom view survives the sweep.
+    try:
+        from kingdoms.mods.kingdoms.kingdom_realms import restore_realm_member_allow_safe
+
+        for member in cleared.values():
+            await restore_realm_member_allow_safe(guild, member)
+    except Exception:
+        logger.warning("KINGDOMS TAVERN: sweep realm allow restore failed", exc_info=True)
 
 
 def tavern_insiders(guild: discord.Guild) -> list[Any]:
@@ -456,6 +497,17 @@ async def exit_tavern(guild: discord.Guild, member: Any, role: Any, taverne_cate
             await asyncio.sleep(2.0 * (attempt + 1))
     for target in _immersion_targets(guild, taverne_category_id):
         await _clear_member_view_deny(target, member)
+    # taverne-exit-fix-v1 (Drasah 05/11, beta synfoni): the clear loop
+    # restored the entry-time snapshots — but a restart mid-stay loses
+    # them, and a legacy deny never had one. The durable fallback
+    # re-poses the leaver's realm member allow (his kingdom view) when
+    # the snapshot path could not. Best effort, converged-skip.
+    try:
+        from kingdoms.mods.kingdoms.kingdom_realms import restore_realm_member_allow_safe
+
+        await restore_realm_member_allow_safe(guild, member)
+    except Exception:
+        logger.warning("KINGDOMS TAVERN: realm allow restore failed", exc_info=True)
     # taverne-selfheal-v1 (Drasah 28/10, live report Rakussy): the exit
     # is the exact moment the incident surfaces — sweep the whole zone
     # so the leaver AND every other orphan heal NOW, not at the next
@@ -1063,12 +1115,19 @@ def _arm_ephemeral_timer(interaction: discord.Interaction) -> None:
 
 
 async def _send_note(interaction: discord.Interaction, text: str) -> None:
-    """Defer, then answer as a followup note (auto-deleted by the timer).
+    """Defer (when the token is still alive), then answer as a followup
+    note (auto-deleted by the timer).
 
-    The v2 move takes a burst of permission calls — the interaction is
-    acknowledged FIRST (defer), the note rides the followup.
+    taverne-exit-fix-v1: the v2 move outlives the 3-second interaction
+    token — a late defer raised NotFound (live 10062, 05/11) and KILLED
+    the success path of the exit. The defer is now best-effort: a dead
+    token still gets its note through the followup, and the move's
+    permission work is never taken down by the ack.
     """
-    await interaction.response.defer(ephemeral=True)
+    try:
+        await interaction.response.defer(ephemeral=True)
+    except Exception:
+        pass  # already acknowledged (defer-first) or token expired
     message = await interaction.followup.send(text, ephemeral=True)
     user_id = getattr(interaction.user, "id", None)
     if user_id is not None:
@@ -1098,6 +1157,14 @@ async def _move_member(interaction: discord.Interaction, *, entering: bool) -> N
         note = strings["already"] if inside else strings["already_out"]
         await _send_note(interaction, note)
         return
+    # taverne-exit-fix-v1 (live 10062, beta synfoni 05/11): the v2 move
+    # takes a burst of permission calls that outlives the 3-second
+    # interaction token — ack FIRST, the note rides the followup, and
+    # the permission work NEVER depends on the ack surviving.
+    try:
+        await interaction.response.defer(ephemeral=True)
+    except Exception:
+        pass  # token already dead — the move is the real work, proceed
     try:
         if entering:
             await enter_tavern(guild, member, role, _taverne_category_id(guild))
@@ -1105,11 +1172,19 @@ async def _move_member(interaction: discord.Interaction, *, entering: bool) -> N
             await exit_tavern(guild, member, role, _taverne_category_id(guild))
     except Exception:
         logger.error("KINGDOMS TAVERN: role move failed", exc_info=True)
-        await _send_note(interaction, strings["role_failed"])
+        try:
+            await _send_note(interaction, strings["role_failed"])
+        except Exception:
+            pass  # dead token — nothing more to say, the move already failed loudly
         return
-    await _send_note(
-        interaction, strings["entered"] if entering else strings["exited"]
-    )
+    try:
+        await _send_note(
+            interaction, strings["entered"] if entering else strings["exited"]
+        )
+    except Exception:
+        # dead token: the move SUCCEEDED — the note is cosmetic, never
+        # let a NotFound mask a successful exit (live incident 05/11).
+        logger.warning("KINGDOMS TAVERN: move note failed (move succeeded)", exc_info=True)
 
 
 class KingdomTavernEnterButton(

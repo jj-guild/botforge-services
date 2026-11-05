@@ -11,6 +11,8 @@ from __future__ import annotations
 
 import asyncio
 from collections.abc import Iterator
+from types import SimpleNamespace
+from typing import Any
 
 import discord
 import pytest
@@ -635,3 +637,145 @@ async def test_the_sweep_heals_orphan_denies_without_the_members_intent() -> Non
     # the member-level allow is NEVER touched (outgame toggle survives)
     kept = beta.permission_overwrite_for(blank2)
     assert kept is not None and kept.view_channel is True
+
+
+# --- taverne-exit-fix-v1 (Drasah 05/11, beta synfoni) ---
+# A player's realm view IS a member-level ALLOW on his kingdom's
+# category. The entry deny REPLACED it and the exit dropped the row to
+# None — the player left the taverne with his kingdom invisible.
+
+
+async def test_enter_then_exit_restores_the_realm_member_allow() -> None:
+    """The synfoni scenario: an allow exists, the taverne round-trip
+    must give it back — never delete it."""
+    guild = MockGuild()
+    await _realm(guild)
+    await ensure_tavern_immersion_structure(guild)
+    member = MockMember(id=88, name="Synfoni")
+    guild.add_member(member)
+    realm = await guild.create_category("🏰 Monroyaume")
+    # the realm view grant — exactly what kingdom_realms poses
+    await realm.set_permissions(
+        member,
+        overwrite=discord.PermissionOverwrite(view_channel=True, read_message_history=True),
+    )
+
+    enter = MockInteraction(user=member, guild=guild, locale="fr")
+    await KingdomTavernEnterButton("🚪 Entrer").callback(enter)
+    deny = realm.permission_overwrite_for(member)
+    assert deny is not None and deny.view_channel is False  # replaced while inside
+
+    exit_ = MockInteraction(user=member, guild=guild, locale="fr")
+    await KingdomTavernExitButton("🚪 Sortir").callback(exit_)
+    restored = realm.permission_overwrite_for(member)
+    # the original allow comes back — not a bare row deletion.
+    assert restored is not None
+    assert restored.view_channel is True
+    assert restored.read_message_history is True
+
+
+async def test_exit_without_snapshot_calls_the_realm_restore_fallback(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A restart mid-stay loses the in-memory snapshot — the exit must
+    still re-pose the realm allow through the durable fallback."""
+    import kingdoms.mods.kingdoms.kingdom_realms as kingdom_realms
+    import kingdoms.mods.kingdoms.tavern_immersion as tavern_immersion
+
+    guild = MockGuild()
+    await _realm(guild)
+    await ensure_tavern_immersion_structure(guild)
+    member = MockMember(id=99, name="Orphelin")
+    guild.add_member(member)
+    court = next(c for c in guild.categories if c.name != TAVERN_CATEGORY_NAME)
+
+    enter = MockInteraction(user=member, guild=guild, locale="fr")
+    await KingdomTavernEnterButton("🚪 Entrer").callback(enter)
+    tavern_immersion._MEMBER_SNAPSHOT.clear()  # the restart
+
+    restored: list[Any] = []
+
+    async def fake_restore(guild_arg: Any, member_arg: Any) -> None:
+        restored.append((guild_arg, member_arg))
+
+    monkeypatch.setattr(
+        kingdom_realms, "restore_realm_member_allow_safe", fake_restore
+    )
+    exit_ = MockInteraction(user=member, guild=guild, locale="fr")
+    await KingdomTavernExitButton("🚪 Sortir").callback(exit_)
+    # no snapshot → the row fell back to None, and the durable realm
+    # restore was invoked for the leaver.
+    assert court.permission_overwrite_for(member) is None
+    assert restored and restored[0][1] is member
+
+
+async def test_a_dead_interaction_token_never_breaks_the_exit() -> None:
+    """The live 10062 (Unknown interaction): the permission burst
+    outlives the 3-second token — the defer fails but the exit (the
+    real work) must complete anyway."""
+    guild = MockGuild()
+    await _realm(guild)
+    await ensure_tavern_immersion_structure(guild)
+    member = MockMember(id=101, name="Token mort")
+    guild.add_member(member)
+    court = next(c for c in guild.categories if c.name != TAVERN_CATEGORY_NAME)
+
+    enter = MockInteraction(user=member, guild=guild, locale="fr")
+    await KingdomTavernEnterButton("🚪 Entrer").callback(enter)
+
+    exit_ = MockInteraction(user=member, guild=guild, locale="fr")
+
+    async def dead_defer(**_kwargs: Any) -> None:
+        raise RuntimeError("10062 Unknown interaction")
+
+    exit_.response.defer = dead_defer  # type: ignore[method-assign]
+    # must NOT raise — the exit completes, the note is best-effort.
+    await KingdomTavernExitButton("🚪 Sortir").callback(exit_)
+    role = find_tavern_role(guild)
+    assert role is not None and role not in member.roles
+    assert court.permission_overwrite_for(member) is None
+
+
+async def test_restore_realm_member_allow_safe_converges_and_reposes(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The realm helper: converged-skip when the allow already stands,
+    re-pose (view + history, the kingdom_realms grant) when missing."""
+    import kingdoms.mods.kingdoms.kingdom_persistent as kingdom_persistent
+    from kingdoms.mods.kingdoms.kingdom_realms import restore_realm_member_allow_safe
+
+    guild = MockGuild()
+    category = await guild.create_category("🏰 Monroyaume")
+    member = MockMember(id=202, name="Bêta-Testeur")
+    guild.add_member(member)
+    lord = SimpleNamespace(id="202", kingdom_id="k-1", left=False)
+    kingdom = SimpleNamespace(id="k-1", name="Monroyaume")
+
+    class _Service:
+        async def lords(self) -> list[Any]:
+            return [lord]
+
+        async def kingdoms(self) -> list[Any]:
+            return [kingdom]
+
+    def fake_wiring() -> Any:
+        return SimpleNamespace(kingdoms_service=_Service())
+
+    monkeypatch.setattr(kingdom_persistent, "_wiring", fake_wiring)
+
+    # missing allow → re-posed with the exact realm grant
+    await restore_realm_member_allow_safe(guild, member)
+    posed = category.permission_overwrite_for(member)
+    assert posed is not None and posed.view_channel is True
+    assert posed.read_message_history is True
+
+    # already allowed → converged-skip, the overwrite object is kept
+    class _Recording:
+        calls = 0
+
+        async def set_permissions(self, *args: Any, **kwargs: Any) -> None:
+            _Recording.calls += 1
+
+    category.set_permissions = _Recording().set_permissions  # type: ignore[method-assign]
+    await restore_realm_member_allow_safe(guild, member)
+    assert _Recording.calls == 0

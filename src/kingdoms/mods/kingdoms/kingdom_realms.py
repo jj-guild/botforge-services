@@ -368,6 +368,75 @@ async def _apply_realm_overwrites(guild: discord.Guild, category: Any, member_id
     await reapply_tavern_member_denies_safe(guild, [category])
 
 
+async def restore_realm_member_allow_safe(guild: discord.Guild, member: Any) -> None:
+    """Re-pose ONE member's realm allow (best effort, idempotent).
+
+    taverne-exit-fix-v1 (Drasah 05/11, beta synfoni): a player's realm
+    view IS a member-level ALLOW on his kingdom's category — the tavern
+    entry's deny REPLACED it and the exit dropped the row to None, so
+    the player left the taverne with his kingdom INVISIBLE until the
+    next provisioning. This durable fallback re-poses the allow even
+    when the entry-time snapshot is gone (a restart mid-stay, a legacy
+    deny): find the member's kingdom, find its category, converge-skip
+    when the allow already stands. A failed re-pose never raises.
+    """
+    member_id = getattr(member, "id", None)
+    if guild is None or member_id is None:
+        return
+    try:
+        from kingdoms.mods.kingdoms.kingdom_persistent import _wiring
+
+        wiring = _wiring()
+        service = getattr(wiring, "kingdoms_service", None)
+        if service is None:
+            return
+        kingdom_id = None
+        for lord in await service.lords():
+            if (
+                str(getattr(lord, "id", "")) == str(member_id)
+                and getattr(lord, "kingdom_id", None) is not None
+                and not getattr(lord, "left", False)
+            ):
+                kingdom_id = str(lord.kingdom_id)
+                break
+        if kingdom_id is None:
+            return
+        kingdom = next(
+            (k for k in await service.kingdoms() if str(getattr(k, "id", "")) == kingdom_id),
+            None,
+        )
+        if kingdom is None:
+            return
+        category = _find_realm_category(guild, str(getattr(kingdom, "name", "")))
+        if category is None:
+            return
+        # duck-typed: the real CategoryChannel and the test mock both
+        # answer permission_overwrite_for (the mock's overwrites
+        # mapping is keyed differently — never read it directly).
+        existing = None
+        lookup = getattr(category, "permission_overwrite_for", None)
+        if lookup is not None:
+            existing = lookup(member)
+        if existing is not None and getattr(existing, "view_channel", None) is True:
+            return  # converged — zero API writes in steady state
+        await category.set_permissions(
+            member,
+            overwrite=discord.PermissionOverwrite(view_channel=True, read_message_history=True),
+            reason="taverne-exit-fix-v1: realm member allow re-posed",
+        )
+        logger.info(
+            "KINGDOM REALMS: member %s realm allow re-posed on %r",
+            member_id,
+            str(getattr(category, "name", "?")),
+        )
+    except Exception:
+        logger.warning(
+            "KINGDOM REALMS: realm allow restore failed for %s",
+            getattr(member, "id", "?"),
+            exc_info=True,
+        )
+
+
 async def grant_bot_access_to_category(guild: discord.Guild, category: Any) -> None:
     """Best-effort grant of the bot's own access to a category.
 
