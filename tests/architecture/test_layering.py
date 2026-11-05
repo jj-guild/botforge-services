@@ -101,8 +101,6 @@ ALLOWLIST_R3 = (
     "kingdoms/core/rpc/content_client.py mentions 'aoe2techtree'",
     "kingdoms/core/rpc/game.py mentions 'aoe2lobby'",
     "kingdoms/core/rpc/game.py mentions 'librematch'",
-    "kingdoms/core/services/live.py mentions 'aoe2lobby'",
-    "kingdoms/core/services/live.py mentions 'librematch'",
     "kingdoms/core/services/profile_stats.py mentions 'librematch'",
     "kingdoms/core/services/provider_endpoints.py mentions 'aoe2lobby'",
     "kingdoms/core/services/provider_endpoints.py mentions 'librematch'",

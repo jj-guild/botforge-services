@@ -404,7 +404,7 @@ def _now_ms() -> int:
 
 
 class LiveClientLike(Protocol):
-    """The dashboard client seam (LiveClient or the GameDataClient)."""
+    """The dashboard client seam (the GameDataClient)."""
 
     async def watch(self, game_key: str) -> dict[str, Any]:
         """Fetch the current dashboard snapshot for a game."""

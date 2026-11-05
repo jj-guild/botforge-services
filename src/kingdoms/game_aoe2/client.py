@@ -1,6 +1,6 @@
 """game-aoe2 client (bot side): the kingdoms.v1.GameData consumer.
 
-Same shape as the LiveClient seam (``watch`` + ``stream_snapshots`` +
+Same shape as the dashboard client seam (``watch`` + ``stream_snapshots`` +
 ``stream_player_events``) so the bot wiring picks whichever process is
 configured: the enriched GameData feed when ``GAME_AOE2_URI`` is set,
 the plain Live feed otherwise. The GameData feed carries the full
