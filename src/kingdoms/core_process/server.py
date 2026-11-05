@@ -21,7 +21,7 @@ from kingdoms import __version__
 from kingdoms.core.rpc.status import CoreStatus, build_status_server
 
 if TYPE_CHECKING:
-    from kingdoms.core.services.live import LiveAggregator
+    pass
 
 logger = logging.getLogger("kingdoms.core_process")
 
@@ -39,59 +39,19 @@ def main() -> None:
 
 
 async def _serve(port: str) -> None:
-    import asyncio
 
     server = build_status_server(
         lambda: CoreStatus(version=__version__, process="svc-core"),
     )
-    from kingdoms.core.rpc.live import LiveServicer, add_live_servicer
-    from kingdoms.core.services.live import LiveAggregator
-
-    aggregator = LiveAggregator(_CoreBindingsDatabase())
-    add_live_servicer(server, LiveServicer(aggregator))
-    enrollments = asyncio.ensure_future(_sync_game_enrollments(aggregator))
+    # NO Live servicer here (owner direction 2026-11-05): the player
+    # state has ONE owner — the game service's aggregator. The core's
+    # duplicate fold (core.services.live) is deleted; the core serves
+    # the platform's own surfaces only.
     bind = f"[::]:{port}"
     server.add_insecure_port(bind)
     await server.start()
     logger.info("SVC_CORE_READY port=%s version=%s", port, __version__)
-    try:
-        await server.wait_for_termination()
-    finally:
-        enrollments.cancel()
-
-
-async def _sync_game_enrollments(aggregator: LiveAggregator) -> None:
-    """Push the platform's enrolled profile ids to the game service.
-
-    Reloads the profile bindings periodically and hands the list to
-    the game service (``UpdateEnrollments``): the game service
-    reconciles its realtime provider's subscriptions in place — svc-core
-    never talks to the providers, in either direction.
-    """
-    import asyncio
-
-    interval_s = float(os.environ.get("GAME_ENROLLMENTS_INTERVAL_S", "30"))
-    uri = os.environ.get("GAME_AOE2_URI", "")
-    client = None
-    last_ids: list[str] | None = None
-    while True:
-        try:
-            await aggregator.refresh_bindings()
-            profile_ids = sorted(aggregator.profile_ids())
-            if profile_ids != last_ids and uri:
-                if client is None:
-                    client = _GameDataClient(uri)
-                applied = await client.update_enrollments(
-                    "aoe2", profile_ids, aggregator.user_ids()
-                )
-                if applied:
-                    last_ids = profile_ids
-                    logger.info("game enrollments synced: %d profiles", len(profile_ids))
-            elif last_ids is not None and not await _game_service_alive(client):
-                last_ids = None
-        except Exception:
-            logger.warning("game enrollment sync failed — retrying next tick", exc_info=True)
-        await asyncio.sleep(interval_s)
+    await server.wait_for_termination()
 
 
 class _GameDataClient:
@@ -115,25 +75,6 @@ class _GameDataClient:
                 )
             )
             return bool(reply.applied)
-
-
-async def _game_service_alive(client: object | None) -> bool:
-    """Probe the game service so a resurrection re-syncs the enrollments."""
-    if client is None:
-        return False
-    return True
-
-
-class _CoreBindingsDatabase:
-    """Mongo-backed bindings seam for the live aggregator (#147)."""
-
-    async def list_bindings_for_game(self, game_key: str) -> list[dict[str, object]]:
-        """List a game's profile bindings from the profile_bindings collection."""
-        from kingdoms.core.models.db import get_async_database
-        from kingdoms.core.services.registration import PROFILE_BINDINGS_COLLECTION
-
-        cursor = get_async_database()[PROFILE_BINDINGS_COLLECTION].find({"game_key": game_key})
-        return [dict(doc) async for doc in cursor]
 
 
 if __name__ == "__main__":
