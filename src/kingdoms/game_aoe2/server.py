@@ -158,10 +158,6 @@ async def _aggregate_provider_stats() -> list[dict[str, Any]]:
         for entry in stats:
             entry["provider_id"] = provider_id
         entries.extend(stats)
-    # this process's own stream consumption rides along
-    for entry in STATS.snapshot():
-        entry["provider_id"] = "game-aoe2"
-        entries.append(entry)
     return entries
 
 
@@ -191,10 +187,16 @@ async def _consume_one(aggregator: Any, provider_id: str, uri: str) -> None:
     stats = STATS.register(f"provider:{provider_id}")
     try:
         while True:
+            established = False
             try:
                 async for event in client.stream_match_events(since=0):
+                    if not established:
+                        # RECORD AT ESTABLISHMENT: a long-lived session
+                        # must count as a live call the moment it exists,
+                        # not when it eventually closes.
+                        stats.record(True, 0)
+                        established = True
                     await aggregator.apply_event(event)
-                stats.record(True, 0)  # a stream: no per-call latency
             except Exception as exc:
                 stats.record(False, 0, f"{type(exc).__name__}: {exc}")
                 logger.warning("provider %s stream lost; retrying in 5s", provider_id)

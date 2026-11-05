@@ -266,7 +266,8 @@ class Aoe2LobbyAdapter:
             try:
                 from kingdoms.core.upstream_identity import project_user_agent
 
-                with STATS.register("aoe2lobby:ws"):
+                ws_stats = STATS.register("aoe2lobby:ws")
+                try:
                     async with websockets.connect(
                         self._ws_url,
                         max_size=self._max_size,
@@ -274,6 +275,9 @@ class Aoe2LobbyAdapter:
                         ping_timeout=30.0,
                         user_agent_header=project_user_agent(),
                     ) as ws:
+                        # RECORD AT CONNECT: a healthy long-lived session
+                        # counts the moment it exists, not at its close.
+                        ws_stats.record(True, 0)
                         self._ws = ws
                         if not self._schema:
                             await self.fetch_schema()
@@ -287,10 +291,12 @@ class Aoe2LobbyAdapter:
                             "aoe2lobby ws CLOSED by the server; reconnecting in %ss",
                             self._reconnect_delay_s,
                         )
-            except (TimeoutError, websockets.WebSocketException, OSError):
-                logger.warning("aoe2lobby ws FAILED; retrying in %ss", self._reconnect_delay_s)
-            except Exception:
-                logger.exception("aoe2lobby ws unexpected error; retrying in %ss", self._reconnect_delay_s)
+                except (TimeoutError, websockets.WebSocketException, OSError) as exc:
+                    ws_stats.record(False, 0, f"{type(exc).__name__}: {exc}")
+                    logger.warning("aoe2lobby ws FAILED; retrying in %ss", self._reconnect_delay_s)
+                except Exception as exc:
+                    ws_stats.record(False, 0, f"{type(exc).__name__}: {exc}")
+                    logger.exception("aoe2lobby ws unexpected error; retrying in %ss", self._reconnect_delay_s)
             finally:
                 self._ws = None
             await asyncio.sleep(self._reconnect_delay_s)
