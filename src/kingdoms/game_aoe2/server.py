@@ -201,9 +201,6 @@ async def _watch_provider_health(aggregator: Any, client: Any) -> None:
             aggregator.mark_degraded()
         await asyncio.sleep(interval_s)
 
-if __name__ == "__main__":
-    main()
-
 
 class _CatalogGateway:
     """The game's catalog + content, composed for the gateway dispatch.
@@ -229,3 +226,7 @@ class _CatalogGateway:
         """Read one localized content doc (the enrichment's read)."""
         result: dict[str, Any] | None = await self._content.get(entity_id, locale)
         return result
+
+
+if __name__ == "__main__":
+    main()
