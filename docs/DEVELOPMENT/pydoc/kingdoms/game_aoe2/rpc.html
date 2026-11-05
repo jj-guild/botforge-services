@@ -45,7 +45,7 @@ civs,&nbsp;aoe2lobby&nbsp;join/spectate&nbsp;URLs,&nbsp;aoe2de&nbsp;deep&nbsp;li
 <td class="section-title" colspan=3>&nbsp;<br><a name="GameDataServicer">class <strong>GameDataServicer</strong></a>(<a href="kingdoms.rpc_generated.kingdoms.v1.gamedata_pb2_grpc.html#GameDataServicer">kingdoms.rpc_generated.kingdoms.v1.gamedata_pb2_grpc.GameDataServicer</a>)</td></tr>
     
 <tr><td class="decor title-decor" rowspan=2><span class="code">&nbsp;&nbsp;&nbsp;</span></td>
-<td class="decor title-decor" colspan=2><span class="code"><a href="#GameDataServicer">GameDataServicer</a>(aggregator:&nbsp;'Any',&nbsp;poll_interval_s:&nbsp;'float'&nbsp;=&nbsp;2.0,&nbsp;enrollments:&nbsp;'Any'&nbsp;=&nbsp;None)&nbsp;-&amp;gt;&nbsp;'None'<br>
+<td class="decor title-decor" colspan=2><span class="code"><a href="#GameDataServicer">GameDataServicer</a>(aggregator:&nbsp;'Any',&nbsp;poll_interval_s:&nbsp;'float'&nbsp;=&nbsp;2.0,&nbsp;enrollments:&nbsp;'Any'&nbsp;=&nbsp;None,&nbsp;stats_provider:&nbsp;'Any'&nbsp;=&nbsp;None)&nbsp;-&amp;gt;&nbsp;'None'<br>
 &nbsp;<br>
 Serve&nbsp;the&nbsp;kingdoms.v1.GameData&nbsp;contract&nbsp;from&nbsp;the&nbsp;aggregator.<br>&nbsp;</span></td></tr>
 <tr><td>&nbsp;</td>
@@ -57,6 +57,15 @@ Serve&nbsp;the&nbsp;kingdoms.v1.GameData&nbsp;contract&nbsp;from&nbsp;the&nbsp;a
 <hr>
 Methods defined here:<br>
 <dl><dt>async <a name="GameDataServicer-GetCoverage"><strong>GetCoverage</strong></a>(self, request: 'gamedata_pb2.CoverageRequest', context: 'grpc.aio.ServicerContext') -&gt; 'gamedata_pb2.GameCoverage'</dt><dd><span class="code">Serve&nbsp;the&nbsp;games&nbsp;this&nbsp;process&nbsp;covers&nbsp;and&nbsp;its&nbsp;health.</span></dd></dl>
+
+<dl><dt>async <a name="GameDataServicer-GetMatchResult"><strong>GetMatchResult</strong></a>(self, request: 'Any', context: 'grpc.aio.ServicerContext') -&gt; 'Any'</dt><dd><span class="code">Proxy&nbsp;a&nbsp;finished&nbsp;match's&nbsp;outcome&nbsp;(the&nbsp;activity&nbsp;feed's&nbsp;cards).</span></dd></dl>
+
+<dl><dt>async <a name="GameDataServicer-GetProfileStats"><strong>GetProfileStats</strong></a>(self, request: 'Any', context: 'grpc.aio.ServicerContext') -&gt; 'Any'</dt><dd><span class="code">Proxy&nbsp;the&nbsp;profile&nbsp;stats&nbsp;through&nbsp;the&nbsp;game's&nbsp;stats&nbsp;provider.<br>
+&nbsp;<br>
+The&nbsp;bot&nbsp;and&nbsp;the&nbsp;mods&nbsp;ask&nbsp;the&nbsp;GAME&nbsp;SERVICE&nbsp;(rule&nbsp;4);&nbsp;the&nbsp;service<br>
+asks&nbsp;its&nbsp;provider&nbsp;—&nbsp;the&nbsp;caller&nbsp;never&nbsp;sees&nbsp;the&nbsp;provider.</span></dd></dl>
+
+<dl><dt>async <a name="GameDataServicer-GetProviderCapabilities"><strong>GetProviderCapabilities</strong></a>(self, request: 'Any', context: 'grpc.aio.ServicerContext') -&gt; 'Any'</dt><dd><span class="code">Proxy&nbsp;the&nbsp;stats&nbsp;provider's&nbsp;declared&nbsp;capabilities.</span></dd></dl>
 
 <dl><dt>async <a name="GameDataServicer-SyncContent"><strong>SyncContent</strong></a>(self, request: 'gamedata_pb2.SyncContentRequest', context: 'grpc.aio.ServicerContext') -&gt; 'gamedata_pb2.SyncContentReply'</dt><dd><span class="code">Run&nbsp;the&nbsp;content&nbsp;sync&nbsp;against&nbsp;the&nbsp;game's&nbsp;providers,&nbsp;in&nbsp;here.<br>
 &nbsp;<br>
@@ -81,7 +90,7 @@ background&nbsp;consumer,&nbsp;maintains&nbsp;the&nbsp;coherent&nbsp;player&nbsp
 aggregator)&nbsp;and&nbsp;serves&nbsp;its&nbsp;subscribers&nbsp;—&nbsp;a&nbsp;mod,&nbsp;the&nbsp;bot:&nbsp;each<br>
 stream&nbsp;owns&nbsp;its&nbsp;queue,&nbsp;one&nbsp;consumer&nbsp;never&nbsp;starves&nbsp;another.</span></dd></dl>
 
-<dl><dt><a name="GameDataServicer-__init__"><strong>__init__</strong></a>(self, aggregator: 'Any', poll_interval_s: 'float' = 2.0, enrollments: 'Any' = None) -&gt; 'None'</dt><dd><span class="code">Wire&nbsp;the&nbsp;aggregator,&nbsp;the&nbsp;refresh&nbsp;interval,&nbsp;the&nbsp;enrollments&nbsp;pusher&nbsp;and&nbsp;the&nbsp;prober.</span></dd></dl>
+<dl><dt><a name="GameDataServicer-__init__"><strong>__init__</strong></a>(self, aggregator: 'Any', poll_interval_s: 'float' = 2.0, enrollments: 'Any' = None, stats_provider: 'Any' = None) -&gt; 'None'</dt><dd><span class="code">Wire&nbsp;the&nbsp;aggregator,&nbsp;the&nbsp;poll&nbsp;interval,&nbsp;the&nbsp;enrollments&nbsp;and&nbsp;the&nbsp;stats&nbsp;proxy.</span></dd></dl>
 
 <hr>
 Data descriptors inherited from <a href="kingdoms.rpc_generated.kingdoms.v1.gamedata_pb2_grpc.html#GameDataServicer">kingdoms.rpc_generated.kingdoms.v1.gamedata_pb2_grpc.GameDataServicer</a>:<br>

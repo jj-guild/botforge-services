@@ -13,6 +13,11 @@ from typing import Any
 
 import grpc
 
+from kingdoms.core.rpc.game import (
+    capabilities_to_wire,
+    match_result_to_wire,
+    player_stats_to_wire,
+)
 from kingdoms.rpc_generated.kingdoms.v1 import gamedata_pb2, gamedata_pb2_grpc
 
 logger = logging.getLogger("kingdoms.game_aoe2")
@@ -177,11 +182,13 @@ class GameDataServicer(gamedata_pb2_grpc.GameDataServicer):
         aggregator: Any,
         poll_interval_s: float = 2.0,
         enrollments: Any = None,
+        stats_provider: Any = None,
     ) -> None:
-        """Wire the aggregator, the refresh interval, the enrollments pusher and the prober."""
+        """Wire the aggregator, the poll interval, the enrollments and the stats proxy."""
         self._aggregator = aggregator
         self._poll_interval_s = poll_interval_s
         self._enrollments = enrollments
+        self._stats_provider = stats_provider
 
     async def GetCoverage(
         self,
@@ -300,6 +307,54 @@ class GameDataServicer(gamedata_pb2_grpc.GameDataServicer):
             counts=counts,
             new_factions=new_factions,
         )
+
+    async def GetProfileStats(
+        self,
+        request: Any,
+        context: grpc.aio.ServicerContext,
+    ) -> Any:
+        """Proxy the profile stats through the game's stats provider.
+
+        The bot and the mods ask the GAME SERVICE (rule 4); the service
+        asks its provider — the caller never sees the provider.
+        """
+        if self._stats_provider is None:
+            await context.abort(grpc.StatusCode.UNIMPLEMENTED, "stats provider not wired")
+            raise AssertionError
+        stats = await self._stats_provider.get_player_stats(request.profile_id)
+        if stats is None:
+            await context.abort(grpc.StatusCode.NOT_FOUND, "no stats for this profile")
+            raise AssertionError
+        return player_stats_to_wire(stats)
+
+    async def GetMatchResult(
+        self,
+        request: Any,
+        context: grpc.aio.ServicerContext,
+    ) -> Any:
+        """Proxy a finished match's outcome (the activity feed's cards)."""
+        if self._stats_provider is None:
+            await context.abort(grpc.StatusCode.UNIMPLEMENTED, "stats provider not wired")
+            raise AssertionError
+        result = await self._stats_provider.get_match_result(
+            list(request.profile_ids), int(request.started_after)
+        )
+        if result is None:
+            await context.abort(grpc.StatusCode.NOT_FOUND, "no result yet")
+            raise AssertionError
+        return match_result_to_wire(result)
+
+    async def GetProviderCapabilities(
+        self,
+        request: Any,
+        context: grpc.aio.ServicerContext,
+    ) -> Any:
+        """Proxy the stats provider's declared capabilities."""
+        if self._stats_provider is None:
+            await context.abort(grpc.StatusCode.UNIMPLEMENTED, "stats provider not wired")
+            raise AssertionError
+        caps = await self._stats_provider.get_capabilities()
+        return capabilities_to_wire(caps)
 
     async def UpdateEnrollments(
         self,

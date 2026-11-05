@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import logging
 import os
+from dataclasses import dataclass
 
 # Transition re-exports: the PUBLIC util (kingdoms.core.wiki_names) is
 # the home now — the private names stay importable while the callers
@@ -31,6 +32,8 @@ from kingdoms.core.wiki_names import (
 
 logger = logging.getLogger("kingdoms.mapsdata")
 
+
+@dataclass
 class MapSeed:
     """The fields a provider resolves for one map name."""
 

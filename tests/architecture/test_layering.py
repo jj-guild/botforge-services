@@ -111,11 +111,7 @@ ALLOWLIST_R3 = (
 )
 
 ALLOWLIST_R4 = (
-    "kingdoms/discord/bot/factory.py -> kingdoms.ext_librematch.adapter",
-    "kingdoms/discord/home.py reads EXT_LIBREMATCH_URI",
-    "kingdoms/discord/live.py reads EXT_LIBREMATCH_URI",
-    "kingdoms/discord/live_activity.py reads EXT_LIBREMATCH_URI",
-    "kingdoms/discord/registration_platform.py reads EXT_LIBREMATCH_URI",
+
 )
 
 

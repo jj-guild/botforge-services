@@ -1,5 +1,7 @@
 syntax = "proto3";
 
+import "kingdoms/v1/game.proto";
+
 package kingdoms.v1;
 
 
@@ -50,6 +52,13 @@ service GameData {
   // The content sync (civs, maps): the game service runs it against ITS
   // providers — the bot never touches a provider, it asks the service.
   rpc SyncContent(SyncContentRequest) returns (SyncContentReply);
+
+  // The provider surfaces, PROXIED by the game service (rule 4: the
+  // mods and the bot talk to the game service, never to an ext). The
+  // wire messages are the Game contract's own — one shape, no copy.
+  rpc GetProfileStats(kingdoms.v1.GetPlayerStatsRequest) returns (kingdoms.v1.PlayerStats);
+  rpc GetMatchResult(kingdoms.v1.GetMatchResultRequest) returns (kingdoms.v1.MatchResult);
+  rpc GetProviderCapabilities(kingdoms.v1.CapabilitiesRequest) returns (kingdoms.v1.Capabilities);
 
 
   // The providers' health-test results for a game: the game service
