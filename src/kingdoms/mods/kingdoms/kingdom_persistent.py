@@ -5470,18 +5470,28 @@ def _parish_tier_of(kingdoms_service: Any, kingdom: Any) -> Any:
     return settings.tier(getattr(kingdom, "parish_tier", 1))
 
 
-async def _church_marry_civ_view(
+def _church_marry_cost(lord: Any, kingdom: Any, tier: Any) -> tuple[int, int, bool]:
+    """The (rings, lock_hours, royal) triple of the clicker's marriage."""
+    royal = str(getattr(lord, "role", "")) == "king"
+    rings = 2 if royal else 1
+    hours = int(getattr(tier, "marriage_lock_hours", 24)) * (2 if royal else 1)
+    return rings, hours, royal
+
+
+async def _church_marry_role_view(
     wiring: KingdomsPanelWiring,
     lord: Any,
     kingdom: Any,
     strings: dict[str, Any],
-) -> discord.ui.View | None:
-    """Build the ephemeral civilization select of the standard marriage (D59).
+) -> discord.ui.LayoutView | None:
+    """Build the role-adapted 💍 Se marier view (paroisse-v1, Drasah 06/11).
 
-    Every bachelor lord of the kingdom marries THEMSELVES (Drasah's
-    2026-10-11 rule): the options are the kingdom's playable hand
-    minus every civilization already claimed by an active marriage
-    (exclusivity D74, all kingdoms).
+    The view ADAPTS to the clicker (never a « si Roi, si seigneur »
+    note): a lord sees ONE ring and the palier's lock, the King sees
+    TWO rings, the doubled royal lock and the season-long guarantee
+    with the MARIAGE ROYAL badge. The civilization select lists the
+    kingdom's playable hand minus every civilization already claimed
+    by an active marriage (exclusivity D74, all kingdoms).
     """
     if wiring.diplomacy_service is None or wiring.kingdoms_service is None:
         return None
@@ -5502,25 +5512,97 @@ async def _church_marry_civ_view(
     ][:25]
     if not options:
         return None
+    tier = _parish_tier_of(wiring.kingdoms_service, kingdom)
+    rings, hours, royal = _church_marry_cost(lord, kingdom, tier)
+    civ_names = {str(civ.key): str(getattr(civ, "display_name", civ.key)) for civ in catalog}
+
+    header = f"## {strings['church_marry_view_title'].format(str(getattr(lord, 'display_name', lord.id)))}"
+    if royal:
+        header += f" — `{strings['church_marry_badge']}`"
+    rules = strings["church_marry_rules"].format(rings, hours)
+    if royal:
+        rules += "\n" + strings["church_marry_rules_royal"]
+
     select: discord.ui.Select[Any] = discord.ui.Select(
         custom_id=f"kingdoms:church:marryciv:{str(lord.id)[:80]}",
-        placeholder=strings["church_marry_intro"][:100],
+        placeholder=str(strings["church_marry_intro"])[:100],
         options=options,
     )
-    diplomacy = wiring.diplomacy_service
-    kingdoms_service = wiring.kingdoms_service
-    kingdom_id = str(kingdom.id)
-    tier = _parish_tier_of(kingdoms_service, kingdom)
-    civ_names = {str(civ.key): str(getattr(civ, "display_name", civ.key)) for civ in catalog}
+    back: discord.ui.Button[Any] = discord.ui.Button(
+        label=str(strings["church_marry_back_button"])[:80],
+        custom_id=f"kingdoms:church:marryback:{str(lord.id)[:80]}",
+        style=discord.ButtonStyle.secondary,
+    )
 
     async def on_choose(target: discord.Interaction[Any]) -> None:
         values = getattr(target, "data", None) or {}
         chosen = [str(v) for v in values.get("values", [])]
         if not chosen:
             return
-        await target.response.defer(ephemeral=True)
+        civ_key = chosen[0]
+        civ_label = civ_names.get(civ_key, civ_key)
+        confirm = _church_marry_confirm_view(
+            strings, lord, kingdom, civ_key, civ_label, rings, hours, royal, tier,
+            wiring, civ_names,
+        )
+        await target.response.edit_message(view=confirm)
+        _register_ephemeral_interaction(target)
+
+    async def on_back(target: discord.Interaction[Any]) -> None:
+        await _church_back_to_state(target, strings, wiring, lord, kingdom)
+
+    select.callback = on_choose  # type: ignore[method-assign, assignment]
+    back.callback = on_back  # type: ignore[method-assign, assignment]
+    view = discord.ui.LayoutView(timeout=None)
+    view.add_item(discord.ui.TextDisplay(header))
+    view.add_item(discord.ui.TextDisplay(rules))
+    view.add_item(discord.ui.ActionRow(select))
+    view.add_item(discord.ui.ActionRow(back))
+    return view
+
+
+def _church_marry_confirm_view(
+    strings: dict[str, Any],
+    lord: Any,
+    kingdom: Any,
+    civ_key: str,
+    civ_label: str,
+    rings: int,
+    hours: int,
+    royal: bool,
+    tier: Any,
+    wiring: KingdomsPanelWiring,
+    civ_names: dict[str, str],
+) -> discord.ui.LayoutView:
+    """The confirmation card — the select is OVERWRITTEN in place."""
+    body = (
+        f"## {strings['church_marry_confirm_title']}\n"
+        f"**{civ_label}**\n"
+        f"{strings['church_marry_confirm_sub'].format(rings, hours)}"
+    )
+    yes: discord.ui.Button[Any] = discord.ui.Button(
+        label=str(strings["church_marry_yes_button"])[:80],
+        custom_id=f"kingdoms:church:marryyes:{str(lord.id)[:60]}:{civ_key[:20]}",
+        style=discord.ButtonStyle.success,
+    )
+    edit: discord.ui.Button[Any] = discord.ui.Button(
+        label=str(strings["church_marry_edit_button"])[:80],
+        custom_id=f"kingdoms:church:marryedit:{str(lord.id)[:60]}",
+        style=discord.ButtonStyle.secondary,
+    )
+    back: discord.ui.Button[Any] = discord.ui.Button(
+        label=str(strings["church_marry_back_button"])[:80],
+        custom_id=f"kingdoms:church:marryback:{str(lord.id)[:60]}",
+        style=discord.ButtonStyle.danger,
+    )
+
+    async def on_yes(target: discord.Interaction[Any]) -> None:
+        # Deferred message update — the window is edited in place after.
+        await target.response.defer()
+        diplomacy = wiring.diplomacy_service
+        kingdoms_service = wiring.kingdoms_service
         try:
-            await diplomacy.marry(str(lord.id), chosen[0])
+            await diplomacy.marry(str(lord.id), civ_key)
         except Exception as exc:
             await target.followup.send(_market_error_note(exc, strings), ephemeral=True)
             return
@@ -5529,17 +5611,14 @@ async def _church_marry_civ_view(
         await _assign_marriage_lock_role_safe(target.guild, str(lord.id))
         # chef-mercenaire-v1 T2c: the sealed civ strips its mercenary
         # holders (fixed 1-écu refund DM).
-        await _strip_mercenary_holders_safe(target.client, chosen[0], strings)
-        royal = str(getattr(lord, "role", "")) == "king"
-        hours = int(tier.marriage_lock_hours) * (2 if royal else 1)
+        await _strip_mercenary_holders_safe(target.client, civ_key, strings)
+        lord_name = str(getattr(lord, "display_name", str(lord.id)))
+        kingdom_name = str(getattr(kingdom, "name", ""))
+        offering = int(getattr(tier, "offering", 0) or 0)
+        # paroisse-v1 (Drasah 06/11): EVERY marriage is announced in
+        # Géopolitique (the royal pattern) — the ephemeral window
+        # keeps only a sober confirmation + Retour Paroisse.
         if royal:
-            await target.followup.send(
-                strings["church_marry_royal_ok"].format(
-                    civ_names.get(chosen[0], chosen[0]),
-                    hours,
-                ),
-                ephemeral=True,
-            )
             lock_until = 0
             try:
                 fresh_lord = next(
@@ -5559,28 +5638,133 @@ async def _church_marry_civ_view(
             await _announce_royal_wedding_safe(
                 target.guild,
                 strings,
-                str(getattr(lord, "display_name", str(lord.id))),
-                str(getattr(kingdom, "name", "")),
-                civ_names.get(chosen[0], chosen[0]),
+                lord_name,
+                kingdom_name,
+                civ_names.get(civ_key, civ_key),
                 hours,
                 king_id=str(lord.id),
                 lock_until=lock_until,
             )
-        else:
-            await target.followup.send(
-                strings["church_marry_ok"].format(
-                    civ_names.get(chosen[0], chosen[0]),
-                    hours,
-                    int(tier.offering),
-                ),
-                ephemeral=True,
-            )
-        await _refresh_realm_views_for_kingdom_safe(target.guild, kingdom_id)
+        elif target.guild is not None:
+            from kingdoms.mods.kingdoms.kingdom_content import announce_geopolitics
 
-    select.callback = on_choose  # type: ignore[method-assign, assignment]
-    view = discord.ui.View(timeout=600)
-    view.add_item(select)
+            try:
+                await announce_geopolitics(
+                    target.guild,
+                    str(target.locale) if target.locale else "en",
+                    str(strings["church_wedding_announce"]).format(
+                        lord_name, kingdom_name, civ_label, hours, offering
+                    ),
+                )
+            except Exception:
+                logger.info("KINGDOMS: wedding announcement skipped", exc_info=True)
+        sealed = _church_marry_sealed_view(strings, lord, wiring, civ_label)
+        try:
+            await target.edit_original_response(view=sealed)
+        except Exception:
+            await target.followup.send(
+                strings["church_marry_sealed_title"].format(civ_label), ephemeral=True
+            )
+        await _refresh_realm_views_for_kingdom_safe(target.guild, str(kingdom.id))
+
+    async def on_edit(target: discord.Interaction[Any]) -> None:
+        fresh = await _church_marry_role_view(wiring, lord, kingdom, strings)
+        if fresh is None:
+            await target.response.edit_message(
+                view=_ephemeral_layout_view(str(strings["market_no_options"]))
+            )
+            return
+        await target.response.edit_message(view=fresh)
+        _register_ephemeral_interaction(target)
+
+    async def on_back(target: discord.Interaction[Any]) -> None:
+        await _church_back_to_state(target, strings, wiring, lord, kingdom)
+
+    yes.callback = on_yes  # type: ignore[method-assign, assignment]
+    edit.callback = on_edit  # type: ignore[method-assign, assignment]
+    back.callback = on_back  # type: ignore[method-assign, assignment]
+    view = discord.ui.LayoutView(timeout=None)
+    view.add_item(discord.ui.TextDisplay(body))
+    view.add_item(discord.ui.ActionRow(yes, edit, back))
     return view
+
+
+def _church_marry_sealed_view(
+    strings: dict[str, Any],
+    lord: Any,
+    wiring: KingdomsPanelWiring,
+    civ_label: str,
+) -> discord.ui.LayoutView:
+    """The sealed face — sober confirmation + Retour Paroisse."""
+    body = (
+        f"## {strings['church_marry_sealed_title'].format(civ_label)}\n"
+        f"{strings['church_marry_sealed_note']}"
+    )
+    back: discord.ui.Button[Any] = discord.ui.Button(
+        label=str(strings["church_marry_back_button"])[:80],
+        custom_id=f"kingdoms:church:marryback:{str(lord.id)[:60]}",
+        style=discord.ButtonStyle.secondary,
+    )
+
+    async def on_back(target: discord.Interaction[Any]) -> None:
+        await _church_back_to_state(target, strings, wiring, lord, None)
+
+    back.callback = on_back  # type: ignore[method-assign, assignment]
+    view = discord.ui.LayoutView(timeout=None)
+    view.add_item(discord.ui.TextDisplay(body))
+    view.add_item(discord.ui.ActionRow(back))
+    return view
+
+
+async def _church_back_to_state(
+    interaction: discord.Interaction,
+    strings: dict[str, Any],
+    wiring: KingdomsPanelWiring,
+    lord: Any,
+    kingdom: Any,
+) -> None:
+    """Edit the ephemeral window back to the Paroisse main sheet."""
+    from kingdoms.mods.kingdoms.kingdom_lieux import _paroisse_rows
+    from kingdoms.mods.kingdoms.kingdom_realm_content import _build_church, _gather_state
+
+    locale = str(interaction.locale) if interaction.locale else "en"
+    if wiring.kingdoms_service is None:
+        await interaction.response.send_message(strings["market_no_service"], ephemeral=True)
+        return
+    if kingdom is None:
+        if lord is None:
+            await interaction.response.send_message(strings["not_lord"], ephemeral=True)
+            return
+        kingdom = next(
+            (
+                k
+                for k in await wiring.kingdoms_service.kingdoms()
+                if str(k.id) == str(getattr(lord, "kingdom_id", None))
+            ),
+            None,
+        )
+    if kingdom is None:
+        await interaction.response.send_message(strings["not_lord"], ephemeral=True)
+        return
+    state = await _gather_state(kingdom, wiring)
+    media = (
+        "attachment://paroisse.png"
+        if any(
+            getattr(a, "filename", "") == "paroisse.png"
+            for a in getattr(interaction.message, "attachments", []) or []
+        )
+        else None
+    )
+    await interaction.response.edit_message(
+        view=_build_church(
+            strings,
+            kingdom,
+            state,
+            media=media,
+            rows=_paroisse_rows(strings, kingdom, state, locale, lord),
+        )
+    )
+    _register_ephemeral_interaction(interaction)
 
 
 class KingdomChurchMarryButton(
@@ -5589,18 +5773,23 @@ class KingdomChurchMarryButton(
 ):
     """The restart-proof 💍 Se marier button of the pinned Paroisse view.
 
-    Every bachelor lord marries themselves (Drasah's rule): the button
-    opens the civilization select of the kingdom's available hand.
-    Consumes one point de mariage (D59) and credits the Offrande of
-    the current palier (D64).
+    paroisse-v1 (Drasah 06/11): the button is GRAY+disabled when the
+    CLICKER is already married or the kingdom holds no ring (the King
+    needs TWO), and the click swaps the Paroisse window IN PLACE to
+    the role-adapted marriage view (never a stacked ephemeral).
     """
 
-    def __init__(self, strings: dict[str, Any]) -> None:
+    def __init__(self, strings: dict[str, Any], disabled: bool = False) -> None:
         super().__init__(
             discord.ui.Button(
                 label=str(strings["church_marry_button"])[:80],
                 custom_id="kingdoms:church:marry",
-                style=discord.ButtonStyle.primary,
+                style=(
+                    discord.ButtonStyle.secondary
+                    if disabled
+                    else discord.ButtonStyle.primary
+                ),
+                disabled=disabled,
             )
         )
 
@@ -5617,7 +5806,7 @@ class KingdomChurchMarryButton(
         return cls(_strings(locale))
 
     async def callback(self, interaction: discord.Interaction) -> None:
-        """Open the civilization select for the clicking bachelor lord."""
+        """Swap the Paroisse window to the role-adapted marriage view."""
         locale = str(interaction.locale) if interaction.locale else "en"
         strings = _strings(locale)
         wiring = _wiring()
@@ -5638,7 +5827,7 @@ class KingdomChurchMarryButton(
                 strings["church_marry_kingdom_none"], ephemeral=True
             )
             return
-        view = await _church_marry_civ_view(wiring, lord, kingdom, strings)
+        view = await _church_marry_role_view(wiring, lord, kingdom, strings)
         if view is None:
             # Drasah's 2026-10-11 feedback: a bare "no options" note was
             # cryptic — say WHY: an empty Alliances hand waits for the
@@ -5651,9 +5840,14 @@ class KingdomChurchMarryButton(
             )
             await interaction.response.send_message(note, ephemeral=True)
             return
-        # fenetre-unique-globale-v1 (Drasah 30/10): joins the shared
-        # single-window registry — no stacking with the player's
-        # previous ephemeral view.
+        # paroisse-v1 (Drasah 06/11): the Paroisse window itself is
+        # swapped IN PLACE — the marriage flow never stacks windows.
+        if _is_ephemeral_parent(interaction):
+            await interaction.response.edit_message(view=view)
+            _register_ephemeral_interaction(interaction)
+            return
+        # Fallback (a pinned non-ephemeral panel): the shared single
+        # window registry — no stacking with the previous view.
         await _open_unique_ephemeral(
             interaction,
             str(strings["church_marry_intro"]),
@@ -5799,7 +5993,12 @@ class KingdomChurchUpgradeButton(
         return cls(strings, next_name, cost)
 
     async def callback(self, interaction: discord.Interaction) -> None:
-        """Pay the next palier and re-render the Paroisse view."""
+        """Pay the next palier and refresh the window (paroisse-v1).
+
+        Inside the ⛪ Améliorer window the purchase edits the window
+        IN PLACE (the three bandes re-render on the fresh palier) —
+        never an announcement, never a stacked note.
+        """
         locale = str(interaction.locale) if interaction.locale else "en"
         strings = _strings(locale)
         wiring = _wiring()
@@ -5814,7 +6013,11 @@ class KingdomChurchUpgradeButton(
                 strings["church_upgrade_king_only"], ephemeral=True
             )
             return
-        await interaction.response.defer(ephemeral=True)
+        in_place = _is_ephemeral_parent(interaction)
+        if in_place:
+            await interaction.response.defer()
+        else:
+            await interaction.response.defer(ephemeral=True)
         try:
             kingdom = await wiring.kingdoms_service.upgrade_parish(str(king.kingdom_id))
         except Exception as exc:
@@ -5824,22 +6027,320 @@ class KingdomChurchUpgradeButton(
             wiring, str(interaction.user.id), "parish_upgrade",
             tier=str(int(getattr(kingdom, "parish_tier", 1) or 1)),
         )
-        wallet = int(getattr(kingdom, "tech_points_bank", 0) or 0)
-        tier = _parish_tier_of(wiring.kingdoms_service, kingdom)
-        tiers = getattr(
-            getattr(wiring.kingdoms_service, "config", None), "parish", SimpleNamespace(tiers=())
-        ).tiers
-        max_tier = len(tiers)
-        await interaction.followup.send(
-            strings["church_upgrade_ok"].format(
-                str(getattr(tier, "display_name", "")),
-                int(getattr(kingdom, "parish_tier", 1) or 1),
-                max_tier or 3,
-                wallet,
-            ),
-            ephemeral=True,
-        )
         await _refresh_realm_views_for_kingdom_safe(interaction.guild, str(kingdom.id))
+        if not in_place:
+            # Legacy path (a pinned non-ephemeral panel): the note.
+            wallet = int(getattr(kingdom, "tech_points_bank", 0) or 0)
+            tier = _parish_tier_of(wiring.kingdoms_service, kingdom)
+            tiers = getattr(
+                getattr(wiring.kingdoms_service, "config", None), "parish", SimpleNamespace(tiers=())
+            ).tiers
+            max_tier = len(tiers)
+            await interaction.followup.send(
+                strings["church_upgrade_ok"].format(
+                    str(getattr(tier, "display_name", "")),
+                    int(getattr(kingdom, "parish_tier", 1) or 1),
+                    max_tier or 3,
+                    wallet,
+                ),
+                ephemeral=True,
+            )
+            return
+        # paroisse-v1: the Améliorer window re-renders itself on the
+        # fresh palier — in place, zero announcement.
+        from kingdoms.mods.kingdoms.kingdom_realm_content import (
+            _build_church_upgrade_view,
+            _gather_state,
+        )
+
+        state = await _gather_state(kingdom, wiring)
+        media = (
+            "attachment://paroisse.png"
+            if any(
+                getattr(a, "filename", "") == "paroisse.png"
+                for a in getattr(interaction.message, "attachments", []) or []
+            )
+            else None
+        )
+        try:
+            await interaction.edit_original_response(
+                view=_build_church_upgrade_view(strings, kingdom, state, king, media=media)
+            )
+        except Exception:
+            logger.info("KINGDOMS: upgrade window refresh skipped", exc_info=True)
+
+
+class _KingdomChurchFaceMixin:
+    """paroisse-v1: the shared toggle wiring (🔎 En savoir plus face).
+
+    Pattern Remparts: both face buttons edit the EPHEMERAL IN PLACE and
+    swap the body between the CLEAN main sheet (mode="state") and the
+    EXPLANATIONS face (mode="info" — Le mariage dans Kingdoms, Verrou,
+    Offrande, Jeton, Lieu Sacrée).
+    """
+
+    _MODE = "state"
+
+    async def _toggle(self, interaction: discord.Interaction) -> None:
+        from kingdoms.mods.kingdoms.kingdom_lieux import (
+            _paroisse_info_rows,
+            _paroisse_rows,
+        )
+        from kingdoms.mods.kingdoms.kingdom_realm_content import (
+            _build_church,
+            _gather_state,
+        )
+
+        locale = str(interaction.locale) if interaction.locale else "en"
+        strings = _strings(locale)
+        wiring = _wiring()
+        if wiring.kingdoms_service is None:
+            await interaction.response.send_message(strings["market_no_service"], ephemeral=True)
+            return
+        lord = await _lord_of(
+            wiring.kingdoms_service, str(interaction.user.id), wiring.bot_admins
+        )
+        if lord is None or getattr(lord, "left", False):
+            await interaction.response.send_message(strings["not_lord"], ephemeral=True)
+            return
+        kingdoms = await wiring.kingdoms_service.kingdoms()
+        kingdom = next(
+            (k for k in kingdoms if str(k.id) == str(getattr(lord, "kingdom_id", None))),
+            None,
+        )
+        if kingdom is None:
+            await interaction.response.send_message(strings["not_lord"], ephemeral=True)
+            return
+        state = await _gather_state(kingdom, wiring)
+        media = (
+            "attachment://paroisse.png"
+            if any(
+                getattr(a, "filename", "") == "paroisse.png"
+                for a in getattr(interaction.message, "attachments", []) or []
+            )
+            else None
+        )
+        if self._MODE == "info":
+            rows = _paroisse_info_rows(strings, locale)
+        else:
+            rows = _paroisse_rows(strings, kingdom, state, locale, lord)
+        await interaction.response.edit_message(
+            view=_build_church(
+                strings, kingdom, state, media=media, rows=rows, mode=self._MODE
+            )
+        )
+        # fenetre-unique: the toggle stays IN PLACE — re-link the
+        # single-window registry onto the edited message.
+        _register_ephemeral_interaction(interaction)
+
+
+class KingdomChurchInfoButton(
+    _KingdomChurchFaceMixin,
+    discord.ui.DynamicItem[discord.ui.Button[Any]],
+    template=r"kingdoms:church:info$",
+):
+    """« 🔎 En savoir plus » — swap the Paroisse view to its info face."""
+
+    _MODE = "info"
+
+    def __init__(self, strings: dict[str, str]) -> None:
+        super().__init__(
+            discord.ui.Button(
+                label=strings["church_info_button"][:80],
+                custom_id="kingdoms:church:info",
+                style=discord.ButtonStyle.primary,
+            )
+        )
+
+    @classmethod
+    async def from_custom_id(
+        cls,
+        interaction: discord.Interaction,
+        item: discord.ui.Item[Any],
+        match: re.Match[str],
+        /,
+    ) -> KingdomChurchInfoButton:
+        locale = str(interaction.locale) if interaction.locale else "en"
+        return cls(_strings(locale))
+
+    async def callback(self, interaction: discord.Interaction) -> None:
+        await self._toggle(interaction)
+
+
+class KingdomChurchStateButton(
+    _KingdomChurchFaceMixin,
+    discord.ui.DynamicItem[discord.ui.Button[Any]],
+    template=r"kingdoms:church:state$",
+):
+    """« ↩️ Retour Paroisse » — swap the view back to its state face."""
+
+    _MODE = "state"
+
+    def __init__(self, strings: dict[str, str]) -> None:
+        super().__init__(
+            discord.ui.Button(
+                label=strings["church_info_back_button"][:80],
+                custom_id="kingdoms:church:state",
+                style=discord.ButtonStyle.success,
+            )
+        )
+
+    @classmethod
+    async def from_custom_id(
+        cls,
+        interaction: discord.Interaction,
+        item: discord.ui.Item[Any],
+        match: re.Match[str],
+        /,
+    ) -> KingdomChurchStateButton:
+        locale = str(interaction.locale) if interaction.locale else "en"
+        return cls(_strings(locale))
+
+    async def callback(self, interaction: discord.Interaction) -> None:
+        await self._toggle(interaction)
+
+
+class KingdomChurchUpgradeViewButton(
+    discord.ui.DynamicItem[discord.ui.Button[Any]],
+    template=r"kingdoms:church:upgradeview$",
+):
+    """« ⛪ Améliorer → X » — open the THREE-BANDES upgrade view.
+
+    paroisse-v1 (Drasah 06/11): the entry button opens a NEW view
+    éphémère (illustration of the CURRENT palier, the Chapelle/Église/
+    Cathédrale bandes with their states, the confirm button green
+    while the treasury pays).
+    """
+
+    def __init__(self, strings: dict[str, Any], next_name: str, cost: int) -> None:
+        if next_name:
+            label = str(strings["church_upgrade_button"]).format(next_name, cost)[:80]
+            disabled = False
+        else:
+            label = str(strings["church_upgrade_max"])[:80]
+            disabled = True
+        super().__init__(
+            discord.ui.Button(
+                label=label,
+                custom_id="kingdoms:church:upgradeview",
+                style=discord.ButtonStyle.success,
+                disabled=disabled,
+            )
+        )
+
+    @classmethod
+    async def from_custom_id(
+        cls,
+        interaction: discord.Interaction,
+        item: discord.ui.Item[Any],
+        match: re.Match[str],
+        /,
+    ) -> KingdomChurchUpgradeViewButton:
+        """Rebuild the entry button (palier looked up best-effort)."""
+        locale = str(interaction.locale) if interaction.locale else "en"
+        strings = _strings(locale)
+        wiring = _wiring()
+        next_name, cost = "", 0
+        if wiring.kingdoms_service is not None:
+            king = await _king_of(
+                wiring.kingdoms_service, str(interaction.user.id), wiring.bot_admins
+            )
+            if king is not None and king.kingdom_id:
+                kingdom = await _kingdom_by_id_safe(
+                    wiring.kingdoms_service, str(king.kingdom_id)
+                )
+                if kingdom is not None:
+                    settings = getattr(
+                        getattr(wiring.kingdoms_service, "config", None), "parish", None
+                    )
+                    if settings is not None:
+                        tier = int(getattr(kingdom, "parish_tier", 1) or 1)
+                        tiers = settings.tiers
+                        if tier < len(tiers):
+                            next_name = str(tiers[tier].display_name)
+                            cost = int(tiers[tier].cost)
+        return cls(strings, next_name, cost)
+
+    async def callback(self, interaction: discord.Interaction) -> None:
+        """Open the Améliorer view as the player's single window."""
+        locale = str(interaction.locale) if interaction.locale else "en"
+        strings = _strings(locale)
+        wiring = _wiring()
+        if wiring.kingdoms_service is None:
+            await interaction.response.send_message(strings["market_no_service"], ephemeral=True)
+            return
+        lord = await _lord_of(
+            wiring.kingdoms_service, str(interaction.user.id), wiring.bot_admins
+        )
+        if lord is None or getattr(lord, "left", False):
+            await interaction.response.send_message(strings["not_lord"], ephemeral=True)
+            return
+        kingdoms = await wiring.kingdoms_service.kingdoms()
+        kingdom = next(
+            (k for k in kingdoms if str(k.id) == str(getattr(lord, "kingdom_id", None))),
+            None,
+        )
+        if kingdom is None:
+            await interaction.response.send_message(strings["not_lord"], ephemeral=True)
+            return
+        from kingdoms.mods.kingdoms.kingdom_lieux import _paroisse_files
+        from kingdoms.mods.kingdoms.kingdom_realm_content import (
+            _build_church_upgrade_view,
+            _gather_state,
+        )
+
+        state = await _gather_state(kingdom, wiring)
+        view = _build_church_upgrade_view(
+            strings, kingdom, state, lord, media="attachment://paroisse.png"
+        )
+        # Tranched 06/11: the Améliorer view is a NEW ephemeral window
+        # (fenêtre unique registry — the Paroisse window is replaced).
+        await _open_unique_ephemeral(
+            interaction, view=view, files=_paroisse_files(state)
+        )
+
+
+class KingdomChurchBackButton(
+    discord.ui.DynamicItem[discord.ui.Button[Any]],
+    template=r"kingdoms:church:back$",
+):
+    """« ↩️ Retour Paroisse » of the Améliorer window — edit in place."""
+
+    def __init__(self, strings: dict[str, str]) -> None:
+        super().__init__(
+            discord.ui.Button(
+                label=strings["church_info_back_button"][:80],
+                custom_id="kingdoms:church:back",
+                style=discord.ButtonStyle.secondary,
+            )
+        )
+
+    @classmethod
+    async def from_custom_id(
+        cls,
+        interaction: discord.Interaction,
+        item: discord.ui.Item[Any],
+        match: re.Match[str],
+        /,
+    ) -> KingdomChurchBackButton:
+        locale = str(interaction.locale) if interaction.locale else "en"
+        return cls(_strings(locale))
+
+    async def callback(self, interaction: discord.Interaction) -> None:
+        strings = _strings(
+            str(interaction.locale) if interaction.locale else "en"
+        )
+        wiring = _wiring()
+        if wiring.kingdoms_service is None:
+            await interaction.response.send_message(strings["market_no_service"], ephemeral=True)
+            return
+        lord = await _lord_of(
+            wiring.kingdoms_service, str(interaction.user.id), wiring.bot_admins
+        )
+        if lord is None:
+            await interaction.response.send_message(strings["not_lord"], ephemeral=True)
+            return
+        await _church_back_to_state(interaction, strings, wiring, lord, None)
 
 
 class _ConsecrateSelect(discord.ui.Select["discord.ui.View"]):
