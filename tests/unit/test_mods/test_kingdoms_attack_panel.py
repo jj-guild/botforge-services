@@ -1358,3 +1358,3396 @@ async def test_score_due_opens_the_battle_room_with_shuffled_civs() -> None:
     voice channel under the provisioned « Champs de Bataille » category
     (battle-room-categorie-v1: the category is NEVER created here), a
     text-in-voice message with each player's SHUFFLED civs + the
+    URL/result buttons, and the room refs stored for the presence
+    tracking."""
+    from kingdoms.mods.kingdoms.kingdom_attack_panel import _open_battle_room
+
+    bundle = ScoreBundle()
+    await bundle.launch_season()
+    await bundle.draw(26)
+    attack, _aquitaine, _bourgogne = await bundle.meeting()
+    _wiring(bundle)
+    guild = MockGuild()
+    # battle-room-categorie-v1: the room joins the PROVISIONED category
+    # — the declare salon lives in the battlefield group, the attack
+    # salon sits next to it.
+    battlefield = await guild.create_category("Champs de Bataille")
+    declare = await guild.create_text_channel("Déclarer une attaque", category=battlefield)
+    assert declare is not None
+    # restructuration-serveur-v1 b: the meeting message lives in the
+    # ATTACK SALON — record it BEFORE the room opens.
+    salon = await guild.create_text_channel("salon d'attaque", category=battlefield)
+    await bundle.attacks.record_attack_channel(attack.id, salon.id)
+    bot = _FakeBot(bundle)
+    bot.guilds = [guild]  # type: ignore[assignment]
+    # The scheduler passes the FRESH store object (a stale pre-draft
+    # snapshot would carry an empty pick & ban).
+    attack = next(a for a in await bundle.attacks.attacks() if a.id == attack.id)
+    # The fixture declares with a legacy lobby URL — production declares
+    # empty (the ID is shared at the RDV, v5): clear it like the real flow.
+    attack.lobby_url = ""
+    await bundle.store.upsert_attack(attack.to_mongo())
+    await _open_battle_room(bot, guild, attack, bundle.kingdoms, "fr")
+    fresh = next(a for a in await bundle.attacks.attacks() if a.id == attack.id)
+    room_id = fresh.score.get("room_channel_id")
+    assert room_id
+    assert fresh.score.get("room_role_id")
+    room = guild.get_channel(int(room_id))
+    assert room is not None
+    assert room.user_limit == 2
+    # battle-room-categorie-v1: the room sits in the PROVISIONED
+    # category — and NO category was ever created (the legacy flow
+    # created a « Champs de bataille » duplicate here).
+    assert room.category is battlefield
+    assert [c.name for c in guild.categories] == ["Champs de Bataille"]
+    # Check 75 live: the @everyone deny locked the bot out of its own
+    # room (403 50001 on the text-in-voice message) — the bot must carry
+    # its own overwrites on the channel it creates.
+    mine = room._overwrites.get(guild.me)
+    assert mine is not None
+    assert mine.view_channel is True
+    assert mine.send_messages is True
+    # The meeting single-message lands in the SALON — the voice room
+    # keeps only the voice (b). battle-room-id-v2: the open also PINGS
+    # the two players (message #2) so they cannot miss the scoreboard.
+    assert room.messages == []
+    assert len(salon.messages) == 2
+    ping = str(salon.messages[1].content or "")
+    assert "<@king-a>" in ping and "<@lord-b>" in ping
+    body = salon.messages[0].content or ""
+    # Drasah 18/10 v4: the meeting shows the FINAL civ of each player only
+    # (post-sabotage, first surviving pick) — the full hands stay in DM.
+    assert "francs" in body
+    assert "huns" in body
+    assert "bretons" not in body
+    assert "perses" not in body
+    # v5 single message: 🔗 ID only at first — ✅ Prêt appears once
+    # the ID is set, 🏆 once both players are Prêt.
+    view = salon.messages[0].view
+    ids = {str(c.custom_id) for c in view.children}
+    assert any(cid.startswith("kingdoms:attack:room:url:") for cid in ids)
+    assert not any(cid.startswith("kingdoms:attack:room:ready:") for cid in ids)
+    assert not any(cid.startswith("kingdoms:attack:room:result:") for cid in ids)
+    assert fresh.score.get("meeting_channel_id") == salon.id
+    assert fresh.score.get("meeting_message_id") == salon.messages[0].id
+    # v4: the sabotage moved to the DMs — no sabotage button in the room.
+    assert not any("sabotage" in cid or cid.startswith("kingdoms:attack:room:sab:") for cid in ids)
+    # Idempotent: a replayed tick never duplicates the room.
+    await _open_battle_room(bot, guild, fresh, bundle.kingdoms, "fr")
+    rooms = [c for c in guild.channels if getattr(c, "user_limit", None) == 2]
+    assert len(rooms) == 1
+    # The ID is shared — the SAME message refreshes: ✅ Prêt unlocks,
+    # the ID shows in the body, 🏆 stays hidden until both are Prêt.
+    from kingdoms.mods.kingdoms.kingdom_attack_panel import _refresh_room_message_safe
+
+    await bundle.attacks.set_lobby_url(attack.id, "king-a", "4242")
+    stamped = next(a for a in await bundle.attacks.attacks() if a.id == attack.id)
+    await _refresh_room_message_safe(bot, stamped, "fr")
+    assert len(salon.messages) == 2  # the SAME salon message refreshes
+    refreshed = {str(c.custom_id) for c in salon.messages[0].view.children}
+    assert any(cid.startswith("kingdoms:attack:room:ready:") for cid in refreshed)
+    assert not any(cid.startswith("kingdoms:attack:room:result:") for cid in refreshed)
+    assert "4242" in str(salon.messages[0].content or "")
+
+
+async def test_battle_room_never_creates_a_category() -> None:
+    """battle-room-categorie-v1 (Drasah 19/10): the legacy room flow
+    created a « Champs de bataille » category duplicate (its exact-name
+    lookup never matched the provisioned « Champs de Bataille »). With
+    no category at all the room lands at the guild root — NEVER a new
+    category."""
+    from kingdoms.mods.kingdoms.kingdom_attack_panel import _open_battle_room
+
+    bundle = ScoreBundle()
+    await bundle.launch_season()
+    await bundle.draw(26)
+    attack, _aquitaine, _bourgogne = await bundle.meeting()
+    _wiring(bundle)
+    guild = MockGuild()
+    salon = await guild.create_text_channel("salon d'attaque")
+    await bundle.attacks.record_attack_channel(attack.id, salon.id)
+    bot = _FakeBot(bundle)
+    bot.guilds = [guild]  # type: ignore[assignment]
+    attack = next(a for a in await bundle.attacks.attacks() if a.id == attack.id)
+    await _open_battle_room(bot, guild, attack, bundle.kingdoms, "fr")
+    fresh = next(a for a in await bundle.attacks.attacks() if a.id == attack.id)
+    room = guild.get_channel(int(fresh.score["room_channel_id"]))
+    assert room is not None
+    # No category anywhere: the room sits at the guild root and the
+    # flow NEVER created one.
+    assert room.category is None
+    assert guild.categories == []
+
+
+async def test_battle_room_joins_the_category_of_the_declare_salon() -> None:
+    """battle-room-categorie-v1: the room resolves the battlefield
+    category through the declare salon's own category — the two live
+    in the same provisioned group, whatever the category's name."""
+    from kingdoms.mods.kingdoms.kingdom_attack_panel import _battlefield_category
+
+    guild = MockGuild()
+    assert _battlefield_category(guild) is None
+    battlefield = await guild.create_category("Champs de Bataille")
+    await guild.create_text_channel("Déclarer une attaque", category=battlefield)
+    assert _battlefield_category(guild) is battlefield
+    # A lone category without any declare salon still matches by slug.
+    guild2 = MockGuild()
+    other = await guild2.create_category("Champs de Bataille")
+    assert _battlefield_category(guild2) is other
+
+
+async def test_battle_room_text_post_failure_still_grants_roles_and_dms(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Check 75: the text-in-voice post is best effort — a failing send
+    must not bury the role grants, the room refs nor the room DMs."""
+    from kingdoms.mods.kingdoms.kingdom_attack_panel import _open_battle_room
+    from tests.mocks.discord_mock import MockTextChannel
+
+    bundle = ScoreBundle()
+    await bundle.launch_season()
+    await bundle.draw(26)
+    attack, _aquitaine, _bourgogne = await bundle.meeting()
+    _wiring(bundle)
+    guild = MockGuild()
+    salon = await guild.create_text_channel("salon d'attaque")
+    await bundle.attacks.record_attack_channel(attack.id, salon.id)
+
+    class _DmUser:
+        def __init__(self, uid: str) -> None:
+            self.id = uid
+
+        async def send(self, content: str, view: Any = None) -> Any:
+            outbox.append((str(self.id), content))
+            return None
+
+    class _DmBot(_FakeBot):
+        def get_user(self, user_id: str) -> Any:
+            return _DmUser(str(user_id))
+
+    outbox: list[tuple[str, str]] = []
+    bot = _DmBot(bundle)
+    attack = next(a for a in await bundle.attacks.attacks() if a.id == attack.id)
+
+    original_send = MockTextChannel.send
+
+    async def failing_send(self: MockTextChannel, *args: Any, **kwargs: Any) -> Any:
+        raise RuntimeError("403 50001 Missing Access (simulated)")
+
+    monkeypatch.setattr(MockTextChannel, "send", failing_send)
+    try:
+        await _open_battle_room(bot, guild, attack, bundle.kingdoms, "fr")
+    finally:
+        monkeypatch.setattr(MockTextChannel, "send", original_send)
+    fresh = next(a for a in await bundle.attacks.attacks() if a.id == attack.id)
+    # The refs are stored BEFORE the message: cleanup can find the room.
+    assert fresh.score.get("room_channel_id")
+    assert fresh.score.get("room_role_id")
+    # Both players still got the room DM pointing at the vocal.
+    dm_targets = {uid for uid, _msg in outbox}
+    assert dm_targets >= {str(attack.attacker_lord_id), str(attack.defender_lord_id)}
+
+
+async def test_room_ready_button_announces_the_match_when_both_ready() -> None:
+    """Check 76: the vocal's ✅ Prêt button records the readiness and,
+    once BOTH players clicked, creates the match scheduled event and
+    announces the start in the room (a re-click never re-announces)."""
+    from kingdoms.mods.kingdoms.kingdom_attack_panel import (
+        KingdomRoomReadyButton,
+        _open_battle_room,
+        _strings,
+    )
+
+    bundle = ScoreBundle()
+    await bundle.launch_season()
+    await bundle.draw(26)
+    # open_meeting: the score phase must be OPEN before a Prêt click.
+    attack, _aquitaine, _bourgogne = await bundle.open_meeting()
+    _wiring(bundle)
+    guild = MockGuild()
+    salon = await guild.create_text_channel("salon d'attaque")
+    await bundle.attacks.record_attack_channel(attack.id, salon.id)
+    bot = _FakeBot(bundle)
+    bot.guilds = [guild]  # type: ignore[assignment]
+    attack = next(a for a in await bundle.attacks.attacks() if a.id == attack.id)
+    await _open_battle_room(bot, guild, attack, bundle.kingdoms, "fr")
+    room = next(c for c in guild.channels if getattr(c, "user_limit", None) == 2)
+    strings = _strings("fr")
+    # battle-room-id-v1: one Prêt button PER SIDE (attacker/defender).
+    button = KingdomRoomReadyButton(
+        attack.id, strings["room_ready_attacker_button"].format(player="king-a"), side="attacker"
+    )
+    other_side = KingdomRoomReadyButton(
+        attack.id, strings["room_ready_defender_button"].format(player="lord-b"), side="defender"
+    )
+
+    # Drasah 18/10 v4: no lobby URL yet — the Prêt is politely refused.
+    raw = next(a for a in await bundle.attacks.attacks() if a.id == attack.id)
+    raw.lobby_url = ""
+    await bundle.store.upsert_attack(raw.to_mongo())
+    refused = MockInteraction(user=MockUser(id="king-a"), guild=guild, channel=room, locale="fr")
+    # type: ignore[arg-type]
+    await button.callback(refused)  # type: ignore[arg-type]
+    assert refused.response.message is not None
+    assert "ID" in str(refused.response.message.content or "")
+    fresh = next(a for a in await bundle.attacks.attacks() if a.id == attack.id)
+    assert not (fresh.score or {}).get("ready")
+    # The attacker shares the lobby URL — the gate opens.
+    await bundle.attacks.set_lobby_url(attack.id, "king-a", "aoe2de://lobby/42")
+
+    # battle-room-id-v1: the WRONG side is refused cleanly (each Prêt
+    # button belongs to ONE side of the scoreboard).
+    wrong = MockInteraction(user=MockUser(id="lord-b"), guild=guild, channel=room, locale="fr", client=bot)
+    # type: ignore[arg-type]
+    await button.callback(wrong)  # type: ignore[arg-type]
+    assert wrong.response.message is not None
+    # battle-room-id-v2: the refusal is worded for the player and
+    # self-destructs after 10 s (timer armed, never blocks the test).
+    assert "réservé à votre adversaire" in str(wrong.response.message.content or "")
+    fresh_wrong = next(a for a in await bundle.attacks.attacks() if a.id == attack.id)
+    assert not (fresh_wrong.score or {}).get("ready")
+
+    created: list[dict[str, Any]] = []
+
+    async def _fake_create_scheduled_event(**kwargs: Any) -> Any:
+        created.append(kwargs)
+
+        class _E:
+            id = 987654321
+
+        return _E()
+
+    guild.create_scheduled_event = _fake_create_scheduled_event  # type: ignore[method-assign]
+    first = MockInteraction(user=MockUser(id="king-a"), guild=guild, channel=room, locale="fr", client=bot)
+    # type: ignore[arg-type]
+    await button.callback(first)  # type: ignore[arg-type]
+    # battle-room-id-v1: NO ephemeral bubble — the interaction defers
+    # silently and the SCOREBOARD (the salon's single message) shows
+    # the Prêt on the attacker's side, the defender still waiting.
+    assert first.response.deferred
+    scoreboard = str(salon.messages[0].content or "")
+    assert "✅ Prêt" in scoreboard
+    assert "en attente du Prêt" in scoreboard
+    assert not created
+    second = MockInteraction(user=MockUser(id="lord-b"), guild=guild, channel=room, locale="fr", client=bot)
+    # type: ignore[arg-type]
+    await other_side.callback(second)  # type: ignore[arg-type]
+    # Both ready: the match event is created once, the ref is stored.
+    assert len(created) == 1
+    fresh = next(a for a in await bundle.attacks.attacks() if a.id == attack.id)
+    assert (fresh.score or {}).get("room_event_id") == 987654321
+    # v5: no extra post — the SAME salon message carries 🏆 and the
+    # « bonne game » footer once both are Prêt (no « La partie commence »).
+    # v2: the salon counts TWO messages (scoreboard + player ping).
+    assert len(salon.messages) == 2
+    final_view = {str(c.custom_id) for c in salon.messages[0].view.children}
+    assert any(cid.startswith("kingdoms:attack:room:result:") for cid in final_view)
+    assert "bonne game" in str(salon.messages[0].content or "")
+    assert not any("La partie commence" in (m.content or "") for m in salon.messages)
+    # A re-click by the same player never re-announces the match.
+    again = MockInteraction(user=MockUser(id="lord-b"), guild=guild, channel=room, locale="fr", client=bot)
+    # type: ignore[arg-type]
+    await other_side.callback(again)  # type: ignore[arg-type]
+    assert len(created) == 1
+    # v2: the 10 s self-destruction timer of the wrong-side refusal
+    # never blocks the suite.
+    import asyncio
+
+    for task in asyncio.all_tasks():
+        if task is not asyncio.current_task():
+            task.cancel()
+    await asyncio.sleep(0)
+
+
+async def test_room_url_button_locks_the_entry_then_a_changed_id_resets_the_ready() -> None:
+    """battle-room-id-v1: the 🔗 click instantly locks the shared view
+    (« saisie de l'ID en cours », disabled) and opens the modal — and a
+    CHANGED ID submitted through the modal resets both Prêts with the
+    dedicated ephemeral note."""
+    import asyncio
+
+    from kingdoms.mods.kingdoms.kingdom_attack_panel import (
+        KingdomRoomUrlButton,
+        KingdomRoomUrlModal,
+        _open_battle_room,
+        _strings,
+    )
+
+    bundle = ScoreBundle()
+    await bundle.launch_season()
+    await bundle.draw(26)
+    attack, _aquitaine, _bourgogne = await bundle.open_meeting()
+    _wiring(bundle)
+    guild = MockGuild()
+    salon = await guild.create_text_channel("salon d'attaque")
+    await bundle.attacks.record_attack_channel(attack.id, salon.id)
+    bot = _FakeBot(bundle)
+    bot.guilds = [guild]  # type: ignore[assignment]
+    attack = next(a for a in await bundle.attacks.attacks() if a.id == attack.id)
+    await _open_battle_room(bot, guild, attack, bundle.kingdoms, "fr")
+    room = next(c for c in guild.channels if getattr(c, "user_limit", None) == 2)
+    strings = _strings("fr")
+    # An ID is already shared and both players are Prêt.
+    await bundle.attacks.set_lobby_url(attack.id, "king-a", "aoe2de://lobby/1")
+    ready = await bundle.attacks.mark_ready(attack.id, "king-a")
+    await bundle.attacks.mark_ready(ready.id, "lord-b")
+    # The attacker asks for a modification — the shared view LOCKS.
+    button = KingdomRoomUrlButton(attack.id, strings["room_id_modify_button"])
+    click = MockInteraction(user=MockUser(id="king-a"), guild=guild, channel=room, locale="fr", client=bot)
+    await button.callback(click)  # type: ignore[arg-type]
+    assert click.response.modal is not None
+    assert isinstance(click.response.modal, KingdomRoomUrlModal)
+    locked = salon.messages[0].view.children
+    url_buttons = [b for b in locked if str(b.custom_id or "").startswith("kingdoms:attack:room:url:")]
+    assert len(url_buttons) == 1
+    assert url_buttons[0].item.label == strings["room_id_pending_button"]  # type: ignore[attr-defined]
+    # beta-retours-v1 (Drasah 06/11, point 1): the ⏳ face stays ENABLED —
+    # the SAME player may re-click (the modal reopens), only the OTHER
+    # player is refused while the PERSISTED stamp lives (restart-proof).
+    assert url_buttons[0].item.disabled is False  # type: ignore[attr-defined]
+    # A CHANGED ID through the modal resets both Prêts (ephemeral note).
+    modal = click.response.modal
+    modal.url_input._value = "aoe2de://lobby/2"  # type: ignore[attr-defined]
+    submit = MockInteraction(user=MockUser(id="king-a"), guild=guild, channel=room, locale="fr", client=bot)
+    await modal.on_submit(submit)  # type: ignore[arg-type]
+    # battle-room-id-v2: the modal submit defers silently — the reset
+    # of the Prêts reads directly on the scoreboard (no ephemeral note).
+    assert submit.response.deferred
+    fresh = next(a for a in await bundle.attacks.attacks() if a.id == attack.id)
+    assert fresh.lobby_url == "aoe2de://lobby/2"
+    assert (fresh.score or {}).get("ready") == []
+    assert "all_ready" not in (fresh.score or {})
+    scoreboard = str(salon.messages[0].content or "")
+    assert "aoe2de://lobby/2" in scoreboard
+    # The pending unlock task (grace timer) never blocks the suite.
+    for task in asyncio.all_tasks():
+        if task is not asyncio.current_task():
+            task.cancel()
+    await asyncio.sleep(0)
+
+
+async def test_sabotage_phase_service_both_sides_and_resolution() -> None:
+    """Drasah 18/10 v4 (phase Sabotage DM, après le draft): BOTH sides
+    with the bought techno may remove up to 2 enemy civs while the
+    meeting is DEFENDED and T is not reached; the phase resolves when
+    both camps settle — an AI defender is settled from the start."""
+    import pytest as _pytest
+
+    from kingdoms.mods.kingdoms.attacks import AttackStateError, PickBanStateError
+
+    bundle = ScoreBundle()
+    await bundle.launch_season()
+    await bundle.draw(26)
+    # meeting(): the draft is resolved, T = 18:00, now is frozen at
+    # 17:50 — the sabotage phase is OPEN.
+    attack, aquitaine, bourgogne = await bundle.meeting()
+    await bundle.stock(aquitaine, sabotage=1)
+    await bundle.stock(bourgogne, sabotage=1)
+
+    # The attacker snipes the defender's first-ranked civ.
+    moved = await bundle.attacks.sabotage_techno(attack.id, "king-a", "huns")
+    assert (moved.pickban or {}).get("attacker_sabotages") == ["huns"]
+    # The DEFENDER may sabotage too (v4 — attacker-only rule gone).
+    moved_b = await bundle.attacks.sabotage_techno(attack.id, "lord-b", "francs")
+    assert (moved_b.pickban or {}).get("defender_sabotages") == ["francs"]
+    # A double snipe or an outsider civ is refused.
+    with _pytest.raises(AttackStateError):
+        await bundle.attacks.sabotage_techno(attack.id, "king-a", "huns")
+    with _pytest.raises(AttackStateError):
+        await bundle.attacks.sabotage_techno(attack.id, "king-a", "francs")
+    # No techno, no sabotage (the stock of Bourgogne is consumed? no —
+    # but a kingdom without the purchase is refused).
+    # Settling one side alone resolves nothing.
+    first = await bundle.attacks.sabotage_settle(attack.id, "king-a")
+    assert not (first.pickban or {}).get("sabotage_resolved")
+    assert (first.pickban or {}).get("sabotage_settled_attacker") is True
+    # The second settle resolves the phase exactly once.
+    second = await bundle.attacks.sabotage_settle(attack.id, "lord-b")
+    assert (second.pickban or {}).get("sabotage_resolved") is True
+    again = await bundle.attacks.sabotage_settle(attack.id, "lord-b")
+    assert (again.pickban or {}).get("sabotage_resolved") is True
+    # After the resolution the window is closed.
+    with _pytest.raises(PickBanStateError):
+        await bundle.attacks.sabotage_techno(attack.id, "king-a", "perses")
+    # A third party may never sabotage.
+    with _pytest.raises(PickBanStateError):
+        await bundle.attacks.sabotage_techno(attack.id, "stranger", "perses")
+
+
+async def test_sabotage_techno_consumes_the_bought_charge() -> None:
+    """sabotage-consommable-v1 (Drasah 22/10): one bought Sabotage
+    charge is CONSUMED at the snipe — the remaining stock decrements,
+    a refused pick (bad civ, cap reached, empty stock) never consumes
+    a charge, and the 2-per-attack cap stays independent of the
+    bought stock."""
+    from kingdoms.mods.kingdoms.attacks import (
+        AttackStateError,
+        SabotageError,
+    )
+
+    bundle = ScoreBundle()
+    await bundle.launch_season()
+    await bundle.draw(26)
+    attack, aquitaine, _bourgogne = await bundle.meeting()
+    await bundle.stock(aquitaine, sabotage=3)
+
+    # First snipe: the charge is spent (3 bought -> 2 left).
+    moved = await bundle.attacks.sabotage_techno(attack.id, "king-a", "huns")
+    assert (moved.pickban or {}).get("attacker_sabotages") == ["huns"]
+    state = await bundle.attacks.technology_state(aquitaine)
+    assert state.purchases.get("sabotage") == 2
+
+    # A REFUSED pick never consumes a charge (wrong civ).
+    with pytest.raises(AttackStateError):
+        await bundle.attacks.sabotage_techno(attack.id, "king-a", "francs")
+    state = await bundle.attacks.technology_state(aquitaine)
+    assert state.purchases.get("sabotage") == 2
+
+    # Second snipe -> 1 left; the third hits the 2-per-attack CAP
+    # before touching the stock.
+    await bundle.attacks.sabotage_techno(attack.id, "king-a", "perses")
+    with pytest.raises(SabotageError):
+        await bundle.attacks.sabotage_techno(attack.id, "king-a", "byzantins")
+    state = await bundle.attacks.technology_state(aquitaine)
+    assert state.purchases.get("sabotage") == 1
+
+    # An empty stock refuses the snipe even with civs available
+    # (the defender side — its per-attack cap is still fresh).
+    await bundle.stock(_bourgogne, sabotage=1)
+    await bundle.attacks.sabotage_techno(attack.id, "lord-b", "francs")
+    with pytest.raises(AttackStateError):
+        await bundle.attacks.sabotage_techno(attack.id, "lord-b", "bretons")
+    state = await bundle.attacks.technology_state(_bourgogne)
+    assert state.purchases.get("sabotage") == 0
+
+
+async def test_sabotage_dm_buttons_flow_and_no_resources_notice() -> None:
+    """The 🗡️ DM button opens the ephemeral menu (no techno → the
+    sab_no_resources notice); the techno path removes a civ and the
+    ⚔️ Passer buttons of both sides close the phase."""
+    from kingdoms.mods.kingdoms.kingdom_attack_panel import (
+        KingdomSabotageOpenButton,
+        KingdomSabotagePassButton,
+        _strings,
+    )
+
+    bundle = ScoreBundle()
+    await bundle.launch_season()
+    await bundle.draw(26)
+    attack, aquitaine, _bourgogne = await bundle.meeting()
+    await bundle.stock(aquitaine, sabotage=1)
+    _wiring(bundle)
+    guild = MockGuild()
+    strings = _strings("fr")
+
+    open_btn = KingdomSabotageOpenButton(attack.id, "king-a", strings["sab_open_button"])
+    assert len(str(open_btn.custom_id)) <= 100
+
+    # The DEFENDER has no techno — his button shows the notice.
+    defender_btn = KingdomSabotageOpenButton(attack.id, "lord-b", strings["sab_open_button"])
+    click_b = MockInteraction(user=MockUser(id="lord-b"), guild=guild, channel=None, locale="fr")
+    # type: ignore[arg-type]
+    await defender_btn.callback(click_b)  # type: ignore[arg-type]
+    assert click_b.response.message is not None
+    assert "sabotage" in str(click_b.response.message.content or "").lower()
+
+    # The ATTACKER opens the ephemeral menu — techno only (no volière).
+    click = MockInteraction(user=MockUser(id="king-a"), guild=guild, channel=None, locale="fr")
+    # type: ignore[arg-type]
+    await open_btn.callback(click)  # type: ignore[arg-type]
+    assert click.response.message is not None
+    menu = click.response.message.view
+    assert menu is not None
+    labels = [str(getattr(child, "label", "")) for child in menu.children]
+    assert strings["sab_techno"] in labels
+    assert strings["sab_pass_button"] not in labels  # Passer stays in the DM
+
+    # The techno path: pick one enemy civ — it is removed.
+    techno = next(c for c in menu.children if str(getattr(c, "label", "")) == strings["sab_techno"])
+    step = MockInteraction(user=MockUser(id="king-a"), guild=guild, channel=None, locale="fr")  # type: ignore[arg-type]
+    await techno.callback(step)  # type: ignore[arg-type]
+    civ_view = step.response.message.view if step.response.message is not None else None
+    assert civ_view is not None
+    select = next(c for c in civ_view.children if hasattr(c, "callback"))
+    select._values = ["huns"]  # type: ignore[attr-defined]
+    pick = MockInteraction(user=MockUser(id="king-a"), guild=guild, channel=None, locale="fr")  # type: ignore[arg-type]
+    await select.callback(pick)  # type: ignore[arg-type]
+    fresh = next(a for a in await bundle.attacks.attacks() if a.id == attack.id)
+    assert (fresh.pickban or {}).get("attacker_sabotages") == ["huns"]
+
+    # Both Passer clicks close the phase; the second answers phase_done.
+    passer_a = KingdomSabotagePassButton(attack.id, "king-a", strings["sab_pass_button"])
+    first = MockInteraction(user=MockUser(id="king-a"), guild=guild, channel=None, locale="fr")
+    # type: ignore[arg-type]
+    await passer_a.callback(first)  # type: ignore[arg-type]
+    assert "attente" in str(first.response.message.content or "")
+    passer_b = KingdomSabotagePassButton(attack.id, "lord-b", strings["sab_pass_button"])
+    second = MockInteraction(user=MockUser(id="lord-b"), guild=guild, channel=None, locale="fr")
+    # type: ignore[arg-type]
+    await passer_b.callback(second)  # type: ignore[arg-type]
+    resolved = next(a for a in await bundle.attacks.attacks() if a.id == attack.id)
+    assert (resolved.pickban or {}).get("sabotage_resolved") is True
+    # A late open is politely refused (phase over).
+    late = MockInteraction(user=MockUser(id="king-a"), guild=guild, channel=None, locale="fr")  # type: ignore[arg-type]
+    await open_btn.callback(late)  # type: ignore[arg-type]
+    assert "termin" in str(late.response.message.content or "").lower()
+
+
+async def test_cleanup_battle_rooms_waits_the_delay_after_the_resolution() -> None:
+    """Drasah 18/10 v4 (live incident): the vocal must NEVER disappear
+    mid-game — the room is deleted 30 minutes AFTER a winner is known."""
+    from datetime import UTC, datetime, timedelta
+
+    from kingdoms.mods.kingdoms.kingdom_attack_panel import (
+        _cleanup_battle_rooms_safe,
+        _open_battle_room,
+    )
+
+    bundle = ScoreBundle()
+    await bundle.launch_season()
+    await bundle.draw(26)
+    attack, aquitaine, _bourgogne = await bundle.open_meeting()
+    _wiring(bundle)
+    guild = MockGuild()
+    # restructuration-serveur-v1 b: the attack's OWN salon follows the
+    # voice room into the same cleanup window.
+    salon = await guild.create_text_channel("salon d'attaque")
+    await bundle.attacks.record_attack_channel(attack.id, salon.id)
+    bot = _FakeBot(bundle)
+    attack = next(a for a in await bundle.attacks.attacks() if a.id == attack.id)
+    await _open_battle_room(bot, guild, attack, bundle.kingdoms, "fr")
+    fresh = next(a for a in await bundle.attacks.attacks() if a.id == attack.id)
+    room_id = int(fresh.score["room_channel_id"])
+    assert guild.get_channel(room_id) is not None
+    assert guild.get_channel(salon.id) is not None
+
+    # A winner is declared — the resolution timestamp is FRESH (the
+    # attacks clock is frozen at 2026-10-11, the cleanup tick reads
+    # the real clock, so pin the resolution on the real now).
+    # The cleanup tick reads bot.guilds, not the passed guild — point
+    # the fake bot at the real MockGuild holding the room.
+    bot.guilds = [guild]
+    await bundle.attacks.resolve(attack.id, aquitaine)
+    resolved = next(a for a in await bundle.attacks.attacks() if a.id == attack.id)
+    resolved.resolved_at = datetime.now(UTC)
+    await bundle.store.upsert_attack(resolved.to_mongo())
+    assert [c for c in guild.channels if getattr(c, "user_limit", None) == 2]
+    # The tick right after the resolution keeps the room alive.
+    kept = await _cleanup_battle_rooms_safe(bot, guild, bundle.attacks)
+    assert kept == 0
+    assert guild.get_channel(room_id) is not None
+    assert guild.get_channel(salon.id) is not None
+    # Simulate the 30-minute grace elapsing: push the resolution back.
+    resolved = next(a for a in await bundle.attacks.attacks() if a.id == attack.id)
+    resolved.resolved_at = datetime.now(UTC) - timedelta(minutes=31)
+    await bundle.store.upsert_attack(resolved.to_mongo())
+    removed = await _cleanup_battle_rooms_safe(bot, guild, bundle.attacks)
+    assert removed == 2  # the voice room AND the attack salon
+    assert guild.get_channel(room_id) is None
+    assert guild.get_channel(salon.id) is None
+    cleaned = next(a for a in await bundle.attacks.attacks() if a.id == attack.id)
+    assert (cleaned.score or {}).get("room_cleaned")
+    assert (cleaned.score or {}).get("attack_salon_cleaned")
+
+
+async def test_sweep_deletes_leftovers_of_a_flagged_clean_room() -> None:
+    """battle-role-sweep-v1 (Drasah 20/10, live lockout incident): the
+    cleanup flags the room ``room_cleaned`` even when Discord REFUSED
+    the delete — the leftover channel/role is flagged clean and never
+    retried. The sweep re-deletes by ref, flag or not."""
+    from datetime import UTC, datetime, timedelta
+
+    from kingdoms.mods.kingdoms.kingdom_attack_panel import (
+        _cleanup_battle_rooms_safe,
+        _open_battle_room,
+    )
+    from tests.mocks.discord_mock import MockRole
+
+    bundle = ScoreBundle()
+    await bundle.launch_season()
+    await bundle.draw(26)
+    attack, aquitaine, _bourgogne = await bundle.open_meeting()
+    _wiring(bundle)
+    guild = MockGuild()
+    salon = await guild.create_text_channel("salon d'attaque")
+    await bundle.attacks.record_attack_channel(attack.id, salon.id)
+    bot = _FakeBot(bundle)
+    attack = next(a for a in await bundle.attacks.attacks() if a.id == attack.id)
+    await _open_battle_room(bot, guild, attack, bundle.kingdoms, "fr")
+    fresh = next(a for a in await bundle.attacks.attacks() if a.id == attack.id)
+    room_id = int(fresh.score["room_channel_id"])
+    role_id = int(fresh.score["room_role_id"])
+    bot.guilds = [guild]
+
+    # The lockout simulation: the flags say cleaned, Discord refused.
+    await bundle.attacks.resolve(attack.id, aquitaine)
+    resolved = next(a for a in await bundle.attacks.attacks() if a.id == attack.id)
+    resolved.resolved_at = datetime.now(UTC) - timedelta(minutes=31)
+    await bundle.store.upsert_attack(resolved.to_mongo())
+    await bundle.attacks.mark_room_cleaned(attack.id)
+    await bundle.attacks.mark_attack_salon_cleaned(attack.id)
+    # The room role never disappears on its own in the mock: bind the
+    # in-memory delete like the real API would.
+    role = guild.get_role(role_id)
+    assert isinstance(role, MockRole)
+
+    def _bind_delete(target: MockRole) -> None:
+        async def _delete(*, reason: str | None = None) -> None:
+            guild._roles.pop(target.id, None)
+
+        target.delete = _delete  # type: ignore[method-assign]
+
+    if role is not None:
+        _bind_delete(role)
+
+    # The main pass skips everything (flags set) — the sweep deletes.
+    played = await _cleanup_battle_rooms_safe(bot, guild, bundle.attacks)
+    assert played == 0  # the flagged pass found nothing to do
+    assert guild.get_channel(room_id) is None
+    assert guild.get_channel(salon.id) is None
+    assert guild.get_role(role_id) is None
+    # Idempotent: a second sweep on the clean guild touches nothing.
+    assert await _cleanup_battle_rooms_safe(bot, guild, bundle.attacks) == 0
+
+
+async def test_sweep_keeps_a_live_room_and_deletes_orphan_battle_roles() -> None:
+    """battle-role-sweep-v1: a name-matching battle role claimed by NO
+    attack (a record failure at the room open) is swept; the role and
+    room of a LIVE meeting survive the sweep untouched."""
+    from kingdoms.mods.kingdoms.kingdom_attack_panel import (
+        _cleanup_battle_rooms_safe,
+        _open_battle_room,
+    )
+    from tests.mocks.discord_mock import MockRole
+
+    bundle = ScoreBundle()
+    await bundle.launch_season()
+    await bundle.draw(26)
+    attack, _aquitaine, _bourgogne = await bundle.open_meeting()
+    _wiring(bundle)
+    guild = MockGuild()
+    bot = _FakeBot(bundle)
+    attack = next(a for a in await bundle.attacks.attacks() if a.id == attack.id)
+    await _open_battle_room(bot, guild, attack, bundle.kingdoms, "fr")
+    fresh = next(a for a in await bundle.attacks.attacks() if a.id == attack.id)
+    live_role_id = int(fresh.score["room_role_id"])
+    live_room_id = int(fresh.score["room_channel_id"])
+    bot.guilds = [guild]
+
+    # An orphan: the « Bataille … » naming pattern, claimed by nothing.
+    orphan = await guild.create_role(name="Bataille orpheline")
+    decoy = await guild.create_role(name="Royaumes Lord")
+    for target in (orphan, decoy, guild.get_role(live_role_id)):
+        assert isinstance(target, MockRole)
+
+        def _bind_delete(t: MockRole) -> None:
+            async def _delete(*, reason: str | None = None) -> None:
+                guild._roles.pop(t.id, None)
+
+            t.delete = _delete  # type: ignore[method-assign]
+
+        _bind_delete(target)
+
+    played = await _cleanup_battle_rooms_safe(bot, guild, bundle.attacks)
+    assert played == 0  # the live meeting keeps everything
+    assert guild.get_channel(live_room_id) is not None
+    assert guild.get_role(live_role_id) is not None
+    assert guild.get_role(orphan.id) is None  # swept
+    assert guild.get_role(decoy.id) is not None  # never a battle role
+
+
+async def test_result_button_needs_both_ready_and_posts_the_conquest_recap() -> None:
+    """battle-room-id-v2: 🏆 refuses before both Prêt; the winner flow
+    is TWO-STAGE (select → EXPLICIT confirmation, anti-missclick) and
+    the result applies only with the OTHER player's confirm (review
+    view — never a second declaration). The resolved match posts the
+    Géopolitique conquest recap with its detail thread (ID reused)."""
+    import asyncio
+
+    from kingdoms.mods.kingdoms.kingdom_attack_panel import (
+        KingdomRoomResultButton,
+        _open_battle_room,
+        _strings,
+    )
+
+    bundle = ScoreBundle()
+    await bundle.launch_season()
+    await bundle.draw(26)
+    attack, aquitaine, _bourgogne = await bundle.open_meeting()
+    _wiring(bundle)
+    guild = MockGuild()
+    geo = MockTextChannel(name="Géopolitique", guild=guild)
+    guild._channels[geo.id] = geo
+    bot = _FakeBot(bundle)
+    bot.guilds = [guild]  # type: ignore[assignment]
+    attack = next(a for a in await bundle.attacks.attacks() if a.id == attack.id)
+    await _open_battle_room(bot, guild, attack, bundle.kingdoms, "fr")
+    room = next(c for c in guild.channels if getattr(c, "user_limit", None) == 2)
+    strings = _strings("fr")
+    await bundle.attacks.set_lobby_url(attack.id, "king-a", "4242")
+    button = KingdomRoomResultButton(attack.id, strings["result_button"])
+    # Not both Prêt yet — the stale 🏆 click is politely refused.
+    early = MockInteraction(user=MockUser(id="king-a"), guild=guild, channel=room, locale="fr")
+    await button.callback(early)  # type: ignore[arg-type]
+    assert early.response.message is not None
+    assert "Prêts" in str(early.response.message.content or "")
+    # Both Prêt — the attacker starts the two-stage declaration.
+    await bundle.attacks.mark_ready(attack.id, "king-a")
+    await bundle.attacks.mark_ready(attack.id, "lord-b")
+    click_a = MockInteraction(user=MockUser(id="king-a"), guild=guild, channel=room, locale="fr", client=bot)
+    await button.callback(click_a)  # type: ignore[arg-type]
+    # Stage 1: the ephemeral winner select.
+    assert click_a.response.message is not None
+    select = click_a.response.message.view.children[0]  # type: ignore[union-attr]
+    select._values = [str(aquitaine)]  # type: ignore[attr-defined]
+    pick_a = MockInteraction(user=MockUser(id="king-a"), guild=guild, channel=room, locale="fr", client=bot)
+    await select.callback(pick_a)  # type: ignore[arg-type,union-attr,func-returns-value]
+    # Stage 2: the explicit confirmation (anti-missclick — the ✏️
+    # Modifier loops back to the select, never a silent declaration).
+    assert pick_a.response.message is not None
+    assert "confirmer" in str(pick_a.response.message.content or "").lower()
+    labels = [str(c.label) for c in pick_a.response.message.view.children]  # type: ignore[union-attr]
+    assert labels == [strings["result_confirm_button"], strings["result_edit_button"]]
+    # The ✏️ Modifier loops back to the winner select via an edit.
+    change = pick_a.response.message.view.children[1]  # type: ignore[union-attr]
+    redo = MockInteraction(user=MockUser(id="king-a"), guild=guild, channel=room, locale="fr", client=bot)
+    await change.callback(redo)  # type: ignore[arg-type,func-returns-value]
+    assert "Qui remporte" in str(redo.response.message.content or "")
+    # The attacker settles on Aquitaine again and CONFIRMS.
+    select2 = redo.response.message.view.children[0]  # type: ignore[union-attr]
+    select2._values = [str(aquitaine)]  # type: ignore[attr-defined]
+    pick_a2 = MockInteraction(user=MockUser(id="king-a"), guild=guild, channel=room, locale="fr", client=bot)
+    await select2.callback(pick_a2)  # type: ignore[arg-type,union-attr,func-returns-value]
+    confirm = pick_a2.response.message.view.children[0]  # type: ignore[union-attr]
+    okay = MockInteraction(user=MockUser(id="king-a"), guild=guild, channel=room, locale="fr", client=bot)
+    await confirm.callback(okay)  # type: ignore[arg-type,func-returns-value]
+    assert okay.response.message is not None
+    assert "Résultat enregistré" in str(okay.response.message.content or "")
+    # PENDING until the other side confirms — the attack is NOT over.
+    fresh = next(a for a in await bundle.attacks.attacks() if a.id == attack.id)
+    assert not fresh.is_over
+    # The defender can no longer DECLARE a winner — the review view
+    # only offers ✅ Confirmer le résultat / ⚖️ Contester.
+    click_b = MockInteraction(user=MockUser(id="lord-b"), guild=guild, channel=room, locale="fr", client=bot)
+    await button.callback(click_b)  # type: ignore[arg-type]
+    assert click_b.response.message is not None
+    assert "a déclaré" in str(click_b.response.message.content or "")
+    review = click_b.response.message.view.children  # type: ignore[union-attr]
+    review_labels = [str(c.label) for c in review]
+    assert review_labels == [strings["result_review_confirm_button"], strings["result_review_contest_button"]]
+    # The defender CONFIRMS the same winner — the result applies now.
+    confirm_b = review[0]
+    okay_b = MockInteraction(user=MockUser(id="lord-b"), guild=guild, channel=room, locale="fr", client=bot)
+    await confirm_b.callback(okay_b)  # type: ignore[arg-type,func-returns-value]
+    assert okay_b.response.message is not None
+    fresh = next(a for a in await bundle.attacks.attacks() if a.id == attack.id)
+    assert fresh.is_over
+    assert str(fresh.winner_kingdom_id) == str(aquitaine)
+    # The conquest recap landed in Géopolitique with its detail thread.
+    assert geo.messages, "the conquest recap landed in Géopolitique"
+    assert "a conquis" in str(geo.messages[0].content or "")
+    assert geo.threads, "the recap spawned its detail thread"
+    assert geo.threads[0].name == "Détail de la conquête"
+    detail = str(geo.threads[0].messages[0].content or "")
+    assert "4242" in detail  # the game ID declared earlier is reused
+    assert "jouait" in detail  # the played civilizations
+    # v2: the armed self-destruction timers never block the suite.
+    for task in asyncio.all_tasks():
+        if task is not asyncio.current_task():
+            task.cancel()
+    await asyncio.sleep(0)
+
+
+async def test_result_contest_opens_a_dispute_kept_until_the_admins_arbitrate() -> None:
+    """battle-room-id-v2: a CONTESTED review (contrary declaration)
+    opens the dispute — the ephemeral reminder STAYS (no timer, the
+    admins arbitrate) and mentions taking contact with an admin."""
+    import asyncio
+
+    from kingdoms.mods.kingdoms.kingdom_attack_panel import (
+        KingdomRoomResultButton,
+        _open_battle_room,
+        _strings,
+    )
+
+    bundle = ScoreBundle()
+    await bundle.launch_season()
+    await bundle.draw(26)
+    attack, aquitaine, _bourgogne = await bundle.open_meeting()
+    _wiring(bundle)
+    guild = MockGuild()
+    bot = _FakeBot(bundle)
+    bot.guilds = [guild]  # type: ignore[assignment]
+    attack = next(a for a in await bundle.attacks.attacks() if a.id == attack.id)
+    await _open_battle_room(bot, guild, attack, bundle.kingdoms, "fr")
+    room = next(c for c in guild.channels if getattr(c, "user_limit", None) == 2)
+    strings = _strings("fr")
+    await bundle.attacks.set_lobby_url(attack.id, "king-a", "4242")
+    await bundle.attacks.mark_ready(attack.id, "king-a")
+    await bundle.attacks.mark_ready(attack.id, "lord-b")
+    button = KingdomRoomResultButton(attack.id, strings["result_button"])
+    # The attacker declares Aquitaine — select then confirm.
+    click_a = MockInteraction(user=MockUser(id="king-a"), guild=guild, channel=room, locale="fr", client=bot)
+    await button.callback(click_a)  # type: ignore[arg-type]
+    select = click_a.response.message.view.children[0]  # type: ignore[union-attr]
+    select._values = [str(aquitaine)]  # type: ignore[attr-defined]
+    pick_a = MockInteraction(user=MockUser(id="king-a"), guild=guild, channel=room, locale="fr", client=bot)
+    await select.callback(pick_a)  # type: ignore[arg-type,union-attr,func-returns-value]
+    confirm = pick_a.response.message.view.children[0]  # type: ignore[union-attr]
+    okay = MockInteraction(user=MockUser(id="king-a"), guild=guild, channel=room, locale="fr", client=bot)
+    await confirm.callback(okay)  # type: ignore[arg-type,func-returns-value]
+    # The defender contests — the contrary declaration opens a dispute.
+    click_b = MockInteraction(user=MockUser(id="lord-b"), guild=guild, channel=room, locale="fr", client=bot)
+    await button.callback(click_b)  # type: ignore[arg-type]
+    contest = click_b.response.message.view.children[1]  # type: ignore[union-attr]
+    assert str(contest.label) == strings["result_review_contest_button"]
+    contest_b = MockInteraction(user=MockUser(id="lord-b"), guild=guild, channel=room, locale="fr", client=bot)
+    await contest.callback(contest_b)  # type: ignore[arg-type,func-returns-value]
+    assert contest_b.response.message is not None
+    content = str(contest_b.response.message.content or "")
+    assert "contradictoire" in content
+    assert "admin" in content.lower()
+    fresh = next(a for a in await bundle.attacks.attacks() if a.id == attack.id)
+    assert (fresh.score or {}).get("disputed")
+    assert not fresh.is_over
+    # The dispute freezes the flow: a new 🏆 click shows the SAME
+    # dispute reminder (staying message), never a fresh select.
+    later = MockInteraction(user=MockUser(id="king-a"), guild=guild, channel=room, locale="fr", client=bot)
+    await button.callback(later)  # type: ignore[arg-type]
+    assert "contradictoire" in str(later.response.message.content or "")
+    assert later.response.message.view is None or not later.response.message.view.children
+    for task in asyncio.all_tasks():
+        if task is not asyncio.current_task():
+            task.cancel()
+    await asyncio.sleep(0)
+
+
+async def test_room_row_order_and_duel_names() -> None:
+    """battle-room-id-v2: once both players are Prêt the single salon
+    message carries FOUR components in the Drasah order — Prêt
+    attaquant | 🔗 ID | 🏆 Déclarer le vainqueur | Prêt défenseur —
+    and the duel names (🗡️ salon, ⚔️ vocal) are slug-based with a
+    numbered suffix on collision, never the legacy prose names."""
+    from kingdoms.mods.kingdoms.kingdom_attack_panel import (
+        _open_battle_room,
+        _room_channel_name,
+        _strings,
+    )
+
+    bundle = ScoreBundle()
+    await bundle.launch_season()
+    await bundle.draw(26)
+    attack, _aquitaine, _bourgogne = await bundle.open_meeting()
+    _wiring(bundle)
+    guild = MockGuild()
+    salon = await guild.create_text_channel("salon d'attaque")
+    await bundle.attacks.record_attack_channel(attack.id, salon.id)
+    bot = _FakeBot(bundle)
+    bot.guilds = [guild]  # type: ignore[assignment]
+    attack = next(a for a in await bundle.attacks.attacks() if a.id == attack.id)
+    await _open_battle_room(bot, guild, attack, bundle.kingdoms, "fr")
+    strings = _strings("fr")
+    await bundle.attacks.set_lobby_url(attack.id, "king-a", "4242")
+    await bundle.attacks.mark_ready(attack.id, "king-a")
+    await bundle.attacks.mark_ready(attack.id, "lord-b")
+    fresh = next(a for a in await bundle.attacks.attacks() if a.id == attack.id)
+    from kingdoms.mods.kingdoms.kingdom_attack_panel import _refresh_room_message_safe
+
+    await _refresh_room_message_safe(bot, fresh, "fr")
+    ids = [str(c.custom_id) for c in salon.messages[0].view.children]
+    assert len(ids) == 4
+    assert ids[0].startswith("kingdoms:attack:room:ready:") and ids[0].endswith(":attacker")
+    assert ids[1].startswith("kingdoms:attack:room:url:")
+    assert ids[2].startswith("kingdoms:attack:room:result:")
+    assert ids[3].startswith("kingdoms:attack:room:ready:") and ids[3].endswith(":defender")
+    labels = [str(c.item.label) for c in salon.messages[0].view.children]  # type: ignore[attr-defined]
+    assert labels[0] == strings["room_ready_attacker_button"].format(player="King A")
+    assert labels[3] == strings["room_ready_defender_button"].format(player="Lord B")
+    # The duel names: the VOCAL room wears the ⚔️ prefix (a defender
+    # is present), the TEXT salon the 🗡️ prefix — slug, -vs- separator,
+    # and a numbered suffix separates SIMULTANEOUS duels on the names.
+    room = next(c for c in guild.channels if getattr(c, "user_limit", None) == 2)
+    assert room.name == "⚔️-king-a-vs-lord-b"
+    twin = _room_channel_name(guild, "🗡️", "King A", "Lord B")
+    assert twin == "🗡️-king-a-vs-lord-b"
+    # The twin salon really exists now — the NEXT duel steps to -2.
+    await guild.create_text_channel(twin)
+    again = _room_channel_name(guild, "🗡️", "king-a", "lord-b")
+    assert again == "🗡️-king-a-vs-lord-b-2"
+
+
+async def test_room_open_pings_both_players_but_never_the_ai() -> None:
+    """battle-room-id-v2: the salon PINGS the two players when the
+    room opens — against the AI defense only the ATTACKER is pinged
+    (no ping-able user on the other side), the scoreboard shows 🤖 IA."""
+    import asyncio
+
+    from kingdoms.mods.kingdoms.kingdom_attack_panel import _open_battle_room
+
+    bundle = ScoreBundle()
+    await bundle.launch_season()
+    await bundle.draw(26)
+    attack, _aquitaine, _bourgogne = await bundle.open_meeting()
+    _wiring(bundle)
+    guild = MockGuild()
+    salon = await guild.create_text_channel("salon d'attaque")
+    await bundle.attacks.record_attack_channel(attack.id, salon.id)
+    bot = _FakeBot(bundle)
+    bot.guilds = [guild]  # type: ignore[assignment]
+    attack = next(a for a in await bundle.attacks.attacks() if a.id == attack.id)
+    # The AI took the defense — the ping targets the attacker alone.
+    attack.ai_defender = True
+    await bundle.store.upsert_attack(attack.to_mongo())
+    await _open_battle_room(bot, guild, attack, bundle.kingdoms, "fr")
+    pings = [m for m in salon.messages if "à vos armes" in str(m.content or "")]
+    assert len(pings) == 1
+    assert "<@king-a>" in str(pings[0].content or "")
+    assert "<@lord-b>" not in str(pings[0].content or "")
+    scoreboard = str(salon.messages[0].content or "")
+    assert "🤖 IA" in scoreboard
+    for task in asyncio.all_tasks():
+        if task is not asyncio.current_task():
+            task.cancel()
+    await asyncio.sleep(0)
+
+
+async def test_ai_room_shows_the_raw_level_and_the_disclaimer() -> None:
+    """battle-ai-rdv-v1: vs the bot AI the scoreboard carries the RAW
+    level (« 🤖 IA — niv. N/5 », Traquenard-aware) and the short
+    multiplayer-ID disclaimer sits right under it."""
+    from kingdoms.mods.kingdoms.kingdom_attack_panel import _open_battle_room
+
+    bundle = ScoreBundle()
+    await bundle.launch_season()
+    await bundle.draw(26)
+    attack, _aquitaine, _bourgogne = await bundle.open_meeting()
+    _wiring(bundle)
+    guild = MockGuild()
+    salon = await guild.create_text_channel("salon d'attaque")
+    await bundle.attacks.record_attack_channel(attack.id, salon.id)
+    bot = _FakeBot(bundle)
+    bot.guilds = [guild]  # type: ignore[assignment]
+    attack = next(a for a in await bundle.attacks.attacks() if a.id == attack.id)
+    attack.ai_defender = True
+    effects = dict(attack.effects or {})
+    effects["ai_level"] = 4
+    attack.effects = effects
+    await bundle.store.upsert_attack(attack.to_mongo())
+    await _open_battle_room(bot, guild, attack, bundle.kingdoms, "fr")
+    scoreboard = str(salon.messages[0].content or "")
+    assert "🤖 IA — niv. 4/5" in scoreboard
+    assert "multijoueur" in scoreboard
+    assert "fraude" in scoreboard
+
+
+async def test_error_notes_self_destruct_quickly(monkeypatch: pytest.MonkeyPatch) -> None:
+    """hygiene-ephemere-v1 (Drasah 30/10): an ERROR bubble is never
+    news — the followup and response refusals self-destruct after a
+    short TTL instead of dangling under the player's DM lane."""
+    import asyncio
+
+    from kingdoms.mods.kingdoms import kingdom_attack_panel as panel
+
+    monkeypatch.setattr(panel, "_ERROR_NOTE_SECONDS", 0.01)
+
+    follow = MockInteraction(user=MockUser(id="king-a"), locale="fr")  # type: ignore[arg-type]
+    await panel._error_note_followup(follow, "❌ refus de test")
+    assert len(follow.followup.messages) == 1
+    await asyncio.sleep(0.05)
+    assert follow.followup.messages == []  # the bubble swept itself
+
+    direct = MockInteraction(user=MockUser(id="king-a"), locale="fr")  # type: ignore[arg-type]
+    await panel._error_note_send(direct, "❌ refus de test")
+    assert direct.response.message is not None
+    await asyncio.sleep(0.05)
+    assert direct.original_deleted is True  # the response swept itself
+
+
+async def test_declare_wizard_dies_with_the_declaration() -> None:
+    """hygiene-ephemere-v1 (Drasah 30/10): the « Sous l'identité »
+    wizard is DELETED the moment the attack is declared — the window
+    can never be reused afterwards (Drasah's 19:49 live report)."""
+    import asyncio
+
+    from kingdoms.mods.kingdoms import kingdom_attack_panel as panel
+    from kingdoms.mods.kingdoms.kingdom_persistent import _wiring as _panel_wiring
+
+    bundle = PhasesBundle()
+    await bundle.launch_season()
+    await bundle.draw(24)
+    bourgogne = await bundle.kingdom_id("Bourgogne")
+    target = (await bundle.owner_maps(bourgogne))[0]
+    _wiring(bundle)
+    guild = MockGuild()
+    strings = panel._strings("fr")
+
+    target_interaction = MockInteraction(user=MockUser(id="king-a"), guild=guild, locale="fr")  # type: ignore[arg-type]
+    await panel._declare_player_attack(_panel_wiring(), target_interaction, strings, target, None)
+    # The wizard's original window is GONE — never reusable.
+    assert target_interaction.original_deleted is True
+    # The declaration itself went through.
+    fresh = next(a for a in await bundle.attacks.attacks() if a.map_key == target)
+    assert str(fresh.attacker_lord_id) == "king-a"
+
+    for task in asyncio.all_tasks():
+        if task is not asyncio.current_task():
+            task.cancel()
+    await asyncio.sleep(0)
+
+
+async def test_declared_note_timer_deletes_the_note_at_the_meeting_time() -> None:
+    """battle-ai-rdv-v1: the declared/itinerary ephemeral self-destructs
+    at the MEETING time — hygiene-ephemere-v1 (Drasah 30/10): it NEVER
+    outlives the 10-minute cancellation window (a far meeting keeps the
+    note alive only as long as the attack may still be cancelled)."""
+    import asyncio
+    from datetime import timedelta
+
+    from kingdoms.mods.kingdoms.game_clock import game_now
+    from kingdoms.mods.kingdoms.kingdom_attack_panel import (
+        _DECLARE_NOTE_TASKS,
+        _arm_declared_note_timer,
+    )
+
+    interaction = MockInteraction(  # type: ignore[arg-type]
+        user=MockUser(id="king-a"),
+        locale="fr",  # type: ignore[arg-type]
+    )
+    note = await interaction.followup.send("⚔️ Attaque déclarée", ephemeral=True)
+    # A far meeting (> 15 min of followup-token life) — STILL armed:
+    # hygiene-ephemere-v1 caps the note at the cancellation window,
+    # it never dangles after the attack can no longer be cancelled.
+    _arm_declared_note_timer("attack-far", interaction, note.id, game_now() + timedelta(minutes=30))
+    assert "attack-far" in _DECLARE_NOTE_TASKS
+    # A near meeting — the timer deletes the note at the deadline.
+    _arm_declared_note_timer("attack-x", interaction, note.id, game_now() + timedelta(seconds=0.05))
+    assert "attack-x" in _DECLARE_NOTE_TASKS
+    await asyncio.sleep(0.15)
+    assert not [m for m in interaction.followup.messages if m.id == note.id]
+    assert "attack-x" not in _DECLARE_NOTE_TASKS
+    # The far timer rides its 600 s cap — sweep it before leaving.
+    for task in list(_DECLARE_NOTE_TASKS.values()):
+        task.cancel()
+    _DECLARE_NOTE_TASKS.clear()
+    await asyncio.sleep(0)
+
+
+async def test_sabotage_stock_line_counts_and_faucon_state() -> None:
+    """sabotage-ux-v1: the draft & ban DM carries the stock line —
+    the Sabotage techno count (never consumed by a use) and the Faucon
+    state (ready / flying / absent)."""
+    import asyncio
+
+    from kingdoms.mods.kingdoms.kingdom_attack_panel import _sabotage_stock_line, _strings
+    from kingdoms.mods.kingdoms.kingdom_persistent import _wiring as _get_wiring
+
+    bundle = ScoreBundle()
+    await bundle.launch_season()
+    await bundle.draw(26)
+    attack, aquitaine, _bourgogne = await bundle.meeting()
+    await bundle.stock(aquitaine, sabotage=2)
+    _wiring(bundle)
+    wiring = _get_wiring()
+    strings = _strings("fr")
+
+    # No faucon slot — the line says absent, the sabotage count shows.
+    kingdom = next(k for k in await bundle.kingdoms.kingdoms() if k.id == aquitaine)
+    line = await _sabotage_stock_line(wiring, attack, "attacker", strings)
+    assert "🗡️ Sabotage : 2" in line
+    assert "🦅 Faucon : absent" in line
+    assert "2 civilisations sabotées maximum" in line
+
+    # A faucon landed (cooldown in the past) — it is ready.
+    kingdom.voliere_slots = ["faucon"]
+    kingdom.voliere_cooldowns = {"faucon": 0}
+    await bundle.store.upsert_kingdom(kingdom.to_mongo())
+    line = await _sabotage_stock_line(wiring, attack, "attacker", strings)
+    assert "🦅 Faucon : dispo" in line
+
+    # The faucon is flying (cooldown far in the future) — the line
+    # shows the Paris landing time.
+    kingdom.voliere_cooldowns = {"faucon": 1900000000}
+    await bundle.store.upsert_kingdom(kingdom.to_mongo())
+    line = await _sabotage_stock_line(wiring, attack, "attacker", strings)
+    assert "en vol jusqu'à" in line
+
+    # A kingdom without the purchase shows the zero count.
+    line = await _sabotage_stock_line(wiring, attack, "defender", strings)
+    assert "🗡️ Sabotage : 0" in line
+    for task in asyncio.all_tasks():
+        if task is not asyncio.current_task():
+            task.cancel()
+    await asyncio.sleep(0)
+
+
+async def test_sabotage_panel_edits_in_place_and_dies_at_passer(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """sabotage-ux-v1: the sabotage phase lives on ONE ephemeral panel
+    per player — the menu click and the civ pick EDIT it in place (no
+    stacking bubbles), the panel carries the X/2 récap + stock line,
+    and the ⚔️ Passer click deletes it at once.
+
+    hygiene-ephemere-v1 (Drasah 30/10): the panel carries NO mosaic —
+    the reveal DM already paints the crests, a duplicated image in the
+    ephemeral window is pure noise (Drasah's 30/10 live report)."""
+    import asyncio
+
+    from kingdoms.mods.kingdoms import kingdom_attack_panel as panel
+    from kingdoms.mods.kingdoms.kingdom_attack_panel import (
+        _SABOTAGE_PANELS,
+        KingdomSabotageOpenButton,
+        KingdomSabotagePassButton,
+        _strings,
+    )
+
+    mosaic_calls: list[set[str]] = []
+
+    class _FakeMosaicFile:
+        pass
+
+    async def fake_mosaic(
+        entries: object,
+        filename: str = "alliances.png",
+        *,
+        with_origin_badges: bool = True,
+        crossed: object = None,
+    ) -> object:
+        mosaic_calls.append({str(civ) for civ in (crossed or ())})
+        return _FakeMosaicFile()
+
+    monkeypatch.setattr(panel, "civ_crest_mosaic_file", fake_mosaic)
+
+    bundle = ScoreBundle()
+    await bundle.launch_season()
+    await bundle.draw(26)
+    attack, aquitaine, _bourgogne = await bundle.meeting()
+    await bundle.stock(aquitaine, sabotage=2)
+    _wiring(bundle)
+    guild = MockGuild()
+    strings = _strings("fr")
+
+    # The attacker opens the PANEL (title + stock line, one message).
+    open_btn = KingdomSabotageOpenButton(attack.id, "king-a", strings["sab_open_button"])
+    click = MockInteraction(user=MockUser(id="king-a"), guild=guild, channel=None, locale="fr")
+    await open_btn.callback(click)  # type: ignore[arg-type]
+    assert click.response.message is not None
+    panel_content = str(click.response.message.content or "")
+    assert "0/2" in panel_content
+    assert "🗡️ Sabotage : 2" in panel_content
+    key = (str(attack.id), "king-a")
+    assert key in _SABOTAGE_PANELS
+    assert _SABOTAGE_PANELS[key]["interaction"] is click
+    # hygiene-ephemere-v1: the panel wears NO mosaic — the DM has it.
+    assert mosaic_calls == []
+    assert not (click.response.message.attachments or [])
+
+    # The techno click EDITS the panel — no new bubble, no followup.
+    menu = click.response.message.view
+    assert menu is not None
+    techno = next(c for c in menu.children if str(getattr(c, "label", "")) == strings["sab_techno"])
+    step = MockInteraction(user=MockUser(id="king-a"), guild=guild, channel=None, locale="fr")
+    await techno.callback(step)  # type: ignore[arg-type]
+    assert step.followup.messages == []
+    step_content = str(step.response.message.content or "") if step.response.message else ""
+    assert "sab_title" not in step_content
+    assert "0/2" in step_content  # the panel header survives the edit
+    assert "Choisis la civilisation" in step_content
+    assert not (step.response.message.attachments or [])
+
+    # sabotage-visuel-v1 (Drasah 04/11, pattern « le choix écrase le
+    # dropdown ») : the civ pick REPLACES the dropdown — the charge is
+    # NOT consumed yet, the ✏️ Modifier / ✅ Valider / ❌ Annuler row
+    # appears in the SAME panel (no new bubble).
+    civ_view = step.response.message.view if step.response.message else None
+    assert civ_view is not None
+    select = next(c for c in civ_view.children if hasattr(c, "callback"))
+    select._values = ["huns"]  # type: ignore[attr-defined]
+    pick = MockInteraction(user=MockUser(id="king-a"), guild=guild, channel=None, locale="fr")
+    await select.callback(pick)  # type: ignore[arg-type]
+    assert pick.followup.messages == []
+    fresh = next(a for a in await bundle.attacks.attacks() if a.id == attack.id)
+    assert not (fresh.pickban or {}).get("attacker_sabotages")
+    pick_content = str(pick.response.message.content or "") if pick.response.message else ""
+    assert "0/2" in pick_content  # the panel récap survives the edit
+    assert "huns" in pick_content  # the pick line shows the choice
+    confirm = pick.response.message.view
+    assert confirm is not None
+    labels = [str(getattr(c, "label", "")) for c in confirm.children]
+    assert labels == [
+        strings["sab_modify_button"],
+        strings["sab_validate_button"],
+        strings["sab_cancel_button"],
+    ]
+
+    # The ✅ Valider is the ONLY consumer — récap 1/2 + done note.
+    validate = next(
+        c for c in confirm.children if str(getattr(c, "label", "")) == strings["sab_validate_button"]
+    )
+    val = MockInteraction(user=MockUser(id="king-a"), guild=guild, channel=None, locale="fr")
+    await validate.callback(val)  # type: ignore[arg-type]
+    assert val.followup.messages == []
+    fresh = next(a for a in await bundle.attacks.attacks() if a.id == attack.id)
+    assert (fresh.pickban or {}).get("attacker_sabotages") == ["huns"]
+    val_content = str(val.response.message.content or "") if val.response.message else ""
+    assert "1/2" in val_content
+    assert "huns" in val_content
+    # sabotage-consommable-v1: the stock line decrements after the snipe
+    # (2 bought charges - 1 used = 1 left, the panel is edited in place).
+    assert "🗡️ Sabotage : 1" in val_content
+    # hygiene-ephemere-v1: the pick re-renders the panel as TEXT only.
+    assert mosaic_calls == []
+    assert not (val.response.message.attachments or [])
+
+    # The ⚔️ Passer click deletes the panel at once.
+    passer = KingdomSabotagePassButton(attack.id, "king-a", strings["sab_pass_button"])
+    settle = MockInteraction(user=MockUser(id="king-a"), guild=guild, channel=None, locale="fr")
+    await passer.callback(settle)  # type: ignore[arg-type]
+    assert click.original_deleted is True
+    assert key not in _SABOTAGE_PANELS
+    for task in asyncio.all_tasks():
+        if task is not asyncio.current_task():
+            task.cancel()
+    await asyncio.sleep(0)
+
+
+async def test_sabotage_panel_fallback_resends_the_whole_panel_through_the_unique_window(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """sabotage-visuel-v1 (Drasah 29/10, PATCH 1.0 item 2): when the
+    in-place edit DIES (expired token, restarted panel), the fallback
+    re-sends the WHOLE panel — récap + note, NEVER a lone note
+    bubble — and the window rides the fenêtre unique registry so
+    the next fallback closes the previous one (no stacking)."""
+    import asyncio
+
+    from kingdoms.mods.kingdoms import kingdom_attack_panel as panel
+    from kingdoms.mods.kingdoms.kingdom_attack_panel import (
+        _SABOTAGE_PANELS,
+        KingdomSabotageOpenButton,
+        _strings,
+    )
+    from kingdoms.mods.kingdoms.kingdom_persistent import _EPHEMERAL_WINDOWS
+
+    class _FakeMosaicFile:
+        pass
+
+    async def fake_mosaic(
+        entries: object,
+        filename: str = "alliances.png",
+        *,
+        with_origin_badges: bool = True,
+        crossed: object = None,
+    ) -> object:
+        return _FakeMosaicFile()
+
+    monkeypatch.setattr(panel, "civ_crest_mosaic_file", fake_mosaic)
+    _EPHEMERAL_WINDOWS.pop("king-a", None)
+
+    bundle = ScoreBundle()
+    await bundle.launch_season()
+    await bundle.draw(26)
+    attack, aquitaine, _bourgogne = await bundle.meeting()
+    await bundle.stock(aquitaine, sabotage=2)
+    _wiring(bundle)
+    guild = MockGuild()
+    strings = _strings("fr")
+
+    open_btn = KingdomSabotageOpenButton(attack.id, "king-a", strings["sab_open_button"])
+    click = MockInteraction(user=MockUser(id="king-a"), guild=guild, channel=None, locale="fr")
+    await open_btn.callback(click)  # type: ignore[arg-type]
+    menu = click.response.message.view
+    techno = next(c for c in menu.children if str(getattr(c, "label", "")) == strings["sab_techno"])
+    step = MockInteraction(user=MockUser(id="king-a"), guild=guild, channel=None, locale="fr")
+    await techno.callback(step)  # type: ignore[arg-type]
+    civ_view = step.response.message.view
+    select = next(c for c in civ_view.children if hasattr(c, "callback"))
+
+    async def _raising_edit(**kwargs: object) -> None:
+        raise RuntimeError("the token died")
+
+    # The pick opens the confirm row in place (nothing consumed yet).
+    select._values = ["huns"]  # type: ignore[attr-defined]
+    pick = MockInteraction(user=MockUser(id="king-a"), guild=guild, channel=None, locale="fr")
+    await select.callback(pick)  # type: ignore[arg-type]
+    confirm = pick.response.message.view
+    validate = next(
+        c for c in confirm.children if str(getattr(c, "label", "")) == strings["sab_validate_button"]
+    )
+
+    # The VALIDATE's in-place edit dies — the fallback carries récap +
+    # note in ONE followup, registered as the player's unique window.
+    val = MockInteraction(user=MockUser(id="king-a"), guild=guild, channel=None, locale="fr")
+    monkeypatch.setattr(val.response, "edit_message", _raising_edit)
+    await validate.callback(val)  # type: ignore[arg-type]
+    assert len(val.followup.messages) == 1
+    window = val.followup.messages[0]
+    fallback_content = str(window.content or "")
+    assert "1/2" in fallback_content  # the récap rides the fallback
+    assert "huns" in fallback_content
+    assert "retirée du camp adverse" in fallback_content  # …and the note
+    assert not (window.files or [])  # hygiene: no mosaic in the panel
+    stored = _EPHEMERAL_WINDOWS.get("king-a")
+    assert stored is not None and stored[0] is val and stored[2] is window
+
+    # A SECOND dying validate replaces the first fallback — the stale
+    # window is deleted (fenêtre unique), never stacked.
+    from kingdoms.mods.kingdoms.kingdom_persistent import _wiring as _panel_wiring
+
+    confirm2 = panel._sabotage_confirm_view(
+        _panel_wiring(), str(attack.id), "attacker", "techno", "perses", strings
+    )
+    val2 = MockInteraction(user=MockUser(id="king-a"), guild=guild, channel=None, locale="fr")
+    monkeypatch.setattr(val2.response, "edit_message", _raising_edit)
+    await confirm2.children[1].callback(val2)  # type: ignore[arg-type]  # ✅ Valider
+    assert window.deleted is True
+    assert len(val2.followup.messages) == 1
+    stored2 = _EPHEMERAL_WINDOWS.get("king-a")
+    assert stored2 is not None and stored2[2] is val2.followup.messages[0]
+    fresh = next(a for a in await bundle.attacks.attacks() if a.id == attack.id)
+    assert sorted((fresh.pickban or {}).get("attacker_sabotages") or []) == ["huns", "perses"]
+
+    _EPHEMERAL_WINDOWS.pop("king-a", None)
+    _SABOTAGE_PANELS.pop((str(attack.id), "king-a"), None)
+    for task in asyncio.all_tasks():
+        if task is not asyncio.current_task():
+            task.cancel()
+    await asyncio.sleep(0)
+
+
+async def test_pickban_validate_closes_the_stale_refusal_window(monkeypatch: pytest.MonkeyPatch) -> None:
+    """PATCH 1.0 item 1 (Drasah 29/10), shirar-v1 wiring: the draft
+    refusals ride the fenêtre unique registry — the doublon warning is
+    DELETED when the player fixes his picks and validates (his 18h19
+    live report: the stale warning stayed stacked under the validated
+    DM). The wizard state now lives in the pickban document."""
+    from kingdoms.mods.kingdoms.kingdom_attack_panel import KingdomPickBanValidateButton
+    from kingdoms.mods.kingdoms.kingdom_persistent import _EPHEMERAL_WINDOWS
+
+    _EPHEMERAL_WINDOWS.pop("king-a", None)
+    bundle = ScoreBundle()
+    await bundle.launch_season()
+    await bundle.draw(26)
+    attack = await bundle.fresh_attack()
+    await bundle.attacks.respond_defense(
+        attack.id, "lord-b", now=datetime(2026, 10, 11, 12, 30, tzinfo=UTC)
+    )
+    await bundle.attacks.reveal_due(now=datetime(2026, 10, 11, 17, 45, tzinfo=UTC)
+    )
+    await bundle.attacks.pick_ban_due(now=datetime(2026, 10, 11, 17, 55, tzinfo=UTC)
+    )
+    await bundle.give_civs("Aquitaine", "francs", "bretons", "goths")
+    _wiring(bundle)
+
+    # A tampered duplicate draft → the refusal rides an ephemeral FOLLOWUP
+    # that self-destructs (no stacking under the validated DM anymore).
+    fresh = next(a for a in await bundle.attacks.attacks() if a.id == attack.id)
+    fresh.pickban["attacker_draft"] = ["francs", "francs", "goths"]
+    refused = MockInteraction(user=MockUser(id="king-a"), guild=MockGuild(), channel=None, locale="fr")
+    await KingdomPickBanValidateButton(str(attack.id), "king-a", True, "fr").callback(refused)  # type: ignore[arg-type]
+    assert refused.followup.messages, "the doublon refusal must ride the followup"
+    assert "doublons" in str(refused.followup.messages[-1].content or "")
+    assert refused.response.message is None  # nothing stacked on the wizard
+
+    # The corrected validation succeeds — the wizard DM is edited IN PLACE
+    # (the refusal note is gone by construction: it never stacked).
+    for index, civ in enumerate(["francs", "bretons", "goths"]):
+        await bundle.attacks.stage_draft_pick(str(attack.id), "king-a", index, civ)
+    validated = MockInteraction(user=MockUser(id="king-a"), guild=MockGuild(), channel=None, locale="fr")
+    await KingdomPickBanValidateButton(str(attack.id), "king-a", True, "fr").callback(validated)  # type: ignore[arg-type]
+    assert "king-a" not in _EPHEMERAL_WINDOWS
+    assert "en attente de l'adversaire" in str(validated.response.message.content or "")
+
+    fresh2 = next(a for a in await bundle.attacks.attacks() if a.id == attack.id)
+    assert (fresh2.pickban or {}).get("attacker_picks") == ["francs", "bretons", "goths"]
+async def test_sabotage_panel_timer_sweeps_the_closed_panel() -> None:
+    """sabotage-ux-v1: the panel timer deletes the panel when it fires
+    (the 15-minute token limit, or a short sweep when no action left)."""
+    import asyncio
+
+    from kingdoms.mods.kingdoms.kingdom_attack_panel import (
+        _SABOTAGE_PANELS,
+        _arm_sabotage_panel_timer,
+    )
+
+    bundle = ScoreBundle()
+    await bundle.launch_season()
+    await bundle.draw(26)
+    attack, _aquitaine, _bourgogne = await bundle.meeting()
+    _wiring(bundle)
+    guild = MockGuild()
+    click = MockInteraction(user=MockUser(id="king-a"), guild=guild, channel=None, locale="fr")
+    key = (str(attack.id), "king-a")
+    _SABOTAGE_PANELS[key] = {"interaction": click}
+    _arm_sabotage_panel_timer(key, seconds=0)
+    await asyncio.sleep(0.05)
+    assert click.original_deleted is True
+    assert key not in _SABOTAGE_PANELS
+    for task in asyncio.all_tasks():
+        if task is not asyncio.current_task():
+            task.cancel()
+    await asyncio.sleep(0)
+
+
+async def test_sabotage_open_button_without_any_resource_answers_no_resources() -> None:
+    """sabotage-garde-v1 (Drasah 28/10): a lord owning NEITHER a bought
+    Sabotage NOR a usable Faucon clicks 🗡️ Saboter — the click answers
+    the sab_no_resources ephemeral AT ONCE (before the guard, the Faucon
+    button showed anyway whenever the volière was wired and the civ
+    pick then died on a raw English error)."""
+    import asyncio
+
+    from kingdoms.mods.kingdoms.kingdom_attack_panel import (
+        _SABOTAGE_PANELS,
+        KingdomSabotageOpenButton,
+        _strings,
+    )
+    from kingdoms.mods.kingdoms.kingdom_persistent import (
+        _EPHEMERAL_WINDOWS,
+        KingdomsPanelWiring,
+        register_kingdoms_panel_wiring,
+    )
+
+    _EPHEMERAL_WINDOWS.pop("king-a", None)
+    bundle = ScoreBundle()
+    await bundle.launch_season()
+    await bundle.draw(26)
+    attack, aquitaine, _bourgogne = await bundle.meeting()
+    # The volière service IS wired (the old bug lived here) but the
+    # kingdom owns NO faucon slot and bought NO sabotage.
+    register_kingdoms_panel_wiring(
+        KingdomsPanelWiring(
+            kingdoms_service=bundle.kingdoms,
+            attacks_service=bundle.attacks,
+            territories_service=bundle.territories,
+            voliere_service=object(),
+        )
+    )
+    strings = _strings("fr")
+    open_btn = KingdomSabotageOpenButton(str(attack.id), "king-a", strings["sab_open_button"])
+    click = MockInteraction(user=MockUser(id="king-a"), guild=MockGuild(), channel=None, locale="fr")
+    await open_btn.callback(click)  # type: ignore[arg-type]
+    assert click.response.ephemeral is True
+    content = str(click.response.message.content or "") if click.response.message else ""
+    assert "ne disposez pas de sabotage ni de Faucon" in content
+    assert (str(attack.id), "king-a") not in _SABOTAGE_PANELS
+    # A faucon slot in cooldown is just as unavailable as no slot.
+    kingdom = next(k for k in await bundle.kingdoms.kingdoms() if k.id == aquitaine)
+    kingdom.voliere_slots = ["faucon"]
+    kingdom.voliere_cooldowns = {"faucon": 1900000000}
+    await bundle.store.upsert_kingdom(kingdom.to_mongo())
+    click2 = MockInteraction(user=MockUser(id="king-a"), guild=MockGuild(), channel=None, locale="fr")
+    await open_btn.callback(click2)  # type: ignore[arg-type]
+    content2 = str(click2.response.message.content or "") if click2.response.message else ""
+    assert click2.response.ephemeral is True
+    assert "ne disposez pas de sabotage ni de Faucon" in content2
+    # PATCH 1.0 item 1: the notice rides the fenêtre unique registry —
+    # a repeated refusal REPLACES the previous one instead of stacking.
+    stored = _EPHEMERAL_WINDOWS.get("king-a")
+    assert stored is not None and stored[0] is click2
+    click2b = MockInteraction(user=MockUser(id="king-a"), guild=MockGuild(), channel=None, locale="fr")
+    await open_btn.callback(click2b)  # type: ignore[arg-type]
+    assert click2.original_deleted is True
+    stored2 = _EPHEMERAL_WINDOWS.get("king-a")
+    assert stored2 is not None and stored2[0] is click2b
+    # With a landed faucon the menu DOES open (the guard passes) — and
+    # the panel's opening closes the stale refusal window.
+    kingdom.voliere_cooldowns = {"faucon": 0}
+    await bundle.store.upsert_kingdom(kingdom.to_mongo())
+    click3 = MockInteraction(user=MockUser(id="king-a"), guild=MockGuild(), channel=None, locale="fr")
+    await open_btn.callback(click3)  # type: ignore[arg-type]
+    panel3 = str(click3.response.message.content or "") if click3.response.message else ""
+    assert "0/2" in panel3
+    assert click2b.original_deleted is True  # the stale notice is closed
+    assert "king-a" not in _EPHEMERAL_WINDOWS  # the panel is never registered
+    _EPHEMERAL_WINDOWS.pop("king-a", None)
+    for task in asyncio.all_tasks():
+        if task is not asyncio.current_task():
+            task.cancel()
+    await asyncio.sleep(0)
+
+
+async def test_meeting_open_sweep_clears_the_sabotage_dm_buttons(monkeypatch) -> None:
+    """dm-expiration-v1 (Drasah 27/10): a meeting that opens on the
+    T-default (a camp never settled) re-edits both DMs WITHOUT their
+    view — the dead phase's 🗡️/⚔️ buttons disappear from the MP, the UI
+    mirrors the server state instead of answering a rejection."""
+
+    class _Attack:
+        id = "a-1"
+        attacker_lord_id = "111"
+        defender_lord_id = "222"
+        ai_defender = False
+        map_key = "fortress"
+        pickban = {  # noqa: RUF012
+            "attacker_dm": {"channel_id": 10, "message_id": 11},
+            "defender_dm": {"channel_id": 20, "message_id": 21},
+        }
+
+    from kingdoms.mods.kingdoms import kingdom_attack_panel as panel
+
+    edits: list[tuple[dict, str, object]] = []
+    reposts: list[str] = []
+
+    async def fake_edit(bot, ref, content, view, files=None):  # type: ignore[no-untyped-def]
+        edits.append((dict(ref), content, view))
+        return True
+
+    async def fake_dm(bot, player_id, content, view=None):  # type: ignore[no-untyped-def]
+        reposts.append(str(player_id))
+
+    monkeypatch.setattr(panel, "_edit_dm_message_safe", fake_edit)
+    monkeypatch.setattr(panel, "_dm_user_safe", fake_dm)
+
+    await panel._sweep_sabotage_dms_on_open_safe(None, _Attack(), panel._strings("fr"))
+    # Both stored DMs are re-edited, view STRIPPED (the buttons go away).
+    assert len(edits) == 2
+    assert all(view is None for _, _, view in edits)
+    assert all("Phase de sabotage terminée — fortress" in content for _, content, _ in edits)
+    # Both edits succeeded — no fallback repost, no stacking bubble.
+    assert reposts == []
+
+
+async def test_room_ping_gets_the_winner_stamped_at_the_resolution() -> None:
+    """sabotage-ux-v1: the « ⚔️ … à vos armes ! » ping of the room is
+    recorded when the room opens and gets the 🏆 winner stamped at
+    the resolution — once, never duplicated."""
+    import asyncio
+
+    from kingdoms.mods.kingdoms.kingdom_attack_panel import (
+        _declare_room_score,
+        _open_battle_room,
+        _strings,
+    )
+    from kingdoms.mods.kingdoms.kingdom_persistent import _wiring as _get_wiring
+
+    bundle = ScoreBundle()
+    await bundle.launch_season()
+    await bundle.draw(26)
+    attack, aquitaine, _bourgogne = await bundle.open_meeting()
+    _wiring(bundle)
+    guild = MockGuild()
+    salon = await guild.create_text_channel("salon d'attaque")
+    await bundle.attacks.record_attack_channel(attack.id, salon.id)
+    bot = _FakeBot(bundle)
+    bot.guilds = [guild]  # type: ignore[assignment]
+    attack = next(a for a in await bundle.attacks.attacks() if a.id == attack.id)
+    attack.ai_defender = True  # a solo declaration resolves at once
+    await bundle.store.upsert_attack(attack.to_mongo())
+    await _open_battle_room(bot, guild, attack, bundle.kingdoms, "fr")
+
+    # The ping refs are recorded — the stamp can find the message.
+    fresh = next(a for a in await bundle.attacks.attacks() if a.id == attack.id)
+    score = dict(fresh.score or {})
+    assert score.get("room_ping_channel_id") == salon.id
+    assert score.get("room_ping_message_id")
+    ping = next(m for m in salon.messages if "à vos armes" in str(m.content or ""))
+    assert "🏆" not in str(ping.content or "")
+
+    # The solo declaration resolves — the ping wears the winner.
+    wiring = _get_wiring()
+    strings = _strings("fr")
+    declare = MockInteraction(user=MockUser(id="king-a"), guild=guild, channel=salon, locale="fr", client=bot)
+    await _declare_room_score(declare, wiring, strings, str(attack.id), "king-a", aquitaine, game_id="aoe2de://lobby")  # type: ignore[arg-type]
+    assert "🏆 Vainqueur : **Aquitaine**" in str(ping.content or "")
+
+    # A second stamp never duplicates the line.
+    from kingdoms.mods.kingdoms.kingdom_attack_panel import _stamp_room_ping_winner_safe
+
+    await _stamp_room_ping_winner_safe(bot, fresh, "Aquitaine", strings)
+    assert str(ping.content or "").count("🏆 Vainqueur") == 1
+    for task in asyncio.all_tasks():
+        if task is not asyncio.current_task():
+            task.cancel()
+    await asyncio.sleep(0)
+
+
+async def test_reveal_renames_the_salon_to_the_true_attacker() -> None:
+    """admin-tools-v1 (Drasah 30/10): the attack salon wears the COVER
+    name until the T-15 reveal — then it is renamed in place to the REAL
+    attacker vs the defender (best effort, never blocking the notes)."""
+    import asyncio
+
+    from kingdoms.mods.kingdoms import kingdom_attack_panel as panel
+    from kingdoms.mods.kingdoms.models import LordRole
+
+    bundle = PhasesBundle()
+    await bundle.launch_season()
+    await bundle.kingdoms.enroll("king-c", "King C", LordRole.KING, proposed_name="Provence")
+    await bundle.draw(28)
+    bourgogne = await bundle.kingdom_id("Bourgogne")
+    attack = await bundle.attacks.declare_attack(
+        "king-a",
+        (await bundle.owner_maps(bourgogne))[0],
+        "",
+        cover_lord_id="king-c",
+        now=datetime(2026, 10, 11, 12, 0, tzinfo=UTC),
+    )
+    await bundle.attacks.respond_defense(
+        attack.id, "lord-b", now=datetime(2026, 10, 11, 12, 30, tzinfo=UTC)
+    )
+    guild = MockGuild()
+    salon = await guild.create_text_channel("🗡️-king-c-vs-bourgogne")
+    await bundle.attacks.record_attack_channel(attack.id, salon.id)
+    played = await panel._run_reveals_safe(guild, bundle.attacks, bundle.kingdoms, panel._strings("fr"))
+    assert played == 1
+    # the cover name is GONE — the salon says the real attacker.
+    assert salon.name == "🗡️-king-a-vs-bourgogne"
+    reveal = [m for m in salon.messages if "La couverture tombe" in str(m.content or "")]
+    assert reveal
+    for task in asyncio.all_tasks():
+        if task is not asyncio.current_task():
+            task.cancel()
+    await asyncio.sleep(0)
+
+
+async def test_meeting_room_sweeps_the_pre_room_announces() -> None:
+    """salon-nettoyage-v1: opening the battle room deletes the declare + reveal notes."""
+    import asyncio
+
+    from kingdoms.mods.kingdoms import kingdom_attack_panel as panel
+
+    bundle = ScoreBundle()
+    await bundle.launch_season()
+    await bundle.draw(26)
+    attack = await bundle.fresh_attack()
+    await bundle.attacks.respond_defense(attack.id, "lord-b", now=datetime(2026, 10, 11, 12, 30, tzinfo=UTC))
+
+    _wiring(bundle)
+    guild = MockGuild()
+    salon = await guild.create_text_channel("salon d'attaque")
+    await bundle.attacks.record_attack_channel(attack.id, salon.id)
+    base = await salon.send("⚔️ a lancé une attaque…")
+    await bundle.attacks.record_attack_base_message(attack.id, base.id)
+
+    # The reveal note lands and gets recorded as a sweepable ref.
+    played = await panel._run_reveals_safe(guild, bundle.attacks, bundle.kingdoms, panel._strings("fr"))
+    assert played == 1
+    notes = [m for m in salon.messages if "Bataille en vue" in str(m.content or "")]
+    assert len(notes) == 1
+    fresh = await bundle.attacks.get_attack(attack.id)
+    assert fresh.score["reveal_message_refs"] == [{"channel_id": salon.id, "message_id": notes[0].id}]
+
+    # Opening the room sweeps the declare announce and the reveal note.
+    bot = _FakeBot(bundle)
+    bot.guilds = [guild]
+    await panel._open_battle_room(bot, guild, fresh, bundle.kingdoms, "fr")
+    opened = await bundle.attacks.get_attack(attack.id)
+    assert opened.score["room_channel_id"]
+    assert base.deleted is True
+    assert notes[0].deleted is True
+    meeting = next(m for m in salon.messages if m.id == opened.score["meeting_message_id"])
+    assert getattr(meeting, "deleted", None) is None
+    pings = [m for m in salon.messages if "à vos armes" in str(m.content or "")]
+    assert len(pings) == 1
+    assert getattr(pings[0], "deleted", None) is None
+
+    # Re-opening never replays the sweep (early return on room_channel_id).
+    await panel._open_battle_room(bot, guild, opened, bundle.kingdoms, "fr")
+    for task in asyncio.all_tasks():
+        if task is not asyncio.current_task():
+            task.cancel()
+    await asyncio.sleep(0)
+
+
+async def test_declare_flow_zero_embuscade_opens_the_kingdom_step() -> None:
+    """embuscade-v1: zero bought Embuscade — NO mode view, the kingdom step first."""
+    from kingdoms.mods.kingdoms.kingdom_attack_panel import (
+        KingdomAttackDeclareButton,
+        _strings,
+    )
+
+    bundle = PhasesBundle()
+    await bundle.launch_season()
+    await bundle.draw(21)
+    _wiring(bundle)
+    click = MockInteraction(  # type: ignore[arg-type]
+        user=MockUser(id="king-a"),  # type: ignore[arg-type]
+        custom_id="kingdoms:attack:declare",
+        locale="fr",
+    )
+    button = KingdomAttackDeclareButton(_strings("fr")["declare_button"])
+    await button.callback(click)  # type: ignore[arg-type]
+    view = (click.response.message or None) and click.response.message.view
+    assert view is not None
+    ids = [c.custom_id for c in view.children]
+    assert "kingdoms:attack:choose:kingdom" in ids
+    assert "kingdoms:attack:mode:embuscade" not in ids
+
+
+async def test_declare_flow_embuscade_mode_declares_the_ambush() -> None:
+    """embuscade-v1: bought cards open the MODE view; the ambush rides its own flow."""
+    from kingdoms.mods.kingdoms.kingdom_attack_panel import (
+        KingdomAttackDeclareButton,
+        _strings,
+    )
+
+    bundle = PhasesBundle()
+    await bundle.launch_season()
+    await bundle.draw(21)
+    aquitaine = await bundle.kingdom_id("Aquitaine")
+    bourgogne = await bundle.kingdom_id("Bourgogne")
+    target = (await bundle.owner_maps(bourgogne))[0]
+    await bundle.stock(aquitaine, embuscade=1)
+    _wiring(bundle)
+    click = MockInteraction(  # type: ignore[arg-type]
+        user=MockUser(id="king-a"),  # type: ignore[arg-type]
+        custom_id="kingdoms:attack:declare",
+        locale="fr",
+    )
+    button = KingdomAttackDeclareButton(_strings("fr")["declare_button"])
+    await button.callback(click)  # type: ignore[arg-type]
+    # Step 0 — the mode view (classic vs embuscade, delays in the labels).
+    mode_view = click.response.message and click.response.message.view
+    assert mode_view is not None
+    ids = [c.custom_id for c in mode_view.children]
+    assert "kingdoms:attack:mode:classic" in ids
+    assert "kingdoms:attack:mode:embuscade" in ids
+    embuscade_button = next(
+        c for c in mode_view.children if c.custom_id == "kingdoms:attack:mode:embuscade"
+    )
+    assert "1h" in str(embuscade_button.label)
+    mode_click = MockInteraction(  # type: ignore[arg-type]
+        user=MockUser(id="king-a"),  # type: ignore[arg-type]
+        custom_id="kingdoms:attack:mode:embuscade",
+        locale="fr",
+    )
+    await embuscade_button.callback(mode_click)  # type: ignore[arg-type]
+    assert mode_click.response.message is not None
+    # Step 1 — the kingdom select, embuscade flavour (armed line).
+    kingdom_view = mode_click.response.message.view
+    assert kingdom_view is not None
+    assert "Embuscade armée" in str(mode_click.response.message.content)
+    kingdom_select = next(
+        c for c in kingdom_view.children if c.custom_id == "kingdoms:attack:choose:kingdom"
+    )
+    step = MockInteraction(  # type: ignore[arg-type]
+        user=MockUser(id="king-a"),
+        data={"values": [bourgogne]},
+        locale="fr",  # type: ignore[arg-type]
+    )
+    await kingdom_select.callback(step)  # type: ignore[arg-type]
+    assert step.response.message is not None
+    # Step 2 — the EMBUSCADE territory select ONLY (no classic select).
+    territory_view = step.response.message.view
+    assert territory_view is not None
+    tids = [c.custom_id for c in territory_view.children]
+    assert "kingdoms:attack:embuscade:territory" in tids
+    assert "kingdoms:attack:choose:territory" not in tids
+    embuscade_select = next(
+        c for c in territory_view.children if c.custom_id == "kingdoms:attack:embuscade:territory"
+    )
+    step2 = MockInteraction(  # type: ignore[arg-type]
+        user=MockUser(id="king-a"),
+        data={"values": [target]},
+        locale="fr",  # type: ignore[arg-type]
+    )
+    await embuscade_select.callback(step2)  # type: ignore[arg-type]
+    # The ambush declared: exceptional attack, card consumed, wizard dead.
+    attacks = await bundle.attacks.attacks()
+    assert len(attacks) == 1
+    assert attacks[0].embuscade is True
+    assert str(attacks[0].state.value) == "declared"
+    assert attacks[0].map_key == target
+    assert click.original_deleted is True
+    fresh = await bundle.attacks.technology_state(aquitaine)
+    assert fresh.purchases.get("embuscade") == 0
+    assert step2.followup.messages
+    assert "Embuscade déclarée" in (step2.followup.messages[0].content or "")
+
+
+async def test_declare_flow_mode_classic_stays_a_normal_attack() -> None:
+    """embuscade-v1: the classic button keeps the normal flow — the card stays."""
+    from kingdoms.mods.kingdoms.kingdom_attack_panel import (
+        KingdomAttackDeclareButton,
+        _strings,
+    )
+
+    bundle = PhasesBundle()
+    await bundle.launch_season()
+    await bundle.draw(21)
+    aquitaine = await bundle.kingdom_id("Aquitaine")
+    bourgogne = await bundle.kingdom_id("Bourgogne")
+    target = (await bundle.owner_maps(bourgogne))[0]
+    await bundle.stock(aquitaine, embuscade=1)
+    _wiring(bundle)
+    click = MockInteraction(  # type: ignore[arg-type]
+        user=MockUser(id="king-a"),  # type: ignore[arg-type]
+        custom_id="kingdoms:attack:declare",
+        locale="fr",
+    )
+    button = KingdomAttackDeclareButton(_strings("fr")["declare_button"])
+    await button.callback(click)  # type: ignore[arg-type]
+    mode_view = click.response.message and click.response.message.view
+    assert mode_view is not None
+    classic_button = next(
+        c for c in mode_view.children if c.custom_id == "kingdoms:attack:mode:classic"
+    )
+    mode_click = MockInteraction(  # type: ignore[arg-type]
+        user=MockUser(id="king-a"),  # type: ignore[arg-type]
+        custom_id="kingdoms:attack:mode:classic",
+        locale="fr",
+    )
+    await classic_button.callback(mode_click)  # type: ignore[arg-type]
+    kingdom_view = mode_click.response.message and mode_click.response.message.view
+    assert kingdom_view is not None
+    kingdom_select = next(
+        c for c in kingdom_view.children if c.custom_id == "kingdoms:attack:choose:kingdom"
+    )
+    step = MockInteraction(  # type: ignore[arg-type]
+        user=MockUser(id="king-a"),
+        data={"values": [bourgogne]},
+        locale="fr",  # type: ignore[arg-type]
+    )
+    await kingdom_select.callback(step)  # type: ignore[arg-type]
+    territory_view = step.response.message and step.response.message.view
+    territory_select = next(
+        c for c in territory_view.children if c.custom_id == "kingdoms:attack:choose:territory"
+    )
+    step2 = MockInteraction(  # type: ignore[arg-type]
+        user=MockUser(id="king-a"),
+        data={"values": [target]},
+        locale="fr",  # type: ignore[arg-type]
+    )
+    await territory_select.callback(step2)  # type: ignore[arg-type]
+    attacks = await bundle.attacks.attacks()
+    assert len(attacks) == 1
+    assert not attacks[0].embuscade
+    assert str(attacks[0].state.value) == "declared"
+    # The bought Embuscade card is NOT consumed by a classic attack.
+    fresh = await bundle.attacks.technology_state(aquitaine)
+    assert fresh.purchases.get("embuscade") == 1
+
+
+async def test_info_button_sends_the_rundown_sheet() -> None:
+    """attaque-ergonomie-v1: the former declaration thread's « Déroulé
+    de l'attaque & droits du défenseur » sheet lives in the ⚔️ info
+    button of the declare panel (ephemeral, single window)."""
+    from kingdoms.mods.kingdoms.kingdom_attack_panel import (
+        KingdomAttackInfoButton,
+        _strings,
+    )
+
+    button = KingdomAttackInfoButton(_strings("fr")["attack_info_button"])
+    assert button.item.custom_id == "kingdoms:attack:info"
+    click = MockInteraction(  # type: ignore[arg-type]
+        user=MockUser(id="king-a"),
+        custom_id="kingdoms:attack:info",
+        locale="fr",
+    )
+    await button.callback(click)  # type: ignore[arg-type]
+    assert click.response.ephemeral is True
+    assert "Déroulé de l'attaque" in str(click.response.message and click.response.message.content or "")
+    assert "Siège" in str(click.response.message and click.response.message.content or "")
+
+
+async def test_declare_flow_second_click_closes_the_previous_window() -> None:
+    """attaque-ergonomie-v1 (Drasah 28/10): every attack-flow entry
+    answers through the mod's single ephemeral window — a repeated
+    declare click CLOSES the previous « Choisis le royaume » view
+    instead of stacking a second one under the panel."""
+    from kingdoms.mods.kingdoms.kingdom_persistent import _EPHEMERAL_WINDOWS
+    from kingdoms.mods.kingdoms.kingdom_attack_panel import (
+        KingdomAttackDeclareButton,
+        _strings,
+    )
+
+    _EPHEMERAL_WINDOWS.clear()
+    bundle = PhasesBundle()
+    await bundle.launch_season()
+    await bundle.draw(21)
+    _wiring(bundle)
+    button = KingdomAttackDeclareButton(_strings("fr")["declare_button"])
+    click1 = MockInteraction(  # type: ignore[arg-type]
+        user=MockUser(id="king-a"),
+        custom_id="kingdoms:attack:declare",
+        locale="fr",
+    )
+    await button.callback(click1)  # type: ignore[arg-type]
+    assert click1.response.message is not None
+    click2 = MockInteraction(  # type: ignore[arg-type]
+        user=MockUser(id="king-a"),
+        custom_id="kingdoms:attack:declare",
+        locale="fr",
+    )
+    await button.callback(click2)  # type: ignore[arg-type]
+    # The FIRST window was closed by the second click — one live
+    # ephemeral per player, no stacking.
+    assert click1.original_deleted is True
+    assert click1.response.message is None
+    assert click2.response.message is not None
+    _EPHEMERAL_WINDOWS.clear()
+
+
+async def test_scoreboard_without_id_is_one_centered_waiting_line() -> None:
+    """attaque-ergonomie-v1 (Drasah 28/10): no game ID yet — ONE
+    centered « 🔗 en attente de l'ID » line, EMPTY side statuses and
+    NO duplicated « 🆔 ID à renseigner » reminder."""
+    from kingdoms.mods.kingdoms.kingdom_attack_panel import _room_body_text, _strings
+
+    bundle = PhasesBundle()
+    await bundle.launch_season()
+    await bundle.draw(21)
+    attack = await bundle.fresh_attack()
+    attack.lobby_url = ""
+    body = await _room_body_text(attack, bundle.kingdoms, _strings("fr"))
+    assert "🔗 en attente de l'ID" in body
+    assert body.count("en attente de l'ID") == 1
+    assert "ID à renseigner" not in body
+    assert "en attente du Prêt" not in body
+
+
+async def test_scoreboard_drops_the_text_vs_and_the_civs_line() -> None:
+    """blasons-affichage-v1 (Drasah 28/10): the painted banner above the
+    scoreboard already carries the names AND the civilizations — the
+    monospace block keeps the pseudos + Prêt states, no text « VS »
+    separator, no civs line (the banner says it)."""
+    from kingdoms.mods.kingdoms.kingdom_attack_panel import _room_body_text, _strings
+
+    bundle = PhasesBundle()
+    await bundle.launch_season()
+    await bundle.draw(21)
+    attack = await bundle.fresh_attack()
+    attack.lobby_url = "https://example.com/lobby"
+    attack.pickban = {
+        "attacker_picks": ["francs", "celtes", "goths"],
+        "defender_picks": ["huns", "perses", "bretons"],
+    }
+    body = await _room_body_text(attack, bundle.kingdoms, _strings("fr"))
+    # The played civs never ride the text block anymore.
+    assert "francs" not in body
+    assert "huns" not in body
+    # No text VS between the pseudos — the banner's badge says it.
+    assert " VS " not in body
+    # The scoreboard keeps its map, ID and Prêt states.
+    assert "⚔️" in body
+    assert "🆔" in body
+    assert "en attente du Prêt" in body
+
+
+async def test_draft_view_button_lists_the_sniped_picks() -> None:
+    """blasons-affichage-v1 (Drasah 28/10): the 📜 « Voir la draft »
+    button answers Drasah's TWO-COLUMN embed — each side's 3 civs
+    numbered 1️⃣2️⃣3️⃣ under its player's name, the sabotaged picks
+    struck through (~~civ~~ ❌)."""
+    from kingdoms.mods.kingdoms.kingdom_attack_panel import (
+        KingdomDraftViewButton,
+        _strings,
+    )
+
+    bundle = PhasesBundle()
+    await bundle.launch_season()
+    await bundle.draw(21)
+    attack = await bundle.fresh_attack()
+    # A resolved draft: 3 picks per side, one snipe on each side.
+    attack.pickban = {
+        "attacker_picks": ["francs", "celtes", "goths"],
+        "defender_picks": ["huns", "perses", "bretons"],
+        "attacker_sabotages": ["huns"],  # the attacker struck the defender
+        "defender_sabotages": ["goths"],  # the defender struck the attacker
+        # draft-ordre-reel-v1 (Drasah 30/10): the phase is OVER — the
+        # sheet shows the REAL stored order (the 1️⃣2️⃣3️⃣ numbering).
+        "sabotage_resolved": True,
+    }
+    await bundle.store.upsert_attack(attack.to_mongo())
+    _wiring(bundle)
+    strings = _strings("fr")
+    button = KingdomDraftViewButton(str(attack.id), strings["draft_button"])
+    assert str(button.item.custom_id).startswith("kingdoms:attack:room:draft:")
+    click = MockInteraction(  # type: ignore[arg-type]
+        user=MockUser(id="king-a"),
+        guild=MockGuild(),
+        locale="fr",
+    )
+    await button.callback(click)  # type: ignore[arg-type]
+    assert click.response.ephemeral is True
+    embed = click.response.message and click.response.message.embed
+    assert embed is not None
+    assert "Draft" in str(embed.title)
+    assert len(embed.fields) == 2
+    left, right = embed.fields
+    assert left.name.startswith("⚔️") and right.name.startswith("🛡️")
+    # Every side's civs ride the two columns, snipes struck through.
+    assert "1️⃣" in left.value and "2️⃣" in left.value and "3️⃣" in left.value
+    assert "francs" in left.value and "celtes" in left.value
+    assert "~~goths~~ ❌" in left.value
+    assert "perses" in right.value and "bretons" in right.value
+    assert "~~huns~~ ❌" in right.value
+
+
+async def test_meeting_files_wear_the_alliances_mosaic_banner(monkeypatch) -> None:
+    """blasons-affichage-v1 (Drasah 28/10): the meeting message wears ONE
+    composite banner — [crest + nom attaquant][VS][crest + nom défenseur],
+    the Alliances mosaic style — and degrades to the text alone when the
+    banner cannot be built."""
+    from kingdoms.mods.kingdoms import kingdom_attack_panel as panel
+
+    class _File:
+        filename = "vs_meeting.png"
+
+    async def fake_banner(attacker_civ, defender_civ):
+        return _File()
+
+    monkeypatch.setattr(panel, "meeting_vs_mosaic_file", fake_banner)
+    pickban = {
+        "attacker_picks": ["francs"],
+        "defender_picks": ["huns"],
+        "attacker_sabotages": [],
+        "defender_sabotages": [],
+    }
+    files = await panel._meeting_files(pickban)
+    assert [f.filename for f in files] == ["vs_meeting.png"]
+    # Banner unbuildable (no civ resolvable) → the text alone.
+    async def fake_none(attacker_civ, defender_civ):
+        return None
+
+    monkeypatch.setattr(panel, "meeting_vs_mosaic_file", fake_none)
+    files = await panel._meeting_files(pickban)
+    assert files == []
+
+
+async def test_vs_badge_file_reads_the_local_asset(monkeypatch, tmp_path) -> None:
+    """blasons-vs-v1: the badge resolves assets/bataille/vs.png — and
+    stays silent (None) when the PNG is not there."""
+    import io as _io
+
+    import discord as _discord
+
+    from kingdoms.mods.kingdoms import civ_crests
+
+    monkeypatch.setattr(
+        civ_crests, "_VS_BADGE_PATH", tmp_path / "vs.png"
+    )
+    assert civ_crests.vs_badge_file() is None
+    (tmp_path / "vs.png").write_bytes(b"png")
+    badge = civ_crests.vs_badge_file()
+    assert badge is not None and badge.filename == "vs.png"
+
+
+async def test_pickban_and_reveal_dms_carry_the_closing_time(monkeypatch) -> None:
+    """dm-fenetres-v1 (Drasah 28/10, règle transverse « toute fenêtre
+    affiche son délai »): le DM de pick & ban affiche l'heure de
+    FERMETURE de la fenêtre, le DM de reveal affiche l'heure du RDV
+    (heure de Paris)."""
+    from datetime import UTC, datetime
+
+    from kingdoms.mods.kingdoms import kingdom_attack_panel as panel
+
+    fr = panel._strings("fr")
+    en = panel._strings("en")
+    assert "{deadline}" in fr["pickban_dm"] and "Fermeture de la fenêtre" in fr["pickban_dm"]
+    assert "{deadline}" in en["pickban_dm"] and "Window closes" in en["pickban_dm"]
+    assert "{deadline}" in fr["pickban_reveal_dm"] and "RDV : {deadline}" in fr["pickban_reveal_dm"]
+    assert "{deadline}" in en["pickban_reveal_dm"] and "Meeting: {deadline}" in en["pickban_reveal_dm"]
+
+    class _Attack:
+        id = "a-1"
+        attacker_lord_id = "111"
+        defender_lord_id = "222"
+        ai_defender = False
+        map_key = "fortress"
+        expires_at = datetime(2026, 10, 28, 20, 40, tzinfo=UTC)
+        pickban = {  # noqa: RUF012
+            "attacker_picks": ["francs", "goths", "huns"],
+            "attacker_dm": {"channel_id": 10, "message_id": 11},
+            "defender_picks": ["bretons", "perses", "byzantins"],
+            "defender_dm": {"channel_id": 20, "message_id": 21},
+        }
+
+    contents: list[str] = []
+    deleted: list[dict] = []
+    repointed: list[tuple] = []
+
+    class _Sent:
+        content = "sent"
+        id = 99
+        channel = type("Ch", (), {"id": 98})()
+
+    async def fake_edit(bot, ref, content, view, files=None):  # type: ignore[no-untyped-def]
+        contents.append(str(content))
+        return True
+
+    async def fake_dm(bot, player_id, content, view=None, files=None):  # type: ignore[no-untyped-def]
+        contents.append(str(content))
+        return _Sent()
+
+    async def fake_delete(bot, ref):  # type: ignore[no-untyped-def]
+        deleted.append(dict(ref))
+
+    async def fake_record(attack_id, player_id, message):  # type: ignore[no-untyped-def]
+        repointed.append((attack_id, player_id))
+
+    async def fake_mosaic(entries, filename="reveal.png", **kwargs):  # type: ignore[no-untyped-def]
+        return None
+
+    monkeypatch.setattr(panel, "_edit_dm_message_safe", fake_edit)
+    monkeypatch.setattr(panel, "_dm_user_safe", fake_dm)
+    monkeypatch.setattr(panel, "_delete_dm_message_safe", fake_delete)
+    monkeypatch.setattr(panel, "_record_pickban_dm_safe", fake_record)
+    monkeypatch.setattr(panel, "civ_crest_mosaic_file", fake_mosaic)
+
+    await panel._edit_pickban_dms_reveal(None, _Attack(), None, fr)
+    # reveal-mp-ping-v1: BOTH players get a FRESH reveal DM (a real
+    # notification) wearing the RDV time in Paris (20:40 UTC → 21:40).
+    assert len(contents) == 2
+    assert all("RDV : 28/10 21:40" in content for content in contents)
+    # Each DM PINGS its player, names the adversary block in bold and
+    # carries the OWN picks line in the REAL stored order.
+    assert "<@111>" in contents[0] and "<@222>" in contents[1]
+    assert all("Draft de votre adversaire" in content for content in contents)
+    assert "1️⃣ francs" in contents[0] and "2️⃣ goths" in contents[0]
+    assert "1️⃣ bretons" in contents[1]
+    # The OLD draft DMs are deleted and the refs re-point to the new
+    # messages (the sabotage refreshes edit the fresh DMs).
+    assert len(deleted) == 2
+    assert len(repointed) == 2
+    assert {pid for _aid, pid in repointed} == {"111", "222"}
+def test_reveal_civs_order_is_stable_across_refreshes() -> None:
+    """sabotage-dm-fresh-v1 (Drasah 30/10): the reveal order is SEEDED
+    — the DM mosaic never reorders between the initial reveal and a
+    post-pick refresh (a fresh shuffle jumped at each snipe)."""
+    from kingdoms.mods.kingdoms.kingdom_attack_panel import _reveal_civs
+
+    picks = ["francs", "bretons", "goths", "huns", "perses"]
+    first = _reveal_civs("a-1:defender", picks)
+    assert first == _reveal_civs("a-1:defender", picks)
+    assert sorted(first) == sorted(picks)
+    assert _reveal_civs("a-1:attacker", picks)  # another seed resolves too
+
+
+async def test_sabotage_dm_button_wears_the_availability(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """sabotage-dm-fresh-v1 (Drasah 30/10) + convention couleurs
+    (Drasah 04/11): the 🗡️ DM button is BLUE while the side owns a
+    usable charge under the 2 cap, GREY and DISABLED once the stock
+    is dry or the cap is reached — GRIS = impossible, never red."""
+    import discord
+
+    from kingdoms.mods.kingdoms import kingdom_attack_panel as panel
+    from kingdoms.mods.kingdoms.kingdom_persistent import _wiring as _panel_wiring
+
+    bundle = ScoreBundle()
+    await bundle.launch_season()
+    await bundle.draw(26)
+    attack, aquitaine, _bourgogne = await bundle.meeting()
+    await bundle.stock(aquitaine, sabotage=1)
+    _wiring(bundle)
+    wiring = _panel_wiring()
+    strings = panel._strings("fr")
+
+    async def fake_mosaic(entries, filename="reveal.png", **kwargs):  # type: ignore[no-untyped-def]
+        return None
+
+    monkeypatch.setattr(panel, "civ_crest_mosaic_file", fake_mosaic)
+    view = await panel._sabotage_dm_view(wiring, attack, "attacker", strings)
+    assert view.children[0].item.style is discord.ButtonStyle.primary
+
+    # The 2-per-attack cap is reached — the button turns GREY, disabled.
+    fresh = next(a for a in await bundle.attacks.attacks() if a.id == attack.id)
+    pickban = dict(fresh.pickban)
+    pickban["attacker_sabotages"] = ["huns", "perses"]
+    fresh.pickban = pickban
+    await bundle.store.upsert_attack(fresh.to_mongo())
+    view = await panel._sabotage_dm_view(wiring, fresh, "attacker", strings)
+    assert view.children[0].item.style is discord.ButtonStyle.secondary
+    assert view.children[0].item.disabled is True
+
+
+async def test_sabotage_pick_refreshes_the_reveal_dm_and_asks_again(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """sabotage-dm-fresh-v1 (Drasah 30/10): the pick edits the Reveal DM
+    IN PLACE (crossed mosaic + fresh stock) and the panel asks « one
+    more ? » — Oui (green) re-opens the action menu in the same panel."""
+    import asyncio
+
+    import discord
+
+    from kingdoms.mods.kingdoms import kingdom_attack_panel as panel
+    from kingdoms.mods.kingdoms.kingdom_persistent import _wiring as _panel_wiring
+
+    bundle = ScoreBundle()
+    await bundle.launch_season()
+    await bundle.draw(26)
+    attack, aquitaine, _bourgogne = await bundle.meeting()
+    await bundle.stock(aquitaine, sabotage=2)
+    _wiring(bundle)
+    wiring = _panel_wiring()
+    fresh = next(a for a in await bundle.attacks.attacks() if a.id == attack.id)
+    pickban = dict(fresh.pickban)
+    pickban["attacker_dm"] = {"channel_id": 10, "message_id": 11}
+    fresh.pickban = pickban
+    await bundle.store.upsert_attack(fresh.to_mongo())
+
+    dm_edits: list[dict[str, Any]] = []
+
+    async def fake_edit(bot, ref, content, view, files=None):  # type: ignore[no-untyped-def]
+        dm_edits.append({"ref": dict(ref), "content": str(content)})
+        return True
+
+    async def fake_mosaic(entries, filename="reveal.png", **kwargs):  # type: ignore[no-untyped-def]
+        return None
+
+    monkeypatch.setattr(panel, "_edit_dm_message_safe", fake_edit)
+    monkeypatch.setattr(panel, "civ_crest_mosaic_file", fake_mosaic)
+
+    strings = panel._strings("fr")
+    view = await panel._sabotage_civ_select_view(
+        wiring, str(attack.id), "attacker", "techno", strings
+    )
+    assert view is not None
+    select = view.children[0]
+    select.values = ["huns"]
+    click = MockInteraction(user=MockUser(id="king-a"), guild=MockGuild(), channel=None, locale="fr")
+    await select.callback(click)  # type: ignore[arg-type]
+    # sabotage-visuel-v1 (04/11): the dropdown is REPLACED by the
+    # confirm row — nothing is consumed and the Reveal DM stays
+    # untouched until the ✅ Valider.
+    assert dm_edits == []
+    confirm_row = click.response.message.view
+    validate = next(
+        c for c in confirm_row.children
+        if str(getattr(c, "label", "")) == strings["sab_validate_button"]
+    )
+    val = MockInteraction(user=MockUser(id="king-a"), guild=MockGuild(), channel=None, locale="fr")
+    await validate.callback(val)  # type: ignore[arg-type]
+
+    # The Reveal DM was re-edited IN PLACE — the stock went 2 → 1.
+    assert len(dm_edits) == 1
+    assert dm_edits[0]["ref"] == {"channel_id": 10, "message_id": 11}
+    assert "Sabotage : 1" in dm_edits[0]["content"]
+    # The panel asks for a 2nd sabotage — green Oui, red Non.
+    content = str(val.response.message.content or "")
+    assert "1/2" in content
+    assert "Veux-tu saboter une autre" in content
+    confirm = click.response.message.view
+    assert confirm is not None and len(confirm.children) == 2
+    assert confirm.children[0].style is discord.ButtonStyle.success
+    assert confirm.children[1].style is discord.ButtonStyle.danger
+
+    # Oui re-opens the action menu in the SAME panel (stock left: 1).
+    yes_click = MockInteraction(
+        user=MockUser(id="king-a"), guild=MockGuild(), channel=None, locale="fr"
+    )
+    await confirm.children[0].callback(yes_click)  # type: ignore[arg-type]
+    assert "Choisis la civilisation" in str(yes_click.response.message.content or "")
+    assert yes_click.response.message.view is not None
+    assert list(yes_click.response.message.view.children)
+    for task in asyncio.all_tasks():
+        if task is not asyncio.current_task():
+            task.cancel()
+    await asyncio.sleep(0)
+
+
+async def test_sabotage_dry_pick_closes_the_panel_without_asking(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """sabotage-dm-fresh-v1: the LAST charge (dry stock) closes the
+    panel directly — no question, the DM carries the récap alone."""
+    import asyncio
+
+    from kingdoms.mods.kingdoms import kingdom_attack_panel as panel
+    from kingdoms.mods.kingdoms.kingdom_persistent import _wiring as _panel_wiring
+
+    bundle = ScoreBundle()
+    await bundle.launch_season()
+    await bundle.draw(26)
+    attack, aquitaine, _bourgogne = await bundle.meeting()
+    await bundle.stock(aquitaine, sabotage=1)
+    _wiring(bundle)
+    wiring = _panel_wiring()
+
+    dm_edits: list[str] = []
+
+    async def fake_edit(bot, ref, content, view, files=None):  # type: ignore[no-untyped-def]
+        dm_edits.append(str(content))
+        return True
+
+    async def fake_mosaic(entries, filename="reveal.png", **kwargs):  # type: ignore[no-untyped-def]
+        return None
+
+    monkeypatch.setattr(panel, "_edit_dm_message_safe", fake_edit)
+    monkeypatch.setattr(panel, "civ_crest_mosaic_file", fake_mosaic)
+
+    strings = panel._strings("fr")
+    view = await panel._sabotage_civ_select_view(
+        wiring, str(attack.id), "attacker", "techno", strings
+    )
+    assert view is not None
+    select = view.children[0]
+    select.values = ["huns"]
+    click = MockInteraction(user=MockUser(id="king-a"), guild=MockGuild(), channel=None, locale="fr")
+    await select.callback(click)  # type: ignore[arg-type]
+    confirm_row = click.response.message.view
+    validate = next(
+        c for c in confirm_row.children
+        if str(getattr(c, "label", "")) == strings["sab_validate_button"]
+    )
+    val = MockInteraction(user=MockUser(id="king-a"), guild=MockGuild(), channel=None, locale="fr")
+    await validate.callback(val)  # type: ignore[arg-type]
+
+    assert len(dm_edits) == 1
+    assert "Sabotage : 0" in dm_edits[0]
+    content = str(val.response.message.content or "")
+    assert "1/2" in content
+    assert "Veux-tu saboter une autre" not in content
+    assert val.response.message.view is None
+    for task in asyncio.all_tasks():
+        if task is not asyncio.current_task():
+            task.cancel()
+    await asyncio.sleep(0)
+
+
+# =========================================================================
+# PATCH 4.0 (Drasah 30/10) — pret-couleurs + resultat-nettoyage +
+# draft-ordre-reel + litige-mp
+# =========================================================================
+
+
+async def test_room_view_ready_buttons_wear_their_own_state() -> None:
+    """pret-couleurs-v1 (Drasah 30/10): the Prêt button is GREY « Prêt »
+    while its player waits and turns GREEN « Je suis prêt ! » (disabled)
+    once the player sits in score["ready"]."""
+    import discord
+
+    from kingdoms.mods.kingdoms.kingdom_attack_panel import _room_view, _strings
+
+    bundle = ScoreBundle()
+    await bundle.launch_season()
+    await bundle.draw(26)
+    attack, _aquitaine, _bourgogne = await bundle.open_meeting()
+    await bundle.attacks.set_lobby_url(attack.id, "king-a", "aoe2de://lobby/42")
+    await bundle.attacks.mark_ready(attack.id, "king-a")
+    _wiring(bundle)
+    attack = next(a for a in await bundle.attacks.attacks() if a.id == attack.id)
+    strings = _strings("fr")
+    view = await _room_view(attack, bundle.kingdoms, strings)
+    ready = [c for c in view.children if "room:ready:" in str(c.item.custom_id)]
+    assert len(ready) == 2
+    by_side = {
+        ("defender" if str(c.item.custom_id).endswith(":defender") else "attacker"): c
+        for c in ready
+    }
+    attacker_button = by_side["attacker"]
+    defender_button = by_side["defender"]
+    # The marked side is GREEN, disabled, « Je suis prêt ! ».
+    assert attacker_button.item.style is discord.ButtonStyle.success
+    assert attacker_button.item.disabled is True
+    assert "Je suis prêt !" in str(attacker_button.item.label)
+    assert "⚔️" in str(attacker_button.item.label)
+    # The waiting side stays GREY « Prêt », clickable.
+    assert defender_button.item.style is discord.ButtonStyle.secondary
+    assert defender_button.item.disabled is False
+    assert str(defender_button.item.label).startswith("Prêt 🛡️")
+    # Both ready → both GREEN « Je suis prêt ! ».
+    await bundle.attacks.mark_ready(attack.id, "lord-b")
+    attack = next(a for a in await bundle.attacks.attacks() if a.id == attack.id)
+    view = await _room_view(attack, bundle.kingdoms, strings)
+    ready = [c for c in view.children if "room:ready:" in str(c.item.custom_id)]
+    assert all(c.item.style is discord.ButtonStyle.success for c in ready)
+    assert all(c.item.disabled for c in ready)
+    assert all("Je suis prêt !" in str(c.item.label) for c in ready)
+
+
+async def test_resolved_room_keeps_only_the_draft_button() -> None:
+    """resultat-nettoyage-v1 (Drasah 30/10): once the winner is declared
+    the room view drops the two Prêts, the 🔗 ID button and the 🏆 — only
+    the 📜 draft sheet (readable by everyone) survives."""
+    from kingdoms.mods.kingdoms.kingdom_attack_panel import _room_view, _strings
+
+    bundle = ScoreBundle()
+    await bundle.launch_season()
+    await bundle.draw(26)
+    attack, aquitaine, _bourgogne = await bundle.open_meeting()
+    await bundle.attacks.set_lobby_url(attack.id, "king-a", "game-42")
+    await bundle.attacks.mark_ready(attack.id, "king-a")
+    await bundle.attacks.mark_ready(attack.id, "lord-b")
+    # litige-mp-v1: a convergence resolves the meeting AND sweeps the
+    # dispute flags (the stale « disputed » would freeze the room's 🏆).
+    await bundle.attacks.declare_score(attack.id, "king-a", aquitaine, "game-42")
+    _attack, outcome = await bundle.attacks.declare_score(
+        attack.id, "lord-b", aquitaine, "game-42"
+    )
+    assert outcome == "resolved"
+    _wiring(bundle)
+    attack = next(a for a in await bundle.attacks.attacks() if a.id == attack.id)
+    assert attack.is_over
+    assert not (attack.score or {}).get("disputed")
+    view = await _room_view(attack, bundle.kingdoms, _strings("fr"))
+    assert len(view.children) == 1
+    assert "room:draft" in str(view.children[0].item.custom_id)
+
+
+async def test_draft_sheet_real_order_after_the_phase_and_seeded_during() -> None:
+    """draft-ordre-reel-v1 (Drasah 30/10): once the sabotage phase is
+    resolved the 📜 sheet shows the REAL stored order numbered 1️⃣2️⃣3️⃣;
+    DURING the phase the order stays a SEEDED random with plain •
+    bullets (no numbering leak, stable across re-opens)."""
+    from kingdoms.mods.kingdoms.kingdom_attack_panel import _draft_sheet_embed, _strings
+
+    class _Attack:
+        id = "d-1"
+        attacker_lord_id = "111"
+        defender_lord_id = "222"
+        ai_defender = False
+        map_key = "fortress"
+        pickban = {  # noqa: RUF012
+            "attacker_picks": ["francs", "celtes", "goths"],
+            "defender_picks": ["huns", "perses", "bretons"],
+        }
+
+    strings = _strings("fr")
+    attack = _Attack()
+    # Phase LIVE: bullets only, the three civs present, STABLE order.
+    embed = await _draft_sheet_embed(attack, None, strings)
+    left = embed.fields[0].value
+    assert "•" in left and "1️⃣" not in left
+    assert "francs" in left and "celtes" in left and "goths" in left
+    again = await _draft_sheet_embed(attack, None, strings)
+    assert again.fields[0].value == left
+    # Phase OVER: the REAL stored order with the 1️⃣2️⃣3️⃣ numbering.
+    attack.pickban["sabotage_resolved"] = True
+    embed = await _draft_sheet_embed(attack, None, strings)
+    left = embed.fields[0].value
+    assert "1️⃣ francs" in left
+    assert "2️⃣ celtes" in left
+    assert "3️⃣ goths" in left
+    # shirar-v1 (Drasah 06/11): the sheet tells HOW the picks were made
+    # — a ranked side reads « Choix du joueur », a defaulted one
+    # (anti-blocking random draw) « Choix aléatoire ».
+    assert "Choix du joueur" in left
+    attack.pickban["default_picks"] = ["attacker"]
+    embed = await _draft_sheet_embed(attack, None, strings)
+    left = embed.fields[0].value
+    assert "Choix aléatoire" in left
+
+
+async def test_sabotage_reveal_payload_pings_and_carries_the_own_picks() -> None:
+    """reveal-mp-ping-v1 (Drasah 30/10): the reveal DM PINGS its player,
+    names the adversary block in bold and carries the OWN picks line in
+    the REAL stored order — the adversary order stays the seeded one."""
+    from kingdoms.mods.kingdoms import kingdom_attack_panel as panel
+
+    class _Attack:
+        id = "r-1"
+        attacker_lord_id = "111"
+        defender_lord_id = "222"
+        ai_defender = False
+        map_key = "fortress"
+        expires_at = datetime(2026, 10, 28, 20, 40, tzinfo=UTC)
+        pickban = {  # noqa: RUF012
+            "attacker_picks": ["francs", "goths", "huns"],
+            "defender_picks": ["bretons", "perses", "byzantins"],
+            "attacker_sabotages": ["bretons"],
+        }
+
+    async def fake_mosaic(entries, filename="reveal.png", **kwargs):  # type: ignore[no-untyped-def]
+        return None
+
+    import pytest as _pytest
+
+    mp = _pytest.MonkeyPatch()
+    mp.setattr(panel, "civ_crest_mosaic_file", fake_mosaic)
+    try:
+        strings = panel._strings("fr")
+        player_id, content, view, _files = await panel._sabotage_reveal_payload(
+            None, _Attack(), "attacker", strings
+        )
+    finally:
+        mp.undo()
+    assert player_id == "111"
+    assert content.startswith("<@111>")
+    assert "Draft de votre adversaire :" in content
+    assert "**Tes picks :**" in content
+    assert "1️⃣ francs" in content and "2️⃣ goths" in content and "3️⃣ huns" in content
+    # hygiene-ephemere-v1: the written civs block is GONE — the seeded
+    # mosaic paints the crests and the sabotage menu lists the names.
+    for civ in ("bretons", "perses", "byzantins"):
+        assert civ not in content
+    assert view is not None
+
+
+async def test_dispute_opens_one_dm_round_for_both_players() -> None:
+    """litige-mp-v1 (Drasah 30/10): a contrary declaration opens a
+    private DM round for BOTH players — each DM carries HIS own
+    declaration back, the two-kingdom select and the ✅ confirm button.
+    Manche UNIQUE: a second call never stacks a new round."""
+    from kingdoms.mods.kingdoms import kingdom_attack_panel as panel
+    from kingdoms.mods.kingdoms.kingdom_persistent import _wiring as _panel_wiring
+
+    bundle = ScoreBundle()
+    await bundle.launch_season()
+    await bundle.draw(26)
+    attack, aquitaine, bourgogne = await bundle.open_meeting()
+    await bundle.attacks.set_lobby_url(attack.id, "king-a", "game-42")
+    await bundle.attacks.mark_ready(attack.id, "king-a")
+    await bundle.attacks.mark_ready(attack.id, "lord-b")
+    await bundle.attacks.declare_score(attack.id, "king-a", aquitaine, "game-42")
+    attack, outcome = await bundle.attacks.declare_score(
+        attack.id, "lord-b", bourgogne, "game-42"
+    )
+    assert outcome == "disputed"
+    _wiring(bundle)
+    wiring = _panel_wiring()
+
+    sent: list[tuple] = []
+
+    class _Sent:
+        id = 555
+        channel = type("Ch", (), {"id": 777})()
+
+    async def fake_dm(bot, player_id, content, view=None, files=None):  # type: ignore[no-untyped-def]
+        sent.append((str(player_id), str(content), view))
+        return _Sent()
+
+    original_dm = panel._dm_user_safe
+    panel._dm_user_safe = fake_dm  # type: ignore[method-assign]
+    try:
+        await panel._send_dispute_dm_round_safe(None, wiring, attack, "fr")
+        assert len(sent) == 2
+        by_player = dict((pid, (content, view)) for pid, content, view in sent)
+        assert set(by_player) == {"king-a", "lord-b"}
+        for player_id, (content, view) in by_player.items():
+            assert "Il semblerait que vous n'ayez pas choisi le même vainqueur" in content
+            assert "admin prendra le relais" in content
+            # The DM carries the player's OWN declaration back.
+            winner = "Aquitaine" if player_id == "king-a" else "Bourgogne"
+            assert f"votre choix était **{winner}**" in content
+            # The view: the two-kingdom select + the confirm button.
+            assert view is not None and len(view.children) == 2
+        fresh = next(a for a in await bundle.attacks.attacks() if a.id == attack.id)
+        score = fresh.score or {}
+        assert score.get("dispute_dm_sent") and score.get("dispute_deadline")
+        assert score.get("dispute_replies") == {}
+        # The DM refs live in the round registry (for the later edits).
+        assert set(panel._DISPUTE_DMS[str(attack.id)]) == {"king-a", "lord-b"}
+        # Manche UNIQUE: a re-send never stacks a second round.
+        await panel._send_dispute_dm_round_safe(None, wiring, fresh, "fr")
+        assert len(sent) == 2
+    finally:
+        panel._dm_user_safe = original_dm  # type: ignore[method-assign]
+        panel._DISPUTE_DMS.pop(str(attack.id), None)
+
+
+async def test_dispute_dm_round_converges_and_resolves(monkeypatch) -> None:
+    """litige-mp-v1: a DM-round reply that CONVERGES resolves the
+    meeting — both DMs die on the convergence note, the dispute flags
+    sweep and the room refreshes (the post-resolution treatment)."""
+    from kingdoms.mods.kingdoms import kingdom_attack_panel as panel
+    from kingdoms.mods.kingdoms.kingdom_persistent import _wiring as _panel_wiring
+
+    bundle = ScoreBundle()
+    await bundle.launch_season()
+    await bundle.draw(26)
+    attack, aquitaine, bourgogne = await bundle.open_meeting()
+    await bundle.attacks.set_lobby_url(attack.id, "king-a", "game-42")
+    await bundle.attacks.mark_ready(attack.id, "king-a")
+    await bundle.attacks.mark_ready(attack.id, "lord-b")
+    await bundle.attacks.declare_score(attack.id, "king-a", aquitaine, "game-42")
+    attack, outcome = await bundle.attacks.declare_score(
+        attack.id, "lord-b", bourgogne, "game-42"
+    )
+    assert outcome == "disputed"
+    _wiring(bundle)
+    wiring = _panel_wiring()
+
+    sent: list[tuple] = []
+
+    class _Sent:
+        id = 556
+        channel = type("Ch", (), {"id": 778})()
+
+    async def fake_dm(bot, player_id, content, view=None, files=None):  # type: ignore[no-untyped-def]
+        sent.append((str(player_id), str(content), view))
+        return _Sent()
+
+    monkeypatch.setattr(panel, "_dm_user_safe", fake_dm)
+    resolved_calls: list[dict] = []
+
+    async def fake_resolved(*args, **kwargs):  # type: ignore[no-untyped-def]
+        resolved_calls.append({})
+
+    monkeypatch.setattr(panel, "_on_score_resolved_safe", fake_resolved)
+    await panel._send_dispute_dm_round_safe(None, wiring, attack, "fr")
+
+    # The DEFENDER changes his mind in his DM → convergence.
+    strings = panel._strings("fr")
+    options = await panel._dispute_select_options(wiring, attack)
+    select = panel.KingdomDisputeChoiceSelect(str(attack.id), options, "pick")
+    click = MockInteraction(
+        user=MockUser(id="lord-b"),
+        guild=MockGuild(),
+        locale="fr",
+        data={"values": [str(aquitaine)]},
+    )
+    await select.callback(click)  # type: ignore[arg-type]
+    content = str(click.response.message.content or "")
+    assert "Litige clos" in content and "Aquitaine" in content
+    # The convergence resolved the meeting and swept the flags.
+    fresh = next(a for a in await bundle.attacks.attacks() if a.id == attack.id)
+    assert fresh.is_over
+    assert not (fresh.score or {}).get("disputed")
+    assert resolved_calls == [{}]
+    # The round registry closes (both DMs died on the convergence note).
+    assert str(attack.id) not in panel._DISPUTE_DMS
+
+
+async def test_dispute_dm_round_persists_then_hands_over_to_the_admins(
+    monkeypatch,
+) -> None:
+    """litige-mp-v1: when BOTH players replied WITHOUT converging the
+    admins take over at once — the admin dispute DM goes out, the
+    ``dispute_admin_sent`` flag lands and both player DMs wear the
+    handover note."""
+    from kingdoms.mods.kingdoms import kingdom_attack_panel as panel
+    from kingdoms.mods.kingdoms.kingdom_persistent import _wiring as _panel_wiring
+
+    bundle = ScoreBundle()
+    await bundle.launch_season()
+    await bundle.draw(26)
+    attack, aquitaine, bourgogne = await bundle.open_meeting()
+    await bundle.attacks.set_lobby_url(attack.id, "king-a", "game-42")
+    await bundle.attacks.mark_ready(attack.id, "king-a")
+    await bundle.attacks.mark_ready(attack.id, "lord-b")
+    await bundle.attacks.declare_score(attack.id, "king-a", aquitaine, "game-42")
+    attack, outcome = await bundle.attacks.declare_score(
+        attack.id, "lord-b", bourgogne, "game-42"
+    )
+    assert outcome == "disputed"
+    _wiring(bundle)
+    wiring = _panel_wiring()
+
+    sent: list[tuple] = []
+    admin_dms: list[str] = []
+
+    class _Sent:
+        id = 557
+        channel = type("Ch", (), {"id": 779})()
+
+    async def fake_dm(bot, player_id, content, view=None, files=None):  # type: ignore[no-untyped-def]
+        sent.append((str(player_id), str(content), view))
+        return _Sent()
+
+    async def fake_admin_dm(bot, w, a, s):  # type: ignore[no-untyped-def]
+        admin_dms.append(str(a.id))
+
+    async def fake_record(attack_id, player_id, message):  # type: ignore[no-untyped-def]
+        return None
+
+    monkeypatch.setattr(panel, "_dm_user_safe", fake_dm)
+    monkeypatch.setattr(panel, "_dm_admins_dispute_safe", fake_admin_dm)
+    monkeypatch.setattr(panel, "_record_pickban_dm_safe", fake_record)
+    await panel._send_dispute_dm_round_safe(None, wiring, attack, "fr")
+
+    strings = panel._strings("fr")
+    options = await panel._dispute_select_options(wiring, attack)
+    # Player A CONFIRMS his own choice via the ✅ button.
+    confirm = panel.KingdomDisputeConfirmButton(str(attack.id), strings["dispute_confirm_button"])
+    click_a = MockInteraction(user=MockUser(id="king-a"), guild=MockGuild(), locale="fr")
+    await confirm.callback(click_a)  # type: ignore[arg-type]
+    content_a = str(click_a.response.message.content or "")
+    assert "en attente de ton adversaire" in content_a and "Aquitaine" in content_a
+    # Player B re-picks his contrary choice via the select.
+    select = panel.KingdomDisputeChoiceSelect(str(attack.id), options, "pick")
+    click_b = MockInteraction(
+        user=MockUser(id="lord-b"),
+        guild=MockGuild(),
+        locale="fr",
+        data={"values": [str(bourgogne)]},
+    )
+    await select.callback(click_b)  # type: ignore[arg-type]
+    content_b = str(click_b.response.message.content or "")
+    assert "admin prend le relais" in content_b
+    assert admin_dms == [str(attack.id)]
+    fresh = next(a for a in await bundle.attacks.attacks() if a.id == attack.id)
+    assert (fresh.score or {}).get("dispute_admin_sent")
+    # The deadline handover is idempotent: the flagged litige is done.
+    due = await bundle.attacks.dispute_handover_due()
+    assert [a.id for a in due] == []
+    panel._DISPUTE_DMS.pop(str(attack.id), None)
+
+
+async def test_dispute_handover_due_flags_the_deadline(monkeypatch) -> None:
+    """litige-mp-v1: a DM round that nobody answers reaches the admins
+    once the 30-minute deadline passes."""
+    from kingdoms.mods.kingdoms import attacks as attacks_module
+
+    bundle = ScoreBundle()
+    await bundle.launch_season()
+    await bundle.draw(26)
+    attack, aquitaine, bourgogne = await bundle.open_meeting()
+    await bundle.attacks.set_lobby_url(attack.id, "king-a", "game-42")
+    await bundle.attacks.mark_ready(attack.id, "king-a")
+    await bundle.attacks.mark_ready(attack.id, "lord-b")
+    await bundle.attacks.declare_score(attack.id, "king-a", aquitaine, "game-42")
+    attack, outcome = await bundle.attacks.declare_score(
+        attack.id, "lord-b", bourgogne, "game-42"
+    )
+    assert outcome == "disputed"
+    await bundle.attacks.open_dispute_dm_round(str(attack.id))
+    # Before the deadline: nothing due.
+    assert await bundle.attacks.dispute_handover_due() == []
+    # 31 minutes later: the litige reaches the admins.
+    late = datetime(2026, 10, 11, 18, 21, tzinfo=UTC)
+    due = await bundle.attacks.dispute_handover_due(now=late)
+    assert [a.id for a in due] == [attack.id]
+    await bundle.attacks.mark_dispute_admin_sent(str(attack.id))
+    assert await bundle.attacks.dispute_handover_due(now=late) == []
+
+
+async def test_reveal_note_stays_above_the_room_and_dies_at_resolution() -> None:
+    """reveal-survie-v1 (Drasah 30/10): the T-15 reveal note stays
+    ABOVE the meeting window (scoreboard) for the whole game — it is
+    swept ONLY when the winner is declared, so the cover's trace stays
+    readable while the game is played."""
+    from kingdoms.mods.kingdoms.kingdom_attack_panel import (
+        _open_attack_salon_safe,
+        _strings,
+        _sweep_pre_room_announces_safe,
+        _sweep_reveal_notes_safe,
+    )
+    from kingdoms.mods.kingdoms.kingdom_persistent import _wiring as _panel_wiring
+
+    bundle = PhasesBundle()
+    await bundle.launch_season()
+    await bundle.draw(24)
+    attack = await bundle.fresh_attack()
+    _wiring(bundle)
+    guild = MockGuild()
+    await _open_attack_salon_safe(guild, _panel_wiring(), _strings("fr"), attack)
+    salon = next(c for c in guild.text_channels if c.name != "Déclarer une attaque")
+    fresh = next(a for a in await bundle.attacks.attacks() if a.id == attack.id)
+    assert int(fresh.score.get("attack_base_message_id") or 0) == salon.messages[0].id
+    # A T-15 reveal note lands in the salon (the cover reveal).
+    reveal = await salon.send("🕶️ Reveal — la couverture tombe.")
+    score = dict(fresh.score)
+    score["reveal_message_refs"] = [{"channel_id": salon.id, "message_id": reveal.id}]
+    fresh.score = score
+    await bundle.store.upsert_attack(fresh.to_mongo())
+
+    # The room opens: the base announce is swept, the reveal SURVIVES.
+    await _sweep_pre_room_announces_safe(guild, fresh)
+    assert salon.messages[0].deleted is True
+    assert reveal.deleted is False
+
+    # The winner is declared: the reveal note goes with the meeting.
+    bot = type("Bot", (), {"guilds": [guild]})()  # type: ignore[arg-type]
+    await _sweep_reveal_notes_safe(bot, fresh)  # type: ignore[arg-type]
+    assert reveal.deleted is True
+
+
+async def test_declare_button_refuses_an_engaged_lord_at_the_click() -> None:
+    """declare-early-lock-v1 (Drasah 31/10): an ENGAGED lord gets the
+    engaged bubble AT THE CLICK — no wizard view opens at all (the
+    answer used to arrive only at the END of the flow)."""
+    from kingdoms.mods.kingdoms.kingdom_attack_panel import (
+        KingdomAttackDeclareButton,
+        _strings,
+    )
+
+    bundle = PhasesBundle()
+    await bundle.launch_season()
+    await bundle.draw(24)
+    await bundle.fresh_attack()  # king-a is the ENGAGED attacker
+    _wiring(bundle)
+    button = KingdomAttackDeclareButton(_strings("fr")["declare_button"])
+    click = MockInteraction(  # type: ignore[arg-type]
+        user=MockUser(id="king-a"),  # type: ignore[arg-type]
+        custom_id="kingdoms:attack:declare",
+        locale="fr",
+    )
+    await button.callback(click)  # type: ignore[arg-type]
+    assert "engagé dans une bataille" in str(click.response.message.content)
+    assert click.response.message.view is None
+
+
+async def test_defend_button_refuses_an_engaged_lord_at_the_click() -> None:
+    """declare-early-lock-v1 (Drasah 31/10) — TRANCHÉ: Défendre also
+    refuses an engaged lord AT THE CLICK, before any defense lands."""
+    from kingdoms.mods.kingdoms.kingdom_attack_panel import (
+        KingdomAttackDefendButton,
+        _strings,
+    )
+
+    bundle = PhasesBundle()
+    await bundle.launch_season()
+    await bundle.draw(24)
+    attack = await bundle.fresh_attack()
+    # king-b (Bourgogne, the DEFENDING kingdom) leads a second
+    # unresolved attack — he is ENGAGED and must not defend.
+    aquitaine = await bundle.kingdom_id("Aquitaine")
+    await bundle.attacks.declare_attack(
+        "king-b", (await bundle.owner_maps(aquitaine))[0], "aoe2de://x"
+    )
+    _wiring(bundle)
+    button = KingdomAttackDefendButton(attack.id, _strings("fr")["defend_button"])
+    click = MockInteraction(  # type: ignore[arg-type]
+        user=MockUser(id="king-b"),  # type: ignore[arg-type]
+        locale="fr",
+    )
+    await button.callback(click)  # type: ignore[arg-type]
+    assert "engagé dans une bataille" in str(click.response.message.content)
+    fresh = next(a for a in await bundle.attacks.attacks() if a.id == attack.id)
+    assert fresh.defender_lord_id is None
+
+
+async def test_sabotage_open_closes_the_previous_panel() -> None:
+    """sabotage-visuel-v1 (Drasah 04/11): a SECOND 🗡️ click DELETES the
+    previous panel FIRST — his live report showed panels stacking side
+    by side (the old registry entry was dropped, never deleted)."""
+    import asyncio
+
+    from kingdoms.mods.kingdoms.kingdom_attack_panel import (
+        _SABOTAGE_PANELS,
+        KingdomSabotageOpenButton,
+        _strings,
+    )
+
+    bundle = ScoreBundle()
+    await bundle.launch_season()
+    await bundle.draw(26)
+    attack, aquitaine, _bourgogne = await bundle.meeting()
+    await bundle.stock(aquitaine, sabotage=2)
+    _wiring(bundle)
+    guild = MockGuild()
+    strings = _strings("fr")
+
+    open_btn = KingdomSabotageOpenButton(attack.id, "king-a", strings["sab_open_button"])
+    first = MockInteraction(user=MockUser(id="king-a"), guild=guild, channel=None, locale="fr")
+    await open_btn.callback(first)  # type: ignore[arg-type]
+    second = MockInteraction(user=MockUser(id="king-a"), guild=guild, channel=None, locale="fr")
+    await open_btn.callback(second)  # type: ignore[arg-type]
+
+    # The previous panel is GONE — one window, replaced in place.
+    assert first.original_deleted is True
+    key = (str(attack.id), "king-a")
+    assert _SABOTAGE_PANELS[key]["interaction"] is second
+
+    _SABOTAGE_PANELS.pop(key, None)
+    for task in asyncio.all_tasks():
+        if task is not asyncio.current_task():
+            task.cancel()
+    await asyncio.sleep(0)
+
+
+async def test_sabotage_refusal_edits_the_mother_panel_in_place(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """sabotage-visuel-v1 (Drasah 04/11): a REFUSED pick (service
+    error) is EDITED INTO the mother panel — the dropdown re-opens
+    under the error line for a retry, NEVER a separate notice bubble
+    stacked next to the panel (fenêtre unique)."""
+    import asyncio
+
+    from kingdoms.mods.kingdoms import kingdom_attack_panel as panel
+    from kingdoms.mods.kingdoms.kingdom_persistent import (
+        _EPHEMERAL_WINDOWS,
+        _wiring as _panel_wiring,
+    )
+
+    bundle = ScoreBundle()
+    await bundle.launch_season()
+    await bundle.draw(26)
+    attack, aquitaine, _bourgogne = await bundle.meeting()
+    await bundle.stock(aquitaine, sabotage=2)
+    _wiring(bundle)
+    wiring = _panel_wiring()
+    guild = MockGuild()
+    strings = panel._strings("fr")
+
+    async def _boom(attack_id: str, player_id: str, civ: str) -> None:
+        raise RuntimeError("cap atteint")
+
+    monkeypatch.setattr(bundle.attacks, "sabotage_techno", _boom)
+
+    view = await panel._sabotage_civ_select_view(wiring, str(attack.id), "attacker", "techno", strings)
+    assert view is not None
+    select = view.children[0]
+    select._values = ["huns"]  # type: ignore[attr-defined]
+    pick = MockInteraction(user=MockUser(id="king-a"), guild=guild, channel=None, locale="fr")
+    await select.callback(pick)  # type: ignore[arg-type]
+    confirm = pick.response.message.view
+    validate = next(
+        c for c in confirm.children if str(getattr(c, "label", "")) == strings["sab_validate_button"]
+    )
+    val = MockInteraction(user=MockUser(id="king-a"), guild=guild, channel=None, locale="fr")
+    await validate.callback(val)  # type: ignore[arg-type]
+
+    # The refusal rides the mother panel — no separate bubble at all.
+    assert val.followup.messages == []
+    assert "king-a" not in _EPHEMERAL_WINDOWS
+    content = str(val.response.message.content or "")
+    assert "cap atteint" in content
+    assert "0/2" in content  # the récap survived the refusal
+    retry = val.response.message.view
+    assert retry is not None and hasattr(retry.children[0], "callback")  # the dropdown is back
+    fresh = next(a for a in await bundle.attacks.attacks() if a.id == attack.id)
+    assert not (fresh.pickban or {}).get("attacker_sabotages")  # nothing consumed
+
+    _EPHEMERAL_WINDOWS.pop("king-a", None)
+    panel._SABOTAGE_PANELS.pop((str(attack.id), "king-a"), None)
+    for task in asyncio.all_tasks():
+        if task is not asyncio.current_task():
+            task.cancel()
+    await asyncio.sleep(0)
+
+
+async def test_gestion_sheets_edit_the_remparts_window_in_place() -> None:
+    """gestion-inplace-v1 (Drasah 04/11, bloc 11+12): clicked from the
+    player's ephemeral Remparts window the ⚔️ Gestion d'attaque / 🛡️
+    Gestion de la défense sheets take the window IN PLACE — the sheet
+    wears the ↩️ Remparts back and NO second window is opened."""
+    import types
+
+    from kingdoms.mods.kingdoms import attacks as attacks_module
+    from kingdoms.mods.kingdoms.kingdom_attack_panel import (
+        KingdomAttackManagerButton,
+        KingdomDefenseManagerButton,
+        _strings,
+    )
+    from tests.mocks.discord_mock import MockMessage
+
+    def _ephemeral_parent(user_id: str) -> MockInteraction:
+        click = MockInteraction(user=MockUser(id=user_id), locale="fr")  # type: ignore[arg-type]
+        parent = MockMessage(view=None)
+        parent.flags = types.SimpleNamespace(ephemeral=True)  # type: ignore[attr-defined]
+        click.message = parent  # type: ignore[attr-defined]
+        return click
+
+    def _sheet_texts(message: Any) -> list[str]:
+        parts: list[str] = []
+        for child in getattr(message, "components", []) or []:
+            for attr in ("content", "label"):
+                value = getattr(child, attr, None)
+                if value:
+                    parts.append(str(value))
+            for item in getattr(child, "items", None) or []:
+                media = getattr(item, "media", None)
+                if media:
+                    parts.append(str(media))
+        return parts
+
+    bundle = PhasesBundle()
+    await bundle.launch_season()
+    await bundle.draw(24)
+    attack = await bundle.fresh_attack()
+    attacks_module._now = lambda: datetime(2026, 10, 11, 12, 30, tzinfo=UTC)
+    _wiring(bundle)
+    # The defense-manager sheet EDITS the Remparts window in place
+    # (edit_message — response.ephemeral stays False, no send at all).
+    defense = KingdomDefenseManagerButton(_strings("fr")["defense_manager_button"])
+    click = _ephemeral_parent("lord-b")
+    await defense.callback(click)  # type: ignore[arg-type]
+    assert click.response.message is not None
+    assert click.response.ephemeral is False  # edit_message, never send_message
+    assert not click.followup.messages  # no stacked second window
+    ids = [str(getattr(i, "custom_id", "") or "") for i in click.response.message.components]
+    assert "kingdoms:remparts:back" in ids
+    # gestion-entete-v1 (Drasah 04/11): the sheet KEEPS the Remparts
+    # IDENTITY — the big title and the illustration ride the face.
+    sheet = "\n".join(_sheet_texts(click.response.message))
+    assert "🧱 Remparts —" in sheet  # the big title survives the click
+    assert "Gestion de la défense" in sheet  # the gestion body under it
+    assert "attachment://rempart.png" in sheet  # the illustration is referenced
+    assert any(
+        str(getattr(a, "filename", "") or "") == "rempart.png"
+        for a in (click.response.message.attachments or [])
+    )
+    # The attack-manager sheet walks the same in-place path.
+    manager = KingdomAttackManagerButton(_strings("fr")["plan_manager_button"])
+    click2 = _ephemeral_parent("lord-b")
+    await manager.callback(click2)  # type: ignore[arg-type]
+    assert click2.response.message is not None
+    assert click2.response.ephemeral is False
+    assert not click2.followup.messages
+    ids2 = [str(getattr(i, "custom_id", "") or "") for i in click2.response.message.components]
+    assert "kingdoms:remparts:back" in ids2
+    sheet2 = "\n".join(_sheet_texts(click2.response.message))
+    assert "🧱 Remparts —" in sheet2  # the big title survives here too
+    assert "Gestion d'attaque" in sheet2
+    # The fresh face (no ephemeral parent) still opens through the
+    # fenêtre unique AND wears the back button.
+    fresh = MockInteraction(user=MockUser(id="lord-b"), locale="fr")  # type: ignore[arg-type]
+    await defense.callback(fresh)  # type: ignore[arg-type]
+    assert fresh.response.ephemeral is True
+    ids3 = [str(getattr(i, "custom_id", "") or "") for i in (fresh.response.message.components if fresh.response.message else [])]
+    assert "kingdoms:remparts:back" in ids3
+
+
+async def test_gestion_face_falls_back_when_the_illustration_is_missing(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """gestion-entete-v1: the Remparts-identity face is cosmetic — when
+    the rempart.png asset is missing the sheet still edits IN PLACE on
+    the old bare face (title + body + back, never a dead click)."""
+    import types
+
+    from kingdoms.mods.kingdoms import kingdom_lieux as lieux_module
+    from kingdoms.mods.kingdoms.kingdom_attack_panel import (
+        KingdomDefenseManagerButton,
+        _strings,
+    )
+    from tests.mocks.discord_mock import MockMessage
+
+    monkeypatch.setattr(lieux_module, "_lieu_files", lambda *_a, **_k: [])
+
+    def _ephemeral_parent(user_id: str) -> MockInteraction:
+        click = MockInteraction(user=MockUser(id=user_id), locale="fr")  # type: ignore[arg-type]
+        parent = MockMessage(view=None)
+        parent.flags = types.SimpleNamespace(ephemeral=True)  # type: ignore[attr-defined]
+        click.message = parent  # type: ignore[attr-defined]
+        return click
+
+    bundle = PhasesBundle()
+    await bundle.launch_season()
+    await bundle.draw(24)
+    await bundle.fresh_attack()
+    _wiring(bundle)
+    defense = KingdomDefenseManagerButton(_strings("fr")["defense_manager_button"])
+    click = _ephemeral_parent("lord-b")
+    await defense.callback(click)  # type: ignore[arg-type]
+    assert click.response.message is not None
+    assert click.response.ephemeral is False  # still an in-place edit
+    assert not click.followup.messages
+    parts: list[str] = []
+    for child in (click.response.message.components or []):
+        text = getattr(child, "content", None)
+        if not text:
+            data = getattr(child, "data", None)
+            if isinstance(data, dict):
+                text = data.get("content") or data.get("label")
+        if text:
+            parts.append(str(text))
+    assert "Gestion de la défense" in "\n".join(parts)  # the sheet body survives
+    ids = [str(getattr(i, "custom_id", "") or "") for i in click.response.message.components]
+    assert "kingdoms:remparts:back" in ids  # the back survives too
+
+
+async def test_cancel_defense_edits_the_sheet_in_place() -> None:
+    """gestion-inplace-v1 (Drasah 04/11): the ↩️ Retirer ma défense of the
+    defense-manager sheet withdraws AND re-renders the sheet IN PLACE —
+    the defended row becomes « en attente », the done note rides the
+    sheet, NEVER a follow-up bubble (the non-ephemeral edge keeps the
+    old defer+followup path)."""
+    import types
+
+    from kingdoms.mods.kingdoms import attacks as attacks_module
+    from kingdoms.mods.kingdoms.kingdom_attack_panel import (
+        KingdomCancelDefenseButton,
+        _strings,
+    )
+    from tests.mocks.discord_mock import MockMessage
+
+    bundle = PhasesBundle()
+    await bundle.launch_season()
+    await bundle.draw(24)
+    attack = await bundle.fresh_attack()
+    attacks_module._now = lambda: datetime(2026, 10, 11, 12, 30, tzinfo=UTC)
+    _wiring(bundle)
+    await bundle.attacks.respond_defense(attack.id, "lord-b")
+
+    def _sheet_text(message: Any) -> str:
+        parts: list[str] = []
+        for child in getattr(message, "components", []) or []:
+            text = getattr(child, "content", None)
+            if not text:
+                data = getattr(child, "data", None)
+                if isinstance(data, dict):
+                    text = data.get("content") or data.get("label")
+            if text:
+                parts.append(str(text))
+        return "\n".join(parts)
+
+    button = KingdomCancelDefenseButton(attack.id, _strings("fr")["cancel_defense_button"])
+    click = MockInteraction(user=MockUser(id="lord-b"), locale="fr")  # type: ignore[arg-type]
+    parent = MockMessage(view=None)
+    parent.flags = types.SimpleNamespace(ephemeral=True)  # type: ignore[attr-defined]
+    click.message = parent  # type: ignore[attr-defined]
+    await button.callback(click)  # type: ignore[arg-type]
+    # In-place: the sheet itself is edited, no follow-up bubble.
+    assert click.response.ephemeral is False
+    assert not click.followup.messages
+    sheet = _sheet_text(click.response.message)
+    assert "Défense retirée" in sheet
+    assert "en attente de défenseur" in sheet
+    # The withdrawn defense is gone from the attack itself.
+    fresh = next(a for a in await bundle.attacks.attacks() if a.id == attack.id)
+    assert fresh.defender_lord_id is None
+    # The non-ephemeral edge (a restarted flow without the sheet)
+    # keeps the legacy defer + followup answer.
+    await bundle.attacks.respond_defense(attack.id, "lord-b")
+    plain = MockInteraction(user=MockUser(id="lord-b"), locale="fr")  # type: ignore[arg-type]
+    await button.callback(plain)  # type: ignore[arg-type]
+    assert plain.followup.messages
+    assert "Défense retirée" in (plain.followup.messages[0].content or "")
+
+
+async def test_remparts_back_button_walks_the_window_home(monkeypatch: pytest.MonkeyPatch) -> None:
+    """gestion-inplace-v1 (Drasah 04/11): the ↩️ Remparts back re-edits
+    the player's window into the LIVE Remparts view (never a stacked
+    second window); a rebuild failure keeps the sheet with the honest
+    note instead of dying silently."""
+    import types
+
+    from kingdoms.mods.kingdoms import kingdom_lieux as lieux_module
+    from kingdoms.mods.kingdoms.kingdom_attack_panel import (
+        KingdomRempartsBackButton,
+        _strings,
+    )
+    from tests.mocks.discord_mock import MockMessage
+
+    def _ephemeral_parent() -> MockInteraction:
+        click = MockInteraction(user=MockUser(id="lord-b"), locale="fr")  # type: ignore[arg-type]
+        parent = MockMessage(view=None)
+        parent.flags = types.SimpleNamespace(ephemeral=True)  # type: ignore[attr-defined]
+        click.message = parent  # type: ignore[attr-defined]
+        return click
+
+    walked: list[bool] = []
+
+    async def _fake_walk_home(interaction: Any) -> bool:
+        walked.append(True)
+        await interaction.response.edit_message(view=None)
+        return True
+
+    monkeypatch.setattr(lieux_module, "edit_remparts_view", _fake_walk_home)
+    button = KingdomRempartsBackButton(_strings("fr")["remparts_back_button"])
+    click = _ephemeral_parent()
+    await button.callback(click)  # type: ignore[arg-type]
+    assert walked == [True]
+    assert click.response.ephemeral is False  # the window was edited, not re-sent
+    assert not click.followup.messages
+
+    # The rebuild fails — the sheet STAYS with the honest note.
+    async def _fake_broken(interaction: Any) -> bool:
+        return False
+
+    monkeypatch.setattr(lieux_module, "edit_remparts_view", _fake_broken)
+    stuck = _ephemeral_parent()
+    await button.callback(stuck)  # type: ignore[arg-type]
+    assert stuck.response.message is not None
+    assert stuck.response.ephemeral is False
+    assert not stuck.followup.messages
+    parts: list[str] = []
+    for child in (stuck.response.message.components or []):
+        text = getattr(child, "content", None)
+        if not text:
+            data = getattr(child, "data", None)
+            if isinstance(data, dict):
+                text = data.get("content") or data.get("label")
+        if text:
+            parts.append(str(text))
+    assert "Impossible de rouvrir les Remparts" in "\n".join(parts)
+
+
+def test_gestion_items_are_registered_on_the_bot() -> None:
+    """gestion-inplace-v1 (Drasah 04/11): the ↩️ Retirer ma défense and
+    ↩️ Remparts back DynamicItems MUST sit in the registration list —
+    the withdraw button was missing (dead after every restart)."""
+    from kingdoms.mods.kingdoms.kingdom_attack_panel import (
+        KingdomCancelDefenseButton,
+        KingdomRempartsBackButton,
+    )
+    from kingdoms.mods.kingdoms.kingdom_persistent import register_kingdoms_persistent_items
+
+    class _RecordingBot:
+        def __init__(self) -> None:
+            self.items: list[Any] = []
+
+        def add_dynamic_items(self, *items: Any) -> None:
+            self.items.extend(items)
+
+    bot = _RecordingBot()
+    register_kingdoms_persistent_items(bot)  # type: ignore[arg-type]
+    assert KingdomCancelDefenseButton in bot.items
+    assert KingdomRempartsBackButton in bot.items
+
+
+async def test_pickban_three_dropdowns_exclude_picked_civs_and_validate_wakes_up() -> None:
+    """shirar-v1: a pick in ONE dropdown stages into the pickban
+    DOCUMENT (stage_draft_pick — restart-proof), lands on its own slot
+    only and REMOVES the civ from the two others (duplicate impossible
+    by construction), the DM edit is VIEW-ONLY (``content`` is NEVER
+    passed — the DM text survives) and ✅ Valider wakes up at 3/3."""
+    import discord
+
+    from kingdoms.mods.kingdoms.kingdom_attack_panel import _pickban_dm_view
+    from kingdoms.mods.kingdoms.kingdom_persistent import (
+        KingdomsPanelWiring,
+        register_kingdoms_panel_wiring,
+    )
+    from tests.mocks.discord_mock import MockMessage
+
+    hand = ["francs", "bretons", "goths", "mayas"]
+    doc = _DraftDoc(hand)
+    wiring = KingdomsPanelWiring(attacks_service=_DraftService(doc))
+    register_kingdoms_panel_wiring(wiring)
+    view = await _pickban_dm_view(wiring, doc, "attacker", "king-a", "fr")
+    dm_text = "⚔️ **Pick & ban — fort**\nTa main : francs, bretons, goths, mayas"
+
+    def _selects(v: Any) -> list[Any]:
+        return [
+            c for c in v.children if isinstance(getattr(c, "item", None), discord.ui.Select)
+        ]
+
+    def _validate(v: Any) -> Any:
+        return next(
+            c
+            for c in v.children
+            if str(getattr(c.item, "custom_id", "")).startswith(
+                "kingdoms:attack:pickban:validate"
+            )
+        )
+
+    async def _pick(v: Any, index: int, civ: str) -> tuple[dict[str, Any], Any]:
+        click = MockInteraction(user=MockUser(id="king-a"), locale="fr", data={"values": [civ]})  # type: ignore[arg-type]
+        click.message = MockMessage(content=dm_text)  # type: ignore[arg-type]
+        captured: dict[str, Any] = {}
+        real_edit = click.edit_original_response
+
+        async def _edit(**kwargs: Any) -> Any:
+            captured.update(kwargs)
+            return await real_edit(**kwargs)
+
+        click.edit_original_response = _edit  # type: ignore[method-assign]
+        await _selects(v)[index].callback(click)  # type: ignore[arg-type]
+        return captured, captured.get("view")
+
+    # Fresh view : three dropdowns, the whole hand everywhere.
+    assert len(_selects(view)) == 3
+    for dynamic in _selects(view):
+        assert [o.value for o in dynamic.item.options] == hand
+
+    # Pick 1 — view-only edit, the civ leaves the two other dropdowns.
+    captured, view2 = await _pick(view, 0, "mayas")
+    assert "content" not in captured  # the DM text NEVER changes
+    assert doc.pickban["attacker_draft"] == ["mayas", "", ""]  # the pick is STAGED
+    s0, s1, s2 = _selects(view2)
+    assert sorted(o.value for o in s0.item.options) == hand  # its own pick stays offered (default)
+    assert next(o for o in s0.item.options if o.value == "mayas").default is True
+    assert sorted(o.value for o in s1.item.options) == ["bretons", "francs", "goths"]
+    assert sorted(o.value for o in s2.item.options) == ["bretons", "francs", "goths"]
+    modify = next(c for c in view2.children if str(getattr(c.item, "label", "") or "") == "✏️ Modifier")
+    assert modify.item.disabled is False and modify.item.style is discord.ButtonStyle.success  # VERT from the FIRST pick
+    assert _validate(view2).item.disabled is True  # 1/3 — still GRIS
+
+    # Picks 2 and 3 — every dropdown keeps its own pick default-shown.
+    _c2, view3 = await _pick(view2, 1, "francs")
+    _c3, view4 = await _pick(view3, 2, "goths")
+    assert "content" not in _c2 and "content" not in _c3
+    assert doc.pickban["attacker_draft"] == ["mayas", "francs", "goths"]
+    for index, civ in enumerate(doc.pickban["attacker_draft"]):
+        select = _selects(view4)[index]
+        assert next(o for o in select.item.options if o.value == civ).default is True
+        others = [c for c in doc.pickban["attacker_draft"] if c != civ]
+        assert not [o for o in select.item.options if o.value in others]  # no duplicate offered
+    assert _validate(view4).item.disabled is False  # 3/3 — the ONLY consumer wakes up
+    assert not [c for c in view4.children if str(getattr(c.item, "label", "") or "").startswith("🎯")]
+async def test_pickban_modify_resets_all_three_dropdowns() -> None:
+    """shirar-v1: ✏️ Modifier is GLOBAL — VERT as soon as one choice
+    exists (read from the pickban DOCUMENT, restart-proof), one click
+    calls clear_draft_picks and the re-rendered view offers the whole
+    hand again (✅ back to GRIS+disabled), the DM text never changes
+    (view-only edit). ❌ Annuler does not exist anymore."""
+    import discord
+
+    from kingdoms.mods.kingdoms.kingdom_attack_panel import _pickban_dm_view
+    from kingdoms.mods.kingdoms.kingdom_persistent import (
+        KingdomsPanelWiring,
+        register_kingdoms_panel_wiring,
+    )
+    from tests.mocks.discord_mock import MockMessage
+
+    hand = ["francs", "bretons", "goths", "mayas"]
+    doc = _DraftDoc(hand, draft=["mayas", "francs", "goths"])
+    wiring = KingdomsPanelWiring(attacks_service=_DraftService(doc))
+    register_kingdoms_panel_wiring(wiring)
+    view = await _pickban_dm_view(wiring, doc, "attacker", "king-a", "fr")
+    dm_text = "⚔️ **Pick & ban — fort**\nTa main : francs, bretons, goths, mayas"
+
+    def _selects(v: Any) -> list[Any]:
+        return [
+            c for c in v.children if isinstance(getattr(c, "item", None), discord.ui.Select)
+        ]
+
+    # A complete ranking — Modifier is VERT and enabled.
+    modify = next(c for c in view.children if str(getattr(c.item, "label", "") or "") == "✏️ Modifier")
+    assert modify.item.disabled is False and modify.item.style is discord.ButtonStyle.success
+    validate = next(
+        c
+        for c in view.children
+        if str(getattr(c.item, "custom_id", "")).startswith(
+            "kingdoms:attack:pickban:validate"
+        )
+    )
+    assert validate.item.disabled is False
+    # No Cancel button anywhere.
+    assert not [c for c in view.children if str(getattr(c.item, "label", "") or "").startswith("❌")]
+    # Each dropdown offers its own pick + the unpicked remainder only.
+    for index, civ in enumerate(["mayas", "francs", "goths"]):
+        offered = sorted(o.value for o in _selects(view)[index].item.options)
+        assert offered == sorted([civ, "bretons"])
+
+    # One click on Modifier — the view re-renders, the picks are wiped.
+    click = MockInteraction(user=MockUser(id="king-a"), locale="fr")  # type: ignore[arg-type]
+    click.message = MockMessage(content=dm_text)  # type: ignore[arg-type]
+    captured: dict[str, Any] = {}
+    real_edit = click.edit_original_response
+
+    async def _edit(**kwargs: Any) -> Any:
+        captured.update(kwargs)
+        return await real_edit(**kwargs)
+
+    click.edit_original_response = _edit  # type: ignore[method-assign]
+    await modify.callback(click)  # type: ignore[arg-type]
+    assert "content" not in captured  # the DM text NEVER changes
+    view2 = captured.get("view")
+    assert view2 is not None
+    assert doc.pickban["attacker_draft"] == ["", "", ""]  # the whole ranking reset
+    for dynamic in _selects(view2):
+        assert [o.value for o in dynamic.item.options] == hand  # the whole hand again
+        assert not [o for o in dynamic.item.options if o.default]
+    modify2 = next(c for c in view2.children if str(getattr(c.item, "label", "") or "") == "✏️ Modifier")
+    assert modify2.item.disabled is True and modify2.item.style is discord.ButtonStyle.secondary  # back to GRIS
+    validate2 = next(
+        c
+        for c in view2.children
+        if str(getattr(c.item, "custom_id", "")).startswith(
+            "kingdoms:attack:pickban:validate"
+        )
+    )
+    assert validate2.item.disabled is True  # back to GRIS
+
+
+async def test_matchup_announce_lands_in_the_salon_once_both_drafts_resolve() -> None:
+    """beta-retours-v1 (Drasah 06/11, point 3): the WHO VS WHO note —
+    the human matchup names both players, the AI matchup carries the
+    multijoueur / spectateurs / AI-level reminders (the reveal stays
+    anonymous, the matchup lands AFTER both drafts)."""
+    from kingdoms.mods.kingdoms import kingdom_attack_panel as panel
+
+    bundle = ScoreBundle()
+    await bundle.launch_season()
+    await bundle.draw(27)
+    attack, _aquitaine, _bourgogne = await bundle.meeting()
+    _wiring(bundle)
+    guild = MockGuild()
+    salon = await guild.create_text_channel("salon d'attaque")
+    await bundle.attacks.record_attack_channel(attack.id, salon.id)
+    strings = panel._strings("fr")
+
+    # The human matchup — both players named, no AI reminder.
+    await panel._announce_matchup_safe(guild, attack, bundle.attacks, bundle.kingdoms, strings)
+    notes = [m for m in salon.messages if "VS" in str(m.content or "")]
+    assert len(notes) == 1
+    assert "**King A**" in (notes[0].content or "")
+    assert "**Lord B**" in (notes[0].content or "")
+    assert "IA" not in (notes[0].content or "")
+
+    # The AI matchup wording carries the reminders (FR + EN).
+    fr = strings["matchup_ai"].format(attacker="King A", kingdom="Bourgogne", level=3)
+    assert "IA Bourgogne" in fr and "niveau de l'IA : **3**/5" in fr
+    assert "multijoueur" in fr and "spectateurs autorisés" in fr
+    en = panel._strings("en")["matchup_ai"].format(attacker="King A", kingdom="B", level=3)
+    assert "multiplayer" in en and "spectators" in en
