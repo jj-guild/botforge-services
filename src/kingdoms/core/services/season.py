@@ -1,8 +1,9 @@
 """Season service: generic season lifecycle over ladder pool rotations (kingdoms-services#132).
 
 Seasons live in the generic core so tournament/other mods reuse them later.
-Activation is a transactional pool switch delegated to GameDataService
-(``activate_map_pool``), plus the season's own state transition, the
+Activation flips the season's map pool to ``used``
+(``GameDataService.activate_map_pool``), plus the season's own state
+transition, the
 ``pool.switched`` notification intent and an audit line. ``reset_ratings``
 seasons additionally announce ``ratings.reset`` — the rating path itself
 (RESET rating-history entries) belongs to the ladder domain (#134).
@@ -147,8 +148,8 @@ class SeasonService:
     async def activate_season(self, season_id: str, now: int) -> SeasonModel:
         """Activate a scheduled season: transactional pool switch + state.
 
-        Delegates the pool history to ``GameDataService.activate_map_pool``
-        (the transactional switch of reference §4), then flips the season
+        Moves the season's pool to ``used`` (``activate_map_pool`` —
+        the pool's composition freezes), then flips the season
         state, emits ``pool.switched`` (players) and — for reset seasons —
         ``ratings.reset`` intents, and audits the activation.
         """
@@ -159,7 +160,9 @@ class SeasonService:
         if current is not None and current["_id"] != season_id:
             raise SeasonActiveError(f"ladder {season.ladder_id!r} already has an active season {current['_id']!r}")
         if season.map_pool_id:
-            await self._game_data.activate_map_pool(season.ladder_id, season.map_pool_id)
+            # usage is a fact: a season that starts on a pool moves it to
+            # ``used`` whatever its lifecycle state (and freezes it)
+            await self._game_data.activate_map_pool(season.map_pool_id)
         season = season.model_copy(update={"state": SEASON_STATE_ACTIVE, "activated_at": now})
         await self._db.upsert_season(season.to_mongo())
         if season.map_pool_id:
