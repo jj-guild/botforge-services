@@ -209,6 +209,16 @@ list&nbsp;keeps&nbsp;its&nbsp;meaning:&nbsp;exactly&nbsp;those&nbsp;games.</span
 
 <dl><dt>async <a name="GuildAccessService-enabled_mods"><strong>enabled_mods</strong></a>(self, guild_id: 'str') -&gt; 'tuple[str, ...]'</dt><dd><span class="code">List&nbsp;the&nbsp;mods&nbsp;granted&nbsp;to&nbsp;one&nbsp;guild&nbsp;(default:&nbsp;the&nbsp;whole&nbsp;catalog).</span></dd></dl>
 
+<dl><dt>async <a name="GuildAccessService-ensure_known"><strong>ensure_known</strong></a>(self, guild_id: 'str') -&gt; 'dict[str, Any]'</dt><dd><span class="code">Make&nbsp;sure&nbsp;one&nbsp;guild&nbsp;the&nbsp;bot&nbsp;sits&nbsp;in&nbsp;has&nbsp;an&nbsp;access&nbsp;document.<br>
+&nbsp;<br>
+The&nbsp;panel's&nbsp;server&nbsp;list&nbsp;reads&nbsp;the&nbsp;collection,&nbsp;but&nbsp;documents&nbsp;were<br>
+only&nbsp;ever&nbsp;written&nbsp;by&nbsp;a&nbsp;request&nbsp;or&nbsp;a&nbsp;grant&nbsp;—&nbsp;a&nbsp;database&nbsp;reset<br>
+showed&nbsp;0&nbsp;servers&nbsp;while&nbsp;the&nbsp;bot&nbsp;kept&nbsp;interacting&nbsp;with&nbsp;its&nbsp;guilds.<br>
+The&nbsp;boot&nbsp;(and&nbsp;every&nbsp;guild&nbsp;join)&nbsp;re-creates&nbsp;the&nbsp;default&nbsp;document<br>
+(no&nbsp;grants:&nbsp;the&nbsp;default-open&nbsp;catalog,&nbsp;semantically&nbsp;identical&nbsp;to<br>
+no&nbsp;document&nbsp;at&nbsp;all),&nbsp;so&nbsp;the&nbsp;stored&nbsp;list&nbsp;and&nbsp;the&nbsp;bot's&nbsp;guilds&nbsp;stay<br>
+coherent.&nbsp;An&nbsp;existing&nbsp;document&nbsp;is&nbsp;returned&nbsp;untouched.</span></dd></dl>
+
 <dl><dt>async <a name="GuildAccessService-get"><strong>get</strong></a>(self, guild_id: 'str') -&gt; 'dict[str, Any]'</dt><dd><span class="code">Return&nbsp;one&nbsp;guild's&nbsp;access&nbsp;state&nbsp;(default:&nbsp;nothing&nbsp;active).</span></dd></dl>
 
 <dl><dt>async <a name="GuildAccessService-grant"><strong>grant</strong></a>(self, guild_id: 'str', keys: 'list[str]') -&gt; 'dict[str, Any]'</dt><dd><span class="code">Grant&nbsp;games/mods&nbsp;to&nbsp;a&nbsp;guild&nbsp;directly&nbsp;(bot&nbsp;admin,&nbsp;no&nbsp;request).<br>

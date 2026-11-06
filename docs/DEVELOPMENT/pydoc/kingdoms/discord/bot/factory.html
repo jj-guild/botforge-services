@@ -189,6 +189,8 @@ crash&nbsp;reporter&nbsp;(cause,&nbsp;interaction&nbsp;context,&nbsp;GitHub&nbsp
 
 <dl><dt>async <a name="KingdomsBot-on_error"><strong>on_error</strong></a>(self, event_method: 'str', /, *args: 'object', **kwargs: 'object') -&gt; 'None'</dt><dd><span class="code">Route&nbsp;unhandled&nbsp;gateway-event&nbsp;failures&nbsp;to&nbsp;each&nbsp;guild's&nbsp;bot-logs.</span></dd></dl>
 
+<dl><dt>async <a name="KingdomsBot-on_guild_join"><strong>on_guild_join</strong></a>(self, guild: 'discord.Guild') -&gt; 'None'</dt><dd><span class="code">Make&nbsp;the&nbsp;joined&nbsp;guild&nbsp;known&nbsp;to&nbsp;the&nbsp;access&nbsp;store&nbsp;(panel&nbsp;coherence).</span></dd></dl>
+
 <dl><dt>async <a name="KingdomsBot-on_interaction"><strong>on_interaction</strong></a>(self, interaction: 'discord.Interaction') -&gt; 'None'</dt><dd><span class="code">Log&nbsp;the&nbsp;triggered&nbsp;action,&nbsp;then&nbsp;observe&nbsp;the&nbsp;clicker's&nbsp;language.<br>
 &nbsp;<br>
 One&nbsp;INFO&nbsp;line&nbsp;per&nbsp;user&nbsp;action&nbsp;(the&nbsp;pod's&nbsp;observable&nbsp;trail&nbsp;—<br>
