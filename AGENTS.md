@@ -149,6 +149,13 @@ A session writing a doc, a comment or a commit in French is a bug.
   Enforced by the AST layering guard (`tests/architecture/test_layering.py`,
   ADR-0021 R5); target: one distinct MongoDB user per owner. Binding
   rule: kingdoms docs/CONVENTIONS.md, *Service data isolation*.
+- **Configuration over code** (developer-mandated): anything declarative
+  (channels, trees, labels, emojis, `admin_only`/`read_only` flags,
+  views, tunables, provider sites) lives in `config/` (`views.yaml`,
+  `mods/<mod>.yaml`, locales) — validated at boot, fail-closed. If the
+  config seam is missing, the work is building the seam in the
+  platform, never hand-coding around it. Binding rule: kingdoms
+  docs/CONVENTIONS.md, *Configuration over code*.
 - **CLI-first mandate:** the `kingdoms` CLI
   (`src/kingdoms/cli/`, [docs/CLI.md](docs/CLI.md)) is the front door
   for environments and ops — doctor (local env checks), local stack,
