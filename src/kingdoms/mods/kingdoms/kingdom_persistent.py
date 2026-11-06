@@ -308,6 +308,16 @@ def register_kingdoms_persistent_items(bot: discord.Client) -> None:
         KingdomChurchArrangeButton,
         KingdomChurchUpgradeButton,
         KingdomChurchConsecrateButton,
+        # ameliorer-vue-v2 (Drasah 06/11): the church salon's Améliorer
+        # entry, the two faces of the Améliorer window, the info/state
+        # faces of the Paroisse salon and the window's returns — all
+        # restart-proof (the ephemeral windows never ride add_view).
+        KingdomChurchUpgradeViewButton,
+        KingdomChurchUpgradeInfoButton,
+        KingdomChurchUpgradeBackButton,
+        KingdomChurchInfoButton,
+        KingdomChurchStateButton,
+        KingdomChurchBackButton,
         KingdomDistributorButton,
         KingdomTavernDrinkButton,
         # taverne-immersion-v1 (Drasah 26/10): the taverne facade's
