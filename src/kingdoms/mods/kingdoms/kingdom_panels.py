@@ -1250,3 +1250,1446 @@ STRINGS: dict[str, dict[str, Any]] = {
         ),
         "church_wedding_announce": (
             "💍 Mariage scellé — {0} des {1} épouse les **{2}** · 🔒 verrou"
+            " {3}h · 🎁 Offrande +{4} ⚙️ · la civilisation est désormais"
+            " **exclusive** au royaume {1} jusqu'à brisure du lien."
+        ),
+        "church_upgrade_confirm_hint": (
+            "L'amélioration paiera {0} ⚙️ depuis le trésor du royaume — la"
+            " fenêtre se mettra à jour après l'achat."
+        ),
+        "church_marry_ok": (
+            "💍 Mariage scellé : **{0}** — verrou {1}h, Offrande +{2} ⚙️."
+        ),
+        "mercenary_refund_dm": (
+            "⚔️ Le Chef Mercenaire rappelle ton contrat : **{0}** vient "
+            "d'être scellée en mariage — ta copie mercenaire est retirée "
+            "et ta bourse est remboursée de **{1} écu(s)**."
+        ),
+        "church_marry_royal_ok": (
+            "👑💍 Mariage scellé : **{0}** devient votre Reine — verrou royal"
+            " {1}h · +2 ⚙️ au trésor · sécurisée toute la saison."
+        ),
+        "church_marry_royal_arranged_ok": (
+            "👑💍 Mariage arrangé royal : **{0}** devient la Reine — verrou"
+            " royal {1}h · +2 ⚙️ · sécurisée toute la saison."
+        ),
+        "church_err_royal_points": (
+            "❌ Un mariage royal coûte DEUX points de mariage — le royaume"
+            " n'en détient pas assez."
+        ),
+        "church_err_royal_token": (
+            "❌ Un mariage arrangé royal coûte DEUX jetons — le royaume n'en"
+            " détient pas assez."
+        ),
+        "royal_wedding_announce": (
+            "👑💍 **Grand mariage royal** — {0} a pris **{1}** pour Reine"
+            " du Royaume {2} ! 📑 Le détail est dans le fil « En savoir"
+            " plus » ci-dessous."
+        ),
+        "royal_wedding_couple": "{0}, promise de la civilisation {1}",
+        "royal_wedding_more_title": "En savoir plus",
+        "royal_wedding_more_body": (
+            "📑 **En savoir plus — le mariage royal du Royaume {1}**\n"
+            "🎯 **Gains** —\n"
+            "🏴 **Civilisation {0}** ⏳ **Toute la saison**\n"
+            "⚙️ **+2 en trésorerie technologique**.\n"
+            "🔒 **Verrou** — Durée des Noces {2} h : ne peut ni attaquer"
+            " ni défendre jusqu'à **{3}**."
+        ),
+        "church_marry_kingdom_none": "Tu n'appartiens à aucun royaume de la saison.",
+        "church_arrange_king_only": "Seul le Roi consomme un mariage arrangé.",
+        "church_upgrade_king_only": "Seul le Roi améliore la Paroisse.",
+        "church_upgrade_ok": (
+            "⛪ Paroisse améliorée : **{0}** (palier {1}/{2}) — trésorerie restante : {3} ⚙️"
+        ),
+        "church_upgrade_max": "❌ La Paroisse est déjà au palier maximal.",
+        "cathedral_consecrate_button": "⛪ Consacrer un Lieu Sacrée (3 ⚙️)",
+        "cathedral_consecrate_choose": "⛪ Choisis le territoire à consacrer :",
+        "cathedral_consecrate_king_only": "❌ Seul le Roi consacre un Lieu Sacrée.",
+        "cathedral_consecrate_tier": "❌ La consécration exige le palier Cathédrale.",
+        "cathedral_consecrate_none": "❌ Aucun territoire n'est disponible à la consécration pour le moment.",
+        "cathedral_consecrate_ok": (
+            "⛪ Le chantier est posé sur **{0}** — verdict le {1} (Paris). "
+            "Jusque-là le territoire résiste à toute technologie ; une attaque classique peut détruire le chantier."
+        ),
+        "cathedral_consecrated": (
+            "⛪ **{0}** consacre un Lieu Sacrée sur **{1}** — "
+            "72h de chantier : immunisé contre les technologies, attaquable en classique."
+        ),
+        "cathedral_sacred": (
+            "⛪ Le Lieu Sacrée de **{0}** sur **{1}** a survécu à son chantier — le territoire est désormais "
+            "**SACRÉ** : immunisé contre tout, à vie."
+        ),
+        "church_err_not_in_hand": (
+            "❌ Cette civilisation n'est pas dans votre main d'Alliances."
+        ),
+        "church_err_no_hand": (
+            "❌ Votre royaume ne détient aucune civilisation libre — la main est"
+            " renouvelée au prochain Jour du Seigneur."
+        ),
+        "market_choose_corrupt": "🎯 Choisissez le territoire à corrompre :",
+        "market_choose_guard": "🛡️ Choisissez le territoire à protéger :",
+        "market_no_options": "Aucune option disponible pour le moment.",
+        "market_territory_line": "{} — propriétaire {}",
+        "market_tech": {
+            "embuscade": "🥷 Embuscade",
+            "traquenard": "🪤 Traquenard",
+            "contre_espionnage": "👀 Contre-espionnage",
+            "sabotage": "🗡️ Sabotage",
+            "jeu_d_armes": "⚔️ Jeu d'armes",
+        },
+        "market_action": {
+            "explorateur": "🧭 Explorateur",
+            "corruption": "💰 Corruption",
+            "garde_royale": "💂 Garde Royale",
+            "patrouille": "👣 Patrouille",
+            "mariage_arrange": "💐 Mariage arrangé",
+        },
+    },
+}
+
+
+def _strings(locale: str) -> dict[str, Any]:
+    return STRINGS["fr"] if str(locale).lower().startswith("fr") else STRINGS["en"]
+
+
+def _is_admin(interaction: discord.Interaction, bot_admins: tuple[str, ...]) -> bool:
+    """Whether the invoking member is a BOT_ADMINS operator or guild admin."""
+    user_id = getattr(interaction.user, "id", None)
+    if user_id is not None and str(user_id) in bot_admins:
+        return True
+    permissions = getattr(interaction.user, "guild_permissions", None)
+    return bool(permissions and permissions.administrator)
+
+
+class _ApplicationContext:
+    """Everything the ephemeral enrollment flow needs to carry along."""
+
+    def __init__(
+        self,
+        locale: str = "en",
+        candidatures_channel: discord.abc.Messageable | None = None,
+        bot_admins: tuple[str, ...] = (),
+        mod_roles_service: ModRolesService | None = None,
+        guild_id: str = "",
+        kingdoms_service: Any = None,
+        anchor: Any = None,
+    ) -> None:
+        self.locale = "fr" if str(locale).lower().startswith("fr") else "en"
+        self.candidatures_channel = candidatures_channel
+        self.bot_admins = bot_admins
+        self.mod_roles_service = mod_roles_service
+        self.guild_id = guild_id
+        self.kingdoms_service = kingdoms_service
+        # The interaction that created the single ephemeral bubble: its
+        # webhook token is the only one that can edit/delete that bubble
+        # from the final submit step (a modal cannot edit it).
+        self.anchor = anchor
+
+    async def declared_kingdom_names(self) -> list[str]:
+        """Return the player kingdom names of the current season (empty if none)."""
+        if self.kingdoms_service is None:
+            return []
+        try:
+            kingdoms = await self.kingdoms_service.kingdoms()
+        except Exception:
+            logger.warning("KINGDOM PANELS: kingdom list read failed", exc_info=True)
+            return []
+        return sorted(k.name for k in kingdoms if getattr(k, "type", "player") != "gaia")
+
+
+class _KingApplicationModal(discord.ui.Modal):
+    """The King form: Insight link + game ID (name comes after approval)."""
+
+    insight_link: discord.ui.TextInput[_KingApplicationModal] = discord.ui.TextInput(
+        label="AoE II Insight link",
+        placeholder="https://www.aoe2insight.com/…",
+        max_length=200,
+        required=True,
+    )
+    game_id: discord.ui.TextInput[_KingApplicationModal] = discord.ui.TextInput(
+        label="Game ID",
+        placeholder="12345678",
+        max_length=20,
+        required=True,
+    )
+    smurfs: discord.ui.TextInput[_KingApplicationModal] = discord.ui.TextInput(
+        label="Smurf accounts",
+        style=discord.TextStyle.paragraph,
+        placeholder="https://www.aoe2insight.com/… (one per line, optional)",
+        max_length=400,
+        required=False,
+    )
+
+    def __init__(self, context: _ApplicationContext) -> None:
+        self.context = context
+        strings = _strings(context.locale)
+        self.insight_link.label = strings["insight_field"][:45]
+        self.insight_link.placeholder = strings["insight_placeholder"][:100]
+        self.game_id.label = strings["game_id_field"][:45]
+        self.game_id.placeholder = strings["game_id_placeholder"][:100]
+        self.smurfs.label = strings["smurfs_field"][:45]
+        self.smurfs.placeholder = strings["smurfs_placeholder"][:100]
+        super().__init__(title=strings["apply_title"][:45], timeout=300)
+
+    async def on_submit(self, interaction: discord.Interaction) -> None:
+        await _send_summary(
+            interaction,
+            self.context,
+            is_king=True,
+            kingdom_name="",
+            queued=False,
+            insight=(self.insight_link.value or "").strip(),
+            game_id=(self.game_id.value or "").strip(),
+            smurfs=_parse_smurfs(self.smurfs.value or ""),
+        )
+
+
+class _LordApplicationModal(discord.ui.Modal):
+    """The Lord form (kingdom chosen beforehand): Insight link + game ID."""
+
+    insight_link: discord.ui.TextInput[_LordApplicationModal] = discord.ui.TextInput(
+        label="AoE II Insight link",
+        placeholder="https://www.aoe2insight.com/…",
+        max_length=200,
+        required=True,
+    )
+    game_id: discord.ui.TextInput[_LordApplicationModal] = discord.ui.TextInput(
+        label="Game ID",
+        placeholder="12345678",
+        max_length=20,
+        required=True,
+    )
+    smurfs: discord.ui.TextInput[_LordApplicationModal] = discord.ui.TextInput(
+        label="Smurf accounts",
+        style=discord.TextStyle.paragraph,
+        placeholder="https://www.aoe2insight.com/… (one per line, optional)",
+        max_length=400,
+        required=False,
+    )
+
+    def __init__(self, context: _ApplicationContext, kingdom_choice: str = "") -> None:
+        self.context = context
+        self.kingdom_choice = kingdom_choice
+        strings = _strings(context.locale)
+        self.insight_link.label = strings["insight_field"][:45]
+        self.insight_link.placeholder = strings["insight_placeholder"][:100]
+        self.game_id.label = strings["game_id_field"][:45]
+        self.game_id.placeholder = strings["game_id_placeholder"][:100]
+        self.smurfs.label = strings["smurfs_field"][:45]
+        self.smurfs.placeholder = strings["smurfs_placeholder"][:100]
+        super().__init__(title=strings["apply_title"][:45], timeout=300)
+
+    async def on_submit(self, interaction: discord.Interaction) -> None:
+        await _send_summary(
+            interaction,
+            self.context,
+            is_king=False,
+            kingdom_name=self.kingdom_choice,
+            queued=self.kingdom_choice == QUEUE_VALUE,
+            insight=(self.insight_link.value or "").strip(),
+            game_id=(self.game_id.value or "").strip(),
+            smurfs=_parse_smurfs(self.smurfs.value or ""),
+        )
+
+
+def _parse_smurfs(raw: str) -> tuple[str, ...]:
+    """Split the smurf textarea into clean, de-duplicated links."""
+    seen: dict[str, None] = {}
+    for line in raw.splitlines():
+        value = line.strip()
+        if value:
+            seen.setdefault(value, None)
+    return tuple(seen)
+
+
+async def _send_summary(
+    interaction: discord.Interaction,
+    context: _ApplicationContext,
+    *,
+    is_king: bool,
+    kingdom_name: str,
+    queued: bool,
+    insight: str,
+    game_id: str,
+    smurfs: tuple[str, ...] = (),
+) -> None:
+    """Validate the form, then show the review + rules-acceptance step.
+
+    The modal was launched from a component of the ephemeral bubble, so
+    edit_message rewrites THAT bubble — the flow stays a single message
+    (validation errors are the exception: they open their own short
+    bubble and leave the flow bubble intact).
+    """
+    strings = _strings(context.locale)
+    if not INSIGHT_URL.match(insight):
+        await interaction.response.send_message(strings["bad_insight"], ephemeral=True)
+        return
+    if not GAME_ID.match(game_id):
+        await interaction.response.send_message(strings["bad_game_id"], ephemeral=True)
+        return
+
+    role_label = strings["role_king"] if is_king else strings["role_lord"]
+    lines = [f"# {strings['summary_title']}", f"**{strings['summary_role']}** : {role_label}"]
+    if is_king:
+        lines.append(f"**{strings['summary_kingdom']}** : {strings['kingdom_after_validation']}")
+    elif queued:
+        lines.append(f"**{strings['summary_queue']}** : {strings['queue_value']}")
+    else:
+        lines.append(f"**{strings['summary_kingdom']}** : {kingdom_name}")
+    lines.extend(
+        [
+            f"**{strings['summary_insight']}** : {insight}",
+            f"**{strings['summary_game_id']}** : {game_id}",
+        ]
+    )
+    if smurfs:
+        lines.append(f"**{strings['summary_smurfs']}** : {', '.join(smurfs)}")
+    lines.append(f"**{strings['rules_label']}**")
+    view = _summary_view(
+        interaction.user.id,
+        interaction.user.name,
+        is_king=is_king,
+        kingdom_name=kingdom_name,
+        queued=queued,
+        insight=insight,
+        game_id=game_id,
+        smurfs=smurfs,
+        context=context,
+    )
+    # The modal was launched from a component of the ephemeral flow
+    # bubble: edit_message rewrites that same bubble (postulation-v1
+    # single-bubble rule) instead of stacking a new ephemeral message.
+    await interaction.response.edit_message(content="\n".join(lines), view=view)
+
+
+async def _rewrite_flow_confirmation(
+    context: _ApplicationContext,
+    interaction: discord.Interaction,
+    confirmation: str,
+) -> None:
+    """Rewrite the single ephemeral flow bubble into its final state.
+
+    Only the anchor interaction's webhook token can edit the ephemeral
+    bubble it created (postulation-v1 single-bubble rule); fall back to
+    a fresh ephemeral followup when the anchor or bubble is gone, then
+    schedule the short confirmation auto-delete (~30 s).
+    """
+    anchor = context.anchor
+    flow_message = getattr(interaction, "message", None)
+    flow_id = int(getattr(flow_message, "id", 0) or 0)
+    edited = False
+    if anchor is not None and flow_id:
+        try:
+            await anchor.followup.edit_message(flow_id, content=confirmation, view=None)
+            edited = True
+        except Exception:
+            logger.warning("KINGDOM PANELS: flow bubble edit failed", exc_info=True)
+    if not edited:
+        await interaction.followup.send(confirmation, ephemeral=True)
+    if anchor is not None and flow_id:
+        _schedule_ephemeral_delete(anchor, flow_message, seconds=_CONFIRM_TTL_SECONDS)
+
+
+async def _enrolled_blocker(
+    strings: dict[str, Any],
+    service: Any,
+    applicant_id: int,
+) -> str | None:
+    """Return the refusal string when the player is already enrolled."""
+    if service is None:
+        return None
+    try:
+        lords = await service.lords()
+    except Exception:
+        lords = []
+    for lord in lords:
+        if str(lord.id) == str(applicant_id) and not lord.left:
+            # 2026-10-24 recovery path (Drasah): a validated King still
+            # awaiting a kingdom (queue, no kingdom) may re-apply — the
+            # approval of the new candidature RESENDS the kingdom-request
+            # DM (the approval flow already sends it even when the
+            # enrollment itself answers "already enrolled"). This is the
+            # self-service recovery for a King whose DM was lost.
+            from kingdoms.mods.kingdoms.service import KING_ROLE
+
+            if (
+                lord.role is KING_ROLE
+                and bool(getattr(lord, "in_queue", False))
+                and getattr(lord, "kingdom_id", None) is None
+            ):
+                return None
+            return str(strings["apply_already_enrolled"])
+    return None
+
+
+async def _pending_candidature_blocker(
+    strings: dict[str, Any],
+    channel: discord.abc.Messageable | None,
+    applicant_id: int,
+) -> str | None:
+    """Return the refusal string when a candidature is still pending.
+
+    A candidature counts as pending while its decision view is still
+    attached (``components`` non-empty) — a decided message keeps its
+    content but loses its buttons, so the player may re-apply after a
+    refusal.
+    """
+    if channel is None:
+        return None
+    mention = f"<@{applicant_id}>"
+    try:
+        recent = await channel_messages(channel)
+    except Exception:
+        recent = []
+    for message in recent:
+        content = getattr(message, "content", "") or ""
+        if mention not in content:
+            continue
+        if strings["candidature_title"] not in content:
+            continue
+        if getattr(message, "components", None):
+            return str(strings["apply_already_pending"])
+    return None
+
+
+async def _apply_blocker(context: _ApplicationContext, applicant_id: int) -> str | None:
+    """Return the refusal string when the player may not apply again.
+
+    Drasah's rule (2026-10-18): ONE candidature per person — a player
+    with a still-pending candidature or already enrolled in the
+    current season must not stack applications.
+    """
+    strings = _strings(context.locale)
+    enrolled = await _enrolled_blocker(strings, context.kingdoms_service, applicant_id)
+    if enrolled is not None:
+        return enrolled
+    return await _pending_candidature_blocker(strings, context.candidatures_channel, applicant_id)
+
+
+def _summary_view(
+    applicant_id: int,
+    applicant_name: str,
+    *,
+    is_king: bool,
+    kingdom_name: str,
+    queued: bool,
+    insight: str,
+    game_id: str,
+    smurfs: tuple[str, ...],
+    context: _ApplicationContext,
+) -> discord.ui.View:
+    """Build the review step: the rules checkbox (a button) + cancel."""
+    strings = _strings(context.locale)
+
+    async def submit(interaction: discord.Interaction) -> None:
+        # Ack first (3-second rule): rewrite the single flow bubble into
+        # its "sending" state while the slow work runs.
+        await interaction.response.edit_message(content=strings["apply_sending"], view=None)
+        blocker = await _apply_blocker(context, applicant_id)
+        if blocker is not None:
+            await interaction.followup.send(blocker, ephemeral=True)
+            return
+        # beta-king-auto-v1 (Drasah 06/11): under an armed beta a KING
+        # candidature (kingdom founding) is AUTO-ACCEPTED — no admin
+        # gate, the players wander and test without Drasah. The very
+        # approval pipeline of the admin ✅ runs (enrollment, welcome,
+        # kingdom-name request DM, season status refresh).
+        if is_king and await _beta_season_active(context):
+            from kingdoms.mods.kingdoms.kingdom_persistent import (
+                _apply_candidature_approval,
+                _wiring,
+            )
+
+            try:
+                extra = await _apply_candidature_approval(
+                    interaction,
+                    _wiring(),
+                    strings,
+                    context.locale,
+                    applicant_id=str(applicant_id),
+                    is_king=True,
+                    kingdom_name=None,
+                )
+                confirmation = f"{strings['beta_king_auto_ok']}{extra}"
+            except Exception:
+                logger.warning(
+                    "KINGDOM PANELS: beta king auto-accept failed", exc_info=True
+                )
+                confirmation = strings["beta_king_auto_failed"]
+            await _rewrite_flow_confirmation(
+                context, interaction, f"{confirmation}\n{strings['sent_ttl']}"
+            )
+            return
+        role_label = strings["role_king"] if is_king else strings["role_lord"]
+        lines = [
+            f"# 📋 {applicant_name}",
+            f"**{strings['candidature_role']}** : {role_label}",
+        ]
+        if is_king:
+            lines.append(f"**{strings['candidature_kingdom']}** : {strings['kingdom_after_validation']}")
+        elif not queued:
+            lines.append(f"**{strings['candidature_kingdom']}** : {kingdom_name}")
+        else:
+            lines.append(f"**{strings['candidature_queue']}** : {strings['queue_value']}")
+        lines.extend(
+            [
+                f"**{strings['candidature_insight']}** : {insight}",
+                f"**{strings['candidature_game_id']}** : {game_id}",
+            ]
+        )
+        if smurfs:
+            lines.append(f"**{strings['summary_smurfs']}** : {', '.join(smurfs)}")
+        lines.append(f"<@{applicant_id}>")
+        view = _candidature_view(
+            context.locale,
+            bot_admins=context.bot_admins,
+            mod_roles_service=context.mod_roles_service,
+            guild_id=context.guild_id,
+        )
+        target = context.candidatures_channel
+        if target is None:
+            await interaction.followup.send(strings["no_service"], ephemeral=True)
+            return
+        await target.send("\n".join(lines), view=view)
+        profile_note = await _provision_profile_note(
+            context,
+            interaction,
+            strings,
+            is_king=is_king,
+            kingdom_name=kingdom_name,
+            queued=queued,
+            insight=insight,
+            game_id=game_id,
+            smurfs=smurfs,
+        )
+        confirmation = strings["sent"] if not profile_note else f"{strings['sent']}\n{profile_note}"
+        confirmation = f"{confirmation}\n{strings['sent_ttl']}"
+        await _rewrite_flow_confirmation(context, interaction, confirmation)
+
+    async def cancel(interaction: discord.Interaction) -> None:
+        await interaction.response.edit_message(content=strings["cancelled"], view=None)
+
+    submit_button: discord.ui.Button[Any] = discord.ui.Button(
+        label=strings["submit"][:80],
+        style=discord.ButtonStyle.success,
+        custom_id="kingdoms:apply:submit",
+    )
+    submit_button.callback = submit  # type: ignore[method-assign]
+    cancel_button: discord.ui.Button[Any] = discord.ui.Button(
+        label=strings["cancel"][:80],
+        style=discord.ButtonStyle.secondary,
+        custom_id="kingdoms:apply:cancel",
+    )
+    cancel_button.callback = cancel  # type: ignore[method-assign]
+    view = discord.ui.View(timeout=600)
+    view.add_item(submit_button)
+    view.add_item(cancel_button)
+    return view
+
+
+async def _beta_season_active(context: _ApplicationContext) -> bool:
+    """beta-king-auto-v1 (Drasah 06/11): is the season's armed beta
+    actually RUNNING (T0 reached, season not finished)? Under a beta
+    the players must wander and test WITHOUT Drasah — a King
+    candidature (kingdom founding) is auto-accepted."""
+    service = context.kingdoms_service
+    if service is None:
+        return False
+    try:
+        from kingdoms.mods.kingdoms.beta_weekend import beta_started
+
+        season = await service.current_season()
+        if season is None or getattr(season, "finished", False):
+            return False
+        return bool(beta_started(season, game_now()))
+    except Exception:
+        logger.warning("KINGDOM PANELS: beta season probe failed", exc_info=True)
+        return False
+
+
+def _role_select_view(context: _ApplicationContext) -> discord.ui.View:
+    """Step 1: the role select (Seigneur / Roi — no free text)."""
+    strings = _strings(context.locale)
+
+    async def on_choose(interaction: discord.Interaction) -> None:
+        values = getattr(interaction, "data", None) or {}
+        chosen = [str(v) for v in values.get("values", [])]
+        if not chosen:
+            return
+        if chosen[0] == "king":
+            await interaction.response.send_modal(_KingApplicationModal(context))
+            return
+        await interaction.response.edit_message(
+            content=f"**{strings['choose_kingdom']}**\n{strings['no_kingdoms_hint']}"
+            if not await context.declared_kingdom_names()
+            else f"**{strings['choose_kingdom']}**",
+            view=await _kingdom_select_view(context),
+        )
+
+    select: discord.ui.Select[Any] = discord.ui.Select(
+        custom_id=ROLE_SELECT_ID,
+        placeholder=strings["choose_role"],
+        options=[
+            discord.SelectOption(label=strings["role_lord"], value="lord"),
+            discord.SelectOption(label=strings["role_king"], value="king"),
+        ],
+    )
+    select.callback = on_choose  # type: ignore[method-assign]
+    view = discord.ui.View(timeout=600)
+    view.add_item(select)
+    return view
+
+
+async def _kingdom_select_view(context: _ApplicationContext) -> discord.ui.View:
+    """Step 2 (Seigneur): the declared kingdoms + the wait option."""
+    strings = _strings(context.locale)
+    names = await context.declared_kingdom_names()
+    options = [discord.SelectOption(label=name[:100], value=name[:100]) for name in names[:24]]
+    options.append(
+        discord.SelectOption(
+            label=strings["queue_option"],
+            value=QUEUE_VALUE,
+            description=strings["queue_description"][:100],
+        )
+    )
+
+    async def on_choose(interaction: discord.Interaction) -> None:
+        values = getattr(interaction, "data", None) or {}
+        chosen = [str(v) for v in values.get("values", [])]
+        if not chosen:
+            return
+        await interaction.response.send_modal(_LordApplicationModal(context, chosen[0]))
+
+    select: discord.ui.Select[Any] = discord.ui.Select(
+        custom_id=KINGDOM_SELECT_ID,
+        placeholder=strings["choose_kingdom"],
+        options=options,
+    )
+    select.callback = on_choose  # type: ignore[method-assign]
+    view = discord.ui.View(timeout=600)
+    view.add_item(select)
+    return view
+
+
+def _candidature_view(
+    locale: str,
+    bot_admins: tuple[str, ...],
+    mod_roles_service: ModRolesService | None = None,
+    guild_id: str = "",
+) -> discord.ui.View:
+    """Build the admin-only decision row of one candidature message.
+
+    Approving assigns the kingdoms_lord or kingdoms_king mod role to
+    the applicant through the ModRolesService — never a raw Discord
+    role id. The role key rides the application message: the decision
+    row is rebuilt from the wire (restart-proof by re-deploy).
+    """
+    strings = _strings(locale)
+
+    async def decide(interaction: discord.Interaction, decision: str) -> None:
+        if not _is_admin(interaction, bot_admins):
+            await interaction.response.send_message("Only admins can decide on applications.", ephemeral=True)
+            return
+        label = {
+            "approve": strings["approved"],
+            "pending": strings["pending"],
+            "refuse": strings["refused"],
+        }[decision]
+        content = interaction.message.content if interaction.message is not None else ""
+        await interaction.response.edit_message(content=content, view=None)
+        note = strings["decided"].format(label)
+        if decision == "approve":
+            applicant = re.search(r"<@(\d+)>", content)
+            is_king = strings["role_king"] in content
+            role_key = ROLE_KING if is_king else ROLE_LORD
+            if mod_roles_service is not None and applicant is not None:
+                # vision-gating-v1 (Drasah 30/10): the game role rides an
+                # APPROVED kingdom — a founding King or a queued player
+                # stays out-of-game until the kingdom is accepted.
+                from kingdoms.mods.kingdoms.kingdom_persistent import (
+                    _candidature_kingdom_approved,
+                    _candidature_kingdom_name,
+                    _wiring,
+                )
+
+                kingdom_name = _candidature_kingdom_name(content, strings)
+                if await _candidature_kingdom_approved(_wiring().kingdoms_service, kingdom_name):
+                    try:
+                        await mod_roles_service.assign_mod_role(guild_id, applicant.group(1), KINGDOM_MOD, role_key)
+                        note += " " + strings["role_assigned"].format(role_key)
+                    except Exception:
+                        logger.warning("CANDIDATURES: role assignment failed", exc_info=True)
+                        note += " " + strings["no_service"]
+            # validation-immersion-v1 (Drasah 28/10): the approved
+            # candidate's out-of-game opt-in (member allow over Beta/
+            # Conscription) is cleared — « Postuler » hides.
+            if interaction.guild is not None and applicant is not None:
+                try:
+                    from kingdoms.mods.kingdoms.kingdom_immersion import clear_outgame_allow_safe
+
+                    await clear_outgame_allow_safe(interaction.guild, applicant.group(1))
+                except Exception:
+                    logger.warning("CANDIDATURES: outgame allow clear failed", exc_info=True)
+        await interaction.followup.send(note, ephemeral=True)
+
+    from kingdoms.mods.kingdoms.kingdom_persistent import KingdomCandidatureButton
+
+    view = discord.ui.View(timeout=None)
+    view.add_item(KingdomCandidatureButton("approve", "✅", discord.ButtonStyle.success))
+    view.add_item(KingdomCandidatureButton("pending", "⏳", discord.ButtonStyle.secondary))
+    view.add_item(KingdomCandidatureButton("refuse", "❌", discord.ButtonStyle.danger))
+    return view
+
+
+# Designer-authored Postuler header (kingdoms#138 group 1): golden
+# accent (the King colour), artwork thumbnail when the asset is
+# bundled, one tagline — everything else lives in the flow itself.
+APPLY_TITLE = "⚔️ INSCRIPTION — KINGDOMS SAISON II"
+APPLY_TAGLINE = "Pars à la conquête des territoires ! Choisis ton camp avant de postuler."
+
+
+def _apply_kingdoms_line(count: int) -> str:
+    """synfoni-v1 (Drasah 06/11): the kingdoms-in-play counter line."""
+    if count <= 0:
+        return "👑 Aucun royaume en jeu pour l'instant — le premier à postuler fondera le sien !"
+    plural = "s" if count != 1 else ""
+    return f"👑 **{count}** royaume{plural} en jeu — rejoins l'aventure !"
+GOLD = discord.Colour(0xE6B800)
+
+
+def _apply_artwork_path() -> Path:
+    """Return the bundled Postuler artwork path (may not exist).
+
+    Computed lazily instead of as a module constant: pydoc renders module
+    data values verbatim, and an absolute path here would make the generated
+    docs depend on the checkout directory (pydoc freshness gate).
+    """
+    return Path(__file__).resolve().parent.parent / "assets" / "kingdoms_artwork.png"
+
+
+async def build_apply_panel(
+    locale: str = "en",
+    candidatures_channel: discord.abc.Messageable | None = None,
+    bot_admins: tuple[str, ...] = (),
+    mod_roles_service: ModRolesService | None = None,
+    guild_id: str = "",
+    kingdoms_service: Any = None,
+) -> discord.ui.LayoutView:
+    """Build the Postuler pinned panel: role lines, Enroll and sheet buttons.
+
+    synfoni-v1 (Drasah 06/11): the panel now counts the APPROVED
+    player kingdoms — a newcomer sees the state of the server at a
+    glance (her beta report: « on ne voit pas combien il y a de
+    royaumes »)."""
+    strings = _strings(locale)
+    del (
+        candidatures_channel,
+        bot_admins,
+        mod_roles_service,
+        guild_id,
+    )
+
+    kingdoms_count: int | None = None
+    try:
+        if kingdoms_service is not None:
+            from kingdoms.mods.kingdoms.models import (
+                KingdomType,
+                KingdomValidation,
+            )
+
+            kingdoms_count = sum(
+                1
+                for kingdom in await kingdoms_service.kingdoms()
+                if getattr(kingdom, "type", "") == KingdomType.PLAYER
+                and getattr(kingdom, "validation", "") == KingdomValidation.APPROVED
+            )
+    except Exception:
+        kingdoms_count = None
+
+    from kingdoms.mods.kingdoms.kingdom_persistent import KingdomApplyButton, KingdomRoleInfoButton
+
+    apply_button = KingdomApplyButton(strings["apply_button"][:80], discord.ButtonStyle.primary)
+    apply_row: discord.ui.ActionRow[discord.ui.LayoutView] = discord.ui.ActionRow()
+    apply_row.add_item(apply_button)
+    roleinfo_row: discord.ui.ActionRow[discord.ui.LayoutView] = discord.ui.ActionRow()
+    roleinfo_row.add_item(KingdomRoleInfoButton("king", strings["roleinfo_king_button"]))
+    roleinfo_row.add_item(KingdomRoleInfoButton("lord", strings["roleinfo_lord_button"]))
+    view = discord.ui.LayoutView(timeout=None)
+    items: list[discord.ui.Item[discord.ui.LayoutView]] = [
+        discord.ui.TextDisplay(f"# {APPLY_TITLE}"),
+        discord.ui.Separator(),
+    ]
+    if _apply_artwork_path().is_file():
+        items.append(
+            discord.ui.Section(
+                discord.ui.TextDisplay(APPLY_TAGLINE),
+                accessory=discord.ui.Thumbnail(media="attachment://kingdoms_artwork.png"),
+            )
+        )
+    else:
+        items.append(discord.ui.TextDisplay(APPLY_TAGLINE))
+    # synfoni-v1 (Drasah 06/11): the kingdoms-in-play counter — a
+    # newcomer reads the state of the server at a glance.
+    if kingdoms_count is not None:
+        items.append(discord.ui.TextDisplay(_apply_kingdoms_line(kingdoms_count)))
+    # One short line per role (postulation-v1): the player picks a camp
+    # before opening the enrollment flow, and each line has its own
+    # “View the role” rights & obligations sheet button.
+    items.extend(
+        [
+            discord.ui.TextDisplay(strings["apply_role_king_line"]),
+            discord.ui.TextDisplay(strings["apply_role_lord_line"]),
+            discord.ui.Separator(),
+            apply_row,
+            roleinfo_row,
+            discord.ui.Separator(),
+            discord.ui.TextDisplay(f"-# {PANEL_MARKER}"),
+        ]
+    )
+    view.add_item(
+        discord.ui.Container(
+            *items,
+            accent_colour=GOLD,
+        )
+    )
+    return view
+
+
+async def build_settings_panel(
+    logs_service: LogService | None,
+    guild_id: str,
+    by: str,
+    bot_admins: tuple[str, ...] = (),
+    roles_service: Any = None,
+) -> discord.ui.LayoutView:
+    """Build the Paramètres panel: the admin season actions.
+
+    Language and timezone live in the platform core (bot-admin) — the mod
+    only exposes its own season actions here.
+    """
+    locale = "en"
+    if logs_service is not None:
+        try:
+            locale = await logs_service.get_locale(guild_id)
+        except Exception:
+            logger.warning("KINGDOM SETTINGS: locale read failed", exc_info=True)
+    strings = _strings(locale)
+
+    from kingdoms.mods.kingdoms.kingdom_persistent import KingdomAdminButton
+    from kingdoms.mods.kingdoms.kingdom_profiles import _strings as profile_strings
+
+    admin_strings = profile_strings(locale)
+    # The time seams moved to the Machine à temps salon (Drasah's
+    # deduplication rule, 2026-10-11): age-next/age-prev, the forced
+    # Lord's Day window, end-season and back-to-setup now live in the
+    # kingdom_time_panel — Paramètres keeps only the season bootstrap
+    # and the server maintenance.
+    # « Démarrer la beta » sits next to « Démarrer la saison » (Drasah
+    # 17/10): the same beta-weekend-v2 flow as the console's answer.
+    buttons = (
+        ("launch", "launch_button", discord.ButtonStyle.success),
+        ("start-season", "start_season_button", discord.ButtonStyle.success),
+        ("start-beta", "start_beta_button", discord.ButtonStyle.success),
+        ("status", "status_button", discord.ButtonStyle.secondary),
+        ("deploy", "deploy_button", discord.ButtonStyle.primary),
+        ("sync", "sync_button", discord.ButtonStyle.secondary),
+        ("reset", "reset_salons_button", discord.ButtonStyle.danger),
+        ("assign", "assign_button", discord.ButtonStyle.primary),
+        ("add-kingdom", "add_kingdom_button", discord.ButtonStyle.primary),
+        ("season-mode", "season_mode_button", discord.ButtonStyle.secondary),
+        ("remove", "remove_player_button", discord.ButtonStyle.danger),
+        ("hat", "hat_button", discord.ButtonStyle.secondary),
+    )
+    # Rows pack in chunks of 5: an overlong ActionRow is rejected by
+    # Discord and kills the whole panel send (the D68 lesson).
+    rows: list[discord.ui.ActionRow[discord.ui.LayoutView]] = []
+    for index, (action, key, style) in enumerate(buttons):
+        if index % 5 == 0:
+            rows.append(discord.ui.ActionRow())
+        rows[index // 5].add_item(KingdomAdminButton(action, admin_strings[key][:80], style))
+
+    view = discord.ui.LayoutView(timeout=None)
+    view.add_item(
+        discord.ui.Container(
+            discord.ui.TextDisplay(f"# {strings['settings_title']}"),
+            discord.ui.Separator(),
+            discord.ui.TextDisplay(f"## 🛠️ {admin_strings['admin_section']}"),
+            *rows,
+            discord.ui.Separator(),
+            discord.ui.TextDisplay(f"-# {SETTINGS_PANEL_MARKER}"),
+            accent_colour=GREEN,
+        )
+    )
+    return view
+
+
+# marche-visuel-v2 (Drasah 28/10): la table unique du marchand —
+# quatre rayons (sa taxonomie, son ordre) : (clé strings de l'en-tête,
+# clés d'articles dans l'ordre d'étalage). Un rayon ≤ 5 boutons = une
+# seule ActionRow (règle D68 : jamais de rangée vide sérialisée).
+MARKET_SECTIONS: tuple[tuple[str, tuple[str, ...]], ...] = (
+    ("market_section_ia", ("traquenard", "jeu_d_armes")),
+    ("market_section_defense", ("patrouille", "garde_royale")),
+    ("market_section_attaque", ("sabotage", "contre_espionnage", "embuscade")),
+    ("market_section_speciales", ("explorateur", "mariage_arrange", "corruption")),
+)
+
+
+async def build_market_panel(
+    locale: str,
+    kingdoms_service: Any = None,
+    banner_filename: str | None = None,
+) -> discord.ui.LayoutView:
+    """Build the Marché panel: the King's technology & action shop (§20).
+
+    Buttons only — every purchase is confirmed through an ephemeral
+    answer at click time, so the panel itself carries no state and is
+    restart-proof (custom_id rebuild, §3b).
+
+    marche-banner-v3 (Drasah 05/11): ``banner_filename`` exposes the
+    merchant banner through a TOP-LEVEL MediaGallery — a CV2 message
+    hides every attachment no component references (the banner was
+    uploaded since marche-visuel-v2 but NEVER rendered: same root
+    cause as the Chambre des comptes illustration).
+    """
+    strings = _strings(locale)
+    from kingdoms.mods.kingdoms.kingdom_persistent import (
+        KingdomMarketActionButton,
+        KingdomMarketTechButton,
+    )
+
+    technologies: Any = None
+    if kingdoms_service is not None:
+        technologies = getattr(kingdoms_service, "config", None)
+        technologies = getattr(technologies, "technologies", None)
+    if technologies is None:
+        from kingdoms.mods.kingdoms.config import TechnologyCosts
+
+        technologies = TechnologyCosts()
+
+    # marche-visuel-v2 (Drasah 28/10): one merchant stall, four shelves
+    # in HIS order — every purchase button wears the same colour; the
+    # tech/action button CLASSES keep their distinct callbacks.
+    tech_class_keys = {
+        "embuscade",
+        "traquenard",
+        "contre_espionnage",
+        "sabotage",
+        "jeu_d_armes",
+    }
+    shelf_items: list[Any] = []
+    for header_key, keys in MARKET_SECTIONS:
+        shelf_items.append(discord.ui.TextDisplay(f"## {strings[header_key]}"))
+        row = discord.ui.ActionRow()
+        for key in keys:
+            cost = int(getattr(technologies, key))
+            label = (
+                strings["market_tech"][key]
+                if key in tech_class_keys
+                else strings["market_action"][key]
+            )
+            button_cls = (
+                KingdomMarketTechButton
+                if key in tech_class_keys
+                else KingdomMarketActionButton
+            )
+            row.add_item(
+                button_cls(
+                    key,
+                    f"{label} — {cost} ⚙️",
+                    discord.ButtonStyle.primary,
+                )
+            )
+        shelf_items.append(row)
+
+    view = discord.ui.LayoutView(timeout=None)
+    # marche-banner-v3 (Drasah 05/11): the banner rides ABOVE the
+    # panel — a top-level MediaGallery referencing the attachment is
+    # the ONLY way a CV2 message shows an uploaded file. Without it the
+    # banner stays invisible (its state since marche-visuel-v2).
+    if banner_filename:
+        view.add_item(
+            discord.ui.MediaGallery(
+                discord.MediaGalleryItem(media=f"attachment://{banner_filename}")
+            )
+        )
+    view.add_item(
+        discord.ui.Container(
+            discord.ui.TextDisplay(f"# {strings['market_title']}"),
+            discord.ui.Separator(),
+            # marche-crier-off-v1 (Drasah 29/10): no crier line anymore.
+            # marche-v2: the King-only rule is finally visible on the
+            # pinned panel (Drasah's decision, 2026-10-13).
+            discord.ui.TextDisplay(strings["market_hint_panel"]),
+            *shelf_items,
+            discord.ui.Separator(),
+            discord.ui.TextDisplay(f"-# {MARKET_PANEL_MARKER}"),
+            accent_colour=GOLD,
+        )
+    )
+    return view
+
+
+async def _deploy_market_panel(
+    channel: discord.TextChannel,
+    locale: str,
+    kingdoms_service: Any,
+) -> None:
+    """Edit the market panel in place, or pin a fresh one (vues-silencieuses-v1)."""
+    from kingdoms.mods.kingdoms.marche_art import banner_file
+
+    # marche-visuel-v2: the banner (generated crier scene) rides as an
+    # attachment on the pinned panel message — attached on the first
+    # edit after upload, kept afterwards (never re-uploaded in steady
+    # state, and no drop when the asset is absent).
+    # marche-banner-v3 (Drasah 05/11): the banner must ALSO be exposed
+    # by the view's top-level MediaGallery — otherwise the CV2 message
+    # never renders it (attachment uploaded but unreferenced).
+    banner = banner_file()
+    banner_filename = (
+        f"marche_banner{banner.suffix.lower()}" if banner is not None else None
+    )
+    view = await build_market_panel(locale, kingdoms_service, banner_filename)
+    marked: list[Any] = [
+        message
+        for message in await channel_messages(channel)
+        if MARKET_PANEL_MARKER in message_text(message)
+    ]
+    if marked:
+        for duplicate in marked[1:]:
+            try:
+                await duplicate.delete()
+            except Exception:
+                logger.warning("KINGDOM PANELS: market duplicate purge failed", exc_info=True)
+        existing = marked[0]
+        text_converged = message_text_squashed(existing) == view_text(view)
+        banner_missing = banner is not None and not existing.attachments
+        # marche-banner-v3: a panel painted BEFORE the gallery also
+        # needs the one-time edit that adds it (the text alone is
+        # converged, the banner would stay invisible forever).
+        gallery_missing = banner is not None and not any(
+            getattr(component, "type", None) == discord.ComponentType.media_gallery
+            for component in existing.components
+        )
+        if text_converged and not banner_missing and not gallery_missing:
+            return
+        try:
+            if banner is not None:
+                await existing.edit(
+                    view=view,
+                    files=[discord.File(str(banner), filename=f"marche_banner{banner.suffix.lower()}")],
+                )
+            else:
+                await existing.edit(view=view)
+            return
+        except Exception:
+            logger.warning("KINGDOM PANELS: market panel edit failed, resending", exc_info=True)
+    if banner is not None:
+        await channel.send(
+            view=view,
+            files=[discord.File(str(banner), filename=f"marche_banner{banner.suffix.lower()}")],
+            allowed_mentions=NO_MENTIONS,
+        )
+    else:
+        await channel.send(view=view, allowed_mentions=NO_MENTIONS)
+
+
+async def refresh_season_status(
+    guild: discord.Guild,
+    locale: str,
+    kingdoms: tuple[str, ...] | list[str] = (),
+    queued: int = 0,
+    progress: str = "",
+) -> bool:
+    """Post (or refresh) the season status message in the dedicated channel."""
+    strings = _strings(locale)
+    from kingdoms.mods.kingdoms.kingdom_setup import _slug
+
+    channel = next(
+        (c for c in guild.text_channels if _slug(c.name) == SEASON_STATUS_CHANNEL),
+        None,
+    )
+    if channel is None:
+        return False
+    names = list(kingdoms)
+    lines = [
+        f"# {strings['season_status_title']}",
+    ]
+    if progress:
+        lines.append(f"**{progress}**")
+    names_line = ", ".join(names) if names else strings["season_status_empty"]
+    lines.extend(
+        [
+            f"**{strings['season_status_kingdoms']}** : {names_line}",
+            f"**{strings['season_status_queue']}** : {queued if queued else strings['season_status_empty']}",
+            f"*{strings['season_status_hint']}*",
+            SEASON_STATUS_MARKER,
+        ]
+    )
+    content = "\n".join(lines)
+    for message in await channel_messages(channel):
+        if SEASON_STATUS_MARKER in message_text(message):
+            try:
+                await message.edit(content=content)
+            except Exception:
+                logger.warning("KINGDOM PANELS: season status refresh failed", exc_info=True)
+            return True
+    await channel.send(content)
+    return True
+
+
+
+async def _deploy_settings_panel(
+    channel: discord.TextChannel,
+    logs_service: LogService | None,
+    guild_id: str,
+    bot_admins: tuple[str, ...],
+) -> None:
+    """Edit the settings panel in place, or pin a fresh one (vues-silencieuses-v1).
+
+    Stale legacy settings messages (old locale/timezone panel, componentless
+    leftovers) are still purged, but a properly marked panel is now edited
+    in place with an identity guard instead of delete+send.
+    """
+    view = await build_settings_panel(logs_service, guild_id, "system", bot_admins)
+    marked: list[Any] = []
+    for message in await channel_messages(channel):
+        text = message_text(message)
+        if SETTINGS_PANEL_MARKER in text:
+            marked.append(message)
+            continue
+        stale = (
+            "kingdoms:settings:" in text
+            or (
+                getattr(message, "author", None) is not None
+                and bool(getattr(message.author, "bot", False))
+                and (
+                    getattr(message, "view", None) is not None
+                    or bool(getattr(message, "components", None))
+                )
+            )
+        )
+        if stale:
+            try:
+                await message.delete()
+            except Exception:
+                logger.warning("KINGDOM PANELS: old settings panel removal failed", exc_info=True)
+    if marked:
+        for duplicate in marked[1:]:
+            try:
+                await duplicate.delete()
+            except Exception:
+                logger.warning("KINGDOM PANELS: settings duplicate purge failed", exc_info=True)
+        existing = marked[0]
+        if message_text_squashed(existing) == view_text(view):
+            return
+        try:
+            await existing.edit(view=view)
+            return
+        except Exception:
+            logger.warning("KINGDOM PANELS: settings panel edit failed, resending", exc_info=True)
+    await channel.send(view=view, allowed_mentions=NO_MENTIONS)
+
+
+async def _deploy_apply_panel(
+    channel: discord.TextChannel,
+    candidatures: discord.TextChannel | None,
+    locale: str,
+    bot_admins: tuple[str, ...],
+    mod_roles_service: ModRolesService | None,
+    guild_id: str,
+    kingdoms_service: Any,
+) -> None:
+    """Remove the old apply panel then pin a fresh one."""
+    for message in await channel_messages(channel):
+        if PANEL_MARKER in message_text(message):
+            try:
+                await message.delete()
+            except Exception:
+                logger.warning("KINGDOM PANELS: old apply panel removal failed", exc_info=True)
+    kwargs: dict[str, Any] = {}
+    if _apply_artwork_path().is_file():
+        kwargs["file"] = discord.File(_apply_artwork_path(), filename="kingdoms_artwork.png")
+    await channel.send(
+        view=await build_apply_panel(
+            locale,
+            candidatures,
+            bot_admins,
+            mod_roles_service,
+            guild_id,
+            kingdoms_service,
+        ),
+        allowed_mentions=NO_MENTIONS,
+        **kwargs,
+    )
+
+
+async def _deploy_channel_panel(
+    channel: discord.TextChannel,
+    *,
+    candidatures: discord.TextChannel | None,
+    locale: str,
+    logs_service: LogService | None,
+    guild_id: str,
+    bot_admins: tuple[str, ...],
+    mod_roles_service: ModRolesService | None,
+    kingdoms_service: Any,
+) -> str | None:
+    """Pin the panel matching one channel (its report key, None otherwise)."""
+    from kingdoms.mods.kingdoms.kingdom_setup import _slug
+
+    slug = _slug(channel.name)
+    if slug == "postuler":
+        await _deploy_apply_panel(
+            channel, candidatures, locale, bot_admins, mod_roles_service, guild_id, kingdoms_service
+        )
+        return "postuler"
+    if slug == "parametres":
+        await _deploy_settings_panel(channel, logs_service, guild_id, bot_admins)
+        return "paramètres"
+    if slug == MARKET_CHANNEL or slug == "bourse":
+        # marche-emoji-v1 (Drasah 26/10): le salon redevient « 💰 marché »
+        # (seul l'emoji caddie gênait) — le slug « bourse » reste accepté
+        # pour rattraper un salon déjà renommé par la passe précédente.
+        await _deploy_market_panel(channel, locale, kingdoms_service)
+        return "marché"
+    if slug == "royaumes":
+        from kingdoms.mods.kingdoms.kingdom_persistent import _wiring
+        from kingdoms.mods.kingdoms.kingdom_realm_content import deploy_gaia_content
+        from kingdoms.mods.kingdoms.kingdom_realms import (
+            deploy_realms_panel,
+            ensure_all_realm_structures,
+        )
+
+        await ensure_all_realm_structures(channel.guild, kingdoms_service)
+        await deploy_realms_panel(channel.guild, locale, kingdoms_service)
+        # restructuration-serveur-v1 c (Drasah 19/10): the Gaïa category
+        # drops to ONE salon — its Territoire view (AI level live)
+        # deploys with the same pass.
+        try:
+            await deploy_gaia_content(channel.guild, _wiring(), locale)
+        except Exception:
+            logger.warning("KINGDOM PANELS: gaia content deploy failed", exc_info=True)
+        return "royaumes"
+    if slug == "taverne":
+        # taverne-immersion-v1 (Drasah 26/10): the 🍺 taverne salon keeps
+        # ONLY the facade — outside art + door-in button (own marker).
+        # taverne-panels-migration-v1 (Drasah 26/10): the drinks panel
+        # and the Chief's auction MIGRATED inside the Comptoir salon of
+        # the private Taverne category (deployed by the provisioning
+        # pass of tavern_immersion, swept from here on every redeploy).
+        from kingdoms.mods.kingdoms.tavern_immersion import deploy_tavern_facade
+
+        try:
+            await deploy_tavern_facade(channel, locale)
+        except Exception:
+            logger.warning(
+                "KINGDOM PANELS: taverne facade deploy failed", exc_info=True
+            )
+        return "taverne"
+    if slug == "machine-a-temps":
+        from kingdoms.mods.kingdoms.kingdom_time_panel import deploy_time_panel
+
+        await deploy_time_panel(channel, locale)
+        return "machine à temps"
+    if slug == "distributeur":
+        from kingdoms.mods.kingdoms.kingdom_distributor_panel import (
+            deploy_distributor_panel,
+        )
+
+        await deploy_distributor_panel(channel, locale)
+        return "distributeur"
+    if slug in ("declarer-une-attaque", "attaquer"):
+        from kingdoms.mods.kingdoms.kingdom_attack_panel import deploy_attack_panel
+
+        await deploy_attack_panel(channel, locale, kingdoms_service)
+        return "déclarer une attaque"
+    if slug in ("scriptorium", "📜-scriptorium"):
+        from kingdoms.mods.kingdoms.kingdom_scriptorium import deploy_scriptorium_panel
+
+        await deploy_scriptorium_panel(channel, locale, kingdoms_service)
+        return "scriptorium"
+    return None
+
+
+async def deploy_panels(
+    guild: discord.Guild,
+    logs_service: LogService | None,
+    bot_admins: tuple[str, ...] = (),
+    mod_roles_service: ModRolesService | None = None,
+    kingdoms_service: Any = None,
+) -> dict[str, str]:
+    """Deploy the pinned panels into Postuler, Paramètres and Marché.
+
+    Returns a report dict {panel: status}. Idempotent in v1: each
+    deployment pins a fresh panel message (existing pins from previous
+    versions are not removed — a later slice will adopt them).
+    """
+    report: dict[str, str] = {}
+    locale = "en"
+    guild_id = str(guild.id)
+    if logs_service is not None:
+        try:
+            locale = await logs_service.get_locale(guild_id)
+        except Exception:
+            logger.warning("KINGDOM PANELS: locale read failed", exc_info=True)
+    from kingdoms.mods.kingdoms.kingdom_setup import _slug
+
+    candidatures = next((c for c in guild.text_channels if _slug(c.name) == "candidatures"), None)
+    for channel in guild.text_channels:
+        key = await _deploy_channel_panel(
+            channel,
+            candidatures=candidatures,
+            locale=locale,
+            logs_service=logs_service,
+            guild_id=guild_id,
+            bot_admins=bot_admins,
+            mod_roles_service=mod_roles_service,
+            kingdoms_service=kingdoms_service,
+        )
+        if key is not None:
+            report[key] = "deployed"
+    context = _ApplicationContext(
+        locale=locale,
+        bot_admins=bot_admins,
+        mod_roles_service=mod_roles_service,
+        guild_id=guild_id,
+        kingdoms_service=kingdoms_service,
+    )
+    try:
+        if await refresh_season_status(
+            guild,
+            locale,
+            kingdoms=await context.declared_kingdom_names(),
+            progress=await _season_progress(kingdoms_service, locale),
+        ):
+            report["statut saison"] = "deployed"
+    except Exception:
+        logger.warning("KINGDOM PANELS: season status deployment failed", exc_info=True)
+    try:
+        if await refresh_changelog(guild, locale):
+            report["update"] = "deployed"
+    except Exception:
+        logger.warning("KINGDOM PANELS: changelog deployment failed", exc_info=True)
+    from kingdoms.mods.kingdoms.kingdom_content import refresh_salons_content
+
+    report.update(await refresh_salons_content(guild, locale, kingdoms_service))
+    # laboratoire-v1 (Drasah 05/11): the 🧪 Labo cockpit rides the same
+    # deployment pass — best-effort, the lab never blocks the others.
+    try:
+        from kingdoms.mods.kingdoms.kingdom_lab import deploy_lab_panel
+
+        if await deploy_lab_panel(guild, locale):
+            report["labo"] = "deployed"
+    except Exception:
+        logger.warning("KINGDOM PANELS: lab cockpit deployment failed", exc_info=True)
+    return report
+
+
+async def _season_progress(kingdoms_service: Any, locale: str) -> str:
+    """Compute the cycle/age progress line (empty when no season runs)."""
+    if kingdoms_service is None:
+        return ""
+    try:
+        season = await kingdoms_service.current_season()
+        if season is None:
+            return ""
+        return season_label(season, kingdoms_service.config, locale=locale)
+    except Exception:
+        logger.warning("KINGDOM PANELS: season progress read failed", exc_info=True)
+        return ""
+
+
+def register_kingdom_panels_command(
+    tree: app_commands.CommandTree[discord.Client],
+    logs_service: LogService | None = None,
+    bot_admins: tuple[str, ...] = (),
+    mod_roles_service: ModRolesService | None = None,
+    kingdoms_service: Any = None,
+) -> None:
+    """Register the /kingdom command: bootstrap + panels, admin only."""
+
+    @tree.command(
+        name=localized("commands.kingdom_name", "kingdom"),
+        description=localized(
+            "commands.kingdom_description",
+            "Bootstrap the Kingdoms salons and panels (admin only)",
+        ),
+    )
+    @app_commands.default_permissions(administrator=True)
+    async def kingdom_command(interaction: discord.Interaction) -> None:
+        """Provision the structure, deploy the panels, report both."""
+        guild = interaction.guild
+        if guild is None:
+            await interaction.response.send_message("The /kingdom command must run inside a server.", ephemeral=True)
+            return
+        if not _is_admin(interaction, bot_admins):
+            await interaction.response.send_message(
+                "You are not allowed to bootstrap Kingdoms (admins only).",
+                ephemeral=True,
+            )
+            return
+        await interaction.response.defer(ephemeral=True, thinking=True)
+        try:
+            from kingdoms.mods.kingdoms.kingdom_setup import provision_structure
+
+            created, adopted = await provision_structure(guild)
+            panels = await deploy_panels(guild, logs_service, bot_admins, mod_roles_service, kingdoms_service)
+        except Exception as exc:
+            logger.exception("KINGDOM SETUP: provisioning failed for guild %s", guild.id)
+            await interaction.followup.send(f"❌ Setup failed: `{type(exc).__name__}: {exc}`"[:2000], ephemeral=True)
+            return
+        from kingdoms.mods.kingdoms.kingdom_setup import build_setup_report_view
+
+        locale = str(interaction.locale) if interaction.locale else "en"
+        view = build_setup_report_view(created, adopted, locale)
+        extra = "\n".join(f"{name}: {status}" for name, status in panels.items())
+        if extra:
+            await interaction.followup.send(content=extra, ephemeral=True)
+            await interaction.followup.send(view=view, ephemeral=True)
+        else:
+            await interaction.followup.send(view=view, ephemeral=True)
+
+
+async def _provision_profile_note(
+    context: _ApplicationContext,
+    interaction: discord.Interaction,
+    strings: dict[str, Any],
+    *,
+    is_king: bool,
+    kingdom_name: str,
+    queued: bool,
+    insight: str,
+    game_id: str,
+    smurfs: tuple[str, ...],
+) -> str:
+    """Provision the applicant's profile message; return the note (or "")."""
+    guild = interaction.guild
+    if guild is None:
+        return ""
+    try:
+        from kingdoms.mods.kingdoms.kingdom_profiles import (
+            build_profile_message,
+            ensure_profile_channel,
+        )
+
+        profile_channel = await ensure_profile_channel(guild, interaction.user)  # type: ignore[arg-type]
+        if profile_channel is not None:
+            role_label = strings["role_king"] if is_king else strings["role_lord"]
+            content, profile_view = build_profile_message(
+                context.locale,
+                member_name=interaction.user.name or "joueur",
+                state=strings["pending"],
+                role_label=role_label,
+                kingdom=kingdom_name,
+                queued=queued,
+                insight=insight,
+                game_id=game_id,
+                smurfs=smurfs,
+            )
+            await profile_channel.send(content, view=profile_view)
+            return str(strings["profile_created"])
+    except Exception:
+        logger.warning("KINGDOM PANELS: profile provisioning failed", exc_info=True)
+    return ""
