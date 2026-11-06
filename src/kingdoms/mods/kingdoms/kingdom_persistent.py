@@ -5626,6 +5626,45 @@ def _church_marry_cost(lord: Any, kingdom: Any, tier: Any) -> tuple[int, int, bo
     return rings, hours, royal
 
 
+def _princess_label(
+    strings: dict[str, Any],
+    lord_id: str,
+    civ_key: str,
+    civ_names: dict[str, str],
+) -> str:
+    """paroisse-retours-v1 (Drasah 06/11): name the PRINCESS, never a
+    raw civilization — « Princesse Atotoztli (Aztèques) » instead of
+    « se marier à Bulgare ». Same seeded promise as the Les Fidèles
+    badge (stable across every view, restart-proof)."""
+    from kingdoms.mods.kingdoms.diplomacy import _pick_promise
+
+    civ_display = civ_names.get(civ_key, civ_key)
+    promise = _pick_promise(f"{lord_id}:{civ_display}", civ_display)
+    named = f"{promise} ({civ_display})" if promise else civ_display
+    return str(strings["church_marry_princess"]).format(named)[:100]
+
+
+def _fmt_marriage_lock_end(hours: int, strings: dict[str, Any]) -> str:
+    """paroisse-retours-v1 (Drasah 06/11): the INDICATIVE end of the
+    combat lock counted from the click — « aujourd'hui/demain HH:MM »
+    (heure de Paris), rendered at view time (the true duration is the
+    palier's own lock hours — compressed under an armed beta)."""
+    from datetime import timedelta
+    from zoneinfo import ZoneInfo
+
+    from kingdoms.mods.kingdoms.game_clock import game_now
+
+    paris = ZoneInfo("Europe/Paris")
+    now = game_now()
+    local_end = (now + timedelta(hours=int(hours or 0))).astimezone(paris)
+    key = (
+        "church_marry_lock_tomorrow"
+        if local_end.date() != now.astimezone(paris).date()
+        else "church_marry_lock_today"
+    )
+    return str(strings[key]).format(local_end.strftime("%H:%M"))
+
+
 async def _church_marry_role_view(
     wiring: KingdomsPanelWiring,
     lord: Any,
@@ -5649,11 +5688,16 @@ async def _church_marry_role_view(
         if getattr(item, "married_civilization", None) is not None
     }
     catalog = getattr(getattr(wiring.kingdoms_service, "config", None), "civilizations", ()) or ()
+    civ_names = {str(civ.key): str(getattr(civ, "display_name", civ.key)) for civ in catalog}
     options = [
-        discord.SelectOption(
-            label=str(getattr(civ, "display_name", civ.key))[:100],
-            value=str(civ.key)[:100],
-        )
+            # paroisse-retours-v1 (Drasah 06/11): the option names the
+            # PRINCESS (seeded, stable) — never a raw civilization.
+            discord.SelectOption(
+                label=_princess_label(
+                    strings, str(lord.id), str(civ.key), civ_names
+                ),
+                value=str(civ.key)[:100],
+            )
         for civ in catalog
         if str(civ.key) in {str(c) for c in kingdom.civilizations}
         and str(civ.key) not in married
@@ -5662,12 +5706,13 @@ async def _church_marry_role_view(
         return None
     tier = _parish_tier_of(wiring.kingdoms_service, kingdom)
     rings, hours, royal = _church_marry_cost(lord, kingdom, tier)
-    civ_names = {str(civ.key): str(getattr(civ, "display_name", civ.key)) for civ in catalog}
 
     header = f"## {strings['church_marry_view_title'].format(str(getattr(lord, 'display_name', lord.id)))}"
     if royal:
         header += f" — `{strings['church_marry_badge']}`"
-    rules = strings["church_marry_rules"].format(rings, hours)
+    rules = strings["church_marry_rules"].format(
+        rings, hours, _fmt_marriage_lock_end(hours, strings)
+    )
     if royal:
         rules += "\n" + strings["church_marry_rules_royal"]
 
@@ -5723,9 +5768,12 @@ def _church_marry_confirm_view(
     civ_names: dict[str, str],
 ) -> discord.ui.LayoutView:
     """The confirmation card — the select is OVERWRITTEN in place."""
+    # paroisse-retours-v1 (Drasah 06/11): the confirmation names the
+    # PRINCESS — never « se marier à Bulgare ».
+    princess = _princess_label(strings, str(lord.id), civ_key, civ_names)
     body = (
         f"## {strings['church_marry_confirm_title']}\n"
-        f"**{civ_label}**\n"
+        f"**{princess}**\n"
         f"{strings['church_marry_confirm_sub'].format(rings, hours)}"
     )
     yes: discord.ui.Button[Any] = discord.ui.Button(
@@ -5733,10 +5781,12 @@ def _church_marry_confirm_view(
         custom_id=f"kingdoms:church:marryyes:{str(lord.id)[:60]}:{civ_key[:20]}",
         style=discord.ButtonStyle.success,
     )
+    # paroisse-retours-v1 (Drasah 06/11): ✏️ Modifier renders GREEN
+    # once a choice exists (grey suggested a dead button).
     edit: discord.ui.Button[Any] = discord.ui.Button(
         label=str(strings["church_marry_edit_button"])[:80],
         custom_id=f"kingdoms:church:marryedit:{str(lord.id)[:60]}",
-        style=discord.ButtonStyle.secondary,
+        style=discord.ButtonStyle.success,
     )
     back: discord.ui.Button[Any] = discord.ui.Button(
         label=str(strings["church_marry_back_button"])[:80],
@@ -5801,12 +5851,12 @@ def _church_marry_confirm_view(
                     target.guild,
                     str(target.locale) if target.locale else "en",
                     str(strings["church_wedding_announce"]).format(
-                        lord_name, kingdom_name, civ_label, hours, offering
+                        lord_name, kingdom_name, princess, hours, offering
                     ),
                 )
             except Exception:
                 logger.info("KINGDOMS: wedding announcement skipped", exc_info=True)
-        sealed = _church_marry_sealed_view(strings, lord, wiring, civ_label)
+        sealed = _church_marry_sealed_view(strings, lord, wiring, princess)
         try:
             await target.edit_original_response(view=sealed)
         except Exception:
