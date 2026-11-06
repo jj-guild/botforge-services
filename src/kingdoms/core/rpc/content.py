@@ -96,12 +96,42 @@ class ContentServicer(content_pb2_grpc.ContentServicer):
         """Serve the provider identity and supported locale surface."""
         return content_capabilities_to_wire(self._provider_key, self._game_key, self._locales)
 
+    def _game_served(self, game_key: str, context: grpc.aio.ServicerContext) -> bool:
+        """Gate one call on the provider's served games (owner direction 2026-11-06).
+
+        A provider serves a DECLARED list of games (its capabilities);
+        a client asking for a game outside the list is a wiring error:
+        an explicit log + an INVALID_ARGUMENT abort — never a silent
+        wrong-wiki answer.
+        """
+        if game_key == self._game_key:
+            return True
+        logger.warning(
+            "CONTENT SCOPE: game %r is NOT served by this provider "
+            "(serves: %r) — the client's wiring is wrong",
+            game_key,
+            self._game_key,
+        )
+        import asyncio
+
+        asyncio.get_running_loop().create_task(
+            context.abort(
+                grpc.StatusCode.INVALID_ARGUMENT,
+                f"this provider serves {self._game_key!r}, not {game_key!r}",
+            )
+        )
+        return False
+
     async def GetMapSeed(
         self,
         request: content_pb2.MapSeedRequest,
         context: grpc.aio.ServicerContext,
     ) -> content_pb2.MapSeedReply:
         """Serve one map's full descriptor (the import flow)."""
+        if not self._game_served(request.game_key, context):
+            import asyncio
+
+            raise asyncio.CancelledError  # the abort above closes the call
         if self._map_seed is None:
             await context.abort(grpc.StatusCode.UNIMPLEMENTED, "map seed not available")
         seed = await self._map_seed(request.game_key, request.map_key)
@@ -166,6 +196,10 @@ class ContentServicer(content_pb2_grpc.ContentServicer):
         context: grpc.aio.ServicerContext,
     ) -> content_pb2.LocalizedContent:
         """Serve one map's localized content, NOT_FOUND when unknown."""
+        if not self._game_served(request.game_key, context):
+            import asyncio
+
+            raise asyncio.CancelledError
         content = await self._map_content(request.map_key, request.locale)
         if content is None or not content.get("found", True):
             await context.abort(grpc.StatusCode.NOT_FOUND, "unknown map_key")
