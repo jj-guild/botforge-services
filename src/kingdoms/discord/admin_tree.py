@@ -306,7 +306,23 @@ class TreeEnsureButton(
         match = re.search(r"<t:(\d+):R>", answer)
         if match:
             delete_after = max(1.0, int(match.group(1)) - _time.time() + 2.0)
-        message: Any = await interaction.followup.send(answer, ephemeral=True)  # type: ignore[func-returns-value]
+        # The provisioning may RECREATE the very channel this interaction
+        # lives in (the admin menu sits in a provisioned scope): the
+        # followup webhook then targets a vanished channel (10003 Unknown
+        # Channel). The provisioning SUCCEEDED — the verdict just cannot
+        # be delivered there; a clean warning, never a traceback.
+        try:
+            message: Any = await interaction.followup.send(answer, ephemeral=True)  # type: ignore[func-returns-value]
+        except discord.HTTPException as exc:
+            if getattr(exc, "code", None) == 10003:
+                logger.warning(
+                    "ADMIN TREE: the invoking channel vanished during the "
+                    "provisioning (scope %s) — the verdict is undeliverable, "
+                    "the channels themselves are in place",
+                    self.scope,
+                )
+                return
+            raise
         if delete_after is not None:
             # delete_after rides the message's own delete(delay=...) — the
             # followup webhook has no delete_after parameter (unlike the
