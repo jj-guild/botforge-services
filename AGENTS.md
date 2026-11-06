@@ -142,6 +142,13 @@ A session writing a doc, a comment or a commit in French is a bug.
   or the Redis lock of the enclosing operation. Cold, insert-only data
   needs none of this. Full hierarchy: kingdoms
   docs/architecture/core.md, *MongoDB write atomicity*.
+- **Service data isolation** (developer-mandated): each service (core,
+  game, mod, `ext-*` provider) owns its code and its MongoDB
+  collections — no cross-owner read, write or aggregation; data is
+  exposed through the service contract (gRPC across processes).
+  Enforced by the AST layering guard (`tests/architecture/test_layering.py`,
+  ADR-0021 R5); target: one distinct MongoDB user per owner. Binding
+  rule: kingdoms docs/CONVENTIONS.md, *Service data isolation*.
 - **CLI-first mandate:** the `kingdoms` CLI
   (`src/kingdoms/cli/`, [docs/CLI.md](docs/CLI.md)) is the front door
   for environments and ops — doctor (local env checks), local stack,
