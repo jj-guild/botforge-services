@@ -10,12 +10,15 @@ process — the consumers never change.
 
 from __future__ import annotations
 
+import logging
 from collections.abc import Awaitable, Callable
 from typing import Any
 
 import grpc
 
 from kingdoms.rpc_generated.kingdoms.v1 import content_pb2, content_pb2_grpc
+
+logger = logging.getLogger("kingdoms.core.rpc.content")
 
 
 def content_capabilities_to_wire(
@@ -138,6 +141,11 @@ class ContentServicer(content_pb2_grpc.ContentServicer):
         context: grpc.aio.ServicerContext,
     ) -> content_pb2.FactionList:
         """Serve every faction key the upstream source knows."""
+        logger.info(
+            "CONTENT SERVE: ListFactions provider=%s game=%s",
+            self._provider_key,
+            self._game_key,
+        )
         keys = await self._list_factions()
         return content_pb2.FactionList(faction_keys=keys)
 
