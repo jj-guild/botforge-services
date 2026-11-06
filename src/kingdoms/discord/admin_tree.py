@@ -143,18 +143,22 @@ async def _ensure_scope(bot: Any, guild_id: str, scope: str) -> str:  # noqa: C9
             resolved = await provision_scope(guild, spec, locale, _translate)
             await persist_resolutions(guild_id, spec.scope, resolved)
         except discord.errors.RateLimited as exc:
-            # Discord's channel-creation quota (2 per 10 min per guild) is
-            # exhausted: a FUNCTIONAL verdict, not a crash — the admin sees
-            # when to retry instead of "see the bot logs".
+            # Discord throttled the channel creation for THIS bot: the
+            # retry_after is Discord's own word (minutes for a routine
+            # bucket, HOURS when the token earned a hard throttle — e.g.
+            # two instances provisioning in parallel for hours). A
+            # FUNCTIONAL verdict with the actual wait, no invented quota.
             minutes = int(exc.retry_after // 60) + 1
             logger.warning(
-                "ADMIN TREE: channel-creation rate-limited (scope %s) — retry in ~%d min",
+                "ADMIN TREE: channel-creation throttled by Discord (scope %s) "
+                "— retry in ~%d min",
                 spec.scope,
                 minutes,
             )
             return (
-                f"⏳ Discord limite la création de salons — réessaie dans ~{minutes} min "
-                f"(le quota est de 2 salons / 10 min par serveur)."
+                f"⏳ Discord bloque la création de salons pour ce bot — "
+                f"réessaie dans ~{minutes} min (le délai vient de Discord, "
+                f"pas de Kingdoms)."
             )
         except Exception:
             logger.warning("ADMIN TREE: ensure failed (scope %s, guild %s)", spec.scope, guild_id, exc_info=True)
