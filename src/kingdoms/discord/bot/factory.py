@@ -893,6 +893,14 @@ def create_bot(config: BotConfig | None = None) -> KingdomsBot:
         deploy_ci_run_ts=resolved.deploy_ci_run_ts,
     )
     shared_state = _build_shared_state(resolved)
+    # Discord rate-limit observability (owner direction 2026-11-06): the
+    # buckets logged — DEBUG per request, INFO when tight, WARNING when
+    # raised. Installed BEFORE the client exists (it patches the class
+    # discord.Client instantiates); a discord.py upgrade degrades to
+    # the stock client, never a crash.
+    from kingdoms.discord.ratelimit_observability import install as _install_observability
+
+    _install_observability()
     bot = KingdomsBot(config=resolved, status=status, registry=registry)
     bot.games = games
     bot.state_service = shared_state
