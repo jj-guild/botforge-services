@@ -110,12 +110,20 @@ class LiquipediaSource:
         name = extract_page_name(map_key)
         cached = self._load_descriptor(game_key, name)
         if cached is not None:
+            logger.info("SEED: %r (game %s) — cache hit", name, game_key)
             return cached
         if game_key not in self._providers:
+            logger.info("SEED: %r (game %s) — no wiki declared, nothing to serve", name, game_key)
             return None  # no wiki declared for this game: nothing to serve
+        logger.info("SEED: %r (game %s) — fetching upstream", name, game_key)
         future: Future[dict[str, Any] | None] = Future()
         self._seed_queue.put((game_key, tuple(title_variants(name)), future))
-        return future.result()
+        result = future.result()
+        if result is None:
+            logger.warning("SEED: %r (game %s) — NOT FOUND upstream", name, game_key)
+        else:
+            logger.info("SEED: %r (game %s) — resolved upstream", name, game_key)
+        return result
 
     def _seed_worker_loop(self) -> None:
         """Serve the queued seed requests in batches, forever.
@@ -196,11 +204,17 @@ class LiquipediaSource:
                 (v for v in req_variants if v.strip().replace(" ", "_") in data), None
             )
             if hit_variant is None:
+                logger.info(
+                    "SEED WORKER: %r (game %s) — page absent upstream",
+                    req_variants[0] if req_variants else "?",
+                    game_key,
+                )
                 future.set_result(None)
                 continue
             hit = data[hit_variant.strip().replace(" ", "_")]
             descriptor = _descriptor_of(game_key, hit_variant, hit)
             self._persist(game_key, hit_variant, hit, descriptor)
+            logger.info("SEED WORKER: %r (game %s) — fetched and persisted", hit_variant, game_key)
             future.set_result(descriptor)
 
     def _load_descriptor(self, game_key: str, name: str) -> dict[str, Any] | None:
