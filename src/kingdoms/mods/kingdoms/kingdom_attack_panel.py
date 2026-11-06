@@ -369,6 +369,9 @@ _STRINGS: dict[str, dict[str, str]] = {
         "no_service": "❌ Le service des attaques est indisponible.",
         "no_target": "❌ Aucun royaume adverse attaquable pour le moment.",
         "choose_kingdom": "🎯 **Choisis le royaume à attaquer :**",
+        "declare_step_one": "▪️ **Étape 1/2**",
+        "declare_step_two": "▪️ **Étape 2/2**",
+        "declare_step_chosen": "✅ Royaume ciblé : {kingdom}",
         "protected_line": "🛡️ Sous patrouille (impossible d'attaquer) : {kingdoms}",
         "patrol_kingdom": "**{name}** jusqu'à {end}h00",
         "ai_level_desc": "IA de défense : {level}/5 · {count} territoire(s)",
@@ -559,6 +562,8 @@ _STRINGS: dict[str, dict[str, str]] = {
         "result_button": "🏆 Déclarer le vainqueur",
         "draft_button": "📜 Voir la draft",
         "draft_sheet": "📜 Draft — {map}",
+        "draft_mode_player": "Choix du joueur",
+        "draft_mode_random": "Choix aléatoire",
         "draft_sheet_help": (
             "Ordre des choix des joueurs durant la draft — ordre réel"
             " une fois la phase de sabotage terminée (aléatoire et"
@@ -801,6 +806,9 @@ _STRINGS: dict[str, dict[str, str]] = {
         "no_service": "❌ The attack service is unavailable.",
         "no_target": "❌ No adversary kingdom is attackable right now.",
         "choose_kingdom": "🎯 **Choose the kingdom to attack:**",
+        "declare_step_one": "▪️ **Step 1/2**",
+        "declare_step_two": "▪️ **Step 2/2**",
+        "declare_step_chosen": "✅ Targeted kingdom: {kingdom}",
         "protected_line": "🛡️ Under patrol (cannot be attacked): {kingdoms}",
         "patrol_kingdom": "**{name}** until {end}:00",
         "ai_level_desc": "Defense AI: {level}/5 · {count} territor(y|ies)",
@@ -981,6 +989,8 @@ _STRINGS: dict[str, dict[str, str]] = {
         "result_button": "🏆 Declare the winner",
         "draft_button": "📜 View the draft",
         "draft_sheet": "📜 Draft — {map}",
+        "draft_mode_player": "Player's choice",
+        "draft_mode_random": "Random pick",
         "draft_sheet_help": (
             "The players' pick order during the draft — the real order"
             " once the sabotage phase is over (random, ranking secret"
@@ -1664,7 +1674,11 @@ async def _kingdom_select_view(
     select.callback = on_choose  # type: ignore[method-assign, assignment]
     view = discord.ui.View(timeout=600)
     view.add_item(select)
-    lines = [str(strings["choose_kingdom"])]
+    # shirar-v1 (Drasah 06/11): the wizard wears EXPLICIT step markers —
+    # the players thought their kingdom click did nothing (the two
+    # steps looked alike); the counter + the targeted-kingdom line of
+    # step 2 kill the confusion.
+    lines = [str(strings["declare_step_one"]), "", str(strings["choose_kingdom"])]
     if mode == "embuscade":
         lines.append(
             str(strings["embuscade_armed_line"]).format(
@@ -1780,9 +1794,12 @@ async def _territory_select_view(
     if embuscade_mode and wiring.attacks_service is not None:
         delay_minutes = int(wiring.attacks_service.embuscade_delay_minutes)
     lines = [
+        str(strings["declare_step_two"]),
+        "",
+        str(strings["declare_step_chosen"]).format(kingdom=f"**{kingdom.name}**"),
         str(strings["embuscade_choose"])
         if embuscade_mode
-        else str(strings["choose_territory"]).format(kingdom=f"**{kingdom.name}**")
+        else str(strings["choose_territory"]).format(kingdom=f"**{kingdom.name}**"),
     ]
     if delay_minutes:
         lines.append(str(strings["itinerary_line"]).format(minutes=delay_minutes))
@@ -2497,6 +2514,14 @@ class KingdomAttackDefendButton(
         lord = await _lord_of(
             wiring.kingdoms_service, str(interaction.user.id), wiring.bot_admins
         )
+        # shirar-v1 (Drasah 06/11): the ATTACKER's camp clicks NOTHING —
+        # no ephemeral, the silent ack swallows the click (the button
+        # cannot gray per-player on a shared salon message).
+        if lord is not None and str(getattr(lord, "kingdom_id", "") or "") == str(
+            attack.attacker_kingdom_id
+        ):
+            await _silent_ack(interaction)
+            return
         # defend-probe-leak (Drasah 29/10): ANY lord outside the
         # defending kingdom gets the SAME generic refusal — probing the
         # button must never reveal whether a defense is already taken.
@@ -3604,6 +3629,22 @@ class KingdomAttackCancelButton(
         if wiring.attacks_service is None or not self.attack_id:
             await _open_unique_ephemeral(interaction, strings["no_service"])
             return
+        # shirar-v1 (Drasah 06/11): the DECLARANT alone can cancel —
+        # every other player (his own co-seigneurs included) clicks
+        # NOTHING: the silent ack swallows the click, no ephemeral
+        # window (règle exceptionnelle Drasah).
+        try:
+            attack = next(
+                item
+                for item in await wiring.attacks_service.attacks()
+                if str(item.id) == self.attack_id
+            )
+            if str(interaction.user.id) != str(attack.attacker_lord_id):
+                await _silent_ack(interaction)
+                return
+        except Exception:
+            # unknown attack — fall through to the service refusal
+            pass
         await interaction.response.defer(ephemeral=True)
         try:
             attack = await wiring.attacks_service.cancel_attack(self.attack_id, str(interaction.user.id))
@@ -3955,146 +3996,324 @@ class KingdomAttackInfoButton(
 _PICKBAN_RANKS = ("1️⃣", "2️⃣", "3️⃣")
 
 
-class KingdomPickBanView(discord.ui.View):
-    """The ephemeral DM view: the ranked-picks wizard (T-5).
+def _pickban_staged(pickban: dict[str, Any], side: str) -> list[str]:
+    """shirar-v1: the STAGED draft picks of one side (restart-proof
+    wizard state, ``{side}_draft`` in the pickban document)."""
+    staged = [str(x) for x in (pickban.get(f"{side}_draft") or [])]
+    while len(staged) < 3:
+        staged.append("")
+    return staged[:3]
 
-    pickban-ordre-v2 (Drasah 04/11, live beta report 19:32 — « le
-    système Objectifs ») : THREE dropdowns directly (« Choix 1 / 2 /
-    3 »), each offering every civ the OTHER two do not hold — a pick
-    in one REMOVES the civ from the others (duplicate impossible by
-    construction, the recap block is GONE: the dropdowns carry the
-    display). ✏️ Modifier is GLOBAL — GRIS+disabled while no choice,
-    VERT from the FIRST pick, one click RESETS the three dropdowns.
-    ❌ Annuler is GONE (« annulé ici ne sert à rien »). ✅ Valider
-    stays the ONLY consumer (GRIS until 3/3, then VERT). The DM
-    content NEVER changes — only the view edits IN PLACE. The
-    resolution stays BLIND (Drasah 18/10 v2) and the validated DM
-    edit is the only surviving surface.
+
+def _pickban_side_of(attack: Any, player_id: str) -> str:
+    """Resolve the side a draft player speaks for (defender defaults)."""
+    if str(attack.attacker_lord_id) == str(player_id):
+        return "attacker"
+    return "defender"
+
+
+async def _resolve_pickban_key(wiring: Any, key: str) -> tuple[str, str]:
+    """Resolve a draft-view key back to (attack_id, player_id) — best
+    effort. Only OPEN drafts (sent, unresolved) match — a resolved
+    draft's buttons die with a graceful refusal."""
+    if wiring is None or wiring.attacks_service is None:
+        return ("", "")
+    try:
+        for attack in await wiring.attacks_service.attacks():
+            if str(getattr(attack, "state", "")) != "defended":
+                continue
+            pickban = dict(attack.pickban or {})
+            if not pickban.get("sent") or pickban.get("resolved_pickban"):
+                continue
+            for player_id in (
+                str(attack.attacker_lord_id or ""),
+                str(attack.defender_lord_id or ""),
+            ):
+                if player_id and _ready_key(str(attack.id), player_id) == key:
+                    return (str(attack.id), player_id)
+    except Exception:
+        logger.warning("KINGDOM ATTACK: pickban key resolution failed", exc_info=True)
+    return ("", "")
+
+
+async def _pickban_dm_view(
+    wiring: Any,
+    attack: Any,
+    side: str,
+    player_id: str,
+    locale: str,
+) -> discord.ui.View:
+    """The draft DM view — RESTART-PROOF (shirar-v1, Drasah 06/11).
+
+    pickban-ordre-v2 kept its rules: THREE dropdowns (« Choix 1 / 2 /
+    3 »), each offering the civs the OTHER two do not hold, ✏️ Modifier
+    GLOBAL (grey+disabled while no choice, green from the first pick,
+    one click resets the three dropdowns), ✅ Valider the ONLY consumer
+    (grey until the ranking is complete). The wizard state now lives
+    in the pickban document (``stage_draft_pick``) and every component
+    is a persistent DynamicItem — a bot restart between the DM send
+    and the click no longer kills the menus (the live « kingdom bot ne
+    répond pas » report: the deploy restarted the bot, the in-memory
+    view died with it).
     """
+    strings = _strings(locale)
+    kingdom_id = str(
+        attack.attacker_kingdom_id if side == "attacker" else attack.defender_kingdom_id
+    )
+    kingdoms_service = wiring.kingdoms_service if wiring else None
+    hand = [
+        str(civ)
+        for civ in await _pickban_hand_safe(wiring, kingdoms_service, kingdom_id, str(player_id))
+    ]
+    picks = _pickban_staged(dict(attack.pickban or {}), side)
+    count = min(3, len(hand) or 1)
+    view = discord.ui.View(timeout=None)
+    for index in range(count):
+        own = picks[index]
+        offered = [civ for civ in hand if civ not in picks or civ == own]
+        if not offered:
+            continue
+        view.add_item(
+            KingdomPickBanSelect(
+                str(attack.id), str(player_id), index, offered, own, locale
+            )
+        )
+    chosen = any(picks[:count])
+    view.add_item(
+        KingdomPickBanModifyButton(str(attack.id), str(player_id), chosen, locale)
+    )
+    view.add_item(
+        KingdomPickBanValidateButton(
+            str(attack.id),
+            str(player_id),
+            all(picks[:count]) and len([p for p in picks[:count] if p]) == count,
+            locale,
+        )
+    )
+    return view
+
+
+async def _pickban_notice_closed(
+    interaction: discord.Interaction, strings: dict[str, str]
+) -> None:
+    """A dead draft click (resolved, expired, unknown) answers once."""
+    await _unique_notice(
+        interaction, strings["failed"].format(message="le pick & ban est fermé")
+    )
+
+
+class KingdomPickBanSelect(
+    discord.ui.DynamicItem[discord.ui.Select[Any]],
+    template=r"kingdoms:attack:pickban:pick:(?P<key>[0-9a-f]{16}):(?P<slot>[0-2])",
+):
+    """The restart-proof dropdown of ONE draft slot (shirar-v1)."""
 
     def __init__(
         self,
         attack_id: str,
         player_id: str,
-        side: str,
-        hand: list[str],
+        index: int,
+        options: list[str],
+        selected: str,
         locale: str,
-        *,
-        picks: list[str] | None = None,
     ) -> None:
-        super().__init__(timeout=600)
+        strings = _strings(locale)
+        key = _ready_key(attack_id, player_id)
+        select: discord.ui.Select[Any] = discord.ui.Select(
+            custom_id=f"kingdoms:attack:pickban:pick:{key}:{index}",
+            placeholder=strings["pickban_pick"].format(
+                n=_PICKBAN_RANKS[index]
+            )[:100],
+            options=[
+                discord.SelectOption(label=civ[:100], value=civ, default=(civ == selected))
+                for civ in options
+            ][:25],
+            min_values=1,
+            max_values=1,
+        )
+        super().__init__(select)
         self.attack_id = attack_id
         self.player_id = player_id
-        self.side = side
-        self.hand = [str(civ) for civ in hand]
+        self.index = index
         self.locale = locale
-        self.strings = _strings(locale)
-        self.count = min(3, len(self.hand))
-        # slots — the CURRENT choice of each dropdown ("" = unset).
-        given = [str(civ) for civ in (picks or [])][: self.count]
-        self.picks = given + [""] * (self.count - len(given))
-        # pickban-ordre-v2 : THREE dropdowns, always visible — each
-        # offers the civs the OTHER two do not hold, plus its own
-        # current pick (default-selected, so the dropdown DISPLAYS it).
-        for index in range(self.count):
-            own = self.picks[index]
-            offered = [
-                civ for civ in self.hand if civ not in self.picks or civ == own
-            ]
-            if not offered:
-                continue
-            select: discord.ui.Select[Any] = discord.ui.Select(
-                placeholder=self.strings["pickban_pick"].format(
-                    n=_PICKBAN_RANKS[index]
-                )[:100],
-                options=[
-                    discord.SelectOption(
-                        label=str(civ)[:100], value=str(civ), default=(civ == own)
-                    )
-                    for civ in offered
-                ][:25],
-                min_values=1,
-                max_values=1,
-            )
-            select.callback = self._make_on_select(index)  # type: ignore[method-assign]
-            self.add_item(select)
-        # ✏️ Modifier GLOBAL (Drasah 04/11 v2) : GRIS+disabled while
-        # no choice is made, VERT from the FIRST pick — one click
-        # resets the THREE dropdowns (convention couleurs 04/11).
-        chosen = any(self.picks)
-        modify = discord.ui.Button(
-            label=self.strings["pickban_modify_button"][:80],
-            style=(
-                discord.ButtonStyle.success
-                if chosen
-                else discord.ButtonStyle.secondary
-            ),
-            disabled=not chosen,
-        )
-        modify.callback = self._on_modify  # type: ignore[method-assign]
-        self.add_item(modify)
-        # ✅ Valider is the ONLY consumer — GRIS+disabled while the
-        # ranking is incomplete (convention couleurs 04/11 : GRIS =
-        # impossible).
-        validate = discord.ui.Button(
-            label=self.strings["pickban_validate"][:80],
-            custom_id="kingdoms:attack:pickban:validate",
-            style=discord.ButtonStyle.success,
-            disabled=not all(self.picks),
-        )
-        validate.callback = self._on_validate  # type: ignore[method-assign]
-        self.add_item(validate)
 
-    async def _rerender(self, interaction: discord.Interaction) -> None:
-        """Edit the DM IN PLACE — VIEW ONLY: the DM text (the rules,
-        the hand, the stocks) never changes, the three dropdowns and
-        the buttons follow the picks (fenêtre mère, the 04/11 pattern).
-        ``content`` is NEVER passed — a live discord.py edit with
-        ``content=None`` would CLEAR the DM text."""
-        view = KingdomPickBanView(
-            self.attack_id,
+    @classmethod
+    async def from_custom_id(
+        cls,
+        interaction: discord.Interaction,
+        item: discord.ui.Item[Any],
+        match: re.Match[str],
+        /,
+    ) -> "KingdomPickBanSelect":
+        from kingdoms.mods.kingdoms.kingdom_persistent import _wiring
+
+        locale = _locale(interaction)
+        attack_id, player_id = await _resolve_pickban_key(_wiring(), match["key"])
+        return cls(attack_id, player_id, int(match["slot"]), [], "", locale)
+
+    async def callback(self, interaction: discord.Interaction) -> None:
+        """Stage the pick, re-render the DM view in place (fenêtre mère)."""
+        from kingdoms.mods.kingdoms.kingdom_persistent import _wiring
+
+        strings = _strings(_locale(interaction))
+        wiring = _wiring()
+        if wiring.attacks_service is None or not self.attack_id:
+            await _pickban_notice_closed(interaction, strings)
+            return
+        values = list(getattr(interaction, "data", None) or {}).get("values") or []
+        if not values:
+            await interaction.response.defer()
+            return
+        try:
+            attack = await wiring.attacks_service.stage_draft_pick(
+                self.attack_id, self.player_id, self.index, str(values[0])
+            )
+        except Exception as exc:
+            message = getattr(exc, "message", None) or str(exc)
+            await _unique_notice(interaction, strings["failed"].format(message=message))
+            _schedule_error_delete(interaction)
+            return
+        view = await _pickban_dm_view(
+            wiring,
+            attack,
+            _pickban_side_of(attack, self.player_id),
             self.player_id,
-            self.side,
-            self.hand,
             self.locale,
-            picks=self.picks,
         )
         try:
             await interaction.response.edit_message(view=view)
         except Exception:
             logger.warning("KINGDOM ATTACK: pick & ban DM edit failed", exc_info=True)
 
-    def _make_on_select(self, index: int) -> Any:
-        """The dropdown of ONE slot — the pick lands on its own line
-        only, then the view re-renders (the civ leaves the two other
-        dropdowns — non-consuming)."""
 
-        async def _on_pick(interaction: discord.Interaction) -> None:
-            values = list(getattr(interaction, "data", None) or {}).get("values") or []
-            if not values:
-                await interaction.response.defer()
-                return
-            self.picks[index] = str(values[0])
-            await self._rerender(interaction)
+class KingdomPickBanModifyButton(
+    discord.ui.DynamicItem[discord.ui.Button[Any]],
+    template=r"kingdoms:attack:pickban:modify:(?P<key>[0-9a-f]{16})",
+):
+    """The restart-proof global ✏️ Modifier — resets the three slots."""
 
-        return _on_pick
+    def __init__(self, attack_id: str, player_id: str, chosen: bool, locale: str) -> None:
+        strings = _strings(locale)
+        key = _ready_key(attack_id, player_id)
+        super().__init__(
+            discord.ui.Button(
+                label=strings["pickban_modify_button"][:80],
+                custom_id=f"kingdoms:attack:pickban:modify:{key}",
+                style=(
+                    discord.ButtonStyle.success
+                    if chosen
+                    else discord.ButtonStyle.secondary
+                ),
+                disabled=not chosen,
+            )
+        )
+        self.attack_id = attack_id
+        self.player_id = player_id
+        self.locale = locale
 
-    async def _on_modify(self, interaction: discord.Interaction) -> None:
-        """✏️ Modifier — resets the THREE dropdowns (every slot back
-        to « », the whole hand offered again, ✅ back to GRIS)."""
-        self.picks = [""] * self.count
-        await self._rerender(interaction)
+    @classmethod
+    async def from_custom_id(
+        cls,
+        interaction: discord.Interaction,
+        item: discord.ui.Item[Any],
+        match: re.Match[str],
+        /,
+    ) -> "KingdomPickBanModifyButton":
+        from kingdoms.mods.kingdoms.kingdom_persistent import _wiring
 
-    async def _on_validate(self, interaction: discord.Interaction) -> None:
+        locale = _locale(interaction)
+        attack_id, player_id = await _resolve_pickban_key(_wiring(), match["key"])
+        return cls(attack_id, player_id, False, locale)
+
+    async def callback(self, interaction: discord.Interaction) -> None:
+        from kingdoms.mods.kingdoms.kingdom_persistent import _wiring
+
+        strings = _strings(_locale(interaction))
+        wiring = _wiring()
+        if wiring.attacks_service is None or not self.attack_id:
+            await _pickban_notice_closed(interaction, strings)
+            return
+        try:
+            attack = await wiring.attacks_service.clear_draft_picks(
+                self.attack_id, self.player_id
+            )
+        except Exception as exc:
+            message = getattr(exc, "message", None) or str(exc)
+            await _unique_notice(interaction, strings["failed"].format(message=message))
+            _schedule_error_delete(interaction)
+            return
+        view = await _pickban_dm_view(
+            wiring,
+            attack,
+            _pickban_side_of(attack, self.player_id),
+            self.player_id,
+            self.locale,
+        )
+        try:
+            await interaction.response.edit_message(view=view)
+        except Exception:
+            logger.warning("KINGDOM ATTACK: pick & ban DM edit failed", exc_info=True)
+
+
+class KingdomPickBanValidateButton(
+    discord.ui.DynamicItem[discord.ui.Button[Any]],
+    template=r"kingdoms:attack:pickban:validate:(?P<key>[0-9a-f]{16})",
+):
+    """The restart-proof ✅ Valider — the ONLY consumer of the wizard."""
+
+    def __init__(self, attack_id: str, player_id: str, complete: bool, locale: str) -> None:
+        strings = _strings(locale)
+        key = _ready_key(attack_id, player_id)
+        super().__init__(
+            discord.ui.Button(
+                label=strings["pickban_validate"][:80],
+                custom_id=f"kingdoms:attack:pickban:validate:{key}",
+                style=discord.ButtonStyle.success,
+                disabled=not complete,
+            )
+        )
+        self.attack_id = attack_id
+        self.player_id = player_id
+        self.locale = locale
+
+    @classmethod
+    async def from_custom_id(
+        cls,
+        interaction: discord.Interaction,
+        item: discord.ui.Item[Any],
+        match: re.Match[str],
+        /,
+    ) -> "KingdomPickBanValidateButton":
+        from kingdoms.mods.kingdoms.kingdom_persistent import _wiring
+
+        locale = _locale(interaction)
+        attack_id, player_id = await _resolve_pickban_key(_wiring(), match["key"])
+        return cls(attack_id, player_id, False, locale)
+
+    async def callback(self, interaction: discord.Interaction) -> None:
         """Submit the ranked picks, then validate (D77, blind)."""
         from kingdoms.mods.kingdoms.kingdom_persistent import _wiring
 
-        strings = self.strings
+        strings = _strings(self.locale)
         wiring = _wiring()
-        if wiring.attacks_service is None:
-            await _unique_notice(interaction, strings["no_service"])
+        if wiring.attacks_service is None or not self.attack_id:
+            await _pickban_notice_closed(interaction, strings)
             return
-        picks = [str(civ) for civ in self.picks if civ]
+        attack = next(
+            (
+                item
+                for item in await wiring.attacks_service.attacks()
+                if str(item.id) == self.attack_id
+            ),
+            None,
+        )
+        if attack is None or attack.pickban.get("resolved_pickban"):
+            await _pickban_notice_closed(interaction, strings)
+            return
+        side = _pickban_side_of(attack, self.player_id)
+        pickban: dict[str, Any] = dict(attack.pickban or {})
+        picks = [str(civ) for civ in _pickban_staged(pickban, side) if civ]
+        hand_count = min(3, len(pickban.get(f"{side}_hand") or []) or 3)
         # pickban-doublon-v1 (Drasah 28/10): the split wordings stay as
         # a SAFETY net — the wizard makes both refusals impossible by
         # construction (a picked civ never rides another dropdown and
@@ -4102,14 +4321,16 @@ class KingdomPickBanView(discord.ui.View):
         if len(set(picks)) != len(picks):
             await _unique_notice(interaction, strings["pickban_duplicate"])
             return
-        if len(picks) != self.count:
+        if not picks or len(picks) != hand_count:
             await _unique_notice(
-                interaction, strings["pickban_missing"].format(count=self.count)
+                interaction, strings["pickban_missing"].format(count=hand_count)
             )
             return
         try:
             await wiring.attacks_service.set_picks(self.attack_id, self.player_id, picks)
-            attack = await wiring.attacks_service.validate_pickban(self.attack_id, self.player_id)
+            attack = await wiring.attacks_service.validate_pickban(
+                self.attack_id, self.player_id
+            )
         except Exception as exc:
             message = getattr(exc, "message", None) or str(exc)
             await _unique_notice(interaction, strings["failed"].format(message=message))
@@ -4148,18 +4369,37 @@ class KingdomPickBanView(discord.ui.View):
                     )
         except Exception:
             logger.warning("KINGDOM ATTACK: mercenary realm refresh failed", exc_info=True)
-        pickban: dict[str, Any] = dict(attack.pickban or {})
+        pickban = dict(attack.pickban or {})
         if not pickban.get("resolved_pickban"):
             return
         # Drasah 18/10 v4: the draft resolved — edit BOTH DMs into the
         # REVEAL (the adversary's shuffled civs) + the sabotage prompt
         # (anti-spam, no new DM): the phase happens HERE, before the RDV.
-        await _edit_pickban_dms_reveal(interaction.client, attack, wiring.kingdoms_service, strings)
+        await _edit_pickban_dms_reveal(
+            interaction.client, attack, wiring.kingdoms_service, strings
+        )
 
 
 def _ready_key(attack_id: str, player_id: str) -> str:
     """Return the 16-hex digest keying the Prêt button (custom ids stay short)."""
     return hashlib.sha256(f"{attack_id}:{player_id}".encode()).hexdigest()[:16]
+
+
+async def _silent_ack(interaction: discord.Interaction) -> None:
+    """shirar-v1 (Drasah 06/11): acknowledge an ineligible click with NO
+    window at all — ``defer`` consumes the token, nothing follows, no
+    ephemeral pollution. Discord would show « interaction failed »
+    without an ack; with one it shows nothing. Used by the 🛡️ Défendre
+    (the attacker's camp) and ❌ Annuler (anyone but the declarant)
+    buttons — the shared salon message cannot gray a button per-player,
+    the SILENT ack is the closest block (règle exceptionnelle Drasah).
+    Best effort: a consumed response is a no-op.
+    """
+    try:
+        if not interaction.response.is_done():
+            await interaction.response.defer(ephemeral=True)
+    except Exception:
+        logger.warning("KINGDOM ATTACK: silent ack failed", exc_info=True)
 
 
 def _room_key(attack_id: str) -> str:
@@ -4397,12 +4637,21 @@ async def _edit_pickban_dms_default_reveal(
     ran at T (a side never ranked its civs), the draft DMs never got
     their reveal — they stayed stuck on « waiting for the adversary »
     forever. This edits both DMs (own picks already ranked, adversary
-    civs in random order, crests attached — NO sabotage view: the
-    default wiped every sabotage and no Faucon applies), falling
-    back to a fresh DM when the refs are lost. The probe is
-    idempotent service-side, so a restart replays nothing.
+    civs in random order, crests attached), falling back to a fresh DM
+    when the refs are lost. The probe is idempotent service-side, so a
+    restart replays nothing. shirar-v1 (Drasah 06/11): the default now
+    KEEPS the sabotage phase — the reveal carries the SAME persistent
+    🗡️ Sabotage / Pass view (a short grace, the meeting opens when
+    both camps settle or at the grace's end).
     """
     pickban: dict[str, Any] = dict(attack.pickban or {})
+    wiring = None
+    try:
+        from kingdoms.mods.kingdoms.kingdom_persistent import _wiring
+
+        wiring = _wiring()
+    except Exception:
+        wiring = None
     for side, player_id in (
         ("attacker", str(attack.attacker_lord_id)),
         ("defender", str(attack.defender_lord_id or "")),
@@ -4431,16 +4680,22 @@ async def _edit_pickban_dms_default_reveal(
             with_origin_badges=False,
         )
         files = [mosaic] if mosaic is not None else None
+        # shirar-v1 (Drasah 06/11): the defaulted draft KEEPS its
+        # sabotage phase — the reveal carries the SAME persistent
+        # 🗡️ Sabotage / Pass view as a settled draft (« même en
+        # situation d'aléatoire il faut pouvoir le faire », live
+        # report: the phase was never offered after the random draw).
+        view = await _sabotage_dm_view(wiring, attack, side, strings)
         ref = pickban.get(f"{side}_dm") or {}
         # reveal-mp-ping-v1: fresh DM + old one deleted + ref re-pointed.
-        sent = await _dm_user_safe(bot, player_id, content, None, files)
+        sent = await _dm_user_safe(bot, player_id, content, view, files)
         if sent is not None:
             await _delete_dm_message_safe(bot, ref)
             await _record_pickban_dm_safe(str(attack.id), player_id, sent)
         elif ref.get("channel_id") and ref.get("message_id"):
-            edited = await _edit_dm_message_safe(bot, ref, content, None, files)
+            edited = await _edit_dm_message_safe(bot, ref, content, view, files)
             if not edited:
-                await _dm_user_safe(bot, player_id, content, None, files)
+                await _dm_user_safe(bot, player_id, content, view, files)
 
 
 async def _edit_pickban_dms_phase_done(bot: Any, attack: Any, strings: dict[str, str]) -> None:
@@ -4718,12 +4973,8 @@ async def _send_pickban_dm(bot: Any, attack: Any, kingdoms_service: Any, locale:
     )
     adversary_hand = await _hand_of(kingdoms_service, attack.defender_kingdom_id)
     theirs = await _hand_of(kingdoms_service, attack.attacker_kingdom_id)
-    view = KingdomPickBanView(
-        str(attack.id),
-        str(attack.attacker_lord_id),
-        "attacker",
-        hand,
-        locale,
+    view = await _pickban_dm_view(
+        wiring, attack, "attacker", str(attack.attacker_lord_id), locale
     )
     # sabotage-ux-v1 (Drasah 22/10): the draft DM carries the stock
     # line — sabotage-consommable-v1: one charge is spent per snipe,
@@ -4745,12 +4996,8 @@ async def _send_pickban_dm(bot: Any, attack: Any, kingdoms_service: Any, locale:
     if message is not None:
         await _record_pickban_dm_safe(str(attack.id), str(attack.attacker_lord_id), message)
     if not attack.ai_defender and attack.defender_lord_id:
-        view = KingdomPickBanView(
-            str(attack.id),
-            str(attack.defender_lord_id),
-            "defender",
-            adversary,
-            locale,
+        view = await _pickban_dm_view(
+            wiring, attack, "defender", str(attack.defender_lord_id), locale
         )
         stock_defender = await _sabotage_stock_line(wiring, attack, "defender", strings) if wiring else ""
         message = await _dm_user_safe(
@@ -5221,13 +5468,19 @@ async def _draft_sheet_embed(attack: Any, kingdoms_service: Any, strings: dict[s
         struck = {str(civ) for civ in (pickban.get(f"{enemy}_sabotages") or [])}
         shown = picks if phase_over else _shuffled_civs(picks, f"{attack.id}:{side}")
         marks = ("1️⃣", "2️⃣", "3️⃣") if phase_over else ("•", "•", "•")
-        return (
+        # shirar-v1 (Drasah 06/11): tell HOW the picks were made — a
+        # defaulted side (anti-blocking random draw, ``default_picks``)
+        # shows « Choix aléatoire », a ranked one « Choix du joueur ».
+        defaulted = side in [str(x) for x in (pickban.get("default_picks") or [])]
+        mode = str(strings["draft_mode_random"] if defaulted else strings["draft_mode_player"])
+        body = (
             "\n".join(
                 f"{marks[i]} {f'~~{civ}~~ ❌' if civ in struck else civ}"
                 for i, civ in enumerate(shown[: len(marks)])
             )
             or "—"
         )
+        return f"*{mode}*\n{body}"
 
     embed = discord.Embed(
         title=str(strings["draft_sheet"]).format(map=attack.map_key),
