@@ -64,6 +64,14 @@ A session writing a doc, a comment or a commit in French is a bug.
   and its CODEOWNERS delegation come first. The contributors-sync workflow
   flags orphan mods/games and CODEOWNERS drift automatically
   (kingdoms repo, `check_ownership.py` under the protected `workflows/scripts/` path).
+- **Mod target layout (developer direction, kingdoms
+  docs/architecture/mods.md §7):** a mod converges on one self-contained
+  directory — docs / conf (declaration YAMLs: channels, panels/menus,
+  locales, providers) / grpc (its server, its collections) / cogs (the
+  discord.py layer, calling its gRPC service through the UI SDK) —
+  extraction-ready, with one PyPI artifact per mod and the bot image
+  built above the published artifacts; the multi-bot activation
+  (`KINGDOMS_MODS`) is configuration, not build-time.
 - **UI SDK mandate:** never build `discord.ui` / `discord.Embed` objects
   directly in a feature — every view, embed or Components V2 layout
   is built through the SDK in `src/kingdoms/discord/ui`. The rules
