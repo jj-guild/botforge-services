@@ -6398,6 +6398,31 @@ class KingdomChurchStateButton(
         await self._toggle(interaction)
 
 
+async def _open_church_upgrade_window(
+    interaction: discord.Interaction,
+    strings: dict[str, Any],
+    wiring: KingdomsPanelWiring,
+    lord: Any,
+    kingdom: Any,
+) -> None:
+    """Open (or re-open) the 🔨 Améliorer ephemeral window (fenêtre unique)."""
+    from kingdoms.mods.kingdoms.kingdom_lieux import _paroisse_files
+    from kingdoms.mods.kingdoms.kingdom_realm_content import (
+        _build_church_upgrade_view,
+        _gather_state,
+    )
+
+    state = await _gather_state(kingdom, wiring)
+    view = _build_church_upgrade_view(
+        strings, kingdom, state, lord, media="attachment://paroisse.png"
+    )
+    # Tranched 06/11: the Améliorer view is a NEW ephemeral window
+    # (fenêtre unique registry — the Paroisse window is replaced).
+    await _open_unique_ephemeral(
+        interaction, view=view, files=_paroisse_files(state)
+    )
+
+
 class KingdomChurchUpgradeViewButton(
     discord.ui.DynamicItem[discord.ui.Button[Any]],
     template=r"kingdoms:church:upgradeview$",
@@ -6481,35 +6506,25 @@ class KingdomChurchUpgradeViewButton(
         if kingdom is None:
             await interaction.response.send_message(strings["not_lord"], ephemeral=True)
             return
-        from kingdoms.mods.kingdoms.kingdom_lieux import _paroisse_files
-        from kingdoms.mods.kingdoms.kingdom_realm_content import (
-            _build_church_upgrade_view,
-            _gather_state,
-        )
-
-        state = await _gather_state(kingdom, wiring)
-        view = _build_church_upgrade_view(
-            strings, kingdom, state, lord, media="attachment://paroisse.png"
-        )
-        # Tranched 06/11: the Améliorer view is a NEW ephemeral window
-        # (fenêtre unique registry — the Paroisse window is replaced).
-        await _open_unique_ephemeral(
-            interaction, view=view, files=_paroisse_files(state)
-        )
+        await _open_church_upgrade_window(interaction, strings, wiring, lord, kingdom)
 
 
 class KingdomChurchBackButton(
     discord.ui.DynamicItem[discord.ui.Button[Any]],
     template=r"kingdoms:church:back$",
 ):
-    """« ↩️ Retour Paroisse » of the Améliorer window — edit in place."""
+    """« ↩️ Retour Paroisse » of the Améliorer window — edit in place.
+
+    ameliorer-vue-v2 (Drasah 06/11): RED (danger) — the maison
+    convention is « sortir = rouge », and grey reads as a dead button.
+    """
 
     def __init__(self, strings: dict[str, str]) -> None:
         super().__init__(
             discord.ui.Button(
                 label=strings["church_info_back_button"][:80],
                 custom_id="kingdoms:church:back",
-                style=discord.ButtonStyle.secondary,
+                style=discord.ButtonStyle.danger,
             )
         )
 
@@ -6539,6 +6554,128 @@ class KingdomChurchBackButton(
             await interaction.response.send_message(strings["not_lord"], ephemeral=True)
             return
         await _church_back_to_state(interaction, strings, wiring, lord, None)
+
+
+class KingdomChurchUpgradeInfoButton(
+    discord.ui.DynamicItem[discord.ui.Button[Any]],
+    template=r"kingdoms:church:upgradeinfo$",
+):
+    """« 🔎 En savoir plus » of the 🔨 Améliorer window (ameliorer-vue-v2).
+
+    The DENSE rules (Lieu Sacrée chantier, Rappel Offrande) live
+    behind this button — the upgrade window stays a pure decision
+    sheet (Drasah 06/11). BLUE (primary), same convention as the
+    Paroisse salon's own En savoir plus.
+    """
+
+    def __init__(self, strings: dict[str, str]) -> None:
+        super().__init__(
+            discord.ui.Button(
+                label=strings["church_info_button"][:80],
+                custom_id="kingdoms:church:upgradeinfo",
+                style=discord.ButtonStyle.primary,
+            )
+        )
+
+    @classmethod
+    async def from_custom_id(
+        cls,
+        interaction: discord.Interaction,
+        item: discord.ui.Item[Any],
+        match: re.Match[str],
+        /,
+    ) -> KingdomChurchUpgradeInfoButton:
+        locale = str(interaction.locale) if interaction.locale else "en"
+        return cls(_strings(locale))
+
+    async def callback(self, interaction: discord.Interaction) -> None:
+        locale = str(interaction.locale) if interaction.locale else "en"
+        strings = _strings(locale)
+        wiring = _wiring()
+        if wiring.kingdoms_service is None:
+            await interaction.response.send_message(strings["market_no_service"], ephemeral=True)
+            return
+        lord = await _lord_of(
+            wiring.kingdoms_service, str(interaction.user.id), wiring.bot_admins
+        )
+        if lord is None or getattr(lord, "left", False):
+            await interaction.response.send_message(strings["not_lord"], ephemeral=True)
+            return
+        kingdoms = await wiring.kingdoms_service.kingdoms()
+        kingdom = next(
+            (k for k in kingdoms if str(k.id) == str(getattr(lord, "kingdom_id", None))),
+            None,
+        )
+        if kingdom is None:
+            await interaction.response.send_message(strings["not_lord"], ephemeral=True)
+            return
+        from kingdoms.mods.kingdoms.kingdom_lieux import _paroisse_files
+        from kingdoms.mods.kingdoms.kingdom_realm_content import (
+            _build_church_upgrade_info_view,
+            _gather_state,
+        )
+
+        state = await _gather_state(kingdom, wiring)
+        view = _build_church_upgrade_info_view(
+            strings, kingdom, media="attachment://paroisse.png"
+        )
+        await _open_unique_ephemeral(
+            interaction, view=view, files=_paroisse_files(state)
+        )
+
+
+class KingdomChurchUpgradeBackButton(
+    discord.ui.DynamicItem[discord.ui.Button[Any]],
+    template=r"kingdoms:church:upgradeback$",
+):
+    """« ↩️ Retour » of the Améliorer info face (ameliorer-vue-v2).
+
+    GREEN (success) like the Paroisse info face's own return button —
+    it is a navigation back to the 🔨 Améliorer decision sheet.
+    """
+
+    def __init__(self, strings: dict[str, str]) -> None:
+        super().__init__(
+            discord.ui.Button(
+                label=strings["church_upgrade_back_button"][:80],
+                custom_id="kingdoms:church:upgradeback",
+                style=discord.ButtonStyle.success,
+            )
+        )
+
+    @classmethod
+    async def from_custom_id(
+        cls,
+        interaction: discord.Interaction,
+        item: discord.ui.Item[Any],
+        match: re.Match[str],
+        /,
+    ) -> KingdomChurchUpgradeBackButton:
+        locale = str(interaction.locale) if interaction.locale else "en"
+        return cls(_strings(locale))
+
+    async def callback(self, interaction: discord.Interaction) -> None:
+        locale = str(interaction.locale) if interaction.locale else "en"
+        strings = _strings(locale)
+        wiring = _wiring()
+        if wiring.kingdoms_service is None:
+            await interaction.response.send_message(strings["market_no_service"], ephemeral=True)
+            return
+        lord = await _lord_of(
+            wiring.kingdoms_service, str(interaction.user.id), wiring.bot_admins
+        )
+        if lord is None or getattr(lord, "left", False):
+            await interaction.response.send_message(strings["not_lord"], ephemeral=True)
+            return
+        kingdoms = await wiring.kingdoms_service.kingdoms()
+        kingdom = next(
+            (k for k in kingdoms if str(k.id) == str(getattr(lord, "kingdom_id", None))),
+            None,
+        )
+        if kingdom is None:
+            await interaction.response.send_message(strings["not_lord"], ephemeral=True)
+            return
+        await _open_church_upgrade_window(interaction, strings, wiring, lord, kingdom)
 
 
 class _ConsecrateSelect(discord.ui.Select["discord.ui.View"]):
