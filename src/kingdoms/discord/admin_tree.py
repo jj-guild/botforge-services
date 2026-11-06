@@ -102,7 +102,7 @@ async def _ensure_scope_pins(bot: Any, guild_id: str, scope: str) -> int:
     return ensured
 
 
-async def _ensure_scope(bot: Any, guild_id: str, scope: str) -> str:
+async def _ensure_scope(bot: Any, guild_id: str, scope: str) -> str:  # noqa: C901
     """Re-provision the scopes' declared channels, best-effort.
 
     ``scope`` carries a comma-separated list (the button's contract):
@@ -142,6 +142,20 @@ async def _ensure_scope(bot: Any, guild_id: str, scope: str) -> str:
         try:
             resolved = await provision_scope(guild, spec, locale, _translate)
             await persist_resolutions(guild_id, spec.scope, resolved)
+        except discord.errors.RateLimited as exc:
+            # Discord's channel-creation quota (2 per 10 min per guild) is
+            # exhausted: a FUNCTIONAL verdict, not a crash — the admin sees
+            # when to retry instead of "see the bot logs".
+            minutes = int(exc.retry_after // 60) + 1
+            logger.warning(
+                "ADMIN TREE: channel-creation rate-limited (scope %s) — retry in ~%d min",
+                spec.scope,
+                minutes,
+            )
+            return (
+                f"⏳ Discord limite la création de salons — réessaie dans ~{minutes} min "
+                f"(le quota est de 2 salons / 10 min par serveur)."
+            )
         except Exception:
             logger.warning("ADMIN TREE: ensure failed (scope %s, guild %s)", spec.scope, guild_id, exc_info=True)
             return "Channel provisioning failed — see the bot logs."
