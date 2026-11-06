@@ -497,16 +497,22 @@ def _strings(locale: str) -> dict[str, str]:
                 " aléatoire en continuant le timer. Impossible de poser un"
                 " Garde Royal sur ce territoire."
             ),
-            # --- paroisse-v1 — la vue ⛪ Améliorer (trois bandes) ---
+            # --- paroisse-v1 — la vue 🔨 Améliorer (trois bandes) ---
+            # ameliorer-vue-v2 (Drasah 06/11) : barre de progression,
+            # palier verrouillé assombri en une ligne, règles denses
+            # derrière 🔎 En savoir plus.
             "church_upgrade_view_title": "⛪ Améliorer la Paroisse — {0}",
-            "church_upgrade_palier_line": "Palier actuel : ⛪ {0} · {1}/{2}",
+            "church_upgrade_palier_line": "Palier actuel : ⛪ {0}",
+            "church_upgrade_bar": "Avancement : {0} · {1}/{2}",
             "church_upgrade_confirm_hint": (
                 "L'amélioration paiera {0} ⚙️ depuis le trésor du royaume — la"
                 " fenêtre se mettra à jour après l'achat."
             ),
             "church_band_current": "✅ NOTRE PALIER",
             "church_band_next": "PROCHAIN · {0} ⚙️",
-            "church_band_locked": "🔒 VERROUILLÉE",
+            "church_band_locked_short": (
+                "-# 🔒 {0} — Palier {1} · débloquée après {2}"
+            ),
             "church_band_reached": "✅ ATTEINT",
             "church_band_desc": "Palier {0} · Coût {1} ⚙️ · 🎁 Offrande +{2} ⚙️ · 🔒 Verrou mariage {3}h",
             "church_band_sacree": (
@@ -525,6 +531,8 @@ def _strings(locale: str) -> dict[str, str]:
                 " de ton palier part directement au trésor du royaume (les"
                 " mariages arrangés n'en versent pas)."
             ),
+            "church_upgrade_info_title": "📖 La Paroisse en détail — {0}",
+            "church_upgrade_back_button": "↩️ Retour",
             "lock_days": "lundi|mardi|mercredi|jeudi|vendredi|samedi|dimanche",
             "lock_time_fmt": "{0} {1}h{2}",
         }
@@ -939,16 +947,21 @@ def _strings(locale: str) -> dict[str, str]:
             " another random territory while keeping its timer. No Royal"
             " Guard may be placed on it."
         ),
-        # --- paroisse-v1 — the ⛪ Upgrade view (three bands) ---
+        # --- paroisse-v1 — the 🔨 Upgrade view (three bands) ---
+        # ameliorer-vue-v2 (Drasah 06/11): progress bar, locked tier
+        # dimmed to one grey line, dense rules behind 🔎 Learn more.
         "church_upgrade_view_title": "⛪ Upgrade the Parish — {0}",
-        "church_upgrade_palier_line": "Current tier: ⛪ {0} · {1}/{2}",
+        "church_upgrade_palier_line": "Current tier: ⛪ {0}",
+        "church_upgrade_bar": "Progress: {0} · {1}/{2}",
         "church_upgrade_confirm_hint": (
             "The upgrade will pay {0} ⚙️ from the kingdom's treasury — the"
             " window refreshes right after the purchase."
         ),
         "church_band_current": "✅ OUR TIER",
         "church_band_next": "NEXT · {0} ⚙️",
-        "church_band_locked": "🔒 LOCKED",
+        "church_band_locked_short": (
+            "-# 🔒 {0} — Tier {1} · unlocked after {2}"
+        ),
         "church_band_reached": "✅ REACHED",
         "church_band_desc": "Tier {0} · Cost {1} ⚙️ · 🎁 Offering +{2} ⚙️ · 🔒 Marriage lock {3}h",
         "church_band_sacree": (
@@ -966,6 +979,8 @@ def _strings(locale: str) -> dict[str, str]:
             " tier's offering goes straight into the kingdom's treasury"
             " (arranged marriages pay none)."
         ),
+        "church_upgrade_info_title": "📖 The Parish in detail — {0}",
+        "church_upgrade_back_button": "↩️ Back",
         "lock_days": "Mon|Tue|Wed|Thu|Fri|Sat|Sun",
         "lock_time_fmt": "{0} {1}:{2}",
     }
@@ -2115,33 +2130,37 @@ def _build_church_upgrade_view(
     lord: Any = None,
     media: str | None = None,
 ) -> Any:
-    """Build the ⛪ Améliorer view (paroisse-v1, Drasah 06/11).
+    """Build the 🔨 Améliorer view (paroisse-v1, Drasah 06/11).
 
-    A NEW ephemeral window: the illustration of the CURRENT palier on
-    top, the palier line, then THREE BANDES — Chapelle, Église,
-    Cathédrale — each with its state (✅ NOTRE PALIER / PROCHAIN +
-    cost / 🔒 VERROUILLÉE / ✅ ATTEINT) and its description (cost,
-    Offrande 🎁, marriage lock, Lieu Sacrée for the Cathédrale). The
-    action button is GREEN while the treasury pays, GRAY when it
-    cannot, and GONE at the top tier (replaced by the max note).
+    A NEW ephemeral window: the palier line, the PROGRESS BAR, then the
+    paliers in ladder ORDER 1-2-3 (Drasah 06/11 ameliorer-vue-v2: the
+    order never changes) — the current and next tiers read as full
+    bandes, the LOCKED tiers are dimmed to ONE grey subtext line so
+    the actionnable PROCHAIN palier pops at first glance. The dense
+    rules (Lieu Sacrée, Rappel Offrande) live behind 🔎 En savoir
+    plus. The action button is GREEN while the treasury pays, GRAY
+    when it cannot, and GONE at the top tier (replaced by the max
+    note). « ↩️ Retour Paroisse » renders RED (danger).
     """
     import discord
 
     from kingdoms.mods.kingdoms.kingdom_persistent import (
         KingdomChurchBackButton,
         KingdomChurchUpgradeButton,
+        KingdomChurchUpgradeInfoButton,
     )
 
     parish = state["parish"]
     tier = int(parish.get("tier", 1) or 1)
     max_tier = int(parish.get("max_tier", 3) or 3)
+    ladder = parish.get("ladder") or []
+    blocks = "⬛" * min(tier, max_tier) + "⬜" * max(max_tier - tier, 0)
     lines = [
-        strings["church_upgrade_palier_line"].format(
-            parish.get("name", ""), tier, max_tier
-        ),
+        strings["church_upgrade_palier_line"].format(parish.get("name", "")),
+        strings["church_upgrade_bar"].format(blocks, tier, max_tier),
         "",
     ]
-    for index, step in enumerate(parish.get("ladder") or [], start=1):
+    for index, step in enumerate(ladder, start=1):
         if index == tier:
             badge = strings["church_band_current"]
         elif index < tier:
@@ -2149,22 +2168,28 @@ def _build_church_upgrade_view(
         elif index == tier + 1:
             badge = strings["church_band_next"].format(step.get("cost", 0))
         else:
-            badge = strings["church_band_locked"]
+            # ameliorer-vue-v2 (Drasah 06/11): a LOCKED palier is one
+            # dimmed grey subtext line — its full stats are noise.
+            previous = ladder[index - 2].get("name", "") if 0 <= index - 2 < len(ladder) else ""
+            lines.append(
+                strings["church_band_locked_short"].format(
+                    step.get("name", ""), index, previous
+                )
+            )
+            lines.append("")
+            continue
         lines.append(f"**⛪ {step['name']}** — {badge}")
-        desc = strings["church_band_desc"].format(
-            index,
-            step.get("cost", 0),
-            step.get("offering", 0),
-            step.get("lock_hours", 24),
+        lines.append(
+            strings["church_band_desc"].format(
+                index,
+                step.get("cost", 0),
+                step.get("offering", 0),
+                step.get("lock_hours", 24),
+            )
         )
-        if index >= max_tier:
-            desc += strings["church_band_sacree"]
-        lines.append(desc)
         lines.append("")
-    lines.append(strings["church_offrande_rappel"])
     row: list[Any] = []
     if tier < max_tier:
-        lines.append("")
         lines.append(
             strings["church_upgrade_confirm_hint"].format(int(parish.get("cost", 0) or 0))
         )
@@ -2181,11 +2206,44 @@ def _build_church_upgrade_view(
     else:
         lines.append("")
         lines.append(strings["church_upgrade_max_note"])
+    row.append(KingdomChurchUpgradeInfoButton(strings))
     row.append(KingdomChurchBackButton(strings))
     return _panel_view_with_buttons(
         strings["church_upgrade_view_title"].format(getattr(kingdom, "name", "")),
         "\n".join(lines),
         f"{VIEW_MARKER_PREFIX}:eglise-upgrade",
+        discord.Colour.purple(),
+        row,
+        media=media,
+    )
+
+
+def _build_church_upgrade_info_view(
+    strings: dict[str, str],
+    kingdom: Any,
+    media: str | None = None,
+) -> Any:
+    """Build the 🔎 face of the 🔨 Améliorer window (ameliorer-vue-v2).
+
+    The DENSE rules Drasah does not want on the decision sheet: the
+    Lieu Sacrée (Cathédrale) chantier rules + the Rappel Offrande.
+    """
+    import discord
+
+    from kingdoms.mods.kingdoms.kingdom_persistent import (
+        KingdomChurchUpgradeBackButton,
+    )
+
+    body = (
+        strings["church_band_sacree"].lstrip("\n")
+        + "\n\n"
+        + strings["church_offrande_rappel"]
+    )
+    row = [KingdomChurchUpgradeBackButton(strings)]
+    return _panel_view_with_buttons(
+        strings["church_upgrade_info_title"].format(getattr(kingdom, "name", "")),
+        body,
+        f"{VIEW_MARKER_PREFIX}:eglise-upgrade-info",
         discord.Colour.purple(),
         row,
         media=media,

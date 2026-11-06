@@ -144,10 +144,16 @@ def test_the_upgrade_view_strings_carry_the_three_bandes() -> None:
     # the bandes badges
     assert "NOTRE PALIER" in strings["church_band_current"]
     assert "{0} ⚙️" in strings["church_band_next"]
-    assert "VERROUILLÉE" in strings["church_band_locked"]
+    # ameliorer-vue-v2: a LOCKED palier is one dimmed grey subtext line
+    assert strings["church_band_locked_short"].startswith("-# 🔒")
+    assert "débloquée après {2}" in strings["church_band_locked_short"]
+    # the progress bar (Drasah 06/11 — le sentiment d'avancement)
+    assert "Avancement" in strings["church_upgrade_bar"]
+    assert "{0}" in strings["church_upgrade_bar"]
     # the bandes description — cost, offrande, marriage lock
     assert "Offrande +{2} ⚙️" in strings["church_band_desc"]
-    # the Cathédrale bande carries the Lieu Sacrée rules
+    # the Cathédrale bande carried the Lieu Sacrée rules — now behind
+    # 🔎 En savoir plus (ameliorer-vue-v2), the key itself survives
     sacree = strings["church_band_sacree"]
     assert "Lieu Sacrée" in sacree
     assert "72h" in sacree
@@ -213,23 +219,60 @@ def test_the_upgrade_view_shows_the_three_bandes() -> None:
     strings = realm_strings("fr")
     view = _build_church_upgrade_view(strings, _kingdom(tier=1), _state(tier=1))
     content = _view_text(view)
-    # the three palier bandes with the paroisse-v1 values
+    # ameliorer-vue-v2: the progress bar — Palier 1/3 reads ⬛⬜⬜
+    assert "Avancement : ⬛⬜⬜ · 1/3" in content
+    # the CURRENT palier reads as a full band (Drasah: l'actif reste clair)
     assert "⛪ Chapelle" in content
     assert "✅ NOTRE PALIER" in content
+    assert "🎁 Offrande +0 ⚙️" in content
+    assert "Verrou mariage 24h" in content
+    # the PROCHAIN palier reads as a full band — it pops at first glance
     assert "⛪ Église" in content
     assert "PROCHAIN · 2 ⚙️" in content
-    assert "⛪ Cathédrale" in content
-    assert "🔒 VERROUILLÉE" in content
-    # the offrande reads +0 / +1 / +2 (Drasah 06/11 correction)
-    assert "🎁 Offrande +0 ⚙️" in content
     assert "🎁 Offrande +1 ⚙️" in content
-    assert "🎁 Offrande +2 ⚙️" in content
-    # the marriage locks read 24h / 12h / 6h
-    assert "Verrou mariage 24h" in content
     assert "Verrou mariage 12h" in content
-    assert "Verrou mariage 6h" in content
-    # the Lieu Sacrée rules ride the Cathédrale bande only
-    assert content.count("Lieu Sacrée") == 1
+    # ameliorer-vue-v2: the LOCKED palier is ONE dimmed grey line —
+    # no full stats, the dense rules left the decision sheet
+    assert "🔒 Cathédrale — Palier 3 · débloquée après l'Église" in content
+    assert "PROCHAIN · 4 ⚙️" not in content
+    assert "🎁 Offrande +2 ⚙️" not in content
+    assert "Verrou mariage 6h" not in content
+    assert "Lieu Sacrée" not in content
+    assert "Rappel Offrande" not in content
+    # the ladder ORDER never changes: Chapelle then Église then Cathédrale
+    assert content.index("Chapelle") < content.index("Église") < content.index("Cathédrale")
+
+
+def test_the_upgrade_view_bar_and_buttons_follow_ameliorer_vue_v2() -> None:
+    strings = realm_strings("fr")
+    # the bar advances with the palier — 2/3 reads ⬛⬛⬜
+    view = _build_church_upgrade_view(strings, _kingdom(tier=2, bank=9), _state(tier=2))
+    content = _view_text(view)
+    assert "Avancement : ⬛⬛⬜ · 2/3" in content
+    # the reached palier keeps its full ATTEINT band
+    assert "✅ ATTEINT" in content
+    buttons = dict((cid, (style, disabled)) for cid, style, disabled in _view_buttons(view))
+    # 🔎 En savoir plus stays BLUE (primary), Retour Paroisse goes RED
+    assert buttons["kingdoms:church:upgradeinfo"] == (discord.ButtonStyle.primary, False)
+    assert buttons["kingdoms:church:back"] == (discord.ButtonStyle.danger, False)
+
+
+def test_the_upgrade_info_face_carries_the_dense_rules() -> None:
+    from kingdoms.mods.kingdoms.kingdom_realm_content import (
+        _build_church_upgrade_info_view,
+    )
+
+    strings = realm_strings("fr")
+    view = _build_church_upgrade_info_view(strings, _kingdom())
+    content = _view_text(view)
+    # the dense rules moved BEHIND 🔎 En savoir plus (ameliorer-vue-v2)
+    assert "Lieu Sacrée" in content
+    assert "72h" in content
+    assert "Garde Royal" in content
+    assert "Rappel Offrande" in content
+    # the return button navigates back to the Améliorer sheet, GREEN
+    buttons = dict((cid, (style, disabled)) for cid, style, disabled in _view_buttons(view))
+    assert buttons["kingdoms:church:upgradeback"] == (discord.ButtonStyle.success, False)
 
 
 def test_the_upgrade_confirm_is_green_when_the_treasury_pays() -> None:
