@@ -60,8 +60,8 @@ def _header(view: discord.ui.LayoutView, spec: EntityCardSpec) -> None:
         view.add_item(discord.ui.Container(*blocks))
 
 
-def _body(view: discord.ui.LayoutView, spec: EntityCardSpec, footer: str) -> None:
-    """Add the card body: props, description, media, links, source, id."""
+def _body(view: discord.ui.LayoutView, spec: EntityCardSpec) -> None:
+    """Add the card body: props, description, media, links, source."""
     body: list[discord.ui.Item[discord.ui.LayoutView]] = []
     if spec.props:
         body.append(discord.ui.TextDisplay("\n".join(spec.props)))
@@ -80,7 +80,6 @@ def _body(view: discord.ui.LayoutView, spec: EntityCardSpec, footer: str) -> Non
     if spec.source_url:
         body.append(discord.ui.Separator())
         body.append(discord.ui.TextDisplay(f"Source : [{spec.source_label}]({spec.source_url})"))
-    body.append(discord.ui.TextDisplay(footer))
     view.add_item(discord.ui.Container(*body, accent_colour=discord.Colour(ACCENT)))
 
 
@@ -91,10 +90,15 @@ def _actions(
     """Add the action row (each factory builds a persistent item)."""
     if not buttons:
         return
-    row: discord.ui.ActionRow[discord.ui.LayoutView] = discord.ui.ActionRow()
-    for build in buttons:
-        row.add_item(build())
-    view.add_item(row)
+    prebuilt = [b for b in buttons if isinstance(b, discord.ui.ActionRow)]
+    factories = [b for b in buttons if not isinstance(b, discord.ui.ActionRow)]
+    for row in prebuilt:
+        view.add_item(row)
+    if factories:
+        row: discord.ui.ActionRow[discord.ui.LayoutView] = discord.ui.ActionRow()
+        for build in factories:
+            row.add_item(build())
+        view.add_item(row)
 
 
 def build_entity_card(spec: EntityCardSpec) -> discord.ui.LayoutView:
@@ -105,8 +109,11 @@ def build_entity_card(spec: EntityCardSpec) -> discord.ui.LayoutView:
     """
     view = discord.ui.LayoutView(timeout=None)
     _header(view, spec)
-    _body(view, spec, f"-# `{spec.entity_id}`")
+    _body(view, spec)
     _actions(view, spec.action_buttons)
+    # the id footer is ALWAYS the last line (owner direction 2026-11-06):
+    # after the buttons, never above them
+    view.add_item(discord.ui.TextDisplay(f"-# `{spec.entity_id}`"))
     return view
 
 
@@ -175,8 +182,9 @@ def pool_card(
     overflow = [m[0] for m in member_sections[10:]]
     if overflow:
         view.add_item(discord.ui.TextDisplay("\n".join(f"- {n}" for n in overflow)))
-    view.add_item(discord.ui.TextDisplay(f"-# `{pool_id}`"))
     _actions(view, buttons)
+    # the id footer is ALWAYS the last line — after the buttons
+    view.add_item(discord.ui.TextDisplay(f"-# `{pool_id}`"))
     return view
 
 
