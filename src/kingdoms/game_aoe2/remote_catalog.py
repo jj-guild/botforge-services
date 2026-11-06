@@ -103,10 +103,24 @@ class RemoteGameDataService:
     async def update_map(
         self,
         entry_id: str,
-        **kwargs: Any,
+        name: str | None = None,
+        filename: str | None = None,
+        description: str | None = None,
+        resource_url: str | None = None,
+        map_type: str | None = None,
+        filenames: tuple[str, ...] | None = None,
     ) -> MapModel:
-        """Update a map's mutable fields."""
-        result = await self._call("update_map", entry_id=entry_id, **kwargs)
+        """Update a map's mutable fields (positional shape, like the real service)."""
+        result = await self._call(
+            "update_map",
+            entry_id=entry_id,
+            name=name,
+            filename=filename,
+            description=description,
+            resource_url=resource_url,
+            map_type=map_type,
+            filenames=filenames,
+        )
         return _model(result)
 
     async def delete_map(self, entry_id: str) -> bool:
@@ -132,7 +146,6 @@ class RemoteGameDataService:
         name: str,
         map_ids: tuple[str, ...] = (),
         description: str = "",
-        owner_guild_id: str | None = None,
     ) -> MapPackModel:
         """Create a map pack (positional shape, like the real service)."""
         return _model_pack(
@@ -142,7 +155,6 @@ class RemoteGameDataService:
                 name=name,
                 map_ids=map_ids,
                 description=description,
-                owner_guild_id=owner_guild_id,
             )
         )
 
@@ -205,9 +217,33 @@ class RemoteGameDataService:
             )
         )
 
-    async def update_map_pool(self, **kwargs: Any) -> MapPoolModel:
-        """Update a pool's mutable fields."""
-        return _model_pool(await self._call("update_map_pool", **kwargs))
+    async def update_map_pool(
+        self,
+        entry_id: str,
+        name: str | None = None,
+        map_ids: tuple[str, ...] | None = None,
+        description: str | None = None,
+        fav_quota: int | None = None,
+        ban_quota: int | None = None,
+    ) -> MapPoolModel:
+        """Update a pool's mutable fields (positional shape, like the real service)."""
+        return _model_pool(
+            await self._call(
+                "update_map_pool",
+                entry_id=entry_id,
+                name=name,
+                map_ids=map_ids,
+                description=description,
+                fav_quota=fav_quota,
+                ban_quota=ban_quota,
+            )
+        )
+
+    async def transition_map_pool(self, entry_id: str, new_state: str) -> MapPoolModel:
+        """Move a pool along its lifecycle (draft->published->used->closed)."""
+        return _model_pool(
+            await self._call("transition_map_pool", entry_id=entry_id, new_state=new_state)
+        )
 
     async def archive_map_pool(self, entry_id: str) -> MapPoolModel:
         """Archive a pool."""
