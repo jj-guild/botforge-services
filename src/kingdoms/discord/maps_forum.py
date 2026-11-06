@@ -255,11 +255,54 @@ async def _heal_thread_title(platform: Any, guild_id: str, thread_id: str, displ
         logger.debug("maps forum: title heal skipped (%s)", thread_id, exc_info=True)
 
 
+async def map_post_render(entry: Any, guild_id: str, bot: Any, service: Any) -> tuple[str, Any]:
+    """Render one map's post (content + view) — THE forum post's shape.
+
+    One builder, two consumers: the forum post (the sync) and the
+    admin's ephemeral preview (the creation and the already-exists
+    verdicts show the admin EXACTLY what the post looks like).
+    """
+    from kingdoms.core.ids import footer
+
+    _, summary, source, image, icon, walls, nomad, tc = await _map_content_full(
+        entry.id, guild_id, bot
+    )
+    source = source or liquipedia_map_url(entry.name)
+    description = summary or (entry.description or "_Aucune description._")
+    pools = await _map_pools_link(service, entry, guild_id, bot=bot)
+    view = _map_post_view(
+        entry.id,
+        entry.name,
+        description,
+        pools,
+        source,
+        image,
+        entry.resource_url,
+        editable=entry.owner_guild_id == guild_id,
+        map_type=getattr(entry, "map_type", ""),
+        filenames=(),
+        game_key=str(getattr(entry, "game_key", "")),
+        owned_by_guild=entry.owner_guild_id == guild_id,
+        icon_url=icon,
+        walls=walls,
+        nomad=nomad,
+        tc=tc,
+    )
+    display = f"{entry.name[:1].upper()}{entry.name[1:]}"
+    tail = f"{source}\n" if source else ""
+    content = f"## {display}\n{tail}{description}"
+    if pools:
+        content = f"{content}\n\n**Pools**\n" + "\n".join(pools)
+    if entry.resource_url:
+        content = f"{content}\n{entry.resource_url}"
+    content = f"{content}\n\n{footer(entry.id)}"
+    return content, view
+
+
 async def _refresh_map_post(bot: Any, platform: Any, guild_id: str, entry: Any, service: Any) -> None:
     """Keep an existing map post's content and layout in sync (best-effort)."""
     import time
 
-    from kingdoms.core.ids import footer
     from kingdoms.core.services.entity_forum import (
         _content_fingerprint,
         _last_layout_render,
@@ -272,38 +315,8 @@ async def _refresh_map_post(bot: Any, platform: Any, guild_id: str, entry: Any, 
     if _stagger_stale_edit(thread_id, time.monotonic()):
         return
     try:
-        _, summary, source, image, icon, walls, nomad, tc = await _map_content_full(
-            entry.id, guild_id, bot
-        )
-        source = source or liquipedia_map_url(entry.name)
-        description = summary or (entry.description or "_Aucune description._")
-        pools = await _map_pools_link(service, entry, guild_id, bot=bot)
-        view = _map_post_view(
-            entry.id,
-            entry.name,
-            description,
-            pools,
-            source,
-            image,
-            entry.resource_url,
-            editable=entry.owner_guild_id == guild_id,
-            map_type=getattr(entry, "map_type", ""),
-            filenames=(),
-            game_key=str(getattr(entry, "game_key", "")),
-            owned_by_guild=entry.owner_guild_id == guild_id,
-            icon_url=icon,
-            walls=walls,
-            nomad=nomad,
-            tc=tc,
-        )
+        content, view = await map_post_render(entry, guild_id, bot, service)
         display = f"{entry.name[:1].upper()}{entry.name[1:]}"
-        tail = f"{source}\n" if source else ""
-        content = f"## {display}\n{tail}{description}"
-        if pools:
-            content = f"{content}\n\n**Pools**\n" + "\n".join(pools)
-        if entry.resource_url:
-            content = f"{content}\n{entry.resource_url}"
-        content = f"{content}\n\n{footer(entry.id)}"
         fingerprint = _content_fingerprint(content)
         if _last_layout_render(thread_id) == fingerprint:
             return
