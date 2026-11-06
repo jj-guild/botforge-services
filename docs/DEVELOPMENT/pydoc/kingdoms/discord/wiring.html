@@ -62,6 +62,15 @@ Recorded&nbsp;at&nbsp;bot&nbsp;build&nbsp;time&nbsp;from&nbsp;the&nbsp;mod&nbsp;
 platform's&nbsp;games/mods&nbsp;—&nbsp;the&nbsp;request&nbsp;picker&nbsp;uses&nbsp;it&nbsp;to&nbsp;add&nbsp;a&nbsp;mod's<br>
 games&nbsp;to&nbsp;the&nbsp;guild's&nbsp;request&nbsp;automatically.</span></dd></dl>
  <dl><dt><a name="-set_guild_access_platform"><strong>set_guild_access_platform</strong></a>(games: 'tuple[str, ...]', mods: 'tuple[str, ...]', mod_required_games: 'tuple[tuple[str, tuple[str, ...]], ...]' = ()) -&gt; 'None'</dt><dd><span class="code">Record&nbsp;the&nbsp;platform's&nbsp;known&nbsp;games&nbsp;and&nbsp;mods&nbsp;(bot&nbsp;build&nbsp;time).</span></dd></dl>
+ <dl><dt>async <a name="-sync_known_guilds"><strong>sync_known_guilds</strong></a>(guild_ids: 'Any') -&gt; 'int'</dt><dd><span class="code">Ensure&nbsp;every&nbsp;guild&nbsp;the&nbsp;bot&nbsp;sits&nbsp;in&nbsp;has&nbsp;its&nbsp;access&nbsp;document.<br>
+&nbsp;<br>
+The&nbsp;admin&nbsp;DM&nbsp;panel's&nbsp;server&nbsp;count&nbsp;reads&nbsp;the&nbsp;``guild_access``<br>
+collection,&nbsp;but&nbsp;documents&nbsp;were&nbsp;only&nbsp;ever&nbsp;written&nbsp;by&nbsp;a&nbsp;request&nbsp;or<br>
+a&nbsp;grant&nbsp;—&nbsp;after&nbsp;a&nbsp;database&nbsp;reset&nbsp;the&nbsp;panel&nbsp;showed&nbsp;0&nbsp;servers&nbsp;while<br>
+the&nbsp;bot&nbsp;kept&nbsp;serving&nbsp;its&nbsp;guilds.&nbsp;The&nbsp;boot&nbsp;(and&nbsp;every&nbsp;guild&nbsp;join)<br>
+re-creates&nbsp;the&nbsp;default&nbsp;document&nbsp;per&nbsp;guild,&nbsp;so&nbsp;the&nbsp;stored&nbsp;list&nbsp;and<br>
+the&nbsp;bot's&nbsp;actual&nbsp;guilds&nbsp;stay&nbsp;coherent.&nbsp;Returns&nbsp;the&nbsp;number&nbsp;of&nbsp;guilds<br>
+ensured;&nbsp;best-effort,&nbsp;never&nbsp;raises.</span></dd></dl>
 </td></tr></table><p>
 <table class="section">
 <tr class="decor data-decor heading-text">

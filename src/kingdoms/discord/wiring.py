@@ -104,6 +104,31 @@ def build_games_service() -> Any | None:
     return _GAMES_SERVICE
 
 
+async def sync_known_guilds(guild_ids: Any) -> int:
+    """Ensure every guild the bot sits in has its access document.
+
+    The admin DM panel's server count reads the ``guild_access``
+    collection, but documents were only ever written by a request or
+    a grant \u2014 after a database reset the panel showed 0 servers while
+    the bot kept serving its guilds. The boot (and every guild join)
+    re-creates the default document per guild, so the stored list and
+    the bot's actual guilds stay coherent. Returns the number of guilds
+    ensured; best-effort, never raises.
+    """
+    service = build_guild_access_service()
+    if service is None:
+        return 0
+    ensured = 0
+    for guild_id in guild_ids:
+        try:
+            await service.ensure_known(str(guild_id))
+        except Exception:
+            logger.warning("GUILD ACCESS known-guild ensure failed (guild %s)", guild_id, exc_info=True)
+            continue
+        ensured += 1
+    return ensured
+
+
 async def guard_bot_admin(
     interaction: discord.Interaction,
     denied_message: str = "Réservé aux bot admins.",
