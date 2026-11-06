@@ -392,3 +392,50 @@ async def test_nuked_guild_is_sked_by_self_healing(monkeypatch: Any) -> None:
     assert await quiesce_mod.guild_nuked("777") is True
     assert await quiesce_mod.guild_nuked("888") is False
     assert await quiesce_mod.guild_nuked(None) is False
+
+
+def test_console_action_registry_renders_extensions(monkeypatch: Any) -> None:
+    """An extension action renders its button and rides the boot wiring."""
+    import discord
+
+    import kingdoms.discord.console as console_mod
+
+    # a registered action reuses a concrete DynamicItem class — an
+    # extension registers its own class the same way
+    action = console_mod.ConsoleAction(
+        key="ext-test",
+        item_cls=console_mod.DevResetDataButton,
+        build=lambda disabled: console_mod.DevResetDataButton(disabled=disabled),
+        description="**Ext test** — an extension action.",
+    )
+    console_mod.register_console_action(action)
+    try:
+        keys = [a.key for a in console_mod.registered_console_actions()]
+        assert keys[:4] == ["clean-managed", "nuke", "reset-data", "install"]
+        assert "ext-test" in keys
+
+        # the home renders the extension's button (disabled off-allowlist)
+        view = console_mod._console_view(None)
+        rendered = str(view.to_components())
+        assert "Ext test" in rendered
+
+        # duplicate keys fail loudly
+        try:
+            console_mod.register_console_action(action)
+            raise AssertionError("duplicate key must fail")
+        except ValueError:
+            pass
+
+        # the boot wiring registers the extension's item class
+        class FakeBot:
+            def __init__(self) -> None:
+                self.items: list[type[discord.ui.DynamicItem[Any]]] = []
+
+            def add_dynamic_items(self, *classes: type[discord.ui.DynamicItem[Any]]) -> None:
+                self.items.extend(classes)
+
+        bot = FakeBot()
+        console_mod.register_console_items(bot)  # type: ignore[arg-type]
+        assert console_mod.DevResetDataButton in bot.items
+    finally:
+        console_mod._ACTIONS.pop("ext-test", None)

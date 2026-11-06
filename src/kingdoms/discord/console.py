@@ -36,6 +36,8 @@ from __future__ import annotations
 import logging
 import os
 import re
+from collections.abc import Callable
+from dataclasses import dataclass
 from typing import Any
 
 import discord
@@ -50,6 +52,53 @@ DEPLOY_ENV_VAR = "KINGDOMS_DEPLOY_ENV"
 PROD_ENV_NAMES = ("prod", "production")
 
 _NS = "console"
+
+
+@dataclass(frozen=True)
+class ConsoleAction:
+    """One console action: a button the console home renders dynamically.
+
+    The console is extensible (the mods-init platform): a mod (or the
+    core) registers its action — a stable key, the DynamicItem class
+    to re-register at every startup, a builder taking the ``disabled``
+    flag, and one description line for the home's intro. The same
+    three gates (test guild, never prod, bot admin) guard every
+    registered action's click — an action never re-implements them.
+
+    - ``key`` \u2014 stable action id (e.g. ``clean-managed``); unique, and
+    must not collide with another registered action;
+    - ``item_cls`` \u2014 the DynamicItem subclass (re-registered at boot);
+    - ``build`` \u2014 ``build(disabled)`` returns the button instance;
+    - ``description`` \u2014 one line of the home's intro text.
+    """
+
+    key: str
+    item_cls: type[discord.ui.DynamicItem[Any]]
+    build: Callable[[bool], discord.ui.DynamicItem[Any]]
+    description: str
+
+
+_ACTIONS: dict[str, ConsoleAction] = {}
+
+
+def register_console_action(action: ConsoleAction) -> ConsoleAction:
+    """Register one console action (fail loudly on a key collision)."""
+    if not action.key or ":" in action.key:
+        raise ValueError(f"console action key {action.key!r} must be a simple slug")
+    if action.key in _ACTIONS:
+        raise ValueError(f"console action {action.key!r} is already registered")
+    _ACTIONS[action.key] = action
+    return action
+
+
+def registered_console_actions() -> tuple[ConsoleAction, ...]:
+    """Return the registered actions in registration order."""
+    return tuple(_ACTIONS.values())
+
+
+def console_action(key: str) -> ConsoleAction | None:
+    """Return one registered action by key; None when unknown."""
+    return _ACTIONS.get(key)
 
 
 def _deploy_env(environ: dict[str, str] | None = None) -> str:
@@ -356,6 +405,7 @@ def _console_view(guild_id: str | int | None) -> discord.ui.LayoutView:
     console exists, yet cannot act on a guild outside the test scope.
     """
     allowed = is_test_guild(guild_id)
+    actions = registered_console_actions()
     view = discord.ui.LayoutView(timeout=None)
     note = (
         "This guild is on the test allowlist \u2014 actions below apply to "
@@ -364,21 +414,21 @@ def _console_view(guild_id: str | int | None) -> discord.ui.LayoutView:
         else "This guild is **not** on the test allowlist \u2014 the actions "
         "are disabled (KINGDOMS_TEST_GUILD_IDS decides, env-defined)."
     )
+    # the intro composes from the registered actions — an extension
+    # action describes itself, the home never hard-codes a list
+    intro = note + "\n" + "\n".join(action.description for action in actions)
     container: discord.ui.Container[discord.ui.LayoutView] = discord.ui.Container(
         discord.ui.TextDisplay("# \u2699 Console"),
-        discord.ui.TextDisplay(
-            f"{note}\n**Clean managed** removes only what the bot created; "
-            "**Nuke** removes everything (triple confirmation); **Reset data** "
-            "wipes this guild's persisted data (isolated \u2014 nothing outside "
-            "this guild is touched); **Install** opens the mods/games selection."
-        ),
+        discord.ui.TextDisplay(intro),
         accent_colour=discord.Colour(0xED4245),
     )
+    # the buttons flow from the registry, five per row (Discord's cap)
     row: discord.ui.ActionRow[discord.ui.LayoutView] = discord.ui.ActionRow()
-    row.add_item(DevCleanManagedButton(disabled=not allowed))
-    row.add_item(DevNukeButton(disabled=not allowed))
-    row.add_item(DevResetDataButton(disabled=not allowed))
-    row.add_item(DevInstallButton(disabled=not allowed))
+    for position, action in enumerate(actions, start=1):
+        if position > 1 and (position - 1) % 5 == 0:
+            container.add_item(row)
+            row = discord.ui.ActionRow()
+        row.add_item(action.build(not allowed))
     container.add_item(row)
     view.add_item(container)
     back_row: discord.ui.ActionRow[discord.ui.LayoutView] = discord.ui.ActionRow()
@@ -615,8 +665,10 @@ class DevInstallModal(discord.ui.Modal):
         )
         self.mods_select = mods_select
         self.games_select = games_select
-        self.add_item(mods_select)
-        self.add_item(games_select)
+        # Discord rejects a bare select inside a modal (the opening button
+        # seems dead) — every select rides a Label wrapper
+        self.add_item(discord.ui.Label(text="Mods", component=mods_select))
+        self.add_item(discord.ui.Label(text="Games", component=games_select))
 
     async def on_submit(self, interaction: discord.Interaction) -> None:
         """Guard, propagate the selection, apply it."""
@@ -715,12 +767,56 @@ class ConsoleBackButton(
 
 
 def register_console_items(bot: discord.Client) -> None:
-    """Register the console's DynamicItems (called at every startup)."""
-    bot.add_dynamic_items(
-        AdminConsoleButton,
-        ConsoleBackButton,
-        DevCleanManagedButton,
-        DevNukeButton,
-        DevResetDataButton,
-        DevInstallButton,
+    """Register the console's DynamicItems (called at every startup).
+
+    The registered actions' item classes ride along — an extension
+    action registers its button once and the boot wiring follows.
+    """
+    bot.add_dynamic_items(AdminConsoleButton, ConsoleBackButton)
+    for action in registered_console_actions():
+        bot.add_dynamic_items(action.item_cls)
+
+
+# ── The built-in actions (registered at import; extensions follow) ─────────
+
+register_console_action(
+    ConsoleAction(
+        key="clean-managed",
+        item_cls=DevCleanManagedButton,
+        build=lambda disabled: DevCleanManagedButton(disabled=disabled),
+        description=(
+            "**Clean managed** removes only what the bot created "
+            "(persisted channels, mod roles, the bot-admins role)."
+        ),
     )
+)
+register_console_action(
+    ConsoleAction(
+        key="nuke",
+        item_cls=DevNukeButton,
+        build=lambda disabled: DevNukeButton(disabled=disabled),
+        description=(
+            "**Nuke** removes every channel, category and role of this guild "
+            "(triple confirmation)."
+        ),
+    )
+)
+register_console_action(
+    ConsoleAction(
+        key="reset-data",
+        item_cls=DevResetDataButton,
+        build=lambda disabled: DevResetDataButton(disabled=disabled),
+        description=(
+            "**Reset data** wipes this guild's persisted data "
+            "(isolated — nothing outside this guild is touched)."
+        ),
+    )
+)
+register_console_action(
+    ConsoleAction(
+        key="install",
+        item_cls=DevInstallButton,
+        build=lambda disabled: DevInstallButton(disabled=disabled),
+        description=("**Install** opens the mods/games selection."),
+    )
+)
