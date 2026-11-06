@@ -131,9 +131,17 @@ A session writing a doc, a comment or a commit in French is a bug.
   workflow, and a useful improvised command is committed ("learned").
   Humans on GitHub only merge PRs and approve prod deploys
   (+ one-time bootstrapping) — see the kingdoms
-  [Automate or learn](https://github.com/merlin-pinpin-org/kingdoms/blob/main/docs/SKILLS/automate-or-learn.md)
+  [Automate or learn](https://github.com/merlin-pinpin-org/kingdoms/blob/main/.agents/skills/automate-or-learn/SKILL.md)
   skill and CONVENTIONS.md (*Human GitHub scope*, *Everything is
   automation*).
+- **MongoDB write atomicity** (developer-mandated): a hot document
+  modified by possibly-concurrent processes is updated with an atomic
+  single-document operation (`find_one_and_update` + `$set`/`$inc`/
+  `$push` with a filter — never read-then-write); a cross-document
+  invariant under concurrent writers needs a multi-document transaction
+  or the Redis lock of the enclosing operation. Cold, insert-only data
+  needs none of this. Full hierarchy: kingdoms
+  docs/architecture/core.md, *MongoDB write atomicity*.
 - **CLI-first mandate:** the `kingdoms` CLI
   (`src/kingdoms/cli/`, [docs/CLI.md](docs/CLI.md)) is the front door
   for environments and ops — doctor (local env checks), local stack,
