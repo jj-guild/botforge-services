@@ -320,3 +320,103 @@ async def test_a_lord_remarries_after_a_broken_link() -> None:
     assert await bundle.diplomacy.marry("lord-a", "celtes") == "celtes"
     lords = {item.id: item for item in await bundle.kingdoms.lords()}
     assert lords["lord-a"].married_civilization == "celtes"
+
+
+# ---------------------------------------------------------------------
+# paroisse-retours-v1 (Drasah 06/11) — 🔨 Améliorer, blue En savoir
+# plus, enriched marry rules, named Princess, green Modifier
+# ---------------------------------------------------------------------
+
+
+def test_the_upgrade_button_is_ameliorer_with_the_hammer() -> None:
+    """paroisse-retours-v1: le bouton se nomme « Améliorer », emoji
+    marteau — fini le « ⛪ Améliorer → Cathédrale (4 ⚙️) »."""
+    assert realm_strings("fr")["church_upgrade_button"] == "🔨 Améliorer"
+    assert realm_strings("en")["church_upgrade_button"] == "🔨 Upgrade"
+
+
+def test_en_savoir_plus_stays_blue_in_the_realm_rows() -> None:
+    """paroisse-retours-v1: dans la vue salon de l'Église, seul les
+    ACTIONS rendent en vert — « 🔎 En savoir plus » reste BLEU."""
+    from kingdoms.mods.kingdoms.kingdom_lieux import _paroisse_rows
+    from kingdoms.mods.kingdoms.kingdom_persistent import _strings as merged_strings
+
+    strings = merged_strings("fr")
+    kingdom = SimpleNamespace(
+        name="Nilrem", marriage_points=3, arranged_marriage_stock=1
+    )
+    rows = _paroisse_rows(strings, kingdom, _state(), "fr")
+    first = list(rows[0])
+    info = [b for b in first if b.item.custom_id == "kingdoms:church:info"]
+    marry = [b for b in first if b.item.custom_id == "kingdoms:church:marry"]
+    assert info and info[0].item.style == discord.ButtonStyle.primary
+    assert marry and marry[0].item.style == discord.ButtonStyle.success
+
+
+def test_the_marry_rules_carry_the_lock_end_and_the_lock_state() -> None:
+    """paroisse-retours-v1: les règles étoffées — la fin INDICATIVE du
+    verrou (« aujourd'hui/demain HH:MM » au moment du clic) et l'état
+    verrouillage complet (ni attaquer, ni défendre, ni carte techno)."""
+    from kingdoms.mods.kingdoms.kingdom_panels import _strings as panel_strings
+    from kingdoms.mods.kingdoms.kingdom_persistent import _fmt_marriage_lock_end
+
+    fr = panel_strings("fr")
+    rules = fr["church_marry_rules"]
+    assert "{2}" in rules
+    assert "ni attaquer, ni défendre, ni utiliser de carte technologique" in rules
+    assert "seront consommées à la célébration" in rules
+    assert "fin de la saison" in rules
+    en = panel_strings("en")
+    assert "{2}" in en["church_marry_rules"]
+    assert "neither attack, nor defend, nor use a technology card" in en["church_marry_rules"]
+    # the indicative end renders HH:MM with the today/tomorrow wording.
+    short = _fmt_marriage_lock_end(1, fr)
+    assert "à **" in short and ":" in short
+    assert short in (
+        fr["church_marry_lock_today"].format(short.split("**")[1]),
+        fr["church_marry_lock_tomorrow"].format(short.split("**")[1]),
+    )
+    # a longer lock reads a different end (9h apart can never collide).
+    assert _fmt_marriage_lock_end(10, fr) != short
+
+
+def test_the_princess_is_named_and_stable() -> None:
+    """paroisse-retours-v1: la vue nomme la PRINCESSE (« Princesse
+    Atotoztli (Aztèques) »), jamais la civilisation seule — le nom est
+    SEEDED, identique à chaque rendu (pattern Les Fidèles)."""
+    from kingdoms.mods.kingdoms.kingdom_persistent import _princess_label
+    from kingdoms.mods.kingdoms.kingdom_panels import _strings as panel_strings
+
+    fr = panel_strings("fr")
+    civ_names = {"bulgares": "Bulgares"}
+    label = _princess_label(fr, "l1", "bulgares", civ_names)
+    again = _princess_label(fr, "l1", "bulgares", civ_names)
+    assert label == again
+    assert label.startswith("Princesse")
+    assert "Bulgares" in label
+    assert _princess_label(panel_strings("en"), "l1", "bulgares", civ_names).startswith(
+        "Princess"
+    )
+
+
+def test_the_confirm_view_names_the_princess_and_greens_the_modifier() -> None:
+    """paroisse-retours-v1: la carte de confirmation porte le nom de la
+    Princesse et ✏️ Modifier rend en VERT (le gris suggérait un bouton
+    mort)."""
+    from kingdoms.mods.kingdoms.kingdom_persistent import (
+        _church_marry_confirm_view,
+        _strings as merged_strings,
+    )
+
+    strings = merged_strings("fr")
+    lord = SimpleNamespace(id="l1", role="lord", display_name="Luc")
+    kingdom = SimpleNamespace(id="k-1", name="Nilrem")
+    tier = SimpleNamespace(marriage_lock_hours=24, offering=0)
+    view = _church_marry_confirm_view(
+        strings, lord, kingdom, "celtes", "Celtes", 1, 24, False, tier,
+        None, {"celtes": "Celtes"},
+    )
+    content = _view_text(view)
+    assert "Princesse" in content and "Celtes" in content
+    edit = [s for cid, s, _d in _view_buttons(view) if cid.startswith("kingdoms:church:marryedit")]
+    assert edit == [discord.ButtonStyle.success]
