@@ -866,7 +866,7 @@ class PoolHardDeleteModal(discord.ui.Modal):
         self.pool = pool
         # the modal title carries the pool id; the label stays under
         # Discord's 45-char cap
-        super().__init__(title=f"Supprimer {pool.id[:24]}", timeout=300)
+        super().__init__(title=f"Supprimer {str(pool.name)[:32]}", timeout=300)
         self.confirm: discord.ui.TextInput[Any] = discord.ui.TextInput(
             label="Tape l'id exact du pool",
             max_length=100,
@@ -894,9 +894,9 @@ class PoolHardDeleteModal(discord.ui.Modal):
             )
             return
         typed = str(self.confirm.value or "").strip()
-        if typed != current.id:
+        if typed != current.name:
             await interaction.response.send_message(
-                f"Refus\u00e9 \u2014 l'id ne correspond pas (`{typed}` \u2260 `{current.id}`). "
+                f"Refus\u00e9 \u2014 le nom ne correspond pas (`{typed}` \u2260 `{current.name}`). "
                 "Aucune suppression effectu\u00e9e.",
                 ephemeral=True,
             )
