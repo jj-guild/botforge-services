@@ -187,3 +187,13 @@ The split is progressive: while ``CORE_URI`` is unset the bot behaves
 exactly as before; when set, startup asserts the wiring
 (``CORE_WIRING_OK``) and logs a warning instead of failing if svc-core
 is unreachable.
+
+## Troubleshooting (the repo's failure memory)
+
+The binding policy lives in kingdoms CONVENTIONS.md, *Troubleshooting
+is part of the fix*: every fixed bug or incident ships its regression
+test and a dated entry here (symptom → root cause → fix → the test
+that guards it), newest first. An entry links the test by name so the
+next session can find both.
+
+No entry yet — the first fixed incident lands here.
