@@ -1491,6 +1491,7 @@ async def _bulk_import_live_report(
             await interaction.followup.edit_message(msg.id, content=_body())
 
     async def on_result(name: str, ok: bool, reason: str = "") -> None:
+        """Append one check's outcome to the live progress message."""
         icon = "\u2705" if ok else "\u274c"
         suffix = f" \u2014 {reason}" if reason else ""
         state["lines"].append(f"{icon} {name}{suffix}")
@@ -1499,6 +1500,7 @@ async def _bulk_import_live_report(
     await _edit()
 
     async def final(summary: str) -> None:
+        """Replace the progress message with the final summary."""
         msg = state["msg"]
         if msg is None:
             await interaction.followup.send(summary, ephemeral=True)

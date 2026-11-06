@@ -43,6 +43,7 @@ class _StreamHub:
         return queue
 
     def unsubscribe(self, queue: Any) -> None:
+        """Remove a consumer's queue so it stops receiving events."""
         if queue in self._subscribers:
             self._subscribers.remove(queue)
 

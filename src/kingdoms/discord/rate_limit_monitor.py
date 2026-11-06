@@ -36,6 +36,7 @@ class _RateLimitTap(logging.Handler):
     """Re-emit discord.py's 429 warnings as structured kingdoms warnings."""
 
     def emit(self, record: logging.LogRecord) -> None:  # pragma: no cover - trivial
+        """Forward a discord.py 429 log record to the kingdoms tap."""
         try:
             self._handle(record.getMessage())
         except Exception:  # noqa: S110 - a broken log record never breaks the bot
