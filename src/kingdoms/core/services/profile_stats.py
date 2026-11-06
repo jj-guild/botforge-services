@@ -74,6 +74,54 @@ class ProfileStatsService:
             return fetched
         return stored
 
+    async def get_cached(self, profile_id: str) -> dict[str, Any] | None:
+        """Serve the CACHED stats ONLY — never a provider fetch.
+
+        The panels' path (owner direction: the panel is immediate): a
+        cache miss serves whatever Mongo holds (even stale) or nothing
+        — the refresh is a BACKGROUND concern (refresh_stale), never
+        the click's latency. The old path fetched the provider inline:
+        ~1s per profile, seconds on every panel open.
+        """
+        cached = await self._redis_get(profile_id)
+        if cached is not None:
+            return cached
+        stored = await self._mongo_get(profile_id)
+        if stored is not None:
+            await self._redis_set(profile_id, stored)
+        return stored
+
+    async def get_many_cached(self, profile_ids: list[str]) -> dict[str, dict[str, Any]]:
+        """Serve many profiles from the CACHE ONLY (the panels' batch)."""
+        results: dict[str, dict[str, Any]] = {}
+        for profile_id in profile_ids:
+            stats = await self.get_cached(profile_id)
+            if stats is not None:
+                results[profile_id] = stats
+        return results
+
+    async def refresh_stale(self, profile_ids: list[str]) -> int:
+        """Refresh the stale/missing profiles in the background.
+
+        Returns the count refreshed. The panels schedule this AFTER
+        answering (the click serves the cache; the freshness catches
+        up for the NEXT open).
+        """
+        refreshed = 0
+        for profile_id in profile_ids:
+            cached = await self._redis_get(profile_id)
+            if cached is not None:
+                continue
+            stored = await self._mongo_get(profile_id)
+            if stored is not None and not self._is_stale(stored):
+                await self._redis_set(profile_id, stored)
+                continue
+            fetched = await self._fetch(profile_id)
+            if fetched is not None:
+                await self._store(profile_id, fetched)
+                refreshed += 1
+        return refreshed
+
     async def get_many(self, profile_ids: list[str]) -> dict[str, dict[str, Any]]:
         """Resolve many profiles at once; missing ones stay absent."""
         results: dict[str, dict[str, Any]] = {}

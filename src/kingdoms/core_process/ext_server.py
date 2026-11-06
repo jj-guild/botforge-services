@@ -25,6 +25,8 @@ async def serve_game_provider(
     list_maps: object | None = None,
     match_events: object | None = None,
     player_stats: object | None = None,
+    update_subscriptions: object | None = None,
+    match_result: object | None = None,
 ) -> None:
     """Serve the kingdoms.v1.Game contract until terminated.
 
@@ -40,6 +42,8 @@ async def serve_game_provider(
             list_maps=list_maps,
             match_events=match_events,
             player_stats=player_stats,
+            update_subscriptions=update_subscriptions,
+            match_result=match_result,
         ),
         server,
     )
@@ -47,7 +51,15 @@ async def serve_game_provider(
     bind = f"[::]:{port}"
     server.add_insecure_port(bind)
     await server.start()
-    logger.info("%s_READY port=%s provider=%s", process_label, port, capabilities.provider_id)
+    from kingdoms import __version__
+
+    logger.info(
+        "%s_READY port=%s provider=%s version=%s",
+        process_label,
+        port,
+        capabilities.provider_id,
+        __version__,
+    )
     await server.wait_for_termination()
 
 

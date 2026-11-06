@@ -5,7 +5,7 @@ description = "Core bot, Discord implementation, shared utilities, and YAML conf
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
-    "discord.py>=2.7.1",
+    "discord.py[voice]>=2.7.1",
     "pymongo>=4.5.0",
     "pydantic>=2.5.0",
     "redis>=5.0.0",
@@ -56,13 +56,18 @@ ignore = ["D203", "D213", "D107", "S603"]
 "tests/**" = ["D", "S101", "SLF"]
 # modular mods own their tests inside modules/mods/<mod>/tests (kingdoms#178)
 "modules/**/tests/**" = ["D", "S101", "SLF"]
-"src/kingdoms/rpc_generated/**" = ["D", "N", "E501", "I", "Q", "UP", "F401"]
+"src/kingdoms/rpc_generated/**" = ["D", "N", "E402", "E501", "I", "Q", "UP", "F401"]
 "src/kingdoms/core/rpc/**" = ["N802"]
+"src/kingdoms/game_aoe2/**" = ["N802"]
 "scripts/**" = ["D", "S101", "S311", "T201"]
 "src/kingdoms/discord/bot/main.py" = ["T201", "T203"]
 "src/kingdoms/cli/**" = ["T201", "T203", "S603", "S607"]
 "src/kingdoms/core/games/aoe2/seed_cli.py" = ["T201"]
 "src/kingdoms/core/games/aoe2/seed_cli_yaml.py" = ["T201"]
+"src/kingdoms/mods/ladder/legacy_import_cli.py" = ["T201"]
+"src/kingdoms/mods/ladder/season_import_cli.py" = ["T201"]
+"src/kingdoms/mods/ladder/season_report_cli.py" = ["T201"]
+"src/kingdoms/mods/ladder/legacy_export_cli.py" = ["T201"]
 "src/kingdoms/core/services/identity_export_cli.py" = ["T201"]
 "src/kingdoms/core_process/run_external_checks.py" = ["T201"]
 "src/kingdoms/core/services/identity_import_cli.py" = ["T201"]
@@ -83,7 +88,6 @@ pythonpath = [".github/workflows"]
 # modular mods (kingdoms#178): each mod's src/ exposes its package as
 # kingdoms.mods.<name> through a conftest shim (see modules/conftest.py)
 
-
 [[tool.mypy.overrides]]
-module = ["kingdoms.rpc_generated.*", "kingdoms.core.rpc.*", "kingdoms.core_process.*"]
+module = ["kingdoms.rpc_generated.*", "kingdoms.core.rpc.*", "kingdoms.core_process.*", "kingdoms.game_aoe2.rpc", "kingdoms.game_aoe2.client"]
 disable_error_code = ["no-untyped-def", "attr-defined", "no-untyped-call", "import-untyped", "name-defined", "type-arg", "arg-type", "assignment", "return-value"]

@@ -11,6 +11,7 @@ Imported bindings are trusted data (they come from the legacy export),
 so validation is not re-run through the game seam; the ``bound_at``
 timestamp is the import date, not the legacy association date.
 """
+
 from __future__ import annotations
 
 import csv
@@ -92,20 +93,26 @@ async def import_identity_links(
         entry_id = f"binding:{game_key}:{discord_id}:{profile_id}"
         existing = await collection.find_one({"_id": entry_id})
         if existing is None:
-            owner = await collection.find_one(
-                {"game_key": game_key, "profile_id": profile_id}
-            )
+            owner = await collection.find_one({"game_key": game_key, "profile_id": profile_id})
             if owner is not None and owner.get("user_id") != discord_id:
                 await collection.delete_one({"_id": owner["_id"]})
                 rebounds += 1
         if existing is not None and existing.get("bound_at") == bound_at:
             continue
+        # MERGE, never replace (merlin 2026-10-29): the seed must not
+        # wipe the provider-resolved profile_name/aliases the live seam
+        # stored at bind time — the roster links render the stored name.
+        existing_profile = (existing or {}).get("profile") or {}
+        profile = {**existing_profile}
+        if display_name:
+            profile["display_name"] = display_name
+        profile.setdefault("profile_id", profile_id)
         binding = {
             "_id": entry_id,
             "user_id": discord_id,
             "game_key": game_key,
             "profile_id": profile_id,
-            "profile": {"profile_id": profile_id, "display_name": display_name},
+            "profile": profile,
             "bound_at": bound_at,
             "imported": True,
         }

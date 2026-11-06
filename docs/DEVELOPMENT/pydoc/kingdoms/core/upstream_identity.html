@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Python: kingdoms.core.upstream_identity</title>
+</head><body>
+
+<table class="heading">
+<tr class="heading-text decor">
+<td class="title">&nbsp;<br><strong class="title"><a href="kingdoms.html" class="white">kingdoms</a>.<a href="kingdoms.core.html" class="white">core</a>.upstream_identity</strong></td>
+<td class="extra"><a href=".">index</a><br><a href="file:SOURCE_ROOT/core/upstream_identity.py">SOURCE_ROOT/core/upstream_identity.py</a></td></tr></table>
+    <p><span class="code">Project&nbsp;identification&nbsp;for&nbsp;outbound&nbsp;provider&nbsp;requests&nbsp;(#277).<br>
+&nbsp;<br>
+Every&nbsp;provider&nbsp;adapter&nbsp;that&nbsp;talks&nbsp;to&nbsp;an&nbsp;external&nbsp;upstream&nbsp;identifies<br>
+itself:&nbsp;a&nbsp;custom&nbsp;User-Agent&nbsp;naming&nbsp;the&nbsp;project&nbsp;(and,&nbsp;when&nbsp;configured,<br>
+a&nbsp;contact&nbsp;address)&nbsp;—&nbsp;never&nbsp;the&nbsp;library&nbsp;default<br>
+(``python-httpx/…``,&nbsp;``websockets/…``).&nbsp;An&nbsp;upstream&nbsp;must&nbsp;be&nbsp;able&nbsp;to<br>
+tell&nbsp;who&nbsp;consumes&nbsp;its&nbsp;API;&nbsp;the&nbsp;Liquipedia&nbsp;terms&nbsp;make&nbsp;it&nbsp;mandatory,<br>
+every&nbsp;other&nbsp;upstream&nbsp;deserves&nbsp;the&nbsp;same&nbsp;courtesy.<br>
+&nbsp;<br>
+The&nbsp;contact&nbsp;address&nbsp;is&nbsp;a&nbsp;project-wide&nbsp;fact,&nbsp;not&nbsp;a&nbsp;per-upstream&nbsp;one:<br>
+``PROVIDER_CONTACT``&nbsp;is&nbsp;THE&nbsp;one&nbsp;variable&nbsp;every&nbsp;provider&nbsp;reads<br>
+(Liquipedia&nbsp;included).</span></p>
+<p>
+<table class="section">
+<tr class="decor pkg-content-decor heading-text">
+<td class="section-title" colspan=3>&nbsp;<br><strong class="bigsection">Modules</strong></td></tr>
+    
+<tr><td class="decor pkg-content-decor"><span class="code">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span></td><td>&nbsp;</td>
+<td class="singlecolumn"><table><tr><td class="multicolumn"><a href="os.html">os</a><br>
+</td><td class="multicolumn"></td><td class="multicolumn"></td><td class="multicolumn"></td></tr></table></td></tr></table><p>
+<table class="section">
+<tr class="decor functions-decor heading-text">
+<td class="section-title" colspan=3>&nbsp;<br><strong class="bigsection">Functions</strong></td></tr>
+    
+<tr><td class="decor functions-decor"><span class="code">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span></td><td>&nbsp;</td>
+<td class="singlecolumn"><dl><dt><a name="-project_user_agent"><strong>project_user_agent</strong></a>() -&gt; 'str'</dt><dd><span class="code">Return&nbsp;the&nbsp;identifying&nbsp;User-Agent&nbsp;for&nbsp;outbound&nbsp;provider&nbsp;requests.</span></dd></dl>
+ <dl><dt><a name="-provider_contact"><strong>provider_contact</strong></a>() -&gt; 'str'</dt><dd><span class="code">Return&nbsp;the&nbsp;operational&nbsp;contact&nbsp;address&nbsp;(``PROVIDER_CONTACT``).</span></dd></dl>
+</td></tr></table>
+</body></html>

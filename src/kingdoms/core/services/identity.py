@@ -55,9 +55,7 @@ class IdentityCache(Protocol):
         """Read one cached value; None on miss (store may be down)."""
         ...
 
-    async def set_state(
-        self, scope: str, key: str, value: dict[str, object], ttl: int | None = None
-    ) -> bool:
+    async def set_state(self, scope: str, key: str, value: dict[str, object], ttl: int | None = None) -> bool:
         """Write one cached value with a TTL (best-effort); True when written."""
         ...
 
@@ -106,6 +104,30 @@ class IdentityService:
     async def get_user(self, user_id: str) -> UserModel | None:
         """Return the internal user document; None when absent."""
         return await self._database.find_user(user_id)
+
+    async def get_many_display_names(self, user_ids: list[str]) -> dict[str, str]:
+        """Resolve a batch's display names in ONE read (the panels' path).
+
+        The ids are the internal user ids (``discord:<snowflake>``); the
+        map carries the id -> the chosen pseudo, absent ids skipped. The
+        per-user get_user loop was one round-trip per member — the
+        players panel's real bottleneck.
+        """
+        finder = getattr(self._database, "find_many_users", None)
+        if finder is None:
+            names: dict[str, str] = {}
+            for user_id in user_ids:
+                user = await self.get_user(user_id)
+                name = str(getattr(user, "display_name", "") or "") if user else ""
+                if name:
+                    names[user_id] = name
+            return names
+        users = await finder(list(user_ids))
+        return {
+            str(getattr(u, "id", "")): str(getattr(u, "display_name", "") or "")
+            for u in users
+            if str(getattr(u, "display_name", "") or "")
+        }
 
     async def set_display_name(self, user_id: str, display_name: str) -> UserModel:
         """Set the user's chosen gamer name (1-16 chars, trimmed).

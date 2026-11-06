@@ -87,6 +87,7 @@ class ModDefinition:
     workflows: tuple[str, ...] = field(default_factory=tuple)
     commands: tuple[str, ...] = field(default_factory=tuple)
     dependencies: tuple[str, ...] = field(default_factory=tuple)
+    required_games: tuple[str, ...] = field(default_factory=tuple)
     private: bool = False
     owner_ids: tuple[str, ...] = field(default_factory=tuple)
 

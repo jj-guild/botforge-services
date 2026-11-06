@@ -31,6 +31,10 @@ class LiveStub:
     source of truth) and serves the per-player dashboard state to the bot.
     The bot renders it through /live in a dedicated channel.
 
+    WatchPlayerEvents streams the generic player status transitions (see
+    kingdoms.core.services.player_events): each transition is dispatched
+    by the consumer to the mods where the player is enrolled.
+
     """
 
     def __init__(self, channel):
@@ -44,6 +48,11 @@ class LiveStub:
                 request_serializer=kingdoms_dot_v1_dot_live__pb2.WatchDashboardRequest.SerializeToString,
                 response_deserializer=kingdoms_dot_v1_dot_live__pb2.DashboardState.FromString,
                 _registered_method=True)
+        self.WatchPlayerEvents = channel.unary_stream(
+                '/kingdoms.v1.Live/WatchPlayerEvents',
+                request_serializer=kingdoms_dot_v1_dot_live__pb2.WatchPlayerEventsRequest.SerializeToString,
+                response_deserializer=kingdoms_dot_v1_dot_live__pb2.PlayerStatusWireEvent.FromString,
+                _registered_method=True)
 
 
 class LiveServicer:
@@ -52,11 +61,22 @@ class LiveServicer:
     source of truth) and serves the per-player dashboard state to the bot.
     The bot renders it through /live in a dedicated channel.
 
+    WatchPlayerEvents streams the generic player status transitions (see
+    kingdoms.core.services.player_events): each transition is dispatched
+    by the consumer to the mods where the player is enrolled.
+
     """
 
     def WatchDashboard(self, request, context):
         """Server-stream the current dashboard state: one snapshot immediately,
         then a new snapshot on every aggregated state change.
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def WatchPlayerEvents(self, request, context):
+        """Server-stream player status transitions as they are aggregated.
         """
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
@@ -69,6 +89,11 @@ def add_LiveServicer_to_server(servicer, server):
                     servicer.WatchDashboard,
                     request_deserializer=kingdoms_dot_v1_dot_live__pb2.WatchDashboardRequest.FromString,
                     response_serializer=kingdoms_dot_v1_dot_live__pb2.DashboardState.SerializeToString,
+            ),
+            'WatchPlayerEvents': grpc.unary_stream_rpc_method_handler(
+                    servicer.WatchPlayerEvents,
+                    request_deserializer=kingdoms_dot_v1_dot_live__pb2.WatchPlayerEventsRequest.FromString,
+                    response_serializer=kingdoms_dot_v1_dot_live__pb2.PlayerStatusWireEvent.SerializeToString,
             ),
     }
     generic_handler = grpc.method_handlers_generic_handler(
@@ -83,6 +108,10 @@ class Live:
     provider event streams (ext-aoe2lobby live layer, ext-librematch as the
     source of truth) and serves the per-player dashboard state to the bot.
     The bot renders it through /live in a dedicated channel.
+
+    WatchPlayerEvents streams the generic player status transitions (see
+    kingdoms.core.services.player_events): each transition is dispatched
+    by the consumer to the mods where the player is enrolled.
 
     """
 
@@ -103,6 +132,33 @@ class Live:
             '/kingdoms.v1.Live/WatchDashboard',
             kingdoms_dot_v1_dot_live__pb2.WatchDashboardRequest.SerializeToString,
             kingdoms_dot_v1_dot_live__pb2.DashboardState.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def WatchPlayerEvents(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_stream(
+            request,
+            target,
+            '/kingdoms.v1.Live/WatchPlayerEvents',
+            kingdoms_dot_v1_dot_live__pb2.WatchPlayerEventsRequest.SerializeToString,
+            kingdoms_dot_v1_dot_live__pb2.PlayerStatusWireEvent.FromString,
             options,
             channel_credentials,
             insecure,

@@ -3,20 +3,19 @@
 The maps forum (``<game>-maps``) and the pools forum
 (``<game>-map-pools``) follow the same pattern: ensure a forum in the
 ``games`` category, then ensure exactly one post per visible entity,
-self-healing (a deleted post is recreated, a vanished entity's post is
+on demand (a deleted post is recreated, a vanished entity's post is
 deleted). That pattern is engine-grade: any mod can declare a forum of
 entity posts without re-implementing the sync loop.
 
 An ``EntityForumSpec`` names the forum (no magic words — the name is
 data), the category, and how to list the entities and build each
-post. ``sync_entity_forum`` is idempotent; ``start_entity_forum_sync``
-runs it periodically. Matched posts are refreshed when their layout
+post. ``sync_entity_forum`` is idempotent; ``register_entity_forum_sync``
+declares it to the scope-surfaces registry (the sync button runs it). Matched posts are refreshed when their layout
 builder changes over time.
 """
 
 from __future__ import annotations
 
-import asyncio
 import hashlib
 import logging
 from collections.abc import Awaitable, Callable
@@ -30,9 +29,41 @@ from kingdoms.discord.message_limits import truncate_body
 logger = logging.getLogger("kingdoms.core.entity_forum")
 
 GAMES_CATEGORY_NAME = "games"
-SYNC_INTERVAL_S = 3600
 EDIT_BACKOFF_S = 23 * 3600
 _STALE_EDITS: dict[str, float] = {}
+
+#: Per-channel PATCH pacing (#276 W4): Discord allows roughly 5 message
+#: edits per 5 seconds on one channel. Even idempotent (fingerprinted)
+#: syncs edit many posts of one forum in a tight loop and flirt with
+#: the bucket ceiling; the pacer keeps consecutive edits of the SAME
+#: forum apart so a full sync pass stays under the quota.
+EDIT_PACING_S = 0.5
+_last_edit_at: dict[str, float] = {}
+
+
+async def pace_channel_edit(channel_id: str) -> None:
+    """Wait so consecutive post edits on one channel stay under ~5/5s.
+
+    Threads of one forum share the parent channel's key: a sync pass
+    edits dozens of posts "in a row" and the pacing is what keeps the
+    burst from eating the channel's PATCH budget (the 492-second 429
+    of the test env). Idempotent and best-effort: the pacer never
+    raises, it only sleeps.
+    """
+    import asyncio
+    import time
+
+    now = time.monotonic()
+    wait = _last_edit_at.get(channel_id, 0.0) + EDIT_PACING_S - now
+    if wait > 0:
+        await asyncio.sleep(wait)
+    _last_edit_at[channel_id] = time.monotonic()
+
+
+def _edit_pacing_key(thread: Any) -> str:
+    """One pacing key per forum: the parent channel, or the thread itself."""
+    parent = getattr(thread, "parent_id", None)
+    return str(parent) if parent else str(thread.id)
 
 
 def _content_fingerprint(content: str) -> str:
@@ -70,21 +101,35 @@ def _remember_layout_render(thread_id: str, fingerprint: str) -> None:
     _LAST_LAYOUT_RENDER[thread_id] = fingerprint
 
 
+def forget_layout_renders() -> None:
+    """Drop every remembered fingerprint (a locale change re-renders).
+
+    The fingerprints are process-memory change detection; after a guild
+    language change the recomputed (translated) content must push even
+    when the pre-change pass remembers the same thread.
+    """
+    _LAST_LAYOUT_RENDER.clear()
+
+
 @dataclass(frozen=True)
 class EntityForumSpec:
     """Declarative description of one entity-post forum.
 
-    ``forum_name`` names a single forum; when the entities span
-    several forums (e.g. one per game), set ``forum_name`` to ""
-    and provide ``forum_name_for`` — the entities are then grouped
-    into their forum and each is synced there.
+    ``tree_channel_for`` returns the channel **key** of the tree
+    folder the entities' forum lives in (``civs`` — the provisioning
+    stored its id under ``tree:<scope>:<key>``); ``tree_scope_for``
+    returns the scope (``games/<game_key>``). When the entities span
+    several forums (e.g. one per game), the entities are grouped by
+    that pair and each group is synced to its own forum. The forum is
+    resolved by its **stored channel id** — never by its translated
+    name; the provisioning owns creation.
     """
 
-    forum_name: str
-    category_name: str = GAMES_CATEGORY_NAME
     list_entities: Callable[[str], Awaitable[list[Any]]] | None = None
-    forum_name_for: Callable[[Any], str] | None = None
+    tree_scope_for: Callable[[Any], str] | None = None
+    tree_channel_for: Callable[[Any], str] | None = None
     entity_name: Callable[[Any], str] = field(default=lambda entity: str(getattr(entity, "name", "")))
+    display_name_for: Callable[[Any, str], Awaitable[str]] | None = None
     build_post: Callable[[Any, str], Awaitable[tuple[str, Any | None]]] | None = None
 
 
@@ -93,21 +138,39 @@ async def sync_entity_forum(guild_id: str, bot: Any, spec: EntityForumSpec) -> i
 
     Posts are matched by thread name (the entity's display name); the
     spec's ``build_post`` returns ``(content, view)`` for each entity.
-    Returns the number of forum actions taken.
+    Returns the number of forum actions taken. The pass holds the
+    guild's forum-sync lock when the platform provides it (the
+    concurrent syncs never double-create).
     """
+    lock = None
+    try:
+        from kingdoms.discord.maps_forum import _sync_lock
+
+        lock = _sync_lock(guild_id)
+    except Exception:
+        lock = None
+    if lock is None:
+        return await _sync_entity_forum_locked(guild_id, bot, spec)
+    async with lock:
+        return await _sync_entity_forum_locked(guild_id, bot, spec)
+
+
+async def _sync_entity_forum_locked(guild_id: str, bot: Any, spec: EntityForumSpec) -> int:
+    """Run the sync body (the caller holds the guild's sync lock)."""
     from kingdoms.discord.channels_platform import DiscordChannelsPlatform
 
     platform = DiscordChannelsPlatform(bot)
     if spec.list_entities is None or spec.build_post is None:
         return 0
     entities = await spec.list_entities(guild_id)
-    groups: dict[str, list[Any]] = {}
+    groups: dict[tuple[str, str], list[Any]] = {}
     for entity in entities:
-        forum_of = spec.forum_name_for(entity) if spec.forum_name_for is not None else spec.forum_name
-        groups.setdefault(forum_of, []).append(entity)
+        scope = spec.tree_scope_for(entity) if spec.tree_scope_for is not None else "games"
+        channel_key = spec.tree_channel_for(entity) if spec.tree_channel_for is not None else "civs"
+        groups.setdefault((scope, channel_key), []).append(entity)
     actions = 0
-    for forum_of, members in groups.items():
-        actions += await _sync_one_forum(guild_id, bot, spec, platform, forum_of, members)
+    for (scope, channel_key), members in groups.items():
+        actions += await _sync_one_forum(guild_id, bot, spec, platform, scope, channel_key, members)
     return actions
 
 
@@ -116,35 +179,29 @@ async def _sync_one_forum(
     bot: Any,
     spec: EntityForumSpec,
     platform: Any,
-    forum_name: str,
+    tree_scope: str,
+    tree_channel: str,
     entities: list[Any],
 ) -> int:
-    """Sync one named forum against its entities (idempotent)."""
-    from kingdoms.discord.wiring import guild_category
-
+    """Sync one tree forum (resolved by stored id) against its entities."""
     guild = bot.get_guild(int(guild_id))
     if guild is None or spec.build_post is None:
         return 0
-    forum = discord.utils.get(guild.forums, name=forum_name)
+    from kingdoms.discord.ui.panels_provisioning import stored_channel_id
+
+    stored = await stored_channel_id(guild_id, tree_scope, tree_channel)
+    forum = None
+    if stored and stored.isdigit():
+        channel = guild.get_channel(int(stored))
+        forum = channel if channel is not None and channel.type == discord.ChannelType.forum else None
     if forum is None:
-        forum = await guild.create_forum(
-            forum_name,
-            category=await guild_category(guild, spec.category_name),
-            overwrites={
-                guild.default_role: discord.PermissionOverwrite(
-                    view_channel=True, send_messages=False, create_public_threads=False
-                ),
-                guild.me: discord.PermissionOverwrite(
-                    view_channel=True,
-                    send_messages=True,
-                    create_public_threads=True,
-                    manage_threads=True,
-                    read_message_history=True,
-                ),
-            },
-            reason=f"kingdoms: {forum_name} forum",
-        )
-    wanted = {spec.entity_name(entity): entity for entity in entities}
+        return 0  # the provisioning owns creation; nothing stored yet
+    wanted: dict[str, Any] = {}
+    for entity in entities:
+        key = spec.entity_name(entity)
+        if spec.display_name_for is not None:
+            key = await spec.display_name_for(entity, guild_id)
+        wanted[key] = entity
     existing = {thread.name: thread for thread in forum.threads}
     actions = 0
     for name, entity in wanted.items():
@@ -182,11 +239,14 @@ async def _refresh_post(thread: Any, content: str, view: Any | None) -> None:
             current = starter.content
         if _content_fingerprint(current or "") == fingerprint:
             return
-        _remember_layout_render(thread.id, fingerprint)
+        await pace_channel_edit(_edit_pacing_key(thread))
         if isinstance(view, discord.ui.LayoutView):
             await starter.edit(view=view)
         else:
             await starter.edit(content=truncate_body(content), view=view)
+        # Remember the fingerprint ONLY on success: a failed edit must
+        # not mark the post as rendered — the next pass retries (a
+        # remembered-but-failed fingerprint froze stale posts).
     except discord.HTTPException as exc:
         if getattr(exc, "code", None) == 30046:
             _note_stale_edit(str(thread.id), now)
@@ -197,30 +257,11 @@ async def _refresh_post(thread: Any, content: str, view: Any | None) -> None:
         logger.debug("entity forum: post refresh skipped (thread %s)", thread.id, exc_info=True)
 
 
-def start_entity_forum_sync(
-    bot: Any,
-    spec: EntityForumSpec,
-    *,
-    interval_s: int = SYNC_INTERVAL_S,
-    startup_delay_s: int = 10,
-) -> asyncio.Task[None]:
-    """Sync the forum in every guild periodically, forever, quietly."""
+def register_entity_forum_sync(spec: EntityForumSpec) -> None:
+    """Declare one entity forum's mirror sync (the sync button runs it)."""
+    from kingdoms.discord.scope_surfaces import register_scope_sync
 
-    async def _loop() -> None:
-        await asyncio.sleep(startup_delay_s)
-        while True:
-            for guild in list(bot.guilds):
-                try:
-                    actions = await sync_entity_forum(str(guild.id), bot, spec)
-                    if actions:
-                        logger.info("entity forum %s: %d changes (guild %s)", spec.forum_name, actions, guild.id)
-                except Exception:
-                    logger.warning(
-                        "entity forum %s sync failed (guild %s) — best-effort",
-                        spec.forum_name,
-                        guild.id,
-                        exc_info=True,
-                    )
-            await asyncio.sleep(interval_s)
+    async def _sync(guild_id: str, bot: Any) -> int:
+        return await sync_entity_forum(guild_id, bot, spec)
 
-    return asyncio.create_task(_loop())
+    register_scope_sync("games", _sync)

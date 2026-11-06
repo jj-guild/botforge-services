@@ -47,11 +47,7 @@ def _parse_channel_categories(declared: object, source: Path) -> list[ChannelCat
         if not isinstance(key, str) or not key or not isinstance(display, str) or not display:
             raise ValueError(f"{source}: channel entries need 'key' and 'display_name'")
         access_data = entry.get("access")
-        access = (
-            ChannelAccessPolicy.from_dict(access_data)
-            if isinstance(access_data, dict)
-            else ChannelAccessPolicy()
-        )
+        access = ChannelAccessPolicy.from_dict(access_data) if isinstance(access_data, dict) else ChannelAccessPolicy()
         categories.append(
             ChannelCategoryDef(
                 key=key,
@@ -103,6 +99,7 @@ def _parse_mod_yaml(data: dict[str, object], source: Path) -> ModDefinition:
     workflows = _parse_str_list(data.get("workflows", []), "workflows", source)
     commands = _parse_str_list(data.get("commands", []), "commands", source)
     dependencies = _parse_str_list(data.get("dependencies", []), "dependencies", source)
+    required_games = _parse_str_list(data.get("required_games", []), "required_games", source)
     seasonal = data.get("seasonal")
     if not isinstance(seasonal, bool):
         raise ValueError(f"{source}: 'seasonal: true|false' is mandatory (mod type: seasonal or permanent)")
@@ -118,7 +115,6 @@ def _parse_mod_yaml(data: dict[str, object], source: Path) -> ModDefinition:
         raise ValueError(
             f"{source}: a private mod must declare 'owner_discord_ids' (Discord user ids)"
         )
-
     return ModDefinition(
         name=name,
         enabled=bool(data.get("enabled", True)),
@@ -130,6 +126,7 @@ def _parse_mod_yaml(data: dict[str, object], source: Path) -> ModDefinition:
         workflows=tuple(workflows),
         commands=tuple(commands),
         dependencies=tuple(dependencies),
+        required_games=tuple(required_games),
     )
 
 
@@ -154,6 +151,7 @@ def load_mod_definitions(config_dir: Path, repo_root: Path | None = None) -> Mod
     never load half-initialized (docs/architecture/mods.md).
     """
     definitions: ModDefs = {}
+    max_mods = 20
     if repo_root is not None:
         modular_dir = Path(repo_root) / "modules" / "mods"
         if modular_dir.is_dir():
@@ -161,6 +159,11 @@ def load_mod_definitions(config_dir: Path, repo_root: Path | None = None) -> Mod
                 declaration = mod_dir / "mod.yaml"
                 if not declaration.is_file():
                     continue
+                if len(definitions) >= max_mods:
+                    raise ValueError(
+                        f"the platform carries at most {max_mods} mods ({modular_dir}); "
+                        "disable one before declaring another"
+                    )
                 definition = _load_declaration(declaration)
                 definitions[definition.name] = definition
                 logger.info(
@@ -173,6 +176,13 @@ def load_mod_definitions(config_dir: Path, repo_root: Path | None = None) -> Mod
     mods_dir = config_dir / "mods"
     if mods_dir.is_dir():
         for path in sorted(mods_dir.glob("*.yaml")):
+            if path.name.endswith(".views.yaml"):
+                continue  # a mod's views declaration, not a mod declaration
+            if len(definitions) >= max_mods:
+                raise ValueError(
+                    f"the platform carries at most {max_mods} mods ({mods_dir}); "
+                    "disable one before declaring another"
+                )
             definition = _load_declaration(path)
             definitions[definition.name] = definition
             logger.info(

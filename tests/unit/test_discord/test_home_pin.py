@@ -1,166 +1,84 @@
-"""Tests for the pinned home menu lifecycle (no rebuild while it lives).
-
-The pinned home message id is registered (message registry or in-memory
-fallback): ``ensure_pinned_home_menu`` must not recreate the menu while
-the registered message exists (it merely re-pins it), and must rebuild
-and re-register only when the registered message is gone.
-"""
-
-from __future__ import annotations
-
-from typing import Any
+"""The declared home menu pins through the static-pin machinery."""
 
 import pytest
 
-from kingdoms.discord.home import ensure_pinned_home_menu
+from kingdoms.discord.views_declared import declare_views_from_config
+from kingdoms.discord.views_registry import clear_registry
 
 
-class _FakeMessage:
-    """Message stand-in: fetchable while alive, pin-tracked."""
-
-    def __init__(self, message_id: str, view: Any, channel: _FakeChannel) -> None:
-        self.id = message_id
-        self.view = view
-        self.channel = channel
-        self.pin_calls = 0
-
-    async def pin(self, reason: str = "") -> None:
-        self.pin_calls += 1
-
-
-class _FakeChannel:
-    """discord.TextChannel stand-in: send + fetch of live messages."""
-
-    def __init__(self) -> None:
-        self.sent: list[_FakeMessage] = []
-
-    async def send(self, view: Any = None, **kwargs: Any) -> _FakeMessage:
-        message = _FakeMessage(str(9000 + len(self.sent)), view, self)
-        self.sent.append(message)
-        return message
-
-    async def fetch_message(self, message_id: int) -> _FakeMessage:
-        for message in self.sent:
-            if message.id == str(message_id):
-                return message
-        raise LookupError(str(message_id))
-
-
-class _FakeHomeChannelService:
-    """Resolves the guild's home channel id."""
-
-    def __init__(self, channel_id: str) -> None:
-        self._channel_id = channel_id
-
-    async def resolve_channel(self, guild_id: str) -> str | None:
-        del guild_id
-        return self._channel_id
-
-
-class _FakeHomeService:
-    """Buttons provider: one button is enough for the layout."""
-
-    def buttons(self) -> list[Any]:
-        from kingdoms.core.services.home import HomeButton
-
-        return [HomeButton(view="status", label="Status", emoji="\U0001f9ed")]
-
-
-class _FakeGuild:
-    """Guild stand-in resolving channels by id."""
-
-    def __init__(self, channel: _FakeChannel) -> None:
-        self._channel = channel
-
-    def get_channel(self, channel_id: int) -> _FakeChannel | None:
-        return self._channel if str(channel_id) == self._channel.id else None
-
-
-class _FakeChannelWithId(_FakeChannel):
-    def __init__(self) -> None:
-        super().__init__()
-        self.id = "1234"
-
-
-class _FakeRegistry:
-    """MessageRegistryService stand-in: durable registered message ids."""
-
-    def __init__(self) -> None:
-        self.registered: dict[str, str] = {}
-
-    async def resolve(self, platform: str, message_key: str, entity_id: str) -> Any:
-        message_id = self.registered.get(entity_id)
-        return _FakeRegistered(message_id) if message_id else None
-
-    async def register(self, **kwargs: Any) -> None:
-        self.registered[str(kwargs["entity_id"])] = str(kwargs["message_id"])
-
-
-class _FakeRegistered:
-    def __init__(self, message_id: str) -> None:
-        self.message_id = message_id
-
-
-class _FakeBot:
-    """discord.Client stand-in: guild lookup + service wiring."""
-
-    def __init__(self, channel: _FakeChannel, registry: Any | None = None) -> None:
-        self.home_channel_service = _FakeHomeChannelService(channel.id)
-        self.home_service = _FakeHomeService()
-        self.message_registry = registry
-        self.guilds = []
-        self.get_guild = lambda guild_id: _FakeGuild(channel) if str(guild_id) == "42" else None
+@pytest.fixture(autouse=True)
+def _fresh_registry() -> None:
+    clear_registry()
+    declare_views_from_config("config")
 
 
 @pytest.mark.asyncio
-async def test_first_ensure_creates_and_registers_the_menu() -> None:
-    channel = _FakeChannelWithId()
-    registry = _FakeRegistry()
-    bot = _FakeBot(channel, registry)
+async def test_the_root_home_menu_pins_as_a_declared_view() -> None:
+    """The root/general pin builds through the declared menu builder."""
+    from unittest.mock import MagicMock
 
-    created = await ensure_pinned_home_menu(bot, "42")
+    from kingdoms.discord.scope_pins import register_scope_pins
+    from kingdoms.discord.static_pins import reset_static_pins
 
-    assert created is True
-    assert len(channel.sent) == 1
-    assert registry.registered["42"] == channel.sent[0].id
-
-
-@pytest.mark.asyncio
-async def test_second_ensure_does_not_recreate_while_the_message_lives() -> None:
-    channel = _FakeChannelWithId()
-    registry = _FakeRegistry()
-    bot = _FakeBot(channel, registry)
-    await ensure_pinned_home_menu(bot, "42")
-    first_message = channel.sent[0]
-
-    created = await ensure_pinned_home_menu(bot, "42")
-
-    assert created is False
-    assert len(channel.sent) == 1  # no new message
-    assert channel.sent[0] is first_message
-    assert first_message.pin_calls >= 1  # merely re-pinned (idempotent on Discord)
+    reset_static_pins()
+    bot = MagicMock()
+    specs = register_scope_pins(bot, ("root", "bot"))
+    keys = {spec.key for spec in specs}
+    assert any("home" in k for k in keys), "the root home pin registers"
+    assert any("admin" in k for k in keys), "the bot admin pin registers"
+    root_home = next(s for s in specs if "home" in s.key)
+    assert root_home.legacy_key == "view:home", "the declared pin edits the legacy message in place"
+    layout = await root_home.build_layout("42")
+    customs = [c.custom_id for c in layout.walk_children() if getattr(c, "custom_id", None)]
+    assert "view:open:panel:profile" in customs, "the declared buttons ride the pin"
 
 
-@pytest.mark.asyncio
-async def test_deleted_menu_is_rebuilt_and_re_registered() -> None:
-    channel = _FakeChannelWithId()
-    registry = _FakeRegistry()
-    bot = _FakeBot(channel, registry)
-    await ensure_pinned_home_menu(bot, "42")
-    channel.sent.clear()  # the registered message is gone
+async def test_roster_lines_sorted_with_mention_and_links() -> None:
+    """The roster lines: pseudo, mention, aoe2insights links — alphabetical."""
 
-    created = await ensure_pinned_home_menu(bot, "42")
+    from kingdoms.discord.home import _casefold_key, _roster_lines
 
-    assert created is True
-    assert len(channel.sent) == 1
-    assert registry.registered["42"] == channel.sent[0].id
+    class _Member:
+        def __init__(self, name: str) -> None:
+            self.display_name = name
+
+    class _Guild:
+        id = 7
+
+        async def fetch_members(self, limit: int | None = None):
+            members = {"10": "Zoé", "20": "alice", "30": "Bob"}
+
+            class _M:
+                def __init__(self, uid: int, name: str) -> None:
+                    self.id = uid
+                    self.display_name = name
+
+            for uid, name in members.items():
+                yield _M(int(uid), name)
+
+    by_user = {
+        "10": [{"user_id": "10", "profile_id": "111", "profile": {"display_name": "ZoeAoe"}}],
+        "20": [{"user_id": "20", "profile_id": "222", "profile": {"display_name": "AliceAoe"}}],
+        "30": [{"user_id": "30", "profile_id": "333", "profile": {"display_name": "BobAoe"}}],
+    }
+    lines = await _roster_lines("aoe2", by_user, _Guild())
+    assert lines[0].startswith("• **alice** — <@20>")
+    assert lines[1].startswith("• **Bob** — <@30>")
+    assert lines[2].startswith("• **Zoé** — <@10>")
+    assert "https://www.aoe2insights.com/user/relic/222/" in lines[0]
+    assert _casefold_key("Zoé") == "zoe"
+    from kingdoms.discord import member_cache
+
+    member_cache._cache.pop(7, None)
 
 
-@pytest.mark.asyncio
-async def test_memory_fallback_without_registry() -> None:
-    channel = _FakeChannelWithId()
-    bot = _FakeBot(channel, registry=None)
+def test_paginate_lines_splits_on_budget() -> None:
+    """Lines beyond the budget split into several pages, none over budget."""
+    from kingdoms.discord.home import _paginate_lines
 
-    assert await ensure_pinned_home_menu(bot, "42") is True
-    assert await ensure_pinned_home_menu(bot, "42") is False
-    assert len(channel.sent) == 1
+    lines = [f"player-{i} " + "x" * 90 for i in range(10)]
+    pages = _paginate_lines(lines, 200)
+    assert len(pages) > 1
+    assert all(len(page) <= 200 for page in pages)
+    assert pages[0].startswith("player-0")
+    assert pages[-1].endswith("x" * 90 or lines[-1].split()[-1])

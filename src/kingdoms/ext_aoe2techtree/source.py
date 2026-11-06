@@ -22,6 +22,8 @@ from typing import Any
 
 import httpx
 
+from kingdoms.core.ids import slug_id
+
 logger = logging.getLogger("kingdoms.ext_aoe2techtree")
 
 DEFAULT_DATASET_DIR = Path(__file__).resolve().parents[3] / "data" / "core" / "aoe2techtree"
@@ -92,7 +94,7 @@ class DatasetContentSource(UpstreamContentSource):
         """Serve a map's descriptor (name-only: the dataset has no map help)."""
         del locale
         return {
-            "entity_id": f"map:aoe2:{map_key}",
+            "entity_id": f"map:aoe2:public:{slug_id(map_key)}",
             "locale": "en",
             "name": map_key,
             "summary": "",
@@ -117,7 +119,12 @@ class ApiContentSource(UpstreamContentSource):
         self._timeout_s = timeout_s
 
     def _headers(self) -> dict[str, str]:
-        headers: dict[str, str] = {"accept": "application/json"}
+        from kingdoms.core.upstream_identity import project_user_agent
+
+        headers: dict[str, str] = {
+            "accept": "application/json",
+            "User-Agent": project_user_agent(),
+        }
         if self._api_key:
             headers["authorization"] = f"Bearer {self._api_key}"
         return headers
@@ -163,7 +170,7 @@ class ApiContentSource(UpstreamContentSource):
         response.raise_for_status()
         payload: dict[str, Any] = response.json()
         return {
-            "entity_id": str(payload.get("entity_id", f"map:aoe2:{map_key}")),
+            "entity_id": str(payload.get("entity_id", f"map:aoe2:public:{slug_id(map_key)}")),
             "locale": str(payload.get("locale", locale)),
             "name": str(payload.get("name", map_key)),
             "summary": str(payload.get("summary", "")),

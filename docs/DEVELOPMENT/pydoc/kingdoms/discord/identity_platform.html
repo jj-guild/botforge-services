@@ -16,6 +16,13 @@ needs&nbsp;to&nbsp;read&nbsp;one&nbsp;user&nbsp;document&nbsp;and&nbsp;persist&n
 the&nbsp;adapter&nbsp;exposes&nbsp;exactly&nbsp;the&nbsp;``IdentityDatabase``&nbsp;protocol&nbsp;surface.</span></p>
 <p>
 <table class="section">
+<tr class="decor pkg-content-decor heading-text">
+<td class="section-title" colspan=3>&nbsp;<br><strong class="bigsection">Modules</strong></td></tr>
+    
+<tr><td class="decor pkg-content-decor"><span class="code">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span></td><td>&nbsp;</td>
+<td class="singlecolumn"><table><tr><td class="multicolumn"><a href="logging.html">logging</a><br>
+</td><td class="multicolumn"></td><td class="multicolumn"></td><td class="multicolumn"></td></tr></table></td></tr></table><p>
+<table class="section">
 <tr class="decor index-decor heading-text">
 <td class="section-title" colspan=3>&nbsp;<br><strong class="bigsection">Classes</strong></td></tr>
     
@@ -45,6 +52,12 @@ Async&nbsp;MongoDB&nbsp;adapter&nbsp;for&nbsp;the&nbsp;IdentityService&nbsp;pers
 
 <dl><dt>async <a name="MongoIdentityDatabase-find_identity"><strong>find_identity</strong></a>(self, platform: 'str', platform_user_id: 'str') -&gt; 'str | None'</dt><dd><span class="code">Return&nbsp;the&nbsp;internal&nbsp;user_id&nbsp;bound&nbsp;to&nbsp;a&nbsp;platform&nbsp;account;&nbsp;None&nbsp;when&nbsp;unbound.</span></dd></dl>
 
+<dl><dt>async <a name="MongoIdentityDatabase-find_many_users"><strong>find_many_users</strong></a>(self, user_ids: 'list[str]') -&gt; 'list[UserModel]'</dt><dd><span class="code">Return&nbsp;the&nbsp;existing&nbsp;user&nbsp;documents&nbsp;for&nbsp;a&nbsp;batch&nbsp;of&nbsp;ids&nbsp;(ONE&nbsp;read).<br>
+&nbsp;<br>
+The&nbsp;players&nbsp;panel's&nbsp;roster&nbsp;read:&nbsp;the&nbsp;per-user&nbsp;find_one&nbsp;loop&nbsp;was<br>
+one&nbsp;Mongo&nbsp;round-trip&nbsp;per&nbsp;enrolled&nbsp;member&nbsp;—&nbsp;the&nbsp;panel's&nbsp;real<br>
+bottleneck&nbsp;(owner&nbsp;direction:&nbsp;the&nbsp;panel&nbsp;must&nbsp;be&nbsp;immediate).</span></dd></dl>
+
 <dl><dt>async <a name="MongoIdentityDatabase-find_user"><strong>find_user</strong></a>(self, user_id: 'str') -&gt; 'UserModel | None'</dt><dd><span class="code">Return&nbsp;the&nbsp;internal&nbsp;user&nbsp;document;&nbsp;None&nbsp;when&nbsp;absent.</span></dd></dl>
 
 <dl><dt>async <a name="MongoIdentityDatabase-unbind_identity"><strong>unbind_identity</strong></a>(self, platform: 'str', platform_user_id: 'str') -&gt; 'bool'</dt><dd><span class="code">Remove&nbsp;a&nbsp;binding;&nbsp;True&nbsp;when&nbsp;one&nbsp;was&nbsp;removed.</span></dd></dl>
@@ -66,5 +79,6 @@ Data descriptors defined here:<br>
     
 <tr><td class="decor data-decor"><span class="code">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span></td><td>&nbsp;</td>
 <td class="singlecolumn"><strong>IDENTITY_COLLECTION</strong> = 'platform_identities'<br>
-<strong>USERS_COLLECTION</strong> = 'users'</td></tr></table>
+<strong>USERS_COLLECTION</strong> = 'users'<br>
+<strong>logger</strong> = &lt;Logger kingdoms.discord.identity_platform (WARNING)&gt;</td></tr></table>
 </body></html>

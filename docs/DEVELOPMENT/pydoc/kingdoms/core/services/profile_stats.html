@@ -68,7 +68,23 @@ Two-layer&nbsp;cached&nbsp;provider&nbsp;stats,&nbsp;shared&nbsp;by&nbsp;the&nbs
 The&nbsp;answer&nbsp;is&nbsp;a&nbsp;plain&nbsp;dict&nbsp;(``blocks``:&nbsp;list&nbsp;of&nbsp;named&nbsp;entries)&nbsp;so<br>
 the&nbsp;Discord&nbsp;layer&nbsp;never&nbsp;imports&nbsp;provider&nbsp;models.</span></dd></dl>
 
+<dl><dt>async <a name="ProfileStatsService-get_cached"><strong>get_cached</strong></a>(self, profile_id: 'str') -&gt; 'dict[str, Any] | None'</dt><dd><span class="code">Serve&nbsp;the&nbsp;CACHED&nbsp;stats&nbsp;ONLY&nbsp;—&nbsp;never&nbsp;a&nbsp;provider&nbsp;fetch.<br>
+&nbsp;<br>
+The&nbsp;panels'&nbsp;path&nbsp;(owner&nbsp;direction:&nbsp;the&nbsp;panel&nbsp;is&nbsp;immediate):&nbsp;a<br>
+cache&nbsp;miss&nbsp;serves&nbsp;whatever&nbsp;Mongo&nbsp;holds&nbsp;(even&nbsp;stale)&nbsp;or&nbsp;nothing<br>
+—&nbsp;the&nbsp;refresh&nbsp;is&nbsp;a&nbsp;BACKGROUND&nbsp;concern&nbsp;(refresh_stale),&nbsp;never<br>
+the&nbsp;click's&nbsp;latency.&nbsp;The&nbsp;old&nbsp;path&nbsp;fetched&nbsp;the&nbsp;provider&nbsp;inline:<br>
+~1s&nbsp;per&nbsp;profile,&nbsp;seconds&nbsp;on&nbsp;every&nbsp;panel&nbsp;open.</span></dd></dl>
+
 <dl><dt>async <a name="ProfileStatsService-get_many"><strong>get_many</strong></a>(self, profile_ids: 'list[str]') -&gt; 'dict[str, dict[str, Any]]'</dt><dd><span class="code">Resolve&nbsp;many&nbsp;profiles&nbsp;at&nbsp;once;&nbsp;missing&nbsp;ones&nbsp;stay&nbsp;absent.</span></dd></dl>
+
+<dl><dt>async <a name="ProfileStatsService-get_many_cached"><strong>get_many_cached</strong></a>(self, profile_ids: 'list[str]') -&gt; 'dict[str, dict[str, Any]]'</dt><dd><span class="code">Serve&nbsp;many&nbsp;profiles&nbsp;from&nbsp;the&nbsp;CACHE&nbsp;ONLY&nbsp;(the&nbsp;panels'&nbsp;batch).</span></dd></dl>
+
+<dl><dt>async <a name="ProfileStatsService-refresh_stale"><strong>refresh_stale</strong></a>(self, profile_ids: 'list[str]') -&gt; 'int'</dt><dd><span class="code">Refresh&nbsp;the&nbsp;stale/missing&nbsp;profiles&nbsp;in&nbsp;the&nbsp;background.<br>
+&nbsp;<br>
+Returns&nbsp;the&nbsp;count&nbsp;refreshed.&nbsp;The&nbsp;panels&nbsp;schedule&nbsp;this&nbsp;AFTER<br>
+answering&nbsp;(the&nbsp;click&nbsp;serves&nbsp;the&nbsp;cache;&nbsp;the&nbsp;freshness&nbsp;catches<br>
+up&nbsp;for&nbsp;the&nbsp;NEXT&nbsp;open).</span></dd></dl>
 
 <hr>
 Data descriptors defined here:<br>

@@ -191,6 +191,21 @@ crash&nbsp;reporter&nbsp;(cause,&nbsp;interaction&nbsp;context,&nbsp;GitHub&nbsp
 
 <dl><dt>async <a name="KingdomsBot-on_error"><strong>on_error</strong></a>(self, event_method: 'str', /, *args: 'object', **kwargs: 'object') -&gt; 'None'</dt><dd><span class="code">Route&nbsp;unhandled&nbsp;gateway-event&nbsp;failures&nbsp;to&nbsp;each&nbsp;guild's&nbsp;bot-logs.</span></dd></dl>
 
+<dl><dt>async <a name="KingdomsBot-on_guild_join"><strong>on_guild_join</strong></a>(self, guild: 'discord.Guild') -&gt; 'None'</dt><dd><span class="code">Make&nbsp;the&nbsp;joined&nbsp;guild&nbsp;known&nbsp;to&nbsp;the&nbsp;access&nbsp;store&nbsp;(panel&nbsp;coherence).</span></dd></dl>
+
+<dl><dt>async <a name="KingdomsBot-on_interaction"><strong>on_interaction</strong></a>(self, interaction: 'discord.Interaction') -&gt; 'None'</dt><dd><span class="code">Log&nbsp;the&nbsp;triggered&nbsp;action,&nbsp;then&nbsp;observe&nbsp;the&nbsp;clicker's&nbsp;language.<br>
+&nbsp;<br>
+One&nbsp;INFO&nbsp;line&nbsp;per&nbsp;user&nbsp;action&nbsp;(the&nbsp;pod's&nbsp;observable&nbsp;trail&nbsp;—<br>
+the&nbsp;owner&nbsp;asked:&nbsp;every&nbsp;triggered&nbsp;action&nbsp;logs):&nbsp;the&nbsp;command<br>
+name,&nbsp;the&nbsp;component's&nbsp;custom_id,&nbsp;the&nbsp;modal&nbsp;—&nbsp;with&nbsp;who&nbsp;and<br>
+where.&nbsp;Then&nbsp;the&nbsp;language&nbsp;observation&nbsp;(Discord&nbsp;exposes&nbsp;a<br>
+user's&nbsp;language&nbsp;only&nbsp;inside&nbsp;interactions;&nbsp;the&nbsp;interaction-free<br>
+DMs&nbsp;render&nbsp;in&nbsp;the&nbsp;language&nbsp;the&nbsp;user&nbsp;was&nbsp;last&nbsp;seen&nbsp;using).</span></dd></dl>
+
+<dl><dt>async <a name="KingdomsBot-on_member_join"><strong>on_member_join</strong></a>(self, member: 'discord.Member') -&gt; 'None'</dt><dd><span class="code">Keep&nbsp;the&nbsp;member&nbsp;cache&nbsp;fresh&nbsp;between&nbsp;TTLs&nbsp;(owner&nbsp;direction).</span></dd></dl>
+
+<dl><dt>async <a name="KingdomsBot-on_member_remove"><strong>on_member_remove</strong></a>(self, member: 'discord.Member') -&gt; 'None'</dt><dd><span class="code">Keep&nbsp;the&nbsp;member&nbsp;cache&nbsp;fresh&nbsp;between&nbsp;TTLs&nbsp;(owner&nbsp;direction).</span></dd></dl>
+
 <dl><dt>async <a name="KingdomsBot-on_ready"><strong>on_ready</strong></a>(self) -&gt; 'None'</dt><dd><span class="code">Log&nbsp;the&nbsp;ready&nbsp;marker&nbsp;asserted&nbsp;by&nbsp;smoke&nbsp;CI,&nbsp;then&nbsp;sync&nbsp;commands&nbsp;once.</span></dd></dl>
 
 <dl><dt>async <a name="KingdomsBot-on_tree_error"><strong>on_tree_error</strong></a>(self, interaction: 'discord.Interaction', error: 'app_commands.AppCommandError') -&gt; 'None'</dt><dd><span class="code">Answer&nbsp;Kingdoms&nbsp;errors&nbsp;with&nbsp;i18n&nbsp;+&nbsp;audit;&nbsp;crash-report&nbsp;the&nbsp;rest.</span></dd></dl>
@@ -201,6 +216,12 @@ Persistent&nbsp;components&nbsp;survive&nbsp;restarts&nbsp;only&nbsp;because&nbs
 state&nbsp;rides&nbsp;the&nbsp;custom_id&nbsp;and&nbsp;their&nbsp;classes&nbsp;are&nbsp;re-registered<br>
 here&nbsp;—&nbsp;a&nbsp;class&nbsp;the&nbsp;factory&nbsp;forgets&nbsp;is&nbsp;dead&nbsp;UI&nbsp;after&nbsp;the&nbsp;next<br>
 deploy&nbsp;(§3b&nbsp;state&nbsp;reconstruction&nbsp;contract).</span></dd></dl>
+
+<hr>
+Data and other attributes defined here:<br>
+<dl><dt><strong>__annotations__</strong> = {'games': 'tuple[str, ...]'}</dl>
+
+<dl><dt><strong>games</strong> = ()</dl>
 
 <hr>
 Methods inherited from <a href="discord.client.html#Client">discord.client.Client</a>:<br>
@@ -1556,7 +1577,6 @@ The&nbsp;status&nbsp;being&nbsp;used&nbsp;upon&nbsp;logging&nbsp;on&nbsp;to&nbsp
 <td class="section-title" colspan=3>&nbsp;<br><strong class="bigsection">Data</strong></td></tr>
     
 <tr><td class="decor data-decor"><span class="code">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span></td><td>&nbsp;</td>
-<td class="singlecolumn"><strong>PINNED_MENU_CHECK_INTERVAL</strong> = 3600<br>
-<strong>READY_LOG_LINE</strong> = 'KINGDOMS_BOT_READY'<br>
+<td class="singlecolumn"><strong>READY_LOG_LINE</strong> = 'KINGDOMS_BOT_READY'<br>
 <strong>logger</strong> = &lt;Logger kingdoms.bot (WARNING)&gt;</td></tr></table>
 </body></html>

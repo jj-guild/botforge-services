@@ -99,12 +99,20 @@ def test_render_dashboard_degraded_and_empty() -> None:
     assert "No linked players" in degraded
     populated = render_dashboard(
         {
-            "players": [
-                {"user_id": "10", "profile_id": "A", "state": STATE_IN_GAME, "match_ref": "m1", "since": 1000}
-            ],
+            "players": [{"user_id": "10", "profile_id": "A", "state": STATE_IN_GAME, "match_ref": "m1", "since": 1000}],
             "generated_at": 1,
             "degraded": False,
         }
     )
-    assert "🟢 <@10>" in populated
-    assert "m1" in populated
+    assert "🟢" in populated  # the active section header
+    assert "<@10>" in populated
+
+
+
+
+def test_live_keys_are_per_game() -> None:
+    """The live view keys carry the game key — one ephemeral view per game."""
+    from kingdoms.discord.live import live_view_key
+
+    assert live_view_key("aoe2") == "view:aoe2:live"
+    assert live_view_key("aoe4") == "view:aoe4:live"

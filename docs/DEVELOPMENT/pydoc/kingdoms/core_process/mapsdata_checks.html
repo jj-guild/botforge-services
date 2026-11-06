@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Python: kingdoms.core_process.mapsdata_checks</title>
+</head><body>
+
+<table class="heading">
+<tr class="heading-text decor">
+<td class="title">&nbsp;<br><strong class="title"><a href="kingdoms.html" class="white">kingdoms</a>.<a href="kingdoms.core_process.html" class="white">core_process</a>.mapsdata_checks</strong></td>
+<td class="extra"><a href=".">index</a><br><a href="file:SOURCE_ROOT/core_process/mapsdata_checks.py">SOURCE_ROOT/core_process/mapsdata_checks.py</a></td></tr></table>
+    <p><span class="code">External-services&nbsp;battery&nbsp;for&nbsp;the&nbsp;Liquipedia&nbsp;maps&nbsp;provider.<br>
+&nbsp;<br>
+Liquipedia&nbsp;is&nbsp;a&nbsp;ToS-constrained&nbsp;upstream&nbsp;(custom&nbsp;identifying<br>
+User-Agent&nbsp;with&nbsp;contact&nbsp;information,&nbsp;2&nbsp;s&nbsp;between&nbsp;light&nbsp;requests):<br>
+the&nbsp;battery&nbsp;runs&nbsp;the&nbsp;REAL&nbsp;batched&nbsp;``action=query``&nbsp;path&nbsp;—&nbsp;the&nbsp;very<br>
+one&nbsp;the&nbsp;maps&nbsp;sync&nbsp;uses&nbsp;—&nbsp;on&nbsp;a&nbsp;couple&nbsp;of&nbsp;well-known&nbsp;pages,&nbsp;in&nbsp;ONE<br>
+paced&nbsp;batch&nbsp;(a&nbsp;handful&nbsp;of&nbsp;light&nbsp;requests,&nbsp;never&nbsp;a&nbsp;crawl).<br>
+&nbsp;<br>
+The&nbsp;battery&nbsp;needs&nbsp;``PROVIDER_CONTACT``&nbsp;(the&nbsp;generic&nbsp;provider<br>
+contact&nbsp;—&nbsp;the&nbsp;same&nbsp;variable&nbsp;the&nbsp;runtime&nbsp;uses);&nbsp;without&nbsp;it&nbsp;the&nbsp;check<br>
+SKIPS&nbsp;with&nbsp;a&nbsp;clear&nbsp;detail<br>
+instead&nbsp;of&nbsp;failing&nbsp;—&nbsp;an&nbsp;unconfigured&nbsp;org&nbsp;must&nbsp;not&nbsp;see&nbsp;a&nbsp;red&nbsp;CI,&nbsp;and<br>
+Liquipedia&nbsp;must&nbsp;never&nbsp;see&nbsp;an&nbsp;unidentified&nbsp;User-Agent.</span></p>
+<p>
+<table class="section">
+<tr class="decor functions-decor heading-text">
+<td class="section-title" colspan=3>&nbsp;<br><strong class="bigsection">Functions</strong></td></tr>
+    
+<tr><td class="decor functions-decor"><span class="code">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span></td><td>&nbsp;</td>
+<td class="singlecolumn"><dl><dt>async <a name="-battery"><strong>battery</strong></a>() -&gt; 'list[CheckResult]'</dt><dd><span class="code">Run&nbsp;the&nbsp;liquipedia&nbsp;checks;&nbsp;all&nbsp;of&nbsp;them,&nbsp;whatever&nbsp;happens.</span></dd></dl>
+</td></tr></table><p>
+<table class="section">
+<tr class="decor data-decor heading-text">
+<td class="section-title" colspan=3>&nbsp;<br><strong class="bigsection">Data</strong></td></tr>
+    
+<tr><td class="decor data-decor"><span class="code">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span></td><td>&nbsp;</td>
+<td class="singlecolumn"><strong>KNOWN_PAGES</strong> = ('Arabia', 'Dry River')<br>
+<strong>KNOWN_PRESENT</strong> = 'Arabia'<br>
+<strong>PROVIDER</strong> = 'liquipedia'<br>
+<strong>SKIP_DETAIL</strong> = 'PROVIDER_CONTACT unset — set the repo variable to enable the battery'</td></tr></table>
+</body></html>

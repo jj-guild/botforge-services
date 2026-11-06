@@ -190,6 +190,13 @@ Resolve&nbsp;internal&nbsp;user&nbsp;ids&nbsp;to&nbsp;platform&nbsp;accounts&nbs
 <td class="singlecolumn">Methods defined here:<br>
 <dl><dt><a name="IdentityService-__init__"><strong>__init__</strong></a>(self, database: 'IdentityDatabase', cache: 'IdentityCache') -&gt; 'None'</dt><dd><span class="code">Wire&nbsp;the&nbsp;persistence&nbsp;and&nbsp;cache&nbsp;seams.</span></dd></dl>
 
+<dl><dt>async <a name="IdentityService-get_many_display_names"><strong>get_many_display_names</strong></a>(self, user_ids: 'list[str]') -&gt; 'dict[str, str]'</dt><dd><span class="code">Resolve&nbsp;a&nbsp;batch's&nbsp;display&nbsp;names&nbsp;in&nbsp;ONE&nbsp;read&nbsp;(the&nbsp;panels'&nbsp;path).<br>
+&nbsp;<br>
+The&nbsp;ids&nbsp;are&nbsp;the&nbsp;internal&nbsp;user&nbsp;ids&nbsp;(``discord:&lt;snowflake&gt;``);&nbsp;the<br>
+map&nbsp;carries&nbsp;the&nbsp;id&nbsp;-&gt;&nbsp;the&nbsp;chosen&nbsp;pseudo,&nbsp;absent&nbsp;ids&nbsp;skipped.&nbsp;The<br>
+per-user&nbsp;get_user&nbsp;loop&nbsp;was&nbsp;one&nbsp;round-trip&nbsp;per&nbsp;member&nbsp;—&nbsp;the<br>
+players&nbsp;panel's&nbsp;real&nbsp;bottleneck.</span></dd></dl>
+
 <dl><dt>async <a name="IdentityService-get_or_create_user"><strong>get_or_create_user</strong></a>(self, *, platform: 'str', platform_user_id: 'str', display_name: 'str', locale: 'str' = 'en') -&gt; 'UserModel'</dt><dd><span class="code">Return&nbsp;the&nbsp;user&nbsp;bound&nbsp;to&nbsp;a&nbsp;platform&nbsp;account,&nbsp;creating&nbsp;it&nbsp;when&nbsp;unknown.</span></dd></dl>
 
 <dl><dt>async <a name="IdentityService-get_user"><strong>get_user</strong></a>(self, user_id: 'str') -&gt; 'UserModel | None'</dt><dd><span class="code">Return&nbsp;the&nbsp;internal&nbsp;user&nbsp;document;&nbsp;None&nbsp;when&nbsp;absent.</span></dd></dl>

@@ -47,12 +47,15 @@ async def serve_content_provider(
     port = os.environ.get("EXT_GRPC_PORT", "50063")
     server.add_insecure_port(f"[::]:{port}")
     await server.start()
+    from kingdoms import __version__
+
     logger.info(
-        "%s_READY port=%s provider=%s game=%s",
+        "%s_READY port=%s provider=%s game=%s version=%s",
         process_label,
         port,
         provider_key,
         game_key,
+        __version__,
     )
     await server.wait_for_termination()
 

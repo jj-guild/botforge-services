@@ -79,6 +79,11 @@ class GameStub:
                 request_serializer=kingdoms_dot_v1_dot_game__pb2.ListMapsRequest.SerializeToString,
                 response_deserializer=kingdoms_dot_v1_dot_game__pb2.GameMaps.FromString,
                 _registered_method=True)
+        self.UpdateSubscriptions = channel.unary_unary(
+                '/kingdoms.v1.Game/UpdateSubscriptions',
+                request_serializer=kingdoms_dot_v1_dot_game__pb2.UpdateSubscriptionsRequest.SerializeToString,
+                response_deserializer=kingdoms_dot_v1_dot_game__pb2.UpdateSubscriptionsResponse.FromString,
+                _registered_method=True)
 
 
 class GameServicer:
@@ -150,6 +155,16 @@ class GameServicer:
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
+    def UpdateSubscriptions(self, request, context):
+        """Push the subscribed profile ids to a realtime provider. The provider
+        updates its upstream subscriptions in place (no session teardown):
+        adds subscribe, removes unsubscribe. Game-agnostic: the ids are the
+        game-side profile ids of the users registered on the platform.
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
 
 def add_GameServicer_to_server(servicer, server):
     rpc_method_handlers = {
@@ -192,6 +207,11 @@ def add_GameServicer_to_server(servicer, server):
                     servicer.ListMaps,
                     request_deserializer=kingdoms_dot_v1_dot_game__pb2.ListMapsRequest.FromString,
                     response_serializer=kingdoms_dot_v1_dot_game__pb2.GameMaps.SerializeToString,
+            ),
+            'UpdateSubscriptions': grpc.unary_unary_rpc_method_handler(
+                    servicer.UpdateSubscriptions,
+                    request_deserializer=kingdoms_dot_v1_dot_game__pb2.UpdateSubscriptionsRequest.FromString,
+                    response_serializer=kingdoms_dot_v1_dot_game__pb2.UpdateSubscriptionsResponse.SerializeToString,
             ),
     }
     generic_handler = grpc.method_handlers_generic_handler(
@@ -415,6 +435,33 @@ class Game:
             '/kingdoms.v1.Game/ListMaps',
             kingdoms_dot_v1_dot_game__pb2.ListMapsRequest.SerializeToString,
             kingdoms_dot_v1_dot_game__pb2.GameMaps.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def UpdateSubscriptions(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/kingdoms.v1.Game/UpdateSubscriptions',
+            kingdoms_dot_v1_dot_game__pb2.UpdateSubscriptionsRequest.SerializeToString,
+            kingdoms_dot_v1_dot_game__pb2.UpdateSubscriptionsResponse.FromString,
             options,
             channel_credentials,
             insecure,

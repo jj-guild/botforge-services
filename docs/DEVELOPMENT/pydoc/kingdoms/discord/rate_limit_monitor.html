@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Python: kingdoms.discord.rate_limit_monitor</title>
+</head><body>
+
+<table class="heading">
+<tr class="heading-text decor">
+<td class="title">&nbsp;<br><strong class="title"><a href="kingdoms.html" class="white">kingdoms</a>.<a href="kingdoms.discord.html" class="white">discord</a>.rate_limit_monitor</strong></td>
+<td class="extra"><a href=".">index</a><br><a href="file:SOURCE_ROOT/discord/rate_limit_monitor.py">SOURCE_ROOT/discord/rate_limit_monitor.py</a></td></tr></table>
+    <p><span class="code">Monitoring&nbsp;of&nbsp;Discord&nbsp;429&nbsp;rate&nbsp;limits&nbsp;(#276,&nbsp;audit&nbsp;point&nbsp;5).<br>
+&nbsp;<br>
+discord.py&nbsp;absorbs&nbsp;429s&nbsp;silently:&nbsp;it&nbsp;logs&nbsp;a&nbsp;WARNING&nbsp;on&nbsp;the<br>
+``discord.http``&nbsp;logger&nbsp;and&nbsp;retries&nbsp;internally,&nbsp;so&nbsp;a&nbsp;rate-limited<br>
+burst&nbsp;disappears&nbsp;from&nbsp;the&nbsp;application&nbsp;logs&nbsp;while&nbsp;every&nbsp;call&nbsp;behind<br>
+it&nbsp;waits&nbsp;(the&nbsp;492-second&nbsp;freeze&nbsp;of&nbsp;the&nbsp;test&nbsp;env).&nbsp;This&nbsp;module&nbsp;taps<br>
+that&nbsp;logger:&nbsp;every&nbsp;429&nbsp;the&nbsp;client&nbsp;takes&nbsp;is&nbsp;re-emitted&nbsp;as&nbsp;a<br>
+structured&nbsp;WARNING&nbsp;on&nbsp;``kingdoms.rate_limit``&nbsp;—&nbsp;endpoint,<br>
+retry_after,&nbsp;and&nbsp;how&nbsp;many&nbsp;have&nbsp;hit&nbsp;so&nbsp;far&nbsp;—&nbsp;so&nbsp;the&nbsp;budget&nbsp;burn&nbsp;is<br>
+measurable&nbsp;instead&nbsp;of&nbsp;invisible.</span></p>
+<p>
+<table class="section">
+<tr class="decor pkg-content-decor heading-text">
+<td class="section-title" colspan=3>&nbsp;<br><strong class="bigsection">Modules</strong></td></tr>
+    
+<tr><td class="decor pkg-content-decor"><span class="code">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span></td><td>&nbsp;</td>
+<td class="singlecolumn"><table><tr><td class="multicolumn"><a href="logging.html">logging</a><br>
+</td><td class="multicolumn"><a href="re.html">re</a><br>
+</td><td class="multicolumn"></td><td class="multicolumn"></td></tr></table></td></tr></table><p>
+<table class="section">
+<tr class="decor functions-decor heading-text">
+<td class="section-title" colspan=3>&nbsp;<br><strong class="bigsection">Functions</strong></td></tr>
+    
+<tr><td class="decor functions-decor"><span class="code">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span></td><td>&nbsp;</td>
+<td class="singlecolumn"><dl><dt><a name="-install_rate_limit_monitor"><strong>install_rate_limit_monitor</strong></a>() -&gt; 'None'</dt><dd><span class="code">Tap&nbsp;discord.py's&nbsp;``discord.http``&nbsp;logger&nbsp;(idempotent).<br>
+&nbsp;<br>
+Attaches&nbsp;one&nbsp;handler&nbsp;that&nbsp;turns&nbsp;the&nbsp;library's&nbsp;internal&nbsp;429<br>
+warnings&nbsp;into&nbsp;measurable,&nbsp;structured&nbsp;logs.&nbsp;Calling&nbsp;it&nbsp;twice<br>
+attaches&nbsp;nothing&nbsp;twice.</span></dd></dl>
+ <dl><dt><a name="-reset_rate_limit_hits"><strong>reset_rate_limit_hits</strong></a>() -&gt; 'None'</dt><dd><span class="code">Clear&nbsp;the&nbsp;hit&nbsp;counters&nbsp;(tests&nbsp;isolate&nbsp;themselves&nbsp;with&nbsp;this).</span></dd></dl>
+</td></tr></table><p>
+<table class="section">
+<tr class="decor data-decor heading-text">
+<td class="section-title" colspan=3>&nbsp;<br><strong class="bigsection">Data</strong></td></tr>
+    
+<tr><td class="decor data-decor"><span class="code">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span></td><td>&nbsp;</td>
+<td class="singlecolumn"><strong>Final</strong> = typing.Final<br>
+<strong>RATE_LIMIT_HITS</strong> = Counter()<br>
+<strong>__annotations__</strong> = {'RATE_LIMIT_HITS': 'Counter[str]', '_GLOBAL_RE': 'Final', '_HANDLER_ATTR': 'Final', '_RATE_LIMIT_RE': 'Final'}<br>
+<strong>logger</strong> = &lt;Logger kingdoms.rate_limit (WARNING)&gt;</td></tr></table>
+</body></html>

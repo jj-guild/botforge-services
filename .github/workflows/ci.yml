@@ -254,6 +254,11 @@ jobs:
           # non-zero only after ALL checks ran.
           uv sync
           uv run python src/kingdoms/core_process/run_external_checks.py
+        env:
+          # The liquipedia battery skips (does not fail) when unset; set
+          # the repo variable PROVIDER_CONTACT (generic, every provider)
+          # to arm it.
+          PROVIDER_CONTACT: ${{ vars.PROVIDER_CONTACT }}
       - name: Run against the composed ext processes (RPC access)
         run: |
           # The compose job runs the ext processes; this pass points the

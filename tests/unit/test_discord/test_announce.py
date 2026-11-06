@@ -13,6 +13,7 @@ skip. KINGDOMS_ANNOUNCE_ENABLED=0 silences it entirely (CI/CD bot).
 
 from __future__ import annotations
 
+import logging
 import time
 from pathlib import Path
 from typing import Any
@@ -32,8 +33,9 @@ from kingdoms.discord.announce import (
 CONFIG_DIR = Path(__file__).resolve().parents[3] / "config"
 
 
-def _status_service(**kwargs: str) -> StatusService:
-    return StatusService(registry=ModRegistry({}), bot_admins=BotAdmins(), **kwargs)
+def _status_service(**kwargs: object) -> StatusService:
+    kwargs.setdefault("bot_admins", BotAdmins())
+    return StatusService(registry=ModRegistry({}), **kwargs)  # type: ignore[arg-type]
 
 
 class _FakeLogService:
@@ -48,12 +50,45 @@ class _FakeLogService:
         self.pinned = pin
 
 
-class _Bot:
-    """Client stand-in exposing the guilds and the gateway latency."""
+class _FakeHTTPResponse:
+    """Response stand-in carrying the two attributes discord.Forbidden reads."""
 
-    def __init__(self, guild_ids: list[str], latency: float | None = None) -> None:
+    status = 403
+    reason = "Forbidden"
+
+
+class _Bot:
+    """Client stand-in exposing the guilds, the latency and the DMs."""
+
+    def __init__(
+        self, guild_ids: list[str], latency: float | None = None, refused_admins: set[str] = frozenset()
+    ) -> None:
         self.guilds = [type("G", (), {"id": int(gid)})() for gid in guild_ids]
         self.latency = latency
+        self.dm_targets: list[str] = []
+        self.refused_admins = set(refused_admins)
+
+        class _User:
+            def __init__(self, user_id: str) -> None:
+                self.id = int(user_id)
+
+            async def send(self, view: Any = None) -> None:
+                self.dm_targets.append(view)  # pragma: no cover
+
+        self._user_cls = _User
+
+    async def fetch_user(self, user_id: int) -> Any:
+        user = type("U", (), {"id": user_id, "dm_views": []})()
+        user.send_original = None
+
+        async def _send(view: Any = None) -> None:
+            if str(user_id) in self.refused_admins:
+                raise discord.Forbidden(_FakeHTTPResponse(), {"code": 50278, "message": "no mutual guilds"})
+            user.dm_views.append(view)
+
+        user.send = _send
+        self.dm_targets.append(str(user_id))
+        return user
 
 
 TYPE_TEXT_DISPLAY = 10
@@ -366,24 +401,37 @@ def test_layout_falls_back_to_english_for_unknown_locale() -> None:
 
 
 @pytest.mark.asyncio
-async def test_announce_delivers_start_layout_to_every_guild() -> None:
-    status = _status_service(deploy_label="pr-42-x")
+async def test_announce_dm_the_layout_to_every_bot_admin() -> None:
+    status = _status_service(deploy_label="pr-42-x", bot_admins=BotAdmins(user_ids=("10", "20")))
     logs = _FakeLogService()
-    bot = _Bot(["111", "222"], latency=0.045)
+    bot = _Bot(["111"], latency=0.045)
     config = AnnounceConfig(locale="en", config_dir=CONFIG_DIR)
     await announce_startup(bot, status, config, logs_service=logs, deploy_env="test")  # type: ignore[arg-type]
-    assert set(logs.events) == {"111", "222"}
-    for events in logs.events.values():
-        assert len(events) == 1
-        event = events[0]
-        assert event.kind == "start"
-        assert event.footer == ""
-        assert not any("kingdoms-deploy" in t for t in _iter_texts(event.layout.to_components())), (
-            "no machine footer in the layout"
-        )
-        assert isinstance(event.layout, discord.ui.LayoutView)
-        joined = "\n".join(_iter_texts(event.layout.to_components()))
-        assert "Latency: 45 ms" in joined, "the gateway latency rides in the Bot section"
+    assert logs.events == {}, "the boot message never lands in a guild channel anymore"
+    assert bot.dm_targets == ["10", "20"], "one DM per bot-admin"
+
+
+@pytest.mark.asyncio
+async def test_announce_dm_refusal_is_info_level_and_serves_the_other_admins(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """A 403 on one bot-admin (no mutual guild / closed DMs) is an
+    expected best-effort outcome: one info line, never a warning nor a
+    traceback, and it never blocks the remaining admins' DMs."""
+    status = _status_service(deploy_label="pr-42-x", bot_admins=BotAdmins(user_ids=("10", "20")))
+    logs = _FakeLogService()
+    bot = _Bot(["111"], refused_admins={"10"})
+    config = AnnounceConfig(locale="en", config_dir=CONFIG_DIR)
+    with caplog.at_level("INFO", logger="kingdoms.bot.announce"):
+        await announce_startup(bot, status, config, logs_service=logs, deploy_env="test")  # type: ignore[arg-type]
+    assert bot.dm_targets == ["10", "20"], "both admins are tried, the refusal is best-effort"
+    records = caplog.records
+    assert not [r for r in records if r.levelname == "WARNING"], "an expected 403 never warns"
+    refused = [r for r in records if "refused" in r.getMessage()]
+    assert len(refused) == 1, "the 403 surfaces as one info line"
+    assert "10" in refused[0].getMessage(), "the info line names the unreachable admin"
+    assert refused[0].levelno == logging.INFO
+    assert not refused[0].exc_info, "no traceback for an expected 403"
 
 
 @pytest.mark.asyncio

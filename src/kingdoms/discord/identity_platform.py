@@ -7,10 +7,13 @@ the adapter exposes exactly the ``IdentityDatabase`` protocol surface.
 
 from __future__ import annotations
 
+import logging
 from typing import Any
 
 from kingdoms.core.models.user import UserModel
 from kingdoms.core.services.identity import IDENTITY_COLLECTION, USERS_COLLECTION
+
+logger = logging.getLogger("kingdoms.discord.identity_platform")
 
 
 class MongoIdentityDatabase:
@@ -49,8 +52,24 @@ class MongoIdentityDatabase:
             return None
         return UserModel.model_validate(dict(doc))
 
+    async def find_many_users(self, user_ids: list[str]) -> list[UserModel]:
+        """Return the existing user documents for a batch of ids (ONE read).
+
+        The players panel's roster read: the per-user find_one loop was
+        one Mongo round-trip per enrolled member — the panel's real
+        bottleneck (owner direction: the panel must be immediate).
+        """
+        if not user_ids:
+            return []
+        docs = []
+        cursor = self._database[USERS_COLLECTION].find({"_id": {"$in": user_ids}})
+        async for doc in cursor:
+            try:
+                docs.append(UserModel.model_validate(dict(doc)))
+            except Exception:
+                logger.debug("a batched user doc failed validation — skipped", exc_info=True)
+        return docs
+
     async def upsert_user(self, user: UserModel) -> None:
         """Insert or replace the user document."""
-        await self._database[USERS_COLLECTION].replace_one(
-            {"_id": user.id}, user.to_mongo(), upsert=True
-        )
+        await self._database[USERS_COLLECTION].replace_one({"_id": user.id}, user.to_mongo(), upsert=True)

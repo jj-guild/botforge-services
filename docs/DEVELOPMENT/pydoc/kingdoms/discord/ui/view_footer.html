@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Python: kingdoms.discord.ui.view_footer</title>
+</head><body>
+
+<table class="heading">
+<tr class="heading-text decor">
+<td class="title">&nbsp;<br><strong class="title"><a href="kingdoms.html" class="white">kingdoms</a>.<a href="kingdoms.discord.html" class="white">discord</a>.<a href="kingdoms.discord.ui.html" class="white">ui</a>.view_footer</strong></td>
+<td class="extra"><a href=".">index</a><br><a href="file:SOURCE_ROOT/discord/ui/view_footer.py">SOURCE_ROOT/discord/ui/view_footer.py</a></td></tr></table>
+    <p><span class="code">The&nbsp;view-id&nbsp;footer:&nbsp;every&nbsp;surface's&nbsp;feedback&nbsp;anchor.<br>
+&nbsp;<br>
+One&nbsp;rule&nbsp;(docs/DEVELOPMENT/VIEWS.md):&nbsp;every&nbsp;rendered&nbsp;surface&nbsp;carries<br>
+its&nbsp;view&nbsp;id&nbsp;as&nbsp;its&nbsp;last&nbsp;line,&nbsp;backticked&nbsp;—&nbsp;the&nbsp;anchor&nbsp;every&nbsp;human<br>
+feedback&nbsp;refers&nbsp;to.&nbsp;LayoutViews&nbsp;get&nbsp;a&nbsp;``-#``&nbsp;small-text&nbsp;line&nbsp;outside<br>
+every&nbsp;container&nbsp;(never&nbsp;inside&nbsp;an&nbsp;embed);&nbsp;embeds&nbsp;carry&nbsp;the&nbsp;id&nbsp;as&nbsp;the<br>
+embed&nbsp;footer,&nbsp;backticked.</span></p>
+<p>
+<table class="section">
+<tr class="decor pkg-content-decor heading-text">
+<td class="section-title" colspan=3>&nbsp;<br><strong class="bigsection">Modules</strong></td></tr>
+    
+<tr><td class="decor pkg-content-decor"><span class="code">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span></td><td>&nbsp;</td>
+<td class="singlecolumn"><table><tr><td class="multicolumn"><a href="discord.html">discord</a><br>
+</td><td class="multicolumn"></td><td class="multicolumn"></td><td class="multicolumn"></td></tr></table></td></tr></table><p>
+<table class="section">
+<tr class="decor functions-decor heading-text">
+<td class="section-title" colspan=3>&nbsp;<br><strong class="bigsection">Functions</strong></td></tr>
+    
+<tr><td class="decor functions-decor"><span class="code">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span></td><td>&nbsp;</td>
+<td class="singlecolumn"><dl><dt><a name="-add_view_footer"><strong>add_view_footer</strong></a>(view: 'discord.ui.LayoutView', view_id: 'str') -&gt; 'discord.ui.LayoutView'</dt><dd><span class="code">Append&nbsp;the&nbsp;id&nbsp;footer&nbsp;line&nbsp;to&nbsp;a&nbsp;LayoutView,&nbsp;outside&nbsp;the&nbsp;containers.</span></dd></dl>
+ <dl><dt><a name="-build_view"><strong>build_view</strong></a>(view_id: 'str', *items: 'Any') -&gt; 'discord.ui.LayoutView'</dt><dd><span class="code">Build&nbsp;a&nbsp;panel&nbsp;LayoutView&nbsp;carrying&nbsp;its&nbsp;id&nbsp;footer&nbsp;—&nbsp;the&nbsp;only&nbsp;way.<br>
+&nbsp;<br>
+The&nbsp;guardrail&nbsp;(owner&nbsp;direction&nbsp;2026-10-31):&nbsp;a&nbsp;view's&nbsp;id&nbsp;line&nbsp;is<br>
+not&nbsp;optional&nbsp;and&nbsp;not&nbsp;manual&nbsp;—&nbsp;every&nbsp;panel&nbsp;builds&nbsp;through&nbsp;this<br>
+constructor,&nbsp;which&nbsp;appends&nbsp;the&nbsp;items&nbsp;then&nbsp;the&nbsp;id&nbsp;footer&nbsp;(the&nbsp;LAST<br>
+line,&nbsp;outside&nbsp;the&nbsp;containers).&nbsp;A&nbsp;view&nbsp;built&nbsp;any&nbsp;other&nbsp;way&nbsp;ships<br>
+without&nbsp;its&nbsp;anchor:&nbsp;the&nbsp;review&nbsp;catches&nbsp;it,&nbsp;or&nbsp;worse,&nbsp;the&nbsp;user's<br>
+feedback&nbsp;names&nbsp;a&nbsp;panel&nbsp;nobody&nbsp;can&nbsp;locate.</span></dd></dl>
+ <dl><dt><a name="-embed_footer"><strong>embed_footer</strong></a>(embed: 'discord.Embed', view_id: 'str') -&gt; 'discord.Embed'</dt><dd><span class="code">Set&nbsp;the&nbsp;id&nbsp;as&nbsp;an&nbsp;embed's&nbsp;footer,&nbsp;backticked.</span></dd></dl>
+ <dl><dt><a name="-require_declared_view_id"><strong>require_declared_view_id</strong></a>(view_id: 'str') -&gt; 'str'</dt><dd><span class="code">Fail&nbsp;fast&nbsp;when&nbsp;a&nbsp;panel&nbsp;renders&nbsp;an&nbsp;id&nbsp;the&nbsp;registry&nbsp;never&nbsp;declared.<br>
+&nbsp;<br>
+The&nbsp;declared&nbsp;ids&nbsp;live&nbsp;in&nbsp;config/views.yaml&nbsp;(the&nbsp;menus'&nbsp;registry);<br>
+a&nbsp;rendered-but-undeclared&nbsp;id&nbsp;means&nbsp;the&nbsp;routing&nbsp;answers&nbsp;'unknown<br>
+view'&nbsp;on&nbsp;the&nbsp;SAME&nbsp;id&nbsp;the&nbsp;panel&nbsp;claims&nbsp;—&nbsp;a&nbsp;broken&nbsp;navigation.&nbsp;This<br>
+raises&nbsp;at&nbsp;the&nbsp;first&nbsp;render&nbsp;(the&nbsp;boot&nbsp;smoke&nbsp;or&nbsp;the&nbsp;first&nbsp;click),<br>
+not&nbsp;after&nbsp;a&nbsp;user&nbsp;reports&nbsp;a&nbsp;dead&nbsp;button.</span></dd></dl>
+</td></tr></table><p>
+<table class="section">
+<tr class="decor data-decor heading-text">
+<td class="section-title" colspan=3>&nbsp;<br><strong class="bigsection">Data</strong></td></tr>
+    
+<tr><td class="decor data-decor"><span class="code">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span></td><td>&nbsp;</td>
+<td class="singlecolumn"><strong>__all__</strong> = ['add_view_footer', 'build_view', 'embed_footer', 'require_declared_view_id']</td></tr></table>
+</body></html>
