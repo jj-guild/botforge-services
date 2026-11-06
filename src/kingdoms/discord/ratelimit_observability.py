@@ -48,7 +48,7 @@ def _margin() -> int:
         return 5
 
 
-def install() -> None:
+def install() -> None:  # noqa: C901
     """Patch the bot's HTTPClient with the rate-limit-logging subclass.
 
     Call ONCE, before the discord.Client is instantiated (the bot's
@@ -59,38 +59,60 @@ def install() -> None:
     import discord.http
 
     base = discord.http.HTTPClient
+    base_ratelimit = discord.http.Ratelimit
+
+    class AdmissionRatelimit(base_ratelimit):  # type: ignore[misc,valid-type]
+        """The bucket WITHOUT self-censoring.
+
+        discord.py's acquire() raises RateLimited pre-emptively when the
+        bucket's expiry (a PREVIOUS 429's memory) exceeds
+        max_ratelimit_timeout — the request never reaches Discord and
+        the verdict replays a stale answer (the owner caught it: the
+        countdown decremented without any real call).
+
+        Here: the margin is the ONLY gate. remaining > margin → the
+        request goes out and DISCORD answers (a real 429 with a live
+        Retry-After, or success). remaining <= margin → block until the
+        reset. Never a pre-emptive raise on a healthy budget.
+        """
+
+        async def acquire(self) -> None:
+            import asyncio
+
+            self._last_request = self._loop.time()
+            if self.is_expired():
+                self.reset()
+
+            margin = _margin()
+            if self.remaining <= margin and self.expires is not None:
+                # at the margin: block until the window resets
+                wait = max(0.0, self.expires - self._loop.time())
+                logger.warning(
+                    "RATE LIMIT ADMISSION: bucket at the margin "
+                    "(remaining=%d <= %d) — blocking %.1fs",
+                    self.remaining,
+                    margin,
+                    wait,
+                )
+                await asyncio.sleep(wait)
+                self.reset()
+            # else: pass through — Discord decides, for real
 
     class RateLimitLoggingHTTPClient(base):  # type: ignore[misc,valid-type]
         """The stock client, plus the bucket logging."""
 
         async def request(self, route: Any, *args: Any, **kwargs: Any) -> Any:
-            import asyncio
-
-            # ADMISSION (owner direction 2026-11-06): the remaining tokens
-            # are our budget — let the request through while remaining >
-            # margin; at the margin, block until the bucket resets (the
-            # margin absorbs the concurrent races, no lock). Never block
-            # preemptively on a healthy budget.
-            bucket = self._bucket_of(route)
-            remaining = getattr(bucket, "remaining", None)
-            reset_after = getattr(bucket, "reset_after", None)
-            margin = _margin()
-            if remaining is not None and remaining <= margin and reset_after:
-                logger.warning(
-                    "RATE LIMIT ADMISSION: %s %s blocks %.1fs (remaining=%d <= margin=%d)",
-                    route.method,
-                    route.url,
-                    reset_after,
-                    remaining,
-                    margin,
-                )
-                await asyncio.sleep(reset_after)
+            # The ADMISSION lives in the bucket (AdmissionRatelimit.acquire):
+            # remaining > margin → the request goes out, DISCORD answers for
+            # real; a RateLimited reaching here is a LIVE 429 (the stale
+            # memory can no longer raise pre-emptively).
             try:
                 data = await super().request(route, *args, **kwargs)
             except discord.errors.RateLimited as exc:
                 bucket = self._bucket_of(route)
                 logger.warning(
-                    "RATE LIMIT RAISED: %s %s — retry_after=%.0fs %s",
+                    "RATE LIMIT 429: Discord answered 429 on %s %s — "
+                    "retry_after=%.0fs %s",
                     route.method,
                     route.url,
                     exc.retry_after,
@@ -130,8 +152,18 @@ def install() -> None:
             reset = f"reset_after={reset_after:.1f}s" if reset_after else "reset_after=?"
             return f"bucket limit={limit} remaining={remaining} {reset}"
 
+    # the client's get_ratelimit builds OUR admission buckets
+    def _get_ratelimit(self: Any, key: str) -> Any:
+        try:
+            return self._buckets[key]
+        except KeyError:
+            self._buckets[key] = AdmissionRatelimit(self.max_ratelimit_timeout)
+            return self._buckets[key]
+
+    RateLimitLoggingHTTPClient.get_ratelimit = _get_ratelimit
+
     try:
         discord.client.HTTPClient = RateLimitLoggingHTTPClient  # type: ignore[attr-defined]
-        logger.info("rate-limit observability installed")
+        logger.info("rate-limit observability installed (admission: margin=%d)", _margin())
     except Exception:
         logger.warning("rate-limit observability could not install — the stock client serves", exc_info=True)
