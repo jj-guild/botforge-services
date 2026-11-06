@@ -107,13 +107,13 @@ STRINGS: dict[str, dict[str, str]] = {
         # her beta report: a validated kingdom left its King in
         # total silence.
         "kingdom_accepted_dm": (
-            "👑 Good news — your kingdom **{kingdom}** has been"
-            " **accepted**! Its salons are ready: head to the"
-            " 🏰 Entrée du royaume to get started. Good conquest!"
+            "👑 Your kingdom **{kingdom}** has been accepted!"
+            " Its salons are ready: head to {mention} —"
+            " the Kingdom's entrance to get started. Good conquest!"
         ),
         "kingdom_accepted_note": (
-            "👑 The kingdom **{kingdom}** has been validated —"
-            " welcome to its members!"
+            "👑 The kingdom **{kingdom}** has been validated — welcome"
+            " to its members! ({mention})"
         ),
     },
     "fr": {
@@ -146,13 +146,13 @@ STRINGS: dict[str, dict[str, str]] = {
         "realms_deleted": "Royaume supprimé.",
         # synfoni-v1 (Drasah 06/11) : l'acceptation est enfin ANNONCÉE.
         "kingdom_accepted_dm": (
-            "👑 Bonne nouvelle — ton royaume **{kingdom}** a été"
-            " **accepté** ! Ses salons sont prêts : direction l'"
-            " 🏰 Entrée du royaume pour commencer. Bonne conquête !"
+            "👑 Ton royaume **{kingdom}** a été accepté !"
+            " Ses salons sont prêts : direction {mention} —"
+            " l'Entrée du royaume pour commencer. Bonne conquête !"
         ),
         "kingdom_accepted_note": (
             "👑 Le royaume **{kingdom}** a été validé — bienvenue à"
-            " ses membres !"
+            " ses membres ! ({mention})"
         ),
     },
 }

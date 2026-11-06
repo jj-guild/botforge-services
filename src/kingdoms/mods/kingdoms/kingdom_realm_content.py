@@ -180,8 +180,8 @@ def _strings(locale: str) -> dict[str, str]:
                 " achat au Marché (2 ⚙️)"
             ),
             "remparts_state_unplaced": (
-                "⚠️ Vous disposez d'une patrouille mais vous ne l'avez"
-                " pas encore paramétrée"
+                "⚠️ Vous disposez d'une patrouille [{0}/2] —"
+                " cliquez sur le bouton Patrouille pour la paramétrer"
             ),
             "remparts_state_active": (
                 "⏲ Votre patrouille [{0}/2] est bien active entre"
@@ -280,13 +280,16 @@ def _strings(locale: str) -> dict[str, str]:
             "traquenard_fiche_title": "🪤 Traquenard",
             "traquenard_fiche_desc": (
                 "**Effet**\n"
-                "À l'usage : choisissez un Royaume, l'IA affrontée devient **Très"
-                " facile**"
+                "À l'usage : choisissez un Royaume, l'IA de ce Royaume devient"
+                " **Très facile**"
                 " durant un laps de temps de 2h au moment où Traquenard est activé"
                 " (chaque activation cumulée repousse la fin de 2h).\n"
-                "Augmente les délais de TOUS les verrouillages du royaume ciblé"
+                "Augmente les délais de TOUS les verrouillages des seigneurs du"
+                " royaume ciblé"
                 " de **+2h** uniquement au moment où Traquenard est activé"
-                " (mariages, exploration et boisson de la taverne)."
+                " (mariages, exploration et boisson de la taverne).\n"
+                "Ne réduit pas le délai d'une déclaration d'attaque en cours,"
+                " elle affectera votre prochaine attaque."
             ),
             "traquenard_forces_button": "👁️ Voir les forces IA",
             "traquenard_go_button": "🪤 Traquenard",
@@ -641,7 +644,8 @@ def _strings(locale: str) -> dict[str, str]:
             " Market (2 ⚙️)"
         ),
         "remparts_state_unplaced": (
-            "⚠️ You own a patrol but it is not configured yet"
+            "⚠️ You own a patrol [{0}/2] — click the Patrol button"
+            " to configure it"
         ),
         "remparts_state_active": (
             "⏲ Your patrol [{0}/2] is active between {1:02d}:00"
@@ -737,13 +741,16 @@ def _strings(locale: str) -> dict[str, str]:
             "traquenard_fiche_title": "🪤 Traquenard",
             "traquenard_fiche_desc": (
                 "**Effect**\n"
-                "On use: choose a Kingdom, the opposing AI turns **Very easy**"
+                "On use: choose a Kingdom, that Kingdom's AI turns **Very easy**"
                 " for a"
                 " 2h lapse of time at the moment the Traquenard is activated"
                 " (each stacked activation pushes the end 2h further).\n"
-                "Adds **+2h** to EVERY lockout of the targeted kingdom, only at"
+                "Adds **+2h** to EVERY lockout of the targeted kingdom's lords,"
+                " only at"
                 " the moment the Traquenard is activated (marriages, exploration"
-                " and tavern drink)."
+                " and tavern drink).\n"
+                "It does not shorten the delay of an attack already declared —"
+                " it will affect your next attack."
             ),
             "traquenard_forces_button": "👁️ View AI forces",
             "traquenard_go_button": "🪤 Traquenard",
@@ -1725,7 +1732,7 @@ def _build_patrol(
                 slot_no, start, start + span
             )
         elif unlock_key in purchases:
-            line = strings["remparts_state_unplaced"]
+            line = strings["remparts_state_unplaced"].format(slot_no)
         else:
             line = strings["remparts_state_missing"].format(slot_no)
         lines.append(line)
