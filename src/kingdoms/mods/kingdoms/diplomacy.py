@@ -888,7 +888,12 @@ class DiplomacyService:
         if lord is None:
             raise KingdomNotFoundError("the player is not enrolled in the current season")
         if lord.married_civilization is not None:
-            raise AlreadyMarriedError("a lord weds once per season (D34)")
+            # paroisse-v1 (Drasah 06/11): D45 relâché — the lord may wed
+            # again after a break, ONE ACTIVE marriage at a time.
+            raise AlreadyMarriedError(
+                "a lord weds ONE active marriage at a time (D34 — "
+                "remarriage allowed once the link breaks)"
+            )
         if lord.kingdom_id is None:
             raise MarriageCapacityError("the lord belongs to no kingdom")
         kingdom = await self._kingdom_by_id(lord.kingdom_id)
@@ -941,7 +946,11 @@ class DiplomacyService:
         if lord is None:
             raise KingdomNotFoundError("the player is not enrolled in the current season")
         if lord.married_civilization is not None:
-            raise AlreadyMarriedError("a lord weds once per season (D45: never bypassed)")
+            # paroisse-v1 (Drasah 06/11): D45 relâché — same rule, the
+            # arranged path never bypasses the ONE ACTIVE marriage.
+            raise AlreadyMarriedError(
+                "a lord weds ONE active marriage at a time (D45: never bypassed)"
+            )
         if lord.kingdom_id is None or lord.left:
             raise MarriageCapacityError("the lord belongs to no kingdom")
         kingdom = await self._kingdom_by_id(lord.kingdom_id)

@@ -347,10 +347,16 @@ def test_paroisse_rows_follow_the_button_rules() -> None:
     rows = _paroisse_rows(strings, kingdom, _minimal_state(), "fr")
     assert len(rows) == 2
     first, second = (list(row) for row in rows)
-    # line 1: the parish actions GREEN + Sortir RED last
-    assert first[-1].item.label == _strings("fr")["sortir_button"]
+    # paroisse-v1 (Drasah 06/11) — rangée 1 : Se marier · Améliorer ·
+    # En savoir plus + Sortir (rouge, en DERNIER).
+    labels = [str(button.item.label) for button in first]
+    assert labels[-1] == _strings("fr")["sortir_button"]
     assert first[-1].item.style == discord.ButtonStyle.danger
-    # line 2: Mariage arrangé ALWAYS visible, gray at tier 1
+    assert "Se marier" in labels[0]
+    assert "Améliorer" in labels[1]
+    assert "En savoir plus" in labels[2]
+    assert len(first) == 4
+    # rangée 2 : Mariage arrangé ALWAYS visible, gray at tier 1
     assert len(second) == 1
     assert second[0].item.disabled is True
     assert second[0].item.style == discord.ButtonStyle.secondary
@@ -364,6 +370,63 @@ def test_paroisse_rows_follow_the_button_rules() -> None:
     arrange = list(rows2[1])[0]
     assert arrange.item.disabled is False
     assert arrange.item.style == discord.ButtonStyle.success
+
+
+def test_paroisse_marry_button_follows_the_clicker_state() -> None:
+    """paroisse-v1: Se marier gris quand déjà marié ou sans bague
+    (le Roi exige DEUX bagues), vert sinon."""
+    from kingdoms.mods.kingdoms.kingdom_realm_content import _church_buttons
+
+    strings = _merged_fr()
+    parish = {"tier": 1, "max_tier": 3, "next_name": "Église", "cost": 2}
+    # A bachelor lord with one ring: the button is usable.
+    kingdom = SimpleNamespace(
+        id=TEST_KINGDOM_ID, marriage_points=1, arranged_marriage_stock=0
+    )
+    lord = SimpleNamespace(id="l1", role="lord", married_civilization=None)
+    (marry,) = [
+        b
+        for b in _church_buttons(strings, kingdom, {"parish": parish}, lord)
+        if str(b.item.custom_id) == "kingdoms:church:marry"
+    ]
+    assert marry.item.disabled is False
+    # Already married: gray.
+    lord_married = SimpleNamespace(id="l1", role="lord", married_civilization="francs")
+    (marry2,) = [
+        b
+        for b in _church_buttons(strings, kingdom, {"parish": parish}, lord_married)
+        if str(b.item.custom_id) == "kingdoms:church:marry"
+    ]
+    assert marry2.item.disabled is True
+    assert marry2.item.style == discord.ButtonStyle.secondary
+    # No ring: gray.
+    kingdom_broke = SimpleNamespace(
+        id=TEST_KINGDOM_ID, marriage_points=0, arranged_marriage_stock=0
+    )
+    (marry3,) = [
+        b
+        for b in _church_buttons(strings, kingdom_broke, {"parish": parish}, lord)
+        if str(b.item.custom_id) == "kingdoms:church:marry"
+    ]
+    assert marry3.item.disabled is True
+    # The King with ONE ring: gray (a royal marriage costs TWO).
+    king_one = SimpleNamespace(id="k1", role="king", married_civilization=None)
+    (marry4,) = [
+        b
+        for b in _church_buttons(strings, kingdom, {"parish": parish}, king_one)
+        if str(b.item.custom_id) == "kingdoms:church:marry"
+    ]
+    assert marry4.item.disabled is True
+    # The King with TWO rings: usable.
+    kingdom_two = SimpleNamespace(
+        id=TEST_KINGDOM_ID, marriage_points=2, arranged_marriage_stock=0
+    )
+    (marry5,) = [
+        b
+        for b in _church_buttons(strings, kingdom_two, {"parish": parish}, king_one)
+        if str(b.item.custom_id) == "kingdoms:church:marry"
+    ]
+    assert marry5.item.disabled is False
 
 
 # ---------------------------------------------------------------------------

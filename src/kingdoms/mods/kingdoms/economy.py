@@ -1203,6 +1203,12 @@ class EconomyService:
         """
         timestamp = now or game_now()
         territory = await self._owned_territory(kingdom_id, territory_id)
+        # paroisse-v1 (Drasah 06/11): no royal guard on a Lieu Sacrée —
+        # neither a chantier territory nor a SACRED one takes a guard.
+        if territory.sacred or territory.is_chantier_at(timestamp):
+            raise EconomyError(
+                "the territory carries a Lieu Sacrée — no royal guard on it"
+            )
         state = await self._attacks.technology_state(kingdom_id)
         stock = int(state.purchases.get(GARDE_ROYALE_STOCK, 0) or 0)
         if stock <= 0:

@@ -3106,11 +3106,12 @@ class AttackService:
     async def _apply_attacker_win(self, attack: AttackModel) -> None:
         """Apply the attacker's verdict on the attacked territory (D20).
 
-        lieu-sacree-v1 (Drasah 14/10): a victory on a CHANTIER
-        territory destroys ONLY the chantier — the territory stays with
-        its defender, the attacker banks 2 ⚙️ and must RE-ATTACK to
-        conquer. A SACRED territory never transfers (defensive — it
-        cannot be attacked at all).
+        paroisse-v1 (Drasah 06/11): a victory on a CHANTIER territory
+        conquers the territory for the attacker, banks the 2 ⚙️
+        destroy reward, and the chantier TRANSFERS to another territory
+        of the defender — CONTINUING the original timer. A SACRED
+        territory never transfers (defensive — it cannot be attacked
+        at all).
         """
         territory = next(
             (item for item in await self._territories.territories() if item.id == attack.territory_id),
@@ -3134,40 +3135,42 @@ class AttackService:
         territory: TerritoryModel,
         now: datetime,
     ) -> None:
-        """Destroy the chantier of a defeated Lieu Sacrée (lieu-sacree-v1).
+        """Destroy the chantier of a defeated Lieu Sacrée (paroisse-v1).
 
-        The territory itself is NOT conquered (Drasah's correction
-        14/10): it stays with the defender, the attacker banks the
-        destroy reward (2 ⚙️), and the cathedral auto-rebuilds on
-        ANOTHER territory of the defender — or is lost when none
-        exists (repurchase 3 ⚙️).
+        Drasah's rules 06/11: the attacker CONQUERS the territory and
+        banks the destroy reward (2 ⚙️); the chantier TRANSFERS
+        immediately to ANOTHER territory of the defender (random pick)
+        CONTINUING the original timer — or is lost when none exists.
         """
         settings = self._config.parish
+        remaining_until = territory.cathedral_until
         territory.cathedral_until = None
         await self._store.upsert_territory(territory.to_mongo())
         attacker = await self._kingdom_by_id(attack.attacker_kingdom_id)
         attacker.tech_points_bank += settings.cathedral_destroy_reward
         await self._store.upsert_kingdom(attacker.to_mongo())
-        rebuilt = next(
-            (
-                item
-                for item in await self._territories.territories()
-                if item.owner_kingdom_id == attack.defender_kingdom_id
-                and item.id != territory.id
-                and not item.sacred
-                and not item.is_chantier_at(now)
-            ),
-            None,
-        )
+        candidates = [
+            item
+            for item in await self._territories.territories()
+            if item.owner_kingdom_id == attack.defender_kingdom_id
+            and item.id != territory.id
+            and not item.sacred
+            and not item.is_chantier_at(now)
+        ]
+        rebuilt = random.choice(candidates) if candidates else None
         if rebuilt is not None:
-            rebuilt.cathedral_until = now + timedelta(hours=settings.cathedral_chantier_hours)
+            # The chantier continues on its new ground — the ORIGINAL
+            # timer keeps running (no fresh 72h window).
+            rebuilt.cathedral_until = remaining_until
             await self._store.upsert_territory(rebuilt.to_mongo())
+        # paroisse-v1 (Drasah 06/11): the attacker takes the territory.
+        await self._territories.transfer(attack.territory_id, attack.attacker_kingdom_id)
         logger.info(
-            "kingdoms: chantier of %s destroyed by %s (+%d tech for the attacker, %s)",
+            "kingdoms: chantier of %s destroyed by %s (+%d tech, territory conquered, %s)",
             territory.map_key,
             attack.attacker_kingdom_id,
             settings.cathedral_destroy_reward,
-            f"rebuilt on {rebuilt.map_key}" if rebuilt is not None else "cathedral LOST",
+            f"chantier moved to {rebuilt.map_key}" if rebuilt is not None else "chantier LOST",
         )
 
     async def restitute(self, attack_id: str) -> AttackModel:

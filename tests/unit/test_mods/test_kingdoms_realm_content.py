@@ -398,24 +398,25 @@ async def test_territory_view_shields_the_guarded_map_with_its_end_time() -> Non
     assert "protégée jusqu'à" in remparts
 
 
-async def test_church_view_shows_the_fidèles_the_palier_ladder_and_the_legend() -> None:
-    """The Paroisse v3 (Drasah 2026-10-11): the palier block with the
-    royal lock line, Les Fidèles du Royaume (one line per member, the
-    married ones with the lock END TIME — never a stale duration), the
-    stocks in the title, the palier ladder with the Cathédrale's Lieu
-    Sacrée, and the legend (verrou, offrande, jeton, sacrée)."""
+async def test_church_view_is_the_clean_paroisse_v1_sheet() -> None:
+    """Paroisse-v1 (Drasah 06/11): the main sheet is CLEAN — the
+    stripped title (no digits), the stats line under it (bagues ·
+    jetons · tech), the 🙏 Notre Chapelle block (palier + Offrande 🎁),
+    Les Fidèles du Royaume with the lock END TIME — and ZERO ladder,
+    ZERO legend (they live behind 🔎 En savoir plus / ⛪ Améliorer)."""
     guild = MockGuild()
     await ensure_realm_structure(guild, _Kingdom(), [])
     await _deploy(guild)
 
     content = _text(_live(_channel(guild, "⛪ paroisse"))[0])
-    # ⛪ the stocks live in the title — palier, marriage points, tokens
-    assert "⛪ Paroisse — Avalon · ⛪ Chapelle · 💍 3 · 💰 1" in content
-    # ✨ the palier block — every kingdom sees its current tier
-    assert "Notre Chapelle" in content
-    assert "Palier : Chapelle (1/3) — Offrande : 0 ⚙️" in content
-    assert "Verrou mariage classique : 24h" in content
-    assert "Verrou mariage royal (Roi) : 48h" in content
+    # ⛪ the title is stripped — the digits left for the stats line
+    assert "⛪ Paroisse — Avalon" in content
+    assert "· ⛪ Chapelle ·" not in content
+    # 📊 the stats line rides UNDER the title — bagues, jetons, tech
+    assert "💍 Bague : 3 · 💐 Mariage arrangé : 1 · ⚙️ Point Technologie : 5" in content
+    # 🙏 the palier block — every kingdom sees its current tier
+    assert "🙏 Notre Chapelle" in content
+    assert "Palier : Chapelle (1/3) — Offrande 🎁 : +0 ⚙️ par mariage" in content
     # 💒 Les Fidèles du Royaume — one line per member with their state
     assert "Les Fidèles du Royaume" in content
     # Drasah 2026-10-12: the badge names the promise herself —
@@ -423,16 +424,15 @@ async def test_church_view_shows_the_fidèles_the_palier_ladder_and_the_legend()
     epouse = _pick_promise("p2:Aztèques", "Aztèques")
     assert f"💍 Luc — {epouse} (Aztèques) · 🔒 verrou jusqu'à" in content
     assert "🎖️ Arthur — célibataire · prêt à se marier 💍" in content
-    # 🔭 the ladder — every palier visible with cost, perks and Sacrée
-    assert "Aperçu des paliers" in content
-    assert "● Chapelle — 0 ⚙️ · verrou 24h · offrande +0 ⚙️" in content
-    assert "▸ Église — 2 ⚙️ · verrou 12h · offrande +1 ⚙️" in content
-    assert "▸ Cathédrale — 4 ⚙️ · verrou 6h · offrande +2 ⚙️ · ⛪ Lieu Sacrée" in content
-    # 📖 the legend — verrou, offrande, jeton, lieu sacrée
-    assert "-# 🔒 Verrou :" in content
-    assert "-# 🕯️ Offrande :" in content
-    assert "-# 💰 Jeton :" in content
-    assert "-# ⛪ Lieu Sacrée (Cathédrale) :" in content
+    # paroisse-v1: the ladder and the legend LEFT the main sheet —
+    # the ladder lives in the ⛪ Améliorer view, the legend behind
+    # 🔎 En savoir plus.
+    assert "Aperçu des paliers" not in content
+    assert "-# 🔒 Verrou :" not in content
+    assert "-# 🕯️ Offrande :" not in content
+    assert "-# 🎁 Offrande :" not in content
+    assert "-# 💰 Jeton :" not in content
+    assert "-# ⛪ Lieu Sacrée" not in content
     # the retired stocks block and help line are gone
     assert "Points de mariage" not in content
     assert "Mariages arrangés en stock" not in content

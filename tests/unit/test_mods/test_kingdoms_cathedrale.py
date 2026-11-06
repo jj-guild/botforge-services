@@ -172,9 +172,12 @@ async def test_defense_win_keeps_the_chantier_alive() -> None:
 
 
 async def test_attacker_win_destroys_only_the_chantier() -> None:
-    """Attacker win: no conquest, +2 ⚙️, auto-rebuild on a bonus-free territory."""
+    """paroisse-v1 (Drasah 06/11): attacker win — the territory is
+    CONQUERED, +2 ⚙️, and the chantier TRANSFERS to another territory
+    of the defender CONTINUING the original timer."""
     bundle, aquitaine, bourgogne, first_map = await _cathedral_season()
     await bundle.cathedrals.consecrate("king-a", first_map, now=NOW)
+    original_until = (await bundle.territory(first_map)).cathedral_until
     bank_before = bourgogne.tech_points_bank
     attack = await bundle.attacks.declare_attack(
         "king-b", first_map, "aoe2de://x", now=NOW + timedelta(hours=1)
@@ -184,14 +187,15 @@ async def test_attacker_win_destroys_only_the_chantier() -> None:
     resolved = await bundle.attacks.resolve(attack.id, bourgogne.id)
     assert resolved.winner_kingdom_id == bourgogne.id
     territory = await bundle.territory(first_map)
-    # Drasah's correction: the territory STAYS with the defender.
-    assert territory.owner_kingdom_id == aquitaine.id
+    # paroisse-v1: the attacker CONQUERS the territory.
+    assert territory.owner_kingdom_id == bourgogne.id
     assert territory.cathedral_until is None
     assert not territory.sacred
     # The attacker banks the destroy reward.
     kingdom_b = await bundle.kingdom_by_name("Bourgogne")
     assert kingdom_b.tech_points_bank == bank_before + bundle.config.parish.cathedral_destroy_reward
-    # The cathedral auto-rebuilt on another bonus-free territory.
+    # The chantier moved to another territory of the defender —
+    # CONTINUING the original timer (no fresh 72h window).
     chantiers = [
         t
         for t in await bundle.territories.territories()
@@ -199,6 +203,7 @@ async def test_attacker_win_destroys_only_the_chantier() -> None:
     ]
     assert len(chantiers) == 1
     assert chantiers[0].map_key != first_map
+    assert chantiers[0].cathedral_until == original_until
     # Replaying the resolution is idempotent (no double reward).
     replay = await bundle.attacks.resolve(attack.id, bourgogne.id)
     assert replay.state is not None
@@ -258,5 +263,7 @@ async def test_destroyed_cathedral_without_free_territory_is_lost() -> None:
     ]
     assert chantiers == []
     territory = await bundle.territory(only_map)
-    assert territory.owner_kingdom_id == aquitaine.id
+    # paroisse-v1: with no other territory to move to, the chantier is
+    # LOST and the attacker still conquers the consecrated ground.
+    assert territory.owner_kingdom_id == bourgogne.id
     assert territory.cathedral_until is None and not territory.sacred
