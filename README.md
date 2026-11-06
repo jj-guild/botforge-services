@@ -53,8 +53,7 @@ see [docs/DEVELOPER.md](docs/DEVELOPER.md) and
   `generated/DEPENDENCIES.md` are owned by the `sync-generated` workflow
   (single writer, published on the `sync/generated-artifacts` branch);
   sessions only preview drift with the sync skills
-  ([Update roadmap](https://github.com/merlin-pinpin-org/kingdoms/blob/main/.agents/skills/update-roadmap/SKILL.md),
-  [Update dependencies](https://github.com/merlin-pinpin-org/kingdoms/blob/main/.agents/skills/update-dependencies/SKILL.md)).
+  ([Generated artifacts](https://github.com/merlin-pinpin-org/kingdoms/blob/main/.agents/skills/generated-artifacts/SKILL.md)).
 
 ## Deploying a pull request
 
