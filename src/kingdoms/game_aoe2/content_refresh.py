@@ -134,7 +134,15 @@ async def refresh_aoe2_maps() -> dict[str, int]:
         for entry in entries:
             maps_total += 1
             already = await content.get(entry.id, "en")
-            if already is not None and already.get("icon_url") and already.get("walls"):
+            # the skip requires the LABEL generation: a doc without
+            # label_gen was stored by the bool-coercion era (walls/nomad/
+            # tc as "True") — it re-enriches with the true labels
+            if (
+                already is not None
+                and already.get("icon_url")
+                and already.get("walls")
+                and already.get("label_gen") == 2
+            ):
                 maps_complete += 1
                 continue
             maps_checked += 1
@@ -160,6 +168,7 @@ async def refresh_aoe2_maps() -> dict[str, int]:
                     "tc": seed.tc,
                     "player_capacity": seed.player_capacity,
                     "creator": seed.creator,
+                    "label_gen": 2,
                     "provider": "liquipedia",
                     "game_versions": list(seed.game_versions),
                     "versions": [dict(v) for v in seed.versions],
