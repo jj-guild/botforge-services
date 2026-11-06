@@ -28,6 +28,26 @@ from typing import Any
 logger = logging.getLogger("kingdoms.discord.ratelimit")
 
 
+def _margin() -> int:
+    """Return the admission margin (config/services.yaml: discord.rate_limit_margin).
+
+    A request goes through while remaining > margin; at the margin the
+    NEXT request blocks until the bucket resets — the margin absorbs the
+    races between concurrent requests (no lock), and leaves headroom for
+    the never-starve calls (commands sync, presence).
+    """
+    try:
+        from pathlib import Path
+
+        import yaml
+
+        path = Path(__file__).resolve().parents[3] / "config" / "services.yaml"
+        data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+        return int((data.get("discord") or {}).get("rate_limit_margin", 5))
+    except Exception:
+        return 5
+
+
 def install() -> None:
     """Patch the bot's HTTPClient with the rate-limit-logging subclass.
 
@@ -44,6 +64,27 @@ def install() -> None:
         """The stock client, plus the bucket logging."""
 
         async def request(self, route: Any, *args: Any, **kwargs: Any) -> Any:
+            import asyncio
+
+            # ADMISSION (owner direction 2026-11-06): the remaining tokens
+            # are our budget — let the request through while remaining >
+            # margin; at the margin, block until the bucket resets (the
+            # margin absorbs the concurrent races, no lock). Never block
+            # preemptively on a healthy budget.
+            bucket = self._bucket_of(route)
+            remaining = getattr(bucket, "remaining", None)
+            reset_after = getattr(bucket, "reset_after", None)
+            margin = _margin()
+            if remaining is not None and remaining <= margin and reset_after:
+                logger.warning(
+                    "RATE LIMIT ADMISSION: %s %s blocks %.1fs (remaining=%d <= margin=%d)",
+                    route.method,
+                    route.url,
+                    reset_after,
+                    remaining,
+                    margin,
+                )
+                await asyncio.sleep(reset_after)
             try:
                 data = await super().request(route, *args, **kwargs)
             except discord.errors.RateLimited as exc:
