@@ -1643,6 +1643,63 @@ class AttackService:
         logger.info("kingdoms: pick & ban submitted by %s on the attack on %s", player_id, attack.map_key)
         return attack
 
+    async def stage_draft_pick(
+        self,
+        attack_id: str,
+        player_id: str,
+        index: int,
+        civ: str,
+        *,
+        now: datetime | None = None,
+    ) -> AttackModel:
+        """shirar-v1 (Drasah 06/11): persist ONE dropdown pick of the DM
+        draft wizard. The pickban DM view is now restart-proof — its
+        three dropdowns read the STAGED picks back after a bot restart
+        (a dead in-memory view was the live « kingdom bot ne répond
+        pas » report: a deploy between the DM send and the click killed
+        every menu). One civ rides ONE slot only — the staging clears
+        any other slot holding it (the wizard's duplicate-free rule).
+        """
+        attack = await self._require_pickban_attack(attack_id, now or _now())
+        side = await self._pick_ban_side(attack, player_id)
+        hand = await self.pickban_hand(
+            attack.attacker_kingdom_id if side == "attacker" else attack.defender_kingdom_id,
+            player_id,
+        )
+        civ = str(civ)
+        if civ not in [str(x) for x in hand]:
+            raise PickBanStateError("chaque pick doit venir de la main de votre royaume")
+        pickban = dict(attack.pickban)
+        staged = [str(x) for x in (pickban.get(f"{side}_draft") or [])]
+        while len(staged) < 3:
+            staged.append("")
+        if not 0 <= index < 3:
+            raise PickBanStateError("slot de draft invalide")
+        staged = ["" if (pos != index and val == civ) else val for pos, val in enumerate(staged)]
+        staged[index] = civ
+        pickban[f"{side}_draft"] = staged
+        attack.pickban = pickban
+        await self._store.upsert_attack(attack.to_mongo())
+        return attack
+
+    async def clear_draft_picks(
+        self,
+        attack_id: str,
+        player_id: str,
+        *,
+        now: datetime | None = None,
+    ) -> AttackModel:
+        """shirar-v1: the global ✏️ Modifier reset — every slot of the
+        player's staged draft returns to « » (the whole hand offered
+        again, the persistent DM view re-renders grey)."""
+        attack = await self._require_pickban_attack(attack_id, now or _now())
+        side = await self._pick_ban_side(attack, player_id)
+        pickban = dict(attack.pickban)
+        pickban[f"{side}_draft"] = ["", "", ""]
+        attack.pickban = pickban
+        await self._store.upsert_attack(attack.to_mongo())
+        return attack
+
     async def validate_pickban(self, attack_id: str, player_id: str, *, now: datetime | None = None) -> AttackModel:
         """Validate one side's pick & ban (D77, Drasah 18/10 v2).
 
@@ -1795,8 +1852,16 @@ class AttackService:
                 # Traquenard forces 0 (Très facile, ia-base-zero-v1),
                 # otherwise the defence bot's own level (0 + Jeu
                 # d'armes, ceiling 5).
+                # shirar-v1 (Drasah 06/11): the window is read LIVE —
+                # a Traquenard activated AFTER the declaration must
+                # count too (the declaration-time snapshot missed it,
+                # live report: the activator's own vision vs the real
+                # draft diverged).
+                traquenard_live = attack.traquenard or await self._traquenard_open(
+                    attack.defender_kingdom_id, timestamp
+                )
                 attack.effects["ai_level"] = (
-                    0 if attack.traquenard else await self.defense_ai_level(attack.defender_kingdom_id)
+                    0 if traquenard_live else await self.defense_ai_level(attack.defender_kingdom_id)
                 )
                 # battle-ai-rdv-v1 (Drasah 22/10): even against the bot
                 # AI the DRAFT runs — same DM flow as a human defense
@@ -1837,39 +1902,38 @@ class AttackService:
             await self._store.upsert_attack(attack.to_mongo())
             return None
         # Drasah 18/10 — the anti-blocking default: a side that never
-        # ranked its 3 civilizations gets 3 RANDOM ones from its hand,
-        # NO sabotage and NO faucon apply for anyone, and the meeting
-        # proceeds (RDV decides, D20). A forgotten draft is never a
-        # forfeit anymore.
+        # ranked its 3 civilizations gets 3 RANDOM ones from its hand.
+        # shirar-v1 (Drasah 06/11): the default KEEPS the sabotage
+        # phase open — a short grace window lets both camps sabotage
+        # (or Pass) even after a random draw (« même en situation
+        # d'aléatoire il faut pouvoir le faire », live report). The
+        # meeting opens when both camps settle, or at the grace's end
+        # (score_due honours ``default_sabotage_grace_until``).
         attacker_ok = bool(pickban.get("attacker_validated"))
         defender_ok = bool(pickban.get("defender_validated")) or attack.ai_defender
         if not (attacker_ok and defender_ok):
             pickban["default_picks"] = sorted(
                 side for side, ok in (("attacker", attacker_ok), ("defender", defender_ok)) if not ok
             )
-            pickban["sabotages"] = {}
-            pickban["attacker_sabotages"] = []
-            pickban["defender_sabotages"] = []
             if not attacker_ok and not pickban.get("attacker_picks"):
                 pickban["attacker_picks"] = _random_picks(await self._side_hand(attack.attacker_kingdom_id))
             if not attack.ai_defender and not defender_ok and not pickban.get("defender_picks"):
                 pickban["defender_picks"] = _random_picks(await self._side_hand(attack.defender_kingdom_id))
             pickban["attacker_validated"] = True
             pickban["defender_validated"] = True
+            pickban["default_sabotage_grace_until"] = int(
+                (timestamp + self._default_sabotage_grace(timestamp)).timestamp()
+            )
             logger.info(
-                "kingdoms: draft defaulted (random civs, no sabotage) on %s — sides %s",
+                "kingdoms: draft defaulted (random civs, sabotage grace %s) on %s — sides %s",
+                self._default_sabotage_grace(timestamp),
                 attack.map_key,
                 pickban["default_picks"],
             )
-        # Drasah 18/10 v2 — the draft is sabotage-free (the
-        # Sabotage/Faucon moves to the battle room later): the default
-        # keeps its anti-blocking guarantees — random civs for the
-        # missing side(s), no sabotage, never a forfeit. The empty
-        # lists also scrub any legacy/volière sabotage of a resolved
-        # document.
-        pickban["sabotages"] = {}
-        pickban["attacker_sabotages"] = []
-        pickban["defender_sabotages"] = []
+        # shirar-v1: the sabotages are NEVER wiped on a default anymore
+        # — the grace window keeps the phase alive for both camps. The
+        # score_due tick marks ``sabotage_resolved`` when the meeting
+        # opens (grace over or both settled), scrubbing leftovers then.
         pickban["resolved_pickban"] = True
         attack.pickban = pickban
         await self._store.upsert_attack(attack.to_mongo())
@@ -2128,6 +2192,15 @@ class AttackService:
                 continue
             if attack.score.get("opened") or timestamp < attack.expires_at:
                 continue
+            # shirar-v1 (Drasah 06/11): a DEFAULTED draft keeps its
+            # sabotage grace — the meeting waits until both camps
+            # settled the phase (``sabotage_resolved`` via the Pass /
+            # settle buttons) or the grace expires (« même en situation
+            # d'aléatoire il faut pouvoir le faire »).
+            grace_until = int(attack.pickban.get("default_sabotage_grace_until") or 0)
+            if grace_until and not attack.pickban.get("sabotage_resolved"):
+                if timestamp.timestamp() < grace_until:
+                    continue
             score = dict(attack.score)
             score["opened"] = True
             score["ready"] = []
@@ -3536,6 +3609,37 @@ class AttackService:
             if epoch is not None:
                 return int(epoch.gaia_ai_level)
         return 1
+
+    def _default_sabotage_grace(self, timestamp: datetime) -> timedelta:
+        """shirar-v1 (Drasah 06/11): the sabotage grace of a defaulted
+        draft — 10 minutes, compressed to 2 under an armed beta (the
+        beta windows are minutes; a 10-minute grace would drown every
+        beta test flow, traquenard-beta-v1 pattern)."""
+        from kingdoms.mods.kingdoms.beta_weekend import beta_started
+
+        minutes = 10
+        try:
+            season = self._kingdoms.current_season()
+            if season is not None and beta_started(season, timestamp):
+                minutes = 2
+        except Exception:
+            logger.warning(
+                "kingdoms: default sabotage grace beta probe failed (ignored)",
+                exc_info=True,
+            )
+        return timedelta(minutes=minutes)
+
+    async def _traquenard_open(self, kingdom_id: str, timestamp: datetime) -> bool:
+        """shirar-v1 (Drasah 06/11): is the target's Traquenard window
+        STILL open at ``timestamp``? The declaration-time snapshot
+        (``attack.traquenard``) misses a window opened AFTER the
+        declaration — the LIVE state wins (the same reasoning as
+        chaine-vivante-v1: the living hand over the stale snapshot).
+        """
+        kingdom = await self._kingdom_by_id(kingdom_id)
+        return int(getattr(kingdom, "traquenard_until", 0) or 0) > int(
+            timestamp.timestamp()
+        )
 
     async def defense_ai_level(self, kingdom_id: str) -> int:
         """Return the kingdom defence bot's AI level (marche-v2 art. 5).
