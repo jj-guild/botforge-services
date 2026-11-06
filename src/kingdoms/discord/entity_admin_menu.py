@@ -115,7 +115,6 @@ async def build_entity_admin_menu(
     from kingdoms.core.services.game_data import (
         MAX_POOL_MAPS,
         POOL_STATE_DRAFT,
-        pool_state_badge,
     )
     from kingdoms.discord.maps_pool_flow import (
         MapAddToPoolButton,
@@ -157,41 +156,29 @@ async def build_entity_admin_menu(
                 )
             )
         state = pool.state
+        # The admin view IS the pool card (owner direction 2026-11-06):
+        # the same shape as the forum post — state header, the member
+        # maps WITH their images — only the BUTTONS change. No
+        # duplicated menu layout, no vanishing images.
         from kingdoms.discord.admin_panel_games import (
             GamesPoolRenameButton,
+            _games_wiring,
         )
-        from kingdoms.discord.ui.menu_template import MenuSpec, build_menu
+        from kingdoms.discord.pools_forum import _pool_maps, _pool_post_layout
 
-        # The maps list is ALWAYS the content (owner direction 2026-11-06):
-        # whatever the pool's state, the admin sees what it holds. The
-        # composition EDITOR stays draft-only (a frozen pool never
-        # changes) — the list itself never hides.
-        maps_lines = await _pool_maps_lines(pool)
-        menu = build_menu(
-            MenuSpec(
-                title="\u2699\ufe0f Gestion du map pool",
-                description=f"`{entity_id}`\n{pool_state_badge(state)}",
-                view_id=f"panel:{entity_id}:admin",
-                sections=(),
-                extra_lines=(f"## Maps ({len(maps_lines)})", *maps_lines)
-                if maps_lines
-                else ("## Maps", "_Aucune map._"),
-            )
-        )
-        # line 1 (edition only): composition (the single Maps editor,
-        # rename) — a published/used/archived pool is frozen: its name
-        # and composition never change, so the composition row is
-        # HIDDEN, only the lifecycle buttons stay
+        service = _games_wiring()
+        guild_id = str(getattr(pool, "owner_guild_id", "") or "")
+        maps = await _pool_maps(service, pool, guild_id) if service else []
+        admin_buttons: list[Any] = []
         if state == POOL_STATE_DRAFT:
-            composition: discord.ui.ActionRow[discord.ui.LayoutView] = discord.ui.ActionRow()
             maps_button = PoolMapsButton(entity_id)
-            if pool is not None and len(getattr(pool, "map_ids", ()) or ()) >= MAX_POOL_MAPS:
+            if len(getattr(pool, "map_ids", ()) or ()) >= MAX_POOL_MAPS:
                 maps_button.item.disabled = True
-            composition.add_item(maps_button)
-            composition.add_item(GamesPoolRenameButton(entity_id))
-            menu.add_item(composition)
-        menu.add_item(_pool_lifecycle_row(entity_id, pool, state))
-        return menu
+            admin_buttons.append(maps_button)
+            admin_buttons.append(GamesPoolRenameButton(entity_id))
+        lifecycle = _pool_lifecycle_row(entity_id, pool, state)
+        admin_buttons.append(lifecycle)
+        return _pool_post_layout(pool, maps, editable=True, admin_buttons=tuple(admin_buttons))
 
     # civ (and any future kind): the cross-guild data is managed through
     # the DM panel — a plain note keeps the surface honest

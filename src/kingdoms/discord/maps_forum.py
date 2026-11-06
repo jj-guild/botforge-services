@@ -468,15 +468,23 @@ def _map_props_lines(
     map_type: str, walls: str, nomad: str, tc: str, player_capacity: str = ""
 ) -> list[str]:
     """Render the map's properties as label lines (Type/Walls/Nomad/TCs/Capacité)."""
+    def _label(value: str) -> str:
+        """Render a trait's display: the label's word, never the bool garbage.
+
+        'True'/'False' are the amputation era's residue (a bool's str)
+        — they hide, not render.
+        """
+        v = value.strip()
+        return "" if v.lower() in ("true", "false") else v
+
     props = [f"**Type** : {map_type}"] if map_type else []
-    if walls:
-        shown = "Oui" if walls.strip().lower() in ("yes", "true") else walls
-        props.append(f"**Walls** : {shown}")
-    if nomad:
-        shown = "Oui" if nomad.strip().lower() in ("yes", "true") else nomad
+    if _label(walls):
+        props.append(f"**Walls** : {_label(walls)}")
+    if _label(nomad):
+        shown = "Oui" if nomad.strip().lower() == "yes" else _label(nomad)
         props.append(f"**Nomad** : {shown}")
-    if tc:
-        props.append(f"**TCs** : {tc}")
+    if _label(tc):
+        props.append(f"**TCs** : {_label(tc)}")
     if player_capacity:
         props.append(f"**Capacité** : {player_capacity}")
     return props

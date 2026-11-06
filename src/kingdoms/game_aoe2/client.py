@@ -165,11 +165,12 @@ class GameDataClient:
             terrain=reply.terrain,
             size=reply.size,
             map_type=reply.map_type,
-            # the RAW labels first (owner direction 2026-11-06): the
-            # infobox's own words — the bools are the amputated fallback
-            walls=str(reply.walls_label or reply.walls),
-            nomad=str(reply.nomad_label or reply.nomad),
-            tc=str(reply.tc_label or reply.tc),
+            # the RAW labels ONLY (owner direction 2026-11-06): the
+            # infobox's own words — never the bools, whose str() is
+            # garbage on a post ("False" where Liquipedia says "No")
+            walls=str(reply.walls_label or ""),
+            nomad=str(reply.nomad_label or ""),
+            tc=str(reply.tc_label or ""),
             player_capacity=str(reply.player_capacity),
             creator=str(reply.creator),
             game_versions=tuple(reply.game_versions),
