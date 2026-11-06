@@ -107,6 +107,11 @@ class ContentProviderClient:
             "walls": reply.walls,
             "nomad": reply.nomad,
             "tc": reply.tc,
+            "walls_label": reply.walls_label,
+            "nomad_label": reply.nomad_label,
+            "tc_label": reply.tc_label,
+            "player_capacity": reply.player_capacity,
+            "creator": reply.creator,
             "game_versions": list(reply.game_versions),
             "versions": [
                 {"name": v.name, "description": v.description, "details": list(v.details)}

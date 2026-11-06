@@ -303,6 +303,14 @@ def _descriptor_of(game_key: str, page: str, data: Any) -> dict[str, Any]:
         "walls": bool(getattr(info, "walls", False)),
         "nomad": bool(getattr(info, "nomad", False)),
         "tc": bool(getattr(info, "tc", False)),
+        # the RAW labels (owner direction 2026-11-06): the infobox's own
+        # words — walls "No"/"Partial", tc "1"/"2", capacity "Up to 8" —
+        # never amputated into bools
+        "walls_label": _safe(lambda: str(info.walls)),
+        "nomad_label": _safe(lambda: str(info.nomad)),
+        "tc_label": _safe(lambda: str(info.tc)),
+        "player_capacity": _safe(lambda: str(getattr(info, "player_capacity", ""))),
+        "creator": _safe(lambda: str(getattr(info, "creator", ""))),
         "game_versions": _safe_list(lambda: list(getattr(info, "game_versions", ()) or ())),
         "versions": _safe_list(
             lambda: [
