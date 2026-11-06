@@ -597,8 +597,13 @@ def _registration_bindings_service(database: Any) -> RegistrationService | None:
     """
     try:
         from kingdoms.core.services.registration import RegistrationService
+        from kingdoms.discord.registration_platform import MongoRegistrationDatabase
 
-        return RegistrationService(database)
+        # The service takes the PORT (the storage adapter), never the raw
+        # database: MongoRegistrationDatabase implements the port's methods
+        # (find_bindings_by_profiles included). The 2026-11-06 crash was
+        # exactly this — the raw AsyncDatabase passed instead.
+        return RegistrationService(MongoRegistrationDatabase(database))
     except Exception:
         logger.warning("registration service unavailable — the panel's names degrade", exc_info=True)
         return None
