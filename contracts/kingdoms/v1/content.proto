@@ -56,6 +56,13 @@ message MapSeedReply {
   repeated string game_versions = 15;
   repeated MapSeedVersion versions = 16;
   repeated string tags = 17;
+  // The RAW infobox labels (owner direction 2026-11-06): the infobox's
+  // own words — never amputated into the bools above
+  string walls_label = 18;     // "No", "Partial", "Yes"
+  string nomad_label = 19;
+  string tc_label = 20;        // the starting TC count, "1" / "2"
+  string player_capacity = 21;  // "Up to 8"
+  string creator = 22;          // "Forgotten Empires"
 }
 
 message ContentCapabilitiesRequest {}
