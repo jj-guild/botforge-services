@@ -260,9 +260,13 @@ async def test_ai_defense_runs_the_draft_and_opens_the_meeting() -> None:
     assert await bundle.attacks.expire_stale(now=attack.expires_at + timedelta(minutes=5)) == []
 
 
-async def test_forgotten_draft_defaults_to_random_picks_no_sabotage() -> None:
-    """Drasah 18/10 — anti-blocking default: nobody ranks/validates in the
-    draft → 3 RANDOM civs per hand, no sabotage, no faucon, RDV proceeds."""
+async def test_forgotten_draft_defaults_to_random_picks_with_a_sabotage_grace() -> None:
+    """Drasah 18/10 — anti-blocking default: nobody ranks/validates in
+    the draft → 3 RANDOM civs per hand. shirar-v1 (Drasah 06/11): the
+    default KEEPS the sabotage phase open — a grace window (10 min, 2
+    under an armed beta) lets both camps sabotage (or Pass) even after
+    a random draw (« même en situation d'aléatoire il faut pouvoir le
+    faire », live report); the RDV waits for the grace, then proceeds."""
     bundle = PhasesBundle()
     await bundle.launch_season()
     await bundle.draw(12)
@@ -284,12 +288,20 @@ async def test_forgotten_draft_defaults_to_random_picks_no_sabotage() -> None:
     assert sorted(fresh.pickban["default_picks"]) == ["attacker", "defender"]
     assert len(fresh.pickban["attacker_picks"]) == 3  # random, from the hand
     assert len(fresh.pickban["defender_picks"]) == 3
-    assert fresh.pickban["attacker_sabotages"] == []
+    assert fresh.pickban["attacker_sabotages"] == []  # the sabotages are KEPT, not wiped
     assert fresh.pickban["defender_sabotages"] == []
     assert fresh.state is AttackState.DEFENDED  # the meeting still decides
+    # shirar-v1: the grace is stamped — 10 minutes, or 2 under a beta.
+    grace_until = int(fresh.pickban.get("default_sabotage_grace_until") or 0)
+    assert grace_until - int(attack.expires_at.timestamp()) in (120, 600)
+    # During the grace the RDV WAITS — the sabotage phase stays open.
     meetings = await bundle.attacks.score_due(now=attack.expires_at)
+    assert meetings == []
+    # Once the grace expires (or both camps settle), the RDV proceeds.
+    meetings = await bundle.attacks.score_due(now=attack.expires_at + timedelta(minutes=11))
     assert [item.id for item in meetings] == [attack.id]
     assert meetings[0].state is AttackState.MEETING
+    assert meetings[0].pickban.get("sabotage_resolved") is True
 
 
 async def test_defaulted_draft_reveal_is_owed_exactly_once() -> None:
@@ -431,7 +443,8 @@ async def test_forgotten_draft_by_one_side_defaults_only_that_side() -> None:
 
 async def test_meeting_time_still_waits_for_the_game_result_after_default() -> None:
     """Drasah 18/10: after the anti-blocking default the meeting opens —
-    the game result (not the draft) decides the territory."""
+    the game result (not the draft) decides the territory. shirar-v1:
+    the opening waits out the sabotage grace first."""
     bundle = PhasesBundle()
     await bundle.launch_season()
     await bundle.draw(11)
@@ -442,10 +455,18 @@ async def test_meeting_time_still_waits_for_the_game_result_after_default() -> N
     await bundle.attacks.reveal_due(now=datetime(2026, 10, 11, 17, 45, tzinfo=UTC))
     await bundle.attacks.pick_ban_due(now=datetime(2026, 10, 11, 17, 46, tzinfo=UTC))
     assert await bundle.attacks.expire_stale(now=attack.expires_at) == []
-    meetings = await bundle.attacks.score_due(now=attack.expires_at)
+    # shirar-v1 (Drasah 06/11): the default keeps a sabotage grace —
+    # the RDV WAITS during it (both camps may still sabotage).
+    assert await bundle.attacks.score_due(now=attack.expires_at) == []
+    meetings = await bundle.attacks.score_due(
+        now=attack.expires_at + timedelta(minutes=11)
+    )
     assert [item.id for item in meetings] == [attack.id]
     assert meetings[0].state is AttackState.MEETING
-    assert await bundle.attacks.expire_stale(now=attack.expires_at + timedelta(minutes=5)) == []
+    assert (
+        await bundle.attacks.expire_stale(now=attack.expires_at + timedelta(minutes=16))
+        == []
+    )
 
 
 async def test_meeting_time_catches_up_an_unrevealed_attack_with_the_ai() -> None:

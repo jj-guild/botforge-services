@@ -130,8 +130,10 @@ async def test_forgotten_draft_defaults_the_defender_and_opens_the_meeting() -> 
     ]
     assert defaulted.pickban["sabotages"] == {}
     assert defaulted.pickban["defender_sabotages"] == []
-    # The RDV opens on the next tick — the game decides.
-    due = await bundle.attacks.score_due(now=_T)
+    # shirar-v1 (Drasah 06/11): the default keeps a sabotage grace —
+    # the RDV WAITS during it, then opens — the game decides.
+    assert await bundle.attacks.score_due(now=_T) == []
+    due = await bundle.attacks.score_due(now=_T + timedelta(minutes=11))
     assert [item.id for item in due] == [attack.id]
 
 

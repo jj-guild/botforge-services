@@ -419,13 +419,14 @@ async def test_cancel_attack_button_refunds_and_purges_the_salon() -> None:
     await _open_attack_salon_safe(guild, _panel_wiring(), _strings("fr"), attack)
     salon = next(c for c in guild.text_channels if c.name != "Déclarer une attaque")
     button = KingdomAttackCancelButton(attack.id, _strings("fr")["cancel_attack_button"])
-    # A NON-declarant is refused.
+    # shirar-v1 (Drasah 06/11): EVERY other player — the defender king,
+    # even the declarant's own co-seigneurs — clicks NOTHING: the
+    # silent ack swallows the click, no ephemeral window at all (règle
+    # exceptionnelle — only the declarant ever cancels).
     stranger = MockInteraction(user=MockUser(id="king-b"), guild=guild, locale="fr")  # type: ignore[arg-type]
     await button.callback(stranger)  # type: ignore[arg-type]
-    assert stranger.followup.messages
-    assert "❌" in str(stranger.followup.messages[0].content)
-    # hygiene-ephemere-v1: the service errors speak French by default.
-    assert "Seul le déclarant" in str(stranger.followup.messages[0].content)
+    assert not stranger.followup.messages
+    assert stranger.response.deferred is True
     fresh = next(a for a in await bundle.attacks.attacks() if a.id == attack.id)
     assert str(fresh.state.value) != "cancelled"
     # The declarant cancels inside the window — budgets refunded, salon gone.
@@ -540,10 +541,21 @@ async def test_defend_button_answers_the_surprise_cases() -> None:
     await bundle.attacks.record_attack_channel(attack.id, salon.id)
     before = len(salon.messages)
     button = KingdomAttackDefendButton(attack.id, _strings("fr")["defend_button"])
-    # A lord OUTSIDE the defending kingdom is refused.
-    outsider = MockInteraction(user=MockUser(id="lord-a"), guild=guild, locale="fr")  # type: ignore[arg-type]
+    # A THIRD-kingdom lord is refused — the generic wording.
+    from kingdoms.mods.kingdoms.models import LordRole
+
+    await bundle.kingdoms.enroll(
+        "king-c", "King C", LordRole.KING, proposed_name="Provence"
+    )
+    outsider = MockInteraction(user=MockUser(id="king-c"), guild=guild, locale="fr")  # type: ignore[arg-type]
     await button.callback(outsider)  # type: ignore[arg-type]
     assert "Vous ne pouvez défendre" in str(outsider.response.message.content)
+    # shirar-v1 (Drasah 06/11): the ATTACKER's camp clicks NOTHING —
+    # the silent ack swallows the click, no ephemeral window at all.
+    attacker_side = MockInteraction(user=MockUser(id="lord-a"), guild=guild, locale="fr")  # type: ignore[arg-type]
+    await button.callback(attacker_side)  # type: ignore[arg-type]
+    assert attacker_side.response.message is None
+    assert attacker_side.response.deferred is True
     # The first lord of the defending kingdom registers the defense —
     # the salon base message does NOT move (no public sign).
     click = MockInteraction(user=MockUser(id="lord-b"), guild=guild, locale="fr")  # type: ignore[arg-type]
@@ -559,7 +571,7 @@ async def test_defend_button_answers_the_surprise_cases() -> None:
     # defend-probe-leak (Drasah 29/10): the outsider clicks AGAIN on
     # the now-defended attack — he still gets the GENERIC refusal, the
     # « déjà défendu » answer must never leak to a foreign lord.
-    probe = MockInteraction(user=MockUser(id="lord-a"), guild=guild, locale="fr")  # type: ignore[arg-type]
+    probe = MockInteraction(user=MockUser(id="king-c"), guild=guild, locale="fr")  # type: ignore[arg-type]
     await button.callback(probe)  # type: ignore[arg-type]
     assert "Vous ne pouvez défendre" in str(probe.response.message.content)
     assert "déjà défendu" not in str(probe.response.message.content)
@@ -1143,75 +1155,138 @@ async def test_scheduler_reveal_clears_the_whole_false_flag() -> None:
     assert "La couverture tombe" in content
 
 
+class _DraftDoc:
+    """shirar-v1: a bare draft document for the restart-proof wizard."""
+
+    def __init__(self, hand: list[str], draft: list[str] | None = None) -> None:
+        self.id = "a-1"
+        self.state = "defended"
+        self.attacker_lord_id = "king-a"
+        self.defender_lord_id = ""
+        self.attacker_kingdom_id = "king-a"
+        self.defender_kingdom_id = "king-b"
+        self.pickban: dict[str, Any] = {}
+        if draft is not None:
+            self.pickban["attacker_draft"] = list(draft)
+        self._hand = list(hand)
+
+
+class _DraftService:
+    """The minimal attacks service the wizard needs (pickban_hand,
+    stage_draft_pick, clear_draft_picks, attacks)."""
+
+    def __init__(self, doc: "_DraftDoc") -> None:
+        self.doc = doc
+
+    async def pickban_hand(self, kingdom_id: str, player_id: str) -> list[str]:
+        return list(self.doc._hand)
+
+    async def attacks(self) -> list[Any]:
+        return [self.doc]
+
+    async def stage_draft_pick(
+        self, attack_id: str, player_id: str, index: int, civ: str
+    ) -> "_DraftDoc":
+        draft = self.doc.pickban.setdefault("attacker_draft", ["", "", ""])
+        while len(draft) < 3:
+            draft.append("")
+        for position, held in enumerate(draft):
+            if position != index and held == civ:
+                draft[position] = ""
+        draft[index] = civ
+        return self.doc
+
+    async def clear_draft_picks(self, attack_id: str, player_id: str) -> "_DraftDoc":
+        self.doc.pickban["attacker_draft"] = ["", "", ""]
+        return self.doc
+
+
 async def test_pickban_view_offers_three_dropdowns_and_a_disabled_validate() -> None:
-    """pickban-ordre-v2 (Drasah 04/11, live beta 19:32 — « le système
-    Objectifs ») : THREE dropdowns directly (« Choix 1/2/3 », the whole
-    hand in each), a GRIS+disabled ✏️ Modifier while no choice is
-    made, a GRIS+disabled ✅ Valider until 3/3 — and ❌ Annuler is
-    GONE (« annulé ici ne sert à rien »)."""
+    """shirar-v1 (Drasah 06/11): the draft wizard is RESTART-PROOF —
+    the dropdowns are persistent DynamicItems rebuilt from the pickban
+    DOCUMENT (the live « kingdom bot ne répond pas »: a deploy restart
+    killed the in-memory view). THREE dropdowns (« Choix 1/2/3 »), a
+    GRIS+disabled ✏️ Modifier while no choice, a GRIS ✅ Valider until
+    3/3 — and ❌ Annuler is GONE."""
     import discord
 
-    from kingdoms.mods.kingdoms.kingdom_attack_panel import KingdomPickBanView
-
-    view = KingdomPickBanView(
-        "s-20261018-015707-a-t-steppe-king-a-1791720000",
-        "king-a",
-        "attacker",
-        ["francs", "bretons", "goths", "mayas"],
-        "fr",
-    )
-    selects = [c for c in view.children if isinstance(c, discord.ui.Select)]
-    assert len(selects) == 3  # THREE dropdowns directly — never a single wizard one
-    for rank, select in enumerate(selects):
-        assert str(select.placeholder).startswith(f"Choix {("1️⃣", "2️⃣", "3️⃣")[rank]}")
-        assert [o.value for o in select.options] == ["francs", "bretons", "goths", "mayas"]
-        assert callable(select.callback)  # « the application did not respond » fix
-    validate = next(c for c in view.children if getattr(c, "custom_id", "") == "kingdoms:attack:pickban:validate")
-    assert callable(validate.callback)
-    assert validate.disabled is True  # GRIS — the ONLY consumer, inert while incomplete
-    assert validate.style is discord.ButtonStyle.success
-    modify = next(c for c in view.children if str(getattr(c, "label", "") or "") == "✏️ Modifier")
-    assert modify.style is discord.ButtonStyle.secondary  # GRIS while no choice
-    assert modify.disabled is True
-    # ❌ Annuler is GONE — Modifier resets the picks, Cancel never comes back.
-    assert not [c for c in view.children if str(getattr(c, "label", "") or "").startswith("❌")]
-    # Drasah 18/10 v2: no sabotage select anymore — the moves ride the
-    # battle room, and the resolution is BLIND (no adversary hand here).
-    assert not [c for c in view.children if "sabotage" in str(getattr(c, "custom_id", ""))]
-
-
-async def test_pickban_validate_rejects_duplicates_and_missing_picks() -> None:
-    """pickban-doublon-v1 (Drasah 28/10): the split wordings survive as
-    a SAFETY net — the wizard (pickban-ordre-v2) makes both refusals
-    impossible by construction (a picked civ leaves the two other
-    dropdowns, ✅ Valider stays disabled until the ranking is complete)."""
-    from kingdoms.mods.kingdoms.kingdom_attack_panel import KingdomPickBanView
+    from kingdoms.mods.kingdoms.kingdom_attack_panel import _pickban_dm_view
     from kingdoms.mods.kingdoms.kingdom_persistent import (
         KingdomsPanelWiring,
         register_kingdoms_panel_wiring,
     )
 
-    register_kingdoms_panel_wiring(KingdomsPanelWiring(attacks_service=object()))
-    view = KingdomPickBanView("a-1", "king-a", "attacker", ["francs", "bretons", "goths"], "fr")
+    doc = _DraftDoc(["francs", "bretons", "goths", "mayas"])
+    wiring = KingdomsPanelWiring(attacks_service=_DraftService(doc))
+    register_kingdoms_panel_wiring(wiring)
+    view = await _pickban_dm_view(wiring, doc, "attacker", "king-a", "fr")
+    selects = [
+        c for c in view.children if isinstance(getattr(c, "item", None), discord.ui.Select)
+    ]
+    assert len(selects) == 3  # THREE dropdowns directly — never a single wizard one
+    for rank, dynamic in enumerate(selects):
+        select = dynamic.item
+        assert str(select.placeholder).startswith(
+            f"Choix {("1️⃣", "2️⃣", "3️⃣")[rank]}"
+        )
+        assert [o.value for o in select.options] == ["francs", "bretons", "goths", "mayas"]
+        assert "kingdoms:attack:pickban:pick:" in str(select.custom_id)
+        assert callable(dynamic.callback)  # « the application did not respond » fix
+    validate = next(
+        c
+        for c in view.children
+        if str(getattr(c.item, "custom_id", "")).startswith(
+            "kingdoms:attack:pickban:validate"
+        )
+    )
+    assert callable(validate.callback)
+    assert validate.item.disabled is True  # GRIS — the ONLY consumer, inert while incomplete
+    assert validate.item.style is discord.ButtonStyle.success
+    modify = next(
+        c for c in view.children if str(getattr(c.item, "label", "") or "") == "✏️ Modifier"
+    )
+    assert modify.item.style is discord.ButtonStyle.secondary  # GRIS while no choice
+    assert modify.item.disabled is True
+    # ❌ Annuler is GONE — Modifier resets the picks, Cancel never comes back.
+    assert not [
+        c for c in view.children if str(getattr(c.item, "label", "") or "").startswith("❌")
+    ]
+    # Drasah 18/10 v2: no sabotage select anymore — the moves ride the
+    # battle room, and the resolution is BLIND (no adversary hand here).
+    assert not [
+        c for c in view.children if "sabotage" in str(getattr(c.item, "custom_id", ""))
+    ]
+
+
+async def test_pickban_validate_rejects_duplicates_and_missing_picks() -> None:
+    """pickban-doublon-v1 (Drasah 28/10), shirar-v1 wiring: the split
+    wordings survive as a SAFETY net — the wizard makes both refusals
+    impossible by construction (stage_draft_pick dedupes, ✅ Valider is
+    disabled until complete), but a tampered draft document still meets
+    the dedicated refusals."""
+    from kingdoms.mods.kingdoms.kingdom_attack_panel import KingdomPickBanValidateButton
+    from kingdoms.mods.kingdoms.kingdom_persistent import (
+        KingdomsPanelWiring,
+        register_kingdoms_panel_wiring,
+    )
 
     # Duplicates: the same civilization twice → the dedicated message.
-    view.picks = ["francs", "francs", "goths"]
+    doc = _DraftDoc(["francs", "bretons", "goths"], draft=["francs", "francs", "goths"])
+    register_kingdoms_panel_wiring(KingdomsPanelWiring(attacks_service=_DraftService(doc)))
     click = MockInteraction(user=MockUser(id="king-a"), guild=MockGuild(), channel=None, locale="fr")
-    await view._on_validate(click)  # type: ignore[arg-type]
+    await KingdomPickBanValidateButton("a-1", "king-a", True, "fr").callback(click)  # type: ignore[arg-type]
     assert click.response.ephemeral is True
     content = str(click.response.message.content or "") if click.response.message else ""
     assert "doublons dans vos choix de civilisations" in content
     assert "Classe d'abord" not in content
 
     # A missing pick keeps the old wording.
-    view2 = KingdomPickBanView("a-1", "king-a", "attacker", ["francs", "bretons", "goths"], "fr")
-    view2.picks = ["francs"]
+    doc2 = _DraftDoc(["francs", "bretons", "goths"], draft=["francs"])
+    register_kingdoms_panel_wiring(KingdomsPanelWiring(attacks_service=_DraftService(doc2)))
     click2 = MockInteraction(user=MockUser(id="king-a"), guild=MockGuild(), channel=None, locale="fr")
-    await view2._on_validate(click2)  # type: ignore[arg-type]
+    await KingdomPickBanValidateButton("a-1", "king-a", True, "fr").callback(click2)  # type: ignore[arg-type]
     content2 = str(click2.response.message.content or "") if click2.response.message else ""
     assert "Classe d'abord tes 3 civilisations" in content2
-
-
 def test_room_dm_carries_voice_salon_and_time_window() -> None:
     """room-dm-v2 (Drasah 28/10, sa maquette): « Tiens-toi prêt » — the DM
     points at the voice channel AND the attack salon, then carries the
@@ -2634,11 +2709,12 @@ async def test_sabotage_panel_fallback_resends_the_whole_panel_through_the_uniqu
 
 
 async def test_pickban_validate_closes_the_stale_refusal_window(monkeypatch: pytest.MonkeyPatch) -> None:
-    """PATCH 1.0 item 1 (Drasah 29/10): the draft refusals ride the
-    fenêtre unique registry — the doublon warning is DELETED when the
-    player fixes his picks and validates (his 18h19 live report: the
-    stale warning stayed stacked under the validated DM)."""
-    from kingdoms.mods.kingdoms.kingdom_attack_panel import KingdomPickBanView
+    """PATCH 1.0 item 1 (Drasah 29/10), shirar-v1 wiring: the draft
+    refusals ride the fenêtre unique registry — the doublon warning is
+    DELETED when the player fixes his picks and validates (his 18h19
+    live report: the stale warning stayed stacked under the validated
+    DM). The wizard state now lives in the pickban document."""
+    from kingdoms.mods.kingdoms.kingdom_attack_panel import KingdomPickBanValidateButton
     from kingdoms.mods.kingdoms.kingdom_persistent import _EPHEMERAL_WINDOWS
 
     _EPHEMERAL_WINDOWS.pop("king-a", None)
@@ -2649,34 +2725,34 @@ async def test_pickban_validate_closes_the_stale_refusal_window(monkeypatch: pyt
     await bundle.attacks.respond_defense(
         attack.id, "lord-b", now=datetime(2026, 10, 11, 12, 30, tzinfo=UTC)
     )
-    await bundle.attacks.reveal_due(now=datetime(2026, 10, 11, 17, 45, tzinfo=UTC))
-    await bundle.attacks.pick_ban_due(now=datetime(2026, 10, 11, 17, 55, tzinfo=UTC))
+    await bundle.attacks.reveal_due(now=datetime(2026, 10, 11, 17, 45, tzinfo=UTC)
+    )
+    await bundle.attacks.pick_ban_due(now=datetime(2026, 10, 11, 17, 55, tzinfo=UTC)
+    )
     await bundle.give_civs("Aquitaine", "francs", "bretons", "goths")
     _wiring(bundle)
 
-    view = KingdomPickBanView(str(attack.id), "king-a", "attacker", ["francs", "bretons", "goths"], "fr")
-
-    # A duplicate → the refusal IS the player's unique window.
-    view.picks = ["francs", "francs", "goths"]
+    # A tampered duplicate draft → the refusal IS the player's unique window.
+    fresh = next(a for a in await bundle.attacks.attacks() if a.id == attack.id)
+    fresh.pickban["attacker_draft"] = ["francs", "francs", "goths"]
     refused = MockInteraction(user=MockUser(id="king-a"), guild=MockGuild(), channel=None, locale="fr")
-    await view._on_validate(refused)  # type: ignore[arg-type]
+    await KingdomPickBanValidateButton(str(attack.id), "king-a", True, "fr").callback(refused)  # type: ignore[arg-type]
     assert refused.response.ephemeral is True
     assert "doublons" in str(refused.response.message.content or "")
     stored = _EPHEMERAL_WINDOWS.get("king-a")
     assert stored is not None and stored[0] is refused
 
     # The corrected validation succeeds — and DELETES the stale warning.
-    view.picks = ["francs", "bretons", "goths"]
+    for index, civ in enumerate(["francs", "bretons", "goths"]):
+        await bundle.attacks.stage_draft_pick(str(attack.id), "king-a", index, civ)
     validated = MockInteraction(user=MockUser(id="king-a"), guild=MockGuild(), channel=None, locale="fr")
-    await view._on_validate(validated)  # type: ignore[arg-type]
+    await KingdomPickBanValidateButton(str(attack.id), "king-a", True, "fr").callback(validated)  # type: ignore[arg-type]
     assert refused.original_deleted is True  # the doublon warning is gone
     assert "king-a" not in _EPHEMERAL_WINDOWS
     assert "en attente de l'adversaire" in str(validated.response.message.content or "")
 
-    fresh = next(a for a in await bundle.attacks.attacks() if a.id == attack.id)
-    assert (fresh.pickban or {}).get("attacker_picks") == ["francs", "bretons", "goths"]
-
-
+    fresh2 = next(a for a in await bundle.attacks.attacks() if a.id == attack.id)
+    assert (fresh2.pickban or {}).get("attacker_picks") == ["francs", "bretons", "goths"]
 async def test_sabotage_panel_timer_sweeps_the_closed_panel() -> None:
     """sabotage-ux-v1: the panel timer deletes the panel when it fires
     (the 15-minute token limit, or a short sweep when no action left)."""
@@ -3730,6 +3806,14 @@ async def test_draft_sheet_real_order_after_the_phase_and_seeded_during() -> Non
     assert "1️⃣ francs" in left
     assert "2️⃣ celtes" in left
     assert "3️⃣ goths" in left
+    # shirar-v1 (Drasah 06/11): the sheet tells HOW the picks were made
+    # — a ranked side reads « Choix du joueur », a defaulted one
+    # (anti-blocking random draw) « Choix aléatoire ».
+    assert "Choix du joueur" in left
+    attack.pickban["default_picks"] = ["attacker"]
+    embed = await _draft_sheet_embed(attack, None, strings)
+    left = embed.fields[0].value
+    assert "Choix aléatoire" in left
 
 
 async def test_sabotage_reveal_payload_pings_and_carries_the_own_picks() -> None:
@@ -4474,28 +4558,44 @@ def test_gestion_items_are_registered_on_the_bot() -> None:
 
 
 async def test_pickban_three_dropdowns_exclude_picked_civs_and_validate_wakes_up() -> None:
-    """pickban-ordre-v2 : a pick in ONE dropdown lands on its own slot
+    """shirar-v1: a pick in ONE dropdown stages into the pickban
+    DOCUMENT (stage_draft_pick — restart-proof), lands on its own slot
     only and REMOVES the civ from the two others (duplicate impossible
     by construction), the DM edit is VIEW-ONLY (``content`` is NEVER
     passed — the DM text survives) and ✅ Valider wakes up at 3/3."""
     import discord
 
-    from kingdoms.mods.kingdoms.kingdom_attack_panel import KingdomPickBanView
+    from kingdoms.mods.kingdoms.kingdom_attack_panel import _pickban_dm_view
+    from kingdoms.mods.kingdoms.kingdom_persistent import (
+        KingdomsPanelWiring,
+        register_kingdoms_panel_wiring,
+    )
     from tests.mocks.discord_mock import MockMessage
 
     hand = ["francs", "bretons", "goths", "mayas"]
-    view = KingdomPickBanView("a-1", "king-a", "attacker", hand, "fr")
+    doc = _DraftDoc(hand)
+    wiring = KingdomsPanelWiring(attacks_service=_DraftService(doc))
+    register_kingdoms_panel_wiring(wiring)
+    view = await _pickban_dm_view(wiring, doc, "attacker", "king-a", "fr")
     dm_text = "⚔️ **Pick & ban — fort**\nTa main : francs, bretons, goths, mayas"
 
     def _selects(v: Any) -> list[Any]:
-        return [c for c in v.children if isinstance(c, discord.ui.Select)]
+        return [
+            c for c in v.children if isinstance(getattr(c, "item", None), discord.ui.Select)
+        ]
 
-    def _button(v: Any, label: str) -> Any:
-        return next(c for c in v.children if str(getattr(c, "label", "") or "") == label)
+    def _validate(v: Any) -> Any:
+        return next(
+            c
+            for c in v.children
+            if str(getattr(c.item, "custom_id", "")).startswith(
+                "kingdoms:attack:pickban:validate"
+            )
+        )
 
-    async def _pick(v: Any, index: int, civ: str, dm: str) -> tuple[dict[str, Any], Any]:
+    async def _pick(v: Any, index: int, civ: str) -> tuple[dict[str, Any], Any]:
         click = MockInteraction(user=MockUser(id="king-a"), locale="fr", data={"values": [civ]})  # type: ignore[arg-type]
-        click.message = MockMessage(content=dm)  # type: ignore[arg-type]
+        click.message = MockMessage(content=dm_text)  # type: ignore[arg-type]
         captured: dict[str, Any] = {}
         real_edit = click.response.edit_message
 
@@ -4509,67 +4609,77 @@ async def test_pickban_three_dropdowns_exclude_picked_civs_and_validate_wakes_up
 
     # Fresh view : three dropdowns, the whole hand everywhere.
     assert len(_selects(view)) == 3
-    for select in _selects(view):
-        assert [o.value for o in select.options] == hand
+    for dynamic in _selects(view):
+        assert [o.value for o in dynamic.item.options] == hand
 
     # Pick 1 — view-only edit, the civ leaves the two other dropdowns.
-    captured, view2 = _pick(view, 0, "mayas", dm_text)
+    captured, view2 = await _pick(view, 0, "mayas")
     assert "content" not in captured  # the DM text NEVER changes
-    assert view2.picks == ["mayas", "", ""]
+    assert doc.pickban["attacker_draft"] == ["mayas", "", ""]  # the pick is STAGED
     s0, s1, s2 = _selects(view2)
-    assert sorted(o.value for o in s0.options) == hand  # its own pick stays offered (default)
-    assert next(o for o in s0.options if o.value == "mayas").default is True
-    assert sorted(o.value for o in s1.options) == ["bretons", "francs", "goths"]
-    assert sorted(o.value for o in s2.options) == ["bretons", "francs", "goths"]
-    modify = _button(view2, "✏️ Modifier")
-    assert modify.disabled is False and modify.style is discord.ButtonStyle.success  # VERT from the FIRST pick
-    validate = next(c for c in view2.children if getattr(c, "custom_id", "") == "kingdoms:attack:pickban:validate")
-    assert validate.disabled is True  # 1/3 — still GRIS
+    assert sorted(o.value for o in s0.item.options) == hand  # its own pick stays offered (default)
+    assert next(o for o in s0.item.options if o.value == "mayas").default is True
+    assert sorted(o.value for o in s1.item.options) == ["bretons", "francs", "goths"]
+    assert sorted(o.value for o in s2.item.options) == ["bretons", "francs", "goths"]
+    modify = next(c for c in view2.children if str(getattr(c.item, "label", "") or "") == "✏️ Modifier")
+    assert modify.item.disabled is False and modify.item.style is discord.ButtonStyle.success  # VERT from the FIRST pick
+    assert _validate(view2).item.disabled is True  # 1/3 — still GRIS
 
     # Picks 2 and 3 — every dropdown keeps its own pick default-shown.
-    _c2, view3 = _pick(view2, 1, "francs", dm_text)
-    _c3, view4 = _pick(view3, 2, "goths", dm_text)
+    _c2, view3 = await _pick(view2, 1, "francs")
+    _c3, view4 = await _pick(view3, 2, "goths")
     assert "content" not in _c2 and "content" not in _c3
-    assert view4.picks == ["mayas", "francs", "goths"]
-    for index, civ in enumerate(view4.picks):
+    assert doc.pickban["attacker_draft"] == ["mayas", "francs", "goths"]
+    for index, civ in enumerate(doc.pickban["attacker_draft"]):
         select = _selects(view4)[index]
-        assert next(o for o in select.options if o.value == civ).default is True
-        others = [c for c in view4.picks if c != civ]
-        assert not [o for o in select.options if o.value in others]  # no duplicate offered
-    validate4 = next(c for c in view4.children if getattr(c, "custom_id", "") == "kingdoms:attack:pickban:validate")
-    assert validate4.disabled is False  # 3/3 — the ONLY consumer wakes up
-    assert not [c for c in view4.children if str(getattr(c, "label", "") or "").startswith("🎯")]
-
-
+        assert next(o for o in select.item.options if o.value == civ).default is True
+        others = [c for c in doc.pickban["attacker_draft"] if c != civ]
+        assert not [o for o in select.item.options if o.value in others]  # no duplicate offered
+    assert _validate(view4).item.disabled is False  # 3/3 — the ONLY consumer wakes up
+    assert not [c for c in view4.children if str(getattr(c.item, "label", "") or "").startswith("🎯")]
 async def test_pickban_modify_resets_all_three_dropdowns() -> None:
-    """pickban-ordre-v2 : ✏️ Modifier is GLOBAL — VERT as soon as one
-    choice exists, one click resets the THREE dropdowns (the whole hand
-    offered again, ✅ back to GRIS+disabled) and the DM text never
-    changes (view-only edit). ❌ Annuler does not exist anymore."""
+    """shirar-v1: ✏️ Modifier is GLOBAL — VERT as soon as one choice
+    exists (read from the pickban DOCUMENT, restart-proof), one click
+    calls clear_draft_picks and the re-rendered view offers the whole
+    hand again (✅ back to GRIS+disabled), the DM text never changes
+    (view-only edit). ❌ Annuler does not exist anymore."""
     import discord
 
-    from kingdoms.mods.kingdoms.kingdom_attack_panel import KingdomPickBanView
+    from kingdoms.mods.kingdoms.kingdom_attack_panel import _pickban_dm_view
+    from kingdoms.mods.kingdoms.kingdom_persistent import (
+        KingdomsPanelWiring,
+        register_kingdoms_panel_wiring,
+    )
     from tests.mocks.discord_mock import MockMessage
 
     hand = ["francs", "bretons", "goths", "mayas"]
-    view = KingdomPickBanView(
-        "a-1", "king-a", "attacker", hand, "fr", picks=["mayas", "francs", "goths"]
-    )
+    doc = _DraftDoc(hand, draft=["mayas", "francs", "goths"])
+    wiring = KingdomsPanelWiring(attacks_service=_DraftService(doc))
+    register_kingdoms_panel_wiring(wiring)
+    view = await _pickban_dm_view(wiring, doc, "attacker", "king-a", "fr")
     dm_text = "⚔️ **Pick & ban — fort**\nTa main : francs, bretons, goths, mayas"
 
     def _selects(v: Any) -> list[Any]:
-        return [c for c in v.children if isinstance(c, discord.ui.Select)]
+        return [
+            c for c in v.children if isinstance(getattr(c, "item", None), discord.ui.Select)
+        ]
 
     # A complete ranking — Modifier is VERT and enabled.
-    modify = next(c for c in view.children if str(getattr(c, "label", "") or "") == "✏️ Modifier")
-    assert modify.disabled is False and modify.style is discord.ButtonStyle.success
-    validate = next(c for c in view.children if getattr(c, "custom_id", "") == "kingdoms:attack:pickban:validate")
-    assert validate.disabled is False
+    modify = next(c for c in view.children if str(getattr(c.item, "label", "") or "") == "✏️ Modifier")
+    assert modify.item.disabled is False and modify.item.style is discord.ButtonStyle.success
+    validate = next(
+        c
+        for c in view.children
+        if str(getattr(c.item, "custom_id", "")).startswith(
+            "kingdoms:attack:pickban:validate"
+        )
+    )
+    assert validate.item.disabled is False
     # No Cancel button anywhere.
-    assert not [c for c in view.children if str(getattr(c, "label", "") or "").startswith("❌")]
+    assert not [c for c in view.children if str(getattr(c.item, "label", "") or "").startswith("❌")]
     # Each dropdown offers its own pick + the unpicked remainder only.
     for index, civ in enumerate(["mayas", "francs", "goths"]):
-        offered = sorted(o.value for o in _selects(view)[index].options)
+        offered = sorted(o.value for o in _selects(view)[index].item.options)
         assert offered == sorted([civ, "bretons"])
 
     # One click on Modifier — the view re-renders, the picks are wiped.
@@ -4587,11 +4697,17 @@ async def test_pickban_modify_resets_all_three_dropdowns() -> None:
     assert "content" not in captured  # the DM text NEVER changes
     view2 = captured.get("view")
     assert view2 is not None
-    assert view2.picks == ["", "", ""]  # the whole ranking reset
-    for select in _selects(view2):
-        assert [o.value for o in select.options] == hand  # the whole hand again
-        assert not [o for o in select.options if o.default]
-    modify2 = next(c for c in view2.children if str(getattr(c, "label", "") or "") == "✏️ Modifier")
-    assert modify2.disabled is True and modify2.style is discord.ButtonStyle.secondary  # back to GRIS
-    validate2 = next(c for c in view2.children if getattr(c, "custom_id", "") == "kingdoms:attack:pickban:validate")
-    assert validate2.disabled is True  # back to GRIS
+    assert doc.pickban["attacker_draft"] == ["", "", ""]  # the whole ranking reset
+    for dynamic in _selects(view2):
+        assert [o.value for o in dynamic.item.options] == hand  # the whole hand again
+        assert not [o for o in dynamic.item.options if o.default]
+    modify2 = next(c for c in view2.children if str(getattr(c.item, "label", "") or "") == "✏️ Modifier")
+    assert modify2.item.disabled is True and modify2.item.style is discord.ButtonStyle.secondary  # back to GRIS
+    validate2 = next(
+        c
+        for c in view2.children
+        if str(getattr(c.item, "custom_id", "")).startswith(
+            "kingdoms:attack:pickban:validate"
+        )
+    )
+    assert validate2.item.disabled is True  # back to GRIS

@@ -501,6 +501,41 @@ async def test_defense_ai_level_traquenard_and_reinforced_patrols_marche_v2() ->
     assert plain.traquenard is False
 
 
+async def test_traquenard_activated_after_the_declaration_counts_at_resolution() -> None:
+    """shirar-v1 (Drasah 06/11): the live report — the activator's
+    vision of Traquenard diverged from the attacked draft because he
+    activated it AFTER declaring. The resolution reads the window LIVE
+    (``_traquenard_open``): a Traquenard opened after the declaration
+    still forces the Facile AI (0/5) — the declaration-time snapshot is
+    only a shortcut, the snapshot flag itself stays honest."""
+    bundle = Bundle()
+    await bundle.launch_season()
+    await bundle.draw(12)
+    aquitaine = await bundle.kingdom_id("Aquitaine")
+    bourgogne = await bundle.kingdom_id("Bourgogne")
+    target = (await bundle.owner_maps(bourgogne))[0]
+    # The attack is declared WITHOUT a Traquenard window.
+    monday = datetime(2026, 10, 12, 12, 0, tzinfo=UTC)
+    attack = await bundle.attacks.declare_attack(
+        "king-a", target, "aoe2de://t", now=monday
+    )
+    assert attack.traquenard is False
+    # The Traquenard is activated AFTER the declaration — still open at T.
+    funded = TechnologyState(_id=aquitaine, season_id="s", tech_points=10)
+    await bundle.store.upsert_technology(funded.to_mongo())
+    await bundle.attacks.buy_technology(aquitaine, "traquenard")
+    await bundle.attacks.activate_traquenard(
+        "king-a", bourgogne, now=attack.expires_at - timedelta(hours=1)
+    )
+    # No defense — the target's bot AI takes over at T, and the LIVE
+    # window (not the stale snapshot) decides its level.
+    await bundle.attacks.expire_stale(now=attack.expires_at)
+    fresh = next(item for item in await bundle.attacks.attacks() if item.id == attack.id)
+    assert fresh.traquenard is False  # the snapshot stays honest
+    assert fresh.ai_defender is True
+    assert fresh.effects["ai_level"] == 0  # the LIVE window wins
+
+
 async def test_traquenard_fiche_v1_cumulates_the_window_and_locks_once() -> None:
     """traquenard-fiche-v1 (Drasah 03/11): the 2h Facile window
     CUMULATES (each new activation pushes the end 2h further, 2h+2h=4h)

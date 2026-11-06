@@ -198,7 +198,9 @@ def test_kingdom_accepted_strings_exist_in_both_locales() -> None:
     for locale in ("fr", "en"):
         strings = realms_strings[locale]
         assert "{kingdom}" in str(strings["kingdom_accepted_dm"])
+        assert "{mention}" in str(strings["kingdom_accepted_dm"])
         assert "{kingdom}" in str(strings["kingdom_accepted_note"])
+        assert "{mention}" in str(strings["kingdom_accepted_note"])
 
 
 def test_apply_kingdoms_line_pluralizes() -> None:
