@@ -84,7 +84,10 @@ def install() -> None:  # noqa: C901
                 self.reset()
 
             margin = _margin()
-            if self.remaining <= margin and self.expires is not None:
+            # The margin only applies where it IS a margin: on a small
+            # bucket (limit <= margin) it would block every call — the
+            # exhaustion there rides discord.py's own remaining <= 0 gate.
+            if self.limit > margin and self.remaining <= margin and self.expires is not None:
                 # at the margin: block until the window resets
                 wait = max(0.0, self.expires - self._loop.time())
                 logger.warning(

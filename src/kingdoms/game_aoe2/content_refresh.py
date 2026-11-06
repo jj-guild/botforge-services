@@ -129,14 +129,6 @@ async def refresh_aoe2_maps() -> dict[str, int]:
     maps_checked = 0
     maps_enriched = 0
     try:
-        from kingdoms.core.upstream_identity import provider_contact
-
-        contact = provider_contact()
-        if not contact:
-            from kingdoms.aoe2.map_seed import LiquipediaUnconfiguredError
-
-            raise LiquipediaUnconfiguredError("PROVIDER_CONTACT is not set")
-
         entries = await game_data.list_maps("aoe2")
         pending: list[tuple[Any, str]] = []
         for entry in entries:
@@ -147,7 +139,7 @@ async def refresh_aoe2_maps() -> dict[str, int]:
                 continue
             maps_checked += 1
             pending.append((entry, entry.name))
-        seeds = await _resolve_map_seeds(contact, [n for _, n in pending])
+        seeds = await _resolve_map_seeds([n for _, n in pending])
         for entry, name in pending:
             seed = seeds.get(_title_variants_key(name))
             if seed is None:
@@ -195,7 +187,7 @@ def _title_variants_key(name: str) -> str:
     return name.strip().replace(" ", "_")
 
 
-async def _resolve_map_seeds(contact: str, names: list[str]) -> dict[str, Any]:
+async def _resolve_map_seeds(names: list[str]) -> dict[str, Any]:
     """Resolve many map seeds — through the ext-liquipedia provider.
 
     The provider owns the Liquipedia access (ADR-0020): ONE client per
