@@ -553,6 +553,7 @@ _CATALOG_OPS: frozenset[str] = frozenset(
         "create_map_pack",
         "update_map",
         "update_map_pool",
+        "transition_map_pool",
         "delete_map",
         "archive_map",
         "archive_map_pool",

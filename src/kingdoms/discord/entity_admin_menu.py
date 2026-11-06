@@ -162,12 +162,20 @@ async def build_entity_admin_menu(
         )
         from kingdoms.discord.ui.menu_template import MenuSpec, build_menu
 
+        # The maps list is ALWAYS the content (owner direction 2026-11-06):
+        # whatever the pool's state, the admin sees what it holds. The
+        # composition EDITOR stays draft-only (a frozen pool never
+        # changes) — the list itself never hides.
+        maps_lines = await _pool_maps_lines(pool)
         menu = build_menu(
             MenuSpec(
                 title="\u2699\ufe0f Gestion du map pool",
                 description=f"`{entity_id}`\n{pool_state_badge(state)}",
                 view_id=f"panel:{entity_id}:admin",
                 sections=(),
+                extra_lines=(f"## Maps ({len(maps_lines)})", *maps_lines)
+                if maps_lines
+                else ("## Maps", "_Aucune map._"),
             )
         )
         # line 1 (edition only): composition (the single Maps editor,
@@ -200,6 +208,27 @@ async def build_entity_admin_menu(
         )
     )
     return menu
+
+
+async def _pool_maps_lines(pool: Any) -> list[str]:
+    """Render the pool's maps as content lines (dead refs noted, never hidden)."""
+    from kingdoms.discord.admin_panel_games import _games_wiring
+
+    service = _games_wiring()
+    if service is None:
+        return []
+    try:
+        catalog = {m.id: m for m in await service.list_maps(str(getattr(pool, "game_key", "")))}
+    except Exception:
+        return []
+    lines: list[str] = []
+    for mid in getattr(pool, "map_ids", ()) or ():
+        entry = catalog.get(mid)
+        if entry is None:
+            lines.append(f"- `{mid}` \u2014 introuvable (supprim\u00e9e ?)")
+        else:
+            lines.append(f"- **{entry.name}**")
+    return lines
 
 
 async def _resolve_pool(entity_id: str) -> Any:
