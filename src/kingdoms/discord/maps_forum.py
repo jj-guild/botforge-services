@@ -367,7 +367,7 @@ async def _map_content_full(
     if service is not None:
         for candidate in (locale, "en"):
             try:
-                doc = await service.get(entity_id, candidate)
+                doc = await service.content_get(entity_id, candidate)
             except Exception:
                 doc = None
             if doc is not None:
@@ -445,7 +445,7 @@ async def _migrate_stale_map_doc(
         }
     )
     try:
-        await service.store(updated)
+        await service.content_store(updated)
     except Exception:
         logger.warning("stale map doc re-store failed (%s) — best-effort", entity_id, exc_info=True)
         return updated
