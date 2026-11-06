@@ -165,9 +165,13 @@ class GameDataClient:
             terrain=reply.terrain,
             size=reply.size,
             map_type=reply.map_type,
-            walls=str(reply.walls),
-            nomad=str(reply.nomad),
-            tc=str(reply.tc),
+            # the RAW labels first (owner direction 2026-11-06): the
+            # infobox's own words — the bools are the amputated fallback
+            walls=str(reply.walls_label or reply.walls),
+            nomad=str(reply.nomad_label or reply.nomad),
+            tc=str(reply.tc_label or reply.tc),
+            player_capacity=str(reply.player_capacity),
+            creator=str(reply.creator),
             game_versions=tuple(reply.game_versions),
             versions=tuple(
                 {"name": v.name, "description": v.description, "details": list(v.details)}

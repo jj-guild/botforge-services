@@ -126,9 +126,25 @@ class RemoteGameDataService:
 
     # ── map packs ───────────────────────────────────────────────────────
 
-    async def create_map_pack(self, **kwargs: Any) -> MapPackModel:
-        """Create a map pack."""
-        return _model_pack(await self._call("create_map_pack", **kwargs))
+    async def create_map_pack(
+        self,
+        game_key: str,
+        name: str,
+        map_ids: tuple[str, ...] = (),
+        description: str = "",
+        owner_guild_id: str | None = None,
+    ) -> MapPackModel:
+        """Create a map pack (positional shape, like the real service)."""
+        return _model_pack(
+            await self._call(
+                "create_map_pack",
+                game_key=game_key,
+                name=name,
+                map_ids=map_ids,
+                description=description,
+                owner_guild_id=owner_guild_id,
+            )
+        )
 
     async def get_map_pack(self, entry_id: str) -> MapPackModel | None:
         """Fetch one map pack; None when it does not exist."""
@@ -160,9 +176,34 @@ class RemoteGameDataService:
         result = await self._call("get_map_pool", entry_id=entry_id)
         return _model_pool(result) if result else None
 
-    async def create_map_pool(self, **kwargs: Any) -> MapPoolModel:
-        """Create a pool; a taken name raises NameTakenError."""
-        return _model_pool(await self._call("create_map_pool", **kwargs))
+    async def create_map_pool(
+        self,
+        game_key: str,
+        name: str,
+        map_ids: tuple[str, ...] = (),
+        map_pack_ids: tuple[str, ...] = (),
+        description: str = "",
+        owner_guild_id: str | None = None,
+        is_public: bool = False,
+    ) -> MapPoolModel:
+        """Create a pool; a taken name raises NameTakenError.
+
+        The signature mirrors the REAL service's positional shape —
+        the callers pass positionals (the 2026-11-06 crash: a
+        **kwargs-only remote raised 'takes 1 positional argument').
+        """
+        return _model_pool(
+            await self._call(
+                "create_map_pool",
+                game_key=game_key,
+                name=name,
+                map_ids=map_ids,
+                map_pack_ids=map_pack_ids,
+                description=description,
+                owner_guild_id=owner_guild_id,
+                is_public=is_public,
+            )
+        )
 
     async def update_map_pool(self, **kwargs: Any) -> MapPoolModel:
         """Update a pool's mutable fields."""

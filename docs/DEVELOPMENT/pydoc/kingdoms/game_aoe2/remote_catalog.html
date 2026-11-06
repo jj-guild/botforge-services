@@ -66,9 +66,13 @@ The&nbsp;GameDataService&nbsp;surface,&nbsp;served&nbsp;by&nbsp;the&nbsp;game&nb
 
 <dl><dt>async <a name="RemoteGameDataService-create_map"><strong>create_map</strong></a>(self, game_key: 'str', name: 'str', filename: 'str', description: 'str' = '', resource_url: 'str' = '', owner_guild_id: 'str | None' = None, map_type: 'str' = '', filenames: 'tuple[str, ...]' = (), is_public: 'bool' = True) -&gt; 'MapModel'</dt><dd><span class="code">Create&nbsp;a&nbsp;map;&nbsp;a&nbsp;taken&nbsp;name&nbsp;raises&nbsp;NameTakenError.</span></dd></dl>
 
-<dl><dt>async <a name="RemoteGameDataService-create_map_pack"><strong>create_map_pack</strong></a>(self, **kwargs: 'Any') -&gt; 'MapPackModel'</dt><dd><span class="code">Create&nbsp;a&nbsp;map&nbsp;pack.</span></dd></dl>
+<dl><dt>async <a name="RemoteGameDataService-create_map_pack"><strong>create_map_pack</strong></a>(self, game_key: 'str', name: 'str', map_ids: 'tuple[str, ...]' = (), description: 'str' = '', owner_guild_id: 'str | None' = None) -&gt; 'MapPackModel'</dt><dd><span class="code">Create&nbsp;a&nbsp;map&nbsp;pack&nbsp;(positional&nbsp;shape,&nbsp;like&nbsp;the&nbsp;real&nbsp;service).</span></dd></dl>
 
-<dl><dt>async <a name="RemoteGameDataService-create_map_pool"><strong>create_map_pool</strong></a>(self, **kwargs: 'Any') -&gt; 'MapPoolModel'</dt><dd><span class="code">Create&nbsp;a&nbsp;pool;&nbsp;a&nbsp;taken&nbsp;name&nbsp;raises&nbsp;NameTakenError.</span></dd></dl>
+<dl><dt>async <a name="RemoteGameDataService-create_map_pool"><strong>create_map_pool</strong></a>(self, game_key: 'str', name: 'str', map_ids: 'tuple[str, ...]' = (), map_pack_ids: 'tuple[str, ...]' = (), description: 'str' = '', owner_guild_id: 'str | None' = None, is_public: 'bool' = False) -&gt; 'MapPoolModel'</dt><dd><span class="code">Create&nbsp;a&nbsp;pool;&nbsp;a&nbsp;taken&nbsp;name&nbsp;raises&nbsp;NameTakenError.<br>
+&nbsp;<br>
+The&nbsp;signature&nbsp;mirrors&nbsp;the&nbsp;REAL&nbsp;service's&nbsp;positional&nbsp;shape&nbsp;—<br>
+the&nbsp;callers&nbsp;pass&nbsp;positionals&nbsp;(the&nbsp;2026-11-06&nbsp;crash:&nbsp;a<br>
+**kwargs-only&nbsp;remote&nbsp;raised&nbsp;'takes&nbsp;1&nbsp;positional&nbsp;argument').</span></dd></dl>
 
 <dl><dt>async <a name="RemoteGameDataService-delete_map"><strong>delete_map</strong></a>(self, entry_id: 'str') -&gt; 'bool'</dt><dd><span class="code">Hard-delete&nbsp;a&nbsp;map&nbsp;(the&nbsp;import&nbsp;rollback's&nbsp;path).</span></dd></dl>
 

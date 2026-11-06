@@ -313,12 +313,12 @@ class GamesMapCreateModal(discord.ui.Modal):
         try:
             from kingdoms.discord.maps_forum import map_post_render
 
-            content, view = await map_post_render(
+            _content, view = await map_post_render(
                 entry, str(interaction.guild_id or ""), interaction.client, service
             )
             await interaction.followup.send(
                 f"✅ Map **{entry.name}** créée — voici son post "
-                f"(il apparaîtra dans le forum maps).{circuit_note}\n\n{content}",
+                f"(il apparaîtra dans le forum maps).{circuit_note}",
                 view=view,
                 ephemeral=True,
             )
@@ -1217,6 +1217,8 @@ async def _finish_map_import(
                     "walls": seed.walls,
                     "nomad": seed.nomad,
                     "tc": seed.tc,
+                    "player_capacity": seed.player_capacity,
+                    "creator": seed.creator,
                     "provider": "liquipedia",
                     "tags": list(seed.tags or ()),
                 }
@@ -1349,13 +1351,14 @@ class GamesMapImportModal(discord.ui.Modal):
                 try:
                     from kingdoms.discord.maps_forum import map_post_render
 
-                    content, _view = await map_post_render(
+                    _content, view = await map_post_render(
                         existing, str(interaction.guild_id or ""), interaction.client, service
                     )
                     await interaction.followup.edit_message(
                         progress.id,
-                        content=f"⚠️ {error} — la map existante :\n\n{content}",
+                        content=f"⚠️ {error} — la map existante :",
                     )
+                    await interaction.followup.send(view=view, ephemeral=True)
                     return
                 except Exception:
                     logger.debug("existing map preview failed", exc_info=True)
@@ -1521,11 +1524,11 @@ async def _finish_bulk_import(
         try:
             from kingdoms.discord.maps_forum import map_post_render
 
-            content, view = await map_post_render(
+            _content, view = await map_post_render(
                 entry, str(interaction.guild_id or ""), interaction.client, service
             )
             await interaction.followup.send(
-                f"\u2705 **{entry.name}** import\u00e9e \u2014 son post :\n\n{content}",
+                f"\u2705 **{entry.name}** import\u00e9e \u2014 son post :",
                 view=view,
                 ephemeral=True,
             )
