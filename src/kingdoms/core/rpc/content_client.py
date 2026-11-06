@@ -84,7 +84,8 @@ class ContentProviderClient:
             stub = content_pb2_grpc.ContentStub(channel)
             try:
                 reply = await stub.GetMapSeed(
-                    content_pb2.MapSeedRequest(game_key=game_key, map_key=map_key)
+                    content_pb2.MapSeedRequest(game_key=game_key, map_key=map_key),
+                    timeout=240.0,  # the provider's backoffs run minutes; never hang the caller
                 )
             except grpc.aio.AioRpcError as exc:
                 if exc.code() in _NOT_FOUND_CODES:

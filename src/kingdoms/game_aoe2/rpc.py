@@ -393,7 +393,18 @@ class GameDataServicer(gamedata_pb2_grpc.GameDataServicer):
             raise AssertionError
         from kingdoms.rpc_generated.kingdoms.v1 import content_pb2
 
-        descriptor = await self._map_seeds.get_map_seed(request.game_key, request.map_key)
+        logger.info(
+            "GET MAP SEED: %r (game %s) — proxying to the liquipedia provider",
+            request.map_key,
+            request.game_key,
+        )
+        try:
+            descriptor = await self._map_seeds.get_map_seed(
+                request.game_key, request.map_key
+            )
+        except Exception as exc:
+            logger.warning("GET MAP SEED: %r failed: %s", request.map_key, exc)
+            raise
         if descriptor is None:
             return content_pb2.MapSeedReply(found=False)
         return _map_seed_reply_of(descriptor)

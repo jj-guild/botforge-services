@@ -1514,6 +1514,27 @@ async def _finish_bulk_import(
         await final(summary)
     else:
         await interaction.followup.send(summary, ephemeral=True)
+    # One ephemeral PER CREATED map, carrying the post's exact shape (owner
+    # direction 2026-11-06): the admin sees every map as its forum post
+    # renders — the same builder the sync uses.
+    for entry in created:
+        try:
+            from kingdoms.discord.maps_forum import map_post_render
+
+            content, view = await map_post_render(
+                entry, str(interaction.guild_id or ""), interaction.client, service
+            )
+            await interaction.followup.send(
+                f"\u2705 **{entry.name}** import\u00e9e \u2014 son post :\n\n{content}",
+                view=view,
+                ephemeral=True,
+            )
+        except Exception:
+            logger.warning(
+                "bulk import: the per-map preview failed for %s \u2014 best-effort",
+                entry.name,
+                exc_info=True,
+            )
 
 
 async def _bulk_import_live_report(
