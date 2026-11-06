@@ -1327,22 +1327,48 @@ async def _objectifs_pin_content(
     )
 
 
-async def _refresh_council_parent_safe(
-    wiring: Any, kingdom: Any, locale: str, parent: Any
+async def _regen_council_window_safe(
+    wiring: Any, kingdom: Any, locale: str, interaction: Any, parent: Any
 ) -> None:
-    """conseil-rafraichi-v1 (Drasah 02/11): re-render the ⚔️ Salle du
-    conseil ephemeral IN PLACE after a goals save — his live report:
-    validating the picker left the council sheet showing the STALE
-    goals (the sheet was rendered BEFORE the save). Best effort: a
-    failure never blocks the save's own flow."""
+    """conseil-regen-v1 (Drasah 06/11): after a goals save the ⚔️ Salle
+    du conseil sheet is CLOSED and REGENERATED — his live report: the
+    conseil-rafraichi in-place re-render died silently whenever the
+    sheet's interaction token was dead (>15 min) and left the STALE
+    goals on screen. The validate click carries a LIVE token: the old
+    sheet is deleted best-effort and a FRESH council view rides its
+    followup — the refresh can no longer fail. Best effort: a failure
+    never blocks the save's own flow."""
+    from time import monotonic
+
     from kingdoms.mods.kingdoms.kingdom_realm_content import _gather_state
     from kingdoms.mods.kingdoms.kingdom_persistent import (
+        _EPHEMERAL_WINDOWS,
+        _close_previous_ephemeral,
         _strings as _merged_strings,
     )
 
+    user_id = str(getattr(interaction.user, "id", ""))
+    # Close the stale sheet — a dead token keeps it on the player's
+    # screen (nothing more we can do, Discord owns that cleanup).
+    if parent is not None:
+        try:
+            await parent.delete()
+        except Exception:
+            logger.info(
+                "KINGDOM LIEUX: stale council sheet delete failed"
+                " (ignored)",
+                exc_info=True,
+            )
+    try:
+        await _close_previous_ephemeral(user_id)
+    except Exception:
+        logger.info(
+            "KINGDOM LIEUX: council regen pre-close failed (ignored)",
+            exc_info=True,
+        )
     try:
         state = await _gather_state(kingdom, wiring)
-        view, _files = await build_conseil_view(
+        view, files = await build_conseil_view(
             _merged_strings(locale),
             kingdom,
             state,
@@ -1351,14 +1377,17 @@ async def _refresh_council_parent_safe(
             rank=await _conseil_rank(wiring, kingdom),
             viewer_is_king=True,
         )
-        await parent.edit(view=view)
+        window = await interaction.followup.send(
+            view=view, files=files or None, ephemeral=True
+        )
+        _EPHEMERAL_WINDOWS[user_id] = (interaction, monotonic(), window)
         logger.info(
-            "KINGDOM LIEUX: council sheet refreshed in place (%s)",
+            "KINGDOM LIEUX: council sheet regenerated (%s)",
             str(getattr(kingdom, "id", "")),
         )
     except Exception:
         logger.warning(
-            "KINGDOM LIEUX: council sheet refresh failed (ignored)",
+            "KINGDOM LIEUX: council sheet regeneration failed (ignored)",
             exc_info=True,
         )
 
@@ -1790,11 +1819,12 @@ def _objectifs_picker(
             view.add_item(nxt)
 
     async def _validate(interaction: discord.Interaction) -> None:
-        # conseil-rafraichi-v1 (Drasah 02/11): the council sheet the
-        # picker was opened from is RE-RENDERED in place at the save —
-        # his live report: validating left the sheet showing the STALE
-        # goals. The parent rides the registry entry's 4th slot (the
-        # CHILD back-reference), captured BEFORE the close pops it.
+        # conseil-regen-v1 (Drasah 06/11): the council sheet the picker
+        # was opened from is CLOSED and REGENERATED at the save — the
+        # conseil-rafraichi in-place edit died silently when the
+        # sheet's token was dead. The parent rides the registry entry's
+        # 4th slot (the CHILD back-reference), captured BEFORE the
+        # close pops it.
         from kingdoms.mods.kingdoms.kingdom_persistent import _EPHEMERAL_WINDOWS
 
         _entry = _EPHEMERAL_WINDOWS.get(str(getattr(interaction.user, "id", "")))
@@ -1838,10 +1868,12 @@ def _objectifs_picker(
             logger.warning(
                 "KINGDOM LIEUX: objectives pin refresh failed", exc_info=True
             )
-        if parent is not None:
-            await _refresh_council_parent_safe(
-                wiring, kingdom, locale, parent
-            )
+        # conseil-regen-v1 (Drasah 06/11): the council sheet is CLOSED
+        # and REGENERATED from this live token — the in-place re-render
+        # died silently whenever the old sheet's token was dead.
+        await _regen_council_window_safe(
+            wiring, kingdom, locale, interaction, parent
+        )
 
     validate = discord.ui.Button(
         label=lieu["objectif_validate_button"],
@@ -1993,9 +2025,9 @@ class KingdomLieuObjectifButton(
                 ephemeral=True,
             )
             return
-        # conseil-rafraichi-v1 (Drasah 02/11): a 4th slot carries the
+        # conseil-regen-v1 (Drasah 06/11): a 4th slot carries the
         # EPHEMERAL PARENT back-reference (the council sheet the button
-        # sits on) so the validate re-renders it in place. The
+        # sits on) so the validate closes it and regenerates. The
         # Discussions ANNOUNCE is a channel message, never an ephemeral
         # parent — no back-reference there.
         _parent = getattr(interaction, "message", None)
@@ -3167,7 +3199,12 @@ async def _open_comptes(
 
 def register_kingdom_lieux_items(bot: discord.Client) -> None:
     """Re-register the lieu hub doors on the bot (restart-proof)."""
+    from kingdoms.mods.kingdoms.kingdom_persistent import antidoubleclic_wrap
+
     bot.add_dynamic_items(
+        # antidoubleclic-v1 (Drasah 06/11): the hub doors ride the
+        # per-player in-flight gate like every restart-proof item.
+        *[antidoubleclic_wrap(item) for item in (
         KingdomLieuSortirButton,
         KingdomLieuObjectifButton,
         KingdomLieuClassementButton,
@@ -3180,5 +3217,6 @@ def register_kingdom_lieux_items(bot: discord.Client) -> None:
         KingdomLieuComptesButton,
         KingdomLieuParoisseButton,
         KingdomLieuVoliereButton,
+        )]
     )
 

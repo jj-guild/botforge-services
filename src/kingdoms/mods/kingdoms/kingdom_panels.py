@@ -469,14 +469,14 @@ STRINGS: dict[str, dict[str, Any]] = {
         "market_ledger_emoji": {
             "embuscade": "🥷",
             "traquenard": "🪤",
-            "contre_espionnage": "🕵️",
+            "contre_espionnage": "👀",
             "sabotage": "🗡️",
-            "jeu_d_armes": "🧪",
-            "explorateur": "🛡️",
-            "corruption": "🧨",
-            "garde_royale": "🛡️",
-            "patrouille": "🛡️",
-            "mariage_arrange": "💒",
+            "jeu_d_armes": "⚔️",
+            "explorateur": "🧭",
+            "corruption": "💰",
+            "garde_royale": "💂",
+            "patrouille": "👣",
+            "mariage_arrange": "💐",
         },
         # marche-crier-off-v1 (Drasah 29/10): one merchant stall, four
         # shelves (his taxonomy + order), all buttons same colour. The
@@ -515,7 +515,7 @@ STRINGS: dict[str, dict[str, Any]] = {
         ),
         "market_err_unknown": "❌ Purchase refused ({}).",
         "market_arranged_token_ok": (
-            "💒 Arranged-marriage token bought — stock: {}. Consume it at the Parish."
+            "💐 Arranged-marriage token bought — stock: {}. Consume it at the Parish."
         ),
         "market_garde_token_ok": (
             "🛡️ Royal Guard bought — in reserve: {}. Place it from the 🧱 Remparts salon."
@@ -525,11 +525,11 @@ STRINGS: dict[str, dict[str, Any]] = {
         ),
         "market_use_button": "🚀 Use",
         "market_corruption_token_ok": (
-            "🧨 Corruption token bought — in reserve: {}. Use it from the "
+            "💰 Corruption token bought — in reserve: {}. Use it from the "
             "🏛️ Chambre des comptes."
         ),
         "market_jeu_d_armes_token_ok": (
-            "🧪 Arms mastery bought — in reserve: {}. Use it from the "
+            "⚔️ Arms mastery bought — in reserve: {}. Use it from the "
             "🏛️ Chambre des comptes (+1 AI level)."
         ),
         "market_explorateur_token_ok": (
@@ -537,9 +537,9 @@ STRINGS: dict[str, dict[str, Any]] = {
             "🏛️ Chambre des comptes."
         ),
         "market_use_jeu_d_armes_ok": (
-            "🧪 Arms mastery used — your defence bot reaches level {}/5."
+            "⚔️ Arms mastery used — your defence bot reaches level {}/5."
         ),
-        "jeu_darmes_card_title": "🧪 Arms Mastery",
+        "jeu_darmes_card_title": "⚔️ Arms Mastery",
         "jeu_darmes_effect_ia": (
             "On use, raises your AI's level by 1 for the whole season."
         ),
@@ -557,25 +557,25 @@ STRINGS: dict[str, dict[str, Any]] = {
         ),
         "jeu_darmes_owned": "You own: **{0}**",
         "jeu_darmes_level": "Your current AI level: **{0}/5 {1}**",
-        "jeu_darmes_button": "🧪 Arms Mastery",
+        "jeu_darmes_button": "⚔️ Arms Mastery",
         "jeu_darmes_activate_button": "✅ Activate",
         "jeu_darmes_cancel_button": "❌ Cancel",
         "jeu_darmes_use_ok": (
-            "🧪 Arms mastery used — your defence bot reaches level {0}/5 "
+            "⚔️ Arms mastery used — your defence bot reaches level {0}/5 "
             "{1}. Your next normal attack rides with 1h less of declaration "
             "delay."
         ),
         "jeu_darmes_use_ok_rush_only": (
-            "🧪 Arms mastery used — your AI already sits at its max level: "
+            "⚔️ Arms mastery used — your AI already sits at its max level: "
             "only the 1h cut on your next normal attack applies."
         ),
         "jeu_darmes_already_active": (
-            "🧪 You already hold an active Arms mastery — it will apply to "
+            "⚔️ You already hold an active Arms mastery — it will apply to "
             "your next normal attack."
         ),
-        "jeu_darmes_no_stock": "🧪 No Arms mastery in reserve — buy one at the Market.",
+        "jeu_darmes_no_stock": "⚔️ No Arms mastery in reserve — buy one at the Market.",
         "jeu_darmes_channel_note": (
-            "🧪 **{0}** has activated an **Arms mastery**: their next "
+            "⚔️ **{0}** has activated an **Arms mastery**: their next "
             "normal attack declaration rides with a 1-hour cut, valid "
             "for ONE attack!"
         ),
@@ -723,16 +723,16 @@ STRINGS: dict[str, dict[str, Any]] = {
         "market_tech": {
             "embuscade": "🥷 Embuscade",
             "traquenard": "🪤 Traquenard",
-            "contre_espionnage": "Counter-espionage",
+            "contre_espionnage": "👀 Counter-espionage",
             "sabotage": "🗡️ Sabotage",
-            "jeu_d_armes": "🧪 Arms Mastery",
+            "jeu_d_armes": "⚔️ Arms Mastery",
         },
         "market_action": {
             "explorateur": "🧭 Explorer",
-            "corruption": "Corruption",
+            "corruption": "💰 Corruption",
             "garde_royale": "💂 Royal Guard",
             "patrouille": "👣 Patrol",
-            "mariage_arrange": "💒 Arranged marriage",
+            "mariage_arrange": "💐 Arranged marriage",
         },
     },
     "fr": {
@@ -1057,14 +1057,14 @@ STRINGS: dict[str, dict[str, Any]] = {
         "market_ledger_emoji": {
             "embuscade": "🥷",
             "traquenard": "🪤",
-            "contre_espionnage": "🕵️",
+            "contre_espionnage": "👀",
             "sabotage": "🗡️",
-            "jeu_d_armes": "🧪",
-            "explorateur": "🛡️",
-            "corruption": "🧨",
-            "garde_royale": "🛡️",
-            "patrouille": "🛡️",
-            "mariage_arrange": "💒",
+            "jeu_d_armes": "⚔️",
+            "explorateur": "🧭",
+            "corruption": "💰",
+            "garde_royale": "💂",
+            "patrouille": "👣",
+            "mariage_arrange": "💐",
         },
         # marche-crier-off-v1 (Drasah 29/10): une seule table de marchand,
         # quatre rayons (sa taxonomie + son ordre), boutons uniformes.
@@ -1103,7 +1103,7 @@ STRINGS: dict[str, dict[str, Any]] = {
         ),
         "market_err_unknown": "❌ Achat refusé ({}).",
         "market_arranged_token_ok": (
-            "💒 Mariage arrangé acheté — stock : {}. Consommez-le à la Paroisse."
+            "💐 Mariage arrangé acheté — stock : {}. Consommez-le à la Paroisse."
         ),
         "market_garde_token_ok": (
             "🛡️ Garde Royale achetée — en réserve : {}. Pose-la depuis le salon 🧱 Remparts."
@@ -1113,11 +1113,11 @@ STRINGS: dict[str, dict[str, Any]] = {
         ),
         "market_use_button": "🚀 Utiliser",
         "market_corruption_token_ok": (
-            "🧨 Jeton Corruption acheté — en réserve : {}. Utilise-le depuis "
+            "💰 Jeton Corruption acheté — en réserve : {}. Utilise-le depuis "
             "la 🏛️ Chambre des comptes."
         ),
         "market_jeu_d_armes_token_ok": (
-            "🧪 Jeu d'armes acheté — en réserve : {}. Utilise-le depuis la "
+            "⚔️ Jeu d'armes acheté — en réserve : {}. Utilise-le depuis la "
             "🏛️ Chambre des comptes (+1 niveau d'IA)."
         ),
         "market_explorateur_token_ok": (
@@ -1125,9 +1125,9 @@ STRINGS: dict[str, dict[str, Any]] = {
             "🏛️ Chambre des comptes."
         ),
         "market_use_jeu_d_armes_ok": (
-            "🧪 Jeu d'armes utilisé — ton bot de défense monte au niveau {}/5."
+            "⚔️ Jeu d'armes utilisé — ton bot de défense monte au niveau {}/5."
         ),
-        "jeu_darmes_card_title": "🧪 Jeu d'armes",
+        "jeu_darmes_card_title": "⚔️ Jeu d'armes",
         "jeu_darmes_effect_ia": (
             "À l'usage, augmente le niveau de votre IA de 1 durant toute la "
             "saison."
@@ -1148,25 +1148,25 @@ STRINGS: dict[str, dict[str, Any]] = {
         ),
         "jeu_darmes_owned": "Vous possédez : **{0}**",
         "jeu_darmes_level": "Votre niveau d'IA actuel : **{0}/5 {1}**",
-        "jeu_darmes_button": "🧪 Jeu d'armes",
+        "jeu_darmes_button": "⚔️ Jeu d'armes",
         "jeu_darmes_activate_button": "✅ Activer",
         "jeu_darmes_cancel_button": "❌ Annuler",
         "jeu_darmes_use_ok": (
-            "🧪 Jeu d'armes utilisé — ton bot de défense monte au niveau "
+            "⚔️ Jeu d'armes utilisé — ton bot de défense monte au niveau "
             "{0}/5 {1}. Ta prochaine attaque normale partira avec 1h de "
             "délai en moins."
         ),
         "jeu_darmes_use_ok_rush_only": (
-            "🧪 Jeu d'armes utilisé — ton IA est déjà au niveau max : seule "
+            "⚔️ Jeu d'armes utilisé — ton IA est déjà au niveau max : seule "
             "la réduction de 1h sur ta prochaine attaque normale s'applique."
         ),
         "jeu_darmes_already_active": (
-            "🧪 Tu as déjà un Jeu d'armes actif — il s'appliquera à ta "
+            "⚔️ Tu as déjà un Jeu d'armes actif — il s'appliquera à ta "
             "prochaine attaque normale."
         ),
-        "jeu_darmes_no_stock": "🧪 Aucun Jeu d'armes en réserve — achat au Marché.",
+        "jeu_darmes_no_stock": "⚔️ Aucun Jeu d'armes en réserve — achat au Marché.",
         "jeu_darmes_channel_note": (
-            "🧪 **{0}** a activé un **Jeu d'armes** : il dispose d'une "
+            "⚔️ **{0}** a activé un **Jeu d'armes** : il dispose d'une "
             "réduction de 1h sur la déclaration de sa prochaine attaque "
             "normale, valable pour UNE attaque !"
         ),
@@ -1314,16 +1314,16 @@ STRINGS: dict[str, dict[str, Any]] = {
         "market_tech": {
             "embuscade": "🥷 Embuscade",
             "traquenard": "🪤 Traquenard",
-            "contre_espionnage": "Contre-espionnage",
+            "contre_espionnage": "👀 Contre-espionnage",
             "sabotage": "🗡️ Sabotage",
-            "jeu_d_armes": "🧪 Jeu d'armes",
+            "jeu_d_armes": "⚔️ Jeu d'armes",
         },
         "market_action": {
             "explorateur": "🧭 Explorateur",
-            "corruption": "Corruption",
+            "corruption": "💰 Corruption",
             "garde_royale": "💂 Garde Royale",
             "patrouille": "👣 Patrouille",
-            "mariage_arrange": "💒 Mariage arrangé",
+            "mariage_arrange": "💐 Mariage arrangé",
         },
     },
 }

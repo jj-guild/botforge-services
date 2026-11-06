@@ -1152,10 +1152,16 @@ async def deploy_lab_panel(guild: discord.Guild | None, locale: str) -> bool:
 
 def register_kingdom_lab_items(bot: discord.Client) -> None:
     """Re-register every lab component on the bot (restart-proof)."""
+    from kingdoms.mods.kingdoms.kingdom_persistent import antidoubleclic_wrap
+
     bot.add_dynamic_items(
+        # antidoubleclic-v1 (Drasah 06/11): the lab items ride the
+        # per-player in-flight gate like every restart-proof item.
+        *[antidoubleclic_wrap(item) for item in (
         KingdomLabTestSelect,
         KingdomLabVerdictButton,
         KingdomLabVitrineButton,
         KingdomLabCleanButton,
         KingdomLabRefreshButton,
+        )]
     )

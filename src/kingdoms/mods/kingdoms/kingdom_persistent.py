@@ -219,6 +219,10 @@ def register_kingdoms_persistent_items(bot: discord.Client) -> None:
     )
 
     bot.add_dynamic_items(
+        # antidoubleclic-v1 (Drasah 06/11): every restart-proof item
+        # rides the per-player in-flight gate — a click while the
+        # player's previous one is still processing is silently acked.
+        *[antidoubleclic_wrap(item) for item in (
         KingdomExpeditionOpenButton,
         KingdomExpeditionCrewButton,
         KingdomExpeditionLaunchButton,
@@ -349,6 +353,7 @@ def register_kingdoms_persistent_items(bot: discord.Client) -> None:
         KingdomTraquenardFicheButton,
         KingdomTraquenardGoButton,
         KingdomTraquenardCancelButton,
+        )]
     )
 
     # laboratoire-v1 (Drasah 05/11): the lab cockpit's items — the
@@ -1778,6 +1783,64 @@ async def _close_previous_ephemeral(user_id: str) -> None:
             "KINGDOMS: previous ephemeral window close failed (ignored)",
             exc_info=True,
         )
+
+
+
+# ---------------------------------------------------------------------------
+# antidoubleclic-v1 (Drasah 06/11): ONE interaction per player at a time.
+# ---------------------------------------------------------------------------
+
+_USER_INFLIGHT: set[str] = set()
+
+
+async def _antidoubleclic_defer(interaction: discord.Interaction) -> bool:
+    """True when the click may run — the player's ONLY live one.
+
+    antidoubleclic-v1 (Drasah 06/11): his live report — a double-click
+    stacked two Remparts views (both clicks raced the single-window
+    registry) and the visible failure made the bot look broken. A
+    SECOND click while the player's previous one is still processing
+    is silently ACKNOWLEDGED — a bare defer renders NOTHING, never an
+    « interaction failed » — and never runs. The check-then-add carries
+    no await in between: atomic in the event loop, no race left.
+    """
+    uid = str(getattr(interaction.user, "id", ""))
+    if uid in _USER_INFLIGHT:
+        try:
+            await interaction.response.defer()
+        except Exception:
+            logger.debug(
+                "KINGDOMS: in-flight silent ack failed", exc_info=True
+            )
+        return False
+    _USER_INFLIGHT.add(uid)
+    return True
+
+
+def antidoubleclic_wrap(item_cls: Any) -> Any:
+    """Wrap a DynamicItem class' callback with the in-flight gate.
+
+    Idempotent — a re-registration never double-wraps (a nested gate
+    would ack its own first click). The wrapped callback releases the
+    player in a finally: a crashed handler never wedges the lock.
+    """
+    if getattr(item_cls, "_antidoubleclic", False):
+        return item_cls
+    orig = item_cls.callback
+
+    async def _gated_callback(
+        self: Any, interaction: discord.Interaction
+    ) -> Any:
+        if not await _antidoubleclic_defer(interaction):
+            return None
+        try:
+            return await orig(self, interaction)
+        finally:
+            _USER_INFLIGHT.discard(str(getattr(interaction.user, "id", "")))
+
+    item_cls.callback = _gated_callback
+    item_cls._antidoubleclic = True  # type: ignore[attr-defined]
+    return item_cls
 
 
 def _seigneurie_closes_previous(previous: Any, parent_ephemeral: bool) -> bool:
