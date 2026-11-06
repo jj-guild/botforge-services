@@ -47,7 +47,8 @@ jobs:
       startsWith(github.event.comment.body, '/dump-db') ||
       startsWith(github.event.comment.body, '/reset-env') ||
       startsWith(github.event.comment.body, '/seed') ||
-      startsWith(github.event.comment.body, '/clean-env')
+      startsWith(github.event.comment.body, '/clean-env') ||
+      startsWith(github.event.comment.body, '/wipe-liquipedia-cache')
     runs-on: ubuntu-latest
     outputs:
       command: ${{ steps.parse.outputs.command }}
@@ -64,7 +65,7 @@ jobs:
           body="$COMMENT_BODY"
           command="$(echo "$body" | awk '{print $1}')"
           case "$command" in
-            /logs|/restart|/start|/stop|/status|/rollback|/dump-db|/reset-env|/seed|/clean-env) ;;
+            /logs|/restart|/start|/stop|/status|/rollback|/dump-db|/reset-env|/seed|/clean-env|/wipe-liquipedia-cache) ;;
             *) echo "::error::unsupported command: $command"; exit 1 ;;
           esac
           env_name="$(echo "$body" | awk '{print $2}')"
@@ -89,6 +90,7 @@ jobs:
             reset-env) capability=env-reset ;;
             seed)      capability=env-control ;;
             clean-env) capability=env-control ;;
+            wipe-liquipedia-cache) capability=env-control ;;
           esac
           {
             echo "command=${command#/}"
@@ -114,6 +116,7 @@ jobs:
               "reset-env": `**/${cmd} intercepted** — wiping the ${env} data volumes and reseeding from the workflow datasets (destructive: the env's data is lost). Checking the roster authority matrix for **@${context.payload.comment.user.login}** (capability \`env-reset\`: self env only, ops anywhere) — verdict right away.`,
               "seed": `**/${cmd} intercepted** — seeding the ${env} data from the requested source file (idempotent: re-running is safe). Checking the roster authority matrix for **@${context.payload.comment.user.login}** (capability \`env-control\`) — verdict right away.`,
               "clean-env": `**/${cmd} intercepted** — cleaning the ${env} runner's Docker residue (dangling images, stopped containers, build cache; never the running stack). Checking the roster authority matrix for **@${context.payload.comment.user.login}** (capability \`env-control\`) — verdict right away.`,
+              "wipe-liquipedia-cache": `**/${cmd} intercepted** — dropping the ${env} liquipedia provider's cache tables ONLY (liquipedia_maps, liquipedia_pages): the stale buggy-era descriptors go, everything else lives. The next maps sync re-fetches fresh. Checking the roster authority matrix for **@${context.payload.comment.user.login}** (capability \`env-control\`) — verdict right away.`,
             }[cmd];
             await github.rest.issues.createComment({
               owner: context.repo.owner,
@@ -182,7 +185,7 @@ jobs:
               [[ -n "$TAIL" ]]    && ARGS+=(-f tail="$TAIL")
               gh workflow run env-logs.yml "${ARGS[@]}"
               ;;
-            restart|start|stop|status)
+            restart|start|stop|status|wipe-liquipedia-cache)
               # env-control is workflow_dispatch-only (two choice lists);
               # reuse it through gh workflow run with its own inputs.
               # Dispatch on the state branch deploy/<env>: the job targets
