@@ -1,0 +1,56 @@
+# Conquest — the seasonal example mod (kingdoms-services#267 chantier 4).
+#
+# Runs as a season: the enrollment is per season (the candidates apply
+# against the ACTIVE season), a map pool can be attached to each
+# season (rotation = a new season with another pool), the inscriptions
+# open 7 days before the season's start. The whole parcours — the
+# player panel (/conquest), the admin channel validation, the admin
+# panel (suspend/resume, create/start/end the season, the section's
+# Synchroniser) — comes from the platform's generic surfaces.
+id: conquest
+enabled: true
+seasonal: true
+required_games: [aoe2]
+channel_groups:
+  - key: royaumes
+    display_name: ⚔️ Conquête
+  - key: conscription
+    display_name: ✒️ Conscription
+  - key: admin
+    display_name: ⚙️ Conquête — admin
+    admin_only: true
+channels:
+  - key: annonces
+    display_name: 📢 annonces
+    description: The conquest's announcements (admin-written, everyone-readable)
+    group: royaumes
+    kind: announce
+  - key: postuler
+    display_name: 📝 postuler
+    description: The enrollment panel channel (the /conquest panel's home)
+    group: conscription
+  - key: admin
+    display_name: 🛠 validation
+    description: The candidates' validation messages (mod admins only)
+    group: admin
+roles:
+  - key: player
+    display_name: Conquest Player
+    color: 0x2ECC71
+    per_season: true
+  - key: admin
+    display_name: Conquest Admin
+    color: 0xE74C3C
+    hoisted: true
+    admin: true
+settings:
+  enrollment:
+    # the validation goes through a message in the admin channel
+    manual: true
+    # the inscriptions open 7 days before the season's start
+    opens_before_start: 7d
+    # a bound aoe2 account is required to apply
+    requires_profile: true
+workflows: []
+commands: [conquest]
+dependencies: []

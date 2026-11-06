@@ -130,6 +130,7 @@ class ModDefinition:
     commands: tuple[str, ...] = field(default_factory=tuple)
     dependencies: tuple[str, ...] = field(default_factory=tuple)
     required_games: tuple[str, ...] = field(default_factory=tuple)
+    settings: dict[str, Any] = field(default_factory=dict)
     private: bool = False
     owner_ids: tuple[str, ...] = field(default_factory=tuple)
 

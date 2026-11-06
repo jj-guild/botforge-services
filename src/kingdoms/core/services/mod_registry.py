@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
+from typing import Any
 
 import yaml
 
@@ -230,6 +231,8 @@ def _parse_mod_yaml(data: dict[str, object], source: Path) -> ModDefinition:
     if not isinstance(seasonal, bool):
         raise ValueError(f"{source}: 'seasonal: true|false' is mandatory (mod type: seasonal or permanent)")
 
+    raw_settings = data.get("settings")
+    settings: dict[str, Any] = dict(raw_settings) if isinstance(raw_settings, dict) else {}
     private = bool(data.get("private", False))
     raw_owners = data.get("owner_discord_ids", [])
     if raw_owners is None:
@@ -254,6 +257,7 @@ def _parse_mod_yaml(data: dict[str, object], source: Path) -> ModDefinition:
         commands=tuple(commands),
         dependencies=tuple(dependencies),
         required_games=tuple(required_games),
+        settings=settings,
     )
 
 
