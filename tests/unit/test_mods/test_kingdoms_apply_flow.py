@@ -337,3 +337,90 @@ async def test_unique_ephemeral_window_tolerates_an_explicit_ephemeral_kwarg() -
     await _open_unique_ephemeral(interaction, "avec vue", view=view, ephemeral=True)
     assert interaction.response.message is not None
     assert interaction.response.message.content == "avec vue"
+
+
+class _BetaSeason:
+    """An armed, RUNNING beta season (T0 reached, never finished)."""
+
+    beta_name = "now"
+    beta_start_at = None  # legacy arming: counts as started
+    finished = False
+
+
+class _BetaKingdomsService:
+    async def current_season(self) -> _BetaSeason:
+        return _BetaSeason()
+
+    async def lords(self) -> list[Any]:
+        return []
+
+
+async def test_submit_auto_accepts_a_king_candidature_under_a_running_beta(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """beta-king-auto-v1 (Drasah 06/11): under an ARMED, RUNNING beta a
+    King candidature (kingdom founding) bypasses the admin gate — the
+    very approval pipeline of the admin ✅ runs at once (the players
+    wander and test without Drasah)."""
+    import pytest
+
+    from kingdoms.mods.kingdoms import kingdom_persistent
+
+    strings = _strings("fr")
+    candidatures = MockTextChannel(name="candidatures")
+    anchor = MockInteraction(locale="fr")
+    context = _context(
+        candidatures=candidatures, anchor=anchor, kingdoms_service=_BetaKingdomsService()
+    )
+    view = _summary_view(
+        42,
+        "Drasah",
+        is_king=True,
+        kingdom_name="",
+        queued=False,
+        insight="https://www.aoe2insight.com/players/123",
+        game_id="12345678",
+        smurfs=(),
+        context=context,
+    )
+    submit_button = next(
+        b for b in view.children if getattr(b, "custom_id", None) == "kingdoms:apply:submit"
+    )
+    bubble = MockMessage(content=strings["summary_title"])
+    anchor.followup.messages.append(bubble)
+    interaction = MockInteraction(locale="fr", user=MockUser(id=42, name="Drasah"))
+    interaction.message = bubble  # type: ignore[method-assign]
+
+    calls: dict[str, Any] = {}
+
+    async def fake_approval(
+        interaction: Any,
+        wiring: Any,
+        strs: Any,
+        locale: Any,
+        *,
+        applicant_id: str,
+        is_king: bool,
+        kingdom_name: str | None,
+    ) -> str:
+        calls["applicant_id"] = applicant_id
+        calls["is_king"] = is_king
+        calls["kingdom_name"] = kingdom_name
+        return " — extra"
+
+    monkeypatch.setattr(
+        kingdom_persistent, "_apply_candidature_approval", fake_approval
+    )
+    await submit_button.callback(interaction)
+    # The admin pipeline ran at once, with the KING flag.
+    assert calls == {
+        "applicant_id": "42",
+        "is_king": True,
+        "kingdom_name": None,
+    }
+    # NO candidature reached the admin channel — the gate is bypassed.
+    assert candidatures.messages == []
+    # The confirmation rewrites the SAME bubble with the beta wording.
+    assert anchor.followup.messages[0] is bubble
+    assert strings["beta_king_auto_ok"] in (bubble.content or "")
+    assert "extra" in (bubble.content or "")

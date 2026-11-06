@@ -291,17 +291,23 @@ async def test_forgotten_draft_defaults_to_random_picks_with_a_sabotage_grace() 
     assert fresh.pickban["attacker_sabotages"] == []  # the sabotages are KEPT, not wiped
     assert fresh.pickban["defender_sabotages"] == []
     assert fresh.state is AttackState.DEFENDED  # the meeting still decides
-    # shirar-v1: the grace is stamped — 10 minutes, or 2 under a beta.
-    grace_until = int(fresh.pickban.get("default_sabotage_grace_until") or 0)
+    # shirar-v1: the grace is stamped — 10 minutes, or 2 under a beta
+    # (beta-retours-v1: the generic key carries it for every flow).
+    grace_until = int(fresh.pickban.get("sabotage_grace_until") or 0)
     assert grace_until - int(attack.expires_at.timestamp()) in (120, 600)
-    # During the grace the RDV WAITS — the sabotage phase stays open.
+    # beta-retours-v1 (Drasah 06/11): the RDV opens AT T — the sabotage
+    # phase lives on INSIDE the room until the grace closes it.
     meetings = await bundle.attacks.score_due(now=attack.expires_at)
-    assert meetings == []
-    # Once the grace expires (or both camps settle), the RDV proceeds.
-    meetings = await bundle.attacks.score_due(now=attack.expires_at + timedelta(minutes=11))
     assert [item.id for item in meetings] == [attack.id]
     assert meetings[0].state is AttackState.MEETING
-    assert meetings[0].pickban.get("sabotage_resolved") is True
+    assert meetings[0].pickban.get("sabotage_resolved") is not True
+    # During the grace the phase stays live; at its expiry it closes.
+    assert await bundle.attacks.sabotage_grace_close_due(now=attack.expires_at) == []
+    closed = await bundle.attacks.sabotage_grace_close_due(
+        now=attack.expires_at + timedelta(minutes=11)
+    )
+    assert [item.id for item in closed] == [attack.id]
+    assert closed[0].pickban.get("sabotage_resolved") is True
 
 
 async def test_defaulted_draft_reveal_is_owed_exactly_once() -> None:
@@ -455,12 +461,9 @@ async def test_meeting_time_still_waits_for_the_game_result_after_default() -> N
     await bundle.attacks.reveal_due(now=datetime(2026, 10, 11, 17, 45, tzinfo=UTC))
     await bundle.attacks.pick_ban_due(now=datetime(2026, 10, 11, 17, 46, tzinfo=UTC))
     assert await bundle.attacks.expire_stale(now=attack.expires_at) == []
-    # shirar-v1 (Drasah 06/11): the default keeps a sabotage grace —
-    # the RDV WAITS during it (both camps may still sabotage).
-    assert await bundle.attacks.score_due(now=attack.expires_at) == []
-    meetings = await bundle.attacks.score_due(
-        now=attack.expires_at + timedelta(minutes=11)
-    )
+    # beta-retours-v1 (Drasah 06/11): the RDV opens AT T — the default
+    # keeps a live sabotage grace INSIDE the open room (10 min, 2 beta).
+    meetings = await bundle.attacks.score_due(now=attack.expires_at)
     assert [item.id for item in meetings] == [attack.id]
     assert meetings[0].state is AttackState.MEETING
     assert (

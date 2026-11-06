@@ -130,11 +130,17 @@ async def test_forgotten_draft_defaults_the_defender_and_opens_the_meeting() -> 
     ]
     assert defaulted.pickban["sabotages"] == {}
     assert defaulted.pickban["defender_sabotages"] == []
-    # shirar-v1 (Drasah 06/11): the default keeps a sabotage grace —
-    # the RDV WAITS during it, then opens — the game decides.
-    assert await bundle.attacks.score_due(now=_T) == []
-    due = await bundle.attacks.score_due(now=_T + timedelta(minutes=11))
+    # beta-retours-v1 (Drasah 06/11): the room opens AT T — the default
+    # keeps the sabotage phase live INSIDE it (10 min, 2 beta), then the
+    # grace probe closes it; the game decides.
+    due = await bundle.attacks.score_due(now=_T)
     assert [item.id for item in due] == [attack.id]
+    assert await bundle.attacks.score_due(now=_T) == []  # idempotent
+    assert await bundle.attacks.sabotage_grace_close_due(now=_T) == []
+    closed = await bundle.attacks.sabotage_grace_close_due(
+        now=_T + timedelta(minutes=11)
+    )
+    assert [item.id for item in closed] == [attack.id]
 
 
 async def test_voice_presence_and_unilateral_noshow() -> None:
@@ -642,3 +648,101 @@ async def test_vs_ai_sabotage_stays_open_until_the_room_opens() -> None:
     assert fresh is not None and fresh.score["opened"] is True
     with pytest.raises(PickBanStateError):
         await bundle.attacks.sabotage_techno(attack.id, "king-a", "huns")
+
+
+async def test_sabotage_lives_inside_the_open_meeting_until_the_grace() -> None:
+    """beta-retours-v1 (Drasah 06/11, point 4): the room opens AT T and
+    the sabotage phase lives on INSIDE it — a late buyer still snipes
+    during the grace (10 min, 2 under a beta), never after it."""
+    bundle = ScoreBundle()
+    await bundle.launch_season()
+    await bundle.draw(9)
+    attack, aquitaine, _bourgogne = await bundle.meeting()
+    await bundle.stock(aquitaine, sabotage=1)
+    # The room opens AT T — the phase stays live (MEETING accepted).
+    due = await bundle.attacks.score_due(now=_T)
+    assert [item.id for item in due] == [attack.id]
+    # Inside the grace (T < now < T+10) the snipe still works.
+    moved = await bundle.attacks.sabotage_techno(attack.id, "king-a", "huns")
+    assert (moved.pickban or {}).get("attacker_sabotages") == ["huns"]
+    # The grace probe keeps the phase open at T, closes it past T+10.
+    assert await bundle.attacks.sabotage_grace_close_due(now=_T) == []
+    closed = await bundle.attacks.sabotage_grace_close_due(
+        now=_T + timedelta(minutes=11)
+    )
+    assert [item.id for item in closed] == [attack.id]
+    assert closed[0].pickban.get("sabotage_resolved") is True
+    # Past the close (or grace) the snipe is refused for good.
+    with pytest.raises(PickBanStateError):
+        await bundle.attacks.sabotage_techno(attack.id, "king-a", "perses")
+
+
+async def test_sabotage_grace_closes_when_both_players_are_ready() -> None:
+    """beta-retours-v1: « Prêt = engagement » — the pair of Prêt clicks
+    closes the sabotage phase at once (the part starts, the buttons
+    die with it)."""
+    bundle = ScoreBundle()
+    await bundle.launch_season()
+    await bundle.draw(9)
+    attack, _aquitaine, _bourgogne = await bundle.meeting()
+    await bundle.attacks.score_due(now=_T)
+    assert await bundle.attacks.sabotage_grace_close_due(now=_T) == []
+    await bundle.attacks.mark_ready(attack.id, "king-a", now=_T)
+    assert await bundle.attacks.sabotage_grace_close_due(now=_T) == []
+    await bundle.attacks.mark_ready(attack.id, "lord-b", now=_T)
+    closed = await bundle.attacks.sabotage_grace_close_due(now=_T)
+    assert [item.id for item in closed] == [attack.id]
+    assert closed[0].pickban.get("sabotage_resolved") is True
+
+
+async def test_matchup_flag_rides_the_resolution_exactly_once() -> None:
+    """beta-retours-v1 (Drasah 06/11, point 3): the reveal stays
+    anonymous — the salon matchup announces once BOTH drafts resolved,
+    then never again (idempotent ``matchup_announced`` stamp)."""
+    bundle = ScoreBundle()
+    await bundle.launch_season()
+    await bundle.draw(9)
+    attack, _aquitaine, _bourgogne = await bundle.meeting()
+    due = await bundle.attacks.matchup_due(now=_FROZEN_NOW)
+    assert [item.id for item in due] == [attack.id]
+    await bundle.attacks.mark_matchup_announced(attack.id)
+    assert await bundle.attacks.matchup_due(now=_FROZEN_NOW) == []
+    # The stamp survives a second announce (idempotent).
+    again = await bundle.attacks.mark_matchup_announced(attack.id)
+    assert again.pickban.get("matchup_announced") is True
+
+
+async def test_room_id_lock_is_persisted_reclickable_and_swept() -> None:
+    """beta-retours-v1 (Drasah 06/11, point 1): a quit modal must never
+    wedge the ID button again — the lock is a PERSISTED 5-minute stamp:
+    the SAME player re-clicks (the stamp refreshes), the OTHER player
+    is refused while it lives, an expired stamp never blocks anyone,
+    and the tick sweep clears the dead stamp (or a landed URL)."""
+    bundle = ScoreBundle()
+    await bundle.launch_season()
+    await bundle.draw(9)
+    attack, _aquitaine, _bourgogne = await bundle.open_meeting()
+    # king-a arms the lock.
+    locked = await bundle.attacks.lock_room_id(attack.id, "king-a", now=_T)
+    assert locked.score["id_lock"]["by"] == "king-a"
+    # The OTHER player is refused while the stamp lives.
+    with pytest.raises(AttackStateError):
+        await bundle.attacks.lock_room_id(attack.id, "lord-b", now=_T + timedelta(minutes=1))
+    # The SAME player re-clicks — the stamp refreshes, the modal reopens.
+    refreshed = await bundle.attacks.lock_room_id(
+        attack.id, "king-a", now=_T + timedelta(minutes=1)
+    )
+    assert refreshed.score["id_lock"]["until"] > locked.score["id_lock"]["until"]
+    # Once the stamp expires, the other player may enter.
+    free = await bundle.attacks.lock_room_id(
+        attack.id, "lord-b", now=_T + timedelta(minutes=6)
+    )
+    assert free.score["id_lock"]["by"] == "lord-b"
+    # The submit clears the lock; a landed URL sweeps a stale one too.
+    unlocked = await bundle.attacks.unlock_room_id(attack.id, "lord-b", )
+    assert "id_lock" not in (unlocked.score or {})
+    await bundle.attacks.lock_room_id(attack.id, "king-a", now=_T)
+    await bundle.attacks.set_lobby_url(attack.id, "king-a", "aoe2de://lobby/1")
+    swept = await bundle.attacks.room_id_unlock_due(now=_T)
+    assert [item.id for item in swept] == [attack.id]
+    assert "id_lock" not in (swept[0].score or {})
