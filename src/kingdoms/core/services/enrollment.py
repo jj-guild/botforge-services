@@ -34,9 +34,28 @@ STATE_ACCEPTED = "accepted"
 STATE_REFUSED = "refused"
 
 CRITERION_MIN_ELO = "min_elo"
+CRITERION_MAX_ELO = "max_elo"
 CRITERION_MIN_MATCHES = "min_matches"
 CRITERION_REQUIRES_PROFILE = "requires_profile"
+CRITERION_REQUIRES_PROFILES = "requires_profiles"
 CRITERION_MANUAL = "manual"
+
+# the enrollment window (not a criterion — a gate on `apply` itself):
+# explicit ISO timestamps, or a duration before the season's start
+# (a seasonal mod opens its inscriptions before the season begins)
+WINDOW_OPENS_AT = "opens_at"
+WINDOW_CLOSES_AT = "closes_at"
+WINDOW_OPENS_BEFORE_START = "opens_before_start"
+
+_WINDOW_KEYS = {WINDOW_OPENS_AT, WINDOW_CLOSES_AT, WINDOW_OPENS_BEFORE_START}
+
+
+class EnrollmentClosedError(RuntimeError):
+    """The enrollment window is closed (or not open yet) on this guild."""
+
+    def __init__(self, message: str) -> None:
+        """Carry the refusal's human reason for the surface's bubble."""
+        super().__init__(message)
 
 
 class EnrollmentDatabase(Protocol):
@@ -66,12 +85,14 @@ class EnrollmentDatabase(Protocol):
 class EnrollmentStats(Protocol):
     """The per-player facts the automatic criteria evaluate."""
 
-    async def player_elo(self, user_id: str, game_key: str) -> int | None:
-        """Return the player's rating for one game; None when unrated."""
+    async def player_elo(self, user_id: str, game_key: str, leaderboard: str = "") -> int | None:
+        """Return the player's rating (optionally one leaderboard); None when unrated."""
         ...
 
-    async def matches_in_window(self, user_id: str, game_key: str, days: int) -> int | None:
-        """Return matches played in the last N days; None when unknown."""
+    async def matches_in_window(
+        self, user_id: str, game_key: str, days: int, leaderboard: str = ""
+    ) -> int | None:
+        """Return matches played in the last N days (optionally one leaderboard); None when unknown."""
         ...
 
     async def has_profile(self, user_id: str, game_key: str) -> bool:
@@ -84,6 +105,14 @@ class EnrollmentMembership(Protocol):
 
     async def register(self, guild_id: str, user_id: str, display_name: str) -> Any:
         """Register one member (roles sync inside)."""
+        ...
+
+
+class ModLifecycleGate(Protocol):
+    """The suspended-mod seam — apply refuses on a suspended mod."""
+
+    async def require_usable(self, guild_id: str, mod: str) -> None:
+        """Raise when the players cannot use the mod (suspended)."""
         ...
 
 
@@ -135,7 +164,14 @@ def parse_criteria(settings: dict[str, Any] | None) -> dict[str, Any]:
     declared = (settings or {}).get("enrollment") or {}
     if not isinstance(declared, dict):
         raise ValueError("'settings.enrollment' must be a mapping")
-    known = {CRITERION_MIN_ELO, CRITERION_MIN_MATCHES, CRITERION_REQUIRES_PROFILE, CRITERION_MANUAL}
+    known = {
+        CRITERION_MIN_ELO,
+        CRITERION_MAX_ELO,
+        CRITERION_MIN_MATCHES,
+        CRITERION_REQUIRES_PROFILE,
+        CRITERION_REQUIRES_PROFILES,
+        CRITERION_MANUAL,
+    } | _WINDOW_KEYS
     unknown = set(declared) - known
     if unknown:
         raise ValueError(f"unknown enrollment criteria: {sorted(unknown)}")
@@ -154,6 +190,7 @@ class EnrollmentService:
         game_key: str = "",
         criteria: dict[str, Any] | None = None,
         timezone: ZoneInfo | None = None,
+        lifecycle: ModLifecycleGate | None = None,
     ) -> None:
         self._mod = mod_name
         self._db = database
@@ -162,6 +199,7 @@ class EnrollmentService:
         self._game_key = game_key
         self._criteria = criteria if criteria is not None else {}
         self._timezone = timezone
+        self._lifecycle = lifecycle
 
     @property
     def mod_name(self) -> str:
@@ -175,12 +213,24 @@ class EnrollmentService:
         display_name: str,
         season: str | None = None,
         now: int = 0,
+        season_start: int | None = None,
     ) -> Application:
         """Apply for enrollment: criteria → auto-accept / refuse / queue.
 
         Idempotent while pending: re-applying returns the existing
         application untouched (one bubble, one state — Drasah's rule).
+
+        Two gates run before anything else: a suspended mod refuses
+        (the players cannot use it — the admins still decide pending
+        applications), and the declared enrollment window decides
+        (``opens_at``/``closes_at`` timestamps, or ``opens_before_start``
+        relative to the season's start).
         """
+        if self._lifecycle is not None:
+            await self._lifecycle.require_usable(guild_id, self._mod)
+        window_error = self._window_refusal(now, season_start)
+        if window_error is not None:
+            raise EnrollmentClosedError(window_error)
         existing = await self._db.find_active_application(self._mod, guild_id, user_id)
         if existing is not None:
             return _application_from_doc(existing)
@@ -211,9 +261,9 @@ class EnrollmentService:
             return stored
         failures = [r.reason for r in results if not r.passed]
         if failures:
-            return await self._decide(application, STATE_REFUSED, now=now, reasons=failures)
+            return await self._decide(stored, STATE_REFUSED, now=now, reasons=failures)
         if not self._criteria.get(CRITERION_MANUAL):
-            return await self._decide(application, STATE_ACCEPTED, now=now)
+            return await self._decide(stored, STATE_ACCEPTED, now=now)
         await self._db.upsert_application(_application_to_doc(stored))
         return stored
 
@@ -251,6 +301,31 @@ class EnrollmentService:
             "total": len(applications),
         }
 
+    def _window_refusal(self, now: int, season_start: int | None) -> str | None:
+        """Return the enrollment window's refusal reason; None when open.
+
+        - ``opens_at`` / ``closes_at`` — explicit ISO timestamps;
+        - ``opens_before_start`` — a duration (``7d``, ``12h``) before the
+          season's start: the inscriptions open before the season begins.
+        """
+        opens_at = self._criteria.get(WINDOW_OPENS_AT)
+        closes_at = self._criteria.get(WINDOW_CLOSES_AT)
+        before_start = self._criteria.get(WINDOW_OPENS_BEFORE_START)
+        opens_epoch: int | None = None
+        if isinstance(opens_at, str) and opens_at:
+            opens_epoch = _iso_to_epoch(opens_at)
+        elif isinstance(before_start, str) and before_start:
+            if season_start is None:
+                return "the season's start is unknown — the enrollment window cannot open"
+            opens_epoch = season_start - _duration_to_seconds(before_start)
+        if opens_epoch is not None and now < opens_epoch:
+            return "the enrollment window is not open yet"
+        if isinstance(closes_at, str) and closes_at:
+            closes_epoch = _iso_to_epoch(closes_at)
+            if closes_epoch is not None and now > closes_epoch:
+                return "the enrollment window is closed"
+        return None
+
     async def _evaluate(self, application: Application) -> tuple[CriterionResult, ...]:
         """Run the declared automatic criteria against the player's facts."""
         if not self._criteria or self._stats is None:
@@ -268,16 +343,26 @@ class EnrollmentService:
         if stats is None:
             raise ValueError("no stats seam wired — criteria cannot evaluate")
         user_id, game = application.user_id, self._game_key
-        if key == CRITERION_MIN_ELO:
-            elo = await stats.player_elo(user_id, game)
+        if key in (CRITERION_MIN_ELO, CRITERION_MAX_ELO):
+            # scalar (``min_elo: 1000``) or mapping (``min_elo: {value: 1000,
+            # leaderboard: rm_1v1}``) — the leaderboard narrows the rating
+            spec = value if isinstance(value, dict) else {"value": value}
+            threshold = int(spec.get("value", 0))
+            leaderboard = str(spec.get("leaderboard", ""))
+            elo = await stats.player_elo(user_id, game, leaderboard)
             if elo is None:
-                return CriterionResult(key, False, f"rating unknown for {game or 'the game'} — manual review")
-            passed = elo >= int(value)
-            return CriterionResult(key, passed, f"rating {elo} {'≥' if passed else '<'} required {value}")
+                board = f" ({leaderboard})" if leaderboard else ""
+                return CriterionResult(key, False, f"rating unknown for {game or 'the game'}{board} — manual review")
+            if key == CRITERION_MIN_ELO:
+                passed = elo >= threshold
+                return CriterionResult(key, passed, f"rating {elo} {'≥' if passed else '<'} required {threshold}")
+            passed = elo <= threshold
+            return CriterionResult(key, passed, f"rating {elo} {'≤' if passed else '>'} required {threshold}")
         if key == CRITERION_MIN_MATCHES:
             spec = value if isinstance(value, dict) else {}
             days, count = int(spec.get("days", 30)), int(spec.get("count", 0))
-            played = await stats.matches_in_window(user_id, game, days)
+            leaderboard = str(spec.get("leaderboard", ""))
+            played = await stats.matches_in_window(user_id, game, days, leaderboard)
             if played is None:
                 return CriterionResult(key, False, "match history unknown — manual review")
             passed = played >= count
@@ -288,6 +373,14 @@ class EnrollmentService:
             has = await stats.has_profile(user_id, game)
             reason = "game profile bound" if has else f"no bound profile for {game or 'the game'}"
             return CriterionResult(key, has, reason)
+        if key == CRITERION_REQUIRES_PROFILES:
+            # every declared game needs a bound account (a mod linked to
+            # several games may require an account on each of them)
+            games = [str(g) for g in value] if isinstance(value, list) else ([game] if game else [])
+            missing = [g for g in games if not await stats.has_profile(user_id, g)]
+            if missing:
+                return CriterionResult(key, False, f"no bound profile for {', '.join(missing)}")
+            return CriterionResult(key, True, "game profiles bound")
         raise ValueError(f"unknown criterion {key!r}")
 
     async def _require(self, application_id: str) -> Application:
@@ -328,6 +421,31 @@ class EnrollmentService:
             state, "by criteria" if not reason else f"({reason})", self._mod, application.user_id,
         )
         return decided
+
+
+def _iso_to_epoch(value: str) -> int | None:
+    """Parse an ISO timestamp into epoch seconds; None when invalid."""
+    from datetime import datetime
+
+    try:
+        parsed = datetime.fromisoformat(value)
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=ZoneInfo("UTC"))
+    return int(parsed.timestamp())
+
+
+def _duration_to_seconds(value: str) -> int:
+    """Parse a duration (``7d``, ``12h``, ``30m``) into seconds."""
+    import re as _re
+
+    match = _re.fullmatch(r"(\d+)([dhm])", value.strip())
+    if match is None:
+        raise ValueError(f"invalid duration {value!r} — expected like '7d', '12h', '30m'")
+    amount = int(match.group(1))
+    unit = match.group(2)
+    return amount * {"d": 86400, "h": 3600, "m": 60}[unit]
 
 
 def _application_to_doc(application: Application) -> dict[str, Any]:

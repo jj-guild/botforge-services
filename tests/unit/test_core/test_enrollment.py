@@ -10,6 +10,7 @@ from kingdoms.core.services.enrollment import (
     STATE_ACCEPTED,
     STATE_PENDING,
     STATE_REFUSED,
+    EnrollmentClosedError,
     EnrollmentService,
     parse_criteria,
 )
@@ -59,16 +60,22 @@ class StaticStats:
         elo: int | None = 1500,
         matches: int | None = 10,
         profile: bool = True,
+        profile_games: set[str] | None = None,
     ) -> None:
         self.elo, self.matches, self.profile = elo, matches, profile
+        self.profile_games = profile_games
 
-    async def player_elo(self, user_id: str, game_key: str) -> int | None:
+    async def player_elo(self, user_id: str, game_key: str, leaderboard: str = "") -> int | None:
         return self.elo
 
-    async def matches_in_window(self, user_id: str, game_key: str, days: int) -> int | None:
+    async def matches_in_window(
+        self, user_id: str, game_key: str, days: int, leaderboard: str = ""
+    ) -> int | None:
         return self.matches
 
     async def has_profile(self, user_id: str, game_key: str) -> bool:
+        if self.profile_games is not None:
+            return game_key in self.profile_games
         return self.profile
 
 
@@ -221,3 +228,103 @@ async def test_dashboard_groups_by_state() -> None:
     assert len(dashboard["accepted"]) == 1
     assert dashboard["refused"] == []
     assert dashboard["total"] == 3
+
+
+async def test_elo_range_with_leaderboard_evaluates() -> None:
+    """min_elo/max_elo accept a leaderboard — the ELO 1000-1500 RM 1v1 case."""
+    db = MemoryDB()
+    service = EnrollmentService(
+        "demo",
+        db,
+        stats=StaticStats(elo=1200),
+        criteria={
+            "min_elo": {"value": 1000, "leaderboard": "rm_1v1"},
+            "max_elo": {"value": 1500, "leaderboard": "rm_1v1"},
+            "min_matches": {"count": 10, "days": 30, "leaderboard": "rm_1v1"},
+        },
+    )
+    application = await service.apply("g1", "u1", "Alice", now=100)
+    assert application.state == "accepted"
+    reasons = " ".join(r.reason for r in application.criteria_results)
+    assert "1000" in reasons and "1500" in reasons
+    # outside the range: refused
+    service2 = EnrollmentService(
+        "demo",
+        MemoryDB(),
+        stats=StaticStats(elo=1800),
+        criteria={"min_elo": {"value": 1000}, "max_elo": {"value": 1500}},
+    )
+    refused = await service2.apply("g1", "u1", "Alice", now=100)
+    assert refused.state == "refused"
+
+
+async def test_requires_profiles_checks_every_declared_game() -> None:
+    """requires_profiles: an account on each declared game of the mod."""
+    db = MemoryDB()
+    service = EnrollmentService(
+        "demo",
+        db,
+        stats=StaticStats(profile_games={"aoe2"}),
+        criteria={"requires_profiles": ["aoe2", "aoe4"]},
+    )
+    refused = await service.apply("g1", "u1", "Alice", now=100)
+    assert refused.state == "refused"
+    assert "aoe4" in " ".join(r.reason for r in refused.criteria_results)
+
+
+async def test_window_opens_at_refuses_before_and_accepts_inside() -> None:
+    """opens_at/closes_at gate the apply itself."""
+    db = MemoryDB()
+    service = EnrollmentService("demo", db, criteria={"opens_at": "2030-01-01T00:00:00+00:00"})
+    with pytest.raises(EnrollmentClosedError, match="not open yet"):
+        await service.apply("g1", "u1", "Alice", now=100)
+    application = await service.apply("g1", "u1", "Alice", now=int(
+        __import__("datetime").datetime.fromisoformat("2030-06-01T00:00:00+00:00").timestamp()
+    ))
+    assert application.state == "pending"
+    service2 = EnrollmentService("demo", db, criteria={"closes_at": "2030-01-01T00:00:00+00:00"})
+    with pytest.raises(EnrollmentClosedError, match="closed"):
+        await service2.apply("g2", "u1", "Alice", now=2_000_000_000)
+
+
+async def test_window_opens_before_the_season_start() -> None:
+    """opens_before_start: the inscriptions open N before the season begins."""
+    db = MemoryDB()
+    service = EnrollmentService("demo", db, criteria={"opens_before_start": "7d"})
+    season_start = 1_000_000
+    with pytest.raises(EnrollmentClosedError, match="not open yet"):
+        await service.apply("g1", "u1", "Alice", season="s1", now=season_start - 8 * 86400, season_start=season_start)
+    application = await service.apply(
+        "g1", "u1", "Alice", season="s1", now=season_start - 6 * 86400, season_start=season_start
+    )
+    assert application.state == "pending"
+
+
+async def test_suspended_mod_refuses_apply() -> None:
+    """A suspended mod refuses the players' applications (admins still decide)."""
+
+    class SuspendedGate:
+        async def require_usable(self, guild_id: str, mod: str) -> None:
+            from kingdoms.core.services.mod_lifecycle import ModSuspendedError
+
+            raise ModSuspendedError(mod, guild_id, "maintenance")
+
+    db = MemoryDB()
+    service = EnrollmentService("demo", db, criteria={}, lifecycle=SuspendedGate())
+    with pytest.raises(Exception, match="suspended"):
+        await service.apply("g1", "u1", "Alice", now=100)
+    # the admins still decide pending applications
+    await db.upsert_application(
+        {
+            "_id": "demo:g1:u9",
+            "mod": "demo",
+            "guild_id": "g1",
+            "user_id": "u9",
+            "display_name": "Bob",
+            "state": "pending",
+            "season": None,
+            "applied_at": 1,
+        }
+    )
+    decided = await service.accept("demo:g1:u9", now=200)
+    assert decided.state == "accepted"

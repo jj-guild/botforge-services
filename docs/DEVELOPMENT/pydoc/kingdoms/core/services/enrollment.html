@@ -43,6 +43,12 @@ Reference:&nbsp;kingdoms-services#267&nbsp;(spec),&nbsp;Drasah's&nbsp;apply&nbsp
     
 <tr><td class="decor index-decor"><span class="code">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span></td><td>&nbsp;</td>
 <td class="singlecolumn"><dl>
+<dt class="heading-text"><a href="builtins.html#RuntimeError">builtins.RuntimeError</a>(<a href="builtins.html#Exception">builtins.Exception</a>)
+</dt><dd>
+<dl>
+<dt class="heading-text"><a href="kingdoms.core.services.enrollment.html#EnrollmentClosedError">EnrollmentClosedError</a>
+</dt></dl>
+</dd>
 <dt class="heading-text"><a href="builtins.html#ValueError">builtins.ValueError</a>(<a href="builtins.html#Exception">builtins.Exception</a>)
 </dt><dd>
 <dl>
@@ -64,6 +70,7 @@ Reference:&nbsp;kingdoms-services#267&nbsp;(spec),&nbsp;Drasah's&nbsp;apply&nbsp
 <dt class="heading-text"><a href="kingdoms.core.services.enrollment.html#EnrollmentDatabase">EnrollmentDatabase</a>
 </dt><dt class="heading-text"><a href="kingdoms.core.services.enrollment.html#EnrollmentMembership">EnrollmentMembership</a>
 </dt><dt class="heading-text"><a href="kingdoms.core.services.enrollment.html#EnrollmentStats">EnrollmentStats</a>
+</dt><dt class="heading-text"><a href="kingdoms.core.services.enrollment.html#ModLifecycleGate">ModLifecycleGate</a>
 </dt></dl>
 </dd>
 </dl>
@@ -247,6 +254,70 @@ Data and other attributes defined here:<br>
 </td></tr></table> <p>
 <table class="section">
 <tr class="decor title-decor heading-text">
+<td class="section-title" colspan=3>&nbsp;<br><a name="EnrollmentClosedError">class <strong>EnrollmentClosedError</strong></a>(<a href="builtins.html#RuntimeError">builtins.RuntimeError</a>)</td></tr>
+    
+<tr><td class="decor title-decor" rowspan=2><span class="code">&nbsp;&nbsp;&nbsp;</span></td>
+<td class="decor title-decor" colspan=2><span class="code"><a href="#EnrollmentClosedError">EnrollmentClosedError</a>(message:&nbsp;'str')&nbsp;-&amp;gt;&nbsp;'None'<br>
+&nbsp;<br>
+The&nbsp;enrollment&nbsp;window&nbsp;is&nbsp;closed&nbsp;(or&nbsp;not&nbsp;open&nbsp;yet)&nbsp;on&nbsp;this&nbsp;guild.<br>&nbsp;</span></td></tr>
+<tr><td>&nbsp;</td>
+<td class="singlecolumn"><dl><dt>Method resolution order:</dt>
+<dd><a href="kingdoms.core.services.enrollment.html#EnrollmentClosedError">EnrollmentClosedError</a></dd>
+<dd><a href="builtins.html#RuntimeError">builtins.RuntimeError</a></dd>
+<dd><a href="builtins.html#Exception">builtins.Exception</a></dd>
+<dd><a href="builtins.html#BaseException">builtins.BaseException</a></dd>
+<dd><a href="builtins.html#object">builtins.object</a></dd>
+</dl>
+<hr>
+Methods defined here:<br>
+<dl><dt><a name="EnrollmentClosedError-__init__"><strong>__init__</strong></a>(self, message: 'str') -&gt; 'None'</dt><dd><span class="code">Carry&nbsp;the&nbsp;refusal's&nbsp;human&nbsp;reason&nbsp;for&nbsp;the&nbsp;surface's&nbsp;bubble.</span></dd></dl>
+
+<hr>
+Data descriptors defined here:<br>
+<dl><dt><strong>__weakref__</strong></dt>
+<dd><span class="code">list&nbsp;of&nbsp;weak&nbsp;references&nbsp;to&nbsp;the&nbsp;object</span></dd>
+</dl>
+<hr>
+Static methods inherited from <a href="builtins.html#RuntimeError">builtins.RuntimeError</a>:<br>
+<dl><dt><a name="EnrollmentClosedError-__new__"><strong>__new__</strong></a>(*args, **kwargs)<span class="grey"><span class="heading-text"> class method of <a href="builtins.html#RuntimeError">builtins.RuntimeError</a></span></span></dt><dd><span class="code">Create&nbsp;and&nbsp;return&nbsp;a&nbsp;new&nbsp;<a href="builtins.html#object">object</a>.&nbsp;&nbsp;See&nbsp;help(type)&nbsp;for&nbsp;accurate&nbsp;signature.</span></dd></dl>
+
+<hr>
+Methods inherited from <a href="builtins.html#BaseException">builtins.BaseException</a>:<br>
+<dl><dt><a name="EnrollmentClosedError-__getattribute__"><strong>__getattribute__</strong></a>(self, name, /)</dt><dd><span class="code">Return&nbsp;getattr(self,&nbsp;name).</span></dd></dl>
+
+<dl><dt><a name="EnrollmentClosedError-__reduce__"><strong>__reduce__</strong></a>(...)</dt><dd><span class="code">Helper&nbsp;for&nbsp;pickle.</span></dd></dl>
+
+<dl><dt><a name="EnrollmentClosedError-__repr__"><strong>__repr__</strong></a>(self, /)</dt><dd><span class="code">Return&nbsp;repr(self).</span></dd></dl>
+
+<dl><dt><a name="EnrollmentClosedError-__setstate__"><strong>__setstate__</strong></a>(...)</dt></dl>
+
+<dl><dt><a name="EnrollmentClosedError-__str__"><strong>__str__</strong></a>(self, /)</dt><dd><span class="code">Return&nbsp;str(self).</span></dd></dl>
+
+<dl><dt><a name="EnrollmentClosedError-add_note"><strong>add_note</strong></a>(...)</dt><dd><span class="code">Exception.<a href="#EnrollmentClosedError-add_note">add_note</a>(note)&nbsp;--<br>
+add&nbsp;a&nbsp;note&nbsp;to&nbsp;the&nbsp;exception</span></dd></dl>
+
+<dl><dt><a name="EnrollmentClosedError-with_traceback"><strong>with_traceback</strong></a>(...)</dt><dd><span class="code">Exception.<a href="#EnrollmentClosedError-with_traceback">with_traceback</a>(tb)&nbsp;--<br>
+set&nbsp;self.<strong>__traceback__</strong>&nbsp;to&nbsp;tb&nbsp;and&nbsp;return&nbsp;self.</span></dd></dl>
+
+<hr>
+Data descriptors inherited from <a href="builtins.html#BaseException">builtins.BaseException</a>:<br>
+<dl><dt><strong>__cause__</strong></dt>
+<dd><span class="code">exception&nbsp;cause</span></dd>
+</dl>
+<dl><dt><strong>__context__</strong></dt>
+<dd><span class="code">exception&nbsp;context</span></dd>
+</dl>
+<dl><dt><strong>__dict__</strong></dt>
+</dl>
+<dl><dt><strong>__suppress_context__</strong></dt>
+</dl>
+<dl><dt><strong>__traceback__</strong></dt>
+</dl>
+<dl><dt><strong>args</strong></dt>
+</dl>
+</td></tr></table> <p>
+<table class="section">
+<tr class="decor title-decor heading-text">
 <td class="section-title" colspan=3>&nbsp;<br><a name="EnrollmentDatabase">class <strong>EnrollmentDatabase</strong></a>(<a href="typing.html#Protocol">typing.Protocol</a>)</td></tr>
     
 <tr><td class="decor title-decor" rowspan=2><span class="code">&nbsp;&nbsp;&nbsp;</span></td>
@@ -376,19 +447,25 @@ classes&nbsp;in&nbsp;the&nbsp;first&nbsp;place&nbsp;with&nbsp;`class&nbsp;Foo[T]
 <td class="section-title" colspan=3>&nbsp;<br><a name="EnrollmentService">class <strong>EnrollmentService</strong></a>(<a href="builtins.html#object">builtins.object</a>)</td></tr>
     
 <tr><td class="decor title-decor" rowspan=2><span class="code">&nbsp;&nbsp;&nbsp;</span></td>
-<td class="decor title-decor" colspan=2><span class="code"><a href="#EnrollmentService">EnrollmentService</a>(mod_name:&nbsp;'str',&nbsp;database:&nbsp;'<a href="#EnrollmentDatabase">EnrollmentDatabase</a>',&nbsp;stats:&nbsp;'<a href="#EnrollmentStats">EnrollmentStats</a>&nbsp;|&nbsp;None'&nbsp;=&nbsp;None,&nbsp;membership:&nbsp;'<a href="#EnrollmentMembership">EnrollmentMembership</a>&nbsp;|&nbsp;None'&nbsp;=&nbsp;None,&nbsp;game_key:&nbsp;'str'&nbsp;=&nbsp;'',&nbsp;criteria:&nbsp;'dict[str,&nbsp;Any]&nbsp;|&nbsp;None'&nbsp;=&nbsp;None,&nbsp;timezone:&nbsp;'ZoneInfo&nbsp;|&nbsp;None'&nbsp;=&nbsp;None)&nbsp;-&amp;gt;&nbsp;'None'<br>
+<td class="decor title-decor" colspan=2><span class="code"><a href="#EnrollmentService">EnrollmentService</a>(mod_name:&nbsp;'str',&nbsp;database:&nbsp;'<a href="#EnrollmentDatabase">EnrollmentDatabase</a>',&nbsp;stats:&nbsp;'<a href="#EnrollmentStats">EnrollmentStats</a>&nbsp;|&nbsp;None'&nbsp;=&nbsp;None,&nbsp;membership:&nbsp;'<a href="#EnrollmentMembership">EnrollmentMembership</a>&nbsp;|&nbsp;None'&nbsp;=&nbsp;None,&nbsp;game_key:&nbsp;'str'&nbsp;=&nbsp;'',&nbsp;criteria:&nbsp;'dict[str,&nbsp;Any]&nbsp;|&nbsp;None'&nbsp;=&nbsp;None,&nbsp;timezone:&nbsp;'ZoneInfo&nbsp;|&nbsp;None'&nbsp;=&nbsp;None,&nbsp;lifecycle:&nbsp;'<a href="#ModLifecycleGate">ModLifecycleGate</a>&nbsp;|&nbsp;None'&nbsp;=&nbsp;None)&nbsp;-&amp;gt;&nbsp;'None'<br>
 &nbsp;<br>
 Run&nbsp;the&nbsp;generic&nbsp;enrollment&nbsp;parcours&nbsp;for&nbsp;one&nbsp;mod.<br>&nbsp;</span></td></tr>
 <tr><td>&nbsp;</td>
 <td class="singlecolumn">Methods defined here:<br>
-<dl><dt><a name="EnrollmentService-__init__"><strong>__init__</strong></a>(self, mod_name: 'str', database: 'EnrollmentDatabase', stats: 'EnrollmentStats | None' = None, membership: 'EnrollmentMembership | None' = None, game_key: 'str' = '', criteria: 'dict[str, Any] | None' = None, timezone: 'ZoneInfo | None' = None) -&gt; 'None'</dt><dd><span class="code">Initialize&nbsp;self.&nbsp;&nbsp;See&nbsp;help(type(self))&nbsp;for&nbsp;accurate&nbsp;signature.</span></dd></dl>
+<dl><dt><a name="EnrollmentService-__init__"><strong>__init__</strong></a>(self, mod_name: 'str', database: 'EnrollmentDatabase', stats: 'EnrollmentStats | None' = None, membership: 'EnrollmentMembership | None' = None, game_key: 'str' = '', criteria: 'dict[str, Any] | None' = None, timezone: 'ZoneInfo | None' = None, lifecycle: 'ModLifecycleGate | None' = None) -&gt; 'None'</dt><dd><span class="code">Initialize&nbsp;self.&nbsp;&nbsp;See&nbsp;help(type(self))&nbsp;for&nbsp;accurate&nbsp;signature.</span></dd></dl>
 
 <dl><dt>async <a name="EnrollmentService-accept"><strong>accept</strong></a>(self, application_id: 'str', now: 'int' = 0, reason: 'str' = '') -&gt; 'Application'</dt><dd><span class="code">Accept&nbsp;a&nbsp;pending&nbsp;application;&nbsp;registers&nbsp;the&nbsp;member&nbsp;(roles&nbsp;sync).</span></dd></dl>
 
-<dl><dt>async <a name="EnrollmentService-apply"><strong>apply</strong></a>(self, guild_id: 'str', user_id: 'str', display_name: 'str', season: 'str | None' = None, now: 'int' = 0) -&gt; 'Application'</dt><dd><span class="code">Apply&nbsp;for&nbsp;enrollment:&nbsp;criteria&nbsp;→&nbsp;auto-accept&nbsp;/&nbsp;refuse&nbsp;/&nbsp;queue.<br>
+<dl><dt>async <a name="EnrollmentService-apply"><strong>apply</strong></a>(self, guild_id: 'str', user_id: 'str', display_name: 'str', season: 'str | None' = None, now: 'int' = 0, season_start: 'int | None' = None) -&gt; 'Application'</dt><dd><span class="code">Apply&nbsp;for&nbsp;enrollment:&nbsp;criteria&nbsp;→&nbsp;auto-accept&nbsp;/&nbsp;refuse&nbsp;/&nbsp;queue.<br>
 &nbsp;<br>
 Idempotent&nbsp;while&nbsp;pending:&nbsp;re-applying&nbsp;returns&nbsp;the&nbsp;existing<br>
-application&nbsp;untouched&nbsp;(one&nbsp;bubble,&nbsp;one&nbsp;state&nbsp;—&nbsp;Drasah's&nbsp;rule).</span></dd></dl>
+application&nbsp;untouched&nbsp;(one&nbsp;bubble,&nbsp;one&nbsp;state&nbsp;—&nbsp;Drasah's&nbsp;rule).<br>
+&nbsp;<br>
+Two&nbsp;gates&nbsp;run&nbsp;before&nbsp;anything&nbsp;else:&nbsp;a&nbsp;suspended&nbsp;mod&nbsp;refuses<br>
+(the&nbsp;players&nbsp;cannot&nbsp;use&nbsp;it&nbsp;—&nbsp;the&nbsp;admins&nbsp;still&nbsp;decide&nbsp;pending<br>
+applications),&nbsp;and&nbsp;the&nbsp;declared&nbsp;enrollment&nbsp;window&nbsp;decides<br>
+(``opens_at``/``closes_at``&nbsp;timestamps,&nbsp;or&nbsp;``opens_before_start``<br>
+relative&nbsp;to&nbsp;the&nbsp;season's&nbsp;start).</span></dd></dl>
 
 <dl><dt>async <a name="EnrollmentService-dashboard"><strong>dashboard</strong></a>(self, guild_id: 'str') -&gt; 'dict[str, Any]'</dt><dd><span class="code">Build&nbsp;the&nbsp;admin&nbsp;dashboard&nbsp;data:&nbsp;candidates,&nbsp;enrolled,&nbsp;refused.</span></dd></dl>
 
@@ -431,9 +508,9 @@ Methods defined here:<br>
 
 <dl><dt>async <a name="EnrollmentStats-has_profile"><strong>has_profile</strong></a>(self, user_id: 'str', game_key: 'str') -&gt; 'bool'</dt><dd><span class="code">Whether&nbsp;the&nbsp;player&nbsp;has&nbsp;a&nbsp;bound,&nbsp;validated&nbsp;game&nbsp;profile.</span></dd></dl>
 
-<dl><dt>async <a name="EnrollmentStats-matches_in_window"><strong>matches_in_window</strong></a>(self, user_id: 'str', game_key: 'str', days: 'int') -&gt; 'int | None'</dt><dd><span class="code">Return&nbsp;matches&nbsp;played&nbsp;in&nbsp;the&nbsp;last&nbsp;N&nbsp;days;&nbsp;None&nbsp;when&nbsp;unknown.</span></dd></dl>
+<dl><dt>async <a name="EnrollmentStats-matches_in_window"><strong>matches_in_window</strong></a>(self, user_id: 'str', game_key: 'str', days: 'int', leaderboard: 'str' = '') -&gt; 'int | None'</dt><dd><span class="code">Return&nbsp;matches&nbsp;played&nbsp;in&nbsp;the&nbsp;last&nbsp;N&nbsp;days&nbsp;(optionally&nbsp;one&nbsp;leaderboard);&nbsp;None&nbsp;when&nbsp;unknown.</span></dd></dl>
 
-<dl><dt>async <a name="EnrollmentStats-player_elo"><strong>player_elo</strong></a>(self, user_id: 'str', game_key: 'str') -&gt; 'int | None'</dt><dd><span class="code">Return&nbsp;the&nbsp;player's&nbsp;rating&nbsp;for&nbsp;one&nbsp;game;&nbsp;None&nbsp;when&nbsp;unrated.</span></dd></dl>
+<dl><dt>async <a name="EnrollmentStats-player_elo"><strong>player_elo</strong></a>(self, user_id: 'str', game_key: 'str', leaderboard: 'str' = '') -&gt; 'int | None'</dt><dd><span class="code">Return&nbsp;the&nbsp;player's&nbsp;rating&nbsp;(optionally&nbsp;one&nbsp;leaderboard);&nbsp;None&nbsp;when&nbsp;unrated.</span></dd></dl>
 
 <hr>
 Class methods defined here:<br>
@@ -464,6 +541,65 @@ Class methods inherited from <a href="typing.html#Protocol">typing.Protocol</a>:
 <hr>
 Class methods inherited from <a href="typing.html#Generic">typing.Generic</a>:<br>
 <dl><dt><a name="EnrollmentStats-__class_getitem__"><strong>__class_getitem__</strong></a>(...)</dt><dd><span class="code">Parameterizes&nbsp;a&nbsp;generic&nbsp;class.<br>
+&nbsp;<br>
+At&nbsp;least,&nbsp;parameterizing&nbsp;a&nbsp;generic&nbsp;class&nbsp;is&nbsp;the&nbsp;*main*&nbsp;thing&nbsp;this<br>
+method&nbsp;does.&nbsp;For&nbsp;example,&nbsp;for&nbsp;some&nbsp;generic&nbsp;class&nbsp;`Foo`,&nbsp;this&nbsp;is&nbsp;called<br>
+when&nbsp;we&nbsp;do&nbsp;`Foo[int]`&nbsp;-&nbsp;there,&nbsp;with&nbsp;`cls=Foo`&nbsp;and&nbsp;`params=int`.<br>
+&nbsp;<br>
+However,&nbsp;note&nbsp;that&nbsp;this&nbsp;method&nbsp;is&nbsp;also&nbsp;called&nbsp;when&nbsp;defining&nbsp;generic<br>
+classes&nbsp;in&nbsp;the&nbsp;first&nbsp;place&nbsp;with&nbsp;`class&nbsp;Foo[T]:&nbsp;...`.</span></dd></dl>
+
+</td></tr></table> <p>
+<table class="section">
+<tr class="decor title-decor heading-text">
+<td class="section-title" colspan=3>&nbsp;<br><a name="ModLifecycleGate">class <strong>ModLifecycleGate</strong></a>(<a href="typing.html#Protocol">typing.Protocol</a>)</td></tr>
+    
+<tr><td class="decor title-decor" rowspan=2><span class="code">&nbsp;&nbsp;&nbsp;</span></td>
+<td class="decor title-decor" colspan=2><span class="code"><a href="#ModLifecycleGate">ModLifecycleGate</a>(*args,&nbsp;**kwargs)<br>
+&nbsp;<br>
+The&nbsp;suspended-mod&nbsp;seam&nbsp;—&nbsp;apply&nbsp;refuses&nbsp;on&nbsp;a&nbsp;suspended&nbsp;mod.<br>&nbsp;</span></td></tr>
+<tr><td>&nbsp;</td>
+<td class="singlecolumn"><dl><dt>Method resolution order:</dt>
+<dd><a href="kingdoms.core.services.enrollment.html#ModLifecycleGate">ModLifecycleGate</a></dd>
+<dd><a href="typing.html#Protocol">typing.Protocol</a></dd>
+<dd><a href="typing.html#Generic">typing.Generic</a></dd>
+<dd><a href="builtins.html#object">builtins.object</a></dd>
+</dl>
+<hr>
+Methods defined here:<br>
+<dl><dt><a name="ModLifecycleGate-__init__"><strong>__init__</strong></a> = _no_init_or_replace_init(self, *args, **kwargs)<span class="grey"><span class="heading-text"> from <a href="typing.html">typing</a></span></span></dt></dl>
+
+<dl><dt>async <a name="ModLifecycleGate-require_usable"><strong>require_usable</strong></a>(self, guild_id: 'str', mod: 'str') -&gt; 'None'</dt><dd><span class="code">Raise&nbsp;when&nbsp;the&nbsp;players&nbsp;cannot&nbsp;use&nbsp;the&nbsp;mod&nbsp;(suspended).</span></dd></dl>
+
+<hr>
+Class methods defined here:<br>
+<dl><dt><a name="ModLifecycleGate-__subclasshook__"><strong>__subclasshook__</strong></a> = _proto_hook(other)<span class="grey"><span class="heading-text"> from typing</span></span></dt></dl>
+
+<hr>
+Data descriptors defined here:<br>
+<dl><dt><strong>__dict__</strong></dt>
+<dd><span class="code">dictionary&nbsp;for&nbsp;instance&nbsp;variables</span></dd>
+</dl>
+<dl><dt><strong>__weakref__</strong></dt>
+<dd><span class="code">list&nbsp;of&nbsp;weak&nbsp;references&nbsp;to&nbsp;the&nbsp;object</span></dd>
+</dl>
+<hr>
+Data and other attributes defined here:<br>
+<dl><dt><strong>__abstractmethods__</strong> = frozenset()</dl>
+
+<dl><dt><strong>__annotations__</strong> = {}</dl>
+
+<dl><dt><strong>__parameters__</strong> = ()</dl>
+
+<dl><dt><strong>__protocol_attrs__</strong> = {'require_usable'}</dl>
+
+<hr>
+Class methods inherited from <a href="typing.html#Protocol">typing.Protocol</a>:<br>
+<dl><dt><a name="ModLifecycleGate-__init_subclass__"><strong>__init_subclass__</strong></a>(*args, **kwargs)</dt><dd><span class="code">Function&nbsp;to&nbsp;initialize&nbsp;subclasses.</span></dd></dl>
+
+<hr>
+Class methods inherited from <a href="typing.html#Generic">typing.Generic</a>:<br>
+<dl><dt><a name="ModLifecycleGate-__class_getitem__"><strong>__class_getitem__</strong></a>(...)</dt><dd><span class="code">Parameterizes&nbsp;a&nbsp;generic&nbsp;class.<br>
 &nbsp;<br>
 At&nbsp;least,&nbsp;parameterizing&nbsp;a&nbsp;generic&nbsp;class&nbsp;is&nbsp;the&nbsp;*main*&nbsp;thing&nbsp;this<br>
 method&nbsp;does.&nbsp;For&nbsp;example,&nbsp;for&nbsp;some&nbsp;generic&nbsp;class&nbsp;`Foo`,&nbsp;this&nbsp;is&nbsp;called<br>
@@ -551,11 +687,16 @@ declaration&nbsp;never&nbsp;silently&nbsp;disables&nbsp;enrollment.</span></dd><
     
 <tr><td class="decor data-decor"><span class="code">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span></td><td>&nbsp;</td>
 <td class="singlecolumn"><strong>CRITERION_MANUAL</strong> = 'manual'<br>
+<strong>CRITERION_MAX_ELO</strong> = 'max_elo'<br>
 <strong>CRITERION_MIN_ELO</strong> = 'min_elo'<br>
 <strong>CRITERION_MIN_MATCHES</strong> = 'min_matches'<br>
 <strong>CRITERION_REQUIRES_PROFILE</strong> = 'requires_profile'<br>
+<strong>CRITERION_REQUIRES_PROFILES</strong> = 'requires_profiles'<br>
 <strong>STATE_ACCEPTED</strong> = 'accepted'<br>
 <strong>STATE_PENDING</strong> = 'pending'<br>
 <strong>STATE_REFUSED</strong> = 'refused'<br>
+<strong>WINDOW_CLOSES_AT</strong> = 'closes_at'<br>
+<strong>WINDOW_OPENS_AT</strong> = 'opens_at'<br>
+<strong>WINDOW_OPENS_BEFORE_START</strong> = 'opens_before_start'<br>
 <strong>logger</strong> = &lt;Logger kingdoms.core.services.enrollment (INFO)&gt;</td></tr></table>
 </body></html>
