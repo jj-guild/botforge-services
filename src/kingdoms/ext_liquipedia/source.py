@@ -300,9 +300,12 @@ def _descriptor_of(game_key: str, page: str, data: Any) -> dict[str, Any]:
         "map_type": _safe(lambda: str(info.map_type)),
         # the enrichment surface: the maps sync rides the provider too
         # (one Liquipedia client per env — never a second in the bot)
-        "walls": bool(getattr(info, "walls", False)),
-        "nomad": bool(getattr(info, "nomad", False)),
-        "tc": bool(getattr(info, "tc", False)),
+        # the bools read the label's MEANING, never its emptiness —
+        # bool("No") is True in Python (the 2026-11-06 bug: every
+        # non-empty label became True, Arabia showed Walls/Nomad: Oui)
+        "walls": str(getattr(info, "walls", "")).strip().lower() in ("yes", "partial", "true"),
+        "nomad": str(getattr(info, "nomad", "")).strip().lower() in ("yes", "true"),
+        "tc": str(getattr(info, "tc", "")).strip().isdigit(),
         # the RAW labels (owner direction 2026-11-06): the infobox's own
         # words — walls "No"/"Partial", tc "1"/"2", capacity "Up to 8" —
         # never amputated into bools

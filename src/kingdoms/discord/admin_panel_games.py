@@ -1227,6 +1227,28 @@ async def _finish_map_import(
 
         if interaction.guild_id is not None:
             await sync_maps_forum(str(interaction.guild_id), game_key, interaction.client)
+        # The answer IS the post (owner direction 2026-11-06): the view
+        # plus the created post's link — never a bare "import réussi".
+        try:
+            from kingdoms.discord.maps_forum import map_post_render
+
+            _content, view = await map_post_render(
+                entry, str(interaction.guild_id or ""), interaction.client, service
+            )
+            fresh = await service.get_map(entry.id)
+            thread_id = str(getattr(fresh, "forum_message_id", "") or "")
+            link = (
+                f"\n<https://discord.com/channels/{interaction.guild_id}/{thread_id}/{thread_id}>"
+                if interaction.guild_id and thread_id.isdigit()
+                else ""
+            )
+            await interaction.followup.send(
+                f"\u2705 **{entry.name}** import\u00e9e \u2014 son post :{link}",
+                view=view,
+                ephemeral=True,
+            )
+        except Exception:
+            logger.warning("map import preview failed — best-effort", exc_info=True)
     except Exception as exc:
         logger.exception("GAMES ADMIN: map import tail failed — rolling back %s", entry.id)
         rolled_back = False
