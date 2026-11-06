@@ -11,6 +11,10 @@ degrades to its empty dashboard — the machinery is game-agnostic.
 from __future__ import annotations
 
 import logging
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from kingdoms.core.services.registration import RegistrationService
 import os
 import re
 import time
@@ -584,8 +588,13 @@ def build_dashboard_view(
 
 
 
-def _registration_bindings_service(database: Any) -> Any | None:
-    """Return the registration service (profile_bindings' owner, rule 5)."""
+def _registration_bindings_service(database: Any) -> RegistrationService | None:
+    """Return the registration service (profile_bindings' owner, rule 5).
+
+    TYPED (not Any): the panels' calls on this seam are checked — an
+    AttributeError like the 2026-11-06 find_bindings_by_profiles miss
+    fails the type check instead of the live panel.
+    """
     try:
         from kingdoms.core.services.registration import RegistrationService
 

@@ -138,6 +138,17 @@ class MongoRegistrationDatabase:
         )
         return bool(result.deleted_count > 0)
 
+    async def find_bindings_by_profiles(
+        self, game_key: str, profile_ids: list[str]
+    ) -> list[dict[str, Any]]:
+        """Read many profiles' bindings in ONE batched find($in)."""
+        if not profile_ids:
+            return []
+        cursor = self._database["profile_bindings"].find(
+            {"game_key": game_key, "profile_id": {"$in": list(profile_ids)}}
+        )
+        return [dict(doc) async for doc in cursor]
+
     async def list_bindings_for_game(self, game_key: str) -> list[dict[str, Any]]:
         """List every profile binding of a game (live dashboard reuse, #147)."""
         cursor = self._database[PROFILE_BINDINGS_COLLECTION].find({"game_key": game_key})
