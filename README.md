@@ -49,11 +49,12 @@ see [docs/DEVELOPER.md](docs/DEVELOPER.md) and
 - **Docs** (`.github/workflows/docs.yml`): this repo hosts its own generated
   technical documentation (`docs/DEVELOPMENT/pydoc/`, regenerated with
   `make docs`); every PR fails when the committed copy is stale.
-- **Generated artifacts in `kingdoms`**: `ROADMAP.md` and
-  `docs/DEPENDENCIES.md` are refreshed by the sync skills
-  ([Update roadmap](https://github.com/merlin-pinpin-org/kingdoms/blob/main/docs/SKILLS/update-roadmap.md),
-  [Update dependencies](https://github.com/merlin-pinpin-org/kingdoms/blob/main/docs/SKILLS/update-dependencies.md)):
-  the sync scripts run locally and the result is committed to the PR branch.
+- **Generated artifacts in `kingdoms`**: `generated/ROADMAP.md` and
+  `generated/DEPENDENCIES.md` are owned by the `sync-generated` workflow
+  (single writer, published on the `sync/generated-artifacts` branch);
+  sessions only preview drift with the sync skills
+  ([Update roadmap](https://github.com/merlin-pinpin-org/kingdoms/blob/main/.agents/skills/update-roadmap/SKILL.md),
+  [Update dependencies](https://github.com/merlin-pinpin-org/kingdoms/blob/main/.agents/skills/update-dependencies/SKILL.md)).
 
 ## Deploying a pull request
 
