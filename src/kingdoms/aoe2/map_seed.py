@@ -24,6 +24,8 @@ class MapSeed:
     nomad: str = ""
     walls: str = ""
     tc: str = ""
+    player_capacity: str = ""
+    creator: str = ""
     public: bool = True
     game_versions: tuple[str, ...] = ()
     versions: tuple[dict[str, object], ...] = ()

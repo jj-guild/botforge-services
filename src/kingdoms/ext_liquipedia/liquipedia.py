@@ -121,6 +121,8 @@ class MapInfo:
     nomad: str = ""
     walls: str = ""
     tc: str = ""
+    player_capacity: str = ""
+    creator: str = ""
     gallery_icon: str = ""
     game_versions: tuple[str, ...] = ()
     versions: tuple[MapVersion, ...] = ()
@@ -502,6 +504,10 @@ class LiquipediaMapsProvider:
             gallery_icon=self._parse_gallery_icon(wikitext),
             walls=self._clean_wikitext(fields.get("walls", "")),
             tc=self._clean_wikitext(fields.get("tc", "")),
+            player_capacity=self._clean_wikitext(
+                fields.get("player_capacity", "") or fields.get("players", "")
+            ),
+            creator=self._clean_wikitext(fields.get("creator", "")),
             game_versions=self._parse_game_tabs(wikitext),
             versions=self._parse_versions_section(wikitext),
         )

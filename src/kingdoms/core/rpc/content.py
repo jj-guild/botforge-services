@@ -153,6 +153,11 @@ class ContentServicer(content_pb2_grpc.ContentServicer):
             walls=bool(seed.get("walls", False)),
             nomad=bool(seed.get("nomad", False)),
             tc=bool(seed.get("tc", False)),
+            walls_label=str(seed.get("walls_label", "")),
+            nomad_label=str(seed.get("nomad_label", "")),
+            tc_label=str(seed.get("tc_label", "")),
+            player_capacity=str(seed.get("player_capacity", "")),
+            creator=str(seed.get("creator", "")),
             game_versions=[str(v) for v in seed.get("game_versions", ()) or ()],
             versions=[
                 content_pb2.MapSeedVersion(

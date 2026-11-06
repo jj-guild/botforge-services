@@ -39,6 +39,7 @@ class EntityCardSpec:
     icon_url: str = ""
     source_url: str = ""
     source_label: str = "Liquipedia"
+    creator: str = ""
     links_heading: str = ""
     links: tuple[str, ...] = ()
     action_buttons: tuple[Callable[[], discord.ui.Item[discord.ui.LayoutView]], ...] = field(
@@ -74,6 +75,8 @@ def _body(view: discord.ui.LayoutView, spec: EntityCardSpec, footer: str) -> Non
         body.append(discord.ui.Separator())
         heading = f"**{spec.links_heading}**\n" if spec.links_heading else ""
         body.append(discord.ui.TextDisplay(heading + "\n".join(spec.links)))
+    if spec.creator:
+        body.append(discord.ui.TextDisplay(f"Créateur : {spec.creator}"))
     if spec.source_url:
         body.append(discord.ui.Separator())
         body.append(discord.ui.TextDisplay(f"Source : [{spec.source_label}]({spec.source_url})"))
@@ -117,6 +120,7 @@ def map_card(
     source_url: str,
     pool_links: tuple[str, ...],
     buttons: tuple[Callable[[], discord.ui.Item[discord.ui.LayoutView]], ...],
+    creator: str = "",
 ) -> discord.ui.LayoutView:
     """Build a map's forum card on the shared template."""
     return build_entity_card(
@@ -128,6 +132,7 @@ def map_card(
             image_url=image_url,
             icon_url=icon_url,
             source_url=source_url,
+            creator=creator,
             links_heading="Map pools",
             links=pool_links,
             action_buttons=buttons,
