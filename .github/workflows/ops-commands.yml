@@ -200,11 +200,11 @@ jobs:
                 ARG2="$(echo "$COMMENT_BODY" | awk '{print $2}')"
                 if [[ -n "$ARG2" && ! "$ARG2" =~ ^- ]]; then
                   case "$ARG2" in
-                    merlin|test|prod|drasah) shift_words=3 ;;
-                    *) shift_words=2 ;;
+                    merlin|test|prod|drasah) shift_words=2 ;;
+                    *) shift_words=1 ;;
                   esac
                 else
-                  shift_words=2
+                  shift_words=1
                 fi
                 COLLECTIONS="$(echo "$COMMENT_BODY" | awk -v skip=$shift_words '{for(i=skip+1;i<=NF;i++) printf "%s ", $i}' | sed 's/ *$//' | cut -c1-200)"
                 [[ -n "$COLLECTIONS" ]] || { echo "::error::/clear-db needs at least one collection name"; exit 1; }
