@@ -114,7 +114,7 @@ async def _map_image_url(entry: Any) -> str:
         if service is None:
             return ""
         for locale in ("fr", "en"):
-            doc = await service.get(entry.id, locale)
+            doc = await service.content_get(entry.id, locale)
             if doc and doc.get("image_url"):
                 return str(doc["image_url"])
     except Exception:
