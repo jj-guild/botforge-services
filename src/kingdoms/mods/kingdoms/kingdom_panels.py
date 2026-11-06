@@ -614,6 +614,38 @@ STRINGS: dict[str, dict[str, Any]] = {
             "❌ No arranged marriage in stock — buy a token at the Market."
         ),
         "church_marry_intro": "👰 Choose the civilization of your marriage:",
+        # --- paroisse-v1 (Drasah 06/11) — the role-adapted 💍 Marry view ---
+        "church_marry_view_title": "💍 Marry — {0}",
+        "church_marry_badge": "ROYAL MARRIAGE",
+        "church_marry_rules": (
+            "**One active marriage only** — the sealed civilization"
+            " becomes **exclusive** to your kingdom.\n"
+            "💍 **{0} ring(s)** will be consumed at the celebration.\n"
+            "🔒 Combat lock: **{1}h** — neither attack nor defense."
+        ),
+        "church_marry_rules_royal": (
+            "👑 Your bond is **guaranteed until the season ends**, even on"
+            " defeat."
+        ),
+        "church_marry_confirm_title": "💍 Confirm your marriage",
+        "church_marry_confirm_sub": "bride to be · {0} ring(s) · lock {1}h",
+        "church_marry_yes_button": "💍 Yes, I do",
+        "church_marry_edit_button": "✏️ Change",
+        "church_marry_back_button": "↩️ Back to Parish",
+        "church_marry_sealed_title": "💍 Marriage sealed: **{0}**",
+        "church_marry_sealed_note": (
+            "The kingdom is informed — the announcement was just published"
+            " in **Geopolitics**."
+        ),
+        "church_wedding_announce": (
+            "💍 Marriage sealed — {0} of the {1} weds the **{2}** · 🔒 lock"
+            " {3}h · 🎁 Offering +{4} ⚙️ · the civilization is now"
+            " **exclusive** to the {1} kingdom until the bond breaks."
+        ),
+        "church_upgrade_confirm_hint": (
+            "The upgrade will pay {0} ⚙️ from the kingdom's treasury — the"
+            " window refreshes right after the purchase."
+        ),
         "church_marry_ok": (
             "💍 Marriage sealed: **{0}** — lock {1}h, Offrande +{2} ⚙️."
         ),
@@ -1173,6 +1205,38 @@ STRINGS: dict[str, dict[str, Any]] = {
             "❌ Aucun mariage arrangé en stock — achetez un jeton au Marché."
         ),
         "church_marry_intro": "👰 Choisissez la civilisation de votre mariage :",
+        # --- paroisse-v1 (Drasah 06/11) — la vue 💍 Se marier adaptée au rôle ---
+        "church_marry_view_title": "💍 Se marier — {0}",
+        "church_marry_badge": "MARIAGE ROYAL",
+        "church_marry_rules": (
+            "**Un seul mariage actif** — la civilisation scellée devient"
+            " **exclusive** à ton royaume.\n"
+            "💍 **{0} bague(s)** sera(ont) consommée(s) à la célébration.\n"
+            "🔒 Verrou de combat : **{1}h** — ni attaque ni défense."
+        ),
+        "church_marry_rules_royal": (
+            "👑 Ton lien est **garanti jusqu'à la fin de la saison**, même"
+            " en cas de défaite."
+        ),
+        "church_marry_confirm_title": "💍 Confirmer ton mariage",
+        "church_marry_confirm_sub": "épouse pressentie · {0} bague(s) · verrou {1}h",
+        "church_marry_yes_button": "💍 Oui, je le veux",
+        "church_marry_edit_button": "✏️ Modifier",
+        "church_marry_back_button": "↩️ Retour Paroisse",
+        "church_marry_sealed_title": "💍 Mariage scellé : **{0}**",
+        "church_marry_sealed_note": (
+            "Le royaume en est informé — l'annonce vient d'être publiée"
+            " dans **Géopolitique**."
+        ),
+        "church_wedding_announce": (
+            "💍 Mariage scellé — {0} des {1} épouse les **{2}** · 🔒 verrou"
+            " {3}h · 🎁 Offrande +{4} ⚙️ · la civilisation est désormais"
+            " **exclusive** au royaume {1} jusqu'à brisure du lien."
+        ),
+        "church_upgrade_confirm_hint": (
+            "L'amélioration paiera {0} ⚙️ depuis le trésor du royaume — la"
+            " fenêtre se mettra à jour après l'achat."
+        ),
         "church_marry_ok": (
             "💍 Mariage scellé : **{0}** — verrou {1}h, Offrande +{2} ⚙️."
         ),

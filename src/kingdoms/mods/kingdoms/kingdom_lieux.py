@@ -678,7 +678,7 @@ async def _open_lieu(interaction: discord.Interaction, kind: str) -> None:
                 kingdom,
                 state,
                 media="attachment://paroisse.png",
-                rows=_paroisse_rows(strings, kingdom, state, locale),
+                rows=_paroisse_rows(strings, kingdom, state, locale, lord),
             ),
             _paroisse_files(state),
         )
@@ -2673,46 +2673,55 @@ def _remparts_info_rows(
 
     return [[KingdomRempartsStateButton(strings), _sortir(locale)]]
 
+def _paroisse_info_rows(
+    strings: dict[str, Any],
+    locale: str,
+) -> list[list[Any]]:
+    """paroisse-v1: the En savoir plus face — Retour Paroisse + Sortir."""
+    from kingdoms.mods.kingdoms.kingdom_persistent import KingdomChurchStateButton
+
+    return [[KingdomChurchStateButton(strings), _sortir(locale)]]
+
+
 def _paroisse_rows(
     strings: dict[str, Any],
     kingdom: Any,
     state: dict[str, Any],
     locale: str,
+    lord: Any = None,
 ) -> list[list[Any]]:
-    """lieux-rows-v1 — the Paroisse button rules (Drasah 01/11).
+    """paroisse-v1 — the Paroisse button rules (Drasah 06/11).
 
-    Line 1: the parish's default actions (green) + Sortir (red, last).
-    Line 2: the 💒 Mariage arrangé card, ALWAYS visible — green from the
-    Église palier while a token is held, gray+disabled otherwise.
+    Rangée 1 : 💍 Se marier · ⛪ Améliorer · 🔎 En savoir plus + Sortir
+    (rouge, en DERNIER). Rangée 2 : les cartes technologiques — 💒
+    Mariage arrangé (toujours visible — vert dès le palier Église avec
+    un jeton en stock, gris sinon) et ⛪ Consacrer au palier max.
     """
     from kingdoms.mods.kingdoms.kingdom_realm_content import _church_buttons
 
-    base = _church_buttons(strings, kingdom, state)
-    arrange: Any = None
-    others: list[Any] = []
-    for button in base:
-        if str(getattr(button.item, "custom_id", "")) == "kingdoms:church:arrange":
-            arrange = button
-        else:
-            others.append(button)
+    base = _church_buttons(strings, kingdom, state, lord)
+    tech_row: list[Any] = []
     row_one: list[Any] = []
-    for button in others:
+    for button in base:
+        custom_id = str(getattr(button.item, "custom_id", ""))
+        if custom_id in ("kingdoms:church:arrange", "kingdoms:church:consecrate"):
+            tech_row.append(button)
+        else:
+            row_one.append(button)
+    for button in row_one:
         # The max-palier Améliorer stays disabled (its own convention).
         if not button.item.disabled:
             _green(button)
-        row_one.append(button)
     row_one.append(_sortir(locale))
-    parish = state.get("parish") or {}
-    tier = int(parish.get("tier", 1) or 1)
-    stock = int(getattr(kingdom, "arranged_marriage_stock", 0) or 0)
-    if arrange is None:
-        from kingdoms.mods.kingdoms.kingdom_persistent import (
-            KingdomChurchArrangeButton,
-        )
-
-        arrange = KingdomChurchArrangeButton(strings, 0)
-    _stock_style(arrange, tier >= 2 and stock > 0)
-    return [row_one, [arrange]]
+    for button in tech_row:
+        if str(getattr(button.item, "custom_id", "")) == "kingdoms:church:arrange":
+            parish = state.get("parish") or {}
+            tier = int(parish.get("tier", 1) or 1)
+            stock = int(getattr(kingdom, "arranged_marriage_stock", 0) or 0)
+            _stock_style(button, tier >= 2 and stock > 0)
+        else:
+            _green(button)
+    return [row_one, tech_row]
 
 
 
