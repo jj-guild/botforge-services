@@ -157,6 +157,12 @@ def register_kingdoms_persistent_items(bot: discord.Client) -> None:
         KingdomRoomUrlButton,
         KingdomSabotageOpenButton,
         KingdomSabotagePassButton,
+        # shirar-v1 (Drasah 06/11): the draft DM wizard is now
+        # restart-proof — three DynamicItems (select / modify /
+        # validate) resolve their key against the open drafts.
+        KingdomPickBanSelect,
+        KingdomPickBanModifyButton,
+        KingdomPickBanValidateButton,
         KingdomDisputeChoiceSelect,
         KingdomDisputeConfirmButton,
     )
@@ -260,6 +266,10 @@ def register_kingdoms_persistent_items(bot: discord.Client) -> None:
         KingdomRoomUrlButton,
         KingdomSabotageOpenButton,
         KingdomSabotagePassButton,
+        # shirar-v1 (Drasah 06/11): the restart-proof draft wizard.
+        KingdomPickBanSelect,
+        KingdomPickBanModifyButton,
+        KingdomPickBanValidateButton,
         # litige-mp-v1 (Drasah 30/10): the dispute DM round's two-kingdom
         # select + confirm button (restart-safe, player DMs).
         KingdomDisputeChoiceSelect,
@@ -629,6 +639,30 @@ async def _announce_kingdom_accepted_safe(
 
     guild = interaction.guild
     name = str(getattr(kingdom, "name", "") or "?")
+    # shirar-v1 (Drasah 06/11): the acceptance carries the realm's
+    # entrance salon as a CLICKABLE #mention — resolved from the
+    # kingdom's category (decoration-blind slug « le-royaume »). In
+    # a DM Discord may not resolve the mention: the note in 📝
+    # postuler (in-guild) carries the guaranteed clickable one.
+    mention = "🏰 le-royaume"
+    try:
+        if guild is not None:
+            from kingdoms.mods.kingdoms.kingdom_realms import _find_realm_category
+
+            category = _find_realm_category(guild, name)
+            if category is not None:
+                channel = next(
+                    (
+                        salon
+                        for salon in getattr(category, "channels", [])
+                        if _slug(str(getattr(salon, "name", ""))) == "le-royaume"
+                    ),
+                    None,
+                )
+                if channel is not None:
+                    mention = f"<#{int(channel.id)}>"
+    except Exception:
+        logger.warning("KINGDOMS: acceptance entrance mention failed", exc_info=True)
     king = next(
         (
             member
@@ -646,7 +680,9 @@ async def _announce_kingdom_accepted_safe(
                 user = await bot.fetch_user(int(str(king.id)))
             if user is not None:
                 await user.send(
-                    str(strings["kingdom_accepted_dm"]).format(kingdom=name)
+                    str(strings["kingdom_accepted_dm"]).format(
+                        kingdom=name, mention=mention
+                    )
                 )
         except Exception:
             logger.warning(
@@ -666,7 +702,9 @@ async def _announce_kingdom_accepted_safe(
             )
             if channel is not None:
                 await channel.send(
-                    str(strings["kingdom_accepted_note"]).format(kingdom=name),
+                    str(strings["kingdom_accepted_note"]).format(
+                        kingdom=name, mention=mention
+                    ),
                     allowed_mentions=NO_MENTIONS,
                 )
         except Exception:
@@ -1653,6 +1691,11 @@ async def _market_purchase_flow(
         note = await _market_failure_note(exc, wiring, king, item, cost, strings)
         await _market_buy_note(interaction, note, kingdom_id, refresh=False)
         return
+    # shirar-v1 (Drasah 06/11): the card window closes AT ONCE — the
+    # purchase is done, the player sees the reaction immediately; the
+    # receipt and the realm refresh run AFTER (they used to delay the
+    # close: the card felt stuck for seconds, live report).
+    await _close_previous_ephemeral(str(interaction.user.id))
     await _record_clicked_chronicle(
         wiring, str(interaction.user.id), "market_purchase",
         item=_market_label(item, strings),
@@ -1660,10 +1703,6 @@ async def _market_purchase_flow(
     )
     await _append_purchase_receipt(interaction, note, strings, wiring, king)
     await _refresh_realm_views_for_kingdom_safe(interaction.guild, kingdom_id)
-    # achat-fermeture-v1 (Drasah 30/10): the purchase is DONE — the card
-    # window closes by itself (the receipt stays as the living trace).
-    # Best effort: a >15-min-old card has a dead token and dies alone.
-    await _close_previous_ephemeral(str(interaction.user.id))
 
 
 def _market_card_file(item: str) -> discord.File | None:
@@ -5272,8 +5311,35 @@ class KingdomMarketUseButton(
                 )
                 return
             own_kingdom_id = str(getattr(lord, "kingdom_id", "") or "")
+            # shirar-v1 (Drasah 06/11): the shortcut carries the SAME
+            # early guard as the « Déclarer une attaque » button — an
+            # ENGAGED or tavern-locked lord is refused AT THE CLICK
+            # (live report: the wizard opened from the Chambre des
+            # comptes while an attack was already running).
+            from kingdoms.mods.kingdoms.attacks import (
+                LordEngagedError,
+                LordTavernLockedError,
+            )
+            from kingdoms.mods.kingdoms.game_clock import game_now
+
+            ap_strings = attack_strings(locale)
+            try:
+                await wiring.attacks_service._refuse_engaged(
+                    str(interaction.user.id), game_now()
+                )
+                wiring.attacks_service._refuse_tavern(lord, game_now())
+            except LordEngagedError:
+                await interaction.response.send_message(
+                    ap_strings["lord_engaged"], ephemeral=True
+                )
+                return
+            except LordTavernLockedError:
+                await interaction.response.send_message(
+                    ap_strings["lord_tavern_locked"], ephemeral=True
+                )
+                return
             mode_content, mode_view = await _attack_mode_select_view(
-                wiring, own_kingdom_id, attack_strings(locale), interaction
+                wiring, own_kingdom_id, ap_strings, interaction
             )
             if mode_view is None:
                 await interaction.response.send_message(
