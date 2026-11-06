@@ -622,22 +622,32 @@ STRINGS: dict[str, dict[str, Any]] = {
         "market_err_no_token": (
             "❌ No arranged marriage in stock — buy a token at the Market."
         ),
-        "church_marry_intro": "👰 Choose the civilization of your marriage:",
+        "church_marry_intro": "👰 Choose the Princess of your marriage:",
         # --- paroisse-v1 (Drasah 06/11) — the role-adapted 💍 Marry view ---
+        # paroisse-retours-v1 (Drasah 06/11): enriched wording + named
+        # Princess + indicative lock end "today/tomorrow HH:MM".
         "church_marry_view_title": "💍 Marry — {0}",
         "church_marry_badge": "ROYAL MARRIAGE",
         "church_marry_rules": (
-            "**One active marriage only** — the sealed civilization"
+            "**One active marriage only** — the chosen civilization"
             " becomes **exclusive** to your kingdom.\n"
             "💍 **{0} ring(s)** will be consumed at the celebration.\n"
-            "🔒 Combat lock: **{1}h** — neither attack nor defense."
+            "👑 Your bond is **guaranteed until the season ends**, even"
+            " on defeat.\n"
+            "🔒 Combat lock: **{1}h** — indicative end of the lock counted"
+            " from the click: {2}.\n"
+            "🛡️ Lock state: while locked you can **neither attack, nor"
+            " defend, nor use a technology card**."
         ),
         "church_marry_rules_royal": (
             "👑 Your bond is **guaranteed until the season ends**, even on"
             " defeat."
         ),
+        "church_marry_princess": "Princess {0}",
+        "church_marry_lock_today": "today at **{0}**",
+        "church_marry_lock_tomorrow": "tomorrow at **{0}**",
         "church_marry_confirm_title": "💍 Confirm your marriage",
-        "church_marry_confirm_sub": "bride to be · {0} ring(s) · lock {1}h",
+        "church_marry_confirm_sub": "princess to be · {0} ring(s) · lock {1}h",
         "church_marry_yes_button": "💍 Yes, I do",
         "church_marry_edit_button": "✏️ Change",
         "church_marry_back_button": "↩️ Back to Parish",
@@ -1224,22 +1234,33 @@ STRINGS: dict[str, dict[str, Any]] = {
         "market_err_no_token": (
             "❌ Aucun mariage arrangé en stock — achetez un jeton au Marché."
         ),
-        "church_marry_intro": "👰 Choisissez la civilisation de votre mariage :",
+        "church_marry_intro": "👰 Choisissez la Princesse de ton mariage :",
         # --- paroisse-v1 (Drasah 06/11) — la vue 💍 Se marier adaptée au rôle ---
+        # paroisse-retours-v1 (Drasah 06/11): texte étoffé + Princesse
+        # nommée + fin indicative du verrou « aujourd'hui/demain HH:MM ».
         "church_marry_view_title": "💍 Se marier — {0}",
         "church_marry_badge": "MARIAGE ROYAL",
         "church_marry_rules": (
-            "**Un seul mariage actif** — la civilisation scellée devient"
+            "**Un seul mariage actif** — la civilisation choisie devient"
             " **exclusive** à ton royaume.\n"
-            "💍 **{0} bague(s)** sera(ont) consommée(s) à la célébration.\n"
-            "🔒 Verrou de combat : **{1}h** — ni attaque ni défense."
+            "💍 **{0} bague(s)** seront consommées à la célébration.\n"
+            "👑 Ton lien est **garanti jusqu'à la fin de la saison**, même"
+            " en cas de défaite.\n"
+            "🔒 Verrou de combat : **{1}h** — fin à titre indicatif du"
+            " verrouillage au moment du clic : {2}.\n"
+            "🛡️ État verrouillage : si tu es verrouillé, tu ne peux"
+            " **ni attaquer, ni défendre, ni utiliser de carte"
+            " technologique**."
         ),
         "church_marry_rules_royal": (
             "👑 Ton lien est **garanti jusqu'à la fin de la saison**, même"
             " en cas de défaite."
         ),
+        "church_marry_princess": "Princesse {0}",
+        "church_marry_lock_today": "aujourd'hui à **{0}**",
+        "church_marry_lock_tomorrow": "demain à **{0}**",
         "church_marry_confirm_title": "💍 Confirmer ton mariage",
-        "church_marry_confirm_sub": "épouse pressentie · {0} bague(s) · verrou {1}h",
+        "church_marry_confirm_sub": "princesse pressentie · {0} bague(s) · verrou {1}h",
         "church_marry_yes_button": "💍 Oui, je le veux",
         "church_marry_edit_button": "✏️ Modifier",
         "church_marry_back_button": "↩️ Retour Paroisse",

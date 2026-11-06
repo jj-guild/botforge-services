@@ -2741,6 +2741,10 @@ def _paroisse_rows(
         else:
             row_one.append(button)
     for button in row_one:
+        # paroisse-retours-v1 (Drasah 06/11): « 🔎 En savoir plus »
+        # stays BLUE (primary) — only the place ACTIONS render green.
+        if str(getattr(button.item, "custom_id", "")) == "kingdoms:church:info":
+            continue
         # The max-palier Améliorer stays disabled (its own convention).
         if not button.item.disabled:
             _green(button)
