@@ -48,7 +48,7 @@ jobs:
       startsWith(github.event.comment.body, '/reset-env') ||
       startsWith(github.event.comment.body, '/seed') ||
       startsWith(github.event.comment.body, '/clean-env') ||
-      startsWith(github.event.comment.body, '/wipe-liquipedia-cache')
+      startsWith(github.event.comment.body, '/clear-db')
     runs-on: ubuntu-latest
     outputs:
       command: ${{ steps.parse.outputs.command }}
@@ -65,7 +65,7 @@ jobs:
           body="$COMMENT_BODY"
           command="$(echo "$body" | awk '{print $1}')"
           case "$command" in
-            /logs|/restart|/start|/stop|/status|/rollback|/dump-db|/reset-env|/seed|/clean-env|/wipe-liquipedia-cache) ;;
+            /logs|/restart|/start|/stop|/status|/rollback|/dump-db|/reset-env|/seed|/clean-env|/clear-db) ;;
             *) echo "::error::unsupported command: $command"; exit 1 ;;
           esac
           env_name="$(echo "$body" | awk '{print $2}')"
@@ -90,7 +90,7 @@ jobs:
             reset-env) capability=env-reset ;;
             seed)      capability=env-control ;;
             clean-env) capability=env-control ;;
-            wipe-liquipedia-cache) capability=env-control ;;
+            clear-db) capability=env-control ;;
           esac
           {
             echo "command=${command#/}"
@@ -116,7 +116,7 @@ jobs:
               "reset-env": `**/${cmd} intercepted** — wiping the ${env} data volumes and reseeding from the workflow datasets (destructive: the env's data is lost). Checking the roster authority matrix for **@${context.payload.comment.user.login}** (capability \`env-reset\`: self env only, ops anywhere) — verdict right away.`,
               "seed": `**/${cmd} intercepted** — seeding the ${env} data from the requested source file (idempotent: re-running is safe). Checking the roster authority matrix for **@${context.payload.comment.user.login}** (capability \`env-control\`) — verdict right away.`,
               "clean-env": `**/${cmd} intercepted** — cleaning the ${env} runner's Docker residue (dangling images, stopped containers, build cache; never the running stack). Checking the roster authority matrix for **@${context.payload.comment.user.login}** (capability \`env-control\`) — verdict right away.`,
-              "wipe-liquipedia-cache": `**/${cmd} intercepted** — dropping the ${env} liquipedia provider's cache tables ONLY (liquipedia_maps, liquipedia_pages): the stale buggy-era descriptors go, everything else lives. The next maps sync re-fetches fresh. Checking the roster authority matrix for **@${context.payload.comment.user.login}** (capability \`env-control\`) — verdict right away.`,
+              "clear-db": `**/${cmd} intercepted** — dropping the ${env}'s NAMED collections ONLY (the arguments; validated names): a surgical wipe, everything else lives. Checking the roster authority matrix for **@${context.payload.comment.user.login}** (capability \`env-control\`) — verdict right away.`,
             }[cmd];
             await github.rest.issues.createComment({
               owner: context.repo.owner,
@@ -185,18 +185,36 @@ jobs:
               [[ -n "$TAIL" ]]    && ARGS+=(-f tail="$TAIL")
               gh workflow run env-logs.yml "${ARGS[@]}"
               ;;
-            restart|start|stop|status|wipe-liquipedia-cache)
+            restart|start|stop|status|clear-db)
               # env-control is workflow_dispatch-only (two choice lists);
               # reuse it through gh workflow run with its own inputs.
               # Dispatch on the state branch deploy/<env>: the job targets
               # the GitHub environment <env>, whose deployment branch policy
               # only allows deploy/<env> — a dispatch from main is rejected
               # by the environment protection.
+              COLLECTIONS=""
+              if [[ "$COMMAND" == "clear-db" ]]; then
+                # /clear-db [env] col1 [col2...]: when arg 2 names a known
+                # env it IS the env; otherwise every arg after the command
+                # is a collection on the requestor's default env.
+                ARG2="$(echo "$COMMENT_BODY" | awk '{print $2}')"
+                if [[ -n "$ARG2" && ! "$ARG2" =~ ^- ]]; then
+                  case "$ARG2" in
+                    merlin|test|prod|drasah) shift_words=3 ;;
+                    *) shift_words=2 ;;
+                  esac
+                else
+                  shift_words=2
+                fi
+                COLLECTIONS="$(echo "$COMMENT_BODY" | awk -v skip=$shift_words '{for(i=skip+1;i<=NF;i++) printf "%s ", $i}' | sed 's/ *$//' | cut -c1-200)"
+                [[ -n "$COLLECTIONS" ]] || { echo "::error::/clear-db needs at least one collection name"; exit 1; }
+              fi
+              ARGS=(-f command="$COMMAND" -f environment="$ENVIRONMENT")
+              [[ -n "$COLLECTIONS" ]] && ARGS+=(-f collections="$COLLECTIONS")
               gh workflow run env-control.yml \
                 --repo merlin-pinpin-org/kingdoms-infra \
                 --ref "deploy/$ENVIRONMENT" \
-                -f command="$COMMAND" \
-                -f environment="$ENVIRONMENT"
+                "${ARGS[@]}"
               ;;
             reset-env)
               # Destructive: gated by the env-reset capability (self env
