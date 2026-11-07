@@ -61,7 +61,11 @@ class _FakeDB:
     async def find_active_factions(
         self, game_key: str, guild_id: str | None = None
     ) -> list[dict[str, Any]]:
-        return []
+        return [
+            dict(d)
+            for d in self._col("factions").docs.values()
+            if str(d.get("game_key")) == game_key and d.get("archived_at") is None
+        ]
 
     async def delete_entry(self, collection: str, entry_id: str) -> bool:
         return self._col(collection).docs.pop(entry_id, None) is not None
@@ -115,5 +119,21 @@ async def test_catalog_gateway_round_trip() -> None:
         # delete over the wire
         assert await remote.delete_map(created.id) is True
         assert await remote.get_map(created.id) is None
+
+        # the factions come back as TYPED models carrying their game_key
+        # (the 2026-11-07 civs bug: raw dicts made the forum mirror scope
+        # resolve to "games/" — zero posts, silently)
+        from kingdoms.core.models.game_data import FactionModel
+
+        await GameDataService(database).create_faction("aoe2", "Aztecs", faction_key="aztecs")
+        factions = await remote.list_factions("aoe2")
+        assert factions, "the created faction must list over the wire"
+        for faction in factions:
+            assert isinstance(faction, FactionModel), (
+                f"the remote must rebuild typed models — got {type(faction)}"
+            )
+            assert faction.game_key == "aoe2", (
+                "the game_key must survive the wire — the forum mirror scopes on it"
+            )
     finally:
         await server.stop(0)

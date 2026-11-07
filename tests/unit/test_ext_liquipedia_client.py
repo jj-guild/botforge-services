@@ -224,12 +224,15 @@ def test_query_tags_normalize_info() -> None:
 
     provider = _make_provider(_mock_transport(ARABIA_WIKITEXT))
     info = provider.map_data("Arabia").info
-    assert query_tags(info) == ("terrain:land",)  # type deduped against terrain
+    # type deduped against terrain; the walls/tc tags always ride
+    # (the English vocabulary — owner direction 2026-11-07)
+    assert query_tags(info) == ("terrain:land", "walls:no")
     hybrid = type(info)(
         name="X", description="", terrain="Hybrid", size="",
         map_type="", image_file="", image_license="", source_url="",
     )
     assert "water" in query_tags(hybrid)
+    assert "walls:no" in query_tags(hybrid), "the walls tag is always present"
     provider = _make_provider(_mock_transport(ARABIA_WIKITEXT))
     provider.close()
 

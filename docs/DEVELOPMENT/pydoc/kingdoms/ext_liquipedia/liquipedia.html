@@ -232,7 +232,7 @@ Data and other attributes defined here:<br>
 <td class="section-title" colspan=3>&nbsp;<br><a name="MapInfo">class <strong>MapInfo</strong></a>(<a href="builtins.html#object">builtins.object</a>)</td></tr>
     
 <tr><td class="decor title-decor" rowspan=2><span class="code">&nbsp;&nbsp;&nbsp;</span></td>
-<td class="decor title-decor" colspan=2><span class="code"><a href="#MapInfo">MapInfo</a>(name:&nbsp;'str',&nbsp;description:&nbsp;'str',&nbsp;terrain:&nbsp;'str',&nbsp;size:&nbsp;'str',&nbsp;map_type:&nbsp;'str',&nbsp;image_file:&nbsp;'str',&nbsp;image_license:&nbsp;'str',&nbsp;source_url:&nbsp;'str',&nbsp;nomad:&nbsp;'str'&nbsp;=&nbsp;'',&nbsp;walls:&nbsp;'str'&nbsp;=&nbsp;'',&nbsp;tc:&nbsp;'str'&nbsp;=&nbsp;'',&nbsp;player_capacity:&nbsp;'str'&nbsp;=&nbsp;'',&nbsp;creator:&nbsp;'str'&nbsp;=&nbsp;'',&nbsp;gallery_icon:&nbsp;'str'&nbsp;=&nbsp;'',&nbsp;game_versions:&nbsp;'tuple[str,&nbsp;...]'&nbsp;=&nbsp;(),&nbsp;versions:&nbsp;'tuple[<a href="#MapVersion">MapVersion</a>,&nbsp;...]'&nbsp;=&nbsp;())&nbsp;-&amp;gt;&nbsp;None<br>
+<td class="decor title-decor" colspan=2><span class="code"><a href="#MapInfo">MapInfo</a>(name:&nbsp;'str',&nbsp;description:&nbsp;'str',&nbsp;terrain:&nbsp;'str',&nbsp;size:&nbsp;'str',&nbsp;map_type:&nbsp;'str',&nbsp;image_file:&nbsp;'str',&nbsp;image_license:&nbsp;'str',&nbsp;source_url:&nbsp;'str',&nbsp;nomad:&nbsp;'str'&nbsp;=&nbsp;'',&nbsp;walls:&nbsp;'str'&nbsp;=&nbsp;'',&nbsp;tc:&nbsp;'str'&nbsp;=&nbsp;'',&nbsp;player_capacity:&nbsp;'str'&nbsp;=&nbsp;'',&nbsp;creator:&nbsp;'str'&nbsp;=&nbsp;'',&nbsp;gallery_icon:&nbsp;'str'&nbsp;=&nbsp;'',&nbsp;game_versions:&nbsp;'tuple[str,&nbsp;...]'&nbsp;=&nbsp;(),&nbsp;versions:&nbsp;'tuple[<a href="#MapVersion">MapVersion</a>,&nbsp;...]'&nbsp;=&nbsp;(),&nbsp;raw_wikitext:&nbsp;'str'&nbsp;=&nbsp;'')&nbsp;-&amp;gt;&nbsp;None<br>
 &nbsp;<br>
 Structured&nbsp;fields&nbsp;extracted&nbsp;from&nbsp;a&nbsp;map's&nbsp;infobox.<br>&nbsp;</span></td></tr>
 <tr><td>&nbsp;</td>
@@ -243,7 +243,7 @@ Structured&nbsp;fields&nbsp;extracted&nbsp;from&nbsp;a&nbsp;map's&nbsp;infobox.<
 
 <dl><dt><a name="MapInfo-__hash__"><strong>__hash__</strong></a>(self)</dt><dd><span class="code">Return&nbsp;hash(self).</span></dd></dl>
 
-<dl><dt><a name="MapInfo-__init__"><strong>__init__</strong></a>(self, name: 'str', description: 'str', terrain: 'str', size: 'str', map_type: 'str', image_file: 'str', image_license: 'str', source_url: 'str', nomad: 'str' = '', walls: 'str' = '', tc: 'str' = '', player_capacity: 'str' = '', creator: 'str' = '', gallery_icon: 'str' = '', game_versions: 'tuple[str, ...]' = (), versions: 'tuple[MapVersion, ...]' = ()) -&gt; None</dt><dd><span class="code">Initialize&nbsp;self.&nbsp;&nbsp;See&nbsp;help(type(self))&nbsp;for&nbsp;accurate&nbsp;signature.</span></dd></dl>
+<dl><dt><a name="MapInfo-__init__"><strong>__init__</strong></a>(self, name: 'str', description: 'str', terrain: 'str', size: 'str', map_type: 'str', image_file: 'str', image_license: 'str', source_url: 'str', nomad: 'str' = '', walls: 'str' = '', tc: 'str' = '', player_capacity: 'str' = '', creator: 'str' = '', gallery_icon: 'str' = '', game_versions: 'tuple[str, ...]' = (), versions: 'tuple[MapVersion, ...]' = (), raw_wikitext: 'str' = '') -&gt; None</dt><dd><span class="code">Initialize&nbsp;self.&nbsp;&nbsp;See&nbsp;help(type(self))&nbsp;for&nbsp;accurate&nbsp;signature.</span></dd></dl>
 
 <dl><dt><a name="MapInfo-__repr__"><strong>__repr__</strong></a>(self)</dt><dd><span class="code">Return&nbsp;repr(self).</span></dd></dl>
 
@@ -265,7 +265,7 @@ Data and other attributes defined here:<br>
 
 <dl><dt><strong>__dataclass_params__</strong> = _DataclassParams(init=True,repr=True,eq=True,ord...rue,kw_only=False,slots=False,weakref_slot=False)</dl>
 
-<dl><dt><strong>__match_args__</strong> = ('name', 'description', 'terrain', 'size', 'map_type', 'image_file', 'image_license', 'source_url', 'nomad', 'walls', 'tc', 'player_capacity', 'creator', 'gallery_icon', 'game_versions', 'versions')</dl>
+<dl><dt><strong>__match_args__</strong> = ('name', 'description', 'terrain', 'size', 'map_type', 'image_file', 'image_license', 'source_url', 'nomad', 'walls', 'tc', 'player_capacity', 'creator', 'gallery_icon', 'game_versions', 'versions', 'raw_wikitext')</dl>
 
 <dl><dt><strong>creator</strong> = ''</dl>
 
@@ -276,6 +276,8 @@ Data and other attributes defined here:<br>
 <dl><dt><strong>nomad</strong> = ''</dl>
 
 <dl><dt><strong>player_capacity</strong> = ''</dl>
+
+<dl><dt><strong>raw_wikitext</strong> = ''</dl>
 
 <dl><dt><strong>tc</strong> = ''</dl>
 
@@ -408,6 +410,11 @@ non-empty,&nbsp;so&nbsp;the&nbsp;same&nbsp;function&nbsp;serves&nbsp;the&nbsp;ne
 unchanged.&nbsp;Tags&nbsp;are&nbsp;lowercase&nbsp;slugs,&nbsp;safe&nbsp;for&nbsp;Mongo&nbsp;``$all``<br>
 queries:&nbsp;``terrain:&lt;v&gt;``,&nbsp;``type:&lt;v&gt;``&nbsp;and&nbsp;``water``&nbsp;when&nbsp;either<br>
 says&nbsp;hybrid/water.</span></dd></dl>
+ <dl><dt><a name="-walls_vocabulary"><strong>walls_vocabulary</strong></a>(walls: 'str') -&gt; 'str'</dt><dd><span class="code">Normalize&nbsp;an&nbsp;infobox&nbsp;walls&nbsp;label&nbsp;into&nbsp;the&nbsp;English&nbsp;tag&nbsp;vocabulary.<br>
+&nbsp;<br>
+Liquipedia&nbsp;only&nbsp;serves&nbsp;English&nbsp;labels&nbsp;(``None``,&nbsp;``No``,&nbsp;``Stone<br>
+Walls``,&nbsp;``Palisade``...)&nbsp;—&nbsp;the&nbsp;tag&nbsp;is&nbsp;the&nbsp;normalized&nbsp;English&nbsp;word:<br>
+``no``&nbsp;/&nbsp;``wood``&nbsp;/&nbsp;``stone``&nbsp;/&nbsp;``partial``.</span></dd></dl>
 </td></tr></table><p>
 <table class="section">
 <tr class="decor data-decor heading-text">

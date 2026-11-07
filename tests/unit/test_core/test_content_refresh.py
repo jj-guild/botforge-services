@@ -113,3 +113,75 @@ async def test_refresh_is_idempotent(monkeypatch: Any) -> None:
 
     assert counts["factions"] == 0
     assert counts["content_docs"] == 4
+
+
+async def test_maps_sync_rebuilds_every_known_map(monkeypatch: Any) -> None:
+    """A sync means FRESH data for EVERY known map — no "complete" skip.
+
+    Every active map re-resolves and re-stores (raw wikitext next to
+    the parsed fields); archived maps stay untouched (owner direction
+    2026-11-07).
+    """
+    import kingdoms.core.services.game_data as game_data_module
+    import kingdoms.game_aoe2.content_refresh as refresh_module
+    import kingdoms.game_aoe2.seed as seed_module
+    from kingdoms.aoe2.map_seed import MapSeed
+    from kingdoms.core.models import db as db_module
+    from kingdoms.core.models.game_data import MapModel
+
+    database = FakeDatabase()
+    monkeypatch.setattr(db_module, "get_async_database", lambda: database)
+
+    class FakeGameData:
+        async def list_maps(self, game_key: str) -> list[MapModel]:
+            del game_key
+            return [
+                MapModel(_id="map:aoe2:arena", game_key="aoe2", name="Arena"),
+                MapModel(_id="map:aoe2:budapest", game_key="aoe2", name="Budapest"),
+                MapModel(
+                    _id="map:aoe2:old",
+                    game_key="aoe2",
+                    name="Old",
+                    archived_at=1,
+                ),
+            ]
+
+    monkeypatch.setattr(game_data_module, "GameDataService", lambda adapter: FakeGameData())
+    monkeypatch.setattr(seed_module, "MongoAoE2Database", lambda database: None)
+
+    async def fake_resolve(names: list[str]) -> dict[str, Any]:
+        return {
+            name: MapSeed(
+                name=name,
+                description=f"The {name} overview.",
+                resource_url=f"https://liquipedia.net/ageofempires2/{name}",
+                image_url=f"https://x/{name}.png",
+                map_type="Land",
+                walls="Stone Walls",
+                nomad="No",
+                tc="1",
+                player_capacity="Up to 8",
+                tags=("type:land", "walls:stone", "tc:1"),
+                raw_wikitext="{{Infobox map|name=" + name + "}}",
+            )
+            for name in names
+        }
+
+    monkeypatch.setattr(refresh_module, "_resolve_map_seeds", fake_resolve)
+
+    from kingdoms.game_aoe2.content_refresh import refresh_aoe2_maps
+
+    counts = await refresh_aoe2_maps()
+    assert counts["maps_total"] == 3
+    assert counts["maps_enriched"] == 2, "every ACTIVE map re-stores — the archived one skips"
+    docs = database.collections["faction_content"].docs
+    assert "map:aoe2:arena:en" in docs and "map:aoe2:budapest:en" in docs
+    assert "map:aoe2:old:en" not in docs
+    arena = docs["map:aoe2:arena:en"]
+    assert arena["raw_wikitext"] == "{{Infobox map|name=Arena}}", "the raw provider payload rides"
+    assert "walls:stone" in arena["tags"] and "tc:1" in arena["tags"]
+
+    # the SECOND sync re-stores everything again: no complete-skip —
+    # a sync always means fresh data, even for an already-rich doc
+    counts_again = await refresh_aoe2_maps()
+    assert counts_again["maps_enriched"] == 2, "a sync is a full rebuild, never a skip"

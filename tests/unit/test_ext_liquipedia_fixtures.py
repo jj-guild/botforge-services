@@ -1,8 +1,8 @@
 """The Liquipedia parse against REAL page wikitexts — no fetch, no fakes.
 
 The fixtures under ``tests/fixtures/liquipedia/`` are the raw wikitexts
-of Budapest, Arabia and Arena, dumped by the provider probe from the
-live API (the run's log). The REAL parser runs on those bytes, so the
+of Budapest, Arabia, Arena and Nomad, dumped by the provider probe from
+the live API (the run's log). The REAL parser runs on those bytes, so the
 labels (image, gallery icon, tags, overview) are checked against the
 actual pages — never against assumptions, and never with a network
 call: the import is tested offline, exactly as the user asked.
@@ -76,7 +76,7 @@ def test_arena_keeps_its_infobox_and_stops_at_the_subsection() -> None:
     assert "tc:1" in tags, "the TC count tags from 1 — got {tags}"
 
 
-@pytest.mark.parametrize("page", ["Arabia", "Arena", "Budapest"])
+@pytest.mark.parametrize("page", ["Arabia", "Arena", "Budapest", "Nomad"])
 def test_every_fixture_page_yields_an_image_and_tags(page: str) -> None:
     """Every dumped page carries its image, its icon and at least one tag."""
     info = _parse(page)
@@ -86,13 +86,35 @@ def test_every_fixture_page_yields_an_image_and_tags(page: str) -> None:
     assert info.description.strip(), f"{page}: the overview must parse"
 
 
-@pytest.mark.parametrize("page", ["Arabia", "Arena", "Budapest"])
+@pytest.mark.parametrize("page", ["Arabia", "Arena", "Budapest", "Nomad"])
 def test_every_fixture_page_carries_its_raw_wikitext(page: str) -> None:
     """The raw provider payload rides the info — the sync's raw-data store."""
     wikitext = (FIXTURES / f"{page.lower()}.wikitext").read_text(encoding="utf-8")
     info = _parse(page)
     assert info.raw_wikitext == wikitext, f"{page}: the raw wikitext must ride the info"
     assert "{{Infobox map" in info.raw_wikitext, f"{page}: the raw payload is the page itself"
+
+
+def test_nomad_keeps_its_infobox_and_nomad_tag() -> None:
+    """Nomad: the nomad-start map — nomad=Yes, walls=No, tc=No (no digit).
+
+    The live-probe facts (2026-11-07): ``tc=No`` in the infobox is not a
+    digit, so no ``tc:<n>`` tag; ``walls=No`` tags ``walls:no``; the
+    hybrid type derives the water tag.
+    """
+    info = _parse("Nomad")
+    assert info.name == "Nomad"
+    assert info.image_file == "Nomad_Map.png"
+    assert info.gallery_icon == "Nomad AoE2 DE.png", "the Gallery's File: icon"
+    assert info.walls == "No"
+    assert info.nomad == "Yes"
+    assert info.tc == "No"
+    assert info.player_capacity == "Up to 8"
+    tags = query_tags(info)
+    assert "nomad" in tags, f"the nomad map tags nomad — got {tags}"
+    assert "walls:no" in tags, f"walls=No tags walls:no — got {tags}"
+    assert "type:hybrid" in tags and "water" in tags, tags
+    assert not any(t.startswith("tc:") for t in tags), "tc=No is not a count"
 
 
 def test_walls_vocabulary_is_english_and_total() -> None:

@@ -184,6 +184,14 @@ class TestCivsSyncJourney:
             assert message.ephemeral, "the admin DM sub-view is ephemeral"
 
             await alice.click(message, custom_id=CIVS_BUTTON_ID)
+
+            # the mirror ran inside the click: one post per faction, in
+            # the provisionned civs forum (the #330 fix — the remote's
+            # factions carry their game_key, so the scope resolves)
+            names = {thread.name for thread in forum.threads}
+            assert {"Aztecs", "Britons"} <= names, (
+                f"the civ posts must land in the forum — got {names}"
+            )
         finally:
             await server.stop(0)
             _restore_caches(saved)
