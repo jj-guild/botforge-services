@@ -127,9 +127,56 @@ async def probe_aoe2lobby(timeout_s: float, profile_id: str) -> None:
         print(f"!! websocket failed: {type(err).__name__}: {err}")
 
 
+def probe_liquipedia(page: str) -> None:
+    """Fetch one map page's RAW wikitext and run the REAL parse on it.
+
+    Prints the raw wikitext (the facts) next to the parsed MapInfo, so
+    a "the labels are wrong on this map" report is debugged against
+    the actual bytes, not assumptions.
+    """
+    from kingdoms.ext_liquipedia.liquipedia import LiquipediaMapsProvider, query_tags
+
+    provider = LiquipediaMapsProvider(
+        "kingdoms provider-probe (github.com/merlin-pinpin-org/kingdoms-services)",
+    )
+    payload = provider._get_json(
+        {"action": "parse", "page": page, "prop": "wikitext", "format": "json"},
+        is_parse=True,
+    )
+    wikitext = str(payload.get("parse", {}).get("wikitext", ""))
+    _print(f"LIQUIPEDIA RAW WIKITEXT — {page}", wikitext[:12000])
+    info = provider._info_from_wikitext(page, wikitext)
+    _print(
+        f"LIQUIPEDIA PARSED MapInfo — {page}",
+        {
+            "name": info.name,
+            "description": info.description,
+            "terrain": info.terrain,
+            "size": info.size,
+            "map_type": info.map_type,
+            "image_file": info.image_file,
+            "gallery_icon": info.gallery_icon,
+            "walls": info.walls,
+            "nomad": info.nomad,
+            "tc": info.tc,
+            "player_capacity": info.player_capacity,
+            "creator": info.creator,
+            "game_versions": info.game_versions,
+            "versions": [v.name for v in info.versions],
+            "tags": list(query_tags(info)),
+        },
+    )
+
+
 async def main_async(args: argparse.Namespace) -> int:
     """Run the enabled probes; exit 0 if at least one call succeeded."""
     ok = False
+    for page in [p.strip() for p in args.liquipedia_page.split(",") if p.strip()]:
+        try:
+            probe_liquipedia(page)
+            ok = True
+        except Exception as err:
+            print(f"!! liquipedia probe failed for {page}: {type(err).__name__}: {err}")
     if not args.skip_http:
         try:
             await probe_librematch(args.profile_id, args.timeout)
@@ -153,6 +200,11 @@ def main() -> int:
     parser.add_argument("--timeout", type=float, default=15.0, help="per-call timeout (s)")
     parser.add_argument("--skip-ws", action="store_true", help="skip the aoe2lobby WebSocket probe")
     parser.add_argument("--skip-http", action="store_true", help="skip the librematch HTTP probe")
+    parser.add_argument(
+        "--liquipedia-page",
+        default="",
+        help="comma-separated map pages: fetch each one's raw wikitext and print the parsed MapInfo",
+    )
     return asyncio.run(main_async(parser.parse_args()))
 
 

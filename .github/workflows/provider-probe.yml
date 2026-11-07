@@ -40,10 +40,15 @@ on:
         required: false
         type: boolean
         default: false
+      liquipedia_pages:
+        description: "Comma-separated Liquipedia map pages to dump (raw wikitext + parsed MapInfo)"
+        required: false
+        default: ""
   pull_request:
     paths:
       - "src/kingdoms/ext_librematch/**"
       - "src/kingdoms/ext_aoe2lobby/**"
+      - "src/kingdoms/ext_liquipedia/**"
       - "src/kingdoms/core/games/aoe2/blobs.py"
       - ".github/workflows/scripts/provider_probe.py"
       - ".github/workflows/provider-probe.yml"
@@ -52,6 +57,7 @@ on:
     paths:
       - "src/kingdoms/ext_librematch/**"
       - "src/kingdoms/ext_aoe2lobby/**"
+      - "src/kingdoms/ext_liquipedia/**"
       - "src/kingdoms/core/games/aoe2/blobs.py"
       - ".github/workflows/scripts/provider_probe.py"
       - ".github/workflows/provider-probe.yml"
@@ -81,8 +87,10 @@ jobs:
           PROFILE_ID: ${{ inputs.profile_id }}
           SKIP_WS: ${{ inputs.skip_ws }}
           SKIP_HTTP: ${{ inputs.skip_http }}
+          LIQUIPEDIA_PAGES: ${{ inputs.liquipedia_pages }}
         run: |
           args=(--profile-id "$PROFILE_ID")
           [[ "$SKIP_WS" == true ]] && args+=(--skip-ws)
           [[ "$SKIP_HTTP" == true ]] && args+=(--skip-http)
+          [[ -n "$LIQUIPEDIA_PAGES" ]] && args+=(--liquipedia-page "$LIQUIPEDIA_PAGES")
           python .github/workflows/scripts/provider_probe.py "${args[@]}"
