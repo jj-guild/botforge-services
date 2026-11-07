@@ -210,6 +210,27 @@ jobs:
             exit 1
           fi
           echo "NATIVE GUILD LOCALE READABLE OK"
+      - name: Assert the member-level locale enumeration on the real gateway
+        # Discord exposes NO per-member language (there is no member.locale in
+        # the API): a user's client language is only observable inside an
+        # interaction (interaction.locale, logged by on_interaction as
+        # INTERACTION USER LOCALE). The boot enumeration proves it: one
+        # GUILD MEMBER LOCALE line per cached member of the CI/CD guild.
+        run: |
+          lines="$(docker logs kingdoms-bot-smoke 2>&1 | grep 'GUILD MEMBER LOCALE' || true)"
+          if [ -z "$lines" ]; then
+            echo '::error::No GUILD MEMBER LOCALE line — the member enumeration produced nothing'
+            docker logs --tail 60 kingdoms-bot-smoke
+            exit 1
+          fi
+          echo "$lines"
+          count="$(echo "$lines" | grep -c 'GUILD MEMBER LOCALE')"
+          nonnull="$(echo "$lines" | grep -cv 'raw=None' || true)"
+          if [ "$nonnull" != "0" ]; then
+            echo "::error::Unexpected: a member line carries a non-None locale (Discord should expose none per member)"
+            exit 1
+          fi
+          echo "MEMBER LOCALE ENUMERATION OK ($count members enumerated, raw=None each — per-user language is interaction-driven)"
       - name: Assert the hot state connected (no degraded startup)
         # kingdoms-services#225: the bot used to boot READY with its Redis
         # state store never started — every cache-aside write failed at
