@@ -30,6 +30,7 @@ class MapSeed:
     game_versions: tuple[str, ...] = ()
     versions: tuple[dict[str, object], ...] = ()
     tags: tuple[str, ...] = ()
+    raw_wikitext: str = ""
 
 
 class LiquipediaUnconfiguredError(RuntimeError):

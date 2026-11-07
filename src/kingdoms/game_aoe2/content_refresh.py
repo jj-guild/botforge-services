@@ -125,35 +125,42 @@ async def refresh_aoe2_maps() -> dict[str, int]:
     content = FactionContentService(database)
     await content.ensure_indexes()
     maps_total = 0
-    maps_complete = 0
-    maps_checked = 0
     maps_enriched = 0
     try:
         entries = await game_data.list_maps("aoe2")
+        # A sync means FRESH DATA for EVERY known map (owner direction
+        # 2026-11-07): no "complete" skip — every entry re-resolves from
+        # the provider (force=True rides the seeds), and the doc stores
+        # the raw provider payload (raw_wikitext) next to the parsed
+        # fields, so the parse can be replayed offline.
         pending: list[tuple[Any, str]] = []
         for entry in entries:
             maps_total += 1
-            already = await content.get(entry.id, "en")
-            # the skip requires the LABEL generation: a doc without
-            # label_gen was stored by the bool-coercion era (walls/nomad/
-            # tc as "True") — it re-enriches with the true labels
-            if (
-                already is not None
-                and already.get("icon_url")
-                and already.get("walls")
-                and already.get("label_gen") == 2
-            ):
-                maps_complete += 1
-                continue
-            maps_checked += 1
-            pending.append((entry, entry.name))
+            if entry.archived_at is None:
+                pending.append((entry, entry.name))
         seeds = await _resolve_map_seeds([n for _, n in pending])
         for entry, name in pending:
             seed = seeds.get(_title_variants_key(name))
             if seed is None:
                 seed = seeds.get(name)
-            if seed is None or not seed.image_url:
+            if seed is None:
+                logger.debug("CONTENT REFRESH: no seed resolved for %r", name)
                 continue
+            if not seed.image_url:
+                logger.debug("CONTENT REFRESH: seed for %r carries no image — skipped", name)
+                continue
+            logger.debug(
+                "CONTENT REFRESH: %r parsed — type=%r walls=%r nomad=%r tc=%r "
+                "capacity=%r tags=%s raw=%d chars",
+                name,
+                seed.map_type,
+                seed.walls,
+                seed.nomad,
+                seed.tc,
+                seed.player_capacity,
+                list(seed.tags),
+                len(seed.raw_wikitext),
+            )
             await content.store(
                 {
                     "entity_id": entry.id,
@@ -173,22 +180,21 @@ async def refresh_aoe2_maps() -> dict[str, int]:
                     "game_versions": list(seed.game_versions),
                     "versions": [dict(v) for v in seed.versions],
                     "tags": list(seed.tags),
+                    "raw_wikitext": seed.raw_wikitext,
                 }
             )
             maps_enriched += 1
     except Exception:
         logger.warning("CONTENT REFRESH: map image enrichment failed — best-effort", exc_info=True)
     logger.info(
-        "CONTENT REFRESH (maps, on demand): %d/%d maps enriched, %d complete skipped, %d checked",
+        "CONTENT REFRESH (maps, on demand): %d/%d maps enriched (full rebuild)",
         maps_enriched,
         maps_total,
-        maps_complete,
-        maps_checked,
     )
     return {
         "maps_enriched": maps_enriched,
-        "maps_checked": maps_checked,
-        "maps_complete": maps_complete,
+        "maps_checked": maps_total,
+        "maps_complete": 0,
         "maps_total": maps_total,
     }
 
@@ -257,6 +263,7 @@ async def _resolve_map_seeds(names: list[str]) -> dict[str, Any]:
                     for v in descriptor.get("versions", ()) or ()
                 ),
                 tags=tuple(str(t) for t in descriptor.get("tags", ()) or ()),
+                raw_wikitext=str(descriptor.get("raw_wikitext", "") or ""),
             ),
         )
 

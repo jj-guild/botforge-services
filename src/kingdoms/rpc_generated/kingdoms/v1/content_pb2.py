@@ -24,7 +24,7 @@ _sym_db = _symbol_database.Default()
 
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x19kingdoms/v1/content.proto\x12\x0bkingdoms.v1\"B\n\x0eMapSeedRequest\x12\x10\n\x08game_key\x18\x01 \x01(\t\x12\x0f\n\x07map_key\x18\x02 \x01(\t\x12\r\n\x05\x66orce\x18\x03 \x01(\x08\"D\n\x0eMapSeedVersion\x12\x0c\n\x04name\x18\x01 \x01(\t\x12\x13\n\x0b\x64\x65scription\x18\x02 \x01(\t\x12\x0f\n\x07\x64\x65tails\x18\x03 \x03(\t\"\xba\x03\n\x0cMapSeedReply\x12\r\n\x05\x66ound\x18\x01 \x01(\x08\x12\x0c\n\x04name\x18\x02 \x01(\t\x12\x13\n\x0b\x64\x65scription\x18\x03 \x01(\t\x12\x14\n\x0cresource_url\x18\x04 \x01(\t\x12\x11\n\timage_url\x18\x05 \x01(\t\x12\x10\n\x08icon_url\x18\x06 \x01(\t\x12\x0f\n\x07terrain\x18\x07 \x01(\t\x12\x0c\n\x04size\x18\x08 \x01(\t\x12\x10\n\x08map_type\x18\t \x01(\t\x12\x12\n\nlicence_ok\x18\n \x01(\x08\x12\x14\n\x0clicence_note\x18\x0b \x01(\t\x12\r\n\x05walls\x18\x0c \x01(\x08\x12\r\n\x05nomad\x18\r \x01(\x08\x12\n\n\x02tc\x18\x0e \x01(\x08\x12\x15\n\rgame_versions\x18\x0f \x03(\t\x12-\n\x08versions\x18\x10 \x03(\x0b\x32\x1b.kingdoms.v1.MapSeedVersion\x12\x0c\n\x04tags\x18\x11 \x03(\t\x12\x13\n\x0bwalls_label\x18\x12 \x01(\t\x12\x13\n\x0bnomad_label\x18\x13 \x01(\t\x12\x10\n\x08tc_label\x18\x14 \x01(\t\x12\x17\n\x0fplayer_capacity\x18\x15 \x01(\t\x12\x0f\n\x07\x63reator\x18\x16 \x01(\t\"\x1c\n\x1a\x43ontentCapabilitiesRequest\"N\n\x13\x43ontentCapabilities\x12\x14\n\x0cprovider_key\x18\x01 \x01(\t\x12\x10\n\x08game_key\x18\x02 \x01(\t\x12\x0f\n\x07locales\x18\x03 \x03(\t\"\x15\n\x13ListFactionsRequest\"#\n\x0b\x46\x61\x63tionList\x12\x14\n\x0c\x66\x61\x63tion_keys\x18\x01 \x03(\t\"<\n\x15\x46\x61\x63tionContentRequest\x12\x13\n\x0b\x66\x61\x63tion_key\x18\x01 \x01(\t\x12\x0e\n\x06locale\x18\x02 \x01(\t\"4\n\x11MapContentRequest\x12\x0f\n\x07map_key\x18\x01 \x01(\t\x12\x0e\n\x06locale\x18\x02 \x01(\t\"\x8a\x01\n\x10LocalizedContent\x12\x11\n\tentity_id\x18\x01 \x01(\t\x12\x0e\n\x06locale\x18\x02 \x01(\t\x12\x0c\n\x04name\x18\x03 \x01(\t\x12\x0f\n\x07summary\x18\x04 \x01(\t\x12\x12\n\nsource_url\x18\x05 \x01(\t\x12\r\n\x05\x66ound\x18\x06 \x01(\x08\x12\x11\n\timage_url\x18\x07 \x01(\t2\xa8\x03\n\x07\x43ontent\x12\x63\n\x16GetContentCapabilities\x12\'.kingdoms.v1.ContentCapabilitiesRequest\x1a .kingdoms.v1.ContentCapabilities\x12J\n\x0cListFactions\x12 .kingdoms.v1.ListFactionsRequest\x1a\x18.kingdoms.v1.FactionList\x12V\n\x11GetFactionContent\x12\".kingdoms.v1.FactionContentRequest\x1a\x1d.kingdoms.v1.LocalizedContent\x12N\n\rGetMapContent\x12\x1e.kingdoms.v1.MapContentRequest\x1a\x1d.kingdoms.v1.LocalizedContent\x12\x44\n\nGetMapSeed\x12\x1b.kingdoms.v1.MapSeedRequest\x1a\x19.kingdoms.v1.MapSeedReplyb\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x19kingdoms/v1/content.proto\x12\x0bkingdoms.v1\"B\n\x0eMapSeedRequest\x12\x10\n\x08game_key\x18\x01 \x01(\t\x12\x0f\n\x07map_key\x18\x02 \x01(\t\x12\r\n\x05\x66orce\x18\x03 \x01(\x08\"D\n\x0eMapSeedVersion\x12\x0c\n\x04name\x18\x01 \x01(\t\x12\x13\n\x0b\x64\x65scription\x18\x02 \x01(\t\x12\x0f\n\x07\x64\x65tails\x18\x03 \x03(\t\"\xd0\x03\n\x0cMapSeedReply\x12\r\n\x05\x66ound\x18\x01 \x01(\x08\x12\x0c\n\x04name\x18\x02 \x01(\t\x12\x13\n\x0b\x64\x65scription\x18\x03 \x01(\t\x12\x14\n\x0cresource_url\x18\x04 \x01(\t\x12\x11\n\timage_url\x18\x05 \x01(\t\x12\x10\n\x08icon_url\x18\x06 \x01(\t\x12\x0f\n\x07terrain\x18\x07 \x01(\t\x12\x0c\n\x04size\x18\x08 \x01(\t\x12\x10\n\x08map_type\x18\t \x01(\t\x12\x12\n\nlicence_ok\x18\n \x01(\x08\x12\x14\n\x0clicence_note\x18\x0b \x01(\t\x12\r\n\x05walls\x18\x0c \x01(\x08\x12\r\n\x05nomad\x18\r \x01(\x08\x12\n\n\x02tc\x18\x0e \x01(\x08\x12\x15\n\rgame_versions\x18\x0f \x03(\t\x12-\n\x08versions\x18\x10 \x03(\x0b\x32\x1b.kingdoms.v1.MapSeedVersion\x12\x0c\n\x04tags\x18\x11 \x03(\t\x12\x13\n\x0bwalls_label\x18\x12 \x01(\t\x12\x13\n\x0bnomad_label\x18\x13 \x01(\t\x12\x10\n\x08tc_label\x18\x14 \x01(\t\x12\x17\n\x0fplayer_capacity\x18\x15 \x01(\t\x12\x0f\n\x07\x63reator\x18\x16 \x01(\t\x12\x14\n\x0craw_wikitext\x18\x17 \x01(\t\"\x1c\n\x1a\x43ontentCapabilitiesRequest\"N\n\x13\x43ontentCapabilities\x12\x14\n\x0cprovider_key\x18\x01 \x01(\t\x12\x10\n\x08game_key\x18\x02 \x01(\t\x12\x0f\n\x07locales\x18\x03 \x03(\t\"\x15\n\x13ListFactionsRequest\"#\n\x0b\x46\x61\x63tionList\x12\x14\n\x0c\x66\x61\x63tion_keys\x18\x01 \x03(\t\"<\n\x15\x46\x61\x63tionContentRequest\x12\x13\n\x0b\x66\x61\x63tion_key\x18\x01 \x01(\t\x12\x0e\n\x06locale\x18\x02 \x01(\t\"4\n\x11MapContentRequest\x12\x0f\n\x07map_key\x18\x01 \x01(\t\x12\x0e\n\x06locale\x18\x02 \x01(\t\"\x8a\x01\n\x10LocalizedContent\x12\x11\n\tentity_id\x18\x01 \x01(\t\x12\x0e\n\x06locale\x18\x02 \x01(\t\x12\x0c\n\x04name\x18\x03 \x01(\t\x12\x0f\n\x07summary\x18\x04 \x01(\t\x12\x12\n\nsource_url\x18\x05 \x01(\t\x12\r\n\x05\x66ound\x18\x06 \x01(\x08\x12\x11\n\timage_url\x18\x07 \x01(\t2\xa8\x03\n\x07\x43ontent\x12\x63\n\x16GetContentCapabilities\x12\'.kingdoms.v1.ContentCapabilitiesRequest\x1a .kingdoms.v1.ContentCapabilities\x12J\n\x0cListFactions\x12 .kingdoms.v1.ListFactionsRequest\x1a\x18.kingdoms.v1.FactionList\x12V\n\x11GetFactionContent\x12\".kingdoms.v1.FactionContentRequest\x1a\x1d.kingdoms.v1.LocalizedContent\x12N\n\rGetMapContent\x12\x1e.kingdoms.v1.MapContentRequest\x1a\x1d.kingdoms.v1.LocalizedContent\x12\x44\n\nGetMapSeed\x12\x1b.kingdoms.v1.MapSeedRequest\x1a\x19.kingdoms.v1.MapSeedReplyb\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
@@ -36,21 +36,21 @@ if not _descriptor._USE_C_DESCRIPTORS:
   _globals['_MAPSEEDVERSION']._serialized_start=110
   _globals['_MAPSEEDVERSION']._serialized_end=178
   _globals['_MAPSEEDREPLY']._serialized_start=181
-  _globals['_MAPSEEDREPLY']._serialized_end=623
-  _globals['_CONTENTCAPABILITIESREQUEST']._serialized_start=625
-  _globals['_CONTENTCAPABILITIESREQUEST']._serialized_end=653
-  _globals['_CONTENTCAPABILITIES']._serialized_start=655
-  _globals['_CONTENTCAPABILITIES']._serialized_end=733
-  _globals['_LISTFACTIONSREQUEST']._serialized_start=735
-  _globals['_LISTFACTIONSREQUEST']._serialized_end=756
-  _globals['_FACTIONLIST']._serialized_start=758
-  _globals['_FACTIONLIST']._serialized_end=793
-  _globals['_FACTIONCONTENTREQUEST']._serialized_start=795
-  _globals['_FACTIONCONTENTREQUEST']._serialized_end=855
-  _globals['_MAPCONTENTREQUEST']._serialized_start=857
-  _globals['_MAPCONTENTREQUEST']._serialized_end=909
-  _globals['_LOCALIZEDCONTENT']._serialized_start=912
-  _globals['_LOCALIZEDCONTENT']._serialized_end=1050
-  _globals['_CONTENT']._serialized_start=1053
-  _globals['_CONTENT']._serialized_end=1477
+  _globals['_MAPSEEDREPLY']._serialized_end=645
+  _globals['_CONTENTCAPABILITIESREQUEST']._serialized_start=647
+  _globals['_CONTENTCAPABILITIESREQUEST']._serialized_end=675
+  _globals['_CONTENTCAPABILITIES']._serialized_start=677
+  _globals['_CONTENTCAPABILITIES']._serialized_end=755
+  _globals['_LISTFACTIONSREQUEST']._serialized_start=757
+  _globals['_LISTFACTIONSREQUEST']._serialized_end=778
+  _globals['_FACTIONLIST']._serialized_start=780
+  _globals['_FACTIONLIST']._serialized_end=815
+  _globals['_FACTIONCONTENTREQUEST']._serialized_start=817
+  _globals['_FACTIONCONTENTREQUEST']._serialized_end=877
+  _globals['_MAPCONTENTREQUEST']._serialized_start=879
+  _globals['_MAPCONTENTREQUEST']._serialized_end=931
+  _globals['_LOCALIZEDCONTENT']._serialized_start=934
+  _globals['_LOCALIZEDCONTENT']._serialized_end=1072
+  _globals['_CONTENT']._serialized_start=1075
+  _globals['_CONTENT']._serialized_end=1499
 # @@protoc_insertion_point(module_scope)

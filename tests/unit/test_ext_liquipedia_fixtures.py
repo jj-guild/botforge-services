@@ -39,6 +39,7 @@ def test_budapest_keeps_its_infobox_and_gallery_icon() -> None:
     assert info.creator == "Forgotten Empires"
     tags = query_tags(info)
     assert "type:hybrid" in tags and "water" in tags and "tc:2" in tags, tags
+    assert "walls:no" in tags, f"the English walls vocabulary — got {tags}"
 
 
 def test_budapest_keeps_its_whole_overview() -> None:
@@ -57,6 +58,7 @@ def test_arabia_keeps_its_infobox_and_the_de_description() -> None:
     assert "most balanced and competitive map" in info.description
     assert "Arid desert with strategic elevations" in info.description
     assert "type:land" in query_tags(info)
+    assert "walls:no" in query_tags(info), "Arabia's infobox says walls=None"
 
 
 def test_arena_keeps_its_infobox_and_stops_at_the_subsection() -> None:
@@ -69,6 +71,9 @@ def test_arena_keeps_its_infobox_and_stops_at_the_subsection() -> None:
     assert info.walls == "Stone Walls"
     assert "pre-built stone walls" in info.description
     assert "Notable Features" not in info.description, "the subsection header never leaks in"
+    tags = query_tags(info)
+    assert "walls:stone" in tags, f"the English walls vocabulary — got {tags}"
+    assert "tc:1" in tags, "the TC count tags from 1 — got {tags}"
 
 
 @pytest.mark.parametrize("page", ["Arabia", "Arena", "Budapest"])
@@ -79,3 +84,26 @@ def test_every_fixture_page_yields_an_image_and_tags(page: str) -> None:
     assert info.gallery_icon, f"{page}: the Gallery icon must parse"
     assert query_tags(info), f"{page}: the tags must parse"
     assert info.description.strip(), f"{page}: the overview must parse"
+
+
+@pytest.mark.parametrize("page", ["Arabia", "Arena", "Budapest"])
+def test_every_fixture_page_carries_its_raw_wikitext(page: str) -> None:
+    """The raw provider payload rides the info — the sync's raw-data store."""
+    wikitext = (FIXTURES / f"{page.lower()}.wikitext").read_text(encoding="utf-8")
+    info = _parse(page)
+    assert info.raw_wikitext == wikitext, f"{page}: the raw wikitext must ride the info"
+    assert "{{Infobox map" in info.raw_wikitext, f"{page}: the raw payload is the page itself"
+
+
+def test_walls_vocabulary_is_english_and_total() -> None:
+    """The walls tags: no/wood/stone/partial — English, always present."""
+    from kingdoms.ext_liquipedia.liquipedia import walls_vocabulary
+
+    assert walls_vocabulary("") == "no"
+    assert walls_vocabulary("None") == "no"
+    assert walls_vocabulary("No") == "no"
+    assert walls_vocabulary("Stone Walls") == "stone"
+    assert walls_vocabulary("Palisade") == "wood"
+    assert walls_vocabulary("Wooden Walls") == "wood"
+    assert walls_vocabulary("Partial") == "partial"
+    assert walls_vocabulary("Yes") == "stone"

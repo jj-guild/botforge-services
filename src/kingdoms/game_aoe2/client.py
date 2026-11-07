@@ -179,6 +179,7 @@ class GameDataClient:
                 for v in reply.versions
             ),
             tags=tuple(reply.tags),
+            raw_wikitext=str(reply.raw_wikitext or ""),
         )
 
     async def watch(self, game_key: str, timeout_s: float = 5.0) -> dict[str, Any]:

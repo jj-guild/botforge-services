@@ -333,6 +333,7 @@ def _descriptor_of(game_key: str, page: str, data: Any) -> dict[str, Any]:
             ]
         ),
         "tags": _safe_list(lambda: list(_query_tags(info))),
+        "raw_wikitext": _safe(lambda: str(getattr(info, "raw_wikitext", ""))),
         "licence_ok": True,
         "licence_note": "",
     }

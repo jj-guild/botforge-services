@@ -126,6 +126,7 @@ class MapInfo:
     gallery_icon: str = ""
     game_versions: tuple[str, ...] = ()
     versions: tuple[MapVersion, ...] = ()
+    raw_wikitext: str = ""
 
 
 @dataclass(frozen=True)
@@ -140,6 +141,27 @@ class MapData:
 
 class MapLicenseError(RuntimeError):
     """The map's image carries an incompatible upstream licence."""
+
+
+def walls_vocabulary(walls: str) -> str:
+    """Normalize an infobox walls label into the English tag vocabulary.
+
+    Liquipedia only serves English labels (``None``, ``No``, ``Stone
+    Walls``, ``Palisade``...) — the tag is the normalized English word:
+    ``no`` / ``wood`` / ``stone`` / ``partial``.
+    """
+    value = walls.strip().lower()
+    if not value or value in ("none", "no", "false"):
+        return "no"
+    if "stone" in value:
+        return "stone"
+    if "wood" in value or "palisade" in value:
+        return "wood"
+    if "partial" in value:
+        return "partial"
+    if value in ("yes", "true"):
+        return "stone"
+    return "no"
 
 
 def query_tags(info: MapInfo) -> tuple[str, ...]:
@@ -162,10 +184,9 @@ def query_tags(info: MapInfo) -> tuple[str, ...]:
         tags.append("water")
     if info.nomad.strip().lower() in ("yes", "true"):
         tags.append("nomad")
-    if info.walls.strip().lower() in ("yes", "partial"):
-        tags.append("walled")
+    tags.append(f"walls:{walls_vocabulary(info.walls)}")
     tc = info.tc.strip()
-    if tc.isdigit() and int(tc) > 1:
+    if tc.isdigit() and int(tc) >= 1:
         tags.append(f"tc:{tc}")
     return tuple(tags)
 
@@ -510,6 +531,7 @@ class LiquipediaMapsProvider:
             creator=self._clean_wikitext(fields.get("creator", "")),
             game_versions=self._parse_game_tabs(wikitext),
             versions=self._parse_versions_section(wikitext),
+            raw_wikitext=wikitext,
         )
 
     @staticmethod

@@ -536,6 +536,7 @@ def _map_seed_reply_of(descriptor: dict[str, Any]) -> Any:
             for v in descriptor.get("versions", ()) or ()
         ],
         tags=[str(t) for t in descriptor.get("tags", ()) or ()],
+        raw_wikitext=str(descriptor.get("raw_wikitext", "") or ""),
     )
 
 

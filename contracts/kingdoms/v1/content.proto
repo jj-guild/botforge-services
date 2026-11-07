@@ -66,6 +66,9 @@ message MapSeedReply {
   string tc_label = 20;        // the starting TC count, "1" / "2"
   string player_capacity = 21;  // "Up to 8"
   string creator = 22;          // "Forgotten Empires"
+  string raw_wikitext = 23;     // the page's raw wikitext (the sync's
+                                // raw-data store: parse again offline,
+                                // never re-fetch to re-parse)
 }
 
 message ContentCapabilitiesRequest {}

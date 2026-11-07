@@ -449,8 +449,13 @@ class ContentRefreshButton(
             from kingdoms.discord.factions_forum import factions_forum_spec
 
             for guild in interaction.client.guilds:
-                await sync_entity_forum(
+                actions = await sync_entity_forum(
                     str(guild.id), interaction.client, factions_forum_spec(interaction.client)
+                )
+                logger.debug(
+                    "DM PANEL: civs forum mirror took %d action(s) on guild %s",
+                    actions,
+                    guild.id,
                 )
         except Exception:
             logger.warning("DM PANEL: civs forum sync after refresh failed — best-effort")
@@ -555,7 +560,12 @@ class MapsSyncButton(
             from kingdoms.discord.maps_forum import sync_maps_forum
 
             for guild in interaction.client.guilds:
-                await sync_maps_forum(str(guild.id), "aoe2", interaction.client)
+                actions = await sync_maps_forum(str(guild.id), "aoe2", interaction.client)
+                logger.debug(
+                    "DM PANEL: maps forum mirror took %d action(s) on guild %s",
+                    actions,
+                    guild.id,
+                )
         except Exception:
             logger.warning("DM PANEL: maps forum sync after enrichment failed — best-effort")
         # the result replaces the progress message: same place, as promised.

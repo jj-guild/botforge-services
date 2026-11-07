@@ -475,10 +475,31 @@ async def _migrate_stale_map_doc(
     logger.info("map doc migrated to the split keys (%s)", entity_id)
     return updated
 
+def _walls_display(walls: str) -> str:
+    """Normalize the walls label to its English display word.
+
+    Liquipedia serves English only (``None``, ``Stone Walls``) — the
+    post shows the same vocabulary as the tags: No / Wood / Stone /
+    Partial, capitalized for display. Empty hides the line.
+    """
+    value = walls.strip().lower()
+    if not value or value in ("none", "no", "false", "true"):
+        return ""
+    if "stone" in value:
+        return "Stone"
+    if "wood" in value or "palisade" in value:
+        return "Wood"
+    if "partial" in value:
+        return "Partial"
+    if value == "yes":
+        return "Stone"
+    return ""
+
+
 def _map_props_lines(
     map_type: str, walls: str, nomad: str, tc: str, player_capacity: str = ""
 ) -> list[str]:
-    """Render the map's properties as label lines (Type/Walls/Nomad/TCs/Capacité)."""
+    """Render the map's properties as label lines (Type/Walls/Nomad/TCs/Capacity)."""
     def _label(value: str) -> str:
         """Render a trait's display: the label's word, never the bool garbage.
 
@@ -486,16 +507,16 @@ def _map_props_lines(
         — they hide, not render.
         """
         v = value.strip()
-        return "" if v.lower() in ("true", "false") else v
+        return "" if v.lower() in ("true", "false", "none") else v
 
     props = [f"**Type** : {map_type}"] if map_type else []
-    if _label(walls):
-        props.append(f"**Walls** : {_label(walls)}")
+    if _walls_display(walls):
+        props.append(f"**Walls** : {_walls_display(walls)}")
     if _label(nomad):
-        shown = "Oui" if nomad.strip().lower() == "yes" else _label(nomad)
+        shown = "Yes" if nomad.strip().lower() == "yes" else _label(nomad)
         props.append(f"**Nomad** : {shown}")
     if _label(tc):
         props.append(f"**TCs** : {_label(tc)}")
     if player_capacity:
-        props.append(f"**Capacité** : {player_capacity}")
+        props.append(f"**Capacity** : {player_capacity}")
     return props

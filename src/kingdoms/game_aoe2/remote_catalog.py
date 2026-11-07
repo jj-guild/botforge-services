@@ -16,13 +16,18 @@ from __future__ import annotations
 import json
 from typing import Any
 
-from kingdoms.core.models.game_data import MapModel, MapPackModel, MapPoolModel
+from kingdoms.core.models.game_data import FactionModel, MapModel, MapPackModel, MapPoolModel
 from kingdoms.core.services.game_data import NameTakenError
 
 
 def _model(doc: Any) -> MapModel:
     """Rebuild a MapModel from the JSON wire (tuples coerce)."""
     return MapModel.model_validate(doc, strict=False)
+
+
+def _model_faction(doc: Any) -> FactionModel:
+    """Rebuild a FactionModel from the JSON wire."""
+    return FactionModel.model_validate(doc, strict=False)
 
 
 def _model_pack(doc: Any) -> MapPackModel:
@@ -293,10 +298,10 @@ class RemoteGameDataService:
 
     # ── factions ────────────────────────────────────────────────────────
 
-    async def list_factions(self, game_key: str, guild_id: str | None = None) -> list[Any]:
+    async def list_factions(self, game_key: str, guild_id: str | None = None) -> list[FactionModel]:
         """List the game's factions (the civs' catalog)."""
         result = await self._call("list_factions", game_key=game_key, guild_id=guild_id)
-        return list(result or [])
+        return [_model_faction(doc) for doc in result or []]
 
     async def list_game_keys(self) -> list[str]:
         """List the implemented games."""

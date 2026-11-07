@@ -39,4 +39,6 @@ PAGE_CACHE_TTL_S = 7 * 24 * 3600
 # parse for a week after the fix shipped).
 # Gen 2: the whole overview (all paragraphs) + the gallery icon's bare
 # form + the captioned-icon preference.
-SEED_GEN = 2
+# Gen 3: the English tag vocabulary (walls:no/wood/stone/partial, tc:<n>
+# from 1) + the raw wikitext riding the descriptor.
+SEED_GEN = 3

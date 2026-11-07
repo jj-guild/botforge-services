@@ -41,12 +41,18 @@ class FactionContentService:
         self._state = state
 
     async def store(self, content: dict[str, Any]) -> None:
-        """Upsert one content document (idempotent by ``<entity id>:<locale>``)."""
+        """Upsert one content document (idempotent by ``<entity id>:<locale>``).
+
+        Write-through: the parsed doc lands in the Redis cache on the
+        same store — a sync refreshes Mongo AND the cache in one pass,
+        and the reads after a sync never re-download from Mongo.
+        """
         doc = dict(content)
         doc["_id"] = f"{content['entity_id']}:{content['locale']}"
         await self._database[CONTENT_COLLECTION].replace_one({"_id": doc["_id"]}, doc, upsert=True)
         await self._invalidate_cache(doc["entity_id"], doc["locale"])
         await self._invalidate_list_caches(doc["entity_id"], doc["locale"])
+        await self._cache_put(doc)
 
     async def get(self, entity_id: str, locale: str) -> dict[str, Any] | None:
         """Resolve one entity's content: Redis first, then Mongo."""
