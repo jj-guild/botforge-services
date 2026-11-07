@@ -241,3 +241,34 @@ async def test_setup_hook_starts_shared_state_and_registration_engine(config_dir
     assert workflow_store.stopped
     await bot.state_service.close()
     assert store.stopped, "close() must stop the shared state store"
+
+
+async def test_on_guild_join_resolves_the_native_guild_locale(
+    config_dir: str, caplog: pytest.LogCaptureFixture
+) -> None:
+    """on_guild_join reads guild.preferred_locale through the native seam.
+
+    The GUILD_CREATE payload always carries preferred_locale, so the guild's
+    language is resolvable at join time; the locale is resolved (and logged),
+    never stored on our side.
+    """
+    from tests.mocks import MockGuild
+
+    bot = create_bot(BotConfig(config_dir=config_dir))
+    guild = MockGuild(id=424242, preferred_locale=discord.Locale.french)
+    with caplog.at_level(logging.INFO, logger="kingdoms.bot"):
+        await bot.on_guild_join(guild)
+    assert any("GUILD JOIN" in record.message and "native_locale=fr" in record.message for record in caplog.records)
+
+
+async def test_on_guild_join_unknown_locale_falls_back_to_english(
+    config_dir: str, caplog: pytest.LogCaptureFixture
+) -> None:
+    """A locale outside the en/fr catalog resolves to English at join time."""
+    from tests.mocks import MockGuild
+
+    bot = create_bot(BotConfig(config_dir=config_dir))
+    guild = MockGuild(id=424243, preferred_locale="ja")
+    with caplog.at_level(logging.INFO, logger="kingdoms.bot"):
+        await bot.on_guild_join(guild)
+    assert any("GUILD JOIN" in record.message and "native_locale=en" in record.message for record in caplog.records)
