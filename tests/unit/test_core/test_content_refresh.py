@@ -180,6 +180,10 @@ async def test_maps_sync_rebuilds_every_known_map(monkeypatch: Any) -> None:
     arena = docs["map:aoe2:arena:en"]
     assert arena["raw_wikitext"] == "{{Infobox map|name=Arena}}", "the raw provider payload rides"
     assert "walls:stone" in arena["tags"] and "tc:1" in arena["tags"]
+    assert arena["split_keys"] is True, (
+        "the freshness marker the reader's contract checks — without it, "
+        "a map whose icon failed to resolve looks stale forever"
+    )
 
     # the SECOND sync re-stores everything again: no complete-skip —
     # a sync always means fresh data, even for an already-rich doc

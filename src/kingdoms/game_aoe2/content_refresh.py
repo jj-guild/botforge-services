@@ -37,7 +37,10 @@ async def refresh_aoe2_content() -> dict[str, int | list[str]]:
     (:func:`refresh_aoe2_maps`).
     """
     from kingdoms.core.models.db import get_async_database
-    from kingdoms.core.services.faction_content import FactionContentService
+    from kingdoms.core.services.faction_content import (
+        FactionContentService,
+        content_state_from_env,
+    )
     from kingdoms.core.services.game_data import GameDataService
     from kingdoms.game_aoe2.content_source import resolve_aoe2_content_source
     from kingdoms.game_aoe2.faction_content import SUPPORTED_LOCALES
@@ -50,7 +53,7 @@ async def refresh_aoe2_content() -> dict[str, int | list[str]]:
     source = resolve_aoe2_content_source(None)
     database = get_async_database()
     game_data = GameDataService(MongoAoE2Database(database))
-    content = FactionContentService(database)
+    content = FactionContentService(database, content_state_from_env())
     await content.ensure_indexes()
     from kingdoms.core.services.provider_mapping import ProviderMappingService
     from kingdoms.core.services.provider_mapping_mongo import MongoProviderMappingDatabase
@@ -115,14 +118,17 @@ async def refresh_aoe2_maps() -> dict[str, int]:
     that qualified).
     """
     from kingdoms.core.models.db import get_async_database
-    from kingdoms.core.services.faction_content import FactionContentService
+    from kingdoms.core.services.faction_content import (
+        FactionContentService,
+        content_state_from_env,
+    )
     from kingdoms.core.services.game_data import GameDataService
 
     from .seed import MongoAoE2Database
 
     database = get_async_database()
     game_data = GameDataService(MongoAoE2Database(database))
-    content = FactionContentService(database)
+    content = FactionContentService(database, content_state_from_env())
     await content.ensure_indexes()
     maps_total = 0
     maps_enriched = 0
@@ -144,10 +150,10 @@ async def refresh_aoe2_maps() -> dict[str, int]:
             if seed is None:
                 seed = seeds.get(name)
             if seed is None:
-                logger.debug("CONTENT REFRESH: no seed resolved for %r", name)
+                logger.info("CONTENT REFRESH: no seed resolved for %r — skipped", name)
                 continue
             if not seed.image_url:
-                logger.debug("CONTENT REFRESH: seed for %r carries no image — skipped", name)
+                logger.info("CONTENT REFRESH: seed for %r carries no image — skipped", name)
                 continue
             logger.debug(
                 "CONTENT REFRESH: %r parsed — type=%r walls=%r nomad=%r tc=%r "
@@ -176,6 +182,11 @@ async def refresh_aoe2_maps() -> dict[str, int]:
                     "player_capacity": seed.player_capacity,
                     "creator": seed.creator,
                     "label_gen": 2,
+                    # the freshness marker the reader's contract checks
+                    # (the 2026-11-07 bug: without it, a map whose icon
+                    # failed to resolve looked stale forever and every
+                    # read re-fetched through the migration path)
+                    "split_keys": True,
                     "provider": "liquipedia",
                     "game_versions": list(seed.game_versions),
                     "versions": [dict(v) for v in seed.versions],

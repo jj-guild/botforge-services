@@ -58,14 +58,15 @@ async def _serve() -> None:
     # The catalog gateway (rule 5): the game's collections answer from
     # the owner's process — the service + the content store, composed.
     from kingdoms.core.models.db import get_async_database as _get_db
-    from kingdoms.core.services.faction_content import FactionContentService
+    from kingdoms.core.services.faction_content import FactionContentService, content_state_from_env
     from kingdoms.core.services.game_data import GameDataService
 
     from .seed import MongoAoE2Database
 
     _database = _get_db()
     catalog = _CatalogGateway(
-        GameDataService(MongoAoE2Database(_database)), FactionContentService(_database)
+        GameDataService(MongoAoE2Database(_database)),
+        FactionContentService(_database, content_state_from_env()),
     )
 
     server = build_status_server(

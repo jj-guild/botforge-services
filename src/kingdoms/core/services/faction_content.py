@@ -32,6 +32,19 @@ LIST_CACHE_SCOPE = "faction_content_list"
 LIST_CACHE_TTL_S = 3_600
 
 
+def content_state_from_env() -> StateService | None:
+    """Build the Redis-backed state from ``REDIS_URI``; None when unset.
+
+    The content reads and the sync's stores must share ONE cache: the
+    sync's write-through lands where the reads look. A process without
+    ``REDIS_URI`` degrades to no cache (Mongo only) — never a crash.
+    """
+    import os
+
+    uri = os.environ.get("REDIS_URI", "")
+    return StateService(redis_uri=uri) if uri else None
+
+
 class FactionContentService:
     """Per-locale entity content: cache-aside reads over the durable store."""
 

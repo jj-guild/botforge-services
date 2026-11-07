@@ -378,19 +378,18 @@ async def _map_content_full(
     separate keys next to the summary since the label-line layout
     split them out of the summary blob.
     """
-    from kingdoms.discord.content_posts import content_service, guild_locale
+    from kingdoms.discord.content_posts import content_service
 
     service = content_service()
-    locale = await guild_locale(guild_id, bot)
     doc = None
     if service is not None:
-        for candidate in (locale, "en"):
-            try:
-                doc = await service.content_get(entity_id, candidate)
-            except Exception:
-                doc = None
-            if doc is not None:
-                break
+        # Liquipedia serves English ONLY (owner direction 2026-11-07):
+        # the map docs are stored under "en", read "en" — a stale
+        # per-locale doc from an earlier era must never win the read
+        try:
+            doc = await service.content_get(entity_id, "en")
+        except Exception:
+            doc = None
     if doc is None:
         return "", "", "", "", "", "", "", "", "", ""
     if doc.get("split_keys") or (doc.get("icon_url") and doc.get("walls") is not None):
@@ -412,7 +411,7 @@ async def _map_content_full(
     # Stale doc (pre-split import: no icon_url / trait keys, the summary
     # carries the old inline blob) — re-resolve from Liquipedia once and
     # re-store the new keys; the next pass takes the fast path.
-    migrated = await _migrate_stale_map_doc(entity_id, doc, service, locale)
+    migrated = await _migrate_stale_map_doc(entity_id, doc, service, "en")
     if migrated is not None:
         doc = migrated
     return (
