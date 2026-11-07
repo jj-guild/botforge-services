@@ -137,7 +137,8 @@ def probe_liquipedia(page: str) -> None:
     from kingdoms.ext_liquipedia.liquipedia import LiquipediaMapsProvider, query_tags
 
     provider = LiquipediaMapsProvider(
-        "kingdoms provider-probe (github.com/merlin-pinpin-org/kingdoms-services)",
+        "kingdoms provider-probe/1.0 "
+        "(https://github.com/merlin-pinpin-org/kingdoms-services)",
     )
     payload = provider._get_json(
         {"action": "parse", "page": page, "prop": "wikitext", "format": "json"},
