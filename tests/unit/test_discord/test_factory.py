@@ -12,6 +12,7 @@ from kingdoms.discord.bot.factory import (
     READY_LOG_LINE,
     BotConfig,
     KingdomsBot,
+    _log_guild_native_locales,
     create_bot,
 )
 
@@ -272,3 +273,25 @@ async def test_on_guild_join_unknown_locale_falls_back_to_english(
     with caplog.at_level(logging.INFO, logger="kingdoms.bot"):
         await bot.on_guild_join(guild)
     assert any("GUILD JOIN" in record.message and "native_locale=en" in record.message for record in caplog.records)
+
+
+def test_log_guild_native_locales_logs_raw_and_resolved_per_guild(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """One greppable GUILD NATIVE LOCALE line per guild: raw + resolved.
+
+    The discord-smoke CI job greps these lines on the real gateway to prove
+    guild.preferred_locale is populated; raw=None must never happen.
+    """
+    from tests.mocks import MockGuild
+
+    guilds = [
+        MockGuild(id=424242, preferred_locale=discord.Locale.french),
+        MockGuild(id=424243, preferred_locale="en-US"),
+    ]
+    with caplog.at_level(logging.INFO, logger="kingdoms.bot"):
+        _log_guild_native_locales(guilds)
+    lines = [r.message for r in caplog.records if "GUILD NATIVE LOCALE" in r.message]
+    assert len(lines) == 2
+    assert any("guild=424242" in line and "raw=fr" in line and "resolved=fr" in line for line in lines)
+    assert any("guild=424243" in line and "raw=en-US" in line and "resolved=en" in line for line in lines)
