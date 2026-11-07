@@ -90,6 +90,13 @@ async def test_the_content_seam_round_trips_over_the_real_wire() -> None:
 
         # an unknown map degrades to None (found=False on the wire)
         assert await client.get_map_seed("aoe2", "unknown") is None
+
+        # the sync's force flag crosses the wire to the backing callable
+        _SEED_CALLS.clear()
+        assert await client.get_map_seed("aoe2", "arabia", force=True) is not None
+        assert ("aoe2", "arabia", True) in _SEED_CALLS, _SEED_CALLS
+        assert await client.get_map_seed("aoe2", "arabia") is not None
+        assert ("aoe2", "arabia", False) in _SEED_CALLS, _SEED_CALLS
     finally:
         await server.stop(0)
 
@@ -164,7 +171,11 @@ async def _map_content(map_key: str, locale: str) -> dict[str, Any] | None:
     return None
 
 
-async def _map_seed(game_key: str, map_key: str) -> dict[str, Any] | None:
+_SEED_CALLS: list[tuple[str, str, bool]] = []
+
+
+async def _map_seed(game_key: str, map_key: str, force: bool = False) -> dict[str, Any] | None:
+    _SEED_CALLS.append((game_key, map_key, force))
     if map_key == "arabia":
         return dict(SEED)
     return None

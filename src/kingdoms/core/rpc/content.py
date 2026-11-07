@@ -78,7 +78,7 @@ class ContentServicer(content_pb2_grpc.ContentServicer):
         list_factions: Callable[[], Awaitable[list[str]]],
         faction_content: Callable[[str, str], Awaitable[dict[str, str | bool] | None]],
         map_content: Callable[[str, str], Awaitable[dict[str, str | bool] | None]],
-        map_seed: Callable[[str, str], Awaitable[dict[str, Any] | None]] | None = None,
+        map_seed: Callable[..., Awaitable[dict[str, Any] | None]] | None = None,
     ) -> None:
         self._provider_key = provider_key
         self._game_key = game_key
@@ -134,7 +134,7 @@ class ContentServicer(content_pb2_grpc.ContentServicer):
             raise asyncio.CancelledError  # the abort above closes the call
         if self._map_seed is None:
             await context.abort(grpc.StatusCode.UNIMPLEMENTED, "map seed not available")
-        seed = await self._map_seed(request.game_key, request.map_key)
+        seed = await self._map_seed(request.game_key, request.map_key, force=bool(request.force))
         if seed is None:
             return content_pb2.MapSeedReply(found=False)
         licence_ok = bool(seed.get("licence_ok", True))

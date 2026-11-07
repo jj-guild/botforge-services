@@ -71,14 +71,16 @@ knows&nbsp;who&nbsp;consumes&nbsp;it.</span></dd></dl>
 
 <dl><dt><a name="LiquipediaSource-map_content"><strong>map_content</strong></a>(self, key: 'str', locale: 'str', game_key: 'str' = 'aoe2') -&gt; 'dict[str, Any] | None'</dt><dd><span class="code">Serve&nbsp;one&nbsp;map's&nbsp;localized&nbsp;content&nbsp;(name&nbsp;+&nbsp;attribution&nbsp;link).</span></dd></dl>
 
-<dl><dt><a name="LiquipediaSource-map_seed"><strong>map_seed</strong></a>(self, game_key: 'str', map_key: 'str') -&gt; 'dict[str, Any] | None'</dt><dd><span class="code">Resolve&nbsp;one&nbsp;map&nbsp;name&nbsp;into&nbsp;its&nbsp;full&nbsp;descriptor.<br>
+<dl><dt><a name="LiquipediaSource-map_seed"><strong>map_seed</strong></a>(self, game_key: 'str', map_key: 'str', force: 'bool' = False) -&gt; 'dict[str, Any] | None'</dt><dd><span class="code">Resolve&nbsp;one&nbsp;map&nbsp;name&nbsp;into&nbsp;its&nbsp;full&nbsp;descriptor.<br>
 &nbsp;<br>
 The&nbsp;persisted&nbsp;descriptor&nbsp;serves&nbsp;first&nbsp;(cache-aside);&nbsp;a&nbsp;miss&nbsp;is<br>
 QUEUED&nbsp;for&nbsp;the&nbsp;seed&nbsp;worker,&nbsp;which&nbsp;coalesces&nbsp;every&nbsp;concurrent<br>
 request&nbsp;into&nbsp;batched&nbsp;``action=query``&nbsp;calls&nbsp;(&lt;=50&nbsp;pages&nbsp;each,<br>
 the&nbsp;light&nbsp;2&nbsp;s&nbsp;pacing&nbsp;—&nbsp;never&nbsp;a&nbsp;burst&nbsp;of&nbsp;single-page&nbsp;``parse``<br>
 calls).&nbsp;A&nbsp;page&nbsp;absent&nbsp;upstream&nbsp;answers&nbsp;None&nbsp;(the&nbsp;caller&nbsp;falls<br>
-back&nbsp;to&nbsp;admin-entered&nbsp;fields).</span></dd></dl>
+back&nbsp;to&nbsp;admin-entered&nbsp;fields).&nbsp;``force``&nbsp;(the&nbsp;admin&nbsp;DM's&nbsp;sync)<br>
+skips&nbsp;the&nbsp;cache&nbsp;READ&nbsp;—&nbsp;the&nbsp;fetch&nbsp;re-runs&nbsp;and&nbsp;the&nbsp;fresh<br>
+descriptor&nbsp;re-persists:&nbsp;a&nbsp;sync&nbsp;means&nbsp;fresh&nbsp;data.</span></dd></dl>
 
 <hr>
 Data descriptors defined here:<br>
@@ -105,5 +107,6 @@ Data descriptors defined here:<br>
 <strong>MAPS_COLLECTION</strong> = 'liquipedia_maps'<br>
 <strong>PAGES_COLLECTION</strong> = 'liquipedia_pages'<br>
 <strong>PAGE_CACHE_TTL_S</strong> = 604800<br>
+<strong>SEED_GEN</strong> = 2<br>
 <strong>logger</strong> = &lt;Logger kingdoms.ext_liquipedia (WARNING)&gt;</td></tr></table>
 </body></html>

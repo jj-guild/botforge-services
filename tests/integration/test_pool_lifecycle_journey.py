@@ -97,7 +97,9 @@ class _CatalogFake(_FakeDB):
 class _CannedMapSeeds:
     """The game service's Liquipedia door, canned per map name."""
 
-    async def get_map_seed(self, game_key: str, map_key: str) -> dict[str, Any] | None:
+    async def get_map_seed(
+        self, game_key: str, map_key: str, force: bool = False
+    ) -> dict[str, Any] | None:
         return LIQUIPEDIA_SEEDS.get(map_key)
 
 

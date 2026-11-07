@@ -28,6 +28,7 @@ from kingdoms.ext_liquipedia import (
     MAPS_COLLECTION,
     PAGE_CACHE_TTL_S,
     PAGES_COLLECTION,
+    SEED_GEN,
 )
 from kingdoms.ext_liquipedia.liquipedia import (
     LiquipediaMapsProvider,
@@ -95,7 +96,7 @@ class LiquipediaSource:
             "found": True,
         }
 
-    def map_seed(self, game_key: str, map_key: str) -> dict[str, Any] | None:
+    def map_seed(self, game_key: str, map_key: str, force: bool = False) -> dict[str, Any] | None:
         """Resolve one map name into its full descriptor.
 
         The persisted descriptor serves first (cache-aside); a miss is
@@ -103,12 +104,14 @@ class LiquipediaSource:
         request into batched ``action=query`` calls (<=50 pages each,
         the light 2 s pacing — never a burst of single-page ``parse``
         calls). A page absent upstream answers None (the caller falls
-        back to admin-entered fields).
+        back to admin-entered fields). ``force`` (the admin DM's sync)
+        skips the cache READ — the fetch re-runs and the fresh
+        descriptor re-persists: a sync means fresh data.
         """
         from kingdoms.core.wiki_names import extract_page_name, title_variants
 
         name = extract_page_name(map_key)
-        cached = self._load_descriptor(game_key, name)
+        cached = None if force else self._load_descriptor(game_key, name)
         if cached is not None:
             logger.info("SEED: %r (game %s) — cache hit", name, game_key)
             return cached
@@ -229,7 +232,14 @@ class LiquipediaSource:
             return None
         if time.time() - float(doc.get("fetched_at", 0)) > PAGE_CACHE_TTL_S:
             return None
-        return dict(doc.get("descriptor") or {}) or None
+        descriptor = dict(doc.get("descriptor") or {}) or None
+        if descriptor is None or descriptor.get("seed_gen") != SEED_GEN:
+            # a pre-generation descriptor is a MISS: the parser moved,
+            # the next request re-fetches and re-persists with the
+            # current generation (the TTL alone would serve the old
+            # parse for a week after a parser fix ships)
+            return None
+        return descriptor
 
     def _persist(
         self, game_key: str, page: str, data: Any, descriptor: dict[str, Any]
@@ -290,6 +300,7 @@ def _descriptor_of(game_key: str, page: str, data: Any) -> dict[str, Any]:
 
     info: Any = getattr(data, "info", None) or _EmptyInfo()
     return {
+        "seed_gen": SEED_GEN,
         "name": _safe(lambda: str(info.name)),
         "description": _safe(lambda: str(info.description)),
         "resource_url": _safe(lambda: str(info.source_url)),

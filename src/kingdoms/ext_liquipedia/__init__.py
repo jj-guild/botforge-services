@@ -30,3 +30,13 @@ MAPS_COLLECTION = "liquipedia_maps"
 PAGES_COLLECTION = "liquipedia_pages"
 
 PAGE_CACHE_TTL_S = 7 * 24 * 3600
+
+# The persisted descriptors' parser generation. The cache-aside serves a
+# stored descriptor ONLY when its generation matches: a parser change
+# bumps this number and every pre-era descriptor becomes a cache miss —
+# the next seed request re-fetches with the new parser and re-persists
+# (the merlin 2026-11-07 lesson: the 7-day TTL alone served the old
+# parse for a week after the fix shipped).
+# Gen 2: the whole overview (all paragraphs) + the gallery icon's bare
+# form + the captioned-icon preference.
+SEED_GEN = 2

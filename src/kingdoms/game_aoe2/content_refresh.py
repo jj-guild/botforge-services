@@ -228,7 +228,7 @@ async def _resolve_map_seeds(names: list[str]) -> dict[str, Any]:
 
     async def _one(name: str) -> tuple[str, Any] | None:
         try:
-            descriptor = await client.get_map_seed("aoe2", name)
+            descriptor = await client.get_map_seed("aoe2", name, force=True)
         except Exception:
             return None  # a missing page degrades to no seed, per map
         if descriptor is None:

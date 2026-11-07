@@ -116,3 +116,69 @@ def test_gallery_icon_is_empty_without_a_gallery() -> None:
     from kingdoms.ext_liquipedia.liquipedia import LiquipediaMapsProvider
 
     assert LiquipediaMapsProvider._parse_gallery_icon("No gallery here.") == ""
+
+
+class _WarmCollection(_FakeCollection):
+    """A collection that serves one persisted descriptor."""
+
+    def __init__(self, doc: dict[str, Any]) -> None:
+        super().__init__()
+        self._doc = doc
+
+    def find_one(self, query: dict[str, Any]) -> dict[str, Any] | None:
+        return self._doc
+
+
+def _persisted_descriptor_doc(descriptor: dict[str, Any]) -> dict[str, Any]:
+    import time as _time
+
+    return {
+        "game_key": "aoe2",
+        "page": "Team_Islands",
+        "name": "Team Islands",
+        "fetched_at": _time.time(),
+        "descriptor": descriptor,
+    }
+
+
+def test_a_current_generation_descriptor_is_a_cache_hit() -> None:
+    """A descriptor stamped with the current parser generation serves."""
+    from kingdoms.ext_liquipedia import SEED_GEN
+
+    doc = _persisted_descriptor_doc({"seed_gen": SEED_GEN, "name": "Team Islands"})
+    db = _FakeDB()
+    db.maps = _WarmCollection(doc)
+    source = LiquipediaSource({"aoe2": _FakeUpstream()}, db)  # type: ignore[arg-type]
+    assert source._load_descriptor("aoe2", "Team Islands") == {
+        "seed_gen": SEED_GEN,
+        "name": "Team Islands",
+    }
+
+
+def test_a_pre_generation_descriptor_is_a_cache_miss() -> None:
+    """A descriptor from the pre-seed_gen era never serves — it re-fetches.
+
+    The merlin 2026-11-07 lesson: the 7-day TTL alone served the old
+    parse for a week after the parser fix shipped.
+    """
+    doc = _persisted_descriptor_doc({"name": "Team Islands"})  # no seed_gen
+    db = _FakeDB()
+    db.maps = _WarmCollection(doc)
+    source = LiquipediaSource({"aoe2": _FakeUpstream()}, db)  # type: ignore[arg-type]
+    assert source._load_descriptor("aoe2", "Team Islands") is None
+
+
+async def test_the_sync_force_skips_the_warm_cache() -> None:
+    """force=True (the admin DM's sync) re-fetches despite a warm cache."""
+    from kingdoms.ext_liquipedia import SEED_GEN
+
+    upstream = _FakeUpstream()
+    doc = _persisted_descriptor_doc({"seed_gen": SEED_GEN, "name": "Team Islands"})
+    db = _FakeDB()
+    db.maps = _WarmCollection(doc)
+    source = LiquipediaSource({"aoe2": upstream}, db)  # type: ignore[arg-type]
+
+    seed = source.map_seed("aoe2", "Team Islands", force=True)
+
+    assert seed is not None and seed["name"] == "Team Islands"
+    assert upstream.batch_calls, "force must go upstream, never serve the cache"

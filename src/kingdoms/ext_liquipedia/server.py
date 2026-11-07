@@ -55,7 +55,9 @@ async def _serve() -> None:
             list_factions=lambda: _wrap(source.faction_keys()),
             faction_content=lambda key, locale: _wrap(source.faction_content(key, locale)),
             map_content=lambda key, locale: _wrap(source.map_content(key, locale)),
-            map_seed=lambda game_key, map_key: _wrap(source.map_seed(game_key, map_key)),
+            map_seed=lambda game_key, map_key, force=False: _wrap(
+                source.map_seed(game_key, map_key, force=force)
+            ),
         ),
     )
     port = os.environ.get("EXT_GRPC_PORT", "50064")

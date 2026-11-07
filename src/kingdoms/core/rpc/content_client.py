@@ -78,13 +78,20 @@ class ContentProviderClient:
             "image_url": reply.image_url,
         }
 
-    async def get_map_seed(self, game_key: str, map_key: str) -> dict[str, object] | None:
-        """Fetch one map's full descriptor, degrading to None."""
+    async def get_map_seed(
+        self, game_key: str, map_key: str, force: bool = False
+    ) -> dict[str, object] | None:
+        """Fetch one map's full descriptor, degrading to None.
+
+        ``force`` evicts the provider's persisted seed cache for this
+        map (re-fetch upstream): the admin DM's sync button wants FRESH
+        data, never a week-old descriptor.
+        """
         async with build_channel(self._provider_uri) as channel:
             stub = content_pb2_grpc.ContentStub(channel)
             try:
                 reply = await stub.GetMapSeed(
-                    content_pb2.MapSeedRequest(game_key=game_key, map_key=map_key),
+                    content_pb2.MapSeedRequest(game_key=game_key, map_key=map_key, force=force),
                     timeout=240.0,  # the provider's backoffs run minutes; never hang the caller
                 )
             except grpc.aio.AioRpcError as exc:

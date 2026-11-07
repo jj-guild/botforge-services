@@ -28,6 +28,9 @@ service Content {
 message MapSeedRequest {
   string game_key = 1;    // e.g. "aoe2" (the provider keys its wikis by game)
   string map_key = 2;     // the map name or page title the admin typed
+  bool force = 3;         // the admin DM's sync: evict the persisted seed
+                          // cache and re-fetch upstream (a sync means
+                          // fresh data, never a week-old descriptor)
 }
 
 message MapSeedVersion {
