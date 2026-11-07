@@ -203,6 +203,18 @@ async def refresh_aoe2_maps() -> dict[str, int]:
                 }
             )
             maps_enriched += 1
+            # the catalog entry's map_type was set at import time — an
+            # import that ran an older parser leaves the raw casing
+            # ("hybrid"); the sync heals it from the fresh seed
+            if seed.map_type and seed.map_type != (entry.map_type or ""):
+                try:
+                    await game_data.update_map(entry.id, map_type=seed.map_type)
+                except Exception:
+                    logger.debug(
+                        "CONTENT REFRESH: map_type heal failed for %r — best-effort",
+                        name,
+                        exc_info=True,
+                    )
     except Exception:
         logger.warning("CONTENT REFRESH: map image enrichment failed — best-effort", exc_info=True)
     logger.info(

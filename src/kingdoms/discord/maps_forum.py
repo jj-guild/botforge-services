@@ -335,7 +335,31 @@ async def _refresh_map_post(bot: Any, platform: Any, guild_id: str, entry: Any, 
     try:
         content, view = await map_post_render(entry, guild_id, bot, service)
         display = f"{entry.name[:1].upper()}{entry.name[1:]}"
-        fingerprint = _content_fingerprint(content)
+        # the content is ONLY the markdown — the card's face (thumbnail,
+        # props, images) lives in the view. A fingerprint of the content
+        # alone skips the edit whenever a doc refresh changed the view
+        # but not the description (the 2026-11-07 stale-thumbnail bug:
+        # posts kept their pre-sync view forever). The fingerprint covers
+        # the view's data too.
+        _, _, _, image, icon, walls, nomad, tc, capacity, creator = (
+            await _map_content_full(entry.id, guild_id, bot)
+        )
+        pools = await _map_pools_link(service, entry, guild_id, bot=bot)
+        signature = "\n".join(
+            [
+                content,
+                f"icon={icon}",
+                f"image={image}",
+                f"walls={walls}",
+                f"nomad={nomad}",
+                f"tc={tc}",
+                f"capacity={capacity}",
+                f"creator={creator}",
+                f"type={getattr(entry, 'map_type', '')}",
+                f"pools={'|'.join(pools)}",
+            ]
+        )
+        fingerprint = _content_fingerprint(signature)
         if _last_layout_render(thread_id) == fingerprint:
             return
         _remember_layout_render(thread_id, fingerprint)

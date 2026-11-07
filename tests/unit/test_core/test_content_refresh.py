@@ -133,10 +133,15 @@ async def test_maps_sync_rebuilds_every_known_map(monkeypatch: Any) -> None:
     monkeypatch.setattr(db_module, "get_async_database", lambda: database)
 
     class FakeGameData:
+        def __init__(self) -> None:
+            self.healed: list[tuple[str, str]] = []
+
         async def list_maps(self, game_key: str) -> list[MapModel]:
             del game_key
             return [
-                MapModel(_id="map:aoe2:arena", game_key="aoe2", name="Arena"),
+                MapModel(
+                    _id="map:aoe2:arena", game_key="aoe2", name="Arena", map_type="land"
+                ),
                 MapModel(_id="map:aoe2:budapest", game_key="aoe2", name="Budapest"),
                 MapModel(_id="map:aoe2:black-forest", game_key="aoe2", name="Black Forest"),
                 MapModel(
@@ -147,7 +152,12 @@ async def test_maps_sync_rebuilds_every_known_map(monkeypatch: Any) -> None:
                 ),
             ]
 
-    monkeypatch.setattr(game_data_module, "GameDataService", lambda adapter: FakeGameData())
+        async def update_map(self, entry_id: str, map_type: str | None = None) -> MapModel:
+            self.healed.append((entry_id, str(map_type)))
+            return MapModel(_id=entry_id, game_key="aoe2", name="x", map_type=str(map_type))
+
+    fake_game_data = FakeGameData()
+    monkeypatch.setattr(game_data_module, "GameDataService", lambda adapter: fake_game_data)
     monkeypatch.setattr(seed_module, "MongoAoE2Database", lambda database: None)
 
     async def fake_resolve(names: list[str]) -> dict[str, Any]:
@@ -197,6 +207,10 @@ async def test_maps_sync_rebuilds_every_known_map(monkeypatch: Any) -> None:
         "the skip froze no-image maps on their pre-sync parse forever"
     )
     assert black_forest["split_keys"] is True
+    # the catalog entry's raw-cased map_type heals from the fresh seed
+    # (an import that ran an older parser left "land" — the post shows
+    # the entry's type, so the sync must heal it)
+    assert ("map:aoe2:arena", "Land") in fake_game_data.healed, fake_game_data.healed
 
     # the SECOND sync re-stores everything again: no complete-skip —
     # a sync always means fresh data, even for an already-rich doc
