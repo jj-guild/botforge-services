@@ -22,6 +22,12 @@ kingdom, any lord may act).
 
 Anonymity is player-facing only — every action logs the acting lord
 for the admin (anti-abus, arbitrage Drasah).
+
+voliere-beta-v1 (Drasah 07/11): under an ARMED, STARTED beta the
+volière opens at the season's very first hour with ALL THREE birds —
+the Féodal gate and the age ladder are bypassed for the beta's whole
+life so every bird flow is testable at once. A normal season (and a
+beta armed ahead of T0) never passes here.
 """
 
 from __future__ import annotations
@@ -33,7 +39,9 @@ from typing import Any
 
 from kingdoms.mods.kingdoms import chronicle
 from kingdoms.mods.kingdoms.admin_debug import bypass_guard
+from kingdoms.mods.kingdoms.beta_weekend import beta_started
 from kingdoms.mods.kingdoms.config import KingdomsSeasonConfig
+from kingdoms.mods.kingdoms.game_clock import game_now
 from kingdoms.mods.kingdoms.models import KingdomModel
 from kingdoms.mods.kingdoms.service import KingdomsModError, KingdomsService
 from kingdoms.mods.kingdoms.territories import TerritoryService
@@ -182,6 +190,13 @@ class VoliereService:
             if not bypass_guard("voliere feudal gate (no season)"):
                 raise VoliereLockedError("no season is running")
             return
+        # voliere-beta-v1 (Drasah 07/11): under an ARMED, STARTED beta the
+        # volière opens at the season's very first hour — the Féodal gate
+        # is bypassed so every bird flow is testable at once. A beta armed
+        # but still ahead of T0 keeps the normal gate: the compressed life
+        # applies at T0, exactly like the preset (beta-weekend-v2).
+        if beta_started(season, now):
+            return
         age_keys = [age.key for age in self._config.ages]
         if FEUDAL_AGE_KEY not in age_keys:
             if not bypass_guard("voliere feudal gate (no Âge Féodal declared)"):
@@ -213,13 +228,27 @@ class VoliereService:
             return 0
         return max(0, min(len(BIRDS), self._age_index(age_key) - start + 1))
 
+    def _capacity_for(self, season: Any, now: datetime) -> int:
+        """The open slot count at the season's age — ALL THREE birds in beta.
+
+        voliere-beta-v1 (Drasah 07/11): a STARTED beta opens every slot
+        from the season's start (Drasah's test ruling — the three birds
+        at once, before any age switch); a normal season follows the age
+        ladder untouched. The bypass reads the LIVE beta state (never a
+        persisted flag) — a normal season launched after a beta recovers
+        the ladder by itself.
+        """
+        if beta_started(season, now):
+            return len(BIRDS)
+        return self.slot_capacity(str(season.current_age_key))
+
     async def slot_state(self, kingdom_id: str) -> dict[str, Any]:
         """Return the volière slot snapshot (capacity, chosen, open, birds)."""
         season = await self._kingdoms.current_season()
         if season is None:
             raise VoliereLockedError("no season is running")
         kingdom = await self._require_kingdom(kingdom_id)
-        capacity = self.slot_capacity(season.current_age_key)
+        capacity = self._capacity_for(season, game_now())
         chosen = [str(bird) for bird in (kingdom.voliere_slots or [])]
         age_keys = [age.key for age in self._config.ages]
         next_age = ""
@@ -250,7 +279,7 @@ class VoliereService:
         if season is None:  # pragma: no cover — _require_feudal guarantees one
             raise VoliereLockedError("no season is running")
         chosen = [str(entry) for entry in (kingdom.voliere_slots or [])]
-        capacity = self.slot_capacity(season.current_age_key)
+        capacity = self._capacity_for(season, now)
         if len(chosen) >= capacity:
             raise VoliereLockedError("no volière slot is open at this age")
         if bird not in BIRDS:
@@ -767,3 +796,4 @@ class VoliereService:
             return False
         until = int(getattr(kingdom, "faucon_release_until", 0) or 0)
         return until > int(now.timestamp())
+

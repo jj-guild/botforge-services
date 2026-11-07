@@ -7,6 +7,11 @@ birds stay usable), the kingdom-SHARED cooldowns, the Corbeau draws
 (civ exclusivity, cover-piercing verify, the 24h « suivi » delay), the
 Faucon (not-yet-drawn territory, pick & ban sabotage with the 2-limit,
 the Lâcher immune window) and the panel-side Pigeon spend (question/MP).
+
+voliere-beta-v1 (Drasah 07/11): under an ARMED, STARTED beta the
+volière opens at the season's first hour with ALL THREE birds — the
+Féodal gate and the age ladder are bypassed; a beta armed ahead of T0
+keeps the normal gate.
 """
 from __future__ import annotations
 
@@ -101,6 +106,28 @@ class VoliereBundle(Bundle):
         kingdom.voliere_cooldowns = cooldowns
         await self.store.upsert_kingdom(kingdom.to_mongo())
 
+    async def arm_beta(self, *, started: bool = True) -> None:
+        """Arm a beta weekend on the running season (voliere-beta-v1).
+
+        ``started=True`` sets T0 one hour BEFORE the frozen game clock
+        (the beta runs); ``started=False`` sets T0 24h AHEAD (the beta
+        is armed but the compressed life has not begun).
+        """
+        season = await self.kingdoms.current_season()
+        assert season is not None
+        season.beta_name = "now"
+        season.beta_start_at = (
+            _NOW - timedelta(hours=1) if started else _NOW + timedelta(hours=24)
+        )
+        await self.store.upsert_season(season.to_mongo())
+
+
+def _freeze_voliere_clock(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Freeze the volière module's game clock on the test moment."""
+    from kingdoms.mods.kingdoms import voliere as voliere_module
+
+    monkeypatch.setattr(voliere_module, "game_now", lambda: _NOW)
+
 
 # ----------------------------------------------------------------------
 # The slots by age (voliere-v2)
@@ -191,6 +218,56 @@ async def test_one_action_flies_the_whole_bird() -> None:
         aquitaine, "pigeon_civ", now=_NOW + timedelta(hours=1)
     )
     assert drawn
+
+
+# ----------------------------------------------------------------------
+# voliere-beta-v1 (Drasah 07/11) — the beta opens all three birds at once
+# ----------------------------------------------------------------------
+
+
+async def test_beta_opens_all_three_birds_from_the_season_start(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """voliere-beta-v1: a STARTED beta lifts the Féodal gate and opens
+    ALL THREE slots from the season's first hour — no age switch needed."""
+    _freeze_voliere_clock(monkeypatch)
+    bundle = VoliereBundle()
+    await bundle.launch_season()
+    await bundle.arm_beta(started=True)
+    aquitaine = await bundle.kingdom_id("Aquitaine")
+    state = await bundle.voliere.slot_state(aquitaine)
+    assert state["capacity"] == 3
+    assert state["open"] == 3
+    assert state["locked"] is False
+    assert state["next_age"] == ""
+    # The three birds all land without a single age switch.
+    assert await bundle.choose(aquitaine, "corbeau") == "corbeau"
+    assert await bundle.choose(aquitaine, "faucon") == "faucon"
+    assert await bundle.choose(aquitaine, "pigeon") == "pigeon"
+    state = await bundle.voliere.slot_state(aquitaine)
+    assert state["open"] == 0
+    # An ACTION runs too — the service gate is lifted, not just slots.
+    drawn = await bundle.voliere.pick_civilization(aquitaine, "pigeon_civ", now=_NOW)
+    assert drawn
+
+
+async def test_an_unstarted_beta_keeps_the_feudal_gate(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """voliere-beta-v1: a beta armed but still ahead of T0 changes
+    NOTHING — the compressed life applies at T0 (beta-weekend-v2)."""
+    _freeze_voliere_clock(monkeypatch)
+    bundle = VoliereBundle()
+    await bundle.launch_season()
+    await bundle.arm_beta(started=False)
+    aquitaine = await bundle.kingdom_id("Aquitaine")
+    state = await bundle.voliere.slot_state(aquitaine)
+    assert state["capacity"] == 0
+    assert state["locked"] is True
+    with pytest.raises(VoliereLockedError):
+        await bundle.choose(aquitaine, "corbeau")
+    with pytest.raises(VoliereLockedError):
+        await bundle.voliere.pick_civilization(aquitaine, "corbeau_civ", now=_NOW)
 
 
 # ----------------------------------------------------------------------
