@@ -165,14 +165,21 @@ def probe_liquipedia(page: str) -> None:
         f"LIQUIPEDIA RAW IMAGEINFO — {page}",
         raw_imageinfo.get("query", {}).get("pages", []),
     )
-    urls = provider._imageinfo_batch(files, "url")
+    # reuse the SAME response — one imageinfo call per page, never two
+    # (the doubled query tipped the runner into Liquipedia's 429s)
+    urls = {
+        str(page_.get("title", "")).split("File:", 1)[-1].replace(" ", "_"): str(
+            (page_.get("imageinfo") or [{}])[0].get("url", "")
+        )
+        for page_ in raw_imageinfo.get("query", {}).get("pages", [])
+    }
     _print(
         f"LIQUIPEDIA RESOLVED URLS — {page}",
         {
             "image_file": info.image_file,
-            "image_url": urls.get(info.image_file, ""),
+            "image_url": urls.get(info.image_file.replace(" ", "_"), ""),
             "gallery_icon": info.gallery_icon,
-            "icon_url": urls.get(info.gallery_icon, ""),
+            "icon_url": urls.get(info.gallery_icon.replace(" ", "_"), ""),
         },
     )
     _print(
