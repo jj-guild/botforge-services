@@ -114,6 +114,9 @@ def test_nomad_keeps_its_infobox_and_nomad_tag() -> None:
     assert info.nomad == "Yes"
     assert info.tc == "No"
     assert info.player_capacity == "Up to 8"
+    assert info.creator == "Ensemble Studios", (
+        "the empty |caption= must not swallow the next line — the creator rides"
+    )
     tags = query_tags(info)
     assert "nomad" in tags, f"the nomad map tags nomad — got {tags}"
     assert "walls:no" in tags, f"walls=No tags walls:no — got {tags}"

@@ -41,4 +41,6 @@ PAGE_CACHE_TTL_S = 7 * 24 * 3600
 # form + the captioned-icon preference.
 # Gen 3: the English tag vocabulary (walls:no/wood/stone/partial, tc:<n>
 # from 1) + the raw wikitext riding the descriptor.
-SEED_GEN = 3
+# Gen 4: the infobox field regex stays on ONE line — an empty value
+# (|caption=) no longer swallows the next line (Nomad's creator).
+SEED_GEN = 4

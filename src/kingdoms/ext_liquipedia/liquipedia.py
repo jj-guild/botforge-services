@@ -81,7 +81,13 @@ class LiquipediaCircuitOpenError(RuntimeError):
 _shared_last_request_at = 0.0
 _shared_last_parse_at = 0.0
 
-_FIELD_RE = re.compile(r"^\s*\|\s*([A-Za-z0-9_]+)\s*=\s*(.*?)\s*$", re.MULTILINE)
+# one line per field, never across: an EMPTY value (``|caption=``)
+# must not swallow the next line as its value (the Nomad 2026-11-07
+# bug: ``|caption=`` ate ``|creator=Ensemble Studios`` whole). The
+# whitespace runs never cross a newline — ``[ \t]`` only.
+_FIELD_RE = re.compile(
+    r"^[ \t]*\|[ \t]*([A-Za-z0-9_]+)[ \t]*=[ \t]*([^\n]*?)[ \t]*$", re.MULTILINE
+)
 _TEMPLATE_RE = re.compile(r"\[\[(?:[^|\]]*\|)?([^\]]+)\]\]")
 _STRIP_RE = re.compile(r"\{\{[^{}]*\}\}|\[\[(?:[^|\]]*\|)?")
 _UNLICENSED_NOTICE_RE = re.compile(r"fair use|non-free|copyright", re.IGNORECASE)
