@@ -150,9 +150,22 @@ def probe_liquipedia(page: str) -> None:
     # the RESOLVED urls (the imageinfo batch): an infobox image that 404s
     # upstream lands here as an empty image_url — the fact the sync's
     # "carries no image" skips were built on (never guess, print)
-    urls = provider._imageinfo_batch(
-        [f"File:{n}" for n in (info.image_file, info.gallery_icon) if n], "url"
+    files = [f"File:{n}" for n in (info.image_file, info.gallery_icon) if n]
+    raw_imageinfo = provider._get_json(
+        {
+            "action": "query",
+            "prop": "imageinfo",
+            "titles": "|".join(files),
+            "iiprop": "url",
+            "format": "json",
+            "formatversion": "2",
+        }
     )
+    _print(
+        f"LIQUIPEDIA RAW IMAGEINFO — {page}",
+        raw_imageinfo.get("query", {}).get("pages", []),
+    )
+    urls = provider._imageinfo_batch(files, "url")
     _print(
         f"LIQUIPEDIA RESOLVED URLS — {page}",
         {
