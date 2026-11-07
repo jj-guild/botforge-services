@@ -266,9 +266,21 @@ class KingdomsBot(discord.Client):
         _remove(member)
 
     async def on_guild_join(self, guild: discord.Guild) -> None:
-        """Make the joined guild known to the access store (panel coherence)."""
+        """Make the joined guild known to the access store (panel coherence).
+
+        The guild's language is Discord's own signal (``guild.preferred_locale``,
+        present in the GUILD_CREATE payload, so readable right here): it is
+        resolved through the native seam and logged, never stored on our side.
+        """
+        from kingdoms.discord.locales import guild_locale
         from kingdoms.discord.wiring import sync_known_guilds
 
+        logger.info(
+            "GUILD JOIN guild=%s name=%r native_locale=%s",
+            guild.id,
+            guild.name,
+            guild_locale(guild),
+        )
         await sync_known_guilds([str(guild.id)])
 
     async def on_ready(self) -> None:
