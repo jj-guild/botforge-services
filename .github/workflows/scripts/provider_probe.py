@@ -144,7 +144,7 @@ def probe_liquipedia(page: str) -> None:
         {"action": "parse", "page": page, "prop": "wikitext", "format": "json"},
         is_parse=True,
     )
-    wikitext = str(payload.get("parse", {}).get("wikitext", ""))
+    wikitext = str(payload.get("parse", {}).get("wikitext", {}).get("*", ""))
     _print(f"LIQUIPEDIA RAW WIKITEXT — {page}", wikitext[:12000])
     info = provider._info_from_wikitext(page, wikitext)
     _print(

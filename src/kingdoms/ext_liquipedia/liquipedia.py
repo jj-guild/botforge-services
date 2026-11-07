@@ -550,27 +550,39 @@ class LiquipediaMapsProvider:
 
         The Overview prose when the page has one, else the bolded lead
         sentence ("Hideout is an Age of Empires II multiplayer map.").
+        The Overview's paragraphs ALL ride — Budapest's overview is two
+        prose paragraphs and the blank line between them must not end
+        the collection (the 2026-11-07 report: half the overview). The
+        collection stops at the first section header, and skips
+        templates, comments, tables and list markup.
         """
         section = LiquipediaMapsProvider._overview_section(wikitext)
-        lines: list[str] = []
+        paragraphs: list[str] = []
+        current: list[str] = []
         depth = 0
+
+        def _flush() -> None:
+            if current:
+                paragraphs.append(" ".join(current))
+                current.clear()
+
         for line in section.splitlines():
             stripped = line.strip()
-            if not stripped or depth > 0 or stripped.startswith("{{"):
-                if lines and depth <= 0:
+            opens = stripped.count("{{")
+            closes = stripped.count("}}")
+            if depth > 0 or opens > closes:
+                depth += opens - closes
+                continue
+            if stripped.startswith("=="):
+                if current or paragraphs:
                     break
-                depth += stripped.count("{{") - stripped.count("}}")
                 continue
-            if depth <= 0 and (stripped.startswith("==") or stripped.startswith("<")):
-                if lines:
-                    break
+            if not stripped or stripped.startswith(("<", "*", "#", "|", "{")):
+                _flush()
                 continue
-            if stripped.startswith("<!--"):
-                continue
-            lines.append(stripped)
-            if len(lines) >= 4:
-                break
-        text = " ".join(lines)
+            current.append(stripped)
+        _flush()
+        text = "\n\n".join(paragraphs[:4])
         text = _BOLD_RE.sub("", text)
         text = _ITALIC_RE.sub("", text)
         text = re.sub(r"\[\[(?:[^|\]]*\|)?([^\]]+)\]\]", r"\1", text)
