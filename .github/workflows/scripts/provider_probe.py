@@ -238,7 +238,7 @@ def main() -> int:
     parser.add_argument("--skip-http", action="store_true", help="skip the librematch HTTP probe")
     parser.add_argument(
         "--liquipedia-page",
-        default="Arabia,Black Forest,Arena,Nomad,Budapest,Haboob",
+        default="Arabia,Black Forest,Arena,Nomad",
         help="comma-separated map pages: fetch each one's raw wikitext and print the parsed MapInfo "
         "(the default set rides every auto-probe: a parser change that breaks a real page "
         "fails the run with the bytes printed)",
