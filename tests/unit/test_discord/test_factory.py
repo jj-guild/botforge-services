@@ -12,6 +12,7 @@ from kingdoms.discord.bot.factory import (
     READY_LOG_LINE,
     BotConfig,
     KingdomsBot,
+    _log_guild_member_locales,
     _log_guild_native_locales,
     create_bot,
 )
@@ -295,3 +296,45 @@ def test_log_guild_native_locales_logs_raw_and_resolved_per_guild(
     assert len(lines) == 2
     assert any("guild=424242" in line and "raw=fr" in line and "resolved=fr" in line for line in lines)
     assert any("guild=424243" in line and "raw=en-US" in line and "resolved=en" in line for line in lines)
+
+
+def test_log_guild_member_locales_probes_each_member(caplog: pytest.LogCaptureFixture) -> None:
+    """One GUILD MEMBER LOCALE line per member, raw=None (no member.locale in the API).
+
+    Discord exposes a user's language only inside interactions; the boot
+    enumeration is the proof probe the discord-smoke CI greps.
+    """
+    from tests.mocks import MockGuild, MockMember
+
+    guild = MockGuild(id=424242)
+    guild.add_member(MockMember(name="alice", guild=guild))
+    guild.add_member(MockMember(name="bob", guild=guild))
+    with caplog.at_level(logging.INFO, logger="kingdoms.bot"):
+        _log_guild_member_locales([guild])
+    lines = [r.message for r in caplog.records if "GUILD MEMBER LOCALE" in r.message]
+    assert len(lines) == 2
+    assert all("guild=424242" in line and "raw=None" in line for line in lines)
+
+
+async def test_on_interaction_logs_the_clicker_locale(config_dir: str, caplog: pytest.LogCaptureFixture) -> None:
+    """on_interaction logs INTERACTION USER LOCALE with raw + resolved locale.
+
+    This is the only per-user language signal Discord exposes
+    (interaction.locale) — the clicker's own client language.
+    """
+    from tests.mocks import MockGuild, MockInteraction, MockMember
+
+    bot = create_bot(BotConfig(config_dir=config_dir))
+    guild = MockGuild(id=424242, preferred_locale="en-US")
+    member = MockMember(name="alice", guild=guild)
+    interaction = MockInteraction(user=member, guild=guild, locale="fr")
+    with caplog.at_level(logging.INFO, logger="kingdoms.bot"):
+        await bot.on_interaction(interaction)
+    assert any(
+        "INTERACTION USER LOCALE" in r.message
+        and f"user={member.id}" in r.message
+        and f"guild={guild.id}" in r.message
+        and "raw=fr" in r.message
+        and "resolved=fr" in r.message
+        for r in caplog.records
+    )

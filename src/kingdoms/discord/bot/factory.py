@@ -294,6 +294,7 @@ class KingdomsBot(discord.Client):
             len(self.guilds),
         )
         _log_guild_native_locales(self.guilds)
+        _log_guild_member_locales(self.guilds)
         # the guild_access store is self-healing at boot: a database
         # reset must not leave the admin DM panel showing 0 servers
         # while the bot keeps serving its guilds (panel coherence).
@@ -756,6 +757,15 @@ class KingdomsBot(discord.Client):
             )
         except Exception:
             logger.debug("action log failed — best-effort", exc_info=True)
+        from kingdoms.discord.locales import interaction_locale
+
+        logger.info(
+            "INTERACTION USER LOCALE user=%s guild=%s raw=%s resolved=%s",
+            str(getattr(getattr(interaction, "user", None), "id", "") or "unknown"),
+            str(interaction.guild_id) if interaction.guild_id else "dm",
+            getattr(interaction, "locale", None),
+            interaction_locale(interaction),
+        )
         if self.logs_service is None:
             return
         from kingdoms.discord.locales import normalize
@@ -1303,6 +1313,24 @@ def _bot_version() -> str:
     from kingdoms import __version__
 
     return __version__
+
+
+def _log_guild_member_locales(guilds: Iterable[discord.Guild]) -> None:
+    """Log one probe line per cached member (smoke-CI greppable).
+
+    Discord exposes no ``member.locale`` in the API — a user's client
+    language is only observable inside an interaction (``interaction.locale``,
+    logged by ``on_interaction``). This boot enumeration shows raw=None per
+    member on the real gateway, which is why detection is interaction-driven.
+    """
+    for guild in guilds:
+        for member in getattr(guild, "members", None) or []:
+            logger.info(
+                "GUILD MEMBER LOCALE guild=%s user=%s raw=%s",
+                guild.id,
+                member.id,
+                getattr(member, "locale", None),
+            )
 
 
 def _log_guild_native_locales(guilds: Iterable[discord.Guild]) -> None:
