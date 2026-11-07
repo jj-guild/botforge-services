@@ -193,6 +193,23 @@ jobs:
           done"
           docker logs kingdoms-bot-smoke 2>&1 | grep KINGDOMS_BOT_READY
           echo "DISCORD GATEWAY READY OK"
+      - name: Assert the native guild locale (preferred_locale) is readable on the real gateway
+        # The READY payload carries preferred_locale per guild; the bot logs one
+        # GUILD NATIVE LOCALE line per guild at boot. CI proves here that the
+        # field is populated for every guild the CI/CD bot sits in.
+        run: |
+          lines="$(docker logs kingdoms-bot-smoke 2>&1 | grep 'GUILD NATIVE LOCALE' || true)"
+          if [ -z "$lines" ]; then
+            echo '::error::No GUILD NATIVE LOCALE line in startup logs — preferred_locale not readable'
+            docker logs --tail 60 kingdoms-bot-smoke
+            exit 1
+          fi
+          echo "$lines"
+          if echo "$lines" | grep -q 'raw=None'; then
+            echo '::error::preferred_locale came back None for at least one guild'
+            exit 1
+          fi
+          echo "NATIVE GUILD LOCALE READABLE OK"
       - name: Assert the hot state connected (no degraded startup)
         # kingdoms-services#225: the bot used to boot READY with its Redis
         # state store never started — every cache-aside write failed at

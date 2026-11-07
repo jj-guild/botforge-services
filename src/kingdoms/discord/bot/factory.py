@@ -19,6 +19,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
+from collections.abc import Iterable
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -292,6 +293,7 @@ class KingdomsBot(discord.Client):
             self.user,
             len(self.guilds),
         )
+        _log_guild_native_locales(self.guilds)
         # the guild_access store is self-healing at boot: a database
         # reset must not leave the admin DM panel showing 0 servers
         # while the bot keeps serving its guilds (panel coherence).
@@ -1301,3 +1303,22 @@ def _bot_version() -> str:
     from kingdoms import __version__
 
     return __version__
+
+
+def _log_guild_native_locales(guilds: Iterable[discord.Guild]) -> None:
+    """Log one line per guild with its native locale (smoke-CI greppable).
+
+    ``guild.preferred_locale`` comes from the GUILD_CREATE/READY payloads, so
+    this proves on the real gateway that the field is populated for every
+    guild the bot sits in. The locale is resolved through the native seam,
+    never stored.
+    """
+    from kingdoms.discord.locales import guild_locale
+
+    for guild in guilds:
+        logger.info(
+            "GUILD NATIVE LOCALE guild=%s raw=%s resolved=%s",
+            guild.id,
+            guild.preferred_locale,
+            guild_locale(guild),
+        )
