@@ -422,9 +422,12 @@ async def test_lords_day_drops_the_un_wed_draft() -> None:
 
 async def test_acquisition_ledger_records_every_origin() -> None:
     """alliances-lisibilite-v1 (Drasah 25/10): each acquisition origin
-    lands ONCE in the append-only ledger — 🎲 starter, 🗺️ condition,
-    💍 standard marriage, 🐝 royal marriage; the FIRST origin of a
-    civilization is never rewritten."""
+    lands ONCE in the ledger — 🎲 starter, 🗺️ condition, 💍 standard
+    marriage, 🐝 royal marriage. provenance-vivante-v1 (Drasah 07/11):
+    the ORIGIN of an in-hand civilization follows the LIVE source that
+    keeps it there (a drafted 🎲 celtes maintained by the filled Black
+    Forest condition wears the 🗺️), while the FIRST-acquisition date
+    is never rewritten and a civ that left the hand keeps its entry."""
     config = _config().model_copy(
         update={
             "starting_civilizations": 2,
@@ -446,15 +449,29 @@ async def test_acquisition_ledger_records_every_origin() -> None:
     assert all(
         kingdom.civilization_acquisitions[civ]["origin"] == "starter" for civ in hand
     )
-    # 🗺️ the cadastre condition acquires the civilization — a starter
-    # origin already recorded is kept (the ledger is append-only)
+    starter_at = {
+        civ: kingdom.civilization_acquisitions[civ]["at"] for civ in hand
+    }
+    # 🗺️ the cadastre condition acquires the civilization — and now
+    # also MAINTAINS the badge of a drafted starter: the live origin is
+    # re-evaluated at the cycle pass (provenance-vivante-v1)
     await bundle.draw_one(aquitaine, "black-forest")
     await bundle.diplomacy.recalculate()
     kingdom = next(k for k in await bundle.kingdoms.kingdoms() if k.id == aquitaine)
     assert "celtes" in kingdom.civilizations
-    assert kingdom.civilization_acquisitions["celtes"]["origin"] == (
-        "starter" if "celtes" in hand else "condition"
+    assert kingdom.civilization_acquisitions["celtes"]["origin"] == "condition"
+    assert (
+        kingdom.civilization_acquisitions["celtes"]["at"] == starter_at["celtes"]
+        if "celtes" in hand
+        else isinstance(kingdom.civilization_acquisitions["celtes"]["at"], int)
     )
+    # 🎲 the OTHER drafted starter left the hand (no condition keeps
+    # it) — its ledger entry survives with its starter badge and date
+    for civ in hand:
+        if civ != "celtes":
+            assert civ not in kingdom.civilizations
+            assert kingdom.civilization_acquisitions[civ]["origin"] == "starter"
+            assert kingdom.civilization_acquisitions[civ]["at"] == starter_at[civ]
     # 💍 standard marriage then 🐝 royal marriage of civs NOT drafted
     free = [civ for civ in ("francs", "azteques", "britanniques") if civ not in hand]
     await bundle.give("Aquitaine", free[0])
@@ -557,3 +574,97 @@ async def test_married_base_carries_its_chain() -> None:
     # the married base stays and carries its whole chain at once
     assert "chinois" in reports["Aquitaine"]
     assert {"shu", "wei", "wu"} <= set(reports["Aquitaine"])
+
+
+async def test_provenance_follows_the_live_maintenance_source() -> None:
+    """provenance-vivante-v1 (Drasah 07/11): the badge of an in-hand
+    civilization follows the LIVE source that keeps it there — 🎲 at
+    the draft, 🗺️ once the filled condition maintains it, 💍 once a
+    marriage secures it (« si le maintien continue grâce aux
+    conditions d'obtention, il faut actualiser l'icône » and « le
+    mariage se situe au-dessus en termes de priorité ») — while the
+    first-acquisition DATE never moves."""
+    config = _config().model_copy(
+        update={
+            "starting_civilizations": 2,
+            "civilizations": (
+                CivilizationCondition(key="celtes", display_name="Celtes", requires_map_keys=("black-forest",)),
+                CivilizationCondition(key="francs", display_name="Francs"),
+            ),
+        }
+    )
+    bundle = Bundle(config=config)
+    await bundle.launch_season()
+    await bundle.kingdoms.start_season()  # 🎲 both civs drafted — celtes in hand
+    aquitaine = await bundle.kingdom_id("Aquitaine")
+    kingdom = next(k for k in await bundle.kingdoms.kingdoms() if k.id == aquitaine)
+    assert kingdom.civilization_acquisitions["celtes"]["origin"] == "starter"
+    starter_at = kingdom.civilization_acquisitions["celtes"]["at"]
+    # 🗺️ the condition now MAINTAINS the drafted starter — the badge
+    # flips at the cycle pass, the date stays the truth of day one
+    await bundle.draw_one(aquitaine, "black-forest")
+    await bundle.diplomacy.recalculate()
+    kingdom = next(k for k in await bundle.kingdoms.kingdoms() if k.id == aquitaine)
+    assert "celtes" in kingdom.civilizations
+    assert kingdom.civilization_acquisitions["celtes"]["origin"] == "condition"
+    assert kingdom.civilization_acquisitions["celtes"]["at"] == starter_at
+    # 💍 the marriage OUTRANKS the condition even though it is filled
+    assert await bundle.diplomacy.marry("lord-a", "celtes") == "celtes"
+    await bundle.diplomacy.recalculate()
+    kingdom = next(k for k in await bundle.kingdoms.kingdoms() if k.id == aquitaine)
+    assert "celtes" in kingdom.secured_civilizations
+    assert kingdom.civilization_acquisitions["celtes"]["origin"] == "marriage"
+    assert kingdom.civilization_acquisitions["celtes"]["at"] == starter_at
+
+
+async def test_a_civilization_leaving_the_hand_keeps_its_ledger_entry() -> None:
+    """provenance-vivante-v1 (Drasah 07/11): a civilization that LEFT
+    the hand keeps its last recorded origin and date untouched — the
+    ledger entry survives for the 📖 Historique; the new holder gets
+    its own entry."""
+    bundle = Bundle()
+    await bundle.launch_season()
+    aquitaine, bourgogne = (
+        await bundle.kingdom_id("Aquitaine"),
+        await bundle.kingdom_id("Bourgogne"),
+    )
+    await bundle.draw_one(aquitaine, "islands")
+    await bundle.diplomacy.recalculate()
+    kingdom = next(k for k in await bundle.kingdoms.kingdoms() if k.id == aquitaine)
+    assert kingdom.civilization_acquisitions["chinois"]["origin"] == "condition"
+    chinois_at = kingdom.civilization_acquisitions["chinois"]["at"]
+    # the territory leaves: the base and its chain drop at the next
+    # pass — the entry stays exactly as it was
+    territory = next(
+        t for t in await bundle.territories.territories() if t.map_key == "islands"
+    )
+    await bundle.territories.transfer(territory.id, bourgogne)
+    await bundle.diplomacy.recalculate()
+    kingdom = next(k for k in await bundle.kingdoms.kingdoms() if k.id == aquitaine)
+    assert "chinois" not in kingdom.civilizations
+    assert kingdom.civilization_acquisitions["chinois"] == {
+        "origin": "condition",
+        "at": chinois_at,
+    }
+    # the new holder writes its own acquisition
+    bourgogne_kingdom = next(
+        k for k in await bundle.kingdoms.kingdoms() if k.id == bourgogne
+    )
+    assert bourgogne_kingdom.civilization_acquisitions["chinois"]["origin"] == "condition"
+
+
+async def test_a_chain_branch_kept_by_a_married_base_wears_the_marriage_badge() -> None:
+    """provenance-vivante-v1 (Drasah 07/11): a branch held ONLY by a
+    married base — its own condition is NOT filled, no eau map — rides
+    the 💍: the marriage is what keeps it in play (« une branche de
+    chaîne portée seulement par une base mariée porte 💍 »)."""
+    bundle = Bundle()
+    await bundle.launch_season()
+    await bundle.give("Aquitaine", "chinois")
+    await bundle.diplomacy.marry("lord-a", "chinois")
+    await bundle.diplomacy.recalculate()
+    aquitaine = await bundle.kingdom_id("Aquitaine")
+    kingdom = next(k for k in await bundle.kingdoms.kingdoms() if k.id == aquitaine)
+    assert {"chinois", "shu", "wei", "wu"} <= set(kingdom.civilizations)
+    for civ in ("chinois", "shu", "wei", "wu"):
+        assert kingdom.civilization_acquisitions[civ]["origin"] == "marriage"

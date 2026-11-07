@@ -200,14 +200,18 @@ class KingdomModel(BaseModel):
     ``execute_at``, ``contest_until``, ``state``, ``stolen``."""
     civilization_acquisitions: dict[str, dict[str, Any]] = Field(default_factory=dict)
     """Alliances lisibilité (alliances-lisibilite-v1, Drasah 25/10):
-    append-only per-civilization acquisition ledger of the kingdom —
-    one ``{civ: {"origin", "at"}}`` entry per civilization EVER
-    acquired (starter draft, cadastre condition, standard/royal
-    marriage, Chef Mercenaire). The FIRST acquisition of a civ is the
-    historical truth and is never rewritten: the entry survives the
-    civ leaving the hand — it feeds the Alliances panel's 📖
-    Historique. Origins: see ``CIV_ACQUISITION_ORIGINS``. Gaïa records
-    nothing (no draft, no marriage)."""
+    per-civilization acquisition ledger of the kingdom — one
+    ``{civ: {"origin", "at"}}`` entry per civilization EVER acquired
+    (starter draft, cadastre condition, standard/royal marriage, Chef
+    Mercenaire). provenance-vivante-v1 (Drasah 07/11): the ORIGIN of a
+    civilization currently IN HAND follows the LIVE source that keeps
+    it there (👑 royal > 💍 marriage > 🗺️ condition — a 🎲 draft starter
+    maintained by a filled condition wears the 🗺️ at the cycle pass);
+    the FIRST-acquisition DATE is never rewritten and a civilization
+    that left the hand keeps its last recorded origin — the entry
+    feeds the Alliances panel's 📖 Historique. Origins: see
+    ``CIV_ACQUISITION_ORIGINS``. Gaïa records nothing (no draft, no
+    marriage)."""
     expedition: dict[str, Any] = Field(default_factory=dict)
     """Expédition (exploration-expedition-v1, Drasah 30/10): the
     kingdom's at-most-one living expedition — ``{}`` when none exists.
@@ -245,9 +249,13 @@ class KingdomModel(BaseModel):
         """Append one acquisition to the per-civ ledger (never rewrites).
 
         alliances-lisibilite-v1 (Drasah 25/10): the FIRST acquisition
-        of a civilization is the historical truth — a later origin
-        never rewrites it, and the entry survives the civilization
-        leaving the hand (the panel's 📖 Historique reads it).
+        of a civilization is the historical truth — the entry survives
+        the civilization leaving the hand (the panel's 📖 Historique
+        reads it). provenance-vivante-v1 (Drasah 07/11): the ORIGIN
+        badge of an in-hand civilization is re-evaluated at every
+        cycle recalculation (DiplomacyService) — this method stays the
+        append-only writer of the FIRST entry, the date it stamps is
+        never rewritten.
         """
         if civilization in self.civilization_acquisitions:
             return

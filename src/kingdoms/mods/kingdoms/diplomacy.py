@@ -535,6 +535,11 @@ class DiplomacyService:
         « si tu n'as pas chinois alors tu n'as pas ces branches » — a
         base that drops takes its branches down at the SAME cycle, a
         married base keeps them.
+        provenance-vivante-v1 (Drasah 07/11): the origin badge of every
+        in-hand civilization follows the LIVE source that keeps it in
+        play (👑 > 💍 > 🗺️) — a draft starter maintained by a condition
+        wears the 🗺️ from this pass on; the first-acquisition date and
+        the ledger entries of civilizations OUT of hand stay untouched.
         Lords of a kingdom flagged for a combat loss lose their marriage
         first (D34/D53). Returns the new lists for the diplomacy screen.
         """
@@ -572,8 +577,18 @@ class DiplomacyService:
             kingdom.secured_civilizations = [c for c in secured if c]
             # alliances-lisibilite-v1 (Drasah 25/10): record the origin
             # of every civilization the kingdom acquires for the FIRST
-            # time (cadastre condition, standard/royal marriage) — the
-            # ledger is append-only, an earlier origin is never rewritten.
+            # time (cadastre condition, standard/royal marriage).
+            # provenance-vivante-v1 (Drasah 07/11): the ORIGIN BADGE of
+            # a civilization IN HAND now follows the source that keeps
+            # it there NOW — a 🎲 draft starter maintained by a filled
+            # condition wears the 🗺️ at the cycle pass (« si le maintien
+            # continue grâce aux conditions d'obtention, il faut
+            # actualiser l'icône »). Priority ladder: 👑 royal marriage >
+            # 💍 standard marriage > 🗺️ condition; a branch kept ONLY by
+            # a married base (not by its own condition) rides the 💍 too.
+            # The FIRST-acquisition DATE is never rewritten (the 📖
+            # Historique keeps the truth of the first day) and a civ
+            # that LEFT the hand keeps its last recorded origin.
             royal_keys = {
                 lord.married_civilization
                 for lord in lords
@@ -582,16 +597,18 @@ class DiplomacyService:
                 and lord.royal_marriage
                 and lord.married_civilization is not None
             }
+            condition_hand = await self._live_hand(kingdom, owned, [], married_count)
             recalc_at = int(game_now().timestamp())
             for key in unlocked:
-                if key in kingdom.civilization_acquisitions:
-                    continue
-                origin = (
-                    "royal"
-                    if key in royal_keys
-                    else "marriage" if key in secured else "condition"
-                )
-                kingdom.record_acquisition(key, origin, recalc_at)
+                origin = self._live_origin(key, royal_keys, secured, condition_hand)
+                existing = kingdom.civilization_acquisitions.get(key)
+                if existing is None:
+                    kingdom.record_acquisition(key, origin, recalc_at)
+                elif str(existing.get("origin", "")) != origin:
+                    kingdom.civilization_acquisitions = {
+                        **kingdom.civilization_acquisitions,
+                        key: {**existing, "origin": origin},
+                    }
             await self._store.upsert_kingdom(kingdom.to_mongo())
             reports[kingdom.name] = unlocked
         if dropped:
@@ -642,6 +659,31 @@ class DiplomacyService:
             if not changed:
                 break
         return unlocked
+
+    def _live_origin(
+        self,
+        key: str,
+        royal_keys: set[str],
+        secured: list[str],
+        condition_hand: list[str],
+    ) -> str:
+        """The LIVE maintenance source of one in-hand civilization.
+
+        provenance-vivante-v1 (Drasah 07/11) — priority ladder: 👑 royal
+        marriage > 💍 standard marriage > 🗺️ condition. A civilization
+        present ONLY thanks to a marriage (the wed base itself, or a
+        chain branch the married base carries — not in the
+        condition-only hand) wears the 💍: the marriage is what keeps
+        it in play. ``condition_hand`` is the live hand computed
+        WITHOUT the marriages, so the two sources never blur.
+        """
+        if key in royal_keys:
+            return "royal"
+        if key in secured:
+            return "marriage"
+        if key in condition_hand:
+            return "condition"
+        return "marriage"
 
     async def alliance_projection(self, kingdom_id: str) -> dict[str, Any]:
         """Read-only alliances projection (alliances-lisibilite-v1, Drasah 25/10).
