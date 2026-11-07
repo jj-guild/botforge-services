@@ -1,8 +1,9 @@
 """The Liquipedia parse against REAL page wikitexts — no fetch, no fakes.
 
 The fixtures under ``tests/fixtures/liquipedia/`` are the raw wikitexts
-of Budapest, Arabia, Arena and Nomad, dumped by the provider probe from
-the live API (the run's log). The REAL parser runs on those bytes, so the
+of the game's permanent pool (Arabia, Black Forest, Arena, Nomad) plus
+Budapest, dumped by the provider probe from the live API (the run's
+log). The REAL parser runs on those bytes, so the
 labels (image, gallery icon, tags, overview) are checked against the
 actual pages — never against assumptions, and never with a network
 call: the import is tested offline, exactly as the user asked.
@@ -20,7 +21,8 @@ FIXTURES = Path(__file__).resolve().parents[1] / "fixtures" / "liquipedia"
 
 
 def _parse(page: str):
-    wikitext = (FIXTURES / f"{page.lower()}.wikitext").read_text(encoding="utf-8")
+    slug = page.strip().lower().replace(" ", "_")
+    wikitext = (FIXTURES / f"{slug}.wikitext").read_text(encoding="utf-8")
     provider = LiquipediaMapsProvider("test-contact https://github.com/merlin-pinpin-org/kingdoms")
     return provider._info_from_wikitext(page, wikitext)
 
@@ -76,7 +78,7 @@ def test_arena_keeps_its_infobox_and_stops_at_the_subsection() -> None:
     assert "tc:1" in tags, "the TC count tags from 1 — got {tags}"
 
 
-@pytest.mark.parametrize("page", ["Arabia", "Arena", "Budapest", "Nomad"])
+@pytest.mark.parametrize("page", ["Arabia", "Arena", "Black Forest", "Budapest", "Nomad"])
 def test_every_fixture_page_yields_an_image_and_tags(page: str) -> None:
     """Every dumped page carries its image, its icon and at least one tag."""
     info = _parse(page)
@@ -86,13 +88,15 @@ def test_every_fixture_page_yields_an_image_and_tags(page: str) -> None:
     assert info.description.strip(), f"{page}: the overview must parse"
 
 
-@pytest.mark.parametrize("page", ["Arabia", "Arena", "Budapest", "Nomad"])
+@pytest.mark.parametrize("page", ["Arabia", "Arena", "Black Forest", "Budapest", "Nomad"])
 def test_every_fixture_page_carries_its_raw_wikitext(page: str) -> None:
     """The raw provider payload rides the info — the sync's raw-data store."""
-    wikitext = (FIXTURES / f"{page.lower()}.wikitext").read_text(encoding="utf-8")
-    info = _parse(page)
-    assert info.raw_wikitext == wikitext, f"{page}: the raw wikitext must ride the info"
-    assert "{{Infobox map" in info.raw_wikitext, f"{page}: the raw payload is the page itself"
+    wikitext = _parse(page).raw_wikitext
+    on_disk = (
+        FIXTURES / f"{page.strip().lower().replace(' ', '_')}.wikitext"
+    ).read_text(encoding="utf-8")
+    assert wikitext == on_disk, f"{page}: the raw wikitext must ride the info"
+    assert "{{Infobox map" in wikitext, f"{page}: the raw payload is the page itself"
 
 
 def test_nomad_keeps_its_infobox_and_nomad_tag() -> None:
@@ -115,6 +119,29 @@ def test_nomad_keeps_its_infobox_and_nomad_tag() -> None:
     assert "walls:no" in tags, f"walls=No tags walls:no — got {tags}"
     assert "type:hybrid" in tags and "water" in tags, tags
     assert not any(t.startswith("tc:") for t in tags), "tc=No is not a count"
+
+
+def test_black_forest_keeps_its_infobox_and_default_walls() -> None:
+    """Black Forest: the pool's permanent map — no walls field in the infobox.
+
+    The live-probe facts (2026-11-07): the infobox carries NO ``walls``
+    field at all — an absent field defaults to the ``walls:no`` tag,
+    never a missing walls tag.
+    """
+    info = _parse("Black Forest")
+    assert info.name == "Black Forest"
+    assert info.image_file == "Black_Forest_Map.png"
+    assert info.gallery_icon == "black-forest_AoE2DE.png"
+    assert info.map_type == "Land"
+    assert info.walls == "", "the infobox has no walls field"
+    assert info.nomad == "No"
+    assert info.tc == "1"
+    assert info.player_capacity == "Up to 8"
+    assert info.creator == "Ensemble Studios"
+    tags = query_tags(info)
+    assert "type:land" in tags, tags
+    assert "walls:no" in tags, f"an absent walls field defaults to walls:no — got {tags}"
+    assert "tc:1" in tags, tags
 
 
 def test_walls_vocabulary_is_english_and_total() -> None:

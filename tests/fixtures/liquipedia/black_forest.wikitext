@@ -1,0 +1,66 @@
+{{tabs static
+|name1=Black Forest (AoE2)
+|link1=Black Forest
+|name2=Black Forest (AoE4)
+|link2=Black Forest (AoE4)
+|name3=Black Forest (AoEO)
+|link3=Black Forest (AoEO)
+|This=1}}{{Infobox map
+|image=Black_Forest_Map.png
+|caption=
+|name=Black Forest
+|creator=Ensemble Studios
+|players=Up to 8
+|game=aoe2
+|type=Land
+|tc=1
+|nomad=No
+|appearance=The Age of Kings
+|span=1999-09-30 — '''Present'''
+}}
+
+'''Black Forest''' (abbr. '''BF''') is a [[Random Map]] in [[Age of Empires II]].
+
+==Overview==
+Black Forest is usually played with explored setting. It is a common map for beginners, since it is often not as aggressive in the early game, but is also a popular team game map for higher-level players.
+
+===Notable Features===
+*Densely forested, with only a few paths to get from one players base to another's
+*Small lakes near players bases
+*Resources sometimes trapped in an "island of grass", meaning players must cut through the trees to get to them
+*Extra boar and wolves scattered around the map
+
+===Strategic Basics===
+Black Forest is a closed map, which means players are able to build walls early to protect themselves until they reach the late game, even in 1v1. Players will sometimes fight in the early game to get a forward wall, which will give them the position advantage later. This leads to early action that this map is sometimes not known for, and even fights with [[Villager|Villagers]] and [[Militia]].
+
+Small lakes will often spawn around the map, leading players to build [[Fish Traps]] to secure themselves safe food economy. Newer versions of the map, such as the one used in [[Rage Forest/3|Rage Forest 3]] guarantee fairer distribution of lakes across the two teams.
+
+Black Forest games usually reach the [[Imperial Age]], so having a strong economy to get fully-upgraded units is important. Single choke points will often be the point of contention for an extended period of time, so since games will sometimes go quite long, having a good trade route in team games is important.
+
+===Civilizations===
+Some civilizations that are strong on Black Forest, categorized by their biggest strengths:
+* Civilizations that can pressure early to get forward walls, or break through enemies walls in the [[Feudal Age]]: [[Lithuanians]], [[Goths]]
+* Civilizations with a strong economy and late-game composition: [[Burgundians]], [[Britons]]
+* Civilizations with strong siege: [[Bohemians]], [[Celts/Age of Empires II|Celts]], [[Mongols/Age of Empires II|Mongols]].
+
+==Recent Tournament Appearances==
+{{Map appearances table|maps=Black Forest}}
+
+==Recent Games==
+{{Map recent games table}}
+
+==Trivia==
+*The [[Black Forest Tournament (by The Legion Clan)/High|Black Forest Tournament by The Legion Clan]] (2002), [[Into the Darkness]] (2016), and the [[Rage Forest|Rage Forest series]] (2021-2026) are the biggest [[Age of Empires II]] tournaments that were played on Black Forest exclusively.
+
+==Gallery==
+<gallery mode="packed-hover" heights="200px">
+File:black-forest_AoE2DE.png|in-game icon ([[Age of Empires II/Definitive Edition|AoEII:DE]])
+File:4v4BlackForestNC23.PNG|4v4 version
+</gallery>
+
+==Additional Content==
+{{ExternalMediaList|subject=Black Forest}}
+
+==References==
+{{Reflist}}
+{{Maps navbox}}
