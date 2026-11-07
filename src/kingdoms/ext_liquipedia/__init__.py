@@ -43,4 +43,6 @@ PAGE_CACHE_TTL_S = 7 * 24 * 3600
 # from 1) + the raw wikitext riding the descriptor.
 # Gen 4: the infobox field regex stays on ONE line — an empty value
 # (|caption=) no longer swallows the next line (Nomad's creator).
-SEED_GEN = 4
+# Gen 5: the map type's display casing normalized ("hybrid" -> "Hybrid")
+# + the raw wikitext rides the provider wire.
+SEED_GEN = 5

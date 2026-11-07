@@ -147,6 +147,21 @@ def probe_liquipedia(page: str) -> None:
     wikitext = str(payload.get("parse", {}).get("wikitext", {}).get("*", ""))
     _print(f"LIQUIPEDIA RAW WIKITEXT — {page}", wikitext[:12000])
     info = provider._info_from_wikitext(page, wikitext)
+    # the RESOLVED urls (the imageinfo batch): an infobox image that 404s
+    # upstream lands here as an empty image_url — the fact the sync's
+    # "carries no image" skips were built on (never guess, print)
+    urls = provider._imageinfo_batch(
+        [f"File:{n}" for n in (info.image_file, info.gallery_icon) if n], "url"
+    )
+    _print(
+        f"LIQUIPEDIA RESOLVED URLS — {page}",
+        {
+            "image_file": info.image_file,
+            "image_url": urls.get(info.image_file, ""),
+            "gallery_icon": info.gallery_icon,
+            "icon_url": urls.get(info.gallery_icon, ""),
+        },
+    )
     _print(
         f"LIQUIPEDIA PARSED MapInfo — {page}",
         {

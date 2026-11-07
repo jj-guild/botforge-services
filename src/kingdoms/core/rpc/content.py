@@ -168,6 +168,7 @@ class ContentServicer(content_pb2_grpc.ContentServicer):
                 for v in seed.get("versions", ()) or ()
             ],
             tags=[str(t) for t in seed.get("tags", ()) or ()],
+            raw_wikitext=str(seed.get("raw_wikitext", "") or ""),
         )
 
     async def ListFactions(

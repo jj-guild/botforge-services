@@ -89,6 +89,19 @@ def test_every_fixture_page_yields_an_image_and_tags(page: str) -> None:
 
 
 @pytest.mark.parametrize("page", ["Arabia", "Arena", "Black Forest", "Budapest", "Nomad"])
+def test_every_map_type_is_casing_normalized(page: str) -> None:
+    """The type's display casing is consistent: first letter upper (owner
+    direction 2026-11-07 — 'Land' and 'hybrid' on the same catalog was
+    inconsistent).
+    """
+    info = _parse(page)
+    if info.map_type:
+        assert info.map_type == f"{info.map_type[:1].upper()}{info.map_type[1:]}", (
+            f"{page}: the map type must be display-cased — got {info.map_type!r}"
+        )
+
+
+@pytest.mark.parametrize("page", ["Arabia", "Arena", "Black Forest", "Budapest", "Nomad"])
 def test_every_fixture_page_carries_its_raw_wikitext(page: str) -> None:
     """The raw provider payload rides the info — the sync's raw-data store."""
     wikitext = _parse(page).raw_wikitext
@@ -108,6 +121,9 @@ def test_nomad_keeps_its_infobox_and_nomad_tag() -> None:
     """
     info = _parse("Nomad")
     assert info.name == "Nomad"
+    assert info.map_type == "Hybrid", (
+        "the infobox says 'hybrid' — the display value is normalized to 'Hybrid'"
+    )
     assert info.image_file == "Nomad_Map.png"
     assert info.gallery_icon == "Nomad AoE2 DE.png", "the Gallery's File: icon"
     assert info.walls == "No"

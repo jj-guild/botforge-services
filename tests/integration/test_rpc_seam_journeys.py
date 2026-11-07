@@ -45,6 +45,7 @@ SEED = {
     "game_versions": ["DE"],
     "versions": [{"name": "RM", "description": "Random map", "details": ["1v1"]}],
     "tags": ["classic"],
+    "raw_wikitext": "{{Infobox map|name=Arabia}}",
 }
 
 
@@ -87,6 +88,10 @@ async def test_the_content_seam_round_trips_over_the_real_wire() -> None:
         assert seed is not None
         assert seed["name"] == "Arabia"
         assert seed["versions"][0]["name"] == "RM"
+        assert seed["raw_wikitext"] == "{{Infobox map|name=Arabia}}", (
+            "the raw provider payload rides the provider wire — the sync's "
+            "raw-data store depends on it"
+        )
 
         # an unknown map degrades to None (found=False on the wire)
         assert await client.get_map_seed("aoe2", "unknown") is None

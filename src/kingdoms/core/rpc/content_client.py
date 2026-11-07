@@ -125,4 +125,5 @@ class ContentProviderClient:
                 for v in reply.versions
             ],
             "tags": list(reply.tags),
+            "raw_wikitext": reply.raw_wikitext,
         }

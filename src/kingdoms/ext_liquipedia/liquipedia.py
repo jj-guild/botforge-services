@@ -518,12 +518,18 @@ class LiquipediaMapsProvider:
             or self._clean_wikitext(fields.get("description", ""))
             or (f"Map page on Liquipedia: {LIQUIPEDIA_ATTRIBUTION}{page}")
         )
+        # the infobox types' casing is inconsistent upstream ("Land" vs
+        # "hybrid") — the display value is normalized: first letter upper,
+        # the rest untouched (the tags slug their own lowercase)
+        map_type = self._clean_wikitext(fields.get("type", "")).strip()
+        if map_type:
+            map_type = f"{map_type[:1].upper()}{map_type[1:]}"
         return MapInfo(
             name=name,
             description=description,
             terrain=self._clean_wikitext(fields.get("terrain", "")),
             size=self._clean_wikitext(fields.get("size", "")),
-            map_type=self._clean_wikitext(fields.get("type", "")),
+            map_type=map_type,
             image_file=fields.get("image", ""),
             image_license="",
             source_url=f"{LIQUIPEDIA_ATTRIBUTION}{page}",

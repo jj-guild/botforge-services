@@ -153,8 +153,16 @@ async def refresh_aoe2_maps() -> dict[str, int]:
                 logger.info("CONTENT REFRESH: no seed resolved for %r — skipped", name)
                 continue
             if not seed.image_url:
-                logger.info("CONTENT REFRESH: seed for %r carries no image — skipped", name)
-                continue
+                # the infobox's image file may 404 upstream (Nomad,
+                # Black Forest 2026-11-07) — the doc stores ANYWAY: the
+                # walls/TCs/tags/capacity/creator and the Gallery icon
+                # are worth more than the main image, and the card
+                # degrades gracefully without it. Skipping the whole doc
+                # froze those maps on their pre-sync parse forever.
+                logger.info(
+                    "CONTENT REFRESH: seed for %r carries no image — the doc stores without it",
+                    name,
+                )
             logger.debug(
                 "CONTENT REFRESH: %r parsed — type=%r walls=%r nomad=%r tc=%r "
                 "capacity=%r tags=%s raw=%d chars",

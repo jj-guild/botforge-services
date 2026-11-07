@@ -138,6 +138,7 @@ async def test_maps_sync_rebuilds_every_known_map(monkeypatch: Any) -> None:
             return [
                 MapModel(_id="map:aoe2:arena", game_key="aoe2", name="Arena"),
                 MapModel(_id="map:aoe2:budapest", game_key="aoe2", name="Budapest"),
+                MapModel(_id="map:aoe2:black-forest", game_key="aoe2", name="Black Forest"),
                 MapModel(
                     _id="map:aoe2:old",
                     game_key="aoe2",
@@ -150,12 +151,18 @@ async def test_maps_sync_rebuilds_every_known_map(monkeypatch: Any) -> None:
     monkeypatch.setattr(seed_module, "MongoAoE2Database", lambda database: None)
 
     async def fake_resolve(names: list[str]) -> dict[str, Any]:
-        return {
-            name: MapSeed(
+        out: dict[str, Any] = {}
+        for name in names:
+            # Black Forest's infobox image 404s upstream — its seed carries
+            # no image_url, and the doc MUST store anyway (the 2026-11-07
+            # bug: the skip froze no-image maps on their pre-sync parse)
+            image = "" if name == "Black Forest" else f"https://x/{name}.png"
+            out[name] = MapSeed(
                 name=name,
                 description=f"The {name} overview.",
                 resource_url=f"https://liquipedia.net/ageofempires2/{name}",
-                image_url=f"https://x/{name}.png",
+                image_url=image,
+                icon_url=f"https://x/{name}-icon.png" if image else "https://x/icon.png",
                 map_type="Land",
                 walls="Stone Walls",
                 nomad="No",
@@ -164,16 +171,15 @@ async def test_maps_sync_rebuilds_every_known_map(monkeypatch: Any) -> None:
                 tags=("type:land", "walls:stone", "tc:1"),
                 raw_wikitext="{{Infobox map|name=" + name + "}}",
             )
-            for name in names
-        }
+        return out
 
     monkeypatch.setattr(refresh_module, "_resolve_map_seeds", fake_resolve)
 
     from kingdoms.game_aoe2.content_refresh import refresh_aoe2_maps
 
     counts = await refresh_aoe2_maps()
-    assert counts["maps_total"] == 3
-    assert counts["maps_enriched"] == 2, "every ACTIVE map re-stores — the archived one skips"
+    assert counts["maps_total"] == 4
+    assert counts["maps_enriched"] == 3, "every ACTIVE map re-stores — the archived one skips"
     docs = database.collections["faction_content"].docs
     assert "map:aoe2:arena:en" in docs and "map:aoe2:budapest:en" in docs
     assert "map:aoe2:old:en" not in docs
@@ -184,8 +190,15 @@ async def test_maps_sync_rebuilds_every_known_map(monkeypatch: Any) -> None:
         "the freshness marker the reader's contract checks — without it, "
         "a map whose icon failed to resolve looks stale forever"
     )
+    black_forest = docs["map:aoe2:black-forest:en"]
+    assert black_forest["image_url"] == "", "the 404 upstream image stays empty"
+    assert black_forest["walls"] == "Stone Walls" and black_forest["tc"] == "1", (
+        "a map without a resolved image still stores its traits — "
+        "the skip froze no-image maps on their pre-sync parse forever"
+    )
+    assert black_forest["split_keys"] is True
 
     # the SECOND sync re-stores everything again: no complete-skip —
     # a sync always means fresh data, even for an already-rich doc
     counts_again = await refresh_aoe2_maps()
-    assert counts_again["maps_enriched"] == 2, "a sync is a full rebuild, never a skip"
+    assert counts_again["maps_enriched"] == 3, "a sync is a full rebuild, never a skip"
