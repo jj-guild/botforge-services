@@ -455,8 +455,10 @@ class LiquipediaMapsProvider:
                 continue
             out[key] = MapData(
                 info=info,
-                image_url=urls.get(info.image_file, ""),
-                icon_url=urls.get(info.gallery_icon, "") if info.gallery_icon else "",
+                image_url=urls.get(info.image_file.replace(" ", "_"), ""),
+                icon_url=(
+                    urls.get(info.gallery_icon.replace(" ", "_"), "") if info.gallery_icon else ""
+                ),
             )
         self._cache.update(out)
         return out
@@ -488,6 +490,12 @@ class LiquipediaMapsProvider:
                     continue
                 title = str(page.get("title", ""))
                 name = title.split("File:", 1)[-1] if title.startswith("File:") else title
+                # the API titles carry SPACES, the infobox references
+                # UNDERSCORES (and vice versa) — one canonical form for
+                # the key AND the lookup, or every cross-form file misses
+                # (the 2026-11-07 bug: nearly every Gallery icon "didn't
+                # resolve" while its URL sat in the response)
+                name = name.replace(" ", "_")
                 if iiprop == "url":
                     out[name] = str(imageinfo[0].get("url", ""))
                 else:

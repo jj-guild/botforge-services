@@ -45,4 +45,6 @@ PAGE_CACHE_TTL_S = 7 * 24 * 3600
 # (|caption=) no longer swallows the next line (Nomad's creator).
 # Gen 5: the map type's display casing normalized ("hybrid" -> "Hybrid")
 # + the raw wikitext rides the provider wire.
-SEED_GEN = 5
+# Gen 6: the imageinfo lookup normalizes spaces/underscores — the
+# Gallery icons and underscored images resolve again.
+SEED_GEN = 6

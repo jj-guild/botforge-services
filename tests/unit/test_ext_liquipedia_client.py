@@ -58,6 +58,68 @@ def _mock_transport(
     return httpx.MockTransport(handler)
 
 
+def test_imageinfo_titles_with_spaces_still_resolve() -> None:
+    """The API returns SPACED titles, the infobox references UNDERSCORES.
+
+    The 2026-11-07 bug: the imageinfo lookup keyed on the spaced title
+    while the infobox carries the underscored form — every Gallery icon
+    and every underscored image "failed to resolve" while its URL sat
+    in the response (the lpcommons foreign repo even answers missing:true
+    WITH a valid imageinfo entry).
+    """
+    wikitext = """
+{{Infobox map
+|name=Arena
+|image=Arena_Map.png
+}}
+
+==Gallery==
+<gallery>
+Arena_AoE2DE.png|in-game icon
+</gallery>
+"""
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        params = dict(request.url.params)
+        body: dict[str, Any]
+        if params.get("action") == "parse":
+            body = {"parse": {"wikitext": wikitext}}
+        else:
+            pages = []
+            for title in str(params.get("titles", "")).split("|"):
+                # the lpcommons shape: missing=true WITH a valid imageinfo
+                pages.append(
+                    {
+                        "title": title.replace("_", " "),
+                        "missing": True,
+                        "known": True,
+                        "imagerepository": "lpcommons",
+                        "imageinfo": (
+                            [{"url": f"https://liquipedia.test/commons/{title.split('File:')[-1]}"}]
+                            if params.get("iiprop") == "url"
+                            else [
+                                {
+                                    "extmetadata": {
+                                        "LicenseShortName": {"value": "CC-BY-SA 3.0"}
+                                    }
+                                }
+                            ]
+                        ),
+                    }
+                )
+            body = {"query": {"pages": pages}}
+        return httpx.Response(200, json=body)
+
+    provider = _make_provider(httpx.MockTransport(handler))
+    data = provider.map_data("Arena")
+    assert data.image_url == "https://liquipedia.test/commons/Arena_Map.png", (
+        "the underscored infobox reference must resolve against the spaced title"
+    )
+    assert data.icon_url == "https://liquipedia.test/commons/Arena_AoE2DE.png", (
+        "the Gallery icon must resolve — its URL sat in the response all along"
+    )
+
+
 def _make_provider(transport: httpx.MockTransport) -> LiquipediaMapsProvider:
     provider = LiquipediaMapsProvider(USER_AGENT, api_url=API_URL, sleep=lambda _s: None)
     provider._client = httpx.Client(
