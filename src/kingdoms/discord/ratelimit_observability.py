@@ -77,6 +77,7 @@ def install() -> None:  # noqa: C901
         """
 
         async def acquire(self) -> None:
+            """Admit one request: block at the margin, pass through elsewhere."""
             import asyncio
 
             self._last_request = self._loop.time()
@@ -105,10 +106,13 @@ def install() -> None:  # noqa: C901
         """The stock client, plus the bucket logging."""
 
         async def request(self, route: Any, *args: Any, **kwargs: Any) -> Any:
-            # The ADMISSION lives in the bucket (AdmissionRatelimit.acquire):
-            # remaining > margin → the request goes out, DISCORD answers for
-            # real; a RateLimited reaching here is a LIVE 429 (the stale
-            # memory can no longer raise pre-emptively).
+            """Serve one HTTP request, logging the live bucket state.
+
+            The ADMISSION lives the bucket (AdmissionRatelimit.acquire):
+            remaining > margin → the request goes out, DISCORD answers for
+            real; a RateLimited reaching here is a LIVE 429 (the stale
+            memory can no longer raise pre-emptively).
+            """
             try:
                 data = await super().request(route, *args, **kwargs)
             except discord.errors.RateLimited as exc:
