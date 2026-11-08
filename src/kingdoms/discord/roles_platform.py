@@ -1,8 +1,8 @@
-"""Discord wiring for the platform roles (kingdoms-services#115).
+"""Discord wiring for the platform roles (botforge-services#115).
 
 Implements the :class:`~kingdoms.core.services.roles.RolesPlatform`
 seam with real discord.py calls only — no business logic lives here.
-The :class:`MongoRolesDatabase` (kingdoms-services#26) persists the
+The :class:`MongoRolesDatabase` (botforge-services#26) persists the
 mod-role mappings; the member-assignment seam serves ModRolesService.
 """
 

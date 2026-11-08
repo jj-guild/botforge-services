@@ -1,8 +1,8 @@
-"""Behavioral (journey) tests on SimCord — kingdoms-services#2, #22, #24.
+"""Behavioral (journey) tests on SimCord — botforge-services#2, #22, #24.
 
 These tests drive the real discord.py machinery (command tree, dispatch,
 converters, interaction lifecycle) against SimCord's in-memory virtual
-Discord. Since kingdoms-services#12 the shared ``simcord_bot`` fixture (in
+Discord. Since botforge-services#12 the shared ``simcord_bot`` fixture (in
 ``tests/conftest.py``) builds the **real bot** through the production
 factory ``create_bot``: journeys exercise the actual dispatch, command tree
 and service wiring. Every user action goes through an actor, every
@@ -50,7 +50,7 @@ def _iter_components(message: discord.Message):
 
 
 class TestRealBotJourneys:
-    """Journeys through the real bot built by create_bot (kingdoms-services#12)."""
+    """Journeys through the real bot built by create_bot (botforge-services#12)."""
 
     @pytest.mark.simcord(strict_sync=False)
     async def test_status_answers_with_the_announcement_layout(self, simcord_env) -> None:  # type: ignore[no-untyped-def]

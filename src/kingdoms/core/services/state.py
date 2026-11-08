@@ -10,7 +10,7 @@ storage seam is the structural ``IStateStore`` protocol (ADR-0011):
 production wires ``RedisStateStore``, tests wire an in-memory substitute
 with a controllable clock (docs/architecture/testing.md).
 
-Reference: kingdoms-services#9, ADR-0005, docs/architecture/core.md §3.
+Reference: botforge-services#9, ADR-0005, docs/architecture/core.md §3.
 """
 
 from __future__ import annotations

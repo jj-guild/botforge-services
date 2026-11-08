@@ -1,4 +1,4 @@
-"""The Kingdoms per-player profiles (kingdoms#138): salons-first v2.
+"""The Kingdoms per-player profiles (botforge#138): salons-first v2.
 
 Each enrolled applicant gets a **private profile channel** under the
 Profils category — visible only to them and the admins:

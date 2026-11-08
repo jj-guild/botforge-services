@@ -14,9 +14,9 @@
 The&nbsp;``--preflight``&nbsp;mode&nbsp;exercises&nbsp;the&nbsp;real&nbsp;startup&nbsp;path&nbsp;(environment,<br>
 MongoDB,&nbsp;Redis,&nbsp;locale&nbsp;catalogs)&nbsp;without&nbsp;connecting&nbsp;to&nbsp;the&nbsp;Discord&nbsp;gateway,<br>
 which&nbsp;requires&nbsp;a&nbsp;valid&nbsp;token.&nbsp;The&nbsp;default&nbsp;mode&nbsp;builds&nbsp;the&nbsp;bot&nbsp;through<br>
-``create_bot``&nbsp;(kingdoms-services#12)&nbsp;and&nbsp;connects&nbsp;to&nbsp;the&nbsp;gateway,&nbsp;logging<br>
+``create_bot``&nbsp;(botforge-services#12)&nbsp;and&nbsp;connects&nbsp;to&nbsp;the&nbsp;gateway,&nbsp;logging<br>
 a&nbsp;distinctive&nbsp;ready&nbsp;line&nbsp;that&nbsp;CI&nbsp;smoke&nbsp;tests&nbsp;assert&nbsp;on<br>
-(kingdoms-services#12,&nbsp;kingdoms-services#34).</span></p>
+(botforge-services#12,&nbsp;botforge-services#34).</span></p>
 <p>
 <table class="section">
 <tr class="decor pkg-content-decor heading-text">
@@ -38,7 +38,7 @@ a&nbsp;distinctive&nbsp;ready&nbsp;line&nbsp;that&nbsp;CI&nbsp;smoke&nbsp;tests&
 &nbsp;<br>
 The&nbsp;health&nbsp;endpoint&nbsp;(``/healthz``&nbsp;on&nbsp;port&nbsp;8000)&nbsp;runs&nbsp;for&nbsp;the&nbsp;whole&nbsp;bot<br>
 lifetime:&nbsp;the&nbsp;container&nbsp;healthcheck&nbsp;(Dockerfile)&nbsp;and&nbsp;the&nbsp;infra<br>
-deployment&nbsp;health&nbsp;gate&nbsp;(kingdoms-infra#4)&nbsp;rely&nbsp;on&nbsp;it.<br>
+deployment&nbsp;health&nbsp;gate&nbsp;(botforge-infra#4)&nbsp;rely&nbsp;on&nbsp;it.<br>
 &nbsp;<br>
 When&nbsp;``CORE_URI``&nbsp;is&nbsp;set&nbsp;(ADR-0020&nbsp;split),&nbsp;the&nbsp;wiring&nbsp;to&nbsp;svc-core&nbsp;is<br>
 asserted&nbsp;at&nbsp;startup&nbsp;and&nbsp;logged:&nbsp;``CORE_WIRING_OK``&nbsp;(or&nbsp;a&nbsp;warning&nbsp;when<br>

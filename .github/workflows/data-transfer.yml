@@ -1,7 +1,7 @@
 # Ladder data transfer: import and export of the two
 # perimeters, dispatched manually (workflow_dispatch).
 #
-# Symmetric design (kingdoms-services#138): four operations, one for
+# Symmetric design (botforge-services#138): four operations, one for
 # each (direction x perimeter):
 #
 #   import  associations — load the latest users.csv (Discord<->AoE2 links)
@@ -79,12 +79,12 @@ jobs:
         with:
           ref: deploy/${{ inputs.environment }}
 
-      - name: Check out kingdoms-services (CLIs and data dumps)
+      - name: Check out botforge-services (CLIs and data dumps)
         uses: actions/checkout@v4
         with:
-          repository: merlin-pinpin-org/kingdoms-services
+          repository: jj-guild/botforge-services
           ref: main
-          path: kingdoms-services
+          path: botforge-services
 
       - name: Fail closed on synthetic data in prod
         if: inputs.environment == 'prod' && inputs.perimeter == 'test-season'
@@ -94,16 +94,16 @@ jobs:
       - name: Resolve the data file
         run: |
           if [[ "${{ inputs.perimeter }}" == associations ]]; then
-            data_dir="kingdoms-services/data/core"
+            data_dir="botforge-services/data/core"
             prefix="users"
           elif [[ "${{ inputs.perimeter }}" == season ]]; then
-            data_dir="kingdoms-services/data/core"
+            data_dir="botforge-services/data/core"
             prefix="season"
           elif [[ "${{ inputs.perimeter }}" == test-season ]]; then
-            data_dir="kingdoms-services/data/test"
+            data_dir="botforge-services/data/test"
             prefix=""
           else
-            data_dir="kingdoms-services/data/mods/ladder"
+            data_dir="botforge-services/data/mods/ladder"
             prefix="matches"
           fi
           if [[ "${{ inputs.perimeter }}" == test-season ]]; then
@@ -134,7 +134,7 @@ jobs:
         run: |
           cd envs/${{ inputs.environment }}
           if [[ "${{ inputs.perimeter }}" == test-season ]]; then
-            python kingdoms-services/scripts/generate_test_data.py /tmp/kingdoms-test-data
+            python botforge-services/scripts/generate_test_data.py /tmp/kingdoms-test-data
             for f in test-season.yaml test-users.csv test-matches.csv; do
               docker compose cp "/tmp/kingdoms-test-data/$f" "kingdoms-core:/tmp/$f"
             done
@@ -173,7 +173,7 @@ jobs:
       - name: Commit an exported dump back to the sources
         if: inputs.operation == 'export' && inputs.perimeter != 'test-season'
         run: |
-          cd kingdoms-services
+          cd botforge-services
           git config user.name "kingdoms-bot"
           git config user.email "bot@kingdoms.invalid"
           git add "${{ env.data_dir }}"

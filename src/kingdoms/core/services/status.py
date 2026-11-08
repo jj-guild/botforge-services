@@ -5,8 +5,8 @@ registry know — uptime, enabled mods with their declared channels/roles,
 configured games, bot admins, the deployed-artifact link and version label
 — without any mod-specific logic.
 
-Reference: kingdoms-services#35 (bot vs guild admins),
-kingdoms-infra#37 (deploy URL plumbing).
+Reference: botforge-services#35 (bot vs guild admins),
+botforge-infra#37 (deploy URL plumbing).
 """
 
 from __future__ import annotations

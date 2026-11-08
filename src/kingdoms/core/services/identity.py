@@ -1,4 +1,4 @@
-"""Platform identity service (kingdoms-services#130, reference §1.1).
+"""Platform identity service (botforge-services#130, reference §1.1).
 
 Maps internal ``user_id``s to platform accounts and back. Identities are
 multi-platform by design: one Kingdoms user may be linked to a Discord

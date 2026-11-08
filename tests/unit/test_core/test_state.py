@@ -1,4 +1,4 @@
-"""Unit tests for StateService (kingdoms-services#9).
+"""Unit tests for StateService (botforge-services#9).
 
 Uses the in-memory IStateStore substitute with a controllable clock; the
 RedisStateStore path itself is exercised by CI against real Redis (docker
@@ -185,7 +185,7 @@ async def test_scoped_events_are_isolated(service: StateService) -> None:
 
 
 async def test_redis_store_connects_lazily_without_start(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Regression guard (kingdoms-services#225): wiring-built services never call start()."""
+    """Regression guard (botforge-services#225): wiring-built services never call start()."""
     from kingdoms.core.services import state as state_module
 
     class LazyClient:

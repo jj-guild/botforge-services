@@ -2,7 +2,7 @@
 
 When a command or a component callback fails, the user is never left
 with a frozen interaction: the failure is reported where it can be
-acted on (developer mandate, kingdoms-services#113):
+acted on (developer mandate, botforge-services#113):
 
 - **bot operators** — every failure DMs the BOT_ADMINS the same
   crash report, whatever the origin (guild, DM, gateway event):

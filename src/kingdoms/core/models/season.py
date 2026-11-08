@@ -1,4 +1,4 @@
-"""Season models: generic, mod-agnostic seasons over a ladder (kingdoms-services#132).
+"""Season models: generic, mod-agnostic seasons over a ladder (botforge-services#132).
 
 A season wraps the ladder's map-pool mechanics: activating a season is a
 transactional pool switch (reference §4). ``reset_ratings`` defaults to

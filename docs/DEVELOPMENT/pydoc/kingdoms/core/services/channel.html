@@ -16,10 +16,10 @@ mod-scoped&nbsp;(``mod:key``,&nbsp;declared&nbsp;in&nbsp;mod&nbsp;YAML&nbsp;and&
 —&nbsp;to&nbsp;a&nbsp;concrete&nbsp;channel.&nbsp;Resolution&nbsp;order:&nbsp;cache&nbsp;-&gt;&nbsp;database&nbsp;-&gt;&nbsp;platform<br>
 creation.&nbsp;The&nbsp;service&nbsp;is&nbsp;generic:&nbsp;it&nbsp;never&nbsp;enumerates&nbsp;mod&nbsp;categories.<br>
 &nbsp;<br>
-Implemented&nbsp;in&nbsp;kingdoms-services#5.&nbsp;Mod-scoped&nbsp;categories&nbsp;and&nbsp;per-mod<br>
-provisioning:&nbsp;kingdoms-services#26,&nbsp;ADR-0003.&nbsp;Declaration-driven&nbsp;channel<br>
-groups,&nbsp;kinds&nbsp;and&nbsp;adopt&nbsp;policies:&nbsp;kingdoms-services#175.&nbsp;Declared<br>
-access&nbsp;policies&nbsp;applied&nbsp;as&nbsp;overwrites:&nbsp;kingdoms-services#57.</span></p>
+Implemented&nbsp;in&nbsp;botforge-services#5.&nbsp;Mod-scoped&nbsp;categories&nbsp;and&nbsp;per-mod<br>
+provisioning:&nbsp;botforge-services#26,&nbsp;ADR-0003.&nbsp;Declaration-driven&nbsp;channel<br>
+groups,&nbsp;kinds&nbsp;and&nbsp;adopt&nbsp;policies:&nbsp;botforge-services#175.&nbsp;Declared<br>
+access&nbsp;policies&nbsp;applied&nbsp;as&nbsp;overwrites:&nbsp;botforge-services#57.</span></p>
 <p>
 <table class="section">
 <tr class="decor pkg-content-decor heading-text">
@@ -123,7 +123,7 @@ core-side&nbsp;channel&nbsp;view&nbsp;built&nbsp;from&nbsp;it.</span></dd></dl>
 
 <dl><dt>async <a name="ChannelService-provision_mod_channels"><strong>provision_mod_channels</strong></a>(self, guild_id: 'str', mod_name: 'str') -&gt; 'ChannelProvisionReport'</dt><dd><span class="code">Provision&nbsp;a&nbsp;mod's&nbsp;whole&nbsp;declaration,&nbsp;reporting&nbsp;created/adopted.<br>
 &nbsp;<br>
-Declaration-driven&nbsp;(kingdoms-services#175):&nbsp;groups&nbsp;(categories)<br>
+Declaration-driven&nbsp;(botforge-services#175):&nbsp;groups&nbsp;(categories)<br>
 in&nbsp;declaration&nbsp;order,&nbsp;then&nbsp;each&nbsp;group's&nbsp;channels&nbsp;in&nbsp;declaration<br>
 order&nbsp;—&nbsp;kinds,&nbsp;admin-only&nbsp;flags&nbsp;and&nbsp;positions&nbsp;all&nbsp;come&nbsp;from&nbsp;the<br>
 YAML,&nbsp;never&nbsp;from&nbsp;feature&nbsp;code.&nbsp;Idempotent:&nbsp;existing&nbsp;groups&nbsp;and<br>
@@ -138,7 +138,7 @@ each&nbsp;``mod:key``&nbsp;category&nbsp;with&nbsp;the&nbsp;same&nbsp;flow&nbsp;
 <hr>
 Readonly properties defined here:<br>
 <dl><dt><strong>platform</strong></dt>
-<dd><span class="code">The&nbsp;platform&nbsp;seam&nbsp;(audit&nbsp;and&nbsp;sync&nbsp;reuse&nbsp;it,&nbsp;kingdoms-services#57).</span></dd>
+<dd><span class="code">The&nbsp;platform&nbsp;seam&nbsp;(audit&nbsp;and&nbsp;sync&nbsp;reuse&nbsp;it,&nbsp;botforge-services#57).</span></dd>
 </dl>
 <hr>
 Data descriptors defined here:<br>

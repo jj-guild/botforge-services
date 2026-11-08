@@ -1,7 +1,7 @@
 """Structured provisioning tests: channel groups, kinds and adopt policies.
 
 Regression guard for the declaration-driven salons-first structure
-(kingdoms-services#175): a mod's channels must provision inside their
+(botforge-services#175): a mod's channels must provision inside their
 declared Discord categories — never flat at the guild root.
 """
 

@@ -1,4 +1,4 @@
-"""Unit tests for the RegistrationService and DM workflow (kingdoms-services#133)."""
+"""Unit tests for the RegistrationService and DM workflow (botforge-services#133)."""
 
 from __future__ import annotations
 

@@ -1,4 +1,4 @@
-"""Kingdoms mod special-action economy - unit tests (kingdoms-services#161, T7).
+"""Kingdoms mod special-action economy - unit tests (botforge-services#161, T7).
 
 Reference §20 behind an in-memory store: the kingdom tech-point wallet
 fed by the epochs and exploration (D9/D36), the Explorateur territory

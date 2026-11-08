@@ -8,8 +8,8 @@ section (deploy/<env>@<sha> state and the Deployment #<n> pipeline run)
 roles, and one merged Admins section — bot operators (BOT_ADMINS) and the
 invoking guild's admins — as a bullet list of Discord mentions.
 
-Reference: kingdoms-services#35 (bot vs guild admins),
-kingdoms-infra#37 (deploy URL plumbing).
+Reference: botforge-services#35 (bot vs guild admins),
+botforge-infra#37 (deploy URL plumbing).
 """
 
 from __future__ import annotations
@@ -101,7 +101,7 @@ def format_deploy(
 ) -> str:
     """Render the Infra field: state branch, state commit, deploy run.
 
-    Four lines grouped on the kingdoms-infra repository, short labels
+    Four lines grouped on the botforge-infra repository, short labels
     carrying the links: the state branch (`Branch deploy/<env>`), the
     deployed state commit (`Commit <sha7>` linking the commit) with
     its **own** committed date (KINGDOMS_DEPLOY_INFRA_COMMIT_TS —

@@ -1,4 +1,4 @@
-"""Permission journeys on SimCord — kingdoms-services#55.
+"""Permission journeys on SimCord — botforge-services#55.
 
 These drive the real bot (``create_bot``) through the real dispatch:
 a member without the required mod role gets an ephemeral denial and

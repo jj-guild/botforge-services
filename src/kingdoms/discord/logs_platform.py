@@ -1,4 +1,4 @@
-"""Discord wiring for the bot logs channel (kingdoms-services#109).
+"""Discord wiring for the bot logs channel (botforge-services#109).
 
 Implements the two seams the core :class:`LogService` depends on, with
 real infrastructure only — no business logic lives here:
@@ -131,7 +131,7 @@ class DiscordLogsPlatform:
         if guild is None:
             raise RuntimeError(f"guild {guild_id} not reachable")
         channel = await guild.create_text_channel(
-            BOT_LOGS_CHANNEL_NAME, reason="Kingdoms bot logs (kingdoms-services#109)"
+            BOT_LOGS_CHANNEL_NAME, reason="Kingdoms bot logs (botforge-services#109)"
         )
         return str(channel.id)
 

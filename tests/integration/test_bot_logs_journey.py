@@ -1,4 +1,4 @@
-"""SimCord journey for the bot logs channel (kingdoms-services#109, #52).
+"""SimCord journey for the bot logs channel (botforge-services#109, #52).
 
 The startup announcement is now a lifecycle event of the per-guild bot
 logs channel: this journey drives the **real bot** (``create_bot`` →

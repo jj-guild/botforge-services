@@ -1,4 +1,4 @@
-"""Unit tests for the core identity import/export (kingdoms-services#138).
+"""Unit tests for the core identity import/export (botforge-services#138).
 
 The identity perimeter: users.csv rows (Discord id + game profile)
 become core ``profile_bindings`` — the same documents

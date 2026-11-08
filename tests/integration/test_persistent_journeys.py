@@ -1,4 +1,4 @@
-"""Persistent-view journeys on SimCord — kingdoms-services#122.
+"""Persistent-view journeys on SimCord — botforge-services#122.
 
 The §3b contract, proven end to end with a **real restart**: the bot
 sends a persistent pager panel, ``restart_bot()`` drains the old

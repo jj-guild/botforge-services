@@ -1,4 +1,4 @@
-"""Unit tests for the bot entry point (kingdoms-services#12, #34)."""
+"""Unit tests for the bot entry point (botforge-services#12, #34)."""
 
 from __future__ import annotations
 

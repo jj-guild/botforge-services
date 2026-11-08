@@ -1,4 +1,4 @@
-"""Unit tests for the LogService (kingdoms-services#109).
+"""Unit tests for the LogService (botforge-services#109).
 
 Covers the cache-aside resolution flow (Redis → MongoDB → creation),
 the admin-only default policy, the crash-loop collapse, and the

@@ -1,4 +1,4 @@
-"""Kingdoms mod season & enrollment service (kingdoms-services#157, T2).
+"""Kingdoms mod season & enrollment service (botforge-services#157, T2).
 
 The domain rules of reference §3-§5 and decisions D21-D26/D38: manual
 admin launch, wholesale reset, King/Lord enrollment, the waiting queue,

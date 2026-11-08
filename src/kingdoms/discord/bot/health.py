@@ -2,7 +2,7 @@
 
 The bot image (``Dockerfile``) declares a ``HEALTHCHECK`` probing
 ``http://localhost:8000/healthz`` and the infra deployment gate
-(``kingdoms-infra/scripts/deploy.sh``) waits on compose health status.
+(``botforge-infra/scripts/deploy.sh``) waits on compose health status.
 The bot is the only process in the container, so a liveness signal is
 enough: if the process is up, Docker keeps restarting it when it dies, and
 the health gate detects a crash-looping bot as ``unhealthy``.

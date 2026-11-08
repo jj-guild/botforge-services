@@ -1,4 +1,4 @@
-# CLI integration smoke (kingdoms-services#188) — exercises the `kingdoms`
+# CLI integration smoke (botforge-services#188) — exercises the `kingdoms`
 # CLI on a GitHub runner exactly the way an agent session or a developer
 # would: doctor (environment report), local (dispatch + graceful failure
 # when docker compose is absent), remote (config lifecycle: add, list,

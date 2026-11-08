@@ -1,4 +1,4 @@
-"""Identity import CLI: one-shot Discord↔AoE2 association load (kingdoms-services#138).
+"""Identity import CLI: one-shot Discord↔AoE2 association load (botforge-services#138).
 
 Usage: ``python -m kingdoms.core.services.identity_import_cli <users_csv>``
 

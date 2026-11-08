@@ -1,4 +1,4 @@
-"""Unit tests for the MessageRegistryService (kingdoms-services#130).
+"""Unit tests for the MessageRegistryService (botforge-services#130).
 
 Covers register/resolve/forget round-trips, cache-aside behaviour,
 replacement on re-registration and cache-failure degradation.

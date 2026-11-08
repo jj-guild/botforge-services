@@ -1,4 +1,4 @@
-"""Unit tests for the notification delivery pipeline (kingdoms-services#140)."""
+"""Unit tests for the notification delivery pipeline (botforge-services#140)."""
 
 from __future__ import annotations
 

@@ -5,8 +5,8 @@ and commands in its YAML config (``config/mods/<mod>.yaml``); the core
 provisions them automatically. Mods never extend core enums and never
 hardcode platform IDs.
 
-Reference: kingdoms-services#26, ADR-0003 (channel categories);
-kingdoms-services#175 (channel groups, kinds and admin-only flags as
+Reference: botforge-services#26, ADR-0003 (channel categories);
+botforge-services#175 (channel groups, kinds and admin-only flags as
 data — the single source of truth for a mod's salons).
 """
 
@@ -22,7 +22,7 @@ everyone-readable)."""
 
 @dataclass(frozen=True, slots=True)
 class ChannelAccessPolicy:
-    """A category's declared audience (kingdoms-services#57).
+    """A category's declared audience (botforge-services#57).
 
     The declaration is the source of truth; the platform overwrites are
     the runtime state, compared by the ChannelAuditService (drift).

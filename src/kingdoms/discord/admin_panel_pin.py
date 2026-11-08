@@ -17,7 +17,7 @@ reachable without typing ``/admin``. The bot therefore maintains a
 - everything is best-effort: a failing pin never blocks the bot, and
   the ``KINGDOMS_ANNOUNCE_ENABLED=0`` smoke bot never touches pins.
 
-Reference: kingdoms-services#115 (admin channel), the developer
+Reference: botforge-services#115 (admin channel), the developer
 mandate on click-time guards.
 """
 

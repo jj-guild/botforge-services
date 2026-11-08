@@ -26,7 +26,7 @@ if _version_not_supported:
 
 
 class LiveStub:
-    """Live test dashboard (kingdoms-services#147): svc-core aggregates the
+    """Live test dashboard (botforge-services#147): svc-core aggregates the
     provider event streams (ext-aoe2lobby live layer, ext-librematch as the
     source of truth) and serves the per-player dashboard state to the bot.
     The bot renders it through /live in a dedicated channel.
@@ -47,7 +47,7 @@ class LiveStub:
 
 
 class LiveServicer:
-    """Live test dashboard (kingdoms-services#147): svc-core aggregates the
+    """Live test dashboard (botforge-services#147): svc-core aggregates the
     provider event streams (ext-aoe2lobby live layer, ext-librematch as the
     source of truth) and serves the per-player dashboard state to the bot.
     The bot renders it through /live in a dedicated channel.
@@ -79,7 +79,7 @@ def add_LiveServicer_to_server(servicer, server):
 
  # This class is part of an EXPERIMENTAL API.
 class Live:
-    """Live test dashboard (kingdoms-services#147): svc-core aggregates the
+    """Live test dashboard (botforge-services#147): svc-core aggregates the
     provider event streams (ext-aoe2lobby live layer, ext-librematch as the
     source of truth) and serves the per-player dashboard state to the bot.
     The bot renders it through /live in a dedicated channel.

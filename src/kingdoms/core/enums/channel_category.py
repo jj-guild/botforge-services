@@ -1,7 +1,7 @@
 """Channel categories: routing keys used by ChannelService.
 
 Core defines only platform-level categories. Mods declare their own
-categories via their mod definitions (kingdoms-services#26); the core never
+categories via their mod definitions (botforge-services#26); the core never
 enumerates mod-specific channels. Reference: ADR-0003.
 """
 

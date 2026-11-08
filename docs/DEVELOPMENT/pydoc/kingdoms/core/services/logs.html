@@ -12,7 +12,7 @@
     <p><span class="code"><a href="#LogService">LogService</a>:&nbsp;lifecycle&nbsp;events&nbsp;in&nbsp;the&nbsp;per-guild&nbsp;bot&nbsp;logs&nbsp;channel&nbsp;(#109).<br>
 &nbsp;<br>
 Resolves&nbsp;each&nbsp;guild's&nbsp;``🤖-bot-logs``&nbsp;channel&nbsp;through&nbsp;the&nbsp;cache-aside<br>
-flow&nbsp;(kingdoms-services#23):&nbsp;Redis&nbsp;(``kingdoms:channels:{guild}:bot_logs``)<br>
+flow&nbsp;(botforge-services#23):&nbsp;Redis&nbsp;(``kingdoms:channels:{guild}:bot_logs``)<br>
 →&nbsp;MongoDB&nbsp;(``channels``,&nbsp;:class:`~kingdoms.core.models.channel.ChannelModel`)<br>
 →&nbsp;platform&nbsp;creation.&nbsp;The&nbsp;channel&nbsp;is&nbsp;**admin-only&nbsp;by&nbsp;default**:&nbsp;view&nbsp;is<br>
 granted&nbsp;to&nbsp;guild&nbsp;administrators&nbsp;and&nbsp;BOT_ADMINS,&nbsp;denied&nbsp;to&nbsp;@everyone&nbsp;—<br>
@@ -26,7 +26,7 @@ every&nbsp;policy&nbsp;change&nbsp;is&nbsp;itself&nbsp;logged&nbsp;as&nbsp;an&nb
 Logged&nbsp;events:&nbsp;start/stop/restart,&nbsp;crash,&nbsp;status&nbsp;change,&nbsp;policy&nbsp;change<br>
 —&nbsp;each&nbsp;localized&nbsp;(en/fr);&nbsp;the&nbsp;"start"&nbsp;event&nbsp;is&nbsp;the&nbsp;deployment<br>
 announcement&nbsp;carrying&nbsp;the&nbsp;frozen&nbsp;``kingdoms-deploy``&nbsp;footer<br>
-(kingdoms-services#52,&nbsp;read&nbsp;back&nbsp;by&nbsp;the&nbsp;kingdoms-infra&nbsp;battery&nbsp;#78).<br>
+(botforge-services#52,&nbsp;read&nbsp;back&nbsp;by&nbsp;the&nbsp;botforge-infra&nbsp;battery&nbsp;#78).<br>
 &nbsp;<br>
 Reliability:&nbsp;best-effort&nbsp;end&nbsp;to&nbsp;end.&nbsp;Redis&nbsp;down&nbsp;→&nbsp;fall&nbsp;back&nbsp;to&nbsp;MongoDB;<br>
 both&nbsp;down&nbsp;→&nbsp;skip&nbsp;the&nbsp;event.&nbsp;A&nbsp;deleted&nbsp;channel&nbsp;is&nbsp;detected&nbsp;on&nbsp;send<br>

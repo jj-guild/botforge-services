@@ -1,4 +1,4 @@
-"""Database exceptions (kingdoms-services#10).
+"""Database exceptions (botforge-services#10).
 
 Persistence failures across the store seams (MongoDB, Redis, the
 in-memory test stores). The taxonomy names the collection so the

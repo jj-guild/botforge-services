@@ -1,4 +1,4 @@
-"""Unit tests for the IdentityService (kingdoms-services#130).
+"""Unit tests for the IdentityService (botforge-services#130).
 
 Covers platform-account → user_id binding, idempotent user creation,
 cache-aside behaviour and cache-failure degradation.

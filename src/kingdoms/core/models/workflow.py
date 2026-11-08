@@ -1,6 +1,6 @@
 """Workflow status, transition and persisted state models.
 
-Reference: kingdoms-services#4, kingdoms-services#6 and ADR-0002
+Reference: botforge-services#4, botforge-services#6 and ADR-0002
 (workflow engine).
 """
 

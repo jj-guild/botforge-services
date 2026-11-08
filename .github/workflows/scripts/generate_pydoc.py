@@ -141,10 +141,10 @@ def main() -> int:
     parser.add_argument(
         "--source",
         type=Path,
-        default=Path("../kingdoms-services/src/kingdoms").resolve()
-        if Path("../kingdoms-services/src/kingdoms").exists()
-        else Path("kingdoms-services/src/kingdoms"),
-        help="Path to the Python package to document (default: kingdoms-services/src/kingdoms)",
+        default=Path("../botforge-services/src/kingdoms").resolve()
+        if Path("../botforge-services/src/kingdoms").exists()
+        else Path("botforge-services/src/kingdoms"),
+        help="Path to the Python package to document (default: botforge-services/src/kingdoms)",
     )
     parser.add_argument(
         "--output",
@@ -158,7 +158,7 @@ def main() -> int:
     if not src_root.is_dir():
         print(
             f"warning: source directory not found: {src_root} "
-            "kingdoms-services is not initialized yet; nothing to generate.",
+            "botforge-services is not initialized yet; nothing to generate.",
             file=sys.stderr,
         )
         return 0

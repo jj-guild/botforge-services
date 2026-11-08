@@ -11,7 +11,7 @@
 <td class="extra"><a href=".">index</a><br><a href="file:SOURCE_ROOT/core/services/roles.py">SOURCE_ROOT/core/services/roles.py</a></td></tr></table>
     <p><span class="code">Core&nbsp;roles&nbsp;service:&nbsp;provision&nbsp;and&nbsp;resolve&nbsp;the&nbsp;platform&nbsp;roles.<br>
 &nbsp;<br>
-The&nbsp;``bot-admins``&nbsp;guild&nbsp;role&nbsp;(kingdoms-services#115)&nbsp;delegates&nbsp;bot<br>
+The&nbsp;``bot-admins``&nbsp;guild&nbsp;role&nbsp;(botforge-services#115)&nbsp;delegates&nbsp;bot<br>
 administration&nbsp;to&nbsp;chosen&nbsp;members&nbsp;without&nbsp;handing&nbsp;them&nbsp;the&nbsp;Discord<br>
 guild&nbsp;administrator&nbsp;permission:&nbsp;the&nbsp;runtime&nbsp;guards<br>
 (:mod:`kingdoms.discord.guards`)&nbsp;validate&nbsp;it&nbsp;at&nbsp;click&nbsp;time.<br>
@@ -126,7 +126,7 @@ Provision&nbsp;and&nbsp;resolve&nbsp;the&nbsp;mod-declared&nbsp;roles&nbsp;(logi
 &nbsp;<br>
 Mods&nbsp;and&nbsp;game&nbsp;providers&nbsp;only&nbsp;ever&nbsp;reference&nbsp;logical&nbsp;role&nbsp;keys<br>
 (``mod:role_key``);&nbsp;the&nbsp;platform&nbsp;role&nbsp;id&nbsp;is&nbsp;resolved&nbsp;through&nbsp;the<br>
-persisted&nbsp;mapping&nbsp;(kingdoms-services#26)&nbsp;with&nbsp;a&nbsp;fallback&nbsp;to&nbsp;the<br>
+persisted&nbsp;mapping&nbsp;(botforge-services#26)&nbsp;with&nbsp;a&nbsp;fallback&nbsp;to&nbsp;the<br>
 declared&nbsp;display&nbsp;name,&nbsp;and&nbsp;admins&nbsp;can&nbsp;rebind&nbsp;a&nbsp;key&nbsp;to&nbsp;an&nbsp;existing<br>
 platform&nbsp;role&nbsp;without&nbsp;touching&nbsp;mod&nbsp;code.<br>&nbsp;</span></td></tr>
 <tr><td>&nbsp;</td>

@@ -1,4 +1,4 @@
-"""Kingdoms mod diplomacy & marriages service (kingdoms-services#160, T6).
+"""Kingdoms mod diplomacy & marriages service (botforge-services#160, T6).
 
 Reference §18-§19 and decisions D32-D34, D45, D51, D53, D59-D60,
 D74: the civilization-conditions engine (CIVILIZATIONS.md as admin

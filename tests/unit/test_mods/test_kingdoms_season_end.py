@@ -1,4 +1,4 @@
-"""Kingdoms mod season closing & ShowMatch - unit tests (kingdoms-services#162, T8).
+"""Kingdoms mod season closing & ShowMatch - unit tests (botforge-services#162, T8).
 
 Reference §23 behind an in-memory store: the Conquest finish on the
 territory counts (D16), the ShowMatch PA2 deciding a tie - duels 1v1

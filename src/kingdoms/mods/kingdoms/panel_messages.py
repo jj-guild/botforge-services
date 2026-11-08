@@ -4,7 +4,7 @@ A real :class:`discord.TextChannel` exposes no ``.messages`` cache — only
 the in-memory test mock does — so the live messages come from the
 ``history()`` iterator. Every panel/content refresh must go through
 these helpers, otherwise the old message is never found on the real API
-and each re-deployment duplicates the pinned message (kingdoms#244).
+and each re-deployment duplicates the pinned message (botforge#244).
 """
 from __future__ import annotations
 

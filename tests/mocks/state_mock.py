@@ -1,4 +1,4 @@
-"""In-memory IStateStore substitute for core tests (kingdoms-services#9).
+"""In-memory IStateStore substitute for core tests (botforge-services#9).
 
 Same interface as ``RedisStateStore`` with TTLs simulated by a controllable
 clock: tests advance time explicitly instead of sleeping. Published events

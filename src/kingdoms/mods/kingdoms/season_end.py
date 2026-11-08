@@ -1,4 +1,4 @@
-"""Kingdoms mod season closing & ShowMatch service (kingdoms-services#162, T8).
+"""Kingdoms mod season closing & ShowMatch service (botforge-services#162, T8).
 
 Reference §23 and decisions D16/D19/D38/D50/D51/D52: the Conquest
 finish at the Monday midnight following the last cycle - territory

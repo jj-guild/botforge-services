@@ -1,4 +1,4 @@
-"""Unit tests for the SurfaceService (kingdoms-services#130).
+"""Unit tests for the SurfaceService (botforge-services#130).
 
 Covers mod-scoped surface resolution (delegated to the ChannelService
 seam) and surface permission queries (delegated to the PermissionService

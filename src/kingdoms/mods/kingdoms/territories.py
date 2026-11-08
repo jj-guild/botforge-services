@@ -1,4 +1,4 @@
-"""Kingdoms mod territories & maps service (kingdoms-services#163, T3).
+"""Kingdoms mod territories & maps service (botforge-services#163, T3).
 
 Reference §6-§10 + decision D31: the admin-managed map catalog, the
 random season draw without duplicates, the per-season "map is out"

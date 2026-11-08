@@ -1,4 +1,4 @@
-"""Unit tests for the ChannelService (kingdoms-services#5).
+"""Unit tests for the ChannelService (botforge-services#5).
 
 Covers the cache-aside resolution flow (cache -> database -> adoption ->
 creation) for platform-level and mod-scoped categories, cache expiry and

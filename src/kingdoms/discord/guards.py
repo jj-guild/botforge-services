@@ -1,6 +1,6 @@
 """Runtime permission guards: admin access is validated at click time.
 
-Developer-mandated rule (kingdoms-services#109, #115): **never assume
+Developer-mandated rule (botforge-services#109, #115): **never assume
 that seeing a button means being allowed to click it**. Discord
 components are visible to whoever can read the channel — permissions
 drift, role removals and channel moves happen between render and
@@ -11,7 +11,7 @@ click time**, against the live guild state:
 - **guild administrators** — the administrator/manage-guild Discord
   permissions of the invoking member;
 - **the ``bot-admins`` role** — the guild role provisioned by the
-  RolesService (kingdoms-services#115), granted by the guild owners
+  RolesService (botforge-services#115), granted by the guild owners
   to delegated operators.
 
 The guard answers a single question — "may this interaction act?" —

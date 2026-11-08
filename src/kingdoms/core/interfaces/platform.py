@@ -5,7 +5,7 @@ inherit from these classes, they just satisfy the shape, checked by mypy.
 ``@runtime_checkable`` enables lightweight isinstance checks (member
 presence only, not signatures).
 
-Reference: docs/ARCHITECTURE.md (kingdoms repo) and kingdoms-services#3.
+Reference: docs/ARCHITECTURE.md (kingdoms repo) and botforge-services#3.
 """
 
 from __future__ import annotations
@@ -75,7 +75,7 @@ class IMessage(Protocol):
 class IPlatform(Protocol):
     """Platform abstraction: messaging, channel management, roles, DMs.
 
-    First implementation: DiscordPlatform (kingdoms-services#11).
+    First implementation: DiscordPlatform (botforge-services#11).
     """
 
     async def send_message(self, channel: IChannel, content: str) -> IMessage:

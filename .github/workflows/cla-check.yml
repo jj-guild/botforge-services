@@ -28,7 +28,7 @@ jobs:
       - name: Check out the roster (kingdoms main — the CLA record)
         uses: actions/checkout@v4
         with:
-          repository: merlin-pinpin-org/kingdoms
+          repository: jj-guild/botforge
           ref: main
           sparse-checkout: |
             CONTRIBUTORS.md

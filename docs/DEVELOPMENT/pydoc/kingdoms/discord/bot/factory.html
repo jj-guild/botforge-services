@@ -9,20 +9,20 @@
 <tr class="heading-text decor">
 <td class="title">&nbsp;<br><strong class="title"><a href="kingdoms.html" class="white">kingdoms</a>.<a href="kingdoms.discord.html" class="white">discord</a>.<a href="kingdoms.discord.bot.html" class="white">bot</a>.factory</strong></td>
 <td class="extra"><a href=".">index</a><br><a href="file:SOURCE_ROOT/discord/bot/factory.py">SOURCE_ROOT/discord/bot/factory.py</a></td></tr></table>
-    <p><span class="code">Bot&nbsp;assembly:&nbsp;builds&nbsp;the&nbsp;runnable&nbsp;Kingdoms&nbsp;bot&nbsp;(kingdoms-services#12).<br>
+    <p><span class="code">Bot&nbsp;assembly:&nbsp;builds&nbsp;the&nbsp;runnable&nbsp;Kingdoms&nbsp;bot&nbsp;(botforge-services#12).<br>
 &nbsp;<br>
 The&nbsp;factory&nbsp;wires,&nbsp;in&nbsp;order:&nbsp;Discord&nbsp;client&nbsp;+&nbsp;command&nbsp;tree,&nbsp;core&nbsp;services<br>
 (registry,&nbsp;status),&nbsp;the&nbsp;``/status``&nbsp;command,&nbsp;and&nbsp;—&nbsp;as&nbsp;their&nbsp;issues&nbsp;land&nbsp;—<br>
 the&nbsp;platform&nbsp;adapter&nbsp;and&nbsp;the&nbsp;core&nbsp;service&nbsp;trio&nbsp;(StateService,<br>
 WorkflowEngine,&nbsp;ChannelService).&nbsp;Everything&nbsp;that&nbsp;is&nbsp;not&nbsp;wired&nbsp;yet&nbsp;is<br>
 optional,&nbsp;so&nbsp;the&nbsp;bot&nbsp;merges&nbsp;incrementally&nbsp;while&nbsp;``--preflight``&nbsp;stays<br>
-green&nbsp;in&nbsp;CI&nbsp;(re-scoping&nbsp;note&nbsp;on&nbsp;kingdoms-services#12).<br>
+green&nbsp;in&nbsp;CI&nbsp;(re-scoping&nbsp;note&nbsp;on&nbsp;botforge-services#12).<br>
 &nbsp;<br>
 The&nbsp;bot&nbsp;class&nbsp;itself&nbsp;is&nbsp;thin:&nbsp;no&nbsp;manual&nbsp;interaction&nbsp;dispatch&nbsp;(CommandTree<br>
 and&nbsp;discord.py&nbsp;Views&nbsp;already&nbsp;route),&nbsp;platform&nbsp;logic&nbsp;stays&nbsp;in&nbsp;the&nbsp;narrow<br>
 Protocol&nbsp;seams&nbsp;(ADR-0011:&nbsp;DiscordChannelsPlatform,&nbsp;DiscordRolesPlatform),<br>
 and&nbsp;the&nbsp;``KINGDOMS_BOT_READY``&nbsp;log&nbsp;contract&nbsp;of&nbsp;the<br>
-smoke&nbsp;CI&nbsp;is&nbsp;preserved&nbsp;(kingdoms-services#34).</span></p>
+smoke&nbsp;CI&nbsp;is&nbsp;preserved&nbsp;(botforge-services#34).</span></p>
 <p>
 <table class="section">
 <tr class="decor pkg-content-decor heading-text">

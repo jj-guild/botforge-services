@@ -1,4 +1,4 @@
-"""Named surfaces & permission queries (kingdoms-services#130).
+"""Named surfaces & permission queries (botforge-services#130).
 
 A **surface** is a mod-declared, named place the bot manages: a channel
 category, resolved through the ChannelService and addressed by its
@@ -32,7 +32,7 @@ class SurfaceChannels(Protocol):
 
 
 class SurfacePermissions(Protocol):
-    """Narrow seam on the runtime PermissionService (kingdoms-services#55)."""
+    """Narrow seam on the runtime PermissionService (botforge-services#55)."""
 
     async def user_has_role(self, guild_id: str, user_id: str, mod: str, role_key: str) -> bool:
         """Whether a member holds one mod role, resolved through the mapping."""

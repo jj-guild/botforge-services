@@ -1,4 +1,4 @@
-"""Kingdoms mod season & enrollment service — unit tests (kingdoms-services#157).
+"""Kingdoms mod season & enrollment service — unit tests (botforge-services#157).
 
 The domain rules of reference §3-§5 behind an in-memory store: manual
 launch (free or imposed), wholesale reset, King/Lord enrollment, the

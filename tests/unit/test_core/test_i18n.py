@@ -1,4 +1,4 @@
-"""Unit tests for the MessageCatalog (kingdoms-services#110, #115).
+"""Unit tests for the MessageCatalog (botforge-services#110, #115).
 
 The catalog must load the nested ``admin:`` section of the yaml
 locales as dotted keys (``admin.title``) \u2014 without the flattening,

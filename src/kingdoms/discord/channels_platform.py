@@ -1,4 +1,4 @@
-"""Discord wiring for the ChannelService platform seam (kingdoms-services#5).
+"""Discord wiring for the ChannelService platform seam (botforge-services#5).
 
 Implements the :class:`~kingdoms.core.services.channel.ChannelsPlatform`
 and :class:`~kingdoms.core.services.channel.StructuredChannelsPlatform`
@@ -7,7 +7,7 @@ Discord normalizes channel names to slugs ("Âge sombre" -> "age-sombre"),
 so name matching here is slug-based; the core stays name-exact.
 
 All Discord channel/category creation of the platform lives in this seam
-(kingdoms-services#175): feature code resolves through ChannelService and
+(botforge-services#175): feature code resolves through ChannelService and
 never calls create_category/create_text_channel/create_forum itself.
 """
 
@@ -74,7 +74,7 @@ class DiscordChannelsPlatform:
 
     # ------------------------------------------------------------------
     # StructuredChannelsPlatform: declaration-driven provisioning
-    # (kingdoms-services#175). Every create_* call of the platform lives
+    # (botforge-services#175). Every create_* call of the platform lives
     # here; feature code never provisions Discord objects directly.
     # ------------------------------------------------------------------
 

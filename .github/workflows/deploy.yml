@@ -1,28 +1,28 @@
 # /deploy — deploy a pull request to any non-protected environment.
 # A PR comment "/deploy" or "/deploy <env>" builds the bot image from
 # the PR head, pushes it to GHCR (tag pr-<id>-<timestamp>-<sha>), then
-# dispatches the kingdoms-infra Pin state workflow (single-writer design,
+# dispatches the botforge-infra Pin state workflow (single-writer design,
 # ADR-0018): it pins the image in the deploy/<env> state branch, merging
 # main in the same commit, serialized with every other state-branch writer
 # by the shared deploy-state-<env> concurrency group. The state push
-# triggers the Deploy environment workflow on kingdoms-infra, which reads
+# triggers the Deploy environment workflow on botforge-infra, which reads
 # the image from Git. The bot runs on the <env> VPS with the PR code until
 # the next state commit. The environment defaults to test; prod-like
-# environments (PROTECTED_ENVS in kingdoms-infra deploy.yml) never deploy
+# environments (PROTECTED_ENVS in botforge-infra deploy.yml) never deploy
 # a PR — they pin released vX.Y.Z images only.
 #
 # Gating: the roster authority matrix (CONTRIBUTORS.md, kingdoms repo)
 # decides — any rostered contributor with an accepted CLA may request a
 # /deploy (the requestor's entry and the PR author's agent-scope are both
 # checked by the reusable authorize.yml gate); fork PRs are rejected
-# outright; kingdoms-infra's Actions policy is the second layer on the
+# outright; botforge-infra's Actions policy is the second layer on the
 # dispatch side. Prod-like environments never deploy a PR.
 #
 # Cross-repo state write: the dispatch uses an ephemeral GitHub App token
 # (actions/create-github-app-token), minted from the
 # KINGDOMS_DEPLOYER_APP_ID / KINGDOMS_DEPLOYER_APP_PRIVATE_KEY repository
-# secrets of this repository. The app is installed on kingdoms-infra only,
-# with Actions: write + Contents: write — see kingdoms-infra
+# secrets of this repository. The app is installed on botforge-infra only,
+# with Actions: write + Contents: write — see botforge-infra
 # docs/DEPLOY-TEST-APP.md for the full setup and the ruleset hardening.
 
 name: Deploy PR (comment)
@@ -70,7 +70,7 @@ jobs:
           script: |
             const commenter = context.payload.comment.user.login;
             // Fork PRs are never deployable, regardless of who comments:
-            // their head lives outside this repository (kingdoms-services#67).
+            // their head lives outside this repository (botforge-services#67).
             const { data: pr } = await github.rest.pulls.get({
               owner: context.repo.owner,
               repo: context.repo.repo,
@@ -89,7 +89,7 @@ jobs:
   gate:
     name: Roster gate — who may deploy
     needs: intercept
-    uses: merlin-pinpin-org/kingdoms/.github/workflows/authorize.yml@main
+    uses: jj-guild/botforge/.github/workflows/authorize.yml@main
     with:
       capability: deploy
       requestor: ${{ github.event.comment.user.login }}
@@ -114,7 +114,7 @@ jobs:
           # /deploy [<env>] — the environment defaults to the requestor's
           # personal environment (their roster alias: sandbox first, the
           # shared validation env is an explicit /deploy test). Environments
-          # are data on kingdoms-infra (one directory under envs/): validate
+          # are data on botforge-infra (one directory under envs/): validate
           # the target against that listing instead of a hardcoded list, so
           # adding a custom env needs no change here. Prod-like environments
           # are rejected: they pin released images only.
@@ -126,9 +126,9 @@ jobs:
             echo "::error::prod is a protected environment: PR deploys are test-like only (released images deploy to prod)."
             exit 1
           fi
-          if ! gh api "repos/merlin-pinpin-org/kingdoms-infra/contents/envs" \
+          if ! gh api "repos/jj-guild/botforge-infra/contents/envs" \
               --jq '.[].name' | grep -qx "$env_name"; then
-            echo "::error::unknown environment '$env_name' (no envs/$env_name/ directory on kingdoms-infra — see docs/ENVIRONMENTS.md)"
+            echo "::error::unknown environment '$env_name' (no envs/$env_name/ directory on botforge-infra — see docs/ENVIRONMENTS.md)"
             exit 1
           fi
           echo "name=$env_name" >> "$GITHUB_OUTPUT"
@@ -246,23 +246,23 @@ jobs:
           cache-from: type=gha
 
 
-      - name: Mint an ephemeral GitHub App token for kingdoms-infra
+      - name: Mint an ephemeral GitHub App token for botforge-infra
         id: app-token
         uses: actions/create-github-app-token@v3
         with:
           app-id: ${{ secrets.KINGDOMS_DEPLOYER_APP_ID }}
           private-key: ${{ secrets.KINGDOMS_DEPLOYER_APP_PRIVATE_KEY }}
-          owner: merlin-pinpin-org
-          repositories: kingdoms-infra
+          owner: jj-guild
+          repositories: botforge-infra
 
       # Single-writer design (ADR-0018): the pin itself is executed by the
-      # kingdoms-infra Pin state workflow, which merges main into the state
+      # botforge-infra Pin state workflow, which merges main into the state
       # branch in the same commit and shares the deploy-state-<env>
       # concurrency group with every other state-branch writer — the pin can
       # never race a sync. This workflow dispatches it and then polls the
       # state branch for the pin commit (identified by the unique image tag)
       # to recover the state commit sha the deploy run will carry.
-      - name: Dispatch the pin to the kingdoms-infra Pin state workflow
+      - name: Dispatch the pin to the botforge-infra Pin state workflow
         id: pin-state
         uses: actions/github-script@v7
         with:
@@ -277,15 +277,15 @@ jobs:
             // message, source and deploy_ts are composed by the Pin state
             // workflow itself.
             const label = "${{ steps.label.outputs.tag }}";
-            const image = `ghcr.io/merlin-pinpin-org/kingdoms-services:${label}`;
+            const image = `ghcr.io/jj-guild/botforge-services:${label}`;
             // The deployed commit's source branch and the PR title feed the
             // /status Services section (Branch and Pull-request lines).
             const { data: prData } = await github.rest.pulls.get({
               owner: context.repo.owner, repo: context.repo.repo, pull_number: pr,
             });
             await github.rest.repos.createDispatchEvent({
-              owner: "merlin-pinpin-org",
-              repo: "kingdoms-infra",
+              owner: "jj-guild",
+              repo: "botforge-infra",
               event_type: "pin-state",
               client_payload: {
                 env: "${{ steps.env.outputs.name }}",
@@ -298,7 +298,7 @@ jobs:
                 deploy_url: "${{ steps.acknowledge.outputs.permalink }}",
                 deploy_kind: "pr",
                 deploy_ref: String(pr),
-                deploy_tree_url: `https://github.com/merlin-pinpin-org/kingdoms-services/tree/${sha}`,
+                deploy_tree_url: `https://github.com/jj-guild/botforge-services/tree/${sha}`,
                 deploy_branch: prData.head.ref,
                 // The PR title is composed by the Pin state workflow from
                 // this run lookup (it has the PR in context anyway): the
@@ -323,7 +323,7 @@ jobs:
             const shortImage = "${{ steps.label.outputs.tag }}";
             const body = comment.body
               .replace("**Status:** 🟡 building", "**Status:** 🔵 deploying")
-              .replace("| Image | (building…) |", `| Image | [\`${shortImage}\`](https://github.com/merlin-pinpin-org/kingdoms-services/pkgs/container/kingdoms-services) |`);
+              .replace("| Image | (building…) |", `| Image | [\`${shortImage}\`](https://github.com/jj-guild/botforge-services/pkgs/container/botforge-services) |`);
             await github.rest.issues.updateComment({
               owner: context.repo.owner,
               repo: context.repo.repo,
@@ -333,7 +333,7 @@ jobs:
 
       # Single implementation of the watch-the-pin-then-the-deploy pattern
       # (.github/workflows/scripts/watch_deploy.sh, also used by agent sessions and release.yml).
-      - name: Watch the kingdoms-infra deploy run
+      - name: Watch the botforge-infra deploy run
         id: watch-infra
         if: success()
         env:
@@ -342,15 +342,15 @@ jobs:
           label="${{ steps.label.outputs.tag }}"
           env_name="${{ steps.env.outputs.name }}"
           .github/workflows/scripts/watch_deploy.sh "$env_name" "$label"
-          run_url="https://github.com/merlin-pinpin-org/kingdoms-infra/actions"
+          run_url="https://github.com/jj-guild/botforge-infra/actions"
           # Recover the deploy run URL for the tracking comment. The state
           # commit is the one carrying OUR label — not merely the latest
           # commit on the branch: a sync or another pin may have landed
           # meanwhile, and the tracking comment must link OUR deploy run.
-          state_sha="$(gh api "repos/merlin-pinpin-org/kingdoms-infra/commits?sha=deploy/${env_name}&path=envs/${env_name}/state/kingdoms-bot.yml&per_page=10" \
+          state_sha="$(gh api "repos/jj-guild/botforge-infra/commits?sha=deploy/${env_name}&path=envs/${env_name}/state/kingdoms-bot.yml&per_page=10" \
             --jq ".[] | select(.commit.message | contains(\"${label}\")) | .sha" | head -1)"
-          run_id="$(gh api "repos/merlin-pinpin-org/kingdoms-infra/actions/workflows/deploy.yml/runs?branch=deploy/${env_name}&per_page=5" --jq ".workflow_runs[] | select(.head_sha == \"${state_sha}\") | .id" | head -1)"
-          [[ -n "$run_id" ]] && run_url="https://github.com/merlin-pinpin-org/kingdoms-infra/actions/runs/${run_id}"
+          run_id="$(gh api "repos/jj-guild/botforge-infra/actions/workflows/deploy.yml/runs?branch=deploy/${env_name}&per_page=5" --jq ".workflow_runs[] | select(.head_sha == \"${state_sha}\") | .id" | head -1)"
+          [[ -n "$run_id" ]] && run_url="https://github.com/jj-guild/botforge-infra/actions/runs/${run_id}"
           echo "run_url=${run_url}" >> "$GITHUB_OUTPUT"
           echo "ok=true" >> "$GITHUB_OUTPUT"
 

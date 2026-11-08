@@ -1,4 +1,4 @@
-"""Unit tests for the MongoDB client setup (kingdoms-services#4).
+"""Unit tests for the MongoDB client setup (botforge-services#4).
 
 These tests only exercise client construction and singleton lifecycle: no
 MongoDB server is required (clients connect lazily). Live-database round

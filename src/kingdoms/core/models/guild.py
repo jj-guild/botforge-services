@@ -1,6 +1,6 @@
 """Guild model: per-server configuration (locale, channel category mapping).
 
-Reference: kingdoms-services#4.
+Reference: botforge-services#4.
 """
 
 from __future__ import annotations

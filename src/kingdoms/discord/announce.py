@@ -21,7 +21,7 @@ job + run date) — each artifact's timestamp sits directly under it,
 under a row of generically labeled buttons carrying the links. The deployed
 environment rides as a badge under the title; there is no machine
 footer — the
-kingdoms-infra post-deploy battery (kingdoms-infra#78) reads the
+botforge-infra post-deploy battery (botforge-infra#78) reads the
 pinned state from the state file, not from the message.
 
 Announcements can be silenced entirely (``KINGDOMS_ANNOUNCE_ENABLED=0``)

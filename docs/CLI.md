@@ -51,7 +51,7 @@ kingdoms remote rm prod
 ```
 
 `deploy` opens an interactive ssh session and points you at the infra
-repo — the deploy procedure is owned by `kingdoms-infra`, not by the
+repo — the deploy procedure is owned by `botforge-infra`, not by the
 CLI. GPG/secret storage is deliberately out of scope: the CLI stores no
 secret, so there is nothing to encrypt.
 

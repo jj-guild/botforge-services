@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Runtime-image purity guard (kingdoms-services#106).
+"""Runtime-image purity guard (botforge-services#106).
 
 Asserts that the test tooling is absent from the runtime image: every
 forbidden import must fail with ModuleNotFoundError inside the built

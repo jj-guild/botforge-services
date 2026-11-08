@@ -1,4 +1,4 @@
-# Season 1 seeding — real JeanJack ladder data (kingdoms-services#205).
+# Season 1 seeding — real JeanJack ladder data (botforge-services#205).
 # The maps are the 23 maps actually played in season 1 (from the match
 # history dump), not a theoretical pool. The ladder ran several pool
 # rotations over the season; each pool is a selection into the catalog.

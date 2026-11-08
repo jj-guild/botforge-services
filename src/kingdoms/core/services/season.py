@@ -1,4 +1,4 @@
-"""Season service: generic season lifecycle over ladder pool rotations (kingdoms-services#132).
+"""Season service: generic season lifecycle over ladder pool rotations (botforge-services#132).
 
 Seasons live in the generic core so tournament/other mods reuse them later.
 Activation is a transactional pool switch delegated to GameDataService

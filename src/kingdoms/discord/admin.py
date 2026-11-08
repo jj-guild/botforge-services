@@ -1,12 +1,12 @@
 """The /admin command: a hierarchical operator panel (Components V2).
 
 Access is restricted to bot operators (``BOT_ADMINS``), guild
-administrators and the ``bot-admins`` role (kingdoms-services#109,
+administrators and the ``bot-admins`` role (botforge-services#109,
 #115) — validated at invocation **and at click time** (the developer
 mandate: never assume that seeing a component means being allowed to
 click it).
 
-Structure (kingdoms-services#117):
+Structure (botforge-services#117):
 
 - **main menu** — the guild's global settings (language fr/en, used
   for every channel message: announcements, lifecycle events, panels)
@@ -24,7 +24,7 @@ All interactive components are built through the UI SDK (ADR-0009):
 Actions, SelectMenus and a ChannelSelect, custom IDs following the
 ``<mod>:<component>:<payload>`` convention.
 
-Reference: kingdoms-services#102, #109, #115, #117.
+Reference: botforge-services#102, #109, #115, #117.
 """
 
 from __future__ import annotations
@@ -526,10 +526,10 @@ def register_admin_command(
     """Register the /admin slash command on the command tree.
 
     ``bot_admins`` is the parsed BOT_ADMINS operator ids (StatusService).
-    ``logs_service`` is the core LogService (kingdoms-services#109); it
+    ``logs_service`` is the core LogService (botforge-services#109); it
     may be None in local runs — the panel degrades to a status note.
     ``roles_service`` resolves the guild's bot-admins role
-    (kingdoms-services#115) — members holding it administer too.
+    (botforge-services#115) — members holding it administer too.
     ``catalog`` localizes the panel with the guild's (or user's) locale.
     ``admin_channel_service`` routes the admin channel like the logs
     channel (the same menu governs both managed channels).

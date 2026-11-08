@@ -1,4 +1,4 @@
-"""Platform exceptions (kingdoms-services#10).
+"""Platform exceptions (botforge-services#10).
 
 Failures of the platform frontends (Discord today, others per
 ADR-0012). The taxonomy stays **core-agnostic**: no discord import

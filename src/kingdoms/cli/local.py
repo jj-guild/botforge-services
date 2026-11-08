@@ -1,7 +1,7 @@
 """Local stack wrappers: didactic front-ends to the Makefile docker targets.
 
 Never duplicates the logic: every action shells out to `make` (which owns
-docker compose) after explaining what it will do (kingdoms-services#191).
+docker compose) after explaining what it will do (botforge-services#191).
 """
 
 from __future__ import annotations

@@ -1,4 +1,4 @@
-"""Registration DM workflow: bind a user to a validated game profile (kingdoms-services#133).
+"""Registration DM workflow: bind a user to a validated game profile (botforge-services#133).
 
 Stateless executor driven by the WorkflowEngine (ADR-0002): each step
 returns the next transition; persistence is the engine's. The flow:

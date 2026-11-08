@@ -1,4 +1,4 @@
-# Contributing to Kingdoms (kingdoms-services)
+# Contributing to Kingdoms (botforge-services)
 
 This repository holds all the Python code of the platform: the
 platform-agnostic core, the Discord implementation, the mods and the YAML
@@ -16,15 +16,15 @@ with a public clone and no credentials.
 ## Set up
 
 ```bash
-git clone https://github.com/merlin-pinpin-org/kingdoms-services.git
-cd kingdoms-services
+git clone https://github.com/jj-guild/botforge-services.git
+cd botforge-services
 make setup        # uv sync — creates the venv and installs dependencies
 ```
 
 ## Your first contribution
 
 1. **Pick or create an issue** (from a
-   [template](https://github.com/merlin-pinpin-org/kingdoms-services/issues/new/choose) —
+   [template](https://github.com/jj-guild/botforge-services/issues/new/choose) —
    blank issues are disabled; non-compliant ones are flagged `invalid`).
 2. **Create a branch** from `main`:
 
@@ -73,7 +73,7 @@ one.
 
 ## Testing rules (short version)
 
-Full strategy: [testing.md](https://github.com/merlin-pinpin-org/kingdoms/blob/main/docs/architecture/testing.md).
+Full strategy: [testing.md](https://github.com/jj-guild/botforge/blob/main/docs/architecture/testing.md).
 
 - Core tests: no Discord at all (plain fixtures, in-memory stores).
 - Adapter/UI unit tests: **MockDiscord** (`tests/mocks/`).
@@ -95,7 +95,7 @@ Full strategy: [testing.md](https://github.com/merlin-pinpin-org/kingdoms/blob/m
 ## The vibe-coding model
 
 This project is primarily built through an AI-agent workflow
-([operating model](https://github.com/merlin-pinpin-org/kingdoms/blob/main/docs/VIBEWORKFLOW.md));
+([operating model](https://github.com/jj-guild/botforge/blob/main/docs/VIBEWORKFLOW.md));
 agent sessions run the same checks you just ran. Human contributions are
 welcome and follow exactly the path above — no agent required.
 

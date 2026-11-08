@@ -6,7 +6,7 @@ declarative bricks (Text, Section, Row, Button, Container…) behind
 in a feature: the SDK enforces the ADR-0009 layout rules (text and
 component budgets, Section accessory constraints) at build time.
 
-On top of the bricks (kingdoms-services#13):
+On top of the bricks (botforge-services#13):
 
 - :mod:`.embeds` — sober, lightweight status/user/ladder embeds;
 - :mod:`.layouts` — Components V2 counterparts of the same cards;

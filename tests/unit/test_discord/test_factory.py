@@ -1,4 +1,4 @@
-"""Unit tests for the bot factory (kingdoms-services#12)."""
+"""Unit tests for the bot factory (botforge-services#12)."""
 
 from __future__ import annotations
 
@@ -163,7 +163,7 @@ def test_create_bot_without_redis_has_no_shared_state(config_dir: str) -> None:
 def test_create_bot_with_redis_shares_one_state_service(config_dir: str) -> None:
     """With Redis configured, every wired service holds the SAME StateService.
 
-    Regression guard (kingdoms-services#225): each service used to build its
+    Regression guard (botforge-services#225): each service used to build its
     own never-started store; the shared instance is what setup_hook connects.
     """
     from kingdoms.core.services.state import StateService
@@ -185,7 +185,7 @@ def test_create_bot_with_redis_shares_one_state_service(config_dir: str) -> None
 async def test_setup_hook_starts_shared_state_and_registration_engine(config_dir: str) -> None:
     """setup_hook must connect the shared state and resume workflows.
 
-    Regression guard (kingdoms-services#225): 'state store not started' meant
+    Regression guard (botforge-services#225): 'state store not started' meant
     nothing ever called start() — the bot booted degraded in production with
     green CI because no test asserted the store connects on the startup path.
     """

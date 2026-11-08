@@ -3,9 +3,9 @@
 The ``--preflight`` mode exercises the real startup path (environment,
 MongoDB, Redis, locale catalogs) without connecting to the Discord gateway,
 which requires a valid token. The default mode builds the bot through
-``create_bot`` (kingdoms-services#12) and connects to the gateway, logging
+``create_bot`` (botforge-services#12) and connects to the gateway, logging
 a distinctive ready line that CI smoke tests assert on
-(kingdoms-services#12, kingdoms-services#34).
+(botforge-services#12, botforge-services#34).
 """
 
 from __future__ import annotations
@@ -83,7 +83,7 @@ async def run_bot() -> None:
 
     The health endpoint (``/healthz`` on port 8000) runs for the whole bot
     lifetime: the container healthcheck (Dockerfile) and the infra
-    deployment health gate (kingdoms-infra#4) rely on it.
+    deployment health gate (botforge-infra#4) rely on it.
 
     When ``CORE_URI`` is set (ADR-0020 split), the wiring to svc-core is
     asserted at startup and logged: ``CORE_WIRING_OK`` (or a warning when

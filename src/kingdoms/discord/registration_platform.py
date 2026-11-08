@@ -1,4 +1,4 @@
-"""Discord-side adapters for the registration stack (kingdoms-services#133).
+"""Discord-side adapters for the registration stack (botforge-services#133).
 
 Production wiring of the RegistrationService seams: the Mongo adapter
 for the game-side profile bindings, and the AoE2 profile-validation

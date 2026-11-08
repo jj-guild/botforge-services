@@ -1,4 +1,4 @@
-"""Unit tests for the SeasonService lifecycle (kingdoms-services#132)."""
+"""Unit tests for the SeasonService lifecycle (botforge-services#132)."""
 
 from __future__ import annotations
 

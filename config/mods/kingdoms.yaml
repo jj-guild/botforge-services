@@ -2,8 +2,8 @@
 # Design: kingdoms repo docs/MODS/kingdoms/ (reference Season II + DECISIONS.md D1-D54).
 # Enabled with T2 (enrollment); the declaration is validated at startup.
 #
-# Single source of truth of the salons-first structure (kingdoms#138,
-# kingdoms-services#175): the startup provisioning and the /kingdom
+# Single source of truth of the salons-first structure (botforge#138,
+# botforge-services#175): the startup provisioning and the /kingdom
 # bootstrap both provision from this declaration — channel groups
 # (categories), kinds (text/forum/announce) and admin-only flags are
 # data here, never code in the mod.

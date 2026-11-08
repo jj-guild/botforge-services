@@ -1,4 +1,4 @@
-"""Platform message registry (kingdoms-services#130, reference §2.3).
+"""Platform message registry (botforge-services#130, reference §2.3).
 
 The only place platform message IDs ever live. Mods register persistent
 messages by logical key — ``(message_key, entity_id)`` scoped to a

@@ -1,4 +1,4 @@
-"""Identity export CLI: one-shot association dump (kingdoms-services#138).
+"""Identity export CLI: one-shot association dump (botforge-services#138).
 
 Usage: ``python -m kingdoms.core.services.identity_export_cli <users_csv>``
 

@@ -9,14 +9,14 @@
 <tr class="heading-text decor">
 <td class="title">&nbsp;<br><strong class="title"><a href="kingdoms.html" class="white">kingdoms</a>.<a href="kingdoms.core.html" class="white">core</a>.<a href="kingdoms.core.services.html" class="white">services</a>.channel_audit</strong></td>
 <td class="extra"><a href=".">index</a><br><a href="file:SOURCE_ROOT/core/services/channel_audit.py">SOURCE_ROOT/core/services/channel_audit.py</a></td></tr></table>
-    <p><span class="code">Channel&nbsp;audit:&nbsp;declared&nbsp;access&nbsp;policies&nbsp;vs&nbsp;runtime&nbsp;overwrites&nbsp;(kingdoms-services#57).<br>
+    <p><span class="code">Channel&nbsp;audit:&nbsp;declared&nbsp;access&nbsp;policies&nbsp;vs&nbsp;runtime&nbsp;overwrites&nbsp;(botforge-services#57).<br>
 &nbsp;<br>
 The&nbsp;mod&nbsp;declarations&nbsp;are&nbsp;the&nbsp;source&nbsp;of&nbsp;truth;&nbsp;the&nbsp;Discord&nbsp;permission<br>
 overwrites&nbsp;are&nbsp;the&nbsp;runtime&nbsp;state.&nbsp;They&nbsp;can&nbsp;drift&nbsp;(a&nbsp;human&nbsp;edits&nbsp;channel<br>
 permissions,&nbsp;a&nbsp;role&nbsp;is&nbsp;deleted,&nbsp;a&nbsp;channel&nbsp;is&nbsp;moved).&nbsp;This&nbsp;service<br>
 compares&nbsp;the&nbsp;two&nbsp;per&nbsp;guild&nbsp;and&nbsp;produces&nbsp;a&nbsp;structured&nbsp;<a href="#DriftReport">DriftReport</a>&nbsp;—<br>
 drift&nbsp;is&nbsp;reported,&nbsp;never&nbsp;silently&nbsp;repaired&nbsp;(repair&nbsp;is&nbsp;the&nbsp;on-demand<br>
-sync,&nbsp;kingdoms-services#58).</span></p>
+sync,&nbsp;botforge-services#58).</span></p>
 <p>
 <table class="section">
 <tr class="decor pkg-content-decor heading-text">

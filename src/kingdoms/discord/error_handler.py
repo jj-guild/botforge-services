@@ -1,4 +1,4 @@
-"""Discord rendering of the exception taxonomy (kingdoms-services#10).
+"""Discord rendering of the exception taxonomy (botforge-services#10).
 
 A :class:`~kingdoms.core.exceptions.KingdomsError` reaching a Discord
 interaction answers with an **ephemeral i18n message** selected by

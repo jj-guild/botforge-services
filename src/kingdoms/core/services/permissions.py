@@ -3,13 +3,13 @@
 Seeing a button is a UX hint, never a security boundary: roles drift,
 messages persist and any member can attempt an interaction. The only
 trustworthy enforcement point is the moment the interaction arrives —
-this service answers it (kingdoms-services#55).
+this service answers it (botforge-services#55).
 
 Inputs, in order:
 
 - **bot operators** — the ``BOT_ADMINS`` ids bypass mod-level checks;
 - **mod-declared required role keys** — resolved to platform role ids
-  through the mod-role mappings (kingdoms-services#26);
+  through the mod-role mappings (botforge-services#26);
 - **the member's live roles** — read through the narrow
   :class:`MemberRoles` seam, never through a stale snapshot.
 

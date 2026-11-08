@@ -1,4 +1,4 @@
-"""Core admin channel service: the 🛡-bot-admins home (kingdoms-services#115).
+"""Core admin channel service: the 🛡-bot-admins home (botforge-services#115).
 
 The admin messages with actions (the admin panels) live in a
 dedicated channel, so the admin surface is visible
@@ -167,7 +167,7 @@ class AdminChannelService:
         channel_id = await self._platform.create_channel(
             guild_id,
             ADMIN_CHANNEL_NAME,
-            reason="Kingdoms admin channel (kingdoms-services#115)",
+            reason="Kingdoms admin channel (botforge-services#115)",
         )
         await self._db.upsert_channel(
             ChannelModel(

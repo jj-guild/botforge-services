@@ -16,7 +16,7 @@ changes,&nbsp;a&nbsp;player's&nbsp;stats&nbsp;barely&nbsp;move&nbsp;in&nbsp;five
 the&nbsp;cache-aside&nbsp;layer&nbsp;every&nbsp;provider&nbsp;lookup&nbsp;goes&nbsp;through&nbsp;—&nbsp;backed&nbsp;by<br>
 the&nbsp;StateService&nbsp;(Redis),&nbsp;the&nbsp;single&nbsp;entry&nbsp;point&nbsp;to&nbsp;hot&nbsp;state.<br>
 &nbsp;<br>
-Rules&nbsp;(kingdoms-services#205):<br>
+Rules&nbsp;(botforge-services#205):<br>
 &nbsp;<br>
 -&nbsp;**completed&nbsp;match**:&nbsp;fetched&nbsp;at&nbsp;most&nbsp;once,&nbsp;ever&nbsp;—&nbsp;the&nbsp;marker&nbsp;key&nbsp;is<br>
 &nbsp;&nbsp;set&nbsp;atomically&nbsp;(``SET&nbsp;NX``);&nbsp;a&nbsp;second&nbsp;fetch&nbsp;is&nbsp;a&nbsp;no-op;<br>

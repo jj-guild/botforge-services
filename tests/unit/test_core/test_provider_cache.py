@@ -1,4 +1,4 @@
-"""Unit tests for the provider data cache (kingdoms-services#205).
+"""Unit tests for the provider data cache (botforge-services#205).
 
 Freshness rules: completed matches fetched once ever (atomic marker),
 live match details 5s, profiles 5 minutes, daily sweep staleness.

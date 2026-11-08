@@ -1,13 +1,13 @@
-# kingdoms-services — developer guide
+# botforge-services — developer guide
 
-`kingdoms-services` holds all the Python code of the Kingdoms Discord bot
+`botforge-services` holds all the Python code of the Kingdoms Discord bot
 platform: the platform-agnostic core, the Discord platform implementation
 (discord.py), the mods, and the YAML configs.
 
 Read the shared
-[conventions](https://github.com/merlin-pinpin-org/kingdoms/blob/main/docs/CONVENTIONS.md)
+[conventions](https://github.com/jj-guild/botforge/blob/main/docs/CONVENTIONS.md)
 and the
-[operating model](https://github.com/merlin-pinpin-org/kingdoms/blob/main/docs/VIBEWORKFLOW.md)
+[operating model](https://github.com/jj-guild/botforge/blob/main/docs/VIBEWORKFLOW.md)
 in the `kingdoms` repo. This page covers what is specific to working *in
 this repo*.
 
@@ -64,7 +64,7 @@ it there (a module per domain in `src/kingdoms/cli/`).
 
 Every guild gets a dedicated **bot logs channel** (`🤖-bot-logs`) where the
 bot posts its lifecycle events: startup announcement, status changes,
-crashes, start/stop/restart. The design (kingdoms-services#109):
+crashes, start/stop/restart. The design (botforge-services#109):
 
 - **Channel naming convention**: channels created by the bot always
   carry an emoji prefix followed by a dash, e.g. `🤖-bot-logs`.
@@ -82,12 +82,12 @@ crashes, start/stop/restart. The design (kingdoms-services#109):
 - **Lifecycle events are best-effort**: a store failure logs a warning,
   never crashes the bot; repeated crashes collapse into a single
   "crash-loop detected" event.
-- The startup announcement (kingdoms-services#52) is the `start` event
+- The startup announcement (botforge-services#52) is the `start` event
   of this flow: a Components V2 layout (accent Container, Section with
   the bot avatar as thumbnail accessory, Separator, link buttons) reusing
   the exact `/status` rendering, carrying a machine-readable footer
   (`kingdoms-deploy env=… image=… kind=… ref=… run=…`) in sub-text —
-  read back by the kingdoms-infra battery through the REST API.
+  read back by the botforge-infra battery through the REST API.
 - `KINGDOMS_ANNOUNCE_ENABLED=0` silences the startup announcement
   entirely — used by the CI/CD smoke bot so CI boots never post in
   the shared guilds.
@@ -106,13 +106,13 @@ The full usage rules — navigation in buttons (never links in V2 text
 blocks), the `<mod>:<component>:<payload>` custom ID convention,
 build-time budgets and guarantees, testing patterns — live in the
 kingdoms repo
-[discord-ui skill](https://github.com/merlin-pinpin-org/kingdoms/blob/main/.agents/skills/discord-ui/SKILL.md).
+[discord-ui skill](https://github.com/jj-guild/botforge/blob/main/.agents/skills/discord-ui/SKILL.md).
 Extend the SDK rather than bypassing it.
 
 ## Testing rules
 
 Full strategy:
-[kingdoms/docs/architecture/testing.md](https://github.com/merlin-pinpin-org/kingdoms/blob/main/docs/architecture/testing.md)
+[kingdoms/docs/architecture/testing.md](https://github.com/jj-guild/botforge/blob/main/docs/architecture/testing.md)
 (hybrid pyramid). The short version — use the **right double for the right
 depth**:
 
@@ -136,7 +136,7 @@ depth**:
   build, real MongoDB/Redis, entrypoint/preflight paths) is exercised by
   CI workflows instead.
 
-### Runtime-image purity (kingdoms-services#106)
+### Runtime-image purity (botforge-services#106)
 
 Test code and test dependencies (SimCord, pytest, mocks) **never land on a
 run machine**: the runtime image runs on the environment VPSes and is
@@ -155,7 +155,7 @@ This is enforced, not conventional — two fail-closed guards:
 at any commit: `uv sync --frozen` + `pytest tests/integration`. It is
 in-memory and network-free — an autouse fixture fails any test that
 attempts a real socket connection. This is the interface consumed by the
-kingdoms-infra post-deploy battery (kingdoms-infra#78), which checks out
+botforge-infra post-deploy battery (botforge-infra#78), which checks out
 this repository at the pinned deploy commit on a GitHub-hosted runner —
 never on an environment VPS.
 
@@ -164,7 +164,7 @@ never on an environment VPS.
 - **Pull request**: post `/deploy [env]` as a comment on the PR (defaults
   to `test`; `prod` is rejected — released images only). The workflow
   builds the PR head, pushes the image `pr-<id>-<timestamp>-<sha7>` to
-  GHCR, pins it on the kingdoms-infra state branch `deploy/<env>` and
+  GHCR, pins it on the botforge-infra state branch `deploy/<env>` and
   deploys it on that environment's runner; the tracking comment on the PR
   follows the deployment. Only collaborators with write access; fork PRs
   rejected. Details in the [README](../README.md).

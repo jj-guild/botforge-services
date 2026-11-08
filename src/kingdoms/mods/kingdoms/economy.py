@@ -1,4 +1,4 @@
-"""Kingdoms mod special-action economy service (kingdoms-services#161, T7).
+"""Kingdoms mod special-action economy service (botforge-services#161, T7).
 
 Reference §20 and decisions D9/D15/D36/D47/D48/D58/D61/D68: the kingdom
 tech-point wallet (``tech_points_bank`` fed by the epochs and the

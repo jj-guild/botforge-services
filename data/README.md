@@ -1,4 +1,4 @@
-# Data dumps (kingdoms-services#138)
+# Data dumps (botforge-services#138)
 
 CSV dumps loaded into (and exported from) live environments by the
 **data-transfer workflow** (`.github/workflows/data-transfer.yml`,
@@ -26,7 +26,7 @@ profiles are absent from users.csv but appear in matches.csv — they are
 imported as players with `legacy_detached_profiles` (ghost links kept
 for traceability, never active for /register).
 
-## Season tools (kingdoms-services#205)
+## Season tools (botforge-services#205)
 
 - **Full season import** — seed + associations + matches, idempotent:
 

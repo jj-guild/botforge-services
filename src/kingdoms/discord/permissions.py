@@ -5,7 +5,7 @@ decides; this module answers. ``require_permission`` is the single
 hook every component callback goes through at click time: on denial
 the user gets the ephemeral i18n reason and an audit event rides to
 the bot-logs channel (ADR-0003) — a denial never fails silently
-(kingdoms-services#55).
+(botforge-services#55).
 """
 
 from __future__ import annotations

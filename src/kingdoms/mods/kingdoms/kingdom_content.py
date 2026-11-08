@@ -1,4 +1,4 @@
-"""Kingdoms mod — salons-first live content (kingdoms#138, group 1).
+"""Kingdoms mod — salons-first live content (botforge#138, group 1).
 
 Best-effort refreshers that keep the designer's channels alive with
 the T2 service only: permissions-serveur-v1 (Drasah 19/10) the age
@@ -56,7 +56,7 @@ def _geopolitics_age_name(age_key: Any) -> str:
     return f"{GEOPOLITICS_BASE_NAME} {emoji}" if emoji else GEOPOLITICS_BASE_NAME
 
 # The designer's pitch of the mod (form corrected, content alpha —
-# kingdoms#138). Pinned in the Présentation announce channel.
+# botforge#138). Pinned in the Présentation announce channel.
 PRESENTATION_MESSAGE = """# ⚔️ Kingdoms — Saison II
 
 Kingdoms est un événement, un mod externe au jeu Age of Empires II !

@@ -1,4 +1,4 @@
-"""Kingdoms mod weekly events - unit tests (kingdoms-services#159, T5).
+"""Kingdoms mod weekly events - unit tests (botforge-services#159, T5).
 
 Reference §15-§17 behind an in-memory store: the Sunday cycle switch
 with the Lord's Day Gaia maps (D1/D31), the Wednesday age switch with

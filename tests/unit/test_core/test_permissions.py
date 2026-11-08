@@ -1,4 +1,4 @@
-"""Unit tests for the PermissionService (kingdoms-services#55).
+"""Unit tests for the PermissionService (botforge-services#55).
 
 Covers the runtime authorization decision tree: bot-admin bypass,
 DM policy (dm_allowed), open actions (no declared roles), the

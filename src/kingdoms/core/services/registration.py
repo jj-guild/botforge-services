@@ -1,4 +1,4 @@
-"""Registration service: profile binding + game-profile validation (kingdoms-services#133).
+"""Registration service: profile binding + game-profile validation (botforge-services#133).
 
 Registration is a *permanent* mod (profile + validation, once): it binds a
 platform user to game profiles. Seasonal binding (per-ladder enrollment)

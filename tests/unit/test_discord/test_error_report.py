@@ -1,4 +1,4 @@
-"""Tests for the enriched error reporting (kingdoms-services#113).
+"""Tests for the enriched error reporting (botforge-services#113).
 
 Guild interaction failures ride the guild's bot-logs channel with the
 git reference of the emitting line and the interaction context; DM
@@ -72,7 +72,7 @@ def test_git_ref_pins_the_source_line_with_a_synthetic_frame() -> None:
         _throw()
     except ValueError as exc:
         frame = inspect.getinnerframes(exc.__traceback__)[-1]
-        tree_url = "https://github.com/merlin-pinpin-org/kingdoms-services/tree/980a037abcd1234"
+        tree_url = "https://github.com/jj-guild/botforge-services/tree/980a037abcd1234"
         ref = git_ref(frame, tree_url)
         assert ref == ""  # tests/ frames are not pinned, whatever the sha
 
@@ -103,7 +103,7 @@ async def test_guild_interaction_failure_rides_bot_logs() -> None:
     await report_interaction_error(
         interaction,
         exc,
-        "https://github.com/merlin-pinpin-org/kingdoms-services/tree/980a037abcd1234",
+        "https://github.com/jj-guild/botforge-services/tree/980a037abcd1234",
         logs,
     )
     assert len(logs.events) == 1
@@ -176,7 +176,7 @@ async def test_admins_receive_the_crash_report_as_dm() -> None:
     await report_interaction_error(
         interaction,
         exc,
-        "https://github.com/merlin-pinpin-org/kingdoms-services/tree/980a037abcd1234",
+        "https://github.com/jj-guild/botforge-services/tree/980a037abcd1234",
         logs,
         bot=bot,
         admin_ids=("111", "not-an-id"),

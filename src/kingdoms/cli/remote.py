@@ -2,7 +2,7 @@
 
 Hosts are stored in a per-user TOML config (~/.config/kingdoms/cli.toml).
 The CLI never stores secrets: authentication relies on the user's own
-ssh keys/agent (kingdoms-services#192).
+ssh keys/agent (botforge-services#192).
 """
 
 from __future__ import annotations
@@ -216,7 +216,7 @@ def _run_host_action(action: str, rest: list[str]) -> int:
         return _connect(h, rest[1:], confirm_destructive=True)
     if action == "deploy":
         print("Deploy: opening an ssh session — the deploy procedure on the remote host")
-        print("is owned by the infra repo (kingdoms-infra). Follow its README there.\n")
+        print("is owned by the infra repo (botforge-infra). Follow its README there.\n")
         return _connect(h, [], interactive=True)
     print(f"FAIL: bad remote action '{action}'. See: kingdoms remote --help")
     return 2

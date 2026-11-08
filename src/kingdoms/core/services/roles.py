@@ -1,6 +1,6 @@
 """Core roles service: provision and resolve the platform roles.
 
-The ``bot-admins`` guild role (kingdoms-services#115) delegates bot
+The ``bot-admins`` guild role (botforge-services#115) delegates bot
 administration to chosen members without handing them the Discord
 guild administrator permission: the runtime guards
 (:mod:`kingdoms.discord.guards`) validate it at click time.
@@ -167,7 +167,7 @@ class ModRolesService:
 
     Mods and game providers only ever reference logical role keys
     (``mod:role_key``); the platform role id is resolved through the
-    persisted mapping (kingdoms-services#26) with a fallback to the
+    persisted mapping (botforge-services#26) with a fallback to the
     declared display name, and admins can rebind a key to an existing
     platform role without touching mod code.
     """

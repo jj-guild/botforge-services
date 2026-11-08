@@ -1,4 +1,4 @@
-"""Kingdoms event scheduler loop - unit tests (kingdoms-services#244, D).
+"""Kingdoms event scheduler loop - unit tests (botforge-services#244, D).
 
 The heartbeat behind ``run_due``: ``start_kingdoms_event_scheduler``
 ticks every few seconds, replays the due slots through the bot's

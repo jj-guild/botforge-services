@@ -26,7 +26,7 @@ jobs:
       - name: Compare the live main rulesets against the documented expectation
         env:
           GH_TOKEN: ${{ github.token }}
-          REPOS: merlin-pinpin-org/kingdoms merlin-pinpin-org/kingdoms-infra merlin-pinpin-org/kingdoms-services
+          REPOS: jj-guild/botforge jj-guild/botforge-infra jj-guild/botforge-services
         run: |
           set -euo pipefail
           drift_file="$RUNNER_TEMP/drift.md"
@@ -65,10 +65,10 @@ jobs:
             checks="$(jq -r '[.rules[] | select(.type == "required_status_checks") | .parameters.required_status_checks[].context] | join("\n")' <<<"$ruleset")"
             checks_list="$checks"
             case "$repo" in
-              merlin-pinpin-org/kingdoms) expected_checks_list=$(printf '%s\n' "check" "cla") ;;
-              merlin-pinpin-org/kingdoms-infra)
+              jj-guild/botforge) expected_checks_list=$(printf '%s\n' "check" "cla") ;;
+              jj-guild/botforge-infra)
                 expected_checks_list=$(printf '%s\n' "Validate compose manifests" "Validate infrastructure files" "Backup/restore round-trip test" "Smoke test (test stack boot)" "cla" "Lint scripts and workflows") ;;
-              merlin-pinpin-org/kingdoms-services)
+              jj-guild/botforge-services)
                 expected_checks_list=$(printf '%s\n' "Lint (ruff)" "Typecheck (mypy strict)" "Unit tests (pytest)" "Validate and boot docker-compose.yml" "Smoke test (bot image + MongoDB + Redis)" "Discord smoke (real gateway via the CI/CD bot)" "Build and test the image" "Generate and check pydoc freshness" "cla") ;;
             esac
             while IFS= read -r expected; do

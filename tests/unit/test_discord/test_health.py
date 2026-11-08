@@ -1,4 +1,4 @@
-"""Unit tests for the container health endpoint (kingdoms-infra#4).
+"""Unit tests for the container health endpoint (botforge-infra#4).
 
 The bot image healthcheck and the infra deployment gate depend on
 ``/healthz``: these tests pin the contract (200 when alive, 503 when the

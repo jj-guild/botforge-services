@@ -2,7 +2,7 @@ syntax = "proto3";
 
 package kingdoms.v1;
 
-// Live test dashboard (kingdoms-services#147): svc-core aggregates the
+// Live test dashboard (botforge-services#147): svc-core aggregates the
 // provider event streams (ext-aoe2lobby live layer, ext-librematch as the
 // source of truth) and serves the per-player dashboard state to the bot.
 // The bot renders it through /live in a dedicated channel.

@@ -3,7 +3,7 @@
 The startup announcement (Components V2 — links are buttons) and the
 /status embed (markdown links) show the **same deployment identity**;
 these helpers are the single source of truth for it (developer
-mandate: /status and the announcement must converge, kingdoms-services
+mandate: /status and the announcement must converge, botforge-services
 #109):
 
 - each artifact (services commit, docker image, infra state commit,
@@ -19,9 +19,9 @@ from __future__ import annotations
 
 from kingdoms.core.services.status import StatusService
 
-SERVICES_REPO_URL = "https://github.com/merlin-pinpin-org/kingdoms-services"
-INFRA_REPO_URL = "https://github.com/merlin-pinpin-org/kingdoms-infra"
-PACKAGE_URL = f"{SERVICES_REPO_URL}/pkgs/container/kingdoms-services"
+SERVICES_REPO_URL = "https://github.com/jj-guild/botforge-services"
+INFRA_REPO_URL = "https://github.com/jj-guild/botforge-infra"
+PACKAGE_URL = f"{SERVICES_REPO_URL}/pkgs/container/botforge-services"
 
 RELEASE_KINDS = frozenset({"release", "prerelease"})
 

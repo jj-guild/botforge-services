@@ -14,13 +14,13 @@
 Seeing&nbsp;a&nbsp;button&nbsp;is&nbsp;a&nbsp;UX&nbsp;hint,&nbsp;never&nbsp;a&nbsp;security&nbsp;boundary:&nbsp;roles&nbsp;drift,<br>
 messages&nbsp;persist&nbsp;and&nbsp;any&nbsp;member&nbsp;can&nbsp;attempt&nbsp;an&nbsp;interaction.&nbsp;The&nbsp;only<br>
 trustworthy&nbsp;enforcement&nbsp;point&nbsp;is&nbsp;the&nbsp;moment&nbsp;the&nbsp;interaction&nbsp;arrives&nbsp;—<br>
-this&nbsp;service&nbsp;answers&nbsp;it&nbsp;(kingdoms-services#55).<br>
+this&nbsp;service&nbsp;answers&nbsp;it&nbsp;(botforge-services#55).<br>
 &nbsp;<br>
 Inputs,&nbsp;in&nbsp;order:<br>
 &nbsp;<br>
 -&nbsp;**bot&nbsp;operators**&nbsp;—&nbsp;the&nbsp;``BOT_ADMINS``&nbsp;ids&nbsp;bypass&nbsp;mod-level&nbsp;checks;<br>
 -&nbsp;**mod-declared&nbsp;required&nbsp;role&nbsp;keys**&nbsp;—&nbsp;resolved&nbsp;to&nbsp;platform&nbsp;role&nbsp;ids<br>
-&nbsp;&nbsp;through&nbsp;the&nbsp;mod-role&nbsp;mappings&nbsp;(kingdoms-services#26);<br>
+&nbsp;&nbsp;through&nbsp;the&nbsp;mod-role&nbsp;mappings&nbsp;(botforge-services#26);<br>
 -&nbsp;**the&nbsp;member's&nbsp;live&nbsp;roles**&nbsp;—&nbsp;read&nbsp;through&nbsp;the&nbsp;narrow<br>
 &nbsp;&nbsp;:class:`<a href="#MemberRoles">MemberRoles</a>`&nbsp;seam,&nbsp;never&nbsp;through&nbsp;a&nbsp;stale&nbsp;snapshot.<br>
 &nbsp;<br>

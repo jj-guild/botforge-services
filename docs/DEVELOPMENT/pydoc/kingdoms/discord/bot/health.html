@@ -13,7 +13,7 @@
 &nbsp;<br>
 The&nbsp;bot&nbsp;image&nbsp;(``Dockerfile``)&nbsp;declares&nbsp;a&nbsp;``HEALTHCHECK``&nbsp;probing<br>
 ``<a href="http://localhost:8000/healthz">http://localhost:8000/healthz</a>``&nbsp;and&nbsp;the&nbsp;infra&nbsp;deployment&nbsp;gate<br>
-(``kingdoms-infra/scripts/deploy.sh``)&nbsp;waits&nbsp;on&nbsp;compose&nbsp;health&nbsp;status.<br>
+(``botforge-infra/scripts/deploy.sh``)&nbsp;waits&nbsp;on&nbsp;compose&nbsp;health&nbsp;status.<br>
 The&nbsp;bot&nbsp;is&nbsp;the&nbsp;only&nbsp;process&nbsp;in&nbsp;the&nbsp;container,&nbsp;so&nbsp;a&nbsp;liveness&nbsp;signal&nbsp;is<br>
 enough:&nbsp;if&nbsp;the&nbsp;process&nbsp;is&nbsp;up,&nbsp;Docker&nbsp;keeps&nbsp;restarting&nbsp;it&nbsp;when&nbsp;it&nbsp;dies,&nbsp;and<br>
 the&nbsp;health&nbsp;gate&nbsp;detects&nbsp;a&nbsp;crash-looping&nbsp;bot&nbsp;as&nbsp;``unhealthy``.</span></p>

@@ -1,4 +1,4 @@
-"""Runtime extension seam for the pinned admin panel (kingdoms-services#177).
+"""Runtime extension seam for the pinned admin panel (botforge-services#177).
 
 The pinned bot-admins panel is the platform's **single admin surface**
 (CONVENTIONS.md, *Guild-level settings and the admin surface*): a mod

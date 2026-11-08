@@ -32,7 +32,7 @@ Mechanics:
   post-restart click shows the guild's current settings \u2014 not a
   stale snapshot.
 
-Reference: kingdoms-services#122, #115; the restart bug report (the
+Reference: botforge-services#122, #115; the restart bug report (the
 pinned panel stops answering after a deploy) and the ``<@system>``
 double-dispatch audit bug.
 """

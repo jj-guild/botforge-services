@@ -1,4 +1,4 @@
-"""Unit tests for the generic mod declaration tools (kingdoms-services#26)."""
+"""Unit tests for the generic mod declaration tools (botforge-services#26)."""
 
 from __future__ import annotations
 

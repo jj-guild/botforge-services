@@ -1,4 +1,4 @@
-"""Platform types enumeration. Implemented in kingdoms-services#7."""
+"""Platform types enumeration. Implemented in botforge-services#7."""
 
 from __future__ import annotations
 

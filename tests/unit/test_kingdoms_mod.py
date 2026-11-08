@@ -1,4 +1,4 @@
-"""Kingdoms mod foundations — unit tests (T1, kingdoms-services#156).
+"""Kingdoms mod foundations — unit tests (T1, botforge-services#156).
 
 Covers the two acceptance criteria testable without Discord: the
 season config is data (changing it changes behavior, not code) and the
@@ -42,7 +42,7 @@ class TestModDeclaration:
     def test_declaration_loads_and_validates(self) -> None:
         defs = load_mod_definitions(REPO_ROOT / "config")
         kingdoms = defs["kingdoms"]
-        assert kingdoms.enabled is True  # T2 enrollment lands (kingdoms-services#157)
+        assert kingdoms.enabled is True  # T2 enrollment lands (botforge-services#157)
         # restructuration-serveur-v1 c+d+e (Drasah 19/10): the announce,
         # exploration, patrol, presentation, rules, season, suggestions,
         # update and tavern salons are gone (Gaïa keeps a single

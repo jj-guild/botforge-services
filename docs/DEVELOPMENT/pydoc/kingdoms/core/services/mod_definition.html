@@ -16,8 +16,8 @@ and&nbsp;commands&nbsp;in&nbsp;its&nbsp;YAML&nbsp;config&nbsp;(``config/mods/&lt
 provisions&nbsp;them&nbsp;automatically.&nbsp;Mods&nbsp;never&nbsp;extend&nbsp;core&nbsp;enums&nbsp;and&nbsp;never<br>
 hardcode&nbsp;platform&nbsp;IDs.<br>
 &nbsp;<br>
-Reference:&nbsp;kingdoms-services#26,&nbsp;ADR-0003&nbsp;(channel&nbsp;categories);<br>
-kingdoms-services#175&nbsp;(channel&nbsp;groups,&nbsp;kinds&nbsp;and&nbsp;admin-only&nbsp;flags&nbsp;as<br>
+Reference:&nbsp;botforge-services#26,&nbsp;ADR-0003&nbsp;(channel&nbsp;categories);<br>
+botforge-services#175&nbsp;(channel&nbsp;groups,&nbsp;kinds&nbsp;and&nbsp;admin-only&nbsp;flags&nbsp;as<br>
 data&nbsp;—&nbsp;the&nbsp;single&nbsp;source&nbsp;of&nbsp;truth&nbsp;for&nbsp;a&nbsp;mod's&nbsp;salons).</span></p>
 <p>
 <table class="section">
@@ -45,7 +45,7 @@ data&nbsp;—&nbsp;the&nbsp;single&nbsp;source&nbsp;of&nbsp;truth&nbsp;for&nbsp;
 <tr><td class="decor title-decor" rowspan=2><span class="code">&nbsp;&nbsp;&nbsp;</span></td>
 <td class="decor title-decor" colspan=2><span class="code"><a href="#ChannelAccessPolicy">ChannelAccessPolicy</a>(view:&nbsp;'tuple[str,&nbsp;...]'&nbsp;=&nbsp;(),&nbsp;post:&nbsp;'tuple[str,&nbsp;...]'&nbsp;=&nbsp;(),&nbsp;everyone_view:&nbsp;'bool'&nbsp;=&nbsp;True,&nbsp;everyone_post:&nbsp;'bool'&nbsp;=&nbsp;False,&nbsp;bot_overwrite:&nbsp;'bool'&nbsp;=&nbsp;True)&nbsp;-&amp;gt;&nbsp;None<br>
 &nbsp;<br>
-A&nbsp;category's&nbsp;declared&nbsp;audience&nbsp;(kingdoms-services#57).<br>
+A&nbsp;category's&nbsp;declared&nbsp;audience&nbsp;(botforge-services#57).<br>
 &nbsp;<br>
 The&nbsp;declaration&nbsp;is&nbsp;the&nbsp;source&nbsp;of&nbsp;truth;&nbsp;the&nbsp;platform&nbsp;overwrites&nbsp;are<br>
 the&nbsp;runtime&nbsp;state,&nbsp;compared&nbsp;by&nbsp;the&nbsp;ChannelAuditService&nbsp;(drift).<br>&nbsp;</span></td></tr>

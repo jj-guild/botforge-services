@@ -11,7 +11,7 @@
 <td class="extra"><a href=".">index</a><br><a href="file:SOURCE_ROOT/discord/guards.py">SOURCE_ROOT/discord/guards.py</a></td></tr></table>
     <p><span class="code">Runtime&nbsp;permission&nbsp;guards:&nbsp;admin&nbsp;access&nbsp;is&nbsp;validated&nbsp;at&nbsp;click&nbsp;time.<br>
 &nbsp;<br>
-Developer-mandated&nbsp;rule&nbsp;(kingdoms-services#109,&nbsp;#115):&nbsp;**never&nbsp;assume<br>
+Developer-mandated&nbsp;rule&nbsp;(botforge-services#109,&nbsp;#115):&nbsp;**never&nbsp;assume<br>
 that&nbsp;seeing&nbsp;a&nbsp;button&nbsp;means&nbsp;being&nbsp;allowed&nbsp;to&nbsp;click&nbsp;it**.&nbsp;Discord<br>
 components&nbsp;are&nbsp;visible&nbsp;to&nbsp;whoever&nbsp;can&nbsp;read&nbsp;the&nbsp;channel&nbsp;—&nbsp;permissions<br>
 drift,&nbsp;role&nbsp;removals&nbsp;and&nbsp;channel&nbsp;moves&nbsp;happen&nbsp;between&nbsp;render&nbsp;and<br>
@@ -22,7 +22,7 @@ click&nbsp;time**,&nbsp;against&nbsp;the&nbsp;live&nbsp;guild&nbsp;state:<br>
 -&nbsp;**guild&nbsp;administrators**&nbsp;—&nbsp;the&nbsp;administrator/manage-guild&nbsp;Discord<br>
 &nbsp;&nbsp;permissions&nbsp;of&nbsp;the&nbsp;invoking&nbsp;member;<br>
 -&nbsp;**the&nbsp;``bot-admins``&nbsp;role**&nbsp;—&nbsp;the&nbsp;guild&nbsp;role&nbsp;provisioned&nbsp;by&nbsp;the<br>
-&nbsp;&nbsp;RolesService&nbsp;(kingdoms-services#115),&nbsp;granted&nbsp;by&nbsp;the&nbsp;guild&nbsp;owners<br>
+&nbsp;&nbsp;RolesService&nbsp;(botforge-services#115),&nbsp;granted&nbsp;by&nbsp;the&nbsp;guild&nbsp;owners<br>
 &nbsp;&nbsp;to&nbsp;delegated&nbsp;operators.<br>
 &nbsp;<br>
 The&nbsp;guard&nbsp;answers&nbsp;a&nbsp;single&nbsp;question&nbsp;—&nbsp;"may&nbsp;this&nbsp;interaction&nbsp;act?"&nbsp;—<br>

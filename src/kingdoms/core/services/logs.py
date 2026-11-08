@@ -1,7 +1,7 @@
 """LogService: lifecycle events in the per-guild bot logs channel (#109).
 
 Resolves each guild's ``🤖-bot-logs`` channel through the cache-aside
-flow (kingdoms-services#23): Redis (``kingdoms:channels:{guild}:bot_logs``)
+flow (botforge-services#23): Redis (``kingdoms:channels:{guild}:bot_logs``)
 → MongoDB (``channels``, :class:`~kingdoms.core.models.channel.ChannelModel`)
 → platform creation. The channel is **admin-only by default**: view is
 granted to guild administrators and BOT_ADMINS, denied to @everyone —
@@ -15,7 +15,7 @@ every policy change is itself logged as an audit event.
 Logged events: start/stop/restart, crash, status change, policy change
 — each localized (en/fr); the "start" event is the deployment
 announcement carrying the frozen ``kingdoms-deploy`` footer
-(kingdoms-services#52, read back by the kingdoms-infra battery #78).
+(botforge-services#52, read back by the botforge-infra battery #78).
 
 Reliability: best-effort end to end. Redis down → fall back to MongoDB;
 both down → skip the event. A deleted channel is detected on send

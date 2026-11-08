@@ -4,7 +4,7 @@ GameProfile is the association between a user and a game. Game-specific
 metrics (ELO rating, rank, ...) are mod/game data: they live in the mod's
 own collections, keyed by this profile, not as core model fields.
 
-Reference: kingdoms-services#4.
+Reference: botforge-services#4.
 """
 
 from __future__ import annotations

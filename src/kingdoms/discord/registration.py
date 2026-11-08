@@ -1,4 +1,4 @@
-"""The /register command and the DM enrollment flow (kingdoms-services#133).
+"""The /register command and the DM enrollment flow (botforge-services#133).
 
 Registration is a *permanent* mod: the flow binds the Discord user to a
 validated AoE2 profile. The command opens the DM workflow: confirm →

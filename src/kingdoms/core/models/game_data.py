@@ -1,6 +1,6 @@
 """Game catalog models: maps, factions, rules, map pools and map packs.
 
-Generic and game-agnostic (kingdoms-services#131): every entry is keyed by
+Generic and game-agnostic (botforge-services#131): every entry is keyed by
 ``game_key`` with stable IDs, so rotating a pool or adding a civ never
 breaks in-progress seasons — matches snapshot what they need. Deletes are
 archival-only (``archived_at``), per the legacy reference §2.

@@ -5,7 +5,7 @@ no game logic: it answers "which mods exist, which are enabled, and what do
 they declare?". ChannelService/RoleService consume these declarations to
 provision channels and roles automatically.
 
-Reference: kingdoms-services#26, docs/architecture/mods.md (kingdoms repo).
+Reference: botforge-services#26, docs/architecture/mods.md (kingdoms repo).
 """
 
 from __future__ import annotations

@@ -18,9 +18,9 @@ dev-logs:
 test:
 	@uv run pytest
 
-# battery: the standalone behavioral journey suite (kingdoms-services#106).
+# battery: the standalone behavioral journey suite (botforge-services#106).
 # One command from a clean checkout at any commit, in-memory and
-# network-free — the kingdoms-infra post-deploy battery (kingdoms-infra#78)
+# network-free — the botforge-infra post-deploy battery (botforge-infra#78)
 # runs it on a GitHub-hosted runner at the pinned deploy commit. Test
 # tooling never runs on an environment VPS.
 battery:
@@ -95,7 +95,7 @@ release-notes:
 	@uv run python .github/workflows/scripts/generate_changelog.py --tag $(TAG) --notes
 
 # contracts-check: fail closed when committed stubs drift from contracts/
-# (wire-compatibility guard, kingdoms-services#128). CI runs it too.
+# (wire-compatibility guard, botforge-services#128). CI runs it too.
 contracts-check:
 	@uv run python .github/workflows/scripts/check_contracts_fresh.py
 

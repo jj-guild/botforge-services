@@ -1,5 +1,5 @@
 [project]
-name = "kingdoms-services"
+name = "botforge-services"
 version = "0.1.0"
 description = "Core bot, Discord implementation, shared utilities, and YAML configs for Kingdoms."
 readme = "README.md"

@@ -5,7 +5,7 @@ e.g. ``clans:clan_leader``); the platform role id is resolved through this
 mapping, never hardcoded. Admins can rebind a logical role to an existing
 platform role without touching mod code.
 
-Reference: kingdoms-services#26, ADR-0014 (RBAC permissions).
+Reference: botforge-services#26, ADR-0014 (RBAC permissions).
 """
 
 from __future__ import annotations

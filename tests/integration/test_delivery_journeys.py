@@ -1,4 +1,4 @@
-"""Delivery journeys on SimCord — kingdoms-services#56.
+"""Delivery journeys on SimCord — botforge-services#56.
 
 A DM panel rendered for a member without the clan role carries the
 role-gated button **disabled** (visible, teaching the unlock); the

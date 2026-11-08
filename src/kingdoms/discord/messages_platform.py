@@ -1,4 +1,4 @@
-"""Discord platform adapters for the message registry (kingdoms-services#147).
+"""Discord platform adapters for the message registry (botforge-services#147).
 
 The live test dashboard's persistent message is addressed by its logical
 key through the MessageRegistryService (#130): the registry is the only

@@ -1,4 +1,4 @@
-"""Unit tests for the exception taxonomy (kingdoms-services#10).
+"""Unit tests for the exception taxonomy (botforge-services#10).
 
 The hierarchy is the contract: every failure of the platform is a
 KingdomsError, the class is the category, the code rides the logs

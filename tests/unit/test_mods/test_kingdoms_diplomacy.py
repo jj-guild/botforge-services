@@ -1,4 +1,4 @@
-"""Kingdoms mod diplomacy & marriages - unit tests (kingdoms-services#160, T6).
+"""Kingdoms mod diplomacy & marriages - unit tests (botforge-services#160, T6).
 
 Reference §18-§19 behind an in-memory store: the civilization
 conditions engine (map keys, map types, unlock chains, the kingdom

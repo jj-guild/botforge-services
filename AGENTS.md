@@ -1,15 +1,15 @@
 # AGENTS.md
 
-`kingdoms-services` — all Python code for the Kingdoms Discord bot
+`botforge-services` — all Python code for the Kingdoms Discord bot
 platform: core services, Discord platform implementation (discord.py),
 mods, YAML configs.
 
 ## Read first
 
-- [kingdoms/docs/CONVENTIONS.md](https://github.com/merlin-pinpin-org/kingdoms/blob/main/docs/CONVENTIONS.md)
+- [kingdoms/docs/CONVENTIONS.md](https://github.com/jj-guild/botforge/blob/main/docs/CONVENTIONS.md)
   — conventions shared by the three repositories (language,
   humans-never-code, secrets, PR lifecycle, issues, checks).
-- [kingdoms/docs/VIBEWORKFLOW.md](https://github.com/merlin-pinpin-org/kingdoms/blob/main/docs/VIBEWORKFLOW.md)
+- [kingdoms/docs/VIBEWORKFLOW.md](https://github.com/jj-guild/botforge/blob/main/docs/VIBEWORKFLOW.md)
   — operating model (roles, session loop, approvals).
 - [docs/DEVELOPER.md](docs/DEVELOPER.md) — this repo's layout, toolchain,
   architecture rules, testing rules, deploy flows.
@@ -17,8 +17,8 @@ mods, YAML configs.
 ## Repositories
 
 - `kingdoms` (documentation, source of truth)
-- `kingdoms-services` (this repo): core, Discord platform, mods, configs
-- `kingdoms-infra`: Docker, CI/CD, GitOps manifests, deployment scripts
+- `botforge-services` (this repo): core, Discord platform, mods, configs
+- `botforge-infra`: Docker, CI/CD, GitOps manifests, deployment scripts
 
 ## GitHub identity
 
@@ -42,7 +42,7 @@ mods, YAML configs.
 - **PR merges, cowboy mode, branch cleanup and user-branch rules are
   defined once in the kingdoms CONVENTIONS.md** (single source of
   truth, all three repos): see
-  [kingdoms/docs/CONVENTIONS.md](https://github.com/merlin-pinpin-org/kingdoms/blob/main/docs/CONVENTIONS.md)
+  [kingdoms/docs/CONVENTIONS.md](https://github.com/jj-guild/botforge/blob/main/docs/CONVENTIONS.md)
   — *Cowboy mode* (API-blocked merges, maintainer-only direct pushes
   with per-push confirmation, never force-push `main`) and
   *Integration branches* (never delete `vibe/<alias>/main`).
@@ -58,7 +58,7 @@ mods, YAML configs.
   is built through the SDK in `src/kingdoms/discord/ui`. The rules
   (bricks, archetypes, navigation-in-buttons, custom IDs, budgets)
   live in the kingdoms repo
-  [discord-ui skill](https://github.com/merlin-pinpin-org/kingdoms/blob/main/.agents/skills/discord-ui/SKILL.md).
+  [discord-ui skill](https://github.com/jj-guild/botforge/blob/main/.agents/skills/discord-ui/SKILL.md).
 - **Runtime permission mandate:** seeing a button never implies being
   allowed to click it — every privileged interactive item validates the
   interaction at click time through the shared guards
@@ -87,7 +87,7 @@ mods, YAML configs.
 - Issue templates: `## Objective` / `## Context` / `## Specifications` /
   `## Acceptance criteria` / `## Dependencies` (blank issues disabled).
 - **Issue references** are GitHub autolinks: same-repo `#N`, cross-repo
-  `owner/repo#N` (e.g. `merlin-pinpin-org/kingdoms-infra#78`) — a bare
+  `owner/repo#N` (e.g. `jj-guild/botforge-infra#78`) — a bare
   `repo#N` renders as plain text; never write it. See CONVENTIONS.md,
   *Documentation is part of the change*.
 - **Enrich the docs and skills proactively** (developer-mandated): when
@@ -100,7 +100,7 @@ mods, YAML configs.
   workflow, and a useful improvised command is committed ("learned").
   Humans on GitHub only merge PRs and approve prod deploys
   (+ one-time bootstrapping) — see the kingdoms
-  [Automate or learn](https://github.com/merlin-pinpin-org/kingdoms/blob/main/docs/SKILLS/automate-or-learn.md)
+  [Automate or learn](https://github.com/jj-guild/botforge/blob/main/docs/SKILLS/automate-or-learn.md)
   skill and CONVENTIONS.md (*Human GitHub scope*, *Everything is
   automation*).
 - **CLI-first mandate:** the `kingdoms` CLI

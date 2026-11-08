@@ -1,4 +1,4 @@
-"""Unit tests for the /admin hierarchical panel (kingdoms-services#102, #117)."""
+"""Unit tests for the /admin hierarchical panel (botforge-services#102, #117)."""
 
 from __future__ import annotations
 

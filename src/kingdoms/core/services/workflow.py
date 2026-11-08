@@ -13,7 +13,7 @@ Storage seams are structural protocols (ADR-0011): production wires
 ``MongoWorkflowStore`` and ``RedisStateStore``, tests wire in-memory
 substitutes (docs/architecture/testing.md).
 
-Reference: kingdoms-services#6, ADR-0002.
+Reference: botforge-services#6, ADR-0002.
 """
 
 from __future__ import annotations

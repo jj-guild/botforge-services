@@ -1,4 +1,4 @@
-"""The Kingdoms salons-first panels (kingdoms#138): enrollment workflow.
+"""The Kingdoms salons-first panels (botforge#138): enrollment workflow.
 
 Three panels on top of the bootstrapped structure:
 
@@ -1963,7 +1963,7 @@ def _candidature_view(
     return view
 
 
-# Designer-authored Postuler header (kingdoms#138 group 1): golden
+# Designer-authored Postuler header (botforge#138 group 1): golden
 # accent (the King colour), artwork thumbnail when the asset is
 # bundled, one tagline — everything else lives in the flow itself.
 APPLY_TITLE = "⚔️ INSCRIPTION — KINGDOMS SAISON II"

@@ -1,4 +1,4 @@
-"""Unit tests for the UI archetypes (kingdoms-services#13).
+"""Unit tests for the UI archetypes (botforge-services#13).
 
 The SDK bricks (factory) and the paged screens already have their own
 suites; these pin the archetypes built on top — the status embeds,

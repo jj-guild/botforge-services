@@ -1,11 +1,11 @@
-"""Channel audit: declared access policies vs runtime overwrites (kingdoms-services#57).
+"""Channel audit: declared access policies vs runtime overwrites (botforge-services#57).
 
 The mod declarations are the source of truth; the Discord permission
 overwrites are the runtime state. They can drift (a human edits channel
 permissions, a role is deleted, a channel is moved). This service
 compares the two per guild and produces a structured DriftReport —
 drift is reported, never silently repaired (repair is the on-demand
-sync, kingdoms-services#58).
+sync, botforge-services#58).
 """
 
 from __future__ import annotations

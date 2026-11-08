@@ -8482,7 +8482,7 @@ async def _purge_and_reinstall(guild: discord.Guild) -> tuple[bool, int]:
 
     Shared by the salons reset and the Back-to-setup flow: the deleted
     channels carried the pinned panels, so the reinstall re-provisions
-    the declared structure and re-pins every panel (kingdoms#138) —
+    the declared structure and re-pins every panel (botforge#138) —
     one click leaves the guild in the fresh, working state.
     """
     deleted = 0

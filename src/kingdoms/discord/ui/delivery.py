@@ -1,4 +1,4 @@
-"""Per-destination message rendering policy (kingdoms-services#56).
+"""Per-destination message rendering policy (botforge-services#56).
 
 Two delivery contexts exist, and the audience defines the content
 (``docs/architecture/discord-permissions.md``, ADR-0016):

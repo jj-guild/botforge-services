@@ -1,4 +1,4 @@
-"""Unit tests for the conventional changelog generator (kingdoms-services#28).
+"""Unit tests for the conventional changelog generator (botforge-services#28).
 
 The parser and renderer are pure functions over commit messages and entry
 lists; the git plumbing (rev-parse, log) is exercised through the public
@@ -138,7 +138,7 @@ class TestGroupByType:
 class TestRender:
     def test_bullet_with_pr_link(self) -> None:
         bullet = entry_bullet(entry("feat", "add the panel", pr=12))
-        assert bullet == "- add the panel ([#12](https://github.com/merlin-pinpin-org/kingdoms-services/pull/12))"
+        assert bullet == "- add the panel ([#12](https://github.com/jj-guild/botforge-services/pull/12))"
 
     def test_bullet_with_scope_and_sha(self) -> None:
         bullet = entry_bullet(entry("fix", "crash", scope="logs"))
@@ -157,7 +157,7 @@ class TestRender:
         notes = render_notes("v0.3.0", None, [entry("feat", "a", pr=1)])
         assert notes.startswith("## What's changed")
         assert "## Image" in notes
-        assert "ghcr.io/merlin-pinpin-org/kingdoms-services:v0.3.0" in notes
+        assert "ghcr.io/jj-guild/botforge-services:v0.3.0" in notes
 
     def test_notes_since_previous(self) -> None:
         notes = render_notes("v0.4.0", "v0.3.0", [])

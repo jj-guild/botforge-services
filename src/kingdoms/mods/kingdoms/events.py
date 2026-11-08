@@ -1,4 +1,4 @@
-"""Kingdoms mod weekly events service (kingdoms-services#159, T5).
+"""Kingdoms mod weekly events service (botforge-services#159, T5).
 
 Reference §15-§17 and decisions D1/D4/D18/D29/D30/D31/D44/D51: the
 event orchestrator - the cycle switch with the Lord's Day (new Gaia

@@ -1,4 +1,4 @@
-"""Unit tests for the GameDataService catalog, pools and lifecycle (kingdoms-services#131)."""
+"""Unit tests for the GameDataService catalog, pools and lifecycle (botforge-services#131)."""
 
 from __future__ import annotations
 

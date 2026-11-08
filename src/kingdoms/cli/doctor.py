@@ -1,7 +1,7 @@
 """Doctor command: checks the local environment and prints actionable advice.
 
 Never raises raw stacktraces at the user; every failed check comes with
-"what do I do now?" guidance (kingdoms-services#190).
+"what do I do now?" guidance (botforge-services#190).
 """
 
 from __future__ import annotations

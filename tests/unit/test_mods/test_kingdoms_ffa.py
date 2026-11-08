@@ -1,4 +1,4 @@
-"""Kingdoms FFA Exploration - unit tests (kingdoms-services#244, ffa-exploration-v1).
+"""Kingdoms FFA Exploration - unit tests (botforge-services#244, ffa-exploration-v1).
 
 The Saturday FFA state machine behind an in-memory store: the
 random-hour draw (deterministic by seed, restart-safe by persistence),

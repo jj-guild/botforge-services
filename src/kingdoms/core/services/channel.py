@@ -5,10 +5,10 @@ mod-scoped (``mod:key``, declared in mod YAML and exposed by ModRegistry)
 — to a concrete channel. Resolution order: cache -> database -> platform
 creation. The service is generic: it never enumerates mod categories.
 
-Implemented in kingdoms-services#5. Mod-scoped categories and per-mod
-provisioning: kingdoms-services#26, ADR-0003. Declaration-driven channel
-groups, kinds and adopt policies: kingdoms-services#175. Declared
-access policies applied as overwrites: kingdoms-services#57.
+Implemented in botforge-services#5. Mod-scoped categories and per-mod
+provisioning: botforge-services#26, ADR-0003. Declaration-driven channel
+groups, kinds and adopt policies: botforge-services#175. Declared
+access policies applied as overwrites: botforge-services#57.
 """
 
 from __future__ import annotations
@@ -156,7 +156,7 @@ class ChannelService:
 
     @property
     def platform(self) -> ChannelsPlatform:
-        """The platform seam (audit and sync reuse it, kingdoms-services#57)."""
+        """The platform seam (audit and sync reuse it, botforge-services#57)."""
         return self._platform
 
     def _category_name(self, category: str) -> str:
@@ -425,7 +425,7 @@ class ChannelService:
     async def provision_mod_channels(self, guild_id: str, mod_name: str) -> ChannelProvisionReport:
         """Provision a mod's whole declaration, reporting created/adopted.
 
-        Declaration-driven (kingdoms-services#175): groups (categories)
+        Declaration-driven (botforge-services#175): groups (categories)
         in declaration order, then each group's channels in declaration
         order — kinds, admin-only flags and positions all come from the
         YAML, never from feature code. Idempotent: existing groups and

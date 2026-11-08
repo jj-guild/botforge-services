@@ -5,7 +5,7 @@ changes, a player's stats barely move in five minutes. This module is
 the cache-aside layer every provider lookup goes through — backed by
 the StateService (Redis), the single entry point to hot state.
 
-Rules (kingdoms-services#205):
+Rules (botforge-services#205):
 
 - **completed match**: fetched at most once, ever — the marker key is
   set atomically (``SET NX``); a second fetch is a no-op;

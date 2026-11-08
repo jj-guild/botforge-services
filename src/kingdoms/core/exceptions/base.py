@@ -1,4 +1,4 @@
-"""Base exception classes for Kingdoms (kingdoms-services#10).
+"""Base exception classes for Kingdoms (botforge-services#10).
 
 Every custom exception of the platform inherits from
 :class:`KingdomsError`. The hierarchy is **typed taxonomy**, not

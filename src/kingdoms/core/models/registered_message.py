@@ -1,4 +1,4 @@
-"""Platform message registry model (kingdoms-services#130).
+"""Platform message registry model (botforge-services#130).
 
 The single place where platform message IDs ever live: keyed by
 ``(platform, message_key, entity_id)``. Mod collections never store

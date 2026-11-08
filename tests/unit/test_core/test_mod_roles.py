@@ -1,4 +1,4 @@
-"""Unit tests for the ModRolesService (kingdoms-services#26).
+"""Unit tests for the ModRolesService (botforge-services#26).
 
 Covers the generic per-mod role provisioning (mapping persistence,
 adoption of same-name roles, creation when missing), the logical-key

@@ -1,4 +1,4 @@
-"""Kingdoms mod attacks & defenses - unit tests (kingdoms-services#158, T4).
+"""Kingdoms mod attacks & defenses - unit tests (botforge-services#158, T4).
 
 Reference §11-§13 behind an in-memory store: the attack state
 machine (declaration, defense, expiry, resolution with the idempotent

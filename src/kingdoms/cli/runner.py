@@ -2,7 +2,7 @@
 
 Never downloads or executes anything on its own: this module explains the
 steps, checks the local `gh` CLI, and prints the exact commands to run
-(kingdoms-services#193).
+(botforge-services#193).
 """
 
 from __future__ import annotations

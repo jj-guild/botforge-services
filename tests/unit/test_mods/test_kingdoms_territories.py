@@ -1,4 +1,4 @@
-"""Kingdoms mod territories & maps — unit tests (kingdoms-services#163, T3).
+"""Kingdoms mod territories & maps — unit tests (botforge-services#163, T3).
 
 Reference §6-§10 behind an in-memory store: the admin-managed map
 catalog as data, the random initial draw without duplicates, the

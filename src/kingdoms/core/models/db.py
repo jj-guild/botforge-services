@@ -3,7 +3,7 @@
 Singleton sync (``MongoClient``) and async (``AsyncMongoClient``, the native
 pymongo async API available since pymongo 4.9 — no Motor dependency) clients,
 configured from the ``MONGO_URI`` and ``MONGO_DB`` environment variables.
-Reference: kingdoms-services#4 and ADR-0004 (MongoDB schema design).
+Reference: botforge-services#4 and ADR-0004 (MongoDB schema design).
 """
 
 from __future__ import annotations

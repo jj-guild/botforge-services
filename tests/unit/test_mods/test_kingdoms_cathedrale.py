@@ -1,4 +1,4 @@
-"""Kingdoms Lieu Sacrée / Cathédrale - unit tests (kingdoms-services#244, lieu-sacree-v1).
+"""Kingdoms Lieu Sacrée / Cathédrale - unit tests (botforge-services#244, lieu-sacree-v1).
 
 The King's consecration behind an in-memory store: the 3 ⚙️ price and
 its guards (King only, Cathédrale palier, own territory, single Lieu

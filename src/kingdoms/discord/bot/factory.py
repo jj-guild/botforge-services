@@ -1,17 +1,17 @@
-"""Bot assembly: builds the runnable Kingdoms bot (kingdoms-services#12).
+"""Bot assembly: builds the runnable Kingdoms bot (botforge-services#12).
 
 The factory wires, in order: Discord client + command tree, core services
 (registry, status), the ``/status`` command, and — as their issues land —
 the platform adapter and the core service trio (StateService,
 WorkflowEngine, ChannelService). Everything that is not wired yet is
 optional, so the bot merges incrementally while ``--preflight`` stays
-green in CI (re-scoping note on kingdoms-services#12).
+green in CI (re-scoping note on botforge-services#12).
 
 The bot class itself is thin: no manual interaction dispatch (CommandTree
 and discord.py Views already route), platform logic stays in the narrow
 Protocol seams (ADR-0011: DiscordChannelsPlatform, DiscordRolesPlatform),
 and the ``KINGDOMS_BOT_READY`` log contract of the
-smoke CI is preserved (kingdoms-services#34).
+smoke CI is preserved (botforge-services#34).
 """
 
 from __future__ import annotations
@@ -345,7 +345,7 @@ class KingdomsBot(discord.Client):
         """Audit declared policies vs runtime overwrites; log the drift (#57).
 
         Drift is reported only — repair happens through the on-demand
-        sync (kingdoms-services#58). Best-effort: a failed audit never
+        sync (botforge-services#58). Best-effort: a failed audit never
         blocks startup.
         """
         if self.channel_service is None or self.registry is None:

@@ -1,6 +1,6 @@
-"""The /kingdom bootstrap command (kingdoms#138): salons-first setup.
+"""The /kingdom bootstrap command (botforge#138): salons-first setup.
 
-kingdoms-services#175 — the structure is data: the channel groups
+botforge-services#175 — the structure is data: the channel groups
 (categories), channel kinds (text/forum/announce) and admin-only flags
 live in ``config/mods/kingdoms.yaml`` and the core ``ChannelService``
 provisions them (cache -> database -> adoption -> creation, idempotent,
@@ -966,7 +966,7 @@ def register_kingdom_command(
             await interaction.followup.send(f"❌ Setup failed: `{type(exc).__name__}: {exc}`"[:2000], ephemeral=True)
             return
         # The panels are pinned messages inside the structure channels
-        # (kingdoms#138): provisioning the salons without re-pinning them
+        # (botforge#138): provisioning the salons without re-pinning them
         # leaves the guild with no reachable enrollment/admin UI — the
         # setup must always end with functional panels.
         try:

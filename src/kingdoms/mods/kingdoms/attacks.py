@@ -1,4 +1,4 @@
-"""Kingdoms mod attacks & defenses service (kingdoms-services#158, T4).
+"""Kingdoms mod attacks & defenses service (botforge-services#158, T4).
 
 Reference §11-§13 and decisions D1, D6-D8, D10-D12, D17-D18, D20-D21
 (not names), D27-D28, D39, D41-D44: the attack state machine (kingdom

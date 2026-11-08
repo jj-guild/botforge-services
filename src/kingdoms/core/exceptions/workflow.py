@@ -1,4 +1,4 @@
-"""Workflow exceptions (kingdoms-services#10).
+"""Workflow exceptions (botforge-services#10).
 
 Workflow failures are user-visible by nature (a registration that
 cannot proceed, a step that does not exist), so the taxonomy is

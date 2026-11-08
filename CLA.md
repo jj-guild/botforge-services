@@ -11,7 +11,7 @@ different or additional license).
 ## 1. Definitions
 
 - **"You"**: the individual copyright owner submitting contributions to the
-  Kingdoms repositories (`kingdoms`, `kingdoms-services`, `kingdoms-infra`).
+  Kingdoms repositories (`kingdoms`, `botforge-services`, `botforge-infra`).
 - **"Contribution"**: any source code, documentation, configuration, or other
   work you intentionally submit for inclusion in the project (excluding
   changes clearly marked as third-party code).

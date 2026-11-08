@@ -1,4 +1,4 @@
-"""Notification delivery pipeline: batching, backoff, degradation (kingdoms-services#140).
+"""Notification delivery pipeline: batching, backoff, degradation (botforge-services#140).
 
 Between the mod cores (which emit intents) and the platform adapter
 (which renders them) sits this pipeline. Business never blocks on

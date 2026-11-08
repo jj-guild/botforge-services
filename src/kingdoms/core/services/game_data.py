@@ -1,4 +1,4 @@
-"""Game data service: versioned catalog CRUD, pools and packs (kingdoms-services#131).
+"""Game data service: versioned catalog CRUD, pools and packs (botforge-services#131).
 
 Generic core contract ``games/<game>/data/``: the service is game-agnostic,
 keyed by ``game_key``. Both write paths — YAML seeding (bulk initial data)

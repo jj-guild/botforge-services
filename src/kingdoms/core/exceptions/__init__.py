@@ -1,4 +1,4 @@
-"""Kingdoms exception taxonomy (kingdoms-services#10).
+"""Kingdoms exception taxonomy (botforge-services#10).
 
 One import for every failure type of the platform. The hierarchy is
 typed (the class is the category), the ``code`` rides logs/audits,

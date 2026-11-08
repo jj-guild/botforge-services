@@ -1,6 +1,6 @@
 """Core home surface: the guild's pinned entry menu, one button per view.
 
-The home is the guild's front door (kingdoms-services#133 follow-up): a
+The home is the guild's front door (botforge-services#133 follow-up): a
 pinned menu in a dedicated channel, plus the ``/home`` command showing
 the same menu. Every button opens an **ephemeral** view — the home is
 public, the answers are personal.

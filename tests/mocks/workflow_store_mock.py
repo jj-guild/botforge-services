@@ -1,4 +1,4 @@
-"""In-memory IWorkflowStore substitute for core tests (kingdoms-services#6).
+"""In-memory IWorkflowStore substitute for core tests (botforge-services#6).
 
 Same interface as ``MongoWorkflowStore`` without a server. See
 docs/architecture/testing.md (in-memory MongoDB substitute).

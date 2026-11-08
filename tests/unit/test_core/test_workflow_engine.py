@@ -1,4 +1,4 @@
-"""Unit tests for the WorkflowEngine (kingdoms-services#6).
+"""Unit tests for the WorkflowEngine (botforge-services#6).
 
 Uses in-memory substitutes for the durable store and the hot-state service
 (docs/architecture/testing.md). The MongoDB-backed store path is exercised

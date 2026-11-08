@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-# Watch a kingdoms-infra deployment end-to-end (ADR-0018 single-writer chain).
+# Watch a botforge-infra deployment end-to-end (ADR-0018 single-writer chain).
 #
 # Given an environment and the unique version label of the pin (the short
 # image tag: pr-<id>-<timestamp>-<sha7>, sha-<sha> or vX.Y.Z), this script:
-#   1. polls the kingdoms-infra state branch deploy/<env> for the pin commit
+#   1. polls the botforge-infra state branch deploy/<env> for the pin commit
 #      (the commit whose message carries the label);
 #   2. watches the Deploy environment workflow run for that exact state
 #      commit (matched on head_sha) until it completes.
@@ -16,14 +16,14 @@
 #   scripts/watch_deploy.sh <env> <version-label> [find-minutes] [run-minutes]
 #   (deadlines default to 30 and 15 minutes)
 #
-# Requires: gh (authenticated with read access to kingdoms-infra).
+# Requires: gh (authenticated with read access to botforge-infra).
 set -euo pipefail
 
 env_name="${1:?usage: watch-deploy.sh <env> <version-label>}"
 label="${2:?usage: watch-deploy.sh <env> <version-label>}"
 find_deadline_min="${3:-30}"
 run_deadline_min="${4:-15}"
-infra_owner_repo="merlin-pinpin-org/kingdoms-infra"
+infra_owner_repo="jj-guild/botforge-infra"
 
 state_file="envs/${env_name}/state/kingdoms-bot.yml"
 
@@ -41,7 +41,7 @@ while [[ $(date +%s) -lt $find_deadline ]]; do
   sleep 20
 done
 if [[ -z "$state_sha" ]]; then
-  echo "::error::the pin never landed on deploy/${env_name} (${find_deadline_min} min deadline) — check the kingdoms-infra Pin state workflow run" >&2
+  echo "::error::the pin never landed on deploy/${env_name} (${find_deadline_min} min deadline) — check the botforge-infra Pin state workflow run" >&2
   exit 1
 fi
 
@@ -66,7 +66,7 @@ while [[ $(date +%s) -lt $run_deadline ]]; do
   sleep 20
 done
 if [[ -z "$run_url" ]]; then
-  echo "::error::the kingdoms-infra deploy run never started (${run_deadline_min} min deadline)" >&2
+  echo "::error::the botforge-infra deploy run never started (${run_deadline_min} min deadline)" >&2
   exit 1
 fi
 
