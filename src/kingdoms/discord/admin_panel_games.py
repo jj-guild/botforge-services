@@ -1518,7 +1518,9 @@ async def _finish_bulk_import(
             # Components V2 forbids a `content` alongside the view (the
             # 2026-11-08 50035 silent-preview failures) — the banner
             # rides INSIDE the view, as its first text display
-            banner = discord.ui.TextDisplay(f"\u2705 **{entry.name}** import\u00e9e \u2014 son post :")
+            banner: discord.ui.TextDisplay[Any] = discord.ui.TextDisplay(
+                f"\u2705 **{entry.name}** import\u00e9e \u2014 son post :"
+            )
             view.insert_item_at(0, banner)
             await interaction.followup.send(view=view, ephemeral=True)
         except Exception:
