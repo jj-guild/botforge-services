@@ -92,7 +92,7 @@ images only. The flow is:
    GitHub release with generated notes, and pins the image on `deploy/test`.
 2. The same workflow then pins the released image on the botforge-infra state
    branch `deploy/test` (dispatch to the infra `Pin state` workflow,
-   botforge-deployer App): the release runs on the test environment, where
+   jj-guild-deployer App): the release runs on the test environment, where
    the humans validate it in Discord — same flow as a PR deploy, but with
    the released image and `/status` showing the Release line.
 3. Once validated, an authorized collaborator runs the
