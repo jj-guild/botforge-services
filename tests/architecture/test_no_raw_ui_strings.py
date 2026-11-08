@@ -60,6 +60,8 @@ ALLOWLIST = {
     "## \U0001F6E1 Candidature staff",
     # view ids and footers
     "view:bot:admin",
+    # the admin bar's id footer (an entity id + :admin — never prose)
+    "-# `:admin`",
     "panel:game:aoe2:live",
     "?",
     "-",

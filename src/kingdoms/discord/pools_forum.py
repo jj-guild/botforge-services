@@ -72,6 +72,9 @@ def _pool_post_layout(
     from kingdoms.discord.ui.entity_cards import pool_card
 
     state_line = _pool_state_badge(getattr(pool, "state", "draft"))
+    # the subtitle carries the status AND the member count (owner
+    # direction 2026-11-08 — like the maps' tags + pools subtitle)
+    state_line += f" · {len(maps)} map(s)"
     mod_link = getattr(pool, "mod_link", "")
     if mod_link:
         state_line += f"\n**Mod à installer** : {mod_link}"

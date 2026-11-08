@@ -64,13 +64,18 @@ def _walk(view: discord.ui.LayoutView) -> tuple[list[str], list[str]]:
 
 
 @pytest.mark.asyncio
-async def test_the_map_admin_menu_keeps_the_card_body(monkeypatch: pytest.MonkeyPatch) -> None:
-    """The menu renders the map's post shape; only the action row swaps."""
+async def test_the_map_admin_bar_is_buttons_only(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The ⚙️ Admin answer is the BUTTON BAR — never a re-render of the post.
+
+    The bar carries the admin actions and its own id
+    (``map:aoe2:public:<name>:admin``); the post re-renders only when
+    its content changed (owner direction 2026-11-08).
+    """
     import os
 
     from kingdoms.core.services.faction_content import FactionContentService
     from kingdoms.core.services.game_data import GameDataService
-    from kingdoms.discord.entity_admin_menu import build_entity_admin_menu
+    from kingdoms.discord.entity_admin_menu import build_entity_admin_bar
     from kingdoms.game_aoe2.server import _CatalogGateway
 
     catalog_fake = _CatalogFake()
@@ -89,17 +94,16 @@ async def test_the_map_admin_menu_keeps_the_card_body(monkeypatch: pytest.Monkey
     saved = _reset_caches()
     try:
         bot = _BotStub()
-        view = await build_entity_admin_menu(
+        view = await build_entity_admin_bar(
             "map", entry.id, "aoe2", owned=True, guild_id="123", bot=bot
         )
         texts, buttons = _walk(view)
         body = "\n".join(texts)
-        assert "Arabia" in body, "the menu carries the map's card, not a bare title"
-        assert "The classic" in body, "the description stays (the body never disappears)"
-        assert any(entry.id in line for line in texts), "the id footer rides the card"
-        assert f"games:map:add:{entry.id}" in buttons, "the add-to-pool action rides the row"
-        assert f"games:map:edit:{entry.id}" in buttons, "the edit action rides the row"
-        assert f"games:map:delete:{entry.id}:aoe2:1" in buttons, "the delete action rides the row"
+        assert "The classic" not in body, "the bar never re-renders the post's body"
+        assert f"{entry.id}:admin" in body, "the bar carries its admin id"
+        assert f"games:map:add:{entry.id}" in buttons, "the add-to-pool action rides the bar"
+        assert f"games:map:edit:{entry.id}" in buttons, "the edit action rides the bar"
+        assert f"games:map:delete:{entry.id}:aoe2:1" in buttons, "the delete action rides the bar"
     finally:
         _restore_caches(saved)
         await server.stop(0)

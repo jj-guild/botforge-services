@@ -35,9 +35,9 @@ GAME_KEY = "aoe2"  # default context; the picker may switch it per view
 
 async def _pool_admin_menu(pool_id: str, game_key: str) -> discord.ui.LayoutView:
     """Render the pool's admin menu (the post's two action lines)."""
-    from kingdoms.discord.entity_admin_menu import build_entity_admin_menu
+    from kingdoms.discord.entity_admin_menu import build_entity_admin_bar
 
-    return await build_entity_admin_menu("pool", pool_id, game_key, owned=True)
+    return await build_entity_admin_bar("pool", pool_id, game_key, owned=True)
 
 
 def _games_wiring() -> Any | None:

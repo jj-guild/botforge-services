@@ -34,6 +34,8 @@ class EntityCardSpec:
 
     title: str
     entity_id: str
+    subtitle: str = ""
+    view_id: str = ""
     props: tuple[str, ...] = ()
     description: str = ""
     image_url: str = ""
@@ -56,60 +58,109 @@ class EntityCardSpec:
     )
 
 
-def _header(view: discord.ui.LayoutView, spec: EntityCardSpec) -> None:
-    """Add the title section (thumbnail = the in-game icon when present)."""
+def _header_blocks(spec: EntityCardSpec) -> list[discord.ui.Item[discord.ui.LayoutView]]:
+    """Build the header section's blocks: title, subtitle, the in-game icon."""
     blocks: list[discord.ui.Item[discord.ui.LayoutView]] = [
         discord.ui.TextDisplay(f"## {spec.title[:1].upper()}{spec.title[1:]}")
     ]
+    if spec.subtitle:
+        blocks.append(discord.ui.TextDisplay(f"_{spec.subtitle}_"))
+    return blocks
+
+
+def _header(spec: EntityCardSpec) -> discord.ui.Item[discord.ui.LayoutView]:
+    """Build the header section: the title block with the icon as the thumbnail."""
+    blocks = _header_blocks(spec)
     if spec.icon_url:
-        view.add_item(
-            discord.ui.Section(*blocks, accessory=discord.ui.Thumbnail(spec.icon_url))
-        )
-    else:
-        view.add_item(discord.ui.Container(*blocks))
+        return discord.ui.Section(*blocks, accessory=discord.ui.Thumbnail(spec.icon_url))
+    return discord.ui.Container(*blocks)
 
 
-def _body(view: discord.ui.LayoutView, spec: EntityCardSpec) -> None:
-    """Add the card body: props, description, media, links, source."""
+def _description_blocks(spec: EntityCardSpec) -> list[discord.ui.Item[discord.ui.LayoutView]]:
+    """Build the description's blocks.
+
+    The props line, then each paragraph behind a separator
+    (owner direction 2026-11-08).
+    """
     body: list[discord.ui.Item[discord.ui.LayoutView]] = []
     if spec.props:
         body.append(discord.ui.TextDisplay("\n".join(spec.props)))
-    if spec.description:
-        body.append(discord.ui.Separator())
-        body.append(discord.ui.TextDisplay(spec.description))
-    # the media gallery: the infobox image first, then EVERY gallery
-    # image (deduplicated, empties skipped) — the whole gallery rides
-    # the card (owner direction 2026-11-07)
+    for block in spec.description.split("\n"):
+        if not block.strip():
+            continue
+        if body:
+            body.append(discord.ui.Separator())
+        body.append(discord.ui.TextDisplay(block))
+    return body
+
+
+def _media_blocks(spec: EntityCardSpec) -> list[discord.ui.Item[discord.ui.LayoutView]]:
+    """Build the media gallery.
+
+    The infobox image first, then EVERY gallery image
+    (deduplicated, empties skipped).
+    """
     seen: set[str] = set()
     media_urls: list[str] = []
     for url in (spec.image_url, *spec.gallery_images):
         if url and url not in seen:
             seen.add(url)
             media_urls.append(url)
-    if media_urls:
-        body.append(discord.ui.Separator())
-        body.append(
-            discord.ui.MediaGallery(*[discord.MediaGalleryItem(u) for u in media_urls])
-        )
-    if spec.links:
-        body.append(discord.ui.Separator())
-        heading = f"**{spec.links_heading}**\n" if spec.links_heading else ""
-        body.append(discord.ui.TextDisplay(heading + "\n".join(spec.links)))
-    if spec.versions:
-        body.append(discord.ui.Separator())
-        lines = ["**Variantes**"]
-        lines.extend(
-            f"• **{v['name']}** — {v['description']}" if v.get("description") else f"• **{v['name']}**"
-            for v in spec.versions
-        )
-        body.append(discord.ui.TextDisplay("\n".join(lines)))
+    if not media_urls:
+        return []
+    return [
+        discord.ui.MediaGallery(*[discord.MediaGalleryItem(u) for u in media_urls])
+    ]
+
+
+def _links_blocks(spec: EntityCardSpec) -> list[discord.ui.Item[discord.ui.LayoutView]]:
+    """Build the cross-links block (the pools the map belongs to)."""
+    if not spec.links:
+        return []
+    heading = f"**{spec.links_heading}**\n" if spec.links_heading else ""
+    return [discord.ui.TextDisplay(heading + "\n".join(spec.links))]
+
+
+def _versions_blocks(spec: EntityCardSpec) -> list[discord.ui.Item[discord.ui.LayoutView]]:
+    """Build the variants block (the map's Versions section)."""
+    if not spec.versions:
+        return []
+    lines = ["**Variantes**"]
+    lines.extend(
+        f"• **{v['name']}** — {v['description']}" if v.get("description") else f"• **{v['name']}**"
+        for v in spec.versions
+    )
+    return [discord.ui.TextDisplay("\n".join(lines))]
+
+
+def _credits_blocks(spec: EntityCardSpec) -> list[discord.ui.Item[discord.ui.LayoutView]]:
+    """Build the credits: the creator just above the source."""
+    blocks: list[discord.ui.Item[discord.ui.LayoutView]] = []
     if spec.creator:
         creator = f"[{spec.creator}]({spec.creator_url})" if spec.creator_url else spec.creator
-        body.append(discord.ui.TextDisplay(f"Créateur : {creator}"))
+        blocks.append(discord.ui.TextDisplay(f"Créateur : {creator}"))
     if spec.source_url:
-        body.append(discord.ui.Separator())
-        body.append(discord.ui.TextDisplay(f"Source : [{spec.source_label}]({spec.source_url})"))
-    view.add_item(discord.ui.Container(*body, accent_colour=discord.Colour(ACCENT)))
+        blocks.append(discord.ui.TextDisplay(f"Source : [{spec.source_label}]({spec.source_url})"))
+    return blocks
+
+
+def _body_blocks(spec: EntityCardSpec) -> list[discord.ui.Item[discord.ui.LayoutView]]:
+    """Build the card's content blocks, each group behind a separator."""
+    groups = [
+        _description_blocks(spec),
+        _media_blocks(spec),
+        _links_blocks(spec),
+        _versions_blocks(spec),
+        _credits_blocks(spec),
+    ]
+    body: list[discord.ui.Item[discord.ui.LayoutView]] = []
+    for group in groups:
+        if not group:
+            continue
+        if body:
+            body.append(discord.ui.Separator())
+        body.extend(group)
+    return body
 
 
 def _actions(
@@ -171,12 +222,11 @@ def build_entity_card(spec: EntityCardSpec) -> discord.ui.LayoutView:
     / media / cross-links / source / id footer / action row.
     """
     view = discord.ui.LayoutView(timeout=None)
-    _header(view, spec)
-    _body(view, spec)
+    blocks: list[discord.ui.Item[discord.ui.LayoutView]] = [_header(spec)]
+    blocks.extend(_body_blocks(spec))
+    view.add_item(discord.ui.Container(*blocks, accent_colour=discord.Colour(ACCENT)))
     _actions(view, spec.action_buttons)
-    # the id footer is ALWAYS the last line (owner direction 2026-11-06):
-    # after the buttons, never above them
-    view.add_item(discord.ui.TextDisplay(f"-# `{spec.entity_id}`"))
+    view.add_item(discord.ui.TextDisplay(f"-# `{spec.view_id or spec.entity_id}`"))
     return view
 
 
@@ -195,12 +245,21 @@ def map_card(
     creator_url: str = "",
     versions: tuple[dict[str, str], ...] = (),
 ) -> discord.ui.LayoutView:
-    """Build a map's forum card on the shared template."""
+    """Build a map's forum card on the shared template.
+
+    The subtitle (owner direction 2026-11-08): the tags (the props
+    line) then the map pools — the body carries the content only.
+    """
+    subtitle = " · ".join(part for part in props if part)
+    if pool_links:
+        joined = ", ".join(pool_links)
+        subtitle = f"{subtitle} · Pools : {joined}" if subtitle else f"Pools : {joined}"
     return build_entity_card(
         EntityCardSpec(
             title=name,
             entity_id=map_id,
-            props=props,
+            subtitle=subtitle,
+            view_id=f"panel:{map_id}",
             description=description,
             image_url=image_url,
             icon_url=icon_url,
@@ -209,8 +268,6 @@ def map_card(
             creator=creator,
             creator_url=creator_url,
             versions=versions,
-            links_heading="Map pools",
-            links=pool_links,
             action_buttons=buttons,
         )
     )
