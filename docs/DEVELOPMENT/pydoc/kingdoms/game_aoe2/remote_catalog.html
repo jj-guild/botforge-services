@@ -96,6 +96,8 @@ the&nbsp;callers&nbsp;pass&nbsp;positionals&nbsp;(the&nbsp;2026-11-06&nbsp;crash
 
 <dl><dt>async <a name="RemoteGameDataService-list_maps"><strong>list_maps</strong></a>(self, game_key: 'str', guild_id: 'str | None' = None) -&gt; 'list[MapModel]'</dt><dd><span class="code">List&nbsp;the&nbsp;game's&nbsp;maps&nbsp;(guild-scoped&nbsp;when&nbsp;a&nbsp;guild&nbsp;is&nbsp;given).</span></dd></dl>
 
+<dl><dt>async <a name="RemoteGameDataService-pools_referencing"><strong>pools_referencing</strong></a>(self, entry_id: 'str') -&gt; 'list[dict[str, Any]]'</dt><dd><span class="code">List&nbsp;the&nbsp;non-archived&nbsp;pools&nbsp;referencing&nbsp;a&nbsp;map&nbsp;(#341).</span></dd></dl>
+
 <dl><dt>async <a name="RemoteGameDataService-resolve_pool_map_ids"><strong>resolve_pool_map_ids</strong></a>(self, pool: 'MapPoolModel') -&gt; 'tuple[str, ...]'</dt><dd><span class="code">Resolve&nbsp;a&nbsp;pool's&nbsp;composition&nbsp;into&nbsp;its&nbsp;map&nbsp;ids&nbsp;(packs&nbsp;expanded).</span></dd></dl>
 
 <dl><dt>async <a name="RemoteGameDataService-send_map_pool_to_guild"><strong>send_map_pool_to_guild</strong></a>(self, entry_id: 'str', target_guild_id: 'str', new_name: 'str') -&gt; 'MapPoolModel'</dt><dd><span class="code">Send&nbsp;a&nbsp;pool&nbsp;to&nbsp;another&nbsp;guild&nbsp;(the&nbsp;sharing&nbsp;flow).</span></dd></dl>

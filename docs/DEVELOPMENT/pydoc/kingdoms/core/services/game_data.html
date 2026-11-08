@@ -281,7 +281,11 @@ CRUD&nbsp;+&nbsp;lifecycle&nbsp;for&nbsp;the&nbsp;game&nbsp;catalog,&nbsp;pools&
 
 <dl><dt>async <a name="GameDataService-archive_faction"><strong>archive_faction</strong></a>(self, entry_id: 'str') -&gt; 'FactionModel'</dt><dd><span class="code">Archive&nbsp;a&nbsp;faction&nbsp;(archival-only&nbsp;delete).</span></dd></dl>
 
-<dl><dt>async <a name="GameDataService-archive_map"><strong>archive_map</strong></a>(self, entry_id: 'str') -&gt; 'MapModel'</dt><dd><span class="code">Archive&nbsp;a&nbsp;map&nbsp;(archival-only&nbsp;delete).</span></dd></dl>
+<dl><dt>async <a name="GameDataService-archive_map"><strong>archive_map</strong></a>(self, entry_id: 'str') -&gt; 'MapModel'</dt><dd><span class="code">Archive&nbsp;a&nbsp;map&nbsp;(archival-only&nbsp;delete).<br>
+&nbsp;<br>
+Refuses&nbsp;to&nbsp;archive&nbsp;a&nbsp;map&nbsp;referenced&nbsp;by&nbsp;a&nbsp;live&nbsp;pool&nbsp;(#341)&nbsp;—<br>
+archiving&nbsp;a&nbsp;pooled&nbsp;map&nbsp;silently&nbsp;dropped&nbsp;it&nbsp;out&nbsp;of&nbsp;the&nbsp;pool's<br>
+renders.&nbsp;The&nbsp;error&nbsp;carries&nbsp;the&nbsp;blocking&nbsp;pools.</span></dd></dl>
 
 <dl><dt>async <a name="GameDataService-archive_map_pack"><strong>archive_map_pack</strong></a>(self, entry_id: 'str') -&gt; 'MapPackModel'</dt><dd><span class="code">Archive&nbsp;a&nbsp;map&nbsp;pack&nbsp;(archival-only).</span></dd></dl>
 
@@ -314,7 +318,8 @@ The&nbsp;normal&nbsp;lifecycle&nbsp;is&nbsp;archival-only,&nbsp;but&nbsp;two&nbs
 real&nbsp;delete:&nbsp;the&nbsp;rollback&nbsp;of&nbsp;a&nbsp;just-created&nbsp;map&nbsp;whose&nbsp;import<br>
 failed&nbsp;after&nbsp;the&nbsp;record&nbsp;landed&nbsp;(#259),&nbsp;and&nbsp;the&nbsp;cleanup&nbsp;of&nbsp;an<br>
 orphaned&nbsp;map&nbsp;(no&nbsp;forum&nbsp;thread,&nbsp;nothing&nbsp;user-visible&nbsp;to<br>
-archive).&nbsp;Refuses&nbsp;to&nbsp;delete&nbsp;a&nbsp;map&nbsp;referenced&nbsp;by&nbsp;a&nbsp;pool.</span></dd></dl>
+archive).&nbsp;Refuses&nbsp;to&nbsp;delete&nbsp;a&nbsp;map&nbsp;referenced&nbsp;by&nbsp;a&nbsp;live&nbsp;pool<br>
+(#341)&nbsp;—&nbsp;the&nbsp;error&nbsp;carries&nbsp;the&nbsp;blocking&nbsp;pools.</span></dd></dl>
 
 <dl><dt>async <a name="GameDataService-duplicate_map_pool"><strong>duplicate_map_pool</strong></a>(self, entry_id: 'str', new_name: 'str', owner_guild_id: 'str | None' = None) -&gt; 'MapPoolModel'</dt><dd><span class="code">Duplicate&nbsp;a&nbsp;pool&nbsp;under&nbsp;a&nbsp;new&nbsp;name&nbsp;(a&nbsp;new&nbsp;stable&nbsp;id).<br>
 &nbsp;<br>
@@ -359,6 +364,14 @@ guilds&nbsp;but&nbsp;shared&nbsp;with&nbsp;everyone);&nbsp;unscoped:&nbsp;every&
 &nbsp;<br>
 Scoped:&nbsp;the&nbsp;guild's&nbsp;own&nbsp;maps&nbsp;plus&nbsp;the&nbsp;global&nbsp;ones;&nbsp;unscoped:<br>
 every&nbsp;map&nbsp;of&nbsp;the&nbsp;game&nbsp;(the&nbsp;admin&nbsp;views).</span></dd></dl>
+
+<dl><dt>async <a name="GameDataService-pools_referencing"><strong>pools_referencing</strong></a>(self, entry_id: 'str') -&gt; 'list[dict[str, Any]]'</dt><dd><span class="code">List&nbsp;the&nbsp;non-archived&nbsp;pools&nbsp;referencing&nbsp;a&nbsp;map&nbsp;(kingdoms-services#341).<br>
+&nbsp;<br>
+The&nbsp;ONE&nbsp;rule's&nbsp;source:&nbsp;a&nbsp;map&nbsp;referenced&nbsp;by&nbsp;a&nbsp;live&nbsp;pool&nbsp;can&nbsp;be<br>
+neither&nbsp;deleted&nbsp;nor&nbsp;archived&nbsp;—&nbsp;the&nbsp;callers&nbsp;(delete_map,<br>
+archive_map,&nbsp;the&nbsp;Discord&nbsp;pre-check)&nbsp;all&nbsp;read&nbsp;this,&nbsp;never<br>
+re-implement&nbsp;it.&nbsp;Archived&nbsp;pools&nbsp;do&nbsp;not&nbsp;block&nbsp;(they&nbsp;are&nbsp;not&nbsp;live<br>
+surfaces).</span></dd></dl>
 
 <dl><dt>async <a name="GameDataService-resolve_pool_map_ids"><strong>resolve_pool_map_ids</strong></a>(self, pool: 'MapPoolModel') -&gt; 'tuple[str, ...]'</dt><dd><span class="code">Union&nbsp;of&nbsp;the&nbsp;pool's&nbsp;direct&nbsp;maps&nbsp;and&nbsp;its&nbsp;packs'&nbsp;maps&nbsp;(archived&nbsp;included).<br>
 &nbsp;<br>
