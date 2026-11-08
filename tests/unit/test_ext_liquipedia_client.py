@@ -563,8 +563,9 @@ def test_liquipedia_circuit_success_resets_the_streak() -> None:
 def test_creator_wikilink_becomes_the_page_url() -> None:
     """``creator=[[Zetnus]]`` rides as the creator's wiki page URL.
 
-    A plain-text creator carries no URL — the post shows it unlinked
-    (owner direction 2026-11-08).
+    The wikilink target wins; a plain-text creator builds its page
+    URL from the name — the creator ALWAYS links (owner direction
+    2026-11-08).
     """
     wikitext = """
 {{Infobox map
@@ -585,4 +586,4 @@ def test_creator_wikilink_becomes_the_page_url() -> None:
 """
     info_plain = provider._info_from_wikitext("Arabia", plain)
     assert info_plain.creator == "Ensemble Studios"
-    assert info_plain.creator_url == ""
+    assert info_plain.creator_url == "https://liquipedia.net/ageofempires/Ensemble_Studios"

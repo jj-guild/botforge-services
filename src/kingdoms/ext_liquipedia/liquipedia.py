@@ -647,54 +647,82 @@ class LiquipediaMapsProvider:
         section = LiquipediaMapsProvider._overview_section(wikitext)
         blocks = LiquipediaMapsProvider._overview_blocks(section)
         return LiquipediaMapsProvider._clean_prose(
-            "\n".join(block for block in blocks if block)
+            "\n\n".join(block for block in blocks if block)
         )
 
     @staticmethod
     def _overview_blocks(section: str) -> list[str]:
-        """Render the Overview section's lines into display blocks.
+        """Render the Overview section into display blocks.
 
-        Prose paragraphs, ``===`` subsections as bold lines, list
-        entries as bullets — stopping at the next LEVEL-2 header.
+        Each block is one paragraph, or a ``===`` subsection TITLE WITH
+        ITS CONTENT (the title never renders alone in its own
+        section — the 2026-11-08 owner report on Nomad's page). List
+        entries ride as bullets inside their subsection's block. The
+        collection stops at the next LEVEL-2 header.
         """
         blocks: list[str] = []
-        current: list[str] = []
+        paragraph: list[str] = []
+        group: list[str] = []
+        title: list[str] = [""]
         depth = 0
-
-        def _flush() -> None:
-            if current:
-                blocks.append(" ".join(current))
-                current.clear()
 
         for line in section.splitlines():
             stripped = line.strip()
-            opens = stripped.count("{{")
-            closes = stripped.count("}}")
-            if depth > 0 or opens > closes:
-                depth += opens - closes
+            skip, depth = LiquipediaMapsProvider._template_skip(stripped, depth)
+            if skip:
                 continue
             if stripped.startswith("=="):
                 if not stripped.startswith("==="):
                     break  # the next level-2 header: the Overview section ends
-                _flush()
-                blocks.append(LiquipediaMapsProvider._subsection_block(stripped))
+                LiquipediaMapsProvider._flush_group(blocks, group, paragraph, title)
+                title[0] = LiquipediaMapsProvider._subsection_block(stripped)
                 continue
             if stripped.startswith(("*", "#")):
-                _flush()
-                blocks.append(LiquipediaMapsProvider._bullet_block(stripped))
+                LiquipediaMapsProvider._flush_paragraph(group, paragraph)
+                group.append(LiquipediaMapsProvider._bullet_block(stripped))
                 continue
             if not stripped or stripped.startswith(("<", "|", "{")):
-                _flush()
+                LiquipediaMapsProvider._flush_paragraph(group, paragraph)
                 continue
-            current.append(stripped)
-        _flush()
+            paragraph.append(stripped)
+        LiquipediaMapsProvider._flush_group(blocks, group, paragraph, title)
         return blocks
 
     @staticmethod
+    def _flush_paragraph(group: list[str], paragraph: list[str]) -> None:
+        """Fold the prose paragraph being collected into its group."""
+        if paragraph:
+            group.append(" ".join(paragraph))
+            paragraph.clear()
+
+    @staticmethod
+    def _flush_group(
+        blocks: list[str], group: list[str], paragraph: list[str], title: list[str]
+    ) -> None:
+        """Close the current group: the title rides WITH its content."""
+        LiquipediaMapsProvider._flush_paragraph(group, paragraph)
+        if group:
+            text = "\n".join(group)
+            blocks.append(f"{title[0]}\n{text}" if title[0] else text)
+            group.clear()
+        elif title[0]:
+            blocks.append(title[0])
+        title[0] = ""
+
+    @staticmethod
+    def _template_skip(stripped: str, depth: int) -> tuple[bool, int]:
+        """Whether the line is template innards (skipped), and the new depth."""
+        opens = stripped.count("{{")
+        closes = stripped.count("}}")
+        if depth > 0 or opens > closes:
+            return True, depth + opens - closes
+        return False, depth
+
+    @staticmethod
     def _subsection_block(header: str) -> str:
-        """Render a ``===`` subsection header as a bold line."""
+        """Render a ``===`` subsection header as a bold-underlined title."""
         title = header.strip("=").strip()
-        return f"**{title}**" if title else ""
+        return f"__**{title}**__" if title else ""
 
     @staticmethod
     def _bullet_block(line: str) -> str:
@@ -738,17 +766,17 @@ class LiquipediaMapsProvider:
 
     @staticmethod
     def _creator_page_url(creator_field: str) -> str:
-        """Extract the creator's Liquipedia page URL from the infobox link.
+        """Build the creator's Liquipedia page URL.
 
         ``creator=[[Zetnus]]`` links to the creator's wiki page — the
-        post shows the creator as a link to it (owner direction
-        2026-11-08). A plain-text creator carries no URL.
+        wikilink target wins; a plain-text creator builds its page URL
+        from the name (owner direction 2026-11-08: the creator ALWAYS
+        links — the wiki's creator pages exist for every map maker).
         """
         match = re.search(r"\[\[([^|\]]+)(?:\|[^\]]*)?\]\]", creator_field)
-        if match is None:
-            return ""
-        target = match.group(1).strip().replace(" ", "_")
-        return f"{LIQUIPEDIA_ATTRIBUTION}{target}"
+        target = match.group(1) if match is not None else creator_field
+        target = target.strip().replace(" ", "_")
+        return f"{LIQUIPEDIA_ATTRIBUTION}{target}" if target else ""
 
     @staticmethod
     def _parse_gallery_icon(wikitext: str) -> str:

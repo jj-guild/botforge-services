@@ -54,4 +54,8 @@ PAGE_CACHE_TTL_S = 7 * 24 * 3600
 # Gen 9: the WHOLE Overview section rides — subsections as bold lines,
 # list entries as bullets (the Overview ended at its first === before).
 # Gen 10: the creator's wiki page link rides ([[Zetnus]] -> its URL).
-SEED_GEN = 10
+# Gen 11: the creator ALWAYS links — a plain-text creator builds its
+# page URL from the name.
+# Gen 12: the subsection titles ride WITH their content (never alone
+# between separators); the blocks join on paragraph gaps.
+SEED_GEN = 12

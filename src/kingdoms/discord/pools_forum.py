@@ -366,28 +366,30 @@ async def _refresh_pool_post(
     # not in the plain-content fallback — they ride the fingerprint too
     # so a rename or a transition re-edits the post
     fingerprint = _content_fingerprint(f"{getattr(pool, 'name', '')}\n{getattr(pool, 'state', '')}\n{fingerprint}")
+    # The title heals FIRST, OUTSIDE the fingerprint guard: after a
+    # rate-limited title + a successful view edit, the fingerprint is
+    # remembered and the early return below froze the stale title
+    # forever (the 2026-11-08 merlin report — rename/status never
+    # caught up). The title edit rides the CHANNEL edit bucket
+    # (~2/10 min), far stricter than message edits; it stays
+    # BEST-EFFORT in its own try and retries on the next pass.
+    expected_title = _pool_thread_title(pool)
+    if thread.name != expected_title:
+        try:
+            await pace_channel_edit(_edit_pacing_key(thread))
+            await thread.edit(name=expected_title, reason="kingdoms: pool state or name changed")
+        except discord.errors.RateLimited:
+            logger.warning(
+                "pools forum: title edit rate-limited (thread %s) — "
+                "the view still refreshes, the title catches up on the next pass",
+                thread.id,
+            )
+        except Exception:
+            logger.debug("pools forum: title heal failed (thread %s)", thread.id, exc_info=True)
     try:
         starter = await thread.fetch_message(thread.id)
         if _last_layout_render(str(thread.id)) == fingerprint:
             return
-        # The title edit rides the CHANNEL edit bucket (~2/10 min), a
-        # far stricter quota than message edits: a publish/archive/edit
-        # cycle eats it and Discord answers 429 with a huge retry_after
-        # (the 550 s of the merlin env). The title is therefore
-        # BEST-EFFORT in its own try — a RateLimited there must never
-        # abort the refresh: the VIEW edit (the maps!) still runs, and
-        # the title catches up on a later pass.
-        expected_title = _pool_thread_title(pool)
-        if thread.name != expected_title:
-            await pace_channel_edit(_edit_pacing_key(thread))
-            try:
-                await thread.edit(name=expected_title, reason="kingdoms: pool state or name changed")
-            except discord.errors.RateLimited:
-                logger.warning(
-                    "pools forum: title edit rate-limited (thread %s) — "
-                    "the view still refreshes, the title catches up later",
-                    thread.id,
-                )
         await pace_channel_edit(_edit_pacing_key(thread))
         await starter.edit(view=_pool_post_layout(pool, maps, editable))
         # The fingerprint is remembered ONLY on success: a failed edit

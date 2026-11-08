@@ -20,6 +20,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
+import re
 from dataclasses import dataclass
 from typing import Any
 
@@ -555,7 +556,10 @@ def _description_display(summary: str) -> str:
     """
     prefix = "Map page on Liquipedia: "
     if summary.startswith(prefix):
-        return f"Page sur Liquipedia : {summary[len(prefix):].strip()}"
+        # the provider's fallback carries no content — the source link
+        # already lives in the credits; the description stays empty
+        # (owner direction 2026-11-08)
+        return ""
     return summary
 
 
@@ -575,6 +579,8 @@ def _walls_display(walls: str) -> str:
         return "Bois"
     if "partial" in value:
         return "Partiels"
+    if "fortif" in value:
+        return "Fortifiés"
     if value == "yes":
         return "Pierre"
     return ""
@@ -609,32 +615,30 @@ def _type_display(map_type: str) -> str:
 def _map_props_lines(
     map_type: str, walls: str, nomad: str, tc: str, player_capacity: str = ""
 ) -> list[str]:
-    """Render the map's properties as French label lines.
+    """Build the map's subtitle tags as backticked French strings.
 
-    The stored docs carry Liquipedia's English (the provider's data,
-    owner direction 2026-11-07); the post is French UI — the labels and
-    the known vocabulary translate at render, the tags stay English
-    slugs (owner direction 2026-11-08).
+    Each tag on the vocabulary (owner direction 2026-11-08):
+    - the Liquipedia type (`Terrestre`/`Hybride`/`Aquatique`)
+    - the walls (`Murs : Pierre`/`Bois`/`Fortifiés`/`Partiels`)
+    - the player count (`Jusqu'à X joueurs`) — only when X < 8,
+      the nominal capacity stays silent
+    - `Nomade` — the Liquipedia flag or a TC=0 start
+    - `X TC au départ` — when the start is more than one TC
+    The open/closed/semi-open/chaotic classification is NOT here: it
+    is the designers' vocabulary, delegated to kingdoms-services#348.
     """
-
-    def _label(value: str) -> str:
-        """Render a trait's display: the label's word, never the bool garbage.
-
-        'True'/'False' are the amputation era's residue (a bool's str)
-        — they hide, not render.
-        """
-        v = value.strip()
-        return "" if v.lower() in ("true", "false", "none") else v
-
+    tags: list[str] = []
     type_shown = _type_display(map_type)
-    props = [f"**Type** : {type_shown}"] if type_shown else []
-    if _walls_display(walls):
-        props.append(f"**Murs** : {_walls_display(walls)}")
-    if _label(nomad):
-        shown = "Oui" if nomad.strip().lower() == "yes" else "Non" if nomad.strip().lower() == "no" else _label(nomad)
-        props.append(f"**Nomade** : {shown}")
-    if _label(tc):
-        props.append(f"**TCs** : {_label(tc)}")
-    if player_capacity:
-        props.append(f"**Capacité** : {player_capacity}")
-    return props
+    if type_shown:
+        tags.append(f"`{type_shown}`")
+    walls_shown = _walls_display(walls)
+    if walls_shown:
+        tags.append(f"`Murs : {walls_shown}`")
+    capacity = re.search(r"up to\s+(\d+)", player_capacity, re.IGNORECASE)
+    if capacity and int(capacity.group(1)) < 8:
+        tags.append(f"`Jusqu'à {capacity.group(1)} joueurs`")
+    if nomad.strip().lower() == "yes" or tc.strip() == "0":
+        tags.append("`Nomade`")
+    if tc.strip().isdigit() and int(tc.strip()) > 1:
+        tags.append(f"`{tc.strip()} TC au départ`")
+    return tags

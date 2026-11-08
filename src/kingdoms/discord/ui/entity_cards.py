@@ -85,7 +85,9 @@ def _description_blocks(spec: EntityCardSpec) -> list[discord.ui.Item[discord.ui
     body: list[discord.ui.Item[discord.ui.LayoutView]] = []
     if spec.props:
         body.append(discord.ui.TextDisplay("\n".join(spec.props)))
-    for block in spec.description.split("\n"):
+    # the paragraphs (double newline): a subsection title rides WITH
+    # its content in one block — the separator never isolates a title
+    for block in spec.description.split("\n\n"):
         if not block.strip():
             continue
         if body:
@@ -223,7 +225,12 @@ def build_entity_card(spec: EntityCardSpec) -> discord.ui.LayoutView:
     """
     view = discord.ui.LayoutView(timeout=None)
     blocks: list[discord.ui.Item[discord.ui.LayoutView]] = [_header(spec)]
-    blocks.extend(_body_blocks(spec))
+    body = _body_blocks(spec)
+    if body:
+        # a separator after the subtitle, before the content (owner
+        # direction 2026-11-08)
+        blocks.append(discord.ui.Separator())
+    blocks.extend(body)
     view.add_item(discord.ui.Container(*blocks, accent_colour=discord.Colour(ACCENT)))
     _actions(view, spec.action_buttons)
     view.add_item(discord.ui.TextDisplay(f"-# `{spec.view_id or spec.entity_id}`"))
@@ -250,10 +257,9 @@ def map_card(
     The subtitle (owner direction 2026-11-08): the tags (the props
     line) then the map pools — the body carries the content only.
     """
-    subtitle = " · ".join(part for part in props if part)
-    if pool_links:
-        joined = ", ".join(pool_links)
-        subtitle = f"{subtitle} · Pools : {joined}" if subtitle else f"Pools : {joined}"
+    tags_line = " ".join(part for part in props if part)
+    pools_line = f"Pools : {', '.join(pool_links)}" if pool_links else ""
+    subtitle = "\n".join(line for line in (tags_line, pools_line) if line)
     return build_entity_card(
         EntityCardSpec(
             title=name,

@@ -73,7 +73,7 @@ def test_arena_keeps_its_infobox_and_the_whole_overview() -> None:
     assert info.map_type == "Land"
     assert info.walls == "Stone Walls"
     assert "pre-built stone walls" in info.description
-    assert "**Notable Features**" in info.description, (
+    assert "__**Notable Features**__" in info.description, (
         "the subsection rides as a bold line — never dropped again"
     )
     assert "• " in info.description, "the list entries ride as bullets"
@@ -180,11 +180,11 @@ def test_black_forest_keeps_its_infobox_and_default_walls() -> None:
     # the WHOLE overview rides (owner direction 2026-11-08): the prose,
     # every subsection as a bold line, every list entry as a bullet
     assert "usually played with explored setting" in info.description
-    assert "**Notable Features**" in info.description
+    assert "__**Notable Features**__" in info.description
     assert "Densely forested, with only a few paths" in info.description
-    assert "**Strategic Basics**" in info.description
+    assert "__**Strategic Basics**__" in info.description
     assert "forward wall" in info.description
-    assert "**Civilizations**" in info.description
+    assert "__**Civilizations**__" in info.description
     assert "Bohemians, Celts, Mongols" in info.description
     assert "Versions" not in info.description, "the level-2 sections never leak"
     tags = query_tags(info)
