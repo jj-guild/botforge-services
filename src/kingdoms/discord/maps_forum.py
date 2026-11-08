@@ -526,20 +526,18 @@ async def _migrate_stale_map_doc(
         return None
     if seed is None:
         return None
-    updated = dict(doc)
-    updated.update(
-        {
-            "summary": seed.description,
-            "icon_url": seed.icon_url,
-            "walls": seed.walls,
-            "nomad": seed.nomad,
-            "tc": seed.tc,
-            "image_url": seed.image_url or doc.get("image_url") or "",
-            # the one-shot marker: a map without an icon would otherwise
-            # never satisfy the freshness check and re-fetch forever
-            "split_keys": True,
-        }
-    )
+    # the FULL doc shape (map_content_doc) — the migration used to
+    # patch the old doc's keys and kept its stale tags, capacity,
+    # creator and versions forever (the 2026-11-08 audit)
+    from kingdoms.aoe2.map_seed import map_content_doc
+
+    name = str(doc.get("name") or entity_id.rsplit(":", 1)[-1])
+    updated = map_content_doc(entity_id, name, seed)
+    # the one-shot marker: a map without an icon would otherwise
+    # never satisfy the freshness check and re-fetch forever
+    updated["split_keys"] = True
+    if not updated["image_url"]:
+        updated["image_url"] = str(doc.get("image_url") or "")
     try:
         await service.content_store(updated)
     except Exception:
