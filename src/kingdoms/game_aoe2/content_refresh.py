@@ -200,6 +200,9 @@ async def refresh_aoe2_maps() -> dict[str, int]:
                     "versions": [dict(v) for v in seed.versions],
                     "tags": list(seed.tags),
                     "raw_wikitext": seed.raw_wikitext,
+                    "gallery_images": [
+                        dict(g) for g in seed.gallery_images or ()
+                    ],
                 }
             )
             maps_enriched += 1
@@ -295,6 +298,9 @@ async def _resolve_map_seeds(names: list[str]) -> dict[str, Any]:
                 ),
                 tags=tuple(str(t) for t in descriptor.get("tags", ()) or ()),
                 raw_wikitext=str(descriptor.get("raw_wikitext", "") or ""),
+                gallery_images=tuple(
+                    dict(g) for g in descriptor.get("gallery_images", ()) or ()
+                ),
             ),
         )
 

@@ -126,4 +126,8 @@ class ContentProviderClient:
             ],
             "tags": list(reply.tags),
             "raw_wikitext": reply.raw_wikitext,
+            "gallery_images": [
+                {"file": g.file, "caption": g.caption, "url": g.url}
+                for g in reply.gallery_images
+            ],
         }

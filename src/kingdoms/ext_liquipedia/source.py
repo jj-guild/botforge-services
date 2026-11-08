@@ -334,6 +334,12 @@ def _descriptor_of(game_key: str, page: str, data: Any) -> dict[str, Any]:
         ),
         "tags": _safe_list(lambda: list(_query_tags(info))),
         "raw_wikitext": _safe(lambda: str(getattr(info, "raw_wikitext", ""))),
+        "gallery_images": _safe_list(
+            lambda: [
+                {"file": g.file, "caption": g.caption, "url": g.url}
+                for g in (getattr(data, "gallery_images", ()) or ())
+            ]
+        ),
         "licence_ok": True,
         "licence_note": "",
     }

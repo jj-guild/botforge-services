@@ -39,6 +39,12 @@ message MapSeedVersion {
   repeated string details = 3;
 }
 
+message MapSeedGalleryImage {
+  string file = 1;      // the wiki file name ("black-forest_AoE2DE.png")
+  string caption = 2;   // the gallery entry's caption ("in-game icon")
+  string url = 3;       // the resolved imageinfo URL
+}
+
 message MapSeedReply {
   bool found = 1;              // false: no page under this name
   string name = 2;             // canonical display name
@@ -69,6 +75,9 @@ message MapSeedReply {
   string raw_wikitext = 23;     // the page's raw wikitext (the sync's
                                 // raw-data store: parse again offline,
                                 // never re-fetch to re-parse)
+  repeated MapSeedGalleryImage gallery_images = 24;  // EVERY gallery
+                                // entry with its resolved URL — the
+                                // post shows the whole gallery
 }
 
 message ContentCapabilitiesRequest {}

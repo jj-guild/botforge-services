@@ -140,6 +140,22 @@ def test_nomad_keeps_its_infobox_and_nomad_tag() -> None:
     assert not any(t.startswith("tc:") for t in tags), "tc=No is not a count"
 
 
+def test_black_forest_gallery_rides_every_entry() -> None:
+    """Black Forest's gallery: BOTH entries ride, icon-captioned first.
+
+    The 2026-11-07 owner direction: grab EVERY gallery image — the
+    in-game icon AND the 4v4 version shot (the parser used to keep one
+    file only).
+    """
+    info = _parse("Black Forest")
+    files = [g.file for g in info.gallery]
+    assert files == ["black-forest_AoE2DE.png", "4v4BlackForestNC23.PNG"], (
+        f"the whole gallery rides — got {files}"
+    )
+    assert "icon" in info.gallery[0].caption.lower(), "the in-game icon stays the icon"
+    assert info.gallery_icon == "black-forest_AoE2DE.png"
+
+
 def test_black_forest_keeps_its_infobox_and_default_walls() -> None:
     """Black Forest: the pool's permanent map — no walls field in the infobox.
 

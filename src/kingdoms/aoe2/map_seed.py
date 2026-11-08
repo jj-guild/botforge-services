@@ -31,6 +31,7 @@ class MapSeed:
     versions: tuple[dict[str, object], ...] = ()
     tags: tuple[str, ...] = ()
     raw_wikitext: str = ""
+    gallery_images: tuple[dict[str, str], ...] = ()
 
 
 class LiquipediaUnconfiguredError(RuntimeError):

@@ -180,6 +180,10 @@ class GameDataClient:
             ),
             tags=tuple(reply.tags),
             raw_wikitext=str(reply.raw_wikitext or ""),
+            gallery_images=tuple(
+                {"file": g.file, "caption": g.caption, "url": g.url}
+                for g in reply.gallery_images
+            ),
         )
 
     async def watch(self, game_key: str, timeout_s: float = 5.0) -> dict[str, Any]:

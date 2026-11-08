@@ -169,6 +169,14 @@ class ContentServicer(content_pb2_grpc.ContentServicer):
             ],
             tags=[str(t) for t in seed.get("tags", ()) or ()],
             raw_wikitext=str(seed.get("raw_wikitext", "") or ""),
+            gallery_images=[
+                content_pb2.MapSeedGalleryImage(
+                    file=str(g.get("file", "")),
+                    caption=str(g.get("caption", "")),
+                    url=str(g.get("url", "")),
+                )
+                for g in seed.get("gallery_images", ()) or ()
+            ],
         )
 
     async def ListFactions(

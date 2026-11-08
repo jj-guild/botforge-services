@@ -537,6 +537,14 @@ def _map_seed_reply_of(descriptor: dict[str, Any]) -> Any:
         ],
         tags=[str(t) for t in descriptor.get("tags", ()) or ()],
         raw_wikitext=str(descriptor.get("raw_wikitext", "") or ""),
+        gallery_images=[
+            content_pb2.MapSeedGalleryImage(
+                file=str(g.get("file", "")),
+                caption=str(g.get("caption", "")),
+                url=str(g.get("url", "")),
+            )
+            for g in descriptor.get("gallery_images", ()) or ()
+        ],
     )
 
 

@@ -113,6 +113,15 @@ class MapVersion:
 
 
 @dataclass(frozen=True)
+class GalleryImage:
+    """One Gallery entry: the file name, its caption, its resolved URL."""
+
+    file: str
+    caption: str = ""
+    url: str = ""
+
+
+@dataclass(frozen=True)
 class MapInfo:
     """Structured fields extracted from a map's infobox."""
 
@@ -130,6 +139,7 @@ class MapInfo:
     player_capacity: str = ""
     creator: str = ""
     gallery_icon: str = ""
+    gallery: tuple[GalleryImage, ...] = ()
     game_versions: tuple[str, ...] = ()
     versions: tuple[MapVersion, ...] = ()
     raw_wikitext: str = ""
@@ -137,11 +147,12 @@ class MapInfo:
 
 @dataclass(frozen=True)
 class MapData:
-    """A map descriptor ready for storage: info + resolved image URL."""
+    """A map descriptor ready for storage: info + resolved image URLs."""
 
     info: MapInfo
     image_url: str
     icon_url: str = ""
+    gallery_images: tuple[GalleryImage, ...] = ()
     attribution: str = LIQUIPEDIA_ATTRIBUTION
 
 
@@ -369,7 +380,17 @@ class LiquipediaMapsProvider:
         icon_url = ""
         if info.gallery_icon:
             icon_url = self._resolve_image_url(info.gallery_icon)
-        return MapData(info=info, image_url=image_url, icon_url=icon_url)
+        gallery_images = tuple(
+            GalleryImage(
+                file=g.file,
+                caption=g.caption,
+                url=self._resolve_image_url(g.file),
+            )
+            for g in info.gallery
+        )
+        return MapData(
+            info=info, image_url=image_url, icon_url=icon_url, gallery_images=gallery_images
+        )
 
     def map_data_batch(self, page_names: list[str]) -> dict[str, MapData]:
         """Several maps' descriptors in a few BATCHED action=query calls.
@@ -436,11 +457,13 @@ class LiquipediaMapsProvider:
             infos[key] = self._info_from_wikitext(key, wikitext)
         if not infos:
             return {}
-        # every referenced image file, resolved and licence-checked in
-        # one imageinfo=url query + one imageinfo=extmetadata query
+        # every referenced image file (infobox + EVERY gallery entry),
+        # resolved and licence-checked in one imageinfo=url query + one
+        # imageinfo=extmetadata query
         files: list[str] = []
         for info in infos.values():
-            for name in (info.image_file, info.gallery_icon):
+            names = [info.image_file, info.gallery_icon, *[g.file for g in info.gallery]]
+            for name in names:
                 if name and f"File:{name}" not in files:
                     files.append(f"File:{name}")
         urls = self._imageinfo_batch(files, "url")
@@ -458,6 +481,14 @@ class LiquipediaMapsProvider:
                 image_url=urls.get(info.image_file.replace(" ", "_"), ""),
                 icon_url=(
                     urls.get(info.gallery_icon.replace(" ", "_"), "") if info.gallery_icon else ""
+                ),
+                gallery_images=tuple(
+                    GalleryImage(
+                        file=g.file,
+                        caption=g.caption,
+                        url=urls.get(g.file.replace(" ", "_"), ""),
+                    )
+                    for g in info.gallery
                 ),
             )
         self._cache.update(out)
@@ -543,6 +574,7 @@ class LiquipediaMapsProvider:
             source_url=f"{LIQUIPEDIA_ATTRIBUTION}{page}",
             nomad=self._clean_wikitext(fields.get("nomad", "")),
             gallery_icon=self._parse_gallery_icon(wikitext),
+            gallery=self._parse_gallery(wikitext),
             walls=self._clean_wikitext(fields.get("walls", "")),
             tc=self._clean_wikitext(fields.get("tc", "")),
             player_capacity=self._clean_wikitext(
@@ -633,26 +665,38 @@ class LiquipediaMapsProvider:
         return text.strip()
 
     @staticmethod
-    def _parse_gallery_icon(wikitext: str) -> str:
-        """Extract the in-game icon file name from the Gallery.
+    def _parse_gallery(wikitext: str) -> tuple[GalleryImage, ...]:
+        """Extract EVERY Gallery entry — the whole gallery, never one file.
 
         The gallery lists one entry per line, in either form:
         "File:Name.png|caption" or the MediaWiki bare "Name.png|caption"
         (Arena's page uses the bare form — the 2026-11-07 merlin report:
         the icon never landed because the parser required the File:
-        prefix). The entry captioned as the icon wins; otherwise the
-        first entry. Empty when the page has no Gallery.
+        prefix). The URLs resolve later (the imageinfo batch).
         """
         block = re.search(r"<gallery[^>]*>(.*?)</gallery>", wikitext, re.S)
         if block is None:
-            return ""
+            return ()
         entries = re.findall(
             r"^\s*(?:File:)?([^|\n<]+?)\s*\|([^\n]*)$", block.group(1), re.M
         )
-        for filename, caption in entries:
-            if "icon" in caption.lower():
-                return str(filename.strip())
-        return str(entries[0][0].strip()) if entries else ""
+        return tuple(
+            GalleryImage(file=str(filename.strip()), caption=str(caption.strip()))
+            for filename, caption in entries
+        )
+
+    @staticmethod
+    def _parse_gallery_icon(wikitext: str) -> str:
+        """Extract the in-game icon file name from the Gallery.
+
+        The entry captioned as the icon wins; otherwise the first entry.
+        Empty when the page has no Gallery.
+        """
+        entries = LiquipediaMapsProvider._parse_gallery(wikitext)
+        for entry in entries:
+            if "icon" in entry.caption.lower():
+                return entry.file
+        return entries[0].file if entries else ""
 
     @classmethod
     def _parse_game_tabs(cls, wikitext: str) -> tuple[str, ...]:

@@ -99,7 +99,7 @@ async def _sync_maps_forum_locked(guild_id: str, game_key: str, bot: Any, servic
             continue
         from kingdoms.core.ids import footer
 
-        _, summary, source, image, icon, walls, nomad, tc, capacity, creator = (
+        _, summary, source, image, icon, walls, nomad, tc, capacity, creator, gallery = (
             await _map_content_full(entry.id, guild_id, bot)
         )
         source = source or liquipedia_map_url(entry.name)
@@ -124,6 +124,7 @@ async def _sync_maps_forum_locked(guild_id: str, game_key: str, bot: Any, servic
             tc=tc,
             player_capacity=capacity,
             creator=creator,
+            gallery_images=gallery,
         )
         display = f"{entry.name[:1].upper()}{entry.name[1:]}"
         tail = f"{source}\n" if source else ""
@@ -210,6 +211,7 @@ def _map_post_view(
     player_capacity: str = "",
     creator: str = "",
     admin_buttons: tuple[Any, ...] = (),
+    gallery_images: tuple[str, ...] = (),
 ) -> discord.ui.LayoutView:
     """Build the map post on the shared entity-card template.
 
@@ -235,6 +237,7 @@ def _map_post_view(
         description=description,
         image_url=image,
         icon_url=icon_url,
+        gallery_images=gallery_images,
         source_url=source,
         pool_links=tuple(pools),
         buttons=tuple(buttons),
@@ -279,7 +282,7 @@ async def map_post_render(
     """
     from kingdoms.core.ids import footer
 
-    _, summary, source, image, icon, walls, nomad, tc, capacity, creator = (
+    _, summary, source, image, icon, walls, nomad, tc, capacity, creator, gallery = (
         await _map_content_full(entry.id, guild_id, bot)
     )
     source = source or liquipedia_map_url(entry.name)
@@ -305,6 +308,7 @@ async def map_post_render(
         player_capacity=capacity,
         creator=creator,
         admin_buttons=admin_buttons,
+        gallery_images=gallery,
     )
     display = f"{entry.name[:1].upper()}{entry.name[1:]}"
     tail = f"{source}\n" if source else ""
@@ -341,7 +345,7 @@ async def _refresh_map_post(bot: Any, platform: Any, guild_id: str, entry: Any, 
         # but not the description (the 2026-11-07 stale-thumbnail bug:
         # posts kept their pre-sync view forever). The fingerprint covers
         # the view's data too.
-        _, _, _, image, icon, walls, nomad, tc, capacity, creator = (
+        _, _, _, image, icon, walls, nomad, tc, capacity, creator, gallery = (
             await _map_content_full(entry.id, guild_id, bot)
         )
         pools = await _map_pools_link(service, entry, guild_id, bot=bot)
@@ -357,6 +361,7 @@ async def _refresh_map_post(bot: Any, platform: Any, guild_id: str, entry: Any, 
                 f"creator={creator}",
                 f"type={getattr(entry, 'map_type', '')}",
                 f"pools={'|'.join(pools)}",
+                f"gallery={'|'.join(gallery)}",
             ]
         )
         fingerprint = _content_fingerprint(signature)
@@ -394,13 +399,14 @@ def register_maps_forum_sync() -> None:
 
 async def _map_content_full(
     entity_id: str, guild_id: str, bot: Any
-) -> tuple[str, str, str, str, str, str, str, str, str, str]:
+) -> tuple[str, str, str, str, str, str, str, str, str, str, tuple[str, ...]]:
     """Resolve a map's full stored content for its post.
 
     ``(name, summary, source, image, icon, walls, nomad, tc, capacity,
-    creator)`` — the traits (walls/nomad/tc/capacity/creator) live as
-    separate keys next to the summary since the label-line layout
-    split them out of the summary blob.
+    creator, gallery)`` — the traits (walls/nomad/tc/capacity/creator)
+    live as separate keys next to the summary since the label-line
+    layout split them out of the summary blob; ``gallery`` is the whole
+    Gallery's resolved URLs (every image, owner direction 2026-11-07).
     """
     from kingdoms.discord.content_posts import content_service
 
@@ -415,7 +421,7 @@ async def _map_content_full(
         except Exception:
             doc = None
     if doc is None:
-        return "", "", "", "", "", "", "", "", "", ""
+        return "", "", "", "", "", "", "", "", "", "", ()
     if doc.get("split_keys") or (doc.get("icon_url") and doc.get("walls") is not None):
         image_url = str(doc.get("image_url") or "")
         # a page without a Gallery has no in-game icon — the main image
@@ -431,6 +437,11 @@ async def _map_content_full(
             str(doc.get("tc") or ""),
             str(doc.get("player_capacity") or ""),
             str(doc.get("creator") or ""),
+            tuple(
+                str(g.get("url") or "")
+                for g in doc.get("gallery_images") or ()
+                if str(g.get("url") or "")
+            ),
         )
     # Stale doc (pre-split import: no icon_url / trait keys, the summary
     # carries the old inline blob) — re-resolve from Liquipedia once and
@@ -449,6 +460,11 @@ async def _map_content_full(
         str(doc.get("tc") or ""),
         str(doc.get("player_capacity") or ""),
         str(doc.get("creator") or ""),
+        tuple(
+            str(g.get("url") or "")
+            for g in doc.get("gallery_images") or ()
+            if str(g.get("url") or "")
+        ),
     )
 
 

@@ -47,4 +47,6 @@ PAGE_CACHE_TTL_S = 7 * 24 * 3600
 # + the raw wikitext rides the provider wire.
 # Gen 6: the imageinfo lookup normalizes spaces/underscores — the
 # Gallery icons and underscored images resolve again.
-SEED_GEN = 6
+# Gen 7: the WHOLE gallery rides the descriptor (every entry, caption
+# and resolved URL) — the post shows all the map's images.
+SEED_GEN = 7

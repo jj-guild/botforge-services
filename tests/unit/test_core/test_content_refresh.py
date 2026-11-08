@@ -180,6 +180,9 @@ async def test_maps_sync_rebuilds_every_known_map(monkeypatch: Any) -> None:
                 player_capacity="Up to 8",
                 tags=("type:land", "walls:stone", "tc:1"),
                 raw_wikitext="{{Infobox map|name=" + name + "}}",
+                gallery_images=(
+                    {"file": name + "_AoE2DE.png", "caption": "in-game icon", "url": f"https://x/{name}-icon.png"},
+                ),
             )
         return out
 
@@ -207,6 +210,9 @@ async def test_maps_sync_rebuilds_every_known_map(monkeypatch: Any) -> None:
         "the skip froze no-image maps on their pre-sync parse forever"
     )
     assert black_forest["split_keys"] is True
+    assert black_forest["gallery_images"], (
+        "the whole gallery rides the stored doc — every entry, caption and URL"
+    )
     # the catalog entry's raw-cased map_type heals from the fresh seed
     # (an import that ran an older parser left "land" — the post shows
     # the entry's type, so the sync must heal it)

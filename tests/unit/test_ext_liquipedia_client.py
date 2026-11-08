@@ -76,6 +76,7 @@ def test_imageinfo_titles_with_spaces_still_resolve() -> None:
 ==Gallery==
 <gallery>
 Arena_AoE2DE.png|in-game icon
+Arena_4v4.PNG|4v4 version
 </gallery>
 """
 
@@ -118,6 +119,10 @@ Arena_AoE2DE.png|in-game icon
     assert data.icon_url == "https://liquipedia.test/commons/Arena_AoE2DE.png", (
         "the Gallery icon must resolve — its URL sat in the response all along"
     )
+    assert [g.url for g in data.gallery_images] == [
+        "https://liquipedia.test/commons/Arena_AoE2DE.png",
+        "https://liquipedia.test/commons/Arena_4v4.PNG",
+    ], "EVERY gallery entry resolves — the whole gallery rides"
 
 
 def _make_provider(transport: httpx.MockTransport) -> LiquipediaMapsProvider:

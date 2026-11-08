@@ -38,6 +38,7 @@ class EntityCardSpec:
     description: str = ""
     image_url: str = ""
     icon_url: str = ""
+    gallery_images: tuple[str, ...] = ()
     source_url: str = ""
     source_label: str = "Liquipedia"
     creator: str = ""
@@ -74,9 +75,20 @@ def _body(view: discord.ui.LayoutView, spec: EntityCardSpec) -> None:
     if spec.description:
         body.append(discord.ui.Separator())
         body.append(discord.ui.TextDisplay(spec.description))
-    if spec.image_url:
+    # the media gallery: the infobox image first, then EVERY gallery
+    # image (deduplicated, empties skipped) — the whole gallery rides
+    # the card (owner direction 2026-11-07)
+    seen: set[str] = set()
+    media_urls: list[str] = []
+    for url in (spec.image_url, *spec.gallery_images):
+        if url and url not in seen:
+            seen.add(url)
+            media_urls.append(url)
+    if media_urls:
         body.append(discord.ui.Separator())
-        body.append(discord.ui.MediaGallery(discord.MediaGalleryItem(spec.image_url)))
+        body.append(
+            discord.ui.MediaGallery(*[discord.MediaGalleryItem(u) for u in media_urls])
+        )
     if spec.links:
         body.append(discord.ui.Separator())
         heading = f"**{spec.links_heading}**\n" if spec.links_heading else ""
@@ -168,6 +180,7 @@ def map_card(
     pool_links: tuple[str, ...],
     buttons: tuple[Callable[[], discord.ui.Item[discord.ui.LayoutView]], ...],
     creator: str = "",
+    gallery_images: tuple[str, ...] = (),
 ) -> discord.ui.LayoutView:
     """Build a map's forum card on the shared template."""
     return build_entity_card(
@@ -178,6 +191,7 @@ def map_card(
             description=description,
             image_url=image_url,
             icon_url=icon_url,
+            gallery_images=gallery_images,
             source_url=source_url,
             creator=creator,
             links_heading="Map pools",
