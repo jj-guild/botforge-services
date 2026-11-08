@@ -563,82 +563,56 @@ def _description_display(summary: str) -> str:
     return summary
 
 
-def _walls_display(walls: str) -> str:
-    """Normalize the walls label to its French display word.
+def _walls_slug(walls: str) -> str:
+    """Normalize the walls label into its filter slug.
 
-    The stored doc carries Liquipedia's English (``None``, ``Stone
-    Walls``) — the post is French UI: the walls vocabulary renders as
-    Bois / Pierre / Partiels. Empty hides the line.
+    The valid vocabulary (owner direction 2026-11-08):
+    ``stone-walls`` / ``palisade-walls`` / ``fortified-walls`` /
+    ``partial-walls`` — English, lowercase, filterable. Empty hides.
     """
     value = walls.strip().lower()
     if not value or value in ("none", "no", "false", "true"):
         return ""
     if "stone" in value:
-        return "Pierre"
+        return "stone-walls"
     if "wood" in value or "palisade" in value:
-        return "Bois"
-    if "partial" in value:
-        return "Partiels"
+        return "palisade-walls"
     if "fortif" in value:
-        return "Fortifiés"
+        return "fortified-walls"
+    if "partial" in value:
+        return "partial-walls"
     if value == "yes":
-        return "Pierre"
+        return "stone-walls"
     return ""
-
-
-_TYPE_DISPLAY = {
-    "hybrid": "Hybride",
-    "land": "Terrestre",
-    "water": "Aquatique",
-    "nomad": "Nomade",
-    "open": "Ouverte",
-    "semi-open": "Semi-ouverte",
-    "closed": "Fermée",
-    "fortified": "Fortifiée",
-    "island": "Île",
-    "real world": "Monde réel",
-}
-
-
-def _type_display(map_type: str) -> str:
-    """Render the map type for the French post.
-
-    The known vocabulary translates (``Hybrid`` → ``Hybride``); an
-    unknown value rides capitalized as-is — never dropped.
-    """
-    value = map_type.strip()
-    if not value:
-        return ""
-    return _TYPE_DISPLAY.get(value.lower(), f"{value[:1].upper()}{value[1:]}")
 
 
 def _map_props_lines(
     map_type: str, walls: str, nomad: str, tc: str, player_capacity: str = ""
 ) -> list[str]:
-    """Build the map's subtitle tags as backticked French strings.
+    """Build the map's subtitle tags as backticked FILTER SLUGS.
 
-    Each tag on the vocabulary (owner direction 2026-11-08):
-    - the Liquipedia type (`Terrestre`/`Hybride`/`Aquatique`)
-    - the walls (`Murs : Pierre`/`Bois`/`Fortifiés`/`Partiels`)
-    - the player count (`Jusqu'à X joueurs`) — only when X < 8,
-      the nominal capacity stays silent
-    - `Nomade` — the Liquipedia flag or a TC=0 start
-    - `X TC au départ` — when the start is more than one TC
+    English, lowercase, never translated — they are query keys the
+    users filter on (owner direction 2026-11-08). The valid vocabulary:
+    - the Liquipedia type (`land`/`water`/`hybrid`)
+    - the walls (`stone-walls`/`palisade-walls`/`fortified-walls`)
+    - `up to X players` — only when X < 8, the nominal stays silent
+    - `nomad` — the Liquipedia flag or a TC=0 start
+    - `X TCs start` — when the start is more than one TC
     The open/closed/semi-open/chaotic classification is NOT here: it
     is the designers' vocabulary, delegated to kingdoms-services#348.
     """
     tags: list[str] = []
-    type_shown = _type_display(map_type)
-    if type_shown:
-        tags.append(f"`{type_shown}`")
-    walls_shown = _walls_display(walls)
-    if walls_shown:
-        tags.append(f"`Murs : {walls_shown}`")
+    type_slug = map_type.strip().lower()
+    if type_slug:
+        tags.append(f"`{type_slug}`")
+    walls_tag = _walls_slug(walls)
+    if walls_tag:
+        tags.append(f"`{walls_tag}`")
     capacity = re.search(r"up to\s+(\d+)", player_capacity, re.IGNORECASE)
     if capacity and int(capacity.group(1)) < 8:
-        tags.append(f"`Jusqu'à {capacity.group(1)} joueurs`")
+        tags.append(f"`up to {capacity.group(1)} players`")
     if nomad.strip().lower() == "yes" or tc.strip() == "0":
-        tags.append("`Nomade`")
+        tags.append("`nomad`")
     if tc.strip().isdigit() and int(tc.strip()) > 1:
-        tags.append(f"`{tc.strip()} TC au départ`")
+        tags.append(f"`{tc.strip()} TCs start`")
     return tags

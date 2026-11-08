@@ -1515,11 +1515,12 @@ async def _finish_bulk_import(
             _content, view = await map_post_render(
                 entry, str(interaction.guild_id or ""), interaction.client, service
             )
-            await interaction.followup.send(
-                f"\u2705 **{entry.name}** import\u00e9e \u2014 son post :",
-                view=view,
-                ephemeral=True,
-            )
+            # Components V2 forbids a `content` alongside the view (the
+            # 2026-11-08 50035 silent-preview failures) — the banner
+            # rides INSIDE the view, as its first text display
+            banner = discord.ui.TextDisplay(f"\u2705 **{entry.name}** import\u00e9e \u2014 son post :")
+            view.insert_item_at(0, banner)
+            await interaction.followup.send(view=view, ephemeral=True)
         except Exception:
             logger.warning(
                 "bulk import: the per-map preview failed for %s \u2014 best-effort",

@@ -296,6 +296,32 @@ class TestPoolLifecycleJourney:
             pool = await remote.get_map_pool(pool.id)
             assert pool is not None and set(pool.map_ids) == {arabia.id, hideout.id}
 
+            # ── #341: a pooled map never deletes — the pre-check refuses
+            # BEFORE the confirmation modal, naming the blocking pool
+            from kingdoms.discord.maps_pool_flow import MapDeleteButton
+
+            delete_view = discord.ui.LayoutView(timeout=None)
+            delete_row: discord.ui.ActionRow[discord.ui.LayoutView] = discord.ui.ActionRow()
+            delete_row.add_item(MapDeleteButton(arabia.id, "aoe2", owned_by_guild=False))
+            delete_view.add_item(delete_row)
+
+            @simcord_bot.tree.command(name="mapdelete")
+            async def mapdelete(interaction: discord.Interaction) -> None:
+                await interaction.response.send_message(view=delete_view)
+
+            await alice.slash(channel, "mapdelete")
+            delete_msg = channel.last_message
+            assert delete_msg is not None
+            refused = await alice.click(
+                delete_msg, custom_id=f"games:map:delete:{arabia.id}:aoe2:0"
+            )
+            assert refused.modal is None, "#341: a pooled map never reaches the modal"
+            refusal = refused.response or (refused.followups[-1] if refused.followups else None)
+            assert refusal is not None and "1v1 Pool" in refusal.content, (
+                f"the refusal names the blocking pool — got {refusal.content if refusal else None}"
+            )
+            assert await remote.get_map(arabia.id) is not None, "the map stays"
+
             # ── rename (a draft's action) ────────────────────────────────
             shown = await alice.click(menu, custom_id=f"admin:pin:modgames:pools:rename:{pool.id}")
             fields = _modal_fields(shown)

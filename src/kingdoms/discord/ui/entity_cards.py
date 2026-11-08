@@ -258,8 +258,8 @@ def map_card(
     line) then the map pools — the body carries the content only.
     """
     tags_line = " ".join(part for part in props if part)
-    pools_line = f"Pools : {', '.join(pool_links)}" if pool_links else ""
-    subtitle = "\n".join(line for line in (tags_line, pools_line) if line)
+    # the pools: one per line, never inline (owner direction 2026-11-08)
+    subtitle = "\n".join(line for line in (tags_line, *pool_links) if line)
     return build_entity_card(
         EntityCardSpec(
             title=name,

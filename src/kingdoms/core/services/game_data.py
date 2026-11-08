@@ -314,6 +314,25 @@ class GameDataService:
         await self._audit_record("map.update", {"entry_id": entry_id, "changes": updates})
         return updated
 
+    async def pools_referencing(self, entry_id: str) -> list[dict[str, Any]]:
+        """List the non-archived pools referencing a map (kingdoms-services#341).
+
+        The ONE rule's source: a map referenced by a live pool can be
+        neither deleted nor archived — the callers (delete_map,
+        archive_map, the Discord pre-check) all read this, never
+        re-implement it. Archived pools do not block (they are not live
+        surfaces).
+        """
+        entry = await self._db.find_entry(MAPS_COLLECTION, entry_id)
+        game_key = str((entry or {}).get("game_key") or "")
+        if not game_key:
+            return []
+        return [
+            pool
+            for pool in await self._db.find_active_map_pools(game_key)
+            if entry_id in (pool.get("map_ids") or ())
+        ]
+
     async def delete_map(self, entry_id: str) -> bool:
         """Hard-delete a map record (rollback and orphan cleanup only).
 
@@ -321,21 +340,32 @@ class GameDataService:
         real delete: the rollback of a just-created map whose import
         failed after the record landed (#259), and the cleanup of an
         orphaned map (no forum thread, nothing user-visible to
-        archive). Refuses to delete a map referenced by a pool.
+        archive). Refuses to delete a map referenced by a live pool
+        (#341) — the error carries the blocking pools.
         """
-        entry = await self._require(MAPS_COLLECTION, entry_id, MapModel.from_mongo)
-        for pool in await self._db.find_active_map_pools(entry.game_key):
-            if entry_id in (pool.get("map_ids") or ()):
-                raise ValueError(f"map {entry_id!r} is referenced by pool {pool.get('_id')!r}")
+        await self._require(MAPS_COLLECTION, entry_id, MapModel.from_mongo)
+        blocking = await self.pools_referencing(entry_id)
+        if blocking:
+            names = ", ".join(str(pool.get("name") or pool.get("_id")) for pool in blocking)
+            raise ValueError(f"map {entry_id!r} is referenced by pool(s): {names}")
         await self._db.delete_entry(MAPS_COLLECTION, entry_id)
         await self._audit_record("map.delete", {"entry_id": entry_id})
         return True
 
     async def archive_map(self, entry_id: str) -> MapModel:
-        """Archive a map (archival-only delete)."""
+        """Archive a map (archival-only delete).
+
+        Refuses to archive a map referenced by a live pool (#341) —
+        archiving a pooled map silently dropped it out of the pool's
+        renders. The error carries the blocking pools.
+        """
         entry = await self._require(MAPS_COLLECTION, entry_id, MapModel.from_mongo)
         if entry.archived_at is not None:
             raise ArchivedEntryError(f"map {entry_id!r} is already archived")
+        blocking = await self.pools_referencing(entry_id)
+        if blocking:
+            names = ", ".join(str(pool.get("name") or pool.get("_id")) for pool in blocking)
+            raise ValueError(f"map {entry_id!r} is referenced by pool(s): {names}")
         entry = entry.model_copy(update={"archived_at": _now_ms()})
         await self._db.upsert_entry(MAPS_COLLECTION, entry.to_mongo())
         await self._audit_record("map.archive", {"entry_id": entry_id})

@@ -303,6 +303,11 @@ class RemoteGameDataService:
         result = await self._call("list_factions", game_key=game_key, guild_id=guild_id)
         return [_model_faction(doc) for doc in result or []]
 
+    async def pools_referencing(self, entry_id: str) -> list[dict[str, Any]]:
+        """List the non-archived pools referencing a map (#341)."""
+        result = await self._call("pools_referencing", entry_id=entry_id)
+        return [dict(pool) for pool in result or []]
+
     async def list_game_keys(self) -> list[str]:
         """List the implemented games."""
         return [str(key) for key in await self._call("list_game_keys") or []]

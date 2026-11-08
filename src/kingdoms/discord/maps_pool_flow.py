@@ -1068,21 +1068,43 @@ class MapDeleteButton(
         return cls(match.group("map_id"), match.group("game_key"), match.group("owned") == "1")
 
     async def callback(self, interaction: discord.Interaction) -> None:
-        """Guard, then open the type-the-name confirmation modal."""
+        """Guard, pre-check the pools (#341), open the confirmation.
+
+        Everything answers as a NEW ephemeral message — a component
+        ``defer(ephemeral=True)`` is a DEFERRED_UPDATE of the carrying
+        message (the flag is ignored) and the followups landed nowhere
+        (the 2026-11-08 silent-answer bug).
+        """
         from kingdoms.discord.maps_pool_flow import _guard_admin
 
         if not await _guard_admin(interaction):
             return
-        await interaction.response.defer(ephemeral=True, thinking=False)
         service = _games_wiring()
         if service is None:
-            await interaction.followup.send("Wiring indisponible.", ephemeral=True)
+            await interaction.response.send_message("Wiring indisponible.", ephemeral=True)
             return
         entry = await service.get_map(self.map_id)
         if entry is None:
-            await interaction.followup.send("Map introuvable.", ephemeral=True)
+            await interaction.response.send_message("Map introuvable.", ephemeral=True)
             return
-        await interaction.followup.send(
+        # #341's pre-check: a map referenced by a live pool is refused
+        # BEFORE the confirmation — the admin learns the blocking pools
+        # without typing anything. The post-modal refusal stays (a pool
+        # edit may race between this check and the submit).
+        blocking = await service.pools_referencing(self.map_id)
+        if blocking:
+            names = ", ".join(
+                str(pool.get("name") or pool.get("_id", "")) if isinstance(pool, dict)
+                else str(getattr(pool, "name", "") or pool)
+                for pool in blocking
+            )
+            await interaction.response.send_message(
+                f"**{entry.name}** fait partie d'un (de) pool en vie : **{names}** — "
+                "retire-la du pool d'abord.",
+                ephemeral=True,
+            )
+            return
+        await interaction.response.send_message(
             view=_map_delete_confirm_view(self.map_id, self.game_key, entry.name),
             ephemeral=True,
         )

@@ -555,6 +555,7 @@ _CATALOG_OPS: frozenset[str] = frozenset(
     {
         "list_factions",
         "list_maps",
+        "pools_referencing",
         "list_map_pools",
         "list_all_map_pools",
         "list_game_keys",
