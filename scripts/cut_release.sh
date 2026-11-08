@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Cut a release of kingdoms-services — the version is never hand-picked.
 #
-# scripts/generate_changelog.py --bump derives the next tag from the
+# .github/workflows/scripts/generate_changelog.py --bump derives the next tag from the
 # Conventional Commits since the last release (feat → minor, fix → patch,
 # BREAKING → major); --prerelease appends the next free -rc<n> classifier
 # on the same base. The GitHub release itself is created by the Docker
@@ -62,7 +62,7 @@ echo "    all checks green"
 
 bump_args=(--bump)
 [[ -n "$prerelease" ]] && bump_args+=(--prerelease)
-tag="$(uv run python scripts/generate_changelog.py "${bump_args[@]}")"
+tag="$(uv run python .github/workflows/scripts/generate_changelog.py "${bump_args[@]}")"
 if ! [[ "$tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-rc[0-9]+)?$ ]]; then
   echo "::error::computed tag '$tag' is not a release tag" >&2
   exit 1
