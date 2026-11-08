@@ -595,9 +595,10 @@ def _map_props_lines(
     users filter on (owner direction 2026-11-08). The valid vocabulary:
     - the Liquipedia type (`land`/`water`/`hybrid`)
     - the walls (`stone-walls`/`palisade-walls`/`fortified-walls`)
-    - `up to X players` — only when X < 8, the nominal stays silent
+    - `up-to-X-players` — only when X < 8, the nominal stays silent
     - `nomad` — the Liquipedia flag or a TC=0 start
-    - `X TCs start` — when the start is more than one TC
+    - `X-tc` — when the start is more than one TC (hyphenated slugs:
+      backticked spaces read badly, owner direction 2026-11-08)
     The open/closed/semi-open/chaotic classification is NOT here: it
     is the designers' vocabulary, delegated to kingdoms-services#348.
     """
@@ -610,9 +611,9 @@ def _map_props_lines(
         tags.append(f"`{walls_tag}`")
     capacity = re.search(r"up to\s+(\d+)", player_capacity, re.IGNORECASE)
     if capacity and int(capacity.group(1)) < 8:
-        tags.append(f"`up to {capacity.group(1)} players`")
+        tags.append(f"`up-to-{capacity.group(1)}-players`")
     if nomad.strip().lower() == "yes" or tc.strip() == "0":
         tags.append("`nomad`")
     if tc.strip().isdigit() and int(tc.strip()) > 1:
-        tags.append(f"`{tc.strip()} TCs start`")
+        tags.append(f"`{tc.strip()}-tc`")
     return tags

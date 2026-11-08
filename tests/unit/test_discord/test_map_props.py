@@ -33,14 +33,14 @@ def test_props_lines_are_backticked_filter_slugs() -> None:
     assert props == [
         "`hybrid`",
         "`stone-walls`",
-        "`2 TCs start`",
+        "`2-tc`",
     ], f"the nominal 8-player capacity stays silent — got {props}"
 
 
 def test_props_lines_capacity_below_nominal_rides() -> None:
     """A below-nominal capacity rides as a player-count tag."""
     props = _map_props_lines("Land", "None", "Yes", "0", "Up to 4")
-    assert "`up to 4 players`" in props
+    assert "`up-to-4-players`" in props
     assert "`nomad`" in props, "the Liquipedia nomad flag rides"
     assert "`land`" in props
     assert not any("walls" in tag for tag in props), "walls=None hides the tag"
@@ -55,4 +55,4 @@ def test_props_lines_nomad_from_tc_zero() -> None:
 def test_props_lines_hide_bool_garbage() -> None:
     """The amputation era's True/False residue never renders."""
     props = _map_props_lines("", "True", "False", "2", "")
-    assert props == ["`2 TCs start`"], f"only the TC tag survives — got {props}"
+    assert props == ["`2-tc`"], f"only the TC tag survives — got {props}"
