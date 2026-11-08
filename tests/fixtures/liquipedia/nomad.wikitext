@@ -1,0 +1,64 @@
+{{tabs static
+|name1=Nomad  (AoE2)
+|link1=Nomad 
+|name2=Nomad  (AoM)
+|link2=Nomad  (AoM)
+|This=1}}
+{{Infobox map
+|name=Nomad
+|image=Nomad_Map.png
+|caption=
+|creator=Ensemble Studios
+|tc=No
+|walls=No
+|nomad=Yes
+|players=Up to 8
+|game=aoe2
+|type=hybrid
+|appearance=The Conquerors
+|span=2000-08-24 — '''Present'''
+|tileset=desert
+}}
+
+'''Nomad''' is an [[Age of Empires II]] multiplayer [[Maps|map]].
+
+==Overview==
+Nomad is the most famous within the maps in which you start without a [[Town Center]] , to the point that its name is used to typify the maps with that characteristic. It is generally a large island completely surrounded by water, in which the villagers are scattered, usually two together and one separate per player.
+
+===Strategic Basics===
+At game start, the one separate villager builds a dock and gathers shorefish, the two other villagers build the Town Center. The aim is to keep creating both Fishing Ships (4-6) and villagers until you are ready to click up. Most civilizations want to play a fast Feudal Age water approach on Nomad, to deny the opponent's fish and secure your own.  From Feudal Age onward, your follow-up strategy will depend on your civilization and the proximity of the opponent. A civilization with a good unique unit can go for a castle drop, if the opponent is close you can choose for prolonged Feudal Age archer play.<!--credit to PROject_Belgium for these strategy basics, he shared them in JonSlow discord-->
+
+===Civilizations===
+* Civs with bonuses before you make your first [[Town Center]] have a large advantage on Nomad: {{CivIcon|Malians}} Malian and {{CivIcon|Persians}} Persian wood bonuses mean you can get a fishing ship out pre-TC, {{CivIcon|Berbers}} have faster walking villagers, and {{CivIcon|Spanish}} Spanish build speed is extra important in Nomad. 
+* The {{CivIcon|Incas}} Inca lama and the {{CivIcon|Gurjaras}} Gurjara bush that spawns with the first Town Center can be great for players having trouble finding food, alternatively the lama can be huge for scouting as Nomad has no starting scout.
+* Civilizations with bonuses regarding Villager raw stats: {{CivIcon|Poles}} Poles, {{CivIcon|Berbers}} Berbers and {{CivIcon|Koreans}} Koreans 
+* {{CivIcon|Vietnamese}} Vietnamese are great for spotting enemy first Town Centers as soon as they finish building them.
+
+==Versions==
+*'''Fluffy Nomad'''
+*[[Holy Cup]] (Holy Nomad) version: One monastery per player and a closeby relic spawn in the middle of the map.
+*[[Wandering Warriors Cup]] version: The island is bigger, therefore the sea around it is narrower than the standard Nomad - this makes the sea not fully encircle the island in most generations.
+
+==Recent Tournament Appearances==
+{{Map appearances table|maps=Nomad}}
+
+==Recent Games==
+{{Map recent games table}}
+
+==Trivia==
+*[[Wandering Warriors Cup]] (2022) was an [[Age of Empires II]] S-tier tournament that had Nomad as a beginning map in every series. 
+*[[Nomad_Wars/3|Nomad Wars 3]] (2022) was the biggest [[Age of Empires II]] tournament played on Nomad exclusively with a prizepool of $1505, dethroning [[Nomad_Battlegrounds|Nomad Battlegrounds]] which previously held the spot since 2018.
+**Similar tournaments are [[Poisn's Nomadness]] (2016), [[Nomad Summer Showdown]] (2019), [[OrnLu's Big Nomad Cup]] (2020), [[Nomad_Wars|Nomad Wars]] (2021), [[Nomad_Warriors|Nomad Warriors]] (2022), all only featuring maps with Nomad start settings.
+
+==Gallery==
+<gallery mode="packed-hover" heights="200px">
+File:Nomad AoE2 DE.png|in-game icon ([[Age of Empires II/Definitive Edition|AoEII:DE]])
+</gallery>
+
+==Additional Content==
+{{ExternalMediaList|subject=Nomad}}
+
+==References==
+{{Reflist}}
+
+{{Maps navbox}}

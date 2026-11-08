@@ -79,7 +79,7 @@ def test_registered_views_fit_discord_limits() -> None:
         maps_section_layout,
         pools_section_layout,
     )
-    from kingdoms.discord.entity_admin_menu import build_entity_admin_menu
+    from kingdoms.discord.entity_admin_menu import build_entity_admin_bar
 
     offenders: list[str] = []
     import asyncio
@@ -98,7 +98,7 @@ def test_registered_views_fit_discord_limits() -> None:
         offenders.extend(walk(await civs_section_layout("aoe2", "1"), "civs_section_layout"))
         offenders.extend(walk(await maps_section_layout("aoe2", "1"), "maps_section_layout"))
         offenders.extend(walk(await pools_section_layout("aoe2", "1"), "pools_section_layout"))
-        offenders.extend(walk(await build_entity_admin_menu("pool", _Pool.id, "aoe2", True), "pool_admin_menu"))
+        offenders.extend(walk(await build_entity_admin_bar("pool", _Pool.id, "aoe2", True), "pool_admin_menu"))
 
     asyncio.run(build())
     assert not offenders, "Discord-shape violations:\n" + "\n".join(offenders)

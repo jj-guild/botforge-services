@@ -63,14 +63,32 @@ class EntityAdminButton(
         )
 
     async def callback(self, interaction: discord.Interaction) -> None:
-        """Guard, then open the entity's contextual management menu."""
+        """Guard, then open the entity's contextual management menu.
+
+        The menu answers as a NEW EPHEMERAL message — never an edit of
+        the post the button rides on. A component ``defer`` is a
+        DEFERRED_UPDATE of the carrying message (the ephemeral flag is
+        ignored): ``edit_original_response`` then rewrote the PUBLIC
+        POST with the admin buttons, visible to everyone (the
+        2026-11-08 critical-path report — the admin controls live only
+        in the clicker's ephemeral answer).
+        """
         from kingdoms.discord.maps_pool_flow import _guard_admin
 
-        await interaction.response.defer(ephemeral=True, thinking=False)
         if not await _guard_admin(interaction):
             return
-        view = await build_entity_admin_menu(self.kind, self.entity_id, self.game_key, self.owned)
-        await interaction.edit_original_response(view=view)
+        view = await build_entity_admin_bar(
+            self.kind,
+            self.entity_id,
+            self.game_key,
+            self.owned,
+            guild_id=str(interaction.guild_id) if interaction.guild_id is not None else "",
+            bot=interaction.client,
+        )
+        if interaction.response.is_done():
+            await interaction.followup.send(view=view, ephemeral=True)
+        else:
+            await interaction.response.send_message(view=view, ephemeral=True)
 
 
 def _pool_lifecycle_row(entity_id: str, pool: Any, state: str) -> Any:
@@ -108,86 +126,52 @@ def _pool_lifecycle_row(entity_id: str, pool: Any, state: str) -> Any:
     return lifecycle
 
 
-async def build_entity_admin_menu(
-    kind: str, entity_id: str, game_key: str, owned: bool
+async def build_entity_admin_bar(
+    kind: str,
+    entity_id: str,
+    game_key: str,
+    owned: bool,
+    guild_id: str = "",
+    bot: Any = None,
 ) -> discord.ui.LayoutView:
-    """Build the ephemeral management menu of one entity (state-greyed)."""
-    from kingdoms.core.services.game_data import (
-        MAX_POOL_MAPS,
-        POOL_STATE_DRAFT,
-        pool_state_badge,
-    )
+    """Build the ephemeral admin BAR of one entity — buttons only.
+
+    The ⚙️ Admin click answers with the entity's admin BUTTON BAR (never
+    a re-render of the post — the post re-renders only when its content
+    changed; owner direction 2026-11-08). The bar carries the entity's
+    admin id: ``map:aoe2:public:arabia:admin``.
+    """
     from kingdoms.discord.maps_pool_flow import (
         MapAddToPoolButton,
         MapDeleteButton,
         MapEditButton,
-        PoolMapsButton,
     )
     from kingdoms.discord.ui.menu_template import MenuSpec, build_menu
 
+    view = discord.ui.LayoutView(timeout=None)
+    rows: list[discord.ui.ActionRow[discord.ui.LayoutView]] = []
+
     if kind == "map":
-        menu = build_menu(
-            MenuSpec(
-                title="⚙️ Gestion de la map",
-                description=f"`{entity_id}`",
-                view_id=f"panel:{entity_id}:admin",
-                sections=(),
-            )
-        )
         row: discord.ui.ActionRow[discord.ui.LayoutView] = discord.ui.ActionRow()
         row.add_item(MapAddToPoolButton(entity_id))
         if owned:
             row.add_item(MapEditButton(entity_id))
         row.add_item(MapDeleteButton(entity_id, game_key=game_key, owned_by_guild=owned))
-        menu.add_item(row)
-        return menu
-    if kind == "pool":
-        pool = await _resolve_pool(entity_id)
-        if pool is None:
-            # a hard-deleted pool never renders a menu \u2014 the default
-            # state would resurrect it as a draft editor
-            from kingdoms.discord.ui.menu_template import MenuSpec, build_menu
+        rows.append(row)
+    elif kind == "pool":
+        bar = await _pool_admin_rows(entity_id)
+        if isinstance(bar, discord.ui.LayoutView):
+            return bar  # the not-found / note menus
+        rows.extend(bar)
 
-            return build_menu(
-                MenuSpec(
-                    title="\u2699\ufe0f Gestion du map pool",
-                    description=f"`{entity_id}` \u2014 introuvable (supprim\u00e9 ?).",
-                    view_id="",
-                    sections=(),
-                )
-            )
-        state = pool.state
-        from kingdoms.discord.admin_panel_games import (
-            GamesPoolRenameButton,
-        )
-        from kingdoms.discord.ui.menu_template import MenuSpec, build_menu
-
-        menu = build_menu(
-            MenuSpec(
-                title="\u2699\ufe0f Gestion du map pool",
-                description=f"`{entity_id}`\n{pool_state_badge(state)}",
-                view_id=f"panel:{entity_id}:admin",
-                sections=(),
-            )
-        )
-        # line 1 (edition only): composition (the single Maps editor,
-        # rename) — a published/used/archived pool is frozen: its name
-        # and composition never change, so the composition row is
-        # HIDDEN, only the lifecycle buttons stay
-        if state == POOL_STATE_DRAFT:
-            composition: discord.ui.ActionRow[discord.ui.LayoutView] = discord.ui.ActionRow()
-            maps_button = PoolMapsButton(entity_id)
-            if pool is not None and len(getattr(pool, "map_ids", ()) or ()) >= MAX_POOL_MAPS:
-                maps_button.item.disabled = True
-            composition.add_item(maps_button)
-            composition.add_item(GamesPoolRenameButton(entity_id))
-            menu.add_item(composition)
-        menu.add_item(_pool_lifecycle_row(entity_id, pool, state))
-        return menu
-
+    for row in rows:
+        view.add_item(row)
+    if rows:
+        view.add_item(discord.ui.TextDisplay(f"-# `{entity_id}:admin`"))
+        return view
     # civ (and any future kind): the cross-guild data is managed through
     # the DM panel — a plain note keeps the surface honest
-    menu = build_menu(
+    return build_menu(
         MenuSpec(
             title="⚙️ Gestion",
             description=(
@@ -195,11 +179,64 @@ async def build_entity_admin_menu(
                 "elle se met à jour via le bouton de synchronisation du "
                 "panel admin DM (raffraichir le contenu)."
             ),
-            view_id="",
+            view_id=f"{entity_id}:admin",
             sections=(),
         )
     )
-    return menu
+
+
+async def _pool_admin_rows(entity_id: str) -> list[Any] | discord.ui.LayoutView:
+    """Build the pool's admin rows: the compose row (drafts) + the lifecycle."""
+    from kingdoms.core.services.game_data import MAX_POOL_MAPS, POOL_STATE_DRAFT
+    from kingdoms.discord.admin_panel_games import GamesPoolRenameButton
+    from kingdoms.discord.maps_pool_flow import PoolMapsButton
+
+    pool = await _resolve_pool(entity_id)
+    if pool is None:
+        # a hard-deleted pool never renders a bar — the default state
+        # would resurrect it as a draft editor
+        from kingdoms.discord.ui.menu_template import MenuSpec, build_menu
+
+        return build_menu(
+            MenuSpec(
+                title="⚙️ Gestion du map pool",
+                description=f"`{entity_id}` — introuvable (supprimé ?).",
+                view_id="",
+                sections=(),
+            )
+        )
+    rows: list[Any] = []
+    if pool.state == POOL_STATE_DRAFT:
+        compose: discord.ui.ActionRow[discord.ui.LayoutView] = discord.ui.ActionRow()
+        maps_button = PoolMapsButton(entity_id)
+        if len(getattr(pool, "map_ids", ()) or ()) >= MAX_POOL_MAPS:
+            maps_button.item.disabled = True
+        compose.add_item(maps_button)
+        compose.add_item(GamesPoolRenameButton(entity_id))
+        rows.append(compose)
+    rows.append(_pool_lifecycle_row(entity_id, pool, pool.state))
+    return rows
+
+
+async def _pool_maps_lines(pool: Any) -> list[str]:
+    """Render the pool's maps as content lines (dead refs noted, never hidden)."""
+    from kingdoms.discord.admin_panel_games import _games_wiring
+
+    service = _games_wiring()
+    if service is None:
+        return []
+    try:
+        catalog = {m.id: m for m in await service.list_maps(str(getattr(pool, "game_key", "")))}
+    except Exception:
+        return []
+    lines: list[str] = []
+    for mid in getattr(pool, "map_ids", ()) or ():
+        entry = catalog.get(mid)
+        if entry is None:
+            lines.append(f"- `{mid}` \u2014 introuvable (supprim\u00e9e ?)")
+        else:
+            lines.append(f"- **{entry.name}**")
+    return lines
 
 
 async def _resolve_pool(entity_id: str) -> Any:
@@ -220,7 +257,7 @@ def register_entity_admin_items(bot: discord.Client) -> None:
     bot.add_dynamic_items(EntityAdminButton)
 
 
-__all__ = ["EntityAdminButton", "build_entity_admin_menu", "register_entity_admin_items"]
+__all__ = ["EntityAdminButton", "build_entity_admin_bar", "register_entity_admin_items"]
 
 
 

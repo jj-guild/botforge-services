@@ -475,7 +475,12 @@ may&nbsp;still&nbsp;use&nbsp;it.<br>&nbsp;</span></td></tr>
 Methods defined here:<br>
 <dl><dt><a name="MapDeleteButton-__init__"><strong>__init__</strong></a>(self, map_id: 'str', game_key: 'str' = '', owned_by_guild: 'bool' = False) -&gt; 'None'</dt><dd><span class="code">Initialize&nbsp;self.&nbsp;&nbsp;See&nbsp;help(<a href="#MapDeleteButton-type">type</a>(self))&nbsp;for&nbsp;accurate&nbsp;signature.</span></dd></dl>
 
-<dl><dt>async <a name="MapDeleteButton-callback"><strong>callback</strong></a>(self, interaction: 'discord.Interaction') -&gt; 'None'</dt><dd><span class="code">Guard,&nbsp;then&nbsp;open&nbsp;the&nbsp;type-the-name&nbsp;confirmation&nbsp;modal.</span></dd></dl>
+<dl><dt>async <a name="MapDeleteButton-callback"><strong>callback</strong></a>(self, interaction: 'discord.Interaction') -&gt; 'None'</dt><dd><span class="code">Guard,&nbsp;pre-check&nbsp;the&nbsp;pools&nbsp;(#341),&nbsp;open&nbsp;the&nbsp;confirmation.<br>
+&nbsp;<br>
+Everything&nbsp;answers&nbsp;as&nbsp;a&nbsp;NEW&nbsp;ephemeral&nbsp;message&nbsp;—&nbsp;a&nbsp;component<br>
+``defer(ephemeral=True)``&nbsp;is&nbsp;a&nbsp;DEFERRED_UPDATE&nbsp;of&nbsp;the&nbsp;carrying<br>
+message&nbsp;(the&nbsp;flag&nbsp;is&nbsp;ignored)&nbsp;and&nbsp;the&nbsp;followups&nbsp;landed&nbsp;nowhere<br>
+(the&nbsp;2026-11-08&nbsp;silent-answer&nbsp;bug).</span></dd></dl>
 
 <hr>
 Class methods defined here:<br>

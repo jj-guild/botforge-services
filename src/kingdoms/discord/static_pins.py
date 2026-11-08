@@ -146,6 +146,32 @@ def registered_static_pins() -> tuple[StaticPinnedView, ...]:
     return tuple(_SPEC_STORE.values())
 
 
+async def _refresh_existing_pin(
+    channel: Any, spec: StaticPinnedView, guild_id: str, message_id: str
+) -> bool | None:
+    """Refresh the live pin in place; None when it must be recreated.
+
+    The 404 (the pin's message was deleted) is the NORMAL heal path —
+    logged as a line, never a stacktrace (the pin is recreated right
+    after; the 2026-11-07 noise report).
+    """
+    try:
+        message = await channel.fetch_message(int(message_id))
+        layout = await spec.build_layout(guild_id)
+        fingerprint = _layout_fingerprint(layout)
+        if _LAST_RENDER.get((spec.key, guild_id)) != fingerprint:
+            await message.edit(view=layout)
+            _LAST_RENDER[(spec.key, guild_id)] = fingerprint
+        await _safe_repin(message, spec.key)
+        return True
+    except discord.NotFound:
+        logger.info("%s pin is gone — recreating", spec.key)
+        return None
+    except Exception:
+        logger.info("%s pin is unreadable — recreating", spec.key, exc_info=True)
+        return None
+
+
 async def ensure_static_pin(bot: discord.Client, spec: StaticPinnedView, guild_id: str) -> bool:
     """Ensure one static pin lives in its channel (create, update, heal).
 
@@ -163,20 +189,8 @@ async def ensure_static_pin(bot: discord.Client, spec: StaticPinnedView, guild_i
         return False
 
     message_id = await spec.resolve_message_id(guild_id)
-    if message_id:
-        try:
-            message = await channel.fetch_message(int(message_id))
-            layout = await spec.build_layout(guild_id)
-            fingerprint = _layout_fingerprint(layout)
-            if _LAST_RENDER.get((spec.key, guild_id)) == fingerprint:
-                await _safe_repin(message, spec.key)
-                return False
-            await message.edit(view=layout)
-            _LAST_RENDER[(spec.key, guild_id)] = fingerprint
-            await _safe_repin(message, spec.key)
-            return False
-        except Exception:
-            logger.info("%s pin is gone — recreating", spec.key, exc_info=True)
+    if message_id and await _refresh_existing_pin(channel, spec, guild_id, message_id) is True:
+        return False
 
     superseded = await _collect_superseded(channel, message_id)
     if superseded and spec.delete_when_superseded:

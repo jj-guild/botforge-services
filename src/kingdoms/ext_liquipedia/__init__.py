@@ -30,3 +30,32 @@ MAPS_COLLECTION = "liquipedia_maps"
 PAGES_COLLECTION = "liquipedia_pages"
 
 PAGE_CACHE_TTL_S = 7 * 24 * 3600
+
+# The persisted descriptors' parser generation. The cache-aside serves a
+# stored descriptor ONLY when its generation matches: a parser change
+# bumps this number and every pre-era descriptor becomes a cache miss —
+# the next seed request re-fetches with the new parser and re-persists
+# (the merlin 2026-11-07 lesson: the 7-day TTL alone served the old
+# parse for a week after the fix shipped).
+# Gen 2: the whole overview (all paragraphs) + the gallery icon's bare
+# form + the captioned-icon preference.
+# Gen 3: the English tag vocabulary (walls:no/wood/stone/partial, tc:<n>
+# from 1) + the raw wikitext riding the descriptor.
+# Gen 4: the infobox field regex stays on ONE line — an empty value
+# (|caption=) no longer swallows the next line (Nomad's creator).
+# Gen 5: the map type's display casing normalized ("hybrid" -> "Hybrid")
+# + the raw wikitext rides the provider wire.
+# Gen 6: the imageinfo lookup normalizes spaces/underscores — the
+# Gallery icons and underscored images resolve again.
+# Gen 7: the WHOLE gallery rides the descriptor (every entry, caption
+# and resolved URL) — the post shows all the map's images.
+# Gen 8: the imageinfo lookup is case-insensitive — MediaWiki
+# capitalizes file titles (black-forest_AoE2DE.png missed its URL).
+# Gen 9: the WHOLE Overview section rides — subsections as bold lines,
+# list entries as bullets (the Overview ended at its first === before).
+# Gen 10: the creator's wiki page link rides ([[Zetnus]] -> its URL).
+# Gen 11: the creator ALWAYS links — a plain-text creator builds its
+# page URL from the name.
+# Gen 12: the subsection titles ride WITH their content (never alone
+# between separators); the blocks join on paragraph gaps.
+SEED_GEN = 12

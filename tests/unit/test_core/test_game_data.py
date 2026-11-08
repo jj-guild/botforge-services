@@ -41,6 +41,9 @@ class FakeGameDataDatabase:
     async def find_entry(self, collection: str, entry_id: str) -> dict[str, Any] | None:
         return self._collection(collection).get(entry_id)
 
+    async def delete_entry(self, collection: str, entry_id: str) -> bool:
+        return self._collection(collection).pop(entry_id, None) is not None
+
     async def find_by_name(self, collection: str, game_key: str, name: str) -> dict[str, Any] | None:
         for doc in self._collection(collection).values():
             if doc.get("game_key") == game_key and doc.get("name") == name and doc.get("archived_at") is None:
@@ -178,6 +181,10 @@ async def test_resolve_pool_map_ids_unions_packs_and_maps() -> None:
     pack = await svc.create_map_pack(GAME, "P1", map_ids=(a.id, b.id))
     pool = await svc.create_map_pool(GAME, "Mixed", map_ids=(a.id, c.id), map_pack_ids=(pack.id,))
     assert await svc.resolve_pool_map_ids(pool) == (a.id, c.id, b.id)
+    # the catalog gateway's JSON seam hands back a plain dict — it
+    # coerces to the model, never a crash (the 2026-11-08 merlin report:
+    # 'dict' object has no attribute 'map_ids')
+    assert await svc.resolve_pool_map_ids(pool.model_dump(by_alias=True)) == (a.id, c.id, b.id)
 
 
 @pytest.mark.asyncio
@@ -237,3 +244,29 @@ async def test_create_map_pool_title_cases_the_display_name() -> None:
     map_entry = await svc.create_map(GAME, "Arabia", filename="arabia.v0")
     pool = await svc.create_map_pool(GAME, "rotation un", map_ids=(map_entry.id,))
     assert pool.name == "Rotation Un"
+
+
+@pytest.mark.asyncio
+async def test_pooled_map_never_deletes_or_archives() -> None:
+    """#341: a map referenced by a live pool refuses delete AND archive.
+
+    The refusal carries the blocking pool's name; an archived pool does
+    not block; once removed from every pool, both paths work again.
+    """
+    svc, _, _ = _service()
+    a = await svc.create_map(GAME, "MapA", filename="a.v0")
+    pool = await svc.create_map_pool(GAME, "Blocked", map_ids=(a.id,))
+    with pytest.raises(ValueError, match="Blocked"):
+        await svc.delete_map(a.id)
+    with pytest.raises(ValueError, match="Blocked"):
+        await svc.archive_map(a.id)
+    assert await svc.get_map(a.id) is not None, "the map stays"
+    # once removed from every pool, both paths work again
+    await svc.update_map_pool(pool.id, map_ids=())
+    archived = await svc.archive_map(a.id)
+    assert archived.archived_at is not None
+    # an archived pool is not a live surface: it does not block
+    b = await svc.create_map(GAME, "MapB", filename="b.v0")
+    pool2 = await svc.create_map_pool(GAME, "Dead", map_ids=(b.id,))
+    await svc.archive_map_pool(pool2.id)
+    assert await svc.delete_map(b.id) is True

@@ -608,7 +608,7 @@ class PoolComposeModal(discord.ui.Modal):
                 else:
                     remove_ids.extend(inner.values or [])
             elif isinstance(inner, discord.ui.TextInput):
-                from kingdoms.mapsdata.bulk_import import parse_import_line
+                from kingdoms.aoe2.bulk_import import parse_import_line
 
                 for line in str(inner.value or "").splitlines():
                     parsed = parse_import_line(line.strip())
@@ -706,7 +706,7 @@ class PoolAddBlockModal(discord.ui.Modal):
         if not await _guard_admin(interaction):
             return
         await interaction.response.defer(ephemeral=True)
-        from kingdoms.mapsdata.bulk_import import parse_import_line
+        from kingdoms.aoe2.bulk_import import parse_import_line
 
         add_ids: list[str] = []
         for line in str(self.lines.value or "").splitlines():
@@ -948,8 +948,12 @@ class MapDeleteConfirmModal(discord.ui.Modal):
             logger.exception("MAPS: confirmed delete failed (%s)", self.map_id)
             await interaction.followup.send(f"Échec : {exc}", ephemeral=True)
             return
-        await _delete_map_post(interaction, entry)
+        # the confirmation lands BEFORE the post's deletion — the modal
+        # was opened from that very thread: deleting it first kills the
+        # interaction's webhook channel and the followup 400s (Unknown
+        # Channel, the 2026-11-08 merlin report)
         await interaction.followup.send(outcome + " Le post est supprimé.", ephemeral=True)
+        await _delete_map_post(interaction, entry)
 
 
 async def _delete_map_post(interaction: discord.Interaction, entry: Any) -> None:
@@ -1064,21 +1068,43 @@ class MapDeleteButton(
         return cls(match.group("map_id"), match.group("game_key"), match.group("owned") == "1")
 
     async def callback(self, interaction: discord.Interaction) -> None:
-        """Guard, then open the type-the-name confirmation modal."""
+        """Guard, pre-check the pools (#341), open the confirmation.
+
+        Everything answers as a NEW ephemeral message — a component
+        ``defer(ephemeral=True)`` is a DEFERRED_UPDATE of the carrying
+        message (the flag is ignored) and the followups landed nowhere
+        (the 2026-11-08 silent-answer bug).
+        """
         from kingdoms.discord.maps_pool_flow import _guard_admin
 
         if not await _guard_admin(interaction):
             return
-        await interaction.response.defer(ephemeral=True, thinking=False)
         service = _games_wiring()
         if service is None:
-            await interaction.followup.send("Wiring indisponible.", ephemeral=True)
+            await interaction.response.send_message("Wiring indisponible.", ephemeral=True)
             return
         entry = await service.get_map(self.map_id)
         if entry is None:
-            await interaction.followup.send("Map introuvable.", ephemeral=True)
+            await interaction.response.send_message("Map introuvable.", ephemeral=True)
             return
-        await interaction.followup.send(
+        # #341's pre-check: a map referenced by a live pool is refused
+        # BEFORE the confirmation — the admin learns the blocking pools
+        # without typing anything. The post-modal refusal stays (a pool
+        # edit may race between this check and the submit).
+        blocking = await service.pools_referencing(self.map_id)
+        if blocking:
+            names = ", ".join(
+                str(pool.get("name") or pool.get("_id", "")) if isinstance(pool, dict)
+                else str(getattr(pool, "name", "") or pool)
+                for pool in blocking
+            )
+            await interaction.response.send_message(
+                f"**{entry.name}** fait partie d'un (de) pool en vie : **{names}** — "
+                "retire-la du pool d'abord.",
+                ephemeral=True,
+            )
+            return
+        await interaction.response.send_message(
             view=_map_delete_confirm_view(self.map_id, self.game_key, entry.name),
             ephemeral=True,
         )
