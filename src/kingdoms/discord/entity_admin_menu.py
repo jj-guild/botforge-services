@@ -63,10 +63,18 @@ class EntityAdminButton(
         )
 
     async def callback(self, interaction: discord.Interaction) -> None:
-        """Guard, then open the entity's contextual management menu."""
+        """Guard, then open the entity's contextual management menu.
+
+        The menu answers as a NEW EPHEMERAL message — never an edit of
+        the post the button rides on. A component ``defer`` is a
+        DEFERRED_UPDATE of the carrying message (the ephemeral flag is
+        ignored): ``edit_original_response`` then rewrote the PUBLIC
+        POST with the admin buttons, visible to everyone (the
+        2026-11-08 critical-path report — the admin controls live only
+        in the clicker's ephemeral answer).
+        """
         from kingdoms.discord.maps_pool_flow import _guard_admin
 
-        await interaction.response.defer(ephemeral=True, thinking=False)
         if not await _guard_admin(interaction):
             return
         view = await build_entity_admin_menu(
@@ -77,7 +85,10 @@ class EntityAdminButton(
             guild_id=str(interaction.guild_id) if interaction.guild_id is not None else "",
             bot=interaction.client,
         )
-        await interaction.edit_original_response(view=view)
+        if interaction.response.is_done():
+            await interaction.followup.send(view=view, ephemeral=True)
+        else:
+            await interaction.response.send_message(view=view, ephemeral=True)
 
 
 def _pool_lifecycle_row(entity_id: str, pool: Any, state: str) -> Any:

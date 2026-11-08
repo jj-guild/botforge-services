@@ -65,7 +65,15 @@ The&nbsp;single&nbsp;⚙️&nbsp;Admin&nbsp;button&nbsp;of&nbsp;a&nbsp;public&nb
 Methods defined here:<br>
 <dl><dt><a name="EntityAdminButton-__init__"><strong>__init__</strong></a>(self, kind: 'str', entity_id: 'str', game_key: 'str' = '', owned: 'bool' = False) -&gt; 'None'</dt><dd><span class="code">Initialize&nbsp;self.&nbsp;&nbsp;See&nbsp;help(<a href="#EntityAdminButton-type">type</a>(self))&nbsp;for&nbsp;accurate&nbsp;signature.</span></dd></dl>
 
-<dl><dt>async <a name="EntityAdminButton-callback"><strong>callback</strong></a>(self, interaction: 'discord.Interaction') -&gt; 'None'</dt><dd><span class="code">Guard,&nbsp;then&nbsp;open&nbsp;the&nbsp;entity's&nbsp;contextual&nbsp;management&nbsp;menu.</span></dd></dl>
+<dl><dt>async <a name="EntityAdminButton-callback"><strong>callback</strong></a>(self, interaction: 'discord.Interaction') -&gt; 'None'</dt><dd><span class="code">Guard,&nbsp;then&nbsp;open&nbsp;the&nbsp;entity's&nbsp;contextual&nbsp;management&nbsp;menu.<br>
+&nbsp;<br>
+The&nbsp;menu&nbsp;answers&nbsp;as&nbsp;a&nbsp;NEW&nbsp;EPHEMERAL&nbsp;message&nbsp;—&nbsp;never&nbsp;an&nbsp;edit&nbsp;of<br>
+the&nbsp;post&nbsp;the&nbsp;button&nbsp;rides&nbsp;on.&nbsp;A&nbsp;component&nbsp;``defer``&nbsp;is&nbsp;a<br>
+DEFERRED_UPDATE&nbsp;of&nbsp;the&nbsp;carrying&nbsp;message&nbsp;(the&nbsp;ephemeral&nbsp;flag&nbsp;is<br>
+ignored):&nbsp;``edit_original_response``&nbsp;then&nbsp;rewrote&nbsp;the&nbsp;PUBLIC<br>
+POST&nbsp;with&nbsp;the&nbsp;admin&nbsp;buttons,&nbsp;visible&nbsp;to&nbsp;everyone&nbsp;(the<br>
+2026-11-08&nbsp;critical-path&nbsp;report&nbsp;—&nbsp;the&nbsp;admin&nbsp;controls&nbsp;live&nbsp;only<br>
+in&nbsp;the&nbsp;clicker's&nbsp;ephemeral&nbsp;answer).</span></dd></dl>
 
 <hr>
 Class methods defined here:<br>
