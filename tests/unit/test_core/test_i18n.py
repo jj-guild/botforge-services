@@ -1,4 +1,4 @@
-"""Unit tests for the MessageCatalog (kingdoms-services#110, #115).
+"""Unit tests for the MessageCatalog (botforge-services#110, #115).
 
 The catalog must load the nested ``admin:`` section of the yaml
 locales as dotted keys (``admin.title``) \u2014 without the flattening,
@@ -10,15 +10,15 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from kingdoms.core.services.i18n import DEFAULT_LOCALE, FALLBACKS, MessageCatalog
+from botforge.core.services.i18n import DEFAULT_LOCALE, FALLBACKS, MessageCatalog
 
 CONFIG_DIR = Path(__file__).resolve().parents[3] / "config"
 
 
 def test_catalog_loads_the_real_locales() -> None:
     catalog = MessageCatalog(CONFIG_DIR)
-    assert catalog.render("admin.title", "en") == "Kingdoms — Admin"
-    assert catalog.render("admin.title", "fr") == "Kingdoms — Admin"
+    assert catalog.render("admin.title", "en") == "BotForge — Admin"
+    assert catalog.render("admin.title", "fr") == "BotForge — Admin"
     assert catalog.render("admin.visibility_admin_hint", "fr"), "a live fr key renders"
 
 
@@ -74,7 +74,7 @@ def test_section_resolves_one_prefix_with_english_fill() -> None:
     from the same catalog as /admin — no per-module yaml parsing."""
     catalog = MessageCatalog(CONFIG_DIR)
     announce_fr = catalog.section("announce", "fr")
-    assert announce_fr["title"] == "Kingdoms — Déploiement"
+    assert announce_fr["title"] == "BotForge — Déploiement"
     assert announce_fr["services_label"] == "Services"
     assert announce_fr["branch_label"] == "Branche"
 

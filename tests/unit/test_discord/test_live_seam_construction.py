@@ -51,7 +51,7 @@ async def test_the_seam_builds_the_service_over_the_adapter() -> None:
     If the seam ever passes the raw database again (the 2026-11-06
     crash), this test fails with the same TypeError the panel saw.
     """
-    from kingdoms.discord.live import _registration_bindings_service
+    from botforge.discord.live import _registration_bindings_service
 
     raw = _FakeRawDatabase()
     raw.docs = {

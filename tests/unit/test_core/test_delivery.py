@@ -1,4 +1,4 @@
-"""Unit tests for the notification delivery pipeline (kingdoms-services#140)."""
+"""Unit tests for the notification delivery pipeline (botforge-services#140)."""
 
 from __future__ import annotations
 
@@ -7,7 +7,7 @@ from typing import Any
 
 import pytest
 
-from kingdoms.core.services.delivery import (
+from botforge.core.services.delivery import (
     MAX_BACKOFF_S,
     NotificationPipeline,
     RateLimitedError,
@@ -109,7 +109,7 @@ async def test_healthy_destination_unaffected_by_degraded_one() -> None:
 async def test_backoff_is_bounded() -> None:
     rng = random.Random(0)  # noqa: S311 - test rng
     for failures in range(1, 20):
-        from kingdoms.core.services.delivery import _jittered_backoff
+        from botforge.core.services.delivery import _jittered_backoff
 
         backoff = _jittered_backoff(failures, rng)
         assert 0.25 <= backoff <= MAX_BACKOFF_S

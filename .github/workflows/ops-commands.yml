@@ -5,7 +5,7 @@
 # dump a database for a prod bug ticket.
 #
 # Gating (fail-closed, before any dispatch): the roster authority
-# matrix (CONTRIBUTORS.md, kingdoms repo) decides per command through
+# matrix (CONTRIBUTORS.md, botforge repo) decides per command through
 # the reusable authorize.yml gate —
 #   /logs      capability env-logs    (ops anywhere; dev on test)
 #   /restart   capability env-control (ops anywhere; dev on test)
@@ -15,7 +15,7 @@
 # Every command gets an immediate acknowledgment: what will happen and
 # why the requestor may ask for it.
 #
-# Execution: kingdoms-infra owns the environments, so each command
+# Execution: botforge-infra owns the environments, so each command
 # dispatches there (repository_dispatch / workflow_dispatch through the
 # kingdoms-deployer App token — same single-writer design as /deploy).
 # The infra side runs on the environment's own runner and reports back.
@@ -75,7 +75,7 @@ jobs:
           # resolved from the roster on kingdoms main via the GitHub
           # API, lowercased to match the env naming.
           if [[ -z "$env_name" || "$env_name" == -* ]]; then
-            alias="$(gh api /repos/merlin-pinpin-org/kingdoms/contents/CONTRIBUTORS.md --jq .content | base64 -d | grep -F "| @${COMMENTER} |" | head -1 | awk -F"|" "{print \$3}" | tr -d " ")"
+            alias="$(gh api /repos/jj-guild/botforge/contents/CONTRIBUTORS.md --jq .content | base64 -d | grep -F "| @${COMMENTER} |" | head -1 | awk -F"|" "{print \$3}" | tr -d " ")"
             [[ -n "$alias" ]] || { echo "::error::requestor has no roster entry — cannot resolve the default env; pass an explicit env (e.g. /${command#/} test)" >&2; exit 1; }
             env_name="${alias,,}"
           fi
@@ -132,7 +132,7 @@ jobs:
   gate:
     name: Roster gate
     needs: authorize
-    uses: merlin-pinpin-org/kingdoms/.github/workflows/authorize.yml@main
+    uses: jj-guild/botforge/.github/workflows/authorize.yml@main
     with:
       capability: ${{ needs.authorize.outputs.capability }}
       environment: ${{ needs.authorize.outputs.environment }}
@@ -140,7 +140,7 @@ jobs:
       pr-number: ${{ github.event.issue.number }}
 
   execute:
-    name: Dispatch to kingdoms-infra
+    name: Dispatch to botforge-infra
     needs: [authorize, gate]
     runs-on: ubuntu-latest
     outputs:
@@ -150,10 +150,10 @@ jobs:
         id: app-token
         uses: actions/create-github-app-token@v2
         with:
-          app-id: ${{ secrets.KINGDOMS_DEPLOYER_APP_ID }}
-          private-key: ${{ secrets.KINGDOMS_DEPLOYER_APP_PRIVATE_KEY }}
-          owner: merlin-pinpin-org
-          repositories: kingdoms-infra
+          app-id: ${{ secrets.BOTFORGE_DEPLOYER_APP_ID }}
+          private-key: ${{ secrets.BOTFORGE_DEPLOYER_APP_PRIVATE_KEY }}
+          owner: jj-guild
+          repositories: botforge-infra
 
       - name: Route the command
         id: dispatch
@@ -177,7 +177,7 @@ jobs:
               FROM="$(echo "$COMMENT_BODY" | grep -oP '(?<=--from )\S+' || true)"
               TO="$(echo "$COMMENT_BODY" | grep -oP '(?<=--to )\S+' || true)"
               TAIL="$(echo "$COMMENT_BODY" | grep -oP '(?<=--tail )\S+' || true)"
-              ARGS=(--repo merlin-pinpin-org/kingdoms-infra --ref "deploy/$ENVIRONMENT" -f environment="$ENVIRONMENT")
+              ARGS=(--repo jj-guild/botforge-infra --ref "deploy/$ENVIRONMENT" -f environment="$ENVIRONMENT")
               [[ -n "$SERVICE" ]] && ARGS+=(-f service="$SERVICE")
               [[ -n "$SINCE" ]]   && ARGS+=(-f since="$SINCE")
               [[ -n "$FROM" ]]    && ARGS+=(-f from="$FROM")
@@ -212,7 +212,7 @@ jobs:
               ARGS=(-f command="$COMMAND" -f environment="$ENVIRONMENT")
               [[ -n "$COLLECTIONS" ]] && ARGS+=(-f collections="$COLLECTIONS")
               gh workflow run env-control.yml \
-                --repo merlin-pinpin-org/kingdoms-infra \
+                --repo jj-guild/botforge-infra \
                 --ref "deploy/$ENVIRONMENT" \
                 "${ARGS[@]}"
               ;;
@@ -227,15 +227,15 @@ jobs:
                 exit 1
               fi
               gh workflow run env-control.yml \
-                --repo merlin-pinpin-org/kingdoms-infra \
+                --repo jj-guild/botforge-infra \
                 --ref "deploy/$ENVIRONMENT" \
                 -f command=reset \
                 -f environment="$ENVIRONMENT"
               ;;
             seed)
               # /seed <env> <type> [file] [ladder_id|guild_id] — idempotent data
-              # seeding through the env's kingdoms-core container
-              # (kingdoms-infra env-seed.yml). Same env-control capability
+              # seeding through the env's botforge-core container
+              # (botforge-infra env-seed.yml). Same env-control capability
               # as restart: seeding is additive, never destructive.
               # ladder-season takes the target test guild id (guild-scoped,
               # fail-closed in env-seed.yml against the env's TEST_GUILD_ID —
@@ -244,7 +244,7 @@ jobs:
               SEED_TYPE="$(echo "$COMMENT_BODY" | awk '{print $3}')"
               SEED_FILE="$(echo "$COMMENT_BODY" | awk '{print $4}')"
               [[ -n "$SEED_TYPE" ]] || { echo "::error::usage: /seed <env> <users|ladder-season|season|test-season> [file] [ladder_id|guild_id]" >&2; exit 1; }
-              ARGS=(--repo merlin-pinpin-org/kingdoms-infra --ref "deploy/$ENVIRONMENT" -f environment="$ENVIRONMENT" -f type="$SEED_TYPE")
+              ARGS=(--repo jj-guild/botforge-infra --ref "deploy/$ENVIRONMENT" -f environment="$ENVIRONMENT" -f type="$SEED_TYPE")
               [[ -n "$SEED_FILE" ]] && ARGS+=(-f file="$SEED_FILE")
               LAST_ARG="$(echo "$COMMENT_BODY" | awk '{print $5}')"
               if [[ -n "$LAST_ARG" ]]; then
@@ -257,7 +257,7 @@ jobs:
               gh workflow run env-seed.yml "${ARGS[@]}"
               ;;
             rollback)
-              gh api --method POST repos/merlin-pinpin-org/kingdoms-infra/dispatches \
+              gh api --method POST repos/jj-guild/botforge-infra/dispatches \
                 -f event_type=rollback-state \
                 -f 'client_payload[env]='"$ENVIRONMENT" \
                 -f 'client_payload[reason]="/'"$COMMAND"' requested by '"$REQUESTOR"' on #'"$THREAD" \
@@ -265,7 +265,7 @@ jobs:
               ;;
             dump-db)
               gh workflow run db-daily-dump.yml \
-                --repo merlin-pinpin-org/kingdoms-infra \
+                --repo jj-guild/botforge-infra \
                 -f environment="$ENVIRONMENT"
               ;;
             clean-env)
@@ -281,7 +281,7 @@ jobs:
               MODE="prune"
               echo "$COMMENT_BODY" | grep -q -- "--deep" && MODE="deep"
               gh workflow run docker-clean.yml \
-                --repo merlin-pinpin-org/kingdoms-infra \
+                --repo jj-guild/botforge-infra \
                 --ref "deploy/$ENVIRONMENT" \
                 -f environment="$ENVIRONMENT" \
                 -f mode="$MODE" \
@@ -318,10 +318,10 @@ jobs:
         id: app-token
         uses: actions/create-github-app-token@v2
         with:
-          app-id: ${{ secrets.KINGDOMS_DEPLOYER_APP_ID }}
-          private-key: ${{ secrets.KINGDOMS_DEPLOYER_APP_PRIVATE_KEY }}
-          owner: merlin-pinpin-org
-          repositories: kingdoms-infra
+          app-id: ${{ secrets.BOTFORGE_DEPLOYER_APP_ID }}
+          private-key: ${{ secrets.BOTFORGE_DEPLOYER_APP_PRIVATE_KEY }}
+          owner: jj-guild
+          repositories: botforge-infra
       - name: Wait for the environment workflow to finish
         id: wait
         env:
@@ -334,7 +334,7 @@ jobs:
           deadline=$(( SECONDS + 600 ))
           run_id=""
           while (( SECONDS < deadline )); do
-            run_id="$(gh run list --repo merlin-pinpin-org/kingdoms-infra \
+            run_id="$(gh run list --repo jj-guild/botforge-infra \
               --workflow "$WF" --branch "deploy/$ENVIRONMENT" --limit 5 \
               --json databaseId,status,conclusion,createdAt \
               --jq "[.[] | select(.createdAt >= \"$since\")] | .[0] // empty" || true)"
@@ -343,10 +343,10 @@ jobs:
           done
           [[ -n "$run_id" ]] || { echo "conclusion=not_found" >> "$GITHUB_OUTPUT"; exit 0; }
           rid="$(echo "$run_id" | python3 -c 'import json,sys; print(json.load(sys.stdin)["databaseId"])')"
-          gh run watch "$rid" --repo merlin-pinpin-org/kingdoms-infra --exit-status > /dev/null 2>&1 || true
-          conclusion="$(gh run view "$rid" --repo merlin-pinpin-org/kingdoms-infra --json conclusion --jq .conclusion)"
+          gh run watch "$rid" --repo jj-guild/botforge-infra --exit-status > /dev/null 2>&1 || true
+          conclusion="$(gh run view "$rid" --repo jj-guild/botforge-infra --json conclusion --jq .conclusion)"
           {
-            echo "run_url=https://github.com/merlin-pinpin-org/kingdoms-infra/actions/runs/$rid"
+            echo "run_url=https://github.com/jj-guild/botforge-infra/actions/runs/$rid"
             echo "run_id=$rid"
             echo "conclusion=$conclusion"
           } >> "$GITHUB_OUTPUT"
@@ -360,11 +360,11 @@ jobs:
           ENVIRONMENT: ${{ needs.authorize.outputs.environment }}
         run: |
           if [[ "$COMMAND" == "logs" ]]; then
-            artifact_name="$(gh api "repos/merlin-pinpin-org/kingdoms-infra/actions/runs/$RUN_ID/artifacts" --jq '.artifacts[0].name' 2>/dev/null || true)"
+            artifact_name="$(gh api "repos/jj-guild/botforge-infra/actions/runs/$RUN_ID/artifacts" --jq '.artifacts[0].name' 2>/dev/null || true)"
             if [[ -n "$artifact_name" ]]; then
               mkdir -p /tmp/envlogs && cd /tmp/envlogs
-              artifact_id="$(gh api "repos/merlin-pinpin-org/kingdoms-infra/actions/runs/$RUN_ID/artifacts" --jq '.artifacts[0].id')"
-              gh api "repos/merlin-pinpin-org/kingdoms-infra/actions/artifacts/$artifact_id/zip" > artifact.zip
+              artifact_id="$(gh api "repos/jj-guild/botforge-infra/actions/runs/$RUN_ID/artifacts" --jq '.artifacts[0].id')"
+              gh api "repos/jj-guild/botforge-infra/actions/artifacts/$artifact_id/zip" > artifact.zip
               unzip -o artifact.zip logs.txt >/dev/null
               {
                 echo '```'
@@ -393,7 +393,7 @@ jobs:
           if [[ "$CONCLUSION" == "not_found" ]]; then
             {
               echo "⚠️ /$COMMAND on $ENVIRONMENT — dispatched but the run could not be located."
-              echo "Check kingdoms-infra actions for workflow $RUN_URL."
+              echo "Check botforge-infra actions for workflow $RUN_URL."
             } > /tmp/report.md
           else
             {
@@ -406,8 +406,8 @@ jobs:
               fi
             } > /tmp/report.md
           fi
-          if gh pr view "$THREAD" --repo merlin-pinpin-org/kingdoms-services >/dev/null 2>&1; then
-            gh pr comment "$THREAD" --repo merlin-pinpin-org/kingdoms-services --body-file /tmp/report.md
+          if gh pr view "$THREAD" --repo jj-guild/botforge-services >/dev/null 2>&1; then
+            gh pr comment "$THREAD" --repo jj-guild/botforge-services --body-file /tmp/report.md
           else
-            gh issue comment "$THREAD" --repo merlin-pinpin-org/kingdoms-services --body-file /tmp/report.md
+            gh issue comment "$THREAD" --repo jj-guild/botforge-services --body-file /tmp/report.md
           fi

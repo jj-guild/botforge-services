@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from kingdoms.game_aoe2.content_refresh import refresh_aoe2_content
+from botforge.game_aoe2.content_refresh import refresh_aoe2_content
 
 # The refresh rides the PROVIDER seam (no vendored data): the tests
 # inject a fake source standing in for the aoe2techtree provider.
@@ -33,7 +33,7 @@ class _FakeSource:
         entry = self._data.get(key, {}).get(locale)
         if entry is None:
             return None
-        from kingdoms.game_aoe2.content_source import LocalizedContent
+        from botforge.game_aoe2.content_source import LocalizedContent
 
         return LocalizedContent(
             entity_id=f"faction:aoe2:{key.lower()}",
@@ -47,7 +47,7 @@ class _FakeSource:
 
 
 def _patch_source(monkeypatch: Any) -> None:
-    import kingdoms.game_aoe2.content_source as source_module
+    import botforge.game_aoe2.content_source as source_module
 
     monkeypatch.setattr(
         source_module, "resolve_aoe2_content_source", lambda *a, **k: _FakeSource()
@@ -82,7 +82,7 @@ class FakeDatabase:
 
 
 async def test_refresh_creates_missing_factions_and_content(monkeypatch: Any) -> None:
-    from kingdoms.core.models import db as db_module
+    from botforge.core.models import db as db_module
 
     database = FakeDatabase()
     monkeypatch.setattr(db_module, "get_async_database", lambda: database)
@@ -101,7 +101,7 @@ async def test_refresh_creates_missing_factions_and_content(monkeypatch: Any) ->
 
 
 async def test_refresh_is_idempotent(monkeypatch: Any) -> None:
-    from kingdoms.core.models import db as db_module
+    from botforge.core.models import db as db_module
 
     database = FakeDatabase()
     monkeypatch.setattr(db_module, "get_async_database", lambda: database)
@@ -122,12 +122,12 @@ async def test_maps_sync_rebuilds_every_known_map(monkeypatch: Any) -> None:
     the parsed fields); archived maps stay untouched (owner direction
     2026-11-07).
     """
-    import kingdoms.core.services.game_data as game_data_module
-    import kingdoms.game_aoe2.content_refresh as refresh_module
-    import kingdoms.game_aoe2.seed as seed_module
-    from kingdoms.aoe2.map_seed import MapSeed
-    from kingdoms.core.models import db as db_module
-    from kingdoms.core.models.game_data import MapModel
+    import botforge.core.services.game_data as game_data_module
+    import botforge.game_aoe2.content_refresh as refresh_module
+    import botforge.game_aoe2.seed as seed_module
+    from botforge.aoe2.map_seed import MapSeed
+    from botforge.core.models import db as db_module
+    from botforge.core.models.game_data import MapModel
 
     database = FakeDatabase()
     monkeypatch.setattr(db_module, "get_async_database", lambda: database)
@@ -188,7 +188,7 @@ async def test_maps_sync_rebuilds_every_known_map(monkeypatch: Any) -> None:
 
     monkeypatch.setattr(refresh_module, "_resolve_map_seeds", fake_resolve)
 
-    from kingdoms.game_aoe2.content_refresh import refresh_aoe2_maps
+    from botforge.game_aoe2.content_refresh import refresh_aoe2_maps
 
     counts = await refresh_aoe2_maps()
     assert counts["maps_total"] == 4

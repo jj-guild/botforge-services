@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import pytest
 
-from kingdoms.discord.views_declared import declare_views_from_config
-from kingdoms.discord.views_registry import (
+from botforge.discord.views_declared import declare_views_from_config
+from botforge.discord.views_registry import (
     ADMIN_EMOJI,
     SYNC_EMOJI,
     clear_registry,
@@ -99,7 +99,7 @@ def test_emojis() -> None:
 
 @pytest.mark.asyncio
 async def test_a_mod_declares_its_own_views(tmp_path) -> None:
-    """A mod's views.yaml merges into the registry (kingdoms#179)."""
+    """A mod's views.yaml merges into the registry (botforge#179)."""
     import yaml
 
     (tmp_path / "views.yaml").write_text(
@@ -118,7 +118,7 @@ async def test_a_mod_declares_its_own_views(tmp_path) -> None:
     )
 
     clear_registry()
-    from kingdoms.discord.views_declared import declare_views_from_config
+    from botforge.discord.views_declared import declare_views_from_config
 
     declare_views_from_config(tmp_path)
     assert get_view("menu:mymod:home") is not None, "the mod's view merged into the registry"
@@ -135,7 +135,7 @@ async def test_the_menu_builder_honors_the_pin_builder_contract() -> None:
     """
     from unittest.mock import MagicMock
 
-    from kingdoms.discord.views_routing import build_declared_menu
+    from botforge.discord.views_routing import build_declared_menu
 
     builder = build_declared_menu(MagicMock(), "menu:home")
     layout = await builder("42")
@@ -177,7 +177,7 @@ async def test_open_declared_view_answers_an_unwired_menu() -> None:
         response = _Response()
         followup = _Followup()
 
-    from kingdoms.discord.views_routing import open_declared_view
+    from botforge.discord.views_routing import open_declared_view
 
     inter = _Inter()
     await open_declared_view(inter, "menu:games:home")  # type: ignore[arg-type]
@@ -201,7 +201,7 @@ def test_scope_surfaces_registry_runs_the_scope_and_its_descendants() -> None:
     """The sync button discovers the registered syncs by scope prefix."""
     import asyncio
 
-    from kingdoms.discord.scope_surfaces import (
+    from botforge.discord.scope_surfaces import (
         clear_scope_syncs,
         register_scope_sync,
         run_scope_syncs,

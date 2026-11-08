@@ -1,7 +1,7 @@
 """Unit tests for the Panels SDK provisioning — the tree rules + adoption.
 
 These pin the channel-tree contract of docs/architecture/channel-tree.md
-(the kingdoms repo): the scope folders provisioned in the guild's
+(the botforge repo): the scope folders provisioned in the guild's
 locale, the canonical order, the read-only menu channels, the admin
 visibility — and the legacy adoption (rename + move in place, ids
 unchanged, so the managed services and their pins survive).
@@ -14,13 +14,13 @@ from typing import Any
 
 import pytest
 
-from kingdoms.core.services.i18n import MessageCatalog
-from kingdoms.discord.ui.panels_provisioning import (
+from botforge.core.services.i18n import MessageCatalog
+from botforge.discord.ui.panels_provisioning import (
     _Platform,
     _sorted_channels,
     provision_scope,
 )
-from kingdoms.discord.ui.panels_scopes import register_platform_scopes, scopes_from_config
+from botforge.discord.ui.panels_scopes import register_platform_scopes, scopes_from_config
 from tests.mocks.discord_mock import (
     MockGuild,
     MockTextChannel,
@@ -55,7 +55,7 @@ def _no_mongo_stored_ids(monkeypatch: Any) -> None:
     """Every provisioning test resolves from an empty store unless set."""
     _STORED.clear()
     monkeypatch.setattr(
-        "kingdoms.discord.ui.panels_provisioning.stored_channel_id", _fake_stored_id
+        "botforge.discord.ui.panels_provisioning.stored_channel_id", _fake_stored_id
     )
 
 
@@ -127,7 +127,7 @@ class TestPlatformScopes:
     def test_registration_is_idempotent(self) -> None:
         register_platform_scopes()
         register_platform_scopes()
-        from kingdoms.discord.ui.panels import registered_scopes
+        from botforge.discord.ui.panels import registered_scopes
 
         keys = [spec.scope for spec in registered_scopes()]
         assert keys.count("bot") == 1

@@ -63,7 +63,7 @@ class _RegistryFake:
 
 async def _start_server(catalog: Any) -> tuple[grpc.aio.Server, int]:
     """Serve the real GameData contract over loopback with this catalog."""
-    from kingdoms.game_aoe2.rpc import GameDataServicer, add_gamedata_servicer
+    from botforge.game_aoe2.rpc import GameDataServicer, add_gamedata_servicer
 
     server = grpc.aio.server()
     add_gamedata_servicer(server, GameDataServicer(aggregator=None, catalog=catalog))
@@ -74,8 +74,8 @@ async def _start_server(catalog: Any) -> tuple[grpc.aio.Server, int]:
 
 def _reset_caches() -> dict[str, Any]:
     """Neutralize the wiring memoizations; return the saved state."""
-    import kingdoms.discord.content_posts as content_posts
-    import kingdoms.discord.wiring as wiring
+    import botforge.discord.content_posts as content_posts
+    import botforge.discord.wiring as wiring
 
     saved = {
         "wiring_service": wiring._GAMES_SERVICE,
@@ -91,8 +91,8 @@ def _reset_caches() -> dict[str, Any]:
 
 
 def _restore_caches(saved: dict[str, Any]) -> None:
-    import kingdoms.discord.content_posts as content_posts
-    import kingdoms.discord.wiring as wiring
+    import botforge.discord.content_posts as content_posts
+    import botforge.discord.wiring as wiring
 
     wiring._GAMES_SERVICE = saved["wiring_service"]
     wiring._GAMES_SERVICE_READY = saved["wiring_ready"]
@@ -104,15 +104,15 @@ class TestCivsSyncJourney:
     """Click the Civs button as a user; the civ forum fills up."""
 
     @pytest.fixture
-    def simcord_bot(self, kingdoms_bot):  # type: ignore[no-untyped-def]
-        bot = kingdoms_bot
-        from kingdoms.discord.admin_dm_panel import register_admin_dm_items
+    def simcord_bot(self, botforge_bot):  # type: ignore[no-untyped-def]
+        bot = botforge_bot
+        from botforge.discord.admin_dm_panel import register_admin_dm_items
 
         register_admin_dm_items(bot)
 
         @bot.tree.command(name="civsync")
         async def civsync(interaction: discord.Interaction) -> None:
-            from kingdoms.discord.admin_dm_panel import _open_sync
+            from botforge.discord.admin_dm_panel import _open_sync
 
             await _open_sync(interaction)
 
@@ -124,9 +124,9 @@ class TestCivsSyncJourney:
     ) -> None:  # type: ignore[no-untyped-def]
         import os
 
-        from kingdoms.core.services.faction_content import FactionContentService
-        from kingdoms.core.services.game_data import GameDataService
-        from kingdoms.game_aoe2.server import _CatalogGateway
+        from botforge.core.services.faction_content import FactionContentService
+        from botforge.core.services.game_data import GameDataService
+        from botforge.game_aoe2.server import _CatalogGateway
 
         guild = simcord_env.create_guild()
         forum = guild.create_forum_channel("civs")
@@ -150,12 +150,12 @@ class TestCivsSyncJourney:
             "channel_id": str(forum.id),
         }
         monkeypatch.setenv("GAME_AOE2_URI", f"127.0.0.1:{port}")
-        import kingdoms.core.models.db as db_module
+        import botforge.core.models.db as db_module
 
         monkeypatch.setattr(db_module, "get_async_database", lambda: registry)
 
         # the content-sync leg, canned at the seam (its own seam test covers it)
-        from kingdoms.game_aoe2.client import GameDataClient
+        from botforge.game_aoe2.client import GameDataClient
 
         async def _canned_sync(self: Any, game_key: str, what: str, timeout_s: float = 900.0) -> dict[str, Any]:
             return {

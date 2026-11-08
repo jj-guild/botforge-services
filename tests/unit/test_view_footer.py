@@ -7,7 +7,7 @@ def test_build_view_appends_the_id_footer() -> None:
     """build_view carries the id as the LAST item — the only way to build."""
     import discord
 
-    from kingdoms.discord.ui.view_footer import build_view
+    from botforge.discord.ui.view_footer import build_view
 
     view = build_view("panel:game:aoe2:live", discord.ui.TextDisplay("body"))
     comps = view.to_components()
@@ -17,7 +17,7 @@ def test_build_view_appends_the_id_footer() -> None:
 
 def test_require_declared_view_id_rejects_unknown() -> None:
     """An undeclared id fails fast, not as a dead button."""
-    from kingdoms.discord.ui.view_footer import require_declared_view_id
+    from botforge.discord.ui.view_footer import require_declared_view_id
 
     with pytest.raises(ValueError, match="not declared"):
         require_declared_view_id("panel:game:aoe2:not-declared-anywhere")

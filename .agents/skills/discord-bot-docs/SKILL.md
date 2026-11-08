@@ -11,7 +11,7 @@ so it drifts silently unless sessions update it.
 
 ## When a session MUST read it
 
-Before touching any file under `src/kingdoms/discord/` (views, panels,
+Before touching any file under `src/botforge/discord/` (views, panels,
 flows, pinned menus, forums, i18n) — the doc states the current rules
 (pin immutability, view origin, guild context, ids, i18n) and the file
 map; they constrain every change.

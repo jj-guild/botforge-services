@@ -15,10 +15,10 @@ from typing import Any
 import grpc
 import pytest
 
-from kingdoms.core.rpc.content import ContentServicer
-from kingdoms.core.rpc.content_client import ContentProviderClient
-from kingdoms.ext_aoe2techtree.source import DatasetContentSource, resolve_source
-from kingdoms.rpc_generated.kingdoms.v1 import content_pb2_grpc
+from botforge.core.rpc.content import ContentServicer
+from botforge.core.rpc.content_client import ContentProviderClient
+from botforge.ext_aoe2techtree.source import DatasetContentSource, resolve_source
+from botforge.rpc_generated.botforge.v1 import content_pb2_grpc
 
 KNOWN_CIVS = ("Aztecs", "Franks", "Britons")
 

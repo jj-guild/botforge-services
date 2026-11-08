@@ -1,4 +1,4 @@
-"""Permission journeys on SimCord — kingdoms-services#55.
+"""Permission journeys on SimCord — botforge-services#55.
 
 These drive the real bot (``create_bot``) through the real dispatch:
 a member without the required mod role gets an ephemeral denial and
@@ -14,10 +14,10 @@ from typing import Any
 import discord
 import pytest
 
-from kingdoms.core.services.mod_definition import ModDefinition, RoleDef
-from kingdoms.core.services.mod_registry import ModRegistry
-from kingdoms.core.services.permissions import PermissionService
-from kingdoms.core.services.roles import ModRolesService
+from botforge.core.services.mod_definition import ModDefinition, RoleDef
+from botforge.core.services.mod_registry import ModRegistry
+from botforge.core.services.permissions import PermissionService
+from botforge.core.services.roles import ModRolesService
 
 JOIN_ID = "clans:join:confirm"
 
@@ -45,7 +45,7 @@ def wire_services(bot: Any, bot_admins: tuple[str, ...] = ()) -> MappingStore:
     the live guild cache); only the mapping store is in-memory (there
     is no MongoDB on the SimCord journeys).
     """
-    from kingdoms.discord.roles_platform import DiscordRolesPlatform
+    from botforge.discord.roles_platform import DiscordRolesPlatform
 
     store = MappingStore()
     registry = ModRegistry(
@@ -67,8 +67,8 @@ class TestPermissionJourneys:
     """Click-time authorization through the real dispatch machinery."""
 
     @pytest.fixture
-    def simcord_bot(self, kingdoms_bot):  # type: ignore[no-untyped-def]
-        bot = kingdoms_bot
+    def simcord_bot(self, botforge_bot):  # type: ignore[no-untyped-def]
+        bot = botforge_bot
         wire_services(bot)
 
         @bot.tree.command(name="clanspanel")
@@ -77,7 +77,7 @@ class TestPermissionJourneys:
             button = discord.ui.Button(label="Join the clan", custom_id=JOIN_ID)
 
             async def join(inter: discord.Interaction) -> None:
-                from kingdoms.discord.permissions import require_permission
+                from botforge.discord.permissions import require_permission
 
                 service = bot.permission_service
                 if service is None:
@@ -126,7 +126,7 @@ class TestPermissionJourneys:
 
     @pytest.mark.simcord(strict_sync=False)
     async def test_bot_admin_bypasses_mod_roles(self, simcord_env, simcord_bot) -> None:  # type: ignore[no-untyped-def]
-        from kingdoms.discord.roles_platform import DiscordRolesPlatform
+        from botforge.discord.roles_platform import DiscordRolesPlatform
 
         guild = simcord_env.create_guild()
         channel = guild.create_text_channel("general")
@@ -155,7 +155,7 @@ class TestPermissionJourneys:
         message = channel.last_message
         assert message is not None
 
-        from kingdoms.core.services.permissions import ActionContext
+        from botforge.core.services.permissions import ActionContext
 
         service = simcord_bot.permission_service
         if service is None:

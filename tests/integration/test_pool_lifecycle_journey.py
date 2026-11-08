@@ -105,7 +105,7 @@ class _CannedMapSeeds:
 
 async def _start_server(catalog: Any, map_seeds: Any) -> tuple[grpc.aio.Server, int]:
     """Serve the real GameData contract over loopback."""
-    from kingdoms.game_aoe2.rpc import GameDataServicer, add_gamedata_servicer
+    from botforge.game_aoe2.rpc import GameDataServicer, add_gamedata_servicer
 
     server = grpc.aio.server()
     add_gamedata_servicer(
@@ -118,8 +118,8 @@ async def _start_server(catalog: Any, map_seeds: Any) -> tuple[grpc.aio.Server, 
 
 def _reset_caches() -> dict[str, Any]:
     """Neutralize the wiring memoizations; return the saved state."""
-    import kingdoms.discord.content_posts as content_posts
-    import kingdoms.discord.wiring as wiring
+    import botforge.discord.content_posts as content_posts
+    import botforge.discord.wiring as wiring
 
     saved = {
         "wiring_service": wiring._GAMES_SERVICE,
@@ -135,8 +135,8 @@ def _reset_caches() -> dict[str, Any]:
 
 
 def _restore_caches(saved: dict[str, Any]) -> None:
-    import kingdoms.discord.content_posts as content_posts
-    import kingdoms.discord.wiring as wiring
+    import botforge.discord.content_posts as content_posts
+    import botforge.discord.wiring as wiring
 
     wiring._GAMES_SERVICE = saved["wiring_service"]
     wiring._GAMES_SERVICE_READY = saved["wiring_ready"]
@@ -170,12 +170,12 @@ class TestPoolLifecycleJourney:
     """The designer's whole pool story, through the real UI."""
 
     @pytest.fixture
-    def simcord_bot(self, kingdoms_bot):  # type: ignore[no-untyped-def]
-        bot = kingdoms_bot
+    def simcord_bot(self, botforge_bot):  # type: ignore[no-untyped-def]
+        bot = botforge_bot
 
         @bot.tree.command(name="mapspanel")
         async def mapspanel(interaction: discord.Interaction) -> None:
-            from kingdoms.discord.admin_panel_games import maps_section_layout
+            from botforge.discord.admin_panel_games import maps_section_layout
 
             await interaction.response.send_message(
                 view=await maps_section_layout("aoe2", str(interaction.guild_id))
@@ -183,7 +183,7 @@ class TestPoolLifecycleJourney:
 
         @bot.tree.command(name="poolspanel")
         async def poolspanel(interaction: discord.Interaction) -> None:
-            from kingdoms.discord.admin_panel_games import pools_section_layout
+            from botforge.discord.admin_panel_games import pools_section_layout
 
             await interaction.response.send_message(
                 view=await pools_section_layout("aoe2", str(interaction.guild_id))
@@ -197,10 +197,10 @@ class TestPoolLifecycleJourney:
     ) -> None:  # type: ignore[no-untyped-def]
         import os
 
-        from kingdoms.core.services.faction_content import FactionContentService
-        from kingdoms.core.services.game_data import GameDataService
-        from kingdoms.game_aoe2.remote_catalog import RemoteGameDataService
-        from kingdoms.game_aoe2.server import _CatalogGateway
+        from botforge.core.services.faction_content import FactionContentService
+        from botforge.core.services.game_data import GameDataService
+        from botforge.game_aoe2.remote_catalog import RemoteGameDataService
+        from botforge.game_aoe2.server import _CatalogGateway
 
         guild = simcord_env.create_guild()
         channel = guild.create_text_channel("general")
@@ -212,7 +212,7 @@ class TestPoolLifecycleJourney:
         server, port = await _start_server(catalog, _CannedMapSeeds())
         uri = f"127.0.0.1:{port}"
         monkeypatch.setenv("GAME_AOE2_URI", uri)
-        import kingdoms.core.models.db as db_module
+        import botforge.core.models.db as db_module
 
         monkeypatch.setattr(db_module, "get_async_database", lambda: _RegistryFake())
         remote = RemoteGameDataService(uri)
@@ -254,7 +254,7 @@ class TestPoolLifecycleJourney:
             # ── the pool's admin menu (the EntityAdminButton path) ───────
             # the menu opens through a posted admin button (the same wire
             # component a pool's forum post carries)
-            from kingdoms.discord.entity_admin_menu import EntityAdminButton
+            from botforge.discord.entity_admin_menu import EntityAdminButton
 
             menu_view = discord.ui.LayoutView(timeout=None)
             menu_row: discord.ui.ActionRow[discord.ui.LayoutView] = discord.ui.ActionRow()
@@ -298,7 +298,7 @@ class TestPoolLifecycleJourney:
 
             # ── #341: a pooled map never deletes — the pre-check refuses
             # BEFORE the confirmation modal, naming the blocking pool
-            from kingdoms.discord.maps_pool_flow import MapDeleteButton
+            from botforge.discord.maps_pool_flow import MapDeleteButton
 
             delete_view = discord.ui.LayoutView(timeout=None)
             delete_row: discord.ui.ActionRow[discord.ui.LayoutView] = discord.ui.ActionRow()
@@ -364,10 +364,10 @@ class TestPoolLifecycleJourney:
     ) -> None:  # type: ignore[no-untyped-def]
         import os
 
-        from kingdoms.core.services.faction_content import FactionContentService
-        from kingdoms.core.services.game_data import GameDataService
-        from kingdoms.game_aoe2.remote_catalog import RemoteGameDataService
-        from kingdoms.game_aoe2.server import _CatalogGateway
+        from botforge.core.services.faction_content import FactionContentService
+        from botforge.core.services.game_data import GameDataService
+        from botforge.game_aoe2.remote_catalog import RemoteGameDataService
+        from botforge.game_aoe2.server import _CatalogGateway
 
         guild = simcord_env.create_guild()
         channel = guild.create_text_channel("general")
@@ -378,7 +378,7 @@ class TestPoolLifecycleJourney:
         )
         server, port = await _start_server(catalog, _CannedMapSeeds())
         monkeypatch.setenv("GAME_AOE2_URI", f"127.0.0.1:{port}")
-        import kingdoms.core.models.db as db_module
+        import botforge.core.models.db as db_module
 
         monkeypatch.setattr(db_module, "get_async_database", lambda: _RegistryFake())
         remote = RemoteGameDataService(f"127.0.0.1:{port}")

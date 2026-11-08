@@ -1,4 +1,4 @@
-"""Unit tests for the bot entry point (kingdoms-services#12, #34)."""
+"""Unit tests for the bot entry point (botforge-services#12, #34)."""
 
 from __future__ import annotations
 
@@ -6,12 +6,12 @@ import logging
 
 import pytest
 
-from kingdoms.discord.bot import main as bot_main
+from botforge.discord.bot import main as bot_main
 
 
 def test_ready_log_line_is_stable() -> None:
     """CI smoke tests grep for this exact marker; it must not drift."""
-    assert bot_main.READY_LOG_LINE == "KINGDOMS_BOT_READY"
+    assert bot_main.READY_LOG_LINE == "BOTFORGE_BOT_READY"
 
 
 def test_main_exits_nonzero_when_gateway_fails(

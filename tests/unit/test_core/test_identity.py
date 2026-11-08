@@ -1,4 +1,4 @@
-"""Unit tests for the IdentityService (kingdoms-services#130).
+"""Unit tests for the IdentityService (botforge-services#130).
 
 Covers platform-account → user_id binding, idempotent user creation,
 cache-aside behaviour and cache-failure degradation.
@@ -8,9 +8,9 @@ from __future__ import annotations
 
 import pytest
 
-from kingdoms.core.models.user import UserModel
-from kingdoms.core.services.identity import IdentityService
-from kingdoms.core.services.state import StateService
+from botforge.core.models.user import UserModel
+from botforge.core.services.identity import IdentityService
+from botforge.core.services.state import StateService
 from tests.mocks.state_mock import FakeClock, InMemoryStateStore
 
 

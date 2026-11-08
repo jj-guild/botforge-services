@@ -15,7 +15,7 @@ import zlib
 
 import pytest
 
-from kingdoms.aoe2.codecs import (
+from botforge.aoe2.codecs import (
     BlobDecodeError,
     decode_blob,
     decode_options,

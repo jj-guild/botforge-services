@@ -1,4 +1,4 @@
-"""Unit tests for the bot factory (kingdoms-services#12)."""
+"""Unit tests for the bot factory (botforge-services#12)."""
 
 from __future__ import annotations
 
@@ -8,10 +8,10 @@ from types import SimpleNamespace
 import discord
 import pytest
 
-from kingdoms.discord.bot.factory import (
+from botforge.discord.bot.factory import (
     READY_LOG_LINE,
     BotConfig,
-    KingdomsBot,
+    BotforgeBot,
     _log_guild_member_locales,
     _log_guild_native_locales,
     create_bot,
@@ -53,7 +53,7 @@ def test_bot_config_from_env_defaults_are_empty() -> None:
 
 def test_create_bot_builds_client_with_tree_and_services(config_dir: str) -> None:
     bot = create_bot(BotConfig(config_dir=config_dir))
-    assert isinstance(bot, KingdomsBot)
+    assert isinstance(bot, BotforgeBot)
     assert isinstance(bot, discord.Client)
     assert isinstance(bot.tree, discord.app_commands.CommandTree)
     assert bot.status_service is not None
@@ -61,13 +61,13 @@ def test_create_bot_builds_client_with_tree_and_services(config_dir: str) -> Non
 
 
 def test_create_bot_keeps_ready_marker_contract(config_dir: str) -> None:
-    """CI smoke greps KINGDOMS_BOT_READY; the factory must log the same marker."""
-    assert READY_LOG_LINE == "KINGDOMS_BOT_READY"
+    """CI smoke greps BOTFORGE_BOT_READY; the factory must log the same marker."""
+    assert READY_LOG_LINE == "BOTFORGE_BOT_READY"
 
 
 async def test_ready_marker_logged_on_ready(config_dir: str, caplog: pytest.LogCaptureFixture) -> None:
     bot = create_bot(BotConfig(config_dir=config_dir))
-    with caplog.at_level(logging.INFO, logger="kingdoms.bot"):
+    with caplog.at_level(logging.INFO, logger="botforge.bot"):
         await bot.on_ready()
     assert any(READY_LOG_LINE in record.message for record in caplog.records)
 
@@ -136,7 +136,7 @@ async def test_boot_route_channels_resolves_both_services(config_dir: str) -> No
 
 @pytest.mark.asyncio
 async def test_boot_route_channels_gated_by_announce_enabled(config_dir: str) -> None:
-    """The CI/CD smoke bot (KINGDOMS_ANNOUNCE_ENABLED=0) never provisions channels."""
+    """The CI/CD smoke bot (BOTFORGE_ANNOUNCE_ENABLED=0) never provisions channels."""
     bot = create_bot(BotConfig(config_dir=config_dir, announce_enabled="0"))
     logs = _FakeLogsService()
     bot.logs_service = logs  # type: ignore[assignment]
@@ -186,10 +186,10 @@ def test_create_bot_without_redis_has_no_shared_state(config_dir: str) -> None:
 def test_create_bot_with_redis_shares_one_state_service(config_dir: str) -> None:
     """With Redis configured, every wired service holds the SAME StateService.
 
-    Regression guard (kingdoms-services#225): each service used to build its
+    Regression guard (botforge-services#225): each service used to build its
     own never-started store; the shared instance is what setup_hook connects.
     """
-    from kingdoms.core.services.state import StateService
+    from botforge.core.services.state import StateService
 
     bot = create_bot(
         BotConfig(config_dir=config_dir, mongo_uri="mongodb://localhost:27017", redis_uri="redis://localhost:6379")
@@ -208,7 +208,7 @@ def test_create_bot_with_redis_shares_one_state_service(config_dir: str) -> None
 async def test_setup_hook_starts_shared_state_and_registration_engine(config_dir: str) -> None:
     """setup_hook must connect the shared state and resume workflows.
 
-    Regression guard (kingdoms-services#225): 'state store not started' meant
+    Regression guard (botforge-services#225): 'state store not started' meant
     nothing ever called start() — the bot booted degraded in production with
     green CI because no test asserted the store connects on the startup path.
     """
@@ -274,7 +274,7 @@ async def test_on_guild_join_resolves_the_native_guild_locale(
 
     bot = create_bot(BotConfig(config_dir=config_dir))
     guild = MockGuild(id=424242, preferred_locale=discord.Locale.french)
-    with caplog.at_level(logging.INFO, logger="kingdoms.bot"):
+    with caplog.at_level(logging.INFO, logger="botforge.bot"):
         await bot.on_guild_join(guild)
     assert any("GUILD JOIN" in record.message and "native_locale=fr" in record.message for record in caplog.records)
 
@@ -287,7 +287,7 @@ async def test_on_guild_join_unknown_locale_falls_back_to_english(
 
     bot = create_bot(BotConfig(config_dir=config_dir))
     guild = MockGuild(id=424243, preferred_locale="ja")
-    with caplog.at_level(logging.INFO, logger="kingdoms.bot"):
+    with caplog.at_level(logging.INFO, logger="botforge.bot"):
         await bot.on_guild_join(guild)
     assert any("GUILD JOIN" in record.message and "native_locale=en" in record.message for record in caplog.records)
 
@@ -306,7 +306,7 @@ def test_log_guild_native_locales_logs_raw_and_resolved_per_guild(
         MockGuild(id=424242, preferred_locale=discord.Locale.french),
         MockGuild(id=424243, preferred_locale="en-US"),
     ]
-    with caplog.at_level(logging.INFO, logger="kingdoms.bot"):
+    with caplog.at_level(logging.INFO, logger="botforge.bot"):
         _log_guild_native_locales(guilds)
     lines = [r.message for r in caplog.records if "GUILD NATIVE LOCALE" in r.message]
     assert len(lines) == 2
@@ -325,7 +325,7 @@ def test_log_guild_member_locales_probes_each_member(caplog: pytest.LogCaptureFi
     guild = MockGuild(id=424242)
     guild.add_member(MockMember(name="alice", guild=guild))
     guild.add_member(MockMember(name="bob", guild=guild))
-    with caplog.at_level(logging.INFO, logger="kingdoms.bot"):
+    with caplog.at_level(logging.INFO, logger="botforge.bot"):
         _log_guild_member_locales([guild])
     lines = [r.message for r in caplog.records if "GUILD MEMBER LOCALE" in r.message]
     assert len(lines) == 2
@@ -344,7 +344,7 @@ async def test_on_interaction_logs_the_clicker_locale(config_dir: str, caplog: p
     guild = MockGuild(id=424242, preferred_locale="en-US")
     member = MockMember(name="alice", guild=guild)
     interaction = MockInteraction(user=member, guild=guild, locale="fr")
-    with caplog.at_level(logging.INFO, logger="kingdoms.bot"):
+    with caplog.at_level(logging.INFO, logger="botforge.bot"):
         await bot.on_interaction(interaction)
     assert any(
         "INTERACTION USER LOCALE" in r.message

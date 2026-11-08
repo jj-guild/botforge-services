@@ -70,10 +70,10 @@ class TestAdminMenuJourney:
     ) -> None:  # type: ignore[no-untyped-def]
         import os
 
-        from kingdoms.core.services.faction_content import FactionContentService
-        from kingdoms.core.services.game_data import GameDataService
-        from kingdoms.game_aoe2.remote_catalog import RemoteGameDataService
-        from kingdoms.game_aoe2.server import _CatalogGateway
+        from botforge.core.services.faction_content import FactionContentService
+        from botforge.core.services.game_data import GameDataService
+        from botforge.game_aoe2.remote_catalog import RemoteGameDataService
+        from botforge.game_aoe2.server import _CatalogGateway
 
         guild = simcord_env.create_guild()
         channel = guild.create_text_channel("general")
@@ -93,7 +93,7 @@ class TestAdminMenuJourney:
         server, port = await _start_server(catalog, _CannedMapSeeds())
         uri = f"127.0.0.1:{port}"
         monkeypatch.setenv("GAME_AOE2_URI", uri)
-        import kingdoms.core.models.db as db_module
+        import botforge.core.models.db as db_module
 
         monkeypatch.setattr(db_module, "get_async_database", lambda: registry)
         remote = RemoteGameDataService(uri)
@@ -103,7 +103,7 @@ class TestAdminMenuJourney:
             property(lambda self: (str(alice.id),)),
         )
 
-        from kingdoms.discord.admin_panel_games import register_games_admin_items
+        from botforge.discord.admin_panel_games import register_games_admin_items
 
         register_games_admin_items(simcord_bot)
 
@@ -114,7 +114,7 @@ class TestAdminMenuJourney:
 
             @simcord_bot.tree.command(name="mapspanel")
             async def mapspanel(interaction: discord.Interaction) -> None:
-                from kingdoms.discord.admin_panel_games import maps_section_layout
+                from botforge.discord.admin_panel_games import maps_section_layout
 
                 await interaction.response.send_message(
                     view=await maps_section_layout("aoe2", str(interaction.guild_id))

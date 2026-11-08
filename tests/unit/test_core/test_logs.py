@@ -1,4 +1,4 @@
-"""Unit tests for the LogService (kingdoms-services#109).
+"""Unit tests for the LogService (botforge-services#109).
 
 Covers the cache-aside resolution flow (Redis → MongoDB — the
 tree routes the channel, the service never adopts or creates one),
@@ -12,15 +12,15 @@ from typing import Any
 
 import pytest
 
-from kingdoms.core.models.channel import ChannelModel
-from kingdoms.core.services.logs import (
+from botforge.core.models.channel import ChannelModel
+from botforge.core.services.logs import (
     BOT_LOGS_CATEGORY,
     CRASH_LOOP_THRESHOLD,
     LifecycleEvent,
     LogService,
     default_policy,
 )
-from kingdoms.core.services.state import StateService
+from botforge.core.services.state import StateService
 from tests.mocks.state_mock import FakeClock, InMemoryStateStore
 
 GUILD = "123456"
@@ -202,10 +202,10 @@ async def test_log_event_delivers_footer_as_subtext(service: LogService, platfor
     platform.live_channels.add("777")
     await service.set_channel(GUILD, "777", by="test")
     await service.resolve_channel(GUILD)
-    event = LifecycleEvent(kind="start", message="Bot is live", footer="kingdoms-deploy env=test")
+    event = LifecycleEvent(kind="start", message="Bot is live", footer="botforge-deploy env=test")
     await service.log_event(GUILD, event)
     _channel_id, content = platform.sent[-1]
-    assert content == "Bot is live\n-# kingdoms-deploy env=test"
+    assert content == "Bot is live\n-# botforge-deploy env=test"
 
 
 @pytest.mark.asyncio

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from kingdoms.core.services.guild_access import GuildAccessError, GuildAccessService
+from botforge.core.services.guild_access import GuildAccessError, GuildAccessService
 
 GAMES = ("aoe2",)
 MODS = ("kingdoms", "ladder")

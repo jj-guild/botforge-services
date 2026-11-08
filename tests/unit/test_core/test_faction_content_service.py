@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from kingdoms.core.services.faction_content import CACHE_SCOPE, FactionContentService
+from botforge.core.services.faction_content import CACHE_SCOPE, FactionContentService
 
 DOC = {
     "entity_id": "faction:aoe2:franks",

@@ -1,5 +1,5 @@
 version = 1
-revision = 5
+revision = 3
 requires-python = ">=3.12"
 resolution-markers = [
     "python_full_version >= '3.15'",
@@ -329,6 +329,69 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/13/c3/c3dc3f564ce6877ecd2a05f8d751b9b27a8c320c2533a98b0c86349778d0/audioop_lts-0.2.2-cp314-cp314t-win32.whl", hash = "sha256:068aa17a38b4e0e7de771c62c60bbca2455924b67a8814f3b0dee92b5820c0b3", size = 27331, upload-time = "2025-08-05T16:43:14.19Z" },
     { url = "https://files.pythonhosted.org/packages/72/bb/b4608537e9ffcb86449091939d52d24a055216a36a8bf66b936af8c3e7ac/audioop_lts-0.2.2-cp314-cp314t-win_amd64.whl", hash = "sha256:a5bf613e96f49712073de86f20dbdd4014ca18efd4d34ed18c75bd808337851b", size = 31697, upload-time = "2025-08-05T16:43:15.193Z" },
     { url = "https://files.pythonhosted.org/packages/f6/22/91616fe707a5c5510de2cac9b046a30defe7007ba8a0c04f9c08f27df312/audioop_lts-0.2.2-cp314-cp314t-win_arm64.whl", hash = "sha256:b492c3b040153e68b9fdaff5913305aaaba5bb433d8a7f73d5cf6a64ed3cc1dd", size = 25206, upload-time = "2025-08-05T16:43:16.444Z" },
+]
+
+[[package]]
+name = "botforge-services"
+version = "0.1.0"
+source = { editable = "." }
+dependencies = [
+    { name = "discord-py", extra = ["voice"] },
+    { name = "fastapi" },
+    { name = "grpcio" },
+    { name = "grpcio-status" },
+    { name = "httpx" },
+    { name = "pydantic" },
+    { name = "pymongo" },
+    { name = "python-dotenv" },
+    { name = "pyyaml" },
+    { name = "redis" },
+    { name = "uvicorn" },
+    { name = "websockets" },
+]
+
+[package.dev-dependencies]
+dev = [
+    { name = "grpcio-tools" },
+    { name = "mypy" },
+    { name = "pytest" },
+    { name = "pytest-asyncio" },
+    { name = "ruff" },
+    { name = "simcord", extra = ["pytest"] },
+    { name = "types-grpcio" },
+    { name = "types-protobuf" },
+    { name = "types-pyyaml" },
+    { name = "types-redis" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "discord-py", extras = ["voice"], specifier = ">=2.7.1" },
+    { name = "fastapi", specifier = ">=0.109.0" },
+    { name = "grpcio", specifier = ">=1.62.0" },
+    { name = "grpcio-status", specifier = ">=1.62.0" },
+    { name = "httpx", specifier = ">=0.26.0" },
+    { name = "pydantic", specifier = ">=2.5.0" },
+    { name = "pymongo", specifier = ">=4.5.0" },
+    { name = "python-dotenv", specifier = ">=1.0.0" },
+    { name = "pyyaml", specifier = ">=6.0" },
+    { name = "redis", specifier = ">=5.0.0" },
+    { name = "uvicorn", specifier = ">=0.27.0" },
+    { name = "websockets", specifier = ">=12.0" },
+]
+
+[package.metadata.requires-dev]
+dev = [
+    { name = "grpcio-tools", specifier = ">=1.62.0" },
+    { name = "mypy", specifier = ">=1.8.0" },
+    { name = "pytest", specifier = ">=7.4.0" },
+    { name = "pytest-asyncio", specifier = ">=0.23.0" },
+    { name = "ruff", specifier = ">=0.1.6" },
+    { name = "simcord", extras = ["pytest"], specifier = ">=2.1.0" },
+    { name = "types-grpcio", specifier = ">=1.84.0.20260928" },
+    { name = "types-protobuf", specifier = ">=7.35.1.20260906" },
+    { name = "types-pyyaml", specifier = ">=6.0" },
+    { name = "types-redis", specifier = ">=4.5.5" },
 ]
 
 [[package]]
@@ -881,69 +944,6 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/72/34/14ca021ce8e5dfedc35312d08ba8bf51fdd999c576889fc2c24cb97f4f10/iniconfig-2.3.0.tar.gz", hash = "sha256:c76315c77db068650d49c5b56314774a7804df16fee4402c1f19d6d15d8c4730", size = 20503, upload-time = "2025-10-18T21:55:43.219Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/cb/b1/3846dd7f199d53cb17f49cba7e651e9ce294d8497c8c150530ed11865bb8/iniconfig-2.3.0-py3-none-any.whl", hash = "sha256:f631c04d2c48c52b84d0d0549c99ff3859c98df65b3101406327ecc7d53fbf12", size = 7484, upload-time = "2025-10-18T21:55:41.639Z" },
-]
-
-[[package]]
-name = "kingdoms-services"
-version = "0.1.0"
-source = { editable = "." }
-dependencies = [
-    { name = "discord-py", extra = ["voice"] },
-    { name = "fastapi" },
-    { name = "grpcio" },
-    { name = "grpcio-status" },
-    { name = "httpx" },
-    { name = "pydantic" },
-    { name = "pymongo" },
-    { name = "python-dotenv" },
-    { name = "pyyaml" },
-    { name = "redis" },
-    { name = "uvicorn" },
-    { name = "websockets" },
-]
-
-[package.dev-dependencies]
-dev = [
-    { name = "grpcio-tools" },
-    { name = "mypy" },
-    { name = "pytest" },
-    { name = "pytest-asyncio" },
-    { name = "ruff" },
-    { name = "simcord", extra = ["pytest"] },
-    { name = "types-grpcio" },
-    { name = "types-protobuf" },
-    { name = "types-pyyaml" },
-    { name = "types-redis" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "discord-py", extras = ["voice"], specifier = ">=2.7.1" },
-    { name = "fastapi", specifier = ">=0.109.0" },
-    { name = "grpcio", specifier = ">=1.62.0" },
-    { name = "grpcio-status", specifier = ">=1.62.0" },
-    { name = "httpx", specifier = ">=0.26.0" },
-    { name = "pydantic", specifier = ">=2.5.0" },
-    { name = "pymongo", specifier = ">=4.5.0" },
-    { name = "python-dotenv", specifier = ">=1.0.0" },
-    { name = "pyyaml", specifier = ">=6.0" },
-    { name = "redis", specifier = ">=5.0.0" },
-    { name = "uvicorn", specifier = ">=0.27.0" },
-    { name = "websockets", specifier = ">=12.0" },
-]
-
-[package.metadata.requires-dev]
-dev = [
-    { name = "grpcio-tools", specifier = ">=1.62.0" },
-    { name = "mypy", specifier = ">=1.8.0" },
-    { name = "pytest", specifier = ">=7.4.0" },
-    { name = "pytest-asyncio", specifier = ">=0.23.0" },
-    { name = "ruff", specifier = ">=0.1.6" },
-    { name = "simcord", extras = ["pytest"], specifier = ">=2.1.0" },
-    { name = "types-grpcio", specifier = ">=1.84.0.20260928" },
-    { name = "types-protobuf", specifier = ">=7.35.1.20260906" },
-    { name = "types-pyyaml", specifier = ">=6.0" },
-    { name = "types-redis", specifier = ">=4.5.5" },
 ]
 
 [[package]]

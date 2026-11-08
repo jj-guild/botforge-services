@@ -33,7 +33,7 @@ class _FakeDatabase:
 @pytest.mark.asyncio
 async def test_the_service_reads_the_bindings_in_batch() -> None:
     """The SERVICE exposes the batched read (the panels' seam)."""
-    from kingdoms.core.services.registration import RegistrationService
+    from botforge.core.services.registration import RegistrationService
 
     database = _FakeDatabase()
     service = RegistrationService(database, {}, None, None)  # type: ignore[arg-type]
@@ -46,7 +46,7 @@ async def test_the_service_reads_the_bindings_in_batch() -> None:
 @pytest.mark.asyncio
 async def test_the_batched_read_degrades_on_empty() -> None:
     """An empty batch answers empty — no database round-trip."""
-    from kingdoms.core.services.registration import RegistrationService
+    from botforge.core.services.registration import RegistrationService
 
     database = _FakeDatabase()
     service = RegistrationService(database, {}, None, None)  # type: ignore[arg-type]

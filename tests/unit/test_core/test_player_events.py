@@ -7,7 +7,7 @@ the others.
 
 from __future__ import annotations
 
-from kingdoms.core.services.player_events import (
+from botforge.core.services.player_events import (
     PlayerStatusEvent,
     PlayerStatusRouter,
 )

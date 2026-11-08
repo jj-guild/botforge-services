@@ -15,7 +15,7 @@ from typing import Any
 
 import discord
 
-from kingdoms.discord.ui import (
+from botforge.discord.ui import (
     PUBLIC_POLICY,
     ButtonBuilder,
     ComponentPolicy,

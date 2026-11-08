@@ -25,7 +25,7 @@ class _CatalogFake(_FakeDB):
 async def _start_server(catalog: Any) -> tuple[Any, int]:
     import grpc
 
-    from kingdoms.game_aoe2.rpc import GameDataServicer, add_gamedata_servicer
+    from botforge.game_aoe2.rpc import GameDataServicer, add_gamedata_servicer
 
     server = grpc.aio.server()
     add_gamedata_servicer(server, GameDataServicer(aggregator=None, catalog=catalog))
@@ -73,10 +73,10 @@ async def test_the_map_admin_bar_is_buttons_only(monkeypatch: pytest.MonkeyPatch
     """
     import os
 
-    from kingdoms.core.services.faction_content import FactionContentService
-    from kingdoms.core.services.game_data import GameDataService
-    from kingdoms.discord.entity_admin_menu import build_entity_admin_bar
-    from kingdoms.game_aoe2.server import _CatalogGateway
+    from botforge.core.services.faction_content import FactionContentService
+    from botforge.core.services.game_data import GameDataService
+    from botforge.discord.entity_admin_menu import build_entity_admin_bar
+    from botforge.game_aoe2.server import _CatalogGateway
 
     catalog_fake = _CatalogFake()
     catalog = _CatalogGateway(
@@ -87,7 +87,7 @@ async def test_the_map_admin_bar_is_buttons_only(monkeypatch: pytest.MonkeyPatch
     )
     server, port = await _start_server(catalog)
     monkeypatch.setenv("GAME_AOE2_URI", f"127.0.0.1:{port}")
-    import kingdoms.core.models.db as db_module
+    import botforge.core.models.db as db_module
 
     monkeypatch.setattr(db_module, "get_async_database", lambda: _RegistryFake())
 

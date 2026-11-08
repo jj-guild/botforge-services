@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Cut a release of kingdoms-services — the version is never hand-picked.
+# Cut a release of botforge-services — the version is never hand-picked.
 #
 # .github/workflows/scripts/generate_changelog.py --bump derives the next tag from the
 # Conventional Commits since the last release (feat → minor, fix → patch,
@@ -15,7 +15,7 @@
 #
 # The tag push itself triggers the Docker workflow: it publishes the
 # image to GHCR (tagged with the raw tag name) and pins it on
-# kingdoms-infra deploy/test (validation on the test environment before
+# botforge-infra deploy/test (validation on the test environment before
 # any prod promotion — .github/workflows/docker.yml, ADR-0018). A -rc
 # pre-release pins on deploy/test like any release, but the Promote
 # release workflow refuses to pin it on deploy/prod.
@@ -51,7 +51,7 @@ fi
 
 sha="$(git rev-parse HEAD)"
 echo "==> Checking the required checks of ${sha:0:7}"
-failing="$(gh api "repos/merlin-pinpin-org/kingdoms-services/commits/${sha}/check-runs" \
+failing="$(gh api "repos/jj-guild/botforge-services/commits/${sha}/check-runs" \
   --jq '.check_runs[] | select(.conclusion != null and .conclusion != "success" and .conclusion != "neutral" and .conclusion != "skipped") | .name')"
 if [[ -n "$failing" ]]; then
   echo "::error::failing checks on main ${sha:0:7}:" >&2
@@ -78,9 +78,9 @@ git push origin "$tag"
 
 echo "==> The Docker workflow now:"
 echo "    - builds and publishes the image (tagged with the raw tag name);"
-echo "    - pins it on kingdoms-infra deploy/test (validation environment);"
+echo "    - pins it on botforge-infra deploy/test (validation environment);"
 echo "    - creates the GitHub release with generated notes."
-echo "==> Release ${tag}: https://github.com/merlin-pinpin-org/kingdoms-services/releases/tag/${tag}"
+echo "==> Release ${tag}: https://github.com/jj-guild/botforge-services/releases/tag/${tag}"
 if [[ -n "$prerelease" ]]; then
   echo "    ${tag} is a pre-release: validate it in Discord on the test environment,"
   echo "    then cut the final release (make release) — never promote an -rc to prod."

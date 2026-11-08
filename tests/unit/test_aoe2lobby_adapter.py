@@ -10,7 +10,7 @@ from __future__ import annotations
 import json
 from typing import Any
 
-from kingdoms.ext_aoe2lobby.adapter import Aoe2LobbyAdapter
+from botforge.ext_aoe2lobby.adapter import Aoe2LobbyAdapter
 
 
 def _frame(adapter: Aoe2LobbyAdapter, payload: dict[str, Any]) -> list[dict[str, Any]]:

@@ -1,1 +1,1 @@
-"""Test package for Kingdoms."""
+"""Test package for BotForge."""

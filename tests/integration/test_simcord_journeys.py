@@ -1,8 +1,8 @@
-"""Behavioral (journey) tests on SimCord — kingdoms-services#2, #22, #24.
+"""Behavioral (journey) tests on SimCord — botforge-services#2, #22, #24.
 
 These tests drive the real discord.py machinery (command tree, dispatch,
 converters, interaction lifecycle) against SimCord's in-memory virtual
-Discord. Since kingdoms-services#12 the shared ``simcord_bot`` fixture (in
+Discord. Since botforge-services#12 the shared ``simcord_bot`` fixture (in
 ``tests/conftest.py``) builds the **real bot** through the production
 factory ``create_bot``: journeys exercise the actual dispatch, command tree
 and service wiring. Every user action goes through an actor, every
@@ -50,7 +50,7 @@ def _iter_components(message: discord.Message):
 
 
 class TestRealBotJourneys:
-    """Journeys through the real bot built by create_bot (kingdoms-services#12)."""
+    """Journeys through the real bot built by create_bot (botforge-services#12)."""
 
     @pytest.mark.simcord(strict_sync=False)
     async def test_status_answers_with_the_announcement_layout(self, simcord_env) -> None:  # type: ignore[no-untyped-def]
@@ -70,7 +70,7 @@ class TestRealBotJourneys:
             if (c.get("type") if isinstance(c, dict) else c.type.value) == TYPE_TEXT_DISPLAY
         ]
         joined = "\n".join(texts)
-        assert "Kingdoms — Deployment" in joined
+        assert "BotForge — Deployment" in joined
         assert "Uptime" in joined
         assert "Commands (sync:" in joined
 
@@ -84,8 +84,8 @@ class TestUIPatterns:
     """
 
     @pytest.fixture
-    def simcord_bot(self, kingdoms_bot):  # type: ignore[no-untyped-def]
-        tree = kingdoms_bot.tree
+    def simcord_bot(self, botforge_bot):  # type: ignore[no-untyped-def]
+        tree = botforge_bot.tree
 
         @tree.command(name="panel")
         async def panel(interaction: discord.Interaction) -> None:
@@ -119,7 +119,7 @@ class TestUIPatterns:
             layout.add_item(container)
             await interaction.response.send_message(view=layout)
 
-        return kingdoms_bot
+        return botforge_bot
 
     @pytest.mark.simcord(strict_sync=False)
     async def test_click_fires_callback_through_dispatch(self, simcord_env) -> None:  # type: ignore[no-untyped-def]
@@ -167,18 +167,18 @@ class TestSDKJourneys:
     """SDK archetype journeys: pagination edits in place, selects dispatch."""
 
     @pytest.fixture
-    def simcord_bot(self, kingdoms_bot):  # type: ignore[no-untyped-def]
-        from kingdoms.discord.ui import Ranking, render_ranking
+    def simcord_bot(self, botforge_bot):  # type: ignore[no-untyped-def]
+        from botforge.discord.ui import Ranking, render_ranking
 
-        @kingdoms_bot.tree.command(name="leaderboard")
+        @botforge_bot.tree.command(name="leaderboard")
         async def leaderboard(interaction: discord.Interaction) -> None:
             ranking = Ranking("Classement", [(f"p{i}", str(100 - i)) for i in range(15)])
             screen = render_ranking(ranking, page_size=5)
             await interaction.response.send_message(view=screen.render())
 
-        @kingdoms_bot.tree.command(name="pick")
+        @botforge_bot.tree.command(name="pick")
         async def pick(interaction: discord.Interaction) -> None:
-            from kingdoms.discord.ui import Container, Option, Row, SelectMenu, Text, UILayout
+            from botforge.discord.ui import Container, Option, Row, SelectMenu, Text, UILayout
 
             async def on_choose(inter: discord.Interaction, values: list[str]) -> None:
                 await inter.response.send_message(f"chose {values[0]}", ephemeral=True)
@@ -191,7 +191,7 @@ class TestSDKJourneys:
             view = UILayout().add(Container().add(Text("Pick one")).add(Row(menu))).build()
             await interaction.response.send_message(view=view)
 
-        return kingdoms_bot
+        return botforge_bot
 
     @pytest.mark.simcord(strict_sync=False)
     async def test_leaderboard_pages_edit_in_place(self, simcord_env) -> None:  # type: ignore[no-untyped-def]

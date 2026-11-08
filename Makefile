@@ -18,9 +18,9 @@ dev-logs:
 test:
 	@uv run pytest
 
-# battery: the standalone behavioral journey suite (kingdoms-services#106).
+# battery: the standalone behavioral journey suite (botforge-services#106).
 # One command from a clean checkout at any commit, in-memory and
-# network-free — the kingdoms-infra post-deploy battery (kingdoms-infra#78)
+# network-free — the botforge-infra post-deploy battery (botforge-infra#78)
 # runs it on a GitHub-hosted runner at the pinned deploy commit. Test
 # tooling never runs on an environment VPS.
 battery:
@@ -49,10 +49,10 @@ check:
 
 # Docs (generated into this repo, fail-closed freshness check in CI)
 docs:
-	@uv run python .github/workflows/scripts/generate_pydoc.py --source src/kingdoms --output docs/DEVELOPMENT/pydoc
+	@uv run python .github/workflows/scripts/generate_pydoc.py --source src/botforge --output docs/DEVELOPMENT/pydoc
 
 docs-check:
-	@uv run python .github/workflows/scripts/generate_pydoc.py --source src/kingdoms --output /tmp/pydoc-fresh
+	@uv run python .github/workflows/scripts/generate_pydoc.py --source src/botforge --output /tmp/pydoc-fresh
 	@diff -rq /tmp/pydoc-fresh docs/DEVELOPMENT/pydoc --exclude=.gitkeep \
 	  && echo "Generated docs are fresh" \
 	  || (echo "ERROR: docs/DEVELOPMENT/pydoc is stale — run 'make docs' and commit"; exit 1)
@@ -95,15 +95,15 @@ release-notes:
 	@uv run python .github/workflows/scripts/generate_changelog.py --tag $(TAG) --notes
 
 # contracts-check: fail closed when committed stubs drift from contracts/
-# (wire-compatibility guard, kingdoms-services#128). CI runs it too.
+# (wire-compatibility guard, botforge-services#128). CI runs it too.
 contracts-check:
 	@uv run python .github/workflows/scripts/check_contracts_fresh.py
 
 # contracts: regenerate the gRPC stubs from contracts/ (ADR-0020).
 contracts:
 	@uv run python -m grpc_tools.protoc \
-		--python_out=src/kingdoms/rpc_generated \
-		--grpc_python_out=src/kingdoms/rpc_generated \
+		--python_out=src/botforge/rpc_generated \
+		--grpc_python_out=src/botforge/rpc_generated \
 		--proto_path=contracts \
-		contracts/kingdoms/v1/*.proto
-	@uv run python -c "import pathlib; [p.write_text(p.read_text().replace('from kingdoms.v1 import ', 'from kingdoms.rpc_generated.kingdoms.v1 import ')) for p in pathlib.Path('src/kingdoms/rpc_generated/kingdoms/v1').glob('*_pb2*.py')]"
+		contracts/botforge/v1/*.proto
+	@uv run python -c "import pathlib; [p.write_text(p.read_text().replace('from botforge.v1 import ', 'from botforge.rpc_generated.botforge.v1 import ')) for p in pathlib.Path('src/botforge/rpc_generated/botforge/v1').glob('*_pb2*.py')]"

@@ -14,7 +14,7 @@ techniques. L'exemple complet (§7) fait moins de 150 lignes.
 ## 1. Le périmètre du SDK
 
 ```python
-from kingdoms.modsdk import (
+from botforge.modsdk import (
     Field,           # un champ d'entité (label, type, éditeur)
     EntitySpec,      # un type d'entité (territoire, royaume, match…)
     ActionSpec,      # une interaction (claim, publish, close, delete…)
@@ -42,22 +42,22 @@ son binding est l'exemple de référence dans le code.
 ## 2. Déclarer une entité
 
 ```python
-from kingdoms.modsdk import EntitySpec, Field
+from botforge.modsdk import EntitySpec, Field
 
 TERRITORY = EntitySpec(
     key="territory",                       # le nom interne, unique dans le mod
     id_prefix="territory",                 # ids : territory:<scope>:<slug>
-    label_key="kingdoms.entity.territory", # clé i18n du nom affiché
+    label_key="botforge.entity.territory", # clé i18n du nom affiché
     states=("draft", "owned", "contested", "razed"),  # le cycle de vie
     initial_state="draft",                 # l'état d'une entité nouvelle
     fields=(
-        Field(key="name", label_key="kingdoms.field.name", required=True),
-        Field(key="terrain", label_key="kingdoms.field.terrain", kind="select",
-              choices=(("plains", "kingdoms.terrain.plains"),
-                       ("hills", "kingdoms.terrain.hills"))),
-        Field(key="description", label_key="kingdoms.field.description", kind="long_text"),
-        Field(key="image_url", label_key="kingdoms.field.image", kind="image"),
-        Field(key="source_url", label_key="kingdoms.field.source", kind="url"),
+        Field(key="name", label_key="botforge.field.name", required=True),
+        Field(key="terrain", label_key="botforge.field.terrain", kind="select",
+              choices=(("plains", "botforge.terrain.plains"),
+                       ("hills", "botforge.terrain.hills"))),
+        Field(key="description", label_key="botforge.field.description", kind="long_text"),
+        Field(key="image_url", label_key="botforge.field.image", kind="image"),
+        Field(key="source_url", label_key="botforge.field.source", kind="url"),
     ),
     title_field="name",        # le titre de la carte
     image_field="image_url",   # l'image principale de la carte
@@ -113,7 +113,7 @@ uniques). Le cache Redis et le partitionnement par guilde sont
 ## 4. Déclarer les interactions
 
 ```python
-from kingdoms.modsdk import ActionSpec, ActionResult
+from botforge.modsdk import ActionSpec, ActionResult
 
 async def claim(entity, actor, values):
     # handler pur : (entity, actor, input) -> ActionResult
@@ -121,12 +121,12 @@ async def claim(entity, actor, values):
                         message=f"{entity['name']} revient à {actor.mention} !")
 
 ACTIONS = (
-    ActionSpec(key="claim", label_key="kingdoms.action.claim",
+    ActionSpec(key="claim", label_key="botforge.action.claim",
                from_states=("draft", "contested"), permission="everyone"),
-    ActionSpec(key="rename", label_key="kingdoms.action.rename",
+    ActionSpec(key="rename", label_key="botforge.action.rename",
                from_states=("draft", "owned"), permission="owner",
-               prompt=(Field(key="name", label_key="kingdoms.field.name", required=True),)),
-    ActionSpec(key="raze", label_key="kingdoms.action.raze",
+               prompt=(Field(key="name", label_key="botforge.field.name", required=True),)),
+    ActionSpec(key="raze", label_key="botforge.action.raze",
                from_states=("owned",), permission="admin", confirm=True),
 )
 ```
@@ -160,7 +160,7 @@ voit « l'action a planté, voir les logs », rien ne casse.
 ### 5.1 La carte publique (le post forum)
 
 ```python
-from kingdoms.modsdk import EntityPanelSpec
+from botforge.modsdk import EntityPanelSpec
 
 PANEL = EntityPanelSpec(
     entity="territory",
@@ -205,17 +205,17 @@ sont figés : leurs boutons ouvrent des éphémères, jamais d'édition
 in-place du pin.
 
 ```python
-from kingdoms.discord.ui.panels import ChannelDecl, PanelSpec, PinMode, ScopeSpec
+from botforge.discord.ui.panels import ChannelDecl, PanelSpec, PinMode, ScopeSpec
 
-KINGDOMS_SCOPE = ScopeSpec(
+BOTFORGE_SCOPE = ScopeSpec(
     scope="kingdoms",
-    category_key="kingdoms.category",
+    category_key="botforge.category",
     channels=(
-        ChannelDecl(key="general", label_key="kingdoms.channel.general", access="readonly"),
-        ChannelDecl(key="discussions", label_key="kingdoms.channel.discussions"),
-        ChannelDecl(key="territories", label_key="kingdoms.channel.territories", kind="forum"),
-        ChannelDecl(key="admin", label_key="kingdoms.channel.admin", access="admin"),
-        ChannelDecl(key="decisions", label_key="kingdoms.channel.decisions", access="admin"),
+        ChannelDecl(key="general", label_key="botforge.channel.general", access="readonly"),
+        ChannelDecl(key="discussions", label_key="botforge.channel.discussions"),
+        ChannelDecl(key="territories", label_key="botforge.channel.territories", kind="forum"),
+        ChannelDecl(key="admin", label_key="botforge.channel.admin", access="admin"),
+        ChannelDecl(key="decisions", label_key="botforge.channel.decisions", access="admin"),
     ),
 )
 ```
@@ -223,11 +223,11 @@ KINGDOMS_SCOPE = ScopeSpec(
 ### 5.3 Les menus épinglés
 
 ```python
-from kingdoms.modsdk import MenuSpec
+from botforge.modsdk import MenuSpec
 
 HOME_MENU = MenuSpec(
-    key="kingdoms-home",
-    label_key="kingdoms.menu.home",
+    key="botforge-home",
+    label_key="botforge.menu.home",
     scope="kingdoms",
     channel_key="general",
     build=build_home_menu,   # async (guild_id, locale) -> LayoutView
@@ -246,9 +246,9 @@ ouvre un éphémère dans lequel on peut naviguer.
 Un seul appel au wiring du bot, au démarrage :
 
 ```python
-from kingdoms.modsdk import bind_mod
-from kingdoms.discord.commands_i18n import tr_guild
-from kingdoms.discord.wiring import guard_bot_admin
+from botforge.modsdk import bind_mod
+from botforge.discord.commands_i18n import tr_guild
+from botforge.discord.wiring import guard_bot_admin
 
 binding = bind_mod(
     "kingdoms",
@@ -260,7 +260,7 @@ binding = bind_mod(
     permission=guard_bot_admin,# (interaction) -> bool, répond seul au refus
 )
 bot.modsdk_bindings["kingdoms"] = binding
-from kingdoms.modsdk import register_dynamic_items
+from botforge.modsdk import register_dynamic_items
 register_dynamic_items(bot)   # une fois pour tous les mods
 ```
 
@@ -282,22 +282,22 @@ binding au clic (redémarrage compris — le custom_id porte
 ## 7. Exemple complet : un mod « kingdoms » minimal
 
 ```python
-# mods/kingdoms/declaration.py
-from kingdoms.modsdk import (
+# mods/botforge/declaration.py
+from botforge.modsdk import (
     ActionSpec, ActionResult, EntityPanelSpec, EntitySpec, Field,
 )
 
 TERRITORY = EntitySpec(
     key="territory",
     id_prefix="territory",
-    label_key="kingdoms.entity.territory",
+    label_key="botforge.entity.territory",
     states=("draft", "owned", "razed"),
     initial_state="draft",
     fields=(
-        Field(key="name", label_key="kingdoms.field.name", required=True),
-        Field(key="terrain", label_key="kingdoms.field.terrain",
+        Field(key="name", label_key="botforge.field.name", required=True),
+        Field(key="terrain", label_key="botforge.field.terrain",
               kind="select", choices=(("plains", "k.terrain.plains"), ("hills", "k.terrain.hills"))),
-        Field(key="description", label_key="kingdoms.field.description", kind="long_text"),
+        Field(key="description", label_key="botforge.field.description", kind="long_text"),
     ),
 )
 
@@ -313,9 +313,9 @@ TERRITORY_PANEL = EntityPanelSpec(
     entity="territory",
     channel="territories",
     admin_actions=(
-        ActionSpec(key="claim", label_key="kingdoms.action.claim",
+        ActionSpec(key="claim", label_key="botforge.action.claim",
                    from_states=("draft",), permission="everyone", handler=claim),
-        ActionSpec(key="raze", label_key="kingdoms.action.raze",
+        ActionSpec(key="raze", label_key="botforge.action.raze",
                    from_states=("owned",), permission="admin", confirm=True, handler=raze),
     ),
 )

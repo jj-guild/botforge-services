@@ -1,7 +1,7 @@
 # /help — list the PR-comment commands available to the requestor.
 #
 # "/help" posts one line per command the requestor's roster roles grant
-# (authority matrix in CONTRIBUTORS.md, kingdoms repo — the source of
+# (authority matrix in CONTRIBUTORS.md, botforge repo — the source of
 # truth); "/help /<cmd>" posts that command's detailed usage. Every
 # command is listed even when a stricter condition applies at call time
 # (env, CLA, agent-scope): the listing shows what the roles grant, the
@@ -30,10 +30,10 @@ jobs:
        startsWith(github.event.comment.body, '/help /'))
     runs-on: ubuntu-latest
     steps:
-      - name: Check out the roster (kingdoms main — the source of truth)
+      - name: Check out the roster (botforge main — the source of truth)
         uses: actions/checkout@v4
         with:
-          repository: merlin-pinpin-org/kingdoms
+          repository: jj-guild/botforge
           ref: main
           sparse-checkout: |
             CONTRIBUTORS.md

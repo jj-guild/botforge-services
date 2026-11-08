@@ -1,4 +1,4 @@
-"""Tests for the runtime permission guards (kingdoms-services#115).
+"""Tests for the runtime permission guards (botforge-services#115).
 
 The developer-mandated rule: **seeing a button never implies being
 allowed to click it** — every interactive item behind a privilege is
@@ -11,8 +11,8 @@ from typing import Any
 
 import pytest
 
-from kingdoms.core.services.roles import RolesService
-from kingdoms.discord.guards import is_admin, require_admin
+from botforge.core.services.roles import RolesService
+from botforge.discord.guards import is_admin, require_admin
 from tests.mocks.discord_mock import MockGuild, MockInteraction, MockUser
 
 

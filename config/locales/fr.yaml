@@ -4,14 +4,14 @@ fr:
     accounts_removed: '✅ Comptes retirés : {listed} — ton profil est à jour.'
     pseudo_updated: '✅ Pseudo mis à jour : {name}'
   common:
-    greeting: Bienvenue sur Kingdoms !
+    greeting: Bienvenue sur BotForge !
     error: Une erreur est survenue. Veuillez réessayer.
     cancel: Annuler
     confirm: Confirmer
   announce:
     commands_label: 'Commandes (sync : {scope})'
     sync_none_label: aucune (DM)
-    title: Kingdoms — Déploiement
+    title: BotForge — Déploiement
     services_label: Services
     infra_label: Infra
     bot_label: Bot
@@ -214,7 +214,7 @@ fr:
   guards:
     denied: Vous n'êtes pas autorisé à faire cela — cette action est réservée aux admins du bot.
   admin:
-    title: Kingdoms — Admin
+    title: BotForge — Admin
     channel_bot_logs: Logs du bot
     channel_bot_admins: Admins du bot
     visibility_admin_label: Admins uniquement
@@ -241,7 +241,7 @@ fr:
     no_service: Les réglages admin sont indisponibles (pas de LogService câblé).
     panel_failed: La gestion des logs a échoué — `{detail}`
   admin_dm:
-    title: Kingdoms — Bot admin
+    title: BotForge — Bot admin
     wiring_unavailable: Wiring indisponible.
     pending_title: 📩 Demandes d'accès en attente
     language_title: 🌐 Langue des DM
@@ -446,7 +446,7 @@ fr:
         games_aoe2: ⚔️ games/aoe2
         mods: 🧩 mods
     homes:
-      root_home_title: 🏰 Kingdoms
+      root_home_title: 🏰 BotForge
       root_home_description: Bienvenue — chaque bouton ouvre une vue réservée à toi. Les échanges vont
         dans 💬 discussions.
       games_home_title: 🎮 Games
@@ -493,7 +493,7 @@ fr:
       btn_language: Langue
     views:
       menu.home:
-        title: 🏰 Kingdoms
+        title: 🏰 BotForge
         description: 'Le point de départ : ton profil, les jeux, les mods et l''admin.'
       menu.admin:
         title: 🛠️ Admin

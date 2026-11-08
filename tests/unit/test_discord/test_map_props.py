@@ -5,13 +5,13 @@ filter on (owner direction 2026-11-08). The valid vocabulary: the
 Liquipedia type, the walls, the player count (silent at the nominal
 8), nomad (the flag or a TC=0 start), the multi-TC start. The
 open/closed/semi-open/chaotic classification is the designers'
-vocabulary — delegated to kingdoms-services#348, never shown from
+vocabulary — delegated to botforge-services#348, never shown from
 the import.
 """
 
 from __future__ import annotations
 
-from kingdoms.discord.maps_forum import _map_props_lines, _walls_slug
+from botforge.discord.maps_forum import _map_props_lines, _walls_slug
 
 
 def test_walls_slug_normalizes_to_the_filter_vocabulary() -> None:

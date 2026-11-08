@@ -13,7 +13,7 @@ from typing import Any
 import discord
 import pytest
 
-from kingdoms.discord.ui.persistent import (
+from botforge.discord.ui.persistent import (
     PersistentPagerButton,
     register_page_renderer,
     register_persistent_items,
@@ -63,7 +63,7 @@ class TestPageRenderers:
             seen.append(("ok", page))
 
         register_page_renderer("ladder", renderer)
-        from kingdoms.discord.ui.persistent import _page_renderers
+        from botforge.discord.ui.persistent import _page_renderers
 
         assert "ladder" in _page_renderers()
 

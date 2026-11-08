@@ -7,7 +7,7 @@ import asyncio
 import grpc
 import pytest
 
-from kingdoms.core.rpc.client import (
+from botforge.core.rpc.client import (
     DEFAULT_POLICY,
     RETRYABLE_CODES,
     RetryPolicy,

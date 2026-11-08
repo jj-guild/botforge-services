@@ -1,8 +1,8 @@
-"""Visible id builders and footers — unit tests (kingdoms.core.ids)."""
+"""Visible id builders and footers — unit tests (botforge.core.ids)."""
 
 from __future__ import annotations
 
-from kingdoms.core.ids import (
+from botforge.core.ids import (
     footer,
     ladder_id,
     map_entry_id,

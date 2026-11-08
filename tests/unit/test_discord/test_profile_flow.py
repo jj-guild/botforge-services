@@ -16,7 +16,7 @@ import discord
 import httpx
 import pytest
 
-from kingdoms.discord import home as home_module
+from botforge.discord import home as home_module
 
 
 def _view_texts(message: Any) -> list[str]:
@@ -296,7 +296,7 @@ async def test_add_failure_names_the_provider(monkeypatch: Any) -> None:
     async def _dm(bot: Any, admin_ids: tuple[str, ...], content: str) -> None:
         admins_dmed.append(content)
 
-    monkeypatch.setattr("kingdoms.discord.error_report.dm_admins", _dm)
+    monkeypatch.setattr("botforge.discord.error_report.dm_admins", _dm)
 
     class _Status:
         bot_admins = ("111",)
@@ -352,8 +352,8 @@ async def test_profile_view_shows_alias_names() -> None:
 @pytest.mark.asyncio
 async def test_validation_seam_says_not_configured_without_stats() -> None:
     """Without the player-stats capability the seam names the config gap."""
-    from kingdoms.core.models.game import ProviderCapabilities
-    from kingdoms.discord.registration_platform import (
+    from botforge.core.models.game import ProviderCapabilities
+    from botforge.discord.registration_platform import (
         Aoe2ProfileValidationSeam,
         ProviderStatsUnavailableError,
     )
@@ -368,12 +368,12 @@ async def test_validation_seam_says_not_configured_without_stats() -> None:
         async def get_player_stats(self, profile_id: str) -> None:
             return None
 
-    import kingdoms.game_aoe2.client as client_module
+    import botforge.game_aoe2.client as client_module
 
     original = client_module.__dict__.get("GameDataClient")
     client_module.GameDataClient = _Client  # type: ignore[assignment]
     try:
-        seam = Aoe2ProfileValidationSeam("kingdoms-game-aoe2:50071")
+        seam = Aoe2ProfileValidationSeam("botforge-game-aoe2:50071")
         try:
             await seam.validate_profile("123456")
             raised = False
@@ -396,7 +396,7 @@ def test_add_modal_payload_shape_is_the_proven_one() -> None:
     """
     from discord import SelectOption
 
-    from kingdoms.discord.home import ProfileAddAccountModal
+    from botforge.discord.home import ProfileAddAccountModal
 
     modal = ProfileAddAccountModal([SelectOption(label="AoE2", value="aoe2", default=True)])
     payload = modal.to_components()
@@ -467,7 +467,7 @@ class _FakeInsightsTransport(httpx.AsyncBaseTransport):
 @pytest.mark.asyncio
 async def test_resolve_relic_id_maps_the_insights_user_id() -> None:
     """The insights user id (or URL) resolves to the relic id."""
-    from kingdoms.discord.registration_platform import resolve_relic_id
+    from botforge.discord.registration_platform import resolve_relic_id
 
     transport = _FakeInsightsTransport({"12488557": "17190369"})
 
@@ -481,7 +481,7 @@ async def test_resolve_relic_id_maps_the_insights_user_id() -> None:
 
 def test_extract_insights_user_id_rejects_injections() -> None:
     """The strict URL gate: only genuine aoe2insights user URLs pass."""
-    from kingdoms.discord.registration_platform import extract_insights_user_id
+    from botforge.discord.registration_platform import extract_insights_user_id
 
     ok = extract_insights_user_id("https://www.aoe2insights.com/user/12488557/")
     assert ok == "12488557"
@@ -514,7 +514,7 @@ def test_extract_insights_user_id_rejects_injections() -> None:
 @pytest.mark.asyncio
 async def test_resolve_relic_id_rejects_dirty_replies() -> None:
     """A non-numeric insights reply (HTML, injection) never resolves."""
-    from kingdoms.discord.registration_platform import resolve_relic_id
+    from botforge.discord.registration_platform import resolve_relic_id
 
     class _DirtyTransport(httpx.AsyncBaseTransport):
         def __init__(self, text: str, status: int = 200) -> None:
@@ -542,7 +542,7 @@ async def test_resolve_relic_id_rejects_dirty_replies() -> None:
 @pytest.mark.asyncio
 async def test_resolve_relic_id_caps_the_input() -> None:
     """An oversized input never reaches the network."""
-    from kingdoms.discord.registration_platform import resolve_relic_id
+    from botforge.discord.registration_platform import resolve_relic_id
 
     class _NoNetworkTransport(httpx.AsyncBaseTransport):
         async def handle_async_request(self, request: httpx.Request) -> httpx.Response:

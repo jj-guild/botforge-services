@@ -11,11 +11,11 @@ from __future__ import annotations
 
 import pytest
 
-from kingdoms.core.services.i18n import MessageCatalog
-from kingdoms.discord.live import (
+from botforge.core.services.i18n import MessageCatalog
+from botforge.discord.live import (
     DEFAULT_GAME_KEY as GAME_KEY,
 )
-from kingdoms.discord.live import build_dashboard_view, live_view_key, scope_snapshot_to_guild
+from botforge.discord.live import build_dashboard_view, live_view_key, scope_snapshot_to_guild
 
 
 class _CatalogBot:
@@ -67,7 +67,7 @@ def test_build_dashboard_view_degraded_renders_red() -> None:
 @pytest.mark.asyncio
 async def test_scope_snapshot_filters_by_cached_members() -> None:
     """The dashboard scope keeps only the guild's members."""
-    from kingdoms.discord import member_cache
+    from botforge.discord import member_cache
 
     snapshot = {
         "players": [
@@ -111,7 +111,7 @@ async def test_scope_snapshot_fails_open_on_empty_roster() -> None:
             return
             yield  # pragma: no cover - an empty async generator
 
-    from kingdoms.discord import member_cache
+    from botforge.discord import member_cache
 
     member_cache._cache.pop(434343, None)
     try:

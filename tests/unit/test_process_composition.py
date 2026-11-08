@@ -19,7 +19,7 @@ import ast
 from pathlib import Path
 from typing import Any
 
-SRC = Path(__file__).resolve().parents[2] / "src" / "kingdoms"
+SRC = Path(__file__).resolve().parents[2] / "src" / "botforge"
 
 
 def test_the_provider_boots_on_its_real_dataset() -> None:
@@ -29,7 +29,7 @@ def test_the_provider_boots_on_its_real_dataset() -> None:
     DATASET is the provider's own data. A deletion of the files (the
     2026-11-05 regression) must fail HERE, loudly.
     """
-    from kingdoms.ext_aoe2techtree.source import DEFAULT_DATASET_DIR, DatasetContentSource
+    from botforge.ext_aoe2techtree.source import DEFAULT_DATASET_DIR, DatasetContentSource
 
     assert (DEFAULT_DATASET_DIR / "data.json").exists(), (
         f"the provider's dataset is gone: {DEFAULT_DATASET_DIR}/data.json — "
@@ -49,7 +49,7 @@ def test_the_core_pushes_the_enrollments() -> None:  # noqa: C901
     """
     import asyncio
 
-    import kingdoms.core_process.server as core_server
+    import botforge.core_process.server as core_server
 
     pushed: list[dict[str, Any]] = []
 
@@ -90,7 +90,7 @@ def test_the_core_pushes_the_enrollments() -> None:  # noqa: C901
 
     async def _one_round() -> None:
         """Run the loop's body once (the interval sleep is patched out)."""
-        import kingdoms.core.models.db as db_module
+        import botforge.core.models.db as db_module
 
         original_db = db_module.get_async_database
         original_client = core_server._GameDataClient
@@ -115,7 +115,7 @@ def test_the_core_pushes_the_enrollments() -> None:  # noqa: C901
 
     import os
 
-    os.environ["GAME_AOE2_URI"] = "kingdoms-game-aoe2:50071"
+    os.environ["GAME_AOE2_URI"] = "botforge-game-aoe2:50071"
     try:
         asyncio.run(_one_round())
     finally:

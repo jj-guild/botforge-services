@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from kingdoms.discord.civ_content import civ_section_lines, parse_civ_help
+from botforge.discord.civ_content import civ_section_lines, parse_civ_help
 
 FRANKS_HELP = (
     "Cavalry civilization<br>\n<br>\n"

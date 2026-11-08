@@ -1,4 +1,4 @@
-"""Unit tests for the generic mod declaration tools (kingdoms-services#26)."""
+"""Unit tests for the generic mod declaration tools (botforge-services#26)."""
 
 from __future__ import annotations
 
@@ -6,12 +6,12 @@ from pathlib import Path
 
 import pytest
 
-from kingdoms.core.services.mod_definition import (
+from botforge.core.services.mod_definition import (
     ChannelCategoryDef,
     ModDefinition,
     RoleDef,
 )
-from kingdoms.core.services.mod_registry import ModRegistry, load_mod_definitions
+from botforge.core.services.mod_registry import ModRegistry, load_mod_definitions
 
 
 def make_definition(name: str = "example") -> ModDefinition:

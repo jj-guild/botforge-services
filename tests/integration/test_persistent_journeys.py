@@ -1,4 +1,4 @@
-"""Persistent-view journeys on SimCord — kingdoms-services#122.
+"""Persistent-view journeys on SimCord — botforge-services#122.
 
 The §3b contract, proven end to end with a **real restart**: the bot
 sends a persistent pager panel, ``restart_bot()`` drains the old
@@ -13,7 +13,7 @@ from __future__ import annotations
 import discord
 import pytest
 
-from kingdoms.discord.ui.persistent import (
+from botforge.discord.ui.persistent import (
     PersistentPagerButton,
     register_page_renderer,
 )
@@ -23,7 +23,7 @@ PAGE_BUTTON = "ladder:page:3"
 
 class TestPersistentJourneys:
     @pytest.fixture
-    def simcord_bot(self, kingdoms_bot):  # type: ignore[no-untyped-def]
+    def simcord_bot(self, botforge_bot):  # type: ignore[no-untyped-def]
         rendered: list[int] = []
 
         async def render_page(interaction: discord.Interaction, page: int) -> None:
@@ -31,8 +31,8 @@ class TestPersistentJourneys:
             await interaction.response.send_message(f"ladder page {page}", ephemeral=True)
 
         register_page_renderer("ladder", render_page)
-        kingdoms_bot._journey_rendered = rendered  # type: ignore[attr-defined]
-        return kingdoms_bot
+        botforge_bot._journey_rendered = rendered  # type: ignore[attr-defined]
+        return botforge_bot
 
     @pytest.mark.simcord(strict_sync=False)
     async def test_click_after_a_real_restart_reconstructs_the_state(self, simcord_env, simcord_bot) -> None:  # type: ignore[no-untyped-def]

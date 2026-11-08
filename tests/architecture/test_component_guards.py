@@ -42,9 +42,9 @@ import pathlib
 import re
 
 # The single source of truth for component emoji: the ui SDK's allowlist
-# (kingdoms.discord.ui.emoji). A new emoji is live-checked first, then
+# (botforge.discord.ui.emoji). A new emoji is live-checked first, then
 # added THERE — never here.
-from kingdoms.discord.ui.emoji import ALLOWED_CODEPOINTS as _ALLOWED
+from botforge.discord.ui.emoji import ALLOWED_CODEPOINTS as _ALLOWED
 
 _GOOD_1F5XX = {cp for cp in _ALLOWED if 0x1F500 <= cp <= 0x1F5FF}
 
@@ -59,7 +59,7 @@ def test_component_emojis_are_discord_valid() -> None:
     before joining the allowlist.
     """
     offenders: list[str] = []
-    for path in ROOT.glob("src/kingdoms/**/*.py"):
+    for path in ROOT.glob("src/botforge/**/*.py"):
         if "rpc_generated" in str(path):
             continue
         text = path.read_text(encoding="utf-8")
@@ -74,7 +74,7 @@ def test_component_emojis_are_discord_valid() -> None:
 
 
 _DEFER_RE = re.compile(r"await\s+interaction\.response\.defer\(")
-_HANDLE_RE = re.compile(r"from\s+kingdoms\.discord\.admin_persistent\s+import\s+(_handle_\w+)")
+_HANDLE_RE = re.compile(r"from\s+botforge\.discord\.admin_persistent\s+import\s+(_handle_\w+)")
 
 
 def test_callbacks_do_not_double_defer() -> None:
@@ -85,7 +85,7 @@ def test_callbacks_do_not_double_defer() -> None:
     InteractionResponded and the click dies (the 2026-10-16 Roles bug).
     """
     offenders: list[str] = []
-    for path in ROOT.glob("src/kingdoms/**/*.py"):
+    for path in ROOT.glob("src/botforge/**/*.py"):
         if "rpc_generated" in str(path):
             continue
         text = path.read_text(encoding="utf-8")
@@ -113,7 +113,7 @@ def test_modals_define_on_submit() -> None:
     cannot see it. A modal exists to be submitted.
     """
     offenders: list[str] = []
-    for path in ROOT.glob("src/kingdoms/**/*.py"):
+    for path in ROOT.glob("src/botforge/**/*.py"):
         if "rpc_generated" in str(path):
             continue
         tree = ast.parse(path.read_text(encoding="utf-8"))
@@ -229,7 +229,7 @@ def test_dynamic_item_custom_ids_match_their_template() -> None:
     rebuild and the button dies silently.
     """
     offenders: list[str] = []
-    for path in ROOT.glob("src/kingdoms/**/*.py"):
+    for path in ROOT.glob("src/botforge/**/*.py"):
         if "rpc_generated" in str(path):
             continue
         tree = ast.parse(path.read_text(encoding="utf-8"))
@@ -336,7 +336,7 @@ def test_action_rows_hold_one_select() -> None:
     """
     offenders: list[str] = []
 
-    for path in ROOT.glob("src/kingdoms/**/*.py"):
+    for path in ROOT.glob("src/botforge/**/*.py"):
         if "rpc_generated" in str(path):
             continue
         tree = ast.parse(path.read_text(encoding="utf-8"))
@@ -363,7 +363,7 @@ def test_games_admin_items_guard_their_callbacks() -> None:
     """
     import ast as _ast
 
-    path = ROOT / "src/kingdoms/discord/admin_panel_games.py"
+    path = ROOT / "src/botforge/discord/admin_panel_games.py"
     tree = _ast.parse(path.read_text(encoding="utf-8"))
     offenders: list[str] = []
     for node in _ast.walk(tree):

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from kingdoms.ext_liquipedia.source import LiquipediaSource
+from botforge.ext_liquipedia.source import LiquipediaSource
 
 
 class _FakeInfo:
@@ -89,7 +89,7 @@ def test_faction_surface_is_empty() -> None:
 
 def test_gallery_icon_accepts_the_file_prefix_form() -> None:
     """A gallery entry with the File: prefix parses (the historical form)."""
-    from kingdoms.ext_liquipedia.liquipedia import LiquipediaMapsProvider
+    from botforge.ext_liquipedia.liquipedia import LiquipediaMapsProvider
 
     wikitext = "== Gallery ==\n<gallery>\nFile:Arabiade icon.png|In-game icon\nFile:Arabia map.png|Overview\n</gallery>"
     assert LiquipediaMapsProvider._parse_gallery_icon(wikitext) == "Arabiade icon.png"
@@ -97,7 +97,7 @@ def test_gallery_icon_accepts_the_file_prefix_form() -> None:
 
 def test_gallery_icon_accepts_the_bare_mediawiki_form() -> None:
     """A gallery entry WITHOUT the File: prefix parses (Arena's form)."""
-    from kingdoms.ext_liquipedia.liquipedia import LiquipediaMapsProvider
+    from botforge.ext_liquipedia.liquipedia import LiquipediaMapsProvider
 
     wikitext = "== Gallery ==\n<gallery>\nArenaicon.png|In-game icon\nArena aoe2de map.png|AoE2:DE map\n</gallery>"
     assert LiquipediaMapsProvider._parse_gallery_icon(wikitext) == "Arenaicon.png"
@@ -105,7 +105,7 @@ def test_gallery_icon_accepts_the_bare_mediawiki_form() -> None:
 
 def test_gallery_icon_prefers_the_captioned_icon_entry() -> None:
     """The entry captioned 'icon' wins over the first entry."""
-    from kingdoms.ext_liquipedia.liquipedia import LiquipediaMapsProvider
+    from botforge.ext_liquipedia.liquipedia import LiquipediaMapsProvider
 
     wikitext = "<gallery>\nArena minimap.png|Minimap\nArenaicon.png|In-game icon\n</gallery>"
     assert LiquipediaMapsProvider._parse_gallery_icon(wikitext) == "Arenaicon.png"
@@ -113,7 +113,7 @@ def test_gallery_icon_prefers_the_captioned_icon_entry() -> None:
 
 def test_gallery_icon_is_empty_without_a_gallery() -> None:
     """A page without a Gallery yields no icon (the main image takes over)."""
-    from kingdoms.ext_liquipedia.liquipedia import LiquipediaMapsProvider
+    from botforge.ext_liquipedia.liquipedia import LiquipediaMapsProvider
 
     assert LiquipediaMapsProvider._parse_gallery_icon("No gallery here.") == ""
 
@@ -143,7 +143,7 @@ def _persisted_descriptor_doc(descriptor: dict[str, Any]) -> dict[str, Any]:
 
 def test_a_current_generation_descriptor_is_a_cache_hit() -> None:
     """A descriptor stamped with the current parser generation serves."""
-    from kingdoms.ext_liquipedia import SEED_GEN
+    from botforge.ext_liquipedia import SEED_GEN
 
     doc = _persisted_descriptor_doc({"seed_gen": SEED_GEN, "name": "Team Islands"})
     db = _FakeDB()
@@ -170,7 +170,7 @@ def test_a_pre_generation_descriptor_is_a_cache_miss() -> None:
 
 async def test_the_sync_force_skips_the_warm_cache() -> None:
     """force=True (the admin DM's sync) re-fetches despite a warm cache."""
-    from kingdoms.ext_liquipedia import SEED_GEN
+    from botforge.ext_liquipedia import SEED_GEN
 
     upstream = _FakeUpstream()
     doc = _persisted_descriptor_doc({"seed_gen": SEED_GEN, "name": "Team Islands"})

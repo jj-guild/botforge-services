@@ -1,4 +1,4 @@
-"""Unit tests for the SurfaceService (kingdoms-services#130).
+"""Unit tests for the SurfaceService (botforge-services#130).
 
 Covers mod-scoped surface resolution (delegated to the ChannelService
 seam) and surface permission queries (delegated to the PermissionService
@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from kingdoms.core.services.surfaces import SurfaceService
+from botforge.core.services.surfaces import SurfaceService
 
 
 class FakeChannels:

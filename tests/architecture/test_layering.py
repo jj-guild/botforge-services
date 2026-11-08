@@ -23,21 +23,21 @@ import ast
 import re
 from pathlib import Path
 
-SRC = Path(__file__).resolve().parents[2] / "src" / "kingdoms"
+SRC = Path(__file__).resolve().parents[2] / "src" / "botforge"
 
 # The shared utils the ext providers may import (R1's whitelist).
 _SHARED_UTILS = (
-    "kingdoms",
-    "kingdoms.core.ids",
-    "kingdoms.core.debug",
-    "kingdoms.core.rate_limit",
-    "kingdoms.core.upstream_identity",
-    "kingdoms.core.rpc",
-    "kingdoms.core.models",
-    "kingdoms.aoe2",
-    "kingdoms.core.wiki_names",
-    "kingdoms.core_process.provider_endpoints",
-    "kingdoms.core_process",
+    "botforge",
+    "botforge.core.ids",
+    "botforge.core.debug",
+    "botforge.core.rate_limit",
+    "botforge.core.upstream_identity",
+    "botforge.core.rpc",
+    "botforge.core.models",
+    "botforge.aoe2",
+    "botforge.core.wiki_names",
+    "botforge.core_process.provider_endpoints",
+    "botforge.core_process",
 )
 
 _PROVIDER_NAMES = ("liquipedia", "aoe2lobby", "librematch", "aoe2techtree")
@@ -106,12 +106,12 @@ def test_r1_ext_imports_only_shared_utils() -> None:
     """R1: no ext package imports game/discord/foreign-provider code."""
     offenders: list[str] = []
     for path in _python_files("ext_aoe2lobby", "ext_librematch", "ext_liquipedia", "ext_aoe2techtree"):
-        own = f"kingdoms.{path.parent.name}"
+        own = f"botforge.{path.parent.name}"
         for module in sorted(_imports_of(path)):
-            if not module.startswith("kingdoms"):
+            if not module.startswith("botforge"):
                 continue
             if module.startswith(own) or module in _SHARED_UTILS or any(
-                module.startswith(u + ".") for u in _SHARED_UTILS if u != "kingdoms"
+                module.startswith(u + ".") for u in _SHARED_UTILS if u != "botforge"
             ):
                 continue
             offenders.append(f"{path.relative_to(SRC.parent)} -> {module}")
@@ -134,7 +134,7 @@ def test_r4_discord_never_touches_providers() -> None:
     offenders: list[str] = []
     for path in _python_files("discord"):
         for module in sorted(_imports_of(path)):
-            if module.startswith("kingdoms.ext_"):
+            if module.startswith("botforge.ext_"):
                 offenders.append(f"{path.relative_to(SRC.parent)} -> {module}")
         offenders.extend(
             f"{path.relative_to(SRC.parent)} reads {env}"
@@ -200,5 +200,5 @@ def test_r5_discord_reads_no_collection_raw() -> None:
 ALLOWLIST_R5: tuple[str, ...] = (
     # The purge tool: an operational maintenance script (a destructive
     # purge guarded by a Mongo marker) — not a feature path.
-    "kingdoms/discord/catalog_purge.py touches a collection raw",
+    "botforge/discord/catalog_purge.py touches a collection raw",
 )

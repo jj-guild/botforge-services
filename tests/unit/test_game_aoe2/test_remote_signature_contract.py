@@ -27,8 +27,8 @@ def _public_methods(cls: type) -> dict[str, inspect.Signature]:
 
 def test_the_remote_mirrors_the_real_service_signatures() -> None:
     """Every public method of the remote matches the real service's shape."""
-    from kingdoms.core.services.game_data import GameDataService
-    from kingdoms.game_aoe2.remote_catalog import RemoteGameDataService
+    from botforge.core.services.game_data import GameDataService
+    from botforge.game_aoe2.remote_catalog import RemoteGameDataService
 
     real = _public_methods(GameDataService)
     remote = _public_methods(RemoteGameDataService)
@@ -93,8 +93,8 @@ FORBIDDEN: dict[str, str] = {
 
 def test_the_remote_subset_is_explicit() -> None:
     """Real methods are exactly: served by the remote OR forbidden here."""
-    from kingdoms.core.services.game_data import GameDataService
-    from kingdoms.game_aoe2.remote_catalog import RemoteGameDataService
+    from botforge.core.services.game_data import GameDataService
+    from botforge.game_aoe2.remote_catalog import RemoteGameDataService
 
     real = set(_public_methods(GameDataService))
     remote = set(_public_methods(RemoteGameDataService))

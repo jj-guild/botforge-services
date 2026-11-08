@@ -1,4 +1,4 @@
-"""Unit tests for the PermissionService (kingdoms-services#55).
+"""Unit tests for the PermissionService (botforge-services#55).
 
 Covers the runtime authorization decision tree: bot-admin bypass,
 DM policy (dm_allowed), open actions (no declared roles), the
@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import pytest
 
-from kingdoms.core.services.permissions import ActionContext, PermissionService
+from botforge.core.services.permissions import ActionContext, PermissionService
 
 GUILD = "123456"
 USER = "42"

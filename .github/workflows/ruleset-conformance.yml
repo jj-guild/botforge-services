@@ -1,7 +1,7 @@
 name: Ruleset conformance
 
 # Compares the live GitHub rulesets of the three repositories against the
-# expected state documented in kingdoms docs/GUIDES/rulesets.md (#183).
+# expected state documented in botforge docs/GUIDES/rulesets.md (#183).
 # The doc is the source of truth; GitHub is the reality. Drift fails the
 # workflow and opens an issue flagged for maintainers — humans resolve
 # it in the web UI, the doc drives GitHub (same model as CONTRIBUTORS.md).
@@ -26,7 +26,7 @@ jobs:
       - name: Compare the live main rulesets against the documented expectation
         env:
           GH_TOKEN: ${{ github.token }}
-          REPOS: merlin-pinpin-org/kingdoms merlin-pinpin-org/kingdoms-infra merlin-pinpin-org/kingdoms-services
+          REPOS: jj-guild/botforge jj-guild/botforge-infra jj-guild/botforge-services
         run: |
           set -euo pipefail
           drift_file="$RUNNER_TEMP/drift.md"
@@ -65,10 +65,10 @@ jobs:
             checks="$(jq -r '[.rules[] | select(.type == "required_status_checks") | .parameters.required_status_checks[].context] | join("\n")' <<<"$ruleset")"
             checks_list="$checks"
             case "$repo" in
-              merlin-pinpin-org/kingdoms) expected_checks_list=$(printf '%s\n' "check" "cla") ;;
-              merlin-pinpin-org/kingdoms-infra)
+              jj-guild/botforge) expected_checks_list=$(printf '%s\n' "check" "cla") ;;
+              jj-guild/botforge-infra)
                 expected_checks_list=$(printf '%s\n' "Validate compose manifests" "Validate infrastructure files" "Backup/restore round-trip test" "Smoke test (test stack boot)" "cla" "Lint scripts and workflows") ;;
-              merlin-pinpin-org/kingdoms-services)
+              jj-guild/botforge-services)
                 expected_checks_list=$(printf '%s\n' "Lint (ruff)" "Typecheck (mypy strict)" "Unit tests (pytest)" "Validate and boot docker-compose.yml" "Smoke test (bot image + MongoDB + Redis)" "Discord smoke (real gateway via the CI/CD bot)" "Build and test the image" "Generate and check pydoc freshness" "cla") ;;
             esac
             while IFS= read -r expected; do
@@ -116,7 +116,7 @@ jobs:
             cat "${DRIFT_FILE:-$RUNNER_TEMP/drift.md}"
             echo
             echo "---"
-            echo "Humans resolve this in the GitHub web UI (Settings → Rules → Rulesets). The documentation is the source of truth: kingdoms docs/GUIDES/rulesets.md."
+            echo "Humans resolve this in the GitHub web UI (Settings → Rules → Rulesets). The documentation is the source of truth: botforge docs/GUIDES/rulesets.md."
             echo
             echo "_Flag: \`ruleset-drift\` · opened automatically by the ruleset-conformance workflow._"
           } > "$body_file"

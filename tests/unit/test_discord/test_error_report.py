@@ -1,4 +1,4 @@
-"""Tests for the enriched error reporting (kingdoms-services#113).
+"""Tests for the enriched error reporting (botforge-services#113).
 
 Guild interaction failures ride the guild's bot-logs channel with the
 git reference of the emitting line and the interaction context; DM
@@ -13,7 +13,7 @@ from unittest.mock import Mock
 import discord
 import pytest
 
-from kingdoms.discord.error_report import (
+from botforge.discord.error_report import (
     emitting_frame,
     git_ref,
     interaction_context,
@@ -26,7 +26,7 @@ from tests.mocks.discord_mock import MockGuild, MockInteraction, MockUser
 @pytest.fixture(autouse=True)
 def _clean_dm_dedupe() -> None:
     """Reset the admin-DM spam guard between tests (fresh quota each time)."""
-    from kingdoms.discord.error_report import reset_dm_report_dedupe
+    from botforge.discord.error_report import reset_dm_report_dedupe
 
     reset_dm_report_dedupe()
 
@@ -41,7 +41,7 @@ class _FakeLogsService:
         self.events.append((guild_id, event.message))
 
 
-def _raise_in_kingdoms_code() -> BaseException:
+def _raise_in_botforge_code() -> BaseException:
     try:
         raise ValueError("boom")
     except ValueError as exc:
@@ -51,7 +51,7 @@ def _raise_in_kingdoms_code() -> BaseException:
 def test_expired_interactions_are_benign_no_crash_report() -> None:
     """A slow answer (10062 Unknown interaction) is not a code defect:
     the full crash report is noise for it."""
-    from kingdoms.discord.error_report import is_benign_interaction_error
+    from botforge.discord.error_report import is_benign_interaction_error
 
     response = Mock(status=404, reason="Not Found", headers={})
     expired = discord.NotFound(response, {"code": 10062, "message": "Unknown interaction"})
@@ -60,12 +60,12 @@ def test_expired_interactions_are_benign_no_crash_report() -> None:
 
 
 def test_emitting_frame_returns_none_outside_src() -> None:
-    """Test code is not runtime code: no src/kingdoms frame, no ref.
+    """Test code is not runtime code: no src/botforge frame, no ref.
 
     The error path degrades to a plain message — never a crash of the
     crash reporter.
     """
-    exc = _raise_in_kingdoms_code()
+    exc = _raise_in_botforge_code()
     assert emitting_frame(exc) is None
     assert git_ref(None, "") == ""
 
@@ -80,7 +80,7 @@ def test_git_ref_pins_the_source_line_with_a_synthetic_frame() -> None:
         _throw()
     except ValueError as exc:
         frame = inspect.getinnerframes(exc.__traceback__)[-1]
-        tree_url = "https://github.com/merlin-pinpin-org/kingdoms-services/tree/980a037abcd1234"
+        tree_url = "https://github.com/jj-guild/botforge-services/tree/980a037abcd1234"
         ref = git_ref(frame, tree_url)
         assert ref == ""  # tests/ frames are not pinned, whatever the sha
 
@@ -107,11 +107,11 @@ async def test_guild_interaction_failure_rides_bot_logs() -> None:
     logs = _FakeLogsService()
     interaction = MockInteraction(user=MockUser(id=42), guild=MockGuild(id=77))
     interaction.guild_id = 77
-    exc = _raise_in_kingdoms_code()
+    exc = _raise_in_botforge_code()
     await report_interaction_error(
         interaction,
         exc,
-        "https://github.com/merlin-pinpin-org/kingdoms-services/tree/980a037abcd1234",
+        "https://github.com/jj-guild/botforge-services/tree/980a037abcd1234",
         logs,
     )
     assert len(logs.events) == 1
@@ -127,7 +127,7 @@ async def test_dm_interaction_failure_answers_the_dm() -> None:
     logs = _FakeLogsService()
     interaction = MockInteraction(user=MockUser(id=42), guild=None)
     interaction.guild_id = None
-    exc = _raise_in_kingdoms_code()
+    exc = _raise_in_botforge_code()
     await report_interaction_error(interaction, exc, "", logs)
     assert logs.events == []
     assert interaction.response.sent is True
@@ -139,7 +139,7 @@ async def test_dm_interaction_failure_answers_the_dm() -> None:
 @pytest.mark.asyncio
 async def test_guild_error_without_interaction_fans_out_to_guilds() -> None:
     logs = _FakeLogsService()
-    exc = _raise_in_kingdoms_code()
+    exc = _raise_in_botforge_code()
     await report_guild_error(exc, ["77", "78"], "", logs)
     assert [guild_id for guild_id, _ in logs.events] == ["77", "78"]
     assert all("boom" in message for _, message in logs.events)
@@ -180,11 +180,11 @@ async def test_admins_receive_the_crash_report_as_dm() -> None:
     bot = _FakeDmBot([111])
     interaction = MockInteraction(user=MockUser(id=42), guild=MockGuild(id=77))
     interaction.guild_id = 77
-    exc = _raise_in_kingdoms_code()
+    exc = _raise_in_botforge_code()
     await report_interaction_error(
         interaction,
         exc,
-        "https://github.com/merlin-pinpin-org/kingdoms-services/tree/980a037abcd1234",
+        "https://github.com/jj-guild/botforge-services/tree/980a037abcd1234",
         logs,
         bot=bot,
         admin_ids=("111", "not-an-id"),
@@ -201,7 +201,7 @@ async def test_dm_failure_also_dms_admins() -> None:
     bot = _FakeDmBot([111])
     interaction = MockInteraction(user=MockUser(id=42), guild=None)
     interaction.guild_id = None
-    exc = _raise_in_kingdoms_code()
+    exc = _raise_in_botforge_code()
     await report_interaction_error(interaction, exc, "", logs, bot=bot, admin_ids=("111",))
     assert bot._users[111].sent, "admins are DM'd even for DM-origin failures"
 
@@ -210,7 +210,7 @@ async def test_dm_failure_also_dms_admins() -> None:
 async def test_guild_error_dms_admins_without_interaction() -> None:
     logs = _FakeLogsService()
     bot = _FakeDmBot([111])
-    exc = _raise_in_kingdoms_code()
+    exc = _raise_in_botforge_code()
     await report_guild_error(exc, ["77"], "", logs, bot=bot, admin_ids=("111",))
     assert bot._users[111].sent
 
@@ -218,12 +218,12 @@ async def test_guild_error_dms_admins_without_interaction() -> None:
 @pytest.mark.asyncio
 async def test_repeated_failures_do_not_spam_admins() -> None:
     """The spam guard coalesces identical failures within its window."""
-    from kingdoms.discord.error_report import reset_dm_report_dedupe
+    from botforge.discord.error_report import reset_dm_report_dedupe
 
     reset_dm_report_dedupe()
     logs = _FakeLogsService()
     bot = _FakeDmBot([111])
-    exc = _raise_in_kingdoms_code()
+    exc = _raise_in_botforge_code()
     await report_guild_error(exc, ["77"], "", logs, bot=bot, admin_ids=("111",))
     assert bot._users[111].sent, "the first failure DMs the admins"
     sent_before = len(bot._users[111].sent)

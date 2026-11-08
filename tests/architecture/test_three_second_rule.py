@@ -3,7 +3,7 @@
 Discord invalidates an interaction ~3s after it fires. A command that
 starts its work with a service/database await and answers later gets
 `NotFound 10062 (Unknown interaction)` — the user sees "This
-interaction failed". The rule (discord-ui skill, kingdoms repo): the
+interaction failed". The rule (discord-ui skill, botforge repo): the
 acknowledgment (defer or immediate answer) is the FIRST await on every
 command path; slow reads ride the followup afterwards.
 
@@ -24,8 +24,8 @@ ROOT = Path(__file__).resolve().parents[2]
 
 # (file, command callback) — every tree-registered slash command.
 COMMANDS: tuple[tuple[str, str], ...] = (
-    ("src/kingdoms/discord/status.py", "status_command"),
-    ("src/kingdoms/discord/admin.py", "admin_command"),
+    ("src/botforge/discord/status.py", "status_command"),
+    ("src/botforge/discord/admin.py", "admin_command"),
 )
 
 ACK_RE = re.compile(r"await interaction\.response\.(defer|send_message|send_modal|edit_message)")

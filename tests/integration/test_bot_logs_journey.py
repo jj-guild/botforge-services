@@ -1,4 +1,4 @@
-"""SimCord journey for the bot logs channel (kingdoms-services#109, #52).
+"""SimCord journey for the bot logs channel (botforge-services#109, #52).
 
 The startup announcement is now a lifecycle event of the per-guild bot
 logs channel: this journey drives the **real bot** (``create_bot`` →
@@ -15,12 +15,12 @@ from typing import Any
 
 import pytest
 
-from kingdoms.core.models.channel import ChannelModel
-from kingdoms.core.services.logs import (
+from botforge.core.models.channel import ChannelModel
+from botforge.core.services.logs import (
     LogService,
 )
-from kingdoms.core.services.state import StateService
-from kingdoms.discord.logs_platform import DiscordLogsPlatform
+from botforge.core.services.state import StateService
+from botforge.discord.logs_platform import DiscordLogsPlatform
 from tests.mocks.state_mock import InMemoryStateStore
 
 IS_COMPONENTS_V2 = 1 << 15
@@ -69,7 +69,7 @@ class TestStartupAnnouncementJourney:
     """The startup announcement lands in each guild's bot logs channel."""
 
     @pytest.fixture
-    def simcord_bot(self, kingdoms_bot):  # type: ignore[no-untyped-def]
+    def simcord_bot(self, botforge_bot):  # type: ignore[no-untyped-def]
         """Attach a real LogService backed by in-memory persistence.
 
         ``create_bot`` leaves ``logs_service`` at None in tests (no
@@ -79,12 +79,12 @@ class TestStartupAnnouncementJourney:
         """
         database = InMemoryLogsDatabase()
         self.logs_database = database
-        kingdoms_bot.logs_service = LogService(
+        botforge_bot.logs_service = LogService(
             database=database,  # type: ignore[arg-type]
-            platform=DiscordLogsPlatform(kingdoms_bot),
+            platform=DiscordLogsPlatform(botforge_bot),
             state=StateService(store=InMemoryStateStore()),  # type: ignore[arg-type]
         )
-        return kingdoms_bot
+        return botforge_bot
 
     @pytest.mark.simcord(strict_sync=False)
     async def test_startup_announcement_dm_the_bot_admins(self, simcord_env) -> None:  # type: ignore[no-untyped-def]

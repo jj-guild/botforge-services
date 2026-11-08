@@ -1,4 +1,4 @@
-"""Unit tests for the GameDataService catalog, pools and lifecycle (kingdoms-services#131)."""
+"""Unit tests for the GameDataService catalog, pools and lifecycle (botforge-services#131)."""
 
 from __future__ import annotations
 
@@ -6,8 +6,8 @@ from typing import Any
 
 import pytest
 
-from kingdoms.core.models.game_data import MapPoolModel
-from kingdoms.core.services.game_data import (
+from botforge.core.models.game_data import MapPoolModel
+from botforge.core.services.game_data import (
     ADMIN_AUDIT_COLLECTION,
     MAP_PACKS_COLLECTION,
     MAP_POOLS_COLLECTION,

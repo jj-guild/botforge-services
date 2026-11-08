@@ -46,19 +46,19 @@ on:
         default: ""
   pull_request:
     paths:
-      - "src/kingdoms/ext_librematch/**"
-      - "src/kingdoms/ext_aoe2lobby/**"
-      - "src/kingdoms/ext_liquipedia/**"
-      - "src/kingdoms/core/games/aoe2/blobs.py"
+      - "src/botforge/ext_librematch/**"
+      - "src/botforge/ext_aoe2lobby/**"
+      - "src/botforge/ext_liquipedia/**"
+      - "src/botforge/core/games/aoe2/blobs.py"
       - ".github/workflows/scripts/provider_probe.py"
       - ".github/workflows/provider-probe.yml"
   push:
     branches: [main]
     paths:
-      - "src/kingdoms/ext_librematch/**"
-      - "src/kingdoms/ext_aoe2lobby/**"
-      - "src/kingdoms/ext_liquipedia/**"
-      - "src/kingdoms/core/games/aoe2/blobs.py"
+      - "src/botforge/ext_librematch/**"
+      - "src/botforge/ext_aoe2lobby/**"
+      - "src/botforge/ext_liquipedia/**"
+      - "src/botforge/core/games/aoe2/blobs.py"
       - ".github/workflows/scripts/provider_probe.py"
       - ".github/workflows/provider-probe.yml"
 

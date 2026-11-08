@@ -1,7 +1,7 @@
 # Map data attribution (Liquipedia)
 
 Map descriptors (name, description, terrain, size) imported by the
-`kingdoms.mapsdata` provider originate from
+`botforge.mapsdata` provider originate from
 [Liquipedia](https://liquipedia.net/ageofempires/) and are licensed under
 **CC-BY-SA 3.0**. Reuse requires attributing Liquipedia as the source; each
 imported map record carries its `source_url` and the

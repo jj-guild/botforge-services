@@ -1,0 +1,579 @@
+"""LogService: lifecycle events in the per-guild bot logs channel (#109).
+
+Resolves each guild's ``🤖-bot-logs`` channel through the cache-aside
+flow (botforge-services#23): Redis (``botforge:channels:{guild}:bot_logs``)
+→ MongoDB (``channels``, :class:`~botforge.core.models.channel.ChannelModel`)
+→ platform creation. The channel is **admin-only by default**: view is
+granted to guild administrators and BOT_ADMINS, denied to @everyone —
+applied atomically at creation so the channel is never public, even
+briefly.
+
+Access policies are per-guild, persisted in MongoDB, and manageable
+through ``/admin`` (re-apply default, grant/revoke a role view access);
+every policy change is itself logged as an audit event.
+
+Logged events: start/stop/restart, crash, status change, policy change
+— each localized (en/fr); the "start" event is the deployment
+announcement carrying the frozen ``botforge-deploy`` footer
+(botforge-services#52, read back by the botforge-infra battery #78).
+
+Reliability: best-effort end to end. Redis down → fall back to MongoDB;
+both down → skip the event. A deleted channel is detected on send
+failure, dropped from the caches, and re-provisioned on the next event.
+Crash-loop guard: repeated start/stop within a short window collapses
+into one "crash-loop detected" event with a counter.
+"""
+
+from __future__ import annotations
+
+import logging
+import time
+from dataclasses import dataclass
+from typing import Any, Protocol
+
+from botforge.core.enums.channel_category import ChannelCategory
+from botforge.core.models.channel import ChannelModel
+from botforge.core.services.i18n import MessageCatalog
+
+logger = logging.getLogger("botforge.logs")
+
+BOT_LOGS_CATEGORY = str(ChannelCategory.BOT_LOGS)
+BOT_LOGS_CHANNEL_NAME = "🤖-bot-logs"
+CHANNELS_COLLECTION = "channels"
+POLICIES_COLLECTION = "channel_access_policies"
+GUILD_SETTINGS_COLLECTION = "guild_settings"
+USER_SETTINGS_COLLECTION = "user_settings"
+SUPPORTED_LOCALES = ("en", "fr")
+CACHE_TTL_SECONDS = 3600
+CRASH_LOOP_WINDOW_SECONDS = 300
+CRASH_LOOP_THRESHOLD = 3
+
+
+class LogsDatabase(Protocol):
+    """Narrow async MongoDB seam the LogService depends on."""
+
+    def __init__(self, database: Any) -> None:
+        """Wrap an async MongoDB database."""
+        ...
+
+    async def find_channel(self, guild_id: str, category: str) -> ChannelModel | None:
+        """Find the persisted channel document for a guild category."""
+        ...
+
+    async def upsert_channel(self, channel: ChannelModel) -> None:
+        """Insert or replace the channel document."""
+        ...
+
+    async def delete_channel(self, guild_id: str, category: str) -> bool:
+        """Drop a channel document; True when one was removed."""
+        ...
+
+    async def get_policy(self, guild_id: str, category: str) -> dict[str, Any] | None:
+        """Read the persisted access policy for a guild category."""
+        ...
+
+    async def set_policy(self, guild_id: str, category: str, policy: dict[str, Any]) -> None:
+        """Persist the access policy (upsert)."""
+        ...
+
+    async def get_guild_settings(self, guild_id: str) -> dict[str, Any] | None:
+        """Read the per-guild settings (locale, ...)."""
+        ...
+
+    async def set_guild_settings(self, guild_id: str, settings: dict[str, Any]) -> None:
+        """Persist the per-guild settings (upsert)."""
+        ...
+
+    async def get_user_settings(self, user_id: str) -> dict[str, Any] | None:
+        """Read the per-user settings (DM locale, ...)."""
+        ...
+
+    async def set_user_settings(self, user_id: str, settings: dict[str, Any]) -> None:
+        """Persist the per-user settings (upsert)."""
+        ...
+
+
+class LogsPlatform(Protocol):
+    """Narrow platform seam: routing, permissions, sending."""
+
+    async def apply_default_policy(self, guild_id: str, channel_id: str) -> None:
+        """Apply the admin-only default permission overwrites."""
+        ...
+
+    async def apply_public_policy(self, guild_id: str, channel_id: str) -> None:
+        """Open the channel to everyone (public visibility)."""
+        ...
+
+    async def grant_role_view(self, guild_id: str, channel_id: str, role_id: str) -> None:
+        """Grant a role view access on the logs channel."""
+        ...
+
+    async def send_log_message(self, guild_id: str, channel_id: str, content: str, layout: Any = None) -> None:
+        """Deliver one lifecycle event to the logs channel (layout optional)."""
+        ...
+
+    async def send_and_pin_log_message(self, guild_id: str, channel_id: str, content: str, layout: Any = None) -> str:
+        """Deliver one lifecycle event, pin it, return the message id."""
+        ...
+
+    async def unpin_log_message(self, guild_id: str, channel_id: str, message_id: str) -> None:
+        """Unpin one message (the superseded boot status)."""
+        ...
+
+    async def list_pinned_log_messages(self, guild_id: str, channel_id: str) -> list[str]:
+        """List every pinned message id of the logs channel."""
+        ...
+
+    async def channel_exists(self, guild_id: str, channel_id: str) -> bool:
+        """Whether the channel still exists on the platform."""
+        ...
+
+    async def list_text_channels(self, guild_id: str) -> list[dict[str, str]]:
+        """List the guild's text channels (id, name) for the admin picker."""
+        ...
+
+
+@dataclass(frozen=True, slots=True)
+class LifecycleEvent:
+    """One bot lifecycle event, ready to render and send.
+
+    ``layout`` is opaque to the core (platform-typed: a discord.py
+    Components V2 ``LayoutView`` on the Discord platform) — the
+    platform seam renders it, the core only carries it. ``message`` is
+    the plain-text rendering, sent when no layout is provided.
+    """
+
+    kind: str
+    message: str
+    footer: str = ""
+    layout: Any = None
+
+
+def default_policy() -> dict[str, Any]:
+    """Build the default access policy: admin-only (guild admins + BOT_ADMINS)."""
+    return {
+        "default": "admin_only",
+        "roles_with_view": [],
+        "updated_at": int(time.time()),
+    }
+
+
+class LogService:
+    """Resolve the bot logs channel and deliver lifecycle events to it."""
+
+    def __init__(
+        self,
+        database: LogsDatabase,
+        platform: LogsPlatform,
+        state: Any,
+        clock: Any = time.monotonic,
+        catalog: MessageCatalog | None = None,
+    ) -> None:
+        """Wire the stores; ``state`` is a StateService (Redis cache-aside).
+
+        ``catalog`` localizes the audit events; ``locale_resolver``
+        resolves a guild's native Discord locale from its id (the
+        bot injects ``guild.preferred_locale`` — the platform stores
+        no locale of its own). None keeps the built-in English
+        messages. The superseded boot-status messages stay (unpinned,
+        never deleted): the boot status declares
+        ``delete_when_superseded=False`` on the static-pin registry —
+        the log trail stays readable.
+        """
+        self._db = database
+        self._platform = platform
+        self._state = state
+        self._clock = clock
+        self._catalog = catalog
+        self._locale_resolver: Any = None
+
+    def _tr(self, key: str, locale: str, **kwargs: Any) -> str:
+        """Render a lifecycle message, falling back to English strings."""
+        if self._catalog is None:
+            from botforge.core.services.i18n import FALLBACKS
+
+            template = FALLBACKS.get(key, key)
+            try:
+                return template.format(**kwargs)
+            except (KeyError, IndexError):
+                return template
+        return self._catalog.render(key, locale, **kwargs)
+
+    async def resolve_channel(self, guild_id: str) -> str | None:
+        """Cache-aside resolution: Redis → MongoDB, nothing else.
+
+        The tree owns the channel (``bot/logs``) and routes it through
+        ``set_channel``; this service never adopts a channel by name
+        and never creates one — the legacy ``🤖-bot-logs``
+        channel stays dead, nothing writes into it anymore. None when
+        the tree has not routed a channel yet (the events drop).
+        """
+        cache_key = self._cache_key(guild_id)
+        cached = await self._safe(self._state.get_state("channels", cache_key))
+        if cached and cached.get("channel_id"):
+            if await self._platform.channel_exists(guild_id, str(cached["channel_id"])):
+                return str(cached["channel_id"])
+            await self._drop_caches(guild_id)
+        stored = await self._db.find_channel(guild_id, BOT_LOGS_CATEGORY)
+        if stored is not None:
+            if await self._platform.channel_exists(guild_id, stored.channel_id):
+                await self._cache(guild_id, stored.channel_id)
+                return stored.channel_id
+            await self._db.delete_channel(guild_id, BOT_LOGS_CATEGORY)
+        return None
+
+    async def log_event(self, guild_id: str, event: LifecycleEvent, *, pin: bool = False) -> None:
+        """Deliver one lifecycle event to the guild's logs channel (best-effort).
+
+        Policy and stop messages are localized with the guild's locale
+        (the announcement layouts render their own localization).
+        ``pin`` marks the message as a permanent reference (the boot
+        status): the platform pins it and unpins the previous one —
+        only the most recent boot status stays pinned.
+        """
+        try:
+            channel_id = await self.resolve_channel(guild_id)
+            if channel_id is None:
+                return
+            content = event.message if not event.footer else f"{event.message}\n-# {event.footer}"
+            if pin:
+                await self._replace_pinned_boot_status(guild_id, channel_id, content, event)
+            else:
+                await self._platform.send_log_message(guild_id, channel_id, content, layout=event.layout)
+        except Exception:
+            logger.warning("LIFECYCLE LOG DELIVERY FAILED (guild %s, event %s) — best-effort", guild_id, event.kind)
+
+    async def _replace_pinned_boot_status(
+        self, guild_id: str, channel_id: str, content: str, event: LifecycleEvent
+    ) -> None:
+        """Pin the new boot status; the superseded stay (unpinned).
+
+        The static-pin registry owns the policy: the boot status is
+        declared with ``delete_when_superseded=False`` — the old
+        statuses are unpinned (only the latest stays pinned) but the
+        messages remain readable in the log trail. The per-guild id
+        rides the state store; the cycle is best-effort like every
+        delivery.
+        """
+        key = f"pinned_boot:{guild_id}"
+        pinned_ids = await self._safe(self._platform.list_pinned_log_messages(guild_id, channel_id)) or []
+        for pinned_id in pinned_ids:
+            try:
+                await self._platform.unpin_log_message(guild_id, channel_id, pinned_id)
+            except Exception:
+                logger.warning(
+                    "PINNED BOOT STATUS unpin failed (guild %s, message %s) — best-effort", guild_id, pinned_id
+                )
+        message_id = await self._platform.send_and_pin_log_message(guild_id, channel_id, content, layout=event.layout)
+        if message_id:
+            await self._safe(self._state.set_state("logs", key, {"message_id": message_id}))
+
+    async def log_crash_loop(self, guild_id: str, base_event: LifecycleEvent) -> None:
+        """Collapse repeated start/stop into one crash-loop event with a counter."""
+        key = f"crash_loop:{guild_id}"
+        state = await self._safe(self._state.get_state("logs", key))
+        count = int(state["count"]) + 1 if state else 1
+        await self._safe(self._state.set_state("logs", key, {"count": count}, ttl=CRASH_LOOP_WINDOW_SECONDS))
+        if count < CRASH_LOOP_THRESHOLD:
+            return
+        minutes = CRASH_LOOP_WINDOW_SECONDS // 60
+        event = LifecycleEvent(
+            kind="crash_loop",
+            message=f"{base_event.message} (crash-loop detected: {count} events in {minutes} min)",
+            footer=base_event.footer,
+        )
+        await self.log_event(guild_id, event)
+
+    async def get_access_policy(self, guild_id: str) -> dict[str, Any]:
+        """Read the guild's logs access policy (default: admin-only)."""
+        return await self._db.get_policy(guild_id, BOT_LOGS_CATEGORY) or default_policy()
+
+    async def grant_role_view_access(self, guild_id: str, role_id: str, by: str) -> None:
+        """Grant a role view access on the logs channel; audited as an event."""
+        policy = await self.get_access_policy(guild_id)
+        roles = [r for r in policy.get("roles_with_view", []) if r != role_id]
+        roles.append(role_id)
+        policy["roles_with_view"] = roles
+        policy["updated_at"] = int(time.time())
+        await self._db.set_policy(guild_id, BOT_LOGS_CATEGORY, policy)
+        channel_id = await self.resolve_channel(guild_id)
+        if channel_id:
+            await self._platform.grant_role_view(guild_id, channel_id, role_id)
+        locale = await self.get_locale(guild_id)
+        await self.log_event(
+            guild_id,
+            LifecycleEvent(kind="policy", message=self._tr("lifecycle.policy.grant", locale, role_id=role_id, by=by)),
+        )
+
+    async def reapply_default_policy(self, guild_id: str, by: str) -> None:
+        """Reset the logs channel to the default admin-only policy; audited."""
+        await self._db.set_policy(guild_id, BOT_LOGS_CATEGORY, default_policy())
+        channel_id = await self.resolve_channel(guild_id)
+        if channel_id:
+            await self._platform.apply_default_policy(guild_id, channel_id)
+        locale = await self.get_locale(guild_id)
+        await self.log_event(
+            guild_id,
+            LifecycleEvent(kind="policy", message=self._tr("lifecycle.policy.reset", locale, by=by)),
+        )
+
+    async def set_channel(self, guild_id: str, channel_id: str, by: str) -> None:
+        """Route the bot logs to an existing channel; audited as an event.
+
+        The channel must already exist on the platform (the admin picks
+        it from the guild's channels); the current visibility policy is
+        re-applied on the new target so the rights follow the routing.
+        """
+        if not await self._platform.channel_exists(guild_id, channel_id):
+            raise ValueError(f"channel {channel_id} does not exist in guild {guild_id}")
+        previous = await self._db.find_channel(guild_id, BOT_LOGS_CATEGORY)
+        if previous is not None and previous.channel_id == channel_id:
+            return  # already routed there: a no-op, never an audit event
+        policy = await self.get_access_policy(guild_id)
+        await self._db.upsert_channel(
+            ChannelModel(
+                _id=f"{guild_id}:{BOT_LOGS_CATEGORY}",
+                guild_id=guild_id,
+                platform="discord",
+                category=BOT_LOGS_CATEGORY,
+                channel_id=channel_id,
+                name=BOT_LOGS_CHANNEL_NAME,
+            )
+        )
+        await self._cache(guild_id, channel_id)
+        if policy.get("default") == "public":
+            await self._platform.apply_public_policy(guild_id, channel_id)
+        else:
+            await self._platform.apply_default_policy(guild_id, channel_id)
+        for role_id in policy.get("roles_with_view", []):
+            await self._platform.grant_role_view(guild_id, channel_id, str(role_id))
+        # the boot routing is internal bookkeeping, not an admin action:
+        # no audit event (the "<@channel-tree>" mention was noise); a
+        # human reroute keeps its audit line
+        if not str(by).isdigit():
+            return
+        previous_note = f" (was <#{previous.channel_id}>)" if previous is not None else ""
+        locale = await self.get_locale(guild_id)
+        await self.log_event(
+            guild_id,
+            LifecycleEvent(
+                kind="policy",
+                message=self._tr(
+                    "lifecycle.policy.route", locale, channel_id=channel_id, previous_note=previous_note, by=by
+                ),
+            ),
+        )
+
+    async def set_visibility(self, guild_id: str, public: bool, by: str) -> None:
+        """Set the logs channel visibility (public/admin-only); audited.
+
+        The policy is persisted first, the platform overwrites second —
+        a crash in between leaves the channel more restrictive than the
+        record, never the reverse.
+        """
+        policy = await self.get_access_policy(guild_id)
+        policy["default"] = "public" if public else "admin_only"
+        policy["updated_at"] = int(time.time())
+        await self._db.set_policy(guild_id, BOT_LOGS_CATEGORY, policy)
+        channel_id = await self.resolve_channel(guild_id)
+        if channel_id:
+            if public:
+                await self._platform.apply_public_policy(guild_id, channel_id)
+            else:
+                await self._platform.apply_default_policy(guild_id, channel_id)
+                for role_id in policy.get("roles_with_view", []):
+                    await self._platform.grant_role_view(guild_id, channel_id, str(role_id))
+        state = "public" if public else "admin-only"
+        locale = await self.get_locale(guild_id)
+        await self.log_event(
+            guild_id,
+            LifecycleEvent(kind="policy", message=self._tr("lifecycle.policy.visibility", locale, state=state, by=by)),
+        )
+
+    async def list_text_channels(self, guild_id: str) -> list[dict[str, str]]:
+        """List the guild's text channels (id, name) for the admin picker."""
+        return await self._platform.list_text_channels(guild_id)
+
+    async def observe_user_locale(self, user_id: str, locale: str) -> None:
+        """Record the Discord client language a user was last seen using.
+
+        Observation, never a setting the user manages: Discord exposes
+        a user's language only inside interactions, so every interaction
+        refreshes it here (best-effort) and the interaction-free DMs
+        (boot status, crash reports) render in the language the user
+        was last seen speaking.
+        """
+        if locale not in SUPPORTED_LOCALES:
+            return
+        try:
+            settings = await self._safe(self._db.get_user_settings(user_id)) or {}
+            if str(settings.get("locale", "")) == locale:
+                return
+            settings["locale"] = locale
+            settings["updated_at"] = int(time.time())
+            await self._db.set_user_settings(user_id, settings)
+        except Exception:
+            logger.debug("user locale observation failed (user %s)", user_id, exc_info=True)
+
+    async def observe_guild_member_locale(self, guild_id: str, user_id: str, locale: str) -> None:
+        """Record the client language one member was last seen using in a guild.
+
+        Only useful when Discord gives us nothing: a non-Community guild's
+        ``preferred_locale`` is a hard-coded ``en-US`` (not a setting), so
+        the guild's language falls back to the majority of its members'
+        observed client languages. Best-effort, never a managed setting.
+        """
+        if locale not in SUPPORTED_LOCALES:
+            return
+        try:
+            settings = await self._safe(self._db.get_guild_settings(guild_id)) or {}
+            observed: dict[str, Any] = dict(settings.get("member_locales", {}) or {})
+            observed[user_id] = locale
+            # keep the store bounded: the 100 most recently seen members
+            if len(observed) > 100:
+                observed = dict(list(observed.items())[-100:])
+            settings["member_locales"] = observed
+            settings["updated_at"] = int(time.time())
+            await self._db.set_guild_settings(guild_id, settings)
+        except Exception:
+            logger.debug("guild member locale observation failed (guild %s)", guild_id, exc_info=True)
+
+    async def observed_guild_locale(self, guild_id: str) -> str:
+        """Return the majority observed client language of the members."""
+        try:
+            settings = await self._safe(self._db.get_guild_settings(guild_id)) or {}
+            observed: dict[str, str] = dict(settings.get("member_locales", {}) or {})
+        except Exception:
+            return "en"
+        if not observed:
+            return "en"
+        counts: dict[str, int] = {}
+        for locale in observed.values():
+            counts[locale] = counts.get(locale, 0) + 1
+        best = max(counts.items(), key=lambda kv: kv[1])[0]
+        return best if best in SUPPORTED_LOCALES else "en"
+
+    async def set_user_locale(self, user_id: str, locale: str) -> None:
+        """Persist the user's DM language choice (the DM picker)."""
+        if locale not in SUPPORTED_LOCALES:
+            raise ValueError(f"unsupported locale: {locale!r}")
+        settings = await self._safe(self._db.get_user_settings(user_id)) or {}
+        settings["locale"] = locale
+        settings["updated_at"] = int(time.time())
+        await self._db.set_user_settings(user_id, settings)
+
+    async def get_user_locale(self, user_id: str) -> str:
+        """Return the user's DM language: the stored choice, the observed one."""
+        try:
+            settings = await self._safe(self._db.get_user_settings(user_id))
+        except Exception:
+            return "en"
+        locale = str((settings or {}).get("locale", ""))
+        return locale if locale in SUPPORTED_LOCALES else "en"
+
+    async def ensure_user_locale(self, user_id: str, locale: str) -> None:
+        """Store the detected client language as the user's default locale.
+
+        The locale is always stored for users and guilds: the detected
+        native value (``interaction.locale``) is the default, English when
+        unknown or unsupported. An explicit picker choice always wins —
+        seeding never overwrites a stored value. Best-effort, never raises.
+        """
+        if locale not in SUPPORTED_LOCALES:
+            locale = "en"
+        try:
+            settings = await self._safe(self._db.get_user_settings(user_id)) or {}
+            if str(settings.get("locale", "")) in SUPPORTED_LOCALES:
+                return
+            settings["locale"] = locale
+            settings["updated_at"] = int(time.time())
+            settings["seeded_by"] = "detected"
+            await self._db.set_user_settings(user_id, settings)
+        except Exception:
+            logger.debug("user locale seeding failed (user %s)", user_id, exc_info=True)
+
+    def set_locale_resolver(self, resolver: Any) -> None:
+        """Inject the fallback locale resolver (guild id -> en/fr).
+
+        The stored guild choice (the admin language picker, bot/admin)
+        always wins; the resolver only serves the guilds that never
+        picked — Discord's own signal (preferred_locale), then the
+        members' observed majority.
+        """
+        self._locale_resolver = resolver
+
+    async def set_locale(self, guild_id: str, locale: str, by: str) -> None:
+        """Persist the guild's language choice (the admin picker)."""
+        if locale not in SUPPORTED_LOCALES:
+            raise ValueError(f"unsupported locale: {locale!r}")
+        settings = await self._safe(self._db.get_guild_settings(guild_id)) or {}
+        settings["locale"] = locale
+        settings["updated_at"] = int(time.time())
+        settings["updated_by"] = by
+        await self._db.set_guild_settings(guild_id, settings)
+        await self.log_event(
+            guild_id,
+            LifecycleEvent(kind="policy", message=self._tr("lifecycle.policy.language", locale, lang=locale, by=by)),
+        )
+
+    async def get_locale(self, guild_id: str) -> str:
+        """Return the guild's language: the stored choice, then the fallback."""
+        try:
+            settings = await self._safe(self._db.get_guild_settings(guild_id))
+        except Exception:
+            settings = None
+        stored = str((settings or {}).get("locale", ""))
+        if stored in SUPPORTED_LOCALES:
+            return stored
+        if self._locale_resolver is None:
+            return "en"
+        try:
+            locale = str(await self._locale_resolver(guild_id) or "en")
+        except TypeError:
+            locale = str(self._locale_resolver(guild_id) or "en")
+        except Exception:
+            return "en"
+        return locale if locale in SUPPORTED_LOCALES else "en"
+
+    async def ensure_guild_locale(self, guild_id: str, locale: str) -> None:
+        """Store the detected native locale as the guild's default locale.
+
+        The locale is always stored for guilds and users: the detected
+        native value (``guild.preferred_locale``) is the default, English
+        when unknown or unsupported. An explicit picker choice always
+        wins — seeding never overwrites a stored value. Best-effort,
+        never raises.
+        """
+        if locale not in SUPPORTED_LOCALES:
+            locale = "en"
+        try:
+            settings = await self._safe(self._db.get_guild_settings(guild_id)) or {}
+            if str(settings.get("locale", "")) in SUPPORTED_LOCALES:
+                return
+            settings["locale"] = locale
+            settings["updated_at"] = int(time.time())
+            settings["seeded_by"] = "detected"
+            await self._db.set_guild_settings(guild_id, settings)
+        except Exception:
+            logger.debug("guild locale seeding failed (guild %s)", guild_id, exc_info=True)
+
+    async def _cache(self, guild_id: str, channel_id: str) -> None:
+        await self._safe(
+            self._state.set_state(
+                "channels", self._cache_key(guild_id), {"channel_id": channel_id}, ttl=CACHE_TTL_SECONDS
+            )
+        )
+
+    async def _drop_caches(self, guild_id: str) -> None:
+        await self._safe(self._state.delete_state("channels", self._cache_key(guild_id)))
+        await self._db.delete_channel(guild_id, BOT_LOGS_CATEGORY)
+
+    def _cache_key(self, guild_id: str) -> str:
+        return f"{guild_id}:{BOT_LOGS_CATEGORY}"
+
+    async def _safe(self, awaitable: Any) -> Any:
+        """Await a store call, degrading to None on failure (Redis down)."""
+        try:
+            return await awaitable
+        except Exception:
+            return None

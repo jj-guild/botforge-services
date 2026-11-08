@@ -1,4 +1,4 @@
-"""Unit tests for the startup announcement (kingdoms-services#52, #109).
+"""Unit tests for the startup announcement (botforge-services#52, #109).
 
 The announcement is the "start" lifecycle event, delivered by the core
 LogService to each guild's 🤖-bot-logs channel. These tests pin the
@@ -8,7 +8,7 @@ own line, the uptime as a Discord relative timestamp, no footer, no
 rollback button — Services/Infra/Bot sections) and the wiring
 contracts: with a LogService the event flows to every guild; without
 one (local runs, unit tests) the announcement degrades to a silent
-skip. KINGDOMS_ANNOUNCE_ENABLED=0 silences it entirely (CI/CD bot).
+skip. BOTFORGE_ANNOUNCE_ENABLED=0 silences it entirely (CI/CD bot).
 """
 
 from __future__ import annotations
@@ -21,10 +21,10 @@ from typing import Any
 import discord
 import pytest
 
-from kingdoms.core.services.logs import LifecycleEvent, LogService
-from kingdoms.core.services.mod_registry import ModRegistry
-from kingdoms.core.services.status import BotAdmins, StatusService
-from kingdoms.discord.announce import (
+from botforge.core.services.logs import LifecycleEvent, LogService
+from botforge.core.services.mod_registry import ModRegistry
+from botforge.core.services.status import BotAdmins, StatusService
+from botforge.discord.announce import (
     AnnounceConfig,
     announce_startup,
     build_announcement_layout,
@@ -127,8 +127,8 @@ def test_layout_is_components_v2() -> None:
         deploy_label="pr-42-x",
         deploy_kind="pr",
         deploy_ref="42",
-        deploy_url="https://github.com/merlin-pinpin-org/kingdoms-services/pull/42#issuecomment-1",
-        deploy_image="ghcr.io/merlin-pinpin-org/kingdoms-services:pr-42-x",
+        deploy_url="https://github.com/jj-guild/botforge-services/pull/42#issuecomment-1",
+        deploy_image="ghcr.io/jj-guild/botforge-services:pr-42-x",
     )
     config = AnnounceConfig(locale="en", config_dir=CONFIG_DIR)
     layout = build_announcement_layout(status, config, env="test")
@@ -136,10 +136,10 @@ def test_layout_is_components_v2() -> None:
     assert layout.to_components(), "the layout must serialize to V2 components"
     texts = _iter_texts(layout.to_components())
     joined = "\n".join(texts)
-    assert "Kingdoms — Deployment" in joined
+    assert "BotForge — Deployment" in joined
     assert "`test`" in joined
     assert not any("[" in text and "](" in text for text in texts), "no markdown links in V2 text blocks"
-    assert "kingdoms-deploy" not in joined, "no machine footer"
+    assert "botforge-deploy" not in joined, "no machine footer"
     assert not any("-# /status" in text for text in texts), "no footer line"
 
 
@@ -150,15 +150,15 @@ def test_layout_buttons_use_generic_labels() -> None:
         deploy_branch="vibe/feature-1",
         deploy_kind="pr",
         deploy_ref="42",
-        deploy_url="https://github.com/merlin-pinpin-org/kingdoms-services/pull/42",
-        deploy_tree_url="https://github.com/merlin-pinpin-org/kingdoms-services/tree/abc1234deadbeef",
-        deploy_image="ghcr.io/merlin-pinpin-org/kingdoms-services:pr-42-20260925-abc1234",
+        deploy_url="https://github.com/jj-guild/botforge-services/pull/42",
+        deploy_tree_url="https://github.com/jj-guild/botforge-services/tree/abc1234deadbeef",
+        deploy_image="ghcr.io/jj-guild/botforge-services:pr-42-20260925-abc1234",
         deploy_ci_run_id="987654",
         deploy_ci_run_number="321",
-        deploy_run_url="https://github.com/merlin-pinpin-org/kingdoms-infra/actions/runs/1",
+        deploy_run_url="https://github.com/jj-guild/botforge-infra/actions/runs/1",
         deploy_run_number="45",
         deploy_infra_label="deploy/test@c232b34deadbeef",
-        deploy_infra_url="https://github.com/merlin-pinpin-org/kingdoms-infra/tree/c232b34deadbeef",
+        deploy_infra_url="https://github.com/jj-guild/botforge-infra/tree/c232b34deadbeef",
     )
     config = AnnounceConfig(locale="en", config_dir=CONFIG_DIR)
     layout = build_announcement_layout(status, config, env="test")
@@ -178,7 +178,7 @@ def test_layout_buttons_use_generic_labels() -> None:
         "the identity is displayed in the text lines"
     )
     ci_button = next(b for b in _iter_buttons(layout.to_components()) if b["label"] == "\u2699\ufe0f Job")
-    assert ci_button["url"] == "https://github.com/merlin-pinpin-org/kingdoms-services/actions/runs/987654", (
+    assert ci_button["url"] == "https://github.com/jj-guild/botforge-services/actions/runs/987654", (
         "the CI button links the services CI job, not the infra deploy run"
     )
     assert any("Job CI" in text and "#321" in text for text in _iter_texts(layout.to_components())), (
@@ -192,7 +192,7 @@ def test_image_line_renders_the_full_tag_and_digest() -> None:
     never inline."""
     digest64 = "0123456789abcdef" * 4
     status = _status_service(
-        deploy_image=f"ghcr.io/merlin-pinpin-org/kingdoms-services:pr-42-20260925222854-abc1234@sha256:{digest64}",
+        deploy_image=f"ghcr.io/jj-guild/botforge-services:pr-42-20260925222854-abc1234@sha256:{digest64}",
     )
     config = AnnounceConfig(locale="en", config_dir=CONFIG_DIR)
     layout = build_announcement_layout(status, config, env="test")
@@ -211,16 +211,16 @@ def test_timestamps_sit_under_commit_and_build_for_both_repos() -> None:
     the state commit line, run date under the deployment line."""
     status = _status_service(
         deploy_branch="vibe/feature-1",
-        deploy_tree_url="https://github.com/merlin-pinpin-org/kingdoms-services/tree/abc1234deadbeef",
+        deploy_tree_url="https://github.com/jj-guild/botforge-services/tree/abc1234deadbeef",
         deploy_commit_ts="1790000000",
         deploy_ts="1790100000",
-        deploy_image="ghcr.io/merlin-pinpin-org/kingdoms-services:pr-42-x",
+        deploy_image="ghcr.io/jj-guild/botforge-services:pr-42-x",
         deploy_ci_run_id="987654",
         deploy_ci_run_number="321",
         deploy_ci_run_ts="1790120000",
         deploy_infra_label="deploy/test@abc1234deadbeef",
         deploy_infra_commit_ts="1790050000",
-        deploy_run_url="https://github.com/merlin-pinpin-org/kingdoms-infra/actions/runs/1",
+        deploy_run_url="https://github.com/jj-guild/botforge-infra/actions/runs/1",
         deploy_run_number="45",
         deploy_run_ts="1790150000",
     )
@@ -288,7 +288,7 @@ def test_layout_sections_and_separator_structure() -> None:
         deploy_kind="release",
         deploy_ref="v0.1.0",
         deploy_commit="9f8e7d6c5b4a3928173645508174938271626153",
-        deploy_url="https://github.com/merlin-pinpin-org/kingdoms-services/releases/tag/v0.1.0",
+        deploy_url="https://github.com/jj-guild/botforge-services/releases/tag/v0.1.0",
     )
     config = AnnounceConfig(locale="en", config_dir=CONFIG_DIR)
     layout = build_announcement_layout(status, config, env="prod")
@@ -312,7 +312,7 @@ def test_prerelease_headlines_as_prerelease_and_release_is_celebrated() -> None:
         deploy_kind="prerelease",
         deploy_ref="v0.3.0-rc1",
         deploy_commit="9f8e7d6c5b4a3928173645508174938271626153",
-        deploy_url="https://github.com/merlin-pinpin-org/kingdoms-services/releases/tag/v0.3.0-rc1",
+        deploy_url="https://github.com/jj-guild/botforge-services/releases/tag/v0.3.0-rc1",
     )
     config = AnnounceConfig(locale="en", config_dir=CONFIG_DIR)
     layout = build_announcement_layout(rc_status, config, env="test")
@@ -326,7 +326,7 @@ def test_prerelease_headlines_as_prerelease_and_release_is_celebrated() -> None:
         deploy_kind="release",
         deploy_ref="v0.3.0",
         deploy_commit="9f8e7d6c5b4a3928173645508174938271626153",
-        deploy_url="https://github.com/merlin-pinpin-org/kingdoms-services/releases/tag/v0.3.0",
+        deploy_url="https://github.com/jj-guild/botforge-services/releases/tag/v0.3.0",
     )
     layout = build_announcement_layout(final_status, config, env="test")
     texts = _iter_texts(layout.to_components())
@@ -343,7 +343,7 @@ def test_release_renders_tag_and_commit_as_distinct_lines() -> None:
         deploy_ref="v0.2.2",
         deploy_commit="9f8e7d6c5b4a3928173645508174938271626153",
         deploy_commit_ts="1790000000",
-        deploy_tree_url="https://github.com/merlin-pinpin-org/kingdoms-services/tree/v0.2.2",
+        deploy_tree_url="https://github.com/jj-guild/botforge-services/tree/v0.2.2",
         deploy_branch="main",
     )
     config = AnnounceConfig(locale="en", config_dir=CONFIG_DIR)
@@ -367,7 +367,7 @@ def test_ci_job_line_sits_under_a_separator_above_the_image() -> None:
     status = _status_service(
         deploy_kind="pr",
         deploy_ref="42",
-        deploy_image=f"ghcr.io/merlin-pinpin-org/kingdoms-services:pr-42-x@sha256:{digest64}",
+        deploy_image=f"ghcr.io/jj-guild/botforge-services:pr-42-x@sha256:{digest64}",
         deploy_ci_run_id="987654",
         deploy_ci_run_number="321",
     )
@@ -389,7 +389,7 @@ def test_layout_is_localized() -> None:
     config = AnnounceConfig(locale="fr", config_dir=CONFIG_DIR)
     layout = build_announcement_layout(status, config, env="prod")
     joined = "\n".join(_iter_texts(layout.to_components()))
-    assert "Kingdoms — Déploiement" in joined
+    assert "BotForge — Déploiement" in joined
 
 
 def test_layout_falls_back_to_english_for_unknown_locale() -> None:
@@ -397,7 +397,7 @@ def test_layout_falls_back_to_english_for_unknown_locale() -> None:
     config = AnnounceConfig(locale="xx", config_dir=CONFIG_DIR)
     layout = build_announcement_layout(status, config, env="test")
     joined = "\n".join(_iter_texts(layout.to_components()))
-    assert "Kingdoms — Deployment" in joined
+    assert "BotForge — Deployment" in joined
 
 
 @pytest.mark.asyncio
@@ -422,7 +422,7 @@ async def test_announce_dm_refusal_is_info_level_and_serves_the_other_admins(
     logs = _FakeLogService()
     bot = _Bot(["111"], refused_admins={"10"})
     config = AnnounceConfig(locale="en", config_dir=CONFIG_DIR)
-    with caplog.at_level("INFO", logger="kingdoms.bot.announce"):
+    with caplog.at_level("INFO", logger="botforge.bot.announce"):
         await announce_startup(bot, status, config, logs_service=logs, deploy_env="test")  # type: ignore[arg-type]
     assert bot.dm_targets == ["10", "20"], "both admins are tried, the refusal is best-effort"
     records = caplog.records

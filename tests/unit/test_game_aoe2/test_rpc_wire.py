@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from kingdoms.game_aoe2.rpc import (
+from botforge.game_aoe2.rpc import (
     dashboard_from_wire,
     dashboard_to_wire,
     event_from_wire,

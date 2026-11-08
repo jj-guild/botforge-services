@@ -8,7 +8,7 @@ from typing import Any
 
 import discord
 
-from kingdoms.discord.pools_forum import (
+from botforge.discord.pools_forum import (
     _pool_maps,
     _pool_post_content,
     _pool_post_layout,
@@ -100,7 +100,7 @@ def test_pool_post_layout_has_section_per_map_and_add_button() -> None:
     sections = [i for i in view.children if isinstance(i, discord.ui.Section)]
     assert len(sections) == 1  # the imaged member rides a Section; Plain is a text line
     assert sections[0].accessory is not None
-    from kingdoms.discord.entity_admin_menu import EntityAdminButton
+    from botforge.discord.entity_admin_menu import EntityAdminButton
 
     rows = [i for i in view.children if isinstance(i, discord.ui.ActionRow)]
     buttons = [b for row in rows for b in row.children]
@@ -135,14 +135,14 @@ def test_pool_post_layout_map_sections_have_no_remove_button() -> None:
     assert len(sections) == 0  # imageless member = text line, no section
     rows = [i for i in view.children if isinstance(i, discord.ui.ActionRow)]
     buttons = [b for row in rows for b in row.children]
-    from kingdoms.discord.entity_admin_menu import EntityAdminButton
+    from botforge.discord.entity_admin_menu import EntityAdminButton
 
     assert any(isinstance(b, EntityAdminButton) for b in buttons)  # the single admin entry point
 
 
 def test_to_draft_button_label_is_short() -> None:
     """The back-to-edition button fits a row (the shorter 'Éditer' label)."""
-    from kingdoms.discord.admin_panel_games import GamesPoolToDraftButton
+    from botforge.discord.admin_panel_games import GamesPoolToDraftButton
 
     button = GamesPoolToDraftButton("pool-1")
     assert button.item.label == "Éditer"
@@ -150,7 +150,7 @@ def test_to_draft_button_label_is_short() -> None:
 
 def test_pool_state_label_maps_all_states() -> None:
     """The badge renders the label of the pool's state."""
-    from kingdoms.core.services.game_data import POOL_STATE_LABELS
+    from botforge.core.services.game_data import POOL_STATE_LABELS
 
     assert POOL_STATE_LABELS.get("draft") == "édition"
     assert POOL_STATE_LABELS.get("published") not in (None, "published")
@@ -192,7 +192,7 @@ async def test_title_rate_limit_never_aborts_the_view_refresh(monkeypatch: Any) 
     cycle eats it); the view edit (the member maps) must still run —
     the merlin env showed the maps frozen behind a RateLimited title.
     """
-    from kingdoms.core.services import entity_forum as ef
+    from botforge.core.services import entity_forum as ef
 
     monkeypatch.setattr(ef, "EDIT_PACING_S", 0)
     ef._last_edit_at.clear()
@@ -208,7 +208,7 @@ async def test_title_rate_limit_never_aborts_the_view_refresh(monkeypatch: Any) 
         mod_link="",
         map_ids=[],
     )
-    from kingdoms.core.services.entity_forum import _last_layout_render
+    from botforge.core.services.entity_forum import _last_layout_render
 
     ef._LAST_LAYOUT_RENDER.pop(str(thread.id), None)
     await _refresh_pool_post(None, "42", thread, pool, [], editable=True)
@@ -225,7 +225,7 @@ async def test_failed_view_edit_is_not_remembered(monkeypatch: Any) -> None:
     when the edit raised — every later pass skipped it. The fingerprint
     is remembered only on success now.
     """
-    from kingdoms.core.services import entity_forum as ef
+    from botforge.core.services import entity_forum as ef
 
     monkeypatch.setattr(ef, "EDIT_PACING_S", 0)
     ef._last_edit_at.clear()
@@ -261,6 +261,6 @@ async def test_failed_view_edit_is_not_remembered(monkeypatch: Any) -> None:
         map_ids=[],
     )
     await _refresh_pool_post(None, "42", _Thread(), pool, [], editable=True)
-    from kingdoms.core.services.entity_forum import _last_layout_render
+    from botforge.core.services.entity_forum import _last_layout_render
 
     assert _last_layout_render("7") == ""  # not remembered: the next pass retries

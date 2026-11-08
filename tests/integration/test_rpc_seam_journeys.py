@@ -16,14 +16,14 @@ from typing import Any
 import grpc
 import pytest
 
-from kingdoms.core.models.game import MatchResult, ProviderCapabilities
-from kingdoms.core.rpc.content import ContentServicer
-from kingdoms.core.rpc.content_client import ContentProviderClient
-from kingdoms.core.rpc.game import GameServicer
-from kingdoms.core.rpc.game_client import GameProviderClient
-from kingdoms.game_aoe2.client import GameDataClient
-from kingdoms.game_aoe2.rpc import GameDataServicer
-from kingdoms.rpc_generated.kingdoms.v1 import content_pb2_grpc, game_pb2_grpc, gamedata_pb2_grpc
+from botforge.core.models.game import MatchResult, ProviderCapabilities
+from botforge.core.rpc.content import ContentServicer
+from botforge.core.rpc.content_client import ContentProviderClient
+from botforge.core.rpc.game import GameServicer
+from botforge.core.rpc.game_client import GameProviderClient
+from botforge.game_aoe2.client import GameDataClient
+from botforge.game_aoe2.rpc import GameDataServicer
+from botforge.rpc_generated.botforge.v1 import content_pb2_grpc, game_pb2_grpc, gamedata_pb2_grpc
 
 FACTION = {
     "entity_id": "faction:aztecs",
@@ -196,7 +196,7 @@ async def _map_seed(game_key: str, map_key: str, force: bool = False) -> dict[st
 
 
 async def _player_stats(profile_id: str) -> Any | None:
-    from kingdoms.core.models.game import PlayerStats, StatsBlock, StatsEntry
+    from botforge.core.models.game import PlayerStats, StatsBlock, StatsEntry
 
     if profile_id != "123":
         return None

@@ -1,4 +1,4 @@
-"""Unit tests for the RegistrationService and DM workflow (kingdoms-services#133)."""
+"""Unit tests for the RegistrationService and DM workflow (botforge-services#133)."""
 
 from __future__ import annotations
 
@@ -6,15 +6,15 @@ from typing import Any
 
 import pytest
 
-from kingdoms.core.models.workflow import WorkflowStatus
-from kingdoms.core.services.registration import (
+from botforge.core.models.workflow import WorkflowStatus
+from botforge.core.services.registration import (
     PROFILE_BINDINGS_COLLECTION,
     REGISTRATIONS_COLLECTION,
     InvalidProfileError,
     ProfileBoundError,
     RegistrationService,
 )
-from kingdoms.core.workflows.registration import RegistrationWorkflow
+from botforge.core.workflows.registration import RegistrationWorkflow
 from tests.unit.test_core.test_game_data import FakeAudit
 
 
@@ -197,8 +197,8 @@ async def test_workflow_timeout_cancels() -> None:
 
 @pytest.mark.asyncio
 async def test_workflow_with_engine_roundtrip() -> None:
-    from kingdoms.core.services.state import StateService
-    from kingdoms.core.services.workflow import WorkflowEngine
+    from botforge.core.services.state import StateService
+    from botforge.core.services.workflow import WorkflowEngine
     from tests.mocks.workflow_store_mock import InMemoryWorkflowStore
     from tests.unit.test_core.test_workflow_engine import InMemoryStateStore
 

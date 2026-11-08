@@ -8,8 +8,8 @@ unknown faction answers None).
 
 from __future__ import annotations
 
-from kingdoms.core.games.game_content import RpcContentSource
-from kingdoms.game_aoe2.content_source import resolve_aoe2_content_source
+from botforge.core.games.game_content import RpcContentSource
+from botforge.game_aoe2.content_source import resolve_aoe2_content_source
 
 
 def test_resolve_without_provider_is_a_functional_error() -> None:
@@ -20,7 +20,7 @@ def test_resolve_without_provider_is_a_functional_error() -> None:
     """
     import pytest
 
-    from kingdoms.game_aoe2.content_source import ProviderUnavailableError
+    from botforge.game_aoe2.content_source import ProviderUnavailableError
 
     with pytest.raises(ProviderUnavailableError):
         resolve_aoe2_content_source(env={})
@@ -28,7 +28,7 @@ def test_resolve_without_provider_is_a_functional_error() -> None:
 
 def test_resolve_env_overrides_to_rpc() -> None:
     """A set EXT_AOE2TECHTREE_URI routes content through the ext process."""
-    source = resolve_aoe2_content_source(env={"EXT_AOE2TECHTREE_URI": "kingdoms-ext-aoe2techtree:50063"})
+    source = resolve_aoe2_content_source(env={"EXT_AOE2TECHTREE_URI": "botforge-ext-aoe2techtree:50063"})
     assert isinstance(source, RpcContentSource)
 
 

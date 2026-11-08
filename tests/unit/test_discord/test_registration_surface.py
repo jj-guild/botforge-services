@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from kingdoms.discord.registration import build_enrollment_screen, render_profile_error
+from botforge.discord.registration import build_enrollment_screen, render_profile_error
 
 
 class FakeDatabase:
@@ -57,7 +57,7 @@ class _FakeCursor:
 
 
 async def test_mongo_registration_database_bindings() -> None:
-    from kingdoms.discord.registration_platform import MongoRegistrationDatabase
+    from botforge.discord.registration_platform import MongoRegistrationDatabase
 
     db = FakeDatabase()
     adapter = MongoRegistrationDatabase(db)

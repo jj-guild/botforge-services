@@ -1,6 +1,6 @@
 # Contracts (ADR-0020)
 
-gRPC contracts between the Kingdoms processes: `bot-discord ↔ svc-core`
+gRPC contracts between the BotForge processes: `bot-discord ↔ svc-core`
 and `svc-core ↔ ext-*`. Owned by the developer; regenerated stubs are
 committed so CI and deploys never need protoc.
 

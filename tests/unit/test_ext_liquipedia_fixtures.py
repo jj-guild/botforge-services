@@ -15,7 +15,7 @@ from pathlib import Path
 
 import pytest
 
-from kingdoms.ext_liquipedia.liquipedia import LiquipediaMapsProvider, query_tags
+from botforge.ext_liquipedia.liquipedia import LiquipediaMapsProvider, query_tags
 
 FIXTURES = Path(__file__).resolve().parents[1] / "fixtures" / "liquipedia"
 
@@ -23,7 +23,7 @@ FIXTURES = Path(__file__).resolve().parents[1] / "fixtures" / "liquipedia"
 def _parse(page: str):
     slug = page.strip().lower().replace(" ", "_")
     wikitext = (FIXTURES / f"{slug}.wikitext").read_text(encoding="utf-8")
-    provider = LiquipediaMapsProvider("test-contact https://github.com/merlin-pinpin-org/kingdoms")
+    provider = LiquipediaMapsProvider("test-contact https://github.com/jj-guild/botforge")
     return provider._info_from_wikitext(page, wikitext)
 
 
@@ -195,7 +195,7 @@ def test_black_forest_keeps_its_infobox_and_default_walls() -> None:
 
 def test_walls_vocabulary_is_english_and_total() -> None:
     """The walls tags: no/wood/stone/partial — English, always present."""
-    from kingdoms.ext_liquipedia.liquipedia import walls_vocabulary
+    from botforge.ext_liquipedia.liquipedia import walls_vocabulary
 
     assert walls_vocabulary("") == "no"
     assert walls_vocabulary("None") == "no"

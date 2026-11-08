@@ -82,10 +82,10 @@ async def test_catalog_gateway_round_trip() -> None:
     """Create → list → get over the real wire; the models survive."""
     import grpc
 
-    from kingdoms.core.services.game_data import GameDataService, NameTakenError
-    from kingdoms.game_aoe2.remote_catalog import RemoteGameDataService
-    from kingdoms.game_aoe2.rpc import GameDataServicer
-    from kingdoms.rpc_generated.kingdoms.v1 import gamedata_pb2_grpc
+    from botforge.core.services.game_data import GameDataService, NameTakenError
+    from botforge.game_aoe2.remote_catalog import RemoteGameDataService
+    from botforge.game_aoe2.rpc import GameDataServicer
+    from botforge.rpc_generated.botforge.v1 import gamedata_pb2_grpc
 
     database = _FakeDB()
     servicer = GameDataServicer(
@@ -123,7 +123,7 @@ async def test_catalog_gateway_round_trip() -> None:
         # the factions come back as TYPED models carrying their game_key
         # (the 2026-11-07 civs bug: raw dicts made the forum mirror scope
         # resolve to "games/" — zero posts, silently)
-        from kingdoms.core.models.game_data import FactionModel
+        from botforge.core.models.game_data import FactionModel
 
         await GameDataService(database).create_faction("aoe2", "Aztecs", faction_key="aztecs")
         factions = await remote.list_factions("aoe2")

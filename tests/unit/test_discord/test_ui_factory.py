@@ -1,4 +1,4 @@
-"""Unit tests for the Discord UI SDK (kingdoms.discord.ui.factory).
+"""Unit tests for the Discord UI SDK (botforge.discord.ui.factory).
 
 The SDK hides the discord.py Components V2 machinery behind
 declarative bricks (Text, Section, Row, Button, Container). These
@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import pytest
 
-from kingdoms.discord.ui import (
+from botforge.discord.ui import (
     BLURPLE,
     Action,
     Button,
@@ -138,12 +138,12 @@ def test_row_rejects_more_than_five_buttons() -> None:
 
 def test_ui_embed_builds_with_budget_check() -> None:
     embed = (
-        UIEmbed(title="Kingdoms — Status", color=BLURPLE, description="d")
+        UIEmbed(title="BotForge — Status", color=BLURPLE, description="d")
         .field("Uptime", "1h 2m")
-        .footer("kingdoms")
+        .footer("botforge")
         .build()
     )
-    assert embed.title == "Kingdoms — Status"
+    assert embed.title == "BotForge — Status"
     assert embed.fields[0].name == "Uptime"
     with pytest.raises(UILayoutError, match="budget"):
         UIEmbed(title="t" * 3000, description="d" * 2000).build()

@@ -30,7 +30,7 @@ def _decode(emitter: str) -> str:
 
 def test_button_emojis_are_discord_valid() -> None:
     """Every declared button emoji is single and selector-free."""
-    root = Path(__file__).resolve().parents[2] / "src" / "kingdoms"
+    root = Path(__file__).resolve().parents[2] / "src" / "botforge"
     offenders: list[str] = []
     for path in root.rglob("*.py"):
         text = path.read_text(encoding="utf-8")
@@ -74,12 +74,12 @@ def test_registered_views_fit_discord_limits() -> None:
 
     from typing import Any
 
-    from kingdoms.discord.admin_panel_games import (
+    from botforge.discord.admin_panel_games import (
         civs_section_layout,
         maps_section_layout,
         pools_section_layout,
     )
-    from kingdoms.discord.entity_admin_menu import build_entity_admin_bar
+    from botforge.discord.entity_admin_menu import build_entity_admin_bar
 
     offenders: list[str] = []
     import asyncio

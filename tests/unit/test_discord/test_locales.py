@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import discord
 
-from kingdoms.discord.locales import guild_locale, guild_locale_by_id, normalize
+from botforge.discord.locales import guild_locale, guild_locale_by_id, normalize
 
 
 class _Guild:

@@ -1,4 +1,4 @@
-"""Unit tests for the Liquipedia maps provider (kingdoms-services#247).
+"""Unit tests for the Liquipedia maps provider (botforge-services#247).
 
 Hermetic: every HTTP request hits an in-memory httpx mock transport
 (the repo's network_free autouse fixture fails any real socket connect),
@@ -14,14 +14,14 @@ from typing import Any, ClassVar
 import httpx
 import pytest
 
-from kingdoms.ext_liquipedia.liquipedia import (
+from botforge.ext_liquipedia.liquipedia import (
     LiquipediaMapsProvider,
     MapLicenseError,
 )
 
 API_URL = "https://liquipedia.test/api.php"
 
-USER_AGENT = "KingdomsBot/1.0 (https://github.com/merlin-pinpin-org; dev@example.com)"
+USER_AGENT = "BotforgeBot/1.0 (https://github.com/jj-guild; dev@example.com)"
 
 
 def _wiki_transport(  # type: ignore[no-untyped-def]
@@ -294,7 +294,7 @@ def test_versions_absent_section_yields_no_variants() -> None:
 
 def test_query_tags_normalize_info() -> None:
     """Tags are stable, lowercase, and water derives from hybrid/water."""
-    from kingdoms.ext_liquipedia.liquipedia import query_tags
+    from botforge.ext_liquipedia.liquipedia import query_tags
 
     provider = _make_provider(_mock_transport(ARABIA_WIKITEXT))
     info = provider.map_data("Arabia").info
@@ -319,7 +319,7 @@ def test_pacing_is_shared_across_provider_instances(monkeypatch: pytest.MonkeyPa
     hammered the API into 429s. The markers are module-level: a second
     provider paces against the first one's last parse.
     """
-    import kingdoms.ext_liquipedia.liquipedia as lp
+    import botforge.ext_liquipedia.liquipedia as lp
 
     sleeps: list[float] = []
     calls: list[str] = []
@@ -361,7 +361,7 @@ def test_pacing_is_shared_across_provider_instances(monkeypatch: pytest.MonkeyPa
 
 def test_429_honors_retry_after_then_retries(monkeypatch: pytest.MonkeyPatch) -> None:
     """A 429 is 'later', not 'no such page' — retry once after Retry-After."""
-    import kingdoms.ext_liquipedia.liquipedia as lp
+    import botforge.ext_liquipedia.liquipedia as lp
 
     attempts: list[int] = []
     sleeps: list[float] = []
@@ -398,7 +398,7 @@ def test_map_data_batch_resolves_pages_and_images_in_few_requests(
     the batch rides action=query (2 s pacing) and carries up to 50
     pages per call \u2014 a whole catalog in a handful of requests.
     """
-    import kingdoms.ext_liquipedia.liquipedia as lp
+    import botforge.ext_liquipedia.liquipedia as lp
 
     calls: list[str] = []
 
@@ -478,7 +478,7 @@ def test_liquipedia_circuit_opens_after_exhausted_429s() -> None:
     """Exhausted 429 retries OPEN the circuit: every further call fails
     fast, zero HTTP traffic, until the window lapses."""
 
-    from kingdoms.ext_liquipedia import liquipedia as lp
+    from botforge.ext_liquipedia import liquipedia as lp
 
     class _Always429:
         status_code = 429
@@ -529,7 +529,7 @@ def test_liquipedia_circuit_opens_after_exhausted_429s() -> None:
 
 def test_liquipedia_circuit_success_resets_the_streak() -> None:
 
-    from kingdoms.ext_liquipedia import liquipedia as lp
+    from botforge.ext_liquipedia import liquipedia as lp
 
     class _Ok:
         status_code = 200

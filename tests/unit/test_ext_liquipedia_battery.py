@@ -13,13 +13,13 @@ from typing import Any
 
 import pytest
 
-from kingdoms.core_process.external_checks import render_report
-from kingdoms.core_process.mapsdata_checks import PROVIDER, battery
+from botforge.core_process.external_checks import render_report
+from botforge.core_process.mapsdata_checks import PROVIDER, battery
 
 
 def _stub_maps_module(monkeypatch: pytest.MonkeyPatch, maps: dict[str, Any]) -> None:
     """Replace the real provider with one returning the given maps."""
-    import kingdoms.ext_liquipedia.liquipedia as lp
+    import botforge.ext_liquipedia.liquipedia as lp
 
     class _StubProvider:
         def __init__(self, *args: Any, **kwargs: Any) -> None:
@@ -76,7 +76,7 @@ async def test_battery_fails_when_known_map_missing(
 
 
 def test_report_renders_skipped_separately() -> None:
-    from kingdoms.core_process.external_checks import CheckResult
+    from botforge.core_process.external_checks import CheckResult
 
     report = render_report(
         [

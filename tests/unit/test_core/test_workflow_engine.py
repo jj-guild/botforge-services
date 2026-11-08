@@ -1,4 +1,4 @@
-"""Unit tests for the WorkflowEngine (kingdoms-services#6).
+"""Unit tests for the WorkflowEngine (botforge-services#6).
 
 Uses in-memory substitutes for the durable store and the hot-state service
 (docs/architecture/testing.md). The MongoDB-backed store path is exercised
@@ -11,9 +11,9 @@ from typing import Any
 
 import pytest
 
-from kingdoms.core.models.workflow import WorkflowStatus, WorkflowTransition
-from kingdoms.core.services.state import StateService
-from kingdoms.core.services.workflow import (
+from botforge.core.models.workflow import WorkflowStatus, WorkflowTransition
+from botforge.core.services.state import StateService
+from botforge.core.services.workflow import (
     IWorkflowStore,
     WorkflowEngine,
     WorkflowNotFoundError,
@@ -221,7 +221,7 @@ async def test_resume_reloads_and_rearms(store: InMemoryWorkflowStore, state_ser
 
 
 async def test_startup_times_out_unknown_definition(store: InMemoryWorkflowStore, state_service: StateService) -> None:
-    from kingdoms.core.models.workflow import WorkflowState
+    from botforge.core.models.workflow import WorkflowState
 
     orphan = WorkflowState(
         _id="legacy:user-1:abc",

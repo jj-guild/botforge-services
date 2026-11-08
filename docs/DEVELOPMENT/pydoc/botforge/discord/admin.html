@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Python: botforge.discord.admin</title>
+</head><body>
+
+<table class="heading">
+<tr class="heading-text decor">
+<td class="title">&nbsp;<br><strong class="title"><a href="botforge.html" class="white">botforge</a>.<a href="botforge.discord.html" class="white">discord</a>.admin</strong></td>
+<td class="extra"><a href=".">index</a><br><a href="file:SOURCE_ROOT/discord/admin.py">SOURCE_ROOT/discord/admin.py</a></td></tr></table>
+    <p><span class="code">The&nbsp;/admin&nbsp;command:&nbsp;a&nbsp;hierarchical&nbsp;operator&nbsp;panel&nbsp;(Components&nbsp;V2).<br>
+&nbsp;<br>
+Access&nbsp;is&nbsp;restricted&nbsp;to&nbsp;bot&nbsp;operators&nbsp;(``BOT_ADMINS``),&nbsp;guild<br>
+administrators&nbsp;and&nbsp;the&nbsp;``bot-admins``&nbsp;role&nbsp;(botforge-services#109,<br>
+#115)&nbsp;—&nbsp;validated&nbsp;at&nbsp;invocation&nbsp;**and&nbsp;at&nbsp;click&nbsp;time**&nbsp;(the&nbsp;developer<br>
+mandate:&nbsp;never&nbsp;assume&nbsp;that&nbsp;seeing&nbsp;a&nbsp;component&nbsp;means&nbsp;being&nbsp;allowed&nbsp;to<br>
+click&nbsp;it).<br>
+&nbsp;<br>
+Structure&nbsp;(botforge-services#117):<br>
+&nbsp;<br>
+-&nbsp;**main&nbsp;menu**&nbsp;—&nbsp;the&nbsp;guild's&nbsp;global&nbsp;settings&nbsp;(language&nbsp;fr/en,&nbsp;used<br>
+&nbsp;&nbsp;for&nbsp;every&nbsp;channel&nbsp;message:&nbsp;announcements,&nbsp;lifecycle&nbsp;events,&nbsp;panels)<br>
+&nbsp;&nbsp;and&nbsp;the&nbsp;managed-channel&nbsp;picker&nbsp;(🛰&nbsp;Bot&nbsp;logs,&nbsp;🛡&nbsp;Bot&nbsp;admins);<br>
+-&nbsp;**channel&nbsp;menu**&nbsp;—&nbsp;the&nbsp;settings&nbsp;of&nbsp;the&nbsp;selected&nbsp;managed&nbsp;channel:<br>
+&nbsp;&nbsp;routing&nbsp;(which&nbsp;guild&nbsp;channel&nbsp;carries&nbsp;it)&nbsp;and&nbsp;visibility<br>
+&nbsp;&nbsp;(public/admin-only,&nbsp;synchronized&nbsp;with&nbsp;the&nbsp;Discord&nbsp;overwrites);<br>
+-&nbsp;**DM&nbsp;setup**&nbsp;—&nbsp;outside&nbsp;a&nbsp;guild,&nbsp;/admin&nbsp;manages&nbsp;the&nbsp;user's&nbsp;personal<br>
+&nbsp;&nbsp;DM&nbsp;locale&nbsp;(error&nbsp;reports,&nbsp;enrollment&nbsp;flows,&nbsp;match&nbsp;reports&nbsp;—&nbsp;every<br>
+&nbsp;&nbsp;DM&nbsp;the&nbsp;bot&nbsp;sends&nbsp;to&nbsp;that&nbsp;user),&nbsp;persisted&nbsp;per&nbsp;user&nbsp;in<br>
+&nbsp;&nbsp;``user_settings``:&nbsp;DMs&nbsp;follow&nbsp;the&nbsp;user,&nbsp;not&nbsp;a&nbsp;guild.<br>
+&nbsp;<br>
+Every&nbsp;action&nbsp;is&nbsp;audited&nbsp;as&nbsp;a&nbsp;lifecycle&nbsp;event&nbsp;in&nbsp;the&nbsp;logs&nbsp;channel.<br>
+All&nbsp;interactive&nbsp;components&nbsp;are&nbsp;built&nbsp;through&nbsp;the&nbsp;UI&nbsp;SDK&nbsp;(ADR-0009):<br>
+Actions,&nbsp;SelectMenus&nbsp;and&nbsp;a&nbsp;ChannelSelect,&nbsp;custom&nbsp;IDs&nbsp;following&nbsp;the<br>
+``&lt;mod&gt;:&lt;component&gt;:&lt;payload&gt;``&nbsp;convention.<br>
+&nbsp;<br>
+Reference:&nbsp;botforge-services#102,&nbsp;#109,&nbsp;#115,&nbsp;#117.</span></p>
+<p>
+<table class="section">
+<tr class="decor pkg-content-decor heading-text">
+<td class="section-title" colspan=3>&nbsp;<br><strong class="bigsection">Modules</strong></td></tr>
+    
+<tr><td class="decor pkg-content-decor"><span class="code">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span></td><td>&nbsp;</td>
+<td class="singlecolumn"><table><tr><td class="multicolumn"><a href="discord.app_commands.html">discord.app_commands</a><br>
+</td><td class="multicolumn"><a href="discord.html">discord</a><br>
+</td><td class="multicolumn"><a href="logging.html">logging</a><br>
+</td><td class="multicolumn"></td></tr></table></td></tr></table><p>
+<table class="section">
+<tr class="decor functions-decor heading-text">
+<td class="section-title" colspan=3>&nbsp;<br><strong class="bigsection">Functions</strong></td></tr>
+    
+<tr><td class="decor functions-decor"><span class="code">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span></td><td>&nbsp;</td>
+<td class="singlecolumn"><dl><dt><a name="-build_admin_note_view"><strong>build_admin_note_view</strong></a>(message: 'str') -&gt; 'discord.ui.LayoutView'</dt><dd><span class="code">Build&nbsp;a&nbsp;single-note&nbsp;admin&nbsp;layout&nbsp;(degradation&nbsp;paths),&nbsp;through&nbsp;the&nbsp;UI&nbsp;SDK.</span></dd></dl>
+ <dl><dt>async <a name="-guards_require"><strong>guards_require</strong></a>(interaction: 'discord.Interaction', admins: 'tuple[str, ...]', roles_service: 'RolesService | None') -&gt; 'bool'</dt><dd><span class="code">Guard&nbsp;the&nbsp;invocation;&nbsp;answer&nbsp;the&nbsp;denial&nbsp;ephemerally&nbsp;when&nbsp;refused.</span></dd></dl>
+ <dl><dt><a name="-register_admin_command"><strong>register_admin_command</strong></a>(tree: 'app_commands.CommandTree[discord.Client]', bot_admins: 'tuple[str, ...]' = (), logs_service: 'LogService | None' = None, roles_service: 'RolesService | None' = None, catalog: 'MessageCatalog | None' = None, admin_channel_service: 'AdminChannelService | None' = None, error_reporter: 'ErrorReporter | None' = None) -&gt; 'None'</dt><dd><span class="code">Register&nbsp;the&nbsp;/admin&nbsp;slash&nbsp;command&nbsp;on&nbsp;the&nbsp;command&nbsp;tree.<br>
+&nbsp;<br>
+``bot_admins``&nbsp;is&nbsp;the&nbsp;parsed&nbsp;BOT_ADMINS&nbsp;operator&nbsp;ids&nbsp;(StatusService).<br>
+``logs_service``&nbsp;is&nbsp;the&nbsp;core&nbsp;LogService&nbsp;(botforge-services#109);&nbsp;it<br>
+may&nbsp;be&nbsp;None&nbsp;in&nbsp;local&nbsp;runs&nbsp;—&nbsp;the&nbsp;panel&nbsp;degrades&nbsp;to&nbsp;a&nbsp;status&nbsp;note.<br>
+``roles_service``&nbsp;resolves&nbsp;the&nbsp;guild's&nbsp;bot-admins&nbsp;role<br>
+(botforge-services#115)&nbsp;—&nbsp;members&nbsp;holding&nbsp;it&nbsp;administer&nbsp;too.<br>
+``catalog``&nbsp;localizes&nbsp;the&nbsp;panel&nbsp;with&nbsp;the&nbsp;guild's&nbsp;(or&nbsp;user's)&nbsp;locale.<br>
+``admin_channel_service``&nbsp;routes&nbsp;the&nbsp;admin&nbsp;channel&nbsp;like&nbsp;the&nbsp;logs<br>
+channel&nbsp;(the&nbsp;same&nbsp;menu&nbsp;governs&nbsp;both&nbsp;managed&nbsp;channels).<br>
+``error_reporter``&nbsp;forwards&nbsp;callback&nbsp;failures&nbsp;to&nbsp;the&nbsp;crash&nbsp;reporter<br>
+(#113):&nbsp;bot-logs&nbsp;gets&nbsp;cause,&nbsp;context&nbsp;and&nbsp;the&nbsp;GitHub&nbsp;source&nbsp;link,<br>
+the&nbsp;BOT_ADMINS&nbsp;get&nbsp;the&nbsp;DM&nbsp;—&nbsp;on&nbsp;top&nbsp;of&nbsp;the&nbsp;ephemeral&nbsp;answer.<br>
+Access&nbsp;is&nbsp;validated&nbsp;at&nbsp;invocation&nbsp;time&nbsp;and&nbsp;at&nbsp;click&nbsp;time&nbsp;(guards):<br>
+BOT_ADMINS,&nbsp;guild&nbsp;administrators&nbsp;or&nbsp;the&nbsp;bot-admins&nbsp;role.</span></dd></dl>
+</td></tr></table><p>
+<table class="section">
+<tr class="decor data-decor heading-text">
+<td class="section-title" colspan=3>&nbsp;<br><strong class="bigsection">Data</strong></td></tr>
+    
+<tr><td class="decor data-decor"><span class="code">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span></td><td>&nbsp;</td>
+<td class="singlecolumn"><strong>ADMIN_CHANNEL_CATEGORY</strong> = 'bot_admins'<br>
+<strong>BACK_BUTTON_ID</strong> = 'admin:button:back'<br>
+<strong>BLURPLE</strong> = 5793266<br>
+<strong>BOT_LOGS_CATEGORY</strong> = 'bot_logs'<br>
+<strong>CHANNEL_MENU_ID</strong> = 'admin:select:channel'<br>
+<strong>CHANNEL_ROUTE_ID</strong> = 'admin:channels:logs'<br>
+<strong>ErrorReporter</strong> = collections.abc.Callable[[discord.interactions.I... BaseException], collections.abc.Awaitable[None]]<br>
+<strong>HOME_CHANNEL_CATEGORY</strong> = 'home'<br>
+<strong>LIVE_CHANNEL_CATEGORY</strong> = 'live'<br>
+<strong>LOCALES</strong> = ('en', 'fr')<br>
+<strong>LOCALE_SELECT_ID</strong> = 'admin:select:locale'<br>
+<strong>MANAGED_CHANNELS</strong> = (('bot_logs', '🛰', 'channel_bot_logs'), ('bot_admins', '🛡', 'channel_bot_admins'), ('home', '🏛', 'channel_home'), ('live', '📡', 'channel_live'))<br>
+<strong>USER_LOCALE_SELECT_ID</strong> = 'admin:select:user-locale'<br>
+<strong>VISIBILITY_ADMIN_ONLY</strong> = 'admin_only'<br>
+<strong>VISIBILITY_PUBLIC</strong> = 'public'<br>
+<strong>VISIBILITY_SELECT_ID</strong> = 'admin:select:visibility'<br>
+<strong>__annotations__</strong> = {'MANAGED_CHANNELS': 'tuple[tuple[str, str, str], ...]'}<br>
+<strong>logger</strong> = &lt;Logger botforge.admin (WARNING)&gt;</td></tr></table>
+</body></html>

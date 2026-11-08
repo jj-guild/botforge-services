@@ -63,29 +63,29 @@ jobs:
           uv run pytest
 
   cli-doctor:
-    # kingdoms-services#188: the `kingdoms` CLI is the front door for
-    # environments — CI runs `kingdoms doctor` so the CLI itself is
+    # botforge-services#188: the `botforge` CLI is the front door for
+    # environments — CI runs `botforge doctor` so the CLI itself is
     # exercised (import, dispatch, report) on every PR, like the bot.
-    name: CLI doctor (kingdoms)
+    name: CLI doctor (botforge)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v5
         with:
           python-version: "3.12"
-      - name: Run kingdoms doctor
+      - name: Run botforge doctor
         run: |
           uv sync
-          uv run kingdoms doctor || {
+          uv run botforge doctor || {
             echo "doctor reported failures — expected on a bare runner (docker compose, .env)."
             echo "The check proves the CLI boots and produces a report; exit code is informational here."
           }
-          uv run kingdoms --help >/dev/null
-          uv run kingdoms local >/dev/null
-          uv run kingdoms remote list >/dev/null
+          uv run botforge --help >/dev/null
+          uv run botforge local >/dev/null
+          uv run botforge remote list >/dev/null
 
   purity-guard:
-    # kingdoms-services#106: production code must never reference test
+    # botforge-services#106: production code must never reference test
     # tooling, and the runtime image must never contain it. The image
     # side runs in the Docker workflow on the actually-built artifact;
     # this job gives the fast source-level signal on every PR.
@@ -97,7 +97,7 @@ jobs:
         run: ./.github/workflows/scripts/check_image_purity.py --source-only
 
   contracts:
-    # kingdoms-services#128: wire-compatibility guard for the gRPC contracts
+    # botforge-services#128: wire-compatibility guard for the gRPC contracts
     # (ADR-0020). The committed stubs must match contracts/ exactly.
     name: Contracts wire-compat (stubs match contracts/)
     runs-on: ubuntu-latest
@@ -118,25 +118,25 @@ jobs:
       - uses: actions/checkout@v4
       - name: Validate the compose manifest
         run: docker compose config --quiet
-      - name: Boot the stack (bot excluded until kingdoms-services#12)
+      - name: Boot the stack (bot excluded until botforge-services#12)
         run: |
           cp .env.example .env
-          docker compose up -d kingdoms-mongo kingdoms-redis
-          timeout 60 bash -c "until docker compose exec -T kingdoms-mongo mongosh --quiet --eval 'db.adminCommand(\"ping\")' | grep -q ok; do sleep 2; done"
-          timeout 60 bash -c "until docker compose exec -T kingdoms-redis redis-cli ping | grep -q PONG; do sleep 2; done"
+          docker compose up -d botforge-mongo botforge-redis
+          timeout 60 bash -c "until docker compose exec -T botforge-mongo mongosh --quiet --eval 'db.adminCommand(\"ping\")' | grep -q ok; do sleep 2; done"
+          timeout 60 bash -c "until docker compose exec -T botforge-redis redis-cli ping | grep -q PONG; do sleep 2; done"
           echo "COMPOSE STACK BOOTS OK"
-      # kingdoms-services#128: all four ADR-0020 processes boot via compose
+      # botforge-services#128: all four ADR-0020 processes boot via compose
       # profiles (make dev / --profile all). The bot needs a Discord token,
       # so it boots only when DISCORD_TOKEN is available on the runner.
       - name: Boot the core and provider processes (profile all)
         run: |
           cp .env.example .env
-          docker compose --profile all up -d --build kingdoms-core kingdoms-ext-librematch kingdoms-ext-aoe2lobby
+          docker compose --profile all up -d --build botforge-core botforge-ext-librematch botforge-ext-aoe2lobby
           # svc-core must reach steady state; providers must be running.
-          timeout 90 bash -c 'until docker compose --profile all ps --status running kingdoms-core | grep -q kingdoms-core; do sleep 2; done'
-          if [ "$(docker inspect -f '{{.State.Status}}' kingdoms-services-kingdoms-core-1)" != running ]; then
+          timeout 90 bash -c 'until docker compose --profile all ps --status running botforge-core | grep -q botforge-core; do sleep 2; done'
+          if [ "$(docker inspect -f '{{.State.Status}}' botforge-services-botforge-core-1)" != running ]; then
             echo '::error::svc-core container exited before serving'
-            docker compose --profile all logs kingdoms-core
+            docker compose --profile all logs botforge-core
             exit 1
           fi
           timeout 60 bash -c 'until docker compose --profile all ps --status running | grep -q ext-librematch; do sleep 2; done'
@@ -156,52 +156,52 @@ jobs:
           CICD_DISCORD_TOKEN: ${{ secrets.CICD_DISCORD_TOKEN }}
         run: |
           if [ -z "$CICD_DISCORD_TOKEN" ]; then
-            echo "::error::CICD_DISCORD_TOKEN is not configured — create the CI/CD bot and add the secret (kingdoms-services#34)"
+            echo "::error::CICD_DISCORD_TOKEN is not configured — create the CI/CD bot and add the secret (botforge-services#34)"
             exit 1
           fi
           echo "CICD_DISCORD_TOKEN is present"
       - name: Build the bot image
-        run: docker build -t kingdoms-bot:ci .
+        run: docker build -t botforge-bot:ci .
       - name: Start MongoDB and Redis
         run: |
-          docker network create kingdoms-ci
-          docker run -d --name kingdoms-mongo --network kingdoms-ci mongo:7.0
-          docker run -d --name kingdoms-redis --network kingdoms-ci redis:7.2
+          docker network create botforge-ci
+          docker run -d --name botforge-mongo --network botforge-ci mongo:7.0
+          docker run -d --name botforge-redis --network botforge-ci redis:7.2
       - name: Wait for MongoDB and Redis
         run: |
-          timeout 60 bash -c "until docker exec kingdoms-mongo mongosh --quiet --eval 'db.adminCommand(\"ping\")' | grep -q ok; do sleep 2; done"
-          timeout 60 bash -c "until docker exec kingdoms-redis redis-cli ping | grep -q PONG; do sleep 2; done"
+          timeout 60 bash -c "until docker exec botforge-mongo mongosh --quiet --eval 'db.adminCommand(\"ping\")' | grep -q ok; do sleep 2; done"
+          timeout 60 bash -c "until docker exec botforge-redis redis-cli ping | grep -q PONG; do sleep 2; done"
       - name: Boot the real bot with the CI/CD token
         env:
           CICD_DISCORD_TOKEN: ${{ secrets.CICD_DISCORD_TOKEN }}
         run: |
-          docker run -d --name kingdoms-bot-smoke --network kingdoms-ci \
-            -e MONGO_URI=mongodb://kingdoms-mongo:27017 \
-            -e REDIS_URI=redis://kingdoms-redis:6379 \
+          docker run -d --name botforge-bot-smoke --network botforge-ci \
+            -e MONGO_URI=mongodb://botforge-mongo:27017 \
+            -e REDIS_URI=redis://botforge-redis:6379 \
             -e DISCORD_TOKEN="$CICD_DISCORD_TOKEN" -e LOG_LEVEL=INFO \
-            -e KINGDOMS_ANNOUNCE_ENABLED=0 \
-            kingdoms-bot:ci
+            -e BOTFORGE_ANNOUNCE_ENABLED=0 \
+            botforge-bot:ci
       - name: Assert the gateway ready signal
         run: |
-          timeout 120 bash -c "until docker logs kingdoms-bot-smoke 2>&1 | grep -q KINGDOMS_BOT_READY; do
-            if [ \"\$(docker inspect -f '{{.State.Status}}' kingdoms-bot-smoke)\" != running ]; then
+          timeout 120 bash -c "until docker logs botforge-bot-smoke 2>&1 | grep -q BOTFORGE_BOT_READY; do
+            if [ \"\$(docker inspect -f '{{.State.Status}}' botforge-bot-smoke)\" != running ]; then
               echo '::error::Bot container exited before reaching the gateway ready signal'
-              docker logs kingdoms-bot-smoke
+              docker logs botforge-bot-smoke
               exit 1
             fi
             sleep 2
           done"
-          docker logs kingdoms-bot-smoke 2>&1 | grep KINGDOMS_BOT_READY
+          docker logs botforge-bot-smoke 2>&1 | grep BOTFORGE_BOT_READY
           echo "DISCORD GATEWAY READY OK"
       - name: Assert the native guild locale (preferred_locale) is readable on the real gateway
         # The READY payload carries preferred_locale per guild; the bot logs one
         # GUILD NATIVE LOCALE line per guild at boot. CI proves here that the
         # field is populated for every guild the CI/CD bot sits in.
         run: |
-          lines="$(docker logs kingdoms-bot-smoke 2>&1 | grep 'GUILD NATIVE LOCALE' || true)"
+          lines="$(docker logs botforge-bot-smoke 2>&1 | grep 'GUILD NATIVE LOCALE' || true)"
           if [ -z "$lines" ]; then
             echo '::error::No GUILD NATIVE LOCALE line in startup logs — preferred_locale not readable'
-            docker logs --tail 60 kingdoms-bot-smoke
+            docker logs --tail 60 botforge-bot-smoke
             exit 1
           fi
           echo "$lines"
@@ -217,10 +217,10 @@ jobs:
         # INTERACTION USER LOCALE). The boot enumeration proves it: one
         # GUILD MEMBER LOCALE line per cached member of the CI/CD guild.
         run: |
-          lines="$(docker logs kingdoms-bot-smoke 2>&1 | grep 'GUILD MEMBER LOCALE' || true)"
+          lines="$(docker logs botforge-bot-smoke 2>&1 | grep 'GUILD MEMBER LOCALE' || true)"
           if [ -z "$lines" ]; then
             echo '::error::No GUILD MEMBER LOCALE line — the member enumeration produced nothing'
-            docker logs --tail 60 kingdoms-bot-smoke
+            docker logs --tail 60 botforge-bot-smoke
             exit 1
           fi
           echo "$lines"
@@ -232,34 +232,34 @@ jobs:
           fi
           echo "MEMBER LOCALE ENUMERATION OK ($count members enumerated, raw=None each — per-user language is interaction-driven)"
       - name: Assert the hot state connected (no degraded startup)
-        # kingdoms-services#225: the bot used to boot READY with its Redis
+        # botforge-services#225: the bot used to boot READY with its Redis
         # state store never started — every cache-aside write failed at
         # runtime while CI stayed green. A wired bot that degrades on the
         # startup path must fail here, not in production.
         run: |
-          if docker logs kingdoms-bot-smoke 2>&1 | grep -q 'state store not started'; then
+          if docker logs botforge-bot-smoke 2>&1 | grep -q 'state store not started'; then
             echo '::error::Bot started with its state store NOT connected (degraded startup)'
-            docker logs kingdoms-bot-smoke 2>&1 | grep -B2 -A2 'state store not started' | head -40
+            docker logs botforge-bot-smoke 2>&1 | grep -B2 -A2 'state store not started' | head -40
             exit 1
           fi
-          if ! docker logs kingdoms-bot-smoke 2>&1 | grep -q 'STATE SERVICE STARTED'; then
+          if ! docker logs botforge-bot-smoke 2>&1 | grep -q 'STATE SERVICE STARTED'; then
             echo '::error::STATE SERVICE STARTED marker missing from startup logs'
-            docker logs --tail 60 kingdoms-bot-smoke
+            docker logs --tail 60 botforge-bot-smoke
             exit 1
           fi
           echo "HOT STATE CONNECTED OK"
       - name: Soak the bot for 60s (no crash loop)
         run: |
           sleep 60
-          if [ "$(docker inspect -f "{{.State.Status}}" kingdoms-bot-smoke)" != "running" ]; then
+          if [ "$(docker inspect -f "{{.State.Status}}" botforge-bot-smoke)" != "running" ]; then
             echo "::error::Bot container crashed during the soak window"
-            docker logs --tail 50 kingdoms-bot-smoke
+            docker logs --tail 50 botforge-bot-smoke
             exit 1
           fi
-          restarts="$(docker inspect -f "{{.RestartCount}}" kingdoms-bot-smoke)"
+          restarts="$(docker inspect -f "{{.RestartCount}}" botforge-bot-smoke)"
           if [ "$restarts" != "0" ]; then
             echo "::error::Bot container restarted $restarts times during the soak window"
-            docker logs --tail 50 kingdoms-bot-smoke
+            docker logs --tail 50 botforge-bot-smoke
             exit 1
           fi
           echo "SOAK OK (60s, no restart)"
@@ -268,14 +268,14 @@ jobs:
         env:
           CICD_DISCORD_TOKEN: ${{ secrets.CICD_DISCORD_TOKEN }}
         run: |
-          docker logs kingdoms-bot-smoke 2>&1 | grep -v -F "$CICD_DISCORD_TOKEN" || true
-          docker logs kingdoms-mongo || true
-          docker logs kingdoms-redis || true
+          docker logs botforge-bot-smoke 2>&1 | grep -v -F "$CICD_DISCORD_TOKEN" || true
+          docker logs botforge-mongo || true
+          docker logs botforge-redis || true
       - name: Cleanup
         if: always()
         run: |
-          docker rm -f kingdoms-bot-smoke kingdoms-mongo kingdoms-redis || true
-          docker network rm kingdoms-ci || true
+          docker rm -f botforge-bot-smoke botforge-mongo botforge-redis || true
+          docker network rm botforge-ci || true
 
   external-services:
     name: External services (real provider batteries)
@@ -291,7 +291,7 @@ jobs:
           # librematch public API, aoe2lobby ws): one report, exit
           # non-zero only after ALL checks ran.
           uv sync
-          uv run python src/kingdoms/core_process/run_external_checks.py
+          uv run python src/botforge/core_process/run_external_checks.py
         env:
           # The liquipedia battery skips (does not fail) when unset; set
           # the repo variable PROVIDER_CONTACT (generic, every provider)
@@ -301,21 +301,21 @@ jobs:
         run: |
           # The compose job runs the ext processes; this pass points the
           # content battery at the deployed gRPC endpoint.
-          docker network create kingdoms-ci-ext || true
-          docker build -t kingdoms-bot:ci .
-          docker run -d --name kingdoms-ext-aoe2techtree --network kingdoms-ci-ext \
-            -e KINGDOMS_PROCESS=ext-aoe2techtree \
-            kingdoms-bot:ci
-          timeout 30 bash -c "until docker logs kingdoms-ext-aoe2techtree 2>&1 | grep -q _READY; do sleep 2; done" || true
-          docker run --rm --network kingdoms-ci-ext \
-            -e EXT_AOE2TECHTREE_URI=kingdoms-ext-aoe2techtree:50063 \
+          docker network create botforge-ci-ext || true
+          docker build -t botforge-bot:ci .
+          docker run -d --name botforge-ext-aoe2techtree --network botforge-ci-ext \
+            -e BOTFORGE_PROCESS=ext-aoe2techtree \
+            botforge-bot:ci
+          timeout 30 bash -c "until docker logs botforge-ext-aoe2techtree 2>&1 | grep -q _READY; do sleep 2; done" || true
+          docker run --rm --network botforge-ci-ext \
+            -e EXT_AOE2TECHTREE_URI=botforge-ext-aoe2techtree:50063 \
             --entrypoint python \
-            kingdoms-bot:ci src/kingdoms/core_process/run_external_checks.py
+            botforge-bot:ci src/botforge/core_process/run_external_checks.py
       - name: Cleanup
         if: always()
         run: |
-          docker rm -f kingdoms-ext-aoe2techtree || true
-          docker network rm kingdoms-ci-ext || true
+          docker rm -f botforge-ext-aoe2techtree || true
+          docker network rm botforge-ci-ext || true
 
   smoke:
     name: Smoke test (bot image + MongoDB + Redis)
@@ -324,48 +324,48 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Build the bot image
-        run: docker build -t kingdoms-bot:ci .
+        run: docker build -t botforge-bot:ci .
 
       - name: Start MongoDB and Redis
         run: |
-          docker network create kingdoms-ci
-          docker run -d --name kingdoms-mongo --network kingdoms-ci mongo:7.0
-          docker run -d --name kingdoms-redis --network kingdoms-ci redis:7.2
+          docker network create botforge-ci
+          docker run -d --name botforge-mongo --network botforge-ci mongo:7.0
+          docker run -d --name botforge-redis --network botforge-ci redis:7.2
 
       - name: Wait for MongoDB and Redis
         run: |
-          timeout 60 bash -c "until docker exec kingdoms-mongo mongosh --quiet --eval 'db.adminCommand(\"ping\")' | grep -q ok; do sleep 2; done"
-          timeout 60 bash -c "until docker exec kingdoms-redis redis-cli ping | grep -q PONG; do sleep 2; done"
+          timeout 60 bash -c "until docker exec botforge-mongo mongosh --quiet --eval 'db.adminCommand(\"ping\")' | grep -q ok; do sleep 2; done"
+          timeout 60 bash -c "until docker exec botforge-redis redis-cli ping | grep -q PONG; do sleep 2; done"
 
       - name: Run the smoke test in the bot container
         env:
-          MONGO_URI: mongodb://kingdoms-mongo:27017
-          REDIS_URI: redis://kingdoms-redis:6379
+          MONGO_URI: mongodb://botforge-mongo:27017
+          REDIS_URI: redis://botforge-redis:6379
         run: |
-          docker run --rm --network kingdoms-ci \
+          docker run --rm --network botforge-ci \
             -e MONGO_URI -e REDIS_URI -e LOG_LEVEL=DEBUG \
             -v "$PWD/.github/workflows/scripts/smoke_test.py:/app/smoke_test.py:ro" \
             --entrypoint python \
-            kingdoms-bot:ci /app/smoke_test.py
+            botforge-bot:ci /app/smoke_test.py
 
       - name: Bot preflight via the real entrypoint (startup path check)
         env:
-          MONGO_URI: mongodb://kingdoms-mongo:27017
-          REDIS_URI: redis://kingdoms-redis:6379
+          MONGO_URI: mongodb://botforge-mongo:27017
+          REDIS_URI: redis://botforge-redis:6379
           DISCORD_TOKEN: dummy-token-for-smoke
         run: |
-          docker run --rm --network kingdoms-ci \
+          docker run --rm --network botforge-ci \
             -e MONGO_URI -e REDIS_URI -e DISCORD_TOKEN \
-            kingdoms-bot:ci --preflight
+            botforge-bot:ci --preflight
 
       - name: Show dependency logs on failure
         if: failure()
         run: |
-          docker logs kingdoms-mongo || true
-          docker logs kingdoms-redis || true
+          docker logs botforge-mongo || true
+          docker logs botforge-redis || true
 
       - name: Cleanup
         if: always()
         run: |
-          docker rm -f kingdoms-mongo kingdoms-redis || true
-          docker network rm kingdoms-ci || true
+          docker rm -f botforge-mongo botforge-redis || true
+          docker network rm botforge-ci || true

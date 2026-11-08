@@ -14,13 +14,13 @@ import ast
 import types
 from pathlib import Path
 
-import kingdoms.core.rpc.content_client as content_client
-import kingdoms.game_aoe2.client as game_client
-import kingdoms.game_aoe2.remote_catalog as remote_catalog
-from kingdoms.core.rpc.content import ContentServicer
-from kingdoms.core.services.faction_content import FactionContentService
-from kingdoms.core.services.game_data import GameDataService
-from kingdoms.game_aoe2.rpc import _CATALOG_OPS, GameDataServicer
+import botforge.core.rpc.content_client as content_client
+import botforge.game_aoe2.client as game_client
+import botforge.game_aoe2.remote_catalog as remote_catalog
+from botforge.core.rpc.content import ContentServicer
+from botforge.core.services.faction_content import FactionContentService
+from botforge.core.services.game_data import GameDataService
+from botforge.game_aoe2.rpc import _CATALOG_OPS, GameDataServicer
 
 # The gateway's composed surface (server._CatalogGateway): the catalog
 # ops dispatch to GameDataService, the content ops to FactionContentService.

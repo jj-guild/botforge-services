@@ -1,4 +1,4 @@
-# CLI integration smoke (kingdoms-services#188) — exercises the `kingdoms`
+# CLI integration smoke (botforge-services#188) — exercises the `botforge`
 # CLI on a GitHub runner exactly the way an agent session or a developer
 # would: doctor (environment report), local (dispatch + graceful failure
 # when docker compose is absent), remote (config lifecycle: add, list,
@@ -17,7 +17,7 @@ permissions:
 
 jobs:
   smoke:
-    name: kingdoms CLI end-to-end (doctor, local, remote, runner)
+    name: botforge CLI end-to-end (doctor, local, remote, runner)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -26,30 +26,30 @@ jobs:
           python-version: "3.12"
       - name: Install the CLI
         run: uv sync
-      - name: kingdoms doctor (failures expected on a bare runner — exit code informational)
+      - name: botforge doctor (failures expected on a bare runner — exit code informational)
         run: |
-          uv run kingdoms doctor || echo "doctor exit=$? (expected: no .env/compose on the runner)"
-      - name: kingdoms local (usage paths; compose stack not booted on the runner)
+          uv run botforge doctor || echo "doctor exit=$? (expected: no .env/compose on the runner)"
+      - name: botforge local (usage paths; compose stack not booted on the runner)
         run: |
-          uv run kingdoms local
-          if uv run kingdoms local badaction; then
+          uv run botforge local
+          if uv run botforge local badaction; then
             echo "::error::local badaction should exit 2"; exit 1
           fi
-      - name: kingdoms remote (config lifecycle, no network)
+      - name: botforge remote (config lifecycle, no network)
         run: |
-          uv run kingdoms remote
-          uv run kingdoms remote add --name ci-host --host 127.0.0.1 --user ci
-          uv run kingdoms remote list | grep -q ci-host
-          uv run kingdoms remote rm ci-host
-          if uv run kingdoms remote list | grep -q ci-host; then
+          uv run botforge remote
+          uv run botforge remote add --name ci-host --host 127.0.0.1 --user ci
+          uv run botforge remote list | grep -q ci-host
+          uv run botforge remote rm ci-host
+          if uv run botforge remote list | grep -q ci-host; then
             echo "::error::ci-host should be gone"; exit 1
           fi
-          if uv run kingdoms remote badaction; then
+          if uv run botforge remote badaction; then
             echo "::error::remote badaction should exit 2"; exit 1
           fi
-      - name: kingdoms runner (usage path)
+      - name: botforge runner (usage path)
         run: |
-          uv run kingdoms runner
-          if uv run kingdoms runner badaction; then
+          uv run botforge runner
+          if uv run botforge runner badaction; then
             echo "::error::runner badaction should exit 2"; exit 1
           fi

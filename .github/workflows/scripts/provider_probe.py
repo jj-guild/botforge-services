@@ -62,8 +62,8 @@ def _dump_blob_bytes(blob: str, label: str) -> None:
 
 async def probe_librematch(profile_id: str, timeout_s: float) -> None:
     """HTTP probe: lobbies, one lobby's decoded match details, player stats."""
-    from kingdoms.core.games.aoe2.blobs import BlobDecodeError, decode_blob
-    from kingdoms.ext_librematch.adapter import LibrematchAdapter
+    from botforge.core.games.aoe2.blobs import BlobDecodeError, decode_blob
+    from botforge.ext_librematch.adapter import LibrematchAdapter
 
     adapter = LibrematchAdapter(timeout_s=timeout_s)
     print(f"\n### ext_librematch — {adapter._base_url}")
@@ -95,7 +95,7 @@ async def probe_aoe2lobby(timeout_s: float, profile_id: str) -> None:
 
     import websockets
 
-    from kingdoms.ext_aoe2lobby.adapter import DEFAULT_WS_URL
+    from botforge.ext_aoe2lobby.adapter import DEFAULT_WS_URL
 
     print(f"\n### ext_aoe2lobby — {DEFAULT_WS_URL}")
     try:
@@ -134,11 +134,11 @@ def probe_liquipedia(page: str) -> None:
     a "the labels are wrong on this map" report is debugged against
     the actual bytes, not assumptions.
     """
-    from kingdoms.ext_liquipedia.liquipedia import LiquipediaMapsProvider, query_tags
+    from botforge.ext_liquipedia.liquipedia import LiquipediaMapsProvider, query_tags
 
     provider = LiquipediaMapsProvider(
-        "kingdoms provider-probe/1.0 "
-        "(https://github.com/merlin-pinpin-org/kingdoms-services)",
+        "botforge provider-probe/1.0 "
+        "(https://github.com/jj-guild/botforge-services)",
     )
     payload = provider._get_json(
         {"action": "parse", "page": page, "prop": "wikitext", "format": "json"},

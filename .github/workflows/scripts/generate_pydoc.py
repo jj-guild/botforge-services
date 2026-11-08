@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Generate pydoc HTML documentation for all Kingdoms modules.
+"""Generate pydoc HTML documentation for all BotForge modules.
 
 Scans the Python source tree, renders HTML documentation for every module
 with pydoc, mirrors the source layout under docs/DEVELOPMENT/pydoc/, and
@@ -115,7 +115,7 @@ def write_index(
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>Kingdoms pydoc index</title>
+<title>BotForge pydoc index</title>
 <style>
 body {{ font-family: sans-serif; margin: 2rem; }}
 h1 {{ font-size: 1.4rem; }}
@@ -123,7 +123,7 @@ ul {{ line-height: 1.6; }}
 </style>
 </head>
 <body>
-<h1>Kingdoms pydoc index</h1>
+<h1>BotForge pydoc index</h1>
 <p>Auto-generated from the Python source tree by
 <code>scripts/generate_pydoc.py</code>.</p>
 <ul>
@@ -141,10 +141,10 @@ def main() -> int:
     parser.add_argument(
         "--source",
         type=Path,
-        default=Path("../kingdoms-services/src/kingdoms").resolve()
-        if Path("../kingdoms-services/src/kingdoms").exists()
-        else Path("kingdoms-services/src/kingdoms"),
-        help="Path to the Python package to document (default: kingdoms-services/src/kingdoms)",
+        default=Path("../botforge-services/src/botforge").resolve()
+        if Path("../botforge-services/src/botforge").exists()
+        else Path("botforge-services/src/botforge"),
+        help="Path to the Python package to document (default: botforge-services/src/botforge)",
     )
     parser.add_argument(
         "--output",
@@ -158,7 +158,7 @@ def main() -> int:
     if not src_root.is_dir():
         print(
             f"warning: source directory not found: {src_root} "
-            "kingdoms-services is not initialized yet; nothing to generate.",
+            "botforge-services is not initialized yet; nothing to generate.",
             file=sys.stderr,
         )
         return 0

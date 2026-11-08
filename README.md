@@ -1,7 +1,7 @@
-# kingdoms-services
+# botforge-services
 
 Core bot, Discord implementation, shared utilities, and YAML configs. All
-Python code for the Kingdoms Discord bot platform.
+Python code for the BotForge Discord bot platform.
 
 ## Quickstart (no AI agent needed)
 
@@ -9,8 +9,8 @@ Prerequisites: Python 3.12, [`uv`](https://docs.astral.sh/uv/), Docker
 (optionally, for the local compose stack).
 
 ```bash
-git clone https://github.com/merlin-pinpin-org/kingdoms-services.git
-cd kingdoms-services
+git clone https://github.com/jj-guild/botforge-services.git
+cd botforge-services
 make setup      # uv sync — venv + dependencies
 make lint       # ruff
 make typecheck  # mypy strict
@@ -33,9 +33,9 @@ needed), `providers`, `librematch`, `aoe2lobby`, `bot`. Narrower boot:
 `contracts/` are wire-compat-guarded: run `make contracts` after any
 `.proto` edit — CI fails if committed stubs drift (`make contracts-check`).
 
-The bot serves `http://localhost:8000/healthz`. A didactic `kingdoms`
+The bot serves `http://localhost:8000/healthz`. A didactic `botforge`
 CLI is also installed by `make setup` — check your environment
-(`kingdoms doctor`), drive the local stack, manage a remote server over
+(`botforge doctor`), drive the local stack, manage a remote server over
 SSH, or set up a self-hosted runner: see [docs/CLI.md](docs/CLI.md).
 Unit and integration
 tests (MockDiscord, SimCord) never need a Discord token or network —
@@ -49,23 +49,23 @@ see [docs/DEVELOPER.md](docs/DEVELOPER.md) and
 - **Docs** (`.github/workflows/docs.yml`): this repo hosts its own generated
   technical documentation (`docs/DEVELOPMENT/pydoc/`, regenerated with
   `make docs`); every PR fails when the committed copy is stale.
-- **Generated artifacts in `kingdoms`**: `generated/ROADMAP.md` and
+- **Generated artifacts in `botforge`**: `generated/ROADMAP.md` and
   `generated/DEPENDENCIES.md` are owned by the `sync-generated` workflow
   (single writer, published on the `sync/generated-artifacts` branch);
   sessions only preview drift with the sync skills
-  ([Generated artifacts](https://github.com/merlin-pinpin-org/kingdoms/blob/main/.agents/skills/generated-artifacts/SKILL.md)).
+  ([Generated artifacts](https://github.com/jj-guild/botforge/blob/main/.agents/skills/generated-artifacts/SKILL.md)).
 
 ## Deploying a pull request
 
 Post `/deploy` (or `/deploy <env>`) as a comment on a pull request of this
 repository to build the PR head, push the image to GHCR
-(`pr-<id>-<timestamp>-<sha7>`), pin it on the kingdoms-infra state branch
+(`pr-<id>-<timestamp>-<sha7>`), pin it on the botforge-infra state branch
 `deploy/<env>` and deploy it on that environment's runner — the tracking
 comment on the PR follows the deployment through building → deploying →
 deployed.
 
 - The environment defaults to `test`; any non-protected environment works
-  (validated against the `envs/` directory of kingdoms-infra).
+  (validated against the `envs/` directory of botforge-infra).
 - `prod` never deploys a PR: it pins released `vX.Y.Z` images only.
 - Only repository collaborators with write access may use it; fork PRs are
   rejected.
@@ -87,12 +87,12 @@ images only. The flow is:
 1. Tag `vX.Y.Z` on `main` (`make release TAG=vX.Y.Z`, or by hand — the
    `release-tags` ruleset authorizes the classifiers, e.g. `v0.1.0-rc1`).
    The [docker](.github/workflows/docker.yml) workflow builds and publishes
-   `ghcr.io/merlin-pinpin-org/kingdoms-services:vX.Y.Z` (the image carries
+   `ghcr.io/jj-guild/botforge-services:vX.Y.Z` (the image carries
    the raw tag name — the state branches pin that exact tag), creates the
    GitHub release with generated notes, and pins the image on `deploy/test`.
-2. The same workflow then pins the released image on the kingdoms-infra state
+2. The same workflow then pins the released image on the botforge-infra state
    branch `deploy/test` (dispatch to the infra `Pin state` workflow,
-   kingdoms-deployer App): the release runs on the test environment, where
+   botforge-deployer App): the release runs on the test environment, where
    the humans validate it in Discord — same flow as a PR deploy, but with
    the released image and `/status` showing the Release line.
 3. Once validated, an authorized collaborator runs the
@@ -109,5 +109,5 @@ images only. The flow is:
 See [docs/DEVELOPER.md](docs/DEVELOPER.md) (developer guide: toolchain,
 architecture rules, testing), [AGENTS.md](AGENTS.md) (agent entry
 points) and the
-[operating model](https://github.com/merlin-pinpin-org/kingdoms/blob/main/docs/VIBEWORKFLOW.md)
-in the `kingdoms` repo.
+[operating model](https://github.com/jj-guild/botforge/blob/main/docs/VIBEWORKFLOW.md)
+in the `botforge` repo.

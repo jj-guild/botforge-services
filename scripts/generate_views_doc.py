@@ -3,9 +3,9 @@
 The views YAML is the single source of truth; this script renders it
 for humans: one section per view with GitHub anchors, every button a
 link to its target's section (menus reference each other through
-clickable links). Run from the kingdoms-services repo root:
+clickable links). Run from the botforge-services repo root:
 
-    uv run python scripts/generate_views_doc.py --output ../kingdoms/docs/DEVELOPMENT/VIEWS.md
+    uv run python scripts/generate_views_doc.py --output ../botforge/docs/DEVELOPMENT/VIEWS.md
 
 The generated doc carries a "generated" banner; hand edits are lost
 on the next run — edit the YAML instead, then regenerate.
@@ -125,7 +125,7 @@ def render(raw_views: dict, scopes: dict | None = None) -> str:
     lines: list[str] = []
     lines.append("# VIEWS — the map of menus and panels")
     lines.append("")
-    lines.append("<!-- Generated from kingdoms-services config/views.yaml — edit the")
+    lines.append("<!-- Generated from botforge-services config/views.yaml — edit the")
     lines.append("     YAML, then regenerate (scripts/generate_views_doc.py). -->")
     lines.append("")
     lines.append(
@@ -148,7 +148,7 @@ def render(raw_views: dict, scopes: dict | None = None) -> str:
     lines.append("")
     lines.append("Platform views live in `config/views.yaml`; a mod's own views live in")
     lines.append("its own `config/mods/<mod>.views.yaml` (a mod's files never scatter —")
-    lines.append("kingdoms#179) and merge into the same registry.")
+    lines.append("botforge#179) and merge into the same registry.")
     lines.append("")
     lines.append("1. **Declare** the view in the right YAML:")
     lines.append("   id, kind, pin scope, buttons (target/label/admin/sync/action);")

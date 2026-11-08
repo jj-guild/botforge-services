@@ -26,13 +26,13 @@ from typing import Any
 import grpc
 import httpx
 
-from kingdoms.core.models.game import PlayerStats, ProviderCapabilities
-from kingdoms.core.rpc.game import GameServicer
-from kingdoms.core.rpc.game_client import GameProviderClient
-from kingdoms.core.services.registration import (
+from botforge.core.models.game import PlayerStats, ProviderCapabilities
+from botforge.core.rpc.game import GameServicer
+from botforge.core.rpc.game_client import GameProviderClient
+from botforge.core.services.registration import (
     RegistrationService,
 )
-from kingdoms.rpc_generated.kingdoms.v1 import game_pb2_grpc
+from botforge.rpc_generated.botforge.v1 import game_pb2_grpc
 
 WORLDEDGE_REPLY = {
     "result": {"code": 0, "message": "SUCCESS"},
@@ -182,9 +182,9 @@ async def _start_game_service(stats_uri: str) -> tuple[Any, int]:
     proxies its stats provider — the harness mirrors the real wiring
     (the same servicer the game-aoe2 process binds).
     """
-    from kingdoms.core.rpc.game_client import GameProviderClient
-    from kingdoms.game_aoe2.rpc import GameDataServicer
-    from kingdoms.rpc_generated.kingdoms.v1 import gamedata_pb2_grpc
+    from botforge.core.rpc.game_client import GameProviderClient
+    from botforge.game_aoe2.rpc import GameDataServicer
+    from botforge.rpc_generated.botforge.v1 import gamedata_pb2_grpc
 
     server = grpc.aio.server()
     servicer = GameDataServicer(
@@ -199,8 +199,8 @@ async def _start_game_service(stats_uri: str) -> tuple[Any, int]:
 
 async def test_registration_end_to_end_with_the_real_wire(monkeypatch: Any) -> None:
     """The full chain: WorldsEdge reply → adapter → gRPC → seam → binding."""
-    from kingdoms.discord.registration_platform import Aoe2ProfileValidationSeam
-    from kingdoms.ext_librematch.adapter import LibrematchAdapter
+    from botforge.discord.registration_platform import Aoe2ProfileValidationSeam
+    from botforge.ext_librematch.adapter import LibrematchAdapter
 
     transport = FakeWorldsEdgeTransport({"/community/leaderboard/GetPersonalStat": WORLDEDGE_REPLY})
 
@@ -265,7 +265,7 @@ async def test_registration_refused_when_the_provider_declares_no_stats(monkeypa
     """player_stats=False (no API key): the seam names the config gap."""
     import pytest
 
-    from kingdoms.discord.registration_platform import Aoe2ProfileValidationSeam, ProviderStatsUnavailableError
+    from botforge.discord.registration_platform import Aoe2ProfileValidationSeam, ProviderStatsUnavailableError
 
     async def player_stats(profile_id: str) -> PlayerStats | None:
         return None
@@ -288,14 +288,14 @@ async def test_registration_rejects_an_unknown_profile(monkeypatch: Any) -> None
     """A profile the leaderboards never heard of: explicit InvalidProfileError."""
     import pytest
 
-    from kingdoms.core.services.registration import InvalidProfileError
-    from kingdoms.discord.registration_platform import Aoe2ProfileValidationSeam
+    from botforge.core.services.registration import InvalidProfileError
+    from botforge.discord.registration_platform import Aoe2ProfileValidationSeam
 
     empty_reply = {"result": {"code": 0}, "statGroups": [], "leaderboardStats": []}
     transport = FakeWorldsEdgeTransport({"/community/leaderboard/GetPersonalStat": empty_reply})
 
     async def player_stats(profile_id: str) -> PlayerStats | None:
-        from kingdoms.ext_librematch.adapter import LibrematchAdapter
+        from botforge.ext_librematch.adapter import LibrematchAdapter
 
         adapter = LibrematchAdapter(
             base_url="https://aoe-api.worldsedgelink.com", transport=transport
@@ -313,7 +313,7 @@ async def test_registration_rejects_an_unknown_profile(monkeypatch: Any) -> None
         async def _no_resolve(typed_id: str, transport: Any = None) -> str | None:
             return None
 
-        import kingdoms.discord.registration_platform as platform
+        import botforge.discord.registration_platform as platform
 
         monkeypatch.setattr(platform, "resolve_relic_id", _no_resolve)
         seam = Aoe2ProfileValidationSeam()
@@ -333,7 +333,7 @@ async def test_the_seam_never_silently_rejects_without_uri(monkeypatch: Any) -> 
     seam must always try a provider (the docker-network default stands in)
     and fail explicitly, never silently.
     """
-    from kingdoms.discord.registration_platform import Aoe2ProfileValidationSeam
+    from botforge.discord.registration_platform import Aoe2ProfileValidationSeam
 
     monkeypatch.delenv("EXT_LIBREMATCH_URI", raising=False)
     seam = Aoe2ProfileValidationSeam()
@@ -348,8 +348,8 @@ async def test_registration_resolves_the_insights_user_id_to_the_relic_id(monkey
     relic id (17190369) are different numbers — the seam must resolve
     the former through /user/<id>/relic-id/ and bind the relic id.
     """
-    from kingdoms.core.services.registration import RegistrationService
-    from kingdoms.discord.registration_platform import (
+    from botforge.core.services.registration import RegistrationService
+    from botforge.discord.registration_platform import (
         Aoe2ProfileValidationSeam,
         resolve_relic_id,
     )
@@ -366,7 +366,7 @@ async def test_registration_resolves_the_insights_user_id_to_the_relic_id(monkey
     )
 
     async def player_stats(profile_id: str) -> PlayerStats | None:
-        from kingdoms.ext_librematch.adapter import LibrematchAdapter
+        from botforge.ext_librematch.adapter import LibrematchAdapter
 
         adapter = LibrematchAdapter(base_url="https://aoe-api.worldsedgelink.com", transport=worldedge)
         return await adapter.player_stats(profile_id)
@@ -382,7 +382,7 @@ async def test_registration_resolves_the_insights_user_id_to_the_relic_id(monkey
         # patch the resolver's transport at the seam level: the seam uses
         # resolve_relic_id with the default (real) transport — inject the
         # fake so the test never leaves localhost
-        import kingdoms.discord.registration_platform as platform
+        import botforge.discord.registration_platform as platform
 
         async def _fake_resolve(typed_id: str, transport: Any = None) -> str | None:
             return await resolve_relic_id(typed_id, transport=insights_transport)

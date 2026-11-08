@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from kingdoms.core.rpc.status import (
+from botforge.core.rpc.status import (
     CoreStatus,
     build_status_server,
     fetch_core_status,

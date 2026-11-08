@@ -16,7 +16,7 @@ from __future__ import annotations
 
 def test_map_seed_reply_carries_every_servicer_field() -> None:
     """Build the reply exactly as the servicer does — every kwarg must exist."""
-    from kingdoms.rpc_generated.kingdoms.v1 import content_pb2
+    from botforge.rpc_generated.botforge.v1 import content_pb2
 
     reply = content_pb2.MapSeedReply(
         found=True,
@@ -56,8 +56,8 @@ def test_the_servicer_source_only_uses_fields_the_wire_declares() -> None:
     import inspect
     import re
 
-    from kingdoms.core.rpc import content as content_servicer
-    from kingdoms.rpc_generated.kingdoms.v1 import content_pb2
+    from botforge.core.rpc import content as content_servicer
+    from botforge.rpc_generated.botforge.v1 import content_pb2
 
     source = inspect.getsource(content_servicer)
     built = set(re.findall(r"MapSeedReply\(([^)]*)", source, re.DOTALL))

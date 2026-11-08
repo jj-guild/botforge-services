@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Python: botforge.ext_librematch.adapter</title>
+</head><body>
+
+<table class="heading">
+<tr class="heading-text decor">
+<td class="title">&nbsp;<br><strong class="title"><a href="botforge.html" class="white">botforge</a>.<a href="botforge.ext_librematch.html" class="white">ext_librematch</a>.adapter</strong></td>
+<td class="extra"><a href=".">index</a><br><a href="file:SOURCE_ROOT/ext_librematch/adapter.py">SOURCE_ROOT/ext_librematch/adapter.py</a></td></tr></table>
+    <p><span class="code">ext-librematch&nbsp;live&nbsp;adapter:&nbsp;Worlds&nbsp;Edge&nbsp;Link&nbsp;Community&nbsp;API&nbsp;client.<br>
+&nbsp;<br>
+Source&nbsp;of&nbsp;truth&nbsp;for&nbsp;AoE2&nbsp;reference&nbsp;data&nbsp;(developer&nbsp;direction):&nbsp;lobby<br>
+listings&nbsp;come&nbsp;from&nbsp;the&nbsp;public&nbsp;Community&nbsp;API&nbsp;endpoint&nbsp;documented&nbsp;by&nbsp;the<br>
+LibreMatch&nbsp;wiki&nbsp;(``GET&nbsp;/community/advertisement/findAdvertisements``).<br>
+The&nbsp;slotinfo/options&nbsp;fields&nbsp;of&nbsp;each&nbsp;lobby&nbsp;are&nbsp;base64+zlib&nbsp;blobs&nbsp;decoded<br>
+by&nbsp;the&nbsp;game&nbsp;module&nbsp;(``botforge.game_aoe2.blobs``).<br>
+&nbsp;<br>
+Conservative&nbsp;by&nbsp;design:&nbsp;on&nbsp;any&nbsp;decode&nbsp;or&nbsp;transport&nbsp;failure&nbsp;the&nbsp;adapter<br>
+serves&nbsp;what&nbsp;it&nbsp;has&nbsp;and&nbsp;degrades&nbsp;—&nbsp;never&nbsp;fails&nbsp;the&nbsp;provider&nbsp;process.</span></p>
+<p>
+<table class="section">
+<tr class="decor pkg-content-decor heading-text">
+<td class="section-title" colspan=3>&nbsp;<br><strong class="bigsection">Modules</strong></td></tr>
+    
+<tr><td class="decor pkg-content-decor"><span class="code">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span></td><td>&nbsp;</td>
+<td class="singlecolumn"><table><tr><td class="multicolumn"><a href="httpx.html">httpx</a><br>
+</td><td class="multicolumn"><a href="logging.html">logging</a><br>
+</td><td class="multicolumn"></td><td class="multicolumn"></td></tr></table></td></tr></table><p>
+<table class="section">
+<tr class="decor index-decor heading-text">
+<td class="section-title" colspan=3>&nbsp;<br><strong class="bigsection">Classes</strong></td></tr>
+    
+<tr><td class="decor index-decor"><span class="code">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span></td><td>&nbsp;</td>
+<td class="singlecolumn"><dl>
+<dt class="heading-text"><a href="builtins.html#object">builtins.object</a>
+</dt><dd>
+<dl>
+<dt class="heading-text"><a href="botforge.ext_librematch.adapter.html#LibrematchAdapter">LibrematchAdapter</a>
+</dt></dl>
+</dd>
+</dl>
+ <p>
+<table class="section">
+<tr class="decor title-decor heading-text">
+<td class="section-title" colspan=3>&nbsp;<br><a name="LibrematchAdapter">class <strong>LibrematchAdapter</strong></a>(<a href="builtins.html#object">builtins.object</a>)</td></tr>
+    
+<tr><td class="decor title-decor" rowspan=2><span class="code">&nbsp;&nbsp;&nbsp;</span></td>
+<td class="decor title-decor" colspan=2><span class="code"><a href="#LibrematchAdapter">LibrematchAdapter</a>(base_url:&nbsp;'str'&nbsp;=&nbsp;'<a href="https://aoe-api.worldsedgelink.com">https://aoe-api.worldsedgelink.com</a>',&nbsp;timeout_s:&nbsp;'float'&nbsp;=&nbsp;10.0,&nbsp;transport:&nbsp;'httpx.AsyncBaseTransport&nbsp;|&nbsp;None'&nbsp;=&nbsp;None,&nbsp;api_key:&nbsp;'str'&nbsp;=&nbsp;'',&nbsp;rate_limiter:&nbsp;'ProviderRateLimiter&nbsp;|&nbsp;None'&nbsp;=&nbsp;None)&nbsp;-&amp;gt;&nbsp;'None'<br>
+&nbsp;<br>
+HTTP&nbsp;client&nbsp;for&nbsp;the&nbsp;Worlds&nbsp;Edge&nbsp;Link&nbsp;Community&nbsp;API&nbsp;(lobbies).<br>
+&nbsp;<br>
+Every&nbsp;external&nbsp;call&nbsp;goes&nbsp;through&nbsp;the&nbsp;Redis-backed&nbsp;throttle<br>
+(``game:{game_key}:rate``,&nbsp;reference&nbsp;2.4);&nbsp;over&nbsp;budget&nbsp;degrades&nbsp;to<br>
+an&nbsp;empty&nbsp;answer,&nbsp;never&nbsp;an&nbsp;error.<br>&nbsp;</span></td></tr>
+<tr><td>&nbsp;</td>
+<td class="singlecolumn">Methods defined here:<br>
+<dl><dt><a name="LibrematchAdapter-__init__"><strong>__init__</strong></a>(self, base_url: 'str' = 'https://aoe-api.worldsedgelink.com', timeout_s: 'float' = 10.0, transport: 'httpx.AsyncBaseTransport | None' = None, api_key: 'str' = '', rate_limiter: 'ProviderRateLimiter | None' = None) -&gt; 'None'</dt><dd><span class="code">Initialize&nbsp;self.&nbsp;&nbsp;See&nbsp;help(type(self))&nbsp;for&nbsp;accurate&nbsp;signature.</span></dd></dl>
+
+<dl><dt>async <a name="LibrematchAdapter-fetch_lobbies"><strong>fetch_lobbies</strong></a>(self) -&gt; 'list[dict[str, Any]]'</dt><dd><span class="code">Fetch&nbsp;the&nbsp;current&nbsp;public&nbsp;lobby&nbsp;listings&nbsp;(raw&nbsp;API&nbsp;payloads).</span></dd></dl>
+
+<dl><dt>async <a name="LibrematchAdapter-list_maps"><strong>list_maps</strong></a>(self) -&gt; 'list[GameMap]'</dt><dd><span class="code">Serve&nbsp;the&nbsp;map&nbsp;catalog&nbsp;seen&nbsp;across&nbsp;the&nbsp;current&nbsp;lobbies.<br>
+&nbsp;<br>
+The&nbsp;Community&nbsp;API&nbsp;exposes&nbsp;no&nbsp;dedicated&nbsp;map&nbsp;catalog;&nbsp;the&nbsp;distinct<br>
+maps&nbsp;of&nbsp;the&nbsp;live&nbsp;lobbies&nbsp;are&nbsp;the&nbsp;best&nbsp;available&nbsp;catalog&nbsp;view.</span></dd></dl>
+
+<dl><dt>async <a name="LibrematchAdapter-match_details"><strong>match_details</strong></a>(self, match_ref: 'str') -&gt; 'MatchDetails | None'</dt><dd><span class="code">Build&nbsp;MatchDetails&nbsp;for&nbsp;a&nbsp;lobby,&nbsp;decoding&nbsp;slotinfo/options&nbsp;blobs.<br>
+&nbsp;<br>
+Cross-checks&nbsp;the&nbsp;advertisement&nbsp;list&nbsp;for&nbsp;the&nbsp;referenced&nbsp;lobby;<br>
+returns&nbsp;None&nbsp;when&nbsp;the&nbsp;lobby&nbsp;is&nbsp;not&nbsp;visible&nbsp;(expired&nbsp;or&nbsp;unknown).</span></dd></dl>
+
+<dl><dt>async <a name="LibrematchAdapter-player_stats"><strong>player_stats</strong></a>(self, profile_id: 'str') -&gt; 'PlayerStats | None'</dt><dd><span class="code">Fetch&nbsp;a&nbsp;profile's&nbsp;identity&nbsp;and&nbsp;leaderboard&nbsp;stats.<br>
+&nbsp;<br>
+Calls&nbsp;the&nbsp;community&nbsp;leaderboard&nbsp;endpoint&nbsp;—&nbsp;it&nbsp;is&nbsp;PUBLIC&nbsp;(no&nbsp;API<br>
+key;&nbsp;the&nbsp;2026-10-16&nbsp;lesson:&nbsp;the&nbsp;key&nbsp;gate&nbsp;rejected&nbsp;every&nbsp;profile<br>
+while&nbsp;the&nbsp;endpoint&nbsp;answers&nbsp;anyone):<br>
+``/community/leaderboard/GetPersonalStat?title=age2&amp;profile_ids=[...]``.<br>
+The&nbsp;reply&nbsp;carries&nbsp;the&nbsp;profile's&nbsp;identity&nbsp;(``statGroups[].members[]``<br>
+—&nbsp;alias,&nbsp;country,&nbsp;clan)&nbsp;plus&nbsp;one&nbsp;stats&nbsp;entry&nbsp;per&nbsp;requested<br>
+leaderboard&nbsp;(``leaderboardStats[]``).&nbsp;Transport&nbsp;failures&nbsp;degrade<br>
+to&nbsp;None&nbsp;—&nbsp;the&nbsp;provider&nbsp;never&nbsp;fails&nbsp;the&nbsp;serving&nbsp;process;&nbsp;the<br>
+Redis-backed&nbsp;rate&nbsp;budget&nbsp;is&nbsp;the&nbsp;only&nbsp;throttle.</span></dd></dl>
+
+<dl><dt>async <a name="LibrematchAdapter-recent_match_result"><strong>recent_match_result</strong></a>(self, profile_ids: 'list[str]', since_epoch_s: 'int') -&gt; 'MatchResult | None'</dt><dd><span class="code">Fetch&nbsp;the&nbsp;latest&nbsp;finished&nbsp;match&nbsp;of&nbsp;the&nbsp;profiles&nbsp;(WorldsEdge).<br>
+&nbsp;<br>
+``GetRecentMatchHistory``&nbsp;lists&nbsp;a&nbsp;profile's&nbsp;recent&nbsp;finished<br>
+matches&nbsp;with&nbsp;the&nbsp;full&nbsp;outcome&nbsp;(winner,&nbsp;duration,&nbsp;map,&nbsp;elo<br>
+deltas).&nbsp;The&nbsp;WorldsEdge&nbsp;match&nbsp;id&nbsp;is&nbsp;NOT&nbsp;the&nbsp;aoe2lobby&nbsp;ref:<br>
+the&nbsp;correlation&nbsp;rides&nbsp;the&nbsp;profiles&nbsp;and&nbsp;the&nbsp;time&nbsp;window&nbsp;—<br>
+the&nbsp;most&nbsp;recent&nbsp;match&nbsp;whose&nbsp;start&nbsp;follows&nbsp;``since``&nbsp;and&nbsp;whose<br>
+members&nbsp;include&nbsp;one&nbsp;of&nbsp;the&nbsp;``profile_ids``.<br>
+&nbsp;<br>
+Returns&nbsp;None&nbsp;on&nbsp;transport&nbsp;failure&nbsp;or&nbsp;when&nbsp;nothing&nbsp;matches<br>
+(the&nbsp;upstream&nbsp;has&nbsp;not&nbsp;recorded&nbsp;the&nbsp;match&nbsp;yet&nbsp;—&nbsp;the&nbsp;caller<br>
+retries&nbsp;with&nbsp;a&nbsp;backoff).</span></dd></dl>
+
+<hr>
+Data descriptors defined here:<br>
+<dl><dt><strong>__dict__</strong></dt>
+<dd><span class="code">dictionary&nbsp;for&nbsp;instance&nbsp;variables</span></dd>
+</dl>
+<dl><dt><strong>__weakref__</strong></dt>
+<dd><span class="code">list&nbsp;of&nbsp;weak&nbsp;references&nbsp;to&nbsp;the&nbsp;object</span></dd>
+</dl>
+</td></tr></table></td></tr></table><p>
+<table class="section">
+<tr class="decor data-decor heading-text">
+<td class="section-title" colspan=3>&nbsp;<br><strong class="bigsection">Data</strong></td></tr>
+    
+<tr><td class="decor data-decor"><span class="code">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span></td><td>&nbsp;</td>
+<td class="singlecolumn"><strong>DEFAULT_BASE_URL</strong> = 'https://aoe-api.worldsedgelink.com'<br>
+<strong>LEADERBOARDS_PATH</strong> = '/api/leaderboard'<br>
+<strong>LEADERBOARD_KEYS</strong> = {'0': 'rm_1v1', '1': 'rm_team', '2': 'unranked', '3': 'dm_1v1', '4': 'dm_team'}<br>
+<strong>LOBBIES_PATH</strong> = '/community/advertisement/findAdvertisements'<br>
+<strong>LOBBIES_QUERY_PARAMS</strong> = {'title': 'age2'}<br>
+<strong>PERSONAL_STAT_PATH</strong> = '/community/leaderboard/GetPersonalStat'<br>
+<strong>RECENT_MATCH_PATH</strong> = '/community/leaderboard/GetRecentMatchHistory'<br>
+<strong>logger</strong> = &lt;Logger botforge.ext_librematch.adapter (WARNING)&gt;</td></tr></table>
+</body></html>
