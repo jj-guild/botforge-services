@@ -46,6 +46,9 @@ SEED = {
     "versions": [{"name": "RM", "description": "Random map", "details": ["1v1"]}],
     "tags": ["classic"],
     "raw_wikitext": "{{Infobox map|name=Arabia}}",
+    "creator": "Ensemble Studios",
+    "creator_url": "https://liquipedia.net/ageofempires/Ensemble_Studios",
+    "player_capacity": "Up to 8",
 }
 
 
@@ -91,6 +94,12 @@ async def test_the_content_seam_round_trips_over_the_real_wire() -> None:
         assert seed["raw_wikitext"] == "{{Infobox map|name=Arabia}}", (
             "the raw provider payload rides the provider wire — the sync's "
             "raw-data store depends on it"
+        )
+        assert seed["creator_url"] == (
+            "https://liquipedia.net/ageofempires/Ensemble_Studios"
+        ), "the creator's page link rides the provider wire (the 2026-11-08 gap)"
+        assert seed["player_capacity"] == "Up to 8", (
+            "the player capacity rides the provider wire"
         )
 
         # an unknown map degrades to None (found=False on the wire)

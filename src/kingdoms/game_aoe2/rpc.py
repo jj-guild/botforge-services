@@ -526,6 +526,12 @@ def _map_seed_reply_of(descriptor: dict[str, Any]) -> Any:
         walls=bool(descriptor.get("walls", False)),
         nomad=bool(descriptor.get("nomad", False)),
         tc=bool(descriptor.get("tc", False)),
+        walls_label=str(descriptor.get("walls_label", "") or ""),
+        nomad_label=str(descriptor.get("nomad_label", "") or ""),
+        tc_label=str(descriptor.get("tc_label", "") or ""),
+        player_capacity=str(descriptor.get("player_capacity", "") or ""),
+        creator=str(descriptor.get("creator", "") or ""),
+        creator_url=str(descriptor.get("creator_url", "") or ""),
         game_versions=[str(v) for v in descriptor.get("game_versions", ()) or ()],
         versions=[
             content_pb2.MapSeedVersion(

@@ -173,6 +173,7 @@ class GameDataClient:
             tc=str(reply.tc_label or ""),
             player_capacity=str(reply.player_capacity),
             creator=str(reply.creator),
+            creator_url=str(reply.creator_url or ""),
             game_versions=tuple(reply.game_versions),
             versions=tuple(
                 {"name": v.name, "description": v.description, "details": list(v.details)}

@@ -119,6 +119,7 @@ class ContentProviderClient:
             "tc_label": reply.tc_label,
             "player_capacity": reply.player_capacity,
             "creator": reply.creator,
+            "creator_url": reply.creator_url,
             "game_versions": list(reply.game_versions),
             "versions": [
                 {"name": v.name, "description": v.description, "details": list(v.details)}

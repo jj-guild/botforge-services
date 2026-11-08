@@ -158,6 +158,7 @@ class ContentServicer(content_pb2_grpc.ContentServicer):
             tc_label=str(seed.get("tc_label", "")),
             player_capacity=str(seed.get("player_capacity", "")),
             creator=str(seed.get("creator", "")),
+            creator_url=str(seed.get("creator_url", "") or ""),
             game_versions=[str(v) for v in seed.get("game_versions", ()) or ()],
             versions=[
                 content_pb2.MapSeedVersion(

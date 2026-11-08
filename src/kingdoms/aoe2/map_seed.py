@@ -27,6 +27,7 @@ class MapSeed:
     tc: str = ""
     player_capacity: str = ""
     creator: str = ""
+    creator_url: str = ""
     public: bool = True
     game_versions: tuple[str, ...] = ()
     versions: tuple[dict[str, object], ...] = ()
@@ -70,6 +71,7 @@ def map_content_doc(entity_id: str, name: str, seed: MapSeed) -> dict[str, Any]:
         "tc": seed.tc,
         "player_capacity": seed.player_capacity,
         "creator": seed.creator,
+        "creator_url": seed.creator_url,
         "label_gen": 2,
         "split_keys": True,
         "provider": "liquipedia",

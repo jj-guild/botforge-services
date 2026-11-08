@@ -262,6 +262,7 @@ async def _resolve_map_seeds(names: list[str]) -> dict[str, Any]:
                 tc=str(descriptor.get("tc_label", "") or ""),
                 player_capacity=str(descriptor.get("player_capacity", "") or ""),
                 creator=str(descriptor.get("creator", "") or ""),
+                creator_url=str(descriptor.get("creator_url", "") or ""),
                 public=True,
                 game_versions=tuple(str(v) for v in descriptor.get("game_versions", ()) or ()),
                 versions=tuple(
