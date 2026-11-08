@@ -286,22 +286,16 @@ class GamesMapCreateModal(discord.ui.Modal):
                 owner_guild_id=owner_guild_id,
                 resource_url=seed.resource_url if seed is not None else "",
             )
-            if seed is not None and seed.image_url:
+            if seed is not None:
+                from kingdoms.aoe2.map_seed import map_content_doc
                 from kingdoms.discord.content_posts import content_service
 
                 content = content_service()
                 if content is not None:
-                    await content.content_store(
-                        {
-                            "entity_id": entry.id,
-                            "locale": "en",
-                            "name": entry.name,
-                            "summary": seed.description,
-                            "source_url": seed.resource_url,
-                            "image_url": seed.image_url,
-                            "provider": "liquipedia",
-                        }
-                    )
+                    # the full doc — a seed without a resolved image
+                    # still carries the traits, tags and gallery (the
+                    # 2026-11-07 no-image lesson, applied to imports too)
+                    await content.content_store(map_content_doc(entry.id, entry.name, seed))
         except Exception:
             logger.exception("GAMES ADMIN: map creation failed")
             await interaction.followup.send(
@@ -1205,24 +1199,9 @@ async def _finish_map_import(
 
         content = content_service()
         if content is not None:
-            await content.content_store(
-                {
-                    "entity_id": entry.id,
-                    "locale": "en",
-                    "name": entry.name,
-                    "summary": seed.description,
-                    "source_url": seed.resource_url,
-                    "image_url": seed.image_url,
-                    "icon_url": seed.icon_url,
-                    "walls": seed.walls,
-                    "nomad": seed.nomad,
-                    "tc": seed.tc,
-                    "player_capacity": seed.player_capacity,
-                    "creator": seed.creator,
-                    "provider": "liquipedia",
-                    "tags": list(seed.tags or ()),
-                }
-            )
+            from kingdoms.aoe2.map_seed import map_content_doc
+
+            await content.content_store(map_content_doc(entry.id, entry.name, seed))
         from kingdoms.discord.maps_forum import sync_maps_forum
 
         if interaction.guild_id is not None:
@@ -1459,22 +1438,9 @@ async def _bulk_import_maps(
 
             content = content_service()
             if content is not None:
-                await content.content_store(
-                    {
-                        "entity_id": entry.id,
-                        "locale": "en",
-                        "name": entry.name,
-                        "summary": seed.description,
-                        "source_url": seed.resource_url,
-                        "image_url": seed.image_url,
-                        "icon_url": seed.icon_url,
-                        "walls": seed.walls,
-                        "nomad": seed.nomad,
-                        "tc": seed.tc,
-                        "provider": "liquipedia",
-                        "tags": list(seed.tags or ()),
-                    }
-                )
+                from kingdoms.aoe2.map_seed import map_content_doc
+
+                await content.content_store(map_content_doc(entry.id, entry.name, seed))
             created.append(entry)
             await _report(p.page_name, True)
         except LiquipediaCircuitOpenError as exc:

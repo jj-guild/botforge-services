@@ -228,5 +228,19 @@ Data and other attributes defined here:<br>
 
 <dl><dt><strong>walls</strong> = ''</dl>
 
-</td></tr></table></td></tr></table>
+</td></tr></table></td></tr></table><p>
+<table class="section">
+<tr class="decor functions-decor heading-text">
+<td class="section-title" colspan=3>&nbsp;<br><strong class="bigsection">Functions</strong></td></tr>
+    
+<tr><td class="decor functions-decor"><span class="code">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span></td><td>&nbsp;</td>
+<td class="singlecolumn"><dl><dt><a name="-map_content_doc"><strong>map_content_doc</strong></a>(entity_id: 'str', name: 'str', seed: 'MapSeed') -&gt; 'dict[str, Any]'</dt><dd><span class="code">Build&nbsp;the&nbsp;stored&nbsp;map&nbsp;content&nbsp;doc's&nbsp;ONE&nbsp;shape&nbsp;—&nbsp;every&nbsp;store&nbsp;path&nbsp;uses&nbsp;it.<br>
+&nbsp;<br>
+The&nbsp;sync's&nbsp;refresh&nbsp;and&nbsp;the&nbsp;three&nbsp;import&nbsp;flows&nbsp;(single&nbsp;creation,<br>
+single&nbsp;import,&nbsp;bulk&nbsp;import)&nbsp;store&nbsp;the&nbsp;same&nbsp;doc:&nbsp;the&nbsp;parsed&nbsp;fields,<br>
+the&nbsp;raw&nbsp;provider&nbsp;payload,&nbsp;the&nbsp;whole&nbsp;gallery&nbsp;and&nbsp;the&nbsp;freshness<br>
+marker.&nbsp;The&nbsp;2026-11-08&nbsp;Michi/Canberra&nbsp;lesson:&nbsp;three&nbsp;hand-copied<br>
+shapes&nbsp;drifted&nbsp;apart,&nbsp;and&nbsp;a&nbsp;doc&nbsp;without&nbsp;``split_keys``&nbsp;looked&nbsp;stale<br>
+forever&nbsp;(empty&nbsp;summary,&nbsp;missing&nbsp;tags&nbsp;on&nbsp;the&nbsp;post).</span></dd></dl>
+</td></tr></table>
 </body></html>

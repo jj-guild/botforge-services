@@ -175,36 +175,9 @@ async def refresh_aoe2_maps() -> dict[str, int]:
                 list(seed.tags),
                 len(seed.raw_wikitext),
             )
-            await content.store(
-                {
-                    "entity_id": entry.id,
-                    "locale": "en",
-                    "name": entry.name,
-                    "summary": seed.description,
-                    "source_url": seed.resource_url,
-                    "image_url": seed.image_url,
-                    "icon_url": seed.icon_url,
-                    "walls": seed.walls,
-                    "nomad": seed.nomad,
-                    "tc": seed.tc,
-                    "player_capacity": seed.player_capacity,
-                    "creator": seed.creator,
-                    "label_gen": 2,
-                    # the freshness marker the reader's contract checks
-                    # (the 2026-11-07 bug: without it, a map whose icon
-                    # failed to resolve looked stale forever and every
-                    # read re-fetched through the migration path)
-                    "split_keys": True,
-                    "provider": "liquipedia",
-                    "game_versions": list(seed.game_versions),
-                    "versions": [dict(v) for v in seed.versions],
-                    "tags": list(seed.tags),
-                    "raw_wikitext": seed.raw_wikitext,
-                    "gallery_images": [
-                        dict(g) for g in seed.gallery_images or ()
-                    ],
-                }
-            )
+            from kingdoms.aoe2.map_seed import map_content_doc
+
+            await content.store(map_content_doc(entry.id, entry.name, seed))
             maps_enriched += 1
             # the catalog entry's map_type was set at import time — an
             # import that ran an older parser leaves the raw casing

@@ -389,8 +389,6 @@ def test_429_honors_retry_after_then_retries(monkeypatch: pytest.MonkeyPatch) ->
     provider.close()
 
 
-@pytest.mark.asyncio
-
 def test_map_data_batch_resolves_pages_and_images_in_few_requests(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
