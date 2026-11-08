@@ -51,4 +51,6 @@ PAGE_CACHE_TTL_S = 7 * 24 * 3600
 # and resolved URL) — the post shows all the map's images.
 # Gen 8: the imageinfo lookup is case-insensitive — MediaWiki
 # capitalizes file titles (black-forest_AoE2DE.png missed its URL).
-SEED_GEN = 8
+# Gen 9: the WHOLE Overview section rides — subsections as bold lines,
+# list entries as bullets (the Overview ended at its first === before).
+SEED_GEN = 9

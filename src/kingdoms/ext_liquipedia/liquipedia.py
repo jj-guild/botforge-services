@@ -617,33 +617,51 @@ class LiquipediaMapsProvider:
 
     @staticmethod
     def _overview_section(wikitext: str) -> str:
-        """Return the Overview prose when the page has one, else the lead."""
+        """Return the Overview section — subsections included, else the lead.
+
+        The section ends at the next LEVEL-2 header (``==Versions==``);
+        ``===`` subsections are PART of the overview (the 2026-11-08
+        cut: the naive newline-plus-equals split matched the
+        subsections too and beheaded the whole Overview at its first
+        one).
+        """
         overview_at = wikitext.find("==Overview==")
         if overview_at >= 0:
             rest = wikitext[overview_at + len("==Overview==") :]
-            return rest.split("\n==")[0]
+            return re.split(r"\n==(?!=)", rest)[0]
         return wikitext
 
     @staticmethod
     def _lead_paragraph(wikitext: str) -> str:
-        """Extract the page's description from its wikitext.
+        r"""Extract the page's description from its wikitext.
 
-        The Overview prose when the page has one, else the bolded lead
-        sentence ("Hideout is an Age of Empires II multiplayer map.").
-        The Overview's paragraphs ALL ride — Budapest's overview is two
-        prose paragraphs and the blank line between them must not end
-        the collection (the 2026-11-07 report: half the overview). The
-        collection stops at the first section header, and skips
-        templates, comments, tables and list markup.
+        The WHOLE Overview section rides (owner direction 2026-11-08):
+        every prose paragraph, every ``===`` subsection as a bold line
+        ("**Notable Features**"), every list entry as a bullet — the
+        collection stops at the next LEVEL-2 header, and skips
+        templates, comments and tables. Pages without an Overview
+        fall back to the bolded lead sentence.
         """
         section = LiquipediaMapsProvider._overview_section(wikitext)
-        paragraphs: list[str] = []
+        blocks = LiquipediaMapsProvider._overview_blocks(section)
+        return LiquipediaMapsProvider._clean_prose(
+            "\n".join(block for block in blocks if block)
+        )
+
+    @staticmethod
+    def _overview_blocks(section: str) -> list[str]:
+        """Render the Overview section's lines into display blocks.
+
+        Prose paragraphs, ``===`` subsections as bold lines, list
+        entries as bullets — stopping at the next LEVEL-2 header.
+        """
+        blocks: list[str] = []
         current: list[str] = []
         depth = 0
 
         def _flush() -> None:
             if current:
-                paragraphs.append(" ".join(current))
+                blocks.append(" ".join(current))
                 current.clear()
 
         for line in section.splitlines():
@@ -654,15 +672,40 @@ class LiquipediaMapsProvider:
                 depth += opens - closes
                 continue
             if stripped.startswith("=="):
-                if current or paragraphs:
-                    break
+                if not stripped.startswith("==="):
+                    break  # the next level-2 header: the Overview section ends
+                _flush()
+                blocks.append(LiquipediaMapsProvider._subsection_block(stripped))
                 continue
-            if not stripped or stripped.startswith(("<", "*", "#", "|", "{")):
+            if stripped.startswith(("*", "#")):
+                _flush()
+                blocks.append(LiquipediaMapsProvider._bullet_block(stripped))
+                continue
+            if not stripped or stripped.startswith(("<", "|", "{")):
                 _flush()
                 continue
             current.append(stripped)
         _flush()
-        text = "\n\n".join(paragraphs[:4])
+        return blocks
+
+    @staticmethod
+    def _subsection_block(header: str) -> str:
+        """Render a ``===`` subsection header as a bold line."""
+        title = header.strip("=").strip()
+        return f"**{title}**" if title else ""
+
+    @staticmethod
+    def _bullet_block(line: str) -> str:
+        """Render a wikitext list entry as a bullet line."""
+        bullet = line.lstrip("*#").strip()
+        return f"• {bullet}" if bullet else ""
+
+    @staticmethod
+    def _clean_prose(text: str) -> str:
+        """Strip the wikitext markup from prose.
+
+        Bold, italic, wikilinks, templates and HTML tags.
+        """
         text = _BOLD_RE.sub("", text)
         text = _ITALIC_RE.sub("", text)
         text = re.sub(r"\[\[(?:[^|\]]*\|)?([^\]]+)\]\]", r"\1", text)

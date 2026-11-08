@@ -103,7 +103,7 @@ async def _sync_maps_forum_locked(guild_id: str, game_key: str, bot: Any, servic
             await _map_content_full(entry.id, guild_id, bot)
         )
         source = source or liquipedia_map_url(entry.name)
-        description = summary or (entry.description or "_Aucune description._")
+        description = _description_display(summary) if summary else (entry.description or "_Aucune description._")
         pools = await _map_pools_link(service, entry, guild_id, bot=bot)
         view = _map_post_view(
             entry.id,
@@ -286,7 +286,7 @@ async def map_post_render(
         await _map_content_full(entry.id, guild_id, bot)
     )
     source = source or liquipedia_map_url(entry.name)
-    description = summary or (entry.description or "_Aucune description._")
+    description = _description_display(summary) if summary else (entry.description or "_Aucune description._")
     pools = await _map_pools_link(service, entry, guild_id, bot=bot)
     view = _map_post_view(
         entry.id,
@@ -514,31 +514,77 @@ async def _migrate_stale_map_doc(
     logger.info("map doc migrated to the split keys (%s)", entity_id)
     return updated
 
-def _walls_display(walls: str) -> str:
-    """Normalize the walls label to its English display word.
+def _description_display(summary: str) -> str:
+    """Render the stored description for the French post.
 
-    Liquipedia serves English only (``None``, ``Stone Walls``) — the
-    post shows the same vocabulary as the tags: No / Wood / Stone /
-    Partial, capitalized for display. Empty hides the line.
+    The provider's fallback ("Map page on Liquipedia: <url>") is
+    English data; the post is French UI — the fallback renders as a
+    French line, anything else rides as-is.
+    """
+    prefix = "Map page on Liquipedia: "
+    if summary.startswith(prefix):
+        return f"Page sur Liquipedia : {summary[len(prefix):].strip()}"
+    return summary
+
+
+def _walls_display(walls: str) -> str:
+    """Normalize the walls label to its French display word.
+
+    The stored doc carries Liquipedia's English (``None``, ``Stone
+    Walls``) — the post is French UI: the walls vocabulary renders as
+    Bois / Pierre / Partiels. Empty hides the line.
     """
     value = walls.strip().lower()
     if not value or value in ("none", "no", "false", "true"):
         return ""
     if "stone" in value:
-        return "Stone"
+        return "Pierre"
     if "wood" in value or "palisade" in value:
-        return "Wood"
+        return "Bois"
     if "partial" in value:
-        return "Partial"
+        return "Partiels"
     if value == "yes":
-        return "Stone"
+        return "Pierre"
     return ""
+
+
+_TYPE_DISPLAY = {
+    "hybrid": "Hybride",
+    "land": "Terrestre",
+    "water": "Aquatique",
+    "nomad": "Nomade",
+    "open": "Ouverte",
+    "semi-open": "Semi-ouverte",
+    "closed": "Fermée",
+    "fortified": "Fortifiée",
+    "island": "Île",
+    "real world": "Monde réel",
+}
+
+
+def _type_display(map_type: str) -> str:
+    """Render the map type for the French post.
+
+    The known vocabulary translates (``Hybrid`` → ``Hybride``); an
+    unknown value rides capitalized as-is — never dropped.
+    """
+    value = map_type.strip()
+    if not value:
+        return ""
+    return _TYPE_DISPLAY.get(value.lower(), f"{value[:1].upper()}{value[1:]}")
 
 
 def _map_props_lines(
     map_type: str, walls: str, nomad: str, tc: str, player_capacity: str = ""
 ) -> list[str]:
-    """Render the map's properties as label lines (Type/Walls/Nomad/TCs/Capacity)."""
+    """Render the map's properties as French label lines.
+
+    The stored docs carry Liquipedia's English (the provider's data,
+    owner direction 2026-11-07); the post is French UI — the labels and
+    the known vocabulary translate at render, the tags stay English
+    slugs (owner direction 2026-11-08).
+    """
+
     def _label(value: str) -> str:
         """Render a trait's display: the label's word, never the bool garbage.
 
@@ -548,14 +594,15 @@ def _map_props_lines(
         v = value.strip()
         return "" if v.lower() in ("true", "false", "none") else v
 
-    props = [f"**Type** : {map_type}"] if map_type else []
+    type_shown = _type_display(map_type)
+    props = [f"**Type** : {type_shown}"] if type_shown else []
     if _walls_display(walls):
-        props.append(f"**Walls** : {_walls_display(walls)}")
+        props.append(f"**Murs** : {_walls_display(walls)}")
     if _label(nomad):
-        shown = "Yes" if nomad.strip().lower() == "yes" else _label(nomad)
-        props.append(f"**Nomad** : {shown}")
+        shown = "Oui" if nomad.strip().lower() == "yes" else "Non" if nomad.strip().lower() == "no" else _label(nomad)
+        props.append(f"**Nomade** : {shown}")
     if _label(tc):
         props.append(f"**TCs** : {_label(tc)}")
     if player_capacity:
-        props.append(f"**Capacity** : {player_capacity}")
+        props.append(f"**Capacité** : {player_capacity}")
     return props

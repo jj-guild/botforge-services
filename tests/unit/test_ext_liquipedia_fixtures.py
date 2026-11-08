@@ -63,8 +63,9 @@ def test_arabia_keeps_its_infobox_and_the_de_description() -> None:
     assert "walls:no" in query_tags(info), "Arabia's infobox says walls=None"
 
 
-def test_arena_keeps_its_infobox_and_stops_at_the_subsection() -> None:
-    """Arena: the infobox, the icon, and the overview stops at Notable Features."""
+def test_arena_keeps_its_infobox_and_the_whole_overview() -> None:
+    """Arena: the infobox, the icon, and the WHOLE overview rides —
+    subsections as bold lines, list entries as bullets."""
     info = _parse("Arena")
     assert info.name == "Arena"
     assert info.image_file == "Arena Map.png"
@@ -72,7 +73,10 @@ def test_arena_keeps_its_infobox_and_stops_at_the_subsection() -> None:
     assert info.map_type == "Land"
     assert info.walls == "Stone Walls"
     assert "pre-built stone walls" in info.description
-    assert "Notable Features" not in info.description, "the subsection header never leaks in"
+    assert "**Notable Features**" in info.description, (
+        "the subsection rides as a bold line — never dropped again"
+    )
+    assert "• " in info.description, "the list entries ride as bullets"
     tags = query_tags(info)
     assert "walls:stone" in tags, f"the English walls vocabulary — got {tags}"
     assert "tc:1" in tags, "the TC count tags from 1 — got {tags}"
@@ -173,6 +177,16 @@ def test_black_forest_keeps_its_infobox_and_default_walls() -> None:
     assert info.tc == "1"
     assert info.player_capacity == "Up to 8"
     assert info.creator == "Ensemble Studios"
+    # the WHOLE overview rides (owner direction 2026-11-08): the prose,
+    # every subsection as a bold line, every list entry as a bullet
+    assert "usually played with explored setting" in info.description
+    assert "**Notable Features**" in info.description
+    assert "Densely forested, with only a few paths" in info.description
+    assert "**Strategic Basics**" in info.description
+    assert "forward wall" in info.description
+    assert "**Civilizations**" in info.description
+    assert "Bohemians, Celts, Mongols" in info.description
+    assert "Versions" not in info.description, "the level-2 sections never leak"
     tags = query_tags(info)
     assert "type:land" in tags, tags
     assert "walls:no" in tags, f"an absent walls field defaults to walls:no — got {tags}"
