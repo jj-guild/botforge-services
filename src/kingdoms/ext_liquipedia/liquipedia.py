@@ -138,6 +138,7 @@ class MapInfo:
     tc: str = ""
     player_capacity: str = ""
     creator: str = ""
+    creator_url: str = ""
     gallery_icon: str = ""
     gallery: tuple[GalleryImage, ...] = ()
     game_versions: tuple[str, ...] = ()
@@ -587,6 +588,7 @@ class LiquipediaMapsProvider:
                 fields.get("player_capacity", "") or fields.get("players", "")
             ),
             creator=self._clean_wikitext(fields.get("creator", "")),
+            creator_url=self._creator_page_url(fields.get("creator", "")),
             game_versions=self._parse_game_tabs(wikitext),
             versions=self._parse_versions_section(wikitext),
             raw_wikitext=wikitext,
@@ -735,6 +737,20 @@ class LiquipediaMapsProvider:
         )
 
     @staticmethod
+    def _creator_page_url(creator_field: str) -> str:
+        """Extract the creator's Liquipedia page URL from the infobox link.
+
+        ``creator=[[Zetnus]]`` links to the creator's wiki page — the
+        post shows the creator as a link to it (owner direction
+        2026-11-08). A plain-text creator carries no URL.
+        """
+        match = re.search(r"\[\[([^|\]]+)(?:\|[^\]]*)?\]\]", creator_field)
+        if match is None:
+            return ""
+        target = match.group(1).strip().replace(" ", "_")
+        return f"{LIQUIPEDIA_ATTRIBUTION}{target}"
+
+    @staticmethod
     def _parse_gallery_icon(wikitext: str) -> str:
         """Extract the in-game icon file name from the Gallery.
 
@@ -803,9 +819,14 @@ class LiquipediaMapsProvider:
 
     @staticmethod
     def _clean_wikitext(value: str) -> str:
-        """Strip wiki markup leftovers from a field value."""
-        cleaned = _STRIP_RE.sub("", value)
-        cleaned = _TEMPLATE_RE.sub(r"\1", cleaned)
+        """Strip wiki markup leftovers from a field value.
+
+        The wikilinks resolve FIRST (``[[Zetnus]]`` -> ``Zetnus``) —
+        stripping the opening brackets first left the closing ones
+        behind (the 2026-11-08 "Zetnus]]" lesson).
+        """
+        cleaned = _TEMPLATE_RE.sub(r"\1", value)
+        cleaned = _STRIP_RE.sub("", cleaned)
         return cleaned.strip()
 
     def _resolve_image_url(self, image_file: str) -> str:

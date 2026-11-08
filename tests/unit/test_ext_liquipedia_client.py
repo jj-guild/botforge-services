@@ -558,3 +558,31 @@ def test_liquipedia_circuit_success_resets_the_streak() -> None:
     finally:
         lp._shared_circuit_open_until = 0.0
         lp._shared_circuit_streak = 0
+
+
+def test_creator_wikilink_becomes_the_page_url() -> None:
+    """``creator=[[Zetnus]]`` rides as the creator's wiki page URL.
+
+    A plain-text creator carries no URL — the post shows it unlinked
+    (owner direction 2026-11-08).
+    """
+    wikitext = """
+{{Infobox map
+|name=Canberra
+|creator=[[Zetnus]]
+}}
+"""
+    provider = _make_provider(_mock_transport(wikitext))
+    info = provider._info_from_wikitext("Canberra", wikitext)
+    assert info.creator == "Zetnus"
+    assert info.creator_url == "https://liquipedia.net/ageofempires/Zetnus"
+
+    plain = """
+{{Infobox map
+|name=Arabia
+|creator=Ensemble Studios
+}}
+"""
+    info_plain = provider._info_from_wikitext("Arabia", plain)
+    assert info_plain.creator == "Ensemble Studios"
+    assert info_plain.creator_url == ""

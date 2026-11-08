@@ -20,6 +20,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
+from dataclasses import dataclass
 from typing import Any
 
 import discord
@@ -99,9 +100,12 @@ async def _sync_maps_forum_locked(guild_id: str, game_key: str, bot: Any, servic
             continue
         from kingdoms.core.ids import footer
 
-        _, summary, source, image, icon, walls, nomad, tc, capacity, creator, gallery = (
-            await _map_content_full(entry.id, guild_id, bot)
+        stored = await _map_content_full(entry.id, guild_id, bot)
+        summary, source, image, icon = stored.summary, stored.source, stored.image, stored.icon
+        walls, nomad, tc, capacity, creator = (
+            stored.walls, stored.nomad, stored.tc, stored.capacity, stored.creator
         )
+        gallery = stored.gallery
         source = source or liquipedia_map_url(entry.name)
         description = _description_display(summary) if summary else (entry.description or "_Aucune description._")
         pools = await _map_pools_link(service, entry, guild_id, bot=bot)
@@ -125,6 +129,8 @@ async def _sync_maps_forum_locked(guild_id: str, game_key: str, bot: Any, servic
             player_capacity=capacity,
             creator=creator,
             gallery_images=gallery,
+            creator_url=stored.creator_url,
+            versions=stored.versions,
         )
         display = f"{entry.name[:1].upper()}{entry.name[1:]}"
         tail = f"{source}\n" if source else ""
@@ -212,6 +218,8 @@ def _map_post_view(
     creator: str = "",
     admin_buttons: tuple[Any, ...] = (),
     gallery_images: tuple[str, ...] = (),
+    creator_url: str = "",
+    versions: tuple[dict[str, str], ...] = (),
 ) -> discord.ui.LayoutView:
     """Build the map post on the shared entity-card template.
 
@@ -241,6 +249,8 @@ def _map_post_view(
         source_url=source,
         pool_links=tuple(pools),
         buttons=tuple(buttons),
+        creator_url=creator_url,
+        versions=versions,
     )
 
 
@@ -282,9 +292,12 @@ async def map_post_render(
     """
     from kingdoms.core.ids import footer
 
-    _, summary, source, image, icon, walls, nomad, tc, capacity, creator, gallery = (
-        await _map_content_full(entry.id, guild_id, bot)
+    stored = await _map_content_full(entry.id, guild_id, bot)
+    summary, source, image, icon = stored.summary, stored.source, stored.image, stored.icon
+    walls, nomad, tc, capacity, creator = (
+        stored.walls, stored.nomad, stored.tc, stored.capacity, stored.creator
     )
+    gallery = stored.gallery
     source = source or liquipedia_map_url(entry.name)
     description = _description_display(summary) if summary else (entry.description or "_Aucune description._")
     pools = await _map_pools_link(service, entry, guild_id, bot=bot)
@@ -309,6 +322,8 @@ async def map_post_render(
         creator=creator,
         admin_buttons=admin_buttons,
         gallery_images=gallery,
+        creator_url=stored.creator_url,
+        versions=stored.versions,
     )
     display = f"{entry.name[:1].upper()}{entry.name[1:]}"
     tail = f"{source}\n" if source else ""
@@ -345,9 +360,12 @@ async def _refresh_map_post(bot: Any, platform: Any, guild_id: str, entry: Any, 
         # but not the description (the 2026-11-07 stale-thumbnail bug:
         # posts kept their pre-sync view forever). The fingerprint covers
         # the view's data too.
-        _, _, _, image, icon, walls, nomad, tc, capacity, creator, gallery = (
-            await _map_content_full(entry.id, guild_id, bot)
+        stored = await _map_content_full(entry.id, guild_id, bot)
+        image, icon = stored.image, stored.icon
+        walls, nomad, tc, capacity, creator = (
+            stored.walls, stored.nomad, stored.tc, stored.capacity, stored.creator
         )
+        gallery = stored.gallery
         pools = await _map_pools_link(service, entry, guild_id, bot=bot)
         signature = "\n".join(
             [
@@ -359,9 +377,11 @@ async def _refresh_map_post(bot: Any, platform: Any, guild_id: str, entry: Any, 
                 f"tc={tc}",
                 f"capacity={capacity}",
                 f"creator={creator}",
+                f"creator_url={stored.creator_url}",
                 f"type={getattr(entry, 'map_type', '')}",
                 f"pools={'|'.join(pools)}",
                 f"gallery={'|'.join(gallery)}",
+                f"versions={'|'.join(v['name'] for v in stored.versions)}",
             ]
         )
         fingerprint = _content_fingerprint(signature)
@@ -397,75 +417,89 @@ def register_maps_forum_sync() -> None:
     register_scope_sync("games", _sync)
 
 
-async def _map_content_full(
-    entity_id: str, guild_id: str, bot: Any
-) -> tuple[str, str, str, str, str, str, str, str, str, str, tuple[str, ...]]:
+@dataclass(frozen=True)
+class MapPostContent:
+    """One map's stored content, resolved for its post.
+
+    The traits (walls/nomad/tc/capacity/creator) live as separate doc
+    keys next to the summary; ``gallery`` is the whole Gallery's
+    resolved URLs; ``versions`` are the map's parsed variants
+    (name + description each).
+    """
+
+    name: str = ""
+    summary: str = ""
+    source: str = ""
+    image: str = ""
+    icon: str = ""
+    walls: str = ""
+    nomad: str = ""
+    tc: str = ""
+    capacity: str = ""
+    creator: str = ""
+    creator_url: str = ""
+    gallery: tuple[str, ...] = ()
+    versions: tuple[dict[str, str], ...] = ()
+
+
+def _map_post_content_of(doc: dict[str, Any]) -> MapPostContent:
+    """Build the post content from a stored content doc."""
+    image_url = str(doc.get("image_url") or "")
+    # a page without a Gallery has no in-game icon — the main image
+    # becomes the thumbnail so every card keeps the same shape
+    return MapPostContent(
+        name=str(doc.get("name") or ""),
+        summary=str(doc.get("summary") or ""),
+        source=str(doc.get("source_url") or ""),
+        image=image_url,
+        icon=str(doc.get("icon_url") or "") or image_url,
+        walls=str(doc.get("walls") or ""),
+        nomad=str(doc.get("nomad") or ""),
+        tc=str(doc.get("tc") or ""),
+        capacity=str(doc.get("player_capacity") or ""),
+        creator=str(doc.get("creator") or ""),
+        creator_url=str(doc.get("creator_url") or ""),
+        gallery=tuple(
+            str(g.get("url") or "")
+            for g in doc.get("gallery_images") or ()
+            if str(g.get("url") or "")
+        ),
+        versions=tuple(
+            {
+                "name": str(v.get("name") or ""),
+                "description": str(v.get("description") or ""),
+            }
+            for v in doc.get("versions") or ()
+            if str(v.get("name") or "")
+        ),
+    )
+
+
+async def _map_content_full(entity_id: str, guild_id: str, bot: Any) -> MapPostContent:
     """Resolve a map's full stored content for its post.
 
-    ``(name, summary, source, image, icon, walls, nomad, tc, capacity,
-    creator, gallery)`` — the traits (walls/nomad/tc/capacity/creator)
-    live as separate keys next to the summary since the label-line
-    layout split them out of the summary blob; ``gallery`` is the whole
-    Gallery's resolved URLs (every image, owner direction 2026-11-07).
+    Liquipedia serves English ONLY (owner direction 2026-11-07): the map
+    docs are stored under "en", read "en" — a stale per-locale doc
+    from an earlier era must never win the read. A stale doc shape
+    re-resolves from Liquipedia once and re-stores the new keys; the
+    next pass takes the fast path.
     """
     from kingdoms.discord.content_posts import content_service
 
     service = content_service()
     doc = None
     if service is not None:
-        # Liquipedia serves English ONLY (owner direction 2026-11-07):
-        # the map docs are stored under "en", read "en" — a stale
-        # per-locale doc from an earlier era must never win the read
         try:
             doc = await service.content_get(entity_id, "en")
         except Exception:
             doc = None
     if doc is None:
-        return "", "", "", "", "", "", "", "", "", "", ()
-    if doc.get("split_keys") or (doc.get("icon_url") and doc.get("walls") is not None):
-        image_url = str(doc.get("image_url") or "")
-        # a page without a Gallery has no in-game icon — the main image
-        # becomes the thumbnail so every card keeps the same shape
-        return (
-            str(doc.get("name") or ""),
-            str(doc.get("summary") or ""),
-            str(doc.get("source_url") or ""),
-            image_url,
-            str(doc.get("icon_url") or "") or image_url,
-            str(doc.get("walls") or ""),
-            str(doc.get("nomad") or ""),
-            str(doc.get("tc") or ""),
-            str(doc.get("player_capacity") or ""),
-            str(doc.get("creator") or ""),
-            tuple(
-                str(g.get("url") or "")
-                for g in doc.get("gallery_images") or ()
-                if str(g.get("url") or "")
-            ),
-        )
-    # Stale doc (pre-split import: no icon_url / trait keys, the summary
-    # carries the old inline blob) — re-resolve from Liquipedia once and
-    # re-store the new keys; the next pass takes the fast path.
-    migrated = await _migrate_stale_map_doc(entity_id, doc, service, "en")
-    if migrated is not None:
-        doc = migrated
-    return (
-        str(doc.get("name") or ""),
-        str(doc.get("summary") or ""),
-        str(doc.get("source_url") or ""),
-        str(doc.get("image_url") or ""),
-        str(doc.get("icon_url") or ""),
-        str(doc.get("walls") or ""),
-        str(doc.get("nomad") or ""),
-        str(doc.get("tc") or ""),
-        str(doc.get("player_capacity") or ""),
-        str(doc.get("creator") or ""),
-        tuple(
-            str(g.get("url") or "")
-            for g in doc.get("gallery_images") or ()
-            if str(g.get("url") or "")
-        ),
-    )
+        return MapPostContent()
+    if not (doc.get("split_keys") or (doc.get("icon_url") and doc.get("walls") is not None)):
+        migrated = await _migrate_stale_map_doc(entity_id, doc, service, "en")
+        if migrated is not None:
+            doc = migrated
+    return _map_post_content_of(doc)
 
 
 async def _migrate_stale_map_doc(

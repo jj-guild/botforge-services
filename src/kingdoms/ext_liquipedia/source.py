@@ -325,6 +325,7 @@ def _descriptor_of(game_key: str, page: str, data: Any) -> dict[str, Any]:
         "tc_label": _safe(lambda: str(info.tc)),
         "player_capacity": _safe(lambda: str(getattr(info, "player_capacity", ""))),
         "creator": _safe(lambda: str(getattr(info, "creator", ""))),
+        "creator_url": _safe(lambda: str(getattr(info, "creator_url", ""))),
         "game_versions": _safe_list(lambda: list(getattr(info, "game_versions", ()) or ())),
         "versions": _safe_list(
             lambda: [

@@ -53,4 +53,5 @@ PAGE_CACHE_TTL_S = 7 * 24 * 3600
 # capitalizes file titles (black-forest_AoE2DE.png missed its URL).
 # Gen 9: the WHOLE Overview section rides — subsections as bold lines,
 # list entries as bullets (the Overview ended at its first === before).
-SEED_GEN = 9
+# Gen 10: the creator's wiki page link rides ([[Zetnus]] -> its URL).
+SEED_GEN = 10

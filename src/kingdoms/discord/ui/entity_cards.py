@@ -42,6 +42,8 @@ class EntityCardSpec:
     source_url: str = ""
     source_label: str = "Liquipedia"
     creator: str = ""
+    creator_url: str = ""
+    versions: tuple[dict[str, str], ...] = ()
     links_heading: str = ""
     links: tuple[str, ...] = ()
     action_buttons: tuple[
@@ -93,8 +95,17 @@ def _body(view: discord.ui.LayoutView, spec: EntityCardSpec) -> None:
         body.append(discord.ui.Separator())
         heading = f"**{spec.links_heading}**\n" if spec.links_heading else ""
         body.append(discord.ui.TextDisplay(heading + "\n".join(spec.links)))
+    if spec.versions:
+        body.append(discord.ui.Separator())
+        lines = ["**Variantes**"]
+        lines.extend(
+            f"• **{v['name']}** — {v['description']}" if v.get("description") else f"• **{v['name']}**"
+            for v in spec.versions
+        )
+        body.append(discord.ui.TextDisplay("\n".join(lines)))
     if spec.creator:
-        body.append(discord.ui.TextDisplay(f"Créateur : {spec.creator}"))
+        creator = f"[{spec.creator}]({spec.creator_url})" if spec.creator_url else spec.creator
+        body.append(discord.ui.TextDisplay(f"Créateur : {creator}"))
     if spec.source_url:
         body.append(discord.ui.Separator())
         body.append(discord.ui.TextDisplay(f"Source : [{spec.source_label}]({spec.source_url})"))
@@ -181,6 +192,8 @@ def map_card(
     buttons: tuple[Callable[[], discord.ui.Item[discord.ui.LayoutView]], ...],
     creator: str = "",
     gallery_images: tuple[str, ...] = (),
+    creator_url: str = "",
+    versions: tuple[dict[str, str], ...] = (),
 ) -> discord.ui.LayoutView:
     """Build a map's forum card on the shared template."""
     return build_entity_card(
@@ -194,6 +207,8 @@ def map_card(
             gallery_images=gallery_images,
             source_url=source_url,
             creator=creator,
+            creator_url=creator_url,
+            versions=versions,
             links_heading="Map pools",
             links=pool_links,
             action_buttons=buttons,

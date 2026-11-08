@@ -75,6 +75,7 @@ message MapSeedReply {
   string raw_wikitext = 23;     // the page's raw wikitext (the sync's
                                 // raw-data store: parse again offline,
                                 // never re-fetch to re-parse)
+  string creator_url = 25;      // the creator's wiki page ([[Zetnus]])
   repeated MapSeedGalleryImage gallery_images = 24;  // EVERY gallery
                                 // entry with its resolved URL — the
                                 // post shows the whole gallery
