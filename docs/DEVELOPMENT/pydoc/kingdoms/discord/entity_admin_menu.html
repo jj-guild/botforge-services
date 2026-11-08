@@ -65,7 +65,15 @@ The&nbsp;single&nbsp;⚙️&nbsp;Admin&nbsp;button&nbsp;of&nbsp;a&nbsp;public&nb
 Methods defined here:<br>
 <dl><dt><a name="EntityAdminButton-__init__"><strong>__init__</strong></a>(self, kind: 'str', entity_id: 'str', game_key: 'str' = '', owned: 'bool' = False) -&gt; 'None'</dt><dd><span class="code">Initialize&nbsp;self.&nbsp;&nbsp;See&nbsp;help(<a href="#EntityAdminButton-type">type</a>(self))&nbsp;for&nbsp;accurate&nbsp;signature.</span></dd></dl>
 
-<dl><dt>async <a name="EntityAdminButton-callback"><strong>callback</strong></a>(self, interaction: 'discord.Interaction') -&gt; 'None'</dt><dd><span class="code">Guard,&nbsp;then&nbsp;open&nbsp;the&nbsp;entity's&nbsp;contextual&nbsp;management&nbsp;menu.</span></dd></dl>
+<dl><dt>async <a name="EntityAdminButton-callback"><strong>callback</strong></a>(self, interaction: 'discord.Interaction') -&gt; 'None'</dt><dd><span class="code">Guard,&nbsp;then&nbsp;open&nbsp;the&nbsp;entity's&nbsp;contextual&nbsp;management&nbsp;menu.<br>
+&nbsp;<br>
+The&nbsp;menu&nbsp;answers&nbsp;as&nbsp;a&nbsp;NEW&nbsp;EPHEMERAL&nbsp;message&nbsp;—&nbsp;never&nbsp;an&nbsp;edit&nbsp;of<br>
+the&nbsp;post&nbsp;the&nbsp;button&nbsp;rides&nbsp;on.&nbsp;A&nbsp;component&nbsp;``defer``&nbsp;is&nbsp;a<br>
+DEFERRED_UPDATE&nbsp;of&nbsp;the&nbsp;carrying&nbsp;message&nbsp;(the&nbsp;ephemeral&nbsp;flag&nbsp;is<br>
+ignored):&nbsp;``edit_original_response``&nbsp;then&nbsp;rewrote&nbsp;the&nbsp;PUBLIC<br>
+POST&nbsp;with&nbsp;the&nbsp;admin&nbsp;buttons,&nbsp;visible&nbsp;to&nbsp;everyone&nbsp;(the<br>
+2026-11-08&nbsp;critical-path&nbsp;report&nbsp;—&nbsp;the&nbsp;admin&nbsp;controls&nbsp;live&nbsp;only<br>
+in&nbsp;the&nbsp;clicker's&nbsp;ephemeral&nbsp;answer).</span></dd></dl>
 
 <hr>
 Class methods defined here:<br>
@@ -190,7 +198,12 @@ classes&nbsp;in&nbsp;the&nbsp;first&nbsp;place&nbsp;with&nbsp;`class&nbsp;Foo[T]
 <td class="section-title" colspan=3>&nbsp;<br><strong class="bigsection">Functions</strong></td></tr>
     
 <tr><td class="decor functions-decor"><span class="code">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span></td><td>&nbsp;</td>
-<td class="singlecolumn"><dl><dt>async <a name="-build_entity_admin_menu"><strong>build_entity_admin_menu</strong></a>(kind: 'str', entity_id: 'str', game_key: 'str', owned: 'bool') -&gt; 'discord.ui.LayoutView'</dt><dd><span class="code">Build&nbsp;the&nbsp;ephemeral&nbsp;management&nbsp;menu&nbsp;of&nbsp;one&nbsp;entity&nbsp;(state-greyed).</span></dd></dl>
+<td class="singlecolumn"><dl><dt>async <a name="-build_entity_admin_bar"><strong>build_entity_admin_bar</strong></a>(kind: 'str', entity_id: 'str', game_key: 'str', owned: 'bool', guild_id: 'str' = '', bot: 'Any' = None) -&gt; 'discord.ui.LayoutView'</dt><dd><span class="code">Build&nbsp;the&nbsp;ephemeral&nbsp;admin&nbsp;BAR&nbsp;of&nbsp;one&nbsp;entity&nbsp;—&nbsp;buttons&nbsp;only.<br>
+&nbsp;<br>
+The&nbsp;⚙️&nbsp;Admin&nbsp;click&nbsp;answers&nbsp;with&nbsp;the&nbsp;entity's&nbsp;admin&nbsp;BUTTON&nbsp;BAR&nbsp;(never<br>
+a&nbsp;re-render&nbsp;of&nbsp;the&nbsp;post&nbsp;—&nbsp;the&nbsp;post&nbsp;re-renders&nbsp;only&nbsp;when&nbsp;its&nbsp;content<br>
+changed;&nbsp;owner&nbsp;direction&nbsp;2026-11-08).&nbsp;The&nbsp;bar&nbsp;carries&nbsp;the&nbsp;entity's<br>
+admin&nbsp;id:&nbsp;``map:aoe2:public:arabia:admin``.</span></dd></dl>
  <dl><dt><a name="-register_entity_admin_items"><strong>register_entity_admin_items</strong></a>(bot: 'discord.Client') -&gt; 'None'</dt><dd><span class="code">Register&nbsp;the&nbsp;entity&nbsp;admin&nbsp;items&nbsp;on&nbsp;the&nbsp;client.</span></dd></dl>
 </td></tr></table><p>
 <table class="section">
@@ -198,5 +211,5 @@ classes&nbsp;in&nbsp;the&nbsp;first&nbsp;place&nbsp;with&nbsp;`class&nbsp;Foo[T]
 <td class="section-title" colspan=3>&nbsp;<br><strong class="bigsection">Data</strong></td></tr>
     
 <tr><td class="decor data-decor"><span class="code">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span></td><td>&nbsp;</td>
-<td class="singlecolumn"><strong>__all__</strong> = ['EntityAdminButton', 'build_entity_admin_menu', 'register_entity_admin_items']</td></tr></table>
+<td class="singlecolumn"><strong>__all__</strong> = ['EntityAdminButton', 'build_entity_admin_bar', 'register_entity_admin_items']</td></tr></table>
 </body></html>

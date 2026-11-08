@@ -168,9 +168,17 @@ async def _sync_entity_forum_locked(guild_id: str, bot: Any, spec: EntityForumSp
         scope = spec.tree_scope_for(entity) if spec.tree_scope_for is not None else "games"
         channel_key = spec.tree_channel_for(entity) if spec.tree_channel_for is not None else "civs"
         groups.setdefault((scope, channel_key), []).append(entity)
+    logger.debug(
+        "entity forum: guild %s listed %d entities in %d group(s): %s",
+        guild_id,
+        len(entities),
+        len(groups),
+        [(scope, channel, len(members)) for (scope, channel), members in groups.items()],
+    )
     actions = 0
     for (scope, channel_key), members in groups.items():
         actions += await _sync_one_forum(guild_id, bot, spec, platform, scope, channel_key, members)
+    logger.debug("entity forum: guild %s sync took %d action(s)", guild_id, actions)
     return actions
 
 
@@ -195,7 +203,18 @@ async def _sync_one_forum(
         channel = guild.get_channel(int(stored))
         forum = channel if channel is not None and channel.type == discord.ChannelType.forum else None
     if forum is None:
-        return 0  # the provisioning owns creation; nothing stored yet
+        # the provisioning owns creation; nothing stored yet — the #330
+        # lesson: this silent return hid a missing forum for days
+        logger.debug(
+            "entity forum: guild %s has no provisionned forum for %s/%s "
+            "(stored id: %r) — %d entity(ies) skipped",
+            guild_id,
+            tree_scope,
+            tree_channel,
+            stored,
+            len(entities),
+        )
+        return 0
     wanted: dict[str, Any] = {}
     for entity in entities:
         key = spec.entity_name(entity)
@@ -204,17 +223,30 @@ async def _sync_one_forum(
         wanted[key] = entity
     existing = {thread.name: thread for thread in forum.threads}
     actions = 0
+    created = 0
+    refreshed = 0
     for name, entity in wanted.items():
         content, view = await spec.build_post(entity, guild_id)
         if name not in existing:
             await platform.create_map_post(guild_id, str(forum.id), name, content, view=view)
             actions += 1
+            created += 1
         else:
             await _refresh_post(existing[name], content, view)
+            refreshed += 1
     for name, thread in existing.items():
         if name not in wanted:
             await thread.delete(reason=f"kingdoms: entity {name} no longer exists")
             actions += 1
+    logger.debug(
+        "entity forum: guild %s %s/%s — %d created, %d refreshed, %d stale deleted",
+        guild_id,
+        tree_scope,
+        tree_channel,
+        created,
+        refreshed,
+        actions - created,
+    )
     return actions
 
 

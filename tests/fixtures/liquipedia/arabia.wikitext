@@ -1,0 +1,75 @@
+{{tabs static
+|name1=Arabia (AoE2)
+|link1=Arabia
+|name2=Arabia (AoM)
+|link2=Arabia (AoM)
+|name3=Arabian Basin
+|link3=Arabian Basin
+|name4=Arabia (AoEO)
+|link4=Arabia (AoEO)
+|name5=Arabia (AoE3)
+|link5=Arabia (AoE3)
+|name6=Arabia (AoE4)
+|link6=Arabia (AoE4)
+|This=1}}
+{{Infobox map
+|name=Arabia
+|image=Arabia AoE2DE.png
+|caption=Arabia (desert version)
+|creator=Ensemble Studios
+|tc=1
+|walls=None
+|nomad=No
+|players=Up to 8
+|appearance=The Age of Kings
+|span=1999-09-30 — '''Present'''
+|tileset=desert
+|type=Land
+|game=aoe2
+}}
+'''Arabia''' is a [[Random Map]] in [[Age of Empires II]].
+
+==Overview==
+<!-- ''list of features that are common in this map''  -->
+Arabia is considered the most balanced and competitive map throughout the history of competitive [[Age of Empires II]]. Almost every tournament will begin their series with it. Be it one versus one or team games. As with all maps in ranked play, starting points, and resource distribution is randomized to an extent. Tournaments will generally produce their own version of this to tweak some of these randomized variables.
+
+Definitive Edition description: ''"Arid desert with strategic elevations, but sparse vegetation and water."''
+
+==Versions==
+<!--''list of the major official (Microsoft, ensemble studios, forgotten empires, relic, etc) changes.'' -->
+*'''Arabia (default)''': standard Arabia map with big variety; can spawn with grass or desert terrain
+**Grass terrain: trees, more "noob friendly" with deer/sheep/boar and resources being closer to the [[Town Center|TC]], also easier to wall because of bigger woodlines and no ponds
+**Desert terrain: palms, ponds, less wood in general
+*'''Desert Arabia''': an Arabia map always spawning with (brown) desert terrain; f.e. used in the [[Duel of the Century - JorDan_23 vs TheViper]] (''DesertArabia_v4'')
+*'''Green Arabia''': an Arabia map always spawning with (green) grass terrain; similar to default grass terrain Arabia but less "noob friendly" with resources not spawning closer to the [[Town Center|TC]]
+*[[Escape Champions League|ECL_Arabia]] (also used for [[EscapeTV Launch Event]])
+*[[War is Coming/The Awakening|TA]]_[[Death Match|DM]]_GA
+*RBW_Arabia ([[Red_Bull_Gaming_World/Online_Series_featuring_Red_Bull_Wololo|event example]])
+*[[King of the Desert/3|KotD3]] Arabia: more open (woodlines more distant to the starting [[Town Center]]s), no cliffs, facilitating more aggressive playstyles
+*[[2v2 World Cup/2020|2v2 World Cup (2020)]] Arabia
+*[[Winter's War]]: '''Winter's Arabia''': map covered with snow
+*[[Mangrove Shallows Cup|MSC]] Arabia, also known as [[Bog Arabia]]
+*'''Savannah''' used in [[Battle of Africa/3|Battle of Africa 3]] is a renamed version of Arabia in an African theme to fit the event.
+*'''Polana''' used in the [[King_of_Poland/1|King of Poland]] tournament series. It has green grass terrain, European vegetation, always 2 cows and 6 sheep around the TC, always 2 boars instead of elephants or rhinos, always deers instead of zebras or ostriches. Scripted by Morheus.
+*'''[[Arobia]]''': standard Arabia, players starting with a [[Monk]]
+
+==Recent Tournament Appearances==
+{{Map appearances table|maps=Arabia}}
+
+==Recent Games==
+{{Map recent games table|maps=Arabia, Winter's Arabia, Savannah}}
+
+==Trivia==
+*There are several tournaments which are played on Arabia exclusively, f.e. [[Masters of Arabia]], [[Arabia Invitational/1|Arabia Invitational I]] and [[Arabia Invitational/2|Arabia Invitational II]], or the [[King of the Desert]] series.
+
+==Gallery==
+<gallery mode="packed-hover" heights="200px">
+File:Arabia_A0E2DE.png|in-game icon ([[Age of Empires II/Definitive Edition|AoEII:DE]])
+</gallery>
+
+==Additional Content==
+{{ExternalMediaList|subject=Arabia}}
+
+==References==
+{{reflist}}
+{{Maps navbox}}

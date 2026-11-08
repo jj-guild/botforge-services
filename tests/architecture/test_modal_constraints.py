@@ -172,7 +172,11 @@ def test_modal_payloads_respect_discord_limits() -> None:
         placeholder = getattr(item, "placeholder", None)
         if placeholder is not None and len(placeholder) > _PLACEHOLDER_MAX:
             offenders.append(f"{where}: placeholder {len(placeholder)} > {_PLACEHOLDER_MAX}")
-        inner_label = getattr(item, "label", None)
+        # the deprecated ``.label`` property warns (discord.py 2.6:
+        # use discord.ui.Label) — the constraint reads the underlying
+        # wire component's label, never the deprecated accessor
+        underlying = getattr(item, "_underlying", None)
+        inner_label = getattr(underlying, "label", None) if underlying is not None else None
         if type(item).__name__ == "TextInput" and inner_label and len(inner_label) > _TEXT_INPUT_LABEL_MAX:
             offenders.append(f"{where}: TextInput label {len(inner_label)} > {_TEXT_INPUT_LABEL_MAX}")
 

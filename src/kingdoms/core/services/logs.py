@@ -471,6 +471,27 @@ class LogService:
         locale = str((settings or {}).get("locale", ""))
         return locale if locale in SUPPORTED_LOCALES else "en"
 
+    async def ensure_user_locale(self, user_id: str, locale: str) -> None:
+        """Store the detected client language as the user's default locale.
+
+        The locale is always stored for users and guilds: the detected
+        native value (``interaction.locale``) is the default, English when
+        unknown or unsupported. An explicit picker choice always wins —
+        seeding never overwrites a stored value. Best-effort, never raises.
+        """
+        if locale not in SUPPORTED_LOCALES:
+            locale = "en"
+        try:
+            settings = await self._safe(self._db.get_user_settings(user_id)) or {}
+            if str(settings.get("locale", "")) in SUPPORTED_LOCALES:
+                return
+            settings["locale"] = locale
+            settings["updated_at"] = int(time.time())
+            settings["seeded_by"] = "detected"
+            await self._db.set_user_settings(user_id, settings)
+        except Exception:
+            logger.debug("user locale seeding failed (user %s)", user_id, exc_info=True)
+
     def set_locale_resolver(self, resolver: Any) -> None:
         """Inject the fallback locale resolver (guild id -> en/fr).
 
@@ -513,6 +534,28 @@ class LogService:
         except Exception:
             return "en"
         return locale if locale in SUPPORTED_LOCALES else "en"
+
+    async def ensure_guild_locale(self, guild_id: str, locale: str) -> None:
+        """Store the detected native locale as the guild's default locale.
+
+        The locale is always stored for guilds and users: the detected
+        native value (``guild.preferred_locale``) is the default, English
+        when unknown or unsupported. An explicit picker choice always
+        wins — seeding never overwrites a stored value. Best-effort,
+        never raises.
+        """
+        if locale not in SUPPORTED_LOCALES:
+            locale = "en"
+        try:
+            settings = await self._safe(self._db.get_guild_settings(guild_id)) or {}
+            if str(settings.get("locale", "")) in SUPPORTED_LOCALES:
+                return
+            settings["locale"] = locale
+            settings["updated_at"] = int(time.time())
+            settings["seeded_by"] = "detected"
+            await self._db.set_guild_settings(guild_id, settings)
+        except Exception:
+            logger.debug("guild locale seeding failed (guild %s)", guild_id, exc_info=True)
 
     async def _cache(self, guild_id: str, channel_id: str) -> None:
         await self._safe(

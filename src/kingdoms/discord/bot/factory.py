@@ -19,6 +19,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
+from collections.abc import Iterable
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -266,9 +267,23 @@ class KingdomsBot(discord.Client):
         _remove(member)
 
     async def on_guild_join(self, guild: discord.Guild) -> None:
-        """Make the joined guild known to the access store (panel coherence)."""
+        """Make the joined guild known to the access store (panel coherence).
+
+        The guild's language is Discord's own signal (``guild.preferred_locale``,
+        present in the GUILD_CREATE payload, so readable right here): it is
+        resolved through the native seam and logged, never stored on our side.
+        """
+        from kingdoms.discord.locales import guild_locale
         from kingdoms.discord.wiring import sync_known_guilds
 
+        logger.info(
+            "GUILD JOIN guild=%s name=%r native_locale=%s",
+            guild.id,
+            guild.name,
+            guild_locale(guild),
+        )
+        if self.logs_service is not None:
+            await self.logs_service.ensure_guild_locale(str(guild.id), guild_locale(guild))
         await sync_known_guilds([str(guild.id)])
 
     async def on_ready(self) -> None:
@@ -280,6 +295,13 @@ class KingdomsBot(discord.Client):
             self.user,
             len(self.guilds),
         )
+        _log_guild_native_locales(self.guilds)
+        _log_guild_member_locales(self.guilds)
+        if self.logs_service is not None:
+            from kingdoms.discord.locales import guild_locale
+
+            for known_guild in self.guilds:
+                await self.logs_service.ensure_guild_locale(str(known_guild.id), guild_locale(known_guild))
         # the guild_access store is self-healing at boot: a database
         # reset must not leave the admin DM panel showing 0 servers
         # while the bot keeps serving its guilds (panel coherence).
@@ -435,10 +457,16 @@ class KingdomsBot(discord.Client):
             await self._ensure_all_pins(guild_id)
             if not maps_forum_wiring_ready():
                 return
-            from kingdoms.core.games.aoe2.content_refresh import refresh_aoe2_content
-
+            # The civs sync rides the GAME SERVICE (the bot never runs
+            # game code nor touches a provider): best-effort at boot, the
+            # DM panel's button re-runs it on demand.
             try:
-                await refresh_aoe2_content()
+                from kingdoms.game_aoe2.client import GameDataClient
+
+                game_uri = os.environ.get("GAME_AOE2_URI", "")
+                if game_uri:
+                    client = GameDataClient(game_uri)
+                    await client.sync_content("aoe2", "factions", timeout_s=300.0)
             except Exception:
                 logger.warning("CONTENT REFRESH at boot failed — best-effort", exc_info=True)
             await sync_maps_forum(guild_id, "aoe2", self)
@@ -742,6 +770,15 @@ class KingdomsBot(discord.Client):
             )
         except Exception:
             logger.debug("action log failed — best-effort", exc_info=True)
+        from kingdoms.discord.locales import interaction_locale
+
+        logger.info(
+            "INTERACTION USER LOCALE user=%s guild=%s raw=%s resolved=%s",
+            str(getattr(getattr(interaction, "user", None), "id", "") or "unknown"),
+            str(interaction.guild_id) if interaction.guild_id else "dm",
+            getattr(interaction, "locale", None),
+            interaction_locale(interaction),
+        )
         if self.logs_service is None:
             return
         from kingdoms.discord.locales import normalize
@@ -753,6 +790,7 @@ class KingdomsBot(discord.Client):
         if user_id:
             try:
                 await self.logs_service.observe_user_locale(user_id, locale)
+                await self.logs_service.ensure_user_locale(user_id, locale)
             except Exception:
                 except_logger("user locale observation failed (user %s)", user_id, exc_info=True)
         if guild_id and user_id:
@@ -887,6 +925,14 @@ def create_bot(config: BotConfig | None = None) -> KingdomsBot:
         deploy_ci_run_ts=resolved.deploy_ci_run_ts,
     )
     shared_state = _build_shared_state(resolved)
+    # Discord rate-limit observability (owner direction 2026-11-06): the
+    # buckets logged — DEBUG per request, INFO when tight, WARNING when
+    # raised. Installed BEFORE the client exists (it patches the class
+    # discord.Client instantiates); a discord.py upgrade degrades to
+    # the stock client, never a crash.
+    from kingdoms.discord.ratelimit_observability import install as _install_observability
+
+    _install_observability()
     bot = KingdomsBot(config=resolved, status=status, registry=registry)
     bot.games = games
     bot.state_service = shared_state
@@ -939,19 +985,16 @@ def create_bot(config: BotConfig | None = None) -> KingdomsBot:
 
     bot.home_service = HomeService(registry, _DiscordModHomeViews(bot.mod_home_builders))
     bot._registration_database = _build_registration_database(resolved)
-    bot._home_providers = {"aoe2": _build_home_provider(resolved)} if _build_home_provider(resolved) else {}
+    bot._home_providers = {}
     import os as _os
 
-    _core_uri = _os.environ.get("CORE_URI", "")
+    # The GAME SERVICE is the one live source (the core's duplicate
+    # aggregator is gone): no GAME_AOE2_URI means no live surfaces.
     _game_uri = _os.environ.get("GAME_AOE2_URI", "")
     if _game_uri:
         from kingdoms.game_aoe2.client import GameDataClient
 
         bot.live_client = GameDataClient(_game_uri)
-    elif _core_uri:
-        from kingdoms.core.rpc.live import LiveClient
-
-        bot.live_client = LiveClient(_core_uri)
     else:
         bot.live_client = None
     register_home_command(bot.tree, bot.home_service, catalog=bot.messages)
@@ -1022,18 +1065,6 @@ def _build_registration_database(config: BotConfig) -> Any | None:
         from kingdoms.discord.registration_platform import MongoRegistrationDatabase
 
         return MongoRegistrationDatabase(get_async_database())
-    except Exception:
-        return None
-
-
-def _build_home_provider(config: BotConfig) -> Any | None:
-    """Return the AoE2 live adapter for the games view, None unwired."""
-    if not config.redis_uri:
-        return None
-    try:
-        from kingdoms.ext_librematch.adapter import LibrematchAdapter
-
-        return LibrematchAdapter(api_key=os.environ.get("AOE2_API_KEY", ""))
     except Exception:
         return None
 
@@ -1289,3 +1320,40 @@ def _bot_version() -> str:
     from kingdoms import __version__
 
     return __version__
+
+
+def _log_guild_member_locales(guilds: Iterable[discord.Guild]) -> None:
+    """Log one probe line per cached member (smoke-CI greppable).
+
+    Discord exposes no ``member.locale`` in the API — a user's client
+    language is only observable inside an interaction (``interaction.locale``,
+    logged by ``on_interaction``). This boot enumeration shows raw=None per
+    member on the real gateway, which is why detection is interaction-driven.
+    """
+    for guild in guilds:
+        for member in getattr(guild, "members", None) or []:
+            logger.info(
+                "GUILD MEMBER LOCALE guild=%s user=%s raw=%s",
+                guild.id,
+                member.id,
+                getattr(member, "locale", None),
+            )
+
+
+def _log_guild_native_locales(guilds: Iterable[discord.Guild]) -> None:
+    """Log one line per guild with its native locale (smoke-CI greppable).
+
+    ``guild.preferred_locale`` comes from the GUILD_CREATE/READY payloads, so
+    this proves on the real gateway that the field is populated for every
+    guild the bot sits in. The locale is resolved through the native seam,
+    never stored.
+    """
+    from kingdoms.discord.locales import guild_locale
+
+    for guild in guilds:
+        logger.info(
+            "GUILD NATIVE LOCALE guild=%s raw=%s resolved=%s",
+            guild.id,
+            guild.preferred_locale,
+            guild_locale(guild),
+        )

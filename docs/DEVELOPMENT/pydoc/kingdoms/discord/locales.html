@@ -24,7 +24,12 @@ in&nbsp;French&nbsp;sets&nbsp;the&nbsp;**server&nbsp;language**&nbsp;in&nbsp;Dis
 **client&nbsp;language**.<br>
 &nbsp;<br>
 Mapping:&nbsp;Discord&nbsp;locales&nbsp;are&nbsp;BCP-47&nbsp;(``fr``,&nbsp;``en-US``…);&nbsp;the&nbsp;catalog<br>
-carries&nbsp;``en``&nbsp;and&nbsp;``fr``.&nbsp;Anything&nbsp;not&nbsp;French&nbsp;is&nbsp;English.</span></p>
+carries&nbsp;``en``&nbsp;and&nbsp;``fr``.&nbsp;Anything&nbsp;not&nbsp;French&nbsp;is&nbsp;English.<br>
+&nbsp;<br>
+The&nbsp;**guild&nbsp;default&nbsp;is&nbsp;fail-safe**:&nbsp;the&nbsp;guild's&nbsp;native&nbsp;``preferred_locale``<br>
+when&nbsp;it&nbsp;carries&nbsp;one&nbsp;(Community-enabled&nbsp;guilds&nbsp;expose&nbsp;Server&nbsp;Settings&nbsp;→<br>
+Language;&nbsp;others&nbsp;report&nbsp;the&nbsp;hard-coded&nbsp;``en-US``)&nbsp;—&nbsp;and&nbsp;**English&nbsp;on&nbsp;any<br>
+missing&nbsp;or&nbsp;erroneous&nbsp;signal**,&nbsp;never&nbsp;an&nbsp;exception.</span></p>
 <p>
 <table class="section">
 <tr class="decor pkg-content-decor heading-text">
@@ -38,8 +43,13 @@ carries&nbsp;``en``&nbsp;and&nbsp;``fr``.&nbsp;Anything&nbsp;not&nbsp;French&nbs
 <td class="section-title" colspan=3>&nbsp;<br><strong class="bigsection">Functions</strong></td></tr>
     
 <tr><td class="decor functions-decor"><span class="code">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span></td><td>&nbsp;</td>
-<td class="singlecolumn"><dl><dt><a name="-guild_locale"><strong>guild_locale</strong></a>(guild: 'discord.Guild | None') -&gt; 'str'</dt><dd><span class="code">Return&nbsp;the&nbsp;guild's&nbsp;native&nbsp;locale&nbsp;(Server&nbsp;Settings&nbsp;→&nbsp;Language).</span></dd></dl>
- <dl><dt><a name="-guild_locale_by_id"><strong>guild_locale_by_id</strong></a>(bot: 'object', guild_id: 'str') -&gt; 'str'</dt><dd><span class="code">Resolve&nbsp;a&nbsp;guild's&nbsp;native&nbsp;locale&nbsp;from&nbsp;its&nbsp;id&nbsp;(live&nbsp;object&nbsp;only).</span></dd></dl>
+<td class="singlecolumn"><dl><dt><a name="-guild_locale"><strong>guild_locale</strong></a>(guild: 'discord.Guild | None') -&gt; 'str'</dt><dd><span class="code">Return&nbsp;the&nbsp;guild's&nbsp;default&nbsp;locale:&nbsp;its&nbsp;native&nbsp;``preferred_locale``.<br>
+&nbsp;<br>
+Fail-safe:&nbsp;any&nbsp;missing&nbsp;attribute&nbsp;or&nbsp;read&nbsp;error&nbsp;resolves&nbsp;to&nbsp;English.</span></dd></dl>
+ <dl><dt><a name="-guild_locale_by_id"><strong>guild_locale_by_id</strong></a>(bot: 'object', guild_id: 'str') -&gt; 'str'</dt><dd><span class="code">Resolve&nbsp;a&nbsp;guild's&nbsp;default&nbsp;locale&nbsp;from&nbsp;its&nbsp;id&nbsp;(live&nbsp;object&nbsp;only).<br>
+&nbsp;<br>
+Fail-safe:&nbsp;unknown&nbsp;guild,&nbsp;invalid&nbsp;id,&nbsp;missing&nbsp;cache&nbsp;or&nbsp;any&nbsp;read&nbsp;error<br>
+resolves&nbsp;to&nbsp;English.</span></dd></dl>
  <dl><dt><a name="-interaction_locale"><strong>interaction_locale</strong></a>(interaction: 'discord.Interaction') -&gt; 'str'</dt><dd><span class="code">Return&nbsp;the&nbsp;locale&nbsp;of&nbsp;an&nbsp;interaction-driven&nbsp;(ephemeral)&nbsp;surface.<br>
 &nbsp;<br>
 The&nbsp;clicker's&nbsp;own&nbsp;client&nbsp;language&nbsp;wins&nbsp;—&nbsp;Discord&nbsp;localizes&nbsp;slash<br>

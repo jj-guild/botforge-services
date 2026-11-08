@@ -14,6 +14,11 @@ in French sets the **server language** in Discord; a user sets their
 
 Mapping: Discord locales are BCP-47 (``fr``, ``en-US``…); the catalog
 carries ``en`` and ``fr``. Anything not French is English.
+
+The **guild default is fail-safe**: the guild's native ``preferred_locale``
+when it carries one (Community-enabled guilds expose Server Settings →
+Language; others report the hard-coded ``en-US``) — and **English on any
+missing or erroneous signal**, never an exception.
 """
 
 from __future__ import annotations
@@ -25,13 +30,22 @@ SUPPORTED = ("en", "fr")
 
 def normalize(raw: object) -> str:
     """Map one raw Discord locale onto the catalog (en/fr, en fallback)."""
-    code = str(raw or "").split("-")[0].lower()
+    try:
+        code = str(raw or "").split("-")[0].lower()
+    except Exception:
+        return "en"
     return code if code in SUPPORTED else "en"
 
 
 def guild_locale(guild: discord.Guild | None) -> str:
-    """Return the guild's native locale (Server Settings → Language)."""
-    return normalize(getattr(guild, "preferred_locale", None))
+    """Return the guild's default locale: its native ``preferred_locale``.
+
+    Fail-safe: any missing attribute or read error resolves to English.
+    """
+    try:
+        return normalize(getattr(guild, "preferred_locale", None))
+    except Exception:
+        return "en"
 
 
 def interaction_locale(interaction: discord.Interaction) -> str:
@@ -52,12 +66,18 @@ def interaction_locale(interaction: discord.Interaction) -> str:
 
 
 def guild_locale_by_id(bot: object, guild_id: str) -> str:
-    """Resolve a guild's native locale from its id (live object only)."""
-    get_guild = getattr(bot, "get_guild", None)
-    if not guild_id or not str(guild_id).isdigit() or get_guild is None:
+    """Resolve a guild's default locale from its id (live object only).
+
+    Fail-safe: unknown guild, invalid id, missing cache or any read error
+    resolves to English.
+    """
+    try:
+        get_guild = getattr(bot, "get_guild", None)
+        if not guild_id or not str(guild_id).isdigit() or get_guild is None:
+            return "en"
+        return guild_locale(get_guild(int(guild_id)))
+    except Exception:
         return "en"
-    guild = get_guild(int(guild_id))
-    return guild_locale(guild)
 
 
 async def stored_guild_locale(bot: object, guild_id: str) -> str:

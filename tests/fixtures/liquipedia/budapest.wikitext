@@ -1,0 +1,63 @@
+{{tabs static
+|name1=Budapest (AoE2)
+|link1=Budapest
+|name2=Budapest (AoM)
+|link2=Budapest (AoM)
+|This=1}}
+{{Infobox map
+|image=Budapest_Map.png
+|caption=
+|name=Budapest
+|creator=Forgotten Empires
+|players=Up to 8
+|appearance=Forgotten Empires
+|span=2012 — '''Present'''
+|type=Hybrid
+|game=aoe2
+|nomad=No
+|walls=None
+|tc=2
+}}
+
+'''Budapest''' is an [[Age of Empires II]] multiplayer [[Maps|map]].
+
+==Overview==
+Players in most maps start with a single Town Center, or sometimes, no Town Center at all. On Budapest, they have two Town Centers not far from each other, each one with its corresponding initial resources and their corresponding scout unit and Villagers.
+
+The map usually depicts a tempered area. There are 4 big lakes, each one on one side of the map, so the initial settlements of each player are much closer than in most other maps. Elevations of various sizes are present on the map, but most of the terrain is flat and cliffs are absent. Medium-sized forests can be found on pockets, so wood is plentiful. Gold and stone mines outside of the initial settlements are of normal variance. Wild predators are present and scattered on the map in low numbers. Relics are present in normal numbers scattered on the map.
+
+<!--
+==Overview==
+
+==Strategic Basics==
+
+==Civilizations==
+
+==Versions==
+''list of the major official (Microsoft, ensemble studios, forgotten empires, relic, etc) changes.''
+
+==Tournament Versions==
+''table of tournaments where the map was played with details''
+
+{{Map appearances table|maps=Budapest}}
+
+==Statistics==
+''things like civs used on the map''
+-->
+
+==Most Recent Tournament Appearances==
+{{Map appearances table|maps=Budapest|tiers=1,2,3}}
+
+==Recent Games==
+{{Map recent games table}}
+
+==Gallery==
+<gallery mode="packed-hover" heights="200px">
+File:Budapest_AoE2DE.png|in-game icon ([[Age of Empires II/Definitive Edition|AoEII:DE]])
+
+</gallery>
+
+==References==
+{{Reflist}}
+
+{{Maps navbox}}

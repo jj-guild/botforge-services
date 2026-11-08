@@ -85,7 +85,11 @@ not&nbsp;factions);&nbsp;``locale``&nbsp;filters&nbsp;when&nbsp;non-empty.&nbsp;
 raw&nbsp;documents&nbsp;(they&nbsp;carry&nbsp;``tags``,&nbsp;``summary``,&nbsp;``image_url``<br>
 and&nbsp;the&nbsp;provider&nbsp;fields).</span></dd></dl>
 
-<dl><dt>async <a name="FactionContentService-store"><strong>store</strong></a>(self, content: 'dict[str, Any]') -&gt; 'None'</dt><dd><span class="code">Upsert&nbsp;one&nbsp;content&nbsp;document&nbsp;(idempotent&nbsp;by&nbsp;``&lt;entity&nbsp;id&gt;:&lt;locale&gt;``).</span></dd></dl>
+<dl><dt>async <a name="FactionContentService-store"><strong>store</strong></a>(self, content: 'dict[str, Any]') -&gt; 'None'</dt><dd><span class="code">Upsert&nbsp;one&nbsp;content&nbsp;document&nbsp;(idempotent&nbsp;by&nbsp;``&lt;entity&nbsp;id&gt;:&lt;locale&gt;``).<br>
+&nbsp;<br>
+Write-through:&nbsp;the&nbsp;parsed&nbsp;doc&nbsp;lands&nbsp;in&nbsp;the&nbsp;Redis&nbsp;cache&nbsp;on&nbsp;the<br>
+same&nbsp;store&nbsp;—&nbsp;a&nbsp;sync&nbsp;refreshes&nbsp;Mongo&nbsp;AND&nbsp;the&nbsp;cache&nbsp;in&nbsp;one&nbsp;pass,<br>
+and&nbsp;the&nbsp;reads&nbsp;after&nbsp;a&nbsp;sync&nbsp;never&nbsp;re-download&nbsp;from&nbsp;Mongo.</span></dd></dl>
 
 <hr>
 Data descriptors defined here:<br>
@@ -96,6 +100,17 @@ Data descriptors defined here:<br>
 <dd><span class="code">list&nbsp;of&nbsp;weak&nbsp;references&nbsp;to&nbsp;the&nbsp;object</span></dd>
 </dl>
 </td></tr></table></td></tr></table><p>
+<table class="section">
+<tr class="decor functions-decor heading-text">
+<td class="section-title" colspan=3>&nbsp;<br><strong class="bigsection">Functions</strong></td></tr>
+    
+<tr><td class="decor functions-decor"><span class="code">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span></td><td>&nbsp;</td>
+<td class="singlecolumn"><dl><dt><a name="-content_state_from_env"><strong>content_state_from_env</strong></a>() -&gt; 'StateService | None'</dt><dd><span class="code">Build&nbsp;the&nbsp;Redis-backed&nbsp;state&nbsp;from&nbsp;``REDIS_URI``;&nbsp;None&nbsp;when&nbsp;unset.<br>
+&nbsp;<br>
+The&nbsp;content&nbsp;reads&nbsp;and&nbsp;the&nbsp;sync's&nbsp;stores&nbsp;must&nbsp;share&nbsp;ONE&nbsp;cache:&nbsp;the<br>
+sync's&nbsp;write-through&nbsp;lands&nbsp;where&nbsp;the&nbsp;reads&nbsp;look.&nbsp;A&nbsp;process&nbsp;without<br>
+``REDIS_URI``&nbsp;degrades&nbsp;to&nbsp;no&nbsp;cache&nbsp;(Mongo&nbsp;only)&nbsp;—&nbsp;never&nbsp;a&nbsp;crash.</span></dd></dl>
+</td></tr></table><p>
 <table class="section">
 <tr class="decor data-decor heading-text">
 <td class="section-title" colspan=3>&nbsp;<br><strong class="bigsection">Data</strong></td></tr>

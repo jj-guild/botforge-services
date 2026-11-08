@@ -12,6 +12,8 @@ from kingdoms.discord.bot.factory import (
     READY_LOG_LINE,
     BotConfig,
     KingdomsBot,
+    _log_guild_member_locales,
+    _log_guild_native_locales,
     create_bot,
 )
 
@@ -76,10 +78,14 @@ def test_create_bot_parses_bot_admins(config_dir: str) -> None:
 
 
 class _FakeLogsService:
-    """Minimal LogService stand-in recording resolve_channel calls."""
+    """Minimal LogService stand-in recording resolve_channel + locale calls."""
 
     def __init__(self) -> None:
         self.resolved: list[str] = []
+        self.ensured_guild_locales: list[tuple[str, str]] = []
+        self.ensured_user_locales: list[tuple[str, str]] = []
+        self.observed_user_locales: list[tuple[str, str]] = []
+        self.observed_member_locales: list[tuple[str, str, str]] = []
 
     async def get_locale(self, guild_id: str) -> str:
         return "en"
@@ -87,6 +93,18 @@ class _FakeLogsService:
     async def resolve_channel(self, guild_id: str) -> str:
         self.resolved.append(guild_id)
         return "logs-channel"
+
+    async def ensure_guild_locale(self, guild_id: str, locale: str) -> None:
+        self.ensured_guild_locales.append((guild_id, locale))
+
+    async def ensure_user_locale(self, user_id: str, locale: str) -> None:
+        self.ensured_user_locales.append((user_id, locale))
+
+    async def observe_user_locale(self, user_id: str, locale: str) -> None:
+        self.observed_user_locales.append((user_id, locale))
+
+    async def observe_guild_member_locale(self, guild_id: str, user_id: str, locale: str) -> None:
+        self.observed_member_locales.append((guild_id, user_id, locale))
 
 
 class _FakeAdminChannelService:
@@ -241,3 +259,122 @@ async def test_setup_hook_starts_shared_state_and_registration_engine(config_dir
     assert workflow_store.stopped
     await bot.state_service.close()
     assert store.stopped, "close() must stop the shared state store"
+
+
+async def test_on_guild_join_resolves_the_native_guild_locale(
+    config_dir: str, caplog: pytest.LogCaptureFixture
+) -> None:
+    """on_guild_join reads guild.preferred_locale through the native seam.
+
+    The GUILD_CREATE payload always carries preferred_locale, so the guild's
+    language is resolvable at join time; the locale is resolved (and logged),
+    never stored on our side.
+    """
+    from tests.mocks import MockGuild
+
+    bot = create_bot(BotConfig(config_dir=config_dir))
+    guild = MockGuild(id=424242, preferred_locale=discord.Locale.french)
+    with caplog.at_level(logging.INFO, logger="kingdoms.bot"):
+        await bot.on_guild_join(guild)
+    assert any("GUILD JOIN" in record.message and "native_locale=fr" in record.message for record in caplog.records)
+
+
+async def test_on_guild_join_unknown_locale_falls_back_to_english(
+    config_dir: str, caplog: pytest.LogCaptureFixture
+) -> None:
+    """A locale outside the en/fr catalog resolves to English at join time."""
+    from tests.mocks import MockGuild
+
+    bot = create_bot(BotConfig(config_dir=config_dir))
+    guild = MockGuild(id=424243, preferred_locale="ja")
+    with caplog.at_level(logging.INFO, logger="kingdoms.bot"):
+        await bot.on_guild_join(guild)
+    assert any("GUILD JOIN" in record.message and "native_locale=en" in record.message for record in caplog.records)
+
+
+def test_log_guild_native_locales_logs_raw_and_resolved_per_guild(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """One greppable GUILD NATIVE LOCALE line per guild: raw + resolved.
+
+    The discord-smoke CI job greps these lines on the real gateway to prove
+    guild.preferred_locale is populated; raw=None must never happen.
+    """
+    from tests.mocks import MockGuild
+
+    guilds = [
+        MockGuild(id=424242, preferred_locale=discord.Locale.french),
+        MockGuild(id=424243, preferred_locale="en-US"),
+    ]
+    with caplog.at_level(logging.INFO, logger="kingdoms.bot"):
+        _log_guild_native_locales(guilds)
+    lines = [r.message for r in caplog.records if "GUILD NATIVE LOCALE" in r.message]
+    assert len(lines) == 2
+    assert any("guild=424242" in line and "raw=fr" in line and "resolved=fr" in line for line in lines)
+    assert any("guild=424243" in line and "raw=en-US" in line and "resolved=en" in line for line in lines)
+
+
+def test_log_guild_member_locales_probes_each_member(caplog: pytest.LogCaptureFixture) -> None:
+    """One GUILD MEMBER LOCALE line per member, raw=None (no member.locale in the API).
+
+    Discord exposes a user's language only inside interactions; the boot
+    enumeration is the proof probe the discord-smoke CI greps.
+    """
+    from tests.mocks import MockGuild, MockMember
+
+    guild = MockGuild(id=424242)
+    guild.add_member(MockMember(name="alice", guild=guild))
+    guild.add_member(MockMember(name="bob", guild=guild))
+    with caplog.at_level(logging.INFO, logger="kingdoms.bot"):
+        _log_guild_member_locales([guild])
+    lines = [r.message for r in caplog.records if "GUILD MEMBER LOCALE" in r.message]
+    assert len(lines) == 2
+    assert all("guild=424242" in line and "raw=None" in line for line in lines)
+
+
+async def test_on_interaction_logs_the_clicker_locale(config_dir: str, caplog: pytest.LogCaptureFixture) -> None:
+    """on_interaction logs INTERACTION USER LOCALE with raw + resolved locale.
+
+    This is the only per-user language signal Discord exposes
+    (interaction.locale) — the clicker's own client language.
+    """
+    from tests.mocks import MockGuild, MockInteraction, MockMember
+
+    bot = create_bot(BotConfig(config_dir=config_dir))
+    guild = MockGuild(id=424242, preferred_locale="en-US")
+    member = MockMember(name="alice", guild=guild)
+    interaction = MockInteraction(user=member, guild=guild, locale="fr")
+    with caplog.at_level(logging.INFO, logger="kingdoms.bot"):
+        await bot.on_interaction(interaction)
+    assert any(
+        "INTERACTION USER LOCALE" in r.message
+        and f"user={member.id}" in r.message
+        and f"guild={guild.id}" in r.message
+        and "raw=fr" in r.message
+        and "resolved=fr" in r.message
+        for r in caplog.records
+    )
+
+
+async def test_on_guild_join_seeds_the_detected_guild_locale(config_dir: str) -> None:
+    """The join-detected native locale is stored as the guild's default."""
+    from tests.mocks import MockGuild
+
+    bot = create_bot(BotConfig(config_dir=config_dir))
+    fake = _FakeLogsService()
+    bot.logs_service = fake
+    await bot.on_guild_join(MockGuild(id=424242, preferred_locale=discord.Locale.french))
+    assert ("424242", "fr") in fake.ensured_guild_locales
+
+
+async def test_on_interaction_seeds_the_detected_user_locale(config_dir: str) -> None:
+    """The clicker's client language (interaction.locale) is stored as the user default."""
+    from tests.mocks import MockGuild, MockInteraction, MockMember
+
+    bot = create_bot(BotConfig(config_dir=config_dir))
+    fake = _FakeLogsService()
+    bot.logs_service = fake
+    guild = MockGuild(id=424242, preferred_locale="en-US")
+    member = MockMember(name="alice", guild=guild)
+    await bot.on_interaction(MockInteraction(user=member, guild=guild, locale="fr"))
+    assert (str(member.id), "fr") in fake.ensured_user_locales

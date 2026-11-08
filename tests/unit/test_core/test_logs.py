@@ -432,3 +432,42 @@ async def test_guild_member_locale_majority(
     assert await service.observed_guild_locale(GUILD) == "fr", "the majority wins"
     await service.observe_guild_member_locale(GUILD, "4", "de")
     assert await service.observed_guild_locale(GUILD) == "fr", "unsupported never counts"
+
+
+@pytest.mark.asyncio
+async def test_ensure_guild_locale_seeds_the_detected_default(
+    service: LogService, database: FakeLogsDatabase, platform: FakeLogsPlatform
+) -> None:
+    """The detected native locale is stored as the guild's default; en when unknown."""
+    assert await service.get_locale(GUILD) == "en", "nothing stored yet: English"
+    await service.ensure_guild_locale(GUILD, "fr")
+    assert await service.get_locale(GUILD) == "fr", "the detected value is stored as the default"
+    assert database.settings[GUILD]["seeded_by"] == "detected"
+    await service.ensure_guild_locale(GUILD, "en")
+    assert await service.get_locale(GUILD) == "fr", "seeding never overwrites a stored value"
+    await database.set_guild_settings(GUILD, {"locale": "en", "updated_by": "admin"})
+    await service.ensure_guild_locale(GUILD, "fr")
+    assert await service.get_locale(GUILD) == "en", "an explicit picker choice wins over seeding"
+
+
+@pytest.mark.asyncio
+async def test_ensure_guild_locale_falls_back_to_english(
+    service: LogService, database: FakeLogsDatabase, platform: FakeLogsPlatform
+) -> None:
+    await service.ensure_guild_locale(GUILD, "de")
+    assert await service.get_locale(GUILD) == "en", "unsupported detected value seeds English"
+
+
+@pytest.mark.asyncio
+async def test_ensure_user_locale_seeds_the_detected_default(
+    service: LogService, database: FakeLogsDatabase, platform: FakeLogsPlatform
+) -> None:
+    """Same rule for users: detected client language stored as the default."""
+    assert await service.get_user_locale("777") == "en"
+    await service.ensure_user_locale("777", "fr")
+    assert await service.get_user_locale("777") == "fr"
+    assert database.users["777"]["seeded_by"] == "detected"
+    await service.ensure_user_locale("777", "de")
+    assert await service.get_user_locale("777") == "fr", "seeding never overwrites a stored value"
+    await service.ensure_user_locale("888", "ja")
+    assert await service.get_user_locale("888") == "en", "unsupported detected value seeds English"
