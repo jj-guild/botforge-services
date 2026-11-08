@@ -282,6 +282,8 @@ class KingdomsBot(discord.Client):
             guild.name,
             guild_locale(guild),
         )
+        if self.logs_service is not None:
+            await self.logs_service.ensure_guild_locale(str(guild.id), guild_locale(guild))
         await sync_known_guilds([str(guild.id)])
 
     async def on_ready(self) -> None:
@@ -295,6 +297,11 @@ class KingdomsBot(discord.Client):
         )
         _log_guild_native_locales(self.guilds)
         _log_guild_member_locales(self.guilds)
+        if self.logs_service is not None:
+            from kingdoms.discord.locales import guild_locale
+
+            for known_guild in self.guilds:
+                await self.logs_service.ensure_guild_locale(str(known_guild.id), guild_locale(known_guild))
         # the guild_access store is self-healing at boot: a database
         # reset must not leave the admin DM panel showing 0 servers
         # while the bot keeps serving its guilds (panel coherence).
@@ -777,6 +784,7 @@ class KingdomsBot(discord.Client):
         if user_id:
             try:
                 await self.logs_service.observe_user_locale(user_id, locale)
+                await self.logs_service.ensure_user_locale(user_id, locale)
             except Exception:
                 except_logger("user locale observation failed (user %s)", user_id, exc_info=True)
         if guild_id and user_id:

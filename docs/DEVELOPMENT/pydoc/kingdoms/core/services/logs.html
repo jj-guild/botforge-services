@@ -140,6 +140,21 @@ never&nbsp;deleted):&nbsp;the&nbsp;boot&nbsp;status&nbsp;declares<br>
 ``delete_when_superseded=False``&nbsp;on&nbsp;the&nbsp;static-pin&nbsp;registry&nbsp;—<br>
 the&nbsp;log&nbsp;trail&nbsp;stays&nbsp;readable.</span></dd></dl>
 
+<dl><dt>async <a name="LogService-ensure_guild_locale"><strong>ensure_guild_locale</strong></a>(self, guild_id: 'str', locale: 'str') -&gt; 'None'</dt><dd><span class="code">Store&nbsp;the&nbsp;detected&nbsp;native&nbsp;locale&nbsp;as&nbsp;the&nbsp;guild's&nbsp;default&nbsp;locale.<br>
+&nbsp;<br>
+The&nbsp;locale&nbsp;is&nbsp;always&nbsp;stored&nbsp;for&nbsp;guilds&nbsp;and&nbsp;users:&nbsp;the&nbsp;detected<br>
+native&nbsp;value&nbsp;(``guild.preferred_locale``)&nbsp;is&nbsp;the&nbsp;default,&nbsp;English<br>
+when&nbsp;unknown&nbsp;or&nbsp;unsupported.&nbsp;An&nbsp;explicit&nbsp;picker&nbsp;choice&nbsp;always<br>
+wins&nbsp;—&nbsp;seeding&nbsp;never&nbsp;overwrites&nbsp;a&nbsp;stored&nbsp;value.&nbsp;Best-effort,<br>
+never&nbsp;raises.</span></dd></dl>
+
+<dl><dt>async <a name="LogService-ensure_user_locale"><strong>ensure_user_locale</strong></a>(self, user_id: 'str', locale: 'str') -&gt; 'None'</dt><dd><span class="code">Store&nbsp;the&nbsp;detected&nbsp;client&nbsp;language&nbsp;as&nbsp;the&nbsp;user's&nbsp;default&nbsp;locale.<br>
+&nbsp;<br>
+The&nbsp;locale&nbsp;is&nbsp;always&nbsp;stored&nbsp;for&nbsp;users&nbsp;and&nbsp;guilds:&nbsp;the&nbsp;detected<br>
+native&nbsp;value&nbsp;(``interaction.locale``)&nbsp;is&nbsp;the&nbsp;default,&nbsp;English&nbsp;when<br>
+unknown&nbsp;or&nbsp;unsupported.&nbsp;An&nbsp;explicit&nbsp;picker&nbsp;choice&nbsp;always&nbsp;wins&nbsp;—<br>
+seeding&nbsp;never&nbsp;overwrites&nbsp;a&nbsp;stored&nbsp;value.&nbsp;Best-effort,&nbsp;never&nbsp;raises.</span></dd></dl>
+
 <dl><dt>async <a name="LogService-get_access_policy"><strong>get_access_policy</strong></a>(self, guild_id: 'str') -&gt; 'dict[str, Any]'</dt><dd><span class="code">Read&nbsp;the&nbsp;guild's&nbsp;logs&nbsp;access&nbsp;policy&nbsp;(default:&nbsp;admin-only).</span></dd></dl>
 
 <dl><dt>async <a name="LogService-get_locale"><strong>get_locale</strong></a>(self, guild_id: 'str') -&gt; 'str'</dt><dd><span class="code">Return&nbsp;the&nbsp;guild's&nbsp;language:&nbsp;the&nbsp;stored&nbsp;choice,&nbsp;then&nbsp;the&nbsp;fallback.</span></dd></dl>

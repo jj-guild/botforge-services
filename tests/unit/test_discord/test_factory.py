@@ -78,10 +78,14 @@ def test_create_bot_parses_bot_admins(config_dir: str) -> None:
 
 
 class _FakeLogsService:
-    """Minimal LogService stand-in recording resolve_channel calls."""
+    """Minimal LogService stand-in recording resolve_channel + locale calls."""
 
     def __init__(self) -> None:
         self.resolved: list[str] = []
+        self.ensured_guild_locales: list[tuple[str, str]] = []
+        self.ensured_user_locales: list[tuple[str, str]] = []
+        self.observed_user_locales: list[tuple[str, str]] = []
+        self.observed_member_locales: list[tuple[str, str, str]] = []
 
     async def get_locale(self, guild_id: str) -> str:
         return "en"
@@ -89,6 +93,18 @@ class _FakeLogsService:
     async def resolve_channel(self, guild_id: str) -> str:
         self.resolved.append(guild_id)
         return "logs-channel"
+
+    async def ensure_guild_locale(self, guild_id: str, locale: str) -> None:
+        self.ensured_guild_locales.append((guild_id, locale))
+
+    async def ensure_user_locale(self, user_id: str, locale: str) -> None:
+        self.ensured_user_locales.append((user_id, locale))
+
+    async def observe_user_locale(self, user_id: str, locale: str) -> None:
+        self.observed_user_locales.append((user_id, locale))
+
+    async def observe_guild_member_locale(self, guild_id: str, user_id: str, locale: str) -> None:
+        self.observed_member_locales.append((guild_id, user_id, locale))
 
 
 class _FakeAdminChannelService:
@@ -338,3 +354,27 @@ async def test_on_interaction_logs_the_clicker_locale(config_dir: str, caplog: p
         and "resolved=fr" in r.message
         for r in caplog.records
     )
+
+
+async def test_on_guild_join_seeds_the_detected_guild_locale(config_dir: str) -> None:
+    """The join-detected native locale is stored as the guild's default."""
+    from tests.mocks import MockGuild
+
+    bot = create_bot(BotConfig(config_dir=config_dir))
+    fake = _FakeLogsService()
+    bot.logs_service = fake
+    await bot.on_guild_join(MockGuild(id=424242, preferred_locale=discord.Locale.french))
+    assert ("424242", "fr") in fake.ensured_guild_locales
+
+
+async def test_on_interaction_seeds_the_detected_user_locale(config_dir: str) -> None:
+    """The clicker's client language (interaction.locale) is stored as the user default."""
+    from tests.mocks import MockGuild, MockInteraction, MockMember
+
+    bot = create_bot(BotConfig(config_dir=config_dir))
+    fake = _FakeLogsService()
+    bot.logs_service = fake
+    guild = MockGuild(id=424242, preferred_locale="en-US")
+    member = MockMember(name="alice", guild=guild)
+    await bot.on_interaction(MockInteraction(user=member, guild=guild, locale="fr"))
+    assert (str(member.id), "fr") in fake.ensured_user_locales
