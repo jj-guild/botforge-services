@@ -470,7 +470,9 @@ class LiquipediaMapsProvider:
         notices = self._imageinfo_batch(files, "extmetadata")
         out: dict[str, MapData] = {}
         for key, info in infos.items():
-            if _UNLICENSED_NOTICE_RE.search(notices.get(info.image_file, "")):
+            if _UNLICENSED_NOTICE_RE.search(
+                    notices.get(info.image_file.replace(" ", "_").casefold(), "")
+                ):
                 logger.info(
                     "liquipedia batch: image licence refused for %s \u2014 skipped",
                     info.name,
@@ -478,15 +480,17 @@ class LiquipediaMapsProvider:
                 continue
             out[key] = MapData(
                 info=info,
-                image_url=urls.get(info.image_file.replace(" ", "_"), ""),
+                image_url=urls.get(info.image_file.replace(" ", "_").casefold(), ""),
                 icon_url=(
-                    urls.get(info.gallery_icon.replace(" ", "_"), "") if info.gallery_icon else ""
+                    urls.get(info.gallery_icon.replace(" ", "_").casefold(), "")
+                    if info.gallery_icon
+                    else ""
                 ),
                 gallery_images=tuple(
                     GalleryImage(
                         file=g.file,
                         caption=g.caption,
-                        url=urls.get(g.file.replace(" ", "_"), ""),
+                        url=urls.get(g.file.replace(" ", "_").casefold(), ""),
                     )
                     for g in info.gallery
                 ),
@@ -522,11 +526,13 @@ class LiquipediaMapsProvider:
                 title = str(page.get("title", ""))
                 name = title.split("File:", 1)[-1] if title.startswith("File:") else title
                 # the API titles carry SPACES, the infobox references
-                # UNDERSCORES (and vice versa) — one canonical form for
-                # the key AND the lookup, or every cross-form file misses
-                # (the 2026-11-07 bug: nearly every Gallery icon "didn't
-                # resolve" while its URL sat in the response)
-                name = name.replace(" ", "_")
+                # UNDERSCORES (and vice versa), and MediaWiki CAPITALIZES
+                # the first letter of every file title — one canonical
+                # form for the key AND the lookup (underscored,
+                # casefolded), or every cross-form file misses (the
+                # 2026-11-07 bugs: nearly every Gallery icon "didn't
+                # resolve", then Black Forest's lowercase b missed)
+                name = name.replace(" ", "_").casefold()
                 if iiprop == "url":
                     out[name] = str(imageinfo[0].get("url", ""))
                 else:

@@ -59,24 +59,26 @@ def _mock_transport(
 
 
 def test_imageinfo_titles_with_spaces_still_resolve() -> None:
-    """The API returns SPACED titles, the infobox references UNDERSCORES.
+    """The API returns SPACED, CAPITALIZED titles; the infobox references
+    UNDERSCORED, lowercase-first ones.
 
-    The 2026-11-07 bug: the imageinfo lookup keyed on the spaced title
+    The 2026-11-07 bugs: the imageinfo lookup keyed on the spaced title
     while the infobox carries the underscored form — every Gallery icon
-    and every underscored image "failed to resolve" while its URL sat
-    in the response (the lpcommons foreign repo even answers missing:true
-    WITH a valid imageinfo entry).
+    "failed to resolve" while its URL sat in the response (the lpcommons
+    foreign repo even answers missing:true WITH a valid imageinfo
+    entry); then MediaWiki's first-letter capitalization made
+    ``black-forest_AoE2DE.png`` miss its ``Black-forest_AoE2DE.png``.
     """
     wikitext = """
 {{Infobox map
-|name=Arena
-|image=Arena_Map.png
+|name=Black Forest
+|image=Black_Forest_Map.png
 }}
 
 ==Gallery==
 <gallery>
-Arena_AoE2DE.png|in-game icon
-Arena_4v4.PNG|4v4 version
+black-forest_AoE2DE.png|in-game icon
+4v4BlackForestNC23.PNG|4v4 version
 </gallery>
 """
 
@@ -89,9 +91,13 @@ Arena_4v4.PNG|4v4 version
             pages = []
             for title in str(params.get("titles", "")).split("|"):
                 # the lpcommons shape: missing=true WITH a valid imageinfo
+                # MediaWiki canonicalizes: spaces + first letter upper
+                spaced = title.replace("_", " ")
+                prefix, _, rest = spaced.partition("File:")
+                canonical = f"{prefix}File:{rest[:1].upper()}{rest[1:]}" if rest else spaced
                 pages.append(
                     {
-                        "title": title.replace("_", " "),
+                        "title": canonical,
                         "missing": True,
                         "known": True,
                         "imagerepository": "lpcommons",
@@ -112,16 +118,17 @@ Arena_4v4.PNG|4v4 version
         return httpx.Response(200, json=body)
 
     provider = _make_provider(httpx.MockTransport(handler))
-    data = provider.map_data("Arena")
-    assert data.image_url == "https://liquipedia.test/commons/Arena_Map.png", (
+    data = provider.map_data("Black Forest")
+    assert data.image_url == "https://liquipedia.test/commons/Black_Forest_Map.png", (
         "the underscored infobox reference must resolve against the spaced title"
     )
-    assert data.icon_url == "https://liquipedia.test/commons/Arena_AoE2DE.png", (
-        "the Gallery icon must resolve — its URL sat in the response all along"
+    assert data.icon_url == "https://liquipedia.test/commons/black-forest_AoE2DE.png", (
+        "the lowercase-first gallery icon must resolve against MediaWiki's "
+        "capitalized title — its URL sat in the response all along"
     )
     assert [g.url for g in data.gallery_images] == [
-        "https://liquipedia.test/commons/Arena_AoE2DE.png",
-        "https://liquipedia.test/commons/Arena_4v4.PNG",
+        "https://liquipedia.test/commons/black-forest_AoE2DE.png",
+        "https://liquipedia.test/commons/4v4BlackForestNC23.PNG",
     ], "EVERY gallery entry resolves — the whole gallery rides"
 
 
