@@ -360,7 +360,11 @@ guilds&nbsp;but&nbsp;shared&nbsp;with&nbsp;everyone);&nbsp;unscoped:&nbsp;every&
 Scoped:&nbsp;the&nbsp;guild's&nbsp;own&nbsp;maps&nbsp;plus&nbsp;the&nbsp;global&nbsp;ones;&nbsp;unscoped:<br>
 every&nbsp;map&nbsp;of&nbsp;the&nbsp;game&nbsp;(the&nbsp;admin&nbsp;views).</span></dd></dl>
 
-<dl><dt>async <a name="GameDataService-resolve_pool_map_ids"><strong>resolve_pool_map_ids</strong></a>(self, pool: 'MapPoolModel') -&gt; 'tuple[str, ...]'</dt><dd><span class="code">Union&nbsp;of&nbsp;the&nbsp;pool's&nbsp;direct&nbsp;maps&nbsp;and&nbsp;its&nbsp;packs'&nbsp;maps&nbsp;(archived&nbsp;included).</span></dd></dl>
+<dl><dt>async <a name="GameDataService-resolve_pool_map_ids"><strong>resolve_pool_map_ids</strong></a>(self, pool: 'MapPoolModel') -&gt; 'tuple[str, ...]'</dt><dd><span class="code">Union&nbsp;of&nbsp;the&nbsp;pool's&nbsp;direct&nbsp;maps&nbsp;and&nbsp;its&nbsp;packs'&nbsp;maps&nbsp;(archived&nbsp;included).<br>
+&nbsp;<br>
+The&nbsp;wire&nbsp;may&nbsp;hand&nbsp;back&nbsp;a&nbsp;plain&nbsp;dict&nbsp;(the&nbsp;catalog&nbsp;gateway's&nbsp;JSON<br>
+seam)&nbsp;—&nbsp;it&nbsp;coerces&nbsp;to&nbsp;the&nbsp;model,&nbsp;never&nbsp;a&nbsp;crash&nbsp;(the&nbsp;2026-11-08<br>
+merlin&nbsp;report:&nbsp;``'dict'&nbsp;<a href="builtins.html#object">object</a>&nbsp;has&nbsp;no&nbsp;attribute&nbsp;'map_ids'``).</span></dd></dl>
 
 <dl><dt>async <a name="GameDataService-seed_from_data"><strong>seed_from_data</strong></a>(self, game_key: 'str', data: 'dict[str, Any]') -&gt; 'dict[str, int]'</dt><dd><span class="code">Seed&nbsp;a&nbsp;game's&nbsp;catalog&nbsp;from&nbsp;a&nbsp;parsed&nbsp;YAML&nbsp;document&nbsp;(idempotent).<br>
 &nbsp;<br>

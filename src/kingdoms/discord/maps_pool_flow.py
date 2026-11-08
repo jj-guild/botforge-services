@@ -948,8 +948,12 @@ class MapDeleteConfirmModal(discord.ui.Modal):
             logger.exception("MAPS: confirmed delete failed (%s)", self.map_id)
             await interaction.followup.send(f"Échec : {exc}", ephemeral=True)
             return
-        await _delete_map_post(interaction, entry)
+        # the confirmation lands BEFORE the post's deletion — the modal
+        # was opened from that very thread: deleting it first kills the
+        # interaction's webhook channel and the followup 400s (Unknown
+        # Channel, the 2026-11-08 merlin report)
         await interaction.followup.send(outcome + " Le post est supprimé.", ephemeral=True)
+        await _delete_map_post(interaction, entry)
 
 
 async def _delete_map_post(interaction: discord.Interaction, entry: Any) -> None:

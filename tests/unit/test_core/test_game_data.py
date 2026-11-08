@@ -178,6 +178,10 @@ async def test_resolve_pool_map_ids_unions_packs_and_maps() -> None:
     pack = await svc.create_map_pack(GAME, "P1", map_ids=(a.id, b.id))
     pool = await svc.create_map_pool(GAME, "Mixed", map_ids=(a.id, c.id), map_pack_ids=(pack.id,))
     assert await svc.resolve_pool_map_ids(pool) == (a.id, c.id, b.id)
+    # the catalog gateway's JSON seam hands back a plain dict — it
+    # coerces to the model, never a crash (the 2026-11-08 merlin report:
+    # 'dict' object has no attribute 'map_ids')
+    assert await svc.resolve_pool_map_ids(pool.model_dump(by_alias=True)) == (a.id, c.id, b.id)
 
 
 @pytest.mark.asyncio

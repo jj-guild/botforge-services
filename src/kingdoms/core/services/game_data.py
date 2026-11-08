@@ -585,7 +585,14 @@ class GameDataService:
         )
 
     async def resolve_pool_map_ids(self, pool: MapPoolModel) -> tuple[str, ...]:
-        """Union of the pool's direct maps and its packs' maps (archived included)."""
+        """Union of the pool's direct maps and its packs' maps (archived included).
+
+        The wire may hand back a plain dict (the catalog gateway's JSON
+        seam) — it coerces to the model, never a crash (the 2026-11-08
+        merlin report: ``'dict' object has no attribute 'map_ids'``).
+        """
+        if isinstance(pool, dict):
+            pool = MapPoolModel.from_mongo(pool)
         ids: list[str] = list(pool.map_ids)
         for pack_id in pool.map_pack_ids:
             doc = await self._db.find_entry(MAP_PACKS_COLLECTION, pack_id)
