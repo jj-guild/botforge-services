@@ -165,7 +165,7 @@ in-memory and network-free — an autouse fixture fails any test that
 attempts a real socket connection. This is the interface consumed by the
 botforge-infra post-deploy battery (botforge-infra#78), which checks out
 this repository at the pinned deploy commit on a GitHub-hosted runner —
-never on an environment VPS.
+never on an environment hosting.
 
 ## Deploying
 

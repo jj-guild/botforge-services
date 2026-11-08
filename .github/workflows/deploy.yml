@@ -6,7 +6,7 @@
 # main in the same commit, serialized with every other state-branch writer
 # by the shared deploy-state-<env> concurrency group. The state push
 # triggers the Deploy environment workflow on botforge-infra, which reads
-# the image from Git. The bot runs on the <env> VPS with the PR code until
+# the image from Git. The bot runs on the <env> hosting with the PR code until
 # the next state commit. The environment defaults to test; prod-like
 # environments (PROTECTED_ENVS in botforge-infra deploy.yml) never deploy
 # a PR — they pin released vX.Y.Z images only.
