@@ -22,7 +22,7 @@ test:
 # One command from a clean checkout at any commit, in-memory and
 # network-free — the botforge-infra post-deploy battery (botforge-infra#78)
 # runs it on a GitHub-hosted runner at the pinned deploy commit. Test
-# tooling never runs on an environment VPS.
+# tooling never runs on an environment hosting.
 battery:
 	@uv sync --frozen
 	@uv run pytest tests/integration

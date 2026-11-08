@@ -9,7 +9,7 @@
 # CI/CD workflows: the deploy path is security-sensitive
 /.github/workflows/     @jj-guild/maintainers
 
-# Docker and entrypoint: what runs on the VPS
+# Docker and entrypoint: what runs on the hosting
 /Dockerfile             @jj-guild/maintainers
 /docker/                @jj-guild/maintainers
 
