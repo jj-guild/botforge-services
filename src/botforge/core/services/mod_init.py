@@ -1,10 +1,18 @@
 """Mod scaffold generator (botforge-services#178, botforge-services#211).
 
 ``botforge mod init <name>`` generates the full self-contained mod
-directory (declaration, package with lifecycle hooks, locale catalogs,
-test, README) plus the botforge repo docs pointer set — everything a
-designer or agent session needs so a new mod starts structured, not
-improvised (docs/GUIDES/mod-init.md in the botforge repo).
+directory (§7 target layout — conf, grpc, cogs, tests, docs pointer)
+plus the botforge repo docs pointer set — everything a designer or agent
+session needs so a new mod starts structured, not improvised
+(docs/GUIDES/mod-init.md in the botforge repo).
+
+The three §7 concerns are separated from day one:
+
+- ``conf/`` — the declaration (mod.yaml) and the locale catalogs
+- ``grpc/<name>/`` — the mod's service package: its contract
+  (contract.py) and its implementation (service.py); no Discord import
+- ``cogs/<name>/`` — the Discord cog: commands and views, calling the
+  service through the contract (``mod_service``); never the data
 """
 
 from __future__ import annotations
@@ -48,12 +56,103 @@ roles:
   - key: {name}_member
     display_name: {member_role}
 workflows: []
-commands: []
+commands:
+  - {command}
 dependencies: []
 """
 
-ENTRYPOINT_TEMPLATE = '''\
-"""{name} mod — entrypoint.
+CONTRACT_TEMPLATE = '''\
+"""The {name} mod's service contract (§7).
+
+The ONLY surface the cog may call: the service implements it, the cog
+consumes it. Everything else in the service package is private — the
+cog never touches the mod's collections or internals directly.
+"""
+
+from __future__ import annotations
+
+from typing import Any, Protocol
+
+
+class {class_name}Service(Protocol):
+    """What the {name} mod's service exposes to its cog."""
+
+    async def status(self, guild_id: str) -> dict[str, Any]:
+        """The mod's status for the guild (the cog renders it)."""
+        ...
+'''
+
+SERVICE_TEMPLATE = '''\
+"""The {name} mod's service (§7 grpc): its data, its collections.
+
+Implements the contract (contract.py). Never imports Discord — the cog
+is the mod's only Discord layer.
+"""
+
+from __future__ import annotations
+
+from typing import Any
+
+from .contract import {class_name}Service as {class_name}Contract
+
+
+class {class_name}ServiceImpl({class_name}Contract):
+    """The {name} mod's service implementation (in-process today)."""
+
+    async def status(self, guild_id: str) -> dict[str, Any]:
+        """The mod's status for the guild (the cog renders it)."""
+        return {{"mod": "{name}", "guild": guild_id, "state": "scaffold"}}
+'''
+
+SERVICE_INIT_TEMPLATE = '''\
+"""The {name} mod's gRPC service package (§7 grpc).
+
+Its data, its collections, its contract. The cog calls this package
+through the contract — never the other way around.
+"""
+
+from __future__ import annotations
+
+from .contract import {class_name}Service
+from .service import {class_name}ServiceImpl
+
+__all__ = ["{class_name}Service", "{class_name}ServiceImpl"]
+'''
+
+COG_TEMPLATE = '''\
+"""The {name} mod's Discord cog (§7): commands and views.
+
+The cog is the mod's ONLY Discord layer. It calls the mod's service
+through the contract (``mod_service``) and builds its UI through the
+botforge UI SDK — never the service's internals.
+"""
+
+from __future__ import annotations
+
+import discord
+
+from botforge.core.services.mod_entrypoint import mod_service
+from botforge.discord.ui import BLURPLE, Container, Text, UILayout
+
+
+async def status_view(guild_id: str) -> discord.ui.LayoutView:
+    """Render the service's status through the UI SDK."""
+    service = mod_service("{name}")
+    status = await service.{class_name}ServiceImpl().status(guild_id)
+    return (
+        UILayout()
+        .add(
+            Container(accent=BLURPLE).add(
+                Text("# {display_name}"),
+                Text(f"state: {{status.get('state', 'unknown')}}"),
+            )
+        )
+        .build()
+    )
+'''
+
+COG_INIT_TEMPLATE = '''\
+"""The {name} mod's cog package (§7 cogs) — the mod's Discord layer.
 
 Lifecycle hooks (all optional, all idempotent — see
 botforge.core.services.mod_entrypoint): the core calls ``register`` at
@@ -68,26 +167,18 @@ from typing import Any
 
 import discord
 
-from botforge.discord.ui import BLURPLE, Container, Text, UILayout
+from .cog import status_view
 
 
 def register(bot: Any, config: Any) -> None:
-    """Wire the mod onto the bot: commands, views, admin sections."""
+    """Wire the cog onto the bot: commands, views, admin sections."""
 
     @discord.app_commands.command(
         name="{command}",
-        description="{display_name} — generated placeholder, replace me"
+        description="{display_name} — generated placeholder, replace me",
     )
     async def _cmd(interaction: discord.Interaction) -> None:
-        view = UILayout().add(
-            Container(accent=BLURPLE).add(
-                Text(f"# {display_name}"),
-                Text(
-                    "This placeholder view comes from `botforge mod init` — "
-                    "replace it with the mod's real surface."
-                ),
-            )
-        ).build()
+        view = await status_view(str(interaction.guild_id or ""))
         await interaction.response.send_message(view=view, ephemeral=True)
 
     bot.tree.add_command(_cmd)
@@ -114,10 +205,20 @@ TEST_TEMPLATE = '''\
 from __future__ import annotations
 
 
-def test_{name}_scaffold_imports() -> None:
-    """The generated entrypoint module imports against the core seams."""
-    from botforge.mods import {name}  # noqa: F401
+def test_{name}_cog_package_loads() -> None:
+    """The generated cog package imports against the core seams."""
+    from botforge.mods.{name} import cogs  # noqa: F401
+
+
+def test_{name}_service_implements_the_contract() -> None:
+    """The service package exposes the contract's implementation."""
+    from botforge.mods.{name}.grpc import {class_name}ServiceImpl
+    from botforge.mods.{name}.grpc.contract import {class_name}Service
+
+    impl = {class_name}ServiceImpl()
+    assert isinstance(impl, {class_name}Service)
 '''
+
 
 README_TEMPLATE = """\
 # {name} (mod)
@@ -125,9 +226,11 @@ README_TEMPLATE = """\
 Scaffolded by `botforge mod init` — see the guide:
 <{SPRINT_DOC_URL}>
 
-- Declaration: `mod.yaml` (schema validated at startup)
-- Package: `src/{name}/` (lifecycle hooks against the core seams)
-- Locales: `locales/en.yaml` + `locales/fr.yaml`
+- Declaration: `conf/mod.yaml` (schema validated at startup)
+- Service: `grpc/{name}/` (its data, its collections, its contract)
+- Cog: `cogs/{name}/` (the Discord layer — calls the service through
+  the contract)
+- Locales: `conf/locales/en.yaml` + `conf/locales/fr.yaml`
 - Tests: `tests/`
 
 Canonical rules and environment documentation live in the `botforge`
@@ -142,6 +245,9 @@ class ModInitResult:
     mod_dir: Path
     declaration: Path
     package: Path
+    service: Path
+    contract: Path
+    cogs: Path
     locales: tuple[Path, ...]
     test: Path
     readme: Path
@@ -172,7 +278,7 @@ def init_mod(
     private: bool = False,
     owner_ids: tuple[str, ...] = (),
 ) -> ModInitResult:
-    """Generate the self-contained mod directory under modules/mods/.
+    """Generate the self-contained §7 mod directory under modules/mods/.
 
     Raises FileExistsError as soon as any target file exists (the caller
     decides whether to abort); nothing is silently overwritten.
@@ -191,6 +297,7 @@ def init_mod(
     role = member_role or f"{display} Member"
     context = {
         "name": name,
+        "class_name": "".join(part.capitalize() for part in name.replace("-", "_").split("_")),
         "seasonal": "true" if seasonal else "false",
         "display_name": display,
         "member_role": role,
@@ -200,17 +307,24 @@ def init_mod(
     }
     result = ModInitResult(
         mod_dir=mod_dir,
-        declaration=mod_dir / "mod.yaml",
-        package=mod_dir / "src" / name / "__init__.py",
+        declaration=mod_dir / "conf" / "mod.yaml",
+        package=mod_dir / "cogs" / name / "__init__.py",
+        service=mod_dir / "grpc" / name / "service.py",
+        contract=mod_dir / "grpc" / name / "contract.py",
+        cogs=mod_dir / "cogs" / name / "cog.py",
         locales=(
-            mod_dir / "locales" / "en.yaml",
-            mod_dir / "locales" / "fr.yaml",
+            mod_dir / "conf" / "locales" / "en.yaml",
+            mod_dir / "conf" / "locales" / "fr.yaml",
         ),
         test=mod_dir / "tests" / f"test_{name}.py",
         readme=mod_dir / "README.md",
     )
     _write(result.declaration, DECLARATION_TEMPLATE.format(**context))
-    _write(result.package, ENTRYPOINT_TEMPLATE.format(**context))
+    _write(result.contract, CONTRACT_TEMPLATE.format(**context))
+    _write(result.service, SERVICE_TEMPLATE.format(**context))
+    _write(result.service.parent / "__init__.py", SERVICE_INIT_TEMPLATE.format(**context))
+    _write(result.cogs, COG_TEMPLATE.format(**context))
+    _write(result.package, COG_INIT_TEMPLATE.format(**context))
     for locale_path, locale in zip(result.locales, ("en", "fr"), strict=True):
         _write(locale_path, LOCALE_TEMPLATE.format(locale=locale, **context))
     _write(result.test, TEST_TEMPLATE.format(**context))

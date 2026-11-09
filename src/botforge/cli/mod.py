@@ -54,7 +54,9 @@ def cmd_init(
     print(f"Mod '{name}' scaffolded under {result.mod_dir}:")
     for label, path in (
         ("declaration", result.declaration),
-        ("package", result.package),
+        ("service", result.service),
+        ("contract", result.contract),
+        ("cogs", result.package),
         ("locales", ", ".join(str(p) for p in result.locales)),
         ("test", result.test),
         ("readme", result.readme),
@@ -62,11 +64,12 @@ def cmd_init(
         print(f"  {label:<12} {path}")
     print()
     print("Next steps (see the guide: " + GUIDE_URL + "):")
-    print("  1. Fill mod.yaml (channels/roles/workflows) — schema validated at startup")
-    print(f"  2. Implement the mod logic in src/{name}/ against the core seams")
-    print("  3. Add locale entries in locales/en.yaml + fr.yaml")
-    print(f"  4. Document the mod in the botforge repo: docs/MODS/{name}/ (TEMPLATE-based)")
-    print("  5. Run: make lint typecheck test")
+    print("  1. Fill conf/mod.yaml (channels/roles/workflows) — schema validated at startup")
+    print(f"  2. Implement the mod's service in grpc/{name}/ (its data, its collections)")
+    print(f"  3. Implement the mod's cog in cogs/{name}/ — it calls the service through the contract")
+    print("  4. Add locale entries in conf/locales/en.yaml + fr.yaml")
+    print(f"  5. Document the mod in the botforge repo: docs/MODS/{name}/ (TEMPLATE-based)")
+    print("  6. Run: make lint typecheck test")
     return 0
 
 

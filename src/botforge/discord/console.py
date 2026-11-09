@@ -183,22 +183,12 @@ async def _nuke_everything_for_guild(guild: discord.Guild) -> tuple[int, int]:
     """Delete every channel and role of the guild; return (channels, roles).
 
     Guild-based seam: the Discord callbacks and the headless CLI
-    (botforge.cli.console_ops) share this one implementation. The
-    guild is quiesced first (console_quiesce): the running bot's
-    self-healing surfaces (live dashboard, boot provisioning) skip the
-    guild while the marker is up, so nothing is recreated mid-nuke.
+    (botforge.cli.console_ops) share this one implementation. Nothing
+    is recreated afterwards: the platform's surfaces are declarations,
+    never creators — a deleted salon degrades until an admin provisions
+    it again (the scope's Synchroniser or the console's install).
     """
-    from botforge.discord.console_quiesce import mark_guild_nuked, quiesce_guild, release_guild
-
-    await quiesce_guild(_client_of(guild), guild.id)
-    try:
-        result = await _nuke_everything_for_guild_inner(guild)
-    finally:
-        await release_guild(_client_of(guild), guild.id)
-    # Durable flag: the guild stays empty \u2014 no self-healing surface may
-    # recreate anything until an explicit re-provision (install).
-    await mark_guild_nuked(guild.id)
-    return result
+    return await _nuke_everything_for_guild_inner(guild)
 
 
 def _client_of(guild: discord.Guild) -> discord.Client:
@@ -207,7 +197,7 @@ def _client_of(guild: discord.Guild) -> discord.Client:
 
 
 async def _nuke_everything_for_guild_inner(guild: discord.Guild) -> tuple[int, int]:
-    """Delete every channel and role of the guild (quiesce is held by the caller)."""
+    """Delete every channel and role of the guild."""
     channels_deleted = 0
     roles_deleted = 0
     for channel in list(getattr(guild, "channels", ()) or ()):
@@ -361,9 +351,6 @@ async def _apply_selection(interaction: discord.Interaction, mods: list[str], ga
     mod_roles_service = wire["mod_roles_service"]
     provisioned = 0
     if channel_service is not None and mod_roles_service is not None:
-        from botforge.discord.console_quiesce import clear_guild_nuked
-
-        await clear_guild_nuked(guild_id)
         for mod_name in mods:
             try:
                 await channel_service.setup_mod_channels(guild_id, mod_name)

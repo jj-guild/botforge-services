@@ -205,6 +205,5 @@ ALLOWLIST_R5: tuple[str, ...] = (
     # role mappings and mod state directly (a destructive maintenance
     # path, same owner rule as the purge tool) — not a feature path.
     "botforge/discord/console.py touches a collection raw",
-    "botforge/discord/console_quiesce.py touches a collection raw",
     "botforge/discord/mod_surfaces.py touches a collection raw",
 )
