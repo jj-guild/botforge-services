@@ -1521,7 +1521,13 @@ async def _finish_bulk_import(
             banner: discord.ui.TextDisplay[Any] = discord.ui.TextDisplay(
                 f"\u2705 **{entry.name}** import\u00e9e \u2014 son post :"
             )
-            view.insert_item_at(0, banner)
+            # discord.py 2.7 LayoutView has no public insert-at-index:
+            # rebuild the children with the banner first (children is a
+            # copy, and clear_items resets the row weights).
+            items = [banner, *view.children]
+            view.clear_items()
+            for item in items:
+                view.add_item(item)
             await interaction.followup.send(view=view, ephemeral=True)
         except Exception:
             logger.warning(
