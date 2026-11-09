@@ -126,6 +126,78 @@ def test_the_core_pushes_the_enrollments() -> None:  # noqa: C901
     )
 
 
+def test_the_core_warns_when_the_game_uri_is_unset() -> None:
+    """An unset GAME_AOE2_URI must be VISIBLE, not a silent skip.
+
+    The 2026-11-08 test-env incident (botforge-services#355): the core's
+    env carried no GAME_AOE2_URI, the loop skipped the push without a
+    single log line, and the dashboard rendered "Aucun joueur lié"
+    despite a linked profile. The loop must warn when it cannot push.
+    """
+    import asyncio
+    import logging
+
+    import botforge.core_process.server as core_server
+
+    class _RoundDoneError(Exception):
+        """Stop the loop after its first interval sleep."""
+
+    async def _fake_sleep(seconds: float) -> None:
+        del seconds
+        raise _RoundDoneError
+
+    class _FakeCursor:
+        def __init__(self, docs: list[dict[str, Any]]) -> None:
+            self._docs = docs
+
+        async def __aiter__(self) -> Any:
+            for doc in self._docs:
+                yield doc
+
+    class _FakeDB:
+        def __getitem__(self, name: str) -> Any:
+            assert name == "profile_bindings"
+
+            def find(query: dict[str, Any]) -> _FakeCursor:
+                assert query == {"game_key": "aoe2"}
+                return _FakeCursor([{"profile_id": "111", "user_id": "u1"}])
+
+            return type("Col", (), {"find": staticmethod(find)})()
+
+    async def _one_round() -> None:
+        import botforge.core.models.db as db_module
+
+        original_db = db_module.get_async_database
+        original_sleep = asyncio.sleep
+        db_module.get_async_database = lambda: _FakeDB()  # type: ignore[assignment]
+        asyncio.sleep = _fake_sleep  # type: ignore[assignment]
+        try:
+            await core_server._sync_game_enrollments()
+        except _RoundDoneError:
+            pass
+        finally:
+            db_module.get_async_database = original_db  # type: ignore[assignment]
+            asyncio.sleep = original_sleep  # type: ignore[assignment]
+
+    import os
+
+    records: list[logging.LogRecord] = []
+    handler = logging.Handler()
+    handler.emit = records.append  # type: ignore[method-assign]
+    core_server.logger.addHandler(handler)
+    core_server.logger.setLevel(logging.WARNING)
+    os.environ.pop("GAME_AOE2_URI", None)
+    try:
+        asyncio.run(_one_round())
+    finally:
+        os.environ.pop("GAME_AOE2_URI", None)
+        core_server.logger.removeHandler(handler)
+    assert any("GAME_AOE2_URI" in record.getMessage() for record in records), (
+        "an unset GAME_AOE2_URI must log a warning — the enrollments "
+        "silently never reach the game service otherwise"
+    )
+
+
 def _later_definition_of(tree: ast.Module, name: str, guard_line: int) -> bool:
     """Whether NAME is defined in the module AFTER the __main__ guard."""
     for later in tree.body:

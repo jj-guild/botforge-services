@@ -67,6 +67,7 @@ jobs:
           command="$(echo "$body" | awk '{print $1}')"
           case "$command" in
             /logs|/restart|/start|/stop|/status|/rollback|/dump-db|/reset-env|/seed|/clean-env|/console|/clear-db) ;;
+>>>>>>> origin/main
             *) echo "::error::unsupported command: $command"; exit 1 ;;
           esac
           env_name="$(echo "$body" | awk '{print $2}')"
