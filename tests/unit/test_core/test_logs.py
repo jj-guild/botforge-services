@@ -1,4 +1,4 @@
-"""Unit tests for the LogService (kingdoms-services#109).
+"""Unit tests for the LogService (botforge-services#109).
 
 Covers the cache-aside resolution flow (Redis → MongoDB — the
 tree routes the channel, the service never adopts or creates one),
@@ -12,15 +12,15 @@ from typing import Any
 
 import pytest
 
-from kingdoms.core.models.channel import ChannelModel
-from kingdoms.core.services.logs import (
+from botforge.core.models.channel import ChannelModel
+from botforge.core.services.logs import (
     BOT_LOGS_CATEGORY,
     CRASH_LOOP_THRESHOLD,
     LifecycleEvent,
     LogService,
     default_policy,
 )
-from kingdoms.core.services.state import StateService
+from botforge.core.services.state import StateService
 from tests.mocks.state_mock import FakeClock, InMemoryStateStore
 
 GUILD = "123456"
@@ -202,10 +202,10 @@ async def test_log_event_delivers_footer_as_subtext(service: LogService, platfor
     platform.live_channels.add("777")
     await service.set_channel(GUILD, "777", by="test")
     await service.resolve_channel(GUILD)
-    event = LifecycleEvent(kind="start", message="Bot is live", footer="kingdoms-deploy env=test")
+    event = LifecycleEvent(kind="start", message="Bot is live", footer="botforge-deploy env=test")
     await service.log_event(GUILD, event)
     _channel_id, content = platform.sent[-1]
-    assert content == "Bot is live\n-# kingdoms-deploy env=test"
+    assert content == "Bot is live\n-# botforge-deploy env=test"
 
 
 @pytest.mark.asyncio
@@ -432,3 +432,42 @@ async def test_guild_member_locale_majority(
     assert await service.observed_guild_locale(GUILD) == "fr", "the majority wins"
     await service.observe_guild_member_locale(GUILD, "4", "de")
     assert await service.observed_guild_locale(GUILD) == "fr", "unsupported never counts"
+
+
+@pytest.mark.asyncio
+async def test_ensure_guild_locale_seeds_the_detected_default(
+    service: LogService, database: FakeLogsDatabase, platform: FakeLogsPlatform
+) -> None:
+    """The detected native locale is stored as the guild's default; en when unknown."""
+    assert await service.get_locale(GUILD) == "en", "nothing stored yet: English"
+    await service.ensure_guild_locale(GUILD, "fr")
+    assert await service.get_locale(GUILD) == "fr", "the detected value is stored as the default"
+    assert database.settings[GUILD]["seeded_by"] == "detected"
+    await service.ensure_guild_locale(GUILD, "en")
+    assert await service.get_locale(GUILD) == "fr", "seeding never overwrites a stored value"
+    await database.set_guild_settings(GUILD, {"locale": "en", "updated_by": "admin"})
+    await service.ensure_guild_locale(GUILD, "fr")
+    assert await service.get_locale(GUILD) == "en", "an explicit picker choice wins over seeding"
+
+
+@pytest.mark.asyncio
+async def test_ensure_guild_locale_falls_back_to_english(
+    service: LogService, database: FakeLogsDatabase, platform: FakeLogsPlatform
+) -> None:
+    await service.ensure_guild_locale(GUILD, "de")
+    assert await service.get_locale(GUILD) == "en", "unsupported detected value seeds English"
+
+
+@pytest.mark.asyncio
+async def test_ensure_user_locale_seeds_the_detected_default(
+    service: LogService, database: FakeLogsDatabase, platform: FakeLogsPlatform
+) -> None:
+    """Same rule for users: detected client language stored as the default."""
+    assert await service.get_user_locale("777") == "en"
+    await service.ensure_user_locale("777", "fr")
+    assert await service.get_user_locale("777") == "fr"
+    assert database.users["777"]["seeded_by"] == "detected"
+    await service.ensure_user_locale("777", "de")
+    assert await service.get_user_locale("777") == "fr", "seeding never overwrites a stored value"
+    await service.ensure_user_locale("888", "ja")
+    assert await service.get_user_locale("888") == "en", "unsupported detected value seeds English"

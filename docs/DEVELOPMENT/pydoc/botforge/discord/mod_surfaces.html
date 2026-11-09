@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Python: botforge.discord.mod_surfaces</title>
+</head><body>
+
+<table class="heading">
+<tr class="heading-text decor">
+<td class="title">&nbsp;<br><strong class="title"><a href="botforge.html" class="white">botforge</a>.<a href="botforge.discord.html" class="white">discord</a>.mod_surfaces</strong></td>
+<td class="extra"><a href=".">index</a><br><a href="file:SOURCE_ROOT/discord/mod_surfaces.py">SOURCE_ROOT/discord/mod_surfaces.py</a></td></tr></table>
+    <p><span class="code">The&nbsp;generic&nbsp;mod&nbsp;surfaces:&nbsp;enroll,&nbsp;manage,&nbsp;run&nbsp;seasons&nbsp;—&nbsp;zero&nbsp;plumbing.<br>
+&nbsp;<br>
+Every&nbsp;mod&nbsp;that&nbsp;declares&nbsp;an&nbsp;enrollment&nbsp;gets&nbsp;the&nbsp;whole&nbsp;parcours&nbsp;with&nbsp;ONE<br>
+call&nbsp;(``register_mod_surfaces``):&nbsp;the&nbsp;player&nbsp;panel&nbsp;(apply,&nbsp;unregister,<br>
+list&nbsp;the&nbsp;enrolled),&nbsp;the&nbsp;admin&nbsp;channel&nbsp;validation&nbsp;(a&nbsp;manual&nbsp;candidate<br>
+lands&nbsp;as&nbsp;a&nbsp;message&nbsp;with&nbsp;Accepter/Refuser&nbsp;buttons&nbsp;in&nbsp;the&nbsp;mod's&nbsp;declared<br>
+admin&nbsp;channel),&nbsp;the&nbsp;admin&nbsp;panel&nbsp;(suspend/resume,&nbsp;the&nbsp;season&nbsp;lifecycle<br>
+for&nbsp;a&nbsp;seasonal&nbsp;mod,&nbsp;the&nbsp;section's&nbsp;Synchroniser)&nbsp;—&nbsp;all&nbsp;on&nbsp;the&nbsp;platform's<br>
+gates:&nbsp;a&nbsp;suspended&nbsp;mod&nbsp;refuses&nbsp;the&nbsp;players'&nbsp;flows,&nbsp;the&nbsp;enrollment<br>
+window&nbsp;and&nbsp;the&nbsp;declared&nbsp;criteria&nbsp;decide,&nbsp;the&nbsp;admins&nbsp;keep&nbsp;every<br>
+management&nbsp;surface&nbsp;whatever&nbsp;the&nbsp;state.<br>
+&nbsp;<br>
+The&nbsp;design&nbsp;goal&nbsp;(botforge-services#267):&nbsp;a&nbsp;game&nbsp;designer&nbsp;writes&nbsp;a<br>
+``mod.yaml``&nbsp;and&nbsp;one&nbsp;``register``&nbsp;line;&nbsp;this&nbsp;module&nbsp;is&nbsp;the&nbsp;plumbing&nbsp;the<br>
+mods&nbsp;never&nbsp;re-implement.</span></p>
+<p>
+<table class="section">
+<tr class="decor pkg-content-decor heading-text">
+<td class="section-title" colspan=3>&nbsp;<br><strong class="bigsection">Modules</strong></td></tr>
+    
+<tr><td class="decor pkg-content-decor"><span class="code">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span></td><td>&nbsp;</td>
+<td class="singlecolumn"><table><tr><td class="multicolumn"><a href="discord.html">discord</a><br>
+</td><td class="multicolumn"><a href="logging.html">logging</a><br>
+</td><td class="multicolumn"><a href="re.html">re</a><br>
+</td><td class="multicolumn"></td></tr></table></td></tr></table><p>
+<table class="section">
+<tr class="decor index-decor heading-text">
+<td class="section-title" colspan=3>&nbsp;<br><strong class="bigsection">Classes</strong></td></tr>
+    
+<tr><td class="decor index-decor"><span class="code">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span></td><td>&nbsp;</td>
+<td class="singlecolumn"><dl>
+<dt class="heading-text"><a href="builtins.html#object">builtins.object</a>
+</dt><dd>
+<dl>
+<dt class="heading-text"><a href="botforge.discord.mod_surfaces.html#ModSurfaces">ModSurfaces</a>
+</dt></dl>
+</dd>
+</dl>
+ <p>
+<table class="section">
+<tr class="decor title-decor heading-text">
+<td class="section-title" colspan=3>&nbsp;<br><a name="ModSurfaces">class <strong>ModSurfaces</strong></a>(<a href="builtins.html#object">builtins.object</a>)</td></tr>
+    
+<tr><td class="decor title-decor" rowspan=2><span class="code">&nbsp;&nbsp;&nbsp;</span></td>
+<td class="decor title-decor" colspan=2><span class="code"><a href="#ModSurfaces">ModSurfaces</a>(bot:&nbsp;'Any',&nbsp;mod_name:&nbsp;'str',&nbsp;*,&nbsp;seasonal:&nbsp;'bool',&nbsp;criteria:&nbsp;'dict[str,&nbsp;Any]&nbsp;|&nbsp;None',&nbsp;game_key:&nbsp;'str'&nbsp;=&nbsp;'',&nbsp;admin_channel_key:&nbsp;'str'&nbsp;=&nbsp;'admin')&nbsp;-&amp;gt;&nbsp;'None'<br>
+&nbsp;<br>
+The&nbsp;per-mod&nbsp;surface&nbsp;stack:&nbsp;player&nbsp;panel&nbsp;+&nbsp;admin&nbsp;channel&nbsp;+&nbsp;admin&nbsp;panel.<br>&nbsp;</span></td></tr>
+<tr><td>&nbsp;</td>
+<td class="singlecolumn">Methods defined here:<br>
+<dl><dt><a name="ModSurfaces-__init__"><strong>__init__</strong></a>(self, bot: 'Any', mod_name: 'str', *, seasonal: 'bool', criteria: 'dict[str, Any] | None', game_key: 'str' = '', admin_channel_key: 'str' = 'admin') -&gt; 'None'</dt><dd><span class="code">Bind&nbsp;the&nbsp;bot,&nbsp;the&nbsp;mod's&nbsp;declaration-derived&nbsp;settings.</span></dd></dl>
+
+<dl><dt>async <a name="ModSurfaces-apply"><strong>apply</strong></a>(self, interaction: 'discord.Interaction') -&gt; 'None'</dt><dd><span class="code">One&nbsp;player&nbsp;applies;&nbsp;the&nbsp;criteria&nbsp;and&nbsp;the&nbsp;window&nbsp;decide.</span></dd></dl>
+
+<dl><dt>async <a name="ModSurfaces-decide_candidate"><strong>decide_candidate</strong></a>(self, interaction: 'discord.Interaction', decision: 'str', application_id: 'str') -&gt; 'None'</dt><dd><span class="code">Let&nbsp;an&nbsp;admin&nbsp;accept&nbsp;or&nbsp;refuse&nbsp;a&nbsp;candidate&nbsp;from&nbsp;the&nbsp;channel&nbsp;message.</span></dd></dl>
+
+<dl><dt>async <a name="ModSurfaces-end_season"><strong>end_season</strong></a>(self, interaction: 'discord.Interaction') -&gt; 'None'</dt><dd><span class="code">End&nbsp;the&nbsp;active&nbsp;season&nbsp;(seasonal&nbsp;mods;&nbsp;admins).</span></dd></dl>
+
+<dl><dt>async <a name="ModSurfaces-list_members"><strong>list_members</strong></a>(self, interaction: 'discord.Interaction') -&gt; 'None'</dt><dd><span class="code">List&nbsp;the&nbsp;enrolled&nbsp;players,&nbsp;one&nbsp;line&nbsp;each&nbsp;(ephemeral).</span></dd></dl>
+
+<dl><dt>async <a name="ModSurfaces-new_season"><strong>new_season</strong></a>(self, interaction: 'discord.Interaction', name: 'str') -&gt; 'None'</dt><dd><span class="code">Create&nbsp;a&nbsp;scheduled&nbsp;season&nbsp;(seasonal&nbsp;mods;&nbsp;admins).</span></dd></dl>
+
+<dl><dt>async <a name="ModSurfaces-open_admin_panel"><strong>open_admin_panel</strong></a>(self, interaction: 'discord.Interaction') -&gt; 'None'</dt><dd><span class="code">Open&nbsp;the&nbsp;mod's&nbsp;admin&nbsp;panel:&nbsp;state,&nbsp;candidates,&nbsp;seasons,&nbsp;sync.</span></dd></dl>
+
+<dl><dt>async <a name="ModSurfaces-open_player_panel"><strong>open_player_panel</strong></a>(self, interaction: 'discord.Interaction') -&gt; 'None'</dt><dd><span class="code">Answer&nbsp;the&nbsp;/&lt;mod&gt;&nbsp;command&nbsp;with&nbsp;the&nbsp;ephemeral&nbsp;player&nbsp;panel.</span></dd></dl>
+
+<dl><dt>async <a name="ModSurfaces-start_season"><strong>start_season</strong></a>(self, interaction: 'discord.Interaction') -&gt; 'None'</dt><dd><span class="code">Activate&nbsp;the&nbsp;scheduled&nbsp;season&nbsp;(seasonal&nbsp;mods;&nbsp;admins).</span></dd></dl>
+
+<dl><dt>async <a name="ModSurfaces-suspend_resume"><strong>suspend_resume</strong></a>(self, interaction: 'discord.Interaction', suspend: 'bool') -&gt; 'None'</dt><dd><span class="code">Suspend&nbsp;or&nbsp;resume&nbsp;the&nbsp;mod&nbsp;on&nbsp;this&nbsp;guild&nbsp;(admins).</span></dd></dl>
+
+<dl><dt>async <a name="ModSurfaces-sync"><strong>sync</strong></a>(self, interaction: 'discord.Interaction') -&gt; 'None'</dt><dd><span class="code">Re-provision&nbsp;the&nbsp;mod's&nbsp;channels&nbsp;and&nbsp;roles&nbsp;(the&nbsp;section's&nbsp;Synchroniser).</span></dd></dl>
+
+<dl><dt>async <a name="ModSurfaces-unregister"><strong>unregister</strong></a>(self, interaction: 'discord.Interaction') -&gt; 'None'</dt><dd><span class="code">One&nbsp;player&nbsp;leaves&nbsp;(idempotent).</span></dd></dl>
+
+<hr>
+Data descriptors defined here:<br>
+<dl><dt><strong>__dict__</strong></dt>
+<dd><span class="code">dictionary&nbsp;for&nbsp;instance&nbsp;variables</span></dd>
+</dl>
+<dl><dt><strong>__weakref__</strong></dt>
+<dd><span class="code">list&nbsp;of&nbsp;weak&nbsp;references&nbsp;to&nbsp;the&nbsp;object</span></dd>
+</dl>
+</td></tr></table></td></tr></table><p>
+<table class="section">
+<tr class="decor functions-decor heading-text">
+<td class="section-title" colspan=3>&nbsp;<br><strong class="bigsection">Functions</strong></td></tr>
+    
+<tr><td class="decor functions-decor"><span class="code">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span></td><td>&nbsp;</td>
+<td class="singlecolumn"><dl><dt><a name="-mod_surfaces_of"><strong>mod_surfaces_of</strong></a>(mod_name: 'str') -&gt; 'ModSurfaces | None'</dt><dd><span class="code">One&nbsp;mod's&nbsp;surfaces;&nbsp;None&nbsp;when&nbsp;the&nbsp;mod&nbsp;has&nbsp;none&nbsp;(tests).</span></dd></dl>
+ <dl><dt><a name="-register_mod_surfaces"><strong>register_mod_surfaces</strong></a>(bot: 'Any', mod_name: 'str', *, seasonal: 'bool', settings: 'dict[str, Any] | None' = None, game_key: 'str' = '', admin_channel_key: 'str' = 'admin') -&gt; 'ModSurfaces'</dt><dd><span class="code">Give&nbsp;one&nbsp;mod&nbsp;the&nbsp;whole&nbsp;player+admin&nbsp;parcours&nbsp;(idempotent).<br>
+&nbsp;<br>
+Wires&nbsp;the&nbsp;``/&lt;mod&gt;``&nbsp;command&nbsp;(the&nbsp;player&nbsp;panel)&nbsp;and&nbsp;registers&nbsp;the<br>
+persistent&nbsp;items;&nbsp;the&nbsp;criteria&nbsp;come&nbsp;from&nbsp;the&nbsp;declaration's<br>
+``settings.enrollment``&nbsp;(parsed&nbsp;and&nbsp;validated&nbsp;here&nbsp;—&nbsp;a&nbsp;broken<br>
+declaration&nbsp;fails&nbsp;loudly&nbsp;at&nbsp;boot,&nbsp;never&nbsp;silently&nbsp;disables).</span></dd></dl>
+ <dl><dt><a name="-registered_mod_surfaces"><strong>registered_mod_surfaces</strong></a>() -&gt; 'tuple[str, ...]'</dt><dd><span class="code">Return&nbsp;the&nbsp;mods&nbsp;carrying&nbsp;the&nbsp;generic&nbsp;surfaces&nbsp;(diagnostics,&nbsp;tests).</span></dd></dl>
+</td></tr></table><p>
+<table class="section">
+<tr class="decor data-decor heading-text">
+<td class="section-title" colspan=3>&nbsp;<br><strong class="bigsection">Data</strong></td></tr>
+    
+<tr><td class="decor data-decor"><span class="code">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span></td><td>&nbsp;</td>
+<td class="singlecolumn"><strong>__all__</strong> = ['ModSurfaces', 'mod_surfaces_of', 'register_mod_surfaces', 'registered_mod_surfaces']<br>
+<strong>__annotations__</strong> = {'_SURFACES': 'dict[str, ModSurfaces]'}</td></tr></table>
+</body></html>

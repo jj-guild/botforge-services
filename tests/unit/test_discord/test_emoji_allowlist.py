@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from kingdoms.discord.ui.emoji import ALLOWED_CODEPOINTS, EMOJI, is_allowed
+from botforge.discord.ui.emoji import ALLOWED_CODEPOINTS, EMOJI, is_allowed
 
 
 def test_semantic_constants_are_allowed() -> None:

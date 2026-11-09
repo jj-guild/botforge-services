@@ -1,10 +1,10 @@
-"""Unit tests for the per-mod season stack seam (kingdoms-services#267)."""
+"""Unit tests for the per-mod season stack seam (botforge-services#267)."""
 
 from __future__ import annotations
 
 from typing import Any
 
-from kingdoms.core.services.mod_seasons import build_mod_season_stack
+from botforge.core.services.mod_seasons import build_mod_season_stack
 
 
 class MemoryCollection:

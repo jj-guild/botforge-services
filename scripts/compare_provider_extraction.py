@@ -25,7 +25,7 @@ import httpx
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from kingdoms.core.games.aoe2.blobs import decode_blob
+from botforge.core.games.aoe2.blobs import decode_blob
 
 LOBBIES_URL = "https://community.ageofempires.com/community/advertisement/findAdvertisements"
 INSIGHTS_MATCH_URL = "https://www.aoe2insights.com/match/{match_id}/"

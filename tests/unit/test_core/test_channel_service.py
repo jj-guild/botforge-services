@@ -1,4 +1,4 @@
-"""Unit tests for the ChannelService (kingdoms-services#5).
+"""Unit tests for the ChannelService (botforge-services#5).
 
 Covers the cache-aside resolution flow (cache -> database -> adoption ->
 creation) for platform-level and mod-scoped categories, cache expiry and
@@ -9,11 +9,11 @@ from __future__ import annotations
 
 import pytest
 
-from kingdoms.core.models.channel import ChannelModel
-from kingdoms.core.services.channel import ChannelService
-from kingdoms.core.services.mod_definition import ChannelCategoryDef, ChannelGroupDef, ModDefinition, RoleDef
-from kingdoms.core.services.mod_registry import ModRegistry
-from kingdoms.core.services.state import StateService
+from botforge.core.models.channel import ChannelModel
+from botforge.core.services.channel import ChannelService
+from botforge.core.services.mod_definition import ChannelCategoryDef, ChannelGroupDef, ModDefinition, RoleDef
+from botforge.core.services.mod_registry import ModRegistry
+from botforge.core.services.state import StateService
 from tests.mocks.state_mock import FakeClock, InMemoryStateStore
 
 GUILD = "123456"

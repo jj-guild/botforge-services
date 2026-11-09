@@ -1,6 +1,6 @@
 """MockDiscord: in-memory mocks for Discord objects, views and interactions.
 
-Tracked by kingdoms-services#2. Every mock subclasses the real discord.py
+Tracked by botforge-services#2. Every mock subclasses the real discord.py
 class so code under test can use ``isinstance`` checks against the real API
 types, but instances are built from plain Python data: no gateway, no HTTP,
 no rate limits.

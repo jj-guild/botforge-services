@@ -1,4 +1,4 @@
-"""Unit tests for the generic enrollment parcours (kingdoms-services#267)."""
+"""Unit tests for the generic enrollment parcours (botforge-services#267)."""
 
 from __future__ import annotations
 
@@ -6,7 +6,7 @@ from typing import Any
 
 import pytest
 
-from kingdoms.core.services.enrollment import (
+from botforge.core.services.enrollment import (
     STATE_ACCEPTED,
     STATE_PENDING,
     STATE_REFUSED,
@@ -203,7 +203,7 @@ async def test_refuse_records_reason_and_blocks_reaccept() -> None:
     refused = await service.refuse(application.application_id, now=150, reason="insufficient level")
     assert refused.state == STATE_REFUSED
     assert refused.reasons == ("insufficient level",)
-    from kingdoms.core.services.enrollment import NotPendingError
+    from botforge.core.services.enrollment import NotPendingError
 
     with pytest.raises(NotPendingError):
         await service.accept(application.application_id)
@@ -305,7 +305,7 @@ async def test_suspended_mod_refuses_apply() -> None:
 
     class SuspendedGate:
         async def require_usable(self, guild_id: str, mod: str) -> None:
-            from kingdoms.core.services.mod_lifecycle import ModSuspendedError
+            from botforge.core.services.mod_lifecycle import ModSuspendedError
 
             raise ModSuspendedError(mod, guild_id, "maintenance")
 

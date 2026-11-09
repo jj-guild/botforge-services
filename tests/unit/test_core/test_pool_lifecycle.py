@@ -6,7 +6,7 @@ from typing import Any
 
 import pytest
 
-from kingdoms.core.services.game_data import (
+from botforge.core.services.game_data import (
     POOL_STATE_CLOSED,
     POOL_STATE_DRAFT,
     POOL_STATE_PUBLISHED,

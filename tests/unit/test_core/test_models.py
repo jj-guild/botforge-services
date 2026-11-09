@@ -5,10 +5,10 @@ from __future__ import annotations
 import pytest
 from pydantic import ValidationError
 
-from kingdoms.core.models.channel import ChannelModel
-from kingdoms.core.models.guild import GuildModel
-from kingdoms.core.models.user import GameProfile, UserModel
-from kingdoms.core.models.workflow import WorkflowState
+from botforge.core.models.channel import ChannelModel
+from botforge.core.models.guild import GuildModel
+from botforge.core.models.user import GameProfile, UserModel
+from botforge.core.models.workflow import WorkflowState
 
 
 def test_user_model_defaults() -> None:

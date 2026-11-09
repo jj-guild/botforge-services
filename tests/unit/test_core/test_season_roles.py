@@ -8,8 +8,8 @@ from __future__ import annotations
 
 import pytest
 
-from kingdoms.core.services.mod_definition import RoleDef
-from kingdoms.core.services.season_roles import SeasonRolesService
+from botforge.core.services.mod_definition import RoleDef
+from botforge.core.services.season_roles import SeasonRolesService
 
 
 class _FakeModRoles:
@@ -86,7 +86,7 @@ async def test_sync_player_role_removal_removes_the_role() -> None:
 
 def test_season_label_reads_the_short_label() -> None:
     """The label extraction prefers label, then name, then the id."""
-    from kingdoms.core.services.season_roles import season_label
+    from botforge.core.services.season_roles import season_label
 
     assert season_label("s1") == "s1"
     assert season_label({"label": "s2", "name": "Season 2"}) == "s2"

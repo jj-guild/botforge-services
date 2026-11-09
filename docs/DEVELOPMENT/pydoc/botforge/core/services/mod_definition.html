@@ -1,0 +1,375 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Python: botforge.core.services.mod_definition</title>
+</head><body>
+
+<table class="heading">
+<tr class="heading-text decor">
+<td class="title">&nbsp;<br><strong class="title"><a href="botforge.html" class="white">botforge</a>.<a href="botforge.core.html" class="white">core</a>.<a href="botforge.core.services.html" class="white">services</a>.mod_definition</strong></td>
+<td class="extra"><a href=".">index</a><br><a href="file:SOURCE_ROOT/core/services/mod_definition.py">SOURCE_ROOT/core/services/mod_definition.py</a></td></tr></table>
+    <p><span class="code">Mod&nbsp;declaration&nbsp;contracts:&nbsp;what&nbsp;a&nbsp;mod&nbsp;needs&nbsp;from&nbsp;the&nbsp;platform.<br>
+&nbsp;<br>
+A&nbsp;mod&nbsp;declares&nbsp;its&nbsp;channel&nbsp;categories,&nbsp;roles,&nbsp;workflows&nbsp;and&nbsp;commands&nbsp;in&nbsp;its<br>
+YAML&nbsp;config&nbsp;(``config/mods/&lt;mod&gt;.yaml``);&nbsp;the&nbsp;core&nbsp;provisions&nbsp;them<br>
+automatically.&nbsp;Mods&nbsp;never&nbsp;extend&nbsp;core&nbsp;enums&nbsp;and&nbsp;never&nbsp;hardcode&nbsp;platform&nbsp;IDs.<br>
+&nbsp;<br>
+Reference:&nbsp;botforge-services#26,&nbsp;ADR-0003&nbsp;(channel&nbsp;categories).</span></p>
+<p>
+<table class="section">
+<tr class="decor index-decor heading-text">
+<td class="section-title" colspan=3>&nbsp;<br><strong class="bigsection">Classes</strong></td></tr>
+    
+<tr><td class="decor index-decor"><span class="code">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span></td><td>&nbsp;</td>
+<td class="singlecolumn"><dl>
+<dt class="heading-text"><a href="builtins.html#object">builtins.object</a>
+</dt><dd>
+<dl>
+<dt class="heading-text"><a href="botforge.core.services.mod_definition.html#ChannelAccessPolicy">ChannelAccessPolicy</a>
+</dt><dt class="heading-text"><a href="botforge.core.services.mod_definition.html#ChannelCategoryDef">ChannelCategoryDef</a>
+</dt><dt class="heading-text"><a href="botforge.core.services.mod_definition.html#ChannelGroupDef">ChannelGroupDef</a>
+</dt><dt class="heading-text"><a href="botforge.core.services.mod_definition.html#ModDefinition">ModDefinition</a>
+</dt><dt class="heading-text"><a href="botforge.core.services.mod_definition.html#RoleDef">RoleDef</a>
+</dt></dl>
+</dd>
+</dl>
+ <p>
+<table class="section">
+<tr class="decor title-decor heading-text">
+<td class="section-title" colspan=3>&nbsp;<br><a name="ChannelAccessPolicy">class <strong>ChannelAccessPolicy</strong></a>(<a href="builtins.html#object">builtins.object</a>)</td></tr>
+    
+<tr><td class="decor title-decor" rowspan=2><span class="code">&nbsp;&nbsp;&nbsp;</span></td>
+<td class="decor title-decor" colspan=2><span class="code"><a href="#ChannelAccessPolicy">ChannelAccessPolicy</a>(view:&nbsp;'tuple[str,&nbsp;...]'&nbsp;=&nbsp;(),&nbsp;post:&nbsp;'tuple[str,&nbsp;...]'&nbsp;=&nbsp;(),&nbsp;everyone_view:&nbsp;'bool'&nbsp;=&nbsp;True,&nbsp;everyone_post:&nbsp;'bool'&nbsp;=&nbsp;False,&nbsp;bot_overwrite:&nbsp;'bool'&nbsp;=&nbsp;True)&nbsp;-&amp;gt;&nbsp;None<br>
+&nbsp;<br>
+A&nbsp;category's&nbsp;declared&nbsp;audience&nbsp;(botforge-services#57).<br>
+&nbsp;<br>
+The&nbsp;declaration&nbsp;is&nbsp;the&nbsp;source&nbsp;of&nbsp;truth;&nbsp;the&nbsp;platform&nbsp;overwrites&nbsp;are<br>
+the&nbsp;runtime&nbsp;state,&nbsp;compared&nbsp;by&nbsp;the&nbsp;ChannelAuditService&nbsp;(drift).<br>&nbsp;</span></td></tr>
+<tr><td>&nbsp;</td>
+<td class="singlecolumn">Methods defined here:<br>
+<dl><dt><a name="ChannelAccessPolicy-__delattr__"><strong>__delattr__</strong></a>(self, name)</dt><dd><span class="code">Implement&nbsp;delattr(self,&nbsp;name).</span></dd></dl>
+
+<dl><dt><a name="ChannelAccessPolicy-__eq__"><strong>__eq__</strong></a>(self, other)</dt><dd><span class="code">Return&nbsp;self==value.</span></dd></dl>
+
+<dl><dt><a name="ChannelAccessPolicy-__getstate__"><strong>__getstate__</strong></a> = _dataclass_getstate(self)<span class="grey"><span class="heading-text"> from <a href="dataclasses.html">dataclasses</a></span></span></dt><dd><span class="code">#&nbsp;_dataclass_getstate&nbsp;and&nbsp;_dataclass_setstate&nbsp;are&nbsp;needed&nbsp;for&nbsp;pickling&nbsp;frozen<br>
+#&nbsp;classes&nbsp;with&nbsp;slots.&nbsp;&nbsp;These&nbsp;could&nbsp;be&nbsp;slightly&nbsp;more&nbsp;performant&nbsp;if&nbsp;we&nbsp;generated<br>
+#&nbsp;the&nbsp;code&nbsp;instead&nbsp;of&nbsp;iterating&nbsp;over&nbsp;fields.&nbsp;&nbsp;But&nbsp;that&nbsp;can&nbsp;be&nbsp;a&nbsp;project&nbsp;for<br>
+#&nbsp;another&nbsp;day,&nbsp;if&nbsp;performance&nbsp;becomes&nbsp;an&nbsp;issue.</span></dd></dl>
+
+<dl><dt><a name="ChannelAccessPolicy-__hash__"><strong>__hash__</strong></a>(self)</dt><dd><span class="code">Return&nbsp;hash(self).</span></dd></dl>
+
+<dl><dt><a name="ChannelAccessPolicy-__init__"><strong>__init__</strong></a>(self, view: 'tuple[str, ...]' = (), post: 'tuple[str, ...]' = (), everyone_view: 'bool' = True, everyone_post: 'bool' = False, bot_overwrite: 'bool' = True) -&gt; None</dt><dd><span class="code">Initialize&nbsp;self.&nbsp;&nbsp;See&nbsp;help(type(self))&nbsp;for&nbsp;accurate&nbsp;signature.</span></dd></dl>
+
+<dl><dt><a name="ChannelAccessPolicy-__repr__"><strong>__repr__</strong></a>(self)</dt><dd><span class="code">Return&nbsp;repr(self).</span></dd></dl>
+
+<dl><dt><a name="ChannelAccessPolicy-__setattr__"><strong>__setattr__</strong></a>(self, name, value)</dt><dd><span class="code">Implement&nbsp;setattr(self,&nbsp;name,&nbsp;value).</span></dd></dl>
+
+<dl><dt><a name="ChannelAccessPolicy-__setstate__"><strong>__setstate__</strong></a> = _dataclass_setstate(self, state)<span class="grey"><span class="heading-text"> from <a href="dataclasses.html">dataclasses</a></span></span></dt></dl>
+
+<dl><dt><a name="ChannelAccessPolicy-to_dict"><strong>to_dict</strong></a>(self) -&gt; 'dict[str, object]'</dt><dd><span class="code">Serialize&nbsp;for&nbsp;persistence&nbsp;and&nbsp;the&nbsp;platform&nbsp;seam.</span></dd></dl>
+
+<hr>
+Class methods defined here:<br>
+<dl><dt><a name="ChannelAccessPolicy-from_dict"><strong>from_dict</strong></a>(data: 'dict[str, Any]') -&gt; 'ChannelAccessPolicy'</dt><dd><span class="code">Rebuild&nbsp;a&nbsp;policy&nbsp;from&nbsp;its&nbsp;persisted&nbsp;form.</span></dd></dl>
+
+<hr>
+Data descriptors defined here:<br>
+<dl><dt><strong>bot_overwrite</strong></dt>
+</dl>
+<dl><dt><strong>everyone_post</strong></dt>
+</dl>
+<dl><dt><strong>everyone_view</strong></dt>
+</dl>
+<dl><dt><strong>post</strong></dt>
+</dl>
+<dl><dt><strong>view</strong></dt>
+</dl>
+<hr>
+Data and other attributes defined here:<br>
+<dl><dt><strong>__annotations__</strong> = {'bot_overwrite': 'bool', 'everyone_post': 'bool', 'everyone_view': 'bool', 'post': 'tuple[str, ...]', 'view': 'tuple[str, ...]'}</dl>
+
+<dl><dt><strong>__dataclass_fields__</strong> = {'bot_overwrite': Field(name='bot_overwrite',type='bool',default=T...appingproxy({}),kw_only=False,_field_type=_FIELD), 'everyone_post': Field(name='everyone_post',type='bool',default=F...appingproxy({}),kw_only=False,_field_type=_FIELD), 'everyone_view': Field(name='everyone_view',type='bool',default=T...appingproxy({}),kw_only=False,_field_type=_FIELD), 'post': Field(name='post',type='tuple[str, ...]',default...appingproxy({}),kw_only=False,_field_type=_FIELD), 'view': Field(name='view',type='tuple[str, ...]',default...appingproxy({}),kw_only=False,_field_type=_FIELD)}</dl>
+
+<dl><dt><strong>__dataclass_params__</strong> = _DataclassParams(init=True,repr=True,eq=True,ord...True,kw_only=False,slots=True,weakref_slot=False)</dl>
+
+<dl><dt><strong>__match_args__</strong> = ('view', 'post', 'everyone_view', 'everyone_post', 'bot_overwrite')</dl>
+
+</td></tr></table> <p>
+<table class="section">
+<tr class="decor title-decor heading-text">
+<td class="section-title" colspan=3>&nbsp;<br><a name="ChannelCategoryDef">class <strong>ChannelCategoryDef</strong></a>(<a href="builtins.html#object">builtins.object</a>)</td></tr>
+    
+<tr><td class="decor title-decor" rowspan=2><span class="code">&nbsp;&nbsp;&nbsp;</span></td>
+<td class="decor title-decor" colspan=2><span class="code"><a href="#ChannelCategoryDef">ChannelCategoryDef</a>(key:&nbsp;'str',&nbsp;display_name:&nbsp;'str',&nbsp;description:&nbsp;'str'&nbsp;=&nbsp;'',&nbsp;per_instance:&nbsp;'bool'&nbsp;=&nbsp;False,&nbsp;group:&nbsp;'str'&nbsp;=&nbsp;'',&nbsp;kind:&nbsp;'str'&nbsp;=&nbsp;'text',&nbsp;admin_only:&nbsp;'bool&nbsp;|&nbsp;None'&nbsp;=&nbsp;None,&nbsp;read_only:&nbsp;'bool&nbsp;|&nbsp;None'&nbsp;=&nbsp;None,&nbsp;access:&nbsp;'<a href="#ChannelAccessPolicy">ChannelAccessPolicy</a>'&nbsp;=&nbsp;<a href="#ChannelAccessPolicy">ChannelAccessPolicy</a>(view=(),&nbsp;post=(),&nbsp;everyone_view=True,&nbsp;everyone_post=False,&nbsp;bot_overwrite=True))&nbsp;-&amp;gt;&nbsp;None<br>
+&nbsp;<br>
+A&nbsp;channel&nbsp;declared&nbsp;by&nbsp;a&nbsp;mod.<br>
+&nbsp;<br>
+Addressed&nbsp;at&nbsp;runtime&nbsp;as&nbsp;``mod:key``&nbsp;(e.g.&nbsp;``ladder:ladder_rankings``).<br>
+&nbsp;<br>
+-&nbsp;``group``&nbsp;—&nbsp;the&nbsp;parent&nbsp;group's&nbsp;key&nbsp;(a&nbsp;declared&nbsp;``channel_groups``<br>
+&nbsp;&nbsp;entry);&nbsp;a&nbsp;channel&nbsp;without&nbsp;a&nbsp;group&nbsp;lives&nbsp;uncategorised;<br>
+-&nbsp;``kind``&nbsp;—&nbsp;``text``,&nbsp;``forum``&nbsp;or&nbsp;``announce``&nbsp;(an&nbsp;announce&nbsp;channel<br>
+&nbsp;&nbsp;is&nbsp;admin-written,&nbsp;everyone-readable);<br>
+-&nbsp;``admin_only``&nbsp;—&nbsp;only&nbsp;the&nbsp;mod's&nbsp;admin&nbsp;roles&nbsp;(and&nbsp;the&nbsp;bot&nbsp;admins)<br>
+&nbsp;&nbsp;see&nbsp;the&nbsp;channel;&nbsp;inherits&nbsp;the&nbsp;group's&nbsp;flag&nbsp;when&nbsp;unset;<br>
+-&nbsp;``read_only``&nbsp;—&nbsp;nobody&nbsp;writes&nbsp;in&nbsp;the&nbsp;channel&nbsp;(the&nbsp;view/post<br>
+&nbsp;&nbsp;policies&nbsp;collapse&nbsp;to&nbsp;read);&nbsp;inherits&nbsp;the&nbsp;group's&nbsp;flag&nbsp;when&nbsp;unset;<br>
+-&nbsp;``access.view``/``access.post``&nbsp;—&nbsp;the&nbsp;mod's&nbsp;declared&nbsp;**role&nbsp;keys**<br>
+&nbsp;&nbsp;(resolved&nbsp;to&nbsp;the&nbsp;declared&nbsp;roles'&nbsp;names&nbsp;at&nbsp;load&nbsp;time),&nbsp;or&nbsp;literal<br>
+&nbsp;&nbsp;role&nbsp;names&nbsp;for&nbsp;roles&nbsp;the&nbsp;mod&nbsp;does&nbsp;not&nbsp;declare.<br>&nbsp;</span></td></tr>
+<tr><td>&nbsp;</td>
+<td class="singlecolumn">Methods defined here:<br>
+<dl><dt><a name="ChannelCategoryDef-__delattr__"><strong>__delattr__</strong></a>(self, name)</dt><dd><span class="code">Implement&nbsp;delattr(self,&nbsp;name).</span></dd></dl>
+
+<dl><dt><a name="ChannelCategoryDef-__eq__"><strong>__eq__</strong></a>(self, other)</dt><dd><span class="code">Return&nbsp;self==value.</span></dd></dl>
+
+<dl><dt><a name="ChannelCategoryDef-__getstate__"><strong>__getstate__</strong></a> = _dataclass_getstate(self)<span class="grey"><span class="heading-text"> from <a href="dataclasses.html">dataclasses</a></span></span></dt><dd><span class="code">#&nbsp;_dataclass_getstate&nbsp;and&nbsp;_dataclass_setstate&nbsp;are&nbsp;needed&nbsp;for&nbsp;pickling&nbsp;frozen<br>
+#&nbsp;classes&nbsp;with&nbsp;slots.&nbsp;&nbsp;These&nbsp;could&nbsp;be&nbsp;slightly&nbsp;more&nbsp;performant&nbsp;if&nbsp;we&nbsp;generated<br>
+#&nbsp;the&nbsp;code&nbsp;instead&nbsp;of&nbsp;iterating&nbsp;over&nbsp;fields.&nbsp;&nbsp;But&nbsp;that&nbsp;can&nbsp;be&nbsp;a&nbsp;project&nbsp;for<br>
+#&nbsp;another&nbsp;day,&nbsp;if&nbsp;performance&nbsp;becomes&nbsp;an&nbsp;issue.</span></dd></dl>
+
+<dl><dt><a name="ChannelCategoryDef-__hash__"><strong>__hash__</strong></a>(self)</dt><dd><span class="code">Return&nbsp;hash(self).</span></dd></dl>
+
+<dl><dt><a name="ChannelCategoryDef-__init__"><strong>__init__</strong></a>(self, key: 'str', display_name: 'str', description: 'str' = '', per_instance: 'bool' = False, group: 'str' = '', kind: 'str' = 'text', admin_only: 'bool | None' = None, read_only: 'bool | None' = None, access: 'ChannelAccessPolicy' = ChannelAccessPolicy(view=(), post=(), everyone_view=True, everyone_post=False, bot_overwrite=True)) -&gt; None</dt><dd><span class="code">Initialize&nbsp;self.&nbsp;&nbsp;See&nbsp;help(type(self))&nbsp;for&nbsp;accurate&nbsp;signature.</span></dd></dl>
+
+<dl><dt><a name="ChannelCategoryDef-__repr__"><strong>__repr__</strong></a>(self)</dt><dd><span class="code">Return&nbsp;repr(self).</span></dd></dl>
+
+<dl><dt><a name="ChannelCategoryDef-__setattr__"><strong>__setattr__</strong></a>(self, name, value)</dt><dd><span class="code">Implement&nbsp;setattr(self,&nbsp;name,&nbsp;value).</span></dd></dl>
+
+<dl><dt><a name="ChannelCategoryDef-__setstate__"><strong>__setstate__</strong></a> = _dataclass_setstate(self, state)<span class="grey"><span class="heading-text"> from <a href="dataclasses.html">dataclasses</a></span></span></dt></dl>
+
+<hr>
+Data descriptors defined here:<br>
+<dl><dt><strong>access</strong></dt>
+</dl>
+<dl><dt><strong>admin_only</strong></dt>
+</dl>
+<dl><dt><strong>description</strong></dt>
+</dl>
+<dl><dt><strong>display_name</strong></dt>
+</dl>
+<dl><dt><strong>group</strong></dt>
+</dl>
+<dl><dt><strong>key</strong></dt>
+</dl>
+<dl><dt><strong>kind</strong></dt>
+</dl>
+<dl><dt><strong>per_instance</strong></dt>
+</dl>
+<dl><dt><strong>read_only</strong></dt>
+</dl>
+<hr>
+Data and other attributes defined here:<br>
+<dl><dt><strong>__annotations__</strong> = {'access': 'ChannelAccessPolicy', 'admin_only': 'bool | None', 'description': 'str', 'display_name': 'str', 'group': 'str', 'key': 'str', 'kind': 'str', 'per_instance': 'bool', 'read_only': 'bool | None'}</dl>
+
+<dl><dt><strong>__dataclass_fields__</strong> = {'access': Field(name='access',type='ChannelAccessPolicy',d...appingproxy({}),kw_only=False,_field_type=_FIELD), 'admin_only': Field(name='admin_only',type='bool | None',defau...appingproxy({}),kw_only=False,_field_type=_FIELD), 'description': Field(name='description',type='str',default='',d...appingproxy({}),kw_only=False,_field_type=_FIELD), 'display_name': Field(name='display_name',type='str',default=&lt;da...appingproxy({}),kw_only=False,_field_type=_FIELD), 'group': Field(name='group',type='str',default='',default...appingproxy({}),kw_only=False,_field_type=_FIELD), 'key': Field(name='key',type='str',default=&lt;dataclasses...appingproxy({}),kw_only=False,_field_type=_FIELD), 'kind': Field(name='kind',type='str',default='text',defa...appingproxy({}),kw_only=False,_field_type=_FIELD), 'per_instance': Field(name='per_instance',type='bool',default=Fa...appingproxy({}),kw_only=False,_field_type=_FIELD), 'read_only': Field(name='read_only',type='bool | None',defaul...appingproxy({}),kw_only=False,_field_type=_FIELD)}</dl>
+
+<dl><dt><strong>__dataclass_params__</strong> = _DataclassParams(init=True,repr=True,eq=True,ord...True,kw_only=False,slots=True,weakref_slot=False)</dl>
+
+<dl><dt><strong>__match_args__</strong> = ('key', 'display_name', 'description', 'per_instance', 'group', 'kind', 'admin_only', 'read_only', 'access')</dl>
+
+</td></tr></table> <p>
+<table class="section">
+<tr class="decor title-decor heading-text">
+<td class="section-title" colspan=3>&nbsp;<br><a name="ChannelGroupDef">class <strong>ChannelGroupDef</strong></a>(<a href="builtins.html#object">builtins.object</a>)</td></tr>
+    
+<tr><td class="decor title-decor" rowspan=2><span class="code">&nbsp;&nbsp;&nbsp;</span></td>
+<td class="decor title-decor" colspan=2><span class="code"><a href="#ChannelGroupDef">ChannelGroupDef</a>(key:&nbsp;'str',&nbsp;display_name:&nbsp;'str',&nbsp;admin_only:&nbsp;'bool'&nbsp;=&nbsp;False,&nbsp;read_only:&nbsp;'bool'&nbsp;=&nbsp;False,&nbsp;position:&nbsp;'int'&nbsp;=&nbsp;0)&nbsp;-&amp;gt;&nbsp;None<br>
+&nbsp;<br>
+A&nbsp;channel&nbsp;group&nbsp;(a&nbsp;Discord&nbsp;category)&nbsp;declared&nbsp;by&nbsp;a&nbsp;mod.<br>
+&nbsp;<br>
+Addressed&nbsp;at&nbsp;runtime&nbsp;as&nbsp;``mod:group:&lt;key&gt;``;&nbsp;channels&nbsp;declare&nbsp;their<br>
+membership&nbsp;with&nbsp;their&nbsp;``group``&nbsp;key.&nbsp;The&nbsp;declaration&nbsp;order&nbsp;is&nbsp;the<br>
+display&nbsp;order&nbsp;(positions&nbsp;are&nbsp;assigned&nbsp;from&nbsp;it).<br>
+&nbsp;<br>
+``admin_only``&nbsp;—&nbsp;only&nbsp;the&nbsp;mod's&nbsp;admin&nbsp;roles&nbsp;(and&nbsp;the&nbsp;bot&nbsp;admins)&nbsp;see<br>
+the&nbsp;group:&nbsp;@everyone&nbsp;is&nbsp;denied&nbsp;at&nbsp;provisioning;&nbsp;``read_only``&nbsp;—<br>
+nobody&nbsp;writes&nbsp;in&nbsp;the&nbsp;group's&nbsp;channels&nbsp;(announcements).<br>&nbsp;</span></td></tr>
+<tr><td>&nbsp;</td>
+<td class="singlecolumn">Methods defined here:<br>
+<dl><dt><a name="ChannelGroupDef-__delattr__"><strong>__delattr__</strong></a>(self, name)</dt><dd><span class="code">Implement&nbsp;delattr(self,&nbsp;name).</span></dd></dl>
+
+<dl><dt><a name="ChannelGroupDef-__eq__"><strong>__eq__</strong></a>(self, other)</dt><dd><span class="code">Return&nbsp;self==value.</span></dd></dl>
+
+<dl><dt><a name="ChannelGroupDef-__getstate__"><strong>__getstate__</strong></a> = _dataclass_getstate(self)<span class="grey"><span class="heading-text"> from <a href="dataclasses.html">dataclasses</a></span></span></dt><dd><span class="code">#&nbsp;_dataclass_getstate&nbsp;and&nbsp;_dataclass_setstate&nbsp;are&nbsp;needed&nbsp;for&nbsp;pickling&nbsp;frozen<br>
+#&nbsp;classes&nbsp;with&nbsp;slots.&nbsp;&nbsp;These&nbsp;could&nbsp;be&nbsp;slightly&nbsp;more&nbsp;performant&nbsp;if&nbsp;we&nbsp;generated<br>
+#&nbsp;the&nbsp;code&nbsp;instead&nbsp;of&nbsp;iterating&nbsp;over&nbsp;fields.&nbsp;&nbsp;But&nbsp;that&nbsp;can&nbsp;be&nbsp;a&nbsp;project&nbsp;for<br>
+#&nbsp;another&nbsp;day,&nbsp;if&nbsp;performance&nbsp;becomes&nbsp;an&nbsp;issue.</span></dd></dl>
+
+<dl><dt><a name="ChannelGroupDef-__hash__"><strong>__hash__</strong></a>(self)</dt><dd><span class="code">Return&nbsp;hash(self).</span></dd></dl>
+
+<dl><dt><a name="ChannelGroupDef-__init__"><strong>__init__</strong></a>(self, key: 'str', display_name: 'str', admin_only: 'bool' = False, read_only: 'bool' = False, position: 'int' = 0) -&gt; None</dt><dd><span class="code">Initialize&nbsp;self.&nbsp;&nbsp;See&nbsp;help(type(self))&nbsp;for&nbsp;accurate&nbsp;signature.</span></dd></dl>
+
+<dl><dt><a name="ChannelGroupDef-__repr__"><strong>__repr__</strong></a>(self)</dt><dd><span class="code">Return&nbsp;repr(self).</span></dd></dl>
+
+<dl><dt><a name="ChannelGroupDef-__setattr__"><strong>__setattr__</strong></a>(self, name, value)</dt><dd><span class="code">Implement&nbsp;setattr(self,&nbsp;name,&nbsp;value).</span></dd></dl>
+
+<dl><dt><a name="ChannelGroupDef-__setstate__"><strong>__setstate__</strong></a> = _dataclass_setstate(self, state)<span class="grey"><span class="heading-text"> from <a href="dataclasses.html">dataclasses</a></span></span></dt></dl>
+
+<hr>
+Data descriptors defined here:<br>
+<dl><dt><strong>admin_only</strong></dt>
+</dl>
+<dl><dt><strong>display_name</strong></dt>
+</dl>
+<dl><dt><strong>key</strong></dt>
+</dl>
+<dl><dt><strong>position</strong></dt>
+</dl>
+<dl><dt><strong>read_only</strong></dt>
+</dl>
+<hr>
+Data and other attributes defined here:<br>
+<dl><dt><strong>__annotations__</strong> = {'admin_only': 'bool', 'display_name': 'str', 'key': 'str', 'position': 'int', 'read_only': 'bool'}</dl>
+
+<dl><dt><strong>__dataclass_fields__</strong> = {'admin_only': Field(name='admin_only',type='bool',default=Fals...appingproxy({}),kw_only=False,_field_type=_FIELD), 'display_name': Field(name='display_name',type='str',default=&lt;da...appingproxy({}),kw_only=False,_field_type=_FIELD), 'key': Field(name='key',type='str',default=&lt;dataclasses...appingproxy({}),kw_only=False,_field_type=_FIELD), 'position': Field(name='position',type='int',default=0,defau...appingproxy({}),kw_only=False,_field_type=_FIELD), 'read_only': Field(name='read_only',type='bool',default=False...appingproxy({}),kw_only=False,_field_type=_FIELD)}</dl>
+
+<dl><dt><strong>__dataclass_params__</strong> = _DataclassParams(init=True,repr=True,eq=True,ord...True,kw_only=False,slots=True,weakref_slot=False)</dl>
+
+<dl><dt><strong>__match_args__</strong> = ('key', 'display_name', 'admin_only', 'read_only', 'position')</dl>
+
+</td></tr></table> <p>
+<table class="section">
+<tr class="decor title-decor heading-text">
+<td class="section-title" colspan=3>&nbsp;<br><a name="ModDefinition">class <strong>ModDefinition</strong></a>(<a href="builtins.html#object">builtins.object</a>)</td></tr>
+    
+<tr><td class="decor title-decor" rowspan=2><span class="code">&nbsp;&nbsp;&nbsp;</span></td>
+<td class="decor title-decor" colspan=2><span class="code"><a href="#ModDefinition">ModDefinition</a>(name:&nbsp;'str',&nbsp;enabled:&nbsp;'bool'&nbsp;=&nbsp;True,&nbsp;seasonal:&nbsp;'bool&nbsp;|&nbsp;None'&nbsp;=&nbsp;None,&nbsp;channel_groups:&nbsp;'tuple[<a href="#ChannelGroupDef">ChannelGroupDef</a>,&nbsp;...]'&nbsp;=&nbsp;&amp;lt;factory&amp;gt;,&nbsp;channel_categories:&nbsp;'tuple[<a href="#ChannelCategoryDef">ChannelCategoryDef</a>,&nbsp;...]'&nbsp;=&nbsp;&amp;lt;factory&amp;gt;,&nbsp;roles:&nbsp;'tuple[<a href="#RoleDef">RoleDef</a>,&nbsp;...]'&nbsp;=&nbsp;&amp;lt;factory&amp;gt;,&nbsp;workflows:&nbsp;'tuple[str,&nbsp;...]'&nbsp;=&nbsp;&amp;lt;factory&amp;gt;,&nbsp;commands:&nbsp;'tuple[str,&nbsp;...]'&nbsp;=&nbsp;&amp;lt;factory&amp;gt;,&nbsp;dependencies:&nbsp;'tuple[str,&nbsp;...]'&nbsp;=&nbsp;&amp;lt;factory&amp;gt;,&nbsp;required_games:&nbsp;'tuple[str,&nbsp;...]'&nbsp;=&nbsp;&amp;lt;factory&amp;gt;,&nbsp;settings:&nbsp;'dict[str,&nbsp;Any]'&nbsp;=&nbsp;&amp;lt;factory&amp;gt;,&nbsp;private:&nbsp;'bool'&nbsp;=&nbsp;False,&nbsp;owner_ids:&nbsp;'tuple[str,&nbsp;...]'&nbsp;=&nbsp;&amp;lt;factory&amp;gt;)&nbsp;-&amp;gt;&nbsp;None<br>
+&nbsp;<br>
+A&nbsp;mod's&nbsp;complete&nbsp;declaration:&nbsp;the&nbsp;core&nbsp;provisions&nbsp;from&nbsp;this&nbsp;only.<br>&nbsp;</span></td></tr>
+<tr><td>&nbsp;</td>
+<td class="singlecolumn">Methods defined here:<br>
+<dl><dt><a name="ModDefinition-__delattr__"><strong>__delattr__</strong></a>(self, name)</dt><dd><span class="code">Implement&nbsp;delattr(self,&nbsp;name).</span></dd></dl>
+
+<dl><dt><a name="ModDefinition-__eq__"><strong>__eq__</strong></a>(self, other)</dt><dd><span class="code">Return&nbsp;self==value.</span></dd></dl>
+
+<dl><dt><a name="ModDefinition-__getstate__"><strong>__getstate__</strong></a> = _dataclass_getstate(self)<span class="grey"><span class="heading-text"> from <a href="dataclasses.html">dataclasses</a></span></span></dt><dd><span class="code">#&nbsp;_dataclass_getstate&nbsp;and&nbsp;_dataclass_setstate&nbsp;are&nbsp;needed&nbsp;for&nbsp;pickling&nbsp;frozen<br>
+#&nbsp;classes&nbsp;with&nbsp;slots.&nbsp;&nbsp;These&nbsp;could&nbsp;be&nbsp;slightly&nbsp;more&nbsp;performant&nbsp;if&nbsp;we&nbsp;generated<br>
+#&nbsp;the&nbsp;code&nbsp;instead&nbsp;of&nbsp;iterating&nbsp;over&nbsp;fields.&nbsp;&nbsp;But&nbsp;that&nbsp;can&nbsp;be&nbsp;a&nbsp;project&nbsp;for<br>
+#&nbsp;another&nbsp;day,&nbsp;if&nbsp;performance&nbsp;becomes&nbsp;an&nbsp;issue.</span></dd></dl>
+
+<dl><dt><a name="ModDefinition-__hash__"><strong>__hash__</strong></a>(self)</dt><dd><span class="code">Return&nbsp;hash(self).</span></dd></dl>
+
+<dl><dt><a name="ModDefinition-__init__"><strong>__init__</strong></a>(self, name: 'str', enabled: 'bool' = True, seasonal: 'bool | None' = None, channel_groups: 'tuple[ChannelGroupDef, ...]' = &lt;factory&gt;, channel_categories: 'tuple[ChannelCategoryDef, ...]' = &lt;factory&gt;, roles: 'tuple[RoleDef, ...]' = &lt;factory&gt;, workflows: 'tuple[str, ...]' = &lt;factory&gt;, commands: 'tuple[str, ...]' = &lt;factory&gt;, dependencies: 'tuple[str, ...]' = &lt;factory&gt;, required_games: 'tuple[str, ...]' = &lt;factory&gt;, settings: 'dict[str, Any]' = &lt;factory&gt;, private: 'bool' = False, owner_ids: 'tuple[str, ...]' = &lt;factory&gt;) -&gt; None</dt><dd><span class="code">Initialize&nbsp;self.&nbsp;&nbsp;See&nbsp;help(type(self))&nbsp;for&nbsp;accurate&nbsp;signature.</span></dd></dl>
+
+<dl><dt><a name="ModDefinition-__repr__"><strong>__repr__</strong></a>(self)</dt><dd><span class="code">Return&nbsp;repr(self).</span></dd></dl>
+
+<dl><dt><a name="ModDefinition-__setattr__"><strong>__setattr__</strong></a>(self, name, value)</dt><dd><span class="code">Implement&nbsp;setattr(self,&nbsp;name,&nbsp;value).</span></dd></dl>
+
+<dl><dt><a name="ModDefinition-__setstate__"><strong>__setstate__</strong></a> = _dataclass_setstate(self, state)<span class="grey"><span class="heading-text"> from <a href="dataclasses.html">dataclasses</a></span></span></dt></dl>
+
+<dl><dt><a name="ModDefinition-channel_category"><strong>channel_category</strong></a>(self, key: 'str') -&gt; 'ChannelCategoryDef'</dt><dd><span class="code">Return&nbsp;the&nbsp;declared&nbsp;channel&nbsp;category&nbsp;for&nbsp;a&nbsp;key,&nbsp;fail&nbsp;loudly.</span></dd></dl>
+
+<dl><dt><a name="ModDefinition-is_private"><strong>is_private</strong></a>(self) -&gt; 'bool'</dt><dd><span class="code">Whether&nbsp;the&nbsp;mod&nbsp;is&nbsp;reserved&nbsp;(bot&nbsp;admins&nbsp;+&nbsp;declared&nbsp;owners).</span></dd></dl>
+
+<dl><dt><a name="ModDefinition-owned_by"><strong>owned_by</strong></a>(self, user_id: 'str') -&gt; 'bool'</dt><dd><span class="code">Whether&nbsp;one&nbsp;Discord&nbsp;user&nbsp;id&nbsp;is&nbsp;a&nbsp;declared&nbsp;owner&nbsp;of&nbsp;this&nbsp;mod.</span></dd></dl>
+
+<dl><dt><a name="ModDefinition-require_seasonal"><strong>require_seasonal</strong></a>(self) -&gt; 'bool'</dt><dd><span class="code">Return&nbsp;the&nbsp;declared&nbsp;mod&nbsp;type;&nbsp;fail&nbsp;loudly&nbsp;when&nbsp;undeclared.<br>
+&nbsp;<br>
+The&nbsp;mod&nbsp;type&nbsp;(seasonal&nbsp;or&nbsp;permanent)&nbsp;is&nbsp;**mandatory**&nbsp;at<br>
+declaration&nbsp;time:&nbsp;the&nbsp;admin-surface&nbsp;machinery&nbsp;branches&nbsp;on&nbsp;it<br>
+(a&nbsp;lifecycle&nbsp;panel&nbsp;+&nbsp;per-season&nbsp;salon&nbsp;for&nbsp;a&nbsp;seasonal&nbsp;mod,&nbsp;a<br>
+guild-level&nbsp;config&nbsp;panel&nbsp;for&nbsp;a&nbsp;permanent&nbsp;one).</span></dd></dl>
+
+<dl><dt><a name="ModDefinition-role"><strong>role</strong></a>(self, key: 'str') -&gt; 'RoleDef'</dt><dd><span class="code">Return&nbsp;the&nbsp;declared&nbsp;role&nbsp;for&nbsp;a&nbsp;key,&nbsp;fail&nbsp;loudly.</span></dd></dl>
+
+<hr>
+Data descriptors defined here:<br>
+<dl><dt><strong>channel_categories</strong></dt>
+</dl>
+<dl><dt><strong>channel_groups</strong></dt>
+</dl>
+<dl><dt><strong>commands</strong></dt>
+</dl>
+<dl><dt><strong>dependencies</strong></dt>
+</dl>
+<dl><dt><strong>enabled</strong></dt>
+</dl>
+<dl><dt><strong>name</strong></dt>
+</dl>
+<dl><dt><strong>owner_ids</strong></dt>
+</dl>
+<dl><dt><strong>private</strong></dt>
+</dl>
+<dl><dt><strong>required_games</strong></dt>
+</dl>
+<dl><dt><strong>roles</strong></dt>
+</dl>
+<dl><dt><strong>seasonal</strong></dt>
+</dl>
+<dl><dt><strong>settings</strong></dt>
+</dl>
+<dl><dt><strong>workflows</strong></dt>
+</dl>
+<hr>
+Data and other attributes defined here:<br>
+<dl><dt><strong>__annotations__</strong> = {'channel_categories': 'tuple[ChannelCategoryDef, ...]', 'channel_groups': 'tuple[ChannelGroupDef, ...]', 'commands': 'tuple[str, ...]', 'dependencies': 'tuple[str, ...]', 'enabled': 'bool', 'name': 'str', 'owner_ids': 'tuple[str, ...]', 'private': 'bool', 'required_games': 'tuple[str, ...]', 'roles': 'tuple[RoleDef, ...]', ...}</dl>
+
+<dl><dt><strong>__dataclass_fields__</strong> = {'channel_categories': Field(name='channel_categories',type='tuple[Chan...appingproxy({}),kw_only=False,_field_type=_FIELD), 'channel_groups': Field(name='channel_groups',type='tuple[ChannelG...appingproxy({}),kw_only=False,_field_type=_FIELD), 'commands': Field(name='commands',type='tuple[str, ...]',def...appingproxy({}),kw_only=False,_field_type=_FIELD), 'dependencies': Field(name='dependencies',type='tuple[str, ...]'...appingproxy({}),kw_only=False,_field_type=_FIELD), 'enabled': Field(name='enabled',type='bool',default=True,de...appingproxy({}),kw_only=False,_field_type=_FIELD), 'name': Field(name='name',type='str',default=&lt;dataclasse...appingproxy({}),kw_only=False,_field_type=_FIELD), 'owner_ids': Field(name='owner_ids',type='tuple[str, ...]',de...appingproxy({}),kw_only=False,_field_type=_FIELD), 'private': Field(name='private',type='bool',default=False,d...appingproxy({}),kw_only=False,_field_type=_FIELD), 'required_games': Field(name='required_games',type='tuple[str, ......appingproxy({}),kw_only=False,_field_type=_FIELD), 'roles': Field(name='roles',type='tuple[RoleDef, ...]',de...appingproxy({}),kw_only=False,_field_type=_FIELD), ...}</dl>
+
+<dl><dt><strong>__dataclass_params__</strong> = _DataclassParams(init=True,repr=True,eq=True,ord...True,kw_only=False,slots=True,weakref_slot=False)</dl>
+
+<dl><dt><strong>__match_args__</strong> = ('name', 'enabled', 'seasonal', 'channel_groups', 'channel_categories', 'roles', 'workflows', 'commands', 'dependencies', 'required_games', 'settings', 'private', 'owner_ids')</dl>
+
+</td></tr></table> <p>
+<table class="section">
+<tr class="decor title-decor heading-text">
+<td class="section-title" colspan=3>&nbsp;<br><a name="RoleDef">class <strong>RoleDef</strong></a>(<a href="builtins.html#object">builtins.object</a>)</td></tr>
+    
+<tr><td class="decor title-decor" rowspan=2><span class="code">&nbsp;&nbsp;&nbsp;</span></td>
+<td class="decor title-decor" colspan=2><span class="code"><a href="#RoleDef">RoleDef</a>(key:&nbsp;'str',&nbsp;display_name:&nbsp;'str',&nbsp;color:&nbsp;'int'&nbsp;=&nbsp;10070709,&nbsp;hoisted:&nbsp;'bool'&nbsp;=&nbsp;False,&nbsp;description:&nbsp;'str'&nbsp;=&nbsp;'',&nbsp;per_season:&nbsp;'bool'&nbsp;=&nbsp;False,&nbsp;admin:&nbsp;'bool'&nbsp;=&nbsp;False)&nbsp;-&amp;gt;&nbsp;None<br>
+&nbsp;<br>
+A&nbsp;role&nbsp;declared&nbsp;by&nbsp;a&nbsp;mod,&nbsp;referenced&nbsp;by&nbsp;logical&nbsp;role&nbsp;key.<br>
+&nbsp;<br>
+``admin``&nbsp;—&nbsp;the&nbsp;mod's&nbsp;admin&nbsp;role:&nbsp;an&nbsp;``admin_only``&nbsp;channel/group<br>
+resolves&nbsp;its&nbsp;audience&nbsp;to&nbsp;the&nbsp;mod's&nbsp;admin&nbsp;roles&nbsp;(and&nbsp;the&nbsp;bot&nbsp;admins).<br>&nbsp;</span></td></tr>
+<tr><td>&nbsp;</td>
+<td class="singlecolumn">Methods defined here:<br>
+<dl><dt><a name="RoleDef-__delattr__"><strong>__delattr__</strong></a>(self, name)</dt><dd><span class="code">Implement&nbsp;delattr(self,&nbsp;name).</span></dd></dl>
+
+<dl><dt><a name="RoleDef-__eq__"><strong>__eq__</strong></a>(self, other)</dt><dd><span class="code">Return&nbsp;self==value.</span></dd></dl>
+
+<dl><dt><a name="RoleDef-__getstate__"><strong>__getstate__</strong></a> = _dataclass_getstate(self)<span class="grey"><span class="heading-text"> from <a href="dataclasses.html">dataclasses</a></span></span></dt><dd><span class="code">#&nbsp;_dataclass_getstate&nbsp;and&nbsp;_dataclass_setstate&nbsp;are&nbsp;needed&nbsp;for&nbsp;pickling&nbsp;frozen<br>
+#&nbsp;classes&nbsp;with&nbsp;slots.&nbsp;&nbsp;These&nbsp;could&nbsp;be&nbsp;slightly&nbsp;more&nbsp;performant&nbsp;if&nbsp;we&nbsp;generated<br>
+#&nbsp;the&nbsp;code&nbsp;instead&nbsp;of&nbsp;iterating&nbsp;over&nbsp;fields.&nbsp;&nbsp;But&nbsp;that&nbsp;can&nbsp;be&nbsp;a&nbsp;project&nbsp;for<br>
+#&nbsp;another&nbsp;day,&nbsp;if&nbsp;performance&nbsp;becomes&nbsp;an&nbsp;issue.</span></dd></dl>
+
+<dl><dt><a name="RoleDef-__hash__"><strong>__hash__</strong></a>(self)</dt><dd><span class="code">Return&nbsp;hash(self).</span></dd></dl>
+
+<dl><dt><a name="RoleDef-__init__"><strong>__init__</strong></a>(self, key: 'str', display_name: 'str', color: 'int' = 10070709, hoisted: 'bool' = False, description: 'str' = '', per_season: 'bool' = False, admin: 'bool' = False) -&gt; None</dt><dd><span class="code">Initialize&nbsp;self.&nbsp;&nbsp;See&nbsp;help(type(self))&nbsp;for&nbsp;accurate&nbsp;signature.</span></dd></dl>
+
+<dl><dt><a name="RoleDef-__repr__"><strong>__repr__</strong></a>(self)</dt><dd><span class="code">Return&nbsp;repr(self).</span></dd></dl>
+
+<dl><dt><a name="RoleDef-__setattr__"><strong>__setattr__</strong></a>(self, name, value)</dt><dd><span class="code">Implement&nbsp;setattr(self,&nbsp;name,&nbsp;value).</span></dd></dl>
+
+<dl><dt><a name="RoleDef-__setstate__"><strong>__setstate__</strong></a> = _dataclass_setstate(self, state)<span class="grey"><span class="heading-text"> from <a href="dataclasses.html">dataclasses</a></span></span></dt></dl>
+
+<hr>
+Data descriptors defined here:<br>
+<dl><dt><strong>admin</strong></dt>
+</dl>
+<dl><dt><strong>color</strong></dt>
+</dl>
+<dl><dt><strong>description</strong></dt>
+</dl>
+<dl><dt><strong>display_name</strong></dt>
+</dl>
+<dl><dt><strong>hoisted</strong></dt>
+</dl>
+<dl><dt><strong>key</strong></dt>
+</dl>
+<dl><dt><strong>per_season</strong></dt>
+</dl>
+<hr>
+Data and other attributes defined here:<br>
+<dl><dt><strong>__annotations__</strong> = {'admin': 'bool', 'color': 'int', 'description': 'str', 'display_name': 'str', 'hoisted': 'bool', 'key': 'str', 'per_season': 'bool'}</dl>
+
+<dl><dt><strong>__dataclass_fields__</strong> = {'admin': Field(name='admin',type='bool',default=False,def...appingproxy({}),kw_only=False,_field_type=_FIELD), 'color': Field(name='color',type='int',default=10070709,d...appingproxy({}),kw_only=False,_field_type=_FIELD), 'description': Field(name='description',type='str',default='',d...appingproxy({}),kw_only=False,_field_type=_FIELD), 'display_name': Field(name='display_name',type='str',default=&lt;da...appingproxy({}),kw_only=False,_field_type=_FIELD), 'hoisted': Field(name='hoisted',type='bool',default=False,d...appingproxy({}),kw_only=False,_field_type=_FIELD), 'key': Field(name='key',type='str',default=&lt;dataclasses...appingproxy({}),kw_only=False,_field_type=_FIELD), 'per_season': Field(name='per_season',type='bool',default=Fals...appingproxy({}),kw_only=False,_field_type=_FIELD)}</dl>
+
+<dl><dt><strong>__dataclass_params__</strong> = _DataclassParams(init=True,repr=True,eq=True,ord...True,kw_only=False,slots=True,weakref_slot=False)</dl>
+
+<dl><dt><strong>__match_args__</strong> = ('key', 'display_name', 'color', 'hoisted', 'description', 'per_season', 'admin')</dl>
+
+</td></tr></table></td></tr></table>
+</body></html>

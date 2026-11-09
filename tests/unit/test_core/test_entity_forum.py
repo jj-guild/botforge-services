@@ -1,4 +1,4 @@
-"""Generic entity-forum engine — unit tests (kingdoms.core.services.entity_forum).
+"""Generic entity-forum engine — unit tests (botforge.core.services.entity_forum).
 
 The stored-id contract: the spec groups its entities by (tree scope,
 tree channel key); each forum is resolved by the channel id the
@@ -12,7 +12,7 @@ from typing import Any
 
 import discord
 
-from kingdoms.core.services.entity_forum import EntityForumSpec, sync_entity_forum
+from botforge.core.services.entity_forum import EntityForumSpec, sync_entity_forum
 
 
 class _Faction:
@@ -102,9 +102,9 @@ def _spec(factions: list[_Faction], stored: dict[str, str]) -> EntityForumSpec:
 
 
 def _wire(monkeypatch: Any, guild: _Guild, platform: _Platform, stored: dict[str, str]) -> None:
-    monkeypatch.setattr("kingdoms.discord.channels_platform.DiscordChannelsPlatform", lambda b: platform)
+    monkeypatch.setattr("botforge.discord.channels_platform.DiscordChannelsPlatform", lambda b: platform)
     monkeypatch.setattr(
-        "kingdoms.discord.ui.panels_provisioning.stored_channel_id",
+        "botforge.discord.ui.panels_provisioning.stored_channel_id",
         lambda guild_id, scope, key: _async_value(stored.get(f"{scope}:{key}")),
     )
 

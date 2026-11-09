@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from kingdoms.core.interfaces.platform import IChannel, IMessage, IPlatform, IUser, IWorkflow
-from kingdoms.core.models.workflow import WorkflowStatus, WorkflowTransition
+from botforge.core.interfaces.platform import IChannel, IMessage, IPlatform, IUser, IWorkflow
+from botforge.core.models.workflow import WorkflowStatus, WorkflowTransition
 
 
 class FakeUser:

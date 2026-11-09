@@ -1,0 +1,116 @@
+syntax = "proto3";
+
+package botforge.v1;
+
+// Game content provider service (ext-aoe2techtree family): a content
+// source process serves localized game catalog data (factions, maps) to
+// svc-core. Content is immutable between game patches; the core caches it
+// in Mongo/Redis and bot admins trigger a refresh on patch days. The
+// upstream the ext process reads (vendored dataset, HTTP API, ...) is
+// the provider's own concern — the core only ever sees this contract,
+// so switching to another API source never touches the consumers.
+service Content {
+  // Declare the provider identity and its supported game/locale surface.
+  rpc GetContentCapabilities(ContentCapabilitiesRequest) returns (ContentCapabilities);
+  // Every faction key the source knows (catalog reconciliation).
+  rpc ListFactions(ListFactionsRequest) returns (FactionList);
+  // One faction's localized content (name + game-provided help summary).
+  rpc GetFactionContent(FactionContentRequest) returns (LocalizedContent);
+  // One map's localized content (name-only today).
+  rpc GetMapContent(MapContentRequest) returns (LocalizedContent);
+
+  // One map's full descriptor (the import flow): description, image,
+  // licence-checked fields — the Liquipedia family of content sources.
+  // The provider owns the raw data and its terms-of-use compliance.
+  rpc GetMapSeed(MapSeedRequest) returns (MapSeedReply);
+}
+
+message MapSeedRequest {
+  string game_key = 1;    // e.g. "aoe2" (the provider keys its wikis by game)
+  string map_key = 2;     // the map name or page title the admin typed
+  bool force = 3;         // the admin DM's sync: evict the persisted seed
+                          // cache and re-fetch upstream (a sync means
+                          // fresh data, never a week-old descriptor)
+}
+
+message MapSeedVersion {
+  string name = 1;
+  string description = 2;
+  repeated string details = 3;
+}
+
+message MapSeedGalleryImage {
+  string file = 1;      // the wiki file name ("black-forest_AoE2DE.png")
+  string caption = 2;   // the gallery entry's caption ("in-game icon")
+  string url = 3;       // the resolved imageinfo URL
+}
+
+message MapSeedReply {
+  bool found = 1;              // false: no page under this name
+  string name = 2;             // canonical display name
+  string description = 3;
+  string resource_url = 4;     // attribution/source link
+  string image_url = 5;
+  string icon_url = 6;
+  string terrain = 7;
+  string size = 8;
+  string map_type = 9;
+  bool licence_ok = 10;        // true: the image passed the licence guard
+  string licence_note = 11;    // the refusal reason when licence_ok is false
+  // The enrichment surface (the maps sync rides the provider too —
+  // one Liquipedia client per env, never a second in the bot):
+  bool walls = 12;
+  bool nomad = 13;
+  bool tc = 14;
+  repeated string game_versions = 15;
+  repeated MapSeedVersion versions = 16;
+  repeated string tags = 17;
+  // The RAW infobox labels (owner direction 2026-11-06): the infobox's
+  // own words — never amputated into the bools above
+  string walls_label = 18;     // "No", "Partial", "Yes"
+  string nomad_label = 19;
+  string tc_label = 20;        // the starting TC count, "1" / "2"
+  string player_capacity = 21;  // "Up to 8"
+  string creator = 22;          // "Forgotten Empires"
+  string raw_wikitext = 23;     // the page's raw wikitext (the sync's
+                                // raw-data store: parse again offline,
+                                // never re-fetch to re-parse)
+  string creator_url = 25;      // the creator's wiki page ([[Zetnus]])
+  repeated MapSeedGalleryImage gallery_images = 24;  // EVERY gallery
+                                // entry with its resolved URL — the
+                                // post shows the whole gallery
+}
+
+message ContentCapabilitiesRequest {}
+
+message ContentCapabilities {
+  string provider_key = 1;   // e.g. "aoe2techtree"
+  string game_key = 2;       // e.g. "aoe2"
+  repeated string locales = 3; // supported content locales, e.g. "en", "fr"
+}
+
+message ListFactionsRequest {}
+
+message FactionList {
+  repeated string faction_keys = 1;
+}
+
+message FactionContentRequest {
+  string faction_key = 1;     // provider-side faction/civ identifier
+  string locale = 2;          // requested locale, empty = source default
+}
+
+message MapContentRequest {
+  string map_key = 1;         // provider-side map identifier
+  string locale = 2;
+}
+
+message LocalizedContent {
+  string entity_id = 1;       // canonical platform entity id
+  string locale = 2;          // locale actually served (fallback applied)
+  string name = 3;            // localized display name
+  string summary = 4;         // localized summary text, may be empty
+  string source_url = 5;      // data source attribution link
+  bool found = 6;             // false: the source does not know this key
+  string image_url = 7;       // optional visual (e.g. the faction's crest), may be empty
+}

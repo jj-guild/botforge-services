@@ -15,7 +15,7 @@ from typing import Any
 import discord
 import pytest
 
-from kingdoms.discord.admin_panel_dynamic import (
+from botforge.discord.admin_panel_dynamic import (
     PIN_BACK_BUTTON_ID,
     PIN_CHANNEL_MENU_ID,
     PIN_LOCALE_SELECT_ID,
@@ -28,7 +28,7 @@ from kingdoms.discord.admin_panel_dynamic import (
     build_pin_main_menu,
     pin_route_id,
 )
-from kingdoms.discord.admin_persistent import (
+from botforge.discord.admin_persistent import (
     register_admin_panel_bot,
     register_admin_persistent_items,
 )
@@ -249,7 +249,7 @@ class TestClickTimeGuards:
         """The ordering bug: a wiring snapshot taken in setup_hook saw
         services=None (the factory builds them later). The bot-based
         resolver must see them at click time."""
-        from kingdoms.discord import admin_persistent
+        from botforge.discord import admin_persistent
 
         bot = _FakeBot(_FakeLogsService())
         register_admin_panel_bot(bot)
@@ -270,7 +270,7 @@ class TestStartupRegistration:
 
         bot = FakeBot()
         register_admin_persistent_items(bot)
-        from kingdoms.discord.admin_panel_dynamic import PinReadOnlySelect
+        from botforge.discord.admin_panel_dynamic import PinReadOnlySelect
     
         assert set(bot.registered) == {
                     PinChannelMenu,

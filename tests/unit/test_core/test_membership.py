@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import pytest
 
-from kingdoms.core.services.membership import MembershipResult, MembershipService
+from botforge.core.services.membership import MembershipResult, MembershipService
 
 
 class _RecordingHooks:

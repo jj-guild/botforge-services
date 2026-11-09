@@ -2,10 +2,10 @@
 
 Behavioral tests (journeys through the real discord.py dispatch) run on
 SimCord: the bot under test runs unmodified against an in-memory virtual
-Discord — no network, no token (see kingdoms/docs/architecture/testing.md).
+Discord — no network, no token (see botforge/docs/architecture/testing.md).
 
 The ``simcord_env`` fixture is provided by the SimCord pytest plugin. Since
-kingdoms-services#12 the shared ``simcord_bot`` fixture builds the real bot
+botforge-services#12 the shared ``simcord_bot`` fixture builds the real bot
 through the production factory (``create_bot``), so journeys exercise the
 actual dispatch, command tree and service wiring.
 """
@@ -17,7 +17,7 @@ from pathlib import Path
 
 import pytest
 
-from kingdoms.discord.bot.factory import BotConfig, KingdomsBot, create_bot
+from botforge.discord.bot.factory import BotConfig, BotforgeBot, create_bot
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
@@ -26,7 +26,7 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 def network_free():  # type: ignore[no-untyped-def]
     """Fail any test that attempts a real network connection (hermeticity).
 
-    Tests are in-memory and network-free by design (kingdoms-services#106):
+    Tests are in-memory and network-free by design (botforge-services#106):
     SimCord replaces the discord.py HTTP client and gateway, so a real
     socket connect means a journey (or the code under test wired for a
     live service) escaped its double — the run must fail, not silently
@@ -44,7 +44,7 @@ def network_free():  # type: ignore[no-untyped-def]
             return
         pytest.fail(
             f"A test attempted a real network connection to {address!r}: "
-            "tests must stay in-memory and network-free (kingdoms-services#106) "
+            "tests must stay in-memory and network-free (botforge-services#106) "
             "— SimCord replaces the discord.py HTTP client and gateway; "
             "loopback only is tolerated for the local /healthz server."
         )
@@ -67,12 +67,12 @@ def bot_config() -> BotConfig:
 
 
 @pytest.fixture
-def kingdoms_bot(bot_config: BotConfig) -> KingdomsBot:
+def botforge_bot(bot_config: BotConfig) -> BotforgeBot:
     """The real bot, built by the production factory."""
     return create_bot(bot_config)
 
 
 @pytest.fixture
-def simcord_bot(kingdoms_bot: KingdomsBot) -> KingdomsBot:
+def simcord_bot(botforge_bot: BotforgeBot) -> BotforgeBot:
     """Hand the real bot to SimCord's environment runner."""
-    return kingdoms_bot
+    return botforge_bot

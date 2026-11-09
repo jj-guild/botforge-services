@@ -5,7 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from kingdoms.core.services.mod_registry import load_mod_definitions
+from botforge.core.services.mod_registry import load_mod_definitions
 
 REPO_ROOT = Path(__file__).resolve().parents[4]
 
@@ -32,7 +32,7 @@ def test_declaration_validates() -> None:
 
 def test_enrollment_settings_parse() -> None:
     """The declared settings land on the definition and parse as criteria."""
-    from kingdoms.core.services.enrollment import parse_criteria
+    from botforge.core.services.enrollment import parse_criteria
 
     definition = _definition()
     criteria = parse_criteria(definition.settings)
@@ -67,7 +67,7 @@ def test_register_wires_the_generic_surfaces() -> None:
         def add_dynamic_items(self, *classes: type) -> None:
             self.items.extend(classes)
 
-    from kingdoms.discord import mod_surfaces
+    from botforge.discord import mod_surfaces
 
     bot = FakeBot()
     # the definition rides the registry at runtime; the register hook
@@ -75,7 +75,7 @@ def test_register_wires_the_generic_surfaces() -> None:
     arena.register(bot, None)
     assert "arena" in mod_surfaces.registered_mod_surfaces()
     assert [command.name for command in bot.tree.get_commands()] == ["arena"]
-    from kingdoms.discord.mod_surfaces import ApplyButton, SyncModButton
+    from botforge.discord.mod_surfaces import ApplyButton, SyncModButton
 
     assert ApplyButton in bot.items
     assert SyncModButton in bot.items

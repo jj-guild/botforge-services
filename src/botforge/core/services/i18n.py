@@ -1,0 +1,137 @@
+"""Message catalog: localized bot messages (guild and DM surfaces).
+
+The catalog loads the ``locales/*.yaml`` files once and renders keys
+per locale, with English as the universal fallback:
+
+- **guild locale** — the global per-guild language (``/admin``), used
+  for the channel messages: announcements, lifecycle events, panels;
+- **user locale** — the per-user DM language (``/admin`` in DM), used
+  for everything the bot sends to that user in a DM (error reports,
+  enrollment flows, match reports). DMs follow the user, not a guild.
+
+Missing keys degrade to English; missing files degrade to the built-in
+fallbacks. The catalog never raises — a message always renders.
+"""
+
+from __future__ import annotations
+
+import logging
+from pathlib import Path
+from typing import Any
+
+import yaml
+
+logger = logging.getLogger("botforge.core.i18n")
+
+DEFAULT_LOCALE = "en"
+FALLBACKS: dict[str, str] = {
+    "errors.unexpected": "An unexpected error occurred. Please try again.",
+    "errors.validation": "Invalid input. Please check your values and try again.",
+    "errors.configuration": "Configuration error. Please contact an administrator.",
+    "errors.not_found": "The requested resource was not found.",
+    "errors.permission": "You do not have permission to perform this action.",
+    "errors.rate_limited": "You are being rate limited. Please try again later.",
+    "errors.workflow": "An error occurred during the workflow. Please try again.",
+    "errors.platform": "A platform error occurred. Please try again.",
+    "errors.database": "A database error occurred. Please try again later.",
+    "lifecycle.stop": "Bot shutting down.",
+    "permissions.denied": "You are not allowed to do that — this action requires a role you do not have.",
+    "lifecycle.policy.grant": "Access policy updated: role <@&{role_id}> granted view, by <@{by}>.",
+    "lifecycle.policy.reset": "Access policy reset to admin-only, by <@{by}>.",
+    "lifecycle.policy.route": "Bot logs routed to <#{channel_id}>{previous_note}, by <@{by}>.",
+    "lifecycle.policy.visibility": "Bot logs visibility set to {state}, by <@{by}>.",
+}
+
+
+class MessageCatalog:
+    """Locale-aware message rendering over the yaml catalogs."""
+
+    def __init__(self, config_dir: Path | str = "config", repo_root: Path | str | None = None) -> None:
+        """Load every ``locales/*.yaml`` catalog.
+
+        The config directory first, then the per-mod catalogs of the
+        modular layout (botforge-services#178): a modular mod keeps its locale
+        entries in ``modules/mods/<mod>/locales/`` and they merge after
+        the shared ones (same keys win per mod).
+        """
+        self._sections: dict[str, dict[str, str]] = {}
+        directory = Path(config_dir) / "locales"
+        try:
+            for path in sorted(directory.glob("*.yaml")):
+                self._load_locale_file(path)
+            if repo_root is not None:
+                modular_dir = Path(repo_root) / "modules" / "mods"
+                if modular_dir.is_dir():
+                    for mod_dir in sorted(p for p in modular_dir.iterdir() if p.is_dir()):
+                        mod_locales = mod_dir / "locales"
+                        if not mod_locales.is_dir():
+                            continue
+                        for path in sorted(mod_locales.glob("*.yaml")):
+                            self._load_locale_file(path)
+        except Exception:
+            logger.warning("LOCALE CATALOG LOAD FAILED (%s) — falling back to built-ins", directory)
+            self._sections = {}
+
+    def _load_locale_file(self, path: Path) -> None:
+        """Merge one locale yaml file into the loaded sections."""
+        locale = path.stem
+        data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+        entries = data.get(locale, {})
+        if isinstance(entries, dict):
+            merged = {**self._sections.get(locale, {}), **self._flatten(entries)}
+            self._sections[locale] = merged
+
+    @staticmethod
+    def _flatten(entries: dict[str, Any], prefix: str = "") -> dict[str, str]:
+        """Flatten nested yaml sections into dotted keys (admin.title)."""
+        flat: dict[str, str] = {}
+        for key, value in entries.items():
+            dotted = f"{prefix}{key}"
+            if isinstance(value, dict):
+                flat.update(MessageCatalog._flatten(value, prefix=f"{dotted}."))
+            elif isinstance(value, str):
+                flat[dotted] = value
+        return flat
+
+    def section(self, prefix: str, locale: str = DEFAULT_LOCALE) -> dict[str, str]:
+        """Resolve every key of a dotted section (e.g. ``announce``).
+
+        Returns the flattened keys of one yaml section (``announce.title``
+        for prefix ``announce``), with English filling the gaps and the
+        built-in fallbacks as last resort. One loader for every surface
+        (announcements, admin panels) \u2014 no per-module yaml parsing.
+        """
+        merged: dict[str, str] = {}
+        for fill_locale in (DEFAULT_LOCALE, locale):
+            for key, value in self._sections.get(fill_locale, {}).items():
+                if key.startswith(f"{prefix}."):
+                    merged[key.removeprefix(f"{prefix}.")] = value
+        if not merged:
+            merged = {
+                key.removeprefix(f"{prefix}."): value
+                for key, value in FALLBACKS.items()
+                if key.startswith(f"{prefix}.")
+            }
+        return merged
+
+    def render(self, key: str, locale: str = DEFAULT_LOCALE, **kwargs: Any) -> str:
+        """Render a dotted key for a locale; English fallback, never raises."""
+        template = self._lookup(key, locale) or self._lookup(key, DEFAULT_LOCALE) or FALLBACKS.get(key, key)
+        try:
+            return template.format(**kwargs)
+        except (KeyError, IndexError):
+            return template
+
+    def _lookup(self, key: str, locale: str) -> str | None:
+        """Resolve a dotted key inside one locale section, flattened."""
+        section = self._sections.get(locale, {})
+        if key in section:
+            return section[key]
+        current: Any = section
+        for part in key.split("."):
+            if not isinstance(current, dict):
+                return None
+            current = current.get(part)
+        if isinstance(current, str):
+            return current
+        return None

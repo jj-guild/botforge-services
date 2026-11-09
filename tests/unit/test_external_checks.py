@@ -6,8 +6,8 @@ from typing import Any
 
 import pytest
 
-from kingdoms.core.services.pinned_menu import PinnedMenuService
-from kingdoms.core_process.external_checks import (
+from botforge.core.services.pinned_menu import PinnedMenuService
+from botforge.core_process.external_checks import (
     CheckResult,
     register_battery,
     registered_batteries,

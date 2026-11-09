@@ -12,8 +12,8 @@ from typing import Any
 
 import pytest
 
-from kingdoms.core.models.channel import ChannelModel
-from kingdoms.core.services.managed_channel import ManagedChannelService
+from botforge.core.models.channel import ChannelModel
+from botforge.core.services.managed_channel import ManagedChannelService
 
 
 class _FakePlatform:

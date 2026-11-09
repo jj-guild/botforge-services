@@ -1,0 +1,432 @@
+"""The pinned admin menu surface: a fully dynamic Components V2 view (#122).
+
+The pinned menu is a **permanent** message, so its components carry no
+live-view state (the \u00a73b reconstruction contract). On top of that, this
+module enforces one structural rule learned the hard way:
+
+**Namespace uniqueness \u2014 a custom_id is served by exactly one dispatch
+mechanism.** discord.py dispatches a component interaction to the
+matching DynamicItems **and** to the live view registered for the
+message, so an id shared between a dynamic template and a live closure
+runs **both** on every click while the view is alive. The historical
+bug: the pinned menu was built by the /admin builders, so its captured
+``by="system"`` closures answered the same ``admin:select:locale`` id as
+the dynamic handler \u2014 every language change was applied twice and
+audited as ``Language set to fr, by <@system>``.
+
+The pinned surface therefore rides its own ``admin:pin:`` namespace:
+
+- ``admin:pin:select:locale`` \u2014 the guild language select;
+- ``admin:pin:select:channel`` \u2014 the managed-channel picker;
+- ``admin:pin:select:visibility`` \u2014 the logs visibility select;
+- ``admin:pin:route:<category>`` \u2014 the routing select, with the
+  managed-channel **category** in the payload (the legacy
+  ``admin:channels:logs`` id was shared by both categories, so the
+  dynamic path always routed to the logs channel);
+- ``admin:pin:button:back`` \u2014 the back button.
+
+Every interactive child is a DynamicItem, and a view whose children
+are all dynamic items is never registered as a live view: a click has
+exactly one dispatch path, restart-proof, with no captured state. The
+ephemeral /admin panel keeps its closures on the ``admin:select:*``
+ids undisturbed \u2014 no dynamic template matches them anymore.
+
+Click-time guards and services resolve at click time through the
+wiring resolver (:func:`~botforge.discord.admin_persistent.register_admin_panel_bot`).
+"""
+
+from __future__ import annotations
+
+import re
+from typing import Any
+
+import discord
+
+from botforge.core.services.i18n import MessageCatalog
+from botforge.core.services.logs import BOT_LOGS_CATEGORY, LogService
+from botforge.discord.admin import (
+    MANAGED_CHANNELS,
+    VISIBILITY_ADMIN_ONLY,
+    VISIBILITY_PUBLIC,
+    _resolve_managed_channel,
+    _t,
+)
+from botforge.discord.ui import BLURPLE
+
+PIN_LOCALE_SELECT_ID = "admin:pin:select:locale"
+PIN_CHANNEL_MENU_ID = "admin:pin:select:channel"
+PIN_VISIBILITY_SELECT_ID = "admin:pin:select:visibility"
+PIN_BACK_BUTTON_ID = "admin:pin:button:back"
+PIN_READ_ONLY_SELECT_ID = "admin:pin:select:read-only"
+
+
+
+def pin_route_id(category: str) -> str:
+    """Return the routing select id of one managed-channel category."""
+    return f"admin:pin:route:{category}"[:100]
+
+
+def _select_row(item: discord.ui.DynamicItem[Any]) -> discord.ui.ActionRow[discord.ui.LayoutView]:
+    """Wrap one dynamic item in its own ActionRow (Discord layout rule)."""
+    row: discord.ui.ActionRow[discord.ui.LayoutView] = discord.ui.ActionRow()
+    row.add_item(item)
+    return row
+
+
+class PinChannelMenu(
+    discord.ui.DynamicItem[discord.ui.Select[Any]],
+    template=r"admin:pin:select:channel",
+):
+    """The pinned managed-channel picker (opens the channel sub-menu)."""
+
+    def __init__(self, options: list[discord.SelectOption], placeholder: str = "") -> None:
+        super().__init__(
+            discord.ui.Select(
+                custom_id=PIN_CHANNEL_MENU_ID,
+                options=options,
+                placeholder=placeholder or None,
+            )
+        )
+
+    @classmethod
+    def create(
+        cls,
+        catalog: MessageCatalog | None,
+        locale: str,
+        status: dict[str, str],
+        placeholder: str = "",
+    ) -> PinChannelMenu:
+        """Build the picker from the guild's current channel status."""
+        options = [
+            discord.SelectOption(
+                label=f"{icon} {_t(catalog, locale, label_key)}",
+                value=category,
+                description=status.get(category, _t(catalog, locale, "not_provisioned")),
+            )
+            for category, icon, label_key in MANAGED_CHANNELS
+        ]
+        return cls(options, placeholder)
+
+    @classmethod
+    async def from_custom_id(
+        cls,
+        interaction: discord.Interaction,
+        item: discord.ui.Item[Any],
+        match: re.Match[str],
+        /,
+    ) -> PinChannelMenu:
+        """Rebuild the picker from the wire (generic options; the callback re-renders)."""
+        return cls(
+            [
+                discord.SelectOption(label=f"{icon} {label_key}", value=category)
+                for category, icon, label_key in MANAGED_CHANNELS
+            ]
+        )
+
+    async def callback(self, interaction: discord.Interaction) -> None:
+        """Open the selected channel's sub-menu through the persistent handler."""
+        from botforge.discord.admin_persistent import _handle_channel
+
+        await _handle_channel(interaction)
+
+
+class PinVisibilitySelect(
+    discord.ui.DynamicItem[discord.ui.Select[Any]],
+    template=r"admin:pin:select:visibility",
+):
+    """The pinned logs-visibility select (public/admin-only)."""
+
+    def __init__(self, options: list[discord.SelectOption], placeholder: str = "") -> None:
+        super().__init__(
+            discord.ui.Select(
+                custom_id=PIN_VISIBILITY_SELECT_ID,
+                options=options,
+                placeholder=placeholder or None,
+            )
+        )
+
+    @classmethod
+    def create(
+        cls,
+        catalog: MessageCatalog | None,
+        locale: str,
+        placeholder: str = "",
+        current: str = VISIBILITY_ADMIN_ONLY,
+    ) -> PinVisibilitySelect:
+        """Build the visibility options, the current policy pre-selected."""
+        options = [
+            discord.SelectOption(
+                label=f"\U0001f512 {_t(catalog, locale, 'visibility_admin_label')}",
+                value=VISIBILITY_ADMIN_ONLY,
+                description=_t(catalog, locale, "visibility_admin_hint"),
+                default=current == VISIBILITY_ADMIN_ONLY,
+            ),
+            discord.SelectOption(
+                label=f"\U0001f513 {_t(catalog, locale, 'visibility_public_label')}",
+                value=VISIBILITY_PUBLIC,
+                description=_t(catalog, locale, "visibility_public_hint"),
+                default=current == VISIBILITY_PUBLIC,
+            ),
+        ]
+        return cls(options, placeholder)
+
+    @classmethod
+    async def from_custom_id(
+        cls,
+        interaction: discord.Interaction,
+        item: discord.ui.Item[Any],
+        match: re.Match[str],
+        /,
+    ) -> PinVisibilitySelect:
+        """Rebuild the select from the wire (generic options; the callback re-renders)."""
+        return cls(
+            [
+                discord.SelectOption(label=VISIBILITY_ADMIN_ONLY, value=VISIBILITY_ADMIN_ONLY),
+                discord.SelectOption(label=VISIBILITY_PUBLIC, value=VISIBILITY_PUBLIC),
+            ]
+        )
+
+    async def callback(self, interaction: discord.Interaction) -> None:
+        """Apply the visibility through the persistent handler."""
+        from botforge.discord.admin_persistent import _handle_visibility
+
+        await _handle_visibility(interaction)
+
+
+class PinRouteSelect(
+    discord.ui.DynamicItem[discord.ui.ChannelSelect[Any]],
+    template=r"admin:pin:route:(?P<category>[a-z_]+)",
+):
+    """The pinned channel-routing select; the category rides the payload."""
+
+    def __init__(self, category: str, placeholder: str = "") -> None:
+        super().__init__(
+            discord.ui.ChannelSelect(
+                custom_id=pin_route_id(category),
+                placeholder=placeholder or None,
+                channel_types=[discord.ChannelType.text],
+            )
+        )
+        self.category = category
+
+    @classmethod
+    async def from_custom_id(
+        cls,
+        interaction: discord.Interaction,
+        item: discord.ui.Item[Any],
+        match: re.Match[str],
+        /,
+    ) -> PinRouteSelect:
+        """Rebuild the routing select from the wire \u2014 the category is the payload."""
+        return cls(match["category"])
+
+    async def callback(self, interaction: discord.Interaction) -> None:
+        """Route the category's channel through the persistent handler."""
+        from botforge.discord.admin_persistent import _handle_route
+
+        await _handle_route(interaction, self.category)
+
+
+class PinBackButton(
+    discord.ui.DynamicItem[discord.ui.Button[Any]],
+    template=r"admin:pin:button:back",
+):
+    """The pinned back button (channel sub-menu \u2192 main menu)."""
+
+    def __init__(self, label: str = "Back") -> None:
+        super().__init__(
+            discord.ui.Button(
+                label=label,
+                style=discord.ButtonStyle.secondary,
+                custom_id=PIN_BACK_BUTTON_ID,
+            )
+        )
+
+    @classmethod
+    async def from_custom_id(
+        cls,
+        interaction: discord.Interaction,
+        item: discord.ui.Item[Any],
+        match: re.Match[str],
+        /,
+    ) -> PinBackButton:
+        """Rebuild the button from the wire \u2014 the only post-restart path."""
+        return cls()
+
+    async def callback(self, interaction: discord.Interaction) -> None:
+        """Return to the main menu through the persistent handler."""
+        from botforge.discord.admin_persistent import _handle_back
+
+        await _handle_back(interaction)
+
+
+class PinReadOnlySelect(
+    discord.ui.DynamicItem[discord.ui.Select[Any]],
+    template=r"admin:pin:select:read-only:(?P<category>[A-Za-z0-9_:-]+)",
+):
+    """The per-channel read-only toggle, shown in the channel's sub-menu.
+
+    Two options (lock / open), the current state pre-selected; the
+    channel category rides the custom_id so the rebuild is state-aware.
+    """
+
+    def __init__(self, options: list[discord.SelectOption], category: str = "") -> None:
+        self.category = category
+        super().__init__(
+            discord.ui.Select(
+                custom_id=f"{PIN_READ_ONLY_SELECT_ID}:{category}"[:100],
+                options=options or [discord.SelectOption(label="-", value="none")],
+                placeholder="Lecture seule du salon...",
+            )
+        )
+
+    @classmethod
+    def per_channel(cls, category: str, locked: bool) -> PinReadOnlySelect:
+        """Build the two lock/open options with the current state pre-selected."""
+        options = [
+            discord.SelectOption(
+                label="\U0001f512 Verrouiller (lecture seule)",
+                value=category,
+                default=locked,
+            ),
+            discord.SelectOption(
+                label="\u270f\ufe0f Ouvrir aux messages",
+                value=f"{category}:open",
+                default=not locked,
+            ),
+        ]
+        return cls(options, category)
+
+    @classmethod
+    async def from_custom_id(
+        cls,
+        interaction: discord.Interaction,
+        item: discord.ui.Item[Any],
+        match: re.Match[str],
+        /,
+    ) -> PinReadOnlySelect:
+        """Rebuild the select from the wire (state-aware options)."""
+        from botforge.discord.pinned_views import get_pinned_read_only
+
+        category = match.group("category")
+        guild_id = str(interaction.guild_id) if interaction.guild_id else ""
+        locked = True
+        if guild_id:
+            try:
+                locked = await get_pinned_read_only(guild_id, category)
+            except Exception:
+                locked = True
+        return cls.per_channel(category, locked)
+
+    async def callback(self, interaction: discord.Interaction) -> None:
+        """Apply the read-only intent through the persistent handler."""
+        from botforge.discord.admin_persistent import _handle_read_only
+
+        await _handle_read_only(interaction)
+
+
+_CLIENT_REF: list[discord.Client] = []
+
+
+def _panel_client_ref() -> discord.Client | None:
+    """Resolve the running bot captured by the panel (None before the first boot)."""
+    return _CLIENT_REF[0] if _CLIENT_REF else None
+
+
+def set_panel_client(client: discord.Client) -> None:
+    """Hold the running client (the mod-spec registry lives on it)."""
+    _CLIENT_REF.clear()
+    _CLIENT_REF.append(client)
+
+
+def spec_registry_resolver() -> dict[str, Any]:
+    """Resolve the registered mod specs (none until mods return)."""
+    return {}
+
+
+async def build_pin_main_menu(
+    logs_service: LogService,
+    guild_id: str,
+    catalog: MessageCatalog | None = None,
+    locale: str = "en",
+    admin_channel_service: Any = None,
+    client: Any = None,
+) -> discord.ui.LayoutView:
+    """Build the pinned admin menu: the new admin menu, frozen (stateless items).
+
+    The games/mods access management lives in the scope admin menus
+    (games/admin, mods/admin) — never here.
+    """
+    from botforge.discord.admin_tree import build_admin_menu
+
+    del catalog, admin_channel_service
+    # The pinned build carries the client (the ephemeral one passes the
+    # interaction): build_admin_menu resolves labels through the guild's
+    # locale either way.
+    return await build_admin_menu(guild_id, locale, interaction=client)
+
+
+async def build_pin_channel_menu(
+    logs_service: LogService,
+    guild_id: str,
+    category: str,
+    catalog: MessageCatalog | None = None,
+    locale: str = "en",
+    admin_channel_service: Any = None,
+) -> discord.ui.LayoutView:
+    """Build the pinned channel sub-menu: fully dynamic, category on the wire."""
+    entry = next((e for e in MANAGED_CHANNELS if e[0] == category), None)
+    if entry is None:
+        view = discord.ui.LayoutView(timeout=None)
+        view.add_item(discord.ui.Container(discord.ui.TextDisplay(f"Unknown channel category: `{category}`.")))
+        return view
+    _, icon, label_key = entry
+    label = _t(catalog, locale, label_key)
+    channel_id = await _resolve_managed_channel(logs_service, guild_id, category, admin_channel_service)
+    status = f"<#{channel_id}>" if channel_id else _t(catalog, locale, "not_provisioned")
+
+    blocks: list[Any] = [
+        discord.ui.TextDisplay(f"# {icon} BotForge \u2014 {label}"),
+        discord.ui.Separator(),
+        discord.ui.TextDisplay(f"{_t(catalog, locale, 'channel')}: {status}"),
+    ]
+    if category == BOT_LOGS_CATEGORY:
+        policy = await logs_service.get_access_policy(guild_id)
+        visibility = str((policy or {}).get("default", VISIBILITY_ADMIN_ONLY))
+        visibility_label = (
+            _t(catalog, locale, "visibility_public")
+            if visibility == VISIBILITY_PUBLIC
+            else _t(catalog, locale, "visibility_admin_only")
+        )
+        blocks.append(discord.ui.TextDisplay(f"{_t(catalog, locale, 'visibility')}: {visibility_label}"))
+        blocks.append(discord.ui.Separator())
+        blocks.append(_select_row(PinRouteSelect(category, placeholder=_t(catalog, locale, "route_placeholder"))))
+        blocks.append(
+            _select_row(
+                PinVisibilitySelect.create(
+                    catalog,
+                    locale,
+                    placeholder=_t(catalog, locale, "visibility_placeholder"),
+                    current=visibility,
+                )
+            )
+        )
+    else:
+        blocks.append(discord.ui.Separator())
+        blocks.append(discord.ui.TextDisplay(_t(catalog, locale, "admin_channel_note")))
+        blocks.append(_select_row(PinRouteSelect(category, placeholder=_t(catalog, locale, "route_placeholder"))))
+    from botforge.discord.pinned_views import get_pinned_read_only
+
+    locked = await get_pinned_read_only(guild_id, category)
+    state = "\U0001f512 lecture seule" if locked else "\u270f\ufe0f messages ouverts"
+    blocks.append(discord.ui.Separator())
+    blocks.append(discord.ui.TextDisplay(f"**Lecture seule** : {state}"))
+    blocks.append(_select_row(PinReadOnlySelect.per_channel(category, locked)))
+    blocks.append(discord.ui.Separator())
+    blocks.append(_select_row(PinBackButton(_t(catalog, locale, "back"))))
+    from botforge.discord.ui.view_footer import build_view
+
+    return build_view(
+        "panel:admin:channel",
+        discord.ui.Container(*blocks, accent_colour=discord.Colour(BLURPLE)),
+    )

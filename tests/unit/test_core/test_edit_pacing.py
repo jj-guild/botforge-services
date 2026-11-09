@@ -14,8 +14,8 @@ import time
 
 import pytest
 
-from kingdoms.core.services import entity_forum
-from kingdoms.core.services.entity_forum import _edit_pacing_key, pace_channel_edit
+from botforge.core.services import entity_forum
+from botforge.core.services.entity_forum import _edit_pacing_key, pace_channel_edit
 
 
 class _Thread:

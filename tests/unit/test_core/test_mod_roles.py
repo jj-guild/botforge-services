@@ -1,4 +1,4 @@
-"""Unit tests for the ModRolesService (kingdoms-services#26).
+"""Unit tests for the ModRolesService (botforge-services#26).
 
 Covers the generic per-mod role provisioning (mapping persistence,
 adoption of same-name roles, creation when missing), the logical-key
@@ -10,11 +10,11 @@ from __future__ import annotations
 
 import pytest
 
-from kingdoms.core.models.role_mapping import RoleMappingModel
-from kingdoms.core.services.mod_definition import ModDefinition, RoleDef
-from kingdoms.core.services.mod_registry import ModRegistry
-from kingdoms.core.services.roles import ModRolesService
-from kingdoms.core.services.state import StateService
+from botforge.core.models.role_mapping import RoleMappingModel
+from botforge.core.services.mod_definition import ModDefinition, RoleDef
+from botforge.core.services.mod_registry import ModRegistry
+from botforge.core.services.roles import ModRolesService
+from botforge.core.services.state import StateService
 from tests.mocks.state_mock import FakeClock, InMemoryStateStore
 
 GUILD = "123456"
@@ -178,7 +178,7 @@ class TestAssignRemove:
         await service.assign_mod_role(GUILD, USER, "clans", "clan_member")
         user, role_id, reason = members.added[0]
         assert user == USER
-        assert reason == "kingdoms: assign mod role clans:clan_member"
+        assert reason == "botforge: assign mod role clans:clan_member"
         await service.remove_mod_role(GUILD, USER, "clans", "clan_member")
         assert members.removed[0][1] == role_id
 

@@ -13,7 +13,7 @@ import pytest
 @pytest.mark.asyncio
 async def test_real_adapter_against_mock_wire() -> None:
     """The full journey: connect, subscribe, join, update, launch, leave."""
-    from kingdoms.ext_aoe2lobby.adapter import Aoe2LobbyAdapter
+    from botforge.ext_aoe2lobby.adapter import Aoe2LobbyAdapter
     from tests.mocks.aoe2lobby_mock import MockLobbyServer, lobby_match
 
     server = MockLobbyServer()

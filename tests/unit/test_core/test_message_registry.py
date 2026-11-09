@@ -1,4 +1,4 @@
-"""Unit tests for the MessageRegistryService (kingdoms-services#130).
+"""Unit tests for the MessageRegistryService (botforge-services#130).
 
 Covers register/resolve/forget round-trips, cache-aside behaviour,
 replacement on re-registration and cache-failure degradation.
@@ -6,9 +6,9 @@ replacement on re-registration and cache-failure degradation.
 
 from __future__ import annotations
 
-from kingdoms.core.models.registered_message import RegisteredMessageModel
-from kingdoms.core.services.message_registry import MessageRegistryService
-from kingdoms.core.services.state import StateService
+from botforge.core.models.registered_message import RegisteredMessageModel
+from botforge.core.services.message_registry import MessageRegistryService
+from botforge.core.services.state import StateService
 from tests.mocks.state_mock import FakeClock, InMemoryStateStore
 
 

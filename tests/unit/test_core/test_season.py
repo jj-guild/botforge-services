@@ -1,4 +1,4 @@
-"""Unit tests for the SeasonService lifecycle (kingdoms-services#132)."""
+"""Unit tests for the SeasonService lifecycle (botforge-services#132)."""
 
 from __future__ import annotations
 
@@ -6,9 +6,9 @@ from typing import Any
 
 import pytest
 
-from kingdoms.core.models.season import SEASON_STATE_ACTIVE, SEASON_STATE_ENDED, SEASON_STATE_SCHEDULED
-from kingdoms.core.services.game_data import GameDataService
-from kingdoms.core.services.season import (
+from botforge.core.models.season import SEASON_STATE_ACTIVE, SEASON_STATE_ENDED, SEASON_STATE_SCHEDULED
+from botforge.core.services.game_data import GameDataService
+from botforge.core.services.season import (
     SeasonActiveError,
     SeasonNotScheduledError,
     SeasonService,

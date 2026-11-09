@@ -1,13 +1,13 @@
 # Ladder mod declaration: seasonal 1v1 ladder (AoE2).
 # Loaded by ModRegistry at startup; /status lists this mod when enabled.
 #
-# REFERENCE EXAMPLE (docs/GUIDES/mod-init.md, kingdoms repo): this is the
+# REFERENCE EXAMPLE (docs/GUIDES/mod-init.md, botforge repo): this is the
 # real declaration of the ladder mod (currently developed on the
 # vibe/merlin/main integration branch) moved as-is into the modular
-# layout — one self-contained directory per mod (kingdoms#178).
+# layout — one self-contained directory per mod (botforge-services#178).
 id: ladder
 # false until the code moves from vibe/merlin/main into this directory
-# (kingdoms#178 mechanical move) — flip to true in that same PR.
+# (botforge-services#178 mechanical move) — flip to true in that same PR.
 enabled: false
 seasonal: true
 settings: {}

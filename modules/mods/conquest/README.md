@@ -10,7 +10,7 @@ days before the season's start.
   enrollment settings (`manual` + `opens_before_start: 7d` +
   `requires_profile`).
 - **Code**: `src/conquest/__init__.py` — ONE `register` line wiring the
-  platform's generic surfaces (`kingdoms.discord.mod_surfaces`).
+  platform's generic surfaces (`botforge.discord.mod_surfaces`).
 - **Surfaces**: `/conquest` (the player panel), the admin channel
   validation, the admin panel (suspendre/reprendre, nouvelle saison /
   démarrer / terminer, synchroniser).

@@ -6,13 +6,13 @@ from pathlib import Path
 
 import pytest
 
-from kingdoms.core.services.mod_registry import load_mod_definitions
+from botforge.core.services.mod_registry import load_mod_definitions
 
 
 def _write(tmp_path: Path, body: str) -> Path:
     mods = tmp_path / "mods"
     mods.mkdir()
-    (mods / "kingdoms.yaml").write_text(body, encoding="utf-8")
+    (mods / "botforge.yaml").write_text(body, encoding="utf-8")
     return tmp_path
 
 
@@ -54,7 +54,7 @@ def test_private_mod_declares_owners(tmp_path: Path) -> None:
 
 def test_private_mod_without_owners_fails_loudly(tmp_path: Path) -> None:
     (tmp_path / "mods").mkdir()
-    (tmp_path / "mods" / "kingdoms.yaml").write_text(
+    (tmp_path / "mods" / "botforge.yaml").write_text(
         PRIVATE.replace('  - "111222333444555666"\n', "").replace('  - "999888777666555444"\n', ""),
         encoding="utf-8",
     )
@@ -63,7 +63,7 @@ def test_private_mod_without_owners_fails_loudly(tmp_path: Path) -> None:
 
 
 def test_private_mod_declaration_in_modular_layout(tmp_path: Path) -> None:
-    """A modular mod.yaml declares privacy the same way (kingdoms#178)."""
+    """A modular mod.yaml declares privacy the same way (botforge-services#178)."""
     mod_dir = tmp_path / "modules" / "mods" / "kingdoms"
     (mod_dir / "src" / "kingdoms").mkdir(parents=True)
     (mod_dir / "mod.yaml").write_text(PRIVATE, encoding="utf-8")

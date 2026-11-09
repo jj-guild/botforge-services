@@ -16,9 +16,9 @@ from typing import Any
 import httpx
 import pytest
 
-from kingdoms.core.games.aoe2.blobs import decode_blob, decode_options, decode_slotinfo  # noqa: F401
-from kingdoms.core.models.game import MatchDetails, Slot
-from kingdoms.ext_librematch.adapter import LibrematchAdapter
+from botforge.aoe2.codecs import decode_blob, decode_options, decode_slotinfo  # noqa: F401
+from botforge.core.models.game import MatchDetails, Slot
+from botforge.ext_librematch.adapter import LibrematchAdapter
 
 
 def _slotinfo_blob(slots: list[dict[str, Any]]) -> str:
@@ -263,7 +263,7 @@ class _FakeRedis:
 
 def _throttled_adapter(payload: object, max_calls: int = 1) -> tuple[LibrematchAdapter, _FakeRedis]:
     fake = _FakeRedis()
-    from kingdoms.core.rpc.rate_limit import ProviderRateLimiter
+    from botforge.core.rpc.rate_limit import ProviderRateLimiter
 
     limiter = ProviderRateLimiter(fake, game_key="aoe2", max_calls=max_calls, window_s=60)
     return LibrematchAdapter(base_url="https://test", transport=_FakeTransport(payload), rate_limiter=limiter), fake

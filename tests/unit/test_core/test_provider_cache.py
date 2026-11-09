@@ -1,4 +1,4 @@
-"""Unit tests for the provider data cache (kingdoms-services#205).
+"""Unit tests for the provider data cache (botforge-services#205).
 
 Freshness rules: completed matches fetched once ever (atomic marker),
 live match details 5s, profiles 5 minutes, daily sweep staleness.
@@ -8,8 +8,8 @@ from __future__ import annotations
 
 from typing import Any
 
-from kingdoms.core.services.provider_cache import ProviderDataCache
-from kingdoms.core.services.state import IStateStore
+from botforge.core.services.provider_cache import ProviderDataCache
+from botforge.core.services.state import IStateStore
 
 
 class FakeStore(IStateStore):
@@ -55,7 +55,7 @@ class FakeStore(IStateStore):
 
 
 def _cache() -> tuple[ProviderDataCache, FakeStore]:
-    from kingdoms.core.services.state import StateService
+    from botforge.core.services.state import StateService
 
     store = FakeStore()
     return ProviderDataCache(StateService(store=store)), store

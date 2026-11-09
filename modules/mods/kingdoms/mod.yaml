@@ -1,16 +1,16 @@
 # Kingdoms mod (Season II territory-conquest AoE2).
 #
-# REFERENCE EXAMPLE (docs/GUIDES/mod-init.md, kingdoms repo): this is the
+# REFERENCE EXAMPLE (docs/GUIDES/mod-init.md, botforge repo): this is the
 # REAL, CURRENT declaration from the vibe/drasah/main integration branch
-# (PR kingdoms-services#244) — salons-first structure (kingdoms#138,
-# kingdoms-services#175): channel groups, kinds, admin-only flags and
+# (PR botforge-services#244) — salons-first structure (botforge-services#138,
+# botforge-services#175): channel groups, kinds, admin-only flags and
 # access policies are data here, never code in the mod.
 #
-# One self-contained directory per mod (kingdoms#178): the code's
+# One self-contained directory per mod (botforge-services#178): the code's
 # mechanical move into this directory is accompanied with Drasah.
 #
 # false until the code moves from vibe/drasah/main into this directory
-# (kingdoms#178 mechanical move) — flip to true in that same PR.
+# (botforge-services#178 mechanical move) — flip to true in that same PR.
 id: kingdoms
 enabled: false
 seasonal: true

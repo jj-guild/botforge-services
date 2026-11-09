@@ -1,7 +1,7 @@
 [project]
-name = "kingdoms-services"
+name = "botforge-services"
 version = "0.1.0"
-description = "Core bot, Discord implementation, shared utilities, and YAML configs for Kingdoms."
+description = "Core bot, Discord implementation, shared utilities, and YAML configs for BotForge."
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
@@ -20,14 +20,14 @@ dependencies = [
 ]
 
 [project.scripts]
-kingdoms = "kingdoms.cli.__main__:main"
+botforge = "botforge.cli.__main__:main"
 
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/kingdoms"]
+packages = ["src/botforge"]
 
 [dependency-groups]
 dev = [
@@ -56,23 +56,23 @@ ignore = ["D203", "D213", "D107", "S603"]
 "tests/**" = ["D", "S101", "SLF"]
 # modular mods own their tests inside modules/mods/<mod>/tests (kingdoms#178)
 "modules/**/tests/**" = ["D", "S101", "SLF"]
-"src/kingdoms/rpc_generated/**" = ["D", "N", "E402", "E501", "I", "Q", "UP", "F401"]
-"src/kingdoms/core/rpc/**" = ["N802"]
-"src/kingdoms/game_aoe2/**" = ["N802"]
+"src/botforge/rpc_generated/**" = ["D", "N", "E402", "E501", "I", "Q", "UP", "F401"]
+"src/botforge/core/rpc/**" = ["N802"]
+"src/botforge/game_aoe2/**" = ["N802"]
 "scripts/**" = ["D", "S101", "S311", "T201"]
-"src/kingdoms/discord/bot/main.py" = ["T201", "T203"]
-"src/kingdoms/cli/**" = ["T201", "T203", "S603", "S607"]
-"src/kingdoms/core/games/aoe2/seed_cli.py" = ["T201"]
-"src/kingdoms/core/games/aoe2/seed_cli_yaml.py" = ["T201"]
-"src/kingdoms/mods/ladder/legacy_import_cli.py" = ["T201"]
-"src/kingdoms/mods/ladder/season_import_cli.py" = ["T201"]
-"src/kingdoms/mods/ladder/season_report_cli.py" = ["T201"]
-"src/kingdoms/mods/ladder/legacy_export_cli.py" = ["T201"]
-"src/kingdoms/core/services/identity_export_cli.py" = ["T201"]
-"src/kingdoms/core_process/run_external_checks.py" = ["T201"]
-"src/kingdoms/core/services/identity_import_cli.py" = ["T201"]
-"src/kingdoms/core/games/aoe2/faction_content_cli.py" = ["T201"]
-"src/kingdoms/core/games/aoe2/content_refresh_cli.py" = ["T201"]
+"src/botforge/discord/bot/main.py" = ["T201", "T203"]
+"src/botforge/cli/**" = ["T201", "T203", "S603", "S607"]
+"src/botforge/game_aoe2/*_cli.py" = ["T201"]
+"src/botforge/core/games/aoe2/seed_cli_yaml.py" = ["T201"]
+"src/botforge/mods/ladder/legacy_import_cli.py" = ["T201"]
+"src/botforge/mods/ladder/season_import_cli.py" = ["T201"]
+"src/botforge/mods/ladder/season_report_cli.py" = ["T201"]
+"src/botforge/mods/ladder/legacy_export_cli.py" = ["T201"]
+"src/botforge/core/services/identity_export_cli.py" = ["T201"]
+"src/botforge/core_process/run_external_checks.py" = ["T201"]
+"src/botforge/core/services/identity_import_cli.py" = ["T201"]
+"src/botforge/core/games/aoe2/faction_content_cli.py" = ["T201"]
+"src/botforge/core/games/aoe2/content_refresh_cli.py" = ["T201"]
 
 [tool.mypy]
 python_version = "3.12"
@@ -89,5 +89,5 @@ pythonpath = [".github/workflows"]
 # kingdoms.mods.<name> through a conftest shim (see modules/conftest.py)
 
 [[tool.mypy.overrides]]
-module = ["kingdoms.rpc_generated.*", "kingdoms.core.rpc.*", "kingdoms.core_process.*", "kingdoms.game_aoe2.rpc", "kingdoms.game_aoe2.client"]
+module = ["botforge.rpc_generated.*", "botforge.core.rpc.*", "botforge.core_process.*", "botforge.game_aoe2.rpc", "botforge.game_aoe2.client", "botforge.game_aoe2.remote_catalog"]
 disable_error_code = ["no-untyped-def", "attr-defined", "no-untyped-call", "import-untyped", "name-defined", "type-arg", "arg-type", "assignment", "return-value"]

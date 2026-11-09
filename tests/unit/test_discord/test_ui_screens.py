@@ -1,4 +1,4 @@
-"""Unit tests for the UI screen archetypes (kingdoms.discord.ui.screens).
+"""Unit tests for the UI screen archetypes (botforge.discord.ui.screens).
 
 Archetypes (Ranking, config panel, match report, pagination) are the
 ready-made screen shapes features instantiate with data instead of
@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import pytest
 
-from kingdoms.discord.ui import (
+from botforge.discord.ui import (
     PaginatedScreen,
     Ranking,
     UILayoutError,
@@ -70,8 +70,8 @@ def test_render_ranking_is_a_paginated_screen() -> None:
 
 def test_paginated_screen_multi_page_has_prev_next_only_where_valid() -> None:
     pages = [[], [], []]
-    pages[0] = [__import__("kingdoms.discord.ui", fromlist=["Text"]).Text("one")]
-    from kingdoms.discord.ui import Text
+    pages[0] = [__import__("botforge.discord.ui", fromlist=["Text"]).Text("one")]
+    from botforge.discord.ui import Text
 
     pages[1] = [Text("two")]
     pages[2] = [Text("three")]
@@ -89,7 +89,7 @@ def test_paginated_screen_multi_page_has_prev_next_only_where_valid() -> None:
 
 @pytest.mark.asyncio
 async def test_paginated_screen_next_edits_in_place() -> None:
-    from kingdoms.discord.ui import Text
+    from botforge.discord.ui import Text
 
     screen = PaginatedScreen([[Text("one")], [Text("two")]], mod="ranking", title="Test")
 
@@ -113,7 +113,7 @@ async def test_paginated_screen_next_edits_in_place() -> None:
 
 
 def test_config_panel_structure() -> None:
-    from kingdoms.discord.ui import Text  # noqa: F401  (archetype builds rows)
+    from botforge.discord.ui import Text  # noqa: F401  (archetype builds rows)
 
     async def on_apply(interaction: object) -> None:
         return None

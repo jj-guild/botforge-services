@@ -1,6 +1,6 @@
 name: Check commits
 
-# Conventional Commits enforcement (kingdoms-services#28): every commit
+# Conventional Commits enforcement (botforge-services#28): every commit
 # on a PR must match the specification — the release changelog
 # (.github/workflows/scripts/generate_changelog.py) groups commits by type, so a
 # non-conventional subject would silently drop out of the release notes.

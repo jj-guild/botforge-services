@@ -1,12 +1,12 @@
 # AGENTS.md
 
-`kingdoms-services` — all Python code for the Kingdoms Discord bot
+`botforge-services` — all Python code for the BotForge Discord bot
 platform: core services, Discord platform implementation (discord.py),
 mods, YAML configs.
 
 ## Read first
 
-**A mod's files never scatter** (kingdoms#179): its declaration,
+**A mod's files never scatter** (botforge#179): its declaration,
 views (`config/mods/<mod>.views.yaml`), code and locales live
 together — never the platform's shared config/locales, never the
 platform's views.yaml. The same holds for a game's files.
@@ -17,19 +17,19 @@ conventions' *Working language* rule). The only French allowed is
 the **user-facing UI content** (locale catalogs, rendered labels).
 A session writing a doc, a comment or a commit in French is a bug.
 
-- [kingdoms/docs/CONVENTIONS.md](https://github.com/merlin-pinpin-org/kingdoms/blob/main/docs/CONVENTIONS.md)
+- [botforge/docs/CONVENTIONS.md](https://github.com/jj-guild/botforge/blob/main/docs/CONVENTIONS.md)
   — conventions shared by the three repositories (language,
   humans-never-code, secrets, PR lifecycle, issues, checks).
-- [kingdoms/docs/VIBEWORKFLOW.md](https://github.com/merlin-pinpin-org/kingdoms/blob/main/docs/VIBEWORKFLOW.md)
+- [botforge/docs/VIBEWORKFLOW.md](https://github.com/jj-guild/botforge/blob/main/docs/VIBEWORKFLOW.md)
   — operating model (roles, session loop, approvals).
 - [docs/DEVELOPER.md](docs/DEVELOPER.md) — this repo's layout, toolchain,
   architecture rules, testing rules, deploy flows.
 
 ## Repositories
 
-- `kingdoms` (documentation, source of truth)
-- `kingdoms-services` (this repo): core, Discord platform, mods, configs
-- `kingdoms-infra`: Docker, CI/CD, GitOps manifests, deployment scripts
+- `botforge` (documentation, source of truth)
+- `botforge-services` (this repo): core, Discord platform, mods, configs
+- `botforge-infra`: Docker, CI/CD, GitOps manifests, deployment scripts
 
 ## GitHub identity
 
@@ -51,37 +51,37 @@ A session writing a doc, a comment or a commit in French is a bug.
   check** — GitHub matches check contexts by exact name, so a rename
   silently blocks merges (see CONVENTIONS.md, *Checks must pass everywhere*).
 - **PR merges, cowboy mode, branch cleanup and user-branch rules are
-  defined once in the kingdoms CONVENTIONS.md** (single source of
+  defined once in the botforge CONVENTIONS.md** (single source of
   truth, all three repos): see
-  [kingdoms/docs/CONVENTIONS.md](https://github.com/merlin-pinpin-org/kingdoms/blob/main/docs/CONVENTIONS.md)
+  [botforge/docs/CONVENTIONS.md](https://github.com/jj-guild/botforge/blob/main/docs/CONVENTIONS.md)
   — *Cowboy mode* (API-blocked merges, maintainer-only direct pushes
   with per-push confirmation, never force-push `main`) and
   *Integration branches* (never delete `vibe/<alias>/main`).
 - **No mod, no game, without a rostered owner (non-overridable):** a
-  session never creates `modules/mods/<mod>/`, `src/kingdoms/mods/<mod>/`,
-  `config/mods/<mod>.yaml`, `src/kingdoms/core/games/<game>/` or mod docs
-  unless a `CONTRIBUTORS.md` entry (kingdoms repo) claims it in its
+  session never creates `modules/mods/<mod>/`, `src/botforge/mods/<mod>/`,
+  `config/mods/<mod>.yaml`, `src/botforge/core/games/<game>/` or mod docs
+  unless a `CONTRIBUTORS.md` entry (botforge repo) claims it in its
   `owns` column — the roster entry and its CODEOWNERS delegation come
   first. The contributors-sync workflow flags orphan mods/games and
   CODEOWNERS drift automatically
-  (kingdoms repo, `check_ownership.py` under the protected `workflows/scripts/` path).
+  (botforge repo, `check_ownership.py` under the protected `workflows/scripts/` path).
 - **Mod intake before any mod work:** a session creating a mod starts
   with the [mod-intake
-  skill](https://github.com/merlin-pinpin-org/kingdoms/blob/main/.agents/skills/mod-intake/SKILL.md)
-  (intake questionnaire, reuse-first check against the core, `kingdoms
+  skill](https://github.com/jj-guild/botforge/blob/main/.agents/skills/mod-intake/SKILL.md)
+  (intake questionnaire, reuse-first check against the core, `botforge
   mod init` scaffold, conventions) — never improvised plumbing. The
-  canonical guide is the kingdoms repo
-  [docs/GUIDES/mod-init.md](https://github.com/merlin-pinpin-org/kingdoms/blob/main/docs/GUIDES/mod-init.md).
+  canonical guide is the botforge repo
+  [docs/GUIDES/mod-init.md](https://github.com/jj-guild/botforge/blob/main/docs/GUIDES/mod-init.md).
 - **UI SDK mandate:** never build `discord.ui` / `discord.Embed` objects
   directly in a feature — every view, embed or Components V2 layout
-  is built through the SDK in `src/kingdoms/discord/ui`. The rules
+  is built through the SDK in `src/botforge/discord/ui`. The rules
   (bricks, archetypes, navigation-in-buttons, custom IDs, budgets)
-  live in the kingdoms repo
-  [discord-ui skill](https://github.com/merlin-pinpin-org/kingdoms/blob/main/.agents/skills/discord-ui/SKILL.md).
+  live in the botforge repo
+  [discord-ui skill](https://github.com/jj-guild/botforge/blob/main/.agents/skills/discord-ui/SKILL.md).
 - **Runtime permission mandate:** seeing a button never implies being
   allowed to click it — every privileged interactive item validates the
   interaction at click time through the shared guards
-  (`src/kingdoms/discord/guards.py`: `require_admin`/`is_admin`),
+  (`src/botforge/discord/guards.py`: `require_admin`/`is_admin`),
   against the live guild state (BOT_ADMINS, guild-admin permissions,
   or the `bot-admins` role via the RolesService). `default_permissions`
   only hides the command entry; it never replaces the check.
@@ -92,13 +92,13 @@ A session writing a doc, a comment or a commit in French is a bug.
   core runtime seam, never a forked panel. The **locale is native
   Discord**: guild surfaces render in the server's language
   (`guild.preferred_locale`), DMs in the user's client language —
-  resolved only through `kingdoms.discord.locales`, never stored or
+  resolved only through `botforge.discord.locales`, never stored or
   picked on our side. User-facing times are Discord `<t:…>`
-  timestamps, never formatted strings — see kingdoms CONVENTIONS.md
+  timestamps, never formatted strings — see botforge CONVENTIONS.md
   (*Guild-level settings and the admin surface*) and the discord-ui
   skill (*Times are Discord timestamps*).
 - **Menus vs panels (views registry):** every view is declared in
-  `views_declared.py` (the executable mirror of the kingdoms repo's
+  `views_declared.py` (the executable mirror of the botforge repo's
   docs/DEVELOPMENT/VIEWS.md — read it before touching any surface).
   A menu only navigates (its buttons open declared views through the
   `view:open:<view id>` router); a panel informs or acts. Admin
@@ -106,7 +106,7 @@ A session writing a doc, a comment or a commit in French is a bug.
   button whose target is undeclared is a drift the tests reject.
 - **Every view carries its view id as its footer** — a `-#` line with
   the id in backticks (`view:aoe2:admin`), the LAST line of the panel.
-  The SDK enforces it (`kingdoms.discord.ui.view_footer.build_view`):
+  The SDK enforces it (`botforge.discord.ui.view_footer.build_view`):
   build panels through `build_view(view_id, *items)` — the constructor
   appends the id footer automatically; `require_declared_view_id`
   fails fast when the id is not declared in `views.yaml`. NEVER add
@@ -122,32 +122,54 @@ A session writing a doc, a comment or a commit in French is a bug.
   the sync is one-way (add, never remove) and re-applied at every
   channel resolution.
 - Every mod or game provider added here has its documentation updated in
-  `kingdoms` (source of truth).
+  `botforge` (source of truth).
 - Issue templates: `## Objective` / `## Context` / `## Specifications` /
   `## Acceptance criteria` / `## Dependencies` (blank issues disabled).
 - **Issue references** are GitHub autolinks: same-repo `#N`, cross-repo
-  `owner/repo#N` (e.g. `merlin-pinpin-org/kingdoms-infra#78`) — a bare
+  `owner/repo#N` (e.g. `jj-guild/botforge-infra#78`) — a bare
   `repo#N` renders as plain text; never write it. See CONVENTIONS.md,
   *Documentation is part of the change*.
 - **Enrich the docs and skills proactively** (developer-mandated): when
   the session's work teaches a rule, pitfall or pattern, update the
   matching skill page, convention or AGENTS.md entry as part of the
-  change — see the kingdoms CONVENTIONS.md
+  change — see the botforge CONVENTIONS.md
   (*Documentation is part of the change*).
 - **Automation mandate:** no one-off commands, for humans or sessions —
   every recurring operation is a committed Makefile target, script or
   workflow, and a useful improvised command is committed ("learned").
   Humans on GitHub only merge PRs and approve prod deploys
-  (+ one-time bootstrapping) — see the kingdoms
-  [Automate or learn](https://github.com/merlin-pinpin-org/kingdoms/blob/main/docs/SKILLS/automate-or-learn.md)
+  (+ one-time bootstrapping) — see the botforge
+  [Automate or learn](https://github.com/jj-guild/botforge/blob/main/.agents/skills/automate-or-learn/SKILL.md)
   skill and CONVENTIONS.md (*Human GitHub scope*, *Everything is
   automation*).
-- **CLI-first mandate:** the `kingdoms` CLI
-  (`src/kingdoms/cli/`, [docs/CLI.md](docs/CLI.md)) is the front door
+- **MongoDB write atomicity** (developer-mandated): a hot document
+  modified by possibly-concurrent processes is updated with an atomic
+  single-document operation (`find_one_and_update` + `$set`/`$inc`/
+  `$push` with a filter — never read-then-write); a cross-document
+  invariant under concurrent writers needs a multi-document transaction
+  or the Redis lock of the enclosing operation. Cold, insert-only data
+  needs none of this. Full hierarchy: botforge
+  docs/architecture/core.md, *MongoDB write atomicity*.
+- **Service data isolation** (developer-mandated): each service (core,
+  game, mod, `ext-*` provider) owns its code and its MongoDB
+  collections — no cross-owner read, write or aggregation; data is
+  exposed through the service contract (gRPC across processes).
+  Enforced by the AST layering guard (`tests/architecture/test_layering.py`,
+  ADR-0021 R5); target: one distinct MongoDB user per owner. Binding
+  rule: botforge docs/CONVENTIONS.md, *Service data isolation*.
+- **Configuration over code** (developer-mandated): anything declarative
+  (channels, trees, labels, emojis, `admin_only`/`read_only` flags,
+  views, tunables, provider sites) lives in `config/` (`views.yaml`,
+  `mods/<mod>.yaml`, locales) — validated at boot, fail-closed. If the
+  config seam is missing, the work is building the seam in the
+  platform, never hand-coding around it. Binding rule: botforge
+  docs/CONVENTIONS.md, *Configuration over code*.
+- **CLI-first mandate:** the `botforge` CLI
+  (`src/botforge/cli/`, [docs/CLI.md](docs/CLI.md)) is the front door
   for environments and ops — doctor (local env checks), local stack,
   remote SSH, runner setup. New environment/ops surface goes in the
   CLI (a module per domain, `main(argv) -> int`), not in ad-hoc
-  commands; sessions use `uv run kingdoms ...` and teach it to
+  commands; sessions use `uv run botforge ...` and teach it to
   designers instead of improvising shell commands.
 
 ## Discord UI rules (the skill's memory)

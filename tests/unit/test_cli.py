@@ -1,4 +1,4 @@
-"""Tests for the kingdoms developer CLI (doctor, local, remote, runner)."""
+"""Tests for the botforge developer CLI (doctor, local, remote, runner)."""
 
 from __future__ import annotations
 
@@ -7,7 +7,7 @@ from unittest import mock
 
 import pytest
 
-from kingdoms.cli import doctor, remote
+from botforge.cli import doctor, remote
 
 
 def test_doctor_report_all_ok(capsys: pytest.CaptureFixture[str]) -> None:
@@ -103,21 +103,21 @@ def test_remote_list_no_args_is_not_usage_error(
 
 
 def test_main_dispatch_help(capsys: pytest.CaptureFixture[str]) -> None:
-    from kingdoms.cli.__main__ import main
+    from botforge.cli.__main__ import main
 
     assert main([]) == 0
     assert "usage" in capsys.readouterr().out.lower()
 
 
 def test_local_usage_error(capsys: pytest.CaptureFixture[str]) -> None:
-    from kingdoms.cli import local
+    from botforge.cli import local
 
     assert local.main(["nope"]) == 2
     assert "usage" in capsys.readouterr().out.lower()
 
 
 def test_runner_usage_error(capsys: pytest.CaptureFixture[str]) -> None:
-    from kingdoms.cli import runner
+    from botforge.cli import runner
 
     assert runner.main(["nope"]) == 2
     assert "setup" in capsys.readouterr().out.lower()

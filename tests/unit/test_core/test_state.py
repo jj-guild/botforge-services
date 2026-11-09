@@ -1,4 +1,4 @@
-"""Unit tests for StateService (kingdoms-services#9).
+"""Unit tests for StateService (botforge-services#9).
 
 Uses the in-memory IStateStore substitute with a controllable clock; the
 RedisStateStore path itself is exercised by CI against real Redis (docker
@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import pytest
 
-from kingdoms.core.services.state import (
+from botforge.core.services.state import (
     IStateStore,
     LockNotAcquiredError,
     RedisStateStore,
@@ -48,13 +48,13 @@ def test_redis_store_satisfies_protocol() -> None:
 
 
 def test_state_key_namespace() -> None:
-    assert state_key("workflow", "wf-1") == "kingdoms:workflow:wf-1"
+    assert state_key("workflow", "wf-1") == "botforge:workflow:wf-1"
 
 
 async def test_set_and_get_state(service: StateService, store: InMemoryStateStore) -> None:
     await service.set_state("workflow", "wf-1", {"step": "ask_name"})
     assert await service.get_state("workflow", "wf-1") == {"step": "ask_name"}
-    assert "kingdoms:workflow:wf-1" in store.raw_entries()
+    assert "botforge:workflow:wf-1" in store.raw_entries()
 
 
 async def test_get_state_missing_returns_none(service: StateService) -> None:
@@ -67,7 +67,7 @@ async def test_set_state_ttl_expires(service: StateService, clock: FakeClock, st
     assert await service.get_state("workflow", "wf-1") == {"step": "ask_name"}
     clock.advance(2)
     assert await service.get_state("workflow", "wf-1") is None
-    assert "kingdoms:workflow:wf-1" not in store.raw_entries()
+    assert "botforge:workflow:wf-1" not in store.raw_entries()
 
 
 async def test_delete_state(service: StateService) -> None:
@@ -185,8 +185,8 @@ async def test_scoped_events_are_isolated(service: StateService) -> None:
 
 
 async def test_redis_store_connects_lazily_without_start(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Regression guard (kingdoms-services#225): wiring-built services never call start()."""
-    from kingdoms.core.services import state as state_module
+    """Regression guard (botforge-services#225): wiring-built services never call start()."""
+    from botforge.core.services import state as state_module
 
     class LazyClient:
         def __init__(self) -> None:
@@ -203,5 +203,5 @@ async def test_redis_store_connects_lazily_without_start(monkeypatch: pytest.Mon
 
     monkeypatch.setattr(state_module.Redis, "from_url", staticmethod(fake_from_url))
     store = RedisStateStore("redis://localhost:6379")
-    assert await store.set("kingdoms:probe", "1") is True
-    assert lazy.written == ["kingdoms:probe"]
+    assert await store.set("botforge:probe", "1") is True
+    assert lazy.written == ["botforge:probe"]

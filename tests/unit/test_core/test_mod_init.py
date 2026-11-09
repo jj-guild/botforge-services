@@ -1,4 +1,4 @@
-"""Unit tests for `kingdoms mod init` — the mod scaffold generator."""
+"""Unit tests for `botforge mod init` — the mod scaffold generator."""
 
 from __future__ import annotations
 
@@ -6,9 +6,9 @@ from pathlib import Path
 
 import pytest
 
-from kingdoms.core.services.mod_init import init_mod
-from kingdoms.core.services.mod_layout import find_mod_declaration
-from kingdoms.core.services.mod_registry import _load_declaration
+from botforge.core.services.mod_init import init_mod
+from botforge.core.services.mod_layout import find_mod_declaration
+from botforge.core.services.mod_registry import _load_declaration
 
 
 def test_init_generates_the_full_mod_directory(tmp_path: Path) -> None:

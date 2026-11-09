@@ -1,4 +1,4 @@
-"""Unit tests for the game provider seam (kingdoms.v1.Game).
+"""Unit tests for the game provider seam (botforge.v1.Game).
 
 Covers: capabilities round-trip (model ↔ wire), the provider servicer,
 and the core-side client — including the clean-degradation paths that
@@ -12,7 +12,7 @@ import asyncio
 import grpc
 import pytest
 
-from kingdoms.core.models.game import (
+from botforge.core.models.game import (
     GameMap,
     MatchDetails,
     MatchEvent,
@@ -22,7 +22,7 @@ from kingdoms.core.models.game import (
     StatsBlock,
     StatsEntry,
 )
-from kingdoms.core.rpc.game import (
+from botforge.core.rpc.game import (
     GameServicer,
     capabilities_from_wire,
     capabilities_to_wire,
@@ -35,13 +35,13 @@ from kingdoms.core.rpc.game import (
     player_stats_from_wire,
     player_stats_to_wire,
 )
-from kingdoms.core.rpc.game_client import (
+from botforge.core.rpc.game_client import (
     GameProviderClient,
     UnsupportedCapabilityError,
 )
-from kingdoms.ext_aoe2lobby import DECLARED_CAPABILITIES as AOE2LOBBY_CAPS
-from kingdoms.ext_librematch import DECLARED_CAPABILITIES as LIBREMATCH_CAPS
-from kingdoms.rpc_generated.kingdoms.v1 import game_pb2, game_pb2_grpc
+from botforge.ext_aoe2lobby import DECLARED_CAPABILITIES as AOE2LOBBY_CAPS
+from botforge.ext_librematch import DECLARED_CAPABILITIES as LIBREMATCH_CAPS
+from botforge.rpc_generated.botforge.v1 import game_pb2, game_pb2_grpc
 
 
 class _ServicerContext:
@@ -298,8 +298,8 @@ class _UnimplementedGameServicer(game_pb2_grpc.GameServicer):
 @pytest.mark.asyncio
 async def test_provider_entrypoints_are_importable() -> None:
     """Both ext process entrypoints exist and expose main()."""
-    from kingdoms.ext_aoe2lobby.server import main as aoe2lobby_main
-    from kingdoms.ext_librematch.server import main as librematch_main
+    from botforge.ext_aoe2lobby.server import main as aoe2lobby_main
+    from botforge.ext_librematch.server import main as librematch_main
 
     assert callable(librematch_main)
     assert callable(aoe2lobby_main)

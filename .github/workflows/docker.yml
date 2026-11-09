@@ -9,7 +9,7 @@ on:
   pull_request:
 
 # The push of a vX.Y.Z tag releases the image and pins it on the
-# kingdoms-infra deploy/test state branch (deploy_kind: release): the
+# botforge-infra deploy/test state branch (deploy_kind: release): the
 # release is validated on the test environment before any prod deploy.
 # Production promotion is a separate, human-triggered step (release.yml)
 # — after Discord validation on test, an authorized human runs it.
@@ -40,27 +40,27 @@ jobs:
         with:
           context: .
           load: true
-          tags: kingdoms-bot:pr
+          tags: botforge-bot:pr
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
       - name: Inspect the image (entrypoint, user, layers)
         run: |
-          docker image inspect kingdoms-bot:pr --format 'Entrypoint: {{json .Config.Entrypoint}} User: {{json .Config.User}}'
-          test "$(docker image inspect kingdoms-bot:pr --format '{{.Config.User}}')" = "65534:65534"
-          test "$(docker history kingdoms-bot:pr --format '{{.Size}}' | wc -l)" -ge 3
-      - name: Purity check the built image (no test tooling, kingdoms-services#106)
-        run: ./.github/workflows/scripts/check_image_purity.py --image kingdoms-bot:pr
+          docker image inspect botforge-bot:pr --format 'Entrypoint: {{json .Config.Entrypoint}} User: {{json .Config.User}}'
+          test "$(docker image inspect botforge-bot:pr --format '{{.Config.User}}')" = "65534:65534"
+          test "$(docker history botforge-bot:pr --format '{{.Size}}' | wc -l)" -ge 3
+      - name: Purity check the built image (no test tooling, botforge-services#106)
+        run: ./.github/workflows/scripts/check_image_purity.py --image botforge-bot:pr
 
       - name: Smoke test the image (with MongoDB and Redis)
         run: |
-          docker network create kingdoms-ci
-          docker run -d --name kingdoms-mongo --network kingdoms-ci mongo:7.0
-          docker run -d --name kingdoms-redis --network kingdoms-ci redis:7.2
-          timeout 60 bash -c 'until docker exec kingdoms-mongo mongosh --quiet --eval "db.adminCommand(\"ping\")" | grep -q ok; do sleep 2; done'
-          timeout 60 bash -c 'until docker exec kingdoms-redis redis-cli ping | grep -q PONG; do sleep 2; done'
+          docker network create botforge-ci
+          docker run -d --name botforge-mongo --network botforge-ci mongo:7.0
+          docker run -d --name botforge-redis --network botforge-ci redis:7.2
+          timeout 60 bash -c 'until docker exec botforge-mongo mongosh --quiet --eval "db.adminCommand(\"ping\")" | grep -q ok; do sleep 2; done'
+          timeout 60 bash -c 'until docker exec botforge-redis redis-cli ping | grep -q PONG; do sleep 2; done'
 
-          cat > /tmp/kingdoms-smoke.py <<'PY'
+          cat > /tmp/botforge-smoke.py <<'PY'
           import os
           import pymongo
           import redis
@@ -69,18 +69,18 @@ jobs:
           assert client.admin.command("ping")["ok"] == 1, "MongoDB ping failed"
           r = redis.Redis.from_url(os.environ["REDIS_URI"], socket_connect_timeout=5)
           assert r.ping() is True, "Redis ping failed"
-          import kingdoms
-          print(f"kingdoms imports OK: {kingdoms.__version__}")
+          import botforge
+          print(f"kingdoms imports OK: {botforge.__version__}")
           print("SMOKE OK")
           PY
 
-          docker run --rm --network kingdoms-ci \
-            -e MONGO_URI=mongodb://kingdoms-mongo:27017 \
-            -e REDIS_URI=redis://kingdoms-redis:6379 \
+          docker run --rm --network botforge-ci \
+            -e MONGO_URI=mongodb://botforge-mongo:27017 \
+            -e REDIS_URI=redis://botforge-redis:6379 \
             -e DISCORD_TOKEN=dummy-token-for-smoke \
-            -v /tmp/kingdoms-smoke.py:/smoke.py:ro \
+            -v /tmp/botforge-smoke.py:/smoke.py:ro \
             --entrypoint /bin/bash \
-            kingdoms-bot:pr -c 'python /smoke.py'
+            botforge-bot:pr -c 'python /smoke.py'
 
       - name: Login to GHCR
         if: github.event_name == 'push'
@@ -113,11 +113,11 @@ jobs:
         uses: docker/metadata-action@v5
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
-          # OCI description labels (kingdoms-services#144): one image per
+          # OCI description labels (botforge-services#144): one image per
           # process must stay identifiable in the registry and docker images.
           labels: |
-            org.opencontainers.image.title=Kingdoms bot (Discord + svc-core, ADR-0020 multi-process image)
-            org.opencontainers.image.description=Kingdoms Discord bot — bot-discord, svc-core and ext-* provider processes, single image, KINGDOMS_PROCESS-selected entrypoint
+            org.opencontainers.image.title=BotForge bot (Discord + svc-core, ADR-0020 multi-process image)
+            org.opencontainers.image.description=BotForge Discord bot — bot-discord, svc-core and ext-* provider processes, single image, BOTFORGE_PROCESS-selected entrypoint
             org.opencontainers.image.source=https://github.com/${{ github.repository }}
             org.opencontainers.image.licenses=MIT
           tags: |
@@ -146,11 +146,11 @@ jobs:
       - name: Cleanup
         if: always()
         run: |
-          docker rm -f kingdoms-mongo kingdoms-redis 2>/dev/null || true
-          docker network rm kingdoms-ci 2>/dev/null || true
+          docker rm -f botforge-mongo botforge-redis 2>/dev/null || true
+          docker network rm botforge-ci 2>/dev/null || true
 
   autopin-personal-env:
-    # Personal environments (docs/ENVIRONMENTS.md of kingdoms-infra): a push
+    # Personal environments (docs/ENVIRONMENTS.md of botforge-infra): a push
     # to a vibe/<alias>/main integration branch builds the image and pins it
     # on that alias's deploy/<alias> state branch — the personal env follows
     # its user's integration branch head automatically. No command, no PR:
@@ -160,14 +160,14 @@ jobs:
     needs: build
     runs-on: ubuntu-latest
     steps:
-      - name: Mint an ephemeral GitHub App token for kingdoms-infra
+      - name: Mint an ephemeral GitHub App token for botforge-infra
         id: app-token
         uses: actions/create-github-app-token@v3
         with:
-          app-id: ${{ secrets.KINGDOMS_DEPLOYER_APP_ID }}
-          private-key: ${{ secrets.KINGDOMS_DEPLOYER_APP_PRIVATE_KEY }}
-          owner: merlin-pinpin-org
-          repositories: kingdoms-infra
+          app-id: ${{ secrets.BOTFORGE_DEPLOYER_APP_ID }}
+          private-key: ${{ secrets.BOTFORGE_DEPLOYER_APP_PRIVATE_KEY }}
+          owner: jj-guild
+          repositories: botforge-infra
       - name: Pin the built image on the alias's state branch
         uses: actions/github-script@v7
         with:
@@ -179,19 +179,19 @@ jobs:
               .replace("/main", "");
             const sha = context.sha;
             const short = sha.slice(0, 7);
-            const image = `ghcr.io/merlin-pinpin-org/kingdoms-services:${{ needs.build.outputs.rich_tag }}`;
+            const image = `ghcr.io/jj-guild/botforge-services:${{ needs.build.outputs.rich_tag }}`;
             await github.rest.repos.createDispatchEvent({
-              owner: "merlin-pinpin-org",
-              repo: "kingdoms-infra",
+              owner: "jj-guild",
+              repo: "botforge-infra",
               event_type: "pin-state",
               client_payload: {
                 env: alias,
                 image,
                 version_label: `${alias}@${short}`,
-                deploy_url: `https://github.com/merlin-pinpin-org/kingdoms-services/tree/${sha}`,
+                deploy_url: `https://github.com/jj-guild/botforge-services/tree/${sha}`,
                 deploy_kind: "integration",
                 deploy_ref: short,
-                deploy_tree_url: `https://github.com/merlin-pinpin-org/kingdoms-services/tree/${sha}`,
+                deploy_tree_url: `https://github.com/jj-guild/botforge-services/tree/${sha}`,
                 deploy_branch: `vibe/${alias}/main`,
                 // The CI job that built the image: this run. The Pin state
                 // workflow resolves its id and number from the run lookup
@@ -208,14 +208,14 @@ jobs:
     needs: build
     runs-on: ubuntu-latest
     steps:
-      - name: Mint an ephemeral GitHub App token for kingdoms-infra
+      - name: Mint an ephemeral GitHub App token for botforge-infra
         id: app-token
         uses: actions/create-github-app-token@v3
         with:
-          app-id: ${{ secrets.KINGDOMS_DEPLOYER_APP_ID }}
-          private-key: ${{ secrets.KINGDOMS_DEPLOYER_APP_PRIVATE_KEY }}
-          owner: merlin-pinpin-org
-          repositories: kingdoms-infra
+          app-id: ${{ secrets.BOTFORGE_DEPLOYER_APP_ID }}
+          private-key: ${{ secrets.BOTFORGE_DEPLOYER_APP_PRIVATE_KEY }}
+          owner: jj-guild
+          repositories: botforge-infra
 
       - name: Pin the released image on deploy/test (ADR-0018)
         uses: actions/github-script@v7
@@ -223,17 +223,17 @@ jobs:
           github-token: ${{ steps.app-token.outputs.token }}
           script: |
             const tag = context.ref.replace("refs/tags/", "");
-            const image = `ghcr.io/merlin-pinpin-org/kingdoms-services:${tag}`;
+            const image = `ghcr.io/jj-guild/botforge-services:${tag}`;
             // The GitHub release page for the tag (created or not yet);
             // /status renders it as the Release/Pre-release link.
-            const releaseUrl = `https://github.com/merlin-pinpin-org/kingdoms-services/releases/tag/${tag}`;
+            const releaseUrl = `https://github.com/jj-guild/botforge-services/releases/tag/${tag}`;
             // A -rc<n> classifier pins as a prerelease: same validation
             // flow on deploy/test, but the Promote workflow refuses it
             // on prod and /status celebrates it distinctly.
             const kind = /-rc\d+$/.test(tag) ? "prerelease" : "release";
             await github.rest.repos.createDispatchEvent({
-              owner: "merlin-pinpin-org",
-              repo: "kingdoms-infra",
+              owner: "jj-guild",
+              repo: "botforge-infra",
               event_type: "pin-state",
               client_payload: {
                 env: "test",
@@ -242,7 +242,7 @@ jobs:
                 deploy_url: releaseUrl,
                 deploy_kind: kind,
                 deploy_ref: tag,
-                deploy_tree_url: `https://github.com/merlin-pinpin-org/kingdoms-services/tree/${tag}`,
+                deploy_tree_url: `https://github.com/jj-guild/botforge-services/tree/${tag}`,
                 deploy_branch: "main",
                 // The CI job that built the image: this run. Its id and
                 // number are resolved by the Pin state workflow from the

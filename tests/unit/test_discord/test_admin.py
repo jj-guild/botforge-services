@@ -1,4 +1,4 @@
-"""Unit tests for the /admin hierarchical panel (kingdoms-services#102, #117)."""
+"""Unit tests for the /admin hierarchical panel (botforge-services#102, #117)."""
 
 from __future__ import annotations
 
@@ -7,13 +7,13 @@ from typing import Any
 import discord
 import pytest
 
-from kingdoms.discord.admin import register_admin_command
+from botforge.discord.admin import register_admin_command
 from tests.mocks.discord_mock import MockGuild, MockInteraction, MockUser
 
 
 def _declare_views() -> None:
-    from kingdoms.discord.views_declared import declare_views_from_config
-    from kingdoms.discord.views_registry import clear_registry
+    from botforge.discord.views_declared import declare_views_from_config
+    from botforge.discord.views_registry import clear_registry
 
     clear_registry()
     declare_views_from_config("config")

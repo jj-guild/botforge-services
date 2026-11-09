@@ -16,11 +16,11 @@ from typing import Any
 
 import grpc
 
-from kingdoms.core.models.game import PlayerStats, ProviderCapabilities, StatsBlock, StatsEntry
-from kingdoms.core.rpc.game import GameServicer
-from kingdoms.core.rpc.game_client import GameProviderClient
-from kingdoms.core.services.profile_stats import PROFILE_STATS_COLLECTION, ProfileStatsService, stats_entry
-from kingdoms.rpc_generated.kingdoms.v1 import game_pb2_grpc
+from botforge.core.models.game import PlayerStats, ProviderCapabilities, StatsBlock, StatsEntry
+from botforge.core.rpc.game import GameServicer
+from botforge.core.rpc.game_client import GameProviderClient
+from botforge.core.services.profile_stats import PROFILE_STATS_COLLECTION, ProfileStatsService, stats_entry
+from botforge.rpc_generated.botforge.v1 import game_pb2_grpc
 
 STATS = PlayerStats(
     profile_id="123",

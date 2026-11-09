@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Python: botforge.core.services.mod_ops_mongo</title>
+</head><body>
+
+<table class="heading">
+<tr class="heading-text decor">
+<td class="title">&nbsp;<br><strong class="title"><a href="botforge.html" class="white">botforge</a>.<a href="botforge.core.html" class="white">core</a>.<a href="botforge.core.services.html" class="white">services</a>.mod_ops_mongo</strong></td>
+<td class="extra"><a href=".">index</a><br><a href="file:SOURCE_ROOT/core/services/mod_ops_mongo.py">SOURCE_ROOT/core/services/mod_ops_mongo.py</a></td></tr></table>
+    <p><span class="code">The&nbsp;mods'&nbsp;Mongo&nbsp;adapters:&nbsp;members,&nbsp;mod&nbsp;states,&nbsp;seasons&nbsp;(botforge-services#267).<br>
+&nbsp;<br>
+Generic&nbsp;platform&nbsp;persistence&nbsp;for&nbsp;any&nbsp;mod:&nbsp;the&nbsp;membership&nbsp;store&nbsp;(the<br>
+enrolled&nbsp;players),&nbsp;the&nbsp;per-guild&nbsp;mod&nbsp;lifecycle&nbsp;states&nbsp;and&nbsp;the&nbsp;seasons<br>
+of&nbsp;a&nbsp;mod's&nbsp;scope.&nbsp;A&nbsp;mod&nbsp;never&nbsp;writes&nbsp;its&nbsp;own&nbsp;Mongo&nbsp;layer&nbsp;for&nbsp;these&nbsp;—<br>
+it&nbsp;wires&nbsp;these&nbsp;adapters&nbsp;against&nbsp;the&nbsp;shared&nbsp;database&nbsp;and&nbsp;stays<br>
+declarative.</span></p>
+<p>
+<table class="section">
+<tr class="decor pkg-content-decor heading-text">
+<td class="section-title" colspan=3>&nbsp;<br><strong class="bigsection">Modules</strong></td></tr>
+    
+<tr><td class="decor pkg-content-decor"><span class="code">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span></td><td>&nbsp;</td>
+<td class="singlecolumn"><table><tr><td class="multicolumn"><a href="time.html">time</a><br>
+</td><td class="multicolumn"></td><td class="multicolumn"></td><td class="multicolumn"></td></tr></table></td></tr></table><p>
+<table class="section">
+<tr class="decor index-decor heading-text">
+<td class="section-title" colspan=3>&nbsp;<br><strong class="bigsection">Classes</strong></td></tr>
+    
+<tr><td class="decor index-decor"><span class="code">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span></td><td>&nbsp;</td>
+<td class="singlecolumn"><dl>
+<dt class="heading-text"><a href="builtins.html#object">builtins.object</a>
+</dt><dd>
+<dl>
+<dt class="heading-text"><a href="botforge.core.services.mod_ops_mongo.html#ModLifecycleMongo">ModLifecycleMongo</a>
+</dt><dt class="heading-text"><a href="botforge.core.services.mod_ops_mongo.html#ModMembershipMongo">ModMembershipMongo</a>
+</dt><dt class="heading-text"><a href="botforge.core.services.mod_ops_mongo.html#ModSeasonMongo">ModSeasonMongo</a>
+</dt></dl>
+</dd>
+</dl>
+ <p>
+<table class="section">
+<tr class="decor title-decor heading-text">
+<td class="section-title" colspan=3>&nbsp;<br><a name="ModLifecycleMongo">class <strong>ModLifecycleMongo</strong></a>(<a href="builtins.html#object">builtins.object</a>)</td></tr>
+    
+<tr><td class="decor title-decor" rowspan=2><span class="code">&nbsp;&nbsp;&nbsp;</span></td>
+<td class="decor title-decor" colspan=2><span class="code"><a href="#ModLifecycleMongo">ModLifecycleMongo</a>(database:&nbsp;'Any')&nbsp;-&amp;gt;&nbsp;'None'<br>
+&nbsp;<br>
+The&nbsp;ModLifecycleDatabase&nbsp;protocol&nbsp;over&nbsp;Mongo.<br>&nbsp;</span></td></tr>
+<tr><td>&nbsp;</td>
+<td class="singlecolumn">Methods defined here:<br>
+<dl><dt><a name="ModLifecycleMongo-__init__"><strong>__init__</strong></a>(self, database: 'Any') -&gt; 'None'</dt><dd><span class="code">Bind&nbsp;the&nbsp;shared&nbsp;database.</span></dd></dl>
+
+<dl><dt>async <a name="ModLifecycleMongo-find_mod_state"><strong>find_mod_state</strong></a>(self, guild_id: 'str', mod: 'str') -&gt; 'dict[str, Any] | None'</dt><dd><span class="code">Return&nbsp;one&nbsp;mod&nbsp;state&nbsp;document;&nbsp;None&nbsp;when&nbsp;absent.</span></dd></dl>
+
+<dl><dt>async <a name="ModLifecycleMongo-upsert_mod_state"><strong>upsert_mod_state</strong></a>(self, document: 'dict[str, Any]') -&gt; 'None'</dt><dd><span class="code">Insert&nbsp;or&nbsp;replace&nbsp;one&nbsp;mod&nbsp;state&nbsp;document&nbsp;by&nbsp;``_id``.</span></dd></dl>
+
+<hr>
+Data descriptors defined here:<br>
+<dl><dt><strong>__dict__</strong></dt>
+<dd><span class="code">dictionary&nbsp;for&nbsp;instance&nbsp;variables</span></dd>
+</dl>
+<dl><dt><strong>__weakref__</strong></dt>
+<dd><span class="code">list&nbsp;of&nbsp;weak&nbsp;references&nbsp;to&nbsp;the&nbsp;object</span></dd>
+</dl>
+</td></tr></table> <p>
+<table class="section">
+<tr class="decor title-decor heading-text">
+<td class="section-title" colspan=3>&nbsp;<br><a name="ModMembershipMongo">class <strong>ModMembershipMongo</strong></a>(<a href="builtins.html#object">builtins.object</a>)</td></tr>
+    
+<tr><td class="decor title-decor" rowspan=2><span class="code">&nbsp;&nbsp;&nbsp;</span></td>
+<td class="decor title-decor" colspan=2><span class="code"><a href="#ModMembershipMongo">ModMembershipMongo</a>(database:&nbsp;'Any',&nbsp;mod:&nbsp;'str')&nbsp;-&amp;gt;&nbsp;'None'<br>
+&nbsp;<br>
+The&nbsp;membership&nbsp;hooks&nbsp;over&nbsp;Mongo&nbsp;—&nbsp;one&nbsp;collection,&nbsp;every&nbsp;mod.<br>
+&nbsp;<br>
+Document&nbsp;id:&nbsp;``&lt;mod&gt;:&lt;guild_id&gt;:&lt;user_id&gt;``;&nbsp;the&nbsp;season&nbsp;label&nbsp;rides<br>
+the&nbsp;document&nbsp;(a&nbsp;seasonal&nbsp;mod&nbsp;re-registers&nbsp;per&nbsp;season,&nbsp;a&nbsp;permanent<br>
+mod&nbsp;keeps&nbsp;one&nbsp;row&nbsp;per&nbsp;player).<br>&nbsp;</span></td></tr>
+<tr><td>&nbsp;</td>
+<td class="singlecolumn">Methods defined here:<br>
+<dl><dt><a name="ModMembershipMongo-__init__"><strong>__init__</strong></a>(self, database: 'Any', mod: 'str') -&gt; 'None'</dt><dd><span class="code">Bind&nbsp;the&nbsp;shared&nbsp;database&nbsp;and&nbsp;the&nbsp;mod's&nbsp;namespace.</span></dd></dl>
+
+<dl><dt>async <a name="ModMembershipMongo-is_member"><strong>is_member</strong></a>(self, guild_id: 'str', user_id: 'str') -&gt; 'bool'</dt><dd><span class="code">Whether&nbsp;one&nbsp;player&nbsp;is&nbsp;enrolled.</span></dd></dl>
+
+<dl><dt>async <a name="ModMembershipMongo-list_members"><strong>list_members</strong></a>(self, guild_id: 'str') -&gt; 'list[dict[str, Any]]'</dt><dd><span class="code">List&nbsp;the&nbsp;guild's&nbsp;enrolled&nbsp;players&nbsp;(ascending&nbsp;by&nbsp;display&nbsp;name).</span></dd></dl>
+
+<dl><dt>async <a name="ModMembershipMongo-register_member"><strong>register_member</strong></a>(self, guild_id: 'str', user_id: 'str', display_name: 'str') -&gt; 'Any'</dt><dd><span class="code">Upsert&nbsp;one&nbsp;member&nbsp;row&nbsp;(idempotent,&nbsp;last&nbsp;display&nbsp;name&nbsp;wins).</span></dd></dl>
+
+<dl><dt>async <a name="ModMembershipMongo-unregister_member"><strong>unregister_member</strong></a>(self, guild_id: 'str', user_id: 'str') -&gt; 'Any'</dt><dd><span class="code">Delete&nbsp;one&nbsp;member&nbsp;row;&nbsp;unknown&nbsp;members&nbsp;are&nbsp;a&nbsp;no-op&nbsp;success.</span></dd></dl>
+
+<hr>
+Data descriptors defined here:<br>
+<dl><dt><strong>__dict__</strong></dt>
+<dd><span class="code">dictionary&nbsp;for&nbsp;instance&nbsp;variables</span></dd>
+</dl>
+<dl><dt><strong>__weakref__</strong></dt>
+<dd><span class="code">list&nbsp;of&nbsp;weak&nbsp;references&nbsp;to&nbsp;the&nbsp;object</span></dd>
+</dl>
+</td></tr></table> <p>
+<table class="section">
+<tr class="decor title-decor heading-text">
+<td class="section-title" colspan=3>&nbsp;<br><a name="ModSeasonMongo">class <strong>ModSeasonMongo</strong></a>(<a href="builtins.html#object">builtins.object</a>)</td></tr>
+    
+<tr><td class="decor title-decor" rowspan=2><span class="code">&nbsp;&nbsp;&nbsp;</span></td>
+<td class="decor title-decor" colspan=2><span class="code"><a href="#ModSeasonMongo">ModSeasonMongo</a>(database:&nbsp;'Any',&nbsp;ladder_id:&nbsp;'str')&nbsp;-&amp;gt;&nbsp;'None'<br>
+&nbsp;<br>
+The&nbsp;SeasonDatabase&nbsp;protocol&nbsp;over&nbsp;Mongo,&nbsp;for&nbsp;a&nbsp;mod's&nbsp;scope.<br>
+&nbsp;<br>
+The&nbsp;seasons&nbsp;collection&nbsp;is&nbsp;shared;&nbsp;every&nbsp;query&nbsp;narrows&nbsp;on&nbsp;the<br>
+mod's&nbsp;ladder&nbsp;id&nbsp;(its&nbsp;``&lt;mod&gt;:&lt;game&gt;:&lt;guild&gt;``&nbsp;scope).<br>&nbsp;</span></td></tr>
+<tr><td>&nbsp;</td>
+<td class="singlecolumn">Methods defined here:<br>
+<dl><dt><a name="ModSeasonMongo-__init__"><strong>__init__</strong></a>(self, database: 'Any', ladder_id: 'str') -&gt; 'None'</dt><dd><span class="code">Bind&nbsp;the&nbsp;shared&nbsp;database&nbsp;and&nbsp;the&nbsp;mod's&nbsp;season&nbsp;scope.</span></dd></dl>
+
+<dl><dt>async <a name="ModSeasonMongo-delete_season"><strong>delete_season</strong></a>(self, season_id: 'str') -&gt; 'None'</dt><dd><span class="code">Delete&nbsp;one&nbsp;season&nbsp;document&nbsp;(never-started&nbsp;seasons&nbsp;only).</span></dd></dl>
+
+<dl><dt>async <a name="ModSeasonMongo-find_active_season"><strong>find_active_season</strong></a>(self, ladder_id: 'str') -&gt; 'dict[str, Any] | None'</dt><dd><span class="code">Return&nbsp;the&nbsp;scope's&nbsp;active&nbsp;season;&nbsp;None&nbsp;when&nbsp;none.</span></dd></dl>
+
+<dl><dt>async <a name="ModSeasonMongo-find_ladder_seasons"><strong>find_ladder_seasons</strong></a>(self, ladder_id: 'str') -&gt; 'list[dict[str, Any]]'</dt><dd><span class="code">List&nbsp;the&nbsp;seasons&nbsp;of&nbsp;the&nbsp;scope&nbsp;(ascending&nbsp;by&nbsp;start).</span></dd></dl>
+
+<dl><dt>async <a name="ModSeasonMongo-find_season"><strong>find_season</strong></a>(self, season_id: 'str') -&gt; 'dict[str, Any] | None'</dt><dd><span class="code">Return&nbsp;one&nbsp;season&nbsp;document;&nbsp;None&nbsp;when&nbsp;absent.</span></dd></dl>
+
+<dl><dt>async <a name="ModSeasonMongo-upsert_season"><strong>upsert_season</strong></a>(self, document: 'dict[str, Any]') -&gt; 'None'</dt><dd><span class="code">Insert&nbsp;or&nbsp;replace&nbsp;one&nbsp;season&nbsp;document&nbsp;by&nbsp;``_id``.</span></dd></dl>
+
+<hr>
+Data descriptors defined here:<br>
+<dl><dt><strong>__dict__</strong></dt>
+<dd><span class="code">dictionary&nbsp;for&nbsp;instance&nbsp;variables</span></dd>
+</dl>
+<dl><dt><strong>__weakref__</strong></dt>
+<dd><span class="code">list&nbsp;of&nbsp;weak&nbsp;references&nbsp;to&nbsp;the&nbsp;object</span></dd>
+</dl>
+</td></tr></table></td></tr></table><p>
+<table class="section">
+<tr class="decor data-decor heading-text">
+<td class="section-title" colspan=3>&nbsp;<br><strong class="bigsection">Data</strong></td></tr>
+    
+<tr><td class="decor data-decor"><span class="code">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span></td><td>&nbsp;</td>
+<td class="singlecolumn"><strong>MEMBERS_COLLECTION</strong> = 'mod_members'<br>
+<strong>MOD_STATES_COLLECTION</strong> = 'mod_states'<br>
+<strong>SEASONS_COLLECTION</strong> = 'seasons'</td></tr></table>
+</body></html>

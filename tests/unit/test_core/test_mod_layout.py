@@ -1,4 +1,4 @@
-"""Unit tests for the modular mod layout resolution (kingdoms#178)."""
+"""Unit tests for the modular mod layout resolution (botforge-services#178)."""
 
 from __future__ import annotations
 
@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from kingdoms.core.services.mod_layout import discover_mods, find_mod_declaration
+from botforge.core.services.mod_layout import discover_mods, find_mod_declaration
 
 
 def test_modular_declaration_is_found(tmp_path: Path) -> None:

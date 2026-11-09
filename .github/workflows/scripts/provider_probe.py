@@ -62,8 +62,8 @@ def _dump_blob_bytes(blob: str, label: str) -> None:
 
 async def probe_librematch(profile_id: str, timeout_s: float) -> None:
     """HTTP probe: lobbies, one lobby's decoded match details, player stats."""
-    from kingdoms.core.games.aoe2.blobs import BlobDecodeError, decode_blob
-    from kingdoms.ext_librematch.adapter import LibrematchAdapter
+    from botforge.core.games.aoe2.blobs import BlobDecodeError, decode_blob
+    from botforge.ext_librematch.adapter import LibrematchAdapter
 
     adapter = LibrematchAdapter(timeout_s=timeout_s)
     print(f"\n### ext_librematch — {adapter._base_url}")
@@ -95,7 +95,7 @@ async def probe_aoe2lobby(timeout_s: float, profile_id: str) -> None:
 
     import websockets
 
-    from kingdoms.ext_aoe2lobby.adapter import DEFAULT_WS_URL
+    from botforge.ext_aoe2lobby.adapter import DEFAULT_WS_URL
 
     print(f"\n### ext_aoe2lobby — {DEFAULT_WS_URL}")
     try:
@@ -127,9 +127,92 @@ async def probe_aoe2lobby(timeout_s: float, profile_id: str) -> None:
         print(f"!! websocket failed: {type(err).__name__}: {err}")
 
 
+def probe_liquipedia(page: str) -> None:
+    """Fetch one map page's RAW wikitext and run the REAL parse on it.
+
+    Prints the raw wikitext (the facts) next to the parsed MapInfo, so
+    a "the labels are wrong on this map" report is debugged against
+    the actual bytes, not assumptions.
+    """
+    from botforge.ext_liquipedia.liquipedia import LiquipediaMapsProvider, query_tags
+
+    provider = LiquipediaMapsProvider(
+        "botforge provider-probe/1.0 "
+        "(https://github.com/jj-guild/botforge-services)",
+    )
+    payload = provider._get_json(
+        {"action": "parse", "page": page, "prop": "wikitext", "format": "json"},
+        is_parse=True,
+    )
+    wikitext = str(payload.get("parse", {}).get("wikitext", {}).get("*", ""))
+    _print(f"LIQUIPEDIA RAW WIKITEXT — {page}", wikitext[:12000])
+    info = provider._info_from_wikitext(page, wikitext)
+    # the RESOLVED urls (the imageinfo batch): an infobox image that 404s
+    # upstream lands here as an empty image_url — the fact the sync's
+    # "carries no image" skips were built on (never guess, print)
+    files = [f"File:{n}" for n in (info.image_file, info.gallery_icon) if n]
+    raw_imageinfo = provider._get_json(
+        {
+            "action": "query",
+            "prop": "imageinfo",
+            "titles": "|".join(files),
+            "iiprop": "url",
+            "format": "json",
+            "formatversion": "2",
+        }
+    )
+    _print(
+        f"LIQUIPEDIA RAW IMAGEINFO — {page}",
+        raw_imageinfo.get("query", {}).get("pages", []),
+    )
+    # reuse the SAME response — one imageinfo call per page, never two
+    # (the doubled query tipped the runner into Liquipedia's 429s)
+    urls = {
+        str(page_.get("title", "")).split("File:", 1)[-1].replace(" ", "_"): str(
+            (page_.get("imageinfo") or [{}])[0].get("url", "")
+        )
+        for page_ in raw_imageinfo.get("query", {}).get("pages", [])
+    }
+    _print(
+        f"LIQUIPEDIA RESOLVED URLS — {page}",
+        {
+            "image_file": info.image_file,
+            "image_url": urls.get(info.image_file.replace(" ", "_"), ""),
+            "gallery_icon": info.gallery_icon,
+            "icon_url": urls.get(info.gallery_icon.replace(" ", "_"), ""),
+        },
+    )
+    _print(
+        f"LIQUIPEDIA PARSED MapInfo — {page}",
+        {
+            "name": info.name,
+            "description": info.description,
+            "terrain": info.terrain,
+            "size": info.size,
+            "map_type": info.map_type,
+            "image_file": info.image_file,
+            "gallery_icon": info.gallery_icon,
+            "walls": info.walls,
+            "nomad": info.nomad,
+            "tc": info.tc,
+            "player_capacity": info.player_capacity,
+            "creator": info.creator,
+            "game_versions": info.game_versions,
+            "versions": [v.name for v in info.versions],
+            "tags": list(query_tags(info)),
+        },
+    )
+
+
 async def main_async(args: argparse.Namespace) -> int:
     """Run the enabled probes; exit 0 if at least one call succeeded."""
     ok = False
+    for page in [p.strip() for p in args.liquipedia_page.split(",") if p.strip()]:
+        try:
+            probe_liquipedia(page)
+            ok = True
+        except Exception as err:
+            print(f"!! liquipedia probe failed for {page}: {type(err).__name__}: {err}")
     if not args.skip_http:
         try:
             await probe_librematch(args.profile_id, args.timeout)
@@ -153,6 +236,13 @@ def main() -> int:
     parser.add_argument("--timeout", type=float, default=15.0, help="per-call timeout (s)")
     parser.add_argument("--skip-ws", action="store_true", help="skip the aoe2lobby WebSocket probe")
     parser.add_argument("--skip-http", action="store_true", help="skip the librematch HTTP probe")
+    parser.add_argument(
+        "--liquipedia-page",
+        default="Arabia,Black Forest,Arena,Nomad",
+        help="comma-separated map pages: fetch each one's raw wikitext and print the parsed MapInfo "
+        "(the default set rides every auto-probe: a parser change that breaks a real page "
+        "fails the run with the bytes printed)",
+    )
     return asyncio.run(main_async(parser.parse_args()))
 
 

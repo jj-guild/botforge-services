@@ -1,7 +1,7 @@
 """Smoke test: run inside the bot container against the real MongoDB and Redis.
 
 Verifies that the stack wiring is correct: dependencies reachable, the
-kingdoms package importable, and configuration loadable. Exits non-zero on
+botforge package importable, and configuration loadable. Exits non-zero on
 the first failure.
 """
 
@@ -28,11 +28,11 @@ def check_redis(uri: str) -> None:
 
 
 def check_imports() -> None:
-    import kingdoms
-    import kingdoms.core.enums.channel_category
-    import kingdoms.discord.bot.main
+    import botforge
+    import botforge.core.enums.channel_category
+    import botforge.discord.bot.main
 
-    print(f"kingdoms package imports OK: {kingdoms.__version__}")
+    print(f"botforge package imports OK: {botforge.__version__}")
 
 
 def check_config() -> None:
@@ -43,7 +43,7 @@ def check_config() -> None:
         with open(f"config/locales/{locale}.yaml") as fh:
             catalog = yaml.safe_load(fh)
         assert locale in catalog and "common" in catalog[locale], f"{locale}.yaml missing common keys"
-    from kingdoms.core.services.mod_registry import load_mod_definitions
+    from botforge.core.services.mod_registry import load_mod_definitions
     mods = load_mod_definitions(Path("config"))
     assert isinstance(mods, dict), "mod declarations failed to load"
     print(f"YAML configs load OK (en, fr); {len(mods)} mod declaration(s) valid")

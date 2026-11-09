@@ -43,8 +43,8 @@ dans l'ordre ; la dernière reste active.
 ## Imports (CLIs)
 
 ```
-uv run python -m kingdoms.mods.ladder.season_import_cli <season.yaml> <users.csv> <matches.csv> <guild_id>
-uv run python -m kingdoms.core.games.aoe2.content_refresh_cli
+uv run python -m botforge.mods.ladder.season_import_cli <season.yaml> <users.csv> <matches.csv> <guild_id>
+uv run python -m botforge.core.games.aoe2.content_refresh_cli
 ```
 
 Le refresh enrichit aussi les maps sans image via l'API Liquipedia

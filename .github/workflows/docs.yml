@@ -26,7 +26,7 @@ jobs:
       - name: Check pydoc freshness
         run: |
           uv run python .github/workflows/scripts/generate_pydoc.py \
-            --source src/kingdoms \
+            --source src/botforge \
             --output /tmp/pydoc-fresh
           if diff -rq /tmp/pydoc-fresh docs/DEVELOPMENT/pydoc \
             --exclude=.gitkeep > /tmp/pydoc-diff.txt 2>&1; then

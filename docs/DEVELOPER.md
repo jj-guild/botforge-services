@@ -1,14 +1,14 @@
-# kingdoms-services — developer guide
+# botforge-services — developer guide
 
-`kingdoms-services` holds all the Python code of the Kingdoms Discord bot
+`botforge-services` holds all the Python code of the BotForge Discord bot
 platform: the platform-agnostic core, the Discord platform implementation
 (discord.py), the mods, and the YAML configs.
 
 Read the shared
-[conventions](https://github.com/merlin-pinpin-org/kingdoms/blob/main/docs/CONVENTIONS.md)
+[conventions](https://github.com/jj-guild/botforge/blob/main/docs/CONVENTIONS.md)
 and the
-[operating model](https://github.com/merlin-pinpin-org/kingdoms/blob/main/docs/VIBEWORKFLOW.md)
-in the `kingdoms` repo. This page covers what is specific to working *in
+[operating model](https://github.com/jj-guild/botforge/blob/main/docs/VIBEWORKFLOW.md)
+in the `botforge` repo. This page covers what is specific to working *in
 this repo*.
 
 ## Layout
@@ -16,17 +16,17 @@ this repo*.
 | Path | Content |
 | ---- | ------- |
 | `AGENTS.md` | Short agent entry point (points here) |
-| `src/kingdoms/core/` | Platform-agnostic core — **no discord.py imports** |
-| `src/kingdoms/discord/` | Discord platform (implements `IPlatform`) |
-| `src/kingdoms/mods/` | Mods (channels categories and roles declared via `ModRegistry`) |
-| `src/kingdoms/modsdk/` | The modder SDK — declarative entities/actions/menus ([docs/DEVELOPMENT/MODSDK.md](DEVELOPMENT/MODSDK.md)) |
+| `src/botforge/core/` | Platform-agnostic core — **no discord.py imports** |
+| `src/botforge/discord/` | Discord platform (implements `IPlatform`) |
+| `src/botforge/mods/` | Mods (channels categories and roles declared via `ModRegistry`) |
+| `src/botforge/modsdk/` | The modder SDK — declarative entities/actions/menus ([docs/DEVELOPMENT/MODSDK.md](DEVELOPMENT/MODSDK.md)) |
 | `config/` | YAML configs, `config/locales/` (i18n), `config/mods/` |
 | `docs/DEVELOPMENT/pydoc/` | Generated technical docs — regenerate with `make docs` (freshness-checked on every PR) |
-| `contracts/` | gRPC contracts between processes (ADR-0020); stubs in `src/kingdoms/rpc_generated/`, regenerated with `make contracts` |
-| `src/kingdoms/core_process/` | svc-core process entrypoint (ADR-0020) |
+| `contracts/` | gRPC contracts between processes (ADR-0020); stubs in `src/botforge/rpc_generated/`, regenerated with `make contracts` |
+| `src/botforge/core_process/` | svc-core process entrypoint (ADR-0020) |
 | `tests/` | Unit + integration tests, `tests/mocks/` (MockDiscord) |
 | `Makefile` | `make lint`, `make typecheck`, `make test`, `make docs` |
-| `src/kingdoms/cli/` | `kingdoms` developer CLI — doctor, local stack, remote ssh, runner ([docs/CLI.md](CLI.md)) |
+| `src/botforge/cli/` | `botforge` developer CLI — doctor, local stack, remote ssh, runner ([docs/CLI.md](CLI.md)) |
 
 ## Toolchain
 
@@ -37,17 +37,17 @@ clone — no credentials, no Discord token, no external services; keep it
 that way. Run `make lint` and `make test` before pushing; all tests must
 pass.
 
-The `kingdoms` CLI ([docs/CLI.md](CLI.md)) is the front door for environment
-and ops work: `kingdoms doctor` checks your machine, `kingdoms local ...`
-drives the dev stack, `kingdoms remote ...` manages servers over SSH and
-`kingdoms runner setup` guides a self-hosted Actions runner. Prefer it to
+The `botforge` CLI ([docs/CLI.md](CLI.md)) is the front door for environment
+and ops work: `botforge doctor` checks your machine, `botforge local ...`
+drives the dev stack, `botforge remote ...` manages servers over SSH and
+`botforge runner setup` guides a self-hosted Actions runner. Prefer it to
 improvised shell commands — if something recurring is missing from it, add
-it there (a module per domain in `src/kingdoms/cli/`).
+it there (a module per domain in `src/botforge/cli/`).
 
 ## Architecture rules
 
-- The core (`src/kingdoms/core/`) is **platform-agnostic**: no discord.py
-  imports in core. Discord code lives in `src/kingdoms/discord/` and
+- The core (`src/botforge/core/`) is **platform-agnostic**: no discord.py
+  imports in core. Discord code lives in `src/botforge/discord/` and
   implements `IPlatform`.
 - All user-facing strings go through the **i18n system**: English default
   (`config/locales/en.yaml`), French available (`config/locales/fr.yaml`).
@@ -56,16 +56,16 @@ it there (a module per domain in `src/kingdoms/cli/`).
   they never create channels/roles directly. Mods and game providers
   reference **logical role keys**, never hardcoded Discord role IDs.
 - Custom IDs follow the convention `<mod>:<component>:<payload>` (see the
-  kingdoms Discord components guide).
+  botforge Discord components guide).
 - Every mod or game provider added here must have its documentation
-  updated in `kingdoms` (source of truth), including
+  updated in `botforge` (source of truth), including
   `docs/MODS/<mod-name>/`.
 
 ## Bot logs channel
 
 Every guild gets a dedicated **bot logs channel** (`🤖-bot-logs`) where the
 bot posts its lifecycle events: startup announcement, status changes,
-crashes, start/stop/restart. The design (kingdoms-services#109):
+crashes, start/stop/restart. The design (botforge-services#109):
 
 - **Channel naming convention**: channels created by the bot always
   carry an emoji prefix followed by a dash, e.g. `🤖-bot-logs`.
@@ -83,17 +83,17 @@ crashes, start/stop/restart. The design (kingdoms-services#109):
 - **Lifecycle events are best-effort**: a store failure logs a warning,
   never crashes the bot; repeated crashes collapse into a single
   "crash-loop detected" event.
-- The startup announcement (kingdoms-services#52) is the `start` event
+- The startup announcement (botforge-services#52) is the `start` event
   of this flow: a Components V2 layout (accent Container, Section with
   the bot avatar as thumbnail accessory, Separator, link buttons) reusing
   the exact `/status` rendering, carrying a machine-readable footer
-  (`kingdoms-deploy env=… image=… kind=… ref=… run=…`) in sub-text —
-  read back by the kingdoms-infra battery through the REST API.
-- `KINGDOMS_ANNOUNCE_ENABLED=0` silences the startup announcement
+  (`botforge-deploy env=… image=… kind=… ref=… run=…`) in sub-text —
+  read back by the botforge-infra battery through the REST API.
+- `BOTFORGE_ANNOUNCE_ENABLED=0` silences the startup announcement
   entirely — used by the CI/CD smoke bot so CI boots never post in
   the shared guilds.
 
-## UI SDK (`src/kingdoms/discord/ui`)
+## UI SDK (`src/botforge/discord/ui`)
 
 Every view, embed or Components V2 layout is built through the UI SDK —
 never by instantiating `discord.ui` / `discord.Embed` classes directly in
@@ -106,18 +106,18 @@ a feature. `factory.py` holds the bricks and builders (`UILayout`,
 The full usage rules — navigation in buttons (never links in V2 text
 blocks), the `<mod>:<component>:<payload>` custom ID convention,
 build-time budgets and guarantees, testing patterns — live in the
-kingdoms repo
-[discord-ui skill](https://github.com/merlin-pinpin-org/kingdoms/blob/main/.agents/skills/discord-ui/SKILL.md).
+botforge repo
+[discord-ui skill](https://github.com/jj-guild/botforge/blob/main/.agents/skills/discord-ui/SKILL.md).
 Extend the SDK rather than bypassing it.
 
 ## Testing rules
 
 Full strategy:
-[kingdoms/docs/architecture/testing.md](https://github.com/merlin-pinpin-org/kingdoms/blob/main/docs/architecture/testing.md)
+[botforge/docs/architecture/testing.md](https://github.com/jj-guild/botforge/blob/main/docs/architecture/testing.md)
 (hybrid pyramid). The short version — use the **right double for the right
 depth**:
 
-- **No Discord at all** for core tests (`src/kingdoms/core/` is
+- **No Discord at all** for core tests (`src/botforge/core/` is
   platform-agnostic; use plain fixtures, in-memory stores).
 - **MockDiscord** (`tests/mocks/discord_mock.py`) for adapter and
   UI-builder unit tests: mock objects subclassing the real discord.py
@@ -133,11 +133,18 @@ depth**:
   token, no network, no sleeps — `env.advance_time()` fires timeouts.
 - Never use `MagicMock` as a substitute for Discord permissions or cache
   state; never call `bot.run()` in a test.
+- **A flow tested with a fake service is not tested — the seam must have
+  its own test** (#322): every caller-to-remote seam (gRPC clients,
+  remotes, proxies) is held by a signature contract
+  (`tests/architecture/test_rpc_seam_contracts.py`) plus one end-to-end
+  seam test over loopback gRPC
+  (`tests/integration/test_rpc_seam_journeys.py`,
+  `test_catalog_gateway.py`).
 - Anything that cannot run in the dev sandbox (Docker Compose boot, image
   build, real MongoDB/Redis, entrypoint/preflight paths) is exercised by
   CI workflows instead.
 
-### Runtime-image purity (kingdoms-services#106)
+### Runtime-image purity (botforge-services#106)
 
 Test code and test dependencies (SimCord, pytest, mocks) **never land on a
 run machine**: the runtime image runs on the environment VPSes and is
@@ -156,16 +163,16 @@ This is enforced, not conventional — two fail-closed guards:
 at any commit: `uv sync --frozen` + `pytest tests/integration`. It is
 in-memory and network-free — an autouse fixture fails any test that
 attempts a real socket connection. This is the interface consumed by the
-kingdoms-infra post-deploy battery (kingdoms-infra#78), which checks out
+botforge-infra post-deploy battery (botforge-infra#78), which checks out
 this repository at the pinned deploy commit on a GitHub-hosted runner —
-never on an environment VPS.
+never on an environment hosting.
 
 ## Deploying
 
 - **Pull request**: post `/deploy [env]` as a comment on the PR (defaults
   to `test`; `prod` is rejected — released images only). The workflow
   builds the PR head, pushes the image `pr-<id>-<timestamp>-<sha7>` to
-  GHCR, pins it on the kingdoms-infra state branch `deploy/<env>` and
+  GHCR, pins it on the botforge-infra state branch `deploy/<env>` and
   deploys it on that environment's runner; the tracking comment on the PR
   follows the deployment. Only collaborators with write access; fork PRs
   rejected. Details in the [README](../README.md).
@@ -177,11 +184,11 @@ never on an environment VPS.
 
 ## Process split (ADR-0020)
 
-Kingdoms runs as separate processes: `bot-discord` (default, legacy
-entrypoint) and `svc-core` (`KINGDOMS_PROCESS=core`, serves the gRPC
+BotForge runs as separate processes: `bot-discord` (default, legacy
+entrypoint) and `svc-core` (`BOTFORGE_PROCESS=core`, serves the gRPC
 seams on `CORE_GRPC_PORT`, default 50051). Contracts live in
 `contracts/`; generated stubs are committed and regenerated with
-`make contracts` (never hand-edit `src/kingdoms/rpc_generated/`).
+`make contracts` (never hand-edit `src/botforge/rpc_generated/`).
 
 The split is progressive: while ``CORE_URI`` is unset the bot behaves
 exactly as before; when set, startup asserts the wiring

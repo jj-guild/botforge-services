@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from kingdoms.core.services.faction_content import CACHE_SCOPE, FactionContentService
+from botforge.core.services.faction_content import CACHE_SCOPE, FactionContentService
 
 DOC = {
     "entity_id": "faction:aoe2:franks",
@@ -162,6 +162,26 @@ async def test_store_is_idempotent_upsert() -> None:
     await service.store(DOC)
     await service.store(DOC)
     assert len(db.collections["faction_content"].docs) == 1
+
+
+async def test_store_writes_through_to_the_cache() -> None:
+    """A sync's store refreshes Mongo AND the Redis cache in one pass.
+
+    The parsed doc lands in the cache on the store itself — the reads
+    after a sync never re-download the doc from Mongo (owner direction
+    2026-11-07).
+    """
+    db = FakeDatabase()
+    state = FakeState()
+    service = FactionContentService(db, state)
+    await service.store(DOC)
+    assert f"{CACHE_SCOPE}:faction:aoe2:franks:fr" in state.store, (
+        "write-through: the parsed doc must land in the cache on store"
+    )
+    baseline = state.get_calls
+    doc = await service.get("faction:aoe2:franks", "fr")
+    assert doc is not None and doc["name"] == DOC["name"]
+    assert state.get_calls == baseline + 1, "one cache read — no Mongo download"
 
 
 async def test_ensure_indexes_creates_query_indexes() -> None:

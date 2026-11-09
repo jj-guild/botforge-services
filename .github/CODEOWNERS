@@ -1,20 +1,20 @@
-# Code ownership (kingdoms-services).
+# Code ownership (botforge-services).
 # Combined with the "main" ruleset (require code owner review, 1
 # approval), no change merges without a maintainer.
-# Team: @merlin-pinpin-org/maintainers (developer + ops).
+# Team: @jj-guild/maintainers (developer + ops).
 #
 # Default: a maintainer reviews everything
-*                       @merlin-pinpin-org/maintainers
+*                       @jj-guild/maintainers
 
 # CI/CD workflows: the deploy path is security-sensitive
-/.github/workflows/     @merlin-pinpin-org/maintainers
+/.github/workflows/     @jj-guild/maintainers
 
-# Docker and entrypoint: what runs on the VPS
-/Dockerfile             @merlin-pinpin-org/maintainers
-/docker/                @merlin-pinpin-org/maintainers
+# Docker and entrypoint: what runs on the hosting
+/Dockerfile             @jj-guild/maintainers
+/docker/                @jj-guild/maintainers
 
 # Mod code: owned by the mod's designer (per the roster 'owns' column,
-# kingdoms repo). Default owner for unclaimed mods is Merlin (the
+# botforge repo). Default owner for unclaimed mods is Merlin (the
 # platform developer) — the contributors-sync ownership check keeps
 # this file and the roster in sync.
-/src/kingdoms/mods/ladder/   @merlin-pinpin
+/src/botforge/mods/ladder/   @merlin-pinpin

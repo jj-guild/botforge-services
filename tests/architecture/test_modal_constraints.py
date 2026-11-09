@@ -7,7 +7,7 @@ unresponsive. The rule landed for real on the profile surface (the add and
 remove modals), and this test keeps it true for every modal of the codebase.
 
 The check is structural and runtime-based at once: it instantiates every
-``discord.ui.Modal`` subclass found in ``kingdoms.discord`` (and modsdk),
+``discord.ui.Modal`` subclass found in ``botforge.discord`` (and modsdk),
 walks its children, and fails when a ``Select``-shaped item is reachable
 without its Label wrapper — i.e. the serialized payload carries a bare
 select component inside an action row instead of a label component.
@@ -31,10 +31,10 @@ SRC = ROOT / "src"
 def _modal_classes() -> list[type[discord.ui.Modal]]:
     """Import every discord module and collect the Modal subclasses."""
     modals: list[type[discord.ui.Modal]] = []
-    import kingdoms
+    import botforge
 
-    for module_info in pkgutil.walk_packages(kingdoms.__path__, prefix="kingdoms."):
-        if not module_info.name.startswith(("kingdoms.discord", "kingdoms.modsdk")):
+    for module_info in pkgutil.walk_packages(botforge.__path__, prefix="botforge."):
+        if not module_info.name.startswith(("botforge.discord", "botforge.modsdk")):
             continue
         try:
             module = importlib.import_module(module_info.name)
@@ -88,7 +88,7 @@ def test_modal_payload_uses_label_components() -> None:
     """The serialized components carry type 18 labels around selects."""
     from discord import SelectOption
 
-    from kingdoms.discord.home import ProfileAddAccountModal, ProfileRemoveAccountModal
+    from botforge.discord.home import ProfileAddAccountModal, ProfileRemoveAccountModal
 
     add = ProfileAddAccountModal([SelectOption(label="AoE2", value="aoe2")])
     remove = ProfileRemoveAccountModal([SelectOption(label="A", value="aoe2|1")])
@@ -103,7 +103,7 @@ def test_modal_select_survives_refresh_lookup() -> None:
     """``Modal._refresh`` must find the select by custom_id (submission read)."""
     from discord import SelectOption
 
-    from kingdoms.discord.home import ProfileRemoveAccountModal
+    from botforge.discord.home import ProfileRemoveAccountModal
 
     modal = ProfileRemoveAccountModal([SelectOption(label="A", value="aoe2|1")])
     custom_id = modal.accounts.custom_id
@@ -119,7 +119,7 @@ def test_modal_multiselect_allows_all_options(max_values: int, option_count: int
     """A multi-select modal must allow choosing every option at once."""
     from discord import SelectOption
 
-    from kingdoms.discord.home import ProfileRemoveAccountModal
+    from botforge.discord.home import ProfileRemoveAccountModal
 
     options = [SelectOption(label=f"opt{i}", value=f"aoe2|{i}") for i in range(option_count)]
     modal = ProfileRemoveAccountModal(options)
@@ -172,7 +172,11 @@ def test_modal_payloads_respect_discord_limits() -> None:
         placeholder = getattr(item, "placeholder", None)
         if placeholder is not None and len(placeholder) > _PLACEHOLDER_MAX:
             offenders.append(f"{where}: placeholder {len(placeholder)} > {_PLACEHOLDER_MAX}")
-        inner_label = getattr(item, "label", None)
+        # the deprecated ``.label`` property warns (discord.py 2.6:
+        # use discord.ui.Label) — the constraint reads the underlying
+        # wire component's label, never the deprecated accessor
+        underlying = getattr(item, "_underlying", None)
+        inner_label = getattr(underlying, "label", None) if underlying is not None else None
         if type(item).__name__ == "TextInput" and inner_label and len(inner_label) > _TEXT_INPUT_LABEL_MAX:
             offenders.append(f"{where}: TextInput label {len(inner_label)} > {_TEXT_INPUT_LABEL_MAX}")
 

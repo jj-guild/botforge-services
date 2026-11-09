@@ -1,7 +1,7 @@
-"""Conquest — the seasonal example mod (kingdoms-services#267 chantier 4).
+"""Conquest — the seasonal example mod (botforge-services#267 chantier 4).
 
 The whole parcours comes from the platform's generic surfaces
-(``kingdoms.discord.mod_surfaces``): the /conquest player panel (apply
+(``botforge.discord.mod_surfaces``): the /conquest player panel (apply
 against the active season, unregister, list the enrolled), the admin
 channel validation, the admin panel (suspend/resume, create/start/end
 the season, the section's Synchroniser). This package is the one-line
@@ -13,7 +13,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-logger = logging.getLogger("kingdoms.mods.conquest")
+logger = logging.getLogger("botforge.mods.conquest")
 
 MOD_NAME = "conquest"
 GAME_KEY = "aoe2"
@@ -22,7 +22,7 @@ GAME_KEY = "aoe2"
 def register(bot: Any, config: Any) -> None:
     """Wire the generic surfaces onto the bot (idempotent, boot-safe)."""
     del config
-    from kingdoms.discord.mod_surfaces import register_mod_surfaces
+    from botforge.discord.mod_surfaces import register_mod_surfaces
 
     definition = None
     registry = getattr(bot, "registry", None)

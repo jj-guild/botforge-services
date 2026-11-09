@@ -86,25 +86,35 @@ async def _fake_seed(name: str) -> _Seed:
 
 
 async def _run_import(interaction: _Interaction) -> None:
-    from kingdoms.discord.admin_panel_games import GamesMapImportModal
+    from botforge.discord.admin_panel_games import GamesMapImportModal
 
     modal = GamesMapImportModal("aoe2")
     object.__setattr__(modal.name, "_value", "Arabia")
     await modal.on_submit(interaction)
 
 
+class _FakeSeedClient:
+    """The game service's client stand-in (the import's seed door)."""
+
+    def __init__(self, seed: Any) -> None:
+        self._seed = seed
+
+    async def get_map_seed(self, map_key: str) -> Any | None:
+        return await self._seed(map_key)
+
+
 async def test_import_success_confirms(monkeypatch: Any) -> None:
-    import kingdoms.discord.admin_panel_games as panel
+    import botforge.discord.admin_panel_games as panel
 
     service = _FakeGamesService()
     interaction = _Interaction()
     monkeypatch.setattr(panel, "_games_wiring", lambda: service)
-    monkeypatch.setattr("kingdoms.mapsdata.seed.fetch_map_seed", _fake_seed)
+    monkeypatch.setattr(panel, "_game_seed_client", lambda: _FakeSeedClient(_fake_seed))
 
     async def ok_sync(guild_id: str, game_key: str, client: Any) -> None:
         return None
 
-    monkeypatch.setattr("kingdoms.discord.maps_forum.sync_maps_forum", ok_sync)
+    monkeypatch.setattr("botforge.discord.maps_forum.sync_maps_forum", ok_sync)
     await _run_import(interaction)
     assert service.created == ["Arabia"]
     assert service.deleted == []
@@ -112,26 +122,26 @@ async def test_import_success_confirms(monkeypatch: Any) -> None:
 
 
 async def test_import_rolls_back_on_forum_failure(monkeypatch: Any) -> None:
-    import kingdoms.discord.admin_panel_games as panel
+    import botforge.discord.admin_panel_games as panel
 
     service = _FakeGamesService()
     interaction = _Interaction()
     monkeypatch.setattr(panel, "_games_wiring", lambda: service)
-    monkeypatch.setattr("kingdoms.mapsdata.seed.fetch_map_seed", _fake_seed)
-    monkeypatch.setattr("kingdoms.discord.maps_forum.sync_maps_forum", _FailingForumSync())
+    monkeypatch.setattr(panel, "_game_seed_client", lambda: _FakeSeedClient(_fake_seed))
+    monkeypatch.setattr("botforge.discord.maps_forum.sync_maps_forum", _FailingForumSync())
     await _run_import(interaction)
     assert "supprimée" in interaction.followup.messages[-1]
     assert service.deleted == ["map:aoe2:public:arabia"]
 
 
 async def test_import_orphan_message_when_rollback_fails(monkeypatch: Any) -> None:
-    import kingdoms.discord.admin_panel_games as panel
+    import botforge.discord.admin_panel_games as panel
 
     service = _FakeGamesService()
     interaction = _Interaction()
     monkeypatch.setattr(panel, "_games_wiring", lambda: service)
-    monkeypatch.setattr("kingdoms.mapsdata.seed.fetch_map_seed", _fake_seed)
-    monkeypatch.setattr("kingdoms.discord.maps_forum.sync_maps_forum", _FailingForumSync())
+    monkeypatch.setattr(panel, "_game_seed_client", lambda: _FakeSeedClient(_fake_seed))
+    monkeypatch.setattr("botforge.discord.maps_forum.sync_maps_forum", _FailingForumSync())
 
     async def failing_delete(entry_id: str) -> bool:
         raise RuntimeError("delete refused")
@@ -193,7 +203,7 @@ class _OrphanInteraction:
 
 
 async def test_orphans_button_lists_only_postless_maps(monkeypatch: Any) -> None:
-    import kingdoms.discord.admin_panel_games as panel
+    import botforge.discord.admin_panel_games as panel
 
     service = _OrphanListService()
     interaction = _OrphanInteraction()
@@ -203,7 +213,7 @@ async def test_orphans_button_lists_only_postless_maps(monkeypatch: Any) -> None
         del interaction
         return True
 
-    monkeypatch.setattr("kingdoms.discord.maps_pool_flow._guard_admin", _allow)
+    monkeypatch.setattr("botforge.discord.maps_pool_flow._guard_admin", _allow)
     button = panel.GamesMapOrphansButton("aoe2")
     await button.callback(interaction)
     assert service.listed is True

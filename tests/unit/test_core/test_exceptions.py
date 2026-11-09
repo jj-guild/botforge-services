@@ -1,7 +1,7 @@
-"""Unit tests for the exception taxonomy (kingdoms-services#10).
+"""Unit tests for the exception taxonomy (botforge-services#10).
 
 The hierarchy is the contract: every failure of the platform is a
-KingdomsError, the class is the category, the code rides the logs
+BotforgeError, the class is the category, the code rides the logs
 and audits, the user_key selects the i18n answer, and the context
 carries serializable data only (ADR-0019 rule 3).
 """
@@ -10,7 +10,8 @@ from __future__ import annotations
 
 import pytest
 
-from kingdoms.core.exceptions import (
+from botforge.core.exceptions import (
+    BotforgeError,
     ConfigurationError,
     ConnectionError,
     DatabaseError,
@@ -18,7 +19,6 @@ from kingdoms.core.exceptions import (
     ErrorContext,
     ExceptionHandler,
     InvalidWorkflowStepError,
-    KingdomsError,
     MessageSendError,
     NotFoundError,
     PermissionError,
@@ -33,11 +33,11 @@ from kingdoms.core.exceptions import (
     WorkflowNotFoundError,
     WorkflowTimeoutError,
 )
-from kingdoms.core.exceptions.handlers import FALLBACK_USER_KEY
+from botforge.core.exceptions.handlers import FALLBACK_USER_KEY
 
 
 class TestBaseHierarchy:
-    def test_every_exception_is_a_kingdoms_error(self) -> None:
+    def test_every_exception_is_a_botforge_error(self) -> None:
         errors = [
             ValidationError("bad", field="age"),
             ConfigurationError("missing", config_key="TOKEN"),
@@ -49,7 +49,7 @@ class TestBaseHierarchy:
             DatabaseError("boom"),
         ]
         for error in errors:
-            assert isinstance(error, KingdomsError)
+            assert isinstance(error, BotforgeError)
             assert isinstance(error, Exception)
 
     def test_the_str_carries_the_code(self) -> None:
@@ -89,7 +89,7 @@ class TestCodesAndUserKeys:
         assert RateLimitError().user_key == "errors.rate_limited"
 
     def test_an_unknown_code_falls_back_to_the_generic_answer(self) -> None:
-        class ExoticError(KingdomsError):
+        class ExoticError(BotforgeError):
             code = "SOMETHING_ELSE"
 
         assert ExoticError("boom").user_key == "errors.unexpected"
@@ -125,7 +125,7 @@ class TestPlatformAndDatabaseFamilies:
         assert error.context.data["channel_id"] == "42"
 
     def test_channel_and_user_not_found_are_not_found(self) -> None:
-        from kingdoms.core.exceptions import ChannelNotFoundError
+        from botforge.core.exceptions import ChannelNotFoundError
 
         assert ChannelNotFoundError("42", "discord").code == "NOT_FOUND"
         assert UserNotFoundError("7", "discord").code == "NOT_FOUND"
@@ -141,7 +141,7 @@ class TestPlatformAndDatabaseFamilies:
 
 
 class TestHandler:
-    def test_a_kingdoms_error_resolves_its_user_key(self) -> None:
+    def test_a_botforge_error_resolves_its_user_key(self) -> None:
         assert ExceptionHandler.user_key(ValidationError("x")) == "errors.validation"
 
     def test_a_foreign_error_falls_back(self) -> None:
@@ -163,26 +163,26 @@ class TestHandler:
 
 
 class TestMigratedExceptions:
-    def test_workflow_not_found_from_the_engine_is_a_kingdoms_error(self) -> None:
-        from kingdoms.core.services.workflow import WorkflowNotFoundError as EngineNotFound
+    def test_workflow_not_found_from_the_engine_is_a_botforge_error(self) -> None:
+        from botforge.core.services.workflow import WorkflowNotFoundError as EngineNotFound
 
         error = EngineNotFound("reg-42")
-        assert isinstance(error, KingdomsError)
+        assert isinstance(error, BotforgeError)
         assert isinstance(error, WorkflowError)
 
     def test_state_service_error_is_a_database_error(self) -> None:
-        from kingdoms.core.services.state import StateServiceError
+        from botforge.core.services.state import StateServiceError
 
         assert isinstance(StateServiceError("redis down"), DatabaseError)
 
     @pytest.mark.asyncio
     async def test_the_engine_still_raises_the_migrated_types(self) -> None:
-        from kingdoms.core.services.workflow import WorkflowEngine, WorkflowNotRegisteredError
+        from botforge.core.services.workflow import WorkflowEngine, WorkflowNotRegisteredError
 
         engine = WorkflowEngine(store=_EmptyStore(), state=_NoopState())
         with pytest.raises(WorkflowNotRegisteredError) as excinfo:
             await engine.start_workflow("nope", "1", "2")
-        assert isinstance(excinfo.value, KingdomsError)
+        assert isinstance(excinfo.value, BotforgeError)
 
 
 class _NoopState:

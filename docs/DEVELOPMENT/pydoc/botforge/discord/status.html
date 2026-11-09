@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Python: botforge.discord.status</title>
+</head><body>
+
+<table class="heading">
+<tr class="heading-text decor">
+<td class="title">&nbsp;<br><strong class="title"><a href="botforge.html" class="white">botforge</a>.<a href="botforge.discord.html" class="white">discord</a>.status</strong></td>
+<td class="extra"><a href=".">index</a><br><a href="file:SOURCE_ROOT/discord/status.py">SOURCE_ROOT/discord/status.py</a></td></tr></table>
+    <p><span class="code">The&nbsp;/status&nbsp;command:&nbsp;bot&nbsp;and&nbsp;per-guild&nbsp;operational&nbsp;report.<br>
+&nbsp;<br>
+Generic&nbsp;bot&nbsp;capability&nbsp;(not&nbsp;a&nbsp;mod):&nbsp;it&nbsp;reports&nbsp;uptime,&nbsp;the&nbsp;deployed<br>
+artifacts&nbsp;grouped&nbsp;by&nbsp;repository&nbsp;—&nbsp;a&nbsp;Services&nbsp;section&nbsp;(version:&nbsp;PR&nbsp;/<br>
+Commit&nbsp;+&nbsp;tree&nbsp;/&nbsp;Release,&nbsp;plus&nbsp;the&nbsp;pinned&nbsp;docker&nbsp;image)&nbsp;and&nbsp;an&nbsp;Infra<br>
+section&nbsp;(deploy/&lt;env&gt;@&lt;sha&gt;&nbsp;state&nbsp;and&nbsp;the&nbsp;Deployment&nbsp;#&lt;n&gt;&nbsp;pipeline&nbsp;run)<br>
+—,&nbsp;configured&nbsp;games,&nbsp;enabled&nbsp;mods&nbsp;with&nbsp;their&nbsp;declared&nbsp;channels&nbsp;and<br>
+roles,&nbsp;and&nbsp;one&nbsp;merged&nbsp;Admins&nbsp;section&nbsp;—&nbsp;bot&nbsp;operators&nbsp;(BOT_ADMINS)&nbsp;and&nbsp;the<br>
+invoking&nbsp;guild's&nbsp;admins&nbsp;—&nbsp;as&nbsp;a&nbsp;bullet&nbsp;list&nbsp;of&nbsp;Discord&nbsp;mentions.<br>
+&nbsp;<br>
+Reference:&nbsp;botforge-services#35&nbsp;(bot&nbsp;vs&nbsp;guild&nbsp;admins),<br>
+botforge-infra#37&nbsp;(deploy&nbsp;URL&nbsp;plumbing).</span></p>
+<p>
+<table class="section">
+<tr class="decor pkg-content-decor heading-text">
+<td class="section-title" colspan=3>&nbsp;<br><strong class="bigsection">Modules</strong></td></tr>
+    
+<tr><td class="decor pkg-content-decor"><span class="code">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span></td><td>&nbsp;</td>
+<td class="singlecolumn"><table><tr><td class="multicolumn"><a href="discord.app_commands.html">discord.app_commands</a><br>
+</td><td class="multicolumn"><a href="discord.html">discord</a><br>
+</td><td class="multicolumn"><a href="logging.html">logging</a><br>
+</td><td class="multicolumn"><a href="os.html">os</a><br>
+</td></tr></table></td></tr></table><p>
+<table class="section">
+<tr class="decor functions-decor heading-text">
+<td class="section-title" colspan=3>&nbsp;<br><strong class="bigsection">Functions</strong></td></tr>
+    
+<tr><td class="decor functions-decor"><span class="code">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span></td><td>&nbsp;</td>
+<td class="singlecolumn"><dl><dt><a name="-build_status_embed"><strong>build_status_embed</strong></a>(status: 'StatusService', guild: 'discord.Guild | None', latency: 'float | None' = None, bot_user_id: 'int | None' = None) -&gt; 'discord.Embed'</dt><dd><span class="code">Build&nbsp;the&nbsp;/status&nbsp;embed&nbsp;from&nbsp;the&nbsp;core&nbsp;report&nbsp;+&nbsp;guild&nbsp;context.</span></dd></dl>
+ <dl><dt><a name="-format_admins"><strong>format_admins</strong></a>(bot_admins: 'tuple[str, ...]', guild: 'discord.Guild | None', bot_user_id: 'int | None' = None) -&gt; 'str'</dt><dd><span class="code">Render&nbsp;one&nbsp;merged&nbsp;Admins&nbsp;section:&nbsp;bot&nbsp;operators&nbsp;+&nbsp;the&nbsp;invoking&nbsp;guild's&nbsp;admins.</span></dd></dl>
+ <dl><dt><a name="-format_deploy"><strong>format_deploy</strong></a>(deploy_run_url: 'str', deploy_url: 'str', deploy_infra_label: 'str' = '', deploy_infra_url: 'str' = '', deploy_run_number: 'str' = '', deploy_run_ts: 'str' = '', infra_commit_ts: 'str' = '') -&gt; 'str'</dt><dd><span class="code">Render&nbsp;the&nbsp;Infra&nbsp;field:&nbsp;state&nbsp;branch,&nbsp;state&nbsp;commit,&nbsp;deploy&nbsp;run.<br>
+&nbsp;<br>
+Four&nbsp;lines&nbsp;grouped&nbsp;on&nbsp;the&nbsp;botforge-infra&nbsp;repository,&nbsp;short&nbsp;labels<br>
+carrying&nbsp;the&nbsp;links:&nbsp;the&nbsp;state&nbsp;branch&nbsp;(`Branch&nbsp;deploy/&lt;env&gt;`),&nbsp;the<br>
+deployed&nbsp;state&nbsp;commit&nbsp;(`Commit&nbsp;&lt;sha7&gt;`&nbsp;linking&nbsp;the&nbsp;commit)&nbsp;with<br>
+its&nbsp;**own**&nbsp;committed&nbsp;date&nbsp;(BOTFORGE_DEPLOY_INFRA_COMMIT_TS&nbsp;—<br>
+distinct&nbsp;from&nbsp;the&nbsp;run&nbsp;date),&nbsp;followed&nbsp;by&nbsp;the&nbsp;Files&nbsp;line&nbsp;(the<br>
+state&nbsp;tree,&nbsp;labeled&nbsp;by&nbsp;the&nbsp;state&nbsp;sha7),&nbsp;and&nbsp;the&nbsp;deployment&nbsp;job<br>
+(`Deployment&nbsp;#&lt;n&gt;`,&nbsp;only&nbsp;the&nbsp;id&nbsp;links,&nbsp;with&nbsp;the&nbsp;run&nbsp;timestamp<br>
+when&nbsp;available).&nbsp;The&nbsp;infra&nbsp;identity&nbsp;is&nbsp;parsed&nbsp;from&nbsp;the<br>
+`deploy/&lt;env&gt;@&lt;sha7&gt;`&nbsp;label;&nbsp;falls&nbsp;back&nbsp;to&nbsp;a&nbsp;single&nbsp;labeled&nbsp;link,<br>
+then&nbsp;to&nbsp;the&nbsp;plain&nbsp;deploy&nbsp;link&nbsp;/&nbsp;n/a&nbsp;when&nbsp;nothing&nbsp;is&nbsp;available.</span></dd></dl>
+ <dl><dt><a name="-format_latency"><strong>format_latency</strong></a>(latency: 'float | None') -&gt; 'str'</dt><dd><span class="code">Render&nbsp;the&nbsp;gateway&nbsp;latency&nbsp;in&nbsp;milliseconds;&nbsp;n/a&nbsp;when&nbsp;unknown.</span></dd></dl>
+ <dl><dt><a name="-format_services_section"><strong>format_services_section</strong></a>(version: 'str', image: 'str' = '', kind: 'str' = '', deploy_url: 'str' = '', branch: 'str' = '', tree_url: 'str' = '', ts: 'str' = '', commit_ts: 'str' = '') -&gt; 'str'</dt><dd><span class="code">Render&nbsp;the&nbsp;Services&nbsp;repo&nbsp;section,&nbsp;one&nbsp;line&nbsp;per&nbsp;deployed&nbsp;artifact.<br>
+&nbsp;<br>
+Same&nbsp;identity&nbsp;as&nbsp;the&nbsp;announcement&nbsp;(deploy_render&nbsp;is&nbsp;the&nbsp;shared<br>
+source&nbsp;of&nbsp;truth):&nbsp;the&nbsp;commit&nbsp;line&nbsp;carries&nbsp;**Committed**&nbsp;(the&nbsp;source<br>
+commit&nbsp;date,&nbsp;BOTFORGE_DEPLOY_COMMIT_TS)&nbsp;and&nbsp;the&nbsp;image&nbsp;line&nbsp;carries<br>
+**Built**&nbsp;(the&nbsp;image&nbsp;pin&nbsp;date,&nbsp;deploy_ts)&nbsp;—&nbsp;distinct&nbsp;natures,&nbsp;one<br>
+timestamp&nbsp;each,&nbsp;never&nbsp;the&nbsp;build&nbsp;date&nbsp;on&nbsp;the&nbsp;commit.&nbsp;The&nbsp;docker&nbsp;tag<br>
+renders&nbsp;shortened&nbsp;(sha7&nbsp;+&nbsp;short&nbsp;stamp)&nbsp;—&nbsp;the&nbsp;full&nbsp;tag&nbsp;never&nbsp;shows.<br>
+Falls&nbsp;back&nbsp;to&nbsp;the&nbsp;untyped&nbsp;single-line&nbsp;render&nbsp;when&nbsp;the&nbsp;pipeline<br>
+provides&nbsp;no&nbsp;typed&nbsp;links.</span></dd></dl>
+ <dl><dt><a name="-register_status_command"><strong>register_status_command</strong></a>(tree: 'app_commands.CommandTree[discord.Client]', status: 'StatusService', sync_target: 'str' = 'global', logs_service: 'LogService | None' = None, catalog: 'MessageCatalog | None' = None) -&gt; 'None'</dt><dd><span class="code">Register&nbsp;the&nbsp;/status&nbsp;slash&nbsp;command&nbsp;on&nbsp;the&nbsp;command&nbsp;tree.<br>
+&nbsp;<br>
+``logs_service``&nbsp;resolves&nbsp;the&nbsp;guild's&nbsp;locale:&nbsp;the&nbsp;layout&nbsp;renders&nbsp;in<br>
+the&nbsp;guild's&nbsp;language&nbsp;(fallback&nbsp;en&nbsp;when&nbsp;the&nbsp;service&nbsp;is&nbsp;absent).<br>
+``catalog``&nbsp;localizes&nbsp;the&nbsp;command&nbsp;name/description&nbsp;per&nbsp;client<br>
+locale&nbsp;(``commands.*``&nbsp;keys&nbsp;in&nbsp;the&nbsp;shared&nbsp;yaml)&nbsp;through&nbsp;the&nbsp;tree<br>
+translator&nbsp;(:meth:`BotforgeBot.attach_translator`).</span></dd></dl>
+ <dl><dt><a name="-status_uptime"><strong>status_uptime</strong></a>(report: 'dict[str, object]') -&gt; 'float'</dt><dd><span class="code">Read&nbsp;the&nbsp;uptime&nbsp;field&nbsp;of&nbsp;a&nbsp;status&nbsp;report.</span></dd></dl>
+</td></tr></table><p>
+<table class="section">
+<tr class="decor data-decor heading-text">
+<td class="section-title" colspan=3>&nbsp;<br><strong class="bigsection">Data</strong></td></tr>
+    
+<tr><td class="decor data-decor"><span class="code">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span></td><td>&nbsp;</td>
+<td class="singlecolumn"><strong>INFRA_REPO_URL</strong> = 'https://github.com/jj-guild/botforge-infra'<br>
+<strong>PACKAGE_URL</strong> = 'https://github.com/jj-guild/botforge-services/pkgs/container/botforge-services'<br>
+<strong>SERVICES_REPO_URL</strong> = 'https://github.com/jj-guild/botforge-services'<br>
+<strong>logger</strong> = &lt;Logger botforge.status (INFO)&gt;</td></tr></table>
+</body></html>

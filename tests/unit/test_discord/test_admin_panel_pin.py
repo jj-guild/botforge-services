@@ -15,9 +15,9 @@ from typing import Any
 import discord
 import pytest
 
-from kingdoms.core.services.i18n import MessageCatalog
-from kingdoms.discord.admin_panel_dynamic import PIN_LOCALE_SELECT_ID, build_pin_main_menu
-from kingdoms.discord.admin_panel_pin import ensure_pinned_admin_menu
+from botforge.core.services.i18n import MessageCatalog
+from botforge.discord.admin_panel_dynamic import PIN_LOCALE_SELECT_ID, build_pin_main_menu
+from botforge.discord.admin_panel_pin import ensure_pinned_admin_menu
 from tests.mocks.discord_mock import MockGuild, MockInteraction, MockUser
 
 
@@ -219,7 +219,7 @@ async def test_pinned_menu_denies_non_admin_at_click_time() -> None:
     interaction.data = {"values": ["fr"]}
     interaction.custom_id = getattr(select, "custom_id", "")
     assert MessageCatalog is not None
-    from kingdoms.discord import admin_persistent
+    from botforge.discord import admin_persistent
 
     admin_persistent._WIRING_RESOLVER = None
     # a wiring-less bot still denies: no services, no mutation

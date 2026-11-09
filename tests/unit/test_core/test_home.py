@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from kingdoms.core.services.home import HomeService
+from botforge.core.services.home import HomeService
 
 
 class _FakeRegistry:

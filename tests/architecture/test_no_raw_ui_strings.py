@@ -21,7 +21,7 @@ ROOT = Path(__file__).resolve().parents[2]
 
 # The enforced scope: the modules held to the no-raw-strings rule today.
 # The games/pools flows carry ~130 legacy French literals — tracked in
-# kingdoms-services#273; each module joins this set as its strings
+# botforge-services#273; each module joins this set as its strings
 # migrate to the catalog.
 ENFORCED = {
     "admin_dm_panel.py",
@@ -60,6 +60,8 @@ ALLOWLIST = {
     "## \U0001F6E1 Candidature staff",
     # view ids and footers
     "view:bot:admin",
+    # the admin bar's id footer (an entity id + :admin — never prose)
+    "-# `:admin`",
     "panel:game:aoe2:live",
     "?",
     "-",
@@ -122,7 +124,7 @@ def _offenders_of(path: Path) -> list[str]:
 
 def test_no_raw_ui_strings() -> None:
     offenders: list[str] = []
-    for path in (ROOT / "src" / "kingdoms").rglob("*.py"):
+    for path in (ROOT / "src" / "botforge").rglob("*.py"):
         if "rpc_generated" in str(path) or path.name not in ENFORCED:
             continue
         offenders.extend(_offenders_of(path))

@@ -1,0 +1,73 @@
+{{Infobox map
+|image=Arena Map.png
+|caption=
+|name=Arena
+|creator=Ensemble Studios
+|players=Up to 8
+|walls=Stone Walls
+|nomad=No
+|tc=1
+|game=aoe2
+|type=Land
+|appearance=The Conquerors
+|span=2000-08-24 — '''Present'''
+}}
+'''Arena''' is a [[Random Map]] in [[Age of Empires II]].
+
+==Overview==
+All players start with pre-built stone walls around their starting [[Town Center]]. This setup leads often to longer games as early rush strategies are less effective. It is the classic map when it comes to so-called [[closed maps]], which is why this map has always been in the ranked map pool for [[Age_of_Empires_II/Definitive_Edition/The_Last_Khans|Age of Empires II]] alongside [[Arabia]].
+
+===Notable Features===
+*Every player starts with a base surrounded by stone-walls.
+*Extensive woodlines around the edges of the map.
+*No hills to avoid camping on hills benefitting the player on top with hill bonus.
+
+The latter two features distinguishes Arena heavily from the other well-known map [[Fortress]], where you also start with a stone-walled base.
+
+===Strategic Basics===
+The layout of the map leads to a general delay of any aggression into [[Castle Age]] due to having a safe starting base and safe access to ressources. Therefore, a Fast Castle-strategy is seen the most frequently. Here specifically, the players try to get to Castle Age as fast as possible to gain access to [[Castle|Castles]], [[Siege Weapons|Siege Weapons]] and [[Monk|Monks]] to acquire map control and breach the opponent's walls. A Siege-Monk rush shortened smush or a Castle drop strategy can be usually seen after having reached the Castle Age. The fight for relics is an important aspect of Arena games, because their possession and gold income can be decisive in the ultra late game if the mineral resources have run out. 
+
+Additionally, the center of the map is rather open but narrow due to the thick surrounding woodlines, which explains the name Arena. This makes the map rather one-dimensional and narrows down the possible angles of attack. With that, one or two well-placed castles can save your base entirely and also grant control over ressources in the center of map, which can benefit civilizations with good defensive possibilities. To generally raze those castles, [[Imperial Age]] siege units, i.e. [[Trebuchet|trebuchets]], [[Bombard Cannon|bombard cannons]] or [[Siege Ram|siege rams]] are needed. In particular, the access to strong late game options such as Bombard Cannons specifically can be crucial at that stage of the game, since those cannot only destroy buildings, but also defeat other siege weapons.
+
+===Civilizations===
+With the above, one can deduce which [[Portal:Civilizations|Civilizations]] are generally good on Arena. A good Arena civilzation combines the following:
+* A good economy to reach [[Castle Age]] as fast as possible and in addition to have a great economy-boom afterwards to afford expensive mid and late game army and technologies.
+* Thriving [[Siege Weapon|Siege weapons]], as they can deal with defensive structures and also with huge masses of army.
+* A broad [[Monastery]] tech-tree allowing for good [[Monk|Monks]]. Especially, the access to the [[Redemption]] technology which allows the conversion of siege weapons can be an important tool for victory.
+* Exceptional defensive options.
+* General Late game abilities and fully upgraded units like [[Paladin|Paladins]].
+* Good non-gold units (called trash units) to close the game when your access to gold has run out.
+
+Accordingly, to the best Arena-civilizations are counted (alphabetical order): {{CivIcon|Aztecs}} Aztecs, {{CivIcon|Britons}} Britons, {{CivIcon|Bohemians}} Bohemians, {{CivIcon|Burgundians}} Burgundians, {{CivIcon|Byzantines}} Byzantines, {{CivIcon|Lithuanians}} Lithuanians, {{CivIcon|Malay}} Malay, {{CivIcon|Teutons}} Teutons, {{CivIcon|Turks}} Turks 
+
+On the other hand, civilizations that have a hard time on Arena are among others: {{CivIcon|Berbers}} Berbers, {{CivIcon|Huns}} Huns, {{CivIcon|Tatars}} Tatars.
+
+==Versions==
+*[[Arina]]: similar map with reduced Feudal Age wall HP before Feudal Age wall HP were halved in the game data
+*[[Voobly Arena Seasonal/2019/Spring|VAS]] version<ref>https://www.aoezone.net/threads/vas-rules-and-settings.153488/</ref>
+*[[DemEyesRed Arena Cup]] (DERAC): [https://www.voobly.com/gamemods/mod/1152/DERAC---Arena map information (Voobly)]
+*'''Clown Arena''' (created 2021): smaller area between the two bases, more space in the back and more wood ([[JorDan_AoE_vs_TheViper|example: Showmatch JorDan vs TheViper]])
+*'''Vintage Arena''': first appearance at [[Arena_Classic|Arena Classic]]; offers more randomness than the current Arena (04/2022) but also more fairness than the old [[AoC]] Arena; description by [[JonSlow]] on discord: "This map offers the variety and excitement of the classic Arena scripts without the imbalances and unfair resource distributions. Starting food resources may or may not spawn outside, but are always in or out for both players. Relics still spawn in the middle terrain. Players can start far apart, but often find themselves very near their opponent’s walls. Stone walls are set to 1800HP".
+
+==Recent Tournament Appearances==
+{{Map appearances table|maps=Arena}}
+
+==Recent Games==
+{{Map recent games table}}
+
+==Trivia==
+*Arena-only players (like [[JonSlow]] or [[DracKeN]] or <!--[[Modri]]) Modri would rather not be associated with "clown" terminology--> are often called "clowns" or "Arena clowns" since [[8th wonder]]'s legendary forum post on AoEZone.<ref>8th wonder,[https://www.aoezone.net/threads/moa5-ro32-melkor-vs-metal.137114/#post-552680 "i love how always when the master of arena is accounced all these so-called arena pros are so excited and dream about winning and then comes good old RM players who play arena once in a while and kick their clown asses. bunch of clowns on clown map. its like ln or bf, they are good/high rate cause its clown map and no one good actually play that map regularly but when they do, they kick those clowns back to HD. :lol:"], ''AoEZone forums'', January 12, 2018. Retrieved 2020-07-07.</ref>
+**This also is an explanation for the [[Clown Legion]] team name.
+*There are dedicated tournaments that are only played on Arena, like  the [[Clown Cup]] series, [[Gladiators of the Arena]], the [[DemEyesRed Arena Cup]], the [[Masters of Arena]] series, or [[Lords of the Arena]].
+
+==Gallery==
+<gallery mode="packed-hover" heights="200px">
+File:Arena_AoE2DE.png|in-game icon ([[Age of Empires II/Definitive Edition|AoEII:DE]])
+</gallery>
+
+==Additional Content==
+{{ExternalMediaList|subject=Arena}}
+
+==References==
+{{Reflist}}
+{{Maps navbox}}

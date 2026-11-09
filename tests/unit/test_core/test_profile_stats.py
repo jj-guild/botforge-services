@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from typing import Any
 
-from kingdoms.core.models.game import PlayerStats, StatsBlock, StatsEntry
-from kingdoms.core.services.profile_stats import PROFILE_STATS_COLLECTION, ProfileStatsService, stats_entry
+from botforge.core.models.game import PlayerStats, StatsBlock, StatsEntry
+from botforge.core.services.profile_stats import PROFILE_STATS_COLLECTION, ProfileStatsService, stats_entry
 
 
 class FakeRedis:

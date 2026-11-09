@@ -3,7 +3,7 @@
 
 Regenerates the stubs from ``contracts/`` into a scratch directory and
 compares the serialized FileDescriptorProtos with the committed ones in
-``src/kingdoms/rpc_generated``. Fails closed when they diverge: a
+``src/botforge/rpc_generated``. Fails closed when they diverge: a
 committed stub that no longer matches its ``.proto`` is exactly the
 wire-compat drift this check exists to catch (field renumbering, type
 changes, removals that would break cross-process RPC at deploy time).
@@ -18,7 +18,7 @@ from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[3]
 CONTRACTS = REPO / "contracts"
-COMMITTED = REPO / "src" / "kingdoms" / "rpc_generated" / "kingdoms" / "v1"
+COMMITTED = REPO / "src" / "botforge" / "rpc_generated" / "botforge" / "v1"
 
 
 def generate(out_dir: Path) -> None:
@@ -31,7 +31,7 @@ def generate(out_dir: Path) -> None:
             f"--python_out={out_dir}",
             f"--grpc_python_out={out_dir}",
             f"--proto_path={CONTRACTS}",
-            *map(str, (CONTRACTS / "kingdoms" / "v1").glob("*.proto")),
+            *map(str, (CONTRACTS / "botforge" / "v1").glob("*.proto")),
         ],
         check=True,
     )
@@ -57,16 +57,16 @@ def main() -> int:
     with tempfile.TemporaryDirectory() as tmp:
         out_dir = Path(tmp)
         generate(out_dir)
-        for pb2 in out_dir.glob("kingdoms/v1/*_pb2.py"):
-            pb2.write_text(pb2.read_text().replace("from kingdoms.v1 import ", "from kingdoms.rpc_generated.kingdoms.v1 import "))
-        fresh = descriptors(sorted(out_dir.glob("kingdoms/v1/*_pb2.py")), out_dir)
+        for pb2 in out_dir.glob("botforge/v1/*_pb2.py"):
+            pb2.write_text(pb2.read_text().replace("from botforge.v1 import ", "from botforge.rpc_generated.botforge.v1 import "))
+        fresh = descriptors(sorted(out_dir.glob("botforge/v1/*_pb2.py")), out_dir)
     committed = descriptors(sorted(COMMITTED.glob("*_pb2.py")), COMMITTED)
     if fresh == committed:
         print("CONTRACTS FRESH: committed stubs match contracts/")
         return 0
     print(
         "::error::Wire-compat drift: committed stubs in "
-        "src/kingdoms/rpc_generated no longer match contracts/ (kingdoms.v1). "
+        "src/botforge/rpc_generated no longer match contracts/ (botforge.v1). "
         "Run 'make contracts' and commit the regenerated stubs."
     )
     return 1

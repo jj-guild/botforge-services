@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from kingdoms.discord.message_limits import (
+from botforge.discord.message_limits import (
     MAX_EMBED_DESCRIPTION,
     MAX_MESSAGE,
     MultiMessageRegistry,

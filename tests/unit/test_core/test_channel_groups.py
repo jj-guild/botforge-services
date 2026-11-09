@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from kingdoms.core.services.mod_registry import load_mod_definitions
+from botforge.core.services.mod_registry import load_mod_definitions
 
 
 def _mod(tmp_path: Path, body: str) -> object:

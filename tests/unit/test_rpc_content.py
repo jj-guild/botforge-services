@@ -1,4 +1,4 @@
-"""Unit tests for the content provider seam (kingdoms.v1.Content).
+"""Unit tests for the content provider seam (botforge.v1.Content).
 
 Covers: capability and content round-trips (plain dict ↔ wire), the
 ContentServicer (including the NOT_FOUND degradation), and the ext
@@ -13,18 +13,18 @@ import asyncio
 import grpc
 import pytest
 
-from kingdoms.core.rpc.content import (
+from botforge.core.rpc.content import (
     ContentServicer,
     content_capabilities_from_wire,
     content_capabilities_to_wire,
     localized_content_from_wire,
     localized_content_to_wire,
 )
-from kingdoms.ext_aoe2techtree.source import (
+from botforge.ext_aoe2techtree.source import (
     DatasetContentSource,
     resolve_source,
 )
-from kingdoms.rpc_generated.kingdoms.v1 import content_pb2
+from botforge.rpc_generated.botforge.v1 import content_pb2
 
 
 class _ServicerContext:
@@ -179,7 +179,7 @@ def test_content_server_list_factions_regression() -> None:
     Regression: the lambda used to pass the bound method instead of its
     result, and ListFactions failed with "must assign iterable".
     """
-    from kingdoms.core_process.content_server import _async_wrap
+    from botforge.core_process.content_server import _async_wrap
 
     class _Source:
         def faction_keys(self) -> list[str]:  # a method, not a property

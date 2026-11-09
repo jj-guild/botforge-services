@@ -1,4 +1,4 @@
-"""Delivery journeys on SimCord — kingdoms-services#56.
+"""Delivery journeys on SimCord — botforge-services#56.
 
 A DM panel rendered for a member without the clan role carries the
 role-gated button **disabled** (visible, teaching the unlock); the
@@ -15,7 +15,7 @@ from typing import Any
 import discord
 import pytest
 
-from kingdoms.discord.ui import (
+from botforge.discord.ui import (
     ButtonBuilder,
     Container,
     MessageDestination,
@@ -97,8 +97,8 @@ def _raw_buttons(components: list[dict[str, Any]]) -> dict[str, bool]:
 
 class TestDeliveryJourneys:
     @pytest.fixture
-    def simcord_bot(self, kingdoms_bot):  # type: ignore[no-untyped-def]
-        bot = kingdoms_bot
+    def simcord_bot(self, botforge_bot):  # type: ignore[no-untyped-def]
+        bot = botforge_bot
         wire_services(bot)
 
         @bot.tree.command(name="clanspanel2")

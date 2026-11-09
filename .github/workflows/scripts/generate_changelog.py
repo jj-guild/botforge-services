@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Generate a Conventional Changelog for kingdoms-services releases.
+"""Generate a Conventional Changelog for botforge-services releases.
 
 Reads the git history between two tags (default: the full history, since
 no release tag exists yet), parses Conventional Commits subjects
@@ -9,13 +9,13 @@ no release tag exists yet), parses Conventional Commits subjects
   the squash-merged PR link) — replaces scripts/release_notes.sh;
 - CHANGELOG.md sections appended at tag time by the Docker workflow;
 
-- version bumps (kingdoms-services#126): the next version is derived from
+- version bumps (botforge-services#126): the next version is derived from
   the Conventional Commits since the last release — `feat` bumps the
   minor, `fix` the patch, a breaking change the major — and pre-releases
   append a `-rc<n>` classifier that increments per cycle. `make release`
   and `make pre-release` call this; the version is never hand-picked.
 
-The output is generated, never hand-edited (kingdoms-services#28).
+The output is generated, never hand-edited (botforge-services#28).
 """
 
 from __future__ import annotations
@@ -28,7 +28,7 @@ import sys
 from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 
-REPO = "merlin-pinpin-org/kingdoms-services"
+REPO = "jj-guild/botforge-services"
 
 TAG_RE = re.compile(
     r"^v(?P<major>\d+)\.(?P<minor>\d+)\.(?P<patch>\d+)(?:-(?P<prerelease>rc\d+))?$"

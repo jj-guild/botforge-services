@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from kingdoms.game_aoe2.aggregator import (
+from botforge.game_aoe2.aggregator import (
     STATE_IN_GAME,
     STATE_IN_LOBBY,
     STATE_OFFLINE,

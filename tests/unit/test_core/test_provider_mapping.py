@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from kingdoms.core.services.provider_mapping import (
+from botforge.core.services.provider_mapping import (
     ProviderMappingError,
     ProviderMappingService,
     parse_mapping_lines,

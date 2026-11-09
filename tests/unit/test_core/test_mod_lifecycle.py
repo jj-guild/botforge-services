@@ -1,10 +1,10 @@
-"""Mod lifecycle: the per-guild active/suspended state (kingdoms-services#267)."""
+"""Mod lifecycle: the per-guild active/suspended state (botforge-services#267)."""
 
 from __future__ import annotations
 
 from typing import Any
 
-from kingdoms.core.services.mod_lifecycle import (
+from botforge.core.services.mod_lifecycle import (
     STATE_ACTIVE,
     STATE_SUSPENDED,
     ModLifecycleService,

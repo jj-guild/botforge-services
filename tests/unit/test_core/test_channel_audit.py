@@ -12,18 +12,18 @@ from typing import Any
 
 import pytest
 
-from kingdoms.core.models.channel import ChannelModel
-from kingdoms.core.services.channel import ChannelService
-from kingdoms.core.services.channel_audit import (
+from botforge.core.models.channel import ChannelModel
+from botforge.core.services.channel import ChannelService
+from botforge.core.services.channel_audit import (
     DRIFT_SEVERITY_MISSING_CHANNEL,
     DRIFT_SEVERITY_MISSING_ROLE,
     DRIFT_SEVERITY_WRONG_OVERWRITE,
     ChannelAuditService,
     DriftReport,
 )
-from kingdoms.core.services.mod_definition import ChannelAccessPolicy, ChannelCategoryDef, ModDefinition
-from kingdoms.core.services.mod_registry import ModRegistry
-from kingdoms.core.services.state import StateService
+from botforge.core.services.mod_definition import ChannelAccessPolicy, ChannelCategoryDef, ModDefinition
+from botforge.core.services.mod_registry import ModRegistry
+from botforge.core.services.state import StateService
 from tests.mocks.state_mock import FakeClock, InMemoryStateStore
 
 GUILD = "123456"
@@ -254,7 +254,7 @@ async def test_report_renders_through_i18n() -> None:
 @pytest.mark.asyncio
 async def test_yaml_access_policy_parsing(tmp_path: Any) -> None:
     """A mod YAML access declaration parses into the ChannelAccessPolicy."""
-    from kingdoms.core.services.mod_registry import ModRegistry, load_mod_definitions
+    from botforge.core.services.mod_registry import ModRegistry, load_mod_definitions
 
     mods_dir = tmp_path / "mods"
     mods_dir.mkdir()

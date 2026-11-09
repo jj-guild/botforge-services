@@ -5,7 +5,7 @@
 # validate the release in Discord. Once validated, an authorized human
 # triggers this workflow (workflow_dispatch) — the tag input is validated
 # against the existing git tags, and the pin is dispatched to the
-# kingdoms-infra Pin state workflow for the prod environment.
+# botforge-infra Pin state workflow for the prod environment.
 #
 # Gating:
 # - only users with write access can run a workflow_dispatch on main
@@ -57,14 +57,14 @@ jobs:
           fi
           echo "TAG=$tag" >> "$GITHUB_ENV"
 
-      - name: Mint an ephemeral GitHub App token for kingdoms-infra
+      - name: Mint an ephemeral GitHub App token for botforge-infra
         id: app-token
         uses: actions/create-github-app-token@v3
         with:
-          app-id: ${{ secrets.KINGDOMS_DEPLOYER_APP_ID }}
-          private-key: ${{ secrets.KINGDOMS_DEPLOYER_APP_PRIVATE_KEY }}
-          owner: merlin-pinpin-org
-          repositories: kingdoms-infra
+          app-id: ${{ secrets.BOTFORGE_DEPLOYER_APP_ID }}
+          private-key: ${{ secrets.BOTFORGE_DEPLOYER_APP_PRIVATE_KEY }}
+          owner: jj-guild
+          repositories: botforge-infra
 
       - name: Pin the released image on deploy/prod (ADR-0018)
         uses: actions/github-script@v7
@@ -72,11 +72,11 @@ jobs:
           github-token: ${{ steps.app-token.outputs.token }}
           script: |
             const tag = process.env.TAG;
-            const image = `ghcr.io/merlin-pinpin-org/kingdoms-services:${tag}`;
-            const releaseUrl = `https://github.com/merlin-pinpin-org/kingdoms-services/releases/tag/${tag}`;
+            const image = `ghcr.io/jj-guild/botforge-services:${tag}`;
+            const releaseUrl = `https://github.com/jj-guild/botforge-services/releases/tag/${tag}`;
             await github.rest.repos.createDispatchEvent({
-              owner: "merlin-pinpin-org",
-              repo: "kingdoms-infra",
+              owner: "jj-guild",
+              repo: "botforge-infra",
               event_type: "pin-state",
               client_payload: {
                 env: "prod",
@@ -85,7 +85,7 @@ jobs:
                 deploy_url: releaseUrl,
                 deploy_kind: "release",
                 deploy_ref: tag,
-                deploy_tree_url: `https://github.com/merlin-pinpin-org/kingdoms-services/tree/${tag}`,
+                deploy_tree_url: `https://github.com/jj-guild/botforge-services/tree/${tag}`,
                 deploy_branch: "main",
                 // The CI job that built the image: the docker.yml run of
                 // this tag. Its id and number are resolved by the Pin state
@@ -102,7 +102,7 @@ jobs:
       # waits for the prod environment reviewers while this step watches.
       - name: Checkout (watch_deploy.sh)
         uses: actions/checkout@v4
-      - name: Watch the kingdoms-infra prod deploy run
+      - name: Watch the botforge-infra prod deploy run
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
         run: .github/workflows/scripts/watch_deploy.sh prod "$TAG" 60 60

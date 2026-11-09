@@ -2,13 +2,13 @@
 
 from __future__ import annotations
 
-from kingdoms.core.services.mod_definition import (
+from botforge.core.services.mod_definition import (
     ChannelCategoryDef,
     ModDefinition,
     RoleDef,
 )
-from kingdoms.core.services.mod_registry import ModRegistry
-from kingdoms.core.services.status import StatusService, parse_bot_admins
+from botforge.core.services.mod_registry import ModRegistry
+from botforge.core.services.status import StatusService, parse_bot_admins
 
 
 def make_registry() -> ModRegistry:
@@ -50,10 +50,10 @@ def test_status_service_exposes_deploy_url() -> None:
     service = StatusService(
         registry=make_registry(),
         bot_admins=parse_bot_admins("42"),
-        deploy_url="https://github.com/merlin-pinpin-org/kingdoms-services/pull/12",
+        deploy_url="https://github.com/jj-guild/botforge-services/pull/12",
     )
-    assert service.deploy_url == "https://github.com/merlin-pinpin-org/kingdoms-services/pull/12"
-    assert service.report()["deploy_url"] == "https://github.com/merlin-pinpin-org/kingdoms-services/pull/12"
+    assert service.deploy_url == "https://github.com/jj-guild/botforge-services/pull/12"
+    assert service.report()["deploy_url"] == "https://github.com/jj-guild/botforge-services/pull/12"
 
 
 def test_status_service_strips_deploy_url_whitespace() -> None:
@@ -90,10 +90,10 @@ def test_status_service_exposes_deploy_run_url() -> None:
     service = StatusService(
         registry=make_registry(),
         bot_admins=parse_bot_admins("42"),
-        deploy_run_url="https://github.com/merlin-pinpin-org/kingdoms-infra/actions/runs/123",
+        deploy_run_url="https://github.com/jj-guild/botforge-infra/actions/runs/123",
     )
-    assert service.deploy_run_url == "https://github.com/merlin-pinpin-org/kingdoms-infra/actions/runs/123"
-    assert service.report()["deploy_run_url"] == "https://github.com/merlin-pinpin-org/kingdoms-infra/actions/runs/123"
+    assert service.deploy_run_url == "https://github.com/jj-guild/botforge-infra/actions/runs/123"
+    assert service.report()["deploy_run_url"] == "https://github.com/jj-guild/botforge-infra/actions/runs/123"
 
 
 def test_status_service_exposes_deploy_infra_identity() -> None:
@@ -101,13 +101,13 @@ def test_status_service_exposes_deploy_infra_identity() -> None:
         registry=make_registry(),
         bot_admins=parse_bot_admins("42"),
         deploy_infra_label="deploy/test@9691aca",
-        deploy_infra_url="https://github.com/merlin-pinpin-org/kingdoms-infra/tree/9691aca",
+        deploy_infra_url="https://github.com/jj-guild/botforge-infra/tree/9691aca",
     )
     assert service.deploy_infra_label == "deploy/test@9691aca"
-    assert service.deploy_infra_url == "https://github.com/merlin-pinpin-org/kingdoms-infra/tree/9691aca"
+    assert service.deploy_infra_url == "https://github.com/jj-guild/botforge-infra/tree/9691aca"
     report = service.report()
     assert report["deploy_infra_label"] == "deploy/test@9691aca"
-    assert report["deploy_infra_url"] == "https://github.com/merlin-pinpin-org/kingdoms-infra/tree/9691aca"
+    assert report["deploy_infra_url"] == "https://github.com/jj-guild/botforge-infra/tree/9691aca"
 
 
 def test_status_service_strips_deploy_infra_whitespace() -> None:

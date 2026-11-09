@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from kingdoms.ext_liquipedia.source import LiquipediaSource
+from botforge.ext_liquipedia.source import LiquipediaSource
 
 
 class _FakeInfo:
@@ -25,12 +25,23 @@ class _FakeData:
 class _FakeUpstream:
     def __init__(self) -> None:
         self.calls: list[str] = []
+        self.batch_calls: list[list[str]] = []
 
     def map_data(self, page: str) -> Any:
         self.calls.append(page)
         if "Team Islands" in page:
             return _FakeData()
         raise RuntimeError("no such page")
+
+    def map_data_batch(self, pages: list[str]) -> dict[str, Any]:
+        """The batched contract the seed worker rides (<=50 per call)."""
+        self.batch_calls.append(list(pages))
+        result: dict[str, Any] = {}
+        for page in pages:
+            if "Team Islands" in page:
+                key = page.strip().replace(" ", "_")
+                result[key] = _FakeData()
+        return result
 
 
 class _FakeCollection:
@@ -74,3 +85,100 @@ def test_faction_surface_is_empty() -> None:
     source = LiquipediaSource({"aoe2": _FakeUpstream()}, _FakeDB())  # type: ignore[arg-type]
     assert source.faction_keys() == []
     assert source.faction_content("Franks", "en") is None
+
+
+def test_gallery_icon_accepts_the_file_prefix_form() -> None:
+    """A gallery entry with the File: prefix parses (the historical form)."""
+    from botforge.ext_liquipedia.liquipedia import LiquipediaMapsProvider
+
+    wikitext = "== Gallery ==\n<gallery>\nFile:Arabiade icon.png|In-game icon\nFile:Arabia map.png|Overview\n</gallery>"
+    assert LiquipediaMapsProvider._parse_gallery_icon(wikitext) == "Arabiade icon.png"
+
+
+def test_gallery_icon_accepts_the_bare_mediawiki_form() -> None:
+    """A gallery entry WITHOUT the File: prefix parses (Arena's form)."""
+    from botforge.ext_liquipedia.liquipedia import LiquipediaMapsProvider
+
+    wikitext = "== Gallery ==\n<gallery>\nArenaicon.png|In-game icon\nArena aoe2de map.png|AoE2:DE map\n</gallery>"
+    assert LiquipediaMapsProvider._parse_gallery_icon(wikitext) == "Arenaicon.png"
+
+
+def test_gallery_icon_prefers_the_captioned_icon_entry() -> None:
+    """The entry captioned 'icon' wins over the first entry."""
+    from botforge.ext_liquipedia.liquipedia import LiquipediaMapsProvider
+
+    wikitext = "<gallery>\nArena minimap.png|Minimap\nArenaicon.png|In-game icon\n</gallery>"
+    assert LiquipediaMapsProvider._parse_gallery_icon(wikitext) == "Arenaicon.png"
+
+
+def test_gallery_icon_is_empty_without_a_gallery() -> None:
+    """A page without a Gallery yields no icon (the main image takes over)."""
+    from botforge.ext_liquipedia.liquipedia import LiquipediaMapsProvider
+
+    assert LiquipediaMapsProvider._parse_gallery_icon("No gallery here.") == ""
+
+
+class _WarmCollection(_FakeCollection):
+    """A collection that serves one persisted descriptor."""
+
+    def __init__(self, doc: dict[str, Any]) -> None:
+        super().__init__()
+        self._doc = doc
+
+    def find_one(self, query: dict[str, Any]) -> dict[str, Any] | None:
+        return self._doc
+
+
+def _persisted_descriptor_doc(descriptor: dict[str, Any]) -> dict[str, Any]:
+    import time as _time
+
+    return {
+        "game_key": "aoe2",
+        "page": "Team_Islands",
+        "name": "Team Islands",
+        "fetched_at": _time.time(),
+        "descriptor": descriptor,
+    }
+
+
+def test_a_current_generation_descriptor_is_a_cache_hit() -> None:
+    """A descriptor stamped with the current parser generation serves."""
+    from botforge.ext_liquipedia import SEED_GEN
+
+    doc = _persisted_descriptor_doc({"seed_gen": SEED_GEN, "name": "Team Islands"})
+    db = _FakeDB()
+    db.maps = _WarmCollection(doc)
+    source = LiquipediaSource({"aoe2": _FakeUpstream()}, db)  # type: ignore[arg-type]
+    assert source._load_descriptor("aoe2", "Team Islands") == {
+        "seed_gen": SEED_GEN,
+        "name": "Team Islands",
+    }
+
+
+def test_a_pre_generation_descriptor_is_a_cache_miss() -> None:
+    """A descriptor from the pre-seed_gen era never serves — it re-fetches.
+
+    The merlin 2026-11-07 lesson: the 7-day TTL alone served the old
+    parse for a week after the parser fix shipped.
+    """
+    doc = _persisted_descriptor_doc({"name": "Team Islands"})  # no seed_gen
+    db = _FakeDB()
+    db.maps = _WarmCollection(doc)
+    source = LiquipediaSource({"aoe2": _FakeUpstream()}, db)  # type: ignore[arg-type]
+    assert source._load_descriptor("aoe2", "Team Islands") is None
+
+
+async def test_the_sync_force_skips_the_warm_cache() -> None:
+    """force=True (the admin DM's sync) re-fetches despite a warm cache."""
+    from botforge.ext_liquipedia import SEED_GEN
+
+    upstream = _FakeUpstream()
+    doc = _persisted_descriptor_doc({"seed_gen": SEED_GEN, "name": "Team Islands"})
+    db = _FakeDB()
+    db.maps = _WarmCollection(doc)
+    source = LiquipediaSource({"aoe2": upstream}, db)  # type: ignore[arg-type]
+
+    seed = source.map_seed("aoe2", "Team Islands", force=True)
+
+    assert seed is not None and seed["name"] == "Team Islands"
+    assert upstream.batch_calls, "force must go upstream, never serve the cache"

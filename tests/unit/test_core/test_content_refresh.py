@@ -1,13 +1,57 @@
-"""Content refresh tests: catalog reconciliation with the vendored dataset."""
+"""Content refresh tests: catalog reconciliation through the provider seam."""
 
 from __future__ import annotations
 
-from pathlib import Path
 from typing import Any
 
-from kingdoms.core.games.aoe2.content_refresh import refresh_aoe2_content
+from botforge.game_aoe2.content_refresh import refresh_aoe2_content
 
-DATASET_DIR = Path(__file__).resolve().parents[3] / "data" / "core" / "aoe2techtree"
+# The refresh rides the PROVIDER seam (no vendored data): the tests
+# inject a fake source standing in for the aoe2techtree provider.
+_FAKE_SOURCE = None
+
+
+class _FakeSource:
+    """A stand-in for the aoe2techtree provider over the seam."""
+
+    def __init__(self) -> None:
+        self._data = {
+            "Franks": {
+                "en": {"name": "Franks", "summary": "Cavalry civ", "image_url": "https://x/franks.png"},
+                "fr": {"name": "Francs", "summary": "Civilisation de cavalerie", "image_url": "https://x/franks.png"},
+            },
+            "Dravidians": {
+                "en": {"name": "Dravidians", "summary": "Elephant civ", "image_url": "https://x/dravidians.png"},
+                "fr": {"name": "Dravidiens", "summary": "Civilisation d'elephants", "image_url": "https://x/dravidians.png"},
+            },
+        }
+
+    async def list_factions(self) -> list[str]:
+        return sorted(self._data)
+
+    async def faction_content(self, key: str, locale: str) -> dict[str, Any] | None:
+        entry = self._data.get(key, {}).get(locale)
+        if entry is None:
+            return None
+        from botforge.game_aoe2.content_source import LocalizedContent
+
+        return LocalizedContent(
+            entity_id=f"faction:aoe2:{key.lower()}",
+            locale=locale,
+            name=entry["name"],
+            summary=entry["summary"],
+            source_url="https://github.com/SiegeEngineers/aoe2techtree",
+            image_url=entry["image_url"],
+
+        )
+
+
+def _patch_source(monkeypatch: Any) -> None:
+    import botforge.game_aoe2.content_source as source_module
+
+    monkeypatch.setattr(
+        source_module, "resolve_aoe2_content_source", lambda *a, **k: _FakeSource()
+    )
 
 
 class FakeCollection:
@@ -38,15 +82,16 @@ class FakeDatabase:
 
 
 async def test_refresh_creates_missing_factions_and_content(monkeypatch: Any) -> None:
-    from kingdoms.core.models import db as db_module
+    from botforge.core.models import db as db_module
 
     database = FakeDatabase()
     monkeypatch.setattr(db_module, "get_async_database", lambda: database)
 
-    counts = await refresh_aoe2_content(DATASET_DIR)
+    _patch_source(monkeypatch)
+    counts = await refresh_aoe2_content()
 
-    assert counts["factions"] == 56
-    assert counts["content_docs"] == 112
+    assert counts["factions"] == 2
+    assert counts["content_docs"] == 4
     factions = database.collections["factions"].docs
     assert "faction:aoe2:franks" in factions
     assert "faction:aoe2:dravidians" in factions
@@ -56,13 +101,124 @@ async def test_refresh_creates_missing_factions_and_content(monkeypatch: Any) ->
 
 
 async def test_refresh_is_idempotent(monkeypatch: Any) -> None:
-    from kingdoms.core.models import db as db_module
+    from botforge.core.models import db as db_module
 
     database = FakeDatabase()
     monkeypatch.setattr(db_module, "get_async_database", lambda: database)
 
-    await refresh_aoe2_content(DATASET_DIR)
-    counts = await refresh_aoe2_content(DATASET_DIR)
+    _patch_source(monkeypatch)
+    await refresh_aoe2_content()
+    _patch_source(monkeypatch)
+    counts = await refresh_aoe2_content()
 
     assert counts["factions"] == 0
-    assert counts["content_docs"] == 112
+    assert counts["content_docs"] == 4
+
+
+async def test_maps_sync_rebuilds_every_known_map(monkeypatch: Any) -> None:
+    """A sync means FRESH data for EVERY known map — no "complete" skip.
+
+    Every active map re-resolves and re-stores (raw wikitext next to
+    the parsed fields); archived maps stay untouched (owner direction
+    2026-11-07).
+    """
+    import botforge.core.services.game_data as game_data_module
+    import botforge.game_aoe2.content_refresh as refresh_module
+    import botforge.game_aoe2.seed as seed_module
+    from botforge.aoe2.map_seed import MapSeed
+    from botforge.core.models import db as db_module
+    from botforge.core.models.game_data import MapModel
+
+    database = FakeDatabase()
+    monkeypatch.setattr(db_module, "get_async_database", lambda: database)
+
+    class FakeGameData:
+        def __init__(self) -> None:
+            self.healed: list[tuple[str, str]] = []
+
+        async def list_maps(self, game_key: str) -> list[MapModel]:
+            del game_key
+            return [
+                MapModel(
+                    _id="map:aoe2:arena", game_key="aoe2", name="Arena", map_type="land"
+                ),
+                MapModel(_id="map:aoe2:budapest", game_key="aoe2", name="Budapest"),
+                MapModel(_id="map:aoe2:black-forest", game_key="aoe2", name="Black Forest"),
+                MapModel(
+                    _id="map:aoe2:old",
+                    game_key="aoe2",
+                    name="Old",
+                    archived_at=1,
+                ),
+            ]
+
+        async def update_map(self, entry_id: str, map_type: str | None = None) -> MapModel:
+            self.healed.append((entry_id, str(map_type)))
+            return MapModel(_id=entry_id, game_key="aoe2", name="x", map_type=str(map_type))
+
+    fake_game_data = FakeGameData()
+    monkeypatch.setattr(game_data_module, "GameDataService", lambda adapter: fake_game_data)
+    monkeypatch.setattr(seed_module, "MongoAoE2Database", lambda database: None)
+
+    async def fake_resolve(names: list[str]) -> dict[str, Any]:
+        out: dict[str, Any] = {}
+        for name in names:
+            # Black Forest's infobox image 404s upstream — its seed carries
+            # no image_url, and the doc MUST store anyway (the 2026-11-07
+            # bug: the skip froze no-image maps on their pre-sync parse)
+            image = "" if name == "Black Forest" else f"https://x/{name}.png"
+            out[name] = MapSeed(
+                name=name,
+                description=f"The {name} overview.",
+                resource_url=f"https://liquipedia.net/ageofempires2/{name}",
+                image_url=image,
+                icon_url=f"https://x/{name}-icon.png" if image else "https://x/icon.png",
+                map_type="Land",
+                walls="Stone Walls",
+                nomad="No",
+                tc="1",
+                player_capacity="Up to 8",
+                tags=("type:land", "walls:stone", "tc:1"),
+                raw_wikitext="{{Infobox map|name=" + name + "}}",
+                gallery_images=(
+                    {"file": name + "_AoE2DE.png", "caption": "in-game icon", "url": f"https://x/{name}-icon.png"},
+                ),
+            )
+        return out
+
+    monkeypatch.setattr(refresh_module, "_resolve_map_seeds", fake_resolve)
+
+    from botforge.game_aoe2.content_refresh import refresh_aoe2_maps
+
+    counts = await refresh_aoe2_maps()
+    assert counts["maps_total"] == 4
+    assert counts["maps_enriched"] == 3, "every ACTIVE map re-stores — the archived one skips"
+    docs = database.collections["faction_content"].docs
+    assert "map:aoe2:arena:en" in docs and "map:aoe2:budapest:en" in docs
+    assert "map:aoe2:old:en" not in docs
+    arena = docs["map:aoe2:arena:en"]
+    assert arena["raw_wikitext"] == "{{Infobox map|name=Arena}}", "the raw provider payload rides"
+    assert "walls:stone" in arena["tags"] and "tc:1" in arena["tags"]
+    assert arena["split_keys"] is True, (
+        "the freshness marker the reader's contract checks — without it, "
+        "a map whose icon failed to resolve looks stale forever"
+    )
+    black_forest = docs["map:aoe2:black-forest:en"]
+    assert black_forest["image_url"] == "", "the 404 upstream image stays empty"
+    assert black_forest["walls"] == "Stone Walls" and black_forest["tc"] == "1", (
+        "a map without a resolved image still stores its traits — "
+        "the skip froze no-image maps on their pre-sync parse forever"
+    )
+    assert black_forest["split_keys"] is True
+    assert black_forest["gallery_images"], (
+        "the whole gallery rides the stored doc — every entry, caption and URL"
+    )
+    # the catalog entry's raw-cased map_type heals from the fresh seed
+    # (an import that ran an older parser left "land" — the post shows
+    # the entry's type, so the sync must heal it)
+    assert ("map:aoe2:arena", "Land") in fake_game_data.healed, fake_game_data.healed
+
+    # the SECOND sync re-stores everything again: no complete-skip —
+    # a sync always means fresh data, even for an already-rich doc
+    counts_again = await refresh_aoe2_maps()
+    assert counts_again["maps_enriched"] == 3, "a sync is a full rebuild, never a skip"

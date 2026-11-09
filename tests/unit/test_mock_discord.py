@@ -1,4 +1,4 @@
-"""Unit tests for the MockDiscord library (kingdoms-services#2).
+"""Unit tests for the MockDiscord library (botforge-services#2).
 
 These tests pin the MockDiscord contract itself: every mock subclasses the
 real discord.py class, is built from plain in-memory data, and records both

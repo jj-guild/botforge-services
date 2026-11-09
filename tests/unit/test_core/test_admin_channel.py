@@ -1,4 +1,4 @@
-"""Tests for the admin channel service (kingdoms-services#115).
+"""Tests for the admin channel service (botforge-services#115).
 
 The transparency contract: the 🛡-bot-admins channel exists, the
 BOT_ADMINS are synced into the bot-admins role, and the channel
@@ -13,8 +13,8 @@ from typing import Any
 
 import pytest
 
-from kingdoms.core.services.admin_channel import AdminChannelService
-from kingdoms.core.services.roles import RolesService
+from botforge.core.services.admin_channel import AdminChannelService
+from botforge.core.services.roles import RolesService
 
 
 class _FakeRolesPlatform:

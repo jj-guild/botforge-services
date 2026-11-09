@@ -1,4 +1,4 @@
-"""Unit tests for the core identity import/export (kingdoms-services#138).
+"""Unit tests for the core identity import/export (botforge-services#138).
 
 The identity perimeter: users.csv rows (Discord id + game profile)
 become core ``profile_bindings`` — the same documents
@@ -14,8 +14,8 @@ from pathlib import Path
 
 import pytest
 
-from kingdoms.core.services.identity_export import export_identity_links
-from kingdoms.core.services.identity_import import import_identity_links
+from botforge.core.services.identity_export import export_identity_links
+from botforge.core.services.identity_import import import_identity_links
 
 USERS_CSV = "\n".join(
     [

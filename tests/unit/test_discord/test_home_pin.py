@@ -2,8 +2,8 @@
 
 import pytest
 
-from kingdoms.discord.views_declared import declare_views_from_config
-from kingdoms.discord.views_registry import clear_registry
+from botforge.discord.views_declared import declare_views_from_config
+from botforge.discord.views_registry import clear_registry
 
 
 @pytest.fixture(autouse=True)
@@ -17,8 +17,8 @@ async def test_the_root_home_menu_pins_as_a_declared_view() -> None:
     """The root/general pin builds through the declared menu builder."""
     from unittest.mock import MagicMock
 
-    from kingdoms.discord.scope_pins import register_scope_pins
-    from kingdoms.discord.static_pins import reset_static_pins
+    from botforge.discord.scope_pins import register_scope_pins
+    from botforge.discord.static_pins import reset_static_pins
 
     reset_static_pins()
     bot = MagicMock()
@@ -36,7 +36,7 @@ async def test_the_root_home_menu_pins_as_a_declared_view() -> None:
 async def test_roster_lines_sorted_with_mention_and_links() -> None:
     """The roster lines: pseudo, mention, aoe2insights links — alphabetical."""
 
-    from kingdoms.discord.home import _casefold_key, _roster_lines
+    from botforge.discord.home import _casefold_key, _roster_lines
 
     class _Member:
         def __init__(self, name: str) -> None:
@@ -67,14 +67,14 @@ async def test_roster_lines_sorted_with_mention_and_links() -> None:
     assert lines[2].startswith("• **Zoé** — <@10>")
     assert "https://www.aoe2insights.com/user/relic/222/" in lines[0]
     assert _casefold_key("Zoé") == "zoe"
-    from kingdoms.discord import member_cache
+    from botforge.discord import member_cache
 
     member_cache._cache.pop(7, None)
 
 
 def test_paginate_lines_splits_on_budget() -> None:
     """Lines beyond the budget split into several pages, none over budget."""
-    from kingdoms.discord.home import _paginate_lines
+    from botforge.discord.home import _paginate_lines
 
     lines = [f"player-{i} " + "x" * 90 for i in range(10)]
     pages = _paginate_lines(lines, 200)

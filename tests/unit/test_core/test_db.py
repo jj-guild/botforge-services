@@ -1,4 +1,4 @@
-"""Unit tests for the MongoDB client setup (kingdoms-services#4).
+"""Unit tests for the MongoDB client setup (botforge-services#4).
 
 These tests only exercise client construction and singleton lifecycle: no
 MongoDB server is required (clients connect lazily). Live-database round
@@ -11,13 +11,13 @@ import pytest
 from pymongo.asynchronous.mongo_client import AsyncMongoClient
 from pymongo.synchronous.mongo_client import MongoClient
 
-from kingdoms.core.models import db
+from botforge.core.models import db
 
 
 @pytest.fixture(autouse=True)
 async def _reset_clients(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("MONGO_URI", "mongodb://localhost:27017")
-    monkeypatch.setenv("MONGO_DB", "kingdoms_test")
+    monkeypatch.setenv("MONGO_DB", "botforge_test")
     db.close_sync_client()
     await db.close_async_client()
     yield
@@ -50,18 +50,18 @@ async def test_close_async_client_releases_singleton() -> None:
 
 
 def test_get_database_uses_env_db_name() -> None:
-    assert db.get_database().name == "kingdoms_test"
+    assert db.get_database().name == "botforge_test"
 
 
 def test_get_async_database_uses_env_db_name() -> None:
-    assert db.get_async_database().name == "kingdoms_test"
+    assert db.get_async_database().name == "botforge_test"
 
 
 def test_get_sync_database_name_without_env(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("MONGO_DB", raising=False)
-    assert db.get_database().name == "kingdoms"
+    assert db.get_database().name == "botforge"
 
 
 def test_get_async_database_name_without_env(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("MONGO_DB", raising=False)
-    assert db.get_async_database().name == "kingdoms"
+    assert db.get_async_database().name == "botforge"

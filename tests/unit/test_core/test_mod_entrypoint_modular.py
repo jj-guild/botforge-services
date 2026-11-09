@@ -1,8 +1,8 @@
-"""Regression tests: modular mods load as kingdoms.mods.<name> (kingdoms#178).
+"""Regression tests: modular mods load as botforge.mods.<name> (botforge-services#178).
 
 The runtime import goes through load_mod_package's sys.path prepend +
 namespace alias — without the alias, ``importlib.import_module`` of
-``kingdoms.mods.<name>`` fails and the mod stays silently inactive
+``botforge.mods.<name>`` fails and the mod stays silently inactive
 (the exact bug that shipped a reference mod without its command).
 
 The tests scaffold a throwaway mod with the committed tool (kingdoms
@@ -15,8 +15,8 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
-from kingdoms.core.services.mod_entrypoint import load_mod_package
-from kingdoms.core.services.mod_init import init_mod
+from botforge.core.services.mod_entrypoint import load_mod_package
+from botforge.core.services.mod_init import init_mod
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 
@@ -35,7 +35,7 @@ def test_modular_mod_loads_through_the_namespace(tmp_path: Path) -> None:
         loaded = load_mod_package(name, repo_root=tmp_path)
         assert loaded.name == name
         assert loaded.has_register
-        assert f"kingdoms.mods.{name}" in sys.modules
+        assert f"botforge.mods.{name}" in sys.modules
     finally:
         sys.path.remove(str(tmp_path / "modules" / "mods" / name / "src"))
 
@@ -46,9 +46,9 @@ def test_registered_package_is_the_same_object(tmp_path: Path) -> None:
     sys.path.insert(0, str(tmp_path / "modules" / "mods" / name / "src"))
     try:
         loaded = load_mod_package(name, repo_root=tmp_path)
-        assert loaded.package is sys.modules[f"kingdoms.mods.{name}"]
+        assert loaded.package is sys.modules[f"botforge.mods.{name}"]
         assert loaded.package is sys.modules.get(name)
     finally:
         sys.path.remove(str(tmp_path / "modules" / "mods" / name / "src"))
-        for key in [f"kingdoms.mods.{name}", name]:
+        for key in [f"botforge.mods.{name}", name]:
             sys.modules.pop(key, None)

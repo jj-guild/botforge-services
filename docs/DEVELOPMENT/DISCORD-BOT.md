@@ -30,7 +30,7 @@ Chaque guilde provisionne ses canaux au démarrage (idempotent) :
 
 - **Salons par défaut** : `🛠-bot-logs` (journaux), `🛡-bot-admins`
   (panel admin épinglé), `🏛-home` (accueil — l'ancien
-  `kingdoms-home` est renommé in-place au premier passage).
+  `botforge-home` est renommé in-place au premier passage).
 - **Self-healing universel, événementiel** : tout salon géré par le
   bot se recrée **à l'instant** de sa suppression
   (`on_guild_channel_delete` → re-résolution : Redis → Mongo →
@@ -245,7 +245,7 @@ Des mécaniques de la bibliothèque — changent en upgradeant discord.py.
   être rapide (timeout 2,5 s + fallback). Un flux utilisateur qui
   échoue répond avec la cause précise (provider, jeu, quoi
   vérifier) et DM la stack aux BOT_ADMINS via
-  ``kingdoms.discord.error_report.dm_admins`` — garde anti-spam : un
+  ``botforge.discord.error_report.dm_admins`` — garde anti-spam : un
   DM par (type d'erreur, surface) et 5 minutes.
 - **PermissionOverwrite** : le provisionnement des salons restreint
   `default_role` (lecture) et ouvre `guild.me` (écriture/gestion).
@@ -300,7 +300,7 @@ Des limites de l'API Discord — hors de notre contrôle.
   catalogue, backoff exponentiel 30/60/120 s sur 429 en respectant
   `Retry-After`).
 
-### Le contrat 429 (Discord) — kingdoms-services#276
+### Le contrat 429 (Discord) — botforge-services#276
 
 Quatre règles, toutes mécanisées — une surface qui les contourne est un
 bug :
@@ -320,7 +320,7 @@ bug :
    des minutes ; les syncs rattrapent à leur prochaine passe.
 4. **Monitoring** : `rate_limit_monitor` tape le logger `discord.http`
    — chaque 429 absorbé par le retry interne de discord.py est
-   ré-émis en WARNING structuré sur `kingdoms.rate_limit` (route,
+   ré-émis en WARNING structuré sur `botforge.rate_limit` (route,
    `retry_after`, compteur par route, distinction global). Un pic de
    429 sur une route est l'empreinte d'une surface qui dérape.
 

@@ -12,7 +12,7 @@ from typing import Any
 
 import pytest
 
-from kingdoms.core.services.pinned_menu import PinnedMenuService
+from botforge.core.services.pinned_menu import PinnedMenuService
 
 
 class _FakeMessage:
