@@ -89,7 +89,7 @@ def _load_package_at(dotted: str, package_dir: Path) -> Any:
         parent = importlib.util.module_from_spec(
             importlib.machinery.ModuleSpec(parent_name, None, is_package=True)
         )
-        parent.__path__ = []  # type: ignore[attr-defined]
+        parent.__path__ = []
         sys.modules[parent_name] = parent
     if dotted in sys.modules:
         return sys.modules[dotted]
@@ -159,7 +159,7 @@ def load_mod_package(name: str, repo_root: Path | None = None) -> LoadedMod:
 
 
 def mod_service(name: str, repo_root: Path | None = None) -> Any:
-    """The mod's gRPC service package (``botforge.mods.<name>.grpc``).
+    """Return the mod's gRPC service package (``botforge.mods.<name>.grpc``).
 
     The seam the COG uses to call its service: the cog never imports the
     service's internals by path, it goes through this accessor (or the

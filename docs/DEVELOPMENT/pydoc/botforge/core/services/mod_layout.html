@@ -11,22 +11,31 @@
 <td class="extra"><a href=".">index</a><br><a href="file:SOURCE_ROOT/core/services/mod_layout.py">SOURCE_ROOT/core/services/mod_layout.py</a></td></tr></table>
     <p><span class="code">Modular&nbsp;mod&nbsp;layout&nbsp;resolution&nbsp;(botforge-services#178,&nbsp;botforge-services#211).<br>
 &nbsp;<br>
-A&nbsp;mod&nbsp;lives&nbsp;in&nbsp;ONE&nbsp;self-contained&nbsp;directory::<br>
+A&nbsp;mod&nbsp;lives&nbsp;in&nbsp;ONE&nbsp;self-contained&nbsp;directory&nbsp;(docs/architecture/mods.md&nbsp;§7,<br>
+the&nbsp;target&nbsp;layout&nbsp;—&nbsp;the&nbsp;gRPC&nbsp;micro-service,&nbsp;its&nbsp;contract&nbsp;and&nbsp;the&nbsp;Discord<br>
+cog&nbsp;are&nbsp;SEPARATE&nbsp;concerns)::<br>
 &nbsp;<br>
 &nbsp;&nbsp;&nbsp;&nbsp;modules/mods/&lt;mod&gt;/<br>
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;mod.yaml&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;declaration&nbsp;(schema&nbsp;of&nbsp;config/mods/&lt;mod&gt;.yaml)<br>
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;src/&lt;mod&gt;/&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;python&nbsp;package&nbsp;imported&nbsp;as&nbsp;``botforge.mods.&lt;mod&gt;``<br>
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;locales/&lt;loc&gt;.yaml&nbsp;&nbsp;per-mod&nbsp;locale&nbsp;catalogs&nbsp;(merged&nbsp;into&nbsp;MessageCatalog)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;conf/&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;declaration&nbsp;YAMLs:&nbsp;mod.yaml&nbsp;+&nbsp;locales/&lt;loc&gt;.yaml<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;grpc/&lt;mod&gt;/&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;the&nbsp;mod's&nbsp;gRPC&nbsp;service&nbsp;package&nbsp;(its&nbsp;data,&nbsp;its<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;collections)&nbsp;+&nbsp;its&nbsp;contract&nbsp;(service.py,&nbsp;contract.py)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;cogs/&lt;mod&gt;/&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;the&nbsp;Discord&nbsp;cog&nbsp;package&nbsp;—&nbsp;loaded&nbsp;by&nbsp;the&nbsp;bot,&nbsp;calling<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;the&nbsp;mod's&nbsp;service&nbsp;through&nbsp;the&nbsp;contract<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;tests/&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;mod-owned&nbsp;tests<br>
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;docs/&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;mod&nbsp;docs&nbsp;pointer&nbsp;(canonical&nbsp;docs:&nbsp;botforge&nbsp;repo)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;README.md&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;mod&nbsp;docs&nbsp;pointer&nbsp;(canonical&nbsp;docs:&nbsp;botforge&nbsp;repo)<br>
 &nbsp;<br>
-The&nbsp;legacy&nbsp;layout&nbsp;stays&nbsp;supported&nbsp;and&nbsp;takes&nbsp;precedence&nbsp;per&nbsp;mod::<br>
+The&nbsp;service&nbsp;imports&nbsp;as&nbsp;``botforge.mods.&lt;mod&gt;.grpc``,&nbsp;the&nbsp;cog&nbsp;as<br>
+``botforge.mods.&lt;mod&gt;.cogs``&nbsp;—&nbsp;the&nbsp;cog&nbsp;is&nbsp;the&nbsp;only&nbsp;Discord&nbsp;layer&nbsp;and&nbsp;never<br>
+touches&nbsp;another&nbsp;mod.<br>
 &nbsp;<br>
-&nbsp;&nbsp;&nbsp;&nbsp;config/mods/&lt;mod&gt;.yaml&nbsp;+&nbsp;src/botforge/mods/&lt;mod&gt;/&nbsp;+&nbsp;config/locales/*.yaml<br>
+Two&nbsp;older&nbsp;layouts&nbsp;stay&nbsp;supported&nbsp;during&nbsp;the&nbsp;migration&nbsp;(legacy&nbsp;first&nbsp;on<br>
+collision,&nbsp;then&nbsp;the&nbsp;pre-§7&nbsp;modular&nbsp;layout,&nbsp;then&nbsp;conf/):<br>
 &nbsp;<br>
-so&nbsp;existing&nbsp;branches&nbsp;(ladder&nbsp;on&nbsp;``vibe/merlin/main``,&nbsp;kingdoms&nbsp;on<br>
-``vibe/drasah/main``)&nbsp;keep&nbsp;working&nbsp;until&nbsp;their&nbsp;mechanical&nbsp;move<br>
-(one&nbsp;PR&nbsp;per&nbsp;mod,&nbsp;CI&nbsp;green&nbsp;each&nbsp;time).</span></p>
+-&nbsp;legacy:&nbsp;``config/mods/&lt;mod&gt;.yaml``&nbsp;+&nbsp;``src/botforge/mods/&lt;mod&gt;/``<br>
+-&nbsp;pre-§7&nbsp;modular:&nbsp;``modules/mods/&lt;mod&gt;/mod.yaml``&nbsp;+&nbsp;``src/&lt;mod&gt;/``&nbsp;+<br>
+&nbsp;&nbsp;``locales/``&nbsp;—&nbsp;so&nbsp;existing&nbsp;branches&nbsp;(ladder&nbsp;on&nbsp;``vibe/merlin/main``,<br>
+&nbsp;&nbsp;kingdoms&nbsp;on&nbsp;``vibe/drasah/main``)&nbsp;keep&nbsp;working&nbsp;until&nbsp;their&nbsp;mechanical<br>
+&nbsp;&nbsp;move&nbsp;(one&nbsp;PR&nbsp;per&nbsp;mod,&nbsp;CI&nbsp;green&nbsp;each&nbsp;time).</span></p>
 <p>
 <table class="section">
 <tr class="decor pkg-content-decor heading-text">
@@ -54,7 +63,7 @@ so&nbsp;existing&nbsp;branches&nbsp;(ladder&nbsp;on&nbsp;``vibe/merlin/main``,&n
 <td class="section-title" colspan=3>&nbsp;<br><a name="ModLayout">class <strong>ModLayout</strong></a>(<a href="builtins.html#object">builtins.object</a>)</td></tr>
     
 <tr><td class="decor title-decor" rowspan=2><span class="code">&nbsp;&nbsp;&nbsp;</span></td>
-<td class="decor title-decor" colspan=2><span class="code"><a href="#ModLayout">ModLayout</a>(name:&nbsp;'str',&nbsp;declaration:&nbsp;'Path',&nbsp;package:&nbsp;'Path&nbsp;|&nbsp;None',&nbsp;locale_files:&nbsp;'tuple[Path,&nbsp;...]')&nbsp;-&amp;gt;&nbsp;None<br>
+<td class="decor title-decor" colspan=2><span class="code"><a href="#ModLayout">ModLayout</a>(name:&nbsp;'str',&nbsp;declaration:&nbsp;'Path',&nbsp;package:&nbsp;'Path&nbsp;|&nbsp;None',&nbsp;locale_files:&nbsp;'tuple[Path,&nbsp;...]',&nbsp;cogs:&nbsp;'Path&nbsp;|&nbsp;None'&nbsp;=&nbsp;None,&nbsp;service:&nbsp;'Path&nbsp;|&nbsp;None'&nbsp;=&nbsp;None)&nbsp;-&amp;gt;&nbsp;None<br>
 &nbsp;<br>
 Where&nbsp;one&nbsp;mod's&nbsp;artifacts&nbsp;live.<br>&nbsp;</span></td></tr>
 <tr><td>&nbsp;</td>
@@ -70,7 +79,7 @@ Where&nbsp;one&nbsp;mod's&nbsp;artifacts&nbsp;live.<br>&nbsp;</span></td></tr>
 
 <dl><dt><a name="ModLayout-__hash__"><strong>__hash__</strong></a>(self)</dt><dd><span class="code">Return&nbsp;hash(self).</span></dd></dl>
 
-<dl><dt><a name="ModLayout-__init__"><strong>__init__</strong></a>(self, name: 'str', declaration: 'Path', package: 'Path | None', locale_files: 'tuple[Path, ...]') -&gt; None</dt><dd><span class="code">Initialize&nbsp;self.&nbsp;&nbsp;See&nbsp;help(type(self))&nbsp;for&nbsp;accurate&nbsp;signature.</span></dd></dl>
+<dl><dt><a name="ModLayout-__init__"><strong>__init__</strong></a>(self, name: 'str', declaration: 'Path', package: 'Path | None', locale_files: 'tuple[Path, ...]', cogs: 'Path | None' = None, service: 'Path | None' = None) -&gt; None</dt><dd><span class="code">Initialize&nbsp;self.&nbsp;&nbsp;See&nbsp;help(type(self))&nbsp;for&nbsp;accurate&nbsp;signature.</span></dd></dl>
 
 <dl><dt><a name="ModLayout-__repr__"><strong>__repr__</strong></a>(self)</dt><dd><span class="code">Return&nbsp;repr(self).</span></dd></dl>
 
@@ -85,6 +94,8 @@ Readonly properties defined here:<br>
 </dl>
 <hr>
 Data descriptors defined here:<br>
+<dl><dt><strong>cogs</strong></dt>
+</dl>
 <dl><dt><strong>declaration</strong></dt>
 </dl>
 <dl><dt><strong>locale_files</strong></dt>
@@ -93,15 +104,17 @@ Data descriptors defined here:<br>
 </dl>
 <dl><dt><strong>package</strong></dt>
 </dl>
+<dl><dt><strong>service</strong></dt>
+</dl>
 <hr>
 Data and other attributes defined here:<br>
-<dl><dt><strong>__annotations__</strong> = {'declaration': 'Path', 'locale_files': 'tuple[Path, ...]', 'name': 'str', 'package': 'Path | None'}</dl>
+<dl><dt><strong>__annotations__</strong> = {'cogs': 'Path | None', 'declaration': 'Path', 'locale_files': 'tuple[Path, ...]', 'name': 'str', 'package': 'Path | None', 'service': 'Path | None'}</dl>
 
-<dl><dt><strong>__dataclass_fields__</strong> = {'declaration': Field(name='declaration',type='Path',default=&lt;da...appingproxy({}),kw_only=False,_field_type=_FIELD), 'locale_files': Field(name='locale_files',type='tuple[Path, ...]...appingproxy({}),kw_only=False,_field_type=_FIELD), 'name': Field(name='name',type='str',default=&lt;dataclasse...appingproxy({}),kw_only=False,_field_type=_FIELD), 'package': Field(name='package',type='Path | None',default=...appingproxy({}),kw_only=False,_field_type=_FIELD)}</dl>
+<dl><dt><strong>__dataclass_fields__</strong> = {'cogs': Field(name='cogs',type='Path | None',default=Non...appingproxy({}),kw_only=False,_field_type=_FIELD), 'declaration': Field(name='declaration',type='Path',default=&lt;da...appingproxy({}),kw_only=False,_field_type=_FIELD), 'locale_files': Field(name='locale_files',type='tuple[Path, ...]...appingproxy({}),kw_only=False,_field_type=_FIELD), 'name': Field(name='name',type='str',default=&lt;dataclasse...appingproxy({}),kw_only=False,_field_type=_FIELD), 'package': Field(name='package',type='Path | None',default=...appingproxy({}),kw_only=False,_field_type=_FIELD), 'service': Field(name='service',type='Path | None',default=...appingproxy({}),kw_only=False,_field_type=_FIELD)}</dl>
 
 <dl><dt><strong>__dataclass_params__</strong> = _DataclassParams(init=True,repr=True,eq=True,ord...True,kw_only=False,slots=True,weakref_slot=False)</dl>
 
-<dl><dt><strong>__match_args__</strong> = ('name', 'declaration', 'package', 'locale_files')</dl>
+<dl><dt><strong>__match_args__</strong> = ('name', 'declaration', 'package', 'locale_files', 'cogs', 'service')</dl>
 
 </td></tr></table></td></tr></table><p>
 <table class="section">
@@ -110,7 +123,7 @@ Data and other attributes defined here:<br>
     
 <tr><td class="decor functions-decor"><span class="code">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span></td><td>&nbsp;</td>
 <td class="singlecolumn"><dl><dt><a name="-discover_mods"><strong>discover_mods</strong></a>(repo_root: 'Path') -&gt; 'dict[str, ModLayout]'</dt><dd><span class="code">Every&nbsp;declared&nbsp;mod,&nbsp;legacy&nbsp;and&nbsp;modular,&nbsp;by&nbsp;name&nbsp;(legacy&nbsp;wins&nbsp;on&nbsp;collision).</span></dd></dl>
- <dl><dt><a name="-find_mod_declaration"><strong>find_mod_declaration</strong></a>(repo_root: 'Path', name: 'str') -&gt; 'ModLayout'</dt><dd><span class="code">Resolve&nbsp;one&nbsp;mod's&nbsp;layout:&nbsp;legacy&nbsp;config&nbsp;first,&nbsp;then&nbsp;modular&nbsp;dir.<br>
+ <dl><dt><a name="-find_mod_declaration"><strong>find_mod_declaration</strong></a>(repo_root: 'Path', name: 'str') -&gt; 'ModLayout'</dt><dd><span class="code">Resolve&nbsp;one&nbsp;mod's&nbsp;layout:&nbsp;legacy&nbsp;config,&nbsp;then&nbsp;§7&nbsp;conf/,&nbsp;then&nbsp;pre-§7&nbsp;root.<br>
 &nbsp;<br>
 Raises&nbsp;FileNotFoundError&nbsp;when&nbsp;the&nbsp;mod&nbsp;is&nbsp;declared&nbsp;nowhere&nbsp;—&nbsp;a&nbsp;declared<br>
 mod&nbsp;without&nbsp;a&nbsp;declaration&nbsp;is&nbsp;a&nbsp;broken&nbsp;install&nbsp;and&nbsp;must&nbsp;fail&nbsp;loudly<br>

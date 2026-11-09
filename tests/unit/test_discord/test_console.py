@@ -7,7 +7,7 @@ seams, the gates through environment dicts.
 
 from __future__ import annotations
 
-from typing import Any, ClassVar
+from typing import Any
 
 from botforge.core.services.guild_access import GuildAccessService
 from botforge.core.services.mod_definition import (

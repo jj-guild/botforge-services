@@ -60,7 +60,7 @@ def _modular_mod_dir(repo_root: Path, name: str) -> Path:
 
 
 def _locale_files(mod_dir: Path, *candidates: Path) -> tuple[Path, ...]:
-    """The first existing locale directory's YAML files, sorted."""
+    """Return the first existing locale directory's YAML files, sorted."""
     for locales_dir in candidates:
         if locales_dir.is_dir():
             return tuple(sorted(locales_dir.glob("*.yaml")))
