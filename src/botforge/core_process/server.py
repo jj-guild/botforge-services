@@ -74,6 +74,12 @@ async def _sync_game_enrollments() -> None:
     """
     interval_s = float(os.environ.get("GAME_ENROLLMENTS_INTERVAL_S", "30"))
     uri = os.environ.get("GAME_AOE2_URI", "")
+    if not uri:
+        logger.warning(
+            "GAME ENROLLMENTS sync disabled: GAME_AOE2_URI is unset — "
+            "the enrollments never reach the game service and the dashboard's "
+            "roster stays empty (issue 2026-11-08: a silent skip is undebuggable)"
+        )
     client: Any = None
     last_ids: list[str] | None = None
     while True:
@@ -87,6 +93,7 @@ async def _sync_game_enrollments() -> None:
                 profile_ids.append(str(binding.get("profile_id", "")))
                 user_ids.append(str(binding.get("user_id", "")))
             profile_ids_sorted = sorted(profile_ids)
+            logger.info("GAME ENROLLMENTS cycle: %d bound profiles", len(profile_ids_sorted))
             if profile_ids_sorted != last_ids and uri:
                 if client is None:
                     client = _GameDataClient(uri)
@@ -94,6 +101,11 @@ async def _sync_game_enrollments() -> None:
                 if applied:
                     last_ids = profile_ids_sorted
                     logger.info("GAME ENROLLMENTS pushed: %d profiles", len(profile_ids_sorted))
+                else:
+                    logger.warning(
+                        "GAME ENROLLMENTS push not applied (game_key=aoe2, %d profiles) — retrying",
+                        len(profile_ids_sorted),
+                    )
         except Exception:
             logger.warning("game enrollments sync failed — retrying", exc_info=True)
         await asyncio.sleep(interval_s)
