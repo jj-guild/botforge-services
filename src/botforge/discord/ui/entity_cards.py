@@ -20,12 +20,78 @@ the data and the buttons. No game or mod imports here.
 from __future__ import annotations
 
 from collections.abc import Callable, Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import Any
 
 import discord
 
 ACCENT = 0x5865F2
+
+# Discord rejects a V2 message whose total displayable text (every
+# TextDisplay + button label) crosses 4000 characters (50035). The
+# description is the only unbounded block on a card — everything else
+# is built from short, bounded fields — so the budget is enforced by
+# clamping the description, never by letting the send fail.
+TEXT_BUDGET = 4000
+# The callers may add text on top of the card (the admin preview's
+# banner) and the buttons' labels count too: a flat headroom keeps
+# the card safe for every consumer.
+BUDGET_HEADROOM = 256
+_TRUNCATION_MARK = "\n\u2026 *(description tronqu\u00e9e \u2014 la suite sur la page source)*"
+# Each kept paragraph becomes its own TextDisplay: the clamp also
+# respects Discord's 40-component cap (a very fragmented description
+# would otherwise blow the component budget before the text one).
+MAX_DESCRIPTION_PARAGRAPHS = 12
+
+
+def _fixed_text(spec: EntityCardSpec) -> int:
+    """Measure the card's displayable text WITHOUT the description block."""
+    total = len(f"## {spec.title[:1].upper()}{spec.title[1:]}")
+    if spec.subtitle:
+        total += len(f"_{spec.subtitle}_")
+    if spec.props:
+        total += len("\n".join(spec.props))
+    if spec.links:
+        if spec.links_heading:
+            total += len(f"**{spec.links_heading}**\n")
+        total += len("\n".join(spec.links))
+    if spec.versions:
+        lines = [
+            f"\u2022 **{v['name']}** \u2014 {v['description']}" if v.get("description") else f"\u2022 **{v['name']}**"
+            for v in spec.versions
+        ]
+        total += len("\n".join(["**Variantes**", *lines]))
+    if spec.creator:
+        total += len(f"Cr\u00e9ateur : {spec.creator}")
+    if spec.source_url:
+        total += len(f"Source : [{spec.source_label}]({spec.source_url})")
+    total += len(f"-# `{spec.view_id or spec.entity_id}`")
+    return total
+
+
+def _clamped_spec(spec: EntityCardSpec) -> EntityCardSpec:
+    """Return the spec with its description fitted into the text budget.
+
+    A description that would cross the budget is cut on a paragraph
+    boundary (a subsection title never separates from its content) and
+    ends with an explicit truncation marker — a shortened card is
+    always visibly shortened, never silently shorter.
+    """
+    allowed = TEXT_BUDGET - BUDGET_HEADROOM - _fixed_text(spec) - len(_TRUNCATION_MARK)
+    if len(spec.description) <= allowed:
+        return spec
+    if allowed < 0:
+        allowed = 0
+    kept: list[str] = []
+    total = 0
+    for paragraph in spec.description.split("\n\n"):
+        cost = len(paragraph) + 2
+        if total + cost > allowed or len(kept) >= MAX_DESCRIPTION_PARAGRAPHS:
+            break
+        kept.append(paragraph)
+        total += cost
+    body = "\n\n".join(kept) if kept else spec.description[:allowed]
+    return replace(spec, description=body + _TRUNCATION_MARK)
 
 
 @dataclass(frozen=True)
@@ -223,6 +289,7 @@ def build_entity_card(spec: EntityCardSpec) -> discord.ui.LayoutView:
     The shared template: header (icon thumbnail) / props / description
     / media / cross-links / source / id footer / action row.
     """
+    spec = _clamped_spec(spec)
     view = discord.ui.LayoutView(timeout=None)
     blocks: list[discord.ui.Item[discord.ui.LayoutView]] = [_header(spec)]
     body = _body_blocks(spec)
