@@ -11,9 +11,9 @@ Fail-closed invariants (mirrored from the Discord surface, enforced
 again at the CLI boundary \\u2014 the workflow is untrusted input):
 
 - the deploy environment must not be prod
-  (``KINGDOMS_DEPLOY_ENV``);
+  (``BOTFORGE_DEPLOY_ENV``);
 - the target guild must be on the env-defined test-guild allowlist
-  (``KINGDOMS_TEST_GUILD_IDS``) \\u2014 ``all`` iterates that allowlist and
+  (``BOTFORGE_TEST_GUILD_IDS``) \\u2014 ``all`` iterates that allowlist and
   nothing else, so a CLI run can never touch an undeclared guild;
 - the allowlist is empty \\u2192 the destructive actions refuse to run
   anywhere (fail closed, same rule as the disabled buttons).
@@ -42,7 +42,7 @@ PROD_ENV_NAMES = ("prod", "production")
 
 
 def _deploy_env() -> str:
-    return os.environ.get("KINGDOMS_DEPLOY_ENV", "").strip().lower()
+    return os.environ.get("BOTFORGE_DEPLOY_ENV", "").strip().lower()
 
 
 def _fail_closed_gates(guilds: list[str]) -> int:
@@ -58,12 +58,12 @@ def _fail_closed_gates(guilds: list[str]) -> int:
 
     allowlist = allowed_test_guild_ids()
     if not allowlist:
-        print("::error::KINGDOMS_TEST_GUILD_IDS is empty — no guild may run console ops (fail closed)")
+        print("::error::BOTFORGE_TEST_GUILD_IDS is empty — no guild may run console ops (fail closed)")
         return 1
     for guild_id in guilds:
         if not is_test_guild(guild_id):
             print(
-                f"::error::guild {guild_id} is not on the env allowlist (KINGDOMS_TEST_GUILD_IDS) — refusing"
+                f"::error::guild {guild_id} is not on the env allowlist (BOTFORGE_TEST_GUILD_IDS) — refusing"
             )
             return 1
     return 0

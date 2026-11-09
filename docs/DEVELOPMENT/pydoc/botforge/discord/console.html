@@ -16,9 +16,9 @@ jamais&nbsp;en&nbsp;prod"):<br>
 &nbsp;<br>
 1.&nbsp;**Visibility&nbsp;gate**&nbsp;—&nbsp;the&nbsp;console&nbsp;section&nbsp;renders&nbsp;in&nbsp;the&nbsp;/admin<br>
 &nbsp;&nbsp;&nbsp;panel&nbsp;only&nbsp;on&nbsp;the&nbsp;env-declared&nbsp;test&nbsp;guilds<br>
-&nbsp;&nbsp;&nbsp;(``KINGDOMS_TEST_GUILD_IDS``)&nbsp;and&nbsp;only&nbsp;for&nbsp;bot&nbsp;admins:&nbsp;nowhere<br>
+&nbsp;&nbsp;&nbsp;(``BOTFORGE_TEST_GUILD_IDS``)&nbsp;and&nbsp;only&nbsp;for&nbsp;bot&nbsp;admins:&nbsp;nowhere<br>
 &nbsp;&nbsp;&nbsp;else,&nbsp;no&nbsp;flag&nbsp;to&nbsp;flip.<br>
-2.&nbsp;**Runtime&nbsp;gate**&nbsp;—&nbsp;every&nbsp;click&nbsp;re-reads&nbsp;``KINGDOMS_DEPLOY_ENV``<br>
+2.&nbsp;**Runtime&nbsp;gate**&nbsp;—&nbsp;every&nbsp;click&nbsp;re-reads&nbsp;``BOTFORGE_DEPLOY_ENV``<br>
 &nbsp;&nbsp;&nbsp;and&nbsp;refuses&nbsp;on&nbsp;``prod``,&nbsp;and&nbsp;re-checks&nbsp;the&nbsp;guard&nbsp;at&nbsp;click&nbsp;time&nbsp;(the<br>
 &nbsp;&nbsp;&nbsp;mandate:&nbsp;seeing&nbsp;the&nbsp;button&nbsp;never&nbsp;implies&nbsp;being&nbsp;allowed&nbsp;to&nbsp;click&nbsp;it).<br>
 3.&nbsp;**Permission&nbsp;gate**&nbsp;—&nbsp;bot&nbsp;admins&nbsp;only&nbsp;(``require_admin``).<br>
@@ -1243,7 +1243,7 @@ action&nbsp;registers&nbsp;its&nbsp;button&nbsp;once&nbsp;and&nbsp;the&nbsp;boot
     
 <tr><td class="decor data-decor"><span class="code">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span></td><td>&nbsp;</td>
 <td class="singlecolumn"><strong>CONSOLE_BACK_BUTTON_ID</strong> = 'console:back'<br>
-<strong>DEPLOY_ENV_VAR</strong> = 'KINGDOMS_DEPLOY_ENV'<br>
+<strong>DEPLOY_ENV_VAR</strong> = 'BOTFORGE_DEPLOY_ENV'<br>
 <strong>PIN_CONSOLE_BUTTON_ID</strong> = 'admin:pin:button:console'<br>
 <strong>PROD_ENV_NAMES</strong> = ('prod', 'production')<br>
 <strong>__annotations__</strong> = {'_ACTIONS': 'dict[str, ConsoleAction]'}<br>

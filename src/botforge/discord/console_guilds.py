@@ -2,7 +2,7 @@
 
 Developer-mandated rule (the dev console session): the dev console's
 commands (clean, nuke, reset db, install) are executable **only on the
-guilds listed in the ``KINGDOMS_TEST_GUILD_IDS`` environment variable**
+guilds listed in the ``BOTFORGE_TEST_GUILD_IDS`` environment variable**
 \u2014 never on any other guild, whatever the flags and permissions say.
 
 Design points:
@@ -33,7 +33,7 @@ __all__ = [
     "parse_test_guild_ids",
 ]
 
-TEST_GUILD_IDS_ENV_VAR = "KINGDOMS_TEST_GUILD_IDS"
+TEST_GUILD_IDS_ENV_VAR = "BOTFORGE_TEST_GUILD_IDS"
 
 
 def _parse(environ: dict[str, str] | None = None) -> frozenset[str]:

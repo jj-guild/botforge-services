@@ -22,9 +22,9 @@ Fail-closed&nbsp;invariants&nbsp;(mirrored&nbsp;from&nbsp;the&nbsp;Discord&nbsp;
 again&nbsp;at&nbsp;the&nbsp;CLI&nbsp;boundary&nbsp;\\u2014&nbsp;the&nbsp;workflow&nbsp;is&nbsp;untrusted&nbsp;input):<br>
 &nbsp;<br>
 -&nbsp;the&nbsp;deploy&nbsp;environment&nbsp;must&nbsp;not&nbsp;be&nbsp;prod<br>
-&nbsp;&nbsp;(``KINGDOMS_DEPLOY_ENV``);<br>
+&nbsp;&nbsp;(``BOTFORGE_DEPLOY_ENV``);<br>
 -&nbsp;the&nbsp;target&nbsp;guild&nbsp;must&nbsp;be&nbsp;on&nbsp;the&nbsp;env-defined&nbsp;test-guild&nbsp;allowlist<br>
-&nbsp;&nbsp;(``KINGDOMS_TEST_GUILD_IDS``)&nbsp;\\u2014&nbsp;``all``&nbsp;iterates&nbsp;that&nbsp;allowlist&nbsp;and<br>
+&nbsp;&nbsp;(``BOTFORGE_TEST_GUILD_IDS``)&nbsp;\\u2014&nbsp;``all``&nbsp;iterates&nbsp;that&nbsp;allowlist&nbsp;and<br>
 &nbsp;&nbsp;nothing&nbsp;else,&nbsp;so&nbsp;a&nbsp;CLI&nbsp;run&nbsp;can&nbsp;never&nbsp;touch&nbsp;an&nbsp;undeclared&nbsp;guild;<br>
 -&nbsp;the&nbsp;allowlist&nbsp;is&nbsp;empty&nbsp;\\u2192&nbsp;the&nbsp;destructive&nbsp;actions&nbsp;refuse&nbsp;to&nbsp;run<br>
 &nbsp;&nbsp;anywhere&nbsp;(fail&nbsp;closed,&nbsp;same&nbsp;rule&nbsp;as&nbsp;the&nbsp;disabled&nbsp;buttons).<br>

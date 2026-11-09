@@ -5,9 +5,9 @@ jamais en prod"):
 
 1. **Visibility gate** \u2014 the console section renders in the /admin
    panel only on the env-declared test guilds
-   (``KINGDOMS_TEST_GUILD_IDS``) and only for bot admins: nowhere
+   (``BOTFORGE_TEST_GUILD_IDS``) and only for bot admins: nowhere
    else, no flag to flip.
-2. **Runtime gate** \u2014 every click re-reads ``KINGDOMS_DEPLOY_ENV``
+2. **Runtime gate** \u2014 every click re-reads ``BOTFORGE_DEPLOY_ENV``
    and refuses on ``prod``, and re-checks the guard at click time (the
    mandate: seeing the button never implies being allowed to click it).
 3. **Permission gate** \u2014 bot admins only (``require_admin``).
@@ -47,7 +47,7 @@ from botforge.discord.guards import require_admin
 
 logger = logging.getLogger("botforge.discord.console")
 
-DEPLOY_ENV_VAR = "KINGDOMS_DEPLOY_ENV"
+DEPLOY_ENV_VAR = "BOTFORGE_DEPLOY_ENV"
 
 PROD_ENV_NAMES = ("prod", "production")
 
@@ -116,7 +116,7 @@ def _prod_refusal() -> str:
 def _guild_refusal() -> str:
     return (
         "This guild is not on the console allowlist: only the guild ids declared "
-        "in the environment (KINGDOMS_TEST_GUILD_IDS) may use it."
+        "in the environment (BOTFORGE_TEST_GUILD_IDS) may use it."
     )
 
 
@@ -399,7 +399,7 @@ def _console_view(guild_id: str | int | None) -> discord.ui.LayoutView:
         "**this guild only**."
         if allowed
         else "This guild is **not** on the test allowlist \u2014 the actions "
-        "are disabled (KINGDOMS_TEST_GUILD_IDS decides, env-defined)."
+        "are disabled (BOTFORGE_TEST_GUILD_IDS decides, env-defined)."
     )
     # the intro composes from the registered actions — an extension
     # action describes itself, the home never hard-codes a list

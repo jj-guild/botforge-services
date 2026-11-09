@@ -224,17 +224,17 @@ def test_console_ops_cli_gates(monkeypatch: Any) -> None:
     from botforge.cli import console_ops
 
     # prod refused whatever the allowlist says
-    monkeypatch.setenv("KINGDOMS_DEPLOY_ENV", "prod")
-    monkeypatch.setenv("KINGDOMS_TEST_GUILD_IDS", "123")
+    monkeypatch.setenv("BOTFORGE_DEPLOY_ENV", "prod")
+    monkeypatch.setenv("BOTFORGE_TEST_GUILD_IDS", "123")
     assert console_ops.main(["clean-managed", "--guild", "123"]) == 1
 
     # empty allowlist: refused everywhere (fail closed)
-    monkeypatch.setenv("KINGDOMS_DEPLOY_ENV", "test")
-    monkeypatch.setenv("KINGDOMS_TEST_GUILD_IDS", "")
+    monkeypatch.setenv("BOTFORGE_DEPLOY_ENV", "test")
+    monkeypatch.setenv("BOTFORGE_TEST_GUILD_IDS", "")
     assert console_ops.main(["reset-data", "--guild", "123"]) == 1
 
     # a guild outside the allowlist: refused
-    monkeypatch.setenv("KINGDOMS_TEST_GUILD_IDS", "123")
+    monkeypatch.setenv("BOTFORGE_TEST_GUILD_IDS", "123")
     assert console_ops.main(["nuke", "--guild", "999"]) == 1
 
 
