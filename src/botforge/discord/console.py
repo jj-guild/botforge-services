@@ -510,7 +510,7 @@ class DevDangerModal(discord.ui.Modal):
 
     CHANNELS_NONE, CHANNELS_BOT, CHANNELS_ALL = "channels:none", "channels:bot", "channels:all"
     ROLES_NONE, ROLES_BOT, ROLES_ALL = "roles:none", "roles:bot", "roles:all"
-    DATA_KEEP, DATA_DELETE = "data:keep", "data:delete"
+    DATA_GUILD, DATA_MAPS, DATA_POOLS = "data:guild", "data:maps", "data:pools"
 
     @classmethod
     async def build(cls, interaction: discord.Interaction) -> DevDangerModal:
@@ -523,20 +523,21 @@ class DevDangerModal(discord.ui.Modal):
 
         return cls(
             title=await tr("danger_modal_title", "\u26a0\ufe0f Danger Zone"),
-            label_channels=await tr("danger_label_channels", "Channels"),
-            label_roles=await tr("danger_label_roles", "Roles"),
-            label_data=await tr("danger_label_data", "Data"),
+            label_channels=await tr("danger_label_channels", "Delete channels"),
+            label_roles=await tr("danger_label_roles", "Delete roles"),
+            label_data=await tr("danger_label_data", "Delete data"),
             opt_none=await tr("danger_opt_none", "None"),
-            opt_bot=await tr("danger_opt_bot", "Bot-managed only"),
+            opt_bot=await tr("danger_opt_bot", "Bot-created only"),
             opt_all=await tr("danger_opt_all", "All"),
-            opt_keep=await tr("danger_opt_keep", "Keep everything"),
-            opt_delete=await tr("danger_opt_delete", "Delete everything"),
+            opt_guild=await tr("danger_opt_guild", "Guild data"),
+            opt_maps=await tr("danger_opt_maps", "Maps (global content)"),
+            opt_pools=await tr("danger_opt_pools", "Map pools (global content)"),
             nothing=await tr("danger_nothing", "Nothing selected \u2014 nothing done."),
             done=await tr(
                 "danger_done",
                 "Danger Zone applied \u2014 channels: {channels}, roles: {roles}, data: {data}.",
             ),
-            data_kept=await tr("danger_data_kept", "kept"),
+            data_kept=await tr("danger_data_kept", "nothing deleted"),
         )
 
     def __init__(
@@ -549,8 +550,9 @@ class DevDangerModal(discord.ui.Modal):
         opt_none: str,
         opt_bot: str,
         opt_all: str,
-        opt_keep: str,
-        opt_delete: str,
+        opt_guild: str,
+        opt_maps: str,
+        opt_pools: str,
         nothing: str,
         done: str,
         data_kept: str,
@@ -584,11 +586,12 @@ class DevDangerModal(discord.ui.Modal):
         self.data_select: discord.ui.Select[Any] = discord.ui.Select(
             placeholder=label_data[:100],
             min_values=0,
-            max_values=1,
+            max_values=3,
             required=False,
             options=[
-                discord.SelectOption(label=opt_keep, value=self.DATA_KEEP),
-                discord.SelectOption(label=opt_delete, value=self.DATA_DELETE),
+                discord.SelectOption(label=opt_guild, value=self.DATA_GUILD),
+                discord.SelectOption(label=opt_maps, value=self.DATA_MAPS),
+                discord.SelectOption(label=opt_pools, value=self.DATA_POOLS),
             ],
         )
         self.add_item(discord.ui.Label(text=label_channels[:45], component=self.channels_select))
@@ -601,8 +604,8 @@ class DevDangerModal(discord.ui.Modal):
             return
         channels_mode = self.channels_select.values[0] if self.channels_select.values else self.CHANNELS_NONE
         roles_mode = self.roles_select.values[0] if self.roles_select.values else self.ROLES_NONE
-        data_mode = self.data_select.values[0] if self.data_select.values else self.DATA_KEEP
-        if (channels_mode, roles_mode, data_mode) == (self.CHANNELS_NONE, self.ROLES_NONE, self.DATA_KEEP):
+        data_modes = list(self.data_select.values)
+        if not data_modes and channels_mode == self.CHANNELS_NONE and roles_mode == self.ROLES_NONE:
             await interaction.response.send_message(self.nothing, ephemeral=True)
             return
         await interaction.response.defer(ephemeral=True)
@@ -619,14 +622,29 @@ class DevDangerModal(discord.ui.Modal):
                 guild, managed_only=roles_mode == self.ROLES_BOT
             )
         data_deleted: dict[str, int] = {}
-        if data_mode == self.DATA_DELETE:
-            data_deleted = await _reset_guild_data(str(guild.id))
+        if self.DATA_GUILD in data_modes:
+            data_deleted.update(await _reset_guild_data(str(guild.id)))
+        if self.DATA_MAPS in data_modes or self.DATA_POOLS in data_modes:
+            from botforge.core.models.db import get_async_database
+            from botforge.core.services.game_data import MAP_POOLS_COLLECTION, MAPS_COLLECTION
+
+            database = get_async_database()
+            for label, collection in (("maps", MAPS_COLLECTION), ("map_pools", MAP_POOLS_COLLECTION)):
+                if (label == "maps" and self.DATA_MAPS not in data_modes) or (
+                    label == "map_pools" and self.DATA_POOLS not in data_modes
+                ):
+                    continue
+                try:
+                    result = await database[collection].delete_many({})
+                    data_deleted[collection] = int(result.deleted_count)
+                except Exception:
+                    logger.warning("CONSOLE data wipe failed (%s)", collection, exc_info=True)
         logger.warning(
             "CONSOLE DANGER ZONE executed (guild %s): channels=%s roles=%s data=%s",
             interaction.guild_id,
             channels_mode,
             roles_mode,
-            data_mode,
+            data_modes,
         )
         data_summary = (
             ", ".join(f"{name}: {count}" for name, count in sorted(data_deleted.items()))

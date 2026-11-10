@@ -296,26 +296,28 @@ async def test_console_action_registry_renders_extensions(monkeypatch: Any) -> N
 
 
 def test_danger_modal_defaults_are_safe() -> None:
-    """The Danger Zone modal's untouched selects mean the safe default."""
+    """The Danger Zone modal: action-titled labels, multi-select data, safe defaults."""
     from botforge.discord.console import DevDangerModal
 
     modal = DevDangerModal(
         title="Danger Zone",
-        label_channels="Channels",
-        label_roles="Roles",
-        label_data="Data",
+        label_channels="Delete channels",
+        label_roles="Delete roles",
+        label_data="Delete data",
         opt_none="None",
-        opt_bot="Bot-managed only",
+        opt_bot="Bot-created only",
         opt_all="All",
-        opt_keep="Keep everything",
-        opt_delete="Delete everything",
+        opt_guild="Guild data",
+        opt_maps="Maps (global content)",
+        opt_pools="Map pools (global content)",
         nothing="Nothing selected.",
         done="done: {channels} {roles} {data}",
-        data_kept="kept",
+        data_kept="nothing deleted",
     )
     assert modal.channels_select.required is False
     assert modal.roles_select.required is False
     assert modal.data_select.required is False
+    assert modal.data_select.max_values == 3
     values = {
         opt.value
         for select in (modal.channels_select, modal.roles_select, modal.data_select)
@@ -328,6 +330,7 @@ def test_danger_modal_defaults_are_safe() -> None:
         DevDangerModal.ROLES_NONE,
         DevDangerModal.ROLES_BOT,
         DevDangerModal.ROLES_ALL,
-        DevDangerModal.DATA_KEEP,
-        DevDangerModal.DATA_DELETE,
+        DevDangerModal.DATA_GUILD,
+        DevDangerModal.DATA_MAPS,
+        DevDangerModal.DATA_POOLS,
     }

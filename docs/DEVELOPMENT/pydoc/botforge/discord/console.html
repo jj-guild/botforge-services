@@ -563,7 +563,7 @@ classes&nbsp;in&nbsp;the&nbsp;first&nbsp;place&nbsp;with&nbsp;`class&nbsp;Foo[T]
 <td class="section-title" colspan=3>&nbsp;<br><a name="DevDangerModal">class <strong>DevDangerModal</strong></a>(<a href="discord.ui.modal.html#Modal">discord.ui.modal.Modal</a>)</td></tr>
     
 <tr><td class="decor title-decor" rowspan=2><span class="code">&nbsp;&nbsp;&nbsp;</span></td>
-<td class="decor title-decor" colspan=2><span class="code"><a href="#DevDangerModal">DevDangerModal</a>(*,&nbsp;title:&nbsp;'str',&nbsp;label_channels:&nbsp;'str',&nbsp;label_roles:&nbsp;'str',&nbsp;label_data:&nbsp;'str',&nbsp;opt_none:&nbsp;'str',&nbsp;opt_bot:&nbsp;'str',&nbsp;opt_all:&nbsp;'str',&nbsp;opt_keep:&nbsp;'str',&nbsp;opt_delete:&nbsp;'str',&nbsp;nothing:&nbsp;'str',&nbsp;done:&nbsp;'str',&nbsp;data_kept:&nbsp;'str')&nbsp;-&amp;gt;&nbsp;'None'<br>
+<td class="decor title-decor" colspan=2><span class="code"><a href="#DevDangerModal">DevDangerModal</a>(*,&nbsp;title:&nbsp;'str',&nbsp;label_channels:&nbsp;'str',&nbsp;label_roles:&nbsp;'str',&nbsp;label_data:&nbsp;'str',&nbsp;opt_none:&nbsp;'str',&nbsp;opt_bot:&nbsp;'str',&nbsp;opt_all:&nbsp;'str',&nbsp;opt_guild:&nbsp;'str',&nbsp;opt_maps:&nbsp;'str',&nbsp;opt_pools:&nbsp;'str',&nbsp;nothing:&nbsp;'str',&nbsp;done:&nbsp;'str',&nbsp;data_kept:&nbsp;'str')&nbsp;-&amp;gt;&nbsp;'None'<br>
 &nbsp;<br>
 The&nbsp;destructive&nbsp;picker:&nbsp;channels,&nbsp;roles,&nbsp;data&nbsp;—&nbsp;three&nbsp;selects.<br>
 &nbsp;<br>
@@ -581,7 +581,7 @@ destructive&nbsp;buttons.<br>&nbsp;</span></td></tr>
 </dl>
 <hr>
 Methods defined here:<br>
-<dl><dt><a name="DevDangerModal-__init__"><strong>__init__</strong></a>(self, *, title: 'str', label_channels: 'str', label_roles: 'str', label_data: 'str', opt_none: 'str', opt_bot: 'str', opt_all: 'str', opt_keep: 'str', opt_delete: 'str', nothing: 'str', done: 'str', data_kept: 'str') -&gt; 'None'</dt><dd><span class="code">Initialize&nbsp;self.&nbsp;&nbsp;See&nbsp;help(type(self))&nbsp;for&nbsp;accurate&nbsp;signature.</span></dd></dl>
+<dl><dt><a name="DevDangerModal-__init__"><strong>__init__</strong></a>(self, *, title: 'str', label_channels: 'str', label_roles: 'str', label_data: 'str', opt_none: 'str', opt_bot: 'str', opt_all: 'str', opt_guild: 'str', opt_maps: 'str', opt_pools: 'str', nothing: 'str', done: 'str', data_kept: 'str') -&gt; 'None'</dt><dd><span class="code">Initialize&nbsp;self.&nbsp;&nbsp;See&nbsp;help(type(self))&nbsp;for&nbsp;accurate&nbsp;signature.</span></dd></dl>
 
 <dl><dt>async <a name="DevDangerModal-on_submit"><strong>on_submit</strong></a>(self, interaction: 'discord.Interaction') -&gt; 'None'</dt><dd><span class="code">Guard,&nbsp;then&nbsp;apply&nbsp;the&nbsp;stated&nbsp;blast&nbsp;radius.</span></dd></dl>
 
@@ -597,9 +597,11 @@ Data and other attributes defined here:<br>
 
 <dl><dt><strong>CHANNELS_NONE</strong> = 'channels:none'</dl>
 
-<dl><dt><strong>DATA_DELETE</strong> = 'data:delete'</dl>
+<dl><dt><strong>DATA_GUILD</strong> = 'data:guild'</dl>
 
-<dl><dt><strong>DATA_KEEP</strong> = 'data:keep'</dl>
+<dl><dt><strong>DATA_MAPS</strong> = 'data:maps'</dl>
+
+<dl><dt><strong>DATA_POOLS</strong> = 'data:pools'</dl>
 
 <dl><dt><strong>ROLES_ALL</strong> = 'roles:all'</dl>
 
