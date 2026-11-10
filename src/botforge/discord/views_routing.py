@@ -508,6 +508,17 @@ def build_declared_menu(bot: Any, view_id: str) -> Any:
         for button in menu_buttons(decl, catalog, locale):
             row.add_item(button)
         view.add_item(row)
+        # The dev console rides the declared admin menu (the pin AND the
+        # ephemeral home→admin both render this builder): test guilds only
+        # (the allowlist), the button's own guards re-check every click.
+        if view_id == "menu:admin":
+            from botforge.discord.console import AdminConsoleButton
+            from botforge.discord.console_guilds import is_test_guild
+
+            if is_test_guild(guild_id):
+                console_row: discord.ui.ActionRow[discord.ui.LayoutView] = discord.ui.ActionRow()
+                console_row.add_item(AdminConsoleButton())
+                view.add_item(console_row)
         from botforge.discord.ui.view_footer import add_view_footer
 
         return add_view_footer(view, view_id)
