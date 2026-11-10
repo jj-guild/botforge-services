@@ -457,10 +457,9 @@ async def _console_view(guild_id: str | int | None, client: Any = None) -> disco
         ext_row.add_item(action.build(not allowed))
         container.add_item(ext_row)
     view.add_item(container)
-    back_row: discord.ui.ActionRow[discord.ui.LayoutView] = discord.ui.ActionRow()
-    back_row.add_item(ConsoleBackButton())
-    view.add_item(back_row)
-    return view
+    from botforge.discord.ui.view_footer import add_view_footer, require_declared_view_id
+
+    return add_view_footer(view, require_declared_view_id("menu:console"))
 
 
 class DevDangerButton(
@@ -744,7 +743,6 @@ async def _delete_all_roles(guild: discord.Guild) -> int:
 
 
 PIN_CONSOLE_BUTTON_ID = "admin:pin:button:console"
-CONSOLE_BACK_BUTTON_ID = "console:back"
 
 
 class AdminConsoleButton(
@@ -781,47 +779,22 @@ class AdminConsoleButton(
         return cls()
 
     async def callback(self, interaction: discord.Interaction) -> None:
-        """Open the console view from the /admin panel."""
+        """Open the console as a NEW ephemeral message (the navigation norm).
+
+        A view that opens another view sends a new message — it never
+        edits the one it comes from (the admin menu stays in the
+        channel; no back button to maintain).
+        """
         if _deploy_env() in PROD_ENV_NAMES or not is_test_guild(interaction.guild_id):
-            await interaction.response.edit_message(view=await _console_view(interaction.guild_id, interaction.client))
+            await interaction.response.send_message(
+                view=await _console_view(interaction.guild_id, interaction.client), ephemeral=True
+            )
             return
         if not await _guard(interaction):
             return
-        await interaction.response.edit_message(view=await _console_view(interaction.guild_id, interaction.client))
-
-
-class ConsoleBackButton(
-    discord.ui.DynamicItem[discord.ui.Button[Any]],
-    template=rf"{CONSOLE_BACK_BUTTON_ID}",
-):
-    """Return from the console view to the /admin main menu."""
-
-    def __init__(self) -> None:
-        super().__init__(
-            discord.ui.Button(
-                label="\u2190 Admin",
-                style=discord.ButtonStyle.secondary,
-                custom_id=CONSOLE_BACK_BUTTON_ID,
-            )
+        await interaction.response.send_message(
+            view=await _console_view(interaction.guild_id, interaction.client), ephemeral=True
         )
-
-    @classmethod
-    async def from_custom_id(
-        cls,
-        interaction: discord.Interaction,
-        item: discord.ui.Item[Any],
-        match: re.Match[str],
-        /,
-    ) -> ConsoleBackButton:
-        """Rebuild the item from the wire."""
-        del interaction, item, match
-        return cls()
-
-    async def callback(self, interaction: discord.Interaction) -> None:
-        """Return to the /admin main menu."""
-        from botforge.discord.admin_persistent import _handle_back
-
-        await _handle_back(interaction)
 
 
 def register_console_items(bot: discord.Client) -> None:
@@ -830,6 +803,6 @@ def register_console_items(bot: discord.Client) -> None:
     The registered actions' item classes ride along \u2014 an extension
     action registers its button once and the boot wiring follows.
     """
-    bot.add_dynamic_items(AdminConsoleButton, ConsoleBackButton, DevDangerButton)
+    bot.add_dynamic_items(AdminConsoleButton, DevDangerButton)
     for action in registered_console_actions():
         bot.add_dynamic_items(action.item_cls)
