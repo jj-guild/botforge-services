@@ -529,8 +529,8 @@ class DevDangerModal(discord.ui.Modal):
             opt_bot=await tr("danger_opt_bot", "Bot-created only"),
             opt_all=await tr("danger_opt_all", "All"),
             opt_guild=await tr("danger_opt_guild", "Guild data"),
-            opt_maps=await tr("danger_opt_maps", "Maps (global content)"),
-            opt_pools=await tr("danger_opt_pools", "Map pools (global content)"),
+            opt_maps=await tr("danger_opt_maps", "Guild maps"),
+            opt_pools=await tr("danger_opt_pools", "Guild map pools"),
             nothing=await tr("danger_nothing", "Nothing selected \u2014 nothing done."),
             done=await tr(
                 "danger_done",
@@ -627,6 +627,8 @@ class DevDangerModal(discord.ui.Modal):
             from botforge.core.models.db import get_async_database
             from botforge.core.services.game_data import MAP_POOLS_COLLECTION, MAPS_COLLECTION
 
+            # GUILD-SCOPED only: the guild's own maps/pools (owner_guild_id)
+            # — never the public catalog (is_public), never another guild's
             database = get_async_database()
             for label, collection in (("maps", MAPS_COLLECTION), ("map_pools", MAP_POOLS_COLLECTION)):
                 if (label == "maps" and self.DATA_MAPS not in data_modes) or (
@@ -634,7 +636,7 @@ class DevDangerModal(discord.ui.Modal):
                 ):
                     continue
                 try:
-                    result = await database[collection].delete_many({})
+                    result = await database[collection].delete_many({"owner_guild_id": str(guild.id)})
                     data_deleted[collection] = int(result.deleted_count)
                 except Exception:
                     logger.warning("CONSOLE data wipe failed (%s)", collection, exc_info=True)
