@@ -602,3 +602,28 @@ fr:
     decided: '## 🛡 Candidature staff **{mod}**
 
       <@{user_id}> — **{verb}** par <@{decided_by}>.'
+
+  console:
+    title: "# ⚙️ Console"
+    note_allowed: "Cette guilde est sur la liste de test — les actions ci-dessous s'appliquent **à cette guilde uniquement**."
+    note_denied: "Cette guilde n'est **pas** sur la liste de test — les actions sont désactivées (BOTFORGE_TEST_GUILD_IDS décide, défini par l'environnement)."
+    danger_btn: "⚠️ Zone de danger"
+    install_label_mods: "Mods"
+    install_label_games: "Jeux"
+    install_placeholder_mods: "Mods à installer…"
+    install_placeholder_games: "Jeux à installer…"
+    install_no_mods: "(aucun mod déclaré)"
+    install_no_games: "(aucun jeu déclaré)"
+    danger_modal_title: "⚠️ Zone de danger"
+    danger_opt_none: "Aucun"
+    danger_opt_all: "Tous"
+    danger_label_channels: "Supprimer les salons"
+    danger_label_roles: "Supprimer les rôles"
+    danger_label_data: "Supprimer les données"
+    danger_opt_bot: "Ceux créés par le bot"
+    danger_opt_guild: "Données de la guilde"
+    danger_opt_maps: "Maps de la guilde"
+    danger_opt_pools: "Map pools de la guilde"
+    danger_data_kept: "rien de supprimé"
+    danger_nothing: "Rien de sélectionné — rien de fait."
+    danger_done: "Zone de danger appliquée — salons : {channels}, rôles : {roles}, données : {data}."

@@ -38,6 +38,11 @@ views:
       sync: true
     title_emoji: 🔓
     admin_surface: true
+  menu:console:
+    kind: menu
+    scope: bot/admin
+    buttons: []
+    admin_surface: true
   panel:status:
     kind: panel
   menu:games:home:
