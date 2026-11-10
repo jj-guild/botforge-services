@@ -58,11 +58,26 @@ jobs:
         with:
           script: |
             const commenter = context.payload.comment.user.login;
+            // Alias-first (CONVENTIONS.md): name the requestor by their
+            // roster alias, never by a @login mention — an agent-driven
+            // /deploy must not ping the maintainer's GitHub account
+            // (botforge-services#358).
+            let requestor = commenter;
+            try {
+              const { data: roster } = await github.rest.repos.getContent({
+                owner: "jj-guild",
+                repo: "botforge",
+                path: "CONTRIBUTORS.md",
+              });
+              const row = Buffer.from(roster.content, "base64").toString("utf8")
+                .split("\n").find(l => l.includes(`| @${commenter} |`));
+              if (row) requestor = row.split("|")[2].trim();
+            } catch {}
             await github.rest.issues.createComment({
               owner: context.repo.owner,
               repo: context.repo.repo,
               issue_number: context.issue.number,
-              body: `**/deploy intercepted** — building the PR image and pinning it on the target environment's state branch (the push then triggers the actual deployment). Checking the roster authority matrix for **@${commenter}** (requestor roles + CLA, PR author's agent scope) — I will report the verdict right away.`,
+              body: `**/deploy intercepted** — building the PR image and pinning it on the target environment's state branch (the push then triggers the actual deployment). Checking the roster authority matrix for **${requestor}** (requestor roles + CLA, PR author's agent scope) — I will report the verdict right away.`,
             });
       - name: Authorize the requestor (roster authority matrix)
         id: authorize
@@ -169,7 +184,7 @@ jobs:
               `| Commit | [\`${{ steps.pr.outputs.sha }}\`](${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/tree/${{ steps.pr.outputs.sha }}) |`,
               `| Image | (building…) |`,
               `| Pipeline | [run \`#${{ github.run_id }}\`](${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}) |`,
-              `| Requested by | @${context.payload.comment.user.login} |`,
+              `| Requested by | ${{ needs.gate.outputs.alias }} |`,
               "",
               `_Updated automatically as the deployment progresses._`,
             ].join("\n");

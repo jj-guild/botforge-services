@@ -44,11 +44,19 @@ jobs:
         with:
           script: |
             const target = context.payload.comment.body.trim().split(/\s+/)[1] || "";
+            // Alias-first (CONVENTIONS.md): name the requestor by their
+            // roster alias, never by a @login mention — an agent-driven
+            // /help must not ping the maintainer's GitHub account
+            // (botforge-services#358). CONTRIBUTORS.md is checked out
+            // one step above.
+            const requestor = require("fs").readFileSync("CONTRIBUTORS.md", "utf8")
+              .split("\n").find(l => l.includes(`| @${context.payload.comment.user.login} |`))
+              ?.split("|")[2].trim() || context.payload.comment.user.login;
             await github.rest.issues.createComment({
               owner: context.repo.owner,
               repo: context.repo.repo,
               issue_number: context.issue.number,
-              body: `**/help intercepted** — listing the commands your roster roles grant, **@${context.payload.comment.user.login}** (CONTRIBUTORS.md authority matrix). Right away.`,
+              body: `**/help intercepted** — listing the commands your roster roles grant, **${requestor}** (CONTRIBUTORS.md authority matrix). Right away.`,
             });
 
       - name: Build the listing
@@ -121,11 +129,14 @@ jobs:
             const unknown = "${{ steps.listing.outputs.unknown-command }}";
             const notAuth = "${{ steps.listing.outputs.not-authorized }}";
             const login = context.payload.comment.user.login;
+            const requestor = require("fs").readFileSync("CONTRIBUTORS.md", "utf8")
+              .split("\n").find(l => l.includes(`| @${login} |`))
+              ?.split("|")[2].trim() || login;
             let body;
             if (unknown) {
               body = `ⓘ \`/${unknown}\` is not a platform command. Post \`/help\` for the list.`;
             } else {
-              body = `ⓘ **@${login}** — your roster roles do not grant \`/${notAuth}\` (CONTRIBUTORS.md authority matrix). Post \`/help\` for what you can use.`;
+              body = `ⓘ **${requestor}** — your roster roles do not grant \`/${notAuth}\` (CONTRIBUTORS.md authority matrix). Post \`/help\` for what you can use.`;
             }
             await github.rest.issues.createComment({
               owner: context.repo.owner,

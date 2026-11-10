@@ -69,13 +69,14 @@ jobs:
             *) echo "::error::unsupported command: $command"; exit 1 ;;
           esac
           env_name="$(echo "$body" | awk '{print $2}')"
-          # No explicit env means the requestor's personal environment
-          # (their roster alias — sandbox first; e.g. "/status test"
-          # targets the shared validation env explicitly). The alias is
-          # resolved from the roster on kingdoms main via the GitHub
-          # API, lowercased to match the env naming.
+          # The requestor's roster alias, resolved from the roster on
+          # kingdoms main via the GitHub API. It is the default target env
+          # (lowercased to match the env naming) when no explicit env is
+          # given, and the alias-first name used in ack comments — never a
+          # @login mention, which would ping the maintainer on every
+          # agent-driven command (botforge-services#358).
+          alias="$(gh api /repos/jj-guild/botforge/contents/CONTRIBUTORS.md --jq .content | base64 -d | grep -F "| @${COMMENTER} |" | head -1 | awk -F"|" "{print \$3}" | tr -d " ")"
           if [[ -z "$env_name" || "$env_name" == -* ]]; then
-            alias="$(gh api /repos/jj-guild/botforge/contents/CONTRIBUTORS.md --jq .content | base64 -d | grep -F "| @${COMMENTER} |" | head -1 | awk -F"|" "{print \$3}" | tr -d " ")"
             [[ -n "$alias" ]] || { echo "::error::requestor has no roster entry — cannot resolve the default env; pass an explicit env (e.g. /${command#/} test)" >&2; exit 1; }
             env_name="${alias,,}"
           fi
@@ -96,6 +97,7 @@ jobs:
             echo "command=${command#/}"
             echo "environment=$env_name"
             echo "capability=$capability"
+            echo "alias=${alias:-$COMMENTER}"
           } >> "$GITHUB_OUTPUT"
 
       - name: Acknowledge (what, why — before the gate, per the conventions)
@@ -105,18 +107,19 @@ jobs:
           script: |
             const cmd = "${{ steps.parse.outputs.command }}";
             const env = "${{ steps.parse.outputs.environment }}";
+            const requestor = "${{ steps.parse.outputs.alias }}";
             const body = {
-              logs: `**/${cmd} intercepted** — collecting the ${env} logs and posting them back here (read-only: no deploy, no state change). Checking the roster authority matrix for **@${context.payload.comment.user.login}** (capability \`env-logs\`) — verdict right away.`,
-              restart: `**/${cmd} intercepted** — restarting the ${env} stack in place (no pull, no recreate, no state change). Checking the roster authority matrix for **@${context.payload.comment.user.login}** (capability \`env-control\`) — verdict right away.`,
-              start: `**/${cmd} intercepted** — starting the ${env} stack in place (no pull, no recreate, no state change). Checking the roster authority matrix for **@${context.payload.comment.user.login}** (capability \`env-control\`) — verdict right away.`,
-              stop: `**/${cmd} intercepted** — stopping the ${env} stack in place (containers kept, no state change). Checking the roster authority matrix for **@${context.payload.comment.user.login}** (capability \`env-control\`) — verdict right away.`,
-              status: `**/${cmd} intercepted** — reporting the ${env} stack state back here (read-only: no deploy, no state change). Checking the roster authority matrix for **@${context.payload.comment.user.login}** (capability \`env-control\`) — verdict right away.`,
-              rollback: `**/${cmd} intercepted** — reverting the last pinned image on deploy/${env} (the push re-triggers the deployment of the previous known-good image). Checking the roster authority matrix for **@${context.payload.comment.user.login}** (capability \`rollback\`) — verdict right away.`,
-              "dump-db": `**/${cmd} intercepted** — dumping the ${env} databases (mongodump + Redis snapshot), archived on the hosting and uploaded as a private artifact. Checking the roster authority matrix for **@${context.payload.comment.user.login}** (capability \`db-dump\`) — verdict right away.`,
-              "reset-env": `**/${cmd} intercepted** — wiping the ${env} data volumes and reseeding from the workflow datasets (destructive: the env's data is lost). Checking the roster authority matrix for **@${context.payload.comment.user.login}** (capability \`env-reset\`: self env only, ops anywhere) — verdict right away.`,
-              "seed": `**/${cmd} intercepted** — seeding the ${env} data from the requested source file (idempotent: re-running is safe). Checking the roster authority matrix for **@${context.payload.comment.user.login}** (capability \`env-control\`) — verdict right away.`,
-              "clean-env": `**/${cmd} intercepted** — cleaning the ${env} runner's Docker residue (dangling images, stopped containers, build cache; never the running stack). Checking the roster authority matrix for **@${context.payload.comment.user.login}** (capability \`env-control\`) — verdict right away.`,
-              "clear-db": `**/${cmd} intercepted** — dropping the ${env}'s NAMED collections ONLY (the arguments; validated names): a surgical wipe, everything else lives. Checking the roster authority matrix for **@${context.payload.comment.user.login}** (capability \`env-control\`) — verdict right away.`,
+              logs: `**/${cmd} intercepted** — collecting the ${env} logs and posting them back here (read-only: no deploy, no state change). Checking the roster authority matrix for **${requestor}** (capability \`env-logs\`) — verdict right away.`,
+              restart: `**/${cmd} intercepted** — restarting the ${env} stack in place (no pull, no recreate, no state change). Checking the roster authority matrix for **${requestor}** (capability \`env-control\`) — verdict right away.`,
+              start: `**/${cmd} intercepted** — starting the ${env} stack in place (no pull, no recreate, no state change). Checking the roster authority matrix for **${requestor}** (capability \`env-control\`) — verdict right away.`,
+              stop: `**/${cmd} intercepted** — stopping the ${env} stack in place (containers kept, no state change). Checking the roster authority matrix for **${requestor}** (capability \`env-control\`) — verdict right away.`,
+              status: `**/${cmd} intercepted** — reporting the ${env} stack state back here (read-only: no deploy, no state change). Checking the roster authority matrix for **${requestor}** (capability \`env-control\`) — verdict right away.`,
+              rollback: `**/${cmd} intercepted** — reverting the last pinned image on deploy/${env} (the push re-triggers the deployment of the previous known-good image). Checking the roster authority matrix for **${requestor}** (capability \`rollback\`) — verdict right away.`,
+              "dump-db": `**/${cmd} intercepted** — dumping the ${env} databases (mongodump + Redis snapshot), archived on the hosting and uploaded as a private artifact. Checking the roster authority matrix for **${requestor}** (capability \`db-dump\`) — verdict right away.`,
+              "reset-env": `**/${cmd} intercepted** — wiping the ${env} data volumes and reseeding from the workflow datasets (destructive: the env's data is lost). Checking the roster authority matrix for **${requestor}** (capability \`env-reset\`: self env only, ops anywhere) — verdict right away.`,
+              "seed": `**/${cmd} intercepted** — seeding the ${env} data from the requested source file (idempotent: re-running is safe). Checking the roster authority matrix for **${requestor}** (capability \`env-control\`) — verdict right away.`,
+              "clean-env": `**/${cmd} intercepted** — cleaning the ${env} runner's Docker residue (dangling images, stopped containers, build cache; never the running stack). Checking the roster authority matrix for **${requestor}** (capability \`env-control\`) — verdict right away.`,
+              "clear-db": `**/${cmd} intercepted** — dropping the ${env}'s NAMED collections ONLY (the arguments; validated names): a surgical wipe, everything else lives. Checking the roster authority matrix for **${requestor}** (capability \`env-control\`) — verdict right away.`,
             }[cmd];
             await github.rest.issues.createComment({
               owner: context.repo.owner,
