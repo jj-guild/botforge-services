@@ -111,9 +111,30 @@ jobs:
           script: |
             const list = `${{ steps.listing.outputs.list }}`;
             const detail = `${{ steps.listing.outputs.detail }}`;
-            const body = list
+            const login = context.payload.comment.user.login;
+            const row = require("fs").readFileSync("CONTRIBUTORS.md", "utf8")
+              .split("\n").find(l => l.includes(`| @${login} |`));
+            const requestor = row?.split("|")[2].trim() || login;
+            const roles = (row?.split("|")[5] || "none").trim().replace(/\|/g, "\\|");
+            const target = context.payload.comment.body.trim().split(/\s+/)[1] || "";
+            const command = (target ? `/help ${target}` : "/help").replace(/\|/g, "\\|");
+            const ts = new Date().toISOString().slice(0, 19).replace("T", " ") + " UTC";
+            const header = [
+              "<!-- botforge-help-tracking -->",
+              `**/help intercepted** — listing the commands your roster roles grant, **${requestor}** (CONTRIBUTORS.md authority matrix).`,
+              "",
+              "| | |",
+              "| --- | --- |",
+              `| Command | \`${command}\` |`,
+              `| Requested by | ${requestor} (@${login}) |`,
+              `| Roles | ${roles} |`,
+              `| When (UTC) | ${ts} |`,
+              "| Status | ✅ answered |",
+              "",
+            ].join("\n");
+            const body = header + (list
               ? `**Commands for your roles** (details: \`/help /<cmd>\`):\n\n${list.split("\n").map(l => "- " + l).join("\n")}`
-              : detail;
+              : detail);
             await github.rest.issues.createComment({
               owner: context.repo.owner,
               repo: context.repo.repo,
@@ -129,14 +150,28 @@ jobs:
             const unknown = "${{ steps.listing.outputs.unknown-command }}";
             const notAuth = "${{ steps.listing.outputs.not-authorized }}";
             const login = context.payload.comment.user.login;
-            const requestor = require("fs").readFileSync("CONTRIBUTORS.md", "utf8")
-              .split("\n").find(l => l.includes(`| @${login} |`))
-              ?.split("|")[2].trim() || login;
+            const row = require("fs").readFileSync("CONTRIBUTORS.md", "utf8")
+              .split("\n").find(l => l.includes(`| @${login} |`));
+            const requestor = row?.split("|")[2].trim() || login;
+            const roles = (row?.split("|")[5] || "none").trim().replace(/\|/g, "\\|");
+            const target = context.payload.comment.body.trim().split(/\s+/)[1] || "";
+            const command = (target ? `/help ${target}` : "/help").replace(/\|/g, "\\|");
+            const ts = new Date().toISOString().slice(0, 19).replace("T", " ") + " UTC";
+            const header = [
+              "<!-- botforge-help-tracking -->",
+              "",
+              "| | |",
+              "| --- | --- |",
+              `| Command | \`${command}\` |`,
+              `| Requested by | ${requestor} (@${login}) |`,
+              `| Roles | ${roles} |`,
+              `| When (UTC) | ${ts} |`,
+            ].join("\n");
             let body;
             if (unknown) {
-              body = `ⓘ \`/${unknown}\` is not a platform command. Post \`/help\` for the list.`;
+              body = header + `| Status | ⓘ unknown command |\n\nⓘ \`/${unknown}\` is not a platform command. Post \`/help\` for the list.`;
             } else {
-              body = `ⓘ **${requestor}** — your roster roles do not grant \`/${notAuth}\` (CONTRIBUTORS.md authority matrix). Post \`/help\` for what you can use.`;
+              body = header + `| Status | ⛔ not authorized |\n\n⛔ **${requestor}** — your roster roles do not grant \`/${notAuth}\` (CONTRIBUTORS.md authority matrix). Post \`/help\` for what you can use.`;
             }
             await github.rest.issues.createComment({
               owner: context.repo.owner,

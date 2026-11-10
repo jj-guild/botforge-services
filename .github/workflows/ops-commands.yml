@@ -54,6 +54,7 @@ jobs:
       command: ${{ steps.parse.outputs.command }}
       environment: ${{ steps.parse.outputs.environment }}
       capability: ${{ steps.parse.outputs.capability }}
+      comment_id: ${{ steps.ack.outputs.comment_id }}
     steps:
       - name: Parse the command (untrusted input — env var, never inline)
         id: parse
@@ -100,33 +101,71 @@ jobs:
             echo "alias=${alias:-$COMMENTER}"
           } >> "$GITHUB_OUTPUT"
 
-      - name: Acknowledge (what, why — before the gate, per the conventions)
+      - name: Open the tracking comment (what, why — one table, a row per step)
         id: ack
         uses: actions/github-script@v7
+        env:
+          # Values derived from the untrusted comment body flow through the
+          # environment, never inline in the script (script-injection
+          # hardening).
+          COMMAND: ${{ steps.parse.outputs.command }}
+          ENVIRONMENT: ${{ steps.parse.outputs.environment }}
+          CAPABILITY: ${{ steps.parse.outputs.capability }}
+          ALIAS: ${{ steps.parse.outputs.alias }}
         with:
           script: |
-            const cmd = "${{ steps.parse.outputs.command }}";
-            const env = "${{ steps.parse.outputs.environment }}";
-            const requestor = "${{ steps.parse.outputs.alias }}";
-            const body = {
-              logs: `**/${cmd} intercepted** — collecting the ${env} logs and posting them back here (read-only: no deploy, no state change). Checking the roster authority matrix for **${requestor}** (capability \`env-logs\`) — verdict right away.`,
-              restart: `**/${cmd} intercepted** — restarting the ${env} stack in place (no pull, no recreate, no state change). Checking the roster authority matrix for **${requestor}** (capability \`env-control\`) — verdict right away.`,
-              start: `**/${cmd} intercepted** — starting the ${env} stack in place (no pull, no recreate, no state change). Checking the roster authority matrix for **${requestor}** (capability \`env-control\`) — verdict right away.`,
-              stop: `**/${cmd} intercepted** — stopping the ${env} stack in place (containers kept, no state change). Checking the roster authority matrix for **${requestor}** (capability \`env-control\`) — verdict right away.`,
-              status: `**/${cmd} intercepted** — reporting the ${env} stack state back here (read-only: no deploy, no state change). Checking the roster authority matrix for **${requestor}** (capability \`env-control\`) — verdict right away.`,
-              rollback: `**/${cmd} intercepted** — reverting the last pinned image on deploy/${env} (the push re-triggers the deployment of the previous known-good image). Checking the roster authority matrix for **${requestor}** (capability \`rollback\`) — verdict right away.`,
-              "dump-db": `**/${cmd} intercepted** — dumping the ${env} databases (mongodump + Redis snapshot), archived on the hosting and uploaded as a private artifact. Checking the roster authority matrix for **${requestor}** (capability \`db-dump\`) — verdict right away.`,
-              "reset-env": `**/${cmd} intercepted** — wiping the ${env} data volumes and reseeding from the workflow datasets (destructive: the env's data is lost). Checking the roster authority matrix for **${requestor}** (capability \`env-reset\`: self env only, ops anywhere) — verdict right away.`,
-              "seed": `**/${cmd} intercepted** — seeding the ${env} data from the requested source file (idempotent: re-running is safe). Checking the roster authority matrix for **${requestor}** (capability \`env-control\`) — verdict right away.`,
-              "clean-env": `**/${cmd} intercepted** — cleaning the ${env} runner's Docker residue (dangling images, stopped containers, build cache; never the running stack). Checking the roster authority matrix for **${requestor}** (capability \`env-control\`) — verdict right away.`,
-              "clear-db": `**/${cmd} intercepted** — dropping the ${env}'s NAMED collections ONLY (the arguments; validated names): a surgical wipe, everything else lives. Checking the roster authority matrix for **${requestor}** (capability \`env-control\`) — verdict right away.`,
-            }[cmd];
-            await github.rest.issues.createComment({
+            const cmd = process.env.COMMAND || "";
+            const env = process.env.ENVIRONMENT || "";
+            const capability = process.env.CAPABILITY || "";
+            const requestor = process.env.ALIAS || context.payload.comment.user.login;
+            const commenter = context.payload.comment.user.login;
+            const esc = s => s.replace(/\|/g, "\\|");
+            const ts = new Date().toISOString().slice(0, 19).replace("T", " ") + " UTC";
+            const why = {
+              logs: `collecting the ${env} logs and posting them back here (read-only: no deploy, no state change)`,
+              restart: `restarting the ${env} stack in place (no pull, no recreate, no state change)`,
+              start: `starting the ${env} stack in place (no pull, no recreate, no state change)`,
+              stop: `stopping the ${env} stack in place (containers kept, no state change)`,
+              status: `reporting the ${env} stack state back here (read-only: no deploy, no state change)`,
+              rollback: `reverting the last pinned image on deploy/${env} (the push re-triggers the deployment of the previous known-good image)`,
+              "dump-db": `dumping the ${env} databases (mongodump + Redis snapshot), archived on the hosting and uploaded as a private artifact`,
+              "reset-env": `wiping the ${env} data volumes and reseeding from the workflow datasets (destructive: the env's data is lost; self env only, ops anywhere)`,
+              seed: `seeding the ${env} data from the requested source file (idempotent: re-running is safe)`,
+              "clean-env": `cleaning the ${env} runner's Docker residue (dangling images, stopped containers, build cache; never the running stack)`,
+              "clear-db": `dropping the ${env}'s NAMED collections ONLY (the arguments; validated names): a surgical wipe, everything else lives`,
+            }[cmd] || `running on ${env}`;
+            const body = [
+              "<!-- botforge-ops-tracking -->",
+              `**/${cmd} intercepted** — ${why}. Checking the roster authority matrix for **${requestor}** (capability \`${capability}\`) — verdict right away.`,
+              "",
+              "**Status:** ⏳ pending gate",
+              "",
+              "| | |",
+              "| --- | --- |",
+              `| Command | \`/${cmd} ${esc(env)}\` |`,
+              `| Environment | \`${esc(env)}\` |`,
+              `| Requested by | ${requestor} (@${commenter}) |`,
+              "| Rights | (pending gate) |",
+              "| Authorized | ⏳ pending gate |",
+              `| Started | ${ts} |`,
+              "| Finished | — |",
+              "",
+              "### Steps",
+              "",
+              "| When (UTC) | Step | Status | Details |",
+              "| --- | --- | --- | --- |",
+              `| ${ts} | command received | ⏳ | \`/${cmd} ${esc(env)}\` by ${requestor} (@${commenter}) |`,
+              "<!-- botforge-steps-end -->",
+              "",
+              "_Updated automatically as the command runs — one row per step._",
+            ].join("\n");
+            const { data: comment } = await github.rest.issues.createComment({
               owner: context.repo.owner,
               repo: context.repo.repo,
               issue_number: context.issue.number,
               body,
             });
+            core.setOutput("comment_id", comment.id);
 
 
   # A reusable workflow can only be called at the job level (a job with
@@ -141,6 +180,43 @@ jobs:
       environment: ${{ needs.authorize.outputs.environment }}
       requestor: ${{ github.event.comment.user.login }}
       pr-number: ${{ github.event.issue.number }}
+
+  deny:
+    name: Record the gate denial in the tracking comment
+    needs: [authorize, gate]
+    if: needs.authorize.result == 'success' && needs.gate.result == 'failure'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Update the tracking comment — denied
+        uses: actions/github-script@v7
+        env:
+          VERDICT: ${{ needs.gate.outputs.verdict }}
+          REASON: ${{ needs.gate.outputs.reason }}
+          CAPABILITY: ${{ needs.authorize.outputs.capability }}
+        with:
+          script: |
+            const ts = new Date().toISOString().slice(0, 19).replace("T", " ") + " UTC";
+            const verdict = process.env.VERDICT || "DENIED";
+            const reason = (process.env.REASON || "").replace(/\|/g, "\\|");
+            const capability = process.env.CAPABILITY || "";
+            const { data: c } = await github.rest.issues.getComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              comment_id: ${{ needs.authorize.outputs.comment_id }},
+            });
+            const body = c.body
+              .replace(/\*\*Status:\*\* [^\n]*/, "**Status:** ⛔ denied")
+              .replace("| Authorized | ⏳ pending gate |", `| Authorized | ⛔ ${verdict}${reason ? " — " + reason : ""} |`)
+              .replace("| Rights | (pending gate) |", `| Rights | capability \`${capability}\` — denied by the authority matrix |`)
+              .replace("| Finished | — |", `| Finished | ${ts} |`)
+              .replace("<!-- botforge-steps-end -->",
+                `| ${ts} | gate | ⛔ | ${verdict}${reason ? " — " + reason : ""} — no dispatch ran |\n<!-- botforge-steps-end -->`);
+            await github.rest.issues.updateComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              comment_id: c.id,
+              body,
+            });
 
   execute:
     name: Dispatch to botforge-infra
@@ -305,6 +381,47 @@ jobs:
             *)             WF="" ;;
           esac
           echo "workflow=${WF}" >> "$GITHUB_OUTPUT"
+
+      - name: Update the tracking comment — authorized and dispatched
+        uses: actions/github-script@v7
+        env:
+          COMMAND: ${{ needs.authorize.outputs.command }}
+          ENVIRONMENT: ${{ needs.authorize.outputs.environment }}
+          CAPABILITY: ${{ needs.authorize.outputs.capability }}
+          WORKFLOW: ${{ steps.route.outputs.workflow }}
+          VERDICT: ${{ needs.gate.outputs.verdict }}
+          REASON: ${{ needs.gate.outputs.reason }}
+        with:
+          script: |
+            const ts = new Date().toISOString().slice(0, 19).replace("T", " ") + " UTC";
+            const cmd = process.env.COMMAND || "";
+            const env = process.env.ENVIRONMENT || "";
+            const capability = process.env.CAPABILITY || "";
+            const wf = process.env.WORKFLOW || "";
+            const verdict = process.env.VERDICT || "ALLOWED";
+            const reason = (process.env.REASON || "").replace(/\|/g, "\\|");
+            const roles = ((reason.match(/\(([^)]+)\)/) || [])[1] || "").replace(/\|/g, "\\|");
+            const icon = verdict === "ALLOWED" ? "✅" : "⛔";
+            const { data: c } = await github.rest.issues.getComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              comment_id: ${{ needs.authorize.outputs.comment_id }},
+            });
+            const gateRow = `| ${ts} | gate | ${icon} | ${verdict}${reason ? " — " + reason : ""} |`;
+            const dispatchRow = `| ${ts} | dispatched | ⏳ | /${cmd} on ${env} — ${wf ? `dispatched ${wf} on deploy/${env}` : `dispatched on deploy/${env}`} |`;
+            const body = c.body
+              .replace(/\*\*Status:\*\* [^\n]*/, "**Status:** ⏳ running")
+              .replace("| Rights | (pending gate) |", `| Rights | ${roles || "see verdict"} (capability \`${capability}\`) |`)
+              .replace("| Authorized | ⏳ pending gate |", `| Authorized | ${icon} ${verdict}${reason ? " — " + reason : ""} |`)
+              .replace("<!-- botforge-steps-end -->",
+                `${gateRow}\n${dispatchRow}\n<!-- botforge-steps-end -->`);
+            await github.rest.issues.updateComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              comment_id: c.id,
+              body,
+            });
+
   report:
     name: Report the result back on the PR
     needs: [authorize, gate, execute]
@@ -381,36 +498,49 @@ jobs:
               } >> "$GITHUB_OUTPUT"
             fi
           fi
-      - name: Post the result on the PR
+      - name: Update the tracking comment — result
+        uses: actions/github-script@v7
         env:
-          GH_TOKEN: ${{ github.token }}
           COMMAND: ${{ needs.authorize.outputs.command }}
           ENVIRONMENT: ${{ needs.authorize.outputs.environment }}
           ALIAS: ${{ needs.gate.outputs.alias }}
           RUN_URL: ${{ steps.wait.outputs.run_url }}
           CONCLUSION: ${{ steps.wait.outputs.conclusion }}
           EXCERPT: ${{ steps.payload.outputs.excerpt }}
-          THREAD: ${{ github.event.issue.number }}
-        run: |
-          icon="✅"; [[ "$CONCLUSION" == "success" ]] || icon="❌"
-          if [[ "$CONCLUSION" == "not_found" ]]; then
-            {
-              echo "⚠️ /$COMMAND on $ENVIRONMENT — dispatched but the run could not be located."
-              echo "Check botforge-infra actions for workflow $RUN_URL."
-            } > /tmp/report.md
-          else
-            {
-              echo "$icon **/$COMMAND on $ENVIRONMENT** — $CONCLUSION."
-              echo "Full run: $RUN_URL"
-              if [[ "$COMMAND" == "logs" && -n "$EXCERPT" ]]; then
-                echo ""
-                echo "Last lines (full dump in the run's private artifact):"
-                printf '%s\n' "$EXCERPT"
-              fi
-            } > /tmp/report.md
-          fi
-          if gh pr view "$THREAD" --repo jj-guild/botforge-services >/dev/null 2>&1; then
-            gh pr comment "$THREAD" --repo jj-guild/botforge-services --body-file /tmp/report.md
-          else
-            gh issue comment "$THREAD" --repo jj-guild/botforge-services --body-file /tmp/report.md
-          fi
+        with:
+          script: |
+            const ts = new Date().toISOString().slice(0, 19).replace("T", " ") + " UTC";
+            const cmd = process.env.COMMAND || "";
+            const env = process.env.ENVIRONMENT || "";
+            const runUrl = process.env.RUN_URL || "";
+            const conclusion = process.env.CONCLUSION || "";
+            const excerpt = process.env.EXCERPT || "";
+            const icon = conclusion === "success" ? "✅" : "❌";
+            const { data: c } = await github.rest.issues.getComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              comment_id: ${{ needs.authorize.outputs.comment_id }},
+            });
+            let body;
+            if (conclusion === "not_found") {
+              body = c.body
+                .replace(/\*\*Status:\*\* [^\n]*/, "**Status:** ⚠️ run not found")
+                .replace("| Finished | — |", `| Finished | ${ts} |`)
+                .replace("<!-- botforge-steps-end -->",
+                  `| ${ts} | result | ⚠️ | /${cmd} on ${env} — dispatched but the run could not be located; check botforge-infra actions |\n<!-- botforge-steps-end -->`);
+            } else {
+              body = c.body
+                .replace(/\*\*Status:\*\* [^\n]*/, `**Status:** ${icon} ${conclusion}`)
+                .replace("| Finished | — |", `| Finished | ${ts} |`)
+                .replace("<!-- botforge-steps-end -->",
+                  `| ${ts} | result | ${icon} | **/${cmd} on ${env}** — ${conclusion} — [run](${runUrl}) |\n<!-- botforge-steps-end -->`);
+              if (cmd === "logs" && excerpt) {
+                body += `\n\nLast lines (full dump in the run's private artifact):\n${excerpt}`;
+              }
+            }
+            await github.rest.issues.updateComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              comment_id: c.id,
+              body,
+            });

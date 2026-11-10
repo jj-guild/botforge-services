@@ -51,6 +51,9 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       pr_author: ${{ steps.authorize.outputs.pr_author }}
+      comment_id: ${{ steps.tracking.outputs.comment_id }}
+      comment_url: ${{ steps.tracking.outputs.comment_url }}
+      alias: ${{ steps.tracking.outputs.alias }}
     steps:
       - name: Acknowledge the command (who, what, why)
         id: intercepted
@@ -73,12 +76,71 @@ jobs:
                 .split("\n").find(l => l.includes(`| @${commenter} |`));
               if (row) requestor = row.split("|")[2].trim();
             } catch {}
+            core.setOutput("alias", requestor);
             await github.rest.issues.createComment({
               owner: context.repo.owner,
               repo: context.repo.repo,
               issue_number: context.issue.number,
               body: `**/deploy intercepted** — building the PR image and pinning it on the target environment's state branch (the push then triggers the actual deployment). Checking the roster authority matrix for **${requestor}** (requestor roles + CLA, PR author's agent scope) — I will report the verdict right away.`,
             });
+      - name: Open the deployment tracking comment (one table, a row per step)
+        id: tracking
+        uses: actions/github-script@v7
+        env:
+          # The comment body is untrusted input: it flows through an
+          # environment variable, never through inline ${{ }} interpolation
+          # (script-injection hardening).
+          COMMENT_BODY: ${{ github.event.comment.body }}
+          ALIAS: ${{ steps.intercepted.outputs.alias }}
+        with:
+          script: |
+            const commenter = context.payload.comment.user.login;
+            const alias = process.env.ALIAS || commenter;
+            const command = process.env.COMMENT_BODY.trim();
+            const arg = command.split(/\s+/)[1] || "";
+            const envName = (arg && !arg.startsWith("-")) ? arg : alias.toLowerCase();
+            const esc = s => s.replace(/\|/g, "\\|");
+            const ts = new Date().toISOString().slice(0, 19).replace("T", " ") + " UTC";
+            const body = [
+              "<!-- botforge-deploy-tracking -->",
+              `## 🚀 Deployment — ${esc(envName)}`,
+              "",
+              `**${esc(command)}** intercepted — building the PR image and pinning it on the target environment's state branch (the push then triggers the actual deployment). Checking the roster authority matrix for **${alias}** (requestor roles + CLA, PR author's agent scope).`,
+              "",
+              "**Status:** ⏳ pending gate",
+              "",
+              "| | |",
+              "| --- | --- |",
+              `| Command | \`${esc(command)}\` |`,
+              `| Environment | \`${esc(envName)}\` |`,
+              `| Requested by | ${alias} (@${commenter}) |`,
+              "| Rights | (pending gate) |",
+              "| Authorized | ⏳ pending gate |",
+              `| Started | ${ts} |`,
+              "| Finished | — |",
+              "| Commit | (pending…) |",
+              "| Image | (pending…) |",
+              `| Pipeline | [run \`#${github.run_id}\`](${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}) |`,
+              "",
+              "### Steps",
+              "",
+              "| When (UTC) | Step | Status | Details |",
+              "| --- | --- | --- | --- |",
+              `| ${ts} | command received | ⏳ | \`${esc(command)}\` by ${alias} (@${commenter}) |`,
+              "<!-- botforge-steps-end -->",
+              "",
+              "_Updated automatically as the deployment progresses — one row per step._",
+            ].join("\n");
+            const { data: comment } = await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body,
+            });
+            core.setOutput("comment_id", comment.id);
+            core.setOutput("comment_url", comment.html_url);
+            core.setOutput("alias", alias);
+
       - name: Authorize the requestor (roster authority matrix)
         id: authorize
         uses: actions/github-script@v7
@@ -166,44 +228,50 @@ jobs:
         id: stamp
         run: echo "timestamp=$(date -u +%Y%m%d%H%M%S)" >> "$GITHUB_OUTPUT"
 
-      - name: Open the deployment tracking comment
-        id: acknowledge
+      - name: Record the gate verdict in the tracking comment
+        id: gate-record
         uses: actions/github-script@v7
+        env:
+          # The gate verdict/reason flow through the environment, never
+          # inline in the script (script-injection hardening).
+          VERDICT: ${{ needs.gate.outputs.verdict }}
+          REASON: ${{ needs.gate.outputs.reason }}
         with:
           script: |
-            const envName = "${{ steps.env.outputs.name }}";
-            const body = [
-              "<!-- botforge-deploy-tracking -->",
-              `## 🚀 Deployment — ${envName}`,
-              "",
-              `**Status:** 🟡 building`,
-              "",
-              "| | |",
-              "| --- | --- |",
-              `| Environment | \`${envName}\` |`,
-              `| Commit | [\`${{ steps.pr.outputs.sha }}\`](${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/tree/${{ steps.pr.outputs.sha }}) |`,
-              `| Image | (building…) |`,
-              `| Pipeline | [run \`#${{ github.run_id }}\`](${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}) |`,
-              `| Requested by | ${{ needs.gate.outputs.alias }} |`,
-              "",
-              `_Updated automatically as the deployment progresses._`,
-            ].join("\n");
-            const { data: comment } = await github.rest.issues.createComment({
+            const ts = new Date().toISOString().slice(0, 19).replace("T", " ") + " UTC";
+            const sha = "${{ steps.pr.outputs.sha }}";
+            const verdict = process.env.VERDICT || "ALLOWED";
+            const reason = (process.env.REASON || "").replace(/\|/g, "\\|");
+            const roles = ((reason.match(/\(([^)]+)\)/) || [])[1] || "").replace(/\|/g, "\\|");
+            const icon = verdict === "ALLOWED" ? "✅" : "⛔";
+            const { data: c } = await github.rest.issues.getComment({
               owner: context.repo.owner,
               repo: context.repo.repo,
-              issue_number: context.issue.number,
+              comment_id: ${{ needs.intercept.outputs.comment_id }},
+            });
+            let body = c.body
+              .replace(/\*\*Status:\*\* [^\n]*/, "**Status:** 🟡 building")
+              .replace("| Rights | (pending gate) |", `| Rights | ${roles || "see verdict"} (capability \`deploy\`) |`)
+              .replace("| Authorized | ⏳ pending gate |", `| Authorized | ${icon} ${verdict}${reason ? " — " + reason : ""} |`)
+              .replace("| Commit | (pending…) |", `| Commit | [\`${sha}\`](${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/tree/${sha}) |`)
+              .replace("<!-- botforge-steps-end -->",
+                `| ${ts} | gate | ${icon} | ${verdict}${reason ? " — " + reason : ""} |\n<!-- botforge-steps-end -->`);
+            await github.rest.issues.updateComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              comment_id: c.id,
               body,
             });
-            core.setOutput("id", comment.id);
-            core.setOutput("permalink", comment.html_url);
+
 
       - name: Mark the previous deployment as superseded
         uses: actions/github-script@v7
         with:
           script: |
-            // A new /deploy-test supersedes any previous deployment comment
-            // of this PR: mark it as rolled back (replaced), keep it for
-            // the audit trail.
+            // A new /deploy supersedes any previous deployment comment
+            // of this PR: mark it as superseded, keep it for the audit
+            // trail. Terminal states (failed, denied, already superseded)
+            // are left as they are.
             const marker = "<!-- botforge-deploy-tracking -->";
             const { data: comments } = await github.rest.issues.listComments({
               owner: context.repo.owner,
@@ -212,16 +280,17 @@ jobs:
               per_page: 100,
             });
             for (const c of comments) {
-              if (c.id === ${{ steps.acknowledge.outputs.id }}) continue;
+              if (c.id === ${{ needs.intercept.outputs.comment_id }}) continue;
               if (c.body.includes(marker)) {
-                await github.rest.issues.updateComment({
-                  owner: context.repo.owner,
-                  repo: context.repo.repo,
-                  comment_id: c.id,
-                  body: c.body.replace("**Status:** 🟡 building", "**Status:** 🔵 deploying")
-                                    .replace("**Status:** 🟢 deployed", "**Status:** ⚪ superseded")
-                                    .replace("**Status:** 🔵 deploying", "**Status:** ⚪ superseded"),
-                });
+                const m = c.body.match(/\*\*Status:\*\* ([^\n]*)/);
+                if (m && !/❌|⛔|⚪/.test(m[1])) {
+                  await github.rest.issues.updateComment({
+                    owner: context.repo.owner,
+                    repo: context.repo.repo,
+                    comment_id: c.id,
+                    body: c.body.replace(/\*\*Status:\*\* [^\n]*/, "**Status:** ⚪ superseded"),
+                  });
+                }
               }
             }
 
@@ -260,6 +329,29 @@ jobs:
           # scope is the comment, not the PR branch, and cache
           # reservation fails. Pull-side caching only.
           cache-from: type=gha
+
+      - name: Update the tracking comment — image pushed
+        if: success()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const ts = new Date().toISOString().slice(0, 19).replace("T", " ") + " UTC";
+            const tag = "${{ steps.label.outputs.tag }}";
+            const { data: c } = await github.rest.issues.getComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              comment_id: ${{ needs.intercept.outputs.comment_id }},
+            });
+            const body = c.body
+              .replace("| Image | (pending…) |", `| Image | [\`${tag}\`](https://github.com/jj-guild/botforge-services/pkgs/container/botforge-services) |`)
+              .replace("<!-- botforge-steps-end -->",
+                `| ${ts} | image pushed | ✅ | \`${tag}\` pushed to GHCR |\n<!-- botforge-steps-end -->`);
+            await github.rest.issues.updateComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              comment_id: c.id,
+              body,
+            });
 
 
       - name: Mint an ephemeral GitHub App token for botforge-infra
@@ -311,7 +403,7 @@ jobs:
                 // the deployment comment that triggered it (the tracking
                 // comment keeps the human trace: requester, pipeline,
                 // image, deploy run).
-                deploy_url: "${{ steps.acknowledge.outputs.permalink }}",
+                deploy_url: "${{ needs.intercept.outputs.comment_url }}",
                 deploy_kind: "pr",
                 deploy_ref: String(pr),
                 deploy_tree_url: `https://github.com/jj-guild/botforge-services/tree/${sha}`,
@@ -329,21 +421,25 @@ jobs:
       - name: Update the tracking comment — deploying
         if: success()
         uses: actions/github-script@v7
+        env:
+          ENV_NAME: ${{ steps.env.outputs.name }}
         with:
           script: |
-            const { data: comment } = await github.rest.issues.getComment({
+            const ts = new Date().toISOString().slice(0, 19).replace("T", " ") + " UTC";
+            const envName = process.env.ENV_NAME || "";
+            const { data: c } = await github.rest.issues.getComment({
               owner: context.repo.owner,
               repo: context.repo.repo,
-              comment_id: ${{ steps.acknowledge.outputs.id }},
+              comment_id: ${{ needs.intercept.outputs.comment_id }},
             });
-            const shortImage = "${{ steps.label.outputs.tag }}";
-            const body = comment.body
-              .replace("**Status:** 🟡 building", "**Status:** 🔵 deploying")
-              .replace("| Image | (building…) |", `| Image | [\`${shortImage}\`](https://github.com/jj-guild/botforge-services/pkgs/container/botforge-services) |`);
+            const body = c.body
+              .replace(/\*\*Status:\*\* [^\n]*/, "**Status:** 🔵 deploying")
+              .replace("<!-- botforge-steps-end -->",
+                `| ${ts} | pin dispatched | 🔵 | pin-state → deploy/${envName} — waiting for the infra deploy run |\n<!-- botforge-steps-end -->`);
             await github.rest.issues.updateComment({
               owner: context.repo.owner,
               repo: context.repo.repo,
-              comment_id: comment.id,
+              comment_id: c.id,
               body,
             });
 
@@ -373,22 +469,29 @@ jobs:
       - name: Update the tracking comment — deployed
         if: success()
         uses: actions/github-script@v7
+        env:
+          RUN_URL: ${{ steps.watch-infra.outputs.run_url }}
+          OK: ${{ steps.watch-infra.outputs.ok }}
         with:
           script: |
-            const { data: comment } = await github.rest.issues.getComment({
+            const ts = new Date().toISOString().slice(0, 19).replace("T", " ") + " UTC";
+            const ok = (process.env.OK || "") === "true";
+            const runUrl = process.env.RUN_URL || "";
+            const icon = ok ? "🟢" : "❌";
+            const { data: c } = await github.rest.issues.getComment({
               owner: context.repo.owner,
               repo: context.repo.repo,
-              comment_id: ${{ steps.acknowledge.outputs.id }},
+              comment_id: ${{ needs.intercept.outputs.comment_id }},
             });
-            const ok = "${{ steps.watch-infra.outputs.ok }}" === "true";
-            const body = comment.body.replace(
-              /\*\*Status:\*\* [^\n]*/,
-              `**Status:** ${ok ? "🟢 deployed" : "❌ failed"} — [infra deploy run](${{ steps.watch-infra.outputs.run_url }})`,
-            );
+            const body = c.body
+              .replace(/\*\*Status:\*\* [^\n]*/, `**Status:** ${ok ? "🟢 deployed" : "❌ failed"} — [infra deploy run](${runUrl})`)
+              .replace("| Finished | — |", `| Finished | ${ts} |`)
+              .replace("<!-- botforge-steps-end -->",
+                `| ${ts} | infra deploy | ${icon} | ${ok ? "deployed" : "failed"} — [run](${runUrl}) |\n<!-- botforge-steps-end -->`);
             await github.rest.issues.updateComment({
               owner: context.repo.owner,
               repo: context.repo.repo,
-              comment_id: comment.id,
+              comment_id: c.id,
               body,
             });
 
@@ -397,18 +500,56 @@ jobs:
         uses: actions/github-script@v7
         with:
           script: |
-            const { data: comment } = await github.rest.issues.getComment({
+            const ts = new Date().toISOString().slice(0, 19).replace("T", " ") + " UTC";
+            const { data: c } = await github.rest.issues.getComment({
               owner: context.repo.owner,
               repo: context.repo.repo,
-              comment_id: ${{ steps.acknowledge.outputs.id }},
+              comment_id: ${{ needs.intercept.outputs.comment_id }},
             });
-            const body = comment.body.replace(
-              /\*\*Status:\*\* [^\n]*/,
-              `**Status:** ❌ failed — see the [pipeline run](${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId})`,
-            );
+            const runUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+            const body = c.body
+              .replace(/\*\*Status:\*\* [^\n]*/, `**Status:** ❌ failed — see the [pipeline run](${runUrl})`)
+              .replace("| Finished | — |", `| Finished | ${ts} |`)
+              .replace("<!-- botforge-steps-end -->",
+                `| ${ts} | workflow | ❌ | failed — see the [pipeline run](${runUrl}) |\n<!-- botforge-steps-end -->`);
             await github.rest.issues.updateComment({
               owner: context.repo.owner,
               repo: context.repo.repo,
-              comment_id: comment.id,
+              comment_id: c.id,
+              body,
+            });
+
+  deny:
+    name: Record the gate denial in the tracking comment
+    needs: [intercept, gate]
+    if: needs.intercept.result == 'success' && needs.gate.result == 'failure'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Update the tracking comment — denied
+        uses: actions/github-script@v7
+        env:
+          VERDICT: ${{ needs.gate.outputs.verdict }}
+          REASON: ${{ needs.gate.outputs.reason }}
+        with:
+          script: |
+            const ts = new Date().toISOString().slice(0, 19).replace("T", " ") + " UTC";
+            const verdict = process.env.VERDICT || "DENIED";
+            const reason = (process.env.REASON || "").replace(/\|/g, "\\|");
+            const { data: c } = await github.rest.issues.getComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              comment_id: ${{ needs.intercept.outputs.comment_id }},
+            });
+            const body = c.body
+              .replace(/\*\*Status:\*\* [^\n]*/, "**Status:** ⛔ denied")
+              .replace("| Authorized | ⏳ pending gate |", `| Authorized | ⛔ ${verdict}${reason ? " — " + reason : ""} |`)
+              .replace("| Rights | (pending gate) |", "| Rights | denied by the authority matrix — see the verdict |")
+              .replace("| Finished | — |", `| Finished | ${ts} |`)
+              .replace("<!-- botforge-steps-end -->",
+                `| ${ts} | gate | ⛔ | ${verdict}${reason ? " — " + reason : ""} — no deploy ran |\n<!-- botforge-steps-end -->`);
+            await github.rest.issues.updateComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              comment_id: c.id,
               body,
             });

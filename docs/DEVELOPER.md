@@ -174,8 +174,11 @@ never on an environment hosting.
   builds the PR head, pushes the image `pr-<id>-<timestamp>-<sha7>` to
   GHCR, pins it on the botforge-infra state branch `deploy/<env>` and
   deploys it on that environment's runner; the tracking comment on the PR
-  follows the deployment. Only collaborators with write access; fork PRs
-  rejected. Details in the [README](../README.md).
+  follows the deployment — one table holding the command, the env, the
+  requestor (alias + login) with their roster rights, the gate verdict
+  (allowed or denied), the start/end times, the commit, image and pipeline,
+  plus one row appended per step in a Steps table. Only collaborators with
+  write access; fork PRs rejected. Details in the [README](../README.md).
 - **Production**: released `vX.Y.Z` images only, pinned on `deploy/prod`
   by the release pipeline — see the README "Releasing and deploying to
   production" section.
