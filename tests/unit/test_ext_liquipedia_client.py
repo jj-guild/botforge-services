@@ -369,7 +369,11 @@ def test_429_honors_retry_after_then_retries(monkeypatch: pytest.MonkeyPatch) ->
     def handler(request: httpx.Request) -> httpx.Response:
         attempts.append(1)
         if len(attempts) == 1:
-            return httpx.Response(429, headers={"Retry-After": "1"})
+            return httpx.Response(
+                429,
+                headers={"Retry-After": "1"},
+                request=httpx.Request("GET", "https://liquipedia.net/api.php"),
+            )
         return httpx.Response(
             200, text=json.dumps({"parse": {"wikitext": "{{Infobox map\n|name=X\n}}"}})
         )
@@ -522,6 +526,84 @@ def test_liquipedia_circuit_opens_after_exhausted_429s() -> None:
         with pytest.raises(httpx.HTTPStatusError):
             provider._get_json({"action": "query"})
         assert lp.LiquipediaCircuitOpenError.retry_in_s() > first_window
+    finally:
+        lp._shared_circuit_open_until = 0.0
+        lp._shared_circuit_streak = 0
+
+
+def test_429_long_retry_after_opens_the_circuit_immediately() -> None:
+    """A Retry-After as long as the circuit window is the server
+    scheduling our silence (issue botforge-services#382): the circuit
+    opens on the FIRST 429 — zero retries, zero further traffic, for
+    at least as long as the server asked.
+    """
+
+    from botforge.ext_liquipedia import liquipedia as lp
+
+    class _Client:
+        headers: ClassVar[dict] = {}
+
+        def __init__(self) -> None:
+            self.calls = 0
+
+        def get(self, url: str, params: dict | None = None) -> Any:
+            self.calls += 1
+            return httpx.Response(
+                429,
+                headers={"Retry-After": "3600"},
+                request=httpx.Request("GET", "https://liquipedia.net/api.php"),
+            )
+
+    provider = lp.LiquipediaMapsProvider(user_agent="test <t@example>")
+    provider._client = _Client()  # type: ignore[attr-defined]
+    provider._sleep = lambda s: None  # type: ignore[method-assign]
+    lp._shared_circuit_open_until = 0.0
+    lp._shared_circuit_streak = 0
+    try:
+        with pytest.raises(httpx.HTTPStatusError):
+            provider._get_json({"action": "query"})
+        assert provider._client.calls == 1, "a long Retry-After means NO retry"
+        assert lp.LiquipediaCircuitOpenError.retry_in_s() >= 3590, (
+            "the circuit window honours the server's Retry-After"
+        )
+    finally:
+        lp._shared_circuit_open_until = 0.0
+        lp._shared_circuit_streak = 0
+
+
+def test_429_retries_at_most_once_before_the_circuit() -> None:
+    """Anti-spam (issue botforge-services#382): a throttling API gets at
+    most ONE retry per call — the old 3-retry loop (30/60/120 s) burned
+    up to 4 requests per call and every call of a batch replayed the
+    storm. Two 429s in a row open the circuit after exactly 2 requests.
+    """
+
+    from botforge.ext_liquipedia import liquipedia as lp
+
+    class _Client:
+        headers: ClassVar[dict] = {}
+
+        def __init__(self) -> None:
+            self.calls = 0
+
+        def get(self, url: str, params: dict | None = None) -> Any:
+            self.calls += 1
+            return httpx.Response(
+                429,
+                headers={"Retry-After": "1"},
+                request=httpx.Request("GET", "https://liquipedia.net/api.php"),
+            )
+
+    provider = lp.LiquipediaMapsProvider(user_agent="test <t@example>")
+    provider._client = _Client()  # type: ignore[attr-defined]
+    provider._sleep = lambda s: None  # type: ignore[method-assign]
+    lp._shared_circuit_open_until = 0.0
+    lp._shared_circuit_streak = 0
+    try:
+        with pytest.raises(httpx.HTTPStatusError):
+            provider._get_json({"action": "query"})
+        assert provider._client.calls == 2, "exactly one retry, then the circuit"
+        assert lp.LiquipediaCircuitOpenError.retry_in_s() > 0
     finally:
         lp._shared_circuit_open_until = 0.0
         lp._shared_circuit_streak = 0

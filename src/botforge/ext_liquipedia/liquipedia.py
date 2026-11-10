@@ -38,7 +38,15 @@ LIQUIPEDIA_ATTRIBUTION = "https://liquipedia.net/ageofempires/"
 _MIN_REQUEST_INTERVAL_S = 2.0
 _PARSE_INTERVAL_S = 60.0
 _429_BACKOFF_BASE_S = 30.0
-_429_MAX_RETRIES = 3
+# Anti-spam (issue botforge-services#382): a 429 is the server saying
+# "stop for a while" — the old 3-retry loop (30/60/120 s) answered a
+# throttling API with up to 4 requests PER CALL, and every call of a
+# batch replayed the same storm. Now: at most ONE retry (a transient
+# blip), and a Retry-After that already says "wait >= the circuit
+# window" opens the circuit IMMEDIATELY — zero further traffic, for
+# exactly as long as the server asked.
+_429_MAX_RETRIES = 1
+_429_RETRY_AFTER_CIRCUIT_S = 30 * 60.0
 
 # The circuit breaker (the branch's subject: STOP taking 429s): after
 # the 429 retries are exhausted the API is telling us, loudly, that
@@ -262,6 +270,31 @@ class LiquipediaMapsProvider:
             else:
                 _shared_last_request_at = marker
 
+    def _open_circuit(self, retry_after: float) -> None:
+        """Open the shared circuit; every further call fails fast.
+
+        The window honours the server's own Retry-After when it is
+        longer than the streak-doubled base (the server scheduled the
+        silence; we keep it, no shorter).
+        """
+        global _shared_circuit_open_until, _shared_circuit_streak
+        _shared_circuit_streak += 1
+        window = max(
+            retry_after,
+            min(
+                _CIRCUIT_WINDOW_BASE_S * (2 ** (_shared_circuit_streak - 1)),
+                _CIRCUIT_WINDOW_MAX_S,
+            ),
+        )
+        _shared_circuit_open_until = time.monotonic() + window
+        logger.warning(
+            "LIQUIPEDIA 429 — CIRCUIT OPEN for %.0f min (streak %d, "
+            "Retry-After %.0f s): every call fails fast until then",
+            window / 60.0,
+            _shared_circuit_streak,
+            retry_after,
+        )
+
     def _get_json(self, params: dict[str, str], is_parse: bool = False) -> dict[str, Any]:
         global _shared_circuit_open_until, _shared_circuit_streak
         if LiquipediaCircuitOpenError.retry_in_s() > 0:
@@ -273,19 +306,26 @@ class LiquipediaMapsProvider:
             )
         self._rate_limit(is_parse=is_parse)
         response = self._client.get(self._api_url, params=params)
-        for attempt in range(_429_MAX_RETRIES):
-            if response.status_code != 429:
-                break
+        attempt = 0
+        while response.status_code == 429:
             # The server-side quota was hit anyway (an earlier burst, a
-            # shared IP): honour its Retry-After, at least the
-            # exponential backoff, and retry \u2014 a 429 is "later",
-            # not "no such page". The shared clock inflates by the same
-            # wait so the NEXT map paces behind this one too.
+            # shared IP). Anti-spam rules (issue botforge-services#382):
+            # - a Retry-After at least as long as the circuit window is
+            #   the server scheduling our silence: the circuit opens NOW,
+            #   for that long, and not a single further request leaves
+            #   this process;
+            # - otherwise at most ONE retry (a transient blip), honouring
+            #   Retry-After with the backoff floor. A second 429 opens the
+            #   circuit: the old 3-retry storm answered a throttling API
+            #   with more traffic, the exact opposite of what it asked for.
             global _shared_last_request_at, _shared_last_parse_at
             retry_after = float(response.headers.get("Retry-After") or 0.0)
-            wait = max(retry_after, _429_BACKOFF_BASE_S * (2**attempt))
+            if retry_after >= _429_RETRY_AFTER_CIRCUIT_S or attempt >= _429_MAX_RETRIES:
+                self._open_circuit(retry_after)
+                break
+            wait = max(retry_after, _429_BACKOFF_BASE_S)
             logger.warning(
-                "LIQUIPEDIA 429 \u2014 backing off %s s (attempt %d/%d) and retrying",
+                "LIQUIPEDIA 429 — backing off %s s (attempt %d/%d) and retrying",
                 wait,
                 attempt + 1,
                 _429_MAX_RETRIES,
@@ -311,23 +351,8 @@ class LiquipediaMapsProvider:
                 _shared_last_request_at = marker
             self._rate_limit(is_parse=is_parse)
             response = self._client.get(self._api_url, params=params)
-        if response.status_code == 429:
-            # The retries are exhausted: the circuit OPENS. Every further
-            # call fails fast until the window lapses — no more 429s.
-            _shared_circuit_streak += 1
-            window = min(
-                _CIRCUIT_WINDOW_BASE_S * (2 ** (_shared_circuit_streak - 1)),
-                _CIRCUIT_WINDOW_MAX_S,
-            )
-            _shared_circuit_open_until = time.monotonic() + window
-            logger.warning(
-                "LIQUIPEDIA 429 exhausted %d retries — CIRCUIT OPEN for %.0f min "
-                "(streak %d): every call fails fast until then",
-                _429_MAX_RETRIES,
-                window / 60.0,
-                _shared_circuit_streak,
-            )
-        elif _shared_circuit_streak:
+            attempt += 1
+        if response.status_code != 429 and _shared_circuit_streak:
             # A healthy call after open windows: the streak resets.
             _shared_circuit_streak = 0
         response.raise_for_status()
