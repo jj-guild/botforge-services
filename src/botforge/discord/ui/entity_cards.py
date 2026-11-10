@@ -146,16 +146,23 @@ def _description_blocks(spec: EntityCardSpec) -> list[discord.ui.Item[discord.ui
     """Build the description's blocks.
 
     The props line, then each paragraph behind a separator
-    (owner direction 2026-11-08).
+    (owner direction 2026-11-08). The paragraph count is capped EVEN
+    when the text budget is met: many short paragraphs are under the
+    text cap yet cross the LayoutView's 40-children cap (the 2026-11-10
+    follow-up: the clamp alone let a fragmented description raise at
+    build time). A capped card states how many paragraphs are hidden.
     """
     body: list[discord.ui.Item[discord.ui.LayoutView]] = []
     if spec.props:
         body.append(discord.ui.TextDisplay("\n".join(spec.props)))
     # the paragraphs (double newline): a subsection title rides WITH
     # its content in one block — the separator never isolates a title
-    for block in spec.description.split("\n\n"):
-        if not block.strip():
-            continue
+    paragraphs = [block for block in spec.description.split("\n\n") if block.strip()]
+    if len(paragraphs) > MAX_DESCRIPTION_PARAGRAPHS:
+        hidden = len(paragraphs) - MAX_DESCRIPTION_PARAGRAPHS
+        paragraphs = paragraphs[:MAX_DESCRIPTION_PARAGRAPHS]
+        paragraphs[-1] = f"{paragraphs[-1]}{_TRUNCATION_MARK}\n\n… (+{hidden} more)"
+    for block in paragraphs:
         if body:
             body.append(discord.ui.Separator())
         body.append(discord.ui.TextDisplay(block))

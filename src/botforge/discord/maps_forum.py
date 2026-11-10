@@ -36,8 +36,6 @@ def liquipedia_map_url(name: str) -> str:
     return LIQUIPEDIA_MAP_URL + name.strip().replace(" ", "_")
 
 
-
-
 def maps_forum_wiring_ready() -> bool:
     """Whether the maps forum wiring can be built (the game service configured)."""
     return bool(os.environ.get("GAME_AOE2_URI"))
@@ -96,56 +94,79 @@ async def _sync_maps_forum_locked(guild_id: str, game_key: str, bot: Any, servic
     for entry in maps:
         if entry.archived_at is not None:
             continue
-        if entry.forum_message_id and await platform.forum_thread_exists(guild_id, entry.forum_message_id):
-            await _refresh_map_post(bot, platform, guild_id, entry, service)
-            continue
-        from botforge.core.ids import footer
-
-        stored = await _map_content_full(entry.id, guild_id, bot)
-        summary, source, image, icon = stored.summary, stored.source, stored.image, stored.icon
-        walls, nomad, tc, capacity, creator = (
-            stored.walls, stored.nomad, stored.tc, stored.capacity, stored.creator
-        )
-        gallery = stored.gallery
-        source = source or liquipedia_map_url(entry.name)
-        description = _description_display(summary) if summary else (entry.description or "_Aucune description._")
-        pools = await _map_pools_link(service, entry, guild_id, bot=bot)
-        view = _map_post_view(
-            entry.id,
-            entry.name,
-            description,
-            pools,
-            source,
-            image,
-            entry.resource_url,
-            editable=entry.owner_guild_id == guild_id,
-            map_type=getattr(entry, "map_type", ""),
-            filenames=(),
-            game_key=str(getattr(entry, "game_key", "")),
-            owned_by_guild=entry.owner_guild_id == guild_id,
-            icon_url=icon,
-            walls=walls,
-            nomad=nomad,
-            tc=tc,
-            player_capacity=capacity,
-            creator=creator,
-            gallery_images=gallery,
-            creator_url=stored.creator_url,
-            versions=stored.versions,
-        )
-        display = f"{entry.name[:1].upper()}{entry.name[1:]}"
-        tail = f"{source}\n" if source else ""
-        content = f"## {display}\n{tail}{description}"
-        if pools:
-            content = f"{content}\n\n**Pools**\n" + "\n".join(pools)
-        if entry.resource_url:
-            content = f"{content}\n{entry.resource_url}"
-        content = f"{content}\n\n{footer(entry.id)}"
-        post_name = f"{entry.name[:1].upper()}{entry.name[1:]}" if entry.name else entry.name
-        thread_id = await platform.create_map_post(guild_id, forum_id, post_name, content, view=view)
-        await service.set_map_forum_message(entry.id, thread_id)
-        created += 1
+        # one map failing never freezes the forum (the 2026-11-10
+        # incident: the first oversized card raised 50035 and every
+        # map AFTER it stayed postless) — the pass logs and moves on
+        try:
+            created += await _sync_one_map(bot, platform, guild_id, forum_id, entry, service)
+        except Exception:
+            logger.warning(
+                "maps forum: post sync failed for %s (%s) — best-effort, the pass continues",
+                entry.id,
+                entry.name,
+                exc_info=True,
+            )
     return created
+
+
+async def _sync_one_map(
+    bot: Any,
+    platform: Any,
+    guild_id: str,
+    forum_id: str,
+    entry: Any,
+    service: Any,
+) -> int:
+    """Sync one map's post (create or refresh); 1 when created."""
+    from botforge.core.ids import footer
+
+    if entry.forum_message_id and await platform.forum_thread_exists(guild_id, entry.forum_message_id):
+        await _refresh_map_post(bot, platform, guild_id, entry, service)
+        return 0
+    stored = await _map_content_full(entry.id, guild_id, bot)
+    summary, source, image, icon = stored.summary, stored.source, stored.image, stored.icon
+    walls, nomad, tc, capacity, creator = (
+        stored.walls, stored.nomad, stored.tc, stored.capacity, stored.creator
+    )
+    gallery = stored.gallery
+    source = source or liquipedia_map_url(entry.name)
+    description = _description_display(summary) if summary else (entry.description or "_Aucune description._")
+    pools = await _map_pools_link(service, entry, guild_id, bot=bot)
+    view = _map_post_view(
+        entry.id,
+        entry.name,
+        description,
+        pools,
+        source,
+        image,
+        entry.resource_url,
+        editable=entry.owner_guild_id == guild_id,
+        map_type=getattr(entry, "map_type", ""),
+        filenames=(),
+        game_key=str(getattr(entry, "game_key", "")),
+        owned_by_guild=entry.owner_guild_id == guild_id,
+        icon_url=icon,
+        walls=walls,
+        nomad=nomad,
+        tc=tc,
+        player_capacity=capacity,
+        creator=creator,
+        gallery_images=gallery,
+        creator_url=stored.creator_url,
+        versions=stored.versions,
+    )
+    display = f"{entry.name[:1].upper()}{entry.name[1:]}"
+    tail = f"{source}\n" if source else ""
+    content = f"## {display}\n{tail}{description}"
+    if pools:
+        content = f"{content}\n\n**Pools**\n" + "\n".join(pools)
+    if entry.resource_url:
+        content = f"{content}\n{entry.resource_url}"
+    content = f"{content}\n\n{footer(entry.id)}"
+    post_name = f"{entry.name[:1].upper()}{entry.name[1:]}" if entry.name else entry.name
+    thread_id = await platform.create_map_post(guild_id, forum_id, post_name, content, view=view)
+    await service.set_map_forum_message(entry.id, thread_id)
+    return 1
 
 
 async def _map_pools_link(service: Any, entry: Any, guild_id: str, bot: Any = None) -> list[str]:
@@ -253,7 +274,6 @@ def _map_post_view(
         creator_url=creator_url,
         versions=versions,
     )
-
 
 
 async def _heal_thread_title(platform: Any, guild_id: str, thread_id: str, display: str) -> None:
