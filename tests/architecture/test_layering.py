@@ -231,7 +231,8 @@ def _mod_files(*, exclude_cogs: bool = False) -> list[Path]:
 
 _DISCORD_IMPORT_RE = re.compile(r"^\s*(?:import discord|from discord|from botforge\.discord)", re.M)
 _NETWORK_IMPORT_RE = re.compile(
-    r"^\s*(?:import (?:aiohttp|httpx|requests|urllib|socket|http\.client)|from (?:aiohttp|httpx|requests|urllib|socket|http\.client))",
+    r"^\s*(?:import (?:aiohttp|httpx|requests|urllib|socket|http\.client)"
+    r"|from (?:aiohttp|httpx|requests|urllib|socket|http\.client))",
     re.M,
 )
 
