@@ -770,15 +770,6 @@ class BotforgeBot(discord.Client):
             )
         except Exception:
             logger.debug("action log failed — best-effort", exc_info=True)
-        from botforge.discord.locales import interaction_locale
-
-        logger.info(
-            "INTERACTION USER LOCALE user=%s guild=%s raw=%s resolved=%s",
-            str(getattr(getattr(interaction, "user", None), "id", "") or "unknown"),
-            str(interaction.guild_id) if interaction.guild_id else "dm",
-            getattr(interaction, "locale", None),
-            interaction_locale(interaction),
-        )
         if self.logs_service is None:
             return
         from botforge.discord.locales import normalize

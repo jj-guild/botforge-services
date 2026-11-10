@@ -332,30 +332,6 @@ def test_log_guild_member_locales_probes_each_member(caplog: pytest.LogCaptureFi
     assert all("guild=424242" in line and "raw=None" in line for line in lines)
 
 
-async def test_on_interaction_logs_the_clicker_locale(config_dir: str, caplog: pytest.LogCaptureFixture) -> None:
-    """on_interaction logs INTERACTION USER LOCALE with raw + resolved locale.
-
-    This is the only per-user language signal Discord exposes
-    (interaction.locale) — the clicker's own client language.
-    """
-    from tests.mocks import MockGuild, MockInteraction, MockMember
-
-    bot = create_bot(BotConfig(config_dir=config_dir))
-    guild = MockGuild(id=424242, preferred_locale="en-US")
-    member = MockMember(name="alice", guild=guild)
-    interaction = MockInteraction(user=member, guild=guild, locale="fr")
-    with caplog.at_level(logging.INFO, logger="botforge.bot"):
-        await bot.on_interaction(interaction)
-    assert any(
-        "INTERACTION USER LOCALE" in r.message
-        and f"user={member.id}" in r.message
-        and f"guild={guild.id}" in r.message
-        and "raw=fr" in r.message
-        and "resolved=fr" in r.message
-        for r in caplog.records
-    )
-
-
 async def test_on_guild_join_seeds_the_detected_guild_locale(config_dir: str) -> None:
     """The join-detected native locale is stored as the guild's default."""
     from tests.mocks import MockGuild
