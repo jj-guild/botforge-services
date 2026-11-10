@@ -105,34 +105,32 @@ def test_empty_allowlist_disables_everywhere() -> None:
     assert not any(is_test_guild(g) for g in ("123456789", "1", "999999999999"))
 
 
-def test_console_view_buttons_disabled_outside_allowlist(monkeypatch: Any) -> None:
+async def test_console_view_buttons_disabled_outside_allowlist(monkeypatch: Any) -> None:
     """Buttons render visible-but-disabled outside the allowlist, enabled inside."""
     from botforge.discord import console as console_mod
     from botforge.discord import console_guilds
 
-    def button_states(guild_id: str) -> list[bool]:
-        view = console_mod._console_view(guild_id)
+    async def button_states(guild_id: str) -> list[bool]:
+        view = await console_mod._console_view(guild_id)
         stack = list(getattr(view, "children", []) or [])
         states: list[bool] = []
         while stack:
             item = stack.pop()
             if type(item).__name__ in (
-                "DevCleanManagedButton",
-                "DevNukeButton",
-                "DevResetDataButton",
                 "DevInstallButton",
+                "DevDangerButton",
             ):
                 states.append(bool(item.item.disabled))
             stack.extend(getattr(item, "children", []) or [])
         return states
 
-    states = button_states("111222333")
-    assert len(states) == 4
+    states = await button_states("111222333")
+    assert len(states) == 2
     assert all(states)
 
     monkeypatch.setattr(console_guilds, "_TEST_GUILD_IDS", frozenset({"111222333"}))
-    states = button_states("111222333")
-    assert len(states) == 4
+    states = await button_states("111222333")
+    assert len(states) == 2
     assert not any(states)
 
 
@@ -252,7 +250,7 @@ def test_console_ops_cli_all_targets_are_allowlisted(monkeypatch: Any) -> None:
 
 
 
-def test_console_action_registry_renders_extensions(monkeypatch: Any) -> None:
+async def test_console_action_registry_renders_extensions(monkeypatch: Any) -> None:
     """An extension action renders its button and rides the boot wiring."""
     import discord
 
@@ -262,18 +260,17 @@ def test_console_action_registry_renders_extensions(monkeypatch: Any) -> None:
     # extension registers its own class the same way
     action = console_mod.ConsoleAction(
         key="ext-test",
-        item_cls=console_mod.DevResetDataButton,
-        build=lambda disabled: console_mod.DevResetDataButton(disabled=disabled),
+        item_cls=console_mod.DevDangerButton,
+        build=lambda disabled: console_mod.DevDangerButton(disabled=disabled),
         description="**Ext test** — an extension action.",
     )
     console_mod.register_console_action(action)
     try:
         keys = [a.key for a in console_mod.registered_console_actions()]
-        assert keys[:4] == ["clean-managed", "nuke", "reset-data", "install"]
-        assert "ext-test" in keys
+        assert keys == ["ext-test"]
 
         # the home renders the extension's button (disabled off-allowlist)
-        view = console_mod._console_view(None)
+        view = await console_mod._console_view(None)
         rendered = str(view.to_components())
         assert "Ext test" in rendered
 
@@ -294,6 +291,69 @@ def test_console_action_registry_renders_extensions(monkeypatch: Any) -> None:
 
         bot = FakeBot()
         console_mod.register_console_items(bot)  # type: ignore[arg-type]
-        assert console_mod.DevResetDataButton in bot.items
+        assert console_mod.DevDangerButton in bot.items
     finally:
         console_mod._ACTIONS.pop("ext-test", None)
+
+
+def test_install_modal_selects_are_optional() -> None:
+    """The install modal's selects are optional (required=False + min 0).
+
+    The API rejects min_values=0 on a required component (50035) — the
+    exact trap that made the first install modal dead on the test env.
+    """
+    from botforge.discord.console import DevInstallModal
+
+    modal = DevInstallModal(
+        title="Install mods & games",
+        label_mods="Mods",
+        label_games="Games",
+        placeholder_mods="Mods…",
+        placeholder_games="Games…",
+        no_mods="(none)",
+        no_games="(none)",
+        applied="Install applied.",
+        refused="refused: {mod} {games}",
+    )
+    assert modal.mods_select.required is False
+    assert modal.mods_select.min_values == 0
+    assert modal.games_select.required is False
+    assert modal.games_select.min_values == 0
+
+
+def test_danger_modal_defaults_are_safe() -> None:
+    """The Danger Zone modal's untouched selects mean the safe default."""
+    from botforge.discord.console import DevDangerModal
+
+    modal = DevDangerModal(
+        title="Danger Zone",
+        label_channels="Channels",
+        label_roles="Roles",
+        label_data="Data",
+        opt_none="None",
+        opt_bot="Bot-managed only",
+        opt_all="All",
+        opt_keep="Keep everything",
+        opt_delete="Delete everything",
+        nothing="Nothing selected.",
+        done="done: {channels} {roles} {data}",
+        data_kept="kept",
+    )
+    assert modal.channels_select.required is False
+    assert modal.roles_select.required is False
+    assert modal.data_select.required is False
+    values = {
+        opt.value
+        for select in (modal.channels_select, modal.roles_select, modal.data_select)
+        for opt in select.options
+    }
+    assert values == {
+        DevDangerModal.CHANNELS_NONE,
+        DevDangerModal.CHANNELS_BOT,
+        DevDangerModal.CHANNELS_ALL,
+        DevDangerModal.ROLES_NONE,
+        DevDangerModal.ROLES_BOT,
+        DevDangerModal.ROLES_ALL,
+        DevDangerModal.DATA_KEEP,
+        DevDangerModal.DATA_DELETE,
+    }

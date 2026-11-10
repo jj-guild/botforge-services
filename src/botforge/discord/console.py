@@ -409,205 +409,64 @@ async def _guard(interaction: discord.Interaction) -> bool:
     )
 
 
-def _console_view(guild_id: str | int | None) -> discord.ui.LayoutView:
-    """Build the console home with its action buttons.
+async def _tr_guild(bot: Any, guild_id: str | int | None, key: str, fallback: str) -> str:
+    """Render one console string in the guild's locale (en fallback)."""
+    from botforge.discord.scope_pins import _catalog, _locale_of, _tr
+
+    catalog = _catalog(bot)
+    locale = await _locale_of(bot, str(guild_id or ""))
+    return _tr(catalog, f"console.{key}", locale, fallback)
+
+
+async def _console_view(guild_id: str | int | None, client: Any = None) -> discord.ui.LayoutView:
+    """Build the console home: Install + Danger Zone, localized.
 
     The buttons are always rendered (visible), but disabled unless the
-    invoking guild is on the env-defined allowlist: an operator sees the
-    console exists, yet cannot act on a guild outside the test scope.
+    invoking guild is on the env-defined allowlist: an operator sees
+    the console exists, yet cannot act on a guild outside the test
+    scope. Extension actions (register_console_action) ride along.
     """
     allowed = is_test_guild(guild_id)
-    actions = registered_console_actions()
     view = discord.ui.LayoutView(timeout=None)
-    note = (
-        "This guild is on the test allowlist \u2014 actions below apply to "
-        "**this guild only**."
+    note_key, note_fallback = (
+        ("note_allowed", "This guild is on the test allowlist \u2014 the actions below apply to **this guild only**.")
         if allowed
-        else "This guild is **not** on the test allowlist \u2014 the actions "
-        "are disabled (BOTFORGE_TEST_GUILD_IDS decides, env-defined)."
+        else (
+            "note_denied",
+            "This guild is **not** on the test allowlist \u2014 the actions are disabled "
+            "(BOTFORGE_TEST_GUILD_IDS decides, env-defined).",
+        )
     )
-    # the intro composes from the registered actions — an extension
-    # action describes itself, the home never hard-codes a list
-    intro = note + "\n" + "\n".join(action.description for action in actions)
+    note = await _tr_guild(client, guild_id, note_key, note_fallback)
+    intro = note + "\n" + "\n".join(action.description for action in registered_console_actions())
     container: discord.ui.Container[discord.ui.LayoutView] = discord.ui.Container(
-        discord.ui.TextDisplay("# \u2699 Console"),
+        discord.ui.TextDisplay(await _tr_guild(client, guild_id, "title", "# \u2699 Console")),
         discord.ui.TextDisplay(intro),
         accent_colour=discord.Colour(0xED4245),
     )
-    # the buttons flow from the registry, five per row (Discord's cap)
     row: discord.ui.ActionRow[discord.ui.LayoutView] = discord.ui.ActionRow()
-    for position, action in enumerate(actions, start=1):
-        if position > 1 and (position - 1) % 5 == 0:
-            container.add_item(row)
-            row = discord.ui.ActionRow()
-        row.add_item(action.build(not allowed))
+    row.add_item(
+        DevInstallButton(
+            label=await _tr_guild(client, guild_id, "install_btn", "\U0001f4e6 Install"),
+            disabled=not allowed,
+        )
+    )
+    row.add_item(
+        DevDangerButton(
+            label=await _tr_guild(client, guild_id, "danger_btn", "\u26a0\ufe0f Danger Zone"),
+            disabled=not allowed,
+        )
+    )
     container.add_item(row)
+    for action in registered_console_actions():
+        ext_row: discord.ui.ActionRow[discord.ui.LayoutView] = discord.ui.ActionRow()
+        ext_row.add_item(action.build(not allowed))
+        container.add_item(ext_row)
     view.add_item(container)
     back_row: discord.ui.ActionRow[discord.ui.LayoutView] = discord.ui.ActionRow()
     back_row.add_item(ConsoleBackButton())
     view.add_item(back_row)
     return view
-
-
-class DevCleanManagedButton(
-    discord.ui.DynamicItem[discord.ui.Button[Any]],
-    template=rf"{_NS}:clean:managed",
-):
-    """Clean only what the bot created (managed clean)."""
-
-    def __init__(self, disabled: bool = False) -> None:
-        super().__init__(
-            discord.ui.Button(
-                label="\U0001f9f9 Clean managed",
-                disabled=disabled,
-                style=discord.ButtonStyle.secondary,
-                custom_id=f"{_NS}:clean:managed",
-            )
-        )
-
-    @classmethod
-    async def from_custom_id(
-        cls,
-        interaction: discord.Interaction,
-        item: discord.ui.Item[Any],
-        match: re.Match[str],
-        /,
-    ) -> DevCleanManagedButton:
-        """Rebuild the item from the wire."""
-        del interaction, item, match
-        return cls()
-
-    async def callback(self, interaction: discord.Interaction) -> None:
-        """Clean what the bot created (managed clean)."""
-        if not await _guard(interaction):
-            return
-        await interaction.response.defer(ephemeral=True)
-        channels, roles = await _delete_managed(interaction)
-        logger.info(
-            "CONSOLE managed clean (guild %s): %d channels, %d roles",
-            interaction.guild_id,
-            channels,
-            roles,
-        )
-        await _safe_followup(
-            interaction,
-            f"Managed clean done: {channels} channel(s), {roles + 1} role(s) deleted "
-            "(\U0001f9f9 the bot-admins role included). Re-run /admin to re-provision.",
-        )
-
-
-class DevNukeButton(
-    discord.ui.DynamicItem[discord.ui.Button[Any]],
-    template=rf"{_NS}:clean:nuke:(?P<step>[0-3])",
-):
-    """Nuke the whole guild \u2014 triple confirmation."""
-
-    STEPS = (
-        ("\U0001f5d1 Nuke the guild", "everything will be deleted"),
-        ("\U0001f5d1 Confirm nuke (1/3)", "every channel, category and role will be deleted"),
-        ("\u26a0\ufe0f Confirm nuke (2/3)", "this deletes EVERYTHING \u2014 no undo"),
-        ("\U0001f6a8 EXECUTE NUKE (3/3)", "last chance \u2014 the guild will be emptied"),
-    )
-
-    def __init__(self, step: int = 0, disabled: bool = False) -> None:
-        self.step = step
-        label, _ = self.STEPS[min(step, 3)]
-        super().__init__(
-            discord.ui.Button(
-                label=label,
-                disabled=disabled,
-                style=discord.ButtonStyle.danger,
-                custom_id=f"{_NS}:clean:nuke:{step}"[:100],
-            )
-        )
-
-    @classmethod
-    async def from_custom_id(
-        cls,
-        interaction: discord.Interaction,
-        item: discord.ui.Item[Any],
-        match: re.Match[str],
-        /,
-    ) -> DevNukeButton:
-        """Rebuild the item from the wire."""
-        del interaction, item
-        return cls(int(match.group("step")))
-
-    async def callback(self, interaction: discord.Interaction) -> None:
-        """Advance the nuke confirmation, or execute it at the last step."""
-        if not await _guard(interaction):
-            return
-        if self.step < 3:
-            view = discord.ui.LayoutView(timeout=None)
-            _, warning = self.STEPS[min(self.step + 1, 3)]
-            container: discord.ui.Container[discord.ui.LayoutView] = discord.ui.Container(
-                discord.ui.TextDisplay(f"# Nuke confirmation ({self.step + 1}/3)"),
-                discord.ui.TextDisplay(f"**{warning}**"),
-                accent_colour=discord.Colour(0xED4245),
-            )
-            row: discord.ui.ActionRow[discord.ui.LayoutView] = discord.ui.ActionRow()
-            row.add_item(DevNukeButton(self.step + 1))
-            container.add_item(row)
-            view.add_item(container)
-            await interaction.response.edit_message(view=view)
-            return
-        await interaction.response.defer(ephemeral=True)
-        channels, roles = await _nuke_everything(interaction)
-        logger.warning(
-            "CONSOLE NUKE executed (guild %s): %d channels, %d roles",
-            interaction.guild_id,
-            channels,
-            roles,
-        )
-        await _safe_followup(
-            interaction,
-            f"Nuke done: {channels} channel(s), {roles} role(s) deleted. "
-            "The guild is empty \u2014 re-run /admin to re-provision the bot surfaces.",
-        )
-
-
-class DevResetDataButton(
-    discord.ui.DynamicItem[discord.ui.Button[Any]],
-    template=rf"{_NS}:reset:data",
-):
-    """Wipe this guild's persisted data \u2014 isolated to the test guild."""
-
-    def __init__(self, disabled: bool = False) -> None:
-        super().__init__(
-            discord.ui.Button(
-                label="\U0001f5d1 Reset data",
-                disabled=disabled,
-                style=discord.ButtonStyle.secondary,
-                custom_id=f"{_NS}:reset:data",
-            )
-        )
-
-    @classmethod
-    async def from_custom_id(
-        cls,
-        interaction: discord.Interaction,
-        item: discord.ui.Item[Any],
-        match: re.Match[str],
-        /,
-    ) -> DevResetDataButton:
-        """Rebuild the item from the wire."""
-        del interaction, item, match
-        return cls()
-
-    async def callback(self, interaction: discord.Interaction) -> None:
-        """Wipe this guild's persisted data (isolated)."""
-        if not await _guard(interaction):
-            return
-        await interaction.response.defer(ephemeral=True)
-        guild_id = str(interaction.guild_id)
-        deleted = await _reset_guild_data(guild_id)
-        logger.warning("CONSOLE data reset executed (guild %s): %s", guild_id, deleted)
-        summary = "\n".join(f"- `{name}`: {count}" for name, count in sorted(deleted.items()))
-        await interaction.followup.send(
-            f"Guild data reset done (isolated to guild `{guild_id}`):\n{summary}\n"
-            "Global content (maps, factions, identities, profile stats) was NOT touched.",
-            ephemeral=True,
-        )
 
 
 class DevInstallButton(
@@ -616,12 +475,12 @@ class DevInstallButton(
 ):
     """Open the mods/games install modal."""
 
-    def __init__(self, disabled: bool = False) -> None:
+    def __init__(self, label: str = "\U0001f4e6 Install", disabled: bool = False) -> None:
         super().__init__(
             discord.ui.Button(
-                label="\U0001f4e5 Install mods / games",
+                label=label,
                 disabled=disabled,
-                style=discord.ButtonStyle.primary,
+                style=discord.ButtonStyle.success,
                 custom_id=f"{_NS}:install",
             )
         )
@@ -639,66 +498,373 @@ class DevInstallButton(
         return cls()
 
     async def callback(self, interaction: discord.Interaction) -> None:
-        """Open the mods/games install picker (an ephemeral view).
-
-        Never a modal: Discord only allows TextInput inside a modal
-        (the select-based modal died with 50035 Invalid Form Body on
-        the test env, 2026-11-09).
-        """
+        """Open the mods/games install modal."""
         if not await _guard(interaction):
             return
-        await interaction.response.send_message(view=DevInstallView(), ephemeral=True)
+        await interaction.response.send_modal(await DevInstallModal.build(interaction))
 
 
-class DevInstallView(discord.ui.View):
-    """The mods/games selection: two multi-selects + apply, ephemeral."""
+class DevInstallModal(discord.ui.Modal):
+    """The mods/games selection modal: two Label-wrapped selects.
 
-    def __init__(self) -> None:
-        super().__init__(timeout=600.0)
+    A bare select inside a modal is rejected by the API (50035); the
+    Label-wrapped one works (the discord-components skill). An optional
+    select needs ``required=False`` + ``min_values=0`` \u2014 the API
+    rejects ``min_values=0`` on a required component (the exact trap
+    that made the first install modal dead on the test env).
+    """
+
+    @classmethod
+    async def build(cls, interaction: discord.Interaction) -> DevInstallModal:
+        """Build the modal with the guild's locale (en fallback)."""
+        bot = interaction.client
+        guild_id = interaction.guild_id
+        return cls(
+            title=await _tr_guild(bot, guild_id, "install_modal_title", "Install mods & games"),
+            label_mods=await _tr_guild(bot, guild_id, "install_label_mods", "Mods"),
+            label_games=await _tr_guild(bot, guild_id, "install_label_games", "Games"),
+            placeholder_mods=await _tr_guild(bot, guild_id, "install_placeholder_mods", "Mods to install\u2026"),
+            placeholder_games=await _tr_guild(bot, guild_id, "install_placeholder_games", "Games to install\u2026"),
+            no_mods=await _tr_guild(bot, guild_id, "install_no_mods", "(no mod declared)"),
+            no_games=await _tr_guild(bot, guild_id, "install_no_games", "(no game declared)"),
+            applied=await _tr_guild(bot, guild_id, "install_applied", "Install applied."),
+            refused=await _tr_guild(
+                bot, guild_id, "install_refused",
+                "\u274c Install refused: the mod **{mod}** requires the game(s) {games}, "
+                "which this platform does not declare.",
+            ),
+        )
+
+    def __init__(
+        self,
+        *,
+        title: str,
+        label_mods: str,
+        label_games: str,
+        placeholder_mods: str,
+        placeholder_games: str,
+        no_mods: str,
+        no_games: str,
+        applied: str,
+        refused: str,
+    ) -> None:
+        super().__init__(title=title[:45], timeout=600.0)
+        self.applied = applied
+        self.refused = refused
         from botforge.discord.wiring import guild_access_platform
 
         all_games, all_mods = guild_access_platform()
         self.all_games = tuple(all_games)
         self.all_mods = tuple(all_mods)
         self.mods_select: discord.ui.Select[Any] = discord.ui.Select(
-            placeholder="Mods to install\u2026",
+            placeholder=placeholder_mods[:100],
             min_values=0,
             max_values=max(1, len(all_mods)),
+            required=False,
             options=(
                 [discord.SelectOption(label=mod, value=mod) for mod in all_mods]
-                or [discord.SelectOption(label="(no mod declared)", value="none")]
+                or [discord.SelectOption(label=no_mods, value="none")]
             ),
         )
         self.games_select: discord.ui.Select[Any] = discord.ui.Select(
-            placeholder="Games to install\u2026",
+            placeholder=placeholder_games[:100],
             min_values=0,
             max_values=max(1, len(all_games)),
+            required=False,
             options=(
                 [discord.SelectOption(label=game, value=game) for game in all_games]
-                or [discord.SelectOption(label="(no game declared)", value="none")]
+                or [discord.SelectOption(label=no_games, value="none")]
             ),
         )
-        self.add_item(self.mods_select)
-        self.add_item(self.games_select)
+        # every select rides a Label wrapper (the skill's modal pattern)
+        self.add_item(discord.ui.Label(text=label_mods[:45], component=self.mods_select))
+        self.add_item(discord.ui.Label(text=label_games[:45], component=self.games_select))
 
-    async def apply(self, interaction: discord.Interaction) -> None:
-        """Guard, propagate the selection, apply it."""
+    async def on_submit(self, interaction: discord.Interaction) -> None:
+        """Guard, validate the dependencies, apply \u2014 or fail loudly."""
         if not await _guard(interaction):
             return
         mods = [v for v in self.mods_select.values if v != "none"]
         games = [v for v in self.games_select.values if v != "none"]
         registry = getattr(interaction.client, "registry", None)
+        # a mod whose required games are not declared on the platform is
+        # an impossible selection: fail the modal with the explanation,
+        # never silently drop the mod
+        for mod_name in mods:
+            unknown = [g for g in _mod_games(registry, mod_name) if g not in self.all_games]
+            if unknown:
+                await interaction.response.send_message(
+                    self.refused.format(mod=mod_name, games=", ".join(unknown)),
+                    ephemeral=True,
+                )
+                return
         games, mods = _propagate(registry, self.all_games, self.all_mods, mods, games)
         await interaction.response.defer(ephemeral=True)
         summary = await _apply_selection(interaction, mods, games)
         logger.info("CONSOLE install applied (guild %s): mods=%s games=%s", interaction.guild_id, mods, games)
-        await interaction.followup.send(f"Install applied.\n{summary}", ephemeral=True)
+        await interaction.followup.send(f"{self.applied}\n{summary}", ephemeral=True)
 
-    @discord.ui.button(label="\u2705 Apply", style=discord.ButtonStyle.success)
-    async def _apply_button(self, interaction: discord.Interaction, button: discord.ui.Button[Any]) -> None:
-        """Apply the selected mods/games."""
-        del button
-        await self.apply(interaction)
+
+class DevDangerButton(
+    discord.ui.DynamicItem[discord.ui.Button[Any]],
+    template=rf"{_NS}:danger",
+):
+    """Open the Danger Zone modal (channels / roles / data)."""
+
+    def __init__(self, label: str = "\u26a0\ufe0f Danger Zone", disabled: bool = False) -> None:
+        super().__init__(
+            discord.ui.Button(
+                label=label,
+                disabled=disabled,
+                style=discord.ButtonStyle.danger,
+                custom_id=f"{_NS}:danger",
+            )
+        )
+
+    @classmethod
+    async def from_custom_id(
+        cls,
+        interaction: discord.Interaction,
+        item: discord.ui.Item[Any],
+        match: re.Match[str],
+        /,
+    ) -> DevDangerButton:
+        """Rebuild the item from the wire."""
+        del interaction, item, match
+        return cls()
+
+    async def callback(self, interaction: discord.Interaction) -> None:
+        """Open the Danger Zone modal."""
+        if not await _guard(interaction):
+            return
+        await interaction.response.send_modal(await DevDangerModal.build(interaction))
+
+
+class DevDangerModal(discord.ui.Modal):
+    """The destructive picker: channels, roles, data \u2014 three selects.
+
+    Every select is optional (required=False + min_values=0): an
+    untouched select means the safe default (nothing deleted, data
+    kept). The options are explicit (All / Bot-managed / None) so the
+    operator states the blast radius instead of stacking separate
+    destructive buttons.
+    """
+
+    CHANNELS_NONE, CHANNELS_BOT, CHANNELS_ALL = "channels:none", "channels:bot", "channels:all"
+    ROLES_NONE, ROLES_BOT, ROLES_ALL = "roles:none", "roles:bot", "roles:all"
+    DATA_KEEP, DATA_DELETE = "data:keep", "data:delete"
+
+    @classmethod
+    async def build(cls, interaction: discord.Interaction) -> DevDangerModal:
+        """Build the modal with the guild's locale (en fallback)."""
+        bot = interaction.client
+        guild_id = interaction.guild_id
+
+        async def tr(key: str, fallback: str) -> str:
+            return await _tr_guild(bot, guild_id, key, fallback)
+
+        return cls(
+            title=await tr("danger_modal_title", "\u26a0\ufe0f Danger Zone"),
+            label_channels=await tr("danger_label_channels", "Channels"),
+            label_roles=await tr("danger_label_roles", "Roles"),
+            label_data=await tr("danger_label_data", "Data"),
+            opt_none=await tr("danger_opt_none", "None"),
+            opt_bot=await tr("danger_opt_bot", "Bot-managed only"),
+            opt_all=await tr("danger_opt_all", "All"),
+            opt_keep=await tr("danger_opt_keep", "Keep everything"),
+            opt_delete=await tr("danger_opt_delete", "Delete everything"),
+            nothing=await tr("danger_nothing", "Nothing selected \u2014 nothing done."),
+            done=await tr(
+                "danger_done",
+                "Danger Zone applied \u2014 channels: {channels}, roles: {roles}, data: {data}.",
+            ),
+            data_kept=await tr("danger_data_kept", "kept"),
+        )
+
+    def __init__(
+        self,
+        *,
+        title: str,
+        label_channels: str,
+        label_roles: str,
+        label_data: str,
+        opt_none: str,
+        opt_bot: str,
+        opt_all: str,
+        opt_keep: str,
+        opt_delete: str,
+        nothing: str,
+        done: str,
+        data_kept: str,
+    ) -> None:
+        super().__init__(title=title[:45], timeout=600.0)
+        self.nothing = nothing
+        self.done = done
+        self.data_kept = data_kept
+        self.channels_select: discord.ui.Select[Any] = discord.ui.Select(
+            placeholder=label_channels[:100],
+            min_values=0,
+            max_values=1,
+            required=False,
+            options=[
+                discord.SelectOption(label=opt_none, value=self.CHANNELS_NONE),
+                discord.SelectOption(label=opt_bot, value=self.CHANNELS_BOT),
+                discord.SelectOption(label=opt_all, value=self.CHANNELS_ALL),
+            ],
+        )
+        self.roles_select: discord.ui.Select[Any] = discord.ui.Select(
+            placeholder=label_roles[:100],
+            min_values=0,
+            max_values=1,
+            required=False,
+            options=[
+                discord.SelectOption(label=opt_none, value=self.ROLES_NONE),
+                discord.SelectOption(label=opt_bot, value=self.ROLES_BOT),
+                discord.SelectOption(label=opt_all, value=self.ROLES_ALL),
+            ],
+        )
+        self.data_select: discord.ui.Select[Any] = discord.ui.Select(
+            placeholder=label_data[:100],
+            min_values=0,
+            max_values=1,
+            required=False,
+            options=[
+                discord.SelectOption(label=opt_keep, value=self.DATA_KEEP),
+                discord.SelectOption(label=opt_delete, value=self.DATA_DELETE),
+            ],
+        )
+        self.add_item(discord.ui.Label(text=label_channels[:45], component=self.channels_select))
+        self.add_item(discord.ui.Label(text=label_roles[:45], component=self.roles_select))
+        self.add_item(discord.ui.Label(text=label_data[:45], component=self.data_select))
+
+    async def on_submit(self, interaction: discord.Interaction) -> None:
+        """Guard, then apply the stated blast radius."""
+        if not await _guard(interaction):
+            return
+        channels_mode = self.channels_select.values[0] if self.channels_select.values else self.CHANNELS_NONE
+        roles_mode = self.roles_select.values[0] if self.roles_select.values else self.ROLES_NONE
+        data_mode = self.data_select.values[0] if self.data_select.values else self.DATA_KEEP
+        if (channels_mode, roles_mode, data_mode) == (self.CHANNELS_NONE, self.ROLES_NONE, self.DATA_KEEP):
+            await interaction.response.send_message(self.nothing, ephemeral=True)
+            return
+        await interaction.response.defer(ephemeral=True)
+        guild = interaction.guild
+        assert guild is not None  # noqa: S101 - guarded by the command check
+        channels_deleted = 0
+        if channels_mode != self.CHANNELS_NONE:
+            channels_deleted = await _delete_channels_for_guild(
+                guild, managed_only=channels_mode == self.CHANNELS_BOT
+            )
+        roles_deleted = 0
+        if roles_mode != self.ROLES_NONE:
+            roles_deleted = await _delete_roles_for_guild(
+                guild, managed_only=roles_mode == self.ROLES_BOT
+            )
+        data_deleted: dict[str, int] = {}
+        if data_mode == self.DATA_DELETE:
+            data_deleted = await _reset_guild_data(str(guild.id))
+        logger.warning(
+            "CONSOLE DANGER ZONE executed (guild %s): channels=%s roles=%s data=%s",
+            interaction.guild_id,
+            channels_mode,
+            roles_mode,
+            data_mode,
+        )
+        data_summary = (
+            ", ".join(f"{name}: {count}" for name, count in sorted(data_deleted.items()))
+            or self.data_kept
+        )
+        await _safe_followup(
+            interaction,
+            self.done.format(channels=channels_deleted, roles=roles_deleted, data=data_summary),
+        )
+
+
+async def _delete_channels_for_guild(guild: discord.Guild, *, managed_only: bool) -> int:
+    """Delete the guild's channels (all, or the bot-managed ones); return the count."""
+    from botforge.core.models.db import get_async_database
+    from botforge.core.services.channel import CHANNELS_COLLECTION
+
+    guild_id = str(guild.id)
+    database = get_async_database()
+    deleted = 0
+    if managed_only:
+        async for doc in database[CHANNELS_COLLECTION].find({"guild_id": guild_id}):
+            channel = guild.get_channel(int(str(doc["channel_id"])))
+            if channel is not None:
+                try:
+                    await channel.delete(reason="botforge dev console: danger zone")
+                    deleted += 1
+                except Exception:
+                    logger.warning("CONSOLE channel delete failed (%s)", doc.get("name"), exc_info=True)
+            await database[CHANNELS_COLLECTION].delete_one({"_id": doc["_id"]})
+    else:
+        for channel in list(getattr(guild, "channels", ()) or ()):
+            try:
+                await channel.delete(reason="botforge dev console: danger zone")
+                deleted += 1
+            except Exception:
+                logger.warning("CONSOLE channel delete failed", exc_info=True)
+        await database[CHANNELS_COLLECTION].delete_many({"guild_id": guild_id})
+    return deleted
+
+
+async def _delete_roles_for_guild(guild: discord.Guild, *, managed_only: bool) -> int:
+    """Delete the guild's roles (all, or the bot-managed ones); return the count."""
+    from botforge.core.models.db import get_async_database
+    from botforge.core.services.roles import ROLE_MAPPINGS_COLLECTION
+
+    guild_id = str(guild.id)
+    database = get_async_database()
+    deleted = 0
+    if managed_only:
+        deleted = await _delete_managed_roles(guild, database, guild_id)
+    else:
+        deleted = await _delete_all_roles(guild)
+        await database[ROLE_MAPPINGS_COLLECTION].delete_many({"guild_id": guild_id})
+    return deleted
+
+
+async def _delete_managed_roles(guild: discord.Guild, database: Any, guild_id: str) -> int:
+    """Delete the bot-managed roles (mappings + bot-admins); return the count."""
+    from botforge.core.services.roles import ROLE_MAPPINGS_COLLECTION
+
+    deleted = 0
+    async for mapping in database[ROLE_MAPPINGS_COLLECTION].find({"guild_id": guild_id}):
+        role = guild.get_role(int(str(mapping["role_id"])))
+        if role is not None:
+            try:
+                await role.delete(reason="botforge dev console: danger zone")
+                deleted += 1
+            except Exception:
+                logger.warning("CONSOLE role delete failed (%s)", mapping.get("role_key"), exc_info=True)
+        await database[ROLE_MAPPINGS_COLLECTION].delete_one({"_id": mapping["_id"]})
+    bot_admins = discord.utils.get(guild.roles, name="bot-admins")
+    if bot_admins is not None:
+        try:
+            await bot_admins.delete(reason="botforge dev console: danger zone")
+            deleted += 1
+        except Exception:
+            logger.warning("CONSOLE bot-admins role delete failed", exc_info=True)
+    return deleted
+
+
+async def _delete_all_roles(guild: discord.Guild) -> int:
+    """Delete every deletable role of the guild; return the count."""
+    deleted = 0
+    for role in list(getattr(guild, "roles", ()) or ()):
+        if role.is_default() or role.managed:
+            continue
+        try:
+            await role.delete(reason="botforge dev console: danger zone")
+            deleted += 1
+        except discord.Forbidden:
+            # a role above the bot's highest role is not deletable by
+            # design \u2014 skip it, never fail the action
+            logger.warning("CONSOLE role delete skipped (above the bot): %s", role.name)
+        except Exception:
+            logger.warning("CONSOLE role delete failed", exc_info=True)
+    return deleted
 
 
 PIN_CONSOLE_BUTTON_ID = "admin:pin:button:console"
@@ -711,11 +877,10 @@ class AdminConsoleButton(
 ):
     """The /admin panel's console opener (test environments only).
 
-    Rendered by ``build_pin_main_menu`` only on the env-declared test
-    guilds (allowlist) and for bot admins; the click re-runs the full
-    console guard (bot admin, never prod, allowlist) before opening the
-    console view — the mandate: seeing the button never implies being
-    allowed to click it.
+    Rendered on the env-declared test guilds (allowlist); the click
+    re-runs the full console guard (bot admin, never prod, allowlist)
+    before opening the console view \u2014 the mandate: seeing the
+    button never implies being allowed to click it.
     """
 
     def __init__(self) -> None:
@@ -742,11 +907,11 @@ class AdminConsoleButton(
     async def callback(self, interaction: discord.Interaction) -> None:
         """Open the console view from the /admin panel."""
         if _deploy_env() in PROD_ENV_NAMES or not is_test_guild(interaction.guild_id):
-            await interaction.response.edit_message(view=_console_view(interaction.guild_id))
+            await interaction.response.edit_message(view=await _console_view(interaction.guild_id, interaction.client))
             return
         if not await _guard(interaction):
             return
-        await interaction.response.edit_message(view=_console_view(interaction.guild_id))
+        await interaction.response.edit_message(view=await _console_view(interaction.guild_id, interaction.client))
 
 
 class ConsoleBackButton(
@@ -786,54 +951,9 @@ class ConsoleBackButton(
 def register_console_items(bot: discord.Client) -> None:
     """Register the console's DynamicItems (called at every startup).
 
-    The registered actions' item classes ride along — an extension
+    The registered actions' item classes ride along \u2014 an extension
     action registers its button once and the boot wiring follows.
     """
-    bot.add_dynamic_items(AdminConsoleButton, ConsoleBackButton)
+    bot.add_dynamic_items(AdminConsoleButton, ConsoleBackButton, DevInstallButton, DevDangerButton)
     for action in registered_console_actions():
         bot.add_dynamic_items(action.item_cls)
-
-
-# ── The built-in actions (registered at import; extensions follow) ─────────
-
-register_console_action(
-    ConsoleAction(
-        key="clean-managed",
-        item_cls=DevCleanManagedButton,
-        build=lambda disabled: DevCleanManagedButton(disabled=disabled),
-        description=(
-            "**Clean managed** removes only what the bot created "
-            "(persisted channels, mod roles, the bot-admins role)."
-        ),
-    )
-)
-register_console_action(
-    ConsoleAction(
-        key="nuke",
-        item_cls=DevNukeButton,
-        build=lambda disabled: DevNukeButton(disabled=disabled),
-        description=(
-            "**Nuke** removes every channel, category and role of this guild "
-            "(triple confirmation)."
-        ),
-    )
-)
-register_console_action(
-    ConsoleAction(
-        key="reset-data",
-        item_cls=DevResetDataButton,
-        build=lambda disabled: DevResetDataButton(disabled=disabled),
-        description=(
-            "**Reset data** wipes this guild's persisted data "
-            "(isolated — nothing outside this guild is touched)."
-        ),
-    )
-)
-register_console_action(
-    ConsoleAction(
-        key="install",
-        item_cls=DevInstallButton,
-        build=lambda disabled: DevInstallButton(disabled=disabled),
-        description=("**Install** opens the mods/games selection."),
-    )
-)

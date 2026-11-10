@@ -600,3 +600,31 @@ en:
     decided: '## 🛡 Staff application **{mod}**
 
       <@{user_id}> — **{verb}** by <@{decided_by}>.'
+
+  console:
+    title: "# ⚙️ Console"
+    note_allowed: "This guild is on the test allowlist — the actions below apply to **this guild only**."
+    note_denied: "This guild is **not** on the test allowlist — the actions are disabled (BOTFORGE_TEST_GUILD_IDS decides, env-defined)."
+    install_btn: "📦 Install"
+    danger_btn: "⚠️ Danger Zone"
+    install_modal_title: "Install mods & games"
+    install_label_mods: "Mods"
+    install_label_games: "Games"
+    install_placeholder_mods: "Mods to install…"
+    install_placeholder_games: "Games to install…"
+    install_no_mods: "(no mod declared)"
+    install_no_games: "(no game declared)"
+    install_applied: "Install applied."
+    install_refused: "❌ Install refused: the mod **{mod}** requires the game(s) {games}, which this platform does not declare."
+    danger_modal_title: "⚠️ Danger Zone"
+    danger_label_channels: "Channels"
+    danger_label_roles: "Roles"
+    danger_label_data: "Data"
+    danger_opt_none: "None"
+    danger_opt_bot: "Bot-managed only"
+    danger_opt_all: "All"
+    danger_opt_keep: "Keep everything"
+    danger_opt_delete: "Delete everything"
+    danger_nothing: "Nothing selected — nothing done."
+    danger_done: "Danger Zone applied — channels: {channels}, roles: {roles}, data: {data}."
+    danger_data_kept: "kept"
