@@ -446,12 +446,6 @@ async def _console_view(guild_id: str | int | None, client: Any = None) -> disco
     )
     row: discord.ui.ActionRow[discord.ui.LayoutView] = discord.ui.ActionRow()
     row.add_item(
-        DevInstallButton(
-            label=await _tr_guild(client, guild_id, "install_btn", "\U0001f4e6 Install"),
-            disabled=not allowed,
-        )
-    )
-    row.add_item(
         DevDangerButton(
             label=await _tr_guild(client, guild_id, "danger_btn", "\u26a0\ufe0f Danger Zone"),
             disabled=not allowed,
@@ -467,142 +461,6 @@ async def _console_view(guild_id: str | int | None, client: Any = None) -> disco
     back_row.add_item(ConsoleBackButton())
     view.add_item(back_row)
     return view
-
-
-class DevInstallButton(
-    discord.ui.DynamicItem[discord.ui.Button[Any]],
-    template=rf"{_NS}:install",
-):
-    """Open the mods/games install modal."""
-
-    def __init__(self, label: str = "\U0001f4e6 Install", disabled: bool = False) -> None:
-        super().__init__(
-            discord.ui.Button(
-                label=label,
-                disabled=disabled,
-                style=discord.ButtonStyle.success,
-                custom_id=f"{_NS}:install",
-            )
-        )
-
-    @classmethod
-    async def from_custom_id(
-        cls,
-        interaction: discord.Interaction,
-        item: discord.ui.Item[Any],
-        match: re.Match[str],
-        /,
-    ) -> DevInstallButton:
-        """Rebuild the item from the wire."""
-        del interaction, item, match
-        return cls()
-
-    async def callback(self, interaction: discord.Interaction) -> None:
-        """Open the mods/games install modal."""
-        if not await _guard(interaction):
-            return
-        await interaction.response.send_modal(await DevInstallModal.build(interaction))
-
-
-class DevInstallModal(discord.ui.Modal):
-    """The mods/games selection modal: two Label-wrapped selects.
-
-    A bare select inside a modal is rejected by the API (50035); the
-    Label-wrapped one works (the discord-components skill). An optional
-    select needs ``required=False`` + ``min_values=0`` \u2014 the API
-    rejects ``min_values=0`` on a required component (the exact trap
-    that made the first install modal dead on the test env).
-    """
-
-    @classmethod
-    async def build(cls, interaction: discord.Interaction) -> DevInstallModal:
-        """Build the modal with the guild's locale (en fallback)."""
-        bot = interaction.client
-        guild_id = interaction.guild_id
-        return cls(
-            title=await _tr_guild(bot, guild_id, "install_modal_title", "Install mods & games"),
-            label_mods=await _tr_guild(bot, guild_id, "install_label_mods", "Mods"),
-            label_games=await _tr_guild(bot, guild_id, "install_label_games", "Games"),
-            placeholder_mods=await _tr_guild(bot, guild_id, "install_placeholder_mods", "Mods to install\u2026"),
-            placeholder_games=await _tr_guild(bot, guild_id, "install_placeholder_games", "Games to install\u2026"),
-            no_mods=await _tr_guild(bot, guild_id, "install_no_mods", "(no mod declared)"),
-            no_games=await _tr_guild(bot, guild_id, "install_no_games", "(no game declared)"),
-            applied=await _tr_guild(bot, guild_id, "install_applied", "Install applied."),
-            refused=await _tr_guild(
-                bot, guild_id, "install_refused",
-                "\u274c Install refused: the mod **{mod}** requires the game(s) {games}, "
-                "which this platform does not declare.",
-            ),
-        )
-
-    def __init__(
-        self,
-        *,
-        title: str,
-        label_mods: str,
-        label_games: str,
-        placeholder_mods: str,
-        placeholder_games: str,
-        no_mods: str,
-        no_games: str,
-        applied: str,
-        refused: str,
-    ) -> None:
-        super().__init__(title=title[:45], timeout=600.0)
-        self.applied = applied
-        self.refused = refused
-        from botforge.discord.wiring import guild_access_platform
-
-        all_games, all_mods = guild_access_platform()
-        self.all_games = tuple(all_games)
-        self.all_mods = tuple(all_mods)
-        self.mods_select: discord.ui.Select[Any] = discord.ui.Select(
-            placeholder=placeholder_mods[:100],
-            min_values=0,
-            max_values=max(1, len(all_mods)),
-            required=False,
-            options=(
-                [discord.SelectOption(label=mod, value=mod) for mod in all_mods]
-                or [discord.SelectOption(label=no_mods, value="none")]
-            ),
-        )
-        self.games_select: discord.ui.Select[Any] = discord.ui.Select(
-            placeholder=placeholder_games[:100],
-            min_values=0,
-            max_values=max(1, len(all_games)),
-            required=False,
-            options=(
-                [discord.SelectOption(label=game, value=game) for game in all_games]
-                or [discord.SelectOption(label=no_games, value="none")]
-            ),
-        )
-        # every select rides a Label wrapper (the skill's modal pattern)
-        self.add_item(discord.ui.Label(text=label_mods[:45], component=self.mods_select))
-        self.add_item(discord.ui.Label(text=label_games[:45], component=self.games_select))
-
-    async def on_submit(self, interaction: discord.Interaction) -> None:
-        """Guard, validate the dependencies, apply \u2014 or fail loudly."""
-        if not await _guard(interaction):
-            return
-        mods = [v for v in self.mods_select.values if v != "none"]
-        games = [v for v in self.games_select.values if v != "none"]
-        registry = getattr(interaction.client, "registry", None)
-        # a mod whose required games are not declared on the platform is
-        # an impossible selection: fail the modal with the explanation,
-        # never silently drop the mod
-        for mod_name in mods:
-            unknown = [g for g in _mod_games(registry, mod_name) if g not in self.all_games]
-            if unknown:
-                await interaction.response.send_message(
-                    self.refused.format(mod=mod_name, games=", ".join(unknown)),
-                    ephemeral=True,
-                )
-                return
-        games, mods = _propagate(registry, self.all_games, self.all_mods, mods, games)
-        await interaction.response.defer(ephemeral=True)
-        summary = await _apply_selection(interaction, mods, games)
-        logger.info("CONSOLE install applied (guild %s): mods=%s games=%s", interaction.guild_id, mods, games)
-        await interaction.followup.send(f"{self.applied}\n{summary}", ephemeral=True)
 
 
 class DevDangerButton(
@@ -954,6 +812,6 @@ def register_console_items(bot: discord.Client) -> None:
     The registered actions' item classes ride along \u2014 an extension
     action registers its button once and the boot wiring follows.
     """
-    bot.add_dynamic_items(AdminConsoleButton, ConsoleBackButton, DevInstallButton, DevDangerButton)
+    bot.add_dynamic_items(AdminConsoleButton, ConsoleBackButton, DevDangerButton)
     for action in registered_console_actions():
         bot.add_dynamic_items(action.item_cls)

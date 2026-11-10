@@ -116,21 +116,18 @@ async def test_console_view_buttons_disabled_outside_allowlist(monkeypatch: Any)
         states: list[bool] = []
         while stack:
             item = stack.pop()
-            if type(item).__name__ in (
-                "DevInstallButton",
-                "DevDangerButton",
-            ):
+            if type(item).__name__ == "DevDangerButton":
                 states.append(bool(item.item.disabled))
             stack.extend(getattr(item, "children", []) or [])
         return states
 
     states = await button_states("111222333")
-    assert len(states) == 2
+    assert len(states) == 1
     assert all(states)
 
     monkeypatch.setattr(console_guilds, "_TEST_GUILD_IDS", frozenset({"111222333"}))
     states = await button_states("111222333")
-    assert len(states) == 2
+    assert len(states) == 1
     assert not any(states)
 
 
@@ -296,29 +293,6 @@ async def test_console_action_registry_renders_extensions(monkeypatch: Any) -> N
         console_mod._ACTIONS.pop("ext-test", None)
 
 
-def test_install_modal_selects_are_optional() -> None:
-    """The install modal's selects are optional (required=False + min 0).
-
-    The API rejects min_values=0 on a required component (50035) — the
-    exact trap that made the first install modal dead on the test env.
-    """
-    from botforge.discord.console import DevInstallModal
-
-    modal = DevInstallModal(
-        title="Install mods & games",
-        label_mods="Mods",
-        label_games="Games",
-        placeholder_mods="Mods…",
-        placeholder_games="Games…",
-        no_mods="(none)",
-        no_games="(none)",
-        applied="Install applied.",
-        refused="refused: {mod} {games}",
-    )
-    assert modal.mods_select.required is False
-    assert modal.mods_select.min_values == 0
-    assert modal.games_select.required is False
-    assert modal.games_select.min_values == 0
 
 
 def test_danger_modal_defaults_are_safe() -> None:
