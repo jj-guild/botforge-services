@@ -153,6 +153,8 @@ class BotforgeBot(discord.Client):
         self.config = config
         self.status_service = status
         self.registry = registry
+        # the repo root the modular mods live under (None outside a repo — a wheel install)
+        self.repo_root: Any = None
         self.logs_service = logs
         if logs is not None:
             logs.set_locale_resolver(self._native_guild_locale)
@@ -256,6 +258,15 @@ class BotforgeBot(discord.Client):
         if getattr(self, "_home_pin_pending", False):
             self._home_pin_pending = False
     
+
+        # the enabled mods' setup hooks (mod_entrypoint): each mod
+        # re-registers its persistent UI after a restart
+        from botforge.core.services.mod_entrypoint import run_mod_hook
+
+        if self.registry is not None:
+            for mod_name in self.registry.enabled():
+                run_mod_hook(self, mod_name, "setup_hook", repo_root=getattr(self, "repo_root", None))
+
 
     async def on_member_join(self, member: discord.Member) -> None:
         """Keep the member cache fresh between TTLs (owner direction)."""
@@ -880,6 +891,13 @@ class BotforgeBot(discord.Client):
                     message=self.messages.render("lifecycle.stop", locale) if self.messages else "Bot shutting down.",
                 )
                 await self.logs_service.log_event(str(guild.id), event)
+        # the enabled mods' close hooks (mod_entrypoint): each mod stops
+        # its own background tasks
+        from botforge.core.services.mod_entrypoint import run_mod_hook
+
+        if self.registry is not None:
+            for mod_name in self.registry.enabled():
+                run_mod_hook(self, mod_name, "close", repo_root=getattr(self, "repo_root", None))
         if self.registration_engine is not None:
             await self.registration_engine.stop()
         if self.state_service is not None:
@@ -890,7 +908,10 @@ class BotforgeBot(discord.Client):
 def create_bot(config: BotConfig | None = None) -> BotforgeBot:
     """Build the BotForge bot: client, tree, core services and commands."""
     resolved = config or BotConfig.from_env()
-    registry = ModRegistry(load_mod_definitions(Path(resolved.config_dir)))
+    from botforge.core.services.mod_layout import default_repo_root
+
+    repo_root = default_repo_root()
+    registry = ModRegistry(load_mod_definitions(Path(resolved.config_dir), repo_root=repo_root))
     games_dir = Path(resolved.config_dir) / "games"
     games = tuple(sorted(entry.name for entry in games_dir.iterdir() if entry.is_dir())) if games_dir.is_dir() else ()
     status = StatusService(
@@ -928,6 +949,7 @@ def create_bot(config: BotConfig | None = None) -> BotforgeBot:
 
     _install_observability()
     bot = BotforgeBot(config=resolved, status=status, registry=registry)
+    bot.repo_root = repo_root
     bot.games = games
     bot.state_service = shared_state
     bot.logs_service = _build_log_service(resolved, bot, state=shared_state)
@@ -1017,6 +1039,13 @@ def create_bot(config: BotConfig | None = None) -> BotforgeBot:
         tuple(registry.enabled()),
         tuple((name, definition.required_games) for name, definition in registry.enabled().items()),
     )
+    # the enabled mods' register hooks (mod_entrypoint): each mod wires
+    # its own commands, views and admin sections — the core never
+    # imports a mod by name
+    from botforge.core.services.mod_entrypoint import register_mod
+
+    for mod_name in registry.enabled():
+        register_mod(bot, resolved, mod_name, repo_root=getattr(bot, "repo_root", None))
     return bot
 
 
