@@ -94,25 +94,6 @@ jobs:
             seed)      capability=env-control ;;
             clean-env) capability=env-control ;;
             console)   capability=console-ops ;;
-            console)
-              # /console <env> <action> <guild|all> [--confirm NUKE]
-              # env-console.yml runs botforge.cli.console_ops in the env's
-              # botforge-bot container. nuke requires the explicit --confirm
-              # NUKE token (the Actions-side triple-click).
-              CONSOLE_ACTION="$(echo "$COMMENT_BODY" | awk '{print $3}')"
-              CONSOLE_GUILD="$(echo "$COMMENT_BODY" | awk '{print $4}')"
-              [[ -n "$CONSOLE_ACTION" && -n "$CONSOLE_GUILD" ]] \
-                || { echo "::error::usage: /console <env> <clean-managed|nuke|reset-data|install> <guild_id|all> [--confirm NUKE]" >&2; exit 1; }
-              ARGS=(--repo jj-guild/botforge-infra --ref "deploy/$ENVIRONMENT" -f environment="$ENVIRONMENT" -f action="$CONSOLE_ACTION" -f guild="$CONSOLE_GUILD")
-              if echo "$COMMENT_BODY" | grep -q -- '--confirm NUKE'; then
-                ARGS+=(-f confirm=NUKE)
-              fi
-              if [[ "$ENVIRONMENT" == "prod" ]]; then
-                echo "::error::/console is never allowed on prod — refusing before any dispatch" >&2
-                exit 1
-              fi
-              gh workflow run env-console.yml "${ARGS[@]}"
-              ;;
             clear-db) capability=env-control ;;
           esac
           {
@@ -285,6 +266,25 @@ jobs:
               [[ -n "$TO" ]]      && ARGS+=(-f to="$TO")
               [[ -n "$TAIL" ]]    && ARGS+=(-f tail="$TAIL")
               gh workflow run env-logs.yml "${ARGS[@]}"
+              ;;
+            console)
+              # /console <env> <action> <guild|all> [--confirm NUKE]
+              # env-console.yml runs botforge.cli.console_ops in the env's
+              # botforge-bot container. nuke requires the explicit --confirm
+              # NUKE token (the Actions-side triple-click).
+              CONSOLE_ACTION="$(echo "$COMMENT_BODY" | awk '{print $3}')"
+              CONSOLE_GUILD="$(echo "$COMMENT_BODY" | awk '{print $4}')"
+              [[ -n "$CONSOLE_ACTION" && -n "$CONSOLE_GUILD" ]] \
+                || { echo "::error::usage: /console <env> <clean-managed|nuke|reset-data|install> <guild_id|all> [--confirm NUKE]" >&2; exit 1; }
+              ARGS=(--repo jj-guild/botforge-infra --ref "deploy/$ENVIRONMENT" -f environment="$ENVIRONMENT" -f action="$CONSOLE_ACTION" -f guild="$CONSOLE_GUILD")
+              if echo "$COMMENT_BODY" | grep -q -- '--confirm NUKE'; then
+                ARGS+=(-f confirm=NUKE)
+              fi
+              if [[ "$ENVIRONMENT" == "prod" ]]; then
+                echo "::error::/console is never allowed on prod — refusing before any dispatch" >&2
+                exit 1
+              fi
+              gh workflow run env-console.yml "${ARGS[@]}"
               ;;
             restart|start|stop|status|clear-db)
               # env-control is workflow_dispatch-only (two choice lists);
