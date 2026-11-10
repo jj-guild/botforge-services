@@ -237,6 +237,9 @@ class BotforgeBot(discord.Client):
 
         register_admin_dm_items(self)
         register_admin_tree_items(self)
+        from botforge.discord.console import register_console_items
+
+        register_console_items(self)
         from botforge.discord.views_declared import declare_platform_views
         from botforge.discord.views_routing import register_view_router
 

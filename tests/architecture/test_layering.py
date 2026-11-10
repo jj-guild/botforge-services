@@ -196,9 +196,13 @@ def test_r5_discord_reads_no_collection_raw() -> None:
 
 
 # The dated, documented gaps (the audit trail — every chantier shrinks it):
-# The dated, documented gap (the audit trail — every chantier shrinks it):
 ALLOWLIST_R5: tuple[str, ...] = (
     # The purge tool: an operational maintenance script (a destructive
     # purge guarded by a Mongo marker) — not a feature path.
     "botforge/discord/catalog_purge.py touches a collection raw",
+    # The dev console (2026-11): the test-env-only ops surface —
+    # clean-managed/nuke/reset-data wipe the guild's channels, role
+    # mappings and mod state directly (a destructive maintenance path,
+    # same owner rule as the purge tool) — not a feature path.
+    "botforge/discord/console.py touches a collection raw",
 )
