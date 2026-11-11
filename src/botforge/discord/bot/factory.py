@@ -242,9 +242,10 @@ class BotforgeBot(discord.Client):
         from botforge.discord.console import register_console_items
 
         register_console_items(self)
-        from botforge.discord.mods_forum import register_mods_forum_items
+        from botforge.discord.mods_forum import register_catalog_syncs, register_mods_forum_items
 
         register_mods_forum_items(self)
+        register_catalog_syncs()
         from botforge.discord.views_declared import declare_platform_views
         from botforge.discord.views_routing import register_view_router
 

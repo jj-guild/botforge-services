@@ -594,7 +594,13 @@ Data and other attributes inherited from <a href="discord.ui.view.html#BaseView"
 <td class="section-title" colspan=3>&nbsp;<br><strong class="bigsection">Functions</strong></td></tr>
     
 <tr><td class="decor functions-decor"><span class="code">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span></td><td>&nbsp;</td>
-<td class="singlecolumn"><dl><dt><a name="-register_mods_forum_items"><strong>register_mods_forum_items</strong></a>(bot: 'discord.Client') -&gt; 'None'</dt><dd><span class="code">Register&nbsp;the&nbsp;catalog's&nbsp;DynamicItems&nbsp;(called&nbsp;at&nbsp;every&nbsp;startup).</span></dd></dl>
+<td class="singlecolumn"><dl><dt><a name="-register_catalog_syncs"><strong>register_catalog_syncs</strong></a>() -&gt; 'None'</dt><dd><span class="code">Register&nbsp;the&nbsp;catalogs'&nbsp;syncs&nbsp;per&nbsp;scope&nbsp;(the&nbsp;Synchroniser's&nbsp;contract).<br>
+&nbsp;<br>
+The&nbsp;games&nbsp;scope's&nbsp;Synchroniser&nbsp;re-syncs&nbsp;the&nbsp;games&nbsp;catalog,&nbsp;the&nbsp;mods<br>
+scope's&nbsp;the&nbsp;mods&nbsp;catalog&nbsp;—&nbsp;the&nbsp;channels&nbsp;are&nbsp;provisioned&nbsp;first,&nbsp;the<br>
+posts&nbsp;follow&nbsp;in&nbsp;the&nbsp;same&nbsp;pass&nbsp;(the&nbsp;boot&nbsp;alone&nbsp;cannot:&nbsp;the&nbsp;channels<br>
+do&nbsp;not&nbsp;exist&nbsp;yet&nbsp;on&nbsp;a&nbsp;virgin&nbsp;guild).</span></dd></dl>
+ <dl><dt><a name="-register_mods_forum_items"><strong>register_mods_forum_items</strong></a>(bot: 'discord.Client') -&gt; 'None'</dt><dd><span class="code">Register&nbsp;the&nbsp;catalog's&nbsp;DynamicItems&nbsp;(called&nbsp;at&nbsp;every&nbsp;startup).</span></dd></dl>
  <dl><dt>async <a name="-sync_catalogs"><strong>sync_catalogs</strong></a>(guild_id: 'str', bot: 'Any') -&gt; 'int'</dt><dd><span class="code">Sync&nbsp;both&nbsp;catalogs:&nbsp;the&nbsp;games'&nbsp;and&nbsp;the&nbsp;mods'&nbsp;—&nbsp;two&nbsp;perimeters,&nbsp;one&nbsp;pass.</span></dd></dl>
 </td></tr></table><p>
 <table class="section">
@@ -602,6 +608,6 @@ Data and other attributes inherited from <a href="discord.ui.view.html#BaseView"
 <td class="section-title" colspan=3>&nbsp;<br><strong class="bigsection">Data</strong></td></tr>
     
 <tr><td class="decor data-decor"><span class="code">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span></td><td>&nbsp;</td>
-<td class="singlecolumn"><strong>__all__</strong> = ['ModInstallButton', 'ModUninstallButton', 'ModUninstallModal', 'register_mods_forum_items', 'sync_catalogs']<br>
+<td class="singlecolumn"><strong>__all__</strong> = ['ModInstallButton', 'ModUninstallButton', 'ModUninstallModal', 'register_catalog_syncs', 'register_mods_forum_items', 'sync_catalogs']<br>
 <strong>__annotations__</strong> = {'CATALOG_SCOPES': 'dict[str, str]'}</td></tr></table>
 </body></html>
