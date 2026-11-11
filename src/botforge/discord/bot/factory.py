@@ -242,6 +242,9 @@ class BotforgeBot(discord.Client):
         from botforge.discord.console import register_console_items
 
         register_console_items(self)
+        from botforge.discord.mods_forum import register_mods_forum_items
+
+        register_mods_forum_items(self)
         from botforge.discord.views_declared import declare_platform_views
         from botforge.discord.views_routing import register_view_router
 
@@ -484,6 +487,9 @@ class BotforgeBot(discord.Client):
             except Exception:
                 logger.warning("CONTENT REFRESH at boot failed — best-effort", exc_info=True)
             await sync_maps_forum(guild_id, "aoe2", self)
+            from botforge.discord.mods_forum import sync_mods_forum
+
+            await sync_mods_forum(guild_id, self)
             await sync_pools_forum(guild_id, self)
             await sync_entity_forum(guild_id, self, factions_forum_spec(self))
             logger.info("CHANNEL TREE surfaces synced (guild %s)", guild_id)

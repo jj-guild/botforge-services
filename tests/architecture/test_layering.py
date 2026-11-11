@@ -205,6 +205,11 @@ ALLOWLIST_R5: tuple[str, ...] = (
     # mappings and mod state directly (a destructive maintenance path,
     # same owner rule as the purge tool) — not a feature path.
     "botforge/discord/console.py touches a collection raw",
+    # The mods catalog forum (2026-11, botforge-services#374): the posts'
+    # bookkeeping (thread ids per item) is its own operational store —
+    # the same maintenance-path rule as the purge tool, not a feature
+    # path; the install/uninstall data goes through the service.
+    "botforge/discord/mods_forum.py touches a collection raw",
 )
 
 
