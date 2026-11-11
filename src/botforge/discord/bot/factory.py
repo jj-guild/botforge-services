@@ -920,6 +920,26 @@ def create_bot(config: BotConfig | None = None) -> BotforgeBot:
     registry = ModRegistry(load_mod_definitions(Path(resolved.config_dir), repo_root=repo_root))
     games_dir = Path(resolved.config_dir) / "games"
     games = tuple(sorted(entry.name for entry in games_dir.iterdir() if entry.is_dir())) if games_dir.is_dir() else ()
+    # the per-game declaration (config/games/<key>/game.yaml): a game is
+    # default-active unless its declaration says otherwise (the mods are
+    # the inverse: default_active: false unless declared true)
+    import yaml as _yaml
+
+    default_games: list[str] = []
+    for game_key in games:
+        game_decl = games_dir / game_key / "game.yaml"
+        if not game_decl.is_file():
+            default_games.append(game_key)
+            continue
+        with open(game_decl, encoding="utf-8") as fh:
+            data = _yaml.safe_load(fh) or {}
+        if bool(data.get("default_active", True)):
+            default_games.append(game_key)
+    default_mods = tuple(
+        name
+        for name, definition in registry.enabled().items()
+        if definition.default_active
+    )
     status = StatusService(
         registry=registry,
         games=games,
@@ -1044,6 +1064,8 @@ def create_bot(config: BotConfig | None = None) -> BotforgeBot:
         games,
         tuple(registry.enabled()),
         tuple((name, definition.required_games) for name, definition in registry.enabled().items()),
+        default_games=tuple(default_games),
+        default_mods=default_mods,
     )
     # the enabled mods' register hooks (mod_entrypoint): each mod wires
     # its own commands, views and admin sections — the core never

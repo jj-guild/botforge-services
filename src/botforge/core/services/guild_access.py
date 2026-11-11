@@ -51,6 +51,8 @@ class GuildAccessService:
         database: GuildAccessDatabase,
         games: tuple[str, ...] = (),
         mods: tuple[str, ...] = (),
+        default_games: tuple[str, ...] | None = None,
+        default_mods: tuple[str, ...] | None = None,
     ) -> None:
         """Store the seams and the platform's known games and mods.
 
@@ -60,6 +62,11 @@ class GuildAccessService:
         self._db = database
         self._games = tuple(games)
         self._mods = tuple(mods)
+        # the default-active sets (per-declaration flags): what a guild
+        # with NO access document gets — games default active, mods
+        # default inactive (owner direction 2026-11-11)
+        self._default_games = tuple(default_games) if default_games is not None else tuple(games)
+        self._default_mods = tuple(default_mods) if default_mods is not None else ()
 
     async def get(self, guild_id: str) -> dict[str, Any]:
         """Return one guild's access state (default: nothing active)."""
@@ -78,13 +85,13 @@ class GuildAccessService:
         """
         access = await self.get(guild_id)
         granted = tuple(access.get("games") or ())
-        return granted or self._games
+        return granted or self._default_games
 
     async def enabled_mods(self, guild_id: str) -> tuple[str, ...]:
         """List the mods granted to one guild (default: the whole catalog)."""
         access = await self.get(guild_id)
         granted = tuple(access.get("mods") or ())
-        return granted or self._mods
+        return granted or self._default_mods
 
     async def request_access(self, guild_id: str, keys: list[str]) -> dict[str, Any]:
         """Record a guild's request for games/mods (pending approval).

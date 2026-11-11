@@ -90,6 +90,7 @@ class ModDefinition:
     required_games: tuple[str, ...] = field(default_factory=tuple)
     private: bool = False
     owner_ids: tuple[str, ...] = field(default_factory=tuple)
+    default_active: bool = False
 
     def is_private(self) -> bool:
         """Whether the mod is reserved (bot admins + declared owners)."""

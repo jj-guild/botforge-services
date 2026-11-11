@@ -1,0 +1,6 @@
+# The aoe2 game declaration.
+# default_active: what a guild with NO access document gets (the
+# default-open catalog). A game is default-active unless this says
+# otherwise — the mods are the inverse (default_active: false).
+id: aoe2
+default_active: true

@@ -25,6 +25,8 @@ _GUILD_ACCESS_SERVICE: Any | None = None
 _GUILD_ACCESS_READY = False
 _GUILD_ACCESS_PLATFORM: tuple[str, ...] = ()
 _GUILD_ACCESS_MODS: tuple[str, ...] = ()
+_GUILD_ACCESS_DEFAULT_GAMES: tuple[str, ...] = ()
+_GUILD_ACCESS_DEFAULT_MODS: tuple[str, ...] = ()
 _MOD_REQUIRED_GAMES: tuple[tuple[str, tuple[str, ...]], ...] = ()
 
 
@@ -32,12 +34,22 @@ def set_guild_access_platform(
     games: tuple[str, ...],
     mods: tuple[str, ...],
     mod_required_games: tuple[tuple[str, tuple[str, ...]], ...] = (),
+    default_games: tuple[str, ...] | None = None,
+    default_mods: tuple[str, ...] | None = None,
 ) -> None:
-    """Record the platform's known games and mods (bot build time)."""
+    """Record the platform's known games and mods (bot build time).
+
+    The default sets are the per-declaration ``default_active`` flags:
+    what a guild with NO access document gets — games default active,
+    mods default inactive.
+    """
     global _GUILD_ACCESS_PLATFORM, _GUILD_ACCESS_MODS, _MOD_REQUIRED_GAMES
+    global _GUILD_ACCESS_DEFAULT_GAMES, _GUILD_ACCESS_DEFAULT_MODS
     _GUILD_ACCESS_PLATFORM = tuple(games)
     _GUILD_ACCESS_MODS = tuple(mods)
     _MOD_REQUIRED_GAMES = tuple(mod_required_games)
+    _GUILD_ACCESS_DEFAULT_GAMES = tuple(default_games) if default_games is not None else tuple(games)
+    _GUILD_ACCESS_DEFAULT_MODS = tuple(default_mods) if default_mods is not None else ()
 
 
 def guild_access_platform() -> tuple[tuple[str, ...], tuple[str, ...]]:
@@ -72,6 +84,8 @@ def build_guild_access_service() -> Any | None:
             MongoGuildAccessDatabase(get_async_database()),
             games=_GUILD_ACCESS_PLATFORM,
             mods=_GUILD_ACCESS_MODS,
+            default_games=_GUILD_ACCESS_DEFAULT_GAMES,
+            default_mods=_GUILD_ACCESS_DEFAULT_MODS,
         )
     except Exception:
         logger.warning("GUILD ACCESS wiring build failed", exc_info=True)

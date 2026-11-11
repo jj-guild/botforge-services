@@ -104,6 +104,7 @@ def _parse_mod_yaml(data: dict[str, object], source: Path) -> ModDefinition:
     if not isinstance(seasonal, bool):
         raise ValueError(f"{source}: 'seasonal: true|false' is mandatory (mod type: seasonal or permanent)")
 
+    default_active = bool(data.get("default_active", False))
     private = bool(data.get("private", False))
     raw_owners = data.get("owner_discord_ids", [])
     if raw_owners is None:
@@ -121,6 +122,7 @@ def _parse_mod_yaml(data: dict[str, object], source: Path) -> ModDefinition:
         seasonal=seasonal,
         private=private,
         owner_ids=owner_ids,
+        default_active=default_active,
         channel_categories=tuple(categories),
         roles=tuple(roles),
         workflows=tuple(workflows),
