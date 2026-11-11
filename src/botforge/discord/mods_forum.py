@@ -135,6 +135,14 @@ async def _create_post(
     forum = guild.get_channel(int(forum_id)) if guild is not None else None
     if guild is None or forum is None:
         return None
+    if not isinstance(forum, discord.ForumChannel):
+        logger.warning(
+            "mods forum: the stored catalog channel %s is a %s, not a forum — "
+            "re-run the Synchroniser (the provisioning recreates it)",
+            forum_id,
+            type(forum).__name__,
+        )
+        return None
     try:
         thread = await forum.create_thread(
             name=name[:90],
@@ -148,12 +156,13 @@ async def _create_post(
     from botforge.core.models.db import get_async_database
 
     post_id = _catalog_post_id(guild_id, kind, name)
+    thread_id = str(thread.id)  # type: ignore[attr-defined]  # ThreadWithMessage carries the thread
     await get_async_database()[CATALOG_POSTS_COLLECTION].update_one(
         {"_id": post_id},
-        {"$set": {"guild_id": guild_id, "kind": kind, "name": name, "thread_id": str(thread.id)}},
+        {"$set": {"guild_id": guild_id, "kind": kind, "name": name, "thread_id": thread_id}},
         upsert=True,
     )
-    return str(thread.id)
+    return thread_id
 
 
 async def _refresh_post(

@@ -20,6 +20,10 @@ ENV PATH="/app/.venv/bin:$PATH" \
     PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1
 COPY --from=build /app/.venv ./.venv
+# pyproject.toml is the repo-root MARKER the mod loader resolves
+# (botforge.core.services.mod_layout.default_repo_root) — without it
+# the modular mods are invisible in the container
+COPY pyproject.toml ./pyproject.toml
 COPY src/ ./src/
 COPY config/ ./config/
 COPY data/ ./data/

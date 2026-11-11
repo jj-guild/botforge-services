@@ -186,15 +186,15 @@ scopes:
       access: readonly
       description: ui.panels.channels.general_description
     - key: admin
+      label: ui.panels.channels.admin
+      kind: text
+      access: admin
+      description: ui.panels.channels.admin_description
     - key: catalog
       label: ui.panels.channels.catalog
       kind: forum
       access: readonly
       description: ui.panels.channels.catalog_description
-      label: ui.panels.channels.admin
-      kind: text
-      access: admin
-      description: ui.panels.channels.admin_description
   games/aoe2:
     category: ui.panels.categories.games_aoe2
     channels:
