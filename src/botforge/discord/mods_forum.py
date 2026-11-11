@@ -415,10 +415,31 @@ def register_mods_forum_items(bot: discord.Client) -> None:
     bot.add_dynamic_items(ModInstallButton, ModUninstallButton)
 
 
+def register_catalog_syncs() -> None:
+    """Register the catalogs' syncs per scope (the Synchroniser's contract).
+
+    The games scope's Synchroniser re-syncs the games catalog, the mods
+    scope's the mods catalog — the channels are provisioned first, the
+    posts follow in the same pass (the boot alone cannot: the channels
+    do not exist yet on a virgin guild).
+    """
+    from botforge.discord.scope_surfaces import register_scope_sync
+
+    async def _sync_games(guild_id: str, bot: Any) -> int:
+        return await _sync_one_catalog(guild_id, bot, "game")
+
+    async def _sync_mods(guild_id: str, bot: Any) -> int:
+        return await _sync_one_catalog(guild_id, bot, "mod")
+
+    register_scope_sync("games", _sync_games)
+    register_scope_sync("mods", _sync_mods)
+
+
 __all__ = [
     "ModInstallButton",
     "ModUninstallButton",
     "ModUninstallModal",
+    "register_catalog_syncs",
     "register_mods_forum_items",
     "sync_catalogs",
 ]
