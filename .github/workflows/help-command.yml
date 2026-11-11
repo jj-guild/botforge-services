@@ -126,7 +126,7 @@ jobs:
               "| | |",
               "| --- | --- |",
               `| Command | \`${command}\` |`,
-              `| Requested by | ${requestor} (@${login}) |`,
+              `| Requested by | ${requestor} (${login}) |`,
               `| Roles | ${roles} |`,
               `| When (UTC) | ${ts} |`,
               "| Status | ✅ answered |",
@@ -163,7 +163,7 @@ jobs:
               "| | |",
               "| --- | --- |",
               `| Command | \`${command}\` |`,
-              `| Requested by | ${requestor} (@${login}) |`,
+              `| Requested by | ${requestor} (${login}) |`,
               `| Roles | ${roles} |`,
               `| When (UTC) | ${ts} |`,
             ].join("\n");

@@ -23,6 +23,8 @@ jobs:
         run: actionlint -color
       - name: Run the pin-payload cap guard
         run: ./.github/workflows/scripts/check_pin_payloads.sh
+      - name: Run the no-PR-comment-mention guard
+        run: ./.github/workflows/scripts/check_no_pr_comment_mentions.sh
   lint:
     name: Lint (ruff)
     runs-on: ubuntu-latest
