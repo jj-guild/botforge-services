@@ -28,14 +28,19 @@ def _service(db: FakeGuildAccessDB | None = None) -> GuildAccessService:
     return GuildAccessService(db or FakeGuildAccessDB(), games=GAMES, mods=MODS)
 
 
-async def test_default_everything_active() -> None:
-    """A guild with no access doc gets the whole catalog (default open)."""
+async def test_default_follows_the_declaration_flags() -> None:
+    """A guild with no access doc gets the DEFAULT-ACTIVE sets.
+
+    Games default active, mods default inactive (owner direction
+    2026-11-11) — the declaration's default_active flag, distinct from
+    private (visibility).
+    """
     service = _service()
     access = await service.get("123")
     assert access["games"] == []
     assert access["mods"] == []
-    assert await service.enabled_games("123") == GAMES
-    assert await service.enabled_mods("123") == MODS
+    assert await service.enabled_games("123") == GAMES  # default-active games
+    assert await service.enabled_mods("123") == ()  # no default-active mod
 
 
 async def test_request_then_approve_grants_access() -> None:

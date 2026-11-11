@@ -186,12 +186,12 @@ Data descriptors inherited from <a href="builtins.html#BaseException">builtins.B
 <td class="section-title" colspan=3>&nbsp;<br><a name="GuildAccessService">class <strong>GuildAccessService</strong></a>(<a href="builtins.html#object">builtins.object</a>)</td></tr>
     
 <tr><td class="decor title-decor" rowspan=2><span class="code">&nbsp;&nbsp;&nbsp;</span></td>
-<td class="decor title-decor" colspan=2><span class="code"><a href="#GuildAccessService">GuildAccessService</a>(database:&nbsp;'<a href="#GuildAccessDatabase">GuildAccessDatabase</a>',&nbsp;games:&nbsp;'tuple[str,&nbsp;...]'&nbsp;=&nbsp;(),&nbsp;mods:&nbsp;'tuple[str,&nbsp;...]'&nbsp;=&nbsp;())&nbsp;-&amp;gt;&nbsp;'None'<br>
+<td class="decor title-decor" colspan=2><span class="code"><a href="#GuildAccessService">GuildAccessService</a>(database:&nbsp;'<a href="#GuildAccessDatabase">GuildAccessDatabase</a>',&nbsp;games:&nbsp;'tuple[str,&nbsp;...]'&nbsp;=&nbsp;(),&nbsp;mods:&nbsp;'tuple[str,&nbsp;...]'&nbsp;=&nbsp;(),&nbsp;default_games:&nbsp;'tuple[str,&nbsp;...]&nbsp;|&nbsp;None'&nbsp;=&nbsp;None,&nbsp;default_mods:&nbsp;'tuple[str,&nbsp;...]&nbsp;|&nbsp;None'&nbsp;=&nbsp;None)&nbsp;-&amp;gt;&nbsp;'None'<br>
 &nbsp;<br>
 Per-guild&nbsp;grants&nbsp;of&nbsp;games&nbsp;and&nbsp;mods:&nbsp;request,&nbsp;approve,&nbsp;revoke.<br>&nbsp;</span></td></tr>
 <tr><td>&nbsp;</td>
 <td class="singlecolumn">Methods defined here:<br>
-<dl><dt><a name="GuildAccessService-__init__"><strong>__init__</strong></a>(self, database: 'GuildAccessDatabase', games: 'tuple[str, ...]' = (), mods: 'tuple[str, ...]' = ()) -&gt; 'None'</dt><dd><span class="code">Store&nbsp;the&nbsp;seams&nbsp;and&nbsp;the&nbsp;platform's&nbsp;known&nbsp;games&nbsp;and&nbsp;mods.<br>
+<dl><dt><a name="GuildAccessService-__init__"><strong>__init__</strong></a>(self, database: 'GuildAccessDatabase', games: 'tuple[str, ...]' = (), mods: 'tuple[str, ...]' = (), default_games: 'tuple[str, ...] | None' = None, default_mods: 'tuple[str, ...] | None' = None) -&gt; 'None'</dt><dd><span class="code">Store&nbsp;the&nbsp;seams&nbsp;and&nbsp;the&nbsp;platform's&nbsp;known&nbsp;games&nbsp;and&nbsp;mods.<br>
 &nbsp;<br>
 ``games``/``mods``&nbsp;restrict&nbsp;what&nbsp;a&nbsp;guild&nbsp;may&nbsp;be&nbsp;granted:&nbsp;only<br>
 keys&nbsp;the&nbsp;platform&nbsp;actually&nbsp;ships&nbsp;(config)&nbsp;can&nbsp;be&nbsp;approved.</span></dd></dl>

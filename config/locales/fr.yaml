@@ -520,6 +520,13 @@ fr:
       menu.mods.admin:
         title: 🧩 Mods
         description: Gérer les mods du serveur.
+
+      menu.mod.kingdom:
+        title: 👑 Kingdom
+        description: "L'accueil du mod Kingdom — les surfaces réelles arrivent avec le portage (botforge-services#368)"
+      menu.mod.kingdom.admin:
+        title: 👑 Kingdom — admin
+        description: "L'admin du mod Kingdom — le panneau des saisons et les candidats arrivent avec le portage"
     mods:
       homes:
         ladder: Ladder
