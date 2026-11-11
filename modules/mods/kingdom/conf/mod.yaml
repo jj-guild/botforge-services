@@ -1,0 +1,35 @@
+# kingdom mod declaration (botforge mod init).
+# Schema (validated by botforge.core.services.mod_registry at startup):
+#   id            required, simple slug, must match the package name
+#   enabled       bool (default true); disabled mods are never loaded
+#   seasonal      bool, MANDATORY; the mod type (seasonal or permanent)
+#                 branches the admin surface (lifecycle panel + season
+#                 salons vs one guild-level config channel)
+#   settings      free-form, mod-specific
+#   channels      list of {key, display_name, description, per_instance}
+#   roles         list of {key, display_name, color, hoisted}
+#   workflows     list of workflow names implemented by the mod
+#   commands      list of command names implemented by the mod
+#   dependencies  list of mod ids this mod depends on
+#   private       bool (default false); a private mod is provisioned and
+#                 visible only to its owners and the bot admins
+#   owner_discord_ids  list of Discord user ids (mandatory when private)
+# Channels are addressed at runtime as "mod:key" (e.g. "kingdom:announce").
+id: kingdom
+enabled: true
+seasonal: true
+private: true
+owner_discord_ids:
+  - "242421489536729100"
+settings: {}
+channels:
+  - key: announce
+    display_name: Kingdom
+    description: Where the kingdom mod posts announcements
+roles:
+  - key: kingdom_member
+    display_name: Kingdom Member
+workflows: []
+commands:
+  - kingdom
+dependencies: []

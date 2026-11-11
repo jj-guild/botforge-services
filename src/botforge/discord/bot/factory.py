@@ -487,9 +487,9 @@ class BotforgeBot(discord.Client):
             except Exception:
                 logger.warning("CONTENT REFRESH at boot failed — best-effort", exc_info=True)
             await sync_maps_forum(guild_id, "aoe2", self)
-            from botforge.discord.mods_forum import sync_mods_forum
+            from botforge.discord.mods_forum import sync_catalogs
 
-            await sync_mods_forum(guild_id, self)
+            await sync_catalogs(guild_id, self)
             await sync_pools_forum(guild_id, self)
             await sync_entity_forum(guild_id, self, factions_forum_spec(self))
             logger.info("CHANNEL TREE surfaces synced (guild %s)", guild_id)

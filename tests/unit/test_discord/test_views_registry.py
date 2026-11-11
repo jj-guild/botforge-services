@@ -72,7 +72,7 @@ def test_the_placeholder_mods_are_disabled() -> None:
     mods_home = get_view("menu:mods:home")
     assert mods_home is not None
     placeholders = [b for b in mods_home.buttons if b.disabled]
-    assert len(placeholders) == 3, "ladder, tournament, kingdom: the three placeholders"
+    assert len(placeholders) == 2, "ladder, tournament: the two placeholders (kingdom is active)"
 
 
 def test_the_game_admin_menu_declares_its_actions() -> None:
