@@ -233,3 +233,8 @@ scopes:
       kind: text
       access: admin
       description: ui.panels.channels.admin_description
+    - key: catalog
+      label: ui.panels.channels.mods_catalog
+      kind: forum
+      access: readonly
+      description: ui.panels.channels.mods_catalog_description

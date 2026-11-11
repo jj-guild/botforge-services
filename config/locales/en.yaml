@@ -440,6 +440,8 @@ en:
         maps_description: 'one sheet per map: image, description, pools'
         map_pools: 🧱 map pools
         map_pools_description: 'one sheet per map pool: composition and state'
+        mods_catalog: "📦 Mods catalog"
+        mods_catalog_description: "One post per game and per mod — install, uninstall, manage the data"
       categories:
         bot: 🤖 bot
         games: 🎮 games
@@ -625,3 +627,18 @@ en:
     danger_data_kept: "nothing deleted"
     danger_nothing: "Nothing selected — nothing done."
     danger_done: "Danger Zone applied — channels: {channels}, roles: {roles}, data: {data}."
+  mods:
+    forum:
+      installed: "Installed"
+      not_installed: "Not installed"
+      requires: "Requires"
+      install_btn: "Install"
+      uninstall_btn: "Uninstall"
+      uninstall_modal_title: "Uninstall {item}"
+      uninstall_modal_label: "Data"
+      opt_keep: "Keep the data (a reinstall restores the state)"
+      opt_delete: "Delete the data (the mod's own collections)"
+      installed_done: "Installed."
+      uninstalled_done: "Uninstalled."
+      refused: "Refused: {reason}"
+      admin_only: "The catalog actions are reserved for bot admins."

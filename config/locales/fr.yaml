@@ -440,6 +440,8 @@ fr:
         maps_description: 'une fiche par carte : image, description, pools'
         map_pools: 🧱 map pools
         map_pools_description: 'une fiche par map pool : composition et état'
+        mods_catalog: "📦 Catalogue des mods"
+        mods_catalog_description: "Un post par jeu et par mod — installer, désinstaller, gérer les données"
       categories:
         bot: 🤖 bot
         games: 🎮 games
@@ -627,3 +629,18 @@ fr:
     danger_data_kept: "rien de supprimé"
     danger_nothing: "Rien de sélectionné — rien de fait."
     danger_done: "Zone de danger appliquée — salons : {channels}, rôles : {roles}, données : {data}."
+  mods:
+    forum:
+      installed: "Installé"
+      not_installed: "Non installé"
+      requires: "Requiert"
+      install_btn: "Installer"
+      uninstall_btn: "Désinstaller"
+      uninstall_modal_title: "Désinstaller {item}"
+      uninstall_modal_label: "Données"
+      opt_keep: "Conserver les données (une réinstallation restaure l'état)"
+      opt_delete: "Supprimer les données (les collections du mod)"
+      installed_done: "Installé."
+      uninstalled_done: "Désinstallé."
+      refused: "Refusé : {reason}"
+      admin_only: "Les actions du catalogue sont réservées aux bot-admins."
