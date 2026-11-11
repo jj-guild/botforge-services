@@ -45,22 +45,25 @@ def test_install_button_rebuilds_from_the_wire() -> None:
     assert not re.search(_INSTALL_TEMPLATE, "modcatalog:uninstall:mod:kingdoms")
 
 
-def test_uninstall_modal_data_select_is_optional() -> None:
-    """The data select is optional (required=False + min 0) — the modal trap."""
+def test_uninstall_modal_selects_are_optional() -> None:
+    """Both selects (data, channels/roles) are optional — the modal trap."""
     modal = ModUninstallModal(
         kind="mod",
         name="kingdoms",
         title="Uninstall kingdoms",
-        label="Data",
-        opt_keep="Keep the data",
-        opt_delete="Delete the data",
+        data_label="Data",
+        data_keep="Keep the data",
+        data_delete="Delete the data",
+        channels_label="Channels and roles",
+        channels_keep="Keep the channels",
+        channels_delete="Delete the channels",
         done="Uninstalled.",
         refused="Refused: {reason}",
     )
-    assert modal.data_select.required is False
-    assert modal.data_select.min_values == 0
-    values = {opt.value for opt in modal.data_select.options}
-    assert values == {ModUninstallModal.DATA_KEEP, ModUninstallModal.DATA_DELETE}
+    for select in (modal.data_select, modal.channels_select):
+        assert select.required is False
+        assert select.min_values == 0
+        assert {opt.value for opt in select.options} == {ModUninstallModal.KEEP, ModUninstallModal.DELETE}
 
 
 def test_catalog_post_id_is_stable() -> None:

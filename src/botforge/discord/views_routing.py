@@ -417,7 +417,7 @@ def _label(catalog: Any, key: str, locale: str, fallback: str = "?") -> str:
     return rendered if rendered != key else fallback
 
 
-def build_declared_menu(bot: Any, view_id: str) -> Any:
+def build_declared_menu(bot: Any, view_id: str) -> Any:  # noqa: C901
     """Build a declared menu's layout: title, description, buttons, footer.
 
     The single menu builder: every declared menu renders through it,
@@ -469,7 +469,11 @@ def build_declared_menu(bot: Any, view_id: str) -> Any:
         row: discord.ui.ActionRow[discord.ui.LayoutView] = discord.ui.ActionRow()
         for button in menu_buttons(decl, catalog, locale):
             row.add_item(button)
-        view.add_item(row)
+        # a menu with NO buttons sends no row: Discord rejects an empty
+        # action row (50035 "Must be between 1 and 5 in length") — the
+        # placeholder mod menus (kingdom until its portage) stay renderable
+        if len(row.children) > 0:
+            view.add_item(row)
         # The dev console rides the declared admin menu (the pin AND the
         # ephemeral home→admin both render this builder): test guilds only
         # (the allowlist), the button's own guards re-check every click.

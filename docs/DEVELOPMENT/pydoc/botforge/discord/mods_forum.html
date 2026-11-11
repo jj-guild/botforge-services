@@ -346,9 +346,9 @@ classes&nbsp;in&nbsp;the&nbsp;first&nbsp;place&nbsp;with&nbsp;`class&nbsp;Foo[T]
 <td class="section-title" colspan=3>&nbsp;<br><a name="ModUninstallModal">class <strong>ModUninstallModal</strong></a>(<a href="discord.ui.modal.html#Modal">discord.ui.modal.Modal</a>)</td></tr>
     
 <tr><td class="decor title-decor" rowspan=2><span class="code">&nbsp;&nbsp;&nbsp;</span></td>
-<td class="decor title-decor" colspan=2><span class="code"><a href="#ModUninstallModal">ModUninstallModal</a>(*,&nbsp;kind:&nbsp;'str',&nbsp;name:&nbsp;'str',&nbsp;title:&nbsp;'str',&nbsp;label:&nbsp;'str',&nbsp;opt_keep:&nbsp;'str',&nbsp;opt_delete:&nbsp;'str',&nbsp;done:&nbsp;'str',&nbsp;refused:&nbsp;'str')&nbsp;-&amp;gt;&nbsp;'None'<br>
+<td class="decor title-decor" colspan=2><span class="code"><a href="#ModUninstallModal">ModUninstallModal</a>(*,&nbsp;kind:&nbsp;'str',&nbsp;name:&nbsp;'str',&nbsp;title:&nbsp;'str',&nbsp;data_label:&nbsp;'str',&nbsp;data_keep:&nbsp;'str',&nbsp;data_delete:&nbsp;'str',&nbsp;channels_label:&nbsp;'str',&nbsp;channels_keep:&nbsp;'str',&nbsp;channels_delete:&nbsp;'str',&nbsp;done:&nbsp;'str',&nbsp;refused:&nbsp;'str')&nbsp;-&amp;gt;&nbsp;'None'<br>
 &nbsp;<br>
-The&nbsp;uninstall&nbsp;modal:&nbsp;keep&nbsp;the&nbsp;data&nbsp;or&nbsp;delete&nbsp;it&nbsp;—&nbsp;explicit,&nbsp;never&nbsp;a&nbsp;default.<br>&nbsp;</span></td></tr>
+The&nbsp;uninstall&nbsp;modal:&nbsp;the&nbsp;data&nbsp;AND&nbsp;the&nbsp;channels/roles&nbsp;choices&nbsp;—&nbsp;explicit,&nbsp;never&nbsp;a&nbsp;default.<br>&nbsp;</span></td></tr>
 <tr><td>&nbsp;</td>
 <td class="singlecolumn"><dl><dt>Method resolution order:</dt>
 <dd><a href="botforge.discord.mods_forum.html#ModUninstallModal">ModUninstallModal</a></dd>
@@ -358,9 +358,9 @@ The&nbsp;uninstall&nbsp;modal:&nbsp;keep&nbsp;the&nbsp;data&nbsp;or&nbsp;delete&
 </dl>
 <hr>
 Methods defined here:<br>
-<dl><dt><a name="ModUninstallModal-__init__"><strong>__init__</strong></a>(self, *, kind: 'str', name: 'str', title: 'str', label: 'str', opt_keep: 'str', opt_delete: 'str', done: 'str', refused: 'str') -&gt; 'None'</dt><dd><span class="code">Initialize&nbsp;self.&nbsp;&nbsp;See&nbsp;help(type(self))&nbsp;for&nbsp;accurate&nbsp;signature.</span></dd></dl>
+<dl><dt><a name="ModUninstallModal-__init__"><strong>__init__</strong></a>(self, *, kind: 'str', name: 'str', title: 'str', data_label: 'str', data_keep: 'str', data_delete: 'str', channels_label: 'str', channels_keep: 'str', channels_delete: 'str', done: 'str', refused: 'str') -&gt; 'None'</dt><dd><span class="code">Initialize&nbsp;self.&nbsp;&nbsp;See&nbsp;help(type(self))&nbsp;for&nbsp;accurate&nbsp;signature.</span></dd></dl>
 
-<dl><dt>async <a name="ModUninstallModal-on_submit"><strong>on_submit</strong></a>(self, interaction: 'discord.Interaction') -&gt; 'None'</dt><dd><span class="code">Apply&nbsp;the&nbsp;uninstall&nbsp;with&nbsp;the&nbsp;stated&nbsp;data&nbsp;choice.</span></dd></dl>
+<dl><dt>async <a name="ModUninstallModal-on_submit"><strong>on_submit</strong></a>(self, interaction: 'discord.Interaction') -&gt; 'None'</dt><dd><span class="code">Apply&nbsp;the&nbsp;uninstall&nbsp;with&nbsp;the&nbsp;stated&nbsp;data&nbsp;and&nbsp;channels/roles&nbsp;choices.</span></dd></dl>
 
 <hr>
 Class methods defined here:<br>
@@ -368,9 +368,9 @@ Class methods defined here:<br>
 
 <hr>
 Data and other attributes defined here:<br>
-<dl><dt><strong>DATA_DELETE</strong> = 'delete'</dl>
+<dl><dt><strong>DELETE</strong> = 'delete'</dl>
 
-<dl><dt><strong>DATA_KEEP</strong> = 'keep'</dl>
+<dl><dt><strong>KEEP</strong> = 'keep'</dl>
 
 <dl><dt><strong>__annotations__</strong> = {}</dl>
 
