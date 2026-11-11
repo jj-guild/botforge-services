@@ -518,6 +518,7 @@ class DevDangerModal(discord.ui.Modal):
         guild_id = interaction.guild_id
 
         async def tr(key: str, fallback: str) -> str:
+            """Translate ``key`` for this guild, falling back to the literal."""
             return await _tr_guild(bot, guild_id, key, fallback)
 
         return cls(
