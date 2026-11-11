@@ -61,7 +61,11 @@ while&nbsp;mod&nbsp;provisioning&nbsp;is&nbsp;the&nbsp;strict&nbsp;seam&nbsp;(no
 Recorded&nbsp;at&nbsp;bot&nbsp;build&nbsp;time&nbsp;from&nbsp;the&nbsp;mod&nbsp;registry,&nbsp;next&nbsp;to&nbsp;the<br>
 platform's&nbsp;games/mods&nbsp;—&nbsp;the&nbsp;request&nbsp;picker&nbsp;uses&nbsp;it&nbsp;to&nbsp;add&nbsp;a&nbsp;mod's<br>
 games&nbsp;to&nbsp;the&nbsp;guild's&nbsp;request&nbsp;automatically.</span></dd></dl>
- <dl><dt><a name="-set_guild_access_platform"><strong>set_guild_access_platform</strong></a>(games: 'tuple[str, ...]', mods: 'tuple[str, ...]', mod_required_games: 'tuple[tuple[str, tuple[str, ...]], ...]' = ()) -&gt; 'None'</dt><dd><span class="code">Record&nbsp;the&nbsp;platform's&nbsp;known&nbsp;games&nbsp;and&nbsp;mods&nbsp;(bot&nbsp;build&nbsp;time).</span></dd></dl>
+ <dl><dt><a name="-set_guild_access_platform"><strong>set_guild_access_platform</strong></a>(games: 'tuple[str, ...]', mods: 'tuple[str, ...]', mod_required_games: 'tuple[tuple[str, tuple[str, ...]], ...]' = (), default_games: 'tuple[str, ...] | None' = None, default_mods: 'tuple[str, ...] | None' = None) -&gt; 'None'</dt><dd><span class="code">Record&nbsp;the&nbsp;platform's&nbsp;known&nbsp;games&nbsp;and&nbsp;mods&nbsp;(bot&nbsp;build&nbsp;time).<br>
+&nbsp;<br>
+The&nbsp;default&nbsp;sets&nbsp;are&nbsp;the&nbsp;per-declaration&nbsp;``default_active``&nbsp;flags:<br>
+what&nbsp;a&nbsp;guild&nbsp;with&nbsp;NO&nbsp;access&nbsp;document&nbsp;gets&nbsp;—&nbsp;games&nbsp;default&nbsp;active,<br>
+mods&nbsp;default&nbsp;inactive.</span></dd></dl>
  <dl><dt>async <a name="-sync_known_guilds"><strong>sync_known_guilds</strong></a>(guild_ids: 'Any') -&gt; 'int'</dt><dd><span class="code">Ensure&nbsp;every&nbsp;guild&nbsp;the&nbsp;bot&nbsp;sits&nbsp;in&nbsp;has&nbsp;its&nbsp;access&nbsp;document.<br>
 &nbsp;<br>
 The&nbsp;admin&nbsp;DM&nbsp;panel's&nbsp;server&nbsp;count&nbsp;reads&nbsp;the&nbsp;``guild_access``<br>
@@ -77,6 +81,6 @@ ensured;&nbsp;best-effort,&nbsp;never&nbsp;raises.</span></dd></dl>
 <td class="section-title" colspan=3>&nbsp;<br><strong class="bigsection">Data</strong></td></tr>
     
 <tr><td class="decor data-decor"><span class="code">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span></td><td>&nbsp;</td>
-<td class="singlecolumn"><strong>__annotations__</strong> = {'_GAMES_SERVICE': 'Any | None', '_GUILD_ACCESS_MODS': 'tuple[str, ...]', '_GUILD_ACCESS_PLATFORM': 'tuple[str, ...]', '_GUILD_ACCESS_SERVICE': 'Any | None', '_MOD_REQUIRED_GAMES': 'tuple[tuple[str, tuple[str, ...]], ...]'}<br>
+<td class="singlecolumn"><strong>__annotations__</strong> = {'_GAMES_SERVICE': 'Any | None', '_GUILD_ACCESS_DEFAULT_GAMES': 'tuple[str, ...]', '_GUILD_ACCESS_DEFAULT_MODS': 'tuple[str, ...]', '_GUILD_ACCESS_MODS': 'tuple[str, ...]', '_GUILD_ACCESS_PLATFORM': 'tuple[str, ...]', '_GUILD_ACCESS_SERVICE': 'Any | None', '_MOD_REQUIRED_GAMES': 'tuple[tuple[str, tuple[str, ...]], ...]'}<br>
 <strong>logger</strong> = &lt;Logger botforge.wiring (INFO)&gt;</td></tr></table>
 </body></html>

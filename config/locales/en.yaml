@@ -518,6 +518,13 @@ en:
       menu.mods.admin:
         title: 🧩 Mods
         description: Manage the server's mods.
+
+      menu.mod.kingdom:
+        title: 👑 Kingdom
+        description: "The Kingdom mod's home — the real surfaces land with the portage (botforge-services#368)"
+      menu.mod.kingdom.admin:
+        title: 👑 Kingdom — admin
+        description: "The Kingdom mod's admin — the season panel and the candidates land with the portage"
     mods:
       homes:
         ladder: Ladder

@@ -69,11 +69,15 @@ def _service(
 
 
 async def test_default_open_installing_materializes_the_doc() -> None:
-    """Default open: installing materializes the WHOLE active set (explicit)."""
+    """Default: games active, mods inactive — installing materializes the set.
+
+    The doc freezes the default-active games plus the installed mod
+    (the other mod stays out: it is not default-active).
+    """
     service, _ = _service()
     result = await service.install("123", mods=("ladder",))
     assert result.ok
-    assert result.active_mods == ("kingdoms", "ladder")  # the doc freezes the open catalog
+    assert result.active_mods == ("ladder",)
     assert result.active_games == ("aoe2",)
 
 
@@ -166,4 +170,4 @@ async def test_status_lists_the_active_sets() -> None:
     await service.install("123", mods=("kingdoms",))
     status = await service.status("123")
     assert status["games"] == ("aoe2",)
-    assert status["mods"] == ("kingdoms", "ladder")
+    assert status["mods"] == ("kingdoms",)
