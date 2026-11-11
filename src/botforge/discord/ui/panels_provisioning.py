@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Callable
+from typing import Any
 
 import discord
 
@@ -181,6 +182,17 @@ async def _ensure_scope_category(
     return await platform.ensure_category(name)
 
 
+def _kind_matches(channel: Any, kind: str) -> bool:
+    """Whether a live channel's Discord type matches the declared kind."""
+    import discord
+
+    if kind == "forum":
+        return isinstance(channel, discord.ForumChannel)
+    if kind == "text":
+        return isinstance(channel, discord.TextChannel) and not isinstance(channel, discord.ForumChannel)
+    return True
+
+
 async def provision_scope(
     guild: discord.Guild,
     spec: ScopeSpec,
@@ -206,7 +218,7 @@ async def provision_scope(
             stored = await stored_channel_id(str(guild.id), spec.scope, decl.key)
             if stored and stored.isdigit():
                 channel = guild.get_channel(int(stored))
-                if channel is not None:
+                if channel is not None and _kind_matches(channel, decl.kind):
                     existing = getattr(channel, "name", "")
                     if existing != name:
                         await channel.edit(
@@ -215,6 +227,19 @@ async def provision_scope(
                     await _apply_access(guild, stored, decl)
                     resolved[decl.key] = stored
                     continue
+                # a stored channel of the WRONG kind (a corrupted
+                # provisioning, a manual conversion): it is treated as
+                # absent — a fresh channel of the declared kind replaces
+                # it and its stored id is overwritten (self-healing)
+                if channel is not None:
+                    logger.warning(
+                        "panels provisioning: stored channel %s/%s has the wrong kind "
+                        "(declared %s, found %s) — recreating",
+                        spec.scope,
+                        decl.key,
+                        decl.kind,
+                        type(channel).__name__,
+                    )
             if decl.kind == "forum":
                 channel_id = await platform.ensure_forum(name, category_id)
             else:
