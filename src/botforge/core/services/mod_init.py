@@ -71,14 +71,15 @@ cog never touches the mod's collections or internals directly.
 
 from __future__ import annotations
 
-from typing import Any, Protocol
+from typing import Any, Protocol, runtime_checkable
 
 
+@runtime_checkable
 class {class_name}Service(Protocol):
     """What the {name} mod's service exposes to its cog."""
 
     async def status(self, guild_id: str) -> dict[str, Any]:
-        """The mod's status for the guild (the cog renders it)."""
+        """Return the mod's status for the guild (the cog renders it)."""
         ...
 '''
 
@@ -100,7 +101,7 @@ class {class_name}ServiceImpl({class_name}Contract):
     """The {name} mod's service implementation (in-process today)."""
 
     async def status(self, guild_id: str) -> dict[str, Any]:
-        """The mod's status for the guild (the cog renders it)."""
+        """Return the mod's status for the guild (the cog renders it)."""
         return {{"mod": "{name}", "guild": guild_id, "state": "scaffold"}}
 '''
 

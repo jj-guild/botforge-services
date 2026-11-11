@@ -440,8 +440,8 @@ fr:
         maps_description: 'une fiche par carte : image, description, pools'
         map_pools: 🧱 map pools
         map_pools_description: 'une fiche par map pool : composition et état'
-        mods_catalog: "📦 Catalogue des mods"
-        mods_catalog_description: "Un post par jeu et par mod — installer, désinstaller, gérer les données"
+        catalog: "catalogue"
+        catalog_description: "Un post par élément — installer, désinstaller, gérer les données"
       categories:
         bot: 🤖 bot
         games: 🎮 games

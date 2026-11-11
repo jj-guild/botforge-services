@@ -1,0 +1,4 @@
+en:
+  kingdom:
+    title: "Kingdom"
+    hello: "Hello from the kingdom mod — scaffolded by `botforge mod init`."

@@ -1,9 +1,10 @@
-"""The mods catalog forum: one post per game and per mod (botforge-services#374).
+"""The install/uninstall catalogs: one post per game, one per mod (botforge-services#374).
 
-The install/uninstall surface lives in a FORUM channel provisioned by
-the tree (the ``mods`` scope's ``catalog`` channel): one post per
-declared game and per declared mod — built from the declarations, the
-posts carry their state (installed or not) and the actions:
+TWO forums, two perimeters, the same logic: the games catalog (the
+``games`` scope's ``catalog`` channel) carries one post per declared
+game; the mods catalog (the ``mods`` scope's ``catalog`` channel)
+carries one post per declared mod. The posts are built from the
+declarations and carry their state (installed or not) and the actions:
 
 - **Install**: the item joins the guild's active set (the required
   games ride along — the service's rules).
@@ -31,8 +32,10 @@ import discord
 logger = logging.getLogger("botforge.discord.mods_forum")
 
 CATALOG_POSTS_COLLECTION = "mod_catalog_posts"
-CATALOG_SCOPE = "mods"
 CATALOG_CHANNEL_KEY = "catalog"
+
+# one catalog per perimeter: the kind decides the tree scope and the items
+CATALOG_SCOPES: dict[str, str] = {"game": "games", "mod": "mods"}
 
 _NS = "modcatalog"
 
@@ -45,11 +48,11 @@ def _catalog_post_id(guild_id: str, kind: str, name: str) -> str:
     return f"{guild_id}:{kind}:{name}"
 
 
-async def _catalog_forum_id(guild_id: str) -> str | None:
-    """Resolve the catalog forum's stored id (the provisioning owns creation)."""
+async def _catalog_forum_id(guild_id: str, kind: str) -> str | None:
+    """Resolve one catalog forum's stored id (the provisioning owns creation)."""
     from botforge.discord.ui.panels_provisioning import stored_channel_id
 
-    stored = await stored_channel_id(guild_id, CATALOG_SCOPE, CATALOG_CHANNEL_KEY)
+    stored = await stored_channel_id(guild_id, CATALOG_SCOPES[kind], CATALOG_CHANNEL_KEY)
     return str(stored) if stored and str(stored).isdigit() else None
 
 
@@ -126,6 +129,7 @@ async def _create_post(
     name: str,
     view: discord.ui.LayoutView,
 ) -> str | None:
+    """Create one catalog post in ITS perimeter's forum (game→games, mod→mods)."""
     """Create one catalog post; return its thread id (None on failure)."""
     guild = bot.get_guild(int(guild_id))
     forum = guild.get_channel(int(forum_id)) if guild is not None else None
@@ -172,25 +176,25 @@ async def _refresh_post(
     return True
 
 
-async def sync_mods_forum(guild_id: str, bot: Any) -> int:
-    """Sync the catalog: one post per game and per mod, refreshed in place."""
+async def _sync_one_catalog(guild_id: str, bot: Any, kind: str) -> int:
+    """Sync ONE catalog: its forum, its items, refreshed in place."""
     service = _build_service(bot)
     if service is None:
         return 0
-    forum_id = await _catalog_forum_id(guild_id)
+    forum_id = await _catalog_forum_id(guild_id, kind)
     if forum_id is None:
         return 0  # the provisioning owns creation; nothing stored yet
     from botforge.discord.wiring import guild_access_platform
 
     all_games, all_mods = guild_access_platform()
+    items = all_games if kind == "game" else all_mods
     status = await service.status(guild_id)
-    installed_games = set(status.get("games") or ())
-    installed_mods = set(status.get("mods") or ())
+    installed_set = set(status.get(f"{kind}s") or ())
     registry = getattr(bot, "registry", None)
 
-    async def _labels(kind: str, name: str, installed: bool) -> dict[str, str]:
+    async def _labels(installed: bool) -> dict[str, str]:
         return {
-            "title": name,
+            "title": "",
             "installed": await _tr(bot, guild_id, "installed", "Installed"),
             "not_installed": await _tr(bot, guild_id, "not_installed", "Not installed"),
             "requires": await _tr(bot, guild_id, "requires", "Requires"),
@@ -200,25 +204,26 @@ async def sync_mods_forum(guild_id: str, bot: Any) -> int:
 
     stored = await _stored_post_ids(guild_id)
     changed = 0
-    for kind, items, installed_set in (
-        ("game", all_games, installed_games),
-        ("mod", all_mods, installed_mods),
-    ):
-        for name in items:
-            required: tuple[str, ...] = ()
-            if kind == "mod" and registry is not None:
-                definition = registry.get(name)
-                required = tuple(getattr(definition, "required_games", ()) or ()) if definition else ()
-            labels = await _labels(kind, name, name in installed_set)
-            view = _catalog_post_view(kind, name, name in installed_set, required, labels)
-            post_id = _catalog_post_id(guild_id, kind, name)
-            thread_id = stored.get(post_id, "")
-            if thread_id and await _refresh_post(bot, guild_id, thread_id, view):
-                changed += 1
-                continue
-            if await _create_post(bot, guild_id, forum_id, kind, name, view):
-                changed += 1
+    for name in items:
+        required: tuple[str, ...] = ()
+        if kind == "mod" and registry is not None:
+            definition = registry.get(name)
+            required = tuple(getattr(definition, "required_games", ()) or ()) if definition else ()
+        labels = await _labels(name in installed_set)
+        view = _catalog_post_view(kind, name, name in installed_set, required, labels)
+        post_id = _catalog_post_id(guild_id, kind, name)
+        thread_id = stored.get(post_id, "")
+        if thread_id and await _refresh_post(bot, guild_id, thread_id, view):
+            changed += 1
+            continue
+        if await _create_post(bot, guild_id, forum_id, kind, name, view):
+            changed += 1
     return changed
+
+
+async def sync_catalogs(guild_id: str, bot: Any) -> int:
+    """Sync both catalogs: the games' and the mods' — two perimeters, one pass."""
+    return await _sync_one_catalog(guild_id, bot, "game") + await _sync_one_catalog(guild_id, bot, "mod")
 
 
 async def _guard(interaction: discord.Interaction) -> bool:
@@ -291,7 +296,7 @@ class ModInstallButton(
             await _tr(interaction.client, str(interaction.guild_id or ""), "installed_done", "Installed."),
             ephemeral=True,
         )
-        await sync_mods_forum(str(interaction.guild_id), interaction.client)
+        await sync_catalogs(str(interaction.guild_id), interaction.client)
 
 
 class ModUninstallButton(
@@ -402,7 +407,7 @@ class ModUninstallModal(discord.ui.Modal):
             )
             return
         await interaction.response.send_message(self.done, ephemeral=True)
-        await sync_mods_forum(str(interaction.guild_id), interaction.client)
+        await sync_catalogs(str(interaction.guild_id), interaction.client)
 
 
 def register_mods_forum_items(bot: discord.Client) -> None:
@@ -415,5 +420,5 @@ __all__ = [
     "ModUninstallButton",
     "ModUninstallModal",
     "register_mods_forum_items",
-    "sync_mods_forum",
+    "sync_catalogs",
 ]

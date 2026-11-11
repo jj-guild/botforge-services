@@ -111,7 +111,6 @@ views:
       emoji: 🎯
     - target: menu:mod:kingdom
       label: ui.mods.homes.kingdom
-      disabled: true
       emoji: 👑
     - target: menu:mods:admin
       label: ui.homes.btn_admin
@@ -130,7 +129,6 @@ views:
       emoji: 🎯
     - target: menu:mod:kingdom:admin
       label: ui.mods.homes.kingdom
-      disabled: true
       emoji: 👑
     - label: ui.homes.btn_sync
       sync: true
@@ -188,6 +186,11 @@ scopes:
       access: readonly
       description: ui.panels.channels.general_description
     - key: admin
+    - key: catalog
+      label: ui.panels.channels.catalog
+      kind: forum
+      access: readonly
+      description: ui.panels.channels.catalog_description
       label: ui.panels.channels.admin
       kind: text
       access: admin
@@ -234,7 +237,7 @@ scopes:
       access: admin
       description: ui.panels.channels.admin_description
     - key: catalog
-      label: ui.panels.channels.mods_catalog
+      label: ui.panels.channels.catalog
       kind: forum
       access: readonly
       description: ui.panels.channels.mods_catalog_description

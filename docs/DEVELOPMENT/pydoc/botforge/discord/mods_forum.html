@@ -9,12 +9,13 @@
 <tr class="heading-text decor">
 <td class="title">&nbsp;<br><strong class="title"><a href="botforge.html" class="white">botforge</a>.<a href="botforge.discord.html" class="white">discord</a>.mods_forum</strong></td>
 <td class="extra"><a href=".">index</a><br><a href="file:SOURCE_ROOT/discord/mods_forum.py">SOURCE_ROOT/discord/mods_forum.py</a></td></tr></table>
-    <p><span class="code">The&nbsp;mods&nbsp;catalog&nbsp;forum:&nbsp;one&nbsp;post&nbsp;per&nbsp;game&nbsp;and&nbsp;per&nbsp;mod&nbsp;(botforge-services#374).<br>
+    <p><span class="code">The&nbsp;install/uninstall&nbsp;catalogs:&nbsp;one&nbsp;post&nbsp;per&nbsp;game,&nbsp;one&nbsp;per&nbsp;mod&nbsp;(botforge-services#374).<br>
 &nbsp;<br>
-The&nbsp;install/uninstall&nbsp;surface&nbsp;lives&nbsp;in&nbsp;a&nbsp;FORUM&nbsp;channel&nbsp;provisioned&nbsp;by<br>
-the&nbsp;tree&nbsp;(the&nbsp;``mods``&nbsp;scope's&nbsp;``catalog``&nbsp;channel):&nbsp;one&nbsp;post&nbsp;per<br>
-declared&nbsp;game&nbsp;and&nbsp;per&nbsp;declared&nbsp;mod&nbsp;—&nbsp;built&nbsp;from&nbsp;the&nbsp;declarations,&nbsp;the<br>
-posts&nbsp;carry&nbsp;their&nbsp;state&nbsp;(installed&nbsp;or&nbsp;not)&nbsp;and&nbsp;the&nbsp;actions:<br>
+TWO&nbsp;forums,&nbsp;two&nbsp;perimeters,&nbsp;the&nbsp;same&nbsp;logic:&nbsp;the&nbsp;games&nbsp;catalog&nbsp;(the<br>
+``games``&nbsp;scope's&nbsp;``catalog``&nbsp;channel)&nbsp;carries&nbsp;one&nbsp;post&nbsp;per&nbsp;declared<br>
+game;&nbsp;the&nbsp;mods&nbsp;catalog&nbsp;(the&nbsp;``mods``&nbsp;scope's&nbsp;``catalog``&nbsp;channel)<br>
+carries&nbsp;one&nbsp;post&nbsp;per&nbsp;declared&nbsp;mod.&nbsp;The&nbsp;posts&nbsp;are&nbsp;built&nbsp;from&nbsp;the<br>
+declarations&nbsp;and&nbsp;carry&nbsp;their&nbsp;state&nbsp;(installed&nbsp;or&nbsp;not)&nbsp;and&nbsp;the&nbsp;actions:<br>
 &nbsp;<br>
 -&nbsp;**Install**:&nbsp;the&nbsp;item&nbsp;joins&nbsp;the&nbsp;guild's&nbsp;active&nbsp;set&nbsp;(the&nbsp;required<br>
 &nbsp;&nbsp;games&nbsp;ride&nbsp;along&nbsp;—&nbsp;the&nbsp;service's&nbsp;rules).<br>
@@ -594,12 +595,13 @@ Data and other attributes inherited from <a href="discord.ui.view.html#BaseView"
     
 <tr><td class="decor functions-decor"><span class="code">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span></td><td>&nbsp;</td>
 <td class="singlecolumn"><dl><dt><a name="-register_mods_forum_items"><strong>register_mods_forum_items</strong></a>(bot: 'discord.Client') -&gt; 'None'</dt><dd><span class="code">Register&nbsp;the&nbsp;catalog's&nbsp;DynamicItems&nbsp;(called&nbsp;at&nbsp;every&nbsp;startup).</span></dd></dl>
- <dl><dt>async <a name="-sync_mods_forum"><strong>sync_mods_forum</strong></a>(guild_id: 'str', bot: 'Any') -&gt; 'int'</dt><dd><span class="code">Sync&nbsp;the&nbsp;catalog:&nbsp;one&nbsp;post&nbsp;per&nbsp;game&nbsp;and&nbsp;per&nbsp;mod,&nbsp;refreshed&nbsp;in&nbsp;place.</span></dd></dl>
+ <dl><dt>async <a name="-sync_catalogs"><strong>sync_catalogs</strong></a>(guild_id: 'str', bot: 'Any') -&gt; 'int'</dt><dd><span class="code">Sync&nbsp;both&nbsp;catalogs:&nbsp;the&nbsp;games'&nbsp;and&nbsp;the&nbsp;mods'&nbsp;—&nbsp;two&nbsp;perimeters,&nbsp;one&nbsp;pass.</span></dd></dl>
 </td></tr></table><p>
 <table class="section">
 <tr class="decor data-decor heading-text">
 <td class="section-title" colspan=3>&nbsp;<br><strong class="bigsection">Data</strong></td></tr>
     
 <tr><td class="decor data-decor"><span class="code">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span></td><td>&nbsp;</td>
-<td class="singlecolumn"><strong>__all__</strong> = ['ModInstallButton', 'ModUninstallButton', 'ModUninstallModal', 'register_mods_forum_items', 'sync_mods_forum']</td></tr></table>
+<td class="singlecolumn"><strong>__all__</strong> = ['ModInstallButton', 'ModUninstallButton', 'ModUninstallModal', 'register_mods_forum_items', 'sync_catalogs']<br>
+<strong>__annotations__</strong> = {'CATALOG_SCOPES': 'dict[str, str]'}</td></tr></table>
 </body></html>
