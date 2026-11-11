@@ -77,7 +77,15 @@ class _Platform:
     async def ensure_channel(self, name: str, category_id: str) -> str:
         """Return the text channel id, creating it when missing."""
         category = self._category(category_id)
-        channel = discord.utils.get(self._guild.text_channels, name=name)
+        # category-scoped FIRST (two scopes may declare the same channel
+        # NAME — the games and mods catalogs are both "catalogue": a
+        # name match in ANOTHER folder is not this channel); a stray
+        # channel with no folder is still ADOPTED (moved into place)
+        channel = discord.utils.get(
+            self._guild.text_channels, name=name, category=(category or None)
+        ) or discord.utils.get(
+            self._guild.text_channels, name=name, category=None
+        )
         if channel is not None:
             if category is not None and channel.category_id != category.id:
                 try:
@@ -97,7 +105,11 @@ class _Platform:
     async def ensure_forum(self, name: str, category_id: str) -> str:
         """Return the forum id, creating it when missing."""
         category = self._category(category_id)
-        forum = discord.utils.get(self._guild.forums, name=name)
+        # category-scoped first (see ensure_channel); a stray forum is
+        # still adopted (moved into its folder)
+        forum = discord.utils.get(
+            self._guild.forums, name=name, category=(category or None)
+        ) or discord.utils.get(self._guild.forums, name=name, category=None)
         if forum is not None:
             if category is not None and forum.category_id != category.id:
                 try:

@@ -348,6 +348,13 @@ fr:
       bot_admins_role: 'les opérateurs du bot : administrent la plateforme'
       bot_admins_role_pending: les opérateurs du bot (le rôle est créé au premier sync)
     games:
+      aoe2:
+        name: "⚔️ Age of Empires II"
+        providers:
+          aoe2lobby: "Lobbies en direct et parties spectatées (aoe2lobby)"
+          librematch: "Profils joueurs, classements et historique de matchs (libre Match API)"
+          liquipedia: "Le wiki : tournois, cartes, civilisations (Liquipedia)"
+          aoe2techtree: "Arbres technologiques et données des civilisations (aoe2techtree)"
       no_game: Aucun jeu
       no_game_granted: Aucun jeu autorise
       no_map: Aucune map
@@ -440,7 +447,7 @@ fr:
         maps_description: 'une fiche par carte : image, description, pools'
         map_pools: 🧱 map pools
         map_pools_description: 'une fiche par map pool : composition et état'
-        catalog: "catalogue"
+        catalog: "📦 catalogue"
         catalog_description: "Un post par élément — installer, désinstaller, gérer les données"
       categories:
         bot: 🤖 bot
@@ -647,6 +654,10 @@ fr:
       uninstall_modal_label: "Données"
       opt_keep: "Conserver les données (une réinstallation restaure l'état)"
       opt_delete: "Supprimer les données (les collections du mod)"
+      opt_data_label: "Données"
+      opt_channels_label: "Salons et rôles"
+      opt_channels_keep: "Conserver les salons et rôles (une réinstallation les retrouve)"
+      opt_channels_delete: "Supprimer les salons et rôles liés"
       installed_done: "Installé."
       uninstalled_done: "Désinstallé."
       refused: "Refusé : {reason}"
