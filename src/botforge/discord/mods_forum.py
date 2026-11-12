@@ -525,6 +525,37 @@ async def provision_mod_channels(bot: Any, guild_id: str, mod_name: str) -> int:
         return 0
 
 
+async def delete_mod_scope(bot: Any, guild_id: str, mod_name: str) -> int:
+    """Delete one mod's provisioned channels and folder (uninstall with the choice).
+
+    Every stored resolution under ``tree:mod/<name>:`` goes (the folder
+    and its channels); the mod's DATA is untouched (the data choice is
+    separate).
+    """
+    guild = bot.get_guild(int(guild_id)) if guild_id.isdigit() else None
+    if guild is None:
+        return 0
+    from botforge.core.models.db import get_async_database
+
+    database = get_async_database()
+    prefix = f"{guild_id}:tree:mod/{mod_name}:"
+    deleted = 0
+    async for doc in database["channels"].find({"_id": {"$regex": f"^{prefix}"}}):
+        channel_id = str(doc.get("channel_id") or "")
+        if channel_id and channel_id.isdigit():
+            channel = guild.get_channel(int(channel_id))
+            if channel is not None:
+                try:
+                    await channel.delete(reason=f"botforge: uninstall the {mod_name} mod")
+                    deleted += 1
+                except discord.HTTPException:
+                    logger.warning(
+                        "catalog: deleting the %s channel failed — best-effort", channel_id, exc_info=True
+                    )
+    await database["channels"].delete_many({"_id": {"$regex": f"^{prefix}"}})
+    return deleted
+
+
 async def provision_mod_roles(bot: Any, guild_id: str, mod_name: str) -> int:
     """Provision one mod's declared roles (installing a mod creates them)."""
     mod_roles_service = getattr(bot, "mod_roles_service", None)
@@ -902,7 +933,9 @@ class ModUninstallModal(discord.ui.Modal):
             if self.kind == "game":
                 deleted = await delete_game_scope(interaction.client, guild_id, self.name)
             if self.kind == "mod":
-                deleted = await teardown_mod_roles(interaction.client, guild_id, self.name)
+                # the mod's folder (channels + category) AND its roles
+                deleted = await delete_mod_scope(interaction.client, guild_id, self.name)
+                deleted += await teardown_mod_roles(interaction.client, guild_id, self.name)
         message = self.done
         if deleted:
             key = "uninstalled_game" if self.kind == "game" else "uninstalled_mod"
