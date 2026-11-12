@@ -12,10 +12,12 @@ both ride THIS service — the rules live in one place:
   collections (``ModStorage.wipe``, the ``<mod>:`` prefix), never
   another mod's, never the platform's.
 
-The access model stays untouched (guild_access): default open, the
-document only ever restricts — installing into a default-open guild
-materializes the doc (the active set, explicit), uninstalling the last
-restricted item re-opens the catalog (the empty list means "all").
+The access model (guild_access): a guild with no access document gets
+the default-active sets (games active, mods not); installing into such
+a guild materializes the document (the active set, explicit). Once a
+document exists its lists are the whole truth, even empty — so an
+uninstall sticks and the catalog's Install button brings the item back
+(a reinstall restores the state when the data was kept).
 
 Results are data (``ModInstallResult``): the surface renders them in
 the guild's locale — this service never formats a user-facing string.

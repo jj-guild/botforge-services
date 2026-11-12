@@ -449,6 +449,7 @@ en:
         map_pools_description: 'one sheet per map pool: composition and state'
         catalog: "📦 catalog"
         catalog_description: "One post per item — install, uninstall, manage the data"
+        mods_catalog_description: "One post per mod — install, uninstall, manage the mod's data"
       categories:
         bot: 🤖 bot
         games: 🎮 games

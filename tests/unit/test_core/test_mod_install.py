@@ -99,8 +99,12 @@ async def test_install_unknown_mod_fails_loudly() -> None:
     assert result.refused_by == ("ghost",)
 
 
-async def test_uninstall_the_last_restriction_reopens_the_catalog() -> None:
-    """Uninstalling everything empties the doc — the platform re-opens."""
+async def test_uninstall_sticks_so_the_item_can_be_reinstalled() -> None:
+    """Uninstalling everything sticks: the doc stays explicit and EMPTY.
+
+    The empty doc means NONE active (it does not re-open the defaults)
+    — the catalog post flips back to Install, and installing again works.
+    """
     service, db = _service()
     await service.install("123", mods=("ladder",), games=("aoe2",))
     result = await service.uninstall("123", mods=("kingdoms", "ladder"), games=("aoe2",))
@@ -108,7 +112,12 @@ async def test_uninstall_the_last_restriction_reopens_the_catalog() -> None:
     assert result.active_mods == ()
     assert result.active_games == ()
     doc = await db.get_guild_access("123")
-    assert doc is not None  # the doc stays explicit (empty = all active)
+    assert doc is not None and doc["games"] == [] and doc["mods"] == []
+    status = await service.status("123")
+    assert status == {"games": (), "mods": ()}  # the uninstall sticks
+    again = await service.install("123", games=("aoe2",))
+    assert again.ok
+    assert (await service.status("123"))["games"] == ("aoe2",)  # reinstall works
 
 
 async def test_uninstall_a_game_with_dependents_is_refused() -> None:
