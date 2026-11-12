@@ -155,7 +155,7 @@ def _catalog_post_view(
     view.add_item(row)
     from botforge.discord.ui.view_footer import add_view_footer
 
-    return add_view_footer(view, f"modcatalog:post:{kind}:{name}")
+    return add_view_footer(view, f"panel:{kind}:{name}")
 
 
 async def _stored_post_ids(guild_id: str) -> dict[str, str]:
@@ -176,8 +176,13 @@ async def _create_post(
     kind: str,
     name: str,
     view: discord.ui.LayoutView,
+    title: str = "",
 ) -> str | None:
-    """Create one catalog post in ITS perimeter's forum (game→games, mod→mods)."""
+    """Create one catalog post in ITS perimeter's forum (game→games, mod→mods).
+
+    The THREAD's name is the item's display name (the long title), not
+    its key — the forum reads like a showcase.
+    """
     """Create one catalog post; return its thread id (None on failure)."""
     guild = bot.get_guild(int(guild_id))
     forum = guild.get_channel(int(forum_id)) if guild is not None else None
@@ -195,7 +200,7 @@ async def _create_post(
         # create_thread returns (thread, message): the unpack is the
         # contract (the merlin AttributeError — thread.id on the tuple)
         thread, _message = await forum.create_thread(
-            name=name[:90],
+            name=(title or name)[:90],
             reason=f"botforge: mods catalog post {name}",
             silent=True,
             view=view,
@@ -220,6 +225,7 @@ async def _refresh_post(
     guild_id: str,
     thread_id: str,
     view: discord.ui.LayoutView,
+    title: str = "",
 ) -> bool:
     """Edit one catalog post's starter message; False when the thread is gone."""
     guild = bot.get_guild(int(guild_id))
@@ -227,12 +233,25 @@ async def _refresh_post(
     if thread is None:
         return False
     try:
+        if title and thread.name != (title or thread.name)[:90]:
+            await thread.edit(name=title[:90], reason="botforge: mods catalog (title refresh)")
         message = await thread.fetch_message(thread.id)
         await message.edit(view=view)
     except discord.HTTPException:
         logger.warning("mods forum: post refresh failed (thread %s) — best-effort", thread_id, exc_info=True)
         return False
     return True
+
+
+async def _item_title(bot: Any, guild_id: str, kind: str, name: str) -> str:
+    """Return one item's display title (the thread's name, the post's heading)."""
+    if kind == "game":
+        title, _providers = await _game_presentation(bot, guild_id, name)
+        return title
+    from botforge.discord.scope_pins import _catalog, _locale_of
+    from botforge.discord.scope_pins import _tr as _tr_key
+
+    return _tr_key(_catalog(bot), f"ui.mods.homes.{name}", await _locale_of(bot, guild_id), name)
 
 
 async def _sync_one_item(
@@ -315,12 +334,13 @@ async def _sync_one_catalog(guild_id: str, bot: Any, kind: str) -> int:
         view = await _sync_one_item(bot, guild_id, kind, name, name in installed_set, stored, registry)
         if view is None:
             continue
+        title = await _item_title(bot, guild_id, kind, name)
         post_id = _catalog_post_id(guild_id, kind, name)
         thread_id = stored.get(post_id, "")
-        if thread_id and await _refresh_post(bot, guild_id, thread_id, view):
+        if thread_id and await _refresh_post(bot, guild_id, thread_id, view, title):
             changed += 1
             continue
-        if await _create_post(bot, guild_id, forum_id, kind, name, view):
+        if await _create_post(bot, guild_id, forum_id, kind, name, view, title):
             changed += 1
     return changed
 
@@ -534,11 +554,14 @@ class ModInstallButton(
             ensured = await provision_game_scope(interaction.client, guild_id, self.name)
         if self.kind == "mod":
             ensured = await provision_mod_roles(interaction.client, guild_id, self.name)
-        await interaction.response.send_message(
-            (await _tr(interaction.client, guild_id, "installed_done", "Installed."))
-            + (f" ({ensured} channels)" if ensured else ""),
-            ephemeral=True,
-        )
+        message = await _tr(interaction.client, guild_id, "installed_done", "Installed.")
+        if ensured:
+            key = "installed_game" if self.kind == "game" else "installed_mod"
+            fallback = "{count} channels" if self.kind == "game" else "{count} roles"
+            message += " " + (await _tr(interaction.client, guild_id, key, fallback)).format(
+                count=ensured
+            )
+        await interaction.response.send_message(message, ephemeral=True)
         await sync_catalogs(str(interaction.guild_id), interaction.client)
 
 
@@ -666,8 +689,19 @@ class ModUninstallModal(discord.ui.Modal):
         kwargs: dict[str, Any] = {f"{self.kind}s": (self.name,), "wipe_data": wipe}
         result = await service.uninstall(guild_id, **kwargs)
         if not result.ok:
+            # the refused reason names the DEPENDENTS (the mods that
+            # require the item), rendered in the guild's locale
+            from botforge.discord.scope_pins import _catalog, _locale_of
+            from botforge.discord.scope_pins import _tr as _tr_key
+
+            catalog = _catalog(interaction.client)
+            locale = await _locale_of(interaction.client, guild_id)
+            names = [
+                _tr_key(catalog, f"ui.mods.homes.{item}", locale, item)
+                for item in result.refused_by
+            ] or [result.summary]
             await interaction.response.send_message(
-                self.refused.format(reason=result.summary), ephemeral=True
+                self.refused.format(reason=", ".join(names)), ephemeral=True
             )
             return
         # the channels/roles choice: delete the item's provisioned scope
@@ -677,10 +711,14 @@ class ModUninstallModal(discord.ui.Modal):
                 deleted = await delete_game_scope(interaction.client, guild_id, self.name)
             if self.kind == "mod":
                 deleted = await teardown_mod_roles(interaction.client, guild_id, self.name)
-        await interaction.response.send_message(
-            self.done + (f" ({deleted} channels deleted)" if deleted else ""),
-            ephemeral=True,
-        )
+        message = self.done
+        if deleted:
+            key = "uninstalled_game" if self.kind == "game" else "uninstalled_mod"
+            fallback = "{count} channels deleted" if self.kind == "game" else "{count} roles deleted"
+            message += " " + (await _tr(interaction.client, guild_id, key, fallback)).format(
+                count=deleted
+            )
+        await interaction.response.send_message(message, ephemeral=True)
         await sync_catalogs(guild_id, interaction.client)
 
 

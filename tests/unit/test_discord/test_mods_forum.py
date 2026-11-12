@@ -17,7 +17,7 @@ def test_catalog_post_view_carries_the_id_footer() -> None:
     """The post view carries its id footer (the declared-views norm)."""
     view = _catalog_post_view("mod", "kingdoms", installed=True, labels={"title": "kingdoms"})
     rendered = str(view.to_components())
-    assert "modcatalog:post:mod:kingdoms" in rendered
+    assert "panel:mod:kingdoms" in rendered
 
 
 def test_installed_post_shows_uninstall_not_install() -> None:
