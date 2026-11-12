@@ -41,6 +41,7 @@ _NS = "modcatalog"
 
 _INSTALL_TEMPLATE = rf"{_NS}:install:(?P<kind>game|mod):(?P<name>[a-z0-9_-]+)"
 _UNINSTALL_TEMPLATE = rf"{_NS}:uninstall:(?P<kind>game|mod):(?P<name>[a-z0-9_-]+)"
+_ADMIN_TEMPLATE = rf"{_NS}:admin:(?P<kind>game|mod):(?P<name>[a-z0-9_-]+)"
 
 
 def load_game_declarations(config_dir: Any) -> dict[str, dict[str, Any]]:
@@ -147,11 +148,13 @@ def _catalog_post_view(
         rendered = [links.get(item, item) for item in required_games]
         blocks.append(discord.ui.TextDisplay(f"{labels.get('requires', 'Requires')}: {', '.join(rendered)}"))
     view.add_item(discord.ui.Container(*blocks, accent_colour=discord.Colour(0x5865F2)))
+    # the install/uninstall actions hide behind the single ⚙️ Admin button
+    # (the maps/pools precedent): the click is guarded, the actions ride
+    # an EPHEMERAL admin-only view — the public post never carries them
     row: discord.ui.ActionRow[discord.ui.LayoutView] = discord.ui.ActionRow()
-    if installed:
-        row.add_item(ModUninstallButton(kind, name, label=labels.get("uninstall", "Uninstall")))
-    else:
-        row.add_item(ModInstallButton(kind, name, label=labels.get("install", "Install")))
+    row.add_item(
+        ModAdminButton(kind, name, label=labels.get("admin_btn", "Admin"))
+    )
     view.add_item(row)
     from botforge.discord.ui.view_footer import add_view_footer
 
@@ -497,6 +500,75 @@ async def teardown_mod_roles(bot: Any, guild_id: str, mod_name: str) -> int:
         return 0
 
 
+class ModAdminButton(
+    discord.ui.DynamicItem[discord.ui.Button[Any]],
+    template=re.compile(_ADMIN_TEMPLATE),
+):
+    """The single ⚙️ Admin button of a catalog post (persistent).
+
+    The click is guarded (bot admin); the install/uninstall actions
+    ride an EPHEMERAL view — the maps/pools precedent: the public post
+    never carries the actions.
+    """
+
+    def __init__(self, kind: str, name: str, label: str = "Admin") -> None:
+        self.kind = kind
+        self.name = name
+        super().__init__(
+            discord.ui.Button(
+                label=label[:80],
+                emoji="\U0001f527",
+                style=discord.ButtonStyle.secondary,
+                custom_id=f"{_NS}:admin:{kind}:{name}"[:100],
+            )
+        )
+
+    @classmethod
+    async def from_custom_id(
+        cls,
+        interaction: discord.Interaction,
+        item: discord.ui.Item[Any],
+        match: re.Match[str],
+        /,
+    ) -> ModAdminButton:
+        """Rebuild the button from the wire."""
+        del interaction, item
+        return cls(match["kind"], match["name"])
+
+    async def callback(self, interaction: discord.Interaction) -> None:
+        """Guard, then send the item's action view ephemeral, admin-only."""
+        if not await _guard(interaction):
+            return
+        service = _build_service(interaction.client)
+        if service is None:
+            return
+        guild_id = str(interaction.guild_id or "")
+        status = await service.status(guild_id)
+        installed = self.name in set(status.get(f"{self.kind}s") or ())
+        labels = {
+            "install": await _tr(interaction.client, guild_id, "install_btn", "Install"),
+            "uninstall": await _tr(interaction.client, guild_id, "uninstall_btn", "Uninstall"),
+        }
+        view = discord.ui.View(timeout=None)
+        if installed:
+            view.add_item(
+                discord.ui.Button(
+                    label=labels["uninstall"][:80],
+                    style=discord.ButtonStyle.danger,
+                    custom_id=f"{_NS}:uninstall:{self.kind}:{self.name}"[:100],
+                )
+            )
+        else:
+            view.add_item(
+                discord.ui.Button(
+                    label=labels["install"][:80],
+                    style=discord.ButtonStyle.success,
+                    custom_id=f"{_NS}:install:{self.kind}:{self.name}"[:100],
+                )
+            )
+        await interaction.response.send_message(view=view, ephemeral=True)
+
+
 class ModInstallButton(
     discord.ui.DynamicItem[discord.ui.Button[Any]],
     template=re.compile(_INSTALL_TEMPLATE),
@@ -724,7 +796,7 @@ class ModUninstallModal(discord.ui.Modal):
 
 def register_mods_forum_items(bot: discord.Client) -> None:
     """Register the catalog's DynamicItems (called at every startup)."""
-    bot.add_dynamic_items(ModInstallButton, ModUninstallButton)
+    bot.add_dynamic_items(ModInstallButton, ModUninstallButton, ModAdminButton)
 
 
 def register_catalog_syncs() -> None:
@@ -748,6 +820,7 @@ def register_catalog_syncs() -> None:
 
 
 __all__ = [
+    "ModAdminButton",
     "ModInstallButton",
     "ModUninstallButton",
     "ModUninstallModal",

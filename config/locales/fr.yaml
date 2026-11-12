@@ -650,6 +650,7 @@ fr:
       not_installed: "Non installé"
       requires: "Requiert"
       install_btn: "Installer"
+      admin_btn: "Administrer"
       uninstall_btn: "Désinstaller"
       uninstall_modal_title: "Désinstaller {item}"
       uninstall_modal_label: "Données"

@@ -648,6 +648,7 @@ en:
       not_installed: "Not installed"
       requires: "Requires"
       install_btn: "Install"
+      admin_btn: "Admin"
       uninstall_btn: "Uninstall"
       uninstall_modal_title: "Uninstall {item}"
       uninstall_modal_label: "Data"
