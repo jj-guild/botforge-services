@@ -122,6 +122,7 @@ def _catalog_post_view(
     required_games: tuple[str, ...] = (),
     labels: dict[str, str] | None = None,
     providers: tuple[tuple[str, str], ...] = (),
+    links: dict[str, str] | None = None,
 ) -> discord.ui.LayoutView:
     """Build one catalog post: the identity, the state, the actions, the id footer.
 
@@ -130,6 +131,7 @@ def _catalog_post_view(
     key); a MOD post carries its required games.
     """
     labels = labels or {}
+    links = links or {}
     view = discord.ui.LayoutView(timeout=None)
     status = labels.get("installed" if installed else "not_installed", "")
     blocks: list[Any] = [
@@ -140,7 +142,10 @@ def _catalog_post_view(
         lines = "\n".join(f"• **{key}** — {purpose}" for key, purpose in providers)
         blocks.append(discord.ui.TextDisplay(lines))
     if required_games:
-        blocks.append(discord.ui.TextDisplay(f"{labels.get('requires', 'Requires')}: {', '.join(required_games)}"))
+        # every required item links to ITS catalog post when it exists
+        # (a click opens the dependency — the catalog is a web, not a list)
+        rendered = [links.get(item, item) for item in required_games]
+        blocks.append(discord.ui.TextDisplay(f"{labels.get('requires', 'Requires')}: {', '.join(rendered)}"))
     view.add_item(discord.ui.Container(*blocks, accent_colour=discord.Colour(0x5865F2)))
     row: discord.ui.ActionRow[discord.ui.LayoutView] = discord.ui.ActionRow()
     if installed:
@@ -230,6 +235,54 @@ async def _refresh_post(
     return True
 
 
+async def _sync_one_item(
+    bot: Any,
+    guild_id: str,
+    kind: str,
+    name: str,
+    installed: bool,
+    stored: dict[str, str],
+    registry: Any,
+) -> discord.ui.LayoutView | None:
+    """Build ONE item's refreshed post view (None when it cannot render)."""
+    required: tuple[str, ...] = ()
+    dependencies: tuple[str, ...] = ()
+    providers: tuple[tuple[str, str], ...] = ()
+    title = name
+    if kind == "mod" and registry is not None:
+        definition = registry.get(name)
+        if definition is not None:
+            required = tuple(getattr(definition, "required_games", ()) or ())
+            dependencies = tuple(getattr(definition, "dependencies", ()) or ())
+        from botforge.discord.scope_pins import _catalog, _locale_of
+        from botforge.discord.scope_pins import _tr as _tr_key
+
+        title = _tr_key(_catalog(bot), f"ui.mods.homes.{name}", await _locale_of(bot, guild_id), name)
+    if kind == "game":
+        title, providers = await _game_presentation(bot, guild_id, name)
+    labels = {
+        "title": title,
+        "installed": await _tr(bot, guild_id, "installed", "Installed"),
+        "not_installed": await _tr(bot, guild_id, "not_installed", "Not installed"),
+        "requires": await _tr(bot, guild_id, "requires", "Requires"),
+        "install": await _tr(bot, guild_id, "install_btn", "Install"),
+        "uninstall": await _tr(bot, guild_id, "uninstall_btn", "Uninstall"),
+    }
+    # every required game AND every required mod links to its catalog
+    # post (the stored threads): a click opens the dependency
+    links: dict[str, str] = {}
+    for item in required:
+        post_id = _catalog_post_id(guild_id, "game", item)
+        if post_id in stored:
+            links[item] = f"<#{stored[post_id]}>"
+    for item in dependencies:
+        post_id = _catalog_post_id(guild_id, "mod", item)
+        if post_id in stored:
+            links[item] = f"<#{stored[post_id]}>"
+    required_line = tuple(required) + tuple(d for d in dependencies if d not in required)
+    return _catalog_post_view(kind, name, installed, required_line, labels, providers, links)
+
+
 async def _sync_one_catalog(guild_id: str, bot: Any, kind: str) -> int:
     """Sync ONE catalog: its forum, its items, refreshed in place."""
     service = _build_service(bot)
@@ -259,16 +312,9 @@ async def _sync_one_catalog(guild_id: str, bot: Any, kind: str) -> int:
     stored = await _stored_post_ids(guild_id)
     changed = 0
     for name in items:
-        required: tuple[str, ...] = ()
-        providers: tuple[tuple[str, str], ...] = ()
-        title = name
-        if kind == "mod" and registry is not None:
-            definition = registry.get(name)
-            required = tuple(getattr(definition, "required_games", ()) or ()) if definition else ()
-        if kind == "game":
-            title, providers = await _game_presentation(bot, guild_id, name)
-        labels = await _labels(name in installed_set, title)
-        view = _catalog_post_view(kind, name, name in installed_set, required, labels, providers)
+        view = await _sync_one_item(bot, guild_id, kind, name, name in installed_set, stored, registry)
+        if view is None:
+            continue
         post_id = _catalog_post_id(guild_id, kind, name)
         thread_id = stored.get(post_id, "")
         if thread_id and await _refresh_post(bot, guild_id, thread_id, view):
