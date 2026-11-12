@@ -140,12 +140,20 @@ views:
     kind: menu
   menu:mod:kingdom:
     kind: menu
+    scope: mods/general
+    buttons:
+    - target: menu:mod:kingdom:admin
+      label: ui.homes.btn_admin
+      admin: true
   menu:mod:ladder:admin:
     kind: menu
   menu:mod:tournament:admin:
     kind: menu
   menu:mod:kingdom:admin:
     kind: menu
+    scope: mods/admin
+    admin_surface: true
+    title_emoji: "🔓"
 scopes:
   root:
     channels:
