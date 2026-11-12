@@ -20,15 +20,20 @@ def test_catalog_post_view_carries_the_id_footer() -> None:
     assert "panel:mod:kingdoms" in rendered
 
 
-def test_installed_post_shows_uninstall_not_install() -> None:
-    """An installed item offers Uninstall; a non-installed one offers Install."""
+def test_the_post_carries_the_admin_button_not_the_actions() -> None:
+    """The public post carries the single Admin button — never the raw actions.
+
+    The install/uninstall actions ride an ephemeral, admin-only view
+    (the click is guarded) — the maps/pools precedent.
+    """
     installed = _catalog_post_view("mod", "kingdoms", installed=True, labels={})
     rendered = str(installed.to_components())
-    assert "modcatalog:uninstall:mod:kingdoms" in rendered
+    assert "modcatalog:admin:mod:kingdoms" in rendered
     assert "modcatalog:install:mod:kingdoms" not in rendered
+    assert "modcatalog:uninstall:mod:kingdoms" not in rendered
     missing = _catalog_post_view("game", "aoe2", installed=False, labels={})
     rendered_missing = str(missing.to_components())
-    assert "modcatalog:install:game:aoe2" in rendered_missing
+    assert "modcatalog:admin:game:aoe2" in rendered_missing
 
 
 def test_required_games_render_on_the_post() -> None:
