@@ -154,6 +154,9 @@ views:
     scope: mods/admin
     admin_surface: true
     title_emoji: "🔓"
+    buttons:
+    - label: ui.homes.btn_sync
+      sync: true
 scopes:
   root:
     channels:

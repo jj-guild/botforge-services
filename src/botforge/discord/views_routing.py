@@ -378,6 +378,21 @@ def menu_buttons(decl: Any, catalog: Any, locale: str) -> list[discord.ui.Button
         if button.target:
             item = ViewOpenButton(button.target, _label(catalog, button.label_key, locale), emoji, button.disabled)
         elif button.sync:
+            import re as _re
+
+            # a MOD admin menu's repair button provisions the MOD's own
+            # folder (mod/<name>: its declared channels + roles), not the
+            # platform's mods scope
+            _mod_admin = _re.match(r"^menu:mod:(?P<name>[a-z0-9_-]+):admin$", decl.id)
+            if _mod_admin:
+                from botforge.discord.mods_forum import ModRepairButton
+
+                item = ModRepairButton(
+                    _mod_admin["name"],
+                    _label(catalog, button.label_key, locale) or "Repair channels & roles",
+                )
+                out.append(item)
+                continue
             from botforge.discord.admin_tree import TreeEnsureButton
 
             # the sync re-provisions the declared tree scope (the folder),

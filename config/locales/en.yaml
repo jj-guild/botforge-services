@@ -293,7 +293,7 @@ en:
     menu_status: 🌍 {servers} server(s)
     menu_btn_requests: Requests
     menu_btn_servers: Servers
-    menu_btn_sync: Synchronize
+    menu_btn_sync: "Repair channels & roles"
     sync_title: Cross-guild sync
     sync_subtitle: 'AoE2 data synchronization shared by every server — each button updates Age of Empires II data (common to all servers).'
     sync_civs_line: "**Civs** \u2014 reconcile the civs catalog and content with the vendored aoe2techtree dataset (fast, local data)."
@@ -657,6 +657,7 @@ en:
       requires: "Requires"
       install_btn: "Install"
       admin_btn: "Admin"
+      repaired: "Repaired — {channels} channels, {roles} roles."
       uninstall_btn: "Uninstall"
       uninstall_modal_title: "Uninstall {item}"
       uninstall_modal_label: "Data"

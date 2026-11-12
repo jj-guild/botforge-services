@@ -471,6 +471,60 @@ async def _game_presentation(
     return title, providers
 
 
+async def provision_mod_channels(bot: Any, guild_id: str, mod_name: str) -> int:
+    """Provision one mod's declared channels under its own folder (mod/<name>).
+
+    The declaration's channels ride the SAME provisioning machinery as
+    the tree scopes (provision_scope + persist_resolutions): the stored
+    ids live under the ``mod/<name>`` scope, the heal and the repair
+    button work exactly like the games'.
+    """
+    from botforge.discord.ui.panels import ChannelDecl, ScopeSpec
+    from botforge.discord.ui.panels_provisioning import persist_resolutions, provision_scope
+
+    guild = bot.get_guild(int(guild_id)) if guild_id.isdigit() else None
+    registry = getattr(bot, "registry", None)
+    definition = registry.get(mod_name) if registry is not None else None
+    if guild is None or definition is None:
+        return 0
+    declared = tuple(getattr(definition, "channel_categories", ()) or ())
+    if not declared:
+        return 0
+    from botforge.discord.scope_pins import _catalog, _locale_of
+    from botforge.discord.scope_pins import _tr as _tr_key
+
+    catalog = _catalog(bot)
+    locale = await _locale_of(bot, guild_id)
+    category_name = _tr_key(catalog, f"ui.mods.homes.{mod_name}", locale, mod_name)
+    spec = ScopeSpec(
+        scope=f"mod/{mod_name}",
+        category_key=category_name,
+        channels=tuple(
+            ChannelDecl(
+                key=channel.key,
+                label_key=channel.display_name,
+                kind="text",
+                access="public",
+            )
+            for channel in declared
+        ),
+    )
+
+    def _translate(key: str, _locale: str) -> str:
+        rendered: str = catalog.render(key, _locale)
+        return rendered if rendered != key else catalog.render(key, "en")
+
+    try:
+        resolved = await provision_scope(guild, spec, locale, _translate)
+        await persist_resolutions(guild_id, spec.scope, resolved)
+        return len(resolved)
+    except Exception:
+        logger.warning(
+            "catalog: provisioning the %s mod channels failed — best-effort", mod_name, exc_info=True
+        )
+        return 0
+
+
 async def provision_mod_roles(bot: Any, guild_id: str, mod_name: str) -> int:
     """Provision one mod's declared roles (installing a mod creates them)."""
     mod_roles_service = getattr(bot, "mod_roles_service", None)
@@ -521,6 +575,52 @@ def _button_view(custom_id: str, label: str, style: discord.ButtonStyle) -> disc
     view = discord.ui.View(timeout=None)
     view.add_item(discord.ui.Button(label=label[:80], style=style, custom_id=custom_id[:100]))
     return view
+
+
+class ModRepairButton(
+    discord.ui.DynamicItem[discord.ui.Button[Any]],
+    template=rf"{_NS}:repair:(?P<name>[a-z0-9_-]+)",
+):
+    """The mod admin menu's repair button: re-provisions the mod's folder.
+
+    The declared channels AND roles (the same pass the install runs) —
+    the label says what it does (botforge-services#384).
+    """
+
+    def __init__(self, name: str, label: str = "Repair channels & roles") -> None:
+        self.name = name
+        super().__init__(
+            discord.ui.Button(
+                label=label[:80],
+                emoji="\U0001f528",
+                style=discord.ButtonStyle.secondary,
+                custom_id=f"{_NS}:repair:{name}"[:100],
+            )
+        )
+
+    @classmethod
+    async def from_custom_id(
+        cls,
+        interaction: discord.Interaction,
+        item: discord.ui.Item[Any],
+        match: re.Match[str],
+        /,
+    ) -> ModRepairButton:
+        """Rebuild the button from the wire."""
+        del interaction, item
+        return cls(match["name"])
+
+    async def callback(self, interaction: discord.Interaction) -> None:
+        """Repair the mod's channels and roles (guarded, best-effort)."""
+        if not await _guard(interaction):
+            return
+        guild_id = str(interaction.guild_id or "")
+        channels = await provision_mod_channels(interaction.client, guild_id, self.name)
+        roles = await provision_mod_roles(interaction.client, guild_id, self.name)
+        message = (await _tr(interaction.client, guild_id, "repaired", "Repaired.")).format(
+            channels=channels, roles=roles
+        )
+        await interaction.response.send_message(message, ephemeral=True)
 
 
 class ModAdminButton(
@@ -626,7 +726,8 @@ class ModInstallButton(
         if self.kind == "game":
             ensured = await provision_game_scope(interaction.client, guild_id, self.name)
         if self.kind == "mod":
-            ensured = await provision_mod_roles(interaction.client, guild_id, self.name)
+            ensured = await provision_mod_channels(interaction.client, guild_id, self.name)
+            ensured += await provision_mod_roles(interaction.client, guild_id, self.name)
         message = await _tr(interaction.client, guild_id, "installed_done", "Installed.")
         if ensured:
             key = "installed_game" if self.kind == "game" else "installed_mod"
@@ -813,7 +914,7 @@ class ModUninstallModal(discord.ui.Modal):
 
 def register_mods_forum_items(bot: discord.Client) -> None:
     """Register the catalog's DynamicItems (called at every startup)."""
-    bot.add_dynamic_items(ModInstallButton, ModUninstallButton, ModAdminButton)
+    bot.add_dynamic_items(ModInstallButton, ModUninstallButton, ModAdminButton, ModRepairButton)
 
 
 def register_catalog_syncs() -> None:
@@ -839,6 +940,7 @@ def register_catalog_syncs() -> None:
 __all__ = [
     "ModAdminButton",
     "ModInstallButton",
+    "ModRepairButton",
     "ModUninstallButton",
     "ModUninstallModal",
     "register_catalog_syncs",
