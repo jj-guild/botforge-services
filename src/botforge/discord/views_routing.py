@@ -20,6 +20,7 @@ menus pick it up mechanically.
 
 from __future__ import annotations
 
+import logging
 import re
 from collections.abc import Awaitable, Callable
 from typing import Any
@@ -27,6 +28,8 @@ from typing import Any
 import discord
 
 from botforge.discord.views_registry import get_view
+
+logger = logging.getLogger("botforge.discord.views_routing")
 
 ROUTER_NS = "view:open"
 BUTTON_TEMPLATE = re.compile(rf"{ROUTER_NS}:(?P<view_id>[a-z0-9:_-]+)")
@@ -432,6 +435,64 @@ def _label(catalog: Any, key: str, locale: str, fallback: str = "?") -> str:
     return rendered if rendered != key else fallback
 
 
+async def _auto_entries(
+    bot: Any,
+    guild_id: str,
+    view_id: str,
+    catalog: Any,
+    locale: str,
+) -> list[Any]:
+    """Build the auto-injected entry buttons of a home/admin menu.
+
+    menu:mods:home lists every enabled mod; menu:mods:admin every
+    enabled mod's admin surface; menu:games:home every game — each
+    ENABLED when installed on the guild, grayed otherwise (#377).
+    """
+    from botforge.discord.wiring import build_guild_access_service, guild_access_platform
+
+    if view_id not in ("menu:mods:home", "menu:mods:admin", "menu:games:home"):
+        return []
+    from botforge.discord.scope_pins import _tr
+
+    registry = getattr(bot, "registry", None)
+    access = build_guild_access_service()
+    all_games, _all_mods = guild_access_platform()
+    installed_games: set[str] = set()
+    installed_mods: set[str] = set()
+    if access is not None:
+        try:
+            installed_games = set(await access.enabled_games(guild_id))
+            installed_mods = set(await access.enabled_mods(guild_id))
+        except Exception:
+            logger.warning("auto entries: the installed state unreadable — best-effort", exc_info=True)
+    out: list[Any] = []
+    if view_id == "menu:games:home":
+        for game_key in all_games:
+            label = _tr(catalog, f"ui.games.{game_key}.name", locale, game_key)
+            out.append(
+                ViewOpenButton(
+                    f"menu:games:{game_key}",
+                    label,
+                    "⚔️",
+                    disabled=game_key not in installed_games,
+                )
+            )
+        return out
+    admin = view_id == "menu:mods:admin"
+    for mod_name in (registry.enabled() if registry is not None else ()):
+        target = f"menu:mod:{mod_name}:admin" if admin else f"menu:mod:{mod_name}"
+        label = _tr(catalog, f"ui.mods.homes.{mod_name}", locale, mod_name)
+        out.append(
+            ViewOpenButton(
+                target,
+                label,
+                "👑" if not admin else "",
+                disabled=mod_name not in installed_mods,
+            )
+        )
+    return out
+
+
 def build_declared_menu(bot: Any, view_id: str) -> Any:  # noqa: C901
     """Build a declared menu's layout: title, description, buttons, footer.
 
@@ -483,6 +544,12 @@ def build_declared_menu(bot: Any, view_id: str) -> Any:  # noqa: C901
         view.add_item(discord.ui.Container(*blocks, accent_colour=accent))
         row: discord.ui.ActionRow[discord.ui.LayoutView] = discord.ui.ActionRow()
         for button in menu_buttons(decl, catalog, locale):
+            row.add_item(button)
+        # the AUTO-INJECTED entries (#377): the mods/games home and admin
+        # menus list every item with its LIVE install state — installed
+        # ones enabled, the rest grayed. The dev declares NOTHING; the
+        # platform lists (the dev is constrained, not trusted).
+        for button in await _auto_entries(bot, guild_id, decl.id, catalog, locale):
             row.add_item(button)
         # a menu with NO buttons sends no row: Discord rejects an empty
         # action row (50035 "Must be between 1 and 5 in length") — the
