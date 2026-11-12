@@ -912,13 +912,21 @@ class BotforgeBot(discord.Client):
         await super().close()
 
 
-def create_bot(config: BotConfig | None = None) -> BotforgeBot:
+def create_bot(config: BotConfig | None = None) -> BotforgeBot:  # noqa: C901
     """Build the BotForge bot: client, tree, core services and commands."""
     resolved = config or BotConfig.from_env()
     from botforge.core.services.mod_layout import default_repo_root
 
     repo_root = default_repo_root()
     registry = ModRegistry(load_mod_definitions(Path(resolved.config_dir), repo_root=repo_root))
+    # the mod menus' AUTOMATION (#377): every enabled mod's home and
+    # admin views are GENERATED (the dev declares nothing — constrained,
+    # not trusted)
+    from botforge.discord.mod_views import declare_mod_views
+
+    declared_mod_views = declare_mod_views(registry)
+    if declared_mod_views:
+        logger.info("VIEWS generated for the enabled mods: %d views", declared_mod_views)
     games_dir = Path(resolved.config_dir) / "games"
     games = tuple(sorted(entry.name for entry in games_dir.iterdir() if entry.is_dir())) if games_dir.is_dir() else ()
     # the per-game declaration (config/games/<key>/game.yaml): a game is
