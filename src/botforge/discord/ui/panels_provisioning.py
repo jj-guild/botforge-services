@@ -194,6 +194,19 @@ async def _ensure_scope_category(
     return await platform.ensure_category(name)
 
 
+def _category_matches(channel: Any, category_id: str) -> bool:
+    """Whether a live channel lives in the scope's declared folder.
+
+    A scope without a category (the guild root) accepts anything; a
+    scoped channel found in ANOTHER folder is not this scope's channel
+    (the merlin case: the mods catalog's stored id pointed at the
+    games forum — a valid forum, in the wrong folder).
+    """
+    if not category_id:
+        return True
+    return str(getattr(channel, "category_id", "") or "") == category_id
+
+
 def _kind_matches(channel: Any, kind: str) -> bool:
     """Whether a live channel's Discord type matches the declared kind."""
     import discord
@@ -230,7 +243,11 @@ async def provision_scope(
             stored = await stored_channel_id(str(guild.id), spec.scope, decl.key)
             if stored and stored.isdigit():
                 channel = guild.get_channel(int(stored))
-                if channel is not None and _kind_matches(channel, decl.kind):
+                if (
+                    channel is not None
+                    and _kind_matches(channel, decl.kind)
+                    and _category_matches(channel, category_id)
+                ):
                     existing = getattr(channel, "name", "")
                     if existing != name:
                         await channel.edit(

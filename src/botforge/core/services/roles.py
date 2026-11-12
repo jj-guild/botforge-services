@@ -32,7 +32,11 @@ CACHE_SCOPE = "roles"
 
 
 class RolesPlatform(Protocol):
-    """Narrow platform seam: role lookup and creation."""
+    """Narrow platform seam: role lookup, creation and deletion."""
+
+    async def delete_role(self, guild_id: str, role_id: str, reason: str) -> None:
+        """Delete one role; missing roles are a no-op."""
+        ...
 
     async def find_role_by_name(self, guild_id: str, name: str) -> str | None:
         """Find a guild role id by its exact name; None when absent."""
@@ -227,6 +231,31 @@ class ModRolesService:
             role_id = await self._resolve_or_provision(guild_id, mod_name, role_def)
             resolved[role_def.key] = role_id
         return resolved
+
+    async def teardown_mod_roles(self, guild_id: str, mod_name: str) -> int:
+        """Delete every role a mod provisioned (uninstall with the choice).
+
+        The persisted mappings go with the roles: a reinstall provisions
+        fresh (the roles are the mod's, the mappings are its ledger).
+        Best-effort per role; returns how many were deleted.
+        """
+        deleted = 0
+        for mapping in await self._db.list_role_mappings(guild_id, mod_name):
+            try:
+                await self._delete_platform_role(guild_id, mapping.role_id, mod_name)
+                deleted += 1
+            except Exception:
+                logger.warning(
+                    "mod roles teardown: deleting %s failed — best-effort", mapping.role_id, exc_info=True
+                )
+            await self._db.delete_role_mapping(guild_id, mod_name, mapping.role_key)
+        return deleted
+
+    async def _delete_platform_role(self, guild_id: str, role_id: str, mod_name: str) -> None:
+        """Delete one platform role (the platform seam owns the how)."""
+        await self._platform.delete_role(
+            guild_id, role_id, reason=f"botforge: uninstall the {mod_name} mod"
+        )
 
     async def _resolve_or_provision(self, guild_id: str, mod_name: str, role_def: RoleDef) -> str:
         """Resolve one declared role to a platform role id, creating it when missing."""
