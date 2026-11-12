@@ -643,6 +643,14 @@ en:
     danger_nothing: "Nothing selected — nothing done."
     danger_done: "Danger Zone applied — channels: {channels}, roles: {roles}, data: {data}."
   mods:
+    standard:
+      installed: "Installed on this server"
+      not_installed: "Not installed on this server"
+      type_seasonal: "Seasonal mod"
+      type_permanent: "Permanent mod"
+      roles: "Roles"
+      commands: "Commands"
+      workflows: "Workflows"
     forum:
       installed: "Installed"
       not_installed: "Not installed"

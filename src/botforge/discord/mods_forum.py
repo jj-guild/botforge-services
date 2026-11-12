@@ -501,9 +501,11 @@ async def teardown_mod_roles(bot: Any, guild_id: str, mod_name: str) -> int:
 
 
 async def _action_view(bot: Any, guild_id: str, kind: str, name: str) -> discord.ui.View:
-    """Build the item's ACTION view (ephemeral, admin-only): the button
-    reflects the CURRENT state — Install when not installed, Uninstall
-    when installed."""
+    """Build the item's ACTION view (ephemeral, admin-only).
+
+    The button reflects the CURRENT state — Install when not installed,
+    Uninstall when installed.
+    """
     service = _build_service(bot)
     status = await service.status(guild_id) if service is not None else {}
     installed = name in set(status.get(f"{kind}s") or ())
