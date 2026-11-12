@@ -25,10 +25,20 @@ private: true
 owner_discord_ids:
   - "242421489536729100"
 settings: {}
+# The mod's channels are ITS declaration (source of truth — the real
+# structure lands with the portage, botforge-services#216 / D70); the
+# interim folder demonstrates the convention: general, the mod's own,
+# admin
 channels:
+  - key: general
+    display_name: Kingdom general
+    description: The kingdom mod's front door
   - key: announce
-    display_name: Kingdom
+    display_name: Kingdom announce
     description: Where the kingdom mod posts announcements
+  - key: admin
+    display_name: Kingdom admin
+    description: The kingdom mod's operators
 roles:
   - key: kingdom_member
     display_name: Kingdom Member
