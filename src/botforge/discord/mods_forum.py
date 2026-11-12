@@ -614,13 +614,15 @@ class ModRepairButton(
         """Repair the mod's channels and roles (guarded, best-effort)."""
         if not await _guard(interaction):
             return
+        # the provisioning can exceed Discord's 3s window: acknowledge first
+        await interaction.response.defer(ephemeral=True)
         guild_id = str(interaction.guild_id or "")
         channels = await provision_mod_channels(interaction.client, guild_id, self.name)
         roles = await provision_mod_roles(interaction.client, guild_id, self.name)
         message = (await _tr(interaction.client, guild_id, "repaired", "Repaired.")).format(
             channels=channels, roles=roles
         )
-        await interaction.response.send_message(message, ephemeral=True)
+        await interaction.followup.send(message, ephemeral=True)
 
 
 class ModAdminButton(
@@ -703,6 +705,9 @@ class ModInstallButton(
         """Install the item; the service's rules apply (deps ride along)."""
         if not await _guard(interaction):
             return
+        # the provisioning can exceed Discord's 3s window: acknowledge
+        # FIRST (defer), work after — the merlin timeout finding
+        await interaction.response.defer(ephemeral=True)
         service = _build_service(interaction.client)
         if service is None:
             return
@@ -738,12 +743,15 @@ class ModInstallButton(
         # the ephemeral action bar REFRESHES in place: the button flips
         # to the item's new state (the confirmation rides the edit)
         try:
-            await interaction.response.edit_message(
+            if interaction.message is None:
+                raise AttributeError("no message to edit")
+            await interaction.followup.edit_message(
+                interaction.message.id,
                 content=message,
                 view=await _action_view(interaction.client, guild_id, self.kind, self.name),
             )
-        except discord.HTTPException:
-            await interaction.response.send_message(message, ephemeral=True)
+        except (discord.HTTPException, AttributeError, TypeError):
+            await interaction.followup.send(message, ephemeral=True)
         await sync_catalogs(str(interaction.guild_id), interaction.client)
 
 
@@ -860,6 +868,8 @@ class ModUninstallModal(discord.ui.Modal):
         """Apply the uninstall with the stated data and channels/roles choices."""
         if not await _guard(interaction):
             return
+        # the teardown can exceed Discord's 3s window: acknowledge first
+        await interaction.response.defer(ephemeral=True)
         guild_id = str(interaction.guild_id or "")
         wipe = bool(self.data_select.values and self.data_select.values[0] == self.DELETE)
         drop_channels = bool(
@@ -882,7 +892,7 @@ class ModUninstallModal(discord.ui.Modal):
                 _tr_key(catalog, f"ui.mods.homes.{item}", locale, item)
                 for item in result.refused_by
             ] or [result.summary]
-            await interaction.response.send_message(
+            await interaction.followup.send(
                 self.refused.format(reason=", ".join(names)), ephemeral=True
             )
             return
@@ -903,12 +913,15 @@ class ModUninstallModal(discord.ui.Modal):
         # the ephemeral action bar REFRESHES in place: the button flips
         # to the item's new state (the confirmation rides the edit)
         try:
-            await interaction.response.edit_message(
+            if interaction.message is None:
+                raise AttributeError("no message to edit")
+            await interaction.followup.edit_message(
+                interaction.message.id,
                 content=message,
                 view=await _action_view(interaction.client, guild_id, self.kind, self.name),
             )
-        except discord.HTTPException:
-            await interaction.response.send_message(message, ephemeral=True)
+        except (discord.HTTPException, AttributeError, TypeError):
+            await interaction.followup.send(message, ephemeral=True)
         await sync_catalogs(guild_id, interaction.client)
 
 
