@@ -133,7 +133,7 @@ fr:
       admin_failed: Le panneau des rôles a échoué — voir les logs du bot.
       games_btn: Jeux
       mods_btn: Mods
-      ensure_btn: Synchroniser
+      ensure_btn: "Réparer salons & rôles"
       channel_access_everyone: '👁️ Lecture : @everyone
 
         ✍️ Écriture : @everyone'
@@ -293,7 +293,7 @@ fr:
     menu_status: 🌍 {servers} serveur(s)
     menu_btn_requests: Demandes
     menu_btn_servers: Serveurs
-    menu_btn_sync: Synchroniser
+    menu_btn_sync: "Réparer salons & rôles"
     sync_title: Synchronisation cross-guild
     sync_civs_line: "**Civs** \u2014 r\u00e9concilie le catalogue et le contenu des civs avec le dataset aoe2techtree embarqu\u00e9 (rapide, donn\u00e9es locales)."
     sync_maps_line: "**Maps** \u2014 enrichit le contenu des maps depuis Liquipedia (\u00e0 la demande, au rythme impos\u00e9 par l'API : une page toutes les 60 s \u2014 un catalogue froid prend un moment)."
@@ -499,7 +499,7 @@ fr:
       btn_create_pool: Créer un map pool
       btn_ensure: Créer les salons manquants
       bot_home_description: L'exploitation du bot — logs, administration, décisions.
-      btn_sync: Synchroniser
+      btn_sync: "Réparer salons & rôles"
       btn_language: Langue
     views:
       menu.home:
@@ -659,6 +659,7 @@ fr:
       requires: "Requiert"
       install_btn: "Installer"
       admin_btn: "Administrer"
+      repaired: "Réparé — {channels} salons, {roles} rôles."
       uninstall_btn: "Désinstaller"
       uninstall_modal_title: "Désinstaller {item}"
       uninstall_modal_label: "Données"
