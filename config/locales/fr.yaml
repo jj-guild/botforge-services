@@ -645,6 +645,14 @@ fr:
     danger_nothing: "Rien de sélectionné — rien de fait."
     danger_done: "Zone de danger appliquée — salons : {channels}, rôles : {roles}, données : {data}."
   mods:
+    standard:
+      installed: "Installé sur ce serveur"
+      not_installed: "Non installé sur ce serveur"
+      type_seasonal: "Mod saisonnier"
+      type_permanent: "Mod permanent"
+      roles: "Rôles"
+      commands: "Commandes"
+      workflows: "Workflows"
     forum:
       installed: "Installé"
       not_installed: "Non installé"
