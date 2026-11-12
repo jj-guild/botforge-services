@@ -11,6 +11,9 @@
 #   workflows     list of workflow names implemented by the mod
 #   commands      list of command names implemented by the mod
 #   dependencies  list of mod ids this mod depends on
+#   required_games  list of game ids this mod requires (installed along with
+#                 the mod; uninstalling such a game is refused while the
+#                 mod is active)
 #   private       bool (default false); a private mod is provisioned and
 #                 visible only to its owners and the bot admins
 #   owner_discord_ids  list of Discord user ids (mandatory when private)
@@ -33,3 +36,5 @@ workflows: []
 commands:
   - kingdom
 dependencies: []
+required_games:
+  - aoe2

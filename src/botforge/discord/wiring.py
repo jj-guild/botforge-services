@@ -193,14 +193,16 @@ async def granted_game_keys(guild_id: str, catalog_keys: tuple[str, ...] = ()) -
     The granted keys drive the channel provisioning: forums are created
     on the grant even when the catalog is still empty, and fill up as
     the content arrives. When the access service is unwired the
-    catalog's keys stand in (the open-degradation seam).
+    catalog's keys stand in (the open-degradation seam). When it IS
+    wired, its answer is the truth — an explicitly uninstalled game
+    (an empty grants list) is NOT re-provisioned.
     """
     service = build_guild_access_service()
     if service is None:
         return catalog_keys
     try:
-        granted = await service.enabled_games(guild_id)
-        return granted if granted else catalog_keys
+        granted: tuple[str, ...] = await service.enabled_games(guild_id)
+        return granted
     except Exception:
         logger.warning("GUILD ACCESS keys read failed (guild %s)", guild_id, exc_info=True)
         return catalog_keys

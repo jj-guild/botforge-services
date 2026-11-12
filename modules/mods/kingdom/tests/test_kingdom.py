@@ -15,3 +15,22 @@ def test_kingdom_service_implements_the_contract() -> None:
 
     impl = KingdomServiceImpl()
     assert isinstance(impl, KingdomService)
+
+
+def test_kingdom_declaration_autoloads_uninstalled_by_default() -> None:
+    """The mod is discovered from the repo root and declares its game.
+
+    default_active: false — the mods catalog shows it NOT installed by
+    default (games are the inverse); required_games: aoe2 — installing
+    kingdom installs aoe2 along, and uninstalling aoe2 is refused while
+    kingdom is active.
+    """
+    from botforge.core.services.mod_layout import default_repo_root, discover_mods
+    from botforge.core.services.mod_registry import load_mod_definitions
+
+    root = default_repo_root()
+    assert root is not None and "kingdom" in discover_mods(root)
+    definition = load_mod_definitions(root / "config", repo_root=root)["kingdom"]
+    assert definition.enabled
+    assert definition.default_active is False
+    assert definition.required_games == ("aoe2",)

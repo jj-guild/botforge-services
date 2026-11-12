@@ -23,10 +23,12 @@ both&nbsp;ride&nbsp;THIS&nbsp;service&nbsp;—&nbsp;the&nbsp;rules&nbsp;live&nbs
 &nbsp;&nbsp;collections&nbsp;(``ModStorage.wipe``,&nbsp;the&nbsp;``&lt;mod&gt;:``&nbsp;prefix),&nbsp;never<br>
 &nbsp;&nbsp;another&nbsp;mod's,&nbsp;never&nbsp;the&nbsp;platform's.<br>
 &nbsp;<br>
-The&nbsp;access&nbsp;model&nbsp;stays&nbsp;untouched&nbsp;(guild_access):&nbsp;default&nbsp;open,&nbsp;the<br>
-document&nbsp;only&nbsp;ever&nbsp;restricts&nbsp;—&nbsp;installing&nbsp;into&nbsp;a&nbsp;default-open&nbsp;guild<br>
-materializes&nbsp;the&nbsp;doc&nbsp;(the&nbsp;active&nbsp;set,&nbsp;explicit),&nbsp;uninstalling&nbsp;the&nbsp;last<br>
-restricted&nbsp;item&nbsp;re-opens&nbsp;the&nbsp;catalog&nbsp;(the&nbsp;empty&nbsp;list&nbsp;means&nbsp;"all").<br>
+The&nbsp;access&nbsp;model&nbsp;(guild_access):&nbsp;a&nbsp;guild&nbsp;with&nbsp;no&nbsp;access&nbsp;document&nbsp;gets<br>
+the&nbsp;default-active&nbsp;sets&nbsp;(games&nbsp;active,&nbsp;mods&nbsp;not);&nbsp;installing&nbsp;into&nbsp;such<br>
+a&nbsp;guild&nbsp;materializes&nbsp;the&nbsp;document&nbsp;(the&nbsp;active&nbsp;set,&nbsp;explicit).&nbsp;Once&nbsp;a<br>
+document&nbsp;exists&nbsp;its&nbsp;lists&nbsp;are&nbsp;the&nbsp;whole&nbsp;truth,&nbsp;even&nbsp;empty&nbsp;—&nbsp;so&nbsp;an<br>
+uninstall&nbsp;sticks&nbsp;and&nbsp;the&nbsp;catalog's&nbsp;Install&nbsp;button&nbsp;brings&nbsp;the&nbsp;item&nbsp;back<br>
+(a&nbsp;reinstall&nbsp;restores&nbsp;the&nbsp;state&nbsp;when&nbsp;the&nbsp;data&nbsp;was&nbsp;kept).<br>
 &nbsp;<br>
 Results&nbsp;are&nbsp;data&nbsp;(``<a href="#ModInstallResult">ModInstallResult</a>``):&nbsp;the&nbsp;surface&nbsp;renders&nbsp;them&nbsp;in<br>
 the&nbsp;guild's&nbsp;locale&nbsp;—&nbsp;this&nbsp;service&nbsp;never&nbsp;formats&nbsp;a&nbsp;user-facing&nbsp;string.</span></p>

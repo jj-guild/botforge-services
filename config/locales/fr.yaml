@@ -449,6 +449,7 @@ fr:
         map_pools_description: 'une fiche par map pool : composition et état'
         catalog: "📦 catalogue"
         catalog_description: "Un post par élément — installer, désinstaller, gérer les données"
+        mods_catalog_description: "Un post par mod — installer, désinstaller, gérer les données du mod"
       categories:
         bot: 🤖 bot
         games: 🎮 games
