@@ -402,6 +402,35 @@ async def _game_presentation(
     return title, providers
 
 
+async def provision_mod_roles(bot: Any, guild_id: str, mod_name: str) -> int:
+    """Provision one mod's declared roles (installing a mod creates them)."""
+    mod_roles_service = getattr(bot, "mod_roles_service", None)
+    if mod_roles_service is None:
+        return 0
+    try:
+        resolved = await mod_roles_service.setup_mod_roles(guild_id, mod_name)
+        return len(resolved)
+    except Exception:
+        logger.warning(
+            "catalog: provisioning the %s mod roles failed — best-effort", mod_name, exc_info=True
+        )
+        return 0
+
+
+async def teardown_mod_roles(bot: Any, guild_id: str, mod_name: str) -> int:
+    """Delete one mod's provisioned roles (uninstall with the choice)."""
+    mod_roles_service = getattr(bot, "mod_roles_service", None)
+    if mod_roles_service is None:
+        return 0
+    try:
+        return int(await mod_roles_service.teardown_mod_roles(guild_id, mod_name))
+    except Exception:
+        logger.warning(
+            "catalog: tearing down the %s mod roles failed — best-effort", mod_name, exc_info=True
+        )
+        return 0
+
+
 class ModInstallButton(
     discord.ui.DynamicItem[discord.ui.Button[Any]],
     template=re.compile(_INSTALL_TEMPLATE),
@@ -452,10 +481,13 @@ class ModInstallButton(
                 ephemeral=True,
             )
             return
-        # installing a GAME creates its channels (the scope folder)
+        # installing a GAME creates its channels (the scope folder);
+        # installing a MOD provisions its declared roles
         ensured = 0
         if self.kind == "game":
             ensured = await provision_game_scope(interaction.client, guild_id, self.name)
+        if self.kind == "mod":
+            ensured = await provision_mod_roles(interaction.client, guild_id, self.name)
         await interaction.response.send_message(
             (await _tr(interaction.client, guild_id, "installed_done", "Installed."))
             + (f" ({ensured} channels)" if ensured else ""),
@@ -597,6 +629,8 @@ class ModUninstallModal(discord.ui.Modal):
         if drop_channels:
             if self.kind == "game":
                 deleted = await delete_game_scope(interaction.client, guild_id, self.name)
+            if self.kind == "mod":
+                deleted = await teardown_mod_roles(interaction.client, guild_id, self.name)
         await interaction.response.send_message(
             self.done + (f" ({deleted} channels deleted)" if deleted else ""),
             ephemeral=True,
