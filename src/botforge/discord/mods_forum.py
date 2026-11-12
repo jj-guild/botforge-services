@@ -500,6 +500,27 @@ async def teardown_mod_roles(bot: Any, guild_id: str, mod_name: str) -> int:
         return 0
 
 
+async def _action_view(bot: Any, guild_id: str, kind: str, name: str) -> discord.ui.View:
+    """Build the item's ACTION view (ephemeral, admin-only): the button
+    reflects the CURRENT state — Install when not installed, Uninstall
+    when installed."""
+    service = _build_service(bot)
+    status = await service.status(guild_id) if service is not None else {}
+    installed = name in set(status.get(f"{kind}s") or ())
+    if installed:
+        label = await _tr(bot, guild_id, "uninstall_btn", "Uninstall")
+        return _button_view(f"{_NS}:uninstall:{kind}:{name}", label, discord.ButtonStyle.danger)
+    label = await _tr(bot, guild_id, "install_btn", "Install")
+    return _button_view(f"{_NS}:install:{kind}:{name}", label, discord.ButtonStyle.success)
+
+
+def _button_view(custom_id: str, label: str, style: discord.ButtonStyle) -> discord.ui.View:
+    """Build a one-button view (the ephemeral action bar)."""
+    view = discord.ui.View(timeout=None)
+    view.add_item(discord.ui.Button(label=label[:80], style=style, custom_id=custom_id[:100]))
+    return view
+
+
 class ModAdminButton(
     discord.ui.DynamicItem[discord.ui.Button[Any]],
     template=re.compile(_ADMIN_TEMPLATE),
@@ -543,29 +564,7 @@ class ModAdminButton(
         if service is None:
             return
         guild_id = str(interaction.guild_id or "")
-        status = await service.status(guild_id)
-        installed = self.name in set(status.get(f"{self.kind}s") or ())
-        labels = {
-            "install": await _tr(interaction.client, guild_id, "install_btn", "Install"),
-            "uninstall": await _tr(interaction.client, guild_id, "uninstall_btn", "Uninstall"),
-        }
-        view = discord.ui.View(timeout=None)
-        if installed:
-            view.add_item(
-                discord.ui.Button(
-                    label=labels["uninstall"][:80],
-                    style=discord.ButtonStyle.danger,
-                    custom_id=f"{_NS}:uninstall:{self.kind}:{self.name}"[:100],
-                )
-            )
-        else:
-            view.add_item(
-                discord.ui.Button(
-                    label=labels["install"][:80],
-                    style=discord.ButtonStyle.success,
-                    custom_id=f"{_NS}:install:{self.kind}:{self.name}"[:100],
-                )
-            )
+        view = await _action_view(interaction.client, guild_id, self.kind, self.name)
         await interaction.response.send_message(view=view, ephemeral=True)
 
 
@@ -633,7 +632,15 @@ class ModInstallButton(
             message += " " + (await _tr(interaction.client, guild_id, key, fallback)).format(
                 count=ensured
             )
-        await interaction.response.send_message(message, ephemeral=True)
+        # the ephemeral action bar REFRESHES in place: the button flips
+        # to the item's new state (the confirmation rides the edit)
+        try:
+            await interaction.response.edit_message(
+                content=message,
+                view=await _action_view(interaction.client, guild_id, self.kind, self.name),
+            )
+        except discord.HTTPException:
+            await interaction.response.send_message(message, ephemeral=True)
         await sync_catalogs(str(interaction.guild_id), interaction.client)
 
 
@@ -790,7 +797,15 @@ class ModUninstallModal(discord.ui.Modal):
             message += " " + (await _tr(interaction.client, guild_id, key, fallback)).format(
                 count=deleted
             )
-        await interaction.response.send_message(message, ephemeral=True)
+        # the ephemeral action bar REFRESHES in place: the button flips
+        # to the item's new state (the confirmation rides the edit)
+        try:
+            await interaction.response.edit_message(
+                content=message,
+                view=await _action_view(interaction.client, guild_id, self.kind, self.name),
+            )
+        except discord.HTTPException:
+            await interaction.response.send_message(message, ephemeral=True)
         await sync_catalogs(guild_id, interaction.client)
 
 
