@@ -129,7 +129,10 @@ class ModInstallService:
             if dependents:
                 return ModInstallResult(
                     ok=False,
-                    summary=f"game required by active mods: {game_key}",
+                    # the DEPENDENTS are named (the mods that require the
+                    # game), never the game itself — the surface renders
+                    # them localized
+                    summary=f"required by active mods: {', '.join(dependents)}",
                     refused_by=dependents,
                 )
             active_games.discard(game_key)
