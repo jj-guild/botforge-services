@@ -290,6 +290,15 @@ class ModRolesService:
         )
         await self._cache_set(self._cache_key(guild_id, mod_name, role_key), role_id)
 
+    async def find_role_mapping(self, guild_id: str, mod: str, role_key: str) -> RoleMappingModel | None:
+        """Return the persisted mapping for one logical role key (ledger only).
+
+        The render-side resolver (owner rule 2026-11-13: never a name
+        match): None means the ledger holds no entry — the caller shows
+        the honest state, the repair provisions and persists.
+        """
+        return await self._db.find_role_mapping(guild_id, mod, role_key)
+
     async def bind_role(self, guild_id: str, mod: str, role_key: str, role_id: str) -> None:
         """Create or update the mapping between a logical role key and a platform role.
 

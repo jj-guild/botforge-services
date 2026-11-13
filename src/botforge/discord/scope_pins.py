@@ -180,6 +180,11 @@ async def _mod_roles_lines(guild_id: str, name: str, definition: Any, bot: Any, 
                 mapping = await service.find_role_mapping(guild_id, name, role.key)
                 role_id = str(mapping.role_id) if mapping is not None else ""
             except Exception:
+                # never a silent "à créer": a broken ledger read is a
+                # defect to see, not a state to render
+                logger.warning(
+                    "mod role resolution failed (%s:%s) — best-effort", name, role.key, exc_info=True
+                )
                 role_id = ""
         if role_id:
             items.append(f"<@&{role_id}>")

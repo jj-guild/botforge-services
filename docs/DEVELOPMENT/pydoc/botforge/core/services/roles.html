@@ -149,6 +149,12 @@ role&nbsp;is&nbsp;created&nbsp;—&nbsp;and&nbsp;the&nbsp;mapping&nbsp;is&nbsp;p
 Admins&nbsp;rebind&nbsp;a&nbsp;logical&nbsp;role&nbsp;to&nbsp;an&nbsp;existing&nbsp;platform&nbsp;role&nbsp;(e.g.&nbsp;a<br>
 server&nbsp;role&nbsp;created&nbsp;before&nbsp;the&nbsp;bot)&nbsp;without&nbsp;touching&nbsp;mod&nbsp;code.</span></dd></dl>
 
+<dl><dt>async <a name="ModRolesService-find_role_mapping"><strong>find_role_mapping</strong></a>(self, guild_id: 'str', mod: 'str', role_key: 'str') -&gt; 'RoleMappingModel | None'</dt><dd><span class="code">Return&nbsp;the&nbsp;persisted&nbsp;mapping&nbsp;for&nbsp;one&nbsp;logical&nbsp;role&nbsp;key&nbsp;(ledger&nbsp;only).<br>
+&nbsp;<br>
+The&nbsp;render-side&nbsp;resolver&nbsp;(owner&nbsp;rule&nbsp;2026-11-13:&nbsp;never&nbsp;a&nbsp;name<br>
+match):&nbsp;None&nbsp;means&nbsp;the&nbsp;ledger&nbsp;holds&nbsp;no&nbsp;entry&nbsp;—&nbsp;the&nbsp;caller&nbsp;shows<br>
+the&nbsp;honest&nbsp;state,&nbsp;the&nbsp;repair&nbsp;provisions&nbsp;and&nbsp;persists.</span></dd></dl>
+
 <dl><dt>async <a name="ModRolesService-remove_mod_role"><strong>remove_mod_role</strong></a>(self, guild_id: 'str', user_id: 'str', mod: 'str', role_key: 'str') -&gt; 'None'</dt><dd><span class="code">Remove&nbsp;the&nbsp;platform&nbsp;role&nbsp;mapped&nbsp;to&nbsp;a&nbsp;logical&nbsp;role&nbsp;key&nbsp;from&nbsp;a&nbsp;member.</span></dd></dl>
 
 <dl><dt>async <a name="ModRolesService-remove_platform_role"><strong>remove_platform_role</strong></a>(self, guild_id: 'str', user_id: 'str', role_id: 'str', mod: 'str', role_key: 'str') -&gt; 'None'</dt><dd><span class="code">Remove&nbsp;one&nbsp;platform&nbsp;role&nbsp;id&nbsp;from&nbsp;a&nbsp;member&nbsp;(best-effort).</span></dd></dl>
