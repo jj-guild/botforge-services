@@ -24,6 +24,7 @@ from typing import Any, ClassVar
 
 import discord
 
+from botforge.discord.ui.emoji import EMOJI
 from botforge.discord.ui.view_footer import add_view_footer
 
 logger = logging.getLogger("botforge.admin_dm")
@@ -250,7 +251,7 @@ class DmOpenButton(
     EMOJIS: ClassVar[dict[str, str]] = {
         "language": "\U0001F310",
         "servers": "\U0001F30D",
-        "sync": "\U0001F527",
+        "sync": EMOJI.WRENCH,
     }
 
     def __init__(self, section: str, label: str, disabled: bool = False) -> None:

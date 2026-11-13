@@ -641,11 +641,13 @@ class ModRepairButton(
     """
 
     def __init__(self, name: str, label: str = "Repair channels & roles") -> None:
+        from botforge.discord.ui.emoji import EMOJI
+
         self.name = name
         super().__init__(
             discord.ui.Button(
                 label=label[:80],
-                emoji="\U0001f528",
+                emoji=EMOJI.WRENCH,
                 style=discord.ButtonStyle.secondary,
                 custom_id=f"{_NS}:repair:{name}"[:100],
             )
