@@ -478,7 +478,12 @@ def _operator_tools_last(items: list[Any]) -> list[Any]:
     def is_operator_tool(item: Any) -> bool:
         emoji = getattr(getattr(item, "emoji", None), "name", "") or ""
         label = str(getattr(item, "label", "") or "")
-        return emoji in {"\U0001f513", "\U0001f528"} or label.lower().startswith(("admin", "réparer", "repair"))
+        # the repair rides its \U0001f5f3 emoji AND its localized label —
+        # a label-only match broke the constraint the day the English
+        # catalog still read "Sync now" (the 2026-11-13 merlin finding)
+        return emoji in {"\U0001f513", "\U0001f528", "\U0001f504"} or label.lower().startswith(
+            ("admin", "réparer", "repair")
+        )
 
     return sorted(items, key=lambda item: 1 if is_operator_tool(item) else 0)
 
@@ -533,10 +538,9 @@ async def _auto_entries(
             emoji = str((game_decls or {}).get(game_key, {}).get("emoji", "") or "")
             plain_label = label.lstrip(emoji).strip() or label
             out.append(ViewOpenButton(target, plain_label, emoji))
-        # the games scope's own channels ride the home's action row (the
-        # folder's doors): général, admin, catalogue — one click each
-        if view_id == "menu:games:home":
-            out.extend(await _scope_channel_buttons(bot, guild_id, "games", catalog, locale))
+        # the games home's doors (général, admin, catalogue) ride the
+        # BODY's channel notice — the link buttons were redundant with
+        # it (the 2026-11-13 merlin direction)
         return out
     admin = view_id == "menu:mods:admin"
     for mod_name in (registry.enabled() if registry is not None else ()):
@@ -548,41 +552,6 @@ async def _auto_entries(
         emoji = str(getattr(definition, "emoji", "") or "") if definition is not None else ""
         plain_label = label.lstrip(emoji).strip() or label
         out.append(ViewOpenButton(target, plain_label, emoji))
-    return out
-
-
-async def _scope_channel_buttons(
-    bot: Any,
-    guild_id: str,
-    scope: str,
-    catalog: Any,
-    locale: str,
-) -> list[Any]:
-    """Build the link buttons to a scope's provisioned channels (its doors)."""
-    import discord
-
-    from botforge.discord.scope_pins import _tr
-    from botforge.discord.ui.panels_provisioning import stored_channel_id
-
-    doors: list[tuple[str, str, str]] = [
-        ("general", "ui.panels.channels.general", "🛡️"),
-        ("admin", "ui.panels.channels.admin", "🔒"),
-        ("catalog", "ui.panels.channels.catalog", "📦"),
-    ]
-    out: list[Any] = []
-    for key, label_key, emoji in doors:
-        channel_id = await stored_channel_id(guild_id, scope, key)
-        if not channel_id or not str(channel_id).isdigit():
-            continue
-        label = _tr(catalog, label_key, locale, key)
-        out.append(
-            discord.ui.Button(
-                style=discord.ButtonStyle.link,
-                url=f"https://discord.com/channels/{guild_id}/{channel_id}",
-                label=str(label)[:80],
-                emoji=discord.PartialEmoji.from_str(emoji),
-            )
-        )
     return out
 
 

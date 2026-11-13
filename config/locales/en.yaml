@@ -498,7 +498,7 @@ en:
       btn_create_pool: Create a map pool
       btn_ensure: Create missing channels
       bot_home_description: The bot's operation — logs, administration, decisions.
-      btn_sync: Sync now
+      btn_sync: Repair channels & roles
       btn_language: Language
     views:
       menu.home:
@@ -528,10 +528,10 @@ en:
         description: Manage the server's mods.
 
       menu.mod.kingdom:
-        title: 👑 Kingdom
+        title: Kingdom
         description: "The Kingdom mod's home — the real surfaces land with the portage (botforge-services#368)"
       menu.mod.kingdom.admin:
-        title: 👑 Kingdom — admin
+        title: Kingdom — admin
         description: "The Kingdom mod's admin — the season panel and the candidates land with the portage"
     mods:
       homes:
