@@ -91,6 +91,8 @@ class ModDefinition:
     private: bool = False
     owner_ids: tuple[str, ...] = field(default_factory=tuple)
     default_active: bool = False
+    emoji: str = ""
+    image: str = ""
 
     def is_private(self) -> bool:
         """Whether the mod is reserved (bot admins + declared owners)."""

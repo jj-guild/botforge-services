@@ -435,6 +435,99 @@ def _label(catalog: Any, key: str, locale: str, fallback: str = "?") -> str:
     return rendered if rendered != key else fallback
 
 
+async def _clickable_image_entries(
+    bot: Any,
+    guild_id: str,
+    view_id: str,
+    catalog: Any,
+    locale: str,
+) -> list[Any]:
+    """Build the home menus' clickable-image blocks (#334).
+
+    An installed item whose declaration carries an ``image`` renders as
+    a link wrapping the image (``[![alt](image)](target)`` — a Discord
+    markdown link around an embedded image): the click jumps to the
+    item's channel. The items without art keep their button.
+    """
+    import discord
+
+    from botforge.discord.ui.panels_provisioning import stored_channel_id
+    from botforge.discord.wiring import build_guild_access_service
+
+    if view_id not in ("menu:games:home", "menu:mods:home"):
+        return []
+    access = build_guild_access_service()
+    if view_id == "menu:games:home":
+        entries = await _game_image_entries(bot, guild_id, catalog, locale, access)
+    else:
+        entries = await _mod_image_entries(bot, guild_id, catalog, locale, access)
+    blocks: list[Any] = []
+    for _name, label, image, scope in entries:
+        channel_id = await stored_channel_id(guild_id, scope, "general")
+        if channel_id and str(channel_id).isdigit():
+            target = f"https://discord.com/channels/{guild_id}/{channel_id}"
+            blocks.append(discord.ui.TextDisplay(f"[![{label}]({image})]({target})"))
+        else:
+            blocks.append(discord.ui.TextDisplay(f"![{label}]({image})"))
+    return blocks
+
+
+async def _game_image_entries(
+    bot: Any,
+    guild_id: str,
+    catalog: Any,
+    locale: str,
+    access: Any,
+) -> list[tuple[str, str, str, str]]:
+    """Collect the installed games' (name, label, image, scope) with art."""
+    from botforge.discord.mods_forum import load_game_declarations
+    from botforge.discord.scope_pins import _tr
+
+    installed: set[str] = set()
+    if access is not None:
+        try:
+            installed = set(await access.enabled_games(guild_id))
+        except Exception:
+            logger.warning("clickable images: the state unreadable", exc_info=True)
+    game_decls = load_game_declarations(
+        getattr(getattr(bot, "config", None), "config_dir", None) or "config"
+    )
+    out: list[tuple[str, str, str, str]] = []
+    for game_key in sorted(installed):
+        image = str((game_decls or {}).get(game_key, {}).get("image", "") or "")
+        if image:
+            label = _tr(catalog, f"ui.games.{game_key}.name", locale, game_key)
+            out.append((game_key, label, image, f"games/{game_key}"))
+    return out
+
+
+async def _mod_image_entries(
+    bot: Any,
+    guild_id: str,
+    catalog: Any,
+    locale: str,
+    access: Any,
+) -> list[tuple[str, str, str, str]]:
+    """Collect the installed mods' (name, label, image, scope) with art."""
+    from botforge.discord.scope_pins import _tr
+
+    installed: set[str] = set()
+    if access is not None:
+        try:
+            installed = set(await access.enabled_mods(guild_id))
+        except Exception:
+            logger.warning("clickable images: the state unreadable", exc_info=True)
+    registry = getattr(bot, "registry", None)
+    out: list[tuple[str, str, str, str]] = []
+    for mod_name in sorted(installed):
+        definition = registry.get(mod_name) if registry is not None else None
+        image = str(getattr(definition, "image", "") or "") if definition is not None else ""
+        if image:
+            label = _tr(catalog, f"ui.mods.homes.{mod_name}", locale, mod_name)
+            out.append((mod_name, label, image, f"mod/{mod_name}"))
+    return out
+
+
 async def _auto_entries(
     bot: Any,
     guild_id: str,
@@ -520,6 +613,12 @@ def build_declared_menu(bot: Any, view_id: str) -> Any:  # noqa: C901
         title = _tr(catalog, f"{prefix}.title", locale, view_id)
         description = _tr(catalog, f"{prefix}.description", locale)
         view = discord.ui.LayoutView(timeout=None)
+        # the mod menus' STANDARD content (#378/#379): every mod's home
+        # and admin render their declaration's presentation — a mod gets
+        # its surfaces for free
+        from botforge.discord.mod_standard import mod_standard_blocks
+
+        standard_blocks = await mod_standard_blocks(bot, guild_id, view_id, _tr)
         header = f"# {title}"
         # the SDK constraint: an admin surface ALWAYS carries the open
         # padlock in its header (one glance tells the operator where they
@@ -532,6 +631,12 @@ def build_declared_menu(bot: Any, view_id: str) -> Any:  # noqa: C901
         blocks: list[Any] = [discord.ui.TextDisplay(header)]
         if description:
             blocks.append(discord.ui.TextDisplay(description))
+        blocks.extend(standard_blocks)
+        # the CLICKABLE IMAGES (#334): on the home menus, an installed
+        # item with a declared image renders as an image wrapped in a
+        # LINK (a click jumps to the item's channel) — the entry IS the
+        # image; the items without art keep their button
+        blocks.extend(await _clickable_image_entries(bot, guild_id, view_id, catalog, locale))
         # only the menus that carry the language picker state the current
         # language: the operator sees what they are about to switch
         if any(button.action == "set-language" for button in decl.buttons):
