@@ -435,102 +435,52 @@ def _label(catalog: Any, key: str, locale: str, fallback: str = "?") -> str:
     return rendered if rendered != key else fallback
 
 
-async def _clickable_image_entries(
+
+
+
+async def _menu_action_row(
     bot: Any,
     guild_id: str,
-    view_id: str,
+    decl: Any,
     catalog: Any,
     locale: str,
-) -> list[Any]:
-    """Build the home menus' clickable-image blocks (#334).
+) -> Any:
+    """Assemble a menu's action row: declared + auto-injected, ordered.
 
-    An installed item whose declaration carries an ``image`` renders as
-    a link wrapping the image (``[![alt](image)](target)`` — a Discord
-    markdown link around an embedded image): the click jumps to the
-    item's channel. The items without art keep their button.
+    The SDK ORDER CONSTRAINT: the operator's tools (the admin flip on
+    a home, the repair on an admin surface) are ALWAYS LAST — whatever
+    the declaration or the injection order, the builder sorts.
     """
-    import discord
-
-    from botforge.discord.wiring import build_guild_access_service
-
-    if view_id not in ("menu:games:home", "menu:mods:home"):
-        return []
-    access = build_guild_access_service()
-    if view_id == "menu:games:home":
-        entries = await _game_image_entries(bot, guild_id, catalog, locale, access)
-    else:
-        entries = await _mod_image_entries(bot, guild_id, catalog, locale, access)
-    blocks: list[Any] = []
-    for name, label, image, scope in entries:
-        # the SMALL visual form: the art rides a THUMBNAIL (a Section's
-        # accessory — the compact image), the title rides the section's
-        # text; the NAVIGATION stays the menu's own buttons (the right
-        # links — they open the views)
-        del name, scope
-        plain = label.lstrip("⚔️👑 ").strip() or label
-        blocks.append(
-            discord.ui.Section(
-                discord.ui.TextDisplay(f"**{plain}**"),
-                accessory=discord.ui.Thumbnail(image),
-            )
-        )
-    return blocks
+    row: Any = discord.ui.ActionRow[discord.ui.LayoutView]()
+    for button in menu_buttons(decl, catalog, locale):
+        row.add_item(button)
+    # the AUTO-INJECTED entries (#377): the mods/games home and admin
+    # menus list the guild's INSTALLED items. The dev declares NOTHING;
+    # the platform lists (the dev is constrained, not trusted).
+    for button in await _auto_entries(bot, guild_id, decl.id, catalog, locale):
+        row.add_item(button)
+    items = list(row.children)
+    row = discord.ui.ActionRow[discord.ui.LayoutView]()
+    for item in _operator_tools_last(items):
+        row.add_item(item)
+    return row
 
 
-async def _game_image_entries(
-    bot: Any,
-    guild_id: str,
-    catalog: Any,
-    locale: str,
-    access: Any,
-) -> list[tuple[str, str, str, str]]:
-    """Collect the installed games' (name, label, image, scope) with art."""
-    from botforge.discord.mods_forum import load_game_declarations
-    from botforge.discord.scope_pins import _tr
+def _operator_tools_last(items: list[Any]) -> list[Any]:
+    """Sort a menu row: the operator's tools (admin flips, repair) last.
 
-    installed: set[str] = set()
-    if access is not None:
-        try:
-            installed = set(await access.enabled_games(guild_id))
-        except Exception:
-            logger.warning("clickable images: the state unreadable", exc_info=True)
-    game_decls = load_game_declarations(
-        getattr(getattr(bot, "config", None), "config_dir", None) or "config"
-    )
-    out: list[tuple[str, str, str, str]] = []
-    for game_key in sorted(installed):
-        image = str((game_decls or {}).get(game_key, {}).get("image", "") or "")
-        if image:
-            label = _tr(catalog, f"ui.games.{game_key}.name", locale, game_key)
-            out.append((game_key, label, image, f"games/{game_key}"))
-    return out
+    The SDK constraint: a home's Admin button and an admin surface's
+    Réparer button are ALWAYS in the last position — the navigation
+    entries come first, the operator's tools close the row. The
+    declaration order and the injection order do not matter; the
+    builder decides.
+    """
+    def is_operator_tool(item: Any) -> bool:
+        emoji = getattr(getattr(item, "emoji", None), "name", "") or ""
+        label = str(getattr(item, "label", "") or "")
+        return emoji in {"\U0001f513", "\U0001f528"} or label.lower().startswith(("admin", "réparer", "repair"))
 
-
-async def _mod_image_entries(
-    bot: Any,
-    guild_id: str,
-    catalog: Any,
-    locale: str,
-    access: Any,
-) -> list[tuple[str, str, str, str]]:
-    """Collect the installed mods' (name, label, image, scope) with art."""
-    from botforge.discord.scope_pins import _tr
-
-    installed: set[str] = set()
-    if access is not None:
-        try:
-            installed = set(await access.enabled_mods(guild_id))
-        except Exception:
-            logger.warning("clickable images: the state unreadable", exc_info=True)
-    registry = getattr(bot, "registry", None)
-    out: list[tuple[str, str, str, str]] = []
-    for mod_name in sorted(installed):
-        definition = registry.get(mod_name) if registry is not None else None
-        image = str(getattr(definition, "image", "") or "") if definition is not None else ""
-        if image:
-            label = _tr(catalog, f"ui.mods.homes.{mod_name}", locale, mod_name)
-            out.append((mod_name, label, image, f"mod/{mod_name}"))
-    return out
+    return sorted(items, key=lambda item: 1 if is_operator_tool(item) else 0)
 
 
 async def _auto_entries(
@@ -578,9 +528,11 @@ async def _auto_entries(
             target = f"menu:game:{game_key}:admin" if admin else f"menu:games:{game_key}"
             label = _tr(catalog, f"ui.games.{game_key}.name", locale, game_key)
             # the emoji rides the declaration (#334: the visual identity is
-            # data, never hardcoded)
+            # data, never hardcoded); the LABEL drops its leading emoji —
+            # the button carries it once, never twice (the merlin finding)
             emoji = str((game_decls or {}).get(game_key, {}).get("emoji", "") or "")
-            out.append(ViewOpenButton(target, label, emoji))
+            plain_label = label.lstrip(emoji).strip() or label
+            out.append(ViewOpenButton(target, plain_label, emoji))
         return out
     admin = view_id == "menu:mods:admin"
     for mod_name in (registry.enabled() if registry is not None else ()):
@@ -590,7 +542,8 @@ async def _auto_entries(
         label = _tr(catalog, f"ui.mods.homes.{mod_name}", locale, mod_name)
         definition = registry.get(mod_name) if registry is not None else None
         emoji = str(getattr(definition, "emoji", "") or "") if definition is not None else ""
-        out.append(ViewOpenButton(target, label, emoji))
+        plain_label = label.lstrip(emoji).strip() or label
+        out.append(ViewOpenButton(target, plain_label, emoji))
     # the scope's own channels ride the home's action row too (#377):
     # général, admin, catalogue — the folder's doors, one click each
     if view_id == "menu:mods:home":
@@ -633,7 +586,7 @@ async def _scope_channel_buttons(
     return out
 
 
-def build_declared_menu(bot: Any, view_id: str) -> Any:  # noqa: C901
+def build_declared_menu(bot: Any, view_id: str) -> Any:
     """Build a declared menu's layout: title, description, buttons, footer.
 
     The single menu builder: every declared menu renders through it,
@@ -676,11 +629,6 @@ def build_declared_menu(bot: Any, view_id: str) -> Any:  # noqa: C901
         if description:
             blocks.append(discord.ui.TextDisplay(description))
         blocks.extend(standard_blocks)
-        # the CLICKABLE IMAGES (#334): on the home menus, an installed
-        # item with a declared image renders as an image wrapped in a
-        # LINK (a click jumps to the item's channel) — the entry IS the
-        # image; the items without art keep their button
-        blocks.extend(await _clickable_image_entries(bot, guild_id, view_id, catalog, locale))
         # only the menus that carry the language picker state the current
         # language: the operator sees what they are about to switch
         if any(button.action == "set-language" for button in decl.buttons):
@@ -700,15 +648,7 @@ def build_declared_menu(bot: Any, view_id: str) -> Any:  # noqa: C901
         # an admin surface reads red: one glance tells the operator where they stand
         accent = discord.Colour(0xE74C3C) if getattr(decl, "admin_surface", False) else discord.Colour(0x5865F2)
         view.add_item(discord.ui.Container(*blocks, accent_colour=accent))
-        row: discord.ui.ActionRow[discord.ui.LayoutView] = discord.ui.ActionRow()
-        for button in menu_buttons(decl, catalog, locale):
-            row.add_item(button)
-        # the AUTO-INJECTED entries (#377): the mods/games home and admin
-        # menus list every item with its LIVE install state — installed
-        # ones enabled, the rest grayed. The dev declares NOTHING; the
-        # platform lists (the dev is constrained, not trusted).
-        for button in await _auto_entries(bot, guild_id, decl.id, catalog, locale):
-            row.add_item(button)
+        row = await _menu_action_row(bot, guild_id, decl, catalog, locale)
         # a menu with NO buttons sends no row: Discord rejects an empty
         # action row (50035 "Must be between 1 and 5 in length") — the
         # placeholder mod menus (kingdom until its portage) stay renderable
