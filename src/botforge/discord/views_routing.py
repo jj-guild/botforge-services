@@ -558,6 +558,31 @@ async def _auto_entries(
     return out
 
 
+async def _declared_menu_notice(
+    bot: Any, guild_id: str, decl: Any, catalog: Any, locale: str, tree_scope: str
+) -> str:
+    """Pick the view's notice.
+
+    A MOD view reads its own yaml, the LIST views scan the installed
+    games/mods, the rest reads its tree scope — never a hardcoded
+    folder (the 2026-11-13 merlin report).
+    """
+    import re
+
+    from botforge.discord.scope_pins import _installed_scan_notice, _mod_notice, _tree_notice
+
+    mod_view = re.match(r"^menu:mod:(?P<name>[a-z0-9_-]+)(?::admin)?$", decl.id)
+    if mod_view is not None:
+        return await _mod_notice(guild_id, mod_view["name"], catalog, locale, bot)
+    if decl.id in ("menu:mods:home", "menu:mods:admin"):
+        return await _installed_scan_notice(guild_id, "mods", catalog, locale, bot)
+    if decl.id in ("menu:games:home", "menu:games:admin"):
+        return await _installed_scan_notice(guild_id, "games", catalog, locale, bot)
+    if tree_scope:
+        return await _tree_notice(guild_id, tree_scope, catalog, locale, bot=bot)
+    return ""
+
+
 def build_declared_menu(bot: Any, view_id: str) -> Any:
     """Build a declared menu's layout: title, description, buttons, footer.
 
@@ -574,7 +599,11 @@ def build_declared_menu(bot: Any, view_id: str) -> Any:
 
     async def _build(guild_id: str) -> discord.ui.LayoutView:
 
-        from botforge.discord.scope_pins import _catalog, _locale_of, _tr, _tree_notice
+        from botforge.discord.scope_pins import (
+        _catalog,
+        _locale_of,
+        _tr,
+    )
 
         catalog = _catalog(bot)
         locale = await _locale_of(bot, guild_id)
@@ -614,7 +643,11 @@ def build_declared_menu(bot: Any, view_id: str) -> Any:
         # the tree scope is the folder ("games", "games/aoe2") — every menu
         # carries its scope's notice (the homes AND the admin surfaces)
         tree_scope = decl.scope.split("/general")[0].split("/admin")[0] if decl.scope else ""
-        notice = await _tree_notice(guild_id, tree_scope, catalog, locale, bot=bot) if tree_scope else ""
+        # the notice READS its scope's declaration: a MOD view lists the
+        # mod's own channels (its yaml), the LIST views scan the
+        # installed games/mods — never a hardcoded folder (the
+        # 2026-11-13 merlin report)
+        notice = await _declared_menu_notice(bot, guild_id, decl, catalog, locale, tree_scope)
         if notice:
             blocks.append(discord.ui.TextDisplay(notice))
         # an admin surface reads red: one glance tells the operator where they stand

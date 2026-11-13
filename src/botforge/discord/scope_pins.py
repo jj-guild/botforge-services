@@ -77,7 +77,7 @@ async def _tree_notice(guild_id: str, scope: str, catalog: Any = None, locale: s
     if spec is None:
         return ""
     lines: list[str] = [
-        _tr(catalog, "ui.tree.channels_heading", locale, "**Salons** (g\u00e9n\u00e9r\u00e9s par le bot) :")
+        _tr(catalog, "ui.tree.channels_heading", locale, "**Salons** :")
     ]
     raw_channels = _declared_channel_meta(scope)
     for decl in spec.channels:
@@ -101,7 +101,7 @@ async def _tree_notice(guild_id: str, scope: str, catalog: Any = None, locale: s
     if role_lines:
         lines.append("")
         lines.append(
-            _tr(catalog, "ui.tree.roles_heading", locale, "**R\u00f4les** (g\u00e9n\u00e9r\u00e9s par le bot) :")
+            _tr(catalog, "ui.tree.roles_heading", locale, "**R\u00f4les** :")
         )
         lines.extend(role_lines)
     return "\n".join(lines)
@@ -140,6 +140,153 @@ def _bot_admins_role_ids(guild_id: str, bot: Any = None) -> list[str]:
     if guild is None:
         return []
     return [str(r.id) for r in getattr(guild, "roles", ()) if r.name == "bot-admins"]
+
+
+async def _mod_channels_lines(guild_id: str, name: str, definition: Any, catalog: Any, locale: str) -> list[str]:
+    """Render the mod's own channels: its declaration is the source of truth.
+
+    The notice READS the declaration (key, display_name, description)
+    and the stored resolutions under the ``mod/<name>`` scope — a mod's
+    home never lists the platform's mods folder (the 2026-11-13
+    merlin report).
+    """
+    from botforge.discord.ui.panels_provisioning import stored_channel_id
+
+    lines: list[str] = []
+    for channel in getattr(definition, "channel_categories", ()) or ():
+        try:
+            channel_id = await stored_channel_id(guild_id, f"mod/{name}", channel.key)
+        except Exception:
+            channel_id = None
+        label = str(getattr(channel, "display_name", "") or channel.key)
+        description = str(getattr(channel, "description", "") or "")
+        if channel_id:
+            where = f"<#{channel_id}> \u2014 {description}" if description else f"<#{channel_id}>"
+        else:
+            where = f"**{label}** (\u00e0 cr\u00e9er)"
+        lines.append(f"\u2022 {where}")
+    return lines
+
+
+async def _mod_roles_lines(guild_id: str, name: str, definition: Any, bot: Any, catalog: Any, locale: str) -> list[str]:
+    """Render the mod's declared roles with their mentions, plus the bot admins.
+
+    The pattern everywhere (owner direction 2026-11-13): a role renders
+    as a MENTION and its use \u2014 the mod's declared roles first, the
+    bot-admins role closes the list on every surface.
+    """
+    def _t(key: str, fallback: str) -> str:
+        if catalog is None:
+            return fallback
+        rendered = str(catalog.render(key, locale))
+        return rendered if rendered != key else fallback
+
+    lines: list[str] = []
+    service = getattr(bot, "mod_roles_service", None)
+    for role in getattr(definition, "roles", ()) or ():
+        role_id = ""
+        if service is not None:
+            try:
+                mapping = await service.find_role_mapping(guild_id, name, role.key)
+                role_id = str(mapping.role_id) if mapping is not None else ""
+            except Exception:
+                role_id = ""
+        if role_id:
+            lines.append(f"\u2022 <@&{role_id}> \u2014 {getattr(role, 'display_name', role.key)}")
+        else:
+            lines.append(f"\u2022 **{getattr(role, 'display_name', role.key)}** (\u00e0 cr\u00e9er)")
+    use = _t("ui.tree.bot_admins_role", "les op\u00e9rateurs du bot : administrent la plateforme")
+    lines.extend(
+        f"\u2022 <@&{role_id}> \u2014 {use}" for role_id in _bot_admins_role_ids(guild_id, bot)
+    )
+    return lines
+
+
+async def _mod_notice(guild_id: str, name: str, catalog: Any, locale: str, bot: Any) -> str:
+    """Render the mod's OWN notice: its declared channels and roles (its yaml)."""
+    registry = getattr(bot, "registry", None)
+    definition = registry.get(name) if registry is not None else None
+    if definition is None:
+        return ""
+    lines: list[str] = [
+        _tr(catalog, "ui.tree.channels_heading", locale, "**Salons** :")
+    ]
+    lines.extend(await _mod_channels_lines(guild_id, name, definition, catalog, locale))
+    role_lines = await _mod_roles_lines(guild_id, name, definition, bot, catalog, locale)
+    if role_lines:
+        lines.append("")
+        lines.append(_tr(catalog, "ui.tree.roles_heading", locale, "**R\u00f4les** :"))
+        lines.extend(role_lines)
+    return "\n".join(lines)
+
+
+async def _game_scope_channel_lines(
+    guild_id: str, key: str, spec: Any, catalog: Any, locale: str
+) -> list[str]:
+    """Render one installed game's tree channels as mention lines."""
+    from botforge.discord.ui.panels_provisioning import stored_channel_id
+
+    lines: list[str] = []
+    for decl in spec.channels:
+        try:
+            channel_id = await stored_channel_id(guild_id, f"games/{key}", decl.key)
+        except Exception:
+            channel_id = None
+        if not channel_id:
+            continue
+        label = _tr(catalog, decl.label_key, locale, decl.label_key.rsplit(".", 1)[-1])
+        lines.append(f"\u2022 {label} \u2014 <#{channel_id}>")
+    return lines
+
+
+async def _installed_scan_notice(
+    guild_id: str, kind: str, catalog: Any, locale: str, bot: Any
+) -> str:
+    """Render the LIST views' notice: the installed games/mods' channels.
+
+    The games/mods home and admin lists never show a hardcoded scope
+    folder: they scan the guild's INSTALLED items and render each one's
+    channels (a game's from its tree scope, a mod's from its yaml
+    declaration) \u2014 the notice follows the live state.
+    """
+    from botforge.discord.ui.panels import registered_scopes
+    from botforge.discord.wiring import build_guild_access_service
+
+    access = build_guild_access_service()
+    installed: tuple[str, ...] = ()
+    if access is None:
+        return ""
+    try:
+        installed = tuple(
+            await (access.enabled_mods(guild_id) if kind == "mods" else access.enabled_games(guild_id))
+        )
+    except Exception:
+        installed = ()
+    lines: list[str] = [
+        _tr(catalog, "ui.tree.channels_heading", locale, "**Salons** :")
+    ]
+    specs = {sp.scope: sp for sp in registered_scopes()}
+    for key in installed:
+        if kind == "mods":
+            registry = getattr(bot, "registry", None)
+            definition = registry.get(key) if registry is not None else None
+            if definition is None:
+                continue
+            lines.extend(await _mod_channels_lines(guild_id, key, definition, catalog, locale))
+        else:
+            spec = specs.get(f"games/{key}")
+            if spec is None:
+                continue
+            lines.extend(await _game_scope_channel_lines(guild_id, key, spec, catalog, locale))
+    role_lines: list[str] = []
+    use = str(catalog.render("ui.tree.bot_admins_role", locale)) if catalog is not None else ""
+    use = use if use and use != "ui.tree.bot_admins_role" else "les op\u00e9rateurs du bot : administrent la plateforme"
+    role_lines.extend(f"\u2022 <@&{rid}> \u2014 {use}" for rid in _bot_admins_role_ids(guild_id, bot))
+    if role_lines:
+        lines.append("")
+        lines.append(_tr(catalog, "ui.tree.roles_heading", locale, "**R\u00f4les** :"))
+        lines.extend(role_lines)
+    return "\n".join(lines)
 
 
 def _declared_channel_meta(scope: str) -> dict[str, dict[str, Any]]:

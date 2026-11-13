@@ -343,8 +343,8 @@ fr:
     selection_invalid: Sélection invalide.
   ui:
     tree:
-      channels_heading: '**Salons** (générés par le bot) :'
-      roles_heading: '**Rôles** (générés par le bot) :'
+      channels_heading: '**Salons** :'
+      roles_heading: '**Rôles** :'
       bot_admins_role: 'les opérateurs du bot : administrent la plateforme'
       bot_admins_role_pending: les opérateurs du bot (le rôle est créé au premier sync)
     games:

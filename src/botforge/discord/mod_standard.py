@@ -76,12 +76,9 @@ async def mod_standard_blocks(
                 )
             )
         )
-    roles = tuple(getattr(definition, "roles", ()) or ())
-    if roles:
-        labels = ", ".join(role.display_name for role in roles)
-        blocks.append(
-            discord.ui.TextDisplay(f"👥 {_tr('mods.standard.roles', 'Roles')}: {labels}")
-        )
+    # the declared roles no longer ride the standard blocks: the view's
+    # notice carries them as MENTIONS with their use, plus the bot admins
+    # (owner direction 2026-11-13 — one pattern everywhere).
     commands = tuple(getattr(definition, "commands", ()) or ())
     if commands:
         blocks.append(
