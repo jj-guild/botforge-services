@@ -8,8 +8,8 @@ click guard is bot-admin (the catalog is platform-wide data).
 
 - map: [Ajouter à un pool] [Modifier] [Supprimer]
 - pool: [Ajouter une map] [Changer d'état] [Supprimer]
-- civ: a disabled placeholder (cross-guild data lives in the DM
-  panel's refresh) — the design's todo action bar.
+- civ: NO admin button — its data is cross-guild (the DM panel's
+  sync owns it), the generic menu carried nothing useful.
 """
 
 from __future__ import annotations
@@ -165,16 +165,13 @@ async def build_entity_admin_bar(
             return spec  # the not-found / note menus
         return build_admin_bar(spec)
 
-    # civ (and any future kind): the cross-guild data is managed through
-    # the DM panel — a plain note keeps the surface honest
+    # any other kind (a stale wire from a superseded surface): the
+    # honest answer is that this entity carries no admin bar — the
+    # civ posts dropped theirs (the menu had nothing useful)
     return build_menu(
         MenuSpec(
-            title="⚙️ Gestion",
-            description=(
-                f"`{entity_id}`\n\nCette donnée est cross-guild : "
-                "elle se met à jour via le bouton de synchronisation du "
-                "panel admin DM (raffraichir le contenu)."
-            ),
+            title="⚙️ Admin",
+            description=f"`{entity_id}`",
             view_id=admin_panel_id(entity_id),
             sections=(),
         )
