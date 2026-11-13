@@ -7,6 +7,9 @@
 id: aoe2
 default_active: true
 emoji: "⚔️"
+# the catalog/home entry's visual (a clickable image — the link wraps
+# it; placeholder art until the real one lands, same CDN as the civs)
+image: "https://raw.githubusercontent.com/SiegeEngineers/aoe2techtree/master/img/Civs/britons.png"
 display_key: ui.games.aoe2.name
 providers:
 - key: aoe2lobby
