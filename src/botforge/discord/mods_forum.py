@@ -471,6 +471,28 @@ async def _game_presentation(
     return title, providers
 
 
+async def refresh_scope_pins(bot: Any, guild_id: str, scopes: tuple[str, ...]) -> int:
+    """Re-render the pinned views of the given scopes (best-effort).
+
+    The install/uninstall changes the guild's live state: the pinned
+    home and admin menus carry it (the auto-injected entries' enabled
+    and grayed buttons) — a stale pin shows a stale state until the
+    next sync. The refresh keeps them honest.
+    """
+    from botforge.discord.static_pins import ensure_static_pin, registered_static_pins
+
+    refreshed = 0
+    for pin in registered_static_pins():
+        if not pin.scope or not any(pin.scope == s or pin.scope.startswith(s + "/") for s in scopes):
+            continue
+        try:
+            await ensure_static_pin(bot, pin, guild_id)
+            refreshed += 1
+        except Exception:
+            logger.warning("catalog: the %s pin refresh failed — best-effort", pin.key, exc_info=True)
+    return refreshed
+
+
 async def provision_mod_channels(bot: Any, guild_id: str, mod_name: str) -> int:
     """Provision one mod's declared channels under its own folder (mod/<name>).
 
@@ -784,6 +806,10 @@ class ModInstallButton(
         except (discord.HTTPException, AttributeError, TypeError):
             await interaction.followup.send(message, ephemeral=True)
         await sync_catalogs(str(interaction.guild_id), interaction.client)
+        # the pinned home/admin menus re-render: the live install state
+        # rides their auto-injected entries
+        pin_scopes = ("games",) if self.kind == "game" else ("mods",)
+        await refresh_scope_pins(interaction.client, str(interaction.guild_id), pin_scopes)
 
 
 class ModUninstallButton(
@@ -956,6 +982,8 @@ class ModUninstallModal(discord.ui.Modal):
         except (discord.HTTPException, AttributeError, TypeError):
             await interaction.followup.send(message, ephemeral=True)
         await sync_catalogs(guild_id, interaction.client)
+        pin_scopes = ("games",) if self.kind == "game" else ("mods",)
+        await refresh_scope_pins(interaction.client, guild_id, pin_scopes)
 
 
 def register_mods_forum_items(bot: discord.Client) -> None:

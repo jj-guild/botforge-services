@@ -31,13 +31,13 @@ settings: {}
 # admin
 channels:
   - key: general
-    display_name: Kingdom general
+    display_name: "🛡️ général"
     description: The kingdom mod's front door
   - key: announce
-    display_name: Kingdom announce
+    display_name: "📣 annonces"
     description: Where the kingdom mod posts announcements
   - key: admin
-    display_name: Kingdom admin
+    display_name: "🛠️ admin"
     description: The kingdom mod's operators
 roles:
   - key: kingdom_member
