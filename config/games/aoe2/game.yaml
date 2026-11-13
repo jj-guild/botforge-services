@@ -6,6 +6,7 @@
 # locale keys render in the guild's language).
 id: aoe2
 default_active: true
+emoji: "⚔️"
 display_key: ui.games.aoe2.name
 providers:
 - key: aoe2lobby

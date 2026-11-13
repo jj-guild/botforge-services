@@ -467,6 +467,11 @@ async def _auto_entries(
         except Exception:
             logger.warning("auto entries: the installed state unreadable — best-effort", exc_info=True)
     out: list[Any] = []
+    from botforge.discord.mods_forum import load_game_declarations
+
+    game_decls: dict[str, dict[str, Any]] = dict(
+        load_game_declarations(getattr(getattr(bot, "config", None), "config_dir", None) or "config")
+    )
     if view_id in ("menu:games:home", "menu:games:admin"):
         admin = view_id == "menu:games:admin"
         for game_key in all_games:
@@ -474,7 +479,10 @@ async def _auto_entries(
                 continue  # not installed on this guild: no button at all
             target = f"menu:game:{game_key}:admin" if admin else f"menu:games:{game_key}"
             label = _tr(catalog, f"ui.games.{game_key}.name", locale, game_key)
-            out.append(ViewOpenButton(target, label, "⚔️"))
+            # the emoji rides the declaration (#334: the visual identity is
+            # data, never hardcoded)
+            emoji = str((game_decls or {}).get(game_key, {}).get("emoji", "") or "")
+            out.append(ViewOpenButton(target, label, emoji))
         return out
     admin = view_id == "menu:mods:admin"
     for mod_name in (registry.enabled() if registry is not None else ()):
@@ -482,7 +490,9 @@ async def _auto_entries(
             continue  # not installed on this guild: no button at all
         target = f"menu:mod:{mod_name}:admin" if admin else f"menu:mod:{mod_name}"
         label = _tr(catalog, f"ui.mods.homes.{mod_name}", locale, mod_name)
-        out.append(ViewOpenButton(target, label, "👑"))
+        definition = registry.get(mod_name) if registry is not None else None
+        emoji = str(getattr(definition, "emoji", "") or "") if definition is not None else ""
+        out.append(ViewOpenButton(target, label, emoji))
     return out
 
 
