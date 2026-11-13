@@ -677,3 +677,9 @@ fr:
       uninstalled_done: "Désinstallé."
       refused: "Refusé : {reason}"
       admin_only: "Les actions du catalogue sont réservées aux bot-admins."
+  entity_cards:
+    variants_heading: Variantes
+    creator_prefix: 'Créateur : '
+    source_prefix: 'Source : '
+    truncated_note: '… *(description tronquée — la suite sur la page source)*'
+    more_note: '… (+{hidden} de plus)'

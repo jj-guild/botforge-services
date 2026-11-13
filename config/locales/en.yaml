@@ -675,3 +675,9 @@ en:
       uninstalled_done: "Uninstalled."
       refused: "Refused: {reason}"
       admin_only: "The catalog actions are reserved for bot admins."
+  entity_cards:
+    variants_heading: Versions
+    creator_prefix: 'Creator: '
+    source_prefix: 'Source: '
+    truncated_note: '… *(description truncated — the rest on the source page)*'
+    more_note: '… (+{hidden} more)'
