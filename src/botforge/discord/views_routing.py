@@ -450,7 +450,7 @@ async def _auto_entries(
     """
     from botforge.discord.wiring import build_guild_access_service, guild_access_platform
 
-    if view_id not in ("menu:mods:home", "menu:mods:admin", "menu:games:home"):
+    if view_id not in ("menu:mods:home", "menu:mods:admin", "menu:games:home", "menu:games:admin"):
         return []
     from botforge.discord.scope_pins import _tr
 
@@ -466,14 +466,16 @@ async def _auto_entries(
         except Exception:
             logger.warning("auto entries: the installed state unreadable — best-effort", exc_info=True)
     out: list[Any] = []
-    if view_id == "menu:games:home":
+    if view_id in ("menu:games:home", "menu:games:admin"):
+        admin = view_id == "menu:games:admin"
         for game_key in all_games:
+            target = f"menu:game:{game_key}:admin" if admin else f"menu:games:{game_key}"
             label = _tr(catalog, f"ui.games.{game_key}.name", locale, game_key)
             out.append(
                 ViewOpenButton(
-                    f"menu:games:{game_key}",
+                    target,
                     label,
-                    "⚔️",
+                    "" if admin else "⚔️",
                     disabled=game_key not in installed_games,
                 )
             )

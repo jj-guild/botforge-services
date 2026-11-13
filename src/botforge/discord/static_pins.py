@@ -100,6 +100,10 @@ def _layout_fingerprint(layout: Any) -> str:
             return {
                 "id": getattr(component, "custom_id", None),
                 "label": getattr(component, "label", None),
+                # the disabled state is part of the change: the
+                # auto-injected entries flip enabled/grayed with the
+                # guild's install state (a stale pin is a stale state)
+                "disabled": bool(getattr(component, "disabled", False)),
                 "children": walk(getattr(component, "children", []) or []),
             }
         if hasattr(component, "options"):

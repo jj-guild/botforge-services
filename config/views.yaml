@@ -49,9 +49,6 @@ views:
     kind: menu
     scope: games/general
     buttons:
-    - target: menu:games:aoe2
-      label: ui.games.homes.aoe2
-      emoji: ⚔️
     - target: menu:games:admin
       label: ui.homes.btn_admin
       admin: true
@@ -59,9 +56,6 @@ views:
     kind: menu
     scope: games/admin
     buttons:
-    - target: menu:game:aoe2:admin
-      label: ui.games.homes.aoe2
-      emoji: ⚔️
     - label: ui.homes.btn_sync
       sync: true
     title_emoji: 🔓
