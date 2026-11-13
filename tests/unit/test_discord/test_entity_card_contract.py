@@ -129,6 +129,7 @@ def test_the_builder_chain_builds_the_same_card() -> None:
 def test_the_extra_seam_composes_a_group_without_forking_the_template() -> None:
     """A shape no spec field expresses rides the extra seam."""
     import discord
+
     from botforge.discord.ui.entity_cards import EntityCardBuilder
 
     def _banner(spec: object) -> list[discord.ui.Item[discord.ui.LayoutView]]:
@@ -137,7 +138,7 @@ def test_the_extra_seam_composes_a_group_without_forking_the_template() -> None:
     view = (
         EntityCardBuilder("kingdoms:territory:anjou", "Anjou")
         .description("Desc")
-        .extra(_banner)
+        .extra(_banner)  # noqa: S610 — the card builder's seam, not Django
         .build()
     )
     joined = "\n".join(_texts(view))

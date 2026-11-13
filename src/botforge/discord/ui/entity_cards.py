@@ -214,9 +214,7 @@ class EntityCardSpec:
         | discord.ui.ActionRow[discord.ui.LayoutView]
         | discord.ui.DynamicItem[Any],
         ...,
-    ] = field(
-        default_factory=tuple
-    )
+    ] = field(default_factory=tuple)
 
 
 def _header_blocks(spec: EntityCardSpec) -> list[discord.ui.Item[discord.ui.LayoutView]]:
@@ -307,9 +305,7 @@ def _media_blocks(spec: EntityCardSpec) -> list[discord.ui.Item[discord.ui.Layou
             media_urls.append(url)
     if not media_urls:
         return []
-    return [
-        discord.ui.MediaGallery(*[discord.MediaGalleryItem(u) for u in media_urls])
-    ]
+    return [discord.ui.MediaGallery(*[discord.MediaGalleryItem(u) for u in media_urls])]
 
 
 def _links_blocks(spec: EntityCardSpec) -> list[discord.ui.Item[discord.ui.LayoutView]]:
@@ -339,9 +335,7 @@ def _credits_blocks(spec: EntityCardSpec, labels: _CardLabels) -> list[discord.u
         creator = f"[{spec.creator}]({spec.creator_url})" if spec.creator_url else spec.creator
         blocks.append(discord.ui.TextDisplay(f"{labels.creator_prefix}{creator}"))
     if spec.source_url:
-        blocks.append(
-            discord.ui.TextDisplay(f"{labels.source_prefix}[{spec.source_label}]({spec.source_url})")
-        )
+        blocks.append(discord.ui.TextDisplay(f"{labels.source_prefix}[{spec.source_label}]({spec.source_url})"))
     return blocks
 
 
@@ -526,7 +520,9 @@ class EntityCardBuilder:
         """Set the action row (factories, ActionRows or DynamicItems)."""
         return self._set("action_buttons", tuple(buttons))
 
-    def extra(self, group: Callable[[EntityCardSpec], Sequence[discord.ui.Item[discord.ui.LayoutView]]]) -> EntityCardBuilder:
+    def extra(
+        self, group: Callable[[EntityCardSpec], Sequence[discord.ui.Item[discord.ui.LayoutView]]]
+    ) -> EntityCardBuilder:
         """Compose a body group no spec field expresses (before the credits).
 
         The extension seam: the group is built from the spec at render
@@ -637,9 +633,7 @@ def civ_card(
     art rides the header thumbnail.
     """
     paragraphs = [
-        f"**{label}**\n" + "\n".join(f"\u2022 {item}" for item in items)
-        for label, items in sections
-        if items
+        f"**{label}**\n" + "\n".join(f"\u2022 {item}" for item in items) for label, items in sections if items
     ]
     return (
         EntityCardBuilder(civ_id, name, locale=locale)
