@@ -7,7 +7,10 @@
 #                 salons vs one guild-level config channel)
 #   settings      free-form, mod-specific
 #   channels      list of {key, display_name, description, per_instance}
-#   roles         list of {key, display_name, color, hoisted}
+#   roles         list of {key, display_name, color, hoisted} — the SDK
+#                 already rides the standard trio (candidate/member/admin,
+#                 prefixed with the mod's key): declare an entry only to
+#                 override one (same key) or add mod-specific roles
 #   workflows     list of workflow names implemented by the mod
 #   commands      list of command names implemented by the mod
 #   dependencies  list of mod ids this mod depends on
@@ -21,6 +24,7 @@
 id: kingdom
 enabled: true
 seasonal: true
+emoji: "👑"
 private: true
 owner_discord_ids:
   - "242421489536729100"
@@ -39,9 +43,10 @@ channels:
   - key: admin
     display_name: "🛠️ admin"
     description: The kingdom mod's operators
-roles:
-  - key: kingdom_member
-    display_name: Kingdom Member
+# the SDK's standard role trio (candidate/member/admin, prefixed with
+# the mod's key) rides every mod — kingdom needs no role entry of its
+# own; the display names are renamable (the stored id is the resolver).
+roles: []
 workflows: []
 commands:
   - kingdom

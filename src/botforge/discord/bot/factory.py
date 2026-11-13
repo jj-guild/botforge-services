@@ -633,10 +633,11 @@ class BotforgeBot(discord.Client):
         await self._ensure_section_pins(guild_id)
 
     def _register_scope_pins(self: BotforgeBot) -> None:
-        """Declare every scope's home and admin pins (idempotent)."""
-        from botforge.discord.scope_pins import register_scope_pins
+        """Declare every scope's and every mod's home and admin pins (idempotent)."""
+        from botforge.discord.scope_pins import register_mod_pins, register_scope_pins
 
         self._scope_pins = register_scope_pins(self, ("root", "bot", "games", "games/aoe2", "mods"))
+        self._scope_pins.extend(register_mod_pins(self))
 
     async def _ensure_all_pins(self: BotforgeBot, guild_id: str) -> None:
         """Ensure every registered static pin lives in its channel (now).

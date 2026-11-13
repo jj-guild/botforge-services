@@ -523,9 +523,17 @@ def _operator_tools_last(items: list[Any]) -> list[Any]:
     builder decides.
     """
     def is_operator_tool(item: Any) -> bool:
-        emoji = getattr(getattr(item, "emoji", None), "name", "") or ""
-        label = str(getattr(item, "label", "") or "")
-        return emoji in {"\U0001f513", "\U0001f528"} or label.lower().startswith(("admin", "réparer", "repair"))
+        # a DynamicItem WRAPS its component: the label and the emoji live
+        # on ``item.item`` — reading the wrapper reads None and nothing
+        # ever sorted (the 2026-11-13 merlin report: the repair stayed
+        # first on every locale)
+        inner = getattr(item, "item", item)
+        emoji = getattr(getattr(inner, "emoji", None), "name", "") or ""
+        label = str(getattr(inner, "label", "") or "")
+        # the repair rides its 🔧 emoji AND its localized label
+        return emoji in {"\U0001f513", "\U0001f527", "\U0001f528", "\U0001f504"} or label.lower().startswith(
+            ("admin", "réparer", "repair")
+        )
 
     return sorted(items, key=lambda item: 1 if is_operator_tool(item) else 0)
 
@@ -580,10 +588,9 @@ async def _auto_entries(
             emoji = str((game_decls or {}).get(game_key, {}).get("emoji", "") or "")
             plain_label = label.lstrip(emoji).strip() or label
             out.append(ViewOpenButton(target, plain_label, emoji))
-        # the games scope's own channels ride the home's action row (the
-        # folder's doors): général, admin, catalogue — one click each
-        if view_id == "menu:games:home":
-            out.extend(await _scope_channel_buttons(bot, guild_id, "games", catalog, locale))
+        # the games home's doors (général, admin, catalogue) ride the
+        # BODY's channel notice — the link buttons were redundant with
+        # it (the 2026-11-13 merlin direction)
         return out
     admin = view_id == "menu:mods:admin"
     for mod_name in (registry.enabled() if registry is not None else ()):
@@ -598,39 +605,29 @@ async def _auto_entries(
     return out
 
 
-async def _scope_channel_buttons(
-    bot: Any,
-    guild_id: str,
-    scope: str,
-    catalog: Any,
-    locale: str,
-) -> list[Any]:
-    """Build the link buttons to a scope's provisioned channels (its doors)."""
-    import discord
+async def _declared_menu_notice(
+    bot: Any, guild_id: str, decl: Any, catalog: Any, locale: str, tree_scope: str
+) -> str:
+    """Pick the view's notice.
 
-    from botforge.discord.scope_pins import _tr
-    from botforge.discord.ui.panels_provisioning import stored_channel_id
+    A MOD view reads its own yaml, the LIST views scan the installed
+    games/mods, the rest reads its tree scope — never a hardcoded
+    folder (the 2026-11-13 merlin report).
+    """
+    import re
 
-    doors: list[tuple[str, str, str]] = [
-        ("general", "ui.panels.channels.general", "🛡️"),
-        ("admin", "ui.panels.channels.admin", "🔒"),
-        ("catalog", "ui.panels.channels.catalog", "📦"),
-    ]
-    out: list[Any] = []
-    for key, label_key, emoji in doors:
-        channel_id = await stored_channel_id(guild_id, scope, key)
-        if not channel_id or not str(channel_id).isdigit():
-            continue
-        label = _tr(catalog, label_key, locale, key)
-        out.append(
-            discord.ui.Button(
-                style=discord.ButtonStyle.link,
-                url=f"https://discord.com/channels/{guild_id}/{channel_id}",
-                label=str(label)[:80],
-                emoji=discord.PartialEmoji.from_str(emoji),
-            )
-        )
-    return out
+    from botforge.discord.scope_pins import _installed_scan_notice, _mod_notice, _tree_notice
+
+    mod_view = re.match(r"^menu:mod:(?P<name>[a-z0-9_-]+)(?::admin)?$", decl.id)
+    if mod_view is not None:
+        return await _mod_notice(guild_id, mod_view["name"], catalog, locale, bot)
+    if decl.id in ("menu:mods:home", "menu:mods:admin"):
+        return await _installed_scan_notice(guild_id, "mods", catalog, locale, bot)
+    if decl.id in ("menu:games:home", "menu:games:admin"):
+        return await _installed_scan_notice(guild_id, "games", catalog, locale, bot)
+    if tree_scope:
+        return await _tree_notice(guild_id, tree_scope, catalog, locale, bot=bot)
+    return ""
 
 
 def build_declared_menu(bot: Any, view_id: str) -> Any:
@@ -649,7 +646,11 @@ def build_declared_menu(bot: Any, view_id: str) -> Any:
 
     async def _build(guild_id: str) -> discord.ui.LayoutView:
 
-        from botforge.discord.scope_pins import _catalog, _locale_of, _tr, _tree_notice
+        from botforge.discord.scope_pins import (
+        _catalog,
+        _locale_of,
+        _tr,
+    )
 
         catalog = _catalog(bot)
         locale = await _locale_of(bot, guild_id)
@@ -689,7 +690,11 @@ def build_declared_menu(bot: Any, view_id: str) -> Any:
         # the tree scope is the folder ("games", "games/aoe2") — every menu
         # carries its scope's notice (the homes AND the admin surfaces)
         tree_scope = decl.scope.split("/general")[0].split("/admin")[0] if decl.scope else ""
-        notice = await _tree_notice(guild_id, tree_scope, catalog, locale, bot=bot) if tree_scope else ""
+        # the notice READS its scope's declaration: a MOD view lists the
+        # mod's own channels (its yaml), the LIST views scan the
+        # installed games/mods — never a hardcoded folder (the
+        # 2026-11-13 merlin report)
+        notice = await _declared_menu_notice(bot, guild_id, decl, catalog, locale, tree_scope)
         if notice:
             blocks.append(discord.ui.TextDisplay(notice))
         # an admin surface reads red: one glance tells the operator where they stand

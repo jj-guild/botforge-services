@@ -4,12 +4,14 @@ Every mod's home and admin surfaces render their declaration's
 presentation — a mod gets its surfaces FOR FREE (the pattern is
 binding, documented on #378/#379):
 
-- **The home** (`menu:mod:<name>`): the installed state on the guild,
-  the declared roles and commands — the player sees what the mod is.
-- **The admin** (`menu:mod:<name>:admin`): the mod's type (seasonal or
-  permanent), the declared roles, commands and workflows — the
-  operator sees what they operate. The season lifecycle panel and the
-  candidates join here with the portage (P3).
+- **The home** (`menu:mod:<name>`): the mod's type (seasonal or
+  permanent) and the declared commands — the player sees what the mod
+  is. The installed state never rides the blocks: a mod menu renders
+  in the mod's own channel, the install is obvious (owner direction
+  2026-11-13).
+- **The admin** (`menu:mod:<name>:admin`): the same identity plus the
+  declared workflows — the operator sees what they operate. The season
+  lifecycle panel and the candidates join here with the portage (P3).
 
 The blocks are DATA rendered in the guild's locale; the declared
 buttons (the admin flip, the mod's own actions) stay the declared
@@ -54,34 +56,22 @@ async def mod_standard_blocks(
         rendered: str = tr(_catalog(bot), key, locale, fallback)
         return rendered
 
-    blocks: list[Any] = []
-    if home:
-        # the installed state: the guild's truth, live
-        installed = await _installed_on(bot, guild_id, name)
-        state_key = "mods.standard.installed" if installed else "mods.standard.not_installed"
-        blocks.append(
-            discord.ui.TextDisplay(
-                ("🟢 " if installed else "⚪️ ") + _tr(state_key, "Installed on this server")
+    # the mod's TYPE rides BOTH surfaces (owner direction 2026-11-13):
+    # the installed state was obvious (the channel would not exist
+    # otherwise) — the type is the identity, home and admin carry it
+    seasonal = bool(getattr(definition, "seasonal", False))
+    blocks: list[Any] = [
+        discord.ui.TextDisplay(
+            "📅 "
+            + _tr(
+                "mods.standard.type_seasonal" if seasonal else "mods.standard.type_permanent",
+                "Seasonal mod" if seasonal else "Permanent mod",
             )
         )
-    else:
-        # the admin surface: the mod's operating identity
-        seasonal = bool(getattr(definition, "seasonal", False))
-        blocks.append(
-            discord.ui.TextDisplay(
-                "📅 "
-                + _tr(
-                    "mods.standard.type_seasonal" if seasonal else "mods.standard.type_permanent",
-                    "Seasonal mod" if seasonal else "Permanent mod",
-                )
-            )
-        )
-    roles = tuple(getattr(definition, "roles", ()) or ())
-    if roles:
-        labels = ", ".join(role.display_name for role in roles)
-        blocks.append(
-            discord.ui.TextDisplay(f"👥 {_tr('mods.standard.roles', 'Roles')}: {labels}")
-        )
+    ]
+    # the declared roles no longer ride the standard blocks: the view's
+    # notice carries them as MENTIONS with their use, plus the bot admins
+    # (owner direction 2026-11-13 — one pattern everywhere).
     commands = tuple(getattr(definition, "commands", ()) or ())
     if commands:
         blocks.append(
@@ -98,19 +88,6 @@ async def mod_standard_blocks(
                 )
             )
     return blocks
-
-
-async def _installed_on(bot: Any, guild_id: str, mod_name: str) -> bool:
-    """Whether one mod is installed on the guild (the access service's truth)."""
-    from botforge.discord.wiring import build_guild_access_service
-
-    access = build_guild_access_service()
-    if access is None:
-        return False
-    try:
-        return mod_name in set(await access.enabled_mods(guild_id))
-    except Exception:
-        return False
 
 
 async def _locale_of(bot: Any, guild_id: str) -> str:

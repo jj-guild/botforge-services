@@ -95,6 +95,24 @@ def _parse_mod_yaml(data: dict[str, object], source: Path) -> ModDefinition:
 
     categories = _parse_channel_categories(data.get("channels", []), source)
     roles = _parse_roles(data.get("roles", []), source)
+    # the SDK's standard role trio rides EVERY mod (owner direction
+    # 2026-11-13): candidate (the signup needs validation), member (the
+    # registered/validated), admin (the mod's operators) — all prefixed
+    # with the mod's key, all provisioned with a persisted mapping (the
+    # stored id is the resolver, the display name is renamable). A mod
+    # overrides a standard role by declaring its own entry with the
+    # same key.
+    standard = {
+        "candidate": f"{name.capitalize()} Candidate",
+        "member": f"{name.capitalize()} Member",
+        "admin": f"{name.capitalize()} Admin",
+    }
+    declared_keys = {role.key for role in roles}
+    roles.extend(
+        RoleDef(key=key, display_name=display)
+        for key, display in standard.items()
+        if key not in declared_keys
+    )
 
     workflows = _parse_str_list(data.get("workflows", []), "workflows", source)
     commands = _parse_str_list(data.get("commands", []), "commands", source)
