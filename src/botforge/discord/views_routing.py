@@ -451,7 +451,6 @@ async def _clickable_image_entries(
     """
     import discord
 
-    from botforge.discord.ui.panels_provisioning import stored_channel_id
     from botforge.discord.wiring import build_guild_access_service
 
     if view_id not in ("menu:games:home", "menu:mods:home"):
@@ -463,26 +462,18 @@ async def _clickable_image_entries(
         entries = await _mod_image_entries(bot, guild_id, catalog, locale, access)
     blocks: list[Any] = []
     for name, label, image, scope in entries:
-        # Discord components v2 has NO clickable image (the docs: the
-        # media components are Content, non-interactive — only Buttons
-        # and Selects are interactive). The closest "a link rendered as
-        # an image": the art rides a MEDIA GALLERY, and the click target
-        # is a LINK BUTTON (style 5, url=) — a rendered, clickable
-        # element carrying the item's emoji and name
-        channel_id = await stored_channel_id(guild_id, scope, "general")
+        # the SMALL visual form: the art rides a THUMBNAIL (a Section's
+        # accessory — the compact image), the title rides the section's
+        # text; the NAVIGATION stays the menu's own buttons (the right
+        # links — they open the views)
+        del name, scope
         plain = label.lstrip("⚔️👑 ").strip() or label
-        blocks.append(discord.ui.MediaGallery(discord.MediaGalleryItem(image, description=plain)))
-        if channel_id and str(channel_id).isdigit():
-            target = f"https://discord.com/channels/{guild_id}/{channel_id}"
-            row: discord.ui.ActionRow[discord.ui.LayoutView] = discord.ui.ActionRow()
-            row.add_item(
-                discord.ui.Button(
-                    style=discord.ButtonStyle.link,
-                    url=target,
-                    label=plain[:80],
-                )
+        blocks.append(
+            discord.ui.Section(
+                discord.ui.TextDisplay(f"**{plain}**"),
+                accessory=discord.ui.Thumbnail(image),
             )
-            blocks.append(row)
+        )
     return blocks
 
 
