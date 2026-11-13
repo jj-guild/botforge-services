@@ -474,9 +474,7 @@ async def _auto_entries(
                 continue  # not installed on this guild: no button at all
             target = f"menu:game:{game_key}:admin" if admin else f"menu:games:{game_key}"
             label = _tr(catalog, f"ui.games.{game_key}.name", locale, game_key)
-            out.append(
-                ViewOpenButton(target, label, "" if admin else "⚔️")
-            )
+            out.append(ViewOpenButton(target, label, "⚔️"))
         return out
     admin = view_id == "menu:mods:admin"
     for mod_name in (registry.enabled() if registry is not None else ()):
@@ -484,9 +482,7 @@ async def _auto_entries(
             continue  # not installed on this guild: no button at all
         target = f"menu:mod:{mod_name}:admin" if admin else f"menu:mod:{mod_name}"
         label = _tr(catalog, f"ui.mods.homes.{mod_name}", locale, mod_name)
-        out.append(
-            ViewOpenButton(target, label, "👑" if not admin else "")
-        )
+        out.append(ViewOpenButton(target, label, "👑"))
     return out
 
 
