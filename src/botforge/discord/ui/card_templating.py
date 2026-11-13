@@ -197,9 +197,17 @@ def render_balises(
             if value is None:
                 continue
             rendered = _render_value(value, obj, locale)
-        lines = [line for line in rendered.split("\n") if line.strip()]
-        if lines:
-            zones.setdefault(balise.zone, []).extend(lines)
+        if balise.zone == ZONE_BODY:
+            # the body keeps its paragraphs: the value's own \n\n are
+            # the card's paragraph boundaries — a line split here
+            # would turn every bullet into its own separator-divided
+            # block (the 2026-11-13 civ regression)
+            if rendered.strip():
+                zones.setdefault(ZONE_BODY, []).append(rendered)
+        else:
+            lines = [line for line in rendered.split("\n") if line.strip()]
+            if lines:
+                zones.setdefault(balise.zone, []).extend(lines)
     return zones
 
 

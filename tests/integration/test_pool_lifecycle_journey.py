@@ -334,6 +334,12 @@ class TestPoolLifecycleJourney:
             pool = await remote.get_map_pool(pool.id)
             assert pool is not None and pool.state == "published", "the pool is live"
 
+            # —— the admin menu REOPENS at every state ————————
+            reopened = await alice.click(button_msg, custom_id=f"panel:admin:pool:{pool.id}:aoe2:1")
+            assert reopened.response is not None, "the admin menu answers at published"
+            bar = str(reopened.response.components)
+            assert "pools:todraft" in bar and "pools:archive" in bar, bar[:200]
+
             # ── re-edit: back to draft ────────────────────────────────────
             await alice.click(menu, custom_id=f"admin:pin:modgames:pools:todraft:{pool.id}")
             pool = await remote.get_map_pool(pool.id)
@@ -344,6 +350,10 @@ class TestPoolLifecycleJourney:
             await alice.click(menu, custom_id=f"admin:pin:modgames:pools:archive:{pool.id}")
             pool = await remote.get_map_pool(pool.id)
             assert pool is not None and pool.state == "closed", "the pool is archived"
+            reopened = await alice.click(button_msg, custom_id=f"panel:admin:pool:{pool.id}:aoe2:1")
+            assert reopened.response is not None, "the admin menu answers at closed"
+            bar = str(reopened.response.components)
+            assert "pools:harddelete" in bar, bar[:200]
 
             # ── hard delete, by NAME (the confirmation modal) ────────────
             shown = await alice.click(

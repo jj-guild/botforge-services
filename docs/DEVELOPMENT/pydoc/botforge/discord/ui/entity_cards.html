@@ -234,7 +234,7 @@ backticks&nbsp;in&nbsp;the&nbsp;subtitle)&nbsp;/&nbsp;props&nbsp;/&nbsp;descript
 sections&nbsp;/&nbsp;media&nbsp;/&nbsp;cross-links&nbsp;/&nbsp;source&nbsp;/&nbsp;action&nbsp;row&nbsp;/&nbsp;VIEW&nbsp;id<br>
 footer&nbsp;—&nbsp;ALWAYS&nbsp;the&nbsp;last&nbsp;line,&nbsp;a&nbsp;different&nbsp;anchor&nbsp;from&nbsp;the<br>
 resource&nbsp;id&nbsp;(#321).</span></dd></dl>
- <dl><dt><a name="-civ_card"><strong>civ_card</strong></a>(civ_id: 'str', name: 'str', civ_type: 'str', sections: 'tuple[tuple[str, tuple[str, ...]], ...]', image_url: 'str', source_url: 'str', source_label: 'str', locale: 'str' = 'en') -&gt; 'discord.ui.LayoutView'</dt><dd><span class="code">Build&nbsp;a&nbsp;civ's&nbsp;forum&nbsp;card&nbsp;on&nbsp;the&nbsp;shared&nbsp;template&nbsp;(#321).<br>
+ <dl><dt><a name="-civ_card"><strong>civ_card</strong></a>(civ_id: 'str', name: 'str', civ_type: 'str', sections: 'tuple[tuple[str, tuple[str, ...]], ...]', image_url: 'str', source_url: 'str', source_label: 'str', locale: 'str' = 'en', buttons: 'tuple[Callable[[], discord.ui.Item[discord.ui.LayoutView]], ...]' = ()) -&gt; 'discord.ui.LayoutView'</dt><dd><span class="code">Build&nbsp;a&nbsp;civ's&nbsp;forum&nbsp;card&nbsp;on&nbsp;the&nbsp;shared&nbsp;template&nbsp;(#321).<br>
 &nbsp;<br>
 Each&nbsp;parsed&nbsp;section&nbsp;(label,&nbsp;bullet&nbsp;items)&nbsp;becomes&nbsp;one&nbsp;description<br>
 paragraph&nbsp;—&nbsp;the&nbsp;template's&nbsp;separators&nbsp;divide&nbsp;them&nbsp;—&nbsp;and&nbsp;the&nbsp;civ's<br>

@@ -16,11 +16,22 @@ entity-forum engine, so no game or mod is hardcoded here.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from typing import Any
 
 import discord
 
 from botforge.core.services.entity_forum import EntityForumSpec
+
+
+def _civ_admin_button(entry_id: str) -> Callable[[], Any]:
+    """Build the civ post's persistent admin button factory (the seam's type)."""
+    from botforge.discord.entity_admin_menu import EntityAdminButton
+
+    def _factory() -> Any:
+        return EntityAdminButton("civ", entry_id, game_key="", owned=False)
+
+    return _factory
 
 
 def _civ_post_layout(
@@ -33,6 +44,9 @@ def _civ_post_layout(
     locale: str = "en",
 ) -> discord.ui.LayoutView:
     """Build the civ post on the shared entity-card template (#321).
+
+    The civ post carries the standard ⚙️ admin entry point like every
+    resource post — its menu explains the cross-guild surface.
 
     The id rides the subtitle (the template's first backticked line),
     the civilization type rides the subtitle's second line, one
@@ -54,6 +68,7 @@ def _civ_post_layout(
         source_url=source,
         source_label=source_label,
         locale=locale,
+        buttons=(_civ_admin_button(entry_id),),
     )
 
 

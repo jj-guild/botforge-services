@@ -637,6 +637,7 @@ def civ_card(
     source_url: str,
     source_label: str,
     locale: str = "en",
+    buttons: tuple[Callable[[], discord.ui.Item[discord.ui.LayoutView]], ...] = (),
 ) -> discord.ui.LayoutView:
     """Build a civ's forum card on the shared template (#321).
 
@@ -660,6 +661,7 @@ def civ_card(
         icon_url=image_url,
         source_url=source_url,
         source_label=source_label,
+        buttons=buttons,
     )
 
 
