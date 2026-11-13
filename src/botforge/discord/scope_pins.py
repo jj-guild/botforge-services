@@ -76,41 +76,37 @@ async def _tree_notice(guild_id: str, scope: str, catalog: Any = None, locale: s
     spec = next((sp for sp in registered_scopes() if sp.scope == scope), None)
     if spec is None:
         return ""
-    lines: list[str] = [
-        _tr(catalog, "ui.tree.channels_heading", locale, "**Salons** :")
-    ]
-    raw_channels = _declared_channel_meta(scope)
+    channels: list[str] = []
     for decl in spec.channels:
-        meta = raw_channels.get(decl.key, {})
         label = _tr(catalog, decl.label_key, locale, decl.label_key.rsplit(".", 1)[-1])
-        # the description rides the i18n catalog (ui.panels.channels.<key>_description)
-        description_key = str(meta.get("description", ""))
-        description = _tr(catalog, description_key, locale, "") if description_key else ""
         lock = _LOCK if decl.access == "admin" else ""
         try:
             channel_id = await stored_channel_id(guild_id, scope, decl.key)
         except Exception:
             channel_id = None
         if channel_id:
-            where = f"<#{channel_id}>{lock} \u2014 {description}" if description else f"<#{channel_id}>{lock}"
+            channels.append(f"<#{channel_id}>{lock}")
         else:
-            base = f"**{label}**{lock} (\u00e0 cr\u00e9er)"
-            where = f"{base} \u2014 {description}" if description else base
-        lines.append(f"\u2022 {where}")
-    role_lines = _scope_role_lines(guild_id, scope, bot, catalog=catalog, locale=locale)
-    if role_lines:
-        lines.append("")
+            channels.append(f"**{label}**{lock} (\u00e0 cr\u00e9er)")
+    lines: list[str] = []
+    if channels:
         lines.append(
-            _tr(catalog, "ui.tree.roles_heading", locale, "**R\u00f4les** :")
+            _tr(catalog, "ui.tree.channels_heading", locale, "\U0001f4fa Salons :")
+            + " "
+            + ", ".join(channels)
         )
-        lines.extend(role_lines)
+    roles = _scope_role_lines(guild_id, scope, bot, catalog=catalog, locale=locale)
+    if roles:
+        lines.append(
+            _tr(catalog, "ui.tree.roles_heading", locale, "\U0001f465 R\u00f4les :") + " " + ", ".join(roles)
+        )
     return "\n".join(lines)
 
 
 def _scope_role_lines(
     guild_id: str, scope: str, bot: Any = None, catalog: Any = None, locale: str = "en"
 ) -> list[str]:
-    """Return the scope's roles: one bullet each, a mention and its use.
+    """Return the scope's roles as bare mentions (the compact pattern).
 
     The platform declares the bot-admins role per guild; a mod's roles
     ride its own declaration and join the same notice.
@@ -121,16 +117,13 @@ def _scope_role_lines(
         rendered = str(catalog.render(key, locale))
         return rendered if rendered != key else fallback
 
-    use = _t("ui.tree.bot_admins_role", "les op\u00e9rateurs du bot : administrent la plateforme")
-    return [
-        f"\u2022 <@&{role_id}> \u2014 {use}"
-        for role_id in _bot_admins_role_ids(guild_id, bot)
-    ] or [
-        "\u2022 **bot-admins** \u2014 "
+    return [f"<@&{role_id}>" for role_id in _bot_admins_role_ids(guild_id, bot)] or [
+        "**bot-admins** ("
         + _t(
             "ui.tree.bot_admins_role_pending",
-            "les op\u00e9rateurs du bot (le r\u00f4le est cr\u00e9\u00e9 au premier sync)",
+            "le r\u00f4le est cr\u00e9\u00e9 au premier sync",
         )
+        + ")"
     ]
 
 
@@ -152,28 +145,25 @@ async def _mod_channels_lines(guild_id: str, name: str, definition: Any, catalog
     """
     from botforge.discord.ui.panels_provisioning import stored_channel_id
 
-    lines: list[str] = []
+    items: list[str] = []
     for channel in getattr(definition, "channel_categories", ()) or ():
         try:
             channel_id = await stored_channel_id(guild_id, f"mod/{name}", channel.key)
         except Exception:
             channel_id = None
         label = str(getattr(channel, "display_name", "") or channel.key)
-        description = str(getattr(channel, "description", "") or "")
         if channel_id:
-            where = f"<#{channel_id}> \u2014 {description}" if description else f"<#{channel_id}>"
+            items.append(f"<#{channel_id}>")
         else:
-            where = f"**{label}** (\u00e0 cr\u00e9er)"
-        lines.append(f"\u2022 {where}")
-    return lines
+            items.append(f"**{label}** (\u00e0 cr\u00e9er)")
+    return items
 
 
 async def _mod_roles_lines(guild_id: str, name: str, definition: Any, bot: Any, catalog: Any, locale: str) -> list[str]:
-    """Render the mod's declared roles with their mentions, plus the bot admins.
+    """Render the mod's declared roles as bare mentions, plus the bot admins.
 
-    The pattern everywhere (owner direction 2026-11-13): a role renders
-    as a MENTION and its use \u2014 the mod's declared roles first, the
-    bot-admins role closes the list on every surface.
+    The pattern everywhere (owner direction 2026-11-13): one compact
+    line, the declared roles first, the bot-admins role closing it.
     """
     def _t(key: str, fallback: str) -> str:
         if catalog is None:
@@ -181,7 +171,7 @@ async def _mod_roles_lines(guild_id: str, name: str, definition: Any, bot: Any, 
         rendered = str(catalog.render(key, locale))
         return rendered if rendered != key else fallback
 
-    lines: list[str] = []
+    items: list[str] = []
     service = getattr(bot, "mod_roles_service", None)
     for role in getattr(definition, "roles", ()) or ():
         role_id = ""
@@ -192,14 +182,11 @@ async def _mod_roles_lines(guild_id: str, name: str, definition: Any, bot: Any, 
             except Exception:
                 role_id = ""
         if role_id:
-            lines.append(f"\u2022 <@&{role_id}> \u2014 {getattr(role, 'display_name', role.key)}")
+            items.append(f"<@&{role_id}>")
         else:
-            lines.append(f"\u2022 **{getattr(role, 'display_name', role.key)}** (\u00e0 cr\u00e9er)")
-    use = _t("ui.tree.bot_admins_role", "les op\u00e9rateurs du bot : administrent la plateforme")
-    lines.extend(
-        f"\u2022 <@&{role_id}> \u2014 {use}" for role_id in _bot_admins_role_ids(guild_id, bot)
-    )
-    return lines
+            items.append(f"**{getattr(role, 'display_name', role.key)}** (\u00e0 cr\u00e9er)")
+    items.extend(f"<@&{role_id}>" for role_id in _bot_admins_role_ids(guild_id, bot))
+    return items
 
 
 async def _mod_notice(guild_id: str, name: str, catalog: Any, locale: str, bot: Any) -> str:
@@ -208,15 +195,19 @@ async def _mod_notice(guild_id: str, name: str, catalog: Any, locale: str, bot: 
     definition = registry.get(name) if registry is not None else None
     if definition is None:
         return ""
-    lines: list[str] = [
-        _tr(catalog, "ui.tree.channels_heading", locale, "**Salons** :")
-    ]
-    lines.extend(await _mod_channels_lines(guild_id, name, definition, catalog, locale))
-    role_lines = await _mod_roles_lines(guild_id, name, definition, bot, catalog, locale)
-    if role_lines:
-        lines.append("")
-        lines.append(_tr(catalog, "ui.tree.roles_heading", locale, "**R\u00f4les** :"))
-        lines.extend(role_lines)
+    lines: list[str] = []
+    channels = await _mod_channels_lines(guild_id, name, definition, catalog, locale)
+    if channels:
+        lines.append(
+            _tr(catalog, "ui.tree.channels_heading", locale, "\U0001f4fa Salons :")
+            + " "
+            + ", ".join(channels)
+        )
+    roles = await _mod_roles_lines(guild_id, name, definition, bot, catalog, locale)
+    if roles:
+        lines.append(
+            _tr(catalog, "ui.tree.roles_heading", locale, "\U0001f465 R\u00f4les :") + " " + ", ".join(roles)
+        )
     return "\n".join(lines)
 
 
@@ -234,8 +225,7 @@ async def _game_scope_channel_lines(
             channel_id = None
         if not channel_id:
             continue
-        label = _tr(catalog, decl.label_key, locale, decl.label_key.rsplit(".", 1)[-1])
-        lines.append(f"\u2022 {label} \u2014 <#{channel_id}>")
+        lines.append(f"<#{channel_id}>")
     return lines
 
 
@@ -262,9 +252,7 @@ async def _installed_scan_notice(
         )
     except Exception:
         installed = ()
-    lines: list[str] = [
-        _tr(catalog, "ui.tree.channels_heading", locale, "**Salons** :")
-    ]
+    channels: list[str] = []
     specs = {sp.scope: sp for sp in registered_scopes()}
     for key in installed:
         if kind == "mods":
@@ -272,20 +260,24 @@ async def _installed_scan_notice(
             definition = registry.get(key) if registry is not None else None
             if definition is None:
                 continue
-            lines.extend(await _mod_channels_lines(guild_id, key, definition, catalog, locale))
+            channels.extend(await _mod_channels_lines(guild_id, key, definition, catalog, locale))
         else:
             spec = specs.get(f"games/{key}")
             if spec is None:
                 continue
-            lines.extend(await _game_scope_channel_lines(guild_id, key, spec, catalog, locale))
-    role_lines: list[str] = []
-    use = str(catalog.render("ui.tree.bot_admins_role", locale)) if catalog is not None else ""
-    use = use if use and use != "ui.tree.bot_admins_role" else "les op\u00e9rateurs du bot : administrent la plateforme"
-    role_lines.extend(f"\u2022 <@&{rid}> \u2014 {use}" for rid in _bot_admins_role_ids(guild_id, bot))
-    if role_lines:
-        lines.append("")
-        lines.append(_tr(catalog, "ui.tree.roles_heading", locale, "**R\u00f4les** :"))
-        lines.extend(role_lines)
+            channels.extend(await _game_scope_channel_lines(guild_id, key, spec, catalog, locale))
+    lines: list[str] = []
+    if channels:
+        lines.append(
+            _tr(catalog, "ui.tree.channels_heading", locale, "\U0001f4fa Salons :")
+            + " "
+            + ", ".join(channels)
+        )
+    roles = [f"<@&{rid}>" for rid in _bot_admins_role_ids(guild_id, bot)]
+    if roles:
+        lines.append(
+            _tr(catalog, "ui.tree.roles_heading", locale, "\U0001f465 R\u00f4les :") + " " + ", ".join(roles)
+        )
     return "\n".join(lines)
 
 
@@ -384,4 +376,120 @@ def _declared_menu_builder(bot: Any, view_id: str) -> Any:
     return _resolve_and_build
 
 
-__all__ = ["register_scope_pins"]
+def register_mod_pins(bot: Any) -> list[Any]:
+    """Declare every enabled mod's home and admin pins (idempotent).
+
+    A mod's home menu pins in its declared "general" channel, its admin
+    menu in its declared "admin" channel (the yaml's channel keys; a
+    mod without them falls back to its first/last declared channel).
+    The pins follow the same static-pin cycle as the platform scopes:
+    created when missing, refreshed in place, healed on channel delete.
+    """
+    from botforge.core.ids import scope_view_key
+    from botforge.discord.static_pins import StaticPinnedView, register_static_pin
+
+    registry = getattr(bot, "registry", None)
+    if registry is None:
+        return []
+    specs: list[Any] = []
+    message_registry = getattr(bot, "message_registry", None)
+    from botforge.discord.views_registry import get_view
+
+    for name in registry.enabled():
+        definition = registry.get(name)
+        keys = [c.key for c in getattr(definition, "channel_categories", ()) or ()]
+        if not keys:
+            continue
+        if get_view(f"menu:mod:{name}") is None:
+            continue
+        home_key = "general" if "general" in keys else keys[0]
+        admin_key = "admin" if "admin" in keys else next((k for k in reversed(keys) if k != home_key), None)
+        scope = f"mod/{name}"
+        home_pin = scope_view_key(scope, "home")
+        specs.append(
+            register_static_pin(
+                StaticPinnedView(
+                    key=home_pin,
+                    mark_suffix=home_pin,
+                    resolve_channel=_scope_channel(scope, home_key),
+                    build_layout=_declared_menu_builder(bot, f"menu:mod:{name}"),
+                    registry=message_registry,
+                    scope=scope,
+                )
+            )
+        )
+        if admin_key is None:
+            continue
+        admin_pin = scope_view_key(scope, "admin")
+        specs.append(
+            register_static_pin(
+                StaticPinnedView(
+                    key=admin_pin,
+                    mark_suffix=admin_pin,
+                    resolve_channel=_scope_channel(scope, admin_key),
+                    build_layout=_declared_menu_builder(bot, f"menu:mod:{name}:admin"),
+                    registry=message_registry,
+                    scope=scope,
+                )
+            )
+        )
+    return specs
+
+
+def _mod_pin_specs(bot: Any, name: str) -> list[Any]:
+    """Return one mod's registered home/admin pin specs (empty when none)."""
+    from botforge.core.ids import scope_view_key
+    from botforge.discord.static_pins import registered_static_pins
+
+    scope = f"mod/{name}"
+    wanted = {scope_view_key(scope, "home"), scope_view_key(scope, "admin")}
+    return [spec for spec in registered_static_pins() if spec.key in wanted]
+
+
+async def ensure_mod_pins(bot: Any, guild_id: str, name: str) -> int:
+    """(Re-)pin one mod's home and admin menus (install/repair path).
+
+    The SDK owns the mod's surface lifecycle: the declaration carries
+    the channels, the boot registers the specs, and the install/repair
+    lands the pins right away \u2014 a mod dev never wires a pin.
+    """
+    import logging
+
+    from botforge.discord.static_pins import ensure_static_pin
+
+    logger = logging.getLogger("botforge.scope_pins")
+    register_mod_pins(bot)
+    landed = 0
+    for spec in _mod_pin_specs(bot, name):
+        try:
+            await ensure_static_pin(bot, spec, guild_id)
+            landed += 1
+        except Exception:
+            logger.warning("mod pin ensure failed (%s) \u2014 best-effort", spec.key, exc_info=True)
+    return landed
+
+
+async def remove_mod_pins(bot: Any, guild_id: str, name: str) -> int:
+    """Remove one mod's pins (uninstall path) \u2014 whatever the channel choice.
+
+    The uninstalled mod's menus must not stay pinned (nor be healed
+    back by the ensure cycle): the messages go, the registry forgets
+    the ids, the specs drop.
+    """
+    import logging
+
+    from botforge.discord.static_pins import remove_static_pin, unregister_static_pin
+
+    logger = logging.getLogger("botforge.scope_pins")
+    removed = 0
+    for spec in _mod_pin_specs(bot, name):
+        try:
+            await remove_static_pin(bot, spec, guild_id)
+            removed += 1
+        except Exception:
+            logger.warning("mod pin removal failed (%s) \u2014 best-effort", spec.key, exc_info=True)
+        unregister_static_pin(spec.key)
+    return removed
+
+
+__all__ = ["ensure_mod_pins", "register_mod_pins", "register_scope_pins", "remove_mod_pins"]

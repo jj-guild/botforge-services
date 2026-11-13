@@ -674,6 +674,9 @@ class ModRepairButton(
         guild_id = str(interaction.guild_id or "")
         channels = await provision_mod_channels(interaction.client, guild_id, self.name)
         roles = await provision_mod_roles(interaction.client, guild_id, self.name)
+        from botforge.discord.scope_pins import ensure_mod_pins
+
+        await ensure_mod_pins(interaction.client, guild_id, self.name)
         message = (await _tr(interaction.client, guild_id, "repaired", "Repaired.")).format(
             channels=channels, roles=roles
         )
@@ -788,6 +791,9 @@ class ModInstallButton(
         if self.kind == "mod":
             ensured = await provision_mod_channels(interaction.client, guild_id, self.name)
             ensured += await provision_mod_roles(interaction.client, guild_id, self.name)
+            from botforge.discord.scope_pins import ensure_mod_pins
+
+            await ensure_mod_pins(interaction.client, guild_id, self.name)
         message = await _tr(interaction.client, guild_id, "installed_done", "Installed.")
         if ensured:
             key = "installed_game" if self.kind == "game" else "installed_mod"
@@ -850,6 +856,28 @@ class ModUninstallButton(
         await interaction.response.send_modal(
             await ModUninstallModal.build(interaction, self.kind, self.name)
         )
+
+
+async def _apply_uninstall_choice(
+    bot: Any, guild_id: str, kind: str, name: str, drop_channels: bool
+) -> int:
+    """Apply the uninstall's channels/roles choice; return what was deleted.
+
+    The uninstalled mod's pins are removed whatever the choice: the
+    pinned menus must not survive their mod.
+    """
+    deleted = 0
+    if drop_channels:
+        if kind == "game":
+            deleted = await delete_game_scope(bot, guild_id, name)
+        if kind == "mod":
+            deleted = await delete_mod_scope(bot, guild_id, name)
+            deleted += await teardown_mod_roles(bot, guild_id, name)
+    if kind == "mod":
+        from botforge.discord.scope_pins import remove_mod_pins
+
+        await remove_mod_pins(bot, guild_id, name)
+    return deleted
 
 
 class ModUninstallModal(discord.ui.Modal):
@@ -955,15 +983,10 @@ class ModUninstallModal(discord.ui.Modal):
                 self.refused.format(reason=", ".join(names)), ephemeral=True
             )
             return
-        # the channels/roles choice: delete the item's provisioned scope
-        deleted = 0
-        if drop_channels:
-            if self.kind == "game":
-                deleted = await delete_game_scope(interaction.client, guild_id, self.name)
-            if self.kind == "mod":
-                # the mod's folder (channels + category) AND its roles
-                deleted = await delete_mod_scope(interaction.client, guild_id, self.name)
-                deleted += await teardown_mod_roles(interaction.client, guild_id, self.name)
+        # the channels/roles choice: delete the item's provisioned scope;
+        # an uninstalled MOD's pinned menus go with it — whatever the
+        # channel choice (the pin must not survive its mod)
+        deleted = await _apply_uninstall_choice(interaction.client, guild_id, self.kind, self.name, drop_channels)
         message = self.done
         if deleted:
             key = "uninstalled_game" if self.kind == "game" else "uninstalled_mod"
