@@ -476,12 +476,15 @@ def _operator_tools_last(items: list[Any]) -> list[Any]:
     builder decides.
     """
     def is_operator_tool(item: Any) -> bool:
-        emoji = getattr(getattr(item, "emoji", None), "name", "") or ""
-        label = str(getattr(item, "label", "") or "")
-        # the repair rides its \U0001f5f3 emoji AND its localized label —
-        # a label-only match broke the constraint the day the English
-        # catalog still read "Sync now" (the 2026-11-13 merlin finding)
-        return emoji in {"\U0001f513", "\U0001f528", "\U0001f504"} or label.lower().startswith(
+        # a DynamicItem WRAPS its component: the label and the emoji live
+        # on ``item.item`` — reading the wrapper reads None and nothing
+        # ever sorted (the 2026-11-13 merlin report: the repair stayed
+        # first on every locale)
+        inner = getattr(item, "item", item)
+        emoji = getattr(getattr(inner, "emoji", None), "name", "") or ""
+        label = str(getattr(inner, "label", "") or "")
+        # the repair rides its 🔧 emoji AND its localized label
+        return emoji in {"\U0001f513", "\U0001f527", "\U0001f528", "\U0001f504"} or label.lower().startswith(
             ("admin", "réparer", "repair")
         )
 
