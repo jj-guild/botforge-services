@@ -681,3 +681,5 @@ en:
     source_prefix: 'Source: '
     truncated_note: '… *(description truncated — the rest on the source page)*'
     more_note: '… (+{hidden} more)'
+  card_templates:
+    missing_notice: "⚠️ Data missing for section(s): {keys}."

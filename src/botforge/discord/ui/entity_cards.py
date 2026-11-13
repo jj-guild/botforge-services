@@ -570,19 +570,25 @@ def map_card(
     """
     tags_line = " ".join(part for part in props if part)
     # the pools: one per line, never inline (owner direction 2026-11-08)
-    subtitle = "\n".join(line for line in (tags_line, *pool_links) if line)
-    return (
-        EntityCardBuilder(map_id, name, locale=locale)
-        .subtitle(subtitle)
-        .view_id(f"panel:{map_id}")
-        .description(description)
-        .media(image_url, *gallery_images)
-        .thumbnail(icon_url)
-        .source(source_url)
-        .creator(creator, creator_url)
-        .versions(*versions)
-        .buttons(*buttons)
-        .build()
+    pools_line = "\n".join(pool_links)
+    from botforge.discord.ui.card_templating import MAP_CARD_TEMPLATE, templated_entity_card
+
+    return templated_entity_card(
+        MAP_CARD_TEMPLATE,
+        None,
+        {"tags": tags_line, "pools": pools_line, "summary": description},
+        title=name,
+        entity_id=map_id,
+        locale=locale,
+        view_id=f"panel:{map_id}",
+        icon_url=icon_url,
+        image_url=image_url,
+        gallery_images=gallery_images,
+        source_url=source_url,
+        creator=creator,
+        creator_url=creator_url,
+        versions=versions,
+        buttons=buttons,
     )
 
 
@@ -604,15 +610,18 @@ def pool_card(
     map — each becomes a Section (the name linking to the map's post)
     with the map image as the accessory.
     """
-    props = (state_line,) if state_line else ()
-    return (
-        EntityCardBuilder(pool_id, name, locale=locale)
-        .props(*props)
-        .description(description)
-        .members(*member_sections)
-        .view_id(f"panel:{pool_id}")
-        .buttons(*buttons)
-        .build()
+    from botforge.discord.ui.card_templating import POOL_CARD_TEMPLATE, templated_entity_card
+
+    return templated_entity_card(
+        POOL_CARD_TEMPLATE,
+        None,
+        {"state": state_line, "summary": description or None},
+        title=name,
+        entity_id=pool_id,
+        locale=locale,
+        view_id=f"panel:{pool_id}",
+        member_sections=member_sections,
+        buttons=buttons,
     )
 
 
@@ -635,14 +644,19 @@ def civ_card(
     paragraphs = [
         f"**{label}**\n" + "\n".join(f"\u2022 {item}" for item in items) for label, items in sections if items
     ]
-    return (
-        EntityCardBuilder(civ_id, name, locale=locale)
-        .subtitle(civ_type)
-        .description("\n\n".join(paragraphs))
-        .thumbnail(image_url)
-        .source(source_url, label=source_label)
-        .view_id(f"panel:{civ_id}")
-        .build()
+    from botforge.discord.ui.card_templating import CIV_CARD_TEMPLATE, templated_entity_card
+
+    return templated_entity_card(
+        CIV_CARD_TEMPLATE,
+        None,
+        {"type": civ_type, "summary": "\n\n".join(paragraphs)},
+        title=name,
+        entity_id=civ_id,
+        locale=locale,
+        view_id=f"panel:{civ_id}",
+        icon_url=image_url,
+        source_url=source_url,
+        source_label=source_label,
     )
 
 
