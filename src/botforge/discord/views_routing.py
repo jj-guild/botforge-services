@@ -463,26 +463,20 @@ async def _clickable_image_entries(
         entries = await _mod_image_entries(bot, guild_id, catalog, locale, access)
     blocks: list[Any] = []
     for _name, label, image, scope in entries:
-        # a components-v2 TextDisplay cannot embed a markdown image —
-        # the valid pattern is a SECTION: the image rides the Thumbnail
-        # accessory, the title carries the markdown LINK (the click
-        # target); the merlin finding (the nested [![]()] renders raw)
+        # the valid components-v2 form (the merlin findings): the image
+        # rides a MEDIA GALLERY (the docs' way — a TextDisplay cannot
+        # embed one, a Section's TextDisplay does not render links), the
+        # title is a TOP-LEVEL TextDisplay whose markdown link is the
+        # click target; no bold, no emoji in the link text (both break
+        # the link's parse)
         channel_id = await stored_channel_id(guild_id, scope, "general")
+        plain = label.lstrip("⚔️👑 ").strip() or label
+        blocks.append(discord.ui.MediaGallery(discord.MediaGalleryItem(image, description=plain)))
         if channel_id and str(channel_id).isdigit():
             target = f"https://discord.com/channels/{guild_id}/{channel_id}"
-            blocks.append(
-                discord.ui.Section(
-                    discord.ui.TextDisplay(f"**[{label}]({target})**"),
-                    accessory=discord.ui.Thumbnail(image),
-                )
-            )
+            blocks.append(discord.ui.TextDisplay(f"[{plain}]({target})"))
         else:
-            blocks.append(
-                discord.ui.Section(
-                    discord.ui.TextDisplay(f"**{label}**"),
-                    accessory=discord.ui.Thumbnail(image),
-                )
-            )
+            blocks.append(discord.ui.TextDisplay(plain))
     return blocks
 
 
