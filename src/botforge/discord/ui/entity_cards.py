@@ -11,6 +11,9 @@ objects, ...). Every card follows the same pseudo-embed contract
 * the resource id in backticks as the subtitle's first line — THE
   anchor every human feedback refers to, at the same place on every
   card whatever the entity's state;
+* the VIEW id in backticks as the footer — a DIFFERENT anchor from
+  the resource id (the panel the card opens, not the entity itself),
+  always the last line, under the final action row;
 * property lines (one setting per line) behind no divider;
 * a divider, the description, the member sections, the media, the
   cross-links, the source link — each block behind a divider;
@@ -23,9 +26,18 @@ and source prefixes, the truncation notes) resolve through the shared
 MessageCatalog on the spec's ``locale`` — the callers own the data,
 the template owns the chrome, neither hardcodes the other's strings.
 
+Two anchors, two places, never confused (#321 follow-up): the
+resource id names the ENTITY (the subtitle, under the header); the
+view id names the VIEW the card carries (the footer, under the
+buttons). A card whose footer repeats its resource id is a bug.
+
 The builders are game/mod-agnostic: they take plain strings and
 return items; the callers (the games forums, the mods' forums) own
-the data and the buttons. No game or mod imports here.
+the data and the buttons. No game or mod imports here. A new
+entity's card is 90% data: the ``EntityCardBuilder`` chain carries
+it, the template does the rest (layout, budget, ids, chrome
+labels), and the ``extra`` seam composes a group no spec field
+expresses — without forking the template.
 """
 
 from __future__ import annotations
@@ -101,6 +113,16 @@ def _subtitle_text(spec: EntityCardSpec) -> str:
     return "\n".join(lines)
 
 
+def _view_id(spec: EntityCardSpec) -> str:
+    """Resolve the card's view id — the panel it opens, never the entity.
+
+    The derived default follows the map precedent (``panel:<id>``):
+    a card without an explicit view id still carries a footer that
+    differs from its resource id.
+    """
+    return spec.view_id or f"panel:{spec.entity_id}"
+
+
 def _member_titles(spec: EntityCardSpec) -> list[str]:
     """Build the member sections' titles (link when the target post exists)."""
     titles: list[str] = []
@@ -135,7 +157,7 @@ def _fixed_text(spec: EntityCardSpec, labels: _CardLabels) -> int:
         total += len(f"{labels.creator_prefix}{spec.creator}")
     if spec.source_url:
         total += len(f"{labels.source_prefix}[{spec.source_label}]({spec.source_url})")
-    total += len(f"-# `{spec.view_id or spec.entity_id}`")
+    total += len(f"-# `{_view_id(spec)}`")
     return total
 
 
@@ -186,6 +208,7 @@ class EntityCardSpec:
     links_heading: str = ""
     links: tuple[str, ...] = ()
     member_sections: tuple[tuple[str, str, str], ...] = ()
+    extra_groups: tuple[Callable[[EntityCardSpec], Sequence[discord.ui.Item[discord.ui.LayoutView]]], ...] = ()
     action_buttons: tuple[
         Callable[[], discord.ui.Item[discord.ui.LayoutView]]
         | discord.ui.ActionRow[discord.ui.LayoutView]
@@ -330,6 +353,10 @@ def _body_blocks(spec: EntityCardSpec, labels: _CardLabels) -> list[discord.ui.I
         _media_blocks(spec),
         _links_blocks(spec),
         _versions_blocks(spec, labels),
+        # the composition seam: a group no spec field expresses rides
+        # here (before the credits), built from the spec — never a
+        # forked template
+        *(tuple(group(spec)) for group in spec.extra_groups),
         _credits_blocks(spec, labels),
     ]
     body: list[discord.ui.Item[discord.ui.LayoutView]] = []
@@ -397,10 +424,11 @@ def _row_of(
 def build_entity_card(spec: EntityCardSpec) -> discord.ui.LayoutView:
     """Build one catalog card from its spec.
 
-    The shared template: header (icon thumbnail, the id in backticks
-    in the subtitle) / props / description / member sections / media /
-    cross-links / source / action row / id footer — ALWAYS the last
-    line (#321).
+    The shared template: header (icon thumbnail, the resource id in
+    backticks in the subtitle) / props / description / member
+    sections / media / cross-links / source / action row / VIEW id
+    footer — ALWAYS the last line, a different anchor from the
+    resource id (#321).
     """
     labels = _card_labels(spec.locale)
     spec = _clamped_spec(spec, labels)
@@ -414,8 +442,112 @@ def build_entity_card(spec: EntityCardSpec) -> discord.ui.LayoutView:
     blocks.extend(body)
     view.add_item(discord.ui.Container(*blocks, accent_colour=discord.Colour(ACCENT)))
     _actions(view, spec.action_buttons)
-    view.add_item(discord.ui.TextDisplay(f"-# `{spec.view_id or spec.entity_id}`"))
+    view.add_item(discord.ui.TextDisplay(f"-# `{_view_id(spec)}`"))
     return view
+
+
+class EntityCardBuilder:
+    """The fluent entity-card builder — a new entity's card is 90% data.
+
+    A new resource card (a mod's territory, a ladder object) is one
+    chain: the template owns the layout, the text budget, the two ids
+    and the chrome labels; the caller owns the data and the buttons.
+    Every setter returns the builder, so the chain reads as the card
+    it builds::
+
+        view = (
+            EntityCardBuilder("kingdoms:territory:t1", "Anjou", locale=locale)
+            .subtitle("Comté · féodal")
+            .props("Ressource : blé", "Frontière : Anjou")
+            .description(summary)
+            .thumbnail(art_url)
+            .source(wiki_url, label="Liquipedia")
+            .buttons(open_button)
+            .build()
+        )
+    """
+
+    def __init__(self, entity_id: str, title: str, *, locale: str = "en") -> None:
+        self._values: dict[str, Any] = {
+            "entity_id": entity_id,
+            "title": title,
+            "locale": locale,
+        }
+
+    def subtitle(self, text: str) -> EntityCardBuilder:
+        """Set the subtitle's second line (the id rides the first)."""
+        return self._set("subtitle", text)
+
+    def view_id(self, view_id: str) -> EntityCardBuilder:
+        """Set the footer's view id (derived ``panel:<id>`` when unset)."""
+        return self._set("view_id", view_id)
+
+    def props(self, *lines: str) -> EntityCardBuilder:
+        """Set the property lines (one setting per line)."""
+        return self._set("props", tuple(lines))
+
+    def description(self, text: str) -> EntityCardBuilder:
+        """Set the description (paragraphs split on double newlines)."""
+        return self._set("description", text)
+
+    def thumbnail(self, url: str) -> EntityCardBuilder:
+        """Set the header thumbnail (the entity's art/icon)."""
+        return self._set("icon_url", url)
+
+    def media(self, main_url: str, *gallery: str) -> EntityCardBuilder:
+        """Set the media gallery (the main image first)."""
+        self._set("image_url", main_url)
+        return self._set("gallery_images", tuple(gallery))
+
+    def source(self, url: str, *, label: str = "Liquipedia") -> EntityCardBuilder:
+        """Set the source link (the credits' last line)."""
+        self._set("source_url", url)
+        return self._set("source_label", label)
+
+    def creator(self, name: str, url: str = "") -> EntityCardBuilder:
+        """Set the creator credit (just above the source)."""
+        self._set("creator", name)
+        return self._set("creator_url", url)
+
+    def versions(self, *versions: dict[str, str]) -> EntityCardBuilder:
+        """Set the variants block (name/description dicts)."""
+        return self._set("versions", tuple(versions))
+
+    def links(self, heading: str, *entries: str) -> EntityCardBuilder:
+        """Set the cross-links block (one target per line)."""
+        self._set("links_heading", heading)
+        return self._set("links", tuple(entries))
+
+    def members(self, *sections: tuple[str, str, str]) -> EntityCardBuilder:
+        """Set the member sections ((name, link, image_url) each)."""
+        return self._set("member_sections", tuple(sections))
+
+    def buttons(self, *buttons: Any) -> EntityCardBuilder:
+        """Set the action row (factories, ActionRows or DynamicItems)."""
+        return self._set("action_buttons", tuple(buttons))
+
+    def extra(self, group: Callable[[EntityCardSpec], Sequence[discord.ui.Item[discord.ui.LayoutView]]]) -> EntityCardBuilder:
+        """Compose a body group no spec field expresses (before the credits).
+
+        The extension seam: the group is built from the spec at render
+        time and rides the template's separators and budget — a new
+        shape composes the template instead of forking it.
+        """
+        self._values.setdefault("extra_groups", ())
+        self._values["extra_groups"] = (*self._values["extra_groups"], group)
+        return self
+
+    def spec(self) -> EntityCardSpec:
+        """Freeze the chain into its spec."""
+        return EntityCardSpec(**self._values)
+
+    def build(self) -> discord.ui.LayoutView:
+        """Build the card on the shared template."""
+        return build_entity_card(self.spec())
+
+    def _set(self, key: str, value: Any) -> EntityCardBuilder:
+        self._values[key] = value
+        return self
 
 
 def map_card(
@@ -443,23 +575,18 @@ def map_card(
     tags_line = " ".join(part for part in props if part)
     # the pools: one per line, never inline (owner direction 2026-11-08)
     subtitle = "\n".join(line for line in (tags_line, *pool_links) if line)
-    return build_entity_card(
-        EntityCardSpec(
-            title=name,
-            entity_id=map_id,
-            subtitle=subtitle,
-            view_id=f"panel:{map_id}",
-            locale=locale,
-            description=description,
-            image_url=image_url,
-            icon_url=icon_url,
-            gallery_images=gallery_images,
-            source_url=source_url,
-            creator=creator,
-            creator_url=creator_url,
-            versions=versions,
-            action_buttons=buttons,
-        )
+    return (
+        EntityCardBuilder(map_id, name, locale=locale)
+        .subtitle(subtitle)
+        .view_id(f"panel:{map_id}")
+        .description(description)
+        .media(image_url, *gallery_images)
+        .thumbnail(icon_url)
+        .source(source_url)
+        .creator(creator, creator_url)
+        .versions(*versions)
+        .buttons(*buttons)
+        .build()
     )
 
 
@@ -482,16 +609,14 @@ def pool_card(
     with the map image as the accessory.
     """
     props = (state_line,) if state_line else ()
-    return build_entity_card(
-        EntityCardSpec(
-            title=name,
-            entity_id=pool_id,
-            props=props,
-            locale=locale,
-            description=description,
-            member_sections=member_sections,
-            action_buttons=buttons,
-        )
+    return (
+        EntityCardBuilder(pool_id, name, locale=locale)
+        .props(*props)
+        .description(description)
+        .members(*member_sections)
+        .view_id(f"panel:{pool_id}")
+        .buttons(*buttons)
+        .build()
     )
 
 
@@ -516,22 +641,20 @@ def civ_card(
         for label, items in sections
         if items
     ]
-    return build_entity_card(
-        EntityCardSpec(
-            title=name,
-            entity_id=civ_id,
-            subtitle=civ_type,
-            locale=locale,
-            description="\n\n".join(paragraphs),
-            icon_url=image_url,
-            source_url=source_url,
-            source_label=source_label,
-        )
+    return (
+        EntityCardBuilder(civ_id, name, locale=locale)
+        .subtitle(civ_type)
+        .description("\n\n".join(paragraphs))
+        .thumbnail(image_url)
+        .source(source_url, label=source_label)
+        .view_id(f"panel:{civ_id}")
+        .build()
     )
 
 
 __all__ = [
     "ACCENT",
+    "EntityCardBuilder",
     "EntityCardSpec",
     "build_entity_card",
     "civ_card",

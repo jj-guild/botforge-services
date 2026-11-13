@@ -64,7 +64,7 @@ def test_pool_card_carries_the_id_in_subtitle_and_footer_whatever_the_state() ->
         )
         texts = _texts(view)
         assert texts[0].startswith("## Rotation 1\n`map_pool:aoe2:p1`"), state_line
-        assert texts[-1] == "-# `map_pool:aoe2:p1`", state_line
+        assert texts[-1] == "-# `panel:map_pool:aoe2:p1`", state_line
 
 
 def test_civ_card_carries_the_id_in_subtitle_and_footer() -> None:
@@ -79,7 +79,7 @@ def test_civ_card_carries_the_id_in_subtitle_and_footer() -> None:
     )
     texts = _texts(view)
     assert texts[0].startswith("## Britons\n`civ:aoe2:britons`")
-    assert texts[-1] == "-# `civ:aoe2:britons`"
+    assert texts[-1] == "-# `panel:civ:aoe2:britons`"
 
 
 def test_the_chrome_labels_localize_per_locale() -> None:
@@ -105,3 +105,43 @@ def test_the_chrome_labels_localize_per_locale() -> None:
     )
     assert "Source :" in " ".join(_texts(view_fr))
     assert "Source: " in " ".join(_texts(view_en))
+
+
+def test_the_builder_chain_builds_the_same_card() -> None:
+    """The fluent builder is the SDK's 90% path for a new entity."""
+    from botforge.discord.ui.entity_cards import EntityCardBuilder
+
+    view = (
+        EntityCardBuilder("kingdoms:territory:anjou", "Anjou", locale="fr")
+        .subtitle("Comté · féodal")
+        .props("Ressource : blé")
+        .description("Un territoire de plaine.")
+        .thumbnail("https://x/art.png")
+        .source("https://wiki/anjou", label="Liquipedia")
+        .buttons(lambda: _button())
+        .build()
+    )
+    texts = _texts(view)
+    assert texts[0].startswith("## Anjou\n`kingdoms:territory:anjou`\nComté · féodal")
+    assert texts[-1] == "-# `panel:kingdoms:territory:anjou`"
+
+
+def test_the_extra_seam_composes_a_group_without_forking_the_template() -> None:
+    """A shape no spec field expresses rides the extra seam."""
+    import discord
+    from botforge.discord.ui.entity_cards import EntityCardBuilder
+
+    def _banner(spec: object) -> list[discord.ui.Item[discord.ui.LayoutView]]:
+        return [discord.ui.TextDisplay("**Nouveau**")]
+
+    view = (
+        EntityCardBuilder("kingdoms:territory:anjou", "Anjou")
+        .description("Desc")
+        .extra(_banner)
+        .build()
+    )
+    joined = "\n".join(_texts(view))
+    assert "**Nouveau**" in joined
+    # the extra group rides INSIDE the template: behind its separators,
+    # before the credits, under the same budget
+    assert "**Nouveau**" in joined.split("Source")[0]

@@ -119,7 +119,7 @@ def test_pool_post_layout_has_section_per_map_and_add_button() -> None:
     # footer ALWAYS the last text block — whatever the pool's state
     texts = [i for i in items if isinstance(i, discord.ui.TextDisplay)]
     assert f"`{_POOL.id}`" in texts[1].content or any(f"`{_POOL.id}`" in t.content for t in texts[:2])
-    assert texts[-1].content == f"-# `{_POOL.id}`"
+    assert texts[-1].content == f"-# `panel:{_POOL.id}`"
     from botforge.discord.entity_admin_menu import EntityAdminButton
 
     rows = [i for i in view.children if isinstance(i, discord.ui.ActionRow)]
