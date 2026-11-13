@@ -511,8 +511,14 @@ def build_declared_menu(bot: Any, view_id: str) -> Any:  # noqa: C901
         description = _tr(catalog, f"{prefix}.description", locale)
         view = discord.ui.LayoutView(timeout=None)
         header = f"# {title}"
-        if getattr(decl, "title_emoji", ""):
-            header = f"{header} {decl.title_emoji}"
+        # the SDK constraint: an admin surface ALWAYS carries the open
+        # padlock in its header (one glance tells the operator where they
+        # stand) — declared per view never again, admin_surface decides
+        title_emoji = "🔓" if getattr(decl, "admin_surface", False) else getattr(
+            decl, "title_emoji", ""
+        )
+        if title_emoji:
+            header = f"{header} {title_emoji}"
         blocks: list[Any] = [discord.ui.TextDisplay(header)]
         if description:
             blocks.append(discord.ui.TextDisplay(description))
