@@ -591,6 +591,45 @@ async def _auto_entries(
         definition = registry.get(mod_name) if registry is not None else None
         emoji = str(getattr(definition, "emoji", "") or "") if definition is not None else ""
         out.append(ViewOpenButton(target, label, emoji))
+    # the scope's own channels ride the home's action row too (#377):
+    # général, admin, catalogue — the folder's doors, one click each
+    if view_id == "menu:mods:home":
+        out.extend(await _scope_channel_buttons(bot, guild_id, "mods", catalog, locale))
+    return out
+
+
+async def _scope_channel_buttons(
+    bot: Any,
+    guild_id: str,
+    scope: str,
+    catalog: Any,
+    locale: str,
+) -> list[Any]:
+    """Build the link buttons to a scope's provisioned channels (its doors)."""
+    import discord
+
+    from botforge.discord.scope_pins import _tr
+    from botforge.discord.ui.panels_provisioning import stored_channel_id
+
+    doors: list[tuple[str, str, str]] = [
+        ("general", "ui.panels.channels.general", "🛡️"),
+        ("admin", "ui.panels.channels.admin", "🔒"),
+        ("catalog", "ui.panels.channels.catalog", "📦"),
+    ]
+    out: list[Any] = []
+    for key, label_key, emoji in doors:
+        channel_id = await stored_channel_id(guild_id, scope, key)
+        if not channel_id or not str(channel_id).isdigit():
+            continue
+        label = _tr(catalog, label_key, locale, key)
+        out.append(
+            discord.ui.Button(
+                style=discord.ButtonStyle.link,
+                url=f"https://discord.com/channels/{guild_id}/{channel_id}",
+                label=str(label)[:80],
+                emoji=discord.PartialEmoji.from_str(emoji),
+            )
+        )
     return out
 
 
