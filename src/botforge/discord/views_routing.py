@@ -444,9 +444,10 @@ async def _auto_entries(
 ) -> list[Any]:
     """Build the auto-injected entry buttons of a home/admin menu.
 
-    menu:mods:home lists every enabled mod; menu:mods:admin every
-    enabled mod's admin surface; menu:games:home every game — each
-    ENABLED when installed on the guild, grayed otherwise (#377).
+    menu:mods:home lists the INSTALLED mods; menu:mods:admin their
+    admin surfaces; the games' home/admin mirror them — an item
+    without its button is simply not installed: NOTHING grayed, no
+    planned placeholders (owner direction 2026-11-13).
     """
     from botforge.discord.wiring import build_guild_access_service, guild_access_platform
 
@@ -469,28 +470,22 @@ async def _auto_entries(
     if view_id in ("menu:games:home", "menu:games:admin"):
         admin = view_id == "menu:games:admin"
         for game_key in all_games:
+            if game_key not in installed_games:
+                continue  # not installed on this guild: no button at all
             target = f"menu:game:{game_key}:admin" if admin else f"menu:games:{game_key}"
             label = _tr(catalog, f"ui.games.{game_key}.name", locale, game_key)
             out.append(
-                ViewOpenButton(
-                    target,
-                    label,
-                    "" if admin else "⚔️",
-                    disabled=game_key not in installed_games,
-                )
+                ViewOpenButton(target, label, "" if admin else "⚔️")
             )
         return out
     admin = view_id == "menu:mods:admin"
     for mod_name in (registry.enabled() if registry is not None else ()):
+        if mod_name not in installed_mods:
+            continue  # not installed on this guild: no button at all
         target = f"menu:mod:{mod_name}:admin" if admin else f"menu:mod:{mod_name}"
         label = _tr(catalog, f"ui.mods.homes.{mod_name}", locale, mod_name)
         out.append(
-            ViewOpenButton(
-                target,
-                label,
-                "👑" if not admin else "",
-                disabled=mod_name not in installed_mods,
-            )
+            ViewOpenButton(target, label, "👑" if not admin else "")
         )
     return out
 
