@@ -21,6 +21,7 @@
 id: kingdom
 enabled: true
 seasonal: true
+emoji: "👑"
 private: true
 owner_discord_ids:
   - "242421489536729100"

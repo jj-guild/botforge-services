@@ -4,7 +4,8 @@ The SDK ORDER CONSTRAINT (#393) and the merlin directions (2026-11-13):
 the repair button closes an admin row (ALWAYS last, whatever the
 declaration or the injection order), the games home carries no door
 buttons (the body's notice owns the links), and the kingdom entries
-and titles carry no emoji.
+and titles carry the declaration's crown emoji (#334: the visual
+identity is data).
 """
 
 from __future__ import annotations
@@ -81,19 +82,21 @@ def test_the_repair_button_closes_the_mods_admin_row(rendered_menus: dict[str, A
     assert labels[-1].lower().startswith("repair"), f"the repair closes the row — got {labels}"
 
 
-def test_the_kingdom_entries_carry_no_emoji(rendered_menus: dict[str, Any]) -> None:
-    """The auto-injected kingdom buttons stay plain (no emoji)."""
+def test_the_kingdom_entries_carry_the_declaration_emoji(rendered_menus: dict[str, Any]) -> None:
+    """The auto-injected kingdom buttons carry the declaration's crown (#334)."""
     for view_id in ("menu:mods:home", "menu:mods:admin"):
         buttons = rendered_menus[view_id]["buttons"]
         kingdom = next(b for b in buttons if str(b.get("label")) == "Kingdom")
-        assert kingdom.get("emoji") is None, f"{view_id}: the kingdom entry carries an emoji"
+        assert (kingdom.get("emoji") or {}).get("name") == "\U0001F451", (
+            f"{view_id}: the kingdom entry must carry the declaration's crown"
+        )
 
 
-def test_the_kingdom_home_titles_carry_no_crown(rendered_menus: dict[str, Any]) -> None:
-    """The kingdom home and admin titles are plain text."""
+def test_the_kingdom_home_titles_carry_the_crown(rendered_menus: dict[str, Any]) -> None:
+    """The kingdom home and admin titles carry the crown (the games' precedent)."""
     for view_id in ("menu:mod:kingdom", "menu:mod:kingdom:admin"):
         header = rendered_menus[view_id]["texts"][0]
-        assert "\U0001f451" not in header, f"{view_id}: the crown is gone — got {header!r}"
+        assert "\U0001F451" in header, f"{view_id}: the crown must ride the title — got {header!r}"
 
 
 def test_the_games_home_carries_no_door_buttons(rendered_menus: dict[str, Any]) -> None:
