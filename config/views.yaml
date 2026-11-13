@@ -103,7 +103,9 @@ views:
     kind: menu
     scope: mods/admin
     admin_surface: true
-    buttons: []
+    buttons:
+    - label: ui.homes.btn_sync
+      sync: true
 
 scopes:
   root:
