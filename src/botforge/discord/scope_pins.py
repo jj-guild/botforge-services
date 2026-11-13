@@ -90,16 +90,12 @@ async def _tree_notice(guild_id: str, scope: str, catalog: Any = None, locale: s
             channels.append(f"**{label}**{lock} (\u00e0 cr\u00e9er)")
     lines: list[str] = []
     if channels:
-        lines.append(
-            _tr(catalog, "ui.tree.channels_heading", locale, "\U0001f4fa Salons :")
-            + " "
-            + ", ".join(channels)
-        )
+        lines.append(_tr(catalog, "ui.tree.channels_heading", locale, "\U0001f4fa Salons :"))
+        lines.extend(f"\u2022 {item}" for item in channels)
     roles = _scope_role_lines(guild_id, scope, bot, catalog=catalog, locale=locale)
     if roles:
-        lines.append(
-            _tr(catalog, "ui.tree.roles_heading", locale, "\U0001f465 R\u00f4les :") + " " + ", ".join(roles)
-        )
+        lines.append(_tr(catalog, "ui.tree.roles_heading", locale, "\U0001f465 R\u00f4les :"))
+        lines.extend(f"\u2022 {item}" for item in roles)
     return "\n".join(lines)
 
 
@@ -177,6 +173,10 @@ async def _mod_roles_lines(guild_id: str, name: str, definition: Any, bot: Any, 
         role_id = ""
         if service is not None:
             try:
+                # the LEDGER is the only resolver (owner rule 2026-11-13:
+                # never resolve a role or channel by name) — a role that
+                # exists on Discord but lost its mapping renders as the
+                # honest "à créer" until the repair re-provisions it
                 mapping = await service.find_role_mapping(guild_id, name, role.key)
                 role_id = str(mapping.role_id) if mapping is not None else ""
             except Exception:
@@ -198,16 +198,12 @@ async def _mod_notice(guild_id: str, name: str, catalog: Any, locale: str, bot: 
     lines: list[str] = []
     channels = await _mod_channels_lines(guild_id, name, definition, catalog, locale)
     if channels:
-        lines.append(
-            _tr(catalog, "ui.tree.channels_heading", locale, "\U0001f4fa Salons :")
-            + " "
-            + ", ".join(channels)
-        )
+        lines.append(_tr(catalog, "ui.tree.channels_heading", locale, "\U0001f4fa Salons :"))
+        lines.extend(f"\u2022 {item}" for item in channels)
     roles = await _mod_roles_lines(guild_id, name, definition, bot, catalog, locale)
     if roles:
-        lines.append(
-            _tr(catalog, "ui.tree.roles_heading", locale, "\U0001f465 R\u00f4les :") + " " + ", ".join(roles)
-        )
+        lines.append(_tr(catalog, "ui.tree.roles_heading", locale, "\U0001f465 R\u00f4les :"))
+        lines.extend(f"\u2022 {item}" for item in roles)
     return "\n".join(lines)
 
 
@@ -268,16 +264,12 @@ async def _installed_scan_notice(
             channels.extend(await _game_scope_channel_lines(guild_id, key, spec, catalog, locale))
     lines: list[str] = []
     if channels:
-        lines.append(
-            _tr(catalog, "ui.tree.channels_heading", locale, "\U0001f4fa Salons :")
-            + " "
-            + ", ".join(channels)
-        )
+        lines.append(_tr(catalog, "ui.tree.channels_heading", locale, "\U0001f4fa Salons :"))
+        lines.extend(f"\u2022 {item}" for item in channels)
     roles = [f"<@&{rid}>" for rid in _bot_admins_role_ids(guild_id, bot)]
     if roles:
-        lines.append(
-            _tr(catalog, "ui.tree.roles_heading", locale, "\U0001f465 R\u00f4les :") + " " + ", ".join(roles)
-        )
+        lines.append(_tr(catalog, "ui.tree.roles_heading", locale, "\U0001f465 R\u00f4les :"))
+        lines.extend(f"\u2022 {item}" for item in roles)
     return "\n".join(lines)
 
 

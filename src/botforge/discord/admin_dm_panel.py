@@ -276,6 +276,10 @@ class DmOpenButton(
     ) -> DmOpenButton:
         """Rebuild from the wire (labels via the admin's DM locale)."""
         section = match.group("section")
+        if section == "sync":
+            # the pre-aoe2 wire (an older DM menu still carries it): the
+            # legacy button opens the same aoe2 sync, never the language modal
+            section = "sync-aoe2"
         if section not in cls.SECTIONS:
             section = "language"
         dm_locale = await _dm_locale(interaction)

@@ -43,6 +43,8 @@ channels:
 roles:
   - key: kingdom_member
     display_name: Kingdom Member
+  - key: kingdom_candidate
+    display_name: Kingdom Candidate
 workflows: []
 commands:
   - kingdom
