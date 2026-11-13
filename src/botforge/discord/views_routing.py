@@ -462,21 +462,27 @@ async def _clickable_image_entries(
     else:
         entries = await _mod_image_entries(bot, guild_id, catalog, locale, access)
     blocks: list[Any] = []
-    for _name, label, image, scope in entries:
-        # the valid components-v2 form (the merlin findings): the image
-        # rides a MEDIA GALLERY (the docs' way — a TextDisplay cannot
-        # embed one, a Section's TextDisplay does not render links), the
-        # title is a TOP-LEVEL TextDisplay whose markdown link is the
-        # click target; no bold, no emoji in the link text (both break
-        # the link's parse)
+    for name, label, image, scope in entries:
+        # Discord components v2 has NO clickable image (the docs: the
+        # media components are Content, non-interactive — only Buttons
+        # and Selects are interactive). The closest "a link rendered as
+        # an image": the art rides a MEDIA GALLERY, and the click target
+        # is a LINK BUTTON (style 5, url=) — a rendered, clickable
+        # element carrying the item's emoji and name
         channel_id = await stored_channel_id(guild_id, scope, "general")
         plain = label.lstrip("⚔️👑 ").strip() or label
         blocks.append(discord.ui.MediaGallery(discord.MediaGalleryItem(image, description=plain)))
         if channel_id and str(channel_id).isdigit():
             target = f"https://discord.com/channels/{guild_id}/{channel_id}"
-            blocks.append(discord.ui.TextDisplay(f"[{plain}]({target})"))
-        else:
-            blocks.append(discord.ui.TextDisplay(plain))
+            row: discord.ui.ActionRow[discord.ui.LayoutView] = discord.ui.ActionRow()
+            row.add_item(
+                discord.ui.Button(
+                    style=discord.ButtonStyle.link,
+                    url=target,
+                    label=plain[:80],
+                )
+            )
+            blocks.append(row)
     return blocks
 
 
