@@ -533,6 +533,10 @@ async def _auto_entries(
             emoji = str((game_decls or {}).get(game_key, {}).get("emoji", "") or "")
             plain_label = label.lstrip(emoji).strip() or label
             out.append(ViewOpenButton(target, plain_label, emoji))
+        # the games scope's own channels ride the home's action row (the
+        # folder's doors): général, admin, catalogue — one click each
+        if view_id == "menu:games:home":
+            out.extend(await _scope_channel_buttons(bot, guild_id, "games", catalog, locale))
         return out
     admin = view_id == "menu:mods:admin"
     for mod_name in (registry.enabled() if registry is not None else ()):
@@ -544,10 +548,6 @@ async def _auto_entries(
         emoji = str(getattr(definition, "emoji", "") or "") if definition is not None else ""
         plain_label = label.lstrip(emoji).strip() or label
         out.append(ViewOpenButton(target, plain_label, emoji))
-    # the scope's own channels ride the home's action row too (#377):
-    # général, admin, catalogue — the folder's doors, one click each
-    if view_id == "menu:mods:home":
-        out.extend(await _scope_channel_buttons(bot, guild_id, "mods", catalog, locale))
     return out
 
 

@@ -106,7 +106,6 @@ def _parse_mod_yaml(data: dict[str, object], source: Path) -> ModDefinition:
 
     default_active = bool(data.get("default_active", False))
     emoji = str(data.get("emoji", "") or "")
-    image = str(data.get("image", "") or "")
     private = bool(data.get("private", False))
     raw_owners = data.get("owner_discord_ids", [])
     if raw_owners is None:
@@ -126,7 +125,6 @@ def _parse_mod_yaml(data: dict[str, object], source: Path) -> ModDefinition:
         owner_ids=owner_ids,
         default_active=default_active,
         emoji=emoji,
-        image=image,
         channel_categories=tuple(categories),
         roles=tuple(roles),
         workflows=tuple(workflows),
