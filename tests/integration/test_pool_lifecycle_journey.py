@@ -350,7 +350,7 @@ class TestPoolLifecycleJourney:
                 menu, custom_id=f"admin:pin:modgames:pools:harddelete:{pool.id}"
             )
             fields = _modal_fields(shown)
-            await alice.submit_modal(shown, {fields["Tape l'id exact du pool"]: pool.name})
+            await alice.submit_modal(shown, {fields["Tape le nom exact du pool"]: pool.name})
             assert await remote.get_map_pool(pool.id) is None, "the pool is gone"
             assert all(p.id != pool.id for p in await remote.list_all_map_pools("aoe2"))
         finally:

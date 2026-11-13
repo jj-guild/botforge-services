@@ -44,7 +44,10 @@ buttons).&nbsp;A&nbsp;card&nbsp;whose&nbsp;footer&nbsp;repeats&nbsp;its&nbsp;res
 &nbsp;<br>
 The&nbsp;builders&nbsp;are&nbsp;game/mod-agnostic:&nbsp;they&nbsp;take&nbsp;plain&nbsp;strings&nbsp;and<br>
 return&nbsp;items;&nbsp;the&nbsp;callers&nbsp;(the&nbsp;games&nbsp;forums,&nbsp;the&nbsp;mods'&nbsp;forums)&nbsp;own<br>
-the&nbsp;data&nbsp;and&nbsp;the&nbsp;buttons.&nbsp;No&nbsp;game&nbsp;or&nbsp;mod&nbsp;imports&nbsp;here.&nbsp;A&nbsp;new<br>
+the&nbsp;data&nbsp;and&nbsp;the&nbsp;buttons.&nbsp;No&nbsp;game&nbsp;or&nbsp;mod&nbsp;imports&nbsp;here&nbsp;—&nbsp;and&nbsp;no<br>
+service&nbsp;either:&nbsp;the&nbsp;discord&nbsp;SDK&nbsp;never&nbsp;queries&nbsp;a&nbsp;service&nbsp;and&nbsp;never<br>
+reads&nbsp;data,&nbsp;it&nbsp;receives&nbsp;and&nbsp;builds&nbsp;(the&nbsp;single&nbsp;allowed&nbsp;read&nbsp;is&nbsp;the<br>
+shared&nbsp;i18n&nbsp;catalog&nbsp;for&nbsp;the&nbsp;chrome&nbsp;labels,&nbsp;through&nbsp;the&nbsp;one&nbsp;loader).&nbsp;A&nbsp;new<br>
 entity's&nbsp;card&nbsp;is&nbsp;90%&nbsp;data:&nbsp;the&nbsp;``<a href="#EntityCardBuilder">EntityCardBuilder</a>``&nbsp;chain&nbsp;carries<br>
 it,&nbsp;the&nbsp;template&nbsp;does&nbsp;the&nbsp;rest&nbsp;(layout,&nbsp;budget,&nbsp;ids,&nbsp;chrome<br>
 labels),&nbsp;and&nbsp;the&nbsp;``extra``&nbsp;seam&nbsp;composes&nbsp;a&nbsp;group&nbsp;no&nbsp;spec&nbsp;field<br>

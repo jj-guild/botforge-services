@@ -33,7 +33,10 @@ buttons). A card whose footer repeats its resource id is a bug.
 
 The builders are game/mod-agnostic: they take plain strings and
 return items; the callers (the games forums, the mods' forums) own
-the data and the buttons. No game or mod imports here. A new
+the data and the buttons. No game or mod imports here — and no
+service either: the discord SDK never queries a service and never
+reads data, it receives and builds (the single allowed read is the
+shared i18n catalog for the chrome labels, through the one loader). A new
 entity's card is 90% data: the ``EntityCardBuilder`` chain carries
 it, the template does the rest (layout, budget, ids, chrome
 labels), and the ``extra`` seam composes a group no spec field
