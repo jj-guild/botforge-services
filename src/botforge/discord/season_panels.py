@@ -241,7 +241,7 @@ class _SeasonValidationModal(discord.ui.Modal, title="La validation"):
     async def on_submit(self, interaction: discord.Interaction) -> None:
         """Record the mode, then re-render the recap."""
         draft = _draft_of(self._bot, self._mod, self._guild)
-        select = getattr(self.validation, "component", self.validation)
+        select: Any = getattr(self.validation, "component", self.validation)
         draft["validation"] = str(select.values[0]) if select.values else "manual"
         await interaction.response.defer(ephemeral=True)
         await _send_draft(interaction, self._bot, self._mod, self._guild)
@@ -337,7 +337,7 @@ class _SeasonMapPoolModal(discord.ui.Modal, title="Le map pool"):
         draft = _draft_of(bot, mod, guild_id)
         options = _map_pool_options(bot)
         if options:
-            select = discord.ui.Select(
+            select: discord.ui.Select[discord.ui.Modal] = discord.ui.Select(
                 options=options[:25],
                 required=False,
                 min_values=0,
@@ -483,6 +483,65 @@ class SeasonDraftButton(
         await interaction.response.send_modal(modal(interaction.client, self.mod, guild_id))
 
 
+class SeasonBetaButton(
+    discord.ui.DynamicItem[discord.ui.Button[Any]],
+    template=rf"{_NS}:beta:(?P<mod>[a-z0-9_-]+)",
+):
+    """The season's BETA phase toggle (a season parameter, owner spec).
+
+    The beta is per season: the toggle flips the draft's flag AND the
+    mod's beta state (the core's ``is_beta`` — the rules bend when the
+    flag is on).
+    """
+
+    def __init__(self, mod: str, active: bool) -> None:
+        super().__init__(
+            discord.ui.Button(
+                custom_id=f"{_NS}:beta:{mod}"[:100],
+                label="Quitter la phase b\u00eata" if active else "Entrer en phase b\u00eata",
+                emoji="\U0001f9ea",
+                style=discord.ButtonStyle.danger if active else discord.ButtonStyle.success,
+            )
+        )
+        self.mod = mod
+
+    @classmethod
+    async def from_custom_id(
+        cls,
+        interaction: discord.Interaction,
+        item: discord.ui.Item[Any],
+        match: Any,
+        /,
+    ) -> SeasonBetaButton:
+        """Rebuild the toggle at click time."""
+        return cls(match["mod"], False)
+
+    async def callback(self, interaction: discord.Interaction) -> None:
+        """Flip the season's beta phase (guarded, ephemeral)."""
+        from botforge.core.services.beta import enter_beta, exit_beta, is_beta
+        from botforge.core.services.mod_storage import ModStateCache
+        from botforge.discord.mod_beta import _beta_guard
+
+        if not await _beta_guard(interaction):
+            return
+        await interaction.response.defer(ephemeral=True)
+        guild_id = str(interaction.guild_id or "")
+        draft = _draft_of(interaction.client, self.mod, guild_id)
+        state_service = getattr(interaction.client, "state_service", None)
+        cache = ModStateCache(state_service, self.mod) if state_service is not None else None
+        active = await is_beta(cache, guild_id, self.mod)
+        if active:
+            await exit_beta(cache, guild_id, self.mod)
+            draft["beta"] = False
+            note = "Phase b\u00eata quitt\u00e9e \u2014 les r\u00e8gles se redressent."
+        else:
+            await enter_beta(cache, guild_id, self.mod)
+            draft["beta"] = True
+            note = "Phase b\u00eata activ\u00e9e \u2014 les r\u00e8gles se plient."
+        await interaction.followup.send(note, ephemeral=True)
+        await _send_edit_bar(interaction, interaction.client, self.mod, guild_id)
+
+
 class SeasonCreateConfirmButton(
     discord.ui.DynamicItem[discord.ui.Button[Any]],
     template=rf"{_NS}:confirm:(?P<mod>[a-z0-9_-]+)",
@@ -593,43 +652,27 @@ def _derive_status(draft: dict[str, Any]) -> str:
     return "\u00e0 planifier"
 
 
-async def build_season_layout(
-    bot: Any, mod: str, guild_id: str, draft: dict[str, Any], read_mode: bool
-) -> discord.ui.LayoutView:
-    """Build the season's view: a section per config group (P3, owner spec).
-
-    Each section carries its current value in the body and its
-    modal-opening button as the accessory (editable one by one); the
-    status derives from the dates (never materialized); the read mode
-    adds the candidates/enrolled counts and the Postuler button.
-    """
-    view = discord.ui.LayoutView(timeout=None)
-    name = str(draft.get("name") or "Nouvelle saison")
-    blocks: list[discord.ui.Item[discord.ui.LayoutView]] = [
-        discord.ui.TextDisplay(f"# {name}"),
-        discord.ui.TextDisplay(f"Statut : **{_derive_status(draft)}**"),
-    ]
-    if read_mode:
-        candidates, enrolled = await _enrollment_counts(bot, mod, guild_id)
-        blocks.append(
-            discord.ui.TextDisplay(
-                f"\U0001f9e1 Candidats : **{candidates}** \u00b7 \U0001f465 Inscrits : **{enrolled}**"
-            )
-        )
-    view.add_item(discord.ui.Container(*blocks))
+def _season_body(draft: dict[str, Any]) -> list[str]:
+    """Render the season's config values as the read panel's body."""
+    lines = [f"# {draft.get('name') or 'Nouvelle saison'}"]
+    lines.append(f"Statut : **{_derive_status(draft)}**")
+    lines.append("")
     validation = draft.get("validation") or "manual"
     validation_label = (
         "Manuelle (les admins d\u00e9cident)"
         if validation == "manual"
         else "Automatique (les crit\u00e8res d\u00e9cident)"
     )
+    lines.append(f"**Validation** : {validation_label}")
     criteria_bits = []
     if draft.get("elo_type"):
         criteria_bits.append(f"elo {draft['elo_type']}")
     if draft.get("elo_max"):
-        criteria_bits.append(f"elo max {draft['elo_max']}")
+        criteria_bits.append(f"plafond {draft['elo_max']}")
     if draft.get("min_matches"):
         criteria_bits.append(f"{draft['min_matches']} derniers matchs")
+    if criteria_bits:
+        lines.append(f"**Crit\u00e8res** : {', '.join(criteria_bits)}")
     players_bits = []
     if draft.get("min_players") and draft.get("max_players"):
         players_bits.append(f"Entre {draft['min_players']} et {draft['max_players']} joueurs")
@@ -637,34 +680,19 @@ async def build_season_layout(
         players_bits.append(f"Au moins {draft['min_players']} joueurs")
     elif draft.get("max_players"):
         players_bits.append(f"Au plus {draft['max_players']} joueurs")
-    sections: list[tuple[str, str]] = [
-        ("name", str(draft.get("name") or "\u2014")),
-        ("validation", validation_label),
-        ("criteria", ", ".join(criteria_bits) if criteria_bits else "\u2014"),
-        ("players", ", ".join(players_bits) if players_bits else "\u2014"),
-        ("map_pool", str(draft.get("map_pool") or "\u2014")),
-        (
-            "dates",
-            (
-                f"Inscription : {_fmt_date(draft.get('enrollment_start'))} \u2192 "
-                f"{_fmt_date(draft.get('enrollment_end'))}\n"
-                f"Saison : {_fmt_date(draft.get('season_start'))} \u2192 "
-                f"{_fmt_date(draft.get('season_end'))}"
-            ),
-        ),
-    ]
-    for param, value in sections:
-        view.add_item(_config_section(mod, param, value))
-    row: Any = discord.ui.ActionRow()
-    if read_mode:
-        row.add_item(SeasonApplyButton(mod))
-    else:
-        row.add_item(SeasonCreateConfirmButton(mod))
-    view.add_item(row)
-    from botforge.discord.ui.view_footer import add_view_footer
-
-    add_view_footer(view, f"panel:mod:{mod}:seasons")
-    return view
+    if players_bits:
+        lines.append(f"**Joueurs** : {' '.join(players_bits)}")
+    if draft.get("map_pool"):
+        lines.append(f"**Map pool** : {draft['map_pool']}")
+    lines.append(
+        f"**Inscription** : {_fmt_date(draft.get('enrollment_start'))} \u2192 "
+        f"{_fmt_date(draft.get('enrollment_end'))}"
+    )
+    lines.append(
+        f"**Saison** : {_fmt_date(draft.get('season_start'))} \u2192 "
+        f"{_fmt_date(draft.get('season_end'))}"
+    )
+    return lines
 
 
 async def _enrollment_counts(bot: Any, mod: str, guild_id: str) -> tuple[int, int]:
@@ -681,23 +709,141 @@ async def _enrollment_counts(bot: Any, mod: str, guild_id: str) -> tuple[int, in
         return (0, 0)
 
 
-def _config_section(mod: str, param: str, value: str) -> Any:
-    """Build one config group's Section: the value + the edit accessory."""
-    label = SeasonDraftButton._PARAM_LABELS.get(param, param)
-    return discord.ui.Section(
-        discord.ui.TextDisplay(f"**{label}**\n{value}"),
-        accessory=SeasonDraftButton(mod, param),
-    )
+def _enrollment_open(draft: dict[str, Any]) -> bool:
+    """Whether the enrollment window is open (derived from the dates)."""
+    import time
+
+    now = int(time.time())
+    try:
+        start = int(draft.get("enrollment_start") or 0)
+        end = int(draft.get("enrollment_end") or 0)
+    except (TypeError, ValueError):
+        return False
+    if end and now > end:
+        return False
+    if start and now < start:
+        return False
+    return True
 
 
-async def _send_draft(interaction: discord.Interaction, bot: Any, mod: str, guild_id: str) -> None:
-    """Send the draft's sectioned view (ephemeral)."""
+async def build_season_layout(
+    bot: Any, mod: str, guild_id: str, draft: dict[str, Any], read_mode: bool
+) -> discord.ui.LayoutView:
+    """Build the season's READ panel (P3, owner spec 2026-11-14).
+
+    A clean reading surface — no sections: the title (the name + the
+    season id in the footer), the derived status, the config values
+    as a body, the candidates/enrolled counts; the Postuler button
+    rides ONLY when the enrollment window is open, before the admin
+    button. The admin button reveals the edit action bar (the modal
+    openers) as an ephemeral view.
+    """
+    view = discord.ui.LayoutView(timeout=None)
+    season_id = str(draft.get("season_id") or "")
+    lines = _season_body(draft)
+    if read_mode:
+        candidates, enrolled = await _enrollment_counts(bot, mod, guild_id)
+        lines.append("")
+        lines.append(f"\U0001f9e1 Candidats : **{candidates}** \u00b7 \U0001f465 Inscrits : **{enrolled}**")
+    view.add_item(discord.ui.Container(discord.ui.TextDisplay("\n".join(lines))))
+    row: Any = discord.ui.ActionRow()
+    if read_mode:
+        # the Postuler button rides ONLY when the enrollment is open,
+        # BEFORE the admin button (the owner's order)
+        if _enrollment_open(draft):
+            row.add_item(SeasonApplyButton(mod))
+        row.add_item(SeasonAdminButton(mod))
+    else:
+        row.add_item(SeasonCreateConfirmButton(mod))
+    view.add_item(row)
+    from botforge.discord.ui.view_footer import add_view_footer
+
+    footer_id = f"panel:mod:{mod}:seasons:{season_id}" if season_id else f"panel:mod:{mod}:seasons"
+    add_view_footer(view, footer_id)
+    return view
+
+
+async def _send_edit_bar(interaction: discord.Interaction, bot: Any, mod: str, guild_id: str) -> None:
+    """Send the season's EDIT action bar (ephemeral, the admin surface).
+
+    The read post stays clean; the admin button reveals THIS bar: the
+    parameter openers (each re-calls its modal), the beta phase toggle,
+    the create button.
+    """
     draft = _draft_of(bot, mod, guild_id)
-    view = await build_season_layout(bot, mod, guild_id, draft, read_mode=False)
+    view = discord.ui.LayoutView(timeout=None)
+    lines = [f"# {draft.get('name') or 'Nouvelle saison'} \u2014 \u00e9dition"]
+    lines.append("_Rappelle une modal pour red\u00e9finir un param\u00e8tre._")
+    view.add_item(discord.ui.Container(discord.ui.TextDisplay("\n".join(lines))))
+    row: Any = discord.ui.ActionRow()
+    for param in ("name", "validation", "criteria", "players", "map_pool", "dates"):
+        row.add_item(SeasonDraftButton(mod, param))
+    view.add_item(row)
+    row2: Any = discord.ui.ActionRow()
+    row2.add_item(SeasonBetaButton(mod, bool(draft.get("beta"))))
+    row2.add_item(SeasonCreateConfirmButton(mod))
+    view.add_item(row2)
     if interaction.response.is_done():
         await interaction.followup.send(view=view, ephemeral=True)
     else:
         await interaction.response.send_message(view=view, ephemeral=True)
+
+
+class SeasonAdminButton(
+    discord.ui.DynamicItem[discord.ui.Button[Any]],
+    template=rf"{_NS}:admin:(?P<mod>[a-z0-9_-]+)",
+):
+    """The read post's admin button: reveals the edit action bar."""
+
+    def __init__(self, mod: str) -> None:
+        super().__init__(
+            discord.ui.Button(
+                custom_id=f"{_NS}:admin:{mod}"[:100],
+                label="Admin",
+                emoji="\U0001f513",
+                style=discord.ButtonStyle.secondary,
+            )
+        )
+        self.mod = mod
+
+    @classmethod
+    async def from_custom_id(
+        cls,
+        interaction: discord.Interaction,
+        item: discord.ui.Item[Any],
+        match: Any,
+        /,
+    ) -> SeasonAdminButton:
+        """Rebuild the button at click time."""
+        return cls(match["mod"])
+
+    async def callback(self, interaction: discord.Interaction) -> None:
+        """Reveal the edit action bar (guarded, ephemeral)."""
+        from botforge.discord.mod_beta import _beta_guard
+
+        if not await _beta_guard(interaction):
+            return
+        await interaction.response.defer(ephemeral=True)
+        guild_id = str(interaction.guild_id or "")
+        # the active season's values seed the draft (the edits target it)
+        stack = _stack(interaction.client, self.mod, guild_id)
+        if stack is not None:
+            try:
+                active = await await_active(stack, guild_id)
+            except Exception:
+                active = None
+            if active is not None:
+                draft = _draft_of(interaction.client, self.mod, guild_id)
+                draft["season_id"] = str(getattr(active, "id", ""))
+                draft["name"] = str(getattr(active, "name", draft.get("name", "")))
+                draft["season_start"] = getattr(active, "start_at", None)
+                draft["season_end"] = getattr(active, "end_at", None)
+        await _send_edit_bar(interaction, interaction.client, self.mod, guild_id)
+
+
+async def _send_draft(interaction: discord.Interaction, bot: Any, mod: str, guild_id: str) -> None:
+    """Send the draft's edit action bar (ephemeral, the admin surface)."""
+    await _send_edit_bar(interaction, bot, mod, guild_id)
 
 
 
@@ -917,6 +1063,8 @@ def register_season_items(client: Any) -> None:
     client.add_dynamic_items(SeasonApplyButton)
     client.add_dynamic_items(SeasonDraftButton)
     client.add_dynamic_items(SeasonCreateConfirmButton)
+    client.add_dynamic_items(SeasonBetaButton)
+    client.add_dynamic_items(SeasonAdminButton)
     client.add_dynamic_items(CandidateDecideButton)
 
 

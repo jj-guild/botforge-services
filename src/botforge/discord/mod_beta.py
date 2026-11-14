@@ -149,11 +149,11 @@ async def beta_console_buttons(bot: Any, guild_id: str, mod: str, tr: Any) -> li
     state_service = getattr(bot, "state_service", None)
     cache = ModStateCache(state_service, mod) if state_service is not None else None
     active = await is_beta(cache, guild_id, mod)
-    toggle_label = tr(
-        None, "ui.beta.btn_leave" if active else "ui.beta.btn_enter", "fr",
-        "Quitter la phase b\u00eata" if active else "Entrer en phase b\u00eata",
-    )
-    out: list[Any] = [BetaPhaseButton(mod, toggle_label, active)]
+    del active
+    # the beta PHASE is a season parameter now (owner direction
+    # 2026-11-14) — the mod's admin menu carries only the registered
+    # actions; the phase toggle lives on the season's edit bar
+    out: list[Any] = []
     for action in registered_beta_actions(mod):
         label = tr(None, action.label_key, "fr", action.key)
         out.append(BetaActionButton(mod, action.key, label, action.emoji))
