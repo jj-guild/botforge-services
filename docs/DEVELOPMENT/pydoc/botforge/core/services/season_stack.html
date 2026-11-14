@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Python: botforge.core.services.season_stack</title>
+</head><body>
+
+<table class="heading">
+<tr class="heading-text decor">
+<td class="title">&nbsp;<br><strong class="title"><a href="botforge.html" class="white">botforge</a>.<a href="botforge.core.html" class="white">core</a>.<a href="botforge.core.services.html" class="white">services</a>.season_stack</strong></td>
+<td class="extra"><a href=".">index</a><br><a href="file:SOURCE_ROOT/core/services/season_stack.py">SOURCE_ROOT/core/services/season_stack.py</a></td></tr></table>
+    <p><span class="code">The&nbsp;per-mod,&nbsp;per-guild&nbsp;season&nbsp;stack&nbsp;accessor&nbsp;—&nbsp;the&nbsp;panels'&nbsp;door&nbsp;(P3).<br>
+&nbsp;<br>
+``build_mod_season_stack``&nbsp;wires&nbsp;the&nbsp;generic&nbsp;stack&nbsp;(SeasonService&nbsp;+<br>
+EnrollmentService&nbsp;+&nbsp;SeasonRolesService)&nbsp;for&nbsp;one&nbsp;mod&nbsp;on&nbsp;ONE&nbsp;guild;&nbsp;the<br>
+pinned&nbsp;panels&nbsp;need&nbsp;it&nbsp;resolved&nbsp;lazily&nbsp;(a&nbsp;guild's&nbsp;stack&nbsp;builds&nbsp;on<br>
+first&nbsp;use&nbsp;and&nbsp;caches&nbsp;on&nbsp;the&nbsp;bot).&nbsp;The&nbsp;seasons&nbsp;ride&nbsp;the&nbsp;mod's<br>
+ModStorage&nbsp;(the&nbsp;namespaced&nbsp;collections&nbsp;—&nbsp;R8);&nbsp;the&nbsp;enrollment's<br>
+criteria&nbsp;come&nbsp;from&nbsp;the&nbsp;mod's&nbsp;declaration&nbsp;(``settings.enrollment``).</span></p>
+<p>
+<table class="section">
+<tr class="decor pkg-content-decor heading-text">
+<td class="section-title" colspan=3>&nbsp;<br><strong class="bigsection">Modules</strong></td></tr>
+    
+<tr><td class="decor pkg-content-decor"><span class="code">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span></td><td>&nbsp;</td>
+<td class="singlecolumn"><table><tr><td class="multicolumn"><a href="logging.html">logging</a><br>
+</td><td class="multicolumn"></td><td class="multicolumn"></td><td class="multicolumn"></td></tr></table></td></tr></table><p>
+<table class="section">
+<tr class="decor index-decor heading-text">
+<td class="section-title" colspan=3>&nbsp;<br><strong class="bigsection">Classes</strong></td></tr>
+    
+<tr><td class="decor index-decor"><span class="code">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span></td><td>&nbsp;</td>
+<td class="singlecolumn"><dl>
+<dt class="heading-text"><a href="builtins.html#object">builtins.object</a>
+</dt><dd>
+<dl>
+<dt class="heading-text"><a href="botforge.core.services.season_stack.html#ModStorageSeasonDatabase">ModStorageSeasonDatabase</a>
+</dt></dl>
+</dd>
+</dl>
+ <p>
+<table class="section">
+<tr class="decor title-decor heading-text">
+<td class="section-title" colspan=3>&nbsp;<br><a name="ModStorageSeasonDatabase">class <strong>ModStorageSeasonDatabase</strong></a>(<a href="builtins.html#object">builtins.object</a>)</td></tr>
+    
+<tr><td class="decor title-decor" rowspan=2><span class="code">&nbsp;&nbsp;&nbsp;</span></td>
+<td class="decor title-decor" colspan=2><span class="code"><a href="#ModStorageSeasonDatabase">ModStorageSeasonDatabase</a>(storage:&nbsp;'Any')&nbsp;-&amp;gt;&nbsp;'None'<br>
+&nbsp;<br>
+The&nbsp;SeasonDatabase&nbsp;protocol&nbsp;over&nbsp;the&nbsp;mod's&nbsp;ModStorage&nbsp;(R8).<br>
+&nbsp;<br>
+The&nbsp;seasons&nbsp;and&nbsp;the&nbsp;applications&nbsp;live&nbsp;in&nbsp;the&nbsp;mod's&nbsp;namespaced<br>
+collections&nbsp;(``&lt;mod&gt;:seasons``,&nbsp;``&lt;mod&gt;:applications``)&nbsp;—&nbsp;the<br>
+platform's&nbsp;tooling&nbsp;addresses&nbsp;them&nbsp;by&nbsp;prefix,&nbsp;the&nbsp;mod&nbsp;never&nbsp;touches<br>
+the&nbsp;shared&nbsp;database&nbsp;raw.<br>&nbsp;</span></td></tr>
+<tr><td>&nbsp;</td>
+<td class="singlecolumn">Methods defined here:<br>
+<dl><dt><a name="ModStorageSeasonDatabase-__init__"><strong>__init__</strong></a>(self, storage: 'Any') -&gt; 'None'</dt><dd><span class="code">Initialize&nbsp;self.&nbsp;&nbsp;See&nbsp;help(type(self))&nbsp;for&nbsp;accurate&nbsp;signature.</span></dd></dl>
+
+<dl><dt>async <a name="ModStorageSeasonDatabase-delete_season"><strong>delete_season</strong></a>(self, season_id: 'str') -&gt; 'None'</dt><dd><span class="code">Drop&nbsp;one&nbsp;season&nbsp;document.</span></dd></dl>
+
+<dl><dt>async <a name="ModStorageSeasonDatabase-find_active_application"><strong>find_active_application</strong></a>(self, guild_id: 'str', user_id: 'str') -&gt; 'dict[str, Any] | None'</dt><dd><span class="code">Return&nbsp;one&nbsp;user's&nbsp;pending&nbsp;application.</span></dd></dl>
+
+<dl><dt>async <a name="ModStorageSeasonDatabase-find_active_season"><strong>find_active_season</strong></a>(self, ladder_id: 'str') -&gt; 'dict[str, Any] | None'</dt><dd><span class="code">Return&nbsp;the&nbsp;ladder's&nbsp;live&nbsp;season&nbsp;(scheduled&nbsp;or&nbsp;active).</span></dd></dl>
+
+<dl><dt>async <a name="ModStorageSeasonDatabase-find_ladder_seasons"><strong>find_ladder_seasons</strong></a>(self, ladder_id: 'str') -&gt; 'list[dict[str, Any]]'</dt><dd><span class="code">Return&nbsp;every&nbsp;season&nbsp;document&nbsp;of&nbsp;one&nbsp;ladder&nbsp;(ascending).</span></dd></dl>
+
+<dl><dt>async <a name="ModStorageSeasonDatabase-find_season"><strong>find_season</strong></a>(self, season_id: 'str') -&gt; 'dict[str, Any] | None'</dt><dd><span class="code">Return&nbsp;one&nbsp;season&nbsp;document.</span></dd></dl>
+
+<dl><dt>async <a name="ModStorageSeasonDatabase-list_applications"><strong>list_applications</strong></a>(self, guild_id: 'str', state: 'str | None' = None) -&gt; 'list[dict[str, Any]]'</dt><dd><span class="code">List&nbsp;the&nbsp;guild's&nbsp;applications&nbsp;(optionally&nbsp;by&nbsp;state).</span></dd></dl>
+
+<dl><dt>async <a name="ModStorageSeasonDatabase-upsert_application"><strong>upsert_application</strong></a>(self, document: 'dict[str, Any]') -&gt; 'None'</dt><dd><span class="code">Insert&nbsp;or&nbsp;replace&nbsp;one&nbsp;application&nbsp;document.</span></dd></dl>
+
+<dl><dt>async <a name="ModStorageSeasonDatabase-upsert_season"><strong>upsert_season</strong></a>(self, document: 'dict[str, Any]') -&gt; 'None'</dt><dd><span class="code">Insert&nbsp;or&nbsp;replace&nbsp;one&nbsp;season&nbsp;document&nbsp;by&nbsp;``_id``.</span></dd></dl>
+
+<hr>
+Data descriptors defined here:<br>
+<dl><dt><strong>__dict__</strong></dt>
+<dd><span class="code">dictionary&nbsp;for&nbsp;instance&nbsp;variables</span></dd>
+</dl>
+<dl><dt><strong>__weakref__</strong></dt>
+<dd><span class="code">list&nbsp;of&nbsp;weak&nbsp;references&nbsp;to&nbsp;the&nbsp;object</span></dd>
+</dl>
+</td></tr></table></td></tr></table><p>
+<table class="section">
+<tr class="decor functions-decor heading-text">
+<td class="section-title" colspan=3>&nbsp;<br><strong class="bigsection">Functions</strong></td></tr>
+    
+<tr><td class="decor functions-decor"><span class="code">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span></td><td>&nbsp;</td>
+<td class="singlecolumn"><dl><dt><a name="-season_stack_for"><strong>season_stack_for</strong></a>(bot: 'Any', mod: 'str', guild_id: 'str') -&gt; 'Any'</dt><dd><span class="code">Resolve&nbsp;(or&nbsp;lazily&nbsp;build)&nbsp;one&nbsp;mod's&nbsp;season&nbsp;stack&nbsp;on&nbsp;one&nbsp;guild.<br>
+&nbsp;<br>
+The&nbsp;stacks&nbsp;cache&nbsp;on&nbsp;the&nbsp;bot&nbsp;(``season_stacks``&nbsp;keyed&nbsp;by<br>
+``(mod,&nbsp;guild_id)``);&nbsp;a&nbsp;seasonal&nbsp;mod&nbsp;without&nbsp;its&nbsp;storage&nbsp;wired<br>
+returns&nbsp;None&nbsp;—&nbsp;the&nbsp;panels&nbsp;degrade&nbsp;quietly,&nbsp;never&nbsp;crash.</span></dd></dl>
+</td></tr></table><p>
+<table class="section">
+<tr class="decor data-decor heading-text">
+<td class="section-title" colspan=3>&nbsp;<br><strong class="bigsection">Data</strong></td></tr>
+    
+<tr><td class="decor data-decor"><span class="code">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span></td><td>&nbsp;</td>
+<td class="singlecolumn"><strong>__all__</strong> = ['ModStorageSeasonDatabase', 'season_stack_for']</td></tr></table>
+</body></html>

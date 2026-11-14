@@ -506,22 +506,22 @@ def _seasonal_standard_channels(definition: Any) -> tuple[Any, ...]:
         return declared
     from botforge.core.services.mod_definition import ChannelCategoryDef
 
-    standard_keys = {"saisons", "candidats", "inscrits"}
+    standard_keys = {"seasons", "candidates", "enrolled"}
     return (
             *(channel for channel in declared if str(channel.key) not in standard_keys),
             ChannelCategoryDef(
-                key="saisons",
+                key="seasons",
                 display_name="📅 saisons",
                 description="The seasons management panel",
             ),
             ChannelCategoryDef(
-                key="candidats",
+                key="candidates",
                 display_name="🧡 candidats",
                 description="The enrollment queue (admin only)",
                 admin_only=True,
             ),
             ChannelCategoryDef(
-                key="inscrits",
+                key="enrolled",
                 display_name="👥 inscrits",
                 description="The enrolled members list",
             ),

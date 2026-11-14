@@ -35,7 +35,7 @@ STAFF_ROLE_KEY = "staff"
 # the enrollment's per-season roles (P3, owner spec 2026-11-14): the
 # candidate acquires CANDIDATE at apply, loses it and gains PLAYER at
 # validation; both reset at the new season
-CANDIDATE_ROLE_KEY = "candidat"
+CANDIDATE_ROLE_KEY = "candidate"
 
 
 class SeasonRolesMembers(Protocol):

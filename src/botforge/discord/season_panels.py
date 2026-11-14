@@ -28,9 +28,11 @@ logger = logging.getLogger("botforge.discord.season_panels")
 _NS = "season"
 
 
-def _stack(bot: Any, mod: str) -> Any:
-    """Return the mod's season stack (wired at boot for seasonal mods)."""
-    return (getattr(bot, "season_stacks", None) or {}).get(mod)
+def _stack(bot: Any, mod: str, guild_id: str = "") -> Any:
+    """Return the mod's season stack on the guild (lazily built, cached)."""
+    from botforge.core.services.season_stack import season_stack_for
+
+    return season_stack_for(bot, mod, guild_id)
 
 
 def _fmt_ts(value: Any) -> str:
@@ -47,7 +49,7 @@ def _fmt_ts(value: Any) -> str:
 async def build_seasons_panel(bot: Any, guild_id: str, mod: str, locale: str = "fr") -> discord.ui.LayoutView:
     """Build the SAISONS panel: the active season + the creation button."""
     view = discord.ui.LayoutView(timeout=None)
-    stack = _stack(bot, mod)
+    stack = _stack(bot, mod, guild_id)
     lines = [f"# \U0001f4c5 {mod.capitalize()} — saisons"]
     active = None
     if stack is not None:
@@ -58,27 +60,27 @@ async def build_seasons_panel(bot: Any, guild_id: str, mod: str, locale: str = "
     if active is None:
         lines.append("_Aucune saison active._")
     else:
-        season_id = str(active.get("id", "?"))
-        name = str(active.get("name", season_id))
-        state = str(active.get("state", "?"))
+        season_id = str(getattr(active, "id", "?"))
+        name = str(getattr(active, "name", season_id))
+        state = str(getattr(active, "state", "?"))
         lines.append(f"## {name} (`{season_id}`)")
         lines.append(f"\u2022 État : **{state}**")
-        lines.append(f"\u2022 Début : {_fmt_ts(active.get('start_at'))}")
-        lines.append(f"\u2022 Fin : {_fmt_ts(active.get('end_at'))}")
+        lines.append(f"\u2022 Début : {_fmt_ts(getattr(active, 'start_at', None))}")
+        lines.append(f"\u2022 Fin : {_fmt_ts(getattr(active, 'end_at', None))}")
     view.add_item(discord.ui.Container(discord.ui.TextDisplay("\n".join(lines))))
     row: discord.ui.ActionRow[discord.ui.LayoutView] = discord.ui.ActionRow()
     row.add_item(SeasonCreateButton(mod))
     view.add_item(row)
     from botforge.discord.ui.view_footer import add_view_footer
 
-    add_view_footer(view, f"panel:mod:{mod}:saisons")
+    add_view_footer(view, f"panel:mod:{mod}:seasons")
     return view
 
 
 async def build_candidates_panel(bot: Any, guild_id: str, mod: str, locale: str = "fr") -> discord.ui.LayoutView:
     """Build the CANDIDATS panel: the pending queue, admin-only decisions."""
     view = discord.ui.LayoutView(timeout=None)
-    stack = _stack(bot, mod)
+    stack = _stack(bot, mod, guild_id)
     lines = [f"# \U0001f9e1 {mod.capitalize()} — candidats", "_File d'attente (admin only)._"]
     pending: list[Any] = []
     if stack is not None:
@@ -101,14 +103,14 @@ async def build_candidates_panel(bot: Any, guild_id: str, mod: str, locale: str 
     view.add_item(row)
     from botforge.discord.ui.view_footer import add_view_footer
 
-    add_view_footer(view, f"panel:mod:{mod}:candidats")
+    add_view_footer(view, f"panel:mod:{mod}:candidates")
     return view
 
 
 async def build_enrolled_panel(bot: Any, guild_id: str, mod: str, locale: str = "fr") -> discord.ui.LayoutView:
     """Build the INSCRITS panel: the enrolled members list."""
     view = discord.ui.LayoutView(timeout=None)
-    stack = _stack(bot, mod)
+    stack = _stack(bot, mod, guild_id)
     lines = [f"# \U0001f465 {mod.capitalize()} — inscrits"]
     accepted: list[Any] = []
     if stack is not None:
@@ -125,17 +127,14 @@ async def build_enrolled_panel(bot: Any, guild_id: str, mod: str, locale: str = 
     view.add_item(discord.ui.Container(discord.ui.TextDisplay("\n".join(lines))))
     from botforge.discord.ui.view_footer import add_view_footer
 
-    add_view_footer(view, f"panel:mod:{mod}:inscrits")
+    add_view_footer(view, f"panel:mod:{mod}:enrolled")
     return view
 
 
-async def await_active(stack: Any, guild_id: str) -> dict[str, Any] | None:
-    """Return the mod's active season document (the stack's resolver)."""
-    seasons = getattr(stack, "seasons", None)
-    if seasons is None:
-        return None
-    active = await seasons.find_active_season(stack.mod_id(guild_id))
-    return active if isinstance(active, dict) else None
+async def await_active(stack: Any, guild_id: str) -> Any:
+    """Return the mod's active season (the stack's own resolver)."""
+    del guild_id
+    return await stack.active_season()
 
 
 class SeasonCreateButton(
@@ -232,13 +231,13 @@ class _SeasonNameModal(discord.ui.Modal, title="Le nom de la saison"):
 
 async def _create_season(interaction: discord.Interaction, state: Any) -> None:
     """Create the season (the service's gate refuses a live one)."""
-    stack = _stack(interaction.client, str(state.subject_id or ""))
+    stack = _stack(interaction.client, str(state.subject_id or ""), str(interaction.guild_id or ""))
     if stack is None:
         await interaction.followup.send("The season stack is not wired.", ephemeral=True)
         return
     try:
         season = await stack.seasons.create_season(
-            stack.mod_id(str(interaction.guild_id or "")),
+            stack.scope,
             str(state.name or "Saison"),
             None,
             start_at=int(state.get("start_at") or 0),
@@ -287,7 +286,7 @@ class CandidateDecideButton(
         if not await _beta_guard(interaction):
             return
         await interaction.response.defer(ephemeral=True)
-        stack = _stack(interaction.client, self.mod)
+        stack = _stack(interaction.client, self.mod, str(interaction.guild_id or ""))
         if stack is None:
             await interaction.followup.send("The season stack is not wired.", ephemeral=True)
             return
