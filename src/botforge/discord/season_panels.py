@@ -70,10 +70,11 @@ async def build_seasons_panel(bot: Any, guild_id: str, mod: str, locale: str = "
             discord.ui.TextDisplay("_Aucune saison active._"),
         )
     )
-    row: discord.ui.ActionRow[discord.ui.LayoutView] = discord.ui.ActionRow()
-    row.add_item(SeasonCreateButton(mod))
-    view.add_item(row)
+    from botforge.discord.ui.factory import split_action_rows
     from botforge.discord.ui.view_footer import add_view_footer
+
+    for row in split_action_rows([SeasonCreateButton(mod).item]):
+        view.add_item(row)
 
     add_view_footer(view, f"panel:mod:{mod}:seasons")
     return view
@@ -97,13 +98,16 @@ async def build_candidates_panel(bot: Any, guild_id: str, mod: str, locale: str 
     if not pending:
         lines.append("_Aucun candidat en attente._")
     view.add_item(discord.ui.Container(discord.ui.TextDisplay("\n".join(lines))))
-    row: discord.ui.ActionRow[discord.ui.LayoutView] = discord.ui.ActionRow()
+    buttons: list[Any] = []
     for application in pending[:5]:
         user_id = str(getattr(application, "user_id", ""))
-        row.add_item(CandidateDecideButton(mod, user_id, True))
-        row.add_item(CandidateDecideButton(mod, user_id, False))
-    view.add_item(row)
+        buttons.append(CandidateDecideButton(mod, user_id, True).item)
+        buttons.append(CandidateDecideButton(mod, user_id, False).item)
+    from botforge.discord.ui.factory import split_action_rows
     from botforge.discord.ui.view_footer import add_view_footer
+
+    for row in split_action_rows(buttons):
+        view.add_item(row)
 
     add_view_footer(view, f"panel:mod:{mod}:candidates")
     return view
@@ -196,9 +200,7 @@ def _draft_of(bot: Any, mod: str, guild_id: str) -> dict[str, Any]:
 class _SeasonNameModal(discord.ui.Modal, title="Le nom de la saison"):
     """The draft's first parameter: the name (re-openable)."""
 
-    name: discord.ui.TextInput[Any] = discord.ui.TextInput(
-        label="Nom", placeholder="Saison 2", max_length=64
-    )
+    name: discord.ui.TextInput[Any] = discord.ui.TextInput(label="Nom", placeholder="Saison 2", max_length=64)
 
     def __init__(self, bot: Any, mod: str, guild_id: str) -> None:
         super().__init__()
@@ -581,9 +583,7 @@ class SeasonCreateConfirmButton(
         draft = _draft_of(interaction.client, self.mod, guild_id)
         stack = _stack(interaction.client, self.mod, guild_id)
         if stack is None:
-            await interaction.followup.send(
-                "The season stack is not wired on this guild.", ephemeral=True
-            )
+            await interaction.followup.send("The season stack is not wired on this guild.", ephemeral=True)
             return
         try:
             season = await stack.seasons.create_season(
@@ -596,8 +596,7 @@ class SeasonCreateConfirmButton(
             message = str(exc)
             if "already has a live season" in message:
                 await interaction.followup.send(
-                    "Une saison est déjà en cours — termine-la ou supprime-la "
-                    "avant d'en créer une nouvelle.",
+                    "Une saison est déjà en cours — termine-la ou supprime-la avant d'en créer une nouvelle.",
                     ephemeral=True,
                 )
             elif "season end must be after start" in message:
@@ -606,14 +605,10 @@ class SeasonCreateConfirmButton(
                     ephemeral=True,
                 )
             else:
-                await interaction.followup.send(
-                    f"La création a refusé : {message}", ephemeral=True
-                )
+                await interaction.followup.send(f"La création a refusé : {message}", ephemeral=True)
             return
         _drafts(interaction.client).pop((self.mod, guild_id), None)
-        await interaction.followup.send(
-            f"Saison **{season.name}** créée (`{season.id}`).", ephemeral=True
-        )
+        await interaction.followup.send(f"Saison **{season.name}** créée (`{season.id}`).", ephemeral=True)
 
 
 def _fmt_date(value: Any) -> str:
@@ -685,13 +680,9 @@ def _season_body(draft: dict[str, Any]) -> list[str]:
     if draft.get("map_pool"):
         lines.append(f"**Map pool** : {draft['map_pool']}")
     lines.append(
-        f"**Inscription** : {_fmt_date(draft.get('enrollment_start'))} \u2192 "
-        f"{_fmt_date(draft.get('enrollment_end'))}"
+        f"**Inscription** : {_fmt_date(draft.get('enrollment_start'))} \u2192 {_fmt_date(draft.get('enrollment_end'))}"
     )
-    lines.append(
-        f"**Saison** : {_fmt_date(draft.get('season_start'))} \u2192 "
-        f"{_fmt_date(draft.get('season_end'))}"
-    )
+    lines.append(f"**Saison** : {_fmt_date(draft.get('season_start'))} \u2192 {_fmt_date(draft.get('season_end'))}")
     return lines
 
 
@@ -746,17 +737,20 @@ async def build_season_layout(
         lines.append("")
         lines.append(f"\U0001f9e1 Candidats : **{candidates}** \u00b7 \U0001f465 Inscrits : **{enrolled}**")
     view.add_item(discord.ui.Container(discord.ui.TextDisplay("\n".join(lines))))
-    row: Any = discord.ui.ActionRow()
+    from botforge.discord.ui.factory import split_action_rows
+    from botforge.discord.ui.view_footer import add_view_footer
+
+    row_items: list[Any] = []
     if read_mode:
         # the Postuler button rides ONLY when the enrollment is open,
         # BEFORE the admin button (the owner's order)
         if _enrollment_open(draft):
-            row.add_item(SeasonApplyButton(mod))
-        row.add_item(SeasonAdminButton(mod))
+            row_items.append(SeasonApplyButton(mod).item)
+        row_items.append(SeasonAdminButton(mod).item)
     else:
-        row.add_item(SeasonCreateConfirmButton(mod))
-    view.add_item(row)
-    from botforge.discord.ui.view_footer import add_view_footer
+        row_items.append(SeasonCreateConfirmButton(mod).item)
+    for row in split_action_rows(row_items):
+        view.add_item(row)
 
     footer_id = f"panel:mod:{mod}:seasons:{season_id}" if season_id else f"panel:mod:{mod}:seasons"
     add_view_footer(view, footer_id)
@@ -775,14 +769,18 @@ async def _send_edit_bar(interaction: discord.Interaction, bot: Any, mod: str, g
     lines = [f"# {draft.get('name') or 'Nouvelle saison'} \u2014 \u00e9dition"]
     lines.append("_Rappelle une modal pour red\u00e9finir un param\u00e8tre._")
     view.add_item(discord.ui.Container(discord.ui.TextDisplay("\n".join(lines))))
-    row: Any = discord.ui.ActionRow()
-    for param in ("name", "validation", "criteria", "players", "map_pool", "dates"):
-        row.add_item(SeasonDraftButton(mod, param))
-    view.add_item(row)
-    row2: Any = discord.ui.ActionRow()
-    row2.add_item(SeasonBetaButton(mod, bool(draft.get("beta"))))
-    row2.add_item(SeasonCreateConfirmButton(mod))
-    view.add_item(row2)
+    from botforge.discord.ui.factory import split_action_rows
+
+    edit_items: list[Any] = [
+        *(
+            SeasonDraftButton(mod, param).item
+            for param in ("name", "validation", "criteria", "players", "map_pool", "dates")
+        ),
+        SeasonBetaButton(mod, bool(draft.get("beta"))).item,
+        SeasonCreateConfirmButton(mod).item,
+    ]
+    for row in split_action_rows(edit_items):
+        view.add_item(row)
     if interaction.response.is_done():
         await interaction.followup.send(view=view, ephemeral=True)
     else:
@@ -846,6 +844,46 @@ async def _send_draft(interaction: discord.Interaction, bot: Any, mod: str, guil
     await _send_edit_bar(interaction, bot, mod, guild_id)
 
 
+def _mod_game_key(bot: Any, mod: str) -> str:
+    """Return the mod's bound game key (its first required game); "" when none."""
+    registry = getattr(bot, "registry", None)
+    definition = registry.get(mod) if registry is not None else None
+    games = getattr(definition, "required_games", ()) or ()
+    return str(games[0]) if games else ""
+
+
+async def _core_display_name(bot: Any, user_id: str) -> str:
+    """Resolve the player's pseudo from the core identity service ("" when unknown)."""
+    identity = getattr(bot, "identity_service", None)
+    if identity is not None:
+        try:
+            user = await identity.get_user(f"discord:{user_id}")
+            if user is not None and str(getattr(user, "display_name", "") or ""):
+                return str(user.display_name)
+        except Exception:
+            logger.warning("SEASON PANEL: the identity lookup failed", exc_info=True)
+    return ""
+
+
+async def _linked_profile_ids(bot: Any, user_id: str, game_key: str) -> list[str]:
+    """List the bound-game profile ids linked to the Discord user — the core knows them."""
+    registration = getattr(bot, "registration_service", None)
+    if registration is None:
+        return []
+    try:
+        bindings = await registration.list_bindings(str(user_id))
+    except Exception:
+        logger.warning("SEASON PANEL: the bindings lookup failed", exc_info=True)
+        return []
+    ids: list[str] = []
+    for binding in bindings or ():
+        if game_key and str(binding.get("game_key", "") or "") != game_key:
+            continue
+        profile_id = str(binding.get("profile_id", "") or "")
+        if profile_id and profile_id not in ids:
+            ids.append(profile_id)
+    return ids
+
 
 class SeasonApplyButton(
     discord.ui.DynamicItem[discord.ui.Button[Any]],
@@ -876,54 +914,52 @@ class SeasonApplyButton(
         return cls(match["mod"])
 
     async def callback(self, interaction: discord.Interaction) -> None:
-        """Open the apply modal (anyone may apply)."""
-        await interaction.response.send_modal(_SeasonApplyModal(self.mod))
+        """Apply directly (anyone may apply).
 
-
-class _SeasonApplyModal(discord.ui.Modal, title="Postuler"):
-    """The apply modal: the display name, then the enrollment decides."""
-
-    display_name: discord.ui.TextInput[Any] = discord.ui.TextInput(
-        label="Pseudo", placeholder="Ton pseudo de jeu", max_length=64
-    )
-
-    def __init__(self, mod: str) -> None:
-        super().__init__()
-        self._mod = mod
-
-    async def on_submit(self, interaction: discord.Interaction) -> None:
-        """Apply through the season stack's enrollment (the 3s rule)."""
+        The pseudo and the linked game profile ids resolve from the core —
+        never asked in a form.
+        """
         await interaction.response.defer(ephemeral=True)
-        stack = _stack(interaction.client, self._mod, str(interaction.guild_id or ""))
-        if stack is None or stack.enrollment is None:
-            await interaction.followup.send(
-                "The enrollment is not wired on this guild.", ephemeral=True
-            )
-            return
+        bot = interaction.client
         guild_id = str(interaction.guild_id or "")
-        try:
-            application = await stack.enrollment.apply(
-                guild_id,
-                str(interaction.user.id),
-                str(self.display_name.value or "").strip(),
-            )
-        except Exception as exc:
-            await interaction.followup.send(f"La candidature a \u00e9chou\u00e9 : {exc}", ephemeral=True)
+        user_id = str(interaction.user.id)
+        stack = _stack(bot, self.mod, guild_id)
+        if stack is None or stack.enrollment is None:
+            await interaction.followup.send("The enrollment is not wired on this guild.", ephemeral=True)
             return
+        core_name = await _core_display_name(bot, user_id)
+        profiles = await _linked_profile_ids(bot, user_id, _mod_game_key(bot, self.mod))
+        if not core_name or not profiles:
+            # a missing pseudo OR a missing bound game profile: the player
+            # registers first — the /register flow lives in #general
+            from botforge.discord.ui.panels_provisioning import stored_channel_id
+
+            general = await stored_channel_id(guild_id, "root", "general")
+            mention = f"<#{general}>" if general else "#général"
+            await interaction.followup.send(
+                f"Pseudo ou profil de jeu manquant — inscris-toi d'abord dans {mention} avec `/register`.",
+                ephemeral=True,
+            )
+            return
+        display_name = core_name
+        try:
+            application = await stack.enrollment.apply(guild_id, user_id, display_name, profiles=profiles)
+        except Exception as exc:
+            await interaction.followup.send(f"La candidature a échoué : {exc}", ephemeral=True)
+            return
+        linked = " — profils liés : " + ", ".join(f"`{p}`" for p in profiles) if profiles else ""
         state = str(getattr(application, "state", "pending"))
         if state == "accepted":
-            await interaction.followup.send(
-                "Candidature **accept\u00e9e** \u2014 bienvenue !", ephemeral=True
-            )
+            await interaction.followup.send(f"Candidature **acceptée** — bienvenue !{linked}", ephemeral=True)
         elif state == "refused":
             reasons = ", ".join(str(r) for r in getattr(application, "reasons", ()) or ())
             await interaction.followup.send(
-                f"Candidature **refus\u00e9e**{(' (' + reasons + ')') if reasons else ''}.",
+                f"Candidature **refusée**{(' (' + reasons + ')') if reasons else ''}.{linked}",
                 ephemeral=True,
             )
         else:
             await interaction.followup.send(
-                "Candidature **en attente** \u2014 les admins d\u00e9cident.", ephemeral=True
+                f"Candidature **en attente** — les admins décident.{linked}", ephemeral=True
             )
 
 
@@ -981,9 +1017,7 @@ class CandidateDecideButton(
             logger.warning("SEASON PANEL: the decision failed", exc_info=True)
             await interaction.followup.send("La décision a échoué — voir les logs.", ephemeral=True)
             return
-        await interaction.followup.send(
-            f"{'Validé' if self.accept else 'Refusé'} : <@{self.user_id}>.", ephemeral=True
-        )
+        await interaction.followup.send(f"{'Validé' if self.accept else 'Refusé'} : <@{self.user_id}>.", ephemeral=True)
 
 
 async def _find_application(stack: Any, guild_id: str, user_id: str) -> Any:

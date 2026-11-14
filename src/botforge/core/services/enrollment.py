@@ -23,6 +23,7 @@ Reference: botforge-services#267 (spec), Drasah's apply flow (vibe/drasah/main).
 from __future__ import annotations
 
 import logging
+from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Any, Protocol
 from zoneinfo import ZoneInfo
@@ -89,9 +90,7 @@ class EnrollmentStats(Protocol):
         """Return the player's rating (optionally one leaderboard); None when unrated."""
         ...
 
-    async def matches_in_window(
-        self, user_id: str, game_key: str, days: int, leaderboard: str = ""
-    ) -> int | None:
+    async def matches_in_window(self, user_id: str, game_key: str, days: int, leaderboard: str = "") -> int | None:
         """Return matches played in the last N days (optionally one leaderboard); None when unknown."""
         ...
 
@@ -139,6 +138,7 @@ class Application:
     decided_at: int | None = None
     reasons: tuple[str, ...] = ()
     criteria_results: tuple[CriterionResult, ...] = ()
+    profiles: tuple[str, ...] = ()
 
     @property
     def application_id(self) -> str:
@@ -214,8 +214,13 @@ class EnrollmentService:
         season: str | None = None,
         now: int = 0,
         season_start: int | None = None,
+        profiles: Sequence[str] | None = None,
     ) -> Application:
         """Apply for enrollment: criteria → auto-accept / refuse / queue.
+
+        ``profiles`` are the player's bound game profile ids, resolved by
+        the caller from the core (registration bindings) — the surface
+        never asks the player for them.
 
         Idempotent while pending: re-applying returns the existing
         application untouched (one bubble, one state — Drasah's rule).
@@ -242,6 +247,7 @@ class EnrollmentService:
             state=STATE_PENDING,
             season=season,
             applied_at=now,
+            profiles=tuple(str(p) for p in (profiles or ())),
         )
         results = await self._evaluate(application)
         stored = Application(
@@ -253,6 +259,7 @@ class EnrollmentService:
             season=application.season,
             applied_at=application.applied_at,
             criteria_results=results,
+            profiles=application.profiles,
         )
         if not results:
             # no automatic criteria: the queue decides (or the mod has
@@ -405,6 +412,7 @@ class EnrollmentService:
             decided_at=now,
             reasons=tuple(reasons) if reasons is not None else ((reason,) if reason else ()),
             criteria_results=application.criteria_results,
+            profiles=application.profiles,
         )
         await self._db.upsert_application(_application_to_doc(decided))
         if state == STATE_ACCEPTED and self._membership is not None:
@@ -418,7 +426,10 @@ class EnrollmentService:
                 )
         logger.info(
             "ENROLLMENT %s %s (mod %s, user %s)",
-            state, "by criteria" if not reason else f"({reason})", self._mod, application.user_id,
+            state,
+            "by criteria" if not reason else f"({reason})",
+            self._mod,
+            application.user_id,
         )
         return decided
 
@@ -464,6 +475,7 @@ def _application_to_doc(application: Application) -> dict[str, Any]:
         "criteria_results": [
             {"key": r.key, "passed": r.passed, "reason": r.reason} for r in application.criteria_results
         ],
+        "profiles": list(application.profiles),
     }
 
 
@@ -487,4 +499,5 @@ def _application_from_doc(doc: dict[str, Any]) -> Application:
             )
             for r in (doc.get("criteria_results") or ())
         ),
+        profiles=tuple(str(pid) for pid in (doc.get("profiles") or ())),
     )

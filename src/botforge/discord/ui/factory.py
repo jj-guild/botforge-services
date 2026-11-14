@@ -47,7 +47,7 @@ Reliability guarantees (enforced here, not at Discord's door):
 
 from __future__ import annotations
 
-from collections.abc import Awaitable, Callable
+from collections.abc import Awaitable, Callable, Sequence
 from dataclasses import dataclass
 from typing import Any
 
@@ -62,6 +62,7 @@ SelectHandler = Callable[[discord.Interaction, list[str]], Awaitable[None]]
 __all__ = [
     "BLURPLE",
     "GREEN",
+    "MAX_ITEMS_PER_ROW",
     "Action",
     "Button",
     "Container",
@@ -75,6 +76,7 @@ __all__ = [
     "UIEmbed",
     "UILayout",
     "UILayoutError",
+    "split_action_rows",
 ]
 
 BLURPLE = 0x5865F2
@@ -82,6 +84,7 @@ GREEN = 0x57F287
 
 TEXT_BUDGET = 4000
 COMPONENT_BUDGET = 40
+MAX_ITEMS_PER_ROW = 5
 
 
 class UILayoutError(ValueError):
@@ -331,11 +334,26 @@ class Row:
     __slots__ = ("buttons",)
 
     def __init__(self, *buttons: Button | Action | SelectMenu | ChannelSelect) -> None:
-        if not 1 <= len(buttons) <= 5:
-            raise UILayoutError(f"an ActionRow holds 1 to 5 items, got {len(buttons)}")
+        if not 1 <= len(buttons) <= MAX_ITEMS_PER_ROW:
+            raise UILayoutError(f"an ActionRow holds 1 to {MAX_ITEMS_PER_ROW} items, got {len(buttons)}")
         if any(isinstance(b, (SelectMenu, ChannelSelect)) for b in buttons) and len(buttons) > 1:
             raise UILayoutError("a SelectMenu must be alone in its row")
         self.buttons = buttons
+
+
+def split_action_rows(items: Sequence[Any]) -> list[discord.ui.ActionRow[Any]]:
+    """Chunk ready-made items (e.g. ``DynamicItem.item``) into valid ActionRows.
+
+    Discord's hard rule — at most ``MAX_ITEMS_PER_ROW`` items per
+    ActionRow — lives HERE in the SDK: feature code hands a flat list
+    and gets back valid rows, instead of building raw
+    ``discord.ui.ActionRow`` objects and crashing at render or click
+    time with ``maximum number of children exceeded``.
+    """
+    rows: list[discord.ui.ActionRow[Any]] = []
+    for start in range(0, len(items), MAX_ITEMS_PER_ROW):
+        rows.append(discord.ui.ActionRow(*items[start : start + MAX_ITEMS_PER_ROW]))
+    return rows
 
 
 @dataclass(frozen=True, slots=True)

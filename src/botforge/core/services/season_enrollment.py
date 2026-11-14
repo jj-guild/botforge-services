@@ -17,6 +17,7 @@ transitions, never a half state.
 from __future__ import annotations
 
 import logging
+from collections.abc import Sequence
 from typing import Any
 
 logger = logging.getLogger("botforge.core.services.season_enrollment")
@@ -60,10 +61,17 @@ class SeasonEnrollment:
         season: str | None = None,
         now: int = 0,
         season_start: int | None = None,
+        profiles: Sequence[str] | None = None,
     ) -> Any:
         """Apply for enrollment; a PENDING application wears the candidate role."""
         application = await self._enrollment.apply(
-            guild_id, user_id, display_name, season=season, now=now, season_start=season_start
+            guild_id,
+            user_id,
+            display_name,
+            season=season,
+            now=now,
+            season_start=season_start,
+            profiles=profiles,
         )
         del season, season_start
         if str(getattr(application, "state", "")) == "pending":
@@ -79,9 +87,7 @@ class SeasonEnrollment:
     async def refuse(self, application_id: str, now: int = 0, reason: str = "") -> Any:
         """Refuse: the candidate role goes."""
         application = await self._enrollment.refuse(application_id, now=now, reason=reason)
-        await self._assign_role(
-            str(application.guild_id), str(application.user_id), "candidate", False
-        )
+        await self._assign_role(str(application.guild_id), str(application.user_id), "candidate", False)
         return application
 
     async def _promote(self, application: Any) -> None:
@@ -124,19 +130,13 @@ class SeasonEnrollment:
             try:
                 state = str(getattr(application, "state", ""))
                 if state == "pending":
-                    await self._assign_role(
-                        guild_id, str(application.user_id), "candidate", False
-                    )
+                    await self._assign_role(guild_id, str(application.user_id), "candidate", False)
                     removed += 1
                 elif state == "accepted":
-                    await self._assign_role(
-                        guild_id, str(application.user_id), "member", False
-                    )
+                    await self._assign_role(guild_id, str(application.user_id), "member", False)
                     removed += 1
             except Exception:
-                logger.warning(
-                    "SEASON ENROLLMENT: the reset failed (%s)", application.user_id, exc_info=True
-                )
+                logger.warning("SEASON ENROLLMENT: the reset failed (%s)", application.user_id, exc_info=True)
         return removed
 
 

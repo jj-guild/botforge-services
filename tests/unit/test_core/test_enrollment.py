@@ -39,9 +39,7 @@ class MemoryDB:
                 return doc
         return None
 
-    async def list_applications(
-        self, mod: str, guild_id: str, state: str | None = None
-    ) -> list[dict[str, Any]]:
+    async def list_applications(self, mod: str, guild_id: str, state: str | None = None) -> list[dict[str, Any]]:
         return [
             dict(d)
             for d in self.docs.values()
@@ -68,9 +66,7 @@ class StaticStats:
     async def player_elo(self, user_id: str, game_key: str, leaderboard: str = "") -> int | None:
         return self.elo
 
-    async def matches_in_window(
-        self, user_id: str, game_key: str, days: int, leaderboard: str = ""
-    ) -> int | None:
+    async def matches_in_window(self, user_id: str, game_key: str, days: int, leaderboard: str = "") -> int | None:
         return self.matches
 
     async def has_profile(self, user_id: str, game_key: str) -> bool:
@@ -278,9 +274,12 @@ async def test_window_opens_at_refuses_before_and_accepts_inside() -> None:
     service = EnrollmentService("demo", db, criteria={"opens_at": "2030-01-01T00:00:00+00:00"})
     with pytest.raises(EnrollmentClosedError, match="not open yet"):
         await service.apply("g1", "u1", "Alice", now=100)
-    application = await service.apply("g1", "u1", "Alice", now=int(
-        __import__("datetime").datetime.fromisoformat("2030-06-01T00:00:00+00:00").timestamp()
-    ))
+    application = await service.apply(
+        "g1",
+        "u1",
+        "Alice",
+        now=int(__import__("datetime").datetime.fromisoformat("2030-06-01T00:00:00+00:00").timestamp()),
+    )
     assert application.state == "pending"
     service2 = EnrollmentService("demo", db, criteria={"closes_at": "2030-01-01T00:00:00+00:00"})
     with pytest.raises(EnrollmentClosedError, match="closed"):
@@ -328,3 +327,25 @@ async def test_suspended_mod_refuses_apply() -> None:
     )
     decided = await service.accept("demo:g1:u9", now=200)
     assert decided.state == "accepted"
+
+
+async def test_apply_persists_the_core_resolved_profiles() -> None:
+    """The surface resolves the bound profile ids from the core; the application keeps them."""
+    db = MemoryDB()
+    service = EnrollmentService("demo", db, criteria={})
+    application = await service.apply("g1", "u1", "Rollon", now=100, profiles=["111", "222"])
+    assert application.profiles == ("111", "222")
+    doc = db.docs[application.application_id]
+    assert doc["profiles"] == ["111", "222"]
+    listed = await service.list_applications("g1")
+    assert listed[0].profiles == ("111", "222")
+    decided = await service.accept(application.application_id, now=200)
+    assert decided.profiles == ("111", "222")
+
+
+async def test_apply_without_profiles_defaults_to_empty() -> None:
+    db = MemoryDB()
+    service = EnrollmentService("demo", db, criteria={})
+    application = await service.apply("g1", "u1", "Alice", now=100)
+    assert application.profiles == ()
+    assert db.docs[application.application_id]["profiles"] == []
