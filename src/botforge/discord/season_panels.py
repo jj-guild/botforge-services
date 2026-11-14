@@ -56,12 +56,15 @@ async def build_seasons_panel(bot: Any, guild_id: str, mod: str, locale: str = "
         except Exception:
             logger.warning("SEASON PANEL: the active season unreadable", exc_info=True)
     if active is not None:
-        # the read mode: the active season's sectioned view + the counts
-        draft = {
-            "name": str(getattr(active, "name", "")),
-            "season_start": getattr(active, "start_at", None),
-            "season_end": getattr(active, "end_at", None),
-        }
+        # the read mode: the active season + its STORED config (the
+        # modals' edits live there — the name, the validation, the
+        # criteria, the dates) + the counts
+        season_id = str(getattr(active, "id", ""))
+        draft = await _load_season_config(bot, mod, guild_id, season_id)
+        draft.setdefault("name", str(getattr(active, "name", "")))
+        draft.setdefault("season_start", getattr(active, "start_at", None))
+        draft.setdefault("season_end", getattr(active, "end_at", None))
+        draft["season_id"] = season_id
         return await build_season_layout(bot, mod, guild_id, draft, read_mode=True)
     view = discord.ui.LayoutView(timeout=None)
     view.add_item(
