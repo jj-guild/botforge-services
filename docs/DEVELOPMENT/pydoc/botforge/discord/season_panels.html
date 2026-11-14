@@ -337,11 +337,16 @@ classes&nbsp;in&nbsp;the&nbsp;first&nbsp;place&nbsp;with&nbsp;`class&nbsp;Foo[T]
 <td class="singlecolumn"><dl><dt>async <a name="-build_candidates_panel"><strong>build_candidates_panel</strong></a>(bot: 'Any', guild_id: 'str', mod: 'str', locale: 'str' = 'fr') -&gt; 'discord.ui.LayoutView'</dt><dd><span class="code">Build&nbsp;the&nbsp;CANDIDATS&nbsp;panel:&nbsp;the&nbsp;pending&nbsp;queue,&nbsp;admin-only&nbsp;decisions.</span></dd></dl>
  <dl><dt>async <a name="-build_enrolled_panel"><strong>build_enrolled_panel</strong></a>(bot: 'Any', guild_id: 'str', mod: 'str', locale: 'str' = 'fr') -&gt; 'discord.ui.LayoutView'</dt><dd><span class="code">Build&nbsp;the&nbsp;INSCRITS&nbsp;panel:&nbsp;the&nbsp;enrolled&nbsp;members&nbsp;list.</span></dd></dl>
  <dl><dt>async <a name="-build_seasons_panel"><strong>build_seasons_panel</strong></a>(bot: 'Any', guild_id: 'str', mod: 'str', locale: 'str' = 'fr') -&gt; 'discord.ui.LayoutView'</dt><dd><span class="code">Build&nbsp;the&nbsp;SAISONS&nbsp;panel:&nbsp;the&nbsp;active&nbsp;season&nbsp;+&nbsp;the&nbsp;creation&nbsp;button.</span></dd></dl>
+ <dl><dt><a name="-register_season_pins"><strong>register_season_pins</strong></a>(bot: 'Any', registry: 'Any') -&gt; 'list[Any]'</dt><dd><span class="code">Register&nbsp;the&nbsp;three&nbsp;season&nbsp;panels'&nbsp;pins&nbsp;for&nbsp;every&nbsp;enabled&nbsp;seasonal&nbsp;mod.<br>
+&nbsp;<br>
+Idempotent&nbsp;(the&nbsp;static-pin&nbsp;store&nbsp;keeps&nbsp;the&nbsp;first&nbsp;per&nbsp;key);&nbsp;the<br>
+install's&nbsp;scope&nbsp;refresh&nbsp;re-renders&nbsp;them&nbsp;(the&nbsp;pins&nbsp;carry&nbsp;the&nbsp;mod's<br>
+scope),&nbsp;and&nbsp;the&nbsp;boot's&nbsp;ensure&nbsp;pass&nbsp;heals&nbsp;them.</span></dd></dl>
 </td></tr></table><p>
 <table class="section">
 <tr class="decor data-decor heading-text">
 <td class="section-title" colspan=3>&nbsp;<br><strong class="bigsection">Data</strong></td></tr>
     
 <tr><td class="decor data-decor"><span class="code">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span></td><td>&nbsp;</td>
-<td class="singlecolumn"><strong>__all__</strong> = ['CandidateDecideButton', 'SeasonCreateButton', 'build_candidates_panel', 'build_enrolled_panel', 'build_seasons_panel']</td></tr></table>
+<td class="singlecolumn"><strong>__all__</strong> = ['CandidateDecideButton', 'SeasonCreateButton', 'build_candidates_panel', 'build_enrolled_panel', 'build_seasons_panel', 'register_season_pins']</td></tr></table>
 </body></html>

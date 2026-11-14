@@ -324,3 +324,56 @@ __all__ = [
     "build_enrolled_panel",
     "build_seasons_panel",
 ]
+
+
+# --- the seasonal mods' pinned panels (the install pins them) ---------
+
+
+def register_season_pins(bot: Any, registry: Any) -> list[Any]:
+    """Register the three season panels' pins for every enabled seasonal mod.
+
+    Idempotent (the static-pin store keeps the first per key); the
+    install's scope refresh re-renders them (the pins carry the mod's
+    scope), and the boot's ensure pass heals them.
+    """
+    from botforge.discord.static_pins import StaticPinnedView, register_static_pin
+    from botforge.discord.ui.panels_provisioning import stored_channel_id
+
+    mods = getattr(registry, "enabled", None)
+    if mods is None:
+        return []
+    specs: list[Any] = []
+    message_registry = getattr(bot, "message_registry", None)
+    for mod in mods():
+        definition = registry.get(mod)
+        if definition is None or not getattr(definition, "seasonal", False):
+            continue
+        for channel_key, panel_builder, pin_key in (
+            ("seasons", build_seasons_panel, "seasons"),
+            ("candidates", build_candidates_panel, "candidates"),
+            ("enrolled", build_enrolled_panel, "enrolled"),
+        ):
+            scope = f"mod/{mod}"
+
+            async def _resolve_channel(guild_id: str, _scope: str = scope, _key: str = channel_key) -> str:
+                return await stored_channel_id(guild_id, _scope, _key) or ""
+
+            async def _build(guild_id: str, _mod: str = mod, _builder: Any = panel_builder) -> Any:
+                return await _builder(bot, guild_id, _mod)
+
+            specs.append(
+                register_static_pin(
+                    StaticPinnedView(
+                        key=f"view:mod:{mod}:{pin_key}",
+                        mark_suffix=f"view:mod:{mod}:{pin_key}",
+                        resolve_channel=_resolve_channel,
+                        build_layout=_build,
+                        registry=message_registry,
+                        scope=scope,
+                    )
+                )
+            )
+    return specs
+
+
+__all__.extend(["register_season_pins"])

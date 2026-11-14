@@ -638,6 +638,11 @@ class BotforgeBot(discord.Client):
 
         self._scope_pins = register_scope_pins(self, ("root", "bot", "games", "games/aoe2", "mods"))
         self._scope_pins.extend(register_mod_pins(self))
+        # the seasonal mods' pinned panels (P3): seasons, candidates,
+        # enrolled — registered with the other pins, healed by the boot pass
+        from botforge.discord.season_panels import register_season_pins
+
+        self._scope_pins.extend(register_season_pins(self, self.registry))
 
     async def _ensure_all_pins(self: BotforgeBot, guild_id: str) -> None:
         """Ensure every registered static pin lives in its channel (now).
