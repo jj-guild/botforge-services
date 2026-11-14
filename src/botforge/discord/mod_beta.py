@@ -75,7 +75,7 @@ class BetaActionButton(
         action = beta_action(self.mod, self.key)
         if action is None:
             await interaction.response.send_message(
-                "This beta action is no longer registered.", ephemeral=True
+                "Cette action b\u00eata n'est plus enregistr\u00e9e.", ephemeral=True
             )
             return
         await interaction.response.defer(ephemeral=True)
@@ -83,7 +83,7 @@ class BetaActionButton(
             report = await action.handler(interaction.client, str(interaction.guild_id or ""))
         except Exception:
             logger.warning("BETA: the %s/%s action failed", self.mod, self.key, exc_info=True)
-            report = "The action failed — see the logs."
+            report = "L'action a \u00e9chou\u00e9 — voir les logs."
         await interaction.followup.send(str(report)[:2000], ephemeral=True)
 
 
@@ -131,10 +131,10 @@ class BetaPhaseButton(
         guild_id = str(interaction.guild_id or "")
         if await is_beta(cache, guild_id, self.mod):
             await exit_beta(cache, guild_id, self.mod)
-            note = _tr(None, "ui.beta.exited", "fr", "Beta phase left — the rules straighten back.")
+            note = _tr(None, "ui.beta.exited", "fr", "Phase b\u00eata quitt\u00e9e — les r\u00e8gles se redressent.")
         else:
             await enter_beta(cache, guild_id, self.mod)
-            note = _tr(None, "ui.beta.entered", "fr", "Beta phase entered — the rules bend.")
+            note = _tr(None, "ui.beta.entered", "fr", "Phase b\u00eata activ\u00e9e — les r\u00e8gles se plient.")
         await interaction.followup.send(note, ephemeral=True)
 
 
@@ -151,7 +151,7 @@ async def beta_console_buttons(bot: Any, guild_id: str, mod: str, tr: Any) -> li
     active = await is_beta(cache, guild_id, mod)
     toggle_label = tr(
         None, "ui.beta.btn_leave" if active else "ui.beta.btn_enter", "fr",
-        "Leave the beta phase" if active else "Enter the beta phase",
+        "Quitter la phase b\u00eata" if active else "Entrer en phase b\u00eata",
     )
     out: list[Any] = [BetaPhaseButton(mod, toggle_label, active)]
     for action in registered_beta_actions(mod):

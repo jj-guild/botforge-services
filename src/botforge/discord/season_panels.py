@@ -436,19 +436,7 @@ async def build_season_layout(
         discord.ui.TextDisplay(f"Statut : **{_derive_status(draft)}**"),
     ]
     if read_mode:
-        stack = _stack(bot, mod, guild_id)
-        candidates = 0
-        enrolled = 0
-        if stack is not None and stack.enrollment is not None:
-            try:
-                candidates = len(
-                    await stack.enrollment.list_applications(guild_id, state="pending")
-                )
-                enrolled = len(
-                    await stack.enrollment.list_applications(guild_id, state="accepted")
-                )
-            except Exception:
-                logger.warning("SEASON VIEW: the counts unreadable", exc_info=True)
+        candidates, enrolled = await _enrollment_counts(bot, mod, guild_id)
         blocks.append(
             discord.ui.TextDisplay(
                 f"\U0001f9e1 Candidats : **{candidates}** \u00b7 \U0001f465 Inscrits : **{enrolled}**"
@@ -501,6 +489,20 @@ async def build_season_layout(
 
     add_view_footer(view, f"panel:mod:{mod}:seasons")
     return view
+
+
+async def _enrollment_counts(bot: Any, mod: str, guild_id: str) -> tuple[int, int]:
+    """Count the guild's pending candidates and accepted members."""
+    stack = _stack(bot, mod, guild_id)
+    if stack is None or stack.enrollment is None:
+        return (0, 0)
+    try:
+        candidates = len(await stack.enrollment.list_applications(guild_id, state="pending"))
+        enrolled = len(await stack.enrollment.list_applications(guild_id, state="accepted"))
+        return (candidates, enrolled)
+    except Exception:
+        logger.warning("SEASON VIEW: the counts unreadable", exc_info=True)
+        return (0, 0)
 
 
 def _config_section(mod: str, param: str, value: str) -> Any:
