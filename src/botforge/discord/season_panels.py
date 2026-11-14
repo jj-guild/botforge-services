@@ -874,7 +874,12 @@ async def _enrollment_counts(bot: Any, mod: str, guild_id: str) -> tuple[int, in
 
 
 def _enrollment_open(draft: dict[str, Any]) -> bool:
-    """Whether the enrollment window is open (derived from the dates)."""
+    """Whether the enrollment window is DECLARED and open.
+
+    An unconfigured season never accepts applications (the owner's
+    rule: Postuler appears only when the dates are set and the
+    window is open) — no default-open.
+    """
     import time
 
     now = int(time.time())
@@ -883,6 +888,8 @@ def _enrollment_open(draft: dict[str, Any]) -> bool:
         end = int(draft.get("enrollment_end") or 0)
     except (TypeError, ValueError):
         return False
+    if not start and not end:
+        return False  # nothing declared: the enrollment is not open
     if end and now > end:
         return False
     if start and now < start:

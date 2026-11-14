@@ -34,6 +34,11 @@ class ModStorageSeasonDatabase:
     def __init__(self, storage: Any) -> None:
         self._storage = storage
 
+    @property
+    def _database(self) -> Any:
+        """The inner Mongo database (the enrollment's seam expects it)."""
+        return getattr(self._storage, "_database", None)
+
     async def upsert_season(self, document: dict[str, Any]) -> None:
         """Insert or replace one season document by ``_id``."""
         await self._storage.collection(SEASONS_COLLECTION).replace_one(
