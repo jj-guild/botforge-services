@@ -97,16 +97,19 @@ def season_stack_for(bot: Any, mod: str, guild_id: str) -> Any:
     key = (mod, guild_id)
     if key in cache:
         return cache[key]
-    database = getattr(bot, "database", None)
-    game_data = getattr(bot, "game_data_service", None)
+    from botforge.core.models.db import get_async_database
+
     mod_roles = getattr(bot, "mod_roles_service", None)
     registry = getattr(bot, "registry", None)
     definition = registry.get(mod) if registry is not None else None
-    if database is None or definition is None:
+    if definition is None:
         return None
     from botforge.core.services.mod_storage import ModStorage
 
-    storage = ModStorage(database, mod)
+    storage = ModStorage(get_async_database(), mod)
+    from botforge.discord.wiring import build_games_service
+
+    game_data = build_games_service()
     stack = build_mod_season_stack(
         mod=mod,
         guild_id=guild_id,

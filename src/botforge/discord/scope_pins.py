@@ -399,8 +399,13 @@ def register_mod_pins(bot: Any) -> list[Any]:
             continue
         if get_view(f"menu:mod:{name}") is None:
             continue
-        home_key = "general" if "general" in keys else keys[0]
-        admin_key = "admin" if "admin" in keys else next((k for k in reversed(keys) if k != home_key), None)
+        # the SDK injects every mod's BACK-END channels (general + admin)
+        # — the menus ALWAYS pin there, never a declared gameplay
+        # channel (the merlin drift: the home menu landed in royaumes,
+        # the admin menu in the laboratoire — the fallback picked the
+        # declaration's first/last keys)
+        home_key = "general"
+        admin_key = "admin"
         scope = f"mod/{name}"
         home_pin = scope_view_key(scope, "home")
         specs.append(
