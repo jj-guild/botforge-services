@@ -39,12 +39,27 @@ def rendered_menus(monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
     from botforge.discord.mod_views import declare_mod_views
     from botforge.discord.views_routing import build_declared_menu
 
-    registry = ModRegistry(load_mod_definitions(Path("config"), repo_root=Path(".")))
+    definitions = load_mod_definitions(Path("config"), repo_root=Path("."))
+    # the REAL declaration ships enabled: false (it flips at the skeleton
+    # #366, when the code moves in) — the render tests force it on: the
+    # menus' contract is what is under test, not the enablement state
+    kingdom = definitions.get("kingdom")
+    if kingdom is not None:
+        object.__setattr__(kingdom, "enabled", True) if not kingdom.enabled else None
+    registry = ModRegistry(definitions)
     declare_mod_views(registry)
 
     monkeypatch.setattr(wiring, "build_guild_access_service", lambda: _InstalledAccess())
     monkeypatch.setattr(wiring, "_GUILD_ACCESS_PLATFORM", ("aoe2",))
     monkeypatch.setattr(wiring, "_GUILD_ACCESS_MODS", ("kingdom",))
+    # the doors' channel-id seam: stubbed — the render must never touch
+    # the real database from a unit test
+    import botforge.discord.ui.panels_provisioning as panels_provisioning
+
+    async def _fake_stored_channel_id(guild_id: str, scope: str, key: str) -> str:
+        return f"77{scope.replace('/', '')}{key}"[:19]
+
+    monkeypatch.setattr(panels_provisioning, "stored_channel_id", _fake_stored_channel_id)
 
     bot = SimpleNamespace(registry=registry, config=SimpleNamespace(config_dir="config"), message_registry=None)
 
