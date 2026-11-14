@@ -182,6 +182,61 @@ class SeasonCreateButton(
         )
 
 
+def _season_config_cache(bot: Any, mod: str) -> Any:
+    """Return the mod's state cache (the season config's persistence door)."""
+    from botforge.core.services.mod_storage import ModStateCache
+
+    state_service = getattr(bot, "state_service", None)
+    return ModStateCache(state_service, mod) if state_service is not None else None
+
+
+async def _persist_season_config(bot: Any, mod: str, guild_id: str, draft: dict[str, Any]) -> None:
+    """Persist the season's config (the enrollment dates drive Postuler)."""
+    season_id = str(draft.get("season_id") or "")
+    if not season_id:
+        return
+    cache = _season_config_cache(bot, mod)
+    if cache is None:
+        return
+    try:
+        payload = {k: v for k, v in draft.items() if not k.startswith("_")}
+        await cache.set(f"season-config:{season_id}", payload)
+    except Exception:
+        logger.warning("SEASON: the config persist failed — best-effort", exc_info=True)
+
+
+async def _load_season_config(bot: Any, mod: str, guild_id: str, season_id: str) -> dict[str, Any]:
+    """Load the season's stored config (empty when none)."""
+    cache = _season_config_cache(bot, mod)
+    if cache is None or not season_id:
+        return {}
+    try:
+        entry = await cache.get(f"season-config:{season_id}")
+        return dict(entry or {})
+    except Exception:
+        logger.warning("SEASON: the config load failed — best-effort", exc_info=True)
+        return {}
+
+
+async def _refresh_seasons_pin(bot: Any, guild_id: str, mod: str) -> None:
+    """Re-render the seasons channel's pinned post in place.
+
+    The modals' submits update THE POST (the pinned read surface), not
+    a new ephemeral bar — the owner's rule: update the post, the action
+    bar never re-sends.
+    """
+    from botforge.discord.static_pins import ensure_static_pin, registered_static_pins
+
+    key = f"view:mod:{mod}:seasons"
+    for spec in registered_static_pins():
+        if spec.key == key:
+            try:
+                await ensure_static_pin(bot, spec, guild_id)
+            except Exception:
+                logger.warning("SEASON: the pin refresh failed — best-effort", exc_info=True)
+            return
+
+
 def _drafts(bot: Any) -> dict[tuple[str, str], dict[str, Any]]:
     """Return the per-(mod, guild) season drafts (the wizard's state store)."""
     drafts = getattr(bot, "season_drafts", None)
@@ -263,12 +318,21 @@ class _SeasonCriteriaModal(discord.ui.Modal, title="Les critères de validation"
             min_values=0,
         ),
     )
+    elo_min: discord.ui.TextInput[Any] = discord.ui.TextInput(
+        label="Elo min (vide = aucun plancher)", placeholder="1200", required=False, max_length=4
+    )
     elo_max: discord.ui.TextInput[Any] = discord.ui.TextInput(
         label="Elo max (vide = aucun plafond)", placeholder="2000", required=False, max_length=4
     )
     min_matches: discord.ui.TextInput[Any] = discord.ui.TextInput(
-        label="Historique : X derniers matchs (vide = aucun)",
+        label="X matchs joués",
         placeholder="10",
+        required=False,
+        max_length=4,
+    )
+    matches_window_days: discord.ui.TextInput[Any] = discord.ui.TextInput(
+        label="...dans les N derniers jours",
+        placeholder="30",
         required=False,
         max_length=4,
     )
@@ -284,8 +348,10 @@ class _SeasonCriteriaModal(discord.ui.Modal, title="Les critères de validation"
         draft = _draft_of(self._bot, self._mod, self._guild)
         elo_select = getattr(self.elo_type, "component", self.elo_type)
         draft["elo_type"] = str(elo_select.values[0]) if elo_select.values else ""
+        draft["elo_min"] = str(self.elo_min.value or "").strip()
         draft["elo_max"] = str(self.elo_max.value or "").strip()
         draft["min_matches"] = str(self.min_matches.value or "").strip()
+        draft["matches_window_days"] = str(self.matches_window_days.value or "").strip()
         await interaction.response.defer(ephemeral=True)
         await _send_draft(interaction, self._bot, self._mod, self._guild)
 
@@ -393,39 +459,90 @@ def _map_pool_options(bot: Any) -> list[discord.SelectOption]:
     return options
 
 
-class _SeasonDatesModal(discord.ui.Modal, title="Les dates"):
-    """The draft's enrollment + season dates (re-openable)."""
+_EDIT_PARAMS = ("name", "validation", "criteria", "players", "map_pool")
+_DATE_FIELDS = {
+    "enrollment_start": "Début inscription",
+    "enrollment_end": "Fin inscription",
+    "season_start": "Début saison",
+    "season_end": "Fin saison",
+}
 
-    enrollment_start: discord.ui.TextInput[Any] = discord.ui.TextInput(
-        label="Début inscription (unix ts)", required=False, max_length=12
-    )
-    enrollment_end: discord.ui.TextInput[Any] = discord.ui.TextInput(
-        label="Fin inscription (unix ts)", required=False, max_length=12
-    )
-    season_start: discord.ui.TextInput[Any] = discord.ui.TextInput(
-        label="Début saison (unix ts)", required=False, max_length=12
-    )
-    season_end: discord.ui.TextInput[Any] = discord.ui.TextInput(
-        label="Fin saison (unix ts)", required=False, max_length=12
+
+def _next_full_hour() -> str:
+    """Return the next full hour, YYYY-MM-DD HH:MM (the guild's TZ, Paris default)."""
+    from datetime import datetime, timedelta
+    from zoneinfo import ZoneInfo
+
+    now = datetime.now(ZoneInfo("Europe/Paris"))
+    nxt = (now + timedelta(hours=1)).replace(minute=0, second=0, microsecond=0)
+    return nxt.strftime("%Y-%m-%d %H:%M")
+
+
+def _parse_date(raw: str) -> int:
+    """Parse YYYY-MM-DD HH:MM in the guild's TZ into a unix ts (0 = empty)."""
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+
+    raw = (raw or "").strip()
+    if not raw:
+        return 0
+    parsed = datetime.strptime(raw, "%Y-%m-%d %H:%M").replace(tzinfo=ZoneInfo("Europe/Paris"))
+    return int(parsed.timestamp())
+
+
+def _render_date_input(ts: Any) -> str:
+    """Render a stored ts back to YYYY-MM-DD HH:MM (the modal's prefill)."""
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+
+    try:
+        value = int(ts)
+    except (TypeError, ValueError):
+        return ""
+    if value <= 0:
+        return ""
+    return datetime.fromtimestamp(value, ZoneInfo("Europe/Paris")).strftime("%Y-%m-%d %H:%M")
+
+
+def _fmt_rel(value: Any) -> str:
+    """Format one stored ts as a RELATIVE Discord timestamp."""
+    try:
+        ts = int(value)
+        if ts > 0:
+            return f"<t:{ts}:R>"
+    except (TypeError, ValueError):
+        pass
+    return "—"
+
+
+class _SeasonDateModal(discord.ui.Modal, title="La date"):
+    """One date's single-field modal (re-openable, pre-filled)."""
+
+    value: discord.ui.TextInput[Any] = discord.ui.TextInput(
+        label="YYYY-MM-DD HH:MM (vide = effacer)",
+        placeholder="2026-11-20 20:00",
+        required=False,
+        max_length=16,
     )
 
-    def __init__(self, bot: Any, mod: str, guild_id: str) -> None:
-        super().__init__()
+    def __init__(self, bot: Any, mod: str, guild_id: str, field_key: str) -> None:
+        super().__init__(title=_DATE_FIELDS.get(field_key, "La date"))
         self._bot = bot
         self._mod = mod
         self._guild = guild_id
+        self._field = field_key
         draft = _draft_of(bot, mod, guild_id)
-        for field_key in ("enrollment_start", "enrollment_end", "season_start", "season_end"):
-            if draft.get(field_key):
-                getattr(self, field_key).default = str(draft[field_key])
+        stored = _render_date_input(draft.get(field_key))
+        self.value.default = stored or _next_full_hour()
 
     async def on_submit(self, interaction: discord.Interaction) -> None:
-        """Record the dates, then re-render the view."""
+        """Parse + record the date, then update the pinned post."""
         draft = _draft_of(self._bot, self._mod, self._guild)
-        for field_key in ("enrollment_start", "enrollment_end", "season_start", "season_end"):
-            draft[field_key] = str(getattr(self, field_key).value or "").strip()
+        draft[self._field] = _parse_date(str(self.value.value or ""))
+        await _persist_season_config(self._bot, self._mod, self._guild, draft)
         await interaction.response.defer(ephemeral=True)
-        await _send_draft(interaction, self._bot, self._mod, self._guild)
+        await _refresh_seasons_pin(self._bot, self._guild, self._mod)
+        await interaction.followup.send("Enregistré — le post est à jour.", ephemeral=True)
 
 
 class SeasonDraftButton(
@@ -435,6 +552,10 @@ class SeasonDraftButton(
     """One draft parameter's re-open button (the modal comes back)."""
 
     _PARAM_LABELS: ClassVar[dict[str, str]] = {
+        "enrollment_start": "📅 Début inscription",
+        "enrollment_end": "📅 Fin inscription",
+        "season_start": "📅 Début saison",
+        "season_end": "📅 Fin saison",
         "name": "✏️ Nom",
         "validation": "⚙️ Validation",
         "criteria": "🎯 Critères",
@@ -478,8 +599,12 @@ class SeasonDraftButton(
             "criteria": _SeasonCriteriaModal,
             "players": _SeasonPlayersModal,
             "map_pool": _SeasonMapPoolModal,
-            "dates": _SeasonDatesModal,
         }.get(self.param)
+        if self.param in _DATE_FIELDS:
+            await interaction.response.send_modal(
+                _SeasonDateModal(interaction.client, self.mod, guild_id, self.param)
+            )
+            return
         if modal is None:
             return
         await interaction.response.send_modal(modal(interaction.client, self.mod, guild_id))
@@ -607,7 +732,10 @@ class SeasonCreateConfirmButton(
             else:
                 await interaction.followup.send(f"La création a refusé : {message}", ephemeral=True)
             return
+        draft["season_id"] = str(season.id)
+        await _persist_season_config(interaction.client, self.mod, guild_id, draft)
         _drafts(interaction.client).pop((self.mod, guild_id), None)
+        await _refresh_seasons_pin(interaction.client, guild_id, self.mod)
         await interaction.followup.send(f"Saison **{season.name}** créée (`{season.id}`).", ephemeral=True)
 
 
@@ -661,11 +789,13 @@ def _season_body(draft: dict[str, Any]) -> list[str]:
     lines.append(f"**Validation** : {validation_label}")
     criteria_bits = []
     if draft.get("elo_type"):
-        criteria_bits.append(f"elo {draft['elo_type']}")
-    if draft.get("elo_max"):
-        criteria_bits.append(f"plafond {draft['elo_max']}")
+        bounds = draft.get("elo_type")
+        if draft.get("elo_min") or draft.get("elo_max"):
+            bounds = f"{draft.get('elo_min') or '-'}-{draft.get('elo_max') or '-'} ({bounds})"
+        criteria_bits.append(f"elo {bounds}")
     if draft.get("min_matches"):
-        criteria_bits.append(f"{draft['min_matches']} derniers matchs")
+        window = f" dans les {draft['matches_window_days']} derniers jours" if draft.get("matches_window_days") else ""
+        criteria_bits.append(f"{draft['min_matches']} matchs{window}")
     if criteria_bits:
         lines.append(f"**Crit\u00e8res** : {', '.join(criteria_bits)}")
     players_bits = []
@@ -680,9 +810,9 @@ def _season_body(draft: dict[str, Any]) -> list[str]:
     if draft.get("map_pool"):
         lines.append(f"**Map pool** : {draft['map_pool']}")
     lines.append(
-        f"**Inscription** : {_fmt_date(draft.get('enrollment_start'))} \u2192 {_fmt_date(draft.get('enrollment_end'))}"
+        f"**Inscription** : {_fmt_rel(draft.get('enrollment_start'))} \u2192 {_fmt_rel(draft.get('enrollment_end'))}"
     )
-    lines.append(f"**Saison** : {_fmt_date(draft.get('season_start'))} \u2192 {_fmt_date(draft.get('season_end'))}")
+    lines.append(f"**Saison** : {_fmt_rel(draft.get('season_start'))} \u2192 {_fmt_rel(draft.get('season_end'))}")
     return lines
 
 
@@ -772,10 +902,8 @@ async def _send_edit_bar(interaction: discord.Interaction, bot: Any, mod: str, g
     from botforge.discord.ui.factory import split_action_rows
 
     edit_items: list[Any] = [
-        *(
-            SeasonDraftButton(mod, param).item
-            for param in ("name", "validation", "criteria", "players", "map_pool", "dates")
-        ),
+        *(SeasonDraftButton(mod, param).item for param in _EDIT_PARAMS),
+        *(SeasonDraftButton(mod, key).item for key in _DATE_FIELDS),
         SeasonBetaButton(mod, bool(draft.get("beta"))).item,
         SeasonCreateConfirmButton(mod).item,
     ]
