@@ -40,18 +40,6 @@ channels:
   # restructuration-serveur-v1 e (Drasah 19/10): the general group and
   # its Taverne are RETIRED — the category disappears at the next
   # provisioning (the legacy cleanup sweeps both).
-  - key: apply
-    display_name: 📝 postuler
-    description: The enrollment panel channel
-    group: conscription
-  - key: applications
-    display_name: 📥 candidatures
-    description: Submitted applications (admin only)
-    group: conscription
-    admin_only: true
-    access:
-      everyone_view: false
-      view: [Kingdom Admin]
   - key: realms
     display_name: 👑 royaumes
     description: Kingdom validation panel (admin only)

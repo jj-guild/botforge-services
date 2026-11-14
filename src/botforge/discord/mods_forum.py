@@ -494,38 +494,59 @@ async def refresh_scope_pins(bot: Any, guild_id: str, scopes: tuple[str, ...]) -
 
 
 def _seasonal_standard_channels(definition: Any) -> tuple[Any, ...]:
-    """Return the declared channels, plus the SEASONAL standard surfaces (P3).
+    """Return the declared channels, plus the SDK's standard surfaces.
 
-    Every seasonal mod's folder carries them (owner spec 2026-11-14):
-    saisons (the management panel), candidats (admin-only, the queue),
-    inscrits (the members list) — injected by the SDK, the mod
-    declares nothing; a mod overriding a standard key keeps its own.
+    Every mod's scope carries its BACK-END channels (general + admin —
+    the pins' targets, the scope's own surfaces, whatever the mod
+    declares); every SEASONAL mod adds the enrollment surfaces
+    (owner spec 2026-11-14): seasons (the management panel), candidates
+    (admin-only, the apply + the queue), enrolled (the members list).
+    Injected by the SDK — the mod declares nothing; a mod overriding
+    a standard key keeps its own; the generic surfaces are NEVER
+    redeclared (postuler/candidatures were the drift, 2026-11-14).
     """
     declared = tuple(getattr(definition, "channel_categories", ()) or ())
-    if not getattr(definition, "seasonal", False):
-        return declared
     from botforge.core.services.mod_definition import ChannelCategoryDef
 
-    standard_keys = {"seasons", "candidates", "enrolled"}
-    return (
-            *(channel for channel in declared if str(channel.key) not in standard_keys),
+    standard_keys = {"general", "admin", "seasons", "candidates", "enrolled"}
+    out = [channel for channel in declared if str(channel.key) not in standard_keys]
+    out.extend(
+        [
             ChannelCategoryDef(
-                key="seasons",
-                display_name="📅 saisons",
-                description="The seasons management panel",
+                key="general",
+                display_name="🛡️ général",
+                description="The mod scope's back-end general channel",
             ),
             ChannelCategoryDef(
-                key="candidates",
-                display_name="🧡 candidats",
-                description="The enrollment queue (admin only)",
+                key="admin",
+                display_name="🔒 admin",
+                description="The mod scope's back-end admin channel",
                 admin_only=True,
             ),
-            ChannelCategoryDef(
-                key="enrolled",
-                display_name="👥 inscrits",
-                description="The enrolled members list",
-            ),
+        ]
+    )
+    if getattr(definition, "seasonal", False):
+        out.extend(
+            [
+                ChannelCategoryDef(
+                    key="seasons",
+                    display_name="📅 saisons",
+                    description="The seasons management panel",
+                ),
+                ChannelCategoryDef(
+                    key="candidates",
+                    display_name="🧡 candidats",
+                    description="The enrollment queue (admin only)",
+                    admin_only=True,
+                ),
+                ChannelCategoryDef(
+                    key="enrolled",
+                    display_name="👥 inscrits",
+                    description="The enrolled members list",
+                ),
+            ]
         )
+    return tuple(out)
 
 
 async def provision_mod_channels(bot: Any, guild_id: str, mod_name: str) -> int:
