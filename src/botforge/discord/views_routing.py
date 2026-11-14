@@ -438,6 +438,48 @@ def _label(catalog: Any, key: str, locale: str, fallback: str = "?") -> str:
 
 
 
+async def _mod_folder_doors(
+    bot: Any,
+    guild_id: str,
+    decl: Any,
+    catalog: Any,
+    locale: str,
+) -> list[Any]:
+    """Build the link buttons to a mod's own declared channels (its doors).
+
+    The mod's home is its folder's front door: one link button per
+    provisioned channel (the declared salons — general, annonces,
+    admin...), one click each (#363).
+    """
+    import discord
+
+    from botforge.discord.scope_pins import _tr
+    from botforge.discord.ui.panels_provisioning import stored_channel_id
+
+    name = str(decl.id).split(":")[-1]
+    registry = getattr(bot, "registry", None)
+    definition = registry.get(name) if registry is not None else None
+    out: list[Any] = []
+    for channel in (getattr(definition, "channels", None) or ()):
+        key = str(getattr(channel, "key", "") or "")
+        display = str(getattr(channel, "display_name", "") or "") or key
+        if not key:
+            continue
+        channel_id = await stored_channel_id(guild_id, f"mod/{name}", key)
+        if not channel_id or not str(channel_id).isdigit():
+            continue
+        label = _tr(catalog, f"ui.mods.homes.{name}", locale, name)
+        del label
+        out.append(
+            discord.ui.Button(
+                style=discord.ButtonStyle.link,
+                url=f"https://discord.com/channels/{guild_id}/{channel_id}",
+                label=display[:80],
+            )
+        )
+    return out
+
+
 async def _menu_action_row(
     bot: Any,
     guild_id: str,
@@ -459,6 +501,11 @@ async def _menu_action_row(
     # the platform lists (the dev is constrained, not trusted).
     for button in await _auto_entries(bot, guild_id, decl.id, catalog, locale):
         row.add_item(button)
+    # a MOD's home carries its folder's doors (its declared channels) —
+    # the front door of its own salons (#363)
+    if str(decl.id).startswith("menu:mod:") and not str(decl.id).endswith(":admin"):
+        for button in await _mod_folder_doors(bot, guild_id, decl, catalog, locale):
+            row.add_item(button)
     items = list(row.children)
     row = discord.ui.ActionRow[discord.ui.LayoutView]()
     for item in _operator_tools_last(items):

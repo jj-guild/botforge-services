@@ -37,6 +37,10 @@ def declare_mod_views(registry: Any) -> int:
     if registry is None:
         return 0
     for name in registry.enabled():
+        # the mod's channels ride its home as DOORS (link buttons, one
+        # click each — the folder's own salons, #363); the admin flip
+        # stays the declared button (the SDK's order constraint sorts it
+        # last)
         register_view(
             ViewDecl(
                 id=f"menu:mod:{name}",
