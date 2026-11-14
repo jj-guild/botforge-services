@@ -95,6 +95,24 @@ def _parse_mod_yaml(data: dict[str, object], source: Path) -> ModDefinition:
 
     categories = _parse_channel_categories(data.get("channels", []), source)
     roles = _parse_roles(data.get("roles", []), source)
+    # the SDK's standard role trio rides EVERY mod (owner direction
+    # 2026-11-13): candidate (the signup needs validation), member (the
+    # registered/validated), admin (the mod's operators) — all prefixed
+    # with the mod's key, all provisioned with a persisted mapping (the
+    # stored id is the resolver, the display name is renamable). A mod
+    # overrides a standard role by declaring its own entry with the
+    # same key.
+    standard = {
+        "candidate": f"{name.capitalize()} Candidate",
+        "member": f"{name.capitalize()} Member",
+        "admin": f"{name.capitalize()} Admin",
+    }
+    declared_keys = {role.key for role in roles}
+    roles.extend(
+        RoleDef(key=key, display_name=display)
+        for key, display in standard.items()
+        if key not in declared_keys
+    )
 
     workflows = _parse_str_list(data.get("workflows", []), "workflows", source)
     commands = _parse_str_list(data.get("commands", []), "commands", source)
@@ -104,6 +122,8 @@ def _parse_mod_yaml(data: dict[str, object], source: Path) -> ModDefinition:
     if not isinstance(seasonal, bool):
         raise ValueError(f"{source}: 'seasonal: true|false' is mandatory (mod type: seasonal or permanent)")
 
+    default_active = bool(data.get("default_active", False))
+    emoji = str(data.get("emoji", "") or "")
     private = bool(data.get("private", False))
     raw_owners = data.get("owner_discord_ids", [])
     if raw_owners is None:
@@ -121,6 +141,8 @@ def _parse_mod_yaml(data: dict[str, object], source: Path) -> ModDefinition:
         seasonal=seasonal,
         private=private,
         owner_ids=owner_ids,
+        default_active=default_active,
+        emoji=emoji,
         channel_categories=tuple(categories),
         roles=tuple(roles),
         workflows=tuple(workflows),
@@ -130,14 +152,34 @@ def _parse_mod_yaml(data: dict[str, object], source: Path) -> ModDefinition:
     )
 
 
-def load_mod_definitions(config_dir: Path) -> ModDefs:
-    """Load and validate every mod declaration in a config directory.
+def _load_declaration(path: Path) -> ModDefinition:
+    """Parse and validate one mod YAML declaration."""
+    with open(path, encoding="utf-8") as fh:
+        data = yaml.safe_load(fh)
+    if not isinstance(data, dict):
+        raise ValueError(f"{path}: declaration must be a mapping")
+    return _parse_mod_yaml(data, path)
 
-    An invalid declaration raises: a broken mod must fail startup loudly,
-    never load half-initialized (docs/architecture/mods.md).
+
+def load_mod_definitions(config_dir: Path, repo_root: Path | None = None) -> ModDefs:
+    """Load and validate every mod declaration — legacy config, then modular.
+
+    The legacy declarations (config/mods/*.yaml) come first and win on
+    id collision; the modular §7 layout (modules/mods/<mod>/conf/mod.yaml,
+    pre-§7 root mod.yaml) is discovered through mod_layout when a repo
+    root is given. An invalid declaration raises: a broken mod must
+    fail startup loudly, never load half-initialized
+    (docs/architecture/mods.md).
     """
     mods_dir = config_dir / "mods"
     definitions: ModDefs = {}
+    if repo_root is not None:
+        from botforge.core.services.mod_layout import discover_mods
+
+        for name, layout in sorted(discover_mods(Path(repo_root)).items()):
+            if name in definitions:
+                continue
+            definitions[name] = _load_declaration(layout.declaration)
     if not mods_dir.is_dir():
         return definitions
     max_mods = 20
@@ -149,11 +191,7 @@ def load_mod_definitions(config_dir: Path) -> ModDefs:
                 f"the platform carries at most {max_mods} mods ({mods_dir}); "
                 "disable one before declaring another"
             )
-        with open(path, encoding="utf-8") as fh:
-            data = yaml.safe_load(fh)
-        if not isinstance(data, dict):
-            raise ValueError(f"{path}: declaration must be a mapping")
-        definition = _parse_mod_yaml(data, path)
+        definition = _load_declaration(path)
         definitions[definition.name] = definition
         logger.info(
             "Mod declared: %s (enabled=%s, %d channels, %d roles)",
