@@ -237,22 +237,32 @@ async def _sync_beta_flag(interaction: discord.Interaction, draft: dict[str, Any
 
 
 async def _refresh_seasons_pin(bot: Any, guild_id: str, mod: str) -> None:
-    """Re-render the seasons channel's pinned post in place.
+    """Update the seasons channel's pinned post IN PLACE (directly).
 
-    The modals' submits update THE POST (the pinned read surface), not
-    a new ephemeral bar — the owner's rule: update the post, the action
-    bar never re-sends.
+    The modals' submits edit THE POST — the pinned read surface —
+    directly: no fingerprint gate, no ephemeral note, nothing else.
+    The post is the single source of truth; the user sees it change.
     """
-    from botforge.discord.static_pins import ensure_static_pin, registered_static_pins
+    from botforge.discord.static_pins import registered_static_pins
 
     key = f"view:mod:{mod}:seasons"
-    for spec in registered_static_pins():
-        if spec.key == key:
-            try:
-                await ensure_static_pin(bot, spec, guild_id)
-            except Exception:
-                logger.warning("SEASON: the pin refresh failed — best-effort", exc_info=True)
+    spec = next((s for s in registered_static_pins() if s.key == key), None)
+    if spec is None:
+        return
+    try:
+        channel_id = await spec.resolve_channel(guild_id)
+        message_id = await spec.resolve_message_id(guild_id)
+        if not channel_id or not message_id:
             return
+        guild = bot.get_guild(int(guild_id)) if guild_id.isdigit() else None
+        channel = guild.get_channel(int(channel_id)) if guild and channel_id.isdigit() else None
+        if channel is None:
+            return
+        message = await channel.fetch_message(int(message_id))
+        layout = await spec.build_layout(guild_id)
+        await message.edit(view=layout)
+    except Exception:
+        logger.warning("SEASON: the post update failed — best-effort", exc_info=True)
 
 
 def _drafts(bot: Any) -> dict[tuple[str, str], dict[str, Any]]:
@@ -291,7 +301,6 @@ class _SeasonNameModal(discord.ui.Modal, title="Le nom de la saison"):
         await _persist_season_config(self._bot, self._mod, self._guild, draft)
         await interaction.response.defer(ephemeral=True)
         await _refresh_seasons_pin(self._bot, self._guild, self._mod)
-        await interaction.followup.send("Enregistré — le post est à jour.", ephemeral=True)
 
 
 class _SeasonValidationModal(discord.ui.Modal, title="La validation"):
@@ -338,7 +347,6 @@ class _SeasonValidationModal(discord.ui.Modal, title="La validation"):
         await _persist_season_config(self._bot, self._mod, self._guild, draft)
         await interaction.response.defer(ephemeral=True)
         await _refresh_seasons_pin(self._bot, self._guild, self._mod)
-        await interaction.followup.send("Enregistré — le post est à jour.", ephemeral=True)
 
 
 class _SeasonCriteriaModal(discord.ui.Modal, title="Les critères de validation"):
@@ -392,7 +400,6 @@ class _SeasonCriteriaModal(discord.ui.Modal, title="Les critères de validation"
         await _persist_season_config(self._bot, self._mod, self._guild, draft)
         await interaction.response.defer(ephemeral=True)
         await _refresh_seasons_pin(self._bot, self._guild, self._mod)
-        await interaction.followup.send("Enregistré — le post est à jour.", ephemeral=True)
 
 
 class _SeasonPlayersModal(discord.ui.Modal, title="Le nombre de joueurs"):
@@ -424,7 +431,6 @@ class _SeasonPlayersModal(discord.ui.Modal, title="Le nombre de joueurs"):
         await _persist_season_config(self._bot, self._mod, self._guild, draft)
         await interaction.response.defer(ephemeral=True)
         await _refresh_seasons_pin(self._bot, self._guild, self._mod)
-        await interaction.followup.send("Enregistré — le post est à jour.", ephemeral=True)
 
 
 class _SeasonMapPoolModal(discord.ui.Modal, title="Le map pool"):
@@ -474,7 +480,6 @@ class _SeasonMapPoolModal(discord.ui.Modal, title="Le map pool"):
         await _persist_season_config(self._bot, self._mod, self._guild, draft)
         await interaction.response.defer(ephemeral=True)
         await _refresh_seasons_pin(self._bot, self._guild, self._mod)
-        await interaction.followup.send("Enregistré — le post est à jour.", ephemeral=True)
 
 
 def _map_pool_options(bot: Any) -> list[discord.SelectOption]:
@@ -585,7 +590,6 @@ class _SeasonDateModal(discord.ui.Modal, title="La date"):
         await _persist_season_config(self._bot, self._mod, self._guild, draft)
         await interaction.response.defer(ephemeral=True)
         await _refresh_seasons_pin(self._bot, self._guild, self._mod)
-        await interaction.followup.send("Enregistré — le post est à jour.", ephemeral=True)
 
 
 class SeasonDraftButton(
@@ -888,13 +892,16 @@ def _enrollment_open(draft: dict[str, Any]) -> bool:
         end = int(draft.get("enrollment_end") or 0)
     except (TypeError, ValueError):
         return False
-    if not start and not end:
-        return False  # nothing declared: the enrollment is not open
-    if end and now > end:
+    try:
+        season_start = int(draft.get("season_start") or 0)
+        season_end = int(draft.get("season_end") or 0)
+    except (TypeError, ValueError):
         return False
-    if start and now < start:
+    # the window must be DECLARED (the enrollment AND the season dates)
+    # and open: now > début inscription, now < fin inscription
+    if not start or not end or not season_start or not season_end:
         return False
-    return True
+    return start < now < end
 
 
 async def build_season_layout(
