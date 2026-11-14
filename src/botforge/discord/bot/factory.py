@@ -236,6 +236,11 @@ class BotforgeBot(discord.Client):
         register_pool_flow_items(self)
         register_entity_admin_items(self)
         register_guild_context_items(self)
+        from botforge.discord.mod_beta import register_beta_items
+        from botforge.discord.season_panels import register_season_items
+
+        register_beta_items(self)
+        register_season_items(self)
 
         register_admin_dm_items(self)
         register_admin_tree_items(self)

@@ -11,11 +11,13 @@
 <td class="extra"><a href=".">index</a><br><a href="file:SOURCE_ROOT/core/services/season_enrollment.py">SOURCE_ROOT/core/services/season_enrollment.py</a></td></tr></table>
     <p><span class="code">The&nbsp;seasonal&nbsp;enrollment&nbsp;glue&nbsp;—&nbsp;the&nbsp;per-season&nbsp;roles&nbsp;ride&nbsp;the&nbsp;enrollment&nbsp;(P3).<br>
 &nbsp;<br>
-The&nbsp;owner's&nbsp;spec&nbsp;(2026-11-14):&nbsp;the&nbsp;candidate&nbsp;and&nbsp;member&nbsp;roles&nbsp;are&nbsp;PER<br>
-SEASON.&nbsp;A&nbsp;candidate&nbsp;acquires&nbsp;**Candidat&nbsp;&lt;mod&gt;&nbsp;&lt;saison&gt;**&nbsp;at&nbsp;apply,<br>
-loses&nbsp;it&nbsp;and&nbsp;gains&nbsp;**Joueur&nbsp;&lt;mod&gt;&nbsp;&lt;saison&gt;**&nbsp;at&nbsp;validation;&nbsp;a&nbsp;refusal<br>
-drops&nbsp;the&nbsp;candidate&nbsp;role;&nbsp;a&nbsp;new&nbsp;season&nbsp;starts&nbsp;with&nbsp;fresh&nbsp;roles&nbsp;(the<br>
-previous&nbsp;season's&nbsp;candidate&nbsp;roles&nbsp;reset).<br>
+The&nbsp;owner's&nbsp;spec&nbsp;(2026-11-14,&nbsp;refined):&nbsp;the&nbsp;candidate&nbsp;and&nbsp;member<br>
+roles&nbsp;are&nbsp;THE&nbsp;MOD'S&nbsp;standard&nbsp;roles&nbsp;(``&lt;Mod&gt;&nbsp;Candidate``&nbsp;/<br>
+``&lt;Mod&gt;&nbsp;Member``&nbsp;—&nbsp;the&nbsp;registry's&nbsp;trio,&nbsp;no&nbsp;season&nbsp;suffix);&nbsp;what<br>
+resets&nbsp;at&nbsp;each&nbsp;new&nbsp;season&nbsp;is&nbsp;the&nbsp;MEMBERSHIP&nbsp;(the&nbsp;roles&nbsp;empty&nbsp;out,&nbsp;a<br>
+fresh&nbsp;enrollment&nbsp;fills&nbsp;them).&nbsp;A&nbsp;candidate&nbsp;acquires&nbsp;the&nbsp;candidate<br>
+role&nbsp;at&nbsp;apply,&nbsp;loses&nbsp;it&nbsp;and&nbsp;gains&nbsp;the&nbsp;member&nbsp;role&nbsp;at&nbsp;validation;&nbsp;a<br>
+refusal&nbsp;drops&nbsp;the&nbsp;candidate&nbsp;role.<br>
 &nbsp;<br>
 The&nbsp;EnrollmentService&nbsp;owns&nbsp;the&nbsp;decisions&nbsp;(criteria,&nbsp;the&nbsp;queue,&nbsp;the<br>
 window);&nbsp;the&nbsp;SeasonRolesService&nbsp;owns&nbsp;the&nbsp;per-season&nbsp;roles;&nbsp;this<br>
@@ -48,16 +50,19 @@ transitions,&nbsp;never&nbsp;a&nbsp;half&nbsp;state.</span></p>
 <td class="section-title" colspan=3>&nbsp;<br><a name="SeasonEnrollment">class <strong>SeasonEnrollment</strong></a>(<a href="builtins.html#object">builtins.object</a>)</td></tr>
     
 <tr><td class="decor title-decor" rowspan=2><span class="code">&nbsp;&nbsp;&nbsp;</span></td>
-<td class="decor title-decor" colspan=2><span class="code"><a href="#SeasonEnrollment">SeasonEnrollment</a>(enrollment:&nbsp;'Any',&nbsp;season_roles:&nbsp;'SeasonRolesService',&nbsp;active_season:&nbsp;'Any')&nbsp;-&amp;gt;&nbsp;'None'<br>
+<td class="decor title-decor" colspan=2><span class="code"><a href="#SeasonEnrollment">SeasonEnrollment</a>(enrollment:&nbsp;'Any',&nbsp;mod_roles:&nbsp;'Any',&nbsp;active_season:&nbsp;'Any')&nbsp;-&amp;gt;&nbsp;'None'<br>
 &nbsp;<br>
 The&nbsp;enrollment's&nbsp;decisions&nbsp;wired&nbsp;to&nbsp;the&nbsp;per-season&nbsp;roles.<br>&nbsp;</span></td></tr>
 <tr><td>&nbsp;</td>
 <td class="singlecolumn">Methods defined here:<br>
-<dl><dt><a name="SeasonEnrollment-__init__"><strong>__init__</strong></a>(self, enrollment: 'Any', season_roles: 'SeasonRolesService', active_season: 'Any') -&gt; 'None'</dt><dd><span class="code">Bind&nbsp;the&nbsp;enrollment,&nbsp;the&nbsp;season&nbsp;roles&nbsp;and&nbsp;the&nbsp;season&nbsp;resolver.<br>
+<dl><dt><a name="SeasonEnrollment-__init__"><strong>__init__</strong></a>(self, enrollment: 'Any', mod_roles: 'Any', active_season: 'Any') -&gt; 'None'</dt><dd><span class="code">Bind&nbsp;the&nbsp;enrollment,&nbsp;the&nbsp;mod's&nbsp;roles&nbsp;service&nbsp;and&nbsp;the&nbsp;season&nbsp;resolver.<br>
 &nbsp;<br>
 ``active_season(guild_id)``&nbsp;returns&nbsp;the&nbsp;guild's&nbsp;live&nbsp;season&nbsp;id<br>
 (or&nbsp;None&nbsp;—&nbsp;the&nbsp;transitions&nbsp;degrade&nbsp;quietly&nbsp;when&nbsp;no&nbsp;season<br>
-lives:&nbsp;the&nbsp;enrollment&nbsp;still&nbsp;decides,&nbsp;the&nbsp;roles&nbsp;wait).</span></dd></dl>
+lives:&nbsp;the&nbsp;enrollment&nbsp;still&nbsp;decides,&nbsp;the&nbsp;roles&nbsp;wait).&nbsp;The<br>
+roles&nbsp;are&nbsp;the&nbsp;MOD'S&nbsp;standard&nbsp;candidate/member&nbsp;keys&nbsp;—&nbsp;resolved<br>
+through&nbsp;the&nbsp;persisted&nbsp;mappings&nbsp;(renamable,&nbsp;never&nbsp;a&nbsp;name<br>
+lookup).</span></dd></dl>
 
 <dl><dt>async <a name="SeasonEnrollment-accept"><strong>accept</strong></a>(self, application_id: 'str', now: 'int' = 0, reason: 'str' = '') -&gt; 'Any'</dt><dd><span class="code">Validate:&nbsp;the&nbsp;candidate&nbsp;role&nbsp;is&nbsp;LOST,&nbsp;the&nbsp;member&nbsp;role&nbsp;GAINED.</span></dd></dl>
 
@@ -65,10 +70,12 @@ lives:&nbsp;the&nbsp;enrollment&nbsp;still&nbsp;decides,&nbsp;the&nbsp;roles&nbs
 
 <dl><dt>async <a name="SeasonEnrollment-refuse"><strong>refuse</strong></a>(self, application_id: 'str', now: 'int' = 0, reason: 'str' = '') -&gt; 'Any'</dt><dd><span class="code">Refuse:&nbsp;the&nbsp;candidate&nbsp;role&nbsp;goes.</span></dd></dl>
 
-<dl><dt>async <a name="SeasonEnrollment-reset_candidates"><strong>reset_candidates</strong></a>(self, guild_id: 'str', season: 'str') -&gt; 'int'</dt><dd><span class="code">Reset&nbsp;a&nbsp;season's&nbsp;candidate&nbsp;roles&nbsp;(the&nbsp;new&nbsp;season&nbsp;starts&nbsp;clean).<br>
+<dl><dt>async <a name="SeasonEnrollment-reset_candidates"><strong>reset_candidates</strong></a>(self, guild_id: 'str', season: 'str') -&gt; 'int'</dt><dd><span class="code">Reset&nbsp;the&nbsp;season's&nbsp;MEMBERSHIP&nbsp;(the&nbsp;new&nbsp;season&nbsp;starts&nbsp;clean).<br>
 &nbsp;<br>
-The&nbsp;previous&nbsp;season's&nbsp;candidates&nbsp;lose&nbsp;the&nbsp;role&nbsp;—&nbsp;the&nbsp;new&nbsp;season<br>
-is&nbsp;a&nbsp;fresh&nbsp;enrollment,&nbsp;never&nbsp;a&nbsp;carry-over.</span></dd></dl>
+The&nbsp;mod's&nbsp;candidate&nbsp;and&nbsp;member&nbsp;roles&nbsp;EMPTY&nbsp;OUT&nbsp;—&nbsp;every<br>
+candidate&nbsp;loses&nbsp;the&nbsp;candidate&nbsp;role,&nbsp;every&nbsp;member&nbsp;the&nbsp;member<br>
+role;&nbsp;a&nbsp;fresh&nbsp;enrollment&nbsp;fills&nbsp;them&nbsp;again.&nbsp;The&nbsp;roles&nbsp;stay&nbsp;(a<br>
+rename&nbsp;keeps&nbsp;its&nbsp;mapping),&nbsp;the&nbsp;membership&nbsp;resets.</span></dd></dl>
 
 <hr>
 Data descriptors defined here:<br>

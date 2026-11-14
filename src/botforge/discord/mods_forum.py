@@ -904,7 +904,7 @@ class ModInstallButton(
         await sync_catalogs(str(interaction.guild_id), interaction.client)
         # the pinned home/admin menus re-render: the live install state
         # rides their auto-injected entries
-        pin_scopes = ("games",) if self.kind == "game" else ("mods",)
+        pin_scopes = ("games",) if self.kind == "game" else ("mods", f"mod/{self.name}")
         await refresh_scope_pins(interaction.client, str(interaction.guild_id), pin_scopes)
 
 
@@ -1095,7 +1095,7 @@ class ModUninstallModal(discord.ui.Modal):
         except (discord.HTTPException, AttributeError, TypeError):
             await interaction.followup.send(message, ephemeral=True)
         await sync_catalogs(guild_id, interaction.client)
-        pin_scopes = ("games",) if self.kind == "game" else ("mods",)
+        pin_scopes = ("games",) if self.kind == "game" else ("mods", f"mod/{self.name}")
         await refresh_scope_pins(interaction.client, guild_id, pin_scopes)
 
 

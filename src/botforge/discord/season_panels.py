@@ -70,6 +70,7 @@ async def build_seasons_panel(bot: Any, guild_id: str, mod: str, locale: str = "
     view.add_item(discord.ui.Container(discord.ui.TextDisplay("\n".join(lines))))
     row: discord.ui.ActionRow[discord.ui.LayoutView] = discord.ui.ActionRow()
     row.add_item(SeasonCreateButton(mod))
+    row.add_item(SeasonApplyButton(mod))
     view.add_item(row)
     from botforge.discord.ui.view_footer import add_view_footer
 
@@ -250,6 +251,86 @@ async def _create_season(interaction: discord.Interaction, state: Any) -> None:
     )
 
 
+class SeasonApplyButton(
+    discord.ui.DynamicItem[discord.ui.Button[Any]],
+    template=rf"{_NS}:apply:(?P<mod>[a-z0-9_-]+)",
+):
+    """The player's Postuler button: the enrollment's entry point."""
+
+    def __init__(self, mod: str) -> None:
+        super().__init__(
+            discord.ui.Button(
+                custom_id=f"{_NS}:apply:{mod}"[:100],
+                label="Postuler",
+                emoji="\U0001f4dd",
+                style=discord.ButtonStyle.primary,
+            )
+        )
+        self.mod = mod
+
+    @classmethod
+    async def from_custom_id(
+        cls,
+        interaction: discord.Interaction,
+        item: discord.ui.Item[Any],
+        match: Any,
+        /,
+    ) -> SeasonApplyButton:
+        """Rebuild the button at click time."""
+        return cls(match["mod"])
+
+    async def callback(self, interaction: discord.Interaction) -> None:
+        """Open the apply modal (anyone may apply)."""
+        await interaction.response.send_modal(_SeasonApplyModal(self.mod))
+
+
+class _SeasonApplyModal(discord.ui.Modal, title="Postuler"):
+    """The apply modal: the display name, then the enrollment decides."""
+
+    display_name: discord.ui.TextInput[Any] = discord.ui.TextInput(
+        label="Pseudo", placeholder="Ton pseudo de jeu", max_length=64
+    )
+
+    def __init__(self, mod: str) -> None:
+        super().__init__()
+        self._mod = mod
+
+    async def on_submit(self, interaction: discord.Interaction) -> None:
+        """Apply through the season stack's enrollment (the 3s rule)."""
+        await interaction.response.defer(ephemeral=True)
+        stack = _stack(interaction.client, self._mod, str(interaction.guild_id or ""))
+        if stack is None or stack.enrollment is None:
+            await interaction.followup.send(
+                "The enrollment is not wired on this guild.", ephemeral=True
+            )
+            return
+        guild_id = str(interaction.guild_id or "")
+        try:
+            application = await stack.enrollment.apply(
+                guild_id,
+                str(interaction.user.id),
+                str(self.display_name.value or "").strip(),
+            )
+        except Exception as exc:
+            await interaction.followup.send(f"La candidature a \u00e9chou\u00e9 : {exc}", ephemeral=True)
+            return
+        state = str(getattr(application, "state", "pending"))
+        if state == "accepted":
+            await interaction.followup.send(
+                "Candidature **accept\u00e9e** \u2014 bienvenue !", ephemeral=True
+            )
+        elif state == "refused":
+            reasons = ", ".join(str(r) for r in getattr(application, "reasons", ()) or ())
+            await interaction.followup.send(
+                f"Candidature **refus\u00e9e**{(' (' + reasons + ')') if reasons else ''}.",
+                ephemeral=True,
+            )
+        else:
+            await interaction.followup.send(
+                "Candidature **en attente** \u2014 les admins d\u00e9cident.", ephemeral=True
+            )
+
+
 class CandidateDecideButton(
     discord.ui.DynamicItem[discord.ui.Button[Any]],
     template=rf"{_NS}:decide:(?P<mod>[a-z0-9_-]+):(?P<user>\d+):(?P<accept>yes|no)",
@@ -319,6 +400,7 @@ async def _find_application(stack: Any, guild_id: str, user_id: str) -> Any:
 
 __all__ = [
     "CandidateDecideButton",
+    "SeasonApplyButton",
     "SeasonCreateButton",
     "build_candidates_panel",
     "build_enrolled_panel",
@@ -377,3 +459,13 @@ def register_season_pins(bot: Any, registry: Any) -> list[Any]:
 
 
 __all__.extend(["register_season_pins"])
+
+
+def register_season_items(client: Any) -> None:
+    """Register the season panels' dynamic items (the bot's wiring)."""
+    client.add_dynamic_items(SeasonCreateButton)
+    client.add_dynamic_items(SeasonApplyButton)
+    client.add_dynamic_items(CandidateDecideButton)
+
+
+__all__.extend(["register_season_items"])

@@ -161,3 +161,12 @@ async def beta_console_buttons(bot: Any, guild_id: str, mod: str, tr: Any) -> li
 
 
 __all__ = ["BetaActionButton", "BetaPhaseButton", "beta_console_buttons"]
+
+
+def register_beta_items(client: Any) -> None:
+    """Register the beta console's dynamic items (the bot's wiring)."""
+    client.add_dynamic_items(BetaActionButton)
+    client.add_dynamic_items(BetaPhaseButton)
+
+
+__all__.extend(["register_beta_items"])
