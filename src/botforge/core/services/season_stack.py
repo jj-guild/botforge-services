@@ -37,7 +37,8 @@ class ModStorageSeasonDatabase:
     @property
     def _database(self) -> Any:
         """The inner Mongo database (the enrollment's seam expects it)."""
-        return getattr(self._storage, "_database", None)
+        # the ModStorage binds it as ``_db``
+        return getattr(self._storage, "_db", None)
 
     async def upsert_season(self, document: dict[str, Any]) -> None:
         """Insert or replace one season document by ``_id``."""
