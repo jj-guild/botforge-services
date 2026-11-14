@@ -84,7 +84,7 @@ class TestRootScope:
         guild = MockGuild()
         resolved = await provision_scope(guild, ROOT_SCOPE, "fr", _translate)
         assert set(resolved) == {"general", "discussions"}
-        general = next(c for c in guild.text_channels if c.name == "🗺️ général")
+        general = next(c for c in guild.text_channels if c.name == "🛡️ général")
         assert general.category is None
         assert len(guild.categories) == 0
 

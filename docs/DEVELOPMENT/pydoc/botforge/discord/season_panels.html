@@ -337,7 +337,7 @@ classes&nbsp;in&nbsp;the&nbsp;first&nbsp;place&nbsp;with&nbsp;`class&nbsp;Foo[T]
 <tr><td class="decor title-decor" rowspan=2><span class="code">&nbsp;&nbsp;&nbsp;</span></td>
 <td class="decor title-decor" colspan=2><span class="code"><a href="#SeasonCreateButton">SeasonCreateButton</a>(mod:&nbsp;'str')&nbsp;-&amp;gt;&nbsp;'None'<br>
 &nbsp;<br>
-The&nbsp;creation&nbsp;button:&nbsp;the&nbsp;wizard&nbsp;walks&nbsp;the&nbsp;owner's&nbsp;parameters.<br>&nbsp;</span></td></tr>
+The&nbsp;creation&nbsp;button:&nbsp;the&nbsp;name&nbsp;modal&nbsp;opens&nbsp;the&nbsp;draft&nbsp;flow.<br>&nbsp;</span></td></tr>
 <tr><td>&nbsp;</td>
 <td class="singlecolumn"><dl><dt>Method resolution order:</dt>
 <dd><a href="botforge.discord.season_panels.html#SeasonCreateButton">SeasonCreateButton</a></dd>
@@ -350,7 +350,7 @@ The&nbsp;creation&nbsp;button:&nbsp;the&nbsp;wizard&nbsp;walks&nbsp;the&nbsp;own
 Methods defined here:<br>
 <dl><dt><a name="SeasonCreateButton-__init__"><strong>__init__</strong></a>(self, mod: 'str') -&gt; 'None'</dt><dd><span class="code">Initialize&nbsp;self.&nbsp;&nbsp;See&nbsp;help(<a href="#SeasonCreateButton-type">type</a>(self))&nbsp;for&nbsp;accurate&nbsp;signature.</span></dd></dl>
 
-<dl><dt>async <a name="SeasonCreateButton-callback"><strong>callback</strong></a>(self, interaction: 'discord.Interaction') -&gt; 'None'</dt><dd><span class="code">Run&nbsp;the&nbsp;creation&nbsp;wizard&nbsp;(guarded,&nbsp;ephemeral).</span></dd></dl>
+<dl><dt>async <a name="SeasonCreateButton-callback"><strong>callback</strong></a>(self, interaction: 'discord.Interaction') -&gt; 'None'</dt><dd><span class="code">Open&nbsp;the&nbsp;name&nbsp;modal&nbsp;(guarded,&nbsp;the&nbsp;draft&nbsp;flow&nbsp;follows).</span></dd></dl>
 
 <hr>
 Class methods defined here:<br>
@@ -477,7 +477,7 @@ classes&nbsp;in&nbsp;the&nbsp;first&nbsp;place&nbsp;with&nbsp;`class&nbsp;Foo[T]
 <tr><td class="decor functions-decor"><span class="code">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span></td><td>&nbsp;</td>
 <td class="singlecolumn"><dl><dt>async <a name="-build_candidates_panel"><strong>build_candidates_panel</strong></a>(bot: 'Any', guild_id: 'str', mod: 'str', locale: 'str' = 'fr') -&gt; 'discord.ui.LayoutView'</dt><dd><span class="code">Build&nbsp;the&nbsp;CANDIDATS&nbsp;panel:&nbsp;the&nbsp;pending&nbsp;queue,&nbsp;admin-only&nbsp;decisions.</span></dd></dl>
  <dl><dt>async <a name="-build_enrolled_panel"><strong>build_enrolled_panel</strong></a>(bot: 'Any', guild_id: 'str', mod: 'str', locale: 'str' = 'fr') -&gt; 'discord.ui.LayoutView'</dt><dd><span class="code">Build&nbsp;the&nbsp;INSCRITS&nbsp;panel:&nbsp;the&nbsp;enrolled&nbsp;members&nbsp;list.</span></dd></dl>
- <dl><dt>async <a name="-build_seasons_panel"><strong>build_seasons_panel</strong></a>(bot: 'Any', guild_id: 'str', mod: 'str', locale: 'str' = 'fr') -&gt; 'discord.ui.LayoutView'</dt><dd><span class="code">Build&nbsp;the&nbsp;SAISONS&nbsp;panel:&nbsp;the&nbsp;active&nbsp;season&nbsp;+&nbsp;the&nbsp;creation&nbsp;button.</span></dd></dl>
+ <dl><dt>async <a name="-build_seasons_panel"><strong>build_seasons_panel</strong></a>(bot: 'Any', guild_id: 'str', mod: 'str', locale: 'str' = 'fr') -&gt; 'discord.ui.LayoutView'</dt><dd><span class="code">Build&nbsp;the&nbsp;SAISONS&nbsp;panel:&nbsp;the&nbsp;active&nbsp;season's&nbsp;view&nbsp;+&nbsp;the&nbsp;creation&nbsp;button.</span></dd></dl>
  <dl><dt><a name="-register_season_items"><strong>register_season_items</strong></a>(client: 'Any') -&gt; 'None'</dt><dd><span class="code">Register&nbsp;the&nbsp;season&nbsp;panels'&nbsp;dynamic&nbsp;items&nbsp;(the&nbsp;bot's&nbsp;wiring).</span></dd></dl>
  <dl><dt><a name="-register_season_pins"><strong>register_season_pins</strong></a>(bot: 'Any', registry: 'Any') -&gt; 'list[Any]'</dt><dd><span class="code">Register&nbsp;the&nbsp;three&nbsp;season&nbsp;panels'&nbsp;pins&nbsp;for&nbsp;every&nbsp;enabled&nbsp;seasonal&nbsp;mod.<br>
 &nbsp;<br>

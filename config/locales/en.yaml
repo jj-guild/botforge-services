@@ -429,7 +429,7 @@ en:
         aoe2: Age of Empires II
     panels:
       channels:
-        general: 🗺️ general
+        general: 🛡️ general
         general_description: 'the server''s front door: the menu, every button opens a view'
         discussions: 💬 discussions
         discussions_description: the server's free discussions
@@ -437,7 +437,7 @@ en:
         decisions_description: the server's operating decisions
         logs: 📜 logs
         logs_description: 'the bot''s journal: boots, deploys, errors'
-        admin: 🛠️ admin
+        admin: 🔒 admin
         admin_description: 'the control room: the pinned admin menu'
         live: 📡 live
         live_description: who is playing live, refreshed continuously
