@@ -493,6 +493,41 @@ async def refresh_scope_pins(bot: Any, guild_id: str, scopes: tuple[str, ...]) -
     return refreshed
 
 
+def _seasonal_standard_channels(definition: Any) -> tuple[Any, ...]:
+    """Return the declared channels, plus the SEASONAL standard surfaces (P3).
+
+    Every seasonal mod's folder carries them (owner spec 2026-11-14):
+    saisons (the management panel), candidats (admin-only, the queue),
+    inscrits (the members list) — injected by the SDK, the mod
+    declares nothing; a mod overriding a standard key keeps its own.
+    """
+    declared = tuple(getattr(definition, "channel_categories", ()) or ())
+    if not getattr(definition, "seasonal", False):
+        return declared
+    from botforge.core.services.mod_definition import ChannelCategoryDef
+
+    standard_keys = {"saisons", "candidats", "inscrits"}
+    return (
+            *(channel for channel in declared if str(channel.key) not in standard_keys),
+            ChannelCategoryDef(
+                key="saisons",
+                display_name="📅 saisons",
+                description="The seasons management panel",
+            ),
+            ChannelCategoryDef(
+                key="candidats",
+                display_name="🧡 candidats",
+                description="The enrollment queue (admin only)",
+                admin_only=True,
+            ),
+            ChannelCategoryDef(
+                key="inscrits",
+                display_name="👥 inscrits",
+                description="The enrolled members list",
+            ),
+        )
+
+
 async def provision_mod_channels(bot: Any, guild_id: str, mod_name: str) -> int:
     """Provision one mod's declared channels under its own folder (mod/<name>).
 
@@ -509,7 +544,7 @@ async def provision_mod_channels(bot: Any, guild_id: str, mod_name: str) -> int:
     definition = registry.get(mod_name) if registry is not None else None
     if guild is None or definition is None:
         return 0
-    declared = tuple(getattr(definition, "channel_categories", ()) or ())
+    declared = _seasonal_standard_channels(definition)
     if not declared:
         return 0
     # the declared view roles resolve to IDS through the persisted

@@ -32,6 +32,10 @@ logger = logging.getLogger("botforge.core.season_roles")
 
 PLAYER_ROLE_KEY = "player"
 STAFF_ROLE_KEY = "staff"
+# the enrollment's per-season roles (P3, owner spec 2026-11-14): the
+# candidate acquires CANDIDATE at apply, loses it and gains PLAYER at
+# validation; both reset at the new season
+CANDIDATE_ROLE_KEY = "candidat"
 
 
 class SeasonRolesMembers(Protocol):
@@ -67,13 +71,17 @@ class SeasonRolesService:
 
     def role_key(self, kind: str, season: str) -> str:
         """Build the logical role key for one season (player/staff)."""
-        if kind not in (PLAYER_ROLE_KEY, STAFF_ROLE_KEY):
+        if kind not in (PLAYER_ROLE_KEY, STAFF_ROLE_KEY, CANDIDATE_ROLE_KEY):
             raise ValueError(f"unknown season role kind: {kind!r}")
         return f"{kind}:{season}"
 
     def display_name(self, kind: str, season: str) -> str:
         """Format the platform display name: e.g. 'Joueur ladder s1'."""
-        kind_label = "Joueur" if kind == PLAYER_ROLE_KEY else "Staff"
+        kind_label = {
+            PLAYER_ROLE_KEY: "Joueur",
+            STAFF_ROLE_KEY: "Staff",
+            CANDIDATE_ROLE_KEY: "Candidat",
+        }[kind]
         return f"{kind_label} {self._mod_name} {season}"
 
     async def ensure_role(self, guild_id: str, kind: str, season: str) -> str | None:
@@ -100,6 +108,19 @@ class SeasonRolesService:
     async def sync_staff_role(self, guild_id: str, user_id: str, season: str, member: bool) -> None:
         """Add/remove the season staff role."""
         await self._sync(guild_id, user_id, STAFF_ROLE_KEY, season, member)
+
+    async def sync_candidate_role(self, guild_id: str, user_id: str, season: str, member: bool) -> None:
+        """Add/remove the season CANDIDATE role (the enrollment's state)."""
+        await self._sync(guild_id, user_id, CANDIDATE_ROLE_KEY, season, member)
+
+    async def promote_candidate(self, guild_id: str, user_id: str, season: str) -> None:
+        """Validate one candidate: -candidat, +joueur (the owner's spec).
+
+        The candidate role is LOST, the member (player) role is
+        GAINED — one transition, both sides, never a half state.
+        """
+        await self._sync(guild_id, user_id, CANDIDATE_ROLE_KEY, season, False)
+        await self._sync(guild_id, user_id, PLAYER_ROLE_KEY, season, True)
 
     async def _sync(self, guild_id: str, user_id: str, kind: str, season: str, member: bool) -> None:
         role_id = await self.ensure_role(guild_id, kind, season)

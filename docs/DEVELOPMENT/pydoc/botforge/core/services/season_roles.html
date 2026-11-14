@@ -144,7 +144,14 @@ The&nbsp;role&nbsp;is&nbsp;created&nbsp;(or&nbsp;adopted&nbsp;by&nbsp;name)&nbsp
 the&nbsp;same&nbsp;idempotence&nbsp;as&nbsp;the&nbsp;declared&nbsp;mod&nbsp;roles,&nbsp;but&nbsp;for&nbsp;keys<br>
 a&nbsp;season&nbsp;invents&nbsp;at&nbsp;runtime.</span></dd></dl>
 
+<dl><dt>async <a name="SeasonRolesService-promote_candidate"><strong>promote_candidate</strong></a>(self, guild_id: 'str', user_id: 'str', season: 'str') -&gt; 'None'</dt><dd><span class="code">Validate&nbsp;one&nbsp;candidate:&nbsp;-candidat,&nbsp;+joueur&nbsp;(the&nbsp;owner's&nbsp;spec).<br>
+&nbsp;<br>
+The&nbsp;candidate&nbsp;role&nbsp;is&nbsp;LOST,&nbsp;the&nbsp;member&nbsp;(player)&nbsp;role&nbsp;is<br>
+GAINED&nbsp;—&nbsp;one&nbsp;transition,&nbsp;both&nbsp;sides,&nbsp;never&nbsp;a&nbsp;half&nbsp;state.</span></dd></dl>
+
 <dl><dt><a name="SeasonRolesService-role_key"><strong>role_key</strong></a>(self, kind: 'str', season: 'str') -&gt; 'str'</dt><dd><span class="code">Build&nbsp;the&nbsp;logical&nbsp;role&nbsp;key&nbsp;for&nbsp;one&nbsp;season&nbsp;(player/staff).</span></dd></dl>
+
+<dl><dt>async <a name="SeasonRolesService-sync_candidate_role"><strong>sync_candidate_role</strong></a>(self, guild_id: 'str', user_id: 'str', season: 'str', member: 'bool') -&gt; 'None'</dt><dd><span class="code">Add/remove&nbsp;the&nbsp;season&nbsp;CANDIDATE&nbsp;role&nbsp;(the&nbsp;enrollment's&nbsp;state).</span></dd></dl>
 
 <dl><dt>async <a name="SeasonRolesService-sync_player_role"><strong>sync_player_role</strong></a>(self, guild_id: 'str', user_id: 'str', season: 'str', member: 'bool') -&gt; 'None'</dt><dd><span class="code">Add/remove&nbsp;the&nbsp;season&nbsp;player&nbsp;role&nbsp;to&nbsp;reflect&nbsp;membership.</span></dd></dl>
 
@@ -171,7 +178,8 @@ Data descriptors defined here:<br>
 <td class="section-title" colspan=3>&nbsp;<br><strong class="bigsection">Data</strong></td></tr>
     
 <tr><td class="decor data-decor"><span class="code">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span></td><td>&nbsp;</td>
-<td class="singlecolumn"><strong>PLAYER_ROLE_KEY</strong> = 'player'<br>
+<td class="singlecolumn"><strong>CANDIDATE_ROLE_KEY</strong> = 'candidat'<br>
+<strong>PLAYER_ROLE_KEY</strong> = 'player'<br>
 <strong>STAFF_ROLE_KEY</strong> = 'staff'<br>
 <strong>logger</strong> = &lt;Logger botforge.core.season_roles (INFO)&gt;</td></tr></table>
 </body></html>
