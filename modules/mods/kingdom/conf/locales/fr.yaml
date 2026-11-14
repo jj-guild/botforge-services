@@ -1,4 +1,4 @@
 fr:
   kingdom:
     title: "Kingdom"
-    hello: "Hello from the kingdom mod — scaffolded by `botforge mod init`."
+    description: "Le mod de conquête territoriale Season II (AoE2) — squelette : la structure déclarée, aucune mécanique de jeu."

@@ -31,9 +31,9 @@ def test_kingdom_declaration_autoloads_uninstalled_by_default() -> None:
     root = default_repo_root()
     assert root is not None and "kingdom" in discover_mods(root)
     definition = load_mod_definitions(root / "config", repo_root=root)["kingdom"]
-    # the REAL declaration ships enabled: false — it flips at the skeleton
-    # (#366, when the code moves in); the discovery and the data contracts
-    # hold either way
-    assert definition.enabled is False
+    # the skeleton (#366): the mod BOOTS — enabled: true, the
+    # declaration is the CURRENT drasah reality (singular rename per
+    # #381), the grpc service + the cog load through the §7 loader
+    assert definition.enabled is True
     assert definition.default_active is False
     assert definition.required_games == ("aoe2",)

@@ -1,21 +1,17 @@
 # Kingdom mod (Season II territory-conquest AoE2).
+# Design: kingdoms repo docs/MODS/kingdoms/ (reference Season II + DECISIONS.md D1-D54).
+# Enabled with T2 (enrollment); the declaration is validated at startup.
 #
-# REFERENCE EXAMPLE (docs/GUIDES/mod-init.md, botforge repo): this is the
-# REAL, CURRENT declaration from the vibe/drasah/main integration branch
-# (PR botforge-services#244) — salons-first structure (botforge-services#138,
-# botforge-services#175): channel groups, kinds, admin-only flags and
-# access policies are data here, never code in the mod.
-#
-# One self-contained directory per mod (botforge-services#178): the code's
-# mechanical move into this directory is accompanied with Drasah.
-#
-# false until the code moves from vibe/drasah/main into this directory
-# (botforge-services#178 mechanical move) — flip to true in that same PR.
+# Single source of truth of the salons-first structure (botforge#138,
+# botforge-services#175): the startup provisioning and the /kingdom
+# bootstrap both provision from this declaration — channel groups
+# (categories), kinds (text/forum/announce) and admin-only flags are
+# data here, never code in the mod.
 id: kingdom
-enabled: false
-seasonal: true
-# the visual identity is data (#334): the entry buttons carry it
+enabled: true
+# the visual identity is data (#334)
 emoji: "👑"
+seasonal: true
 settings: {}
 channel_groups:
   - key: profiles
@@ -24,12 +20,19 @@ channel_groups:
   # GONE ENTIRELY (Taverne + the vocal) — nothing is kept or moved.
   - key: conscription
     display_name: ✒️ ᴄᴏɴsᴄʀɪᴘᴛɪᴏɴ
+  # restructuration-gaia-v1 (Drasah 24/10): the Gaïa group RETIRES —
+  # its Territoire salon moves into the Kingdoms category, which is
+  # renamed « Kingdoms-Gaia »; the Taverne (taverne-v1) is born here.
   - key: kingdom
-    display_name: 🏰 ᴋɪɴɢᴅᴏᴍs
-  - key: gaia
-    display_name: 🏰 ɢᴀɪᴀ
+    display_name: 🏰 ᴋɪɴɢᴅᴏᴍs-ɢᴀɪᴀ
   - key: battlefield
     display_name: ⚔️ ᴄʜᴀᴍᴘs ᴅᴇ ʙᴀᴛᴀɪʟʟᴇ
+  # laboratoire-v1 (Drasah 05/11): the visual-validation lab — ONE
+  # admin-only category, ONE salon with the cockpit panel. The lab
+  # never touches the game salons (renders ride the Nilrem data).
+  - key: laboratoire
+    display_name: 🧪 ʟᴀʙᴏʀᴀᴛᴏɪʀᴇ
+    admin_only: true
   - key: admin
     display_name: ⚙️ ᴀᴅᴍɪɴ
     admin_only: true
@@ -68,8 +71,12 @@ channels:
       everyone_view: false
       view: [Kingdom Lord, Kingdom King, Kingdom Admin]
   - key: market
-    display_name: 🛒 marché
-    description: Kingdom market (trades and resources)
+    # marche-emoji-v1 (Drasah 26/10): le nom reste « marché » — seul
+    # l'emoji caddie 🛒 gênait ; 💰 le remplace. La bourse est le nom
+    # de la monnaie, pas du salon. Même clé (renommage id-mappé au
+    # prochain provisioning).
+    display_name: 💰 marché
+    description: The kingdom's market — techs and actions bought with écus
     group: kingdom
     access:
       everyone_view: false
@@ -86,10 +93,16 @@ channels:
   - key: territory
     display_name: 🗺️ territoire
     description: Territories and their cadastre effects — plus the Gaïa AI level (restructuration-serveur-v1 c, Drasah 19/10)
-    group: gaia
-    # restructuration-serveur-v1 c (Drasah 19/10): patrol (AI level)
-    # merged into this Territoire view; exploration is an EPHEMERAL FFA
-    # salon opened when a free-for-all manifests — both salons retire.
+    # restructuration-gaia-v1 (Drasah 24/10): moved from the retired
+    # gaia group into kingdoms (Kingdoms-Gaia).
+    group: kingdom
+    access:
+      everyone_view: false
+      view: [Kingdom Lord, Kingdom King, Kingdom Admin]
+  - key: tavern
+    display_name: 🍺 taverne
+    description: The lords' tavern — drinks, rumors, bets and the Mercenary Chief (taverne-v1)
+    group: kingdom
     access:
       everyone_view: false
       view: [Kingdom Lord, Kingdom King, Kingdom Admin]
@@ -119,13 +132,9 @@ channels:
     access:
       everyone_view: false
       view: [Kingdom Admin]
-  - key: season_management
-    display_name: 🗓️ gestion saison
-    description: Season management (admin only)
-    group: admin
-    access:
-      everyone_view: false
-      view: [Kingdom Admin]
+  # saison-removal-v1 (Drasah 27/10): the 🗓️ gestion saison salon is
+  # GONE — nothing in the mod ever targeted it (no panel, no command);
+  # the live salon is swept as a legacy slug at the next provisioning.
   - key: time_machine
     display_name: ⏱️ machine à temps
     description: Game-clock test panel — fast-forward and snapshots (admin only)
@@ -142,18 +151,54 @@ channels:
     access:
       everyone_view: false
       view: [Kingdom Admin]
-  - key: console
-    display_name: 🛠 console-admin
-    description: The admin test console — text commands, answers in the salon (admin only)
+  # console-removal-v1 (Drasah 25/10): the console channel block is
+  # GONE — the listener never booted in prod; the live flows live on
+  # the ⚙️ Paramètres panel and the salon is swept as a legacy slug.
+  - key: requests
+    display_name: 📬 demandes
+    description: Edit/leave requests (admin only)
+    group: admin
+    access:
+      everyone_view: false
+      view: [Kingdom Admin]
+  # admin-logs-v1 (Drasah 30/10): the destructive admin actions land in
+  # 📜 journal-admin — a timestamped trail (ejection, reking, validation).
+  - key: admin_log
+    display_name: 📜 journal-admin
+    description: Timestamped admin actions log (admin only)
     group: admin
     admin_only: true
     access:
       everyone_view: false
       view: [Kingdom Admin]
-  - key: requests
-    display_name: 📬 demandes
-    description: Edit/leave requests (admin only)
-    group: admin
+  # laboratoire-v1 (Drasah 05/11): the Labo salon — the pinned cockpit
+  # panel renders the mod's views in the salon (admin only, nothing
+  # interactive, Nilrem data, zero game-channel write).
+  - key: lab
+    display_name: 🧪 labo
+    description: The visual laboratory cockpit (admin only)
+    group: laboratoire
+    admin_only: true
+    access:
+      everyone_view: false
+      view: [Kingdom Admin]
+  # laboratoire-v2 (Drasah 05/11): the lab DISPATCHES every test into
+  # two version salons — 📜 original (the deployed code's render) and
+  # 🚧 travaux (the work-in-progress render) — the side-by-side
+  # comparison Drasah validates before confirming to Mistral.
+  - key: lab_original
+    display_name: 📜 original
+    description: The lab's original-version renders — the deployed code (admin only)
+    group: laboratoire
+    admin_only: true
+    access:
+      everyone_view: false
+      view: [Kingdom Admin]
+  - key: lab_travaux
+    display_name: 🚧 travaux
+    description: The lab's work-in-progress renders — the pending version (admin only)
+    group: laboratoire
+    admin_only: true
     access:
       everyone_view: false
       view: [Kingdom Admin]
@@ -176,11 +221,10 @@ roles:
     display_name: Kingdom Admin
     color: 0xE74C3C
     hoisted: true
-    admin: true
 workflows: []
-commands: []
-dependencies: []
 # kingdom is an AoE2 territory-conquest mod: installing it installs aoe2
 # along, and uninstalling aoe2 is refused while kingdom is active
 required_games:
   - aoe2
+commands: []
+dependencies: []
