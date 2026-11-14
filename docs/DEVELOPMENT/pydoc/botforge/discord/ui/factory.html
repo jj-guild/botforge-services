@@ -657,11 +657,25 @@ Data descriptors inherited from <a href="builtins.html#BaseException">builtins.B
 </dl>
 </td></tr></table></td></tr></table><p>
 <table class="section">
+<tr class="decor functions-decor heading-text">
+<td class="section-title" colspan=3>&nbsp;<br><strong class="bigsection">Functions</strong></td></tr>
+    
+<tr><td class="decor functions-decor"><span class="code">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span></td><td>&nbsp;</td>
+<td class="singlecolumn"><dl><dt><a name="-split_action_rows"><strong>split_action_rows</strong></a>(items: 'Sequence[Any]') -&gt; 'list[discord.ui.ActionRow[Any]]'</dt><dd><span class="code">Chunk&nbsp;ready-made&nbsp;items&nbsp;(e.g.&nbsp;``DynamicItem.item``)&nbsp;into&nbsp;valid&nbsp;ActionRows.<br>
+&nbsp;<br>
+Discord's&nbsp;hard&nbsp;rule&nbsp;—&nbsp;at&nbsp;most&nbsp;``MAX_ITEMS_PER_ROW``&nbsp;items&nbsp;per<br>
+ActionRow&nbsp;—&nbsp;lives&nbsp;HERE&nbsp;in&nbsp;the&nbsp;SDK:&nbsp;feature&nbsp;code&nbsp;hands&nbsp;a&nbsp;flat&nbsp;list<br>
+and&nbsp;gets&nbsp;back&nbsp;valid&nbsp;rows,&nbsp;instead&nbsp;of&nbsp;building&nbsp;raw<br>
+``discord.ui.ActionRow``&nbsp;objects&nbsp;and&nbsp;crashing&nbsp;at&nbsp;render&nbsp;or&nbsp;click<br>
+time&nbsp;with&nbsp;``maximum&nbsp;number&nbsp;of&nbsp;children&nbsp;exceeded``.</span></dd></dl>
+</td></tr></table><p>
+<table class="section">
 <tr class="decor data-decor heading-text">
 <td class="section-title" colspan=3>&nbsp;<br><strong class="bigsection">Data</strong></td></tr>
     
 <tr><td class="decor data-decor"><span class="code">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span></td><td>&nbsp;</td>
 <td class="singlecolumn"><strong>BLURPLE</strong> = 5793266<br>
 <strong>GREEN</strong> = 5763719<br>
-<strong>__all__</strong> = ['BLURPLE', 'GREEN', 'Action', 'Button', 'Container', 'Option', 'Row', 'Section', 'SelectMenu', 'Separator', 'Text', 'Thumbnail', 'UIEmbed', 'UILayout', 'UILayoutError']</td></tr></table>
+<strong>MAX_ITEMS_PER_ROW</strong> = 5<br>
+<strong>__all__</strong> = ['BLURPLE', 'GREEN', 'MAX_ITEMS_PER_ROW', 'Action', 'Button', 'Container', 'Option', 'Row', 'Section', 'SelectMenu', 'Separator', 'Text', 'Thumbnail', 'UIEmbed', 'UILayout', 'UILayoutError', 'split_action_rows']</td></tr></table>
 </body></html>
