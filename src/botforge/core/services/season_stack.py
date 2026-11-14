@@ -117,7 +117,11 @@ def season_stack_for(bot: Any, mod: str, guild_id: str) -> Any:
         database=ModStorageSeasonDatabase(storage),
         game_data=game_data,
         season_roles=SeasonRolesService(mod_roles, mod) if mod_roles is not None else None,
-        enrollment_criteria=(getattr(definition, "settings", None) or {}).get("enrollment"),
+        # the enrollment ALWAYS wires: no declared criteria = the queue
+        # decides (the manual mode) — never "not wired" (the merlin
+        # finding: Postuler refused because the declaration carries no
+        # settings.enrollment)
+        enrollment_criteria=(getattr(definition, "settings", None) or {}).get("enrollment") or {},
     )
     cache[key] = stack
     return stack

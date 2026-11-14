@@ -218,6 +218,24 @@ async def _load_season_config(bot: Any, mod: str, guild_id: str, season_id: str)
         return {}
 
 
+async def _sync_beta_flag(interaction: discord.Interaction, draft: dict[str, Any], active: bool) -> None:
+    """Sync the season's beta flag with the core's phase state."""
+    from botforge.core.services.beta import enter_beta, exit_beta
+    from botforge.core.services.mod_storage import ModStateCache
+
+    draft["beta"] = active
+    state_service = getattr(interaction.client, "state_service", None)
+    if state_service is None:
+        return
+    mod = str(draft.get("_mod") or "")
+    guild_id = str(interaction.guild_id or "")
+    cache = ModStateCache(state_service, mod)
+    if active:
+        await enter_beta(cache, guild_id, mod)
+    else:
+        await exit_beta(cache, guild_id, mod)
+
+
 async def _refresh_seasons_pin(bot: Any, guild_id: str, mod: str) -> None:
     """Re-render the seasons channel's pinned post in place.
 
@@ -270,12 +288,18 @@ class _SeasonNameModal(discord.ui.Modal, title="Le nom de la saison"):
         """Record the name, then show the draft's recap."""
         draft = _draft_of(self._bot, self._mod, self._guild)
         draft["name"] = str(self.name.value or "").strip()
+        await _persist_season_config(self._bot, self._mod, self._guild, draft)
         await interaction.response.defer(ephemeral=True)
-        await _send_draft(interaction, self._bot, self._mod, self._guild)
+        await _refresh_seasons_pin(self._bot, self._guild, self._mod)
+        await interaction.followup.send("Enregistré — le post est à jour.", ephemeral=True)
 
 
 class _SeasonValidationModal(discord.ui.Modal, title="La validation"):
-    """The draft's validation parameter: manual or automatic (re-openable)."""
+    """The season's mode: the validation + the beta phase (re-openable).
+
+    The BETA phase rides here as a CHECKBOX (owner direction
+    2026-11-14) — the season's rules bend while the box is checked.
+    """
 
     validation: Any = discord.ui.Label(
         text="La validation des candidatures",
@@ -288,20 +312,33 @@ class _SeasonValidationModal(discord.ui.Modal, title="La validation"):
             min_values=0,
         ),
     )
+    beta: Any = discord.ui.Label(
+        text="Saison bêta (les règles se plient)",
+        component=discord.ui.Checkbox(),
+    )
 
     def __init__(self, bot: Any, mod: str, guild_id: str) -> None:
         super().__init__()
         self._bot = bot
         self._mod = mod
         self._guild = guild_id
+        draft = _draft_of(bot, mod, guild_id)
+        if draft.get("beta"):
+            self.beta.component.default = True
 
     async def on_submit(self, interaction: discord.Interaction) -> None:
-        """Record the mode, then re-render the recap."""
+        """Record the mode + the beta flag, then update the post."""
         draft = _draft_of(self._bot, self._mod, self._guild)
         select: Any = getattr(self.validation, "component", self.validation)
         draft["validation"] = str(select.values[0]) if select.values else "manual"
+        checkbox = getattr(self.beta, "component", None)
+        if checkbox is not None:
+            draft["_mod"] = self._mod
+            await _sync_beta_flag(interaction, draft, bool(getattr(checkbox, "values", False)))
+        await _persist_season_config(self._bot, self._mod, self._guild, draft)
         await interaction.response.defer(ephemeral=True)
-        await _send_draft(interaction, self._bot, self._mod, self._guild)
+        await _refresh_seasons_pin(self._bot, self._guild, self._mod)
+        await interaction.followup.send("Enregistré — le post est à jour.", ephemeral=True)
 
 
 class _SeasonCriteriaModal(discord.ui.Modal, title="Les critères de validation"):
@@ -352,8 +389,10 @@ class _SeasonCriteriaModal(discord.ui.Modal, title="Les critères de validation"
         draft["elo_max"] = str(self.elo_max.value or "").strip()
         draft["min_matches"] = str(self.min_matches.value or "").strip()
         draft["matches_window_days"] = str(self.matches_window_days.value or "").strip()
+        await _persist_season_config(self._bot, self._mod, self._guild, draft)
         await interaction.response.defer(ephemeral=True)
-        await _send_draft(interaction, self._bot, self._mod, self._guild)
+        await _refresh_seasons_pin(self._bot, self._guild, self._mod)
+        await interaction.followup.send("Enregistré — le post est à jour.", ephemeral=True)
 
 
 class _SeasonPlayersModal(discord.ui.Modal, title="Le nombre de joueurs"):
@@ -382,8 +421,10 @@ class _SeasonPlayersModal(discord.ui.Modal, title="Le nombre de joueurs"):
         draft = _draft_of(self._bot, self._mod, self._guild)
         draft["min_players"] = str(self.min_players.value or "").strip()
         draft["max_players"] = str(self.max_players.value or "").strip()
+        await _persist_season_config(self._bot, self._mod, self._guild, draft)
         await interaction.response.defer(ephemeral=True)
-        await _send_draft(interaction, self._bot, self._mod, self._guild)
+        await _refresh_seasons_pin(self._bot, self._guild, self._mod)
+        await interaction.followup.send("Enregistré — le post est à jour.", ephemeral=True)
 
 
 class _SeasonMapPoolModal(discord.ui.Modal, title="Le map pool"):
@@ -430,8 +471,10 @@ class _SeasonMapPoolModal(discord.ui.Modal, title="Le map pool"):
             draft["map_pool"] = str(select.values[0]) if select.values else ""
         else:
             draft["map_pool"] = str(getattr(item, "value", "") or "").strip()
+        await _persist_season_config(self._bot, self._mod, self._guild, draft)
         await interaction.response.defer(ephemeral=True)
-        await _send_draft(interaction, self._bot, self._mod, self._guild)
+        await _refresh_seasons_pin(self._bot, self._guild, self._mod)
+        await interaction.followup.send("Enregistré — le post est à jour.", ephemeral=True)
 
 
 def _map_pool_options(bot: Any) -> list[discord.SelectOption]:
@@ -666,7 +709,7 @@ class SeasonBetaButton(
             draft["beta"] = True
             note = "Phase b\u00eata activ\u00e9e \u2014 les r\u00e8gles se plient."
         await interaction.followup.send(note, ephemeral=True)
-        await _send_edit_bar(interaction, interaction.client, self.mod, guild_id)
+        await _refresh_seasons_pin(interaction.client, guild_id, self.mod)
 
 
 class SeasonCreateConfirmButton(
