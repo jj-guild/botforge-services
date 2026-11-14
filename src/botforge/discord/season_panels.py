@@ -243,8 +243,45 @@ class _SeasonValidationModal(discord.ui.Modal, title="La validation"):
         await _send_draft(interaction, self._bot, self._mod, self._guild)
 
 
-class _SeasonCriteriaModal(discord.ui.Modal, title="Les critères d'inscription"):
-    """The draft's enrollment criteria (re-openable)."""
+class _SeasonCriteriaModal(discord.ui.Modal, title="Les critères de validation"):
+    """The draft's validation criteria (re-openable; the provider work is planned)."""
+
+    elo_type: discord.ui.Select[Any] = discord.ui.Select(
+        placeholder="Le leaderboard qui compte",
+        options=[
+            discord.SelectOption(label="Elo 1v1", value="1v1"),
+            discord.SelectOption(label="Elo TG", value="tg"),
+        ],
+        min_values=0,
+    )
+    elo_max: discord.ui.TextInput[Any] = discord.ui.TextInput(
+        label="Elo max (vide = aucun plafond)", placeholder="2000", required=False, max_length=4
+    )
+    min_matches: discord.ui.TextInput[Any] = discord.ui.TextInput(
+        label="Historique : X derniers matchs (vide = aucun)",
+        placeholder="10",
+        required=False,
+        max_length=4,
+    )
+
+    def __init__(self, bot: Any, mod: str, guild_id: str) -> None:
+        super().__init__()
+        self._bot = bot
+        self._mod = mod
+        self._guild = guild_id
+
+    async def on_submit(self, interaction: discord.Interaction) -> None:
+        """Record the criteria, then re-render the view."""
+        draft = _draft_of(self._bot, self._mod, self._guild)
+        draft["elo_type"] = str(self.elo_type.values[0]) if self.elo_type.values else ""
+        draft["elo_max"] = str(self.elo_max.value or "").strip()
+        draft["min_matches"] = str(self.min_matches.value or "").strip()
+        await interaction.response.defer(ephemeral=True)
+        await _send_draft(interaction, self._bot, self._mod, self._guild)
+
+
+class _SeasonPlayersModal(discord.ui.Modal, title="Le nombre de joueurs"):
+    """The draft's player bounds (re-openable)."""
 
     min_players: discord.ui.TextInput[Any] = discord.ui.TextInput(
         label="Joueurs min (vide = aucun)", placeholder="8", required=False, max_length=4
@@ -265,10 +302,69 @@ class _SeasonCriteriaModal(discord.ui.Modal, title="Les critères d'inscription"
             self.max_players.default = str(draft["max_players"])
 
     async def on_submit(self, interaction: discord.Interaction) -> None:
-        """Record the bounds, then re-render the recap."""
+        """Record the bounds, then re-render the view."""
         draft = _draft_of(self._bot, self._mod, self._guild)
         draft["min_players"] = str(self.min_players.value or "").strip()
         draft["max_players"] = str(self.max_players.value or "").strip()
+        await interaction.response.defer(ephemeral=True)
+        await _send_draft(interaction, self._bot, self._mod, self._guild)
+
+
+class _SeasonMapPoolModal(discord.ui.Modal, title="Le map pool"):
+    """The draft's map pool (re-openable; the pool picker is planned)."""
+
+    map_pool: discord.ui.TextInput[Any] = discord.ui.TextInput(
+        label="Map pool (nom ou id)", placeholder="pool-base", required=False, max_length=64
+    )
+
+    def __init__(self, bot: Any, mod: str, guild_id: str) -> None:
+        super().__init__()
+        self._bot = bot
+        self._mod = mod
+        self._guild = guild_id
+        draft = _draft_of(bot, mod, guild_id)
+        if draft.get("map_pool"):
+            self.map_pool.default = str(draft["map_pool"])
+
+    async def on_submit(self, interaction: discord.Interaction) -> None:
+        """Record the pool, then re-render the view."""
+        draft = _draft_of(self._bot, self._mod, self._guild)
+        draft["map_pool"] = str(self.map_pool.value or "").strip()
+        await interaction.response.defer(ephemeral=True)
+        await _send_draft(interaction, self._bot, self._mod, self._guild)
+
+
+class _SeasonDatesModal(discord.ui.Modal, title="Les dates"):
+    """The draft's enrollment + season dates (re-openable)."""
+
+    enrollment_start: discord.ui.TextInput[Any] = discord.ui.TextInput(
+        label="Début inscription (unix ts, vide = tout de suite)", required=False, max_length=12
+    )
+    enrollment_end: discord.ui.TextInput[Any] = discord.ui.TextInput(
+        label="Fin inscription (unix ts, vide = à la création)", required=False, max_length=12
+    )
+    season_start: discord.ui.TextInput[Any] = discord.ui.TextInput(
+        label="Début saison (unix ts, vide = tout de suite)", required=False, max_length=12
+    )
+    season_end: discord.ui.TextInput[Any] = discord.ui.TextInput(
+        label="Fin saison (unix ts, vide = indéterminée)", required=False, max_length=12
+    )
+
+    def __init__(self, bot: Any, mod: str, guild_id: str) -> None:
+        super().__init__()
+        self._bot = bot
+        self._mod = mod
+        self._guild = guild_id
+        draft = _draft_of(bot, mod, guild_id)
+        for field_key in ("enrollment_start", "enrollment_end", "season_start", "season_end"):
+            if draft.get(field_key):
+                getattr(self, field_key).default = str(draft[field_key])
+
+    async def on_submit(self, interaction: discord.Interaction) -> None:
+        """Record the dates, then re-render the view."""
+        draft = _draft_of(self._bot, self._mod, self._guild)
+        for field_key in ("enrollment_start", "enrollment_end", "season_start", "season_end"):
+            draft[field_key] = str(getattr(self, field_key).value or "").strip()
         await interaction.response.defer(ephemeral=True)
         await _send_draft(interaction, self._bot, self._mod, self._guild)
 
@@ -280,9 +376,12 @@ class SeasonDraftButton(
     """One draft parameter's re-open button (the modal comes back)."""
 
     _PARAM_LABELS: ClassVar[dict[str, str]] = {
-        "name": "Nom",
-        "validation": "Validation",
-        "criteria": "Critères",
+        "name": "✏️ Nom",
+        "validation": "⚙️ Validation",
+        "criteria": "🎯 Critères",
+        "players": "👥 Joueurs",
+        "map_pool": "🗺️ Map pool",
+        "dates": "📅 Dates",
     }
 
     def __init__(self, mod: str, param: str) -> None:
@@ -318,6 +417,9 @@ class SeasonDraftButton(
             "name": _SeasonNameModal,
             "validation": _SeasonValidationModal,
             "criteria": _SeasonCriteriaModal,
+            "players": _SeasonPlayersModal,
+            "map_pool": _SeasonMapPoolModal,
+            "dates": _SeasonDatesModal,
         }.get(self.param)
         if modal is None:
             return
@@ -375,7 +477,22 @@ class SeasonCreateConfirmButton(
                 start_at=int(draft.get("start_at") or 0),
             )
         except Exception as exc:
-            await interaction.followup.send(f"La création a refusé : {exc}", ephemeral=True)
+            message = str(exc)
+            if "already has a live season" in message:
+                await interaction.followup.send(
+                    "Une saison est déjà en cours — termine-la ou supprime-la "
+                    "avant d'en créer une nouvelle.",
+                    ephemeral=True,
+                )
+            elif "season end must be after start" in message:
+                await interaction.followup.send(
+                    "Les dates sont incohérentes — la fin doit suivre le début.",
+                    ephemeral=True,
+                )
+            else:
+                await interaction.followup.send(
+                    f"La création a refusé : {message}", ephemeral=True
+                )
             return
         _drafts(interaction.client).pop((self.mod, guild_id), None)
         await interaction.followup.send(
@@ -507,7 +624,7 @@ async def _enrollment_counts(bot: Any, mod: str, guild_id: str) -> tuple[int, in
 
 def _config_section(mod: str, param: str, value: str) -> Any:
     """Build one config group's Section: the value + the edit accessory."""
-    label = param.replace("_", " ").capitalize()
+    label = SeasonDraftButton._PARAM_LABELS.get(param, param)
     return discord.ui.Section(
         discord.ui.TextDisplay(f"**{label}**\n{value}"),
         accessory=SeasonDraftButton(mod, param),
