@@ -133,6 +133,11 @@ def load_mod_package(name: str, repo_root: Path | None = None) -> LoadedMod:
         except FileNotFoundError:
             layout = None
         if layout is not None and layout.cogs is not None:
+            # the mod's CORE package (src/<name>) registers as
+            # botforge.mods.<name> FIRST — the cog and the grpc service
+            # import their core through it (the layout's package field)
+            if layout.package is not None and (layout.package / "__init__.py").is_file():
+                _load_package_at(f"botforge.mods.{name}", layout.package)
             package = _load_package_at(f"botforge.mods.{name}.cogs", layout.cogs)
             service = None
             has_service = False

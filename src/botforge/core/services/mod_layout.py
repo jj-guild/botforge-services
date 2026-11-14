@@ -96,10 +96,14 @@ def find_mod_declaration(repo_root: Path, name: str) -> ModLayout:
     mod_dir = _modular_mod_dir(root, name)
     conf_yaml = mod_dir / "conf" / "mod.yaml"
     if conf_yaml.is_file():
+        # the mod's CORE package (src/<name>) rides the layout when it
+        # exists — the loader registers it as botforge.mods.<name> so
+        # the cog and the grpc service import their core through it
+        core_package = mod_dir / "src" / name
         return ModLayout(
             name=name,
             declaration=conf_yaml,
-            package=None,
+            package=core_package if (core_package / "__init__.py").is_file() else None,
             locale_files=_locale_files(mod_dir, mod_dir / "conf" / "locales"),
             cogs=mod_dir / "cogs" / name,
             service=mod_dir / "grpc" / name,

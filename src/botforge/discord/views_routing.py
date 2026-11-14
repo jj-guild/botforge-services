@@ -506,6 +506,14 @@ async def _menu_action_row(
     if str(decl.id).startswith("menu:mod:") and not str(decl.id).endswith(":admin"):
         for button in await _mod_folder_doors(bot, guild_id, decl, catalog, locale):
             row.add_item(button)
+    # the mod's BETA CONSOLE rides its admin surface (the SDK's generic
+    # phase — the mod's registered twists, the phase toggle)
+    if str(decl.id).startswith("menu:mod:") and str(decl.id).endswith(":admin"):
+        from botforge.discord.mod_beta import beta_console_buttons
+        from botforge.discord.scope_pins import _tr as _beta_tr
+
+        for button in await beta_console_buttons(bot, guild_id, str(decl.id).split(":")[-2], _beta_tr):
+            row.add_item(button)
     items = list(row.children)
     row = discord.ui.ActionRow[discord.ui.LayoutView]()
     for item in _operator_tools_last(items):
