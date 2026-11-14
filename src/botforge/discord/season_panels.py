@@ -220,13 +220,16 @@ class _SeasonNameModal(discord.ui.Modal, title="Le nom de la saison"):
 class _SeasonValidationModal(discord.ui.Modal, title="La validation"):
     """The draft's validation parameter: manual or automatic (re-openable)."""
 
-    validation: discord.ui.Select[Any] = discord.ui.Select(
-        placeholder="La validation des candidatures",
-        options=[
-            discord.SelectOption(label="Manuelle (les admins décident)", value="manual"),
-            discord.SelectOption(label="Automatique (les critères décident)", value="auto"),
-        ],
-        min_values=0,
+    validation: Any = discord.ui.Label(
+        text="La validation des candidatures",
+        component=discord.ui.Select(
+            options=[
+                discord.SelectOption(label="Manuelle (les admins décident)", value="manual"),
+                discord.SelectOption(label="Automatique (les critères décident)", value="auto"),
+            ],
+            required=False,
+            min_values=0,
+        ),
     )
 
     def __init__(self, bot: Any, mod: str, guild_id: str) -> None:
@@ -238,7 +241,8 @@ class _SeasonValidationModal(discord.ui.Modal, title="La validation"):
     async def on_submit(self, interaction: discord.Interaction) -> None:
         """Record the mode, then re-render the recap."""
         draft = _draft_of(self._bot, self._mod, self._guild)
-        draft["validation"] = str(self.validation.values[0]) if self.validation.values else "manual"
+        select = getattr(self.validation, "component", self.validation)
+        draft["validation"] = str(select.values[0]) if select.values else "manual"
         await interaction.response.defer(ephemeral=True)
         await _send_draft(interaction, self._bot, self._mod, self._guild)
 
@@ -246,13 +250,16 @@ class _SeasonValidationModal(discord.ui.Modal, title="La validation"):
 class _SeasonCriteriaModal(discord.ui.Modal, title="Les critères de validation"):
     """The draft's validation criteria (re-openable; the provider work is planned)."""
 
-    elo_type: discord.ui.Select[Any] = discord.ui.Select(
-        placeholder="Le leaderboard qui compte",
-        options=[
-            discord.SelectOption(label="Elo 1v1", value="1v1"),
-            discord.SelectOption(label="Elo TG", value="tg"),
-        ],
-        min_values=0,
+    elo_type: Any = discord.ui.Label(
+        text="Le leaderboard qui compte",
+        component=discord.ui.Select(
+            options=[
+                discord.SelectOption(label="Elo 1v1", value="1v1"),
+                discord.SelectOption(label="Elo TG", value="tg"),
+            ],
+            required=False,
+            min_values=0,
+        ),
     )
     elo_max: discord.ui.TextInput[Any] = discord.ui.TextInput(
         label="Elo max (vide = aucun plafond)", placeholder="2000", required=False, max_length=4
@@ -273,7 +280,8 @@ class _SeasonCriteriaModal(discord.ui.Modal, title="Les critères de validation"
     async def on_submit(self, interaction: discord.Interaction) -> None:
         """Record the criteria, then re-render the view."""
         draft = _draft_of(self._bot, self._mod, self._guild)
-        draft["elo_type"] = str(self.elo_type.values[0]) if self.elo_type.values else ""
+        elo_select = getattr(self.elo_type, "component", self.elo_type)
+        draft["elo_type"] = str(elo_select.values[0]) if elo_select.values else ""
         draft["elo_max"] = str(self.elo_max.value or "").strip()
         draft["min_matches"] = str(self.min_matches.value or "").strip()
         await interaction.response.defer(ephemeral=True)
@@ -311,11 +319,15 @@ class _SeasonPlayersModal(discord.ui.Modal, title="Le nombre de joueurs"):
 
 
 class _SeasonMapPoolModal(discord.ui.Modal, title="Le map pool"):
-    """The draft's map pool (re-openable; the pool picker is planned)."""
+    """The draft's map pool: a SELECT of the active pools (owner spec).
 
-    map_pool: discord.ui.TextInput[Any] = discord.ui.TextInput(
-        label="Map pool (nom ou id)", placeholder="pool-base", required=False, max_length=64
-    )
+    The active (non-archived, non-deleted) pools stay under Discord's
+    25-option cap — a select, never a free-text id. The pool list comes
+    from the game service; without it the section degrades to a
+    manual id field.
+    """
+
+    map_pool: Any = None  # built per instance (the pools are runtime data)
 
     def __init__(self, bot: Any, mod: str, guild_id: str) -> None:
         super().__init__()
@@ -323,31 +335,76 @@ class _SeasonMapPoolModal(discord.ui.Modal, title="Le map pool"):
         self._mod = mod
         self._guild = guild_id
         draft = _draft_of(bot, mod, guild_id)
-        if draft.get("map_pool"):
-            self.map_pool.default = str(draft["map_pool"])
+        options = _map_pool_options(bot)
+        if options:
+            select = discord.ui.Select(
+                options=options[:25],
+                required=False,
+                min_values=0,
+            )
+            self.map_pool = discord.ui.Label(text="Le pool de la saison", component=select)
+            self.add_item(self.map_pool)
+        else:
+            field: discord.ui.TextInput[Any] = discord.ui.TextInput(
+                label="Map pool (id)", placeholder="pool-base", required=False, max_length=64
+            )
+            if draft.get("map_pool"):
+                field.default = str(draft["map_pool"])
+            self.map_pool = field
+            self.add_item(field)
 
     async def on_submit(self, interaction: discord.Interaction) -> None:
         """Record the pool, then re-render the view."""
         draft = _draft_of(self._bot, self._mod, self._guild)
-        draft["map_pool"] = str(self.map_pool.value or "").strip()
+        item = self.map_pool
+        select = getattr(item, "component", None)
+        if select is not None:
+            draft["map_pool"] = str(select.values[0]) if select.values else ""
+        else:
+            draft["map_pool"] = str(getattr(item, "value", "") or "").strip()
         await interaction.response.defer(ephemeral=True)
         await _send_draft(interaction, self._bot, self._mod, self._guild)
+
+
+def _map_pool_options(bot: Any) -> list[discord.SelectOption]:
+    """List the game's active map pools as select options (<25 by design)."""
+    from botforge.discord.wiring import build_games_service
+
+    service = build_games_service()
+    options: list[discord.SelectOption] = []
+    if service is None:
+        return options
+    try:
+        pools = service.list_map_pools()
+    except Exception:
+        logger.warning("SEASON VIEW: the pool list unreadable", exc_info=True)
+        return options
+    for pool in pools or ():
+        pool_id = str(getattr(pool, "id", "") or "")
+        name = str(getattr(pool, "name", "") or pool_id)
+        state = str(getattr(pool, "state", "") or "")
+        if not pool_id or state in {"archived", "closed", "deleted"}:
+            continue
+        options.append(discord.SelectOption(label=name[:100], value=pool_id, description=state))
+        if len(options) >= 25:
+            break
+    return options
 
 
 class _SeasonDatesModal(discord.ui.Modal, title="Les dates"):
     """The draft's enrollment + season dates (re-openable)."""
 
     enrollment_start: discord.ui.TextInput[Any] = discord.ui.TextInput(
-        label="Début inscription (unix ts, vide = tout de suite)", required=False, max_length=12
+        label="Début inscription (unix ts)", required=False, max_length=12
     )
     enrollment_end: discord.ui.TextInput[Any] = discord.ui.TextInput(
-        label="Fin inscription (unix ts, vide = à la création)", required=False, max_length=12
+        label="Fin inscription (unix ts)", required=False, max_length=12
     )
     season_start: discord.ui.TextInput[Any] = discord.ui.TextInput(
-        label="Début saison (unix ts, vide = tout de suite)", required=False, max_length=12
+        label="Début saison (unix ts)", required=False, max_length=12
     )
     season_end: discord.ui.TextInput[Any] = discord.ui.TextInput(
-        label="Fin saison (unix ts, vide = indéterminée)", required=False, max_length=12
+        label="Fin saison (unix ts)", required=False, max_length=12
     )
 
     def __init__(self, bot: Any, mod: str, guild_id: str) -> None:
@@ -574,10 +631,12 @@ async def build_season_layout(
     if draft.get("min_matches"):
         criteria_bits.append(f"{draft['min_matches']} derniers matchs")
     players_bits = []
-    if draft.get("min_players"):
-        players_bits.append(f"min {draft['min_players']}")
-    if draft.get("max_players"):
-        players_bits.append(f"max {draft['max_players']}")
+    if draft.get("min_players") and draft.get("max_players"):
+        players_bits.append(f"Entre {draft['min_players']} et {draft['max_players']} joueurs")
+    elif draft.get("min_players"):
+        players_bits.append(f"Au moins {draft['min_players']} joueurs")
+    elif draft.get("max_players"):
+        players_bits.append(f"Au plus {draft['max_players']} joueurs")
     sections: list[tuple[str, str]] = [
         ("name", str(draft.get("name") or "\u2014")),
         ("validation", validation_label),
