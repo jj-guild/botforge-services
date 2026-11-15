@@ -100,6 +100,10 @@ async def build_candidates_panel(bot: Any, guild_id: str, mod: str, locale: str 
         lines.append(f"\u2022 **{display}** (<@{user_id}>) — `{user_id}`")
     if not pending:
         lines.append("_Aucun candidat en attente._")
+    seasons_list = await _seasons_list_lines(bot, mod, guild_id)
+    if seasons_list:
+        lines.append("")
+        lines.extend(seasons_list)
     view.add_item(discord.ui.Container(discord.ui.TextDisplay("\n".join(lines))))
     buttons: list[Any] = []
     for application in pending[:5]:
@@ -133,6 +137,10 @@ async def build_enrolled_panel(bot: Any, guild_id: str, mod: str, locale: str = 
         lines.append(f"\u2022 **{display}** (<@{user_id}>)")
     if not accepted:
         lines.append("_Aucun inscrit._")
+    seasons_list = await _seasons_list_lines(bot, mod, guild_id)
+    if seasons_list:
+        lines.append("")
+        lines.extend(seasons_list)
     view.add_item(discord.ui.Container(discord.ui.TextDisplay("\n".join(lines))))
     from botforge.discord.ui.view_footer import add_view_footer
 
@@ -983,6 +991,26 @@ def _enrollment_open(draft: dict[str, Any]) -> bool:
     return start < now < end
 
 
+async def _seasons_list_lines(bot: Any, mod: str, guild_id: str) -> list[str]:
+    """List the ladder's seasons (the history under the active one)."""
+    stack = _stack(bot, mod, guild_id)
+    if stack is None:
+        return []
+    try:
+        seasons = await stack.seasons.list_seasons(stack.scope)
+    except Exception:
+        logger.warning("SEASON VIEW: the seasons list unreadable", exc_info=True)
+        return []
+    lines = ["**Saisons** :"]
+    for season in seasons[:10]:
+        season_id = str(getattr(season, "id", "?"))
+        name = str(getattr(season, "name", season_id))
+        state = str(getattr(season, "state", "?"))
+        marker = " \u25b8" if str(getattr(season, "state", "")) in ("scheduled", "active") else ""
+        lines.append(f"\u2022 {name} (`{season_id}`) — {state}{marker}")
+    return lines if len(lines) > 1 else []
+
+
 async def build_season_layout(
     bot: Any, mod: str, guild_id: str, draft: dict[str, Any], read_mode: bool
 ) -> discord.ui.LayoutView:
@@ -998,10 +1026,18 @@ async def build_season_layout(
     view = discord.ui.LayoutView(timeout=None)
     season_id = str(draft.get("season_id") or "")
     lines = _season_body(draft)
+    if season_id:
+        # the #321 card contract: the resource id sits at the same
+        # place on every card — the subtitle's first line, in backticks
+        lines.insert(1, f"-# `{season_id}`")
     if read_mode:
         candidates, enrolled = await _enrollment_counts(bot, mod, guild_id)
         lines.append("")
         lines.append(f"\U0001f9e1 Candidats : **{candidates}** \u00b7 \U0001f465 Inscrits : **{enrolled}**")
+    seasons_list = await _seasons_list_lines(bot, mod, guild_id)
+    if seasons_list:
+        lines.append("")
+        lines.extend(seasons_list)
     view.add_item(discord.ui.Container(discord.ui.TextDisplay("\n".join(lines))))
     from botforge.discord.ui.factory import split_action_rows
     from botforge.discord.ui.view_footer import add_view_footer
@@ -1018,35 +1054,43 @@ async def build_season_layout(
     for row in split_action_rows(row_items):
         view.add_item(row)
 
-    footer_id = f"panel:mod:{mod}:seasons:{season_id}" if season_id else f"panel:mod:{mod}:seasons"
+    # the footer id: the guild + the season's INDEX (the season id's
+    # last segment) — no repeated mod, no implicit game key
+    index = season_id.rsplit(":", 1)[-1] if season_id else ""
+    footer_id = (
+        f"panel:mod:{mod}:seasons:{guild_id}:{index}"
+        if index
+        else f"panel:mod:{mod}:seasons:{guild_id}"
+    )
     add_view_footer(view, footer_id)
     return view
 
 
-async def _send_edit_bar(interaction: discord.Interaction, bot: Any, mod: str, guild_id: str) -> None:
+async def _send_edit_bar(
+    interaction: discord.Interaction, bot: Any, mod: str, guild_id: str, has_season: bool = True
+) -> None:
     """Send the season's EDIT action bar (ephemeral, the admin surface).
 
     The read post stays clean; the admin button reveals THIS bar: the
-    parameter openers (each re-calls its modal), the beta phase toggle,
-    the create button.
+    parameter openers (each re-calls its modal), the create button
+    (only when no season lives), the management (only when one does).
+    No header — the panel id rides the footer.
     """
     draft = _draft_of(bot, mod, guild_id)
     view = discord.ui.LayoutView(timeout=None)
-    lines = [f"# {draft.get('name') or 'Nouvelle saison'} \u2014 \u00e9dition"]
-    lines.append("_Rappelle une modal pour red\u00e9finir un param\u00e8tre._")
-    view.add_item(discord.ui.Container(discord.ui.TextDisplay("\n".join(lines))))
     from botforge.discord.ui.factory import split_action_rows
 
     edit_items: list[Any] = [
         *(SeasonDraftButton(mod, param).item for param in _EDIT_PARAMS),
         *(SeasonDraftButton(mod, key).item for key in _DATE_FIELDS),
-        SeasonBetaButton(mod, bool(draft.get("beta"))).item,
-        SeasonCreateConfirmButton(mod).item,
-        SeasonManageButton(mod, "end").item,
-        SeasonManageButton(mod, "delete").item,
+        *( [SeasonCreateConfirmButton(mod).item] if not has_season else [] ),
+        *( [SeasonManageButton(mod, "end").item, SeasonManageButton(mod, "delete").item] if has_season else [] ),
     ]
     for row in split_action_rows(edit_items):
         view.add_item(row)
+    from botforge.discord.ui.view_footer import add_view_footer
+
+    add_view_footer(view, f"panel:mod:{mod}:seasons:{guild_id}")
     if interaction.response.is_done():
         await interaction.followup.send(view=view, ephemeral=True)
     else:

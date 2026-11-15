@@ -85,7 +85,7 @@ class TestEditBar:
         assert rows
         assert all(len(r.children) <= MAX_ITEMS_PER_ROW for r in rows)
         buttons = [i for r in rows for i in r.children]
-        assert len(buttons) == 13  # 5 params + 4 dates + create + end + delete
+        assert len(buttons) == 11  # 5 params + 4 dates + end + delete (no create: a season lives)
 
 
 class _FakeEnrollment:
