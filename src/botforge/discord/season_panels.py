@@ -1436,7 +1436,16 @@ def start_season_refresher(bot: Any) -> None:
     is a snapshot — the refresher re-renders it so the button appears
     when the enrollment window opens and disappears when it closes,
     without anyone clicking anything.
+
+    Gated off in the test journeys (``BOTFORGE_SEASON_REFRESHER=off``):
+    a background loop never settles, and the journeys' runner waits
+    for the bot's outstanding work to drain.
     """
+    import os
+
+    if os.environ.get("BOTFORGE_SEASON_REFRESHER", "").lower() in {"off", "0", "false"}:
+        return
+
     from discord.ext import tasks
 
     @tasks.loop(minutes=5)
