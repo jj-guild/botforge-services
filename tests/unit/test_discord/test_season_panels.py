@@ -1,14 +1,15 @@
-"""The seasonal panels: the SDK row rule, the admin edit bar, the Postuler flow.
+"""The seasonal panels: the phase machine, the row rule, Postuler.
 
-Regression pins (merlin report 2026-11-14):
+The drastic simplification (owner spec 2026-11-15): a season is a
+name, a phase (préparation -> inscriptions ouvertes -> en attente
+d'ouverture -> ouverte -> fermée, with a direct start from
+inscriptions), TODO criteria, and the admin validation in the
+candidates channel. Regression pins:
 
-- the seasons panel's Admin button must ANSWER — the edit bar used to
-  pack 6 buttons into ONE ActionRow and crash after the defer with
-  "maximum number of children exceeded" (the click died silently).
-  The 5-per-row rule is now hardcoded in the SDK (``split_action_rows``);
+- the 5-per-row rule stays hardcoded in the SDK (``split_action_rows``);
 - Postuler never asks the pseudo or the AoE2 profile ids in a form:
-  both resolve from the core (identity + registration bindings); a
-  player missing either one is redirected to #general (``/register``).
+  both resolve from the core; a player missing either one is
+  redirected to #general (``/register``).
 """
 
 from __future__ import annotations
@@ -22,10 +23,9 @@ import pytest
 
 import botforge.discord.ui.panels_provisioning as panels_provisioning
 from botforge.discord.season_panels import (
-    SeasonAdminButton,
     SeasonApplyButton,
-    _send_edit_bar,
     build_candidates_panel,
+    build_seasons_panel,
 )
 from botforge.discord.ui.factory import (
     MAX_ITEMS_PER_ROW,
@@ -74,20 +74,6 @@ class TestSdkRowRule:
         assert split_action_rows([]) == []
 
 
-class TestEditBar:
-    async def test_the_six_draft_params_never_crash_the_bar(self) -> None:
-        bot = SimpleNamespace()
-        interaction = _interaction(bot)
-        await _send_edit_bar(interaction, bot, "kingdom", "123")
-        assert interaction.followup.send.await_count == 1
-        view = interaction.followup.send.await_args.kwargs["view"]
-        rows = _rows_of(view)
-        assert rows
-        assert all(len(r.children) <= MAX_ITEMS_PER_ROW for r in rows)
-        buttons = [i for r in rows for i in r.children]
-        assert len(buttons) == 11  # 5 params + 4 dates + end + delete (no create: a season lives)
-
-
 class _FakeEnrollment:
     def __init__(self, applications: list[Any]) -> None:
         self._applications = applications
@@ -108,15 +94,16 @@ class TestCandidatesPanel:
         assert sum(len(r.children) for r in rows) == 6  # 3 candidates x validate/refuse
 
 
-class TestAdminButtonAnswers:
-    async def test_the_admin_button_sends_the_edit_bar(self) -> None:
-        bot = SimpleNamespace(status_service=SimpleNamespace(bot_admins=("42",)))
-        interaction = _interaction(bot)
-        await SeasonAdminButton("kingdom").callback(interaction)
-        assert interaction.response.defer.await_count == 1
-        assert interaction.followup.send.await_count == 1
-        view = interaction.followup.send.await_args.kwargs["view"]
-        assert all(len(r.children) <= MAX_ITEMS_PER_ROW for r in _rows_of(view))
+class TestPhasePanel:
+    async def test_the_panel_renders_the_phase_and_transitions(self) -> None:
+        bot = SimpleNamespace()
+        bot.state_service = None
+        bot.season_stacks = {}
+        view = await build_seasons_panel(bot, "123", "kingdom")
+        rows = _rows_of(view)
+        buttons = [i for r in rows for i in r.children]
+        # no active season: the create button only
+        assert any("Créer" in str(getattr(b, "label", "")) for b in buttons)
 
 
 class _FakeIdentity:
