@@ -9,7 +9,7 @@ three pinned surfaces:
   (the SeasonService's gate)
 - **candidats** — admin-only: the pending queue, one validate/refuse
   pair per candidate; only the admins decide
-- **inscrits** — the enrolled members list
+- **inscrits** — the season's participants list
 
 The panels ride the per-mod season stack (SeasonService +
 EnrollmentService + SeasonRolesService); the ids resolve through the
@@ -141,7 +141,11 @@ class SeasonPhaseButton(
 async def build_seasons_panel(bot: Any, guild_id: str, mod: str, locale: str = "fr") -> discord.ui.LayoutView:
     """Build the SAISONS panel (the owner's drastic simplification).
 
-    The name, the phase, the TODO criteria, the counts, the transitions.
+    The name, the season id, the phase, the TODO criteria, the
+    counts — and the player's buttons: Je veux m'inscrire (when the
+    inscriptions are open), the candidates list, the participants
+    list, the admin door. The phase transitions live in the admin
+    submenu, never here.
     """
     stack = _stack(bot, mod, guild_id)
     active = None
@@ -169,46 +173,93 @@ async def build_seasons_panel(bot: Any, guild_id: str, mod: str, locale: str = "
     config = await _load_season_config(bot, mod, guild_id, season_id)
     name = str(config.get("name") or getattr(active, "name", season_id))
     phase = _phase_of(config)
-    candidates, enrolled = await _enrollment_counts(bot, mod, guild_id)
+    candidates, participants = await _enrollment_counts(bot, mod, guild_id)
     lines = [f"# {name}"]
+    lines.append(f"`{season_id}`")
     lines.append(f"\u00c9tat : **{_PHASE_LABELS[phase]}**")
     lines.append("")
     lines.append("**Crit\u00e8res** (\u00e0 venir) : un compte AoE2 + la validation admin dans le channel admin")
-    lines.append(f"\U0001f9e1 Candidats : **{candidates}** \u00b7 \U0001f465 Inscrits : **{enrolled}**")
+    lines.append(f"\U0001f9e1 Candidats : **{candidates}** \u00b7 \U0001f465 Participants : **{participants}**")
     view.add_item(discord.ui.Container(discord.ui.TextDisplay("\n".join(lines))))
     from botforge.discord.ui.factory import split_action_rows
     from botforge.discord.ui.view_footer import add_view_footer
 
-    items: list[Any] = []
-    index = _PHASES.index(phase)
-    if index > 0:
-        items.append(
-            discord.ui.Button(
-                custom_id=f"{_NS}:phase:{mod}:prev"[:100],
-                label="\u2190",
-                style=discord.ButtonStyle.secondary,
-            )
-        )
-    next_label = _NEXT_LABELS.get(phase)
-    if next_label:
-        items.append(SeasonPhaseButton(mod, "next", next_label).item)
+    items: list[Any] = [SeasonAdminButton(mod).item]
     if phase == "inscriptions":
-        # the direct start: the season may open WITHOUT closing the
-        # inscriptions (the owner's choice, 2026-11-15)
-        items.append(SeasonPhaseButton(mod, "start", "Démarrer la saison").item)
-        items.append(SeasonApplyButton(mod).item)
-    items.append(SeasonAdminButton(mod).item)
+        # the player's door rides FIRST when the inscriptions are open
+        items.insert(0, SeasonApplyButton(mod).item)
+    items.append(SeasonListButton(mod, "candidates").item)
+    items.append(SeasonListButton(mod, "participants").item)
     for row in split_action_rows(items):
         view.add_item(row)
     add_view_footer(view, f"panel:mod:{mod}:seasons:{season_id}")
     return view
 
 
+class SeasonListButton(
+    discord.ui.DynamicItem[discord.ui.Button[Any]],
+    template=rf"{_NS}:list:(?P<mod>[a-z0-9_-]+):(?P<what>candidates|participants)",
+):
+    """The read post's list buttons: the candidates or the participants."""
+
+    def __init__(self, mod: str, what: str) -> None:
+        labels = {"candidates": "\U0001f9e1 Candidats", "participants": "\U0001f465 Participants"}
+        super().__init__(
+            discord.ui.Button(
+                custom_id=f"{_NS}:list:{mod}:{what}"[:100],
+                label=labels.get(what, what),
+                style=discord.ButtonStyle.secondary,
+            )
+        )
+        self.mod = mod
+        self.what = what
+
+    @classmethod
+    async def from_custom_id(
+        cls,
+        interaction: discord.Interaction,
+        item: discord.ui.Item[Any],
+        match: Any,
+        /,
+    ) -> SeasonListButton:
+        """Rebuild the button at click time."""
+        return cls(match["mod"], match["what"])
+
+    async def callback(self, interaction: discord.Interaction) -> None:
+        """Show the list (ephemeral, the live data)."""
+        await interaction.response.defer(ephemeral=True)
+        guild_id = str(interaction.guild_id or "")
+        stack = _stack(interaction.client, self.mod, guild_id)
+        if stack is None or stack.enrollment is None:
+            return
+        state = "pending" if self.what == "candidates" else "accepted"
+        title = "Candidats" if self.what == "candidates" else "Participants"
+        try:
+            applications = await stack.enrollment.list_applications(guild_id, state=state)
+        except Exception:
+            applications = []
+        lines = [f"# {title} — {self.mod}"]
+        if not applications:
+            lines.append("_Personne._")
+        for application in applications:
+            user_id = str(getattr(application, "user_id", "?"))
+            display = str(getattr(application, "display_name", "?"))
+            lines.append(f"\u2022 **{display}** (<@{user_id}>)")
+        view = discord.ui.LayoutView(timeout=None)
+        view.add_item(discord.ui.Container(discord.ui.TextDisplay("\n".join(lines))))
+        await interaction.followup.send(view=view, ephemeral=True)
+
+
 class SeasonAdminButton(
     discord.ui.DynamicItem[discord.ui.Button[Any]],
     template=rf"{_NS}:admin:(?P<mod>[a-z0-9_-]+)",
 ):
-    """The post's admin button: opens the NAME modal (the only edit)."""
+    """The post's admin door: opens the admin action bar (ephemeral).
+
+    The bar carries the settings (the name) and the PHASE
+    TRANSITIONS — the read post stays clean (the owner's rule
+    2026-11-15).
+    """
 
     def __init__(self, mod: str) -> None:
         super().__init__(
@@ -233,11 +284,12 @@ class SeasonAdminButton(
         return cls(match["mod"])
 
     async def callback(self, interaction: discord.Interaction) -> None:
-        """Open the name modal (guarded)."""
+        """Reveal the admin action bar (guarded, ephemeral)."""
         from botforge.discord.mod_beta import _beta_guard
 
         if not await _beta_guard(interaction):
             return
+        await interaction.response.defer(ephemeral=True)
         guild_id = str(interaction.guild_id or "")
         stack = _stack(interaction.client, self.mod, guild_id)
         if stack is not None:
@@ -251,11 +303,75 @@ class SeasonAdminButton(
                 config["season_id"] = season_id
                 config.setdefault("name", str(getattr(active, "name", "")))
                 _draft_of(interaction.client, self.mod, guild_id).update(config)
-        await interaction.response.send_modal(
-            _SeasonNameModal(interaction.client, self.mod, guild_id)
+        await _send_admin_bar(interaction, interaction.client, self.mod, guild_id)
+
+
+async def _send_admin_bar(interaction: discord.Interaction, bot: Any, mod: str, guild_id: str) -> None:
+    """Send the admin action bar: the settings + the transitions."""
+    draft = _draft_of(bot, mod, guild_id)
+    phase = _phase_of(draft)
+    index = _PHASES.index(phase)
+    view = discord.ui.LayoutView(timeout=None)
+    lines = [f"# {draft.get('name') or 'Saison'} — admin"]
+    lines.append(f"\u00c9tat : **{_PHASE_LABELS[phase]}**")
+    view.add_item(discord.ui.Container(discord.ui.TextDisplay("\n".join(lines))))
+    from botforge.discord.ui.factory import split_action_rows
+
+    items: list[Any] = [SeasonNameButton(mod).item]
+    if index > 0:
+        # the previous state, NAMED (never a bare arrow)
+        items.append(SeasonPhaseButton(mod, "prev", f"\u2190 {_PHASE_LABELS[_PHASES[index - 1]]}").item)
+    next_label = _NEXT_LABELS.get(phase)
+    if next_label:
+        items.append(SeasonPhaseButton(mod, "next", next_label).item)
+    if phase == "inscriptions":
+        # the direct start: the season may open WITHOUT closing the
+        # inscriptions (the owner's choice)
+        items.append(SeasonPhaseButton(mod, "start", "D\u00e9marrer la saison").item)
+    for row in split_action_rows(items):
+        view.add_item(row)
+    if interaction.response.is_done():
+        await interaction.followup.send(view=view, ephemeral=True)
+    else:
+        await interaction.response.send_message(view=view, ephemeral=True)
+
+
+class SeasonNameButton(
+    discord.ui.DynamicItem[discord.ui.Button[Any]],
+    template=rf"{_NS}:name:(?P<mod>[a-z0-9_-]+)",
+):
+    """The admin bar's name button: opens the name modal."""
+
+    def __init__(self, mod: str) -> None:
+        super().__init__(
+            discord.ui.Button(
+                custom_id=f"{_NS}:name:{mod}"[:100],
+                label="\u270f\ufe0f Nom",
+                style=discord.ButtonStyle.secondary,
+            )
         )
+        self.mod = mod
 
+    @classmethod
+    async def from_custom_id(
+        cls,
+        interaction: discord.Interaction,
+        item: discord.ui.Item[Any],
+        match: Any,
+        /,
+    ) -> SeasonNameButton:
+        """Rebuild the button at click time."""
+        return cls(match["mod"])
 
+    async def callback(self, interaction: discord.Interaction) -> None:
+        """Open the name modal (guarded)."""
+        from botforge.discord.mod_beta import _beta_guard
+
+        if not await _beta_guard(interaction):
+            return
+        await interaction.response.send_modal(
+            _SeasonNameModal(interaction.client, self.mod, str(interaction.guild_id or ""))
+        )
 
 
 async def _enrollment_counts(bot: Any, mod: str, guild_id: str) -> tuple[int, int]:
@@ -329,8 +445,8 @@ async def build_candidates_panel(bot: Any, guild_id: str, mod: str, locale: str 
     return view
 
 
-async def build_enrolled_panel(bot: Any, guild_id: str, mod: str, locale: str = "fr") -> discord.ui.LayoutView:
-    """Build the INSCRITS panel: the enrolled members list."""
+async def build_participants_panel(bot: Any, guild_id: str, mod: str, locale: str = "fr") -> discord.ui.LayoutView:
+    """Build the INSCRITS panel: the season's participants list."""
     view = discord.ui.LayoutView(timeout=None)
     stack = _stack(bot, mod, guild_id)
     lines = [f"# \U0001f465 {mod.capitalize()} — inscrits"]
@@ -339,7 +455,7 @@ async def build_enrolled_panel(bot: Any, guild_id: str, mod: str, locale: str = 
         try:
             accepted = list(await stack.enrollment.list_applications(guild_id, state="accepted"))
         except Exception:
-            logger.warning("SEASON PANEL: the enrolled list unreadable", exc_info=True)
+            logger.warning("SEASON PANEL: the participants list unreadable", exc_info=True)
     for application in accepted[:40]:
         user_id = str(getattr(application, "user_id", "?"))
         display = str(getattr(application, "display_name", "?"))
@@ -353,7 +469,7 @@ async def build_enrolled_panel(bot: Any, guild_id: str, mod: str, locale: str = 
     view.add_item(discord.ui.Container(discord.ui.TextDisplay("\n".join(lines))))
     from botforge.discord.ui.view_footer import add_view_footer
 
-    add_view_footer(view, f"panel:mod:{mod}:enrolled")
+    add_view_footer(view, f"panel:mod:{mod}:participants")
     return view
 
 
@@ -462,6 +578,76 @@ async def _sync_beta_flag(interaction: discord.Interaction, draft: dict[str, Any
         await exit_beta(cache, guild_id, mod)
 
 
+
+
+async def _current_season_config(bot: Any, mod: str, guild_id: str) -> dict[str, Any]:
+    """Load the active season's config (empty when none)."""
+    stack = _stack(bot, mod, guild_id)
+    if stack is None:
+        return {}
+    try:
+        active = await await_active(stack, guild_id)
+    except Exception:
+        return {}
+    if active is None:
+        return {}
+    season_id = str(getattr(active, "id", ""))
+    config = await _load_season_config(bot, mod, guild_id, season_id)
+    config["season_id"] = season_id
+    return config
+
+
+async def _announce_application(
+    bot: Any, guild_id: str, mod: str, user_id: str, display_name: str
+) -> None:
+    """Post the new application in the mod's admin channel."""
+    from botforge.discord.ui.panels_provisioning import stored_channel_id
+
+    try:
+        admin_channel = await stored_channel_id(guild_id, f"mod/{mod}", "admin")
+        if not admin_channel:
+            return
+        guild = bot.get_guild(int(guild_id)) if guild_id.isdigit() else None
+        channel = guild.get_channel(int(admin_channel)) if guild and admin_channel.isdigit() else None
+        if channel is None:
+            return
+        await channel.send(
+            f"\U0001f9e1 Nouvelle candidature : **{display_name}** (<@{user_id}>) — "
+            f"à valider dans le channel candidats."
+        )
+    except Exception:
+        logger.warning("SEASON: the admin announce failed — best-effort", exc_info=True)
+
+
+async def _refresh_all_season_posts(bot: Any, guild_id: str, mod: str) -> None:
+    """Update the seasons, candidates and participants posts in place."""
+    await _refresh_seasons_pin(bot, guild_id, mod)
+    await _refresh_season_pin(bot, guild_id, mod, "candidates")
+    await _refresh_season_pin(bot, guild_id, mod, "participants")
+
+
+async def _refresh_season_pin(bot: Any, guild_id: str, mod: str, pin_key: str) -> None:
+    """Update one seasonal post in place (the direct fetch + edit)."""
+    from botforge.discord.static_pins import registered_static_pins
+
+    key = f"view:mod:{mod}:{pin_key}"
+    spec = next((s for s in registered_static_pins() if s.key == key), None)
+    if spec is None:
+        return
+    try:
+        channel_id = await spec.resolve_channel(guild_id)
+        message_id = await spec.resolve_message_id(guild_id)
+        if not channel_id or not message_id:
+            return
+        guild = bot.get_guild(int(guild_id)) if guild_id.isdigit() else None
+        channel = guild.get_channel(int(channel_id)) if guild and channel_id.isdigit() else None
+        if channel is None:
+            return
+        message = await channel.fetch_message(int(message_id))
+        layout = await spec.build_layout(guild_id)
+        await message.edit(view=layout)
+    except Exception:
+        logger.warning("SEASON: the %s post update failed — best-effort", pin_key, exc_info=True)
 
 
 async def _refresh_seasons_pin(bot: Any, guild_id: str, mod: str) -> None:
@@ -590,7 +776,7 @@ class SeasonApplyButton(
         super().__init__(
             discord.ui.Button(
                 custom_id=f"{_NS}:apply:{mod}"[:100],
-                label="Postuler",
+                label="Je veux m'inscrire",
                 emoji="\U0001f4dd",
                 style=discord.ButtonStyle.primary,
             )
@@ -609,10 +795,12 @@ class SeasonApplyButton(
         return cls(match["mod"])
 
     async def callback(self, interaction: discord.Interaction) -> None:
-        """Apply directly (anyone may apply).
+        """Apply (or WITHDRAW when already in) — anyone may click.
 
-        The pseudo and the linked game profile ids resolve from the core —
-        never asked in a form.
+        The pseudo and the linked game profile ids resolve from the
+        core — never asked in a form. A player already
+        candidate/participant on an unstarted season may DESIST: the
+        same click withdraws them.
         """
         await interaction.response.defer(ephemeral=True)
         bot = interaction.client
@@ -622,6 +810,21 @@ class SeasonApplyButton(
         if stack is None or stack.enrollment is None:
             await interaction.followup.send("The enrollment is not wired on this guild.", ephemeral=True)
             return
+        # the désistement: already in + the season not started
+        existing = await _find_application(stack, guild_id, user_id)
+        if existing is not None and str(getattr(existing, "state", "")) in ("pending", "accepted"):
+            config = await _current_season_config(bot, self.mod, guild_id)
+            if _phase_of(config) != "ouverte":
+                try:
+                    await stack.enrollment.withdraw(str(getattr(existing, "id", "")))
+                except Exception as exc:
+                    await interaction.followup.send(f"Le désistement a échoué : {exc}", ephemeral=True)
+                    return
+                await _refresh_all_season_posts(bot, guild_id, self.mod)
+                await interaction.followup.send(
+                    "Désinscription **enregistrée** — à bientôt !", ephemeral=True
+                )
+                return
         core_name = await _core_display_name(bot, user_id)
         profiles = await _linked_profile_ids(bot, user_id, _mod_game_key(bot, self.mod))
         if not core_name or not profiles:
@@ -653,9 +856,11 @@ class SeasonApplyButton(
                 ephemeral=True,
             )
         else:
+            await _announce_application(bot, guild_id, self.mod, user_id, display_name)
             await interaction.followup.send(
                 f"Candidature **en attente** — les admins décident.{linked}", ephemeral=True
             )
+        await _refresh_all_season_posts(bot, guild_id, self.mod)
 
 
 
@@ -715,13 +920,18 @@ class CandidateDecideButton(
             await interaction.followup.send("La décision a échoué — voir les logs.", ephemeral=True)
             return
         await interaction.followup.send(f"{'Validé' if self.accept else 'Refusé'} : <@{self.user_id}>.", ephemeral=True)
+        await _refresh_all_season_posts(interaction.client, str(interaction.guild_id or ""), self.mod)
+
 
 
 
 
 async def _find_application(stack: Any, guild_id: str, user_id: str) -> Any:
     """Find one pending application by user id."""
-    for application in await stack.enrollment.list_applications(guild_id, state="pending"):
+    list_applications = getattr(stack.enrollment, "list_applications", None)
+    if list_applications is None:
+        return None
+    for application in await list_applications(guild_id, state="pending"):
         if str(getattr(application, "user_id", "")) == user_id:
             return application
     return None
@@ -732,7 +942,7 @@ __all__ = [
     "SeasonApplyButton",
     "SeasonCreateButton",
     "build_candidates_panel",
-    "build_enrolled_panel",
+    "build_participants_panel",
     "build_seasons_panel",
 ]
 
@@ -762,7 +972,7 @@ def register_season_pins(bot: Any, registry: Any) -> list[Any]:
         for channel_key, panel_builder, pin_key in (
             ("seasons", build_seasons_panel, "seasons"),
             ("candidates", build_candidates_panel, "candidates"),
-            ("enrolled", build_enrolled_panel, "enrolled"),
+            ("participants", build_participants_panel, "participants"),
         ):
             scope = f"mod/{mod}"
 
@@ -813,7 +1023,7 @@ async def _refresh_all_season_pins(bot: Any) -> None:
             definition = registry.get(mod)
             if definition is None or not getattr(definition, "seasonal", False):
                 continue
-            await _refresh_seasons_pin(bot, guild_id, mod)
+            await _refresh_all_season_posts(bot, guild_id, mod)
 
 
 def start_season_refresher(bot: Any) -> None:

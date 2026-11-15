@@ -20,7 +20,7 @@ three&nbsp;pinned&nbsp;surfaces:<br>
 &nbsp;&nbsp;(the&nbsp;SeasonService's&nbsp;gate)<br>
 -&nbsp;**candidats**&nbsp;—&nbsp;admin-only:&nbsp;the&nbsp;pending&nbsp;queue,&nbsp;one&nbsp;validate/refuse<br>
 &nbsp;&nbsp;pair&nbsp;per&nbsp;candidate;&nbsp;only&nbsp;the&nbsp;admins&nbsp;decide<br>
--&nbsp;**inscrits**&nbsp;—&nbsp;the&nbsp;enrolled&nbsp;members&nbsp;list<br>
+-&nbsp;**inscrits**&nbsp;—&nbsp;the&nbsp;season's&nbsp;participants&nbsp;list<br>
 &nbsp;<br>
 The&nbsp;panels&nbsp;ride&nbsp;the&nbsp;per-mod&nbsp;season&nbsp;stack&nbsp;(SeasonService&nbsp;+<br>
 EnrollmentService&nbsp;+&nbsp;SeasonRolesService);&nbsp;the&nbsp;ids&nbsp;resolve&nbsp;through&nbsp;the<br>
@@ -210,10 +210,12 @@ The&nbsp;player's&nbsp;Postuler&nbsp;button:&nbsp;the&nbsp;enrollment's&nbsp;ent
 Methods defined here:<br>
 <dl><dt><a name="SeasonApplyButton-__init__"><strong>__init__</strong></a>(self, mod: 'str') -&gt; 'None'</dt><dd><span class="code">Initialize&nbsp;self.&nbsp;&nbsp;See&nbsp;help(<a href="#SeasonApplyButton-type">type</a>(self))&nbsp;for&nbsp;accurate&nbsp;signature.</span></dd></dl>
 
-<dl><dt>async <a name="SeasonApplyButton-callback"><strong>callback</strong></a>(self, interaction: 'discord.Interaction') -&gt; 'None'</dt><dd><span class="code">Apply&nbsp;directly&nbsp;(anyone&nbsp;may&nbsp;apply).<br>
+<dl><dt>async <a name="SeasonApplyButton-callback"><strong>callback</strong></a>(self, interaction: 'discord.Interaction') -&gt; 'None'</dt><dd><span class="code">Apply&nbsp;(or&nbsp;WITHDRAW&nbsp;when&nbsp;already&nbsp;in)&nbsp;—&nbsp;anyone&nbsp;may&nbsp;click.<br>
 &nbsp;<br>
-The&nbsp;pseudo&nbsp;and&nbsp;the&nbsp;linked&nbsp;game&nbsp;profile&nbsp;ids&nbsp;resolve&nbsp;from&nbsp;the&nbsp;core&nbsp;—<br>
-never&nbsp;asked&nbsp;in&nbsp;a&nbsp;form.</span></dd></dl>
+The&nbsp;pseudo&nbsp;and&nbsp;the&nbsp;linked&nbsp;game&nbsp;profile&nbsp;ids&nbsp;resolve&nbsp;from&nbsp;the<br>
+core&nbsp;—&nbsp;never&nbsp;asked&nbsp;in&nbsp;a&nbsp;form.&nbsp;A&nbsp;player&nbsp;already<br>
+candidate/participant&nbsp;on&nbsp;an&nbsp;unstarted&nbsp;season&nbsp;may&nbsp;DESIST:&nbsp;the<br>
+same&nbsp;click&nbsp;withdraws&nbsp;them.</span></dd></dl>
 
 <hr>
 Class methods defined here:<br>
@@ -479,10 +481,14 @@ classes&nbsp;in&nbsp;the&nbsp;first&nbsp;place&nbsp;with&nbsp;`class&nbsp;Foo[T]
     
 <tr><td class="decor functions-decor"><span class="code">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span></td><td>&nbsp;</td>
 <td class="singlecolumn"><dl><dt>async <a name="-build_candidates_panel"><strong>build_candidates_panel</strong></a>(bot: 'Any', guild_id: 'str', mod: 'str', locale: 'str' = 'fr') -&gt; 'discord.ui.LayoutView'</dt><dd><span class="code">Build&nbsp;the&nbsp;CANDIDATS&nbsp;panel:&nbsp;the&nbsp;pending&nbsp;queue,&nbsp;admin-only&nbsp;decisions.</span></dd></dl>
- <dl><dt>async <a name="-build_enrolled_panel"><strong>build_enrolled_panel</strong></a>(bot: 'Any', guild_id: 'str', mod: 'str', locale: 'str' = 'fr') -&gt; 'discord.ui.LayoutView'</dt><dd><span class="code">Build&nbsp;the&nbsp;INSCRITS&nbsp;panel:&nbsp;the&nbsp;enrolled&nbsp;members&nbsp;list.</span></dd></dl>
+ <dl><dt>async <a name="-build_participants_panel"><strong>build_participants_panel</strong></a>(bot: 'Any', guild_id: 'str', mod: 'str', locale: 'str' = 'fr') -&gt; 'discord.ui.LayoutView'</dt><dd><span class="code">Build&nbsp;the&nbsp;INSCRITS&nbsp;panel:&nbsp;the&nbsp;season's&nbsp;participants&nbsp;list.</span></dd></dl>
  <dl><dt>async <a name="-build_seasons_panel"><strong>build_seasons_panel</strong></a>(bot: 'Any', guild_id: 'str', mod: 'str', locale: 'str' = 'fr') -&gt; 'discord.ui.LayoutView'</dt><dd><span class="code">Build&nbsp;the&nbsp;SAISONS&nbsp;panel&nbsp;(the&nbsp;owner's&nbsp;drastic&nbsp;simplification).<br>
 &nbsp;<br>
-The&nbsp;name,&nbsp;the&nbsp;phase,&nbsp;the&nbsp;TODO&nbsp;criteria,&nbsp;the&nbsp;counts,&nbsp;the&nbsp;transitions.</span></dd></dl>
+The&nbsp;name,&nbsp;the&nbsp;season&nbsp;id,&nbsp;the&nbsp;phase,&nbsp;the&nbsp;TODO&nbsp;criteria,&nbsp;the<br>
+counts&nbsp;—&nbsp;and&nbsp;the&nbsp;player's&nbsp;buttons:&nbsp;Je&nbsp;veux&nbsp;m'inscrire&nbsp;(when&nbsp;the<br>
+inscriptions&nbsp;are&nbsp;open),&nbsp;the&nbsp;candidates&nbsp;list,&nbsp;the&nbsp;participants<br>
+list,&nbsp;the&nbsp;admin&nbsp;door.&nbsp;The&nbsp;phase&nbsp;transitions&nbsp;live&nbsp;in&nbsp;the&nbsp;admin<br>
+submenu,&nbsp;never&nbsp;here.</span></dd></dl>
  <dl><dt><a name="-register_season_items"><strong>register_season_items</strong></a>(client: 'Any') -&gt; 'None'</dt><dd><span class="code">Register&nbsp;the&nbsp;season&nbsp;panels'&nbsp;dynamic&nbsp;items&nbsp;(the&nbsp;bot's&nbsp;wiring).</span></dd></dl>
  <dl><dt><a name="-register_season_pins"><strong>register_season_pins</strong></a>(bot: 'Any', registry: 'Any') -&gt; 'list[Any]'</dt><dd><span class="code">Register&nbsp;the&nbsp;three&nbsp;season&nbsp;panels'&nbsp;pins&nbsp;for&nbsp;every&nbsp;enabled&nbsp;seasonal&nbsp;mod.<br>
 &nbsp;<br>
@@ -495,5 +501,5 @@ scope),&nbsp;and&nbsp;the&nbsp;boot's&nbsp;ensure&nbsp;pass&nbsp;heals&nbsp;them
 <td class="section-title" colspan=3>&nbsp;<br><strong class="bigsection">Data</strong></td></tr>
     
 <tr><td class="decor data-decor"><span class="code">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span></td><td>&nbsp;</td>
-<td class="singlecolumn"><strong>__all__</strong> = ['CandidateDecideButton', 'SeasonApplyButton', 'SeasonCreateButton', 'build_candidates_panel', 'build_enrolled_panel', 'build_seasons_panel', 'register_season_pins', 'register_season_items']</td></tr></table>
+<td class="singlecolumn"><strong>__all__</strong> = ['CandidateDecideButton', 'SeasonApplyButton', 'SeasonCreateButton', 'build_candidates_panel', 'build_participants_panel', 'build_seasons_panel', 'register_season_pins', 'register_season_items']</td></tr></table>
 </body></html>

@@ -288,6 +288,19 @@ class EnrollmentService:
             raise NotPendingError(f"application {application_id!r} is {application.state}, not pending")
         return await self._decide(application, STATE_REFUSED, now=now, reason=reason)
 
+    async def withdraw(self, application_id: str, now: int = 0) -> Application:
+        """Withdraw an application (the player's own désistement).
+
+        A pending or accepted application may be withdrawn — the
+        member leaves the season (the roles drop through the glue).
+        """
+        application = await self._require(application_id)
+        if application.state not in (STATE_PENDING, STATE_ACCEPTED):
+            raise NotPendingError(
+                f"application {application_id!r} is {application.state}, not withdrawable"
+            )
+        return await self._decide(application, STATE_REFUSED, now=now, reason="withdrawn")
+
     async def list_applications(self, guild_id: str, state: str | None = None) -> list[Application]:
         """List the guild's applications (dashboard data)."""
         docs = await self._db.list_applications(self._mod, guild_id, state)
