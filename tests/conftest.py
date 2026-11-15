@@ -12,6 +12,7 @@ actual dispatch, command tree and service wiring.
 
 from __future__ import annotations
 
+import os
 import socket
 from pathlib import Path
 
@@ -76,3 +77,8 @@ def botforge_bot(bot_config: BotConfig) -> BotforgeBot:
 def simcord_bot(botforge_bot: BotforgeBot) -> BotforgeBot:
     """Hand the real bot to SimCord's environment runner."""
     return botforge_bot
+
+
+# the season posts' refresher stays OFF in the journeys: a background
+# loop never settles (simcord's contract waits for the outstanding work)
+os.environ.setdefault("BOTFORGE_SEASON_REFRESHER", "off")
