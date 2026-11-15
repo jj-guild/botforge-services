@@ -1076,7 +1076,6 @@ async def _send_edit_bar(
     (only when no season lives), the management (only when one does).
     No header — the panel id rides the footer.
     """
-    draft = _draft_of(bot, mod, guild_id)
     view = discord.ui.LayoutView(timeout=None)
     from botforge.discord.ui.factory import split_action_rows
 
