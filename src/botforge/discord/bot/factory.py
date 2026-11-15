@@ -241,6 +241,9 @@ class BotforgeBot(discord.Client):
 
         register_beta_items(self)
         register_season_items(self)
+        from botforge.discord.season_panels import start_season_refresher
+
+        start_season_refresher(self)
 
         register_admin_dm_items(self)
         register_admin_tree_items(self)

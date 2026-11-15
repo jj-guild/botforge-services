@@ -239,6 +239,82 @@ async def _sync_beta_flag(interaction: discord.Interaction, draft: dict[str, Any
         await exit_beta(cache, guild_id, mod)
 
 
+class SeasonManageButton(
+    discord.ui.DynamicItem[discord.ui.Button[Any]],
+    template=rf"{_NS}:manage:(?P<mod>[a-z0-9_-]+):(?P<action>end|delete)",
+):
+    """The season's management: end it, or delete a never-started one."""
+
+    def __init__(self, mod: str, action: str) -> None:
+        super().__init__(
+            discord.ui.Button(
+                custom_id=f"{_NS}:manage:{mod}:{action}"[:100],
+                label="Terminer la saison" if action == "end" else "Supprimer la saison",
+                emoji="\U0001f3c1" if action == "end" else "\U0001f5d1\ufe0f",
+                style=discord.ButtonStyle.danger,
+            )
+        )
+        self.mod = mod
+        self.action = action
+
+    @classmethod
+    async def from_custom_id(
+        cls,
+        interaction: discord.Interaction,
+        item: discord.ui.Item[Any],
+        match: Any,
+        /,
+    ) -> SeasonManageButton:
+        """Rebuild the button at click time."""
+        return cls(match["mod"], match["action"])
+
+    async def callback(self, interaction: discord.Interaction) -> None:
+        """End or delete the season (guarded, ephemeral, the 3s rule)."""
+        import time
+
+        from botforge.discord.mod_beta import _beta_guard
+
+        if not await _beta_guard(interaction):
+            return
+        await interaction.response.defer(ephemeral=True)
+        guild_id = str(interaction.guild_id or "")
+        stack = _stack(interaction.client, self.mod, guild_id)
+        if stack is None:
+            await interaction.followup.send(
+                "The season stack is not wired on this guild.", ephemeral=True
+            )
+            return
+        active = None
+        try:
+            active = await await_active(stack, guild_id)
+        except Exception:
+            logger.warning("SEASON MANAGE: the active lookup failed", exc_info=True)
+        if active is None:
+            await interaction.followup.send("Aucune saison active.", ephemeral=True)
+            return
+        season_id = str(getattr(active, "id", ""))
+        try:
+            if self.action == "end":
+                await stack.seasons.end_season(season_id, now=int(time.time()))
+                note = f"Saison **{getattr(active, 'name', season_id)}** termin\u00e9e."
+            else:
+                await stack.seasons.delete_season(season_id)
+                note = f"Saison **{getattr(active, 'name', season_id)}** supprim\u00e9e."
+        except Exception as exc:
+            message = str(exc)
+            if "cannot be deleted" in message:
+                await interaction.followup.send(
+                    "Seule une saison jamais activ\u00e9e peut \u00eatre supprim\u00e9e \u2014 "
+                    "termine-la plut\u00f4t.",
+                    ephemeral=True,
+                )
+            else:
+                await interaction.followup.send(f"L'action a refus\u00e9 : {message}", ephemeral=True)
+            return
+        await _refresh_seasons_pin(interaction.client, guild_id, self.mod)
+        await interaction.followup.send(note, ephemeral=True)
+
+
 async def _refresh_seasons_pin(bot: Any, guild_id: str, mod: str) -> None:
     """Update the seasons channel's pinned post IN PLACE (directly).
 
@@ -966,6 +1042,8 @@ async def _send_edit_bar(interaction: discord.Interaction, bot: Any, mod: str, g
         *(SeasonDraftButton(mod, key).item for key in _DATE_FIELDS),
         SeasonBetaButton(mod, bool(draft.get("beta"))).item,
         SeasonCreateConfirmButton(mod).item,
+        SeasonManageButton(mod, "end").item,
+        SeasonManageButton(mod, "delete").item,
     ]
     for row in split_action_rows(edit_items):
         view.add_item(row)
@@ -1285,9 +1363,45 @@ def register_season_items(client: Any) -> None:
     client.add_dynamic_items(SeasonApplyButton)
     client.add_dynamic_items(SeasonDraftButton)
     client.add_dynamic_items(SeasonCreateConfirmButton)
+    client.add_dynamic_items(SeasonManageButton)
     client.add_dynamic_items(SeasonBetaButton)
     client.add_dynamic_items(SeasonAdminButton)
     client.add_dynamic_items(CandidateDecideButton)
 
 
 __all__.extend(["register_season_items"])
+
+
+async def _refresh_all_season_pins(bot: Any) -> None:
+    """Re-render every guild's seasonal posts (the refresher's body)."""
+    for guild in getattr(bot, "guilds", ()) or ():
+        guild_id = str(guild.id)
+        registry = getattr(bot, "registry", None)
+        if registry is None:
+            continue
+        for mod in registry.enabled():
+            definition = registry.get(mod)
+            if definition is None or not getattr(definition, "seasonal", False):
+                continue
+            await _refresh_seasons_pin(bot, guild_id, mod)
+
+
+def start_season_refresher(bot: Any) -> None:
+    """Start the pinned season posts' refresher (every 5 minutes).
+
+    The Postuler button's visibility derives from the dates; the post
+    is a snapshot — the refresher re-renders it so the button appears
+    when the enrollment window opens and disappears when it closes,
+    without anyone clicking anything.
+    """
+    from discord.ext import tasks
+
+    @tasks.loop(minutes=5)
+    async def _loop() -> None:
+        try:
+            await _refresh_all_season_pins(bot)
+        except Exception:
+            logger.warning("SEASON refresher: the pass failed — best-effort", exc_info=True)
+
+    _loop.start()
+    logger.info("SEASON refresher started (every 5 minutes)")
