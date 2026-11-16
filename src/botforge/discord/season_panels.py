@@ -360,7 +360,10 @@ async def build_admin_panel(bot: Any, guild_id: str, mod: str, season_id: str) -
             view.add_item(row)
         add_view_footer(view, f"panel:mod:{mod}:seasons:admin")
         return view
-    items: list[Any] = [SeasonNameButton(mod).item]
+    items: list[Any] = []
+    if phase != "ouverte" and phase != "fermee":
+        # the rename lives BEFORE the season opens (the owner's rule)
+        items.append(SeasonNameButton(mod).item)
     if index > 0:
         # the previous state, NAMED (never a bare arrow)
         items.append(SeasonPhaseButton(mod, "prev", f"\u2190 {_PHASE_LABELS[_PHASES[index - 1]]}").item)
@@ -371,6 +374,9 @@ async def build_admin_panel(bot: Any, guild_id: str, mod: str, season_id: str) -
         # the direct start: the season may open WITHOUT closing the
         # inscriptions (the owner's choice)
         items.append(SeasonPhaseButton(mod, "start", "D\u00e9marrer la saison").item)
+    if phase == "fermee":
+        # the closed season: the NEXT season's create door
+        items.append(SeasonCreateButton(mod).item)
     for row in split_action_rows(items):
         view.add_item(row)
     add_view_footer(view, f"panel:{season_id}:admin")
