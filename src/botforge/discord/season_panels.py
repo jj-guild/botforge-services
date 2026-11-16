@@ -338,29 +338,30 @@ async def _sync_season_service_state(stack: Any, season_id: str, phase: str) -> 
 async def _swap_admin_bar(
     interaction: discord.Interaction, bot: Any, mod: str, guild_id: str, season_id: str
 ) -> None:
-    """Replace the old admin bar with the new season's (delete, else update)."""
+    """Replace the old admin bar with the new season's.
+
+    An EPHEMERAL message is only reachable through ITS OWN
+    interaction's webhook (channel.fetch_message 404s on it) — the
+    delete rides the OLD interaction's followup (remembered at the
+    create click, the token lives 15 min); the edit is the fallback,
+    the fresh send the last resort.
+    """
     fresh = await build_admin_panel(bot, guild_id, mod, season_id)
     draft = _draft_of(bot, mod, guild_id)
     old_id = str(draft.pop("_admin_bar_message_id", "") or "")
-    channel = interaction.channel
-    old_message = None
-    if old_id and channel is not None and hasattr(channel, "fetch_message"):
+    old_interaction = draft.pop("_admin_bar_interaction", None)
+    if old_id and old_interaction is not None:
         try:
-            old_message = await channel.fetch_message(int(old_id))
-        except Exception:
-            logger.info("SEASON: the old admin bar is gone — sending fresh", exc_info=True)
-    if old_message is not None:
-        try:
-            await old_message.delete()
+            await old_interaction.followup.delete_message(int(old_id))
             await interaction.followup.send(view=fresh, ephemeral=True)
             return
         except Exception:
-            logger.info("SEASON: the delete failed — updating the old bar", exc_info=True)
+            logger.info("SEASON: the old bar's delete failed — editing it", exc_info=True)
         try:
-            await old_message.edit(view=fresh)
+            await old_interaction.followup.edit_message(int(old_id), view=fresh)
             return
         except Exception:
-            logger.info("SEASON: the update failed — sending fresh", exc_info=True)
+            logger.info("SEASON: the old bar's edit failed — sending fresh", exc_info=True)
     await interaction.followup.send(view=fresh, ephemeral=True)
 
 
@@ -697,12 +698,14 @@ class SeasonCreateButton(
 
         if not await _beta_guard(interaction):
             return
-        # remember the OLD admin bar's message (the create button rides
-        # it) — the modal's submit deletes/updates it when the new
-        # season lands (a modal submit carries no message reference)
+        # remember the OLD admin bar's INTERACTION + message id: an
+        # ephemeral message lives only through ITS OWN interaction's
+        # webhook (channel.fetch_message 404s on it) — the delete must
+        # ride the old interaction's followup (the token lives 15 min)
         if interaction.message is not None:
             draft = _draft_of(interaction.client, self.mod, str(interaction.guild_id or ""))
             draft["_admin_bar_message_id"] = str(interaction.message.id)
+            draft["_admin_bar_interaction"] = interaction
         await interaction.response.send_modal(
             _SeasonNameModal(interaction.client, self.mod, str(interaction.guild_id or ""))
         )
