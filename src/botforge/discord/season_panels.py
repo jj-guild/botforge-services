@@ -1007,6 +1007,8 @@ def register_season_items(client: Any) -> None:
     client.add_dynamic_items(SeasonApplyButton)
     client.add_dynamic_items(SeasonPhaseButton)
     client.add_dynamic_items(SeasonAdminButton)
+    client.add_dynamic_items(SeasonNameButton)
+    client.add_dynamic_items(SeasonListButton)
     client.add_dynamic_items(CandidateDecideButton)
 
 
