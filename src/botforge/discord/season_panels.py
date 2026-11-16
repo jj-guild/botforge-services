@@ -816,7 +816,7 @@ class SeasonApplyButton(
             config = await _current_season_config(bot, self.mod, guild_id)
             if _phase_of(config) != "ouverte":
                 try:
-                    await stack.enrollment.withdraw(str(getattr(existing, "id", "")))
+                    await stack.enrollment.withdraw(str(getattr(existing, "application_id", "")))
                 except Exception as exc:
                     await interaction.followup.send(f"Le désistement a échoué : {exc}", ephemeral=True)
                     return
@@ -927,13 +927,14 @@ class CandidateDecideButton(
 
 
 async def _find_application(stack: Any, guild_id: str, user_id: str) -> Any:
-    """Find one pending application by user id."""
+    """Find the user's pending OR accepted application (both may desist)."""
     list_applications = getattr(stack.enrollment, "list_applications", None)
     if list_applications is None:
         return None
-    for application in await list_applications(guild_id, state="pending"):
-        if str(getattr(application, "user_id", "")) == user_id:
-            return application
+    for state in ("pending", "accepted"):
+        for application in await list_applications(guild_id, state=state):
+            if str(getattr(application, "user_id", "")) == user_id:
+                return application
     return None
 
 
