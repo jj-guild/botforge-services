@@ -107,18 +107,19 @@ class SeasonPhaseButton(
         return cls(match["mod"], match["direction"], match["direction"])
 
     async def callback(self, interaction: discord.Interaction) -> None:
-        """Move the phase, persist, update the post (guarded)."""
+        """Move the phase, update the admin panel + the post in place."""
         from botforge.discord.mod_beta import _beta_guard
 
         if not await _beta_guard(interaction):
             return
-        await interaction.response.defer(ephemeral=True)
         guild_id = str(interaction.guild_id or "")
         stack = _stack(interaction.client, self.mod, guild_id)
         if stack is None:
+            await interaction.response.defer(ephemeral=True)
             return
         active = await await_active(stack, guild_id)
         if active is None:
+            await interaction.response.defer(ephemeral=True)
             return
         season_id = str(getattr(active, "id", ""))
         config = await _load_season_config(interaction.client, self.mod, guild_id, season_id)
@@ -135,6 +136,11 @@ class SeasonPhaseButton(
         config["phase"] = _PHASES[index]
         config["season_id"] = season_id
         await _persist_season_config(interaction.client, self.mod, guild_id, config)
+        # the ADMIN PANEL edits ITSELF in place (the click rides it) +
+        # the pinned post updates
+        await interaction.response.edit_message(
+            view=await build_admin_panel(interaction.client, guild_id, self.mod, season_id)
+        )
         await _refresh_seasons_pin(interaction.client, guild_id, self.mod)
 
 
@@ -178,21 +184,23 @@ async def build_seasons_panel(bot: Any, guild_id: str, mod: str, locale: str = "
     lines.append(f"`{season_id}`")
     lines.append(f"\u00c9tat : **{_PHASE_LABELS[phase]}**")
     lines.append("")
-    lines.append("**Crit\u00e8res** (\u00e0 venir) : un compte AoE2 + la validation admin dans le channel admin")
+    lines.append("**Crit\u00e8res** : un compte AoE2 + validation dans le channel admin")
     lines.append(f"\U0001f9e1 Candidats : **{candidates}** \u00b7 \U0001f465 Participants : **{participants}**")
     view.add_item(discord.ui.Container(discord.ui.TextDisplay("\n".join(lines))))
     from botforge.discord.ui.factory import split_action_rows
     from botforge.discord.ui.view_footer import add_view_footer
 
-    items: list[Any] = [SeasonAdminButton(mod).item]
+    items: list[Any] = []
     if phase == "inscriptions":
-        # the player's door rides FIRST when the inscriptions are open
-        items.insert(0, SeasonApplyButton(mod).item)
+        items.append(SeasonApplyButton(mod).item)
     items.append(SeasonListButton(mod, "candidates").item)
     items.append(SeasonListButton(mod, "participants").item)
+    # the admin door rides ALWAYS LAST (the owner's order)
+    items.append(SeasonAdminButton(mod).item)
     for row in split_action_rows(items):
         view.add_item(row)
-    add_view_footer(view, f"panel:mod:{mod}:seasons:{season_id}")
+    # the panel id: panel:<season id> (panel:mod:<mod>:season:<guild>:<n>)
+    add_view_footer(view, f"panel:{season_id}")
     return view
 
 
@@ -229,24 +237,12 @@ class SeasonListButton(
         """Show the list (ephemeral, the live data)."""
         await interaction.response.defer(ephemeral=True)
         guild_id = str(interaction.guild_id or "")
-        stack = _stack(interaction.client, self.mod, guild_id)
-        if stack is None or stack.enrollment is None:
-            return
-        state = "pending" if self.what == "candidates" else "accepted"
-        title = "Candidats" if self.what == "candidates" else "Participants"
-        try:
-            applications = await stack.enrollment.list_applications(guild_id, state=state)
-        except Exception:
-            applications = []
-        lines = [f"# {title} — {self.mod}"]
-        if not applications:
-            lines.append("_Personne._")
-        for application in applications:
-            user_id = str(getattr(application, "user_id", "?"))
-            display = str(getattr(application, "display_name", "?"))
-            lines.append(f"\u2022 **{display}** (<@{user_id}>)")
-        view = discord.ui.LayoutView(timeout=None)
-        view.add_item(discord.ui.Container(discord.ui.TextDisplay("\n".join(lines))))
+        # the SAME builder as the pinned view (panel:mod:<mod>:<what>),
+        # rendered ephemeral — rigorously the pinned view
+        if self.what == "candidates":
+            view = await build_candidates_panel(interaction.client, guild_id, self.mod)
+        else:
+            view = await build_participants_panel(interaction.client, guild_id, self.mod)
         await interaction.followup.send(view=view, ephemeral=True)
 
 
@@ -306,16 +302,20 @@ class SeasonAdminButton(
         await _send_admin_bar(interaction, interaction.client, self.mod, guild_id)
 
 
-async def _send_admin_bar(interaction: discord.Interaction, bot: Any, mod: str, guild_id: str) -> None:
-    """Send the admin action bar: the settings + the transitions."""
+async def build_admin_panel(bot: Any, guild_id: str, mod: str, season_id: str) -> discord.ui.LayoutView:
+    """Build the season's ADMIN panel (ephemeral, the owner's rule).
+
+    NO header — the action rows only (the name, the phase transitions
+    NAMED, the direct start) — the footer carries the admin panel id
+    (panel:<season id>:admin). The panel EDITS ITSELF on every phase
+    change.
+    """
     draft = _draft_of(bot, mod, guild_id)
     phase = _phase_of(draft)
     index = _PHASES.index(phase)
     view = discord.ui.LayoutView(timeout=None)
-    lines = [f"# {draft.get('name') or 'Saison'} — admin"]
-    lines.append(f"\u00c9tat : **{_PHASE_LABELS[phase]}**")
-    view.add_item(discord.ui.Container(discord.ui.TextDisplay("\n".join(lines))))
     from botforge.discord.ui.factory import split_action_rows
+    from botforge.discord.ui.view_footer import add_view_footer
 
     items: list[Any] = [SeasonNameButton(mod).item]
     if index > 0:
@@ -330,6 +330,22 @@ async def _send_admin_bar(interaction: discord.Interaction, bot: Any, mod: str, 
         items.append(SeasonPhaseButton(mod, "start", "D\u00e9marrer la saison").item)
     for row in split_action_rows(items):
         view.add_item(row)
+    add_view_footer(view, f"panel:{season_id}:admin")
+    return view
+
+
+async def _send_admin_bar(interaction: discord.Interaction, bot: Any, mod: str, guild_id: str) -> None:
+    """Send the admin panel (ephemeral, no header, self-editing)."""
+    stack = _stack(bot, mod, guild_id)
+    season_id = ""
+    if stack is not None:
+        try:
+            active = await await_active(stack, guild_id)
+        except Exception:
+            active = None
+        if active is not None:
+            season_id = str(getattr(active, "id", ""))
+    view = await build_admin_panel(bot, guild_id, mod, season_id)
     if interaction.response.is_done():
         await interaction.followup.send(view=view, ephemeral=True)
     else:
@@ -409,59 +425,82 @@ async def _seasons_list_lines(bot: Any, mod: str, guild_id: str) -> list[str]:
 
 
 async def build_candidates_panel(bot: Any, guild_id: str, mod: str, locale: str = "fr") -> discord.ui.LayoutView:
-    """Build the CANDIDATS panel: the pending queue, admin-only decisions."""
+    """Build the CANDIDATS panel (public: NO admin buttons).
+
+    The roster-style lines (the pseudo — the bold mention — the
+    account links); the decisions live in the ADMIN announce message
+    and the ephemeral admin bar, never on a public view.
+    """
     view = discord.ui.LayoutView(timeout=None)
     stack = _stack(bot, mod, guild_id)
-    lines = [f"# \U0001f9e1 {mod.capitalize()} — candidats", "_File d'attente (admin only)._"]
+    lines = [f"# \U0001f9e1 {mod.capitalize()} — candidats", "_Les candidatures de la saison._"]
     pending: list[Any] = []
     if stack is not None:
         try:
             pending = list(await stack.enrollment.list_applications(guild_id, state="pending"))
         except Exception:
             logger.warning("SEASON PANEL: the queue unreadable", exc_info=True)
-    for application in pending[:20]:
-        user_id = str(getattr(application, "user_id", "?"))
-        display = str(getattr(application, "display_name", "?"))
-        lines.append(f"\u2022 **{display}** (<@{user_id}>) — `{user_id}`")
-    if not pending:
-        lines.append("_Aucun candidat en attente._")
+    lines.extend(await _roster_style_lines(bot, guild_id, mod, pending, "_Aucun candidat en attente._"))
     seasons_list = await _seasons_list_lines(bot, mod, guild_id)
     if seasons_list:
         lines.append("")
         lines.extend(seasons_list)
     view.add_item(discord.ui.Container(discord.ui.TextDisplay("\n".join(lines))))
-    buttons: list[Any] = []
-    for application in pending[:5]:
-        user_id = str(getattr(application, "user_id", ""))
-        buttons.append(CandidateDecideButton(mod, user_id, True).item)
-        buttons.append(CandidateDecideButton(mod, user_id, False).item)
-    from botforge.discord.ui.factory import split_action_rows
     from botforge.discord.ui.view_footer import add_view_footer
-
-    for row in split_action_rows(buttons):
-        view.add_item(row)
 
     add_view_footer(view, f"panel:mod:{mod}:candidates")
     return view
 
 
+async def _roster_style_lines(
+    bot: Any, guild_id: str, mod: str, applications: list[Any], empty_note: str
+) -> list[str]:
+    """Render the applications like the aoe2 players list.
+
+    ``• **Merlin** — **@Merlin Pinpin**: [JeanJack](url), [Merlin
+    Pinpin](url)`` — the application's pseudo, the bold mention, the
+    linked game accounts (the insights links). No raw discord ids.
+    """
+    if not applications:
+        return [empty_note]
+    game_key = _mod_game_key(bot, mod)
+    by_user: dict[str, list[dict[str, Any]]] = {}
+    for application in applications:
+        user_id = str(getattr(application, "user_id", "?"))
+        by_user.setdefault(user_id, [])
+    lines: list[str] = []
+    for application in applications:
+        user_id = str(getattr(application, "user_id", "?"))
+        pseudo = str(getattr(application, "display_name", "?"))
+        profiles: list[str] = []
+        for pid in getattr(application, "profiles", ()) or ():
+            pid = str(pid)
+            url = _game_account_url(game_key, pid) if game_key else ""
+            profiles.append(f"[{pid}]({url})" if url else pid)
+        links = f": {', '.join(profiles)}" if profiles else ""
+        lines.append(f"\u2022 **{pseudo}** — **<@{user_id}>**{links}")
+    return lines
+
+
+def _game_account_url(game_key: str, profile_id: str) -> str:
+    """Return the profile's public account link (aoe2insights by default)."""
+    from botforge.discord.home import _game_account_url as _url
+
+    return _url(game_key, profile_id)
+
+
 async def build_participants_panel(bot: Any, guild_id: str, mod: str, locale: str = "fr") -> discord.ui.LayoutView:
-    """Build the INSCRITS panel: the season's participants list."""
+    """Build the PARTICIPANTS panel: the season's participants, roster-style."""
     view = discord.ui.LayoutView(timeout=None)
     stack = _stack(bot, mod, guild_id)
-    lines = [f"# \U0001f465 {mod.capitalize()} — inscrits"]
+    lines = [f"# \U0001f465 {mod.capitalize()} — participants"]
     accepted: list[Any] = []
     if stack is not None:
         try:
             accepted = list(await stack.enrollment.list_applications(guild_id, state="accepted"))
         except Exception:
             logger.warning("SEASON PANEL: the participants list unreadable", exc_info=True)
-    for application in accepted[:40]:
-        user_id = str(getattr(application, "user_id", "?"))
-        display = str(getattr(application, "display_name", "?"))
-        lines.append(f"\u2022 **{display}** (<@{user_id}>)")
-    if not accepted:
-        lines.append("_Aucun inscrit._")
+    lines.extend(await _roster_style_lines(bot, guild_id, mod, accepted, "_Aucun participant._"))
     seasons_list = await _seasons_list_lines(bot, mod, guild_id)
     if seasons_list:
         lines.append("")
@@ -611,10 +650,24 @@ async def _announce_application(
         channel = guild.get_channel(int(admin_channel)) if guild and admin_channel.isdigit() else None
         if channel is None:
             return
-        await channel.send(
-            f"\U0001f9e1 Nouvelle candidature : **{display_name}** (<@{user_id}>) — "
-            f"à valider dans le channel candidats."
+        from botforge.discord.ui.factory import split_action_rows
+
+        view = discord.ui.LayoutView(timeout=None)
+        view.add_item(
+            discord.ui.Container(
+                discord.ui.TextDisplay(
+                    f"\U0001f9e1 Nouvelle candidature : **{display_name}** — **<@{user_id}>**"
+                )
+            )
         )
+        for row in split_action_rows(
+            [
+                CandidateDecideButton(mod, str(user_id), True).item,
+                CandidateDecideButton(mod, str(user_id), False).item,
+            ]
+        ):
+            view.add_item(row)
+        await channel.send(view=view)
     except Exception:
         logger.warning("SEASON: the admin announce failed — best-effort", exc_info=True)
 
@@ -627,8 +680,13 @@ async def _refresh_all_season_posts(bot: Any, guild_id: str, mod: str) -> None:
 
 
 async def _refresh_season_pin(bot: Any, guild_id: str, mod: str, pin_key: str) -> None:
-    """Update one seasonal post in place (the direct fetch + edit)."""
-    from botforge.discord.static_pins import registered_static_pins
+    """Update one seasonal post in place (create when missing).
+
+    A freshly provisioned channel carries no pinned view yet: the
+    refresh falls back to the ensure path (the pin is CREATED), then
+    the later passes edit it in place.
+    """
+    from botforge.discord.static_pins import ensure_static_pin, registered_static_pins
 
     key = f"view:mod:{mod}:{pin_key}"
     spec = next((s for s in registered_static_pins() if s.key == key), None)
@@ -637,7 +695,11 @@ async def _refresh_season_pin(bot: Any, guild_id: str, mod: str, pin_key: str) -
     try:
         channel_id = await spec.resolve_channel(guild_id)
         message_id = await spec.resolve_message_id(guild_id)
-        if not channel_id or not message_id:
+        if not channel_id:
+            return
+        if not message_id:
+            # a fresh channel: the pin is CREATED (the ensure path)
+            await ensure_static_pin(bot, spec, guild_id)
             return
         guild = bot.get_guild(int(guild_id)) if guild_id.isdigit() else None
         channel = guild.get_channel(int(channel_id)) if guild and channel_id.isdigit() else None
@@ -912,9 +974,9 @@ class CandidateDecideButton(
             return
         try:
             if self.accept:
-                await stack.enrollment.accept(str(application.id))
+                await stack.enrollment.accept(str(application.application_id))
             else:
-                await stack.enrollment.refuse(str(application.id))
+                await stack.enrollment.refuse(str(application.application_id))
         except Exception:
             logger.warning("SEASON PANEL: the decision failed", exc_info=True)
             await interaction.followup.send("La décision a échoué — voir les logs.", ephemeral=True)

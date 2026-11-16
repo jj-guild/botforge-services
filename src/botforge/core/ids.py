@@ -39,8 +39,13 @@ def season_id(ladder_id: str, index: int) -> str:
 
 
 def mod_scope(mod_key: str, game_key: str, guild_id: str) -> str:
-    """Build a mod's season scope: ``<mod>:<game key>:<guild id>``."""
-    return f"{mod_key}:{game_key}:{guild_id}"
+    """Build a mod's season scope: ``mod:<mod>:season:<guild id>``.
+
+    The season ids read ``mod:<mod>:season:<guild id>:<n>`` (owner
+    spec 2026-11-16) — the game key never rides the visible ids.
+    """
+    del game_key
+    return f"mod:{mod_key}:season:{guild_id}"
 
 
 def territory_id(season_id: str, map_key: str) -> str:

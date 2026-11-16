@@ -755,8 +755,9 @@ class ModRepairButton(
         """Repair the mod's channels and roles (guarded, best-effort)."""
         if not await _guard(interaction):
             return
-        # the provisioning can exceed Discord's 3s window: acknowledge first
-        await interaction.response.defer(ephemeral=True)
+        # the provisioning can exceed Discord's 3s window: the visible
+        # thinking state first (never silent work)
+        await interaction.response.defer(ephemeral=True, thinking=True)
         guild_id = str(interaction.guild_id or "")
         # the ROLES first (the channels' policies resolve their view
         # roles to the provisioned ids), then the channels

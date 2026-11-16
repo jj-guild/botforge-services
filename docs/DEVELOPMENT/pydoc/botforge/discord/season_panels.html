@@ -480,8 +480,12 @@ classes&nbsp;in&nbsp;the&nbsp;first&nbsp;place&nbsp;with&nbsp;`class&nbsp;Foo[T]
 <td class="section-title" colspan=3>&nbsp;<br><strong class="bigsection">Functions</strong></td></tr>
     
 <tr><td class="decor functions-decor"><span class="code">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span></td><td>&nbsp;</td>
-<td class="singlecolumn"><dl><dt>async <a name="-build_candidates_panel"><strong>build_candidates_panel</strong></a>(bot: 'Any', guild_id: 'str', mod: 'str', locale: 'str' = 'fr') -&gt; 'discord.ui.LayoutView'</dt><dd><span class="code">Build&nbsp;the&nbsp;CANDIDATS&nbsp;panel:&nbsp;the&nbsp;pending&nbsp;queue,&nbsp;admin-only&nbsp;decisions.</span></dd></dl>
- <dl><dt>async <a name="-build_participants_panel"><strong>build_participants_panel</strong></a>(bot: 'Any', guild_id: 'str', mod: 'str', locale: 'str' = 'fr') -&gt; 'discord.ui.LayoutView'</dt><dd><span class="code">Build&nbsp;the&nbsp;INSCRITS&nbsp;panel:&nbsp;the&nbsp;season's&nbsp;participants&nbsp;list.</span></dd></dl>
+<td class="singlecolumn"><dl><dt>async <a name="-build_candidates_panel"><strong>build_candidates_panel</strong></a>(bot: 'Any', guild_id: 'str', mod: 'str', locale: 'str' = 'fr') -&gt; 'discord.ui.LayoutView'</dt><dd><span class="code">Build&nbsp;the&nbsp;CANDIDATS&nbsp;panel&nbsp;(public:&nbsp;NO&nbsp;admin&nbsp;buttons).<br>
+&nbsp;<br>
+The&nbsp;roster-style&nbsp;lines&nbsp;(the&nbsp;pseudo&nbsp;—&nbsp;the&nbsp;bold&nbsp;mention&nbsp;—&nbsp;the<br>
+account&nbsp;links);&nbsp;the&nbsp;decisions&nbsp;live&nbsp;in&nbsp;the&nbsp;ADMIN&nbsp;announce&nbsp;message<br>
+and&nbsp;the&nbsp;ephemeral&nbsp;admin&nbsp;bar,&nbsp;never&nbsp;on&nbsp;a&nbsp;public&nbsp;view.</span></dd></dl>
+ <dl><dt>async <a name="-build_participants_panel"><strong>build_participants_panel</strong></a>(bot: 'Any', guild_id: 'str', mod: 'str', locale: 'str' = 'fr') -&gt; 'discord.ui.LayoutView'</dt><dd><span class="code">Build&nbsp;the&nbsp;PARTICIPANTS&nbsp;panel:&nbsp;the&nbsp;season's&nbsp;participants,&nbsp;roster-style.</span></dd></dl>
  <dl><dt>async <a name="-build_seasons_panel"><strong>build_seasons_panel</strong></a>(bot: 'Any', guild_id: 'str', mod: 'str', locale: 'str' = 'fr') -&gt; 'discord.ui.LayoutView'</dt><dd><span class="code">Build&nbsp;the&nbsp;SAISONS&nbsp;panel&nbsp;(the&nbsp;owner's&nbsp;drastic&nbsp;simplification).<br>
 &nbsp;<br>
 The&nbsp;name,&nbsp;the&nbsp;season&nbsp;id,&nbsp;the&nbsp;phase,&nbsp;the&nbsp;TODO&nbsp;criteria,&nbsp;the<br>

@@ -51,7 +51,10 @@ guild's&nbsp;local&nbsp;maps.&nbsp;The&nbsp;game&nbsp;lives&nbsp;in&nbsp;the&nbs
 map&nbsp;name&nbsp;across&nbsp;games&nbsp;never&nbsp;collides&nbsp;—&nbsp;and&nbsp;the&nbsp;visibility&nbsp;scope<br>
 is&nbsp;what&nbsp;every&nbsp;consumer&nbsp;(forums,&nbsp;pools,&nbsp;permissions)&nbsp;branches&nbsp;on.<br>
 ``&lt;slug&gt;``&nbsp;keeps&nbsp;underscores&nbsp;(``slug_id``).</span></dd></dl>
- <dl><dt><a name="-mod_scope"><strong>mod_scope</strong></a>(mod_key: 'str', game_key: 'str', guild_id: 'str') -&gt; 'str'</dt><dd><span class="code">Build&nbsp;a&nbsp;mod's&nbsp;season&nbsp;scope:&nbsp;``&lt;mod&gt;:&lt;game&nbsp;key&gt;:&lt;guild&nbsp;id&gt;``.</span></dd></dl>
+ <dl><dt><a name="-mod_scope"><strong>mod_scope</strong></a>(mod_key: 'str', game_key: 'str', guild_id: 'str') -&gt; 'str'</dt><dd><span class="code">Build&nbsp;a&nbsp;mod's&nbsp;season&nbsp;scope:&nbsp;``mod:&lt;mod&gt;:season:&lt;guild&nbsp;id&gt;``.<br>
+&nbsp;<br>
+The&nbsp;season&nbsp;ids&nbsp;read&nbsp;``mod:&lt;mod&gt;:season:&lt;guild&nbsp;id&gt;:&lt;n&gt;``&nbsp;(owner<br>
+spec&nbsp;2026-11-16)&nbsp;—&nbsp;the&nbsp;game&nbsp;key&nbsp;never&nbsp;rides&nbsp;the&nbsp;visible&nbsp;ids.</span></dd></dl>
  <dl><dt><a name="-pool_entry_id"><strong>pool_entry_id</strong></a>(game_key: 'str', name: 'str', owner_guild_id: 'str | None') -&gt; 'str'</dt><dd><span class="code">Return&nbsp;a&nbsp;map&nbsp;pool's&nbsp;stable&nbsp;id,&nbsp;game-scoped&nbsp;like&nbsp;the&nbsp;maps.<br>
 &nbsp;<br>
 ``pool:&lt;game_key&gt;:&lt;guild_id&gt;:&lt;name-slug&gt;``&nbsp;for&nbsp;a&nbsp;guild's&nbsp;pool,<br>

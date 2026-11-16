@@ -89,7 +89,7 @@ def test_stack_builds_the_season_scope() -> None:
         database=database,
         game_data=None,
     )
-    assert stack.scope == "demo:aoe2:123"
+    assert stack.scope == "mod:demo:season:123"
     assert stack.seasons is not None
     assert stack.enrollment is None
 
@@ -121,7 +121,7 @@ async def test_stack_enrollment_persists_through_the_database() -> None:
     assert stack.enrollment is not None
     application = await stack.enrollment.apply("123", "u1", "Alice", now=10)
     assert application.state == "pending"
-    collection = database._database.collections["demo:aoe2:123:applications"]
+    collection = database._database.collections["mod:demo:season:123:applications"]
     assert "demo:123:u1" in collection.docs
     decided = await stack.enrollment.accept(application.application_id, now=20)
     assert decided.state == "accepted"

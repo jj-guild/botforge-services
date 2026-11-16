@@ -83,15 +83,15 @@ class _FakeEnrollment:
 
 
 class TestCandidatesPanel:
-    async def test_decide_pairs_split_over_valid_rows(self) -> None:
+    async def test_the_public_panel_carries_no_admin_buttons(self) -> None:
         pending = [SimpleNamespace(user_id=str(100 + i), display_name=f"P{i}", state="pending") for i in range(3)]
         stack = SimpleNamespace(enrollment=_FakeEnrollment(pending))
         bot = SimpleNamespace(season_stacks={("kingdom", "123"): stack})
         view = await build_candidates_panel(bot, "123", "kingdom")
         rows = _rows_of(view)
-        assert rows
-        assert all(len(r.children) <= MAX_ITEMS_PER_ROW for r in rows)
-        assert sum(len(r.children) for r in rows) == 6  # 3 candidates x validate/refuse
+        # the public view: NO rows of buttons at all (the decisions are
+        # private — the admin announce + the ephemeral bar)
+        assert not rows
 
 
 class TestPhasePanel:

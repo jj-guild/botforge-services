@@ -23,7 +23,7 @@ def test_season_id_is_ladder_plus_incremental_index() -> None:
 
 
 def test_mod_scope_embeds_mod_game_and_guild() -> None:
-    assert mod_scope("kingdoms", "aoe2", "123") == "kingdoms:aoe2:123"
+    assert mod_scope("kingdoms", "aoe2", "123") == "mod:kingdoms:season:123"
 
 
 def test_territory_id_embeds_season_and_map_key() -> None:
