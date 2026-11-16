@@ -305,31 +305,6 @@ async def _ensure_group_category(
     return await platform.ensure_category(group_name)
 
 
-# the renamed tree channels: the new key adopts the old key's stored
-# id — the channel is RENAMED in place, never duplicated (the
-# enrolled -> participants rename, owner spec 2026-11-15)
-_LEGACY_CHANNEL_KEYS: dict[str, tuple[str, ...]] = {
-    "participants": ("enrolled",),
-}
-
-
-async def _resolve_stored_channel(guild_id: str, scope: str, channel_key: str) -> str | None:
-    """Resolve one channel's stored id, adopting the legacy keys' ids.
-
-    A renamed channel (enrolled -> participants) keeps its stored id
-    under the OLD key: the new key adopts it — the channel renames in
-    place, never duplicated.
-    """
-    stored = await stored_channel_id(guild_id, scope, channel_key)
-    if stored:
-        return stored
-    for legacy_key in _LEGACY_CHANNEL_KEYS.get(channel_key, ()):
-        legacy = await stored_channel_id(guild_id, scope, legacy_key)
-        if legacy:
-            return legacy
-    return None
-
-
 async def provision_scope(
     guild: discord.Guild,
     spec: ScopeSpec,
@@ -366,7 +341,7 @@ async def provision_scope(
             resolved,
         )
         try:
-            stored = await _resolve_stored_channel(str(guild.id), spec.scope, decl.key)
+            stored = await stored_channel_id(str(guild.id), spec.scope, decl.key)
             if stored and stored.isdigit():
                 channel = guild.get_channel(int(stored))
                 if (
