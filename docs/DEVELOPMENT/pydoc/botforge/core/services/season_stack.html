@@ -44,17 +44,17 @@ criteria&nbsp;come&nbsp;from&nbsp;the&nbsp;mod's&nbsp;declaration&nbsp;(``settin
 <td class="section-title" colspan=3>&nbsp;<br><a name="ModStorageSeasonDatabase">class <strong>ModStorageSeasonDatabase</strong></a>(<a href="builtins.html#object">builtins.object</a>)</td></tr>
     
 <tr><td class="decor title-decor" rowspan=2><span class="code">&nbsp;&nbsp;&nbsp;</span></td>
-<td class="decor title-decor" colspan=2><span class="code"><a href="#ModStorageSeasonDatabase">ModStorageSeasonDatabase</a>(storage:&nbsp;'Any')&nbsp;-&amp;gt;&nbsp;'None'<br>
+<td class="decor title-decor" colspan=2><span class="code"><a href="#ModStorageSeasonDatabase">ModStorageSeasonDatabase</a>(database:&nbsp;'Any',&nbsp;scope:&nbsp;'str')&nbsp;-&amp;gt;&nbsp;'None'<br>
 &nbsp;<br>
-The&nbsp;SeasonDatabase&nbsp;protocol&nbsp;over&nbsp;the&nbsp;mod's&nbsp;ModStorage&nbsp;(R8).<br>
+The&nbsp;SeasonDatabase&nbsp;protocol&nbsp;over&nbsp;the&nbsp;mod's&nbsp;season&nbsp;SCOPE&nbsp;(R8).<br>
 &nbsp;<br>
-The&nbsp;seasons&nbsp;and&nbsp;the&nbsp;applications&nbsp;live&nbsp;in&nbsp;the&nbsp;mod's&nbsp;namespaced<br>
-collections&nbsp;(``&lt;mod&gt;:seasons``,&nbsp;``&lt;mod&gt;:applications``)&nbsp;—&nbsp;the<br>
-platform's&nbsp;tooling&nbsp;addresses&nbsp;them&nbsp;by&nbsp;prefix,&nbsp;the&nbsp;mod&nbsp;never&nbsp;touches<br>
-the&nbsp;shared&nbsp;database&nbsp;raw.<br>&nbsp;</span></td></tr>
+The&nbsp;seasons&nbsp;and&nbsp;the&nbsp;applications&nbsp;live&nbsp;under&nbsp;the&nbsp;SCOPE's&nbsp;own<br>
+namespace&nbsp;—&nbsp;``mod:&lt;mod&gt;:season:&lt;guild&gt;:seasons``&nbsp;and<br>
+``...:applications``&nbsp;—&nbsp;NEVER&nbsp;the&nbsp;bare&nbsp;``&lt;mod&gt;:``&nbsp;prefix&nbsp;(the<br>
+owner's&nbsp;rule:&nbsp;one&nbsp;namespace&nbsp;per&nbsp;scope,&nbsp;the&nbsp;wipe&nbsp;is&nbsp;surgical).<br>&nbsp;</span></td></tr>
 <tr><td>&nbsp;</td>
 <td class="singlecolumn">Methods defined here:<br>
-<dl><dt><a name="ModStorageSeasonDatabase-__init__"><strong>__init__</strong></a>(self, storage: 'Any') -&gt; 'None'</dt><dd><span class="code">Initialize&nbsp;self.&nbsp;&nbsp;See&nbsp;help(type(self))&nbsp;for&nbsp;accurate&nbsp;signature.</span></dd></dl>
+<dl><dt><a name="ModStorageSeasonDatabase-__init__"><strong>__init__</strong></a>(self, database: 'Any', scope: 'str') -&gt; 'None'</dt><dd><span class="code">Initialize&nbsp;self.&nbsp;&nbsp;See&nbsp;help(type(self))&nbsp;for&nbsp;accurate&nbsp;signature.</span></dd></dl>
 
 <dl><dt>async <a name="ModStorageSeasonDatabase-delete_season"><strong>delete_season</strong></a>(self, season_id: 'str') -&gt; 'None'</dt><dd><span class="code">Drop&nbsp;one&nbsp;season&nbsp;document.</span></dd></dl>
 

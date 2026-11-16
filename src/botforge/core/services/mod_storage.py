@@ -66,8 +66,9 @@ class ModStorage:
         touched.
         """
         total = 0
+        prefixes = (f"{self._mod}:", f"mod:{self._mod}:")
         for name in await self._db.list_collection_names():
-            if name.startswith(f"{self._mod}:"):
+            if name.startswith(prefixes):
                 result = await self._db[name].delete_many({})
                 total += int(result.deleted_count)
         return total

@@ -476,6 +476,27 @@ async def build_candidates_panel(bot: Any, guild_id: str, mod: str, locale: str 
     return view
 
 
+async def _profile_names(bot: Any, user_id: str, game_key: str) -> dict[str, str]:
+    """Resolve the user's bound profile ids to their stored NAMES."""
+    registration = getattr(bot, "registration_service", None)
+    if registration is None:
+        return {}
+    try:
+        bindings = await registration.list_bindings(user_id)
+    except Exception:
+        return {}
+    names: dict[str, str] = {}
+    for binding in bindings or ():
+        if game_key and str(binding.get("game_key", "") or "") != game_key:
+            continue
+        pid = str(binding.get("profile_id", "") or "")
+        profile = binding.get("profile") or {}
+        stored = str(profile.get("profile_name") or "")
+        if pid and stored:
+            names[pid] = stored
+    return names
+
+
 async def _roster_style_lines(
     bot: Any, guild_id: str, mod: str, applications: list[Any], empty_note: str
 ) -> list[str]:
@@ -496,11 +517,13 @@ async def _roster_style_lines(
     for application in applications:
         user_id = str(getattr(application, "user_id", "?"))
         pseudo = str(getattr(application, "display_name", "?"))
+        names = await _profile_names(bot, user_id, game_key) if game_key else {}
         profiles: list[str] = []
         for pid in getattr(application, "profiles", ()) or ():
             pid = str(pid)
+            label = names.get(pid) or pid
             url = _game_account_url(game_key, pid) if game_key else ""
-            profiles.append(f"[{pid}]({url})" if url else pid)
+            profiles.append(f"[{label}]({url})" if url else label)
         links = f": {', '.join(profiles)}" if profiles else ""
         lines.append(f"\u2022 **{pseudo}** — **<@{user_id}>**{links}")
     return lines
@@ -674,11 +697,13 @@ async def _announce_application(
         from botforge.discord.ui.factory import split_action_rows
 
         game_key = _mod_game_key(bot, mod)
+        names = await _profile_names(bot, user_id, game_key) if game_key else {}
         links: list[str] = []
         for pid in profiles:
             pid = str(pid)
+            label = names.get(pid) or pid
             url = _game_account_url(game_key, pid) if game_key else ""
-            links.append(f"[{pid}]({url})" if url else pid)
+            links.append(f"[{label}]({url})" if url else label)
         suffix = f": {', '.join(links)}" if links else ""
         view = discord.ui.LayoutView(timeout=None)
         view.add_item(
@@ -1048,7 +1073,9 @@ class CandidateDecideButton(
         decision = "acceptée" if self.accept else "refusée"
         # the ANNOUNCE message (the buttons ride it) becomes the
         # resolution — the Y/N disappears
-        resolution = _decision_resolution(interaction, self.mod, application, self.user_id, decision)
+        resolution = await _decision_resolution(
+            interaction, self.mod, application, self.user_id, decision
+        )
         try:
             resolved = discord.ui.LayoutView(timeout=None)
             resolved.add_item(discord.ui.Container(discord.ui.TextDisplay(resolution)))
@@ -1070,17 +1097,20 @@ class CandidateDecideButton(
 
 
 
-def _decision_resolution(
+async def _decision_resolution(
     interaction: discord.Interaction, mod: str, application: Any, user_id: str, decision: str
 ) -> str:
     """Render the decision's resolution line (the roster format)."""
     pseudo = str(getattr(application, "display_name", "?"))
     game_key = _mod_game_key(interaction.client, mod)
+    user_id = str(getattr(application, "user_id", "?"))
+    names = await _profile_names(interaction.client, user_id, game_key) if game_key else {}
     links: list[str] = []
     for pid in getattr(application, "profiles", ()) or ():
         pid = str(pid)
+        label = names.get(pid) or pid
         url = _game_account_url(game_key, pid) if game_key else ""
-        links.append(f"[{pid}]({url})" if url else pid)
+        links.append(f"[{label}]({url})" if url else label)
     suffix = f": {', '.join(links)}" if links else ""
     return (
         f"La candidature de **{pseudo}** — **<@{user_id}>**{suffix} "

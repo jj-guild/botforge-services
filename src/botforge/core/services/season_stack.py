@@ -23,61 +23,67 @@ APPLICATIONS_COLLECTION = "applications"
 
 
 class ModStorageSeasonDatabase:
-    """The SeasonDatabase protocol over the mod's ModStorage (R8).
+    """The SeasonDatabase protocol over the mod's season SCOPE (R8).
 
-    The seasons and the applications live in the mod's namespaced
-    collections (``<mod>:seasons``, ``<mod>:applications``) — the
-    platform's tooling addresses them by prefix, the mod never touches
-    the shared database raw.
+    The seasons and the applications live under the SCOPE's own
+    namespace — ``mod:<mod>:season:<guild>:seasons`` and
+    ``...:applications`` — NEVER the bare ``<mod>:`` prefix (the
+    owner's rule: one namespace per scope, the wipe is surgical).
     """
 
-    def __init__(self, storage: Any) -> None:
-        self._storage = storage
+    def __init__(self, database: Any, scope: str) -> None:
+        self._db = database
+        self._scope = scope
 
     @property
     def _database(self) -> Any:
         """The inner Mongo database (the enrollment's seam expects it)."""
-        # the ModStorage binds it as ``_db``
-        return getattr(self._storage, "_db", None)
+        return self._db
+
+    def _seasons(self) -> Any:
+        """Return the scope's seasons collection."""
+        return self._db[f"{self._scope}:{SEASONS_COLLECTION}"]
 
     async def upsert_season(self, document: dict[str, Any]) -> None:
         """Insert or replace one season document by ``_id``."""
-        await self._storage.collection(SEASONS_COLLECTION).replace_one(
-            {"_id": document["_id"]}, document, upsert=True
-        )
+        await self._seasons().replace_one({"_id": document["_id"]}, document, upsert=True)
 
     async def find_season(self, season_id: str) -> dict[str, Any] | None:
         """Return one season document."""
-        doc = await self._storage.collection(SEASONS_COLLECTION).find_one({"_id": season_id})
+        doc = await self._seasons().find_one({"_id": season_id})
         return dict(doc) if doc is not None else None
 
     async def find_ladder_seasons(self, ladder_id: str) -> list[dict[str, Any]]:
         """Return every season document of one ladder (ascending)."""
-        cursor = self._storage.collection(SEASONS_COLLECTION).find({"ladder_id": ladder_id})
+        cursor = self._seasons().find({"ladder_id": ladder_id})
         return [dict(doc) async for doc in cursor.sort("index", 1)]
 
     async def find_active_season(self, ladder_id: str) -> dict[str, Any] | None:
         """Return the ladder's live season (scheduled or active)."""
-        collection = self._storage.collection(SEASONS_COLLECTION)
-        cursor = collection.find({"ladder_id": ladder_id, "state": {"$in": ["scheduled", "active"]}})
+        cursor = self._seasons().find({"ladder_id": ladder_id, "state": {"$in": ["scheduled", "active"]}})
         async for doc in cursor.sort("index", -1).limit(1):
             return dict(doc)
         return None
 
     async def delete_season(self, season_id: str) -> None:
         """Drop one season document."""
-        await self._storage.collection(SEASONS_COLLECTION).delete_one({"_id": season_id})
+        await self._seasons().delete_one({"_id": season_id})
 
     async def upsert_application(self, document: dict[str, Any]) -> None:
         """Insert or replace one application document."""
-        await self._storage.collection(APPLICATIONS_COLLECTION).replace_one(
+        self._db[f"{self._scope}:{APPLICATIONS_COLLECTION}"].replace_one(
             {"_id": document["_id"]}, document, upsert=True
         )
 
+    def _applications(self) -> Any:
+        """Return the scope's applications collection."""
+        return self._db[f"{self._scope}:{APPLICATIONS_COLLECTION}"]
+
     async def find_active_application(self, guild_id: str, user_id: str) -> dict[str, Any] | None:
         """Return one user's pending application."""
-        collection = self._storage.collection(APPLICATIONS_COLLECTION)
-        doc = await collection.find_one({"guild_id": guild_id, "user_id": user_id, "state": "pending"})
+        doc = await self._applications().find_one(
+            {"guild_id": guild_id, "user_id": user_id, "state": "pending"}
+        )
         return dict(doc) if doc is not None else None
 
     async def list_applications(self, guild_id: str, state: str | None = None) -> list[dict[str, Any]]:
@@ -85,7 +91,7 @@ class ModStorageSeasonDatabase:
         query: dict[str, Any] = {"guild_id": guild_id}
         if state is not None:
             query["state"] = state
-        cursor = self._storage.collection(APPLICATIONS_COLLECTION).find(query)
+        cursor = self._applications().find(query)
         return [dict(doc) async for doc in cursor.sort("applied_at", 1)]
 
 
@@ -116,11 +122,15 @@ def season_stack_for(bot: Any, mod: str, guild_id: str) -> Any:
     from botforge.discord.wiring import build_games_service
 
     game_data = build_games_service()
+    game_key = (getattr(definition, "required_games", ()) or ("",))[0]
+    from botforge.core.ids import mod_scope
+
+    scope = mod_scope(mod, game_key, guild_id)
     stack = build_mod_season_stack(
         mod=mod,
         guild_id=guild_id,
-        game_key=(getattr(definition, "required_games", ()) or ("",))[0],
-        database=ModStorageSeasonDatabase(storage),
+        game_key=game_key,
+        database=ModStorageSeasonDatabase(storage._db, scope),
         game_data=game_data,
         season_roles=SeasonRolesService(mod_roles, mod) if mod_roles is not None else None,
         # the enrollment ALWAYS wires: no declared criteria = the queue
