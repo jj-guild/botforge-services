@@ -171,7 +171,10 @@ async def build_seasons_panel(bot: Any, guild_id: str, mod: str, locale: str = "
         from botforge.discord.ui.factory import split_action_rows
         from botforge.discord.ui.view_footer import add_view_footer
 
-        for row in split_action_rows([SeasonCreateButton(mod).item]):
+        # the public panel carries the ADMIN door only — the create
+        # button lives in the ephemeral admin bar (no admin buttons in
+        # public, the owner's rule)
+        for row in split_action_rows([SeasonAdminButton(mod).item]):
             view.add_item(row)
         add_view_footer(view, f"panel:mod:{mod}:seasons")
         return view
@@ -317,6 +320,13 @@ async def build_admin_panel(bot: Any, guild_id: str, mod: str, season_id: str) -
     from botforge.discord.ui.factory import split_action_rows
     from botforge.discord.ui.view_footer import add_view_footer
 
+    if not season_id:
+        # no season: the admin bar carries the CREATE door (the name
+        # modal creates it on submit)
+        for row in split_action_rows([SeasonCreateButton(mod).item]):
+            view.add_item(row)
+        add_view_footer(view, f"panel:mod:{mod}:seasons:admin")
+        return view
     items: list[Any] = [SeasonNameButton(mod).item]
     if index > 0:
         # the previous state, NAMED (never a bare arrow)
@@ -775,9 +785,42 @@ class _SeasonNameModal(discord.ui.Modal, title="Le nom de la saison"):
             self.name.default = str(draft["name"])
 
     async def on_submit(self, interaction: discord.Interaction) -> None:
-        """Record the name, then show the draft's recap."""
+        """Record the name — CREATE the season when none lives."""
         draft = _draft_of(self._bot, self._mod, self._guild)
         draft["name"] = str(self.name.value or "").strip()
+        stack = _stack(self._bot, self._mod, self._guild)
+        active = None
+        if stack is not None:
+            try:
+                active = await await_active(stack, self._guild)
+            except Exception:
+                active = None
+        if active is None and stack is not None:
+            # no season: the name CREATES it (the direct flow, the
+            # confirm button is gone)
+            try:
+                season = await stack.seasons.create_season(
+                    stack.scope, draft.get("name") or "Saison", None, start_at=0
+                )
+            except Exception as exc:
+                message = str(exc)
+                if "already has a live season" in message:
+                    note = "Une saison est déjà en cours — termine-la avant d'en créer une nouvelle."
+                else:
+                    note = f"La création a refusé : {message}"
+                await interaction.response.defer(ephemeral=True)
+                await interaction.followup.send(note, ephemeral=True)
+                return
+            draft["season_id"] = str(season.id)
+            draft["phase"] = "preparation"
+            await _persist_season_config(self._bot, self._mod, self._guild, draft)
+            await interaction.response.defer(ephemeral=True)
+            await _refresh_seasons_pin(self._bot, self._guild, self._mod)
+            await interaction.followup.send(
+                f"Saison **{season.name}** créée.", ephemeral=True
+            )
+            return
+        # a season lives: the name RENAMES it (persist + the post updates)
         await _persist_season_config(self._bot, self._mod, self._guild, draft)
         await interaction.response.defer(ephemeral=True)
         await _refresh_seasons_pin(self._bot, self._guild, self._mod)
