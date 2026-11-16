@@ -586,7 +586,7 @@ async def _sync_season_roles(bot: Any, mod: str, guild_id: str, user_id: str, st
                 await mod_roles.remove_platform_role(guild_id, user_id, candidate, "", "candidate")
             if member:
                 await mod_roles.assign_platform_role(guild_id, user_id, member, "", "member")
-        else:
+        else:  # refused / withdrawn / reset — both roles drop
             if candidate:
                 await mod_roles.remove_platform_role(guild_id, user_id, candidate, "", "candidate")
             if member:
@@ -960,6 +960,22 @@ class _SeasonNameModal(discord.ui.Modal, title="Le nom de la saison"):
                 await interaction.response.defer(ephemeral=True)
                 await interaction.followup.send(note, ephemeral=True)
                 return
+            # the new season starts CLEAN: the old applications go
+            # (the lists empty) and the old members' roles drop (the
+            # membership resets each season, the owner's spec)
+            try:
+                old_pending = await stack.enrollment.list_applications(self._guild)
+                for application in old_pending:
+                    await _sync_season_roles(
+                        self._bot,
+                        self._mod,
+                        self._guild,
+                        str(getattr(application, "user_id", "?")),
+                        "reset",
+                    )
+                await stack.enrollment.reset(self._guild)
+            except Exception:
+                logger.warning("SEASON: the create's reset failed — best-effort", exc_info=True)
             draft["season_id"] = str(season.id)
             draft["phase"] = "preparation"
             await _persist_season_config(self._bot, self._mod, self._guild, draft)
@@ -967,7 +983,7 @@ class _SeasonNameModal(discord.ui.Modal, title="Le nom de la saison"):
             # the OLD admin bar (remembered at the create click) is
             # DELETED — the UPDATE is the fallback (the owner's rule)
             await _swap_admin_bar(interaction, self._bot, self._mod, self._guild, str(season.id))
-            await _refresh_seasons_pin(self._bot, self._guild, self._mod)
+            await _refresh_all_season_posts(self._bot, self._guild, self._mod)
             return
         # a season lives: the name RENAMES it (persist + the post updates)
         await _persist_season_config(self._bot, self._mod, self._guild, draft)

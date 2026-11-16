@@ -86,6 +86,11 @@ class ModStorageSeasonDatabase:
         )
         return dict(doc) if doc is not None else None
 
+    async def wipe_applications(self, guild_id: str) -> int:
+        """Delete the guild's applications (the new season starts clean)."""
+        result = await self._applications().delete_many({"guild_id": guild_id})
+        return int(getattr(result, "deleted_count", 0))
+
     async def list_applications(self, guild_id: str, state: str | None = None) -> list[dict[str, Any]]:
         """List the guild's applications (optionally by state)."""
         query: dict[str, Any] = {"guild_id": guild_id}

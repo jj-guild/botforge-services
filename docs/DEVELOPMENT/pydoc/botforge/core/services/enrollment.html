@@ -479,6 +479,12 @@ relative&nbsp;to&nbsp;the&nbsp;season's&nbsp;start).</span></dd></dl>
 
 <dl><dt>async <a name="EnrollmentService-refuse"><strong>refuse</strong></a>(self, application_id: 'str', now: 'int' = 0, reason: 'str' = '') -&gt; 'Application'</dt><dd><span class="code">Refuse&nbsp;a&nbsp;pending&nbsp;application,&nbsp;recording&nbsp;the&nbsp;reason.</span></dd></dl>
 
+<dl><dt>async <a name="EnrollmentService-reset"><strong>reset</strong></a>(self, guild_id: 'str') -&gt; 'int'</dt><dd><span class="code">Wipe&nbsp;the&nbsp;guild's&nbsp;applications&nbsp;(a&nbsp;new&nbsp;season&nbsp;starts&nbsp;clean).<br>
+&nbsp;<br>
+The&nbsp;membership&nbsp;resets&nbsp;each&nbsp;season&nbsp;(the&nbsp;owner's&nbsp;spec):&nbsp;the&nbsp;new<br>
+season's&nbsp;lists&nbsp;start&nbsp;EMPTY;&nbsp;the&nbsp;roles&nbsp;drop&nbsp;through&nbsp;the&nbsp;panels'<br>
+sync&nbsp;(the&nbsp;callers&nbsp;pass&nbsp;the&nbsp;old&nbsp;members).</span></dd></dl>
+
 <dl><dt>async <a name="EnrollmentService-withdraw"><strong>withdraw</strong></a>(self, application_id: 'str', now: 'int' = 0) -&gt; 'Application'</dt><dd><span class="code">Withdraw&nbsp;an&nbsp;application&nbsp;(the&nbsp;player's&nbsp;own&nbsp;désistement).<br>
 &nbsp;<br>
 A&nbsp;pending&nbsp;or&nbsp;accepted&nbsp;application&nbsp;may&nbsp;be&nbsp;withdrawn&nbsp;—&nbsp;the<br>

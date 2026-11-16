@@ -301,6 +301,18 @@ class EnrollmentService:
             )
         return await self._decide(application, STATE_REFUSED, now=now, reason="withdrawn")
 
+    async def reset(self, guild_id: str) -> int:
+        """Wipe the guild's applications (a new season starts clean).
+
+        The membership resets each season (the owner's spec): the new
+        season's lists start EMPTY; the roles drop through the panels'
+        sync (the callers pass the old members).
+        """
+        wipe = getattr(self._db, "wipe_applications", None)
+        if wipe is None:
+            return 0
+        return int(await wipe(guild_id))
+
     async def list_applications(self, guild_id: str, state: str | None = None) -> list[Application]:
         """List the guild's applications (dashboard data)."""
         docs = await self._db.list_applications(self._mod, guild_id, state)
