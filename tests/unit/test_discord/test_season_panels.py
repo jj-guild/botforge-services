@@ -102,8 +102,9 @@ class TestPhasePanel:
         view = await build_seasons_panel(bot, "123", "kingdom")
         rows = _rows_of(view)
         buttons = [i for r in rows for i in r.children]
-        # no active season: the create button only
-        assert any("Créer" in str(getattr(b, "label", "")) for b in buttons)
+        # no active season: the ADMIN door only (the create button is
+        # private — it lives in the ephemeral admin bar)
+        assert any(str(getattr(b, "label", "")) == "Admin" for b in buttons)
 
 
 class _FakeIdentity:
