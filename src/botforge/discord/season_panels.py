@@ -926,9 +926,17 @@ class _SeasonNameModal(discord.ui.Modal, title="Le nom de la saison"):
             draft["phase"] = "preparation"
             await _persist_season_config(self._bot, self._mod, self._guild, draft)
             await interaction.response.defer(ephemeral=True)
-            # NOTHING new stacks: the pinned post updates in place —
-            # that IS the answer (no create menu, no note above
-            # buttons; the admin bar stays a bare bar of buttons)
+            # the OLD admin bar (the one the create button rode) is
+            # DELETED; the NEW season's admin bar takes its place
+            try:
+                if interaction.message is not None:
+                    await interaction.message.delete()
+            except Exception:
+                logger.info("SEASON: the old admin bar's delete skipped — best-effort", exc_info=True)
+            await interaction.followup.send(
+                view=await build_admin_panel(self._bot, self._guild, self._mod, str(season.id)),
+                ephemeral=True,
+            )
             await _refresh_seasons_pin(self._bot, self._guild, self._mod)
             return
         # a season lives: the name RENAMES it (persist + the post updates)
