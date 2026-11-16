@@ -893,20 +893,10 @@ class _SeasonNameModal(discord.ui.Modal, title="Le nom de la saison"):
             draft["phase"] = "preparation"
             await _persist_season_config(self._bot, self._mod, self._guild, draft)
             await interaction.response.defer(ephemeral=True)
+            # NOTHING new stacks: the pinned post updates in place —
+            # that IS the answer (no create menu, no note above
+            # buttons; the admin bar stays a bare bar of buttons)
             await _refresh_seasons_pin(self._bot, self._guild, self._mod)
-            # the FRESH admin panel replaces the create door (the
-            # transitions now live here); the note rides the view —
-            # a components-v2 message carries no content
-            view = await build_admin_panel(self._bot, self._guild, self._mod, str(season.id))
-            # the note rides FIRST (LayoutView has no insert — build a
-            # fresh view with the note then the panel's children)
-            merged = discord.ui.LayoutView(timeout=None)
-            merged.add_item(
-                discord.ui.Container(discord.ui.TextDisplay(f"Saison **{season.name}** créée."))
-            )
-            for child in view.children:
-                merged.add_item(child)
-            await interaction.followup.send(view=merged, ephemeral=True)
             return
         # a season lives: the name RENAMES it (persist + the post updates)
         await _persist_season_config(self._bot, self._mod, self._guild, draft)
@@ -1181,20 +1171,7 @@ class CandidateDecideButton(
         resolution = await _decision_resolution(
             interaction, self.mod, application, self.user_id, decision
         )
-        try:
-            resolved = discord.ui.LayoutView(timeout=None)
-            resolved.add_item(discord.ui.Container(discord.ui.TextDisplay(resolution)))
-            if interaction.message is not None:
-                await interaction.message.edit(view=resolved)
-        except Exception:
-            logger.info("SEASON: the announce edit skipped — best-effort", exc_info=True)
-        # the player is DM'd — the decision never stays silent
-        try:
-            target = interaction.client.get_user(int(self.user_id))
-            if target is not None:
-                await target.send(resolution)
-        except Exception:
-            logger.info("SEASON: the decision DM failed — best-effort", exc_info=True)
+        await _apply_decision_resolution(interaction, resolution, self.user_id)
         if not self.accept:
             await _sync_season_roles(
                 interaction.client, self.mod, str(interaction.guild_id or ""), self.user_id, "refused"
@@ -1204,6 +1181,25 @@ class CandidateDecideButton(
 
 
 
+
+
+async def _apply_decision_resolution(
+    interaction: discord.Interaction, resolution: str, user_id: str
+) -> None:
+    """Edit the announce in place + DM the player (both best-effort)."""
+    try:
+        resolved = discord.ui.LayoutView(timeout=None)
+        resolved.add_item(discord.ui.Container(discord.ui.TextDisplay(resolution)))
+        if interaction.message is not None:
+            await interaction.message.edit(view=resolved)
+    except Exception:
+        logger.info("SEASON: the announce edit skipped — best-effort", exc_info=True)
+    try:
+        target = interaction.client.get_user(int(user_id))
+        if target is not None:
+            await target.send(resolution)
+    except Exception:
+        logger.info("SEASON: the decision DM failed — best-effort", exc_info=True)
 
 
 async def _decision_resolution(
