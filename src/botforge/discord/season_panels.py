@@ -434,6 +434,23 @@ async def _seasons_list_lines(bot: Any, mod: str, guild_id: str) -> list[str]:
     return lines
 
 
+async def _season_subtitle(bot: Any, guild_id: str, mod: str) -> list[str]:
+    """Render the active season's subtitle (name, id, phase)."""
+    stack = _stack(bot, mod, guild_id)
+    if stack is None:
+        return []
+    try:
+        active = await await_active(stack, guild_id)
+    except Exception:
+        return []
+    if active is None:
+        return []
+    season_id = str(getattr(active, "id", ""))
+    config = await _load_season_config(bot, mod, guild_id, season_id)
+    name = str(config.get("name") or getattr(active, "name", season_id))
+    return [f"**{name}** · `{season_id}` · {_PHASE_LABELS[_phase_of(config)]}", ""]
+
+
 async def build_candidates_panel(bot: Any, guild_id: str, mod: str, locale: str = "fr") -> discord.ui.LayoutView:
     """Build the CANDIDATS panel (public: NO admin buttons).
 
@@ -443,7 +460,8 @@ async def build_candidates_panel(bot: Any, guild_id: str, mod: str, locale: str 
     """
     view = discord.ui.LayoutView(timeout=None)
     stack = _stack(bot, mod, guild_id)
-    lines = [f"# \U0001f9e1 {mod.capitalize()} — candidats", "_Les candidatures de la saison._"]
+    lines = [f"# \U0001f9e1 {mod.capitalize()} — candidats"]
+    lines.extend(await _season_subtitle(bot, guild_id, mod))
     pending: list[Any] = []
     if stack is not None:
         try:
@@ -451,10 +469,6 @@ async def build_candidates_panel(bot: Any, guild_id: str, mod: str, locale: str 
         except Exception:
             logger.warning("SEASON PANEL: the queue unreadable", exc_info=True)
     lines.extend(await _roster_style_lines(bot, guild_id, mod, pending, "_Aucun candidat en attente._"))
-    seasons_list = await _seasons_list_lines(bot, mod, guild_id)
-    if seasons_list:
-        lines.append("")
-        lines.extend(seasons_list)
     view.add_item(discord.ui.Container(discord.ui.TextDisplay("\n".join(lines))))
     from botforge.discord.ui.view_footer import add_view_footer
 
@@ -504,6 +518,7 @@ async def build_participants_panel(bot: Any, guild_id: str, mod: str, locale: st
     view = discord.ui.LayoutView(timeout=None)
     stack = _stack(bot, mod, guild_id)
     lines = [f"# \U0001f465 {mod.capitalize()} — participants"]
+    lines.extend(await _season_subtitle(bot, guild_id, mod))
     accepted: list[Any] = []
     if stack is not None:
         try:
@@ -511,10 +526,6 @@ async def build_participants_panel(bot: Any, guild_id: str, mod: str, locale: st
         except Exception:
             logger.warning("SEASON PANEL: the participants list unreadable", exc_info=True)
     lines.extend(await _roster_style_lines(bot, guild_id, mod, accepted, "_Aucun participant._"))
-    seasons_list = await _seasons_list_lines(bot, mod, guild_id)
-    if seasons_list:
-        lines.append("")
-        lines.extend(seasons_list)
     view.add_item(discord.ui.Container(discord.ui.TextDisplay("\n".join(lines))))
     from botforge.discord.ui.view_footer import add_view_footer
 
@@ -647,9 +658,9 @@ async def _current_season_config(bot: Any, mod: str, guild_id: str) -> dict[str,
 
 
 async def _announce_application(
-    bot: Any, guild_id: str, mod: str, user_id: str, display_name: str
+    bot: Any, guild_id: str, mod: str, user_id: str, display_name: str, profiles: list[str]
 ) -> None:
-    """Post the new application in the mod's admin channel."""
+    """Post the new application in the mod's admin channel (roster format)."""
     from botforge.discord.ui.panels_provisioning import stored_channel_id
 
     try:
@@ -662,11 +673,18 @@ async def _announce_application(
             return
         from botforge.discord.ui.factory import split_action_rows
 
+        game_key = _mod_game_key(bot, mod)
+        links: list[str] = []
+        for pid in profiles:
+            pid = str(pid)
+            url = _game_account_url(game_key, pid) if game_key else ""
+            links.append(f"[{pid}]({url})" if url else pid)
+        suffix = f": {', '.join(links)}" if links else ""
         view = discord.ui.LayoutView(timeout=None)
         view.add_item(
             discord.ui.Container(
                 discord.ui.TextDisplay(
-                    f"\U0001f9e1 Nouvelle candidature : **{display_name}** — **<@{user_id}>**"
+                    f"\U0001f9e1 Nouvelle candidature : **{display_name}** — **<@{user_id}>**{suffix}"
                 )
             )
         )
@@ -816,8 +834,11 @@ class _SeasonNameModal(discord.ui.Modal, title="Le nom de la saison"):
             await _persist_season_config(self._bot, self._mod, self._guild, draft)
             await interaction.response.defer(ephemeral=True)
             await _refresh_seasons_pin(self._bot, self._guild, self._mod)
+            # the FRESH admin panel replaces the create door (the
+            # transitions now live here)
+            view = await build_admin_panel(self._bot, self._guild, self._mod, str(season.id))
             await interaction.followup.send(
-                f"Saison **{season.name}** créée.", ephemeral=True
+                f"Saison **{season.name}** créée.", view=view, ephemeral=True  # type: ignore[call-overload]
             )
             return
         # a season lives: the name RENAMES it (persist + the post updates)
@@ -961,7 +982,7 @@ class SeasonApplyButton(
                 ephemeral=True,
             )
         else:
-            await _announce_application(bot, guild_id, self.mod, user_id, display_name)
+            await _announce_application(bot, guild_id, self.mod, user_id, display_name, profiles)
             await interaction.followup.send(
                 f"Candidature **en attente** — les admins décident.{linked}", ephemeral=True
             )
@@ -1024,11 +1045,47 @@ class CandidateDecideButton(
             logger.warning("SEASON PANEL: the decision failed", exc_info=True)
             await interaction.followup.send("La décision a échoué — voir les logs.", ephemeral=True)
             return
-        await interaction.followup.send(f"{'Validé' if self.accept else 'Refusé'} : <@{self.user_id}>.", ephemeral=True)
+        decision = "acceptée" if self.accept else "refusée"
+        # the ANNOUNCE message (the buttons ride it) becomes the
+        # resolution — the Y/N disappears
+        resolution = _decision_resolution(interaction, self.mod, application, self.user_id, decision)
+        try:
+            resolved = discord.ui.LayoutView(timeout=None)
+            resolved.add_item(discord.ui.Container(discord.ui.TextDisplay(resolution)))
+            if interaction.message is not None:
+                await interaction.message.edit(view=resolved)
+        except Exception:
+            logger.info("SEASON: the announce edit skipped — best-effort", exc_info=True)
+        # the player is DM'd — the decision never stays silent
+        try:
+            target = interaction.client.get_user(int(self.user_id))
+            if target is not None:
+                await target.send(resolution)
+        except Exception:
+            logger.info("SEASON: the decision DM failed — best-effort", exc_info=True)
+        await interaction.response.defer(ephemeral=True)
         await _refresh_all_season_posts(interaction.client, str(interaction.guild_id or ""), self.mod)
 
 
 
+
+
+def _decision_resolution(
+    interaction: discord.Interaction, mod: str, application: Any, user_id: str, decision: str
+) -> str:
+    """Render the decision's resolution line (the roster format)."""
+    pseudo = str(getattr(application, "display_name", "?"))
+    game_key = _mod_game_key(interaction.client, mod)
+    links: list[str] = []
+    for pid in getattr(application, "profiles", ()) or ():
+        pid = str(pid)
+        url = _game_account_url(game_key, pid) if game_key else ""
+        links.append(f"[{pid}]({url})" if url else pid)
+    suffix = f": {', '.join(links)}" if links else ""
+    return (
+        f"La candidature de **{pseudo}** — **<@{user_id}>**{suffix} "
+        f"a été **{decision}** par <@{interaction.user.id}>."
+    )
 
 
 async def _find_application(stack: Any, guild_id: str, user_id: str) -> Any:

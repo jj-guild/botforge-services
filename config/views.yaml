@@ -73,7 +73,7 @@ views:
     # data, never code); every game menu declares the same target
     - target: panel:profile
       label: ui.homes.btn_profile
-      emoji: 👤🏼
+      emoji: 👤
     - target: menu:game:aoe2:admin
       label: ui.homes.btn_admin
       admin: true
