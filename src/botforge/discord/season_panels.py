@@ -136,6 +136,10 @@ class SeasonPhaseButton(
         config["phase"] = _PHASES[index]
         config["season_id"] = season_id
         await _persist_season_config(interaction.client, self.mod, guild_id, config)
+        # the SERVICE's season follows the phase: 'ouverte' ACTIVATES,
+        # 'fermee' ENDS — a closed season frees the create gate (the
+        # merlin finding: the closed season blocked the next create)
+        await _sync_season_service_state(stack, season_id, _PHASES[index])
         # the ADMIN PANEL edits ITSELF in place (the click rides it) +
         # the pinned post updates
         await interaction.response.edit_message(
@@ -306,6 +310,29 @@ class SeasonAdminButton(
                 config.setdefault("name", str(getattr(active, "name", "")))
                 _draft_of(interaction.client, self.mod, guild_id).update(config)
         await _send_admin_bar(interaction, interaction.client, self.mod, guild_id)
+
+
+async def _sync_season_service_state(stack: Any, season_id: str, phase: str) -> None:
+    """Sync the SERVICE's season state with the UI phase (best-effort).
+
+    ``ouverte`` -> activate (the live season runs); ``fermee`` -> end
+    (the create gate frees — a new season may be created).
+    """
+    import time
+
+    now = int(time.time())
+    try:
+        if phase == "ouverte":
+            await stack.seasons.activate_season(season_id, now)
+        elif phase == "fermee":
+            await stack.seasons.end_season(season_id, now)
+    except Exception:
+        logger.info(
+            "SEASON: the service state sync skipped (%s/%s) — best-effort",
+            season_id,
+            phase,
+            exc_info=True,
+        )
 
 
 async def build_admin_panel(bot: Any, guild_id: str, mod: str, season_id: str) -> discord.ui.LayoutView:
