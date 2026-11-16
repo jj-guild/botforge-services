@@ -335,6 +335,35 @@ async def _sync_season_service_state(stack: Any, season_id: str, phase: str) -> 
         )
 
 
+async def _swap_admin_bar(
+    interaction: discord.Interaction, bot: Any, mod: str, guild_id: str, season_id: str
+) -> None:
+    """Replace the old admin bar with the new season's (delete, else update)."""
+    fresh = await build_admin_panel(bot, guild_id, mod, season_id)
+    draft = _draft_of(bot, mod, guild_id)
+    old_id = str(draft.pop("_admin_bar_message_id", "") or "")
+    channel = interaction.channel
+    old_message = None
+    if old_id and channel is not None and hasattr(channel, "fetch_message"):
+        try:
+            old_message = await channel.fetch_message(int(old_id))
+        except Exception:
+            logger.info("SEASON: the old admin bar is gone — sending fresh", exc_info=True)
+    if old_message is not None:
+        try:
+            await old_message.delete()
+            await interaction.followup.send(view=fresh, ephemeral=True)
+            return
+        except Exception:
+            logger.info("SEASON: the delete failed — updating the old bar", exc_info=True)
+        try:
+            await old_message.edit(view=fresh)
+            return
+        except Exception:
+            logger.info("SEASON: the update failed — sending fresh", exc_info=True)
+    await interaction.followup.send(view=fresh, ephemeral=True)
+
+
 async def build_admin_panel(bot: Any, guild_id: str, mod: str, season_id: str) -> discord.ui.LayoutView:
     """Build the season's ADMIN panel (ephemeral, the owner's rule).
 
@@ -668,6 +697,12 @@ class SeasonCreateButton(
 
         if not await _beta_guard(interaction):
             return
+        # remember the OLD admin bar's message (the create button rides
+        # it) — the modal's submit deletes/updates it when the new
+        # season lands (a modal submit carries no message reference)
+        if interaction.message is not None:
+            draft = _draft_of(interaction.client, self.mod, str(interaction.guild_id or ""))
+            draft["_admin_bar_message_id"] = str(interaction.message.id)
         await interaction.response.send_modal(
             _SeasonNameModal(interaction.client, self.mod, str(interaction.guild_id or ""))
         )
@@ -926,17 +961,9 @@ class _SeasonNameModal(discord.ui.Modal, title="Le nom de la saison"):
             draft["phase"] = "preparation"
             await _persist_season_config(self._bot, self._mod, self._guild, draft)
             await interaction.response.defer(ephemeral=True)
-            # the OLD admin bar (the one the create button rode) is
-            # DELETED; the NEW season's admin bar takes its place
-            try:
-                if interaction.message is not None:
-                    await interaction.message.delete()
-            except Exception:
-                logger.info("SEASON: the old admin bar's delete skipped — best-effort", exc_info=True)
-            await interaction.followup.send(
-                view=await build_admin_panel(self._bot, self._guild, self._mod, str(season.id)),
-                ephemeral=True,
-            )
+            # the OLD admin bar (remembered at the create click) is
+            # DELETED — the UPDATE is the fallback (the owner's rule)
+            await _swap_admin_bar(interaction, self._bot, self._mod, self._guild, str(season.id))
             await _refresh_seasons_pin(self._bot, self._guild, self._mod)
             return
         # a season lives: the name RENAMES it (persist + the post updates)
