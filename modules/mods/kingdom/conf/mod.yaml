@@ -209,6 +209,15 @@ roles:
     display_name: Kingdom Admin
     color: 0xE74C3C
     hoisted: true
+  # the season enrollment's roles (the owner's spec): the candidate
+  # role lands at apply, the member role at accept; the membership
+  # resets each season (the roles stay)
+  - key: candidate
+    display_name: "🧡 Kingdom Candidat"
+    color: 0xE67E22
+  - key: member
+    display_name: "👥 Kingdom Joueur"
+    color: 0x2ECC71
 workflows: []
 # kingdom is an AoE2 territory-conquest mod: installing it installs aoe2
 # along, and uninstalling aoe2 is refused while kingdom is active

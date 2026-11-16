@@ -95,6 +95,34 @@ class ModStorageSeasonDatabase:
         return [dict(doc) async for doc in cursor.sort("applied_at", 1)]
 
 
+class _SeasonMembership:
+    """The enrollment's membership seam — the mod's roles follow.
+
+    accept -> the member role lands (the candidate role drops); the
+    apply-time candidate role and the refuse/withdraw drops are handled
+    by the panels' role sync (the same helpers).
+    """
+
+    def __init__(self, mod_roles: Any, mod: str) -> None:
+        self._mod_roles = mod_roles
+        self._mod = mod
+
+    async def register(self, guild_id: str, user_id: str, display_name: str) -> None:
+        """Apply the accept's seam: +member, -candidate (best-effort)."""
+        del display_name
+        if self._mod_roles is None:
+            return
+        try:
+            member_role = await self._mod_roles.resolve_role_id(guild_id, self._mod, "member")
+            candidate_role = await self._mod_roles.resolve_role_id(guild_id, self._mod, "candidate")
+            if member_role:
+                await self._mod_roles.assign_platform_role(guild_id, user_id, member_role, "", "member")
+            if candidate_role:
+                await self._mod_roles.remove_platform_role(guild_id, user_id, candidate_role, "", "candidate")
+        except Exception:
+            logger.warning("SEASON MEMBERSHIP: the accept's roles failed — best-effort", exc_info=True)
+
+
 def season_stack_for(bot: Any, mod: str, guild_id: str) -> Any:
     """Resolve (or lazily build) one mod's season stack on one guild.
 
@@ -138,6 +166,7 @@ def season_stack_for(bot: Any, mod: str, guild_id: str) -> Any:
         # finding: Postuler refused because the declaration carries no
         # settings.enrollment)
         enrollment_criteria=(getattr(definition, "settings", None) or {}).get("enrollment") or {},
+        enrollment_membership=_SeasonMembership(mod_roles, mod),
     )
     cache[key] = stack
     return stack

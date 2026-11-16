@@ -196,8 +196,11 @@ async def build_seasons_panel(bot: Any, guild_id: str, mod: str, locale: str = "
     items: list[Any] = []
     if phase == "inscriptions":
         items.append(SeasonApplyButton(mod).item)
-    items.append(SeasonListButton(mod, "candidates").item)
-    items.append(SeasonListButton(mod, "participants").item)
+        # the candidates list rides only while the inscriptions are OPEN
+        items.append(SeasonListButton(mod, "candidates").item)
+    if phase != "preparation":
+        # the participants list rides once the season is past preparation
+        items.append(SeasonListButton(mod, "participants").item)
     # the admin door rides ALWAYS LAST (the owner's order)
     items.append(SeasonAdminButton(mod).item)
     for row in split_action_rows(items):
@@ -313,8 +316,11 @@ async def build_admin_panel(bot: Any, guild_id: str, mod: str, season_id: str) -
     (panel:<season id>:admin). The panel EDITS ITSELF on every phase
     change.
     """
-    draft = _draft_of(bot, mod, guild_id)
-    phase = _phase_of(draft)
+    # the STORED config is the truth (the draft lags one change
+    # behind — the merlin finding: the transitions stayed stale after
+    # a phase change)
+    config = await _load_season_config(bot, mod, guild_id, season_id)
+    phase = _phase_of(config)
     index = _PHASES.index(phase)
     view = discord.ui.LayoutView(timeout=None)
     from botforge.discord.ui.factory import split_action_rows
@@ -495,6 +501,35 @@ async def _profile_names(bot: Any, user_id: str, game_key: str) -> dict[str, str
         if pid and stored:
             names[pid] = stored
     return names
+
+
+async def _sync_season_roles(bot: Any, mod: str, guild_id: str, user_id: str, state: str) -> None:
+    """Sync the mod's candidate/member roles with the application's state.
+
+    pending -> +candidate; accepted -> +member -candidate (the seam
+    also covers it); refused/withdrawn -> both drop. Best-effort.
+    """
+    mod_roles = getattr(bot, "mod_roles_service", None)
+    if mod_roles is None:
+        return
+    try:
+        candidate = await mod_roles.resolve_role_id(guild_id, mod, "candidate")
+        member = await mod_roles.resolve_role_id(guild_id, mod, "member")
+        if state == "pending":
+            if candidate:
+                await mod_roles.assign_platform_role(guild_id, user_id, candidate, "", "candidate")
+        elif state == "accepted":
+            if candidate:
+                await mod_roles.remove_platform_role(guild_id, user_id, candidate, "", "candidate")
+            if member:
+                await mod_roles.assign_platform_role(guild_id, user_id, member, "", "member")
+        else:
+            if candidate:
+                await mod_roles.remove_platform_role(guild_id, user_id, candidate, "", "candidate")
+            if member:
+                await mod_roles.remove_platform_role(guild_id, user_id, member, "", "member")
+    except Exception:
+        logger.warning("SEASON: the role sync failed — best-effort", exc_info=True)
 
 
 async def _roster_style_lines(
@@ -1011,6 +1046,7 @@ class SeasonApplyButton(
             )
         else:
             await _announce_application(bot, guild_id, self.mod, user_id, display_name, profiles)
+            await _sync_season_roles(bot, self.mod, guild_id, user_id, "pending")
             await interaction.followup.send(
                 f"Candidature **en attente** — les admins décident.{linked}", ephemeral=True
             )
@@ -1061,6 +1097,7 @@ class SeasonWithdrawConfirmButton(
         except Exception as exc:
             await interaction.followup.send(f"Le désistement a échoué : {exc}", ephemeral=True)
             return
+        await _sync_season_roles(bot, self.mod, guild_id, self.user_id, "withdrawn")
         await _refresh_all_season_posts(bot, guild_id, self.mod)
         await interaction.followup.send(
             "Désinscription **enregistrée** — à bientôt !", ephemeral=True
@@ -1158,6 +1195,10 @@ class CandidateDecideButton(
                 await target.send(resolution)
         except Exception:
             logger.info("SEASON: the decision DM failed — best-effort", exc_info=True)
+        if not self.accept:
+            await _sync_season_roles(
+                interaction.client, self.mod, str(interaction.guild_id or ""), self.user_id, "refused"
+            )
         # the ack already rode the START defer (the 3s rule) — never twice
         await _refresh_all_season_posts(interaction.client, str(interaction.guild_id or ""), self.mod)
 
