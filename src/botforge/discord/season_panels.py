@@ -860,11 +860,18 @@ class _SeasonNameModal(discord.ui.Modal, title="Le nom de la saison"):
             await interaction.response.defer(ephemeral=True)
             await _refresh_seasons_pin(self._bot, self._guild, self._mod)
             # the FRESH admin panel replaces the create door (the
-            # transitions now live here)
+            # transitions now live here); the note rides the view —
+            # a components-v2 message carries no content
             view = await build_admin_panel(self._bot, self._guild, self._mod, str(season.id))
-            await interaction.followup.send(
-                f"Saison **{season.name}** créée.", view=view, ephemeral=True  # type: ignore[call-overload]
+            # the note rides FIRST (LayoutView has no insert — build a
+            # fresh view with the note then the panel's children)
+            merged = discord.ui.LayoutView(timeout=None)
+            merged.add_item(
+                discord.ui.Container(discord.ui.TextDisplay(f"Saison **{season.name}** créée."))
             )
+            for child in view.children:
+                merged.add_item(child)
+            await interaction.followup.send(view=merged, ephemeral=True)
             return
         # a season lives: the name RENAMES it (persist + the post updates)
         await _persist_season_config(self._bot, self._mod, self._guild, draft)
@@ -961,19 +968,15 @@ class SeasonApplyButton(
         if stack is None or stack.enrollment is None:
             await interaction.followup.send("The enrollment is not wired on this guild.", ephemeral=True)
             return
-        # the désistement: already in + the season not started
+        # the désistement: already in + the season not started — a
+        # CONFIRMATION modal first (the owner's rule, never a silent drop)
         existing = await _find_application(stack, guild_id, user_id)
         if existing is not None and str(getattr(existing, "state", "")) in ("pending", "accepted"):
             config = await _current_season_config(bot, self.mod, guild_id)
             if _phase_of(config) != "ouverte":
-                try:
-                    await stack.enrollment.withdraw(str(getattr(existing, "application_id", "")))
-                except Exception as exc:
-                    await interaction.followup.send(f"Le désistement a échoué : {exc}", ephemeral=True)
-                    return
-                await _refresh_all_season_posts(bot, guild_id, self.mod)
                 await interaction.followup.send(
-                    "Désinscription **enregistrée** — à bientôt !", ephemeral=True
+                    view=_withdraw_confirm_view(self.mod, guild_id, user_id),
+                    ephemeral=True,
                 )
                 return
         core_name = await _core_display_name(bot, user_id)
@@ -1012,6 +1015,71 @@ class SeasonApplyButton(
                 f"Candidature **en attente** — les admins décident.{linked}", ephemeral=True
             )
         await _refresh_all_season_posts(bot, guild_id, self.mod)
+
+
+class SeasonWithdrawConfirmButton(
+    discord.ui.DynamicItem[discord.ui.Button[Any]],
+    template=rf"{_NS}:withdraw:(?P<mod>[a-z0-9_-]+):(?P<user>\d+)",
+):
+    """The désistement's confirm button: the withdrawal runs."""
+
+    def __init__(self, mod: str, user_id: str) -> None:
+        super().__init__(
+            discord.ui.Button(
+                custom_id=f"{_NS}:withdraw:{mod}:{user_id}"[:100],
+                label="Se désinscrire",
+                style=discord.ButtonStyle.danger,
+            )
+        )
+        self.mod = mod
+        self.user_id = user_id
+
+    @classmethod
+    async def from_custom_id(
+        cls,
+        interaction: discord.Interaction,
+        item: discord.ui.Item[Any],
+        match: Any,
+        /,
+    ) -> SeasonWithdrawConfirmButton:
+        """Rebuild the button at click time."""
+        return cls(match["mod"], match["user"])
+
+    async def callback(self, interaction: discord.Interaction) -> None:
+        """Withdraw after the confirmation (the player's own click)."""
+        await interaction.response.defer(ephemeral=True)
+        bot = interaction.client
+        guild_id = str(interaction.guild_id or "")
+        stack = _stack(bot, self.mod, guild_id)
+        if stack is None:
+            return
+        existing = await _find_application(stack, guild_id, self.user_id)
+        if existing is None:
+            return
+        try:
+            await stack.enrollment.withdraw(str(getattr(existing, "application_id", "")))
+        except Exception as exc:
+            await interaction.followup.send(f"Le désistement a échoué : {exc}", ephemeral=True)
+            return
+        await _refresh_all_season_posts(bot, guild_id, self.mod)
+        await interaction.followup.send(
+            "Désinscription **enregistrée** — à bientôt !", ephemeral=True
+        )
+
+
+def _withdraw_confirm_view(mod: str, guild_id: str, user_id: str) -> discord.ui.LayoutView:
+    """Build the désistement's confirmation (a modal-shaped ephemeral)."""
+    view = discord.ui.LayoutView(timeout=None)
+    view.add_item(
+        discord.ui.Container(
+            discord.ui.TextDisplay("Se désinscrire de la saison ?"),
+            discord.ui.TextDisplay("_Ton retrait est immédiat — tu pourras re-candidater._"),
+        )
+    )
+    row: Any = discord.ui.ActionRow()
+    row.add_item(SeasonWithdrawConfirmButton(mod, user_id))
+    view.add_item(row)
+    return view
 
 
 
@@ -1090,7 +1158,7 @@ class CandidateDecideButton(
                 await target.send(resolution)
         except Exception:
             logger.info("SEASON: the decision DM failed — best-effort", exc_info=True)
-        await interaction.response.defer(ephemeral=True)
+        # the ack already rode the START defer (the 3s rule) — never twice
         await _refresh_all_season_posts(interaction.client, str(interaction.guild_id or ""), self.mod)
 
 
@@ -1201,6 +1269,7 @@ def register_season_items(client: Any) -> None:
     client.add_dynamic_items(SeasonAdminButton)
     client.add_dynamic_items(SeasonNameButton)
     client.add_dynamic_items(SeasonListButton)
+    client.add_dynamic_items(SeasonWithdrawConfirmButton)
     client.add_dynamic_items(CandidateDecideButton)
 
 
