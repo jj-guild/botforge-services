@@ -22,7 +22,7 @@ from typing import Any
 
 import discord
 
-from .common import _bot_admins, strings_by_locale, surface, wiring
+from .common import _bot_admins, mod_catalog, strings_by_locale, surface, wiring
 
 logger = logging.getLogger("kingdom.validation")
 
@@ -41,7 +41,7 @@ async def build_validation_panel(guild_id: str) -> discord.ui.LayoutView:
     """Build the pinned validation dashboard's layout (guild-locale strings)."""
     from botforge.mods.kingdom.models import KingdomValidation
 
-    strings = strings_by_locale(await _guild_locale(guild_id))
+    strings = mod_catalog().section("kingdom.validation", await _guild_locale(guild_id))
     stack = wiring()
     pending: list[Any] = []
     accepted: list[Any] = []
@@ -62,17 +62,17 @@ async def build_validation_panel(guild_id: str) -> discord.ui.LayoutView:
             else:
                 refused.append(kingdom)
     blocks: list[discord.ui.Item[discord.ui.LayoutView]] = [
-        discord.ui.TextDisplay(f"# {strings['validation_title']}"),
-        discord.ui.TextDisplay(str(strings["validation_help"])),
+        discord.ui.TextDisplay(f"# {strings['title']}"),
+        discord.ui.TextDisplay(str(strings["help"])),
         discord.ui.Separator(),
     ]
     if pending:
-        blocks.append(discord.ui.TextDisplay(f"## {strings['validation_pending_header']}"))
+        blocks.append(discord.ui.TextDisplay(f"## {strings['pending_header']}"))
         for kingdom in pending:
             king_name = await _king_display_name(stack, kingdom)
             blocks.append(
                 discord.ui.TextDisplay(
-                    str(strings["validation_row"]).format(name=kingdom.name, king=king_name)
+                    str(strings["row"]).format(name=kingdom.name, king=king_name)
                 )
             )
             row: discord.ui.ActionRow[discord.ui.LayoutView] = discord.ui.ActionRow()
@@ -80,7 +80,7 @@ async def build_validation_panel(guild_id: str) -> discord.ui.LayoutView:
                 ValidationDecisionButton(
                     kingdom.id,
                     "ok",
-                    str(strings["validation_accept_button"])[:80],
+                    str(strings["accept_button"])[:80],
                     discord.ButtonStyle.success,
                 )
             )
@@ -88,22 +88,22 @@ async def build_validation_panel(guild_id: str) -> discord.ui.LayoutView:
                 ValidationDecisionButton(
                     kingdom.id,
                     "no",
-                    str(strings["validation_refuse_button"])[:80],
+                    str(strings["refuse_button"])[:80],
                     discord.ButtonStyle.danger,
                 )
             )
             blocks.append(row)
     else:
-        blocks.append(discord.ui.TextDisplay(str(strings["validation_empty"])))
+        blocks.append(discord.ui.TextDisplay(str(strings["empty"])))
     blocks.append(discord.ui.Separator())
     blocks.append(
         discord.ui.TextDisplay(
-            _table(strings["validation_accepted_header"], strings["validation_table_kingdom"], accepted)
+            _table(strings["accepted_header"], strings["table_kingdom"], accepted)
         )
     )
     blocks.append(
         discord.ui.TextDisplay(
-            _table(strings["validation_refused_header"], strings["validation_table_kingdom"], refused)
+            _table(strings["refused_header"], strings["table_kingdom"], refused)
         )
     )
     container = discord.ui.Container(*blocks, accent_colour=discord.Colour(0xA72D2D))
@@ -177,30 +177,32 @@ class ValidationDecisionButton(
         """Apply the decision, then re-render the dashboard in place."""
         from botforge.discord.guards import require_admin
 
-        strings = strings_by_locale(await _guild_locale(str(interaction.guild_id or "")))
+        locale = await _guild_locale(str(interaction.guild_id or ""))
+        strings = mod_catalog().section("kingdom.validation", locale)
+        shared = strings_by_locale(locale)
         admins = _bot_admins(interaction)
         roles = getattr(interaction.client, "roles_service", None)
         if not await require_admin(
             interaction,
             admins,
             roles,
-            denied_message=str(strings["validation_denied"]),
+            denied_message=str(strings["denied"]),
         ):
             return
         stack = wiring()
         if stack is None:
-            await interaction.followup.send(str(strings["plan_no_service"]), ephemeral=True)
+            await interaction.followup.send(str(shared["plan_no_service"]), ephemeral=True)
             return
         try:
             if self.choice == "ok":
                 kingdom = await stack.kingdoms.approve_kingdom(self.kingdom_id)
-                note = str(strings["validation_approved_note"]).format(name=kingdom.name)
+                note = str(strings["approved_note"]).format(name=kingdom.name)
             else:
                 kingdom = await stack.kingdoms.refuse_kingdom(self.kingdom_id)
-                note = str(strings["validation_refused_note"]).format(name=kingdom.name)
+                note = str(strings["refused_note"]).format(name=kingdom.name)
         except Exception as exc:  # noqa: BLE001 — the dashboard reports, never raises
             logger.warning("kingdom: validation decision failed (%s)", self.kingdom_id, exc_info=True)
-            note = str(strings["console_error"]).format(str(exc)[:150])
+            note = str(shared["console_error"]).format(str(exc)[:150])
         try:
             await interaction.response.edit_message(
                 view=await build_validation_panel(str(interaction.guild_id or ""))

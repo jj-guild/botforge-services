@@ -69,30 +69,38 @@ def test_validation_custom_ids_are_stable() -> None:
 
 
 def test_validation_strings_parity() -> None:
-    """The dashboard's keys exist in both locales and format with their arities."""
-    from botforge.mods.kingdom.cogs.kingdom.strings import strings
+    """The dashboard's yaml keys exist in both locales and format with their arities."""
+    from botforge.mods.kingdom.cogs.kingdom.common import mod_catalog
 
     for locale in ("fr", "en"):
-        s = strings(locale)
+        s = mod_catalog().section("kingdom.validation", locale)
         for key in (
-            "validation_title",
-            "validation_help",
-            "validation_pending_header",
-            "validation_row",
-            "validation_empty",
-            "validation_accept_button",
-            "validation_refuse_button",
-            "validation_accepted_header",
-            "validation_refused_header",
-            "validation_table_kingdom",
-            "validation_denied",
-            "validation_approved_note",
-            "validation_refused_note",
+            "title",
+            "help",
+            "pending_header",
+            "row",
+            "empty",
+            "accept_button",
+            "refuse_button",
+            "accepted_header",
+            "refused_header",
+            "table_kingdom",
+            "denied",
+            "approved_note",
+            "refused_note",
         ):
-            assert s[key]
-        s["validation_row"].format(name="X", king="Y")
-        s["validation_approved_note"].format(name="X")
-        s["validation_refused_note"].format(name="X")
+            assert s[key], (locale, key)
+        s["row"].format(name="X", king="Y")
+        s["approved_note"].format(name="X")
+        s["refused_note"].format(name="X")
+
+
+def test_validation_strings_live_in_the_mod_yaml_not_the_python_dict() -> None:
+    """Merlin's rule: the mod's translations are yaml data, never hardcoded."""
+    from botforge.mods.kingdom.cogs.kingdom import strings as legacy
+
+    for locale in ("fr", "en"):
+        assert not [k for k in legacy.strings(locale) if k.startswith("validation_")]
 
 
 def test_the_dashboard_builds_without_a_stack() -> None:

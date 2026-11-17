@@ -656,23 +656,6 @@ DEFAULTS: dict[str, dict[str, str]] = {
         "console_clock_modal_title": "⏩ Avancer l'horloge",
         "console_clock_bad": "❌ {0}",
         "console_clock_done": "✅ Horloge de jeu avancée : **{0}**.",
-        "validation_title": "👑 Validation des royaumes",
-        "validation_help": (
-            "Chaque royaume fondé attend la validation de son nom (règle 35)."
-            " Une décision ici s'applique à l'instant : valider ouvre le jeu au"
-            " royaume, refuser renvoie ses membres dans la file d'attente."
-        ),
-        "validation_pending_header": "⏳ En attente",
-        "validation_row": "**{name}** — Roi : {king}",
-        "validation_empty": "Aucun royaume en attente de validation.",
-        "validation_accept_button": "✅ Valider",
-        "validation_refuse_button": "❌ Refuser",
-        "validation_accepted_header": "✅ Validés",
-        "validation_refused_header": "🚫 Refusés",
-        "validation_table_kingdom": "Royaume",
-        "validation_denied": "La validation est réservée aux admins du bot.",
-        "validation_approved_note": "✅ **{name}** validé — le royaume rejoint la saison.",
-        "validation_refused_note": "🚫 **{name}** refusé — ses membres retournent dans la file.",
     },
     "en": {
         "panel_title": "⚔️ Battlefield — Attack",
@@ -1299,23 +1282,6 @@ DEFAULTS: dict[str, dict[str, str]] = {
         ),
         "console_confirm_button": "⚠️ Confirm",
         "console_cancel_button": "Cancel",
-        "validation_title": "👑 Kingdom validation",
-        "validation_help": (
-            "Every founded kingdom awaits its name's validation (rule 35)."
-            " A decision here applies at once: approving opens the game to"
-            " the kingdom, refusing sends its members back to the queue."
-        ),
-        "validation_pending_header": "⏳ Pending",
-        "validation_row": "**{name}** — King: {king}",
-        "validation_empty": "No kingdom awaits validation.",
-        "validation_accept_button": "✅ Approve",
-        "validation_refuse_button": "❌ Refuse",
-        "validation_accepted_header": "✅ Approved",
-        "validation_refused_header": "🚫 Refused",
-        "validation_table_kingdom": "Kingdom",
-        "validation_denied": "Validation is reserved for the bot's admins.",
-        "validation_approved_note": "✅ **{name}** approved — the kingdom joins the season.",
-        "validation_refused_note": "🚫 **{name}** refused — its members return to the queue.",
         "console_cancelled": "❌ Cancelled — nothing was touched.",
         "console_relaunch_done": "✅ Season relaunched — the old data is archived.",
         "console_reset_done": "✅ Data reset — the old data is archived.",

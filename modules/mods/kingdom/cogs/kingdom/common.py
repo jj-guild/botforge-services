@@ -251,6 +251,32 @@ def strings_by_locale(locale: str) -> dict[str, str]:
     return strings(locale)
 
 
+_MOD_CATALOG: Any = None
+
+
+def mod_catalog() -> Any:
+    """The mod's yaml message catalog (``conf/locales/*.yaml`` — data i18n).
+
+    The mod's own translations live in its ``conf/locales/fr.yaml`` and
+    ``en.yaml`` (the standard modular layout, mod_layout's locale
+    files) — never hardcoded in a python module. The core
+    ``MessageCatalog`` loads them once (cached here); its ``section``
+    renders one dotted section per locale with the English fallback —
+    a missing key degrades, never raises. This is the accessor every
+    new mod surface uses; the legacy ``strings_by_locale`` dict shrinks
+    as P5 migrates the remaining keys.
+    """
+    global _MOD_CATALOG
+    if _MOD_CATALOG is None:
+        from pathlib import Path
+
+        from botforge.core.services.i18n import MessageCatalog
+
+        conf_dir = Path(__file__).resolve().parents[2] / "conf"
+        _MOD_CATALOG = MessageCatalog(str(conf_dir))
+    return _MOD_CATALOG
+
+
 # ---------------------------------------------------------------------------
 # Name resolvers + failures
 # ---------------------------------------------------------------------------

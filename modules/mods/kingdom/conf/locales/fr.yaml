@@ -2,3 +2,17 @@ fr:
   kingdom:
     title: "Kingdom"
     description: "Le mod de conquête territoriale Season II (AoE2) — squelette : la structure déclarée, aucune mécanique de jeu."
+    validation:
+      title: "👑 Validation des royaumes"
+      help: "Chaque royaume fondé attend la validation de son nom (règle 35). Une décision ici s'applique à l'instant : valider ouvre le jeu au royaume, refuser renvoie ses membres dans la file d'attente."
+      pending_header: "⏳ En attente"
+      row: "**{name}** — Roi : {king}"
+      empty: "Aucun royaume en attente de validation."
+      accept_button: "✅ Valider"
+      refuse_button: "❌ Refuser"
+      accepted_header: "✅ Validés"
+      refused_header: "🚫 Refusés"
+      table_kingdom: "Royaume"
+      denied: "La validation est réservée aux admins du bot."
+      approved_note: "✅ **{name}** validé — le royaume rejoint la saison."
+      refused_note: "🚫 **{name}** refusé — ses membres retournent dans la file."

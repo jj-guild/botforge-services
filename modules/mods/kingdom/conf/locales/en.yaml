@@ -2,3 +2,17 @@ en:
   kingdom:
     title: "Kingdom"
     description: "The Season II territory-conquest mod (AoE2) — skeleton: the declared structure, no game mechanics."
+    validation:
+      title: "👑 Kingdom validation"
+      help: "Every founded kingdom awaits its name's validation (rule 35). A decision here applies at once: approving opens the game to the kingdom, refusing sends its members back to the queue."
+      pending_header: "⏳ Pending"
+      row: "**{name}** — King: {king}"
+      empty: "No kingdom awaits validation."
+      accept_button: "✅ Approve"
+      refuse_button: "❌ Refuse"
+      accepted_header: "✅ Approved"
+      refused_header: "🚫 Refused"
+      table_kingdom: "Kingdom"
+      denied: "Validation is reserved for the bot's admins."
+      approved_note: "✅ **{name}** approved — the kingdom joins the season."
+      refused_note: "🚫 **{name}** refused — its members return to the queue."
