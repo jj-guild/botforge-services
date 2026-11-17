@@ -53,6 +53,17 @@ def test_home_opens_the_four_sections() -> None:
     assert targets == {"panel:profile", "menu:games:home", "menu:mods:home", "menu:admin"}
 
 
+def test_the_game_home_opens_with_the_profile_button() -> None:
+    """A game's home menu opens with the generic Profile button, before the
+    game's own panels (#409); the admin flip still closes the row."""
+    aoe2_home = get_view("menu:games:aoe2")
+    assert aoe2_home is not None
+    assert aoe2_home.buttons[0].target == "panel:profile"
+    assert aoe2_home.buttons[0].label_key == "ui.homes.btn_profile"
+    assert aoe2_home.buttons[-1].target == "menu:game:aoe2:admin"
+    assert aoe2_home.buttons[-1].admin
+
+
 def test_admin_buttons_carry_the_padlock() -> None:
     for decl in registered_views():
         for button in decl.buttons:
