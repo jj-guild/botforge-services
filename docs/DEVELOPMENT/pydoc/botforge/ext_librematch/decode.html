@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Python: botforge.ext_librematch.decode</title>
+</head><body>
+
+<table class="heading">
+<tr class="heading-text decor">
+<td class="title">&nbsp;<br><strong class="title"><a href="botforge.html" class="white">botforge</a>.<a href="botforge.ext_librematch.html" class="white">ext_librematch</a>.decode</strong></td>
+<td class="extra"><a href=".">index</a><br><a href="file:SOURCE_ROOT/ext_librematch/decode.py">SOURCE_ROOT/ext_librematch/decode.py</a></td></tr></table>
+    <p><span class="code">libre:match&nbsp;options/slotinfo&nbsp;decoding&nbsp;—&nbsp;the&nbsp;exploit&nbsp;step&nbsp;(#288,&nbsp;T2).<br>
+&nbsp;<br>
+The&nbsp;raw&nbsp;history&nbsp;documents&nbsp;are&nbsp;stored&nbsp;FIRST&nbsp;(T1);&nbsp;this&nbsp;module&nbsp;decodes<br>
+the&nbsp;encoded&nbsp;match&nbsp;fields&nbsp;AFTER&nbsp;the&nbsp;fact,&nbsp;without&nbsp;any&nbsp;re-fetch&nbsp;of&nbsp;the<br>
+history:&nbsp;the&nbsp;match-details&nbsp;endpoint&nbsp;answers&nbsp;the&nbsp;``options``&nbsp;and<br>
+``slotinfo``&nbsp;blobs&nbsp;for&nbsp;an&nbsp;already-known&nbsp;match&nbsp;id,&nbsp;and&nbsp;the&nbsp;game<br>
+module's&nbsp;blob&nbsp;decoder&nbsp;(``botforge.aoe2.codecs``)&nbsp;turns&nbsp;them&nbsp;into&nbsp;the<br>
+structured&nbsp;fields&nbsp;—&nbsp;game&nbsp;settings,&nbsp;slots/teams,&nbsp;civs,&nbsp;map.<br>
+&nbsp;<br>
+A&nbsp;decode&nbsp;failure&nbsp;is&nbsp;never&nbsp;fatal:&nbsp;the&nbsp;raw&nbsp;blobs&nbsp;stay&nbsp;stored,&nbsp;the<br>
+projection&nbsp;fields&nbsp;stay&nbsp;empty,&nbsp;the&nbsp;sync&nbsp;retries&nbsp;on&nbsp;its&nbsp;next&nbsp;pass.</span></p>
+<p>
+<table class="section">
+<tr class="decor pkg-content-decor heading-text">
+<td class="section-title" colspan=3>&nbsp;<br><strong class="bigsection">Modules</strong></td></tr>
+    
+<tr><td class="decor pkg-content-decor"><span class="code">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span></td><td>&nbsp;</td>
+<td class="singlecolumn"><table><tr><td class="multicolumn"><a href="json.html">json</a><br>
+</td><td class="multicolumn"><a href="logging.html">logging</a><br>
+</td><td class="multicolumn"></td><td class="multicolumn"></td></tr></table></td></tr></table><p>
+<table class="section">
+<tr class="decor functions-decor heading-text">
+<td class="section-title" colspan=3>&nbsp;<br><strong class="bigsection">Functions</strong></td></tr>
+    
+<tr><td class="decor functions-decor"><span class="code">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span></td><td>&nbsp;</td>
+<td class="singlecolumn"><dl><dt><a name="-decode_match_payload"><strong>decode_match_payload</strong></a>(raw: 'dict[str, Any]') -&gt; 'tuple[str, str]'</dt><dd><span class="code">Decode&nbsp;one&nbsp;raw&nbsp;match&nbsp;payload's&nbsp;blobs&nbsp;into&nbsp;(options_json,&nbsp;slots_json).<br>
+&nbsp;<br>
+Empty&nbsp;strings&nbsp;when&nbsp;the&nbsp;payload&nbsp;carries&nbsp;no&nbsp;decodable&nbsp;blob&nbsp;—&nbsp;the<br>
+caller&nbsp;keeps&nbsp;the&nbsp;document,&nbsp;the&nbsp;fields&nbsp;simply&nbsp;stay&nbsp;unexploited.</span></dd></dl>
+</td></tr></table><p>
+<table class="section">
+<tr class="decor data-decor heading-text">
+<td class="section-title" colspan=3>&nbsp;<br><strong class="bigsection">Data</strong></td></tr>
+    
+<tr><td class="decor data-decor"><span class="code">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span></td><td>&nbsp;</td>
+<td class="singlecolumn"><strong>BLOB_FIELDS</strong> = ('slotinfo', 'options')<br>
+<strong>DECODE_BATCH</strong> = 25<br>
+<strong>logger</strong> = &lt;Logger botforge.ext_librematch.decode (INFO)&gt;</td></tr></table>
+</body></html>

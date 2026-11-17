@@ -70,9 +70,16 @@ An&nbsp;empty&nbsp;``profile_ids``&nbsp;means&nbsp;every&nbsp;known&nbsp;account
 
 <dl><dt>async <a name="LibrematchStore-find_profiles_of_user"><strong>find_profiles_of_user</strong></a>(self, user_id: 'str') -&gt; 'list[str]'</dt><dd><span class="code">Return&nbsp;the&nbsp;platform&nbsp;user's&nbsp;known&nbsp;accounts&nbsp;(the&nbsp;unification's&nbsp;key).</span></dd></dl>
 
+<dl><dt>async <a name="LibrematchStore-find_undecoded_matches"><strong>find_undecoded_matches</strong></a>(self, profile_ids: 'list[str]', limit: 'int' = 25) -&gt; 'list[dict[str, Any]]'</dt><dd><span class="code">List&nbsp;the&nbsp;stored&nbsp;matches&nbsp;whose&nbsp;encoded&nbsp;fields&nbsp;are&nbsp;not&nbsp;decoded&nbsp;yet.<br>
+&nbsp;<br>
+The&nbsp;decode&nbsp;step&nbsp;(T2)&nbsp;exploits&nbsp;the&nbsp;stored&nbsp;documents&nbsp;AFTER&nbsp;the<br>
+ingestion&nbsp;—&nbsp;this&nbsp;is&nbsp;its&nbsp;work&nbsp;queue,&nbsp;newest&nbsp;first.</span></dd></dl>
+
 <dl><dt>async <a name="LibrematchStore-find_user_of_profile"><strong>find_user_of_profile</strong></a>(self, profile_id: 'str') -&gt; 'str'</dt><dd><span class="code">Return&nbsp;the&nbsp;account's&nbsp;platform&nbsp;owner;&nbsp;empty&nbsp;when&nbsp;unknown.</span></dd></dl>
 
 <dl><dt>async <a name="LibrematchStore-list_known_profiles"><strong>list_known_profiles</strong></a>(self) -&gt; 'list[str]'</dt><dd><span class="code">List&nbsp;every&nbsp;account&nbsp;the&nbsp;store&nbsp;has&nbsp;a&nbsp;status&nbsp;or&nbsp;binding&nbsp;for.</span></dd></dl>
+
+<dl><dt>async <a name="LibrematchStore-update_match_fields"><strong>update_match_fields</strong></a>(self, doc_id: 'str', fields: 'dict[str, Any]') -&gt; 'None'</dt><dd><span class="code">Patch&nbsp;the&nbsp;projection&nbsp;fields&nbsp;of&nbsp;one&nbsp;stored&nbsp;match&nbsp;document.</span></dd></dl>
 
 <dl><dt>async <a name="LibrematchStore-upsert_account"><strong>upsert_account</strong></a>(self, document: 'dict[str, Any]') -&gt; 'None'</dt><dd><span class="code">Insert&nbsp;or&nbsp;replace&nbsp;one&nbsp;account's&nbsp;status&nbsp;document.</span></dd></dl>
 

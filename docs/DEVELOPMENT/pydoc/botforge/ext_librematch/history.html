@@ -61,6 +61,13 @@ Pull&nbsp;the&nbsp;known&nbsp;accounts'&nbsp;history&nbsp;into&nbsp;the&nbsp;sto
 
 <dl><dt>async <a name="MatchHistorySyncer-account_stats"><strong>account_stats</strong></a>(self, profile_ids: 'list[str]') -&gt; 'list[AccountEloStatus]'</dt><dd><span class="code">Serve&nbsp;the&nbsp;per-account&nbsp;status&nbsp;(current&nbsp;+&nbsp;max&nbsp;elo&nbsp;per&nbsp;board).</span></dd></dl>
 
+<dl><dt>async <a name="MatchHistorySyncer-decode_stored"><strong>decode_stored</strong></a>(self, profile_ids: 'list[str]', batch: 'int' = 25) -&gt; 'int'</dt><dd><span class="code">Decode&nbsp;the&nbsp;stored&nbsp;matches'&nbsp;encoded&nbsp;fields&nbsp;(#288,&nbsp;T2).<br>
+&nbsp;<br>
+The&nbsp;blobs&nbsp;ride&nbsp;the&nbsp;match-details&nbsp;endpoint&nbsp;of&nbsp;an&nbsp;already-stored<br>
+match&nbsp;id&nbsp;—&nbsp;the&nbsp;history&nbsp;itself&nbsp;is&nbsp;never&nbsp;re-fetched.&nbsp;A&nbsp;decode&nbsp;or<br>
+transport&nbsp;failure&nbsp;leaves&nbsp;the&nbsp;document&nbsp;untouched:&nbsp;the&nbsp;next&nbsp;sync<br>
+retries.&nbsp;Returns&nbsp;the&nbsp;number&nbsp;of&nbsp;decoded&nbsp;matches.</span></dd></dl>
+
 <dl><dt>async <a name="MatchHistorySyncer-match_history"><strong>match_history</strong></a>(self, profile_ids: 'list[str]', limit: 'int' = 0, since_s: 'int' = 0, leaderboard_id: 'str' = '') -&gt; 'list[MatchHistoryEntry]'</dt><dd><span class="code">Serve&nbsp;the&nbsp;stored&nbsp;history&nbsp;as&nbsp;the&nbsp;exploited&nbsp;projection.</span></dd></dl>
 
 <dl><dt>async <a name="MatchHistorySyncer-sync_account"><strong>sync_account</strong></a>(self, profile_id: 'str') -&gt; 'bool'</dt><dd><span class="code">Sync&nbsp;one&nbsp;account:&nbsp;raw&nbsp;history&nbsp;+&nbsp;status,&nbsp;then&nbsp;the&nbsp;elo&nbsp;max.<br>
@@ -91,7 +98,8 @@ Data descriptors defined here:<br>
 <td class="section-title" colspan=3>&nbsp;<br><strong class="bigsection">Data</strong></td></tr>
     
 <tr><td class="decor data-decor"><span class="code">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span></td><td>&nbsp;</td>
-<td class="singlecolumn"><strong>DEFAULT_HISTORY_LIMIT</strong> = 50<br>
+<td class="singlecolumn"><strong>DECODE_BATCH</strong> = 25<br>
+<strong>DEFAULT_HISTORY_LIMIT</strong> = 50<br>
 <strong>DEFAULT_SYNC_COUNT</strong> = 1000<br>
 <strong>LEADERBOARD_KEYS</strong> = {'0': 'rm_1v1', '1': 'rm_team', '2': 'unranked', '3': 'dm_1v1', '4': 'dm_team'}<br>
 <strong>STATS_LEADERBOARDS</strong> = ('0', '3', '4')<br>

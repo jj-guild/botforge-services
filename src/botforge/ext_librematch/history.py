@@ -28,6 +28,7 @@ from botforge.core.models.game import (
     UserEloStats,
 )
 from botforge.ext_librematch.adapter import LEADERBOARD_KEYS
+from botforge.ext_librematch.decode import DECODE_BATCH, decode_match_payload
 from botforge.ext_librematch.store import DEFAULT_HISTORY_LIMIT, LibrematchStore
 
 logger = logging.getLogger("botforge.ext_librematch.history")
@@ -98,6 +99,9 @@ class MatchHistorySyncer:
                 boards[leaderboard_id] = board
                 stored_any = True
         await self._store.upsert_account(self._account_doc(profile_id, boards, previous))
+        # The decode step (T2): the stored documents are exploited AFTER
+        # the ingestion — no history re-fetch, only the details endpoint.
+        await self.decode_stored([profile_id])
         return stored_any
 
     async def sync_accounts(self, profile_ids: list[str]) -> int:
@@ -186,6 +190,37 @@ class MatchHistorySyncer:
                     continue
                 peak = max(peak, _int(member.get("newrating")), _int(member.get("oldrating")))
         return peak
+
+    async def decode_stored(self, profile_ids: list[str], batch: int = DECODE_BATCH) -> int:
+        """Decode the stored matches' encoded fields (#288, T2).
+
+        The blobs ride the match-details endpoint of an already-stored
+        match id — the history itself is never re-fetched. A decode or
+        transport failure leaves the document untouched: the next sync
+        retries. Returns the number of decoded matches.
+        """
+        decoded = 0
+        pending = await self._store.find_undecoded_matches(profile_ids, batch)
+        for doc in pending:
+            match_id = str(doc.get("match_id", ""))
+            if not match_id:
+                continue
+            raw = await self._adapter.fetch_match_details_raw(match_id)
+            if not raw:
+                continue
+            options_json, slots_json = decode_match_payload(raw)
+            if not options_json and not slots_json:
+                continue
+            await self._store.update_match_fields(
+                str(doc["_id"]),
+                {
+                    "options_json": options_json,
+                    "slots_json": slots_json,
+                    "decoded_at": _now_ms(),
+                },
+            )
+            decoded += 1
+        return decoded
 
     async def _find_status(self, profile_id: str) -> dict[str, Any] | None:
         """Return the account's previously stored status document."""

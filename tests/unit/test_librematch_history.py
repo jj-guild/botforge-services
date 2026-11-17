@@ -83,6 +83,12 @@ class FakeCollection:
     async def count_documents(self, query: dict[str, Any]) -> int:
         return len(_matches(query, list(self.docs.values())))
 
+    async def update_one(self, query: dict[str, Any], update: dict[str, Any]) -> None:
+        doc = self.docs.get(str(query.get("_id", "")))
+        if doc is None:
+            return
+        doc.update(update.get("$set", {}))
+
 
 class FakeDb:
     """database[collection] stand-in."""
@@ -100,7 +106,12 @@ class FakeAdapter:
     def __init__(self) -> None:
         self.history: dict[str, list[dict[str, Any]]] = {}
         self.stats: dict[str, dict[str, Any]] = {}
+        self.details: dict[str, dict[str, Any]] = {}
         self.calls: list[tuple[str, str]] = []
+
+    async def fetch_match_details_raw(self, match_id: str) -> dict[str, Any]:
+        self.calls.append(("details", match_id))
+        return self.details.get(match_id, {})
 
     async def fetch_match_history_raw(
         self, profile_id: str, leaderboard_id: str = "", count: int = 1000
@@ -292,3 +303,77 @@ async def test_sync_accounts_targets_given_or_all() -> None:
     adapter.stats["456:0"] = _stat("456", 1100, 1, 1, 0)
     assert await syncer.sync_accounts([]) == 2  # every known account
     assert set(db["librematch:accounts"].docs) == {"123", "456"}
+
+
+def _slotinfo(slots: list[dict[str, Any]]) -> str:
+    """Build a real-shape slotinfo blob: base64(zlib("<N>,<json>"))."""
+    import base64
+    import json as _json
+    import zlib
+
+    payload = f"{len(slots)},{_json.dumps(slots)}"
+    return base64.b64encode(zlib.compress(payload.encode())).decode()
+
+
+def _options(pairs: list[tuple[str, str]]) -> str:
+    """Build a real-shape options blob (the codecs test's recipe)."""
+    import base64
+    import struct
+    import zlib
+
+    records = b"".join(
+        struct.pack("<I", len(k.encode()) + 1 + len(v.encode())) + f"{k}:{v}".encode()
+        for k, v in pairs
+    )
+    inner = base64.b64encode(bytes([len(pairs)]) + records).decode()
+    return base64.b64encode(zlib.compress(inner.encode())).decode()
+
+
+async def test_decode_exploits_stored_matches_without_refetch() -> None:
+    """T2: the encoded fields decode AFTER the storage, no history re-fetch."""
+    db, adapter = FakeDb(), FakeAdapter()
+    adapter.history["123:0"] = [
+        _match("m1", "0", 100, 200, [_member("123", 1, 1, 1000, 1024)])
+    ]
+    adapter.details["m1"] = {
+        "id": "m1",
+        "options": _options([("MAP_SIZE", "3"), ("SPEED", "2")]),
+        "slotinfo": _slotinfo(
+            [{"profileInfo": {"id": 123}, "factionID": 1, "teamID": 1, "status": 3}]
+        ),
+    }
+    syncer = _syncer(db, adapter)
+    await syncer.sync_account("123")
+
+    doc = db["librematch:matches"].docs["m1:0"]
+    import json
+
+    assert json.loads(doc["options_json"]) == {"MAP_SIZE": "3", "SPEED": "2"}
+    slots = json.loads(doc["slots_json"])
+    assert slots[0]["profile_id"] == "123"
+    assert slots[0]["civ"] == 1
+    assert slots[0]["team"] == 1
+    assert slots[0]["slot_kind"] == "human"
+    # the served projection carries the decoded fields (T2)
+    entries = await syncer.match_history(["123"])
+    assert entries[0].options_json == doc["options_json"]
+    assert entries[0].slots_json == doc["slots_json"]
+    # no history re-fetch: only the details endpoint was called
+    assert ("details", "m1") in adapter.calls
+    assert ("history", "123") in adapter.calls
+
+
+async def test_decode_failure_leaves_the_document_untouched() -> None:
+    """T2: an undecodable blob degrades — the raw stays, fields stay empty."""
+    db, adapter = FakeDb(), FakeAdapter()
+    adapter.history["123:0"] = [
+        _match("m1", "0", 100, 200, [_member("123", 1, 1, 1000, 1024)])
+    ]
+    adapter.details["m1"] = {"id": "m1", "options": "not-a-blob", "slotinfo": "!!!"}
+    syncer = _syncer(db, adapter)
+    await syncer.sync_account("123")
+
+    doc = db["librematch:matches"].docs["m1:0"]
+    assert doc["options_json"] == ""
+    assert doc["slots_json"] == ""
+    assert doc["raw"]["id"] == "m1"  # the raw document is never dropped
