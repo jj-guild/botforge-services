@@ -129,6 +129,12 @@ class _ModEnrollmentDatabase:
         docs: list[dict[str, Any]] = [dict(doc) async for doc in cursor]
         return docs
 
+    async def wipe_applications(self, guild_id: str) -> int:
+        """Delete the guild's applications (a new season starts clean)."""
+        collection = await self._collection()
+        result = await collection.delete_many({"guild_id": guild_id})
+        return int(getattr(result, "deleted_count", 0))
+
     async def count_members(self, mod: str, guild_id: str) -> int:
         """Count accepted applications (the enrolled members)."""
         collection = await self._collection()
