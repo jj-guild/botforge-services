@@ -7,6 +7,8 @@ the confirm card degrades quietly without a stack.
 
 from __future__ import annotations
 
+from typing import Any
+
 import pytest
 
 
@@ -20,17 +22,17 @@ def test_console_modules_import() -> None:
     )
 
 
-def test_console_dynamic_item_templates() -> None:
-    """Each console action is a restart-proof DynamicItem."""
+def test_console_dynamic_item_custom_ids() -> None:
+    """Each console action is a restart-proof DynamicItem (stable custom ids)."""
     from botforge.mods.kingdom.cogs.kingdom.console import (
         KingdomClockButton,
         KingdomRelaunchButton,
         KingdomResetButton,
     )
 
-    assert KingdomRelaunchButton.template.pattern == r"kingdom:console:relaunch$"
-    assert KingdomResetButton.template.pattern == r"kingdom:console:reset$"
-    assert KingdomClockButton.template.pattern == r"kingdom:console:clock$"
+    assert KingdomRelaunchButton("x").custom_id == "kingdom:console:relaunch"
+    assert KingdomResetButton("x").custom_id == "kingdom:console:reset"
+    assert KingdomClockButton("x").custom_id == "kingdom:console:clock"
 
 
 def test_console_strings_parity() -> None:
@@ -98,10 +100,19 @@ def test_parse_duration_accepts_jumps() -> None:
         parse_duration("hier")
 
 
-@pytest.mark.asyncio
-async def test_console_register_is_idempotent() -> None:
-    """Registering the console actions twice never raises (restart re-run)."""
+def test_console_register_is_idempotent(monkeypatch: Any) -> None:
+    """Registering the console actions twice never raises (restart re-run).
+
+    The platform console registry is process-global: the test rides a
+    COPY of it (monkeypatch) so the platform's own registry assertions
+    never observe the mod's registrations.
+    """
+    import botforge.discord.console as console_mod
+
     from botforge.mods.kingdom.cogs.kingdom.console import register_console_actions
 
+    monkeypatch.setattr(console_mod, "_ACTIONS", dict(console_mod._ACTIONS))
     register_console_actions()
     register_console_actions()
+    keys = [action.key for action in console_mod.registered_console_actions()]
+    assert "kingdom-relaunch" in keys and "kingdom-reset" in keys and "kingdom-clock" in keys
