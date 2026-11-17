@@ -133,3 +133,44 @@ def test_plan_helpers_stay_stable() -> None:
         except ValueError:
             raised = True
         assert raised, args
+
+
+@pytest.mark.asyncio
+async def test_phases_tick_degrades_without_stack(monkeypatch) -> None:
+    """P4.1b tranche 2e: the tick without a stack is a silent no-op."""
+    from botforge.mods.kingdom.cogs.kingdom import phases
+
+    class _Bot:
+        guilds: list = []
+
+    monkeypatch.setattr(phases, "_register_voice_listener", lambda _bot: None)
+    await phases.run_attack_phases_safe(_Bot())
+
+
+def test_phases_strings_are_phases_ready() -> None:
+    """Every phase-run key exists FR and EN (the tick formats them)."""
+    from botforge.mods.kingdom.cogs.kingdom.strings import DEFAULTS
+
+    keys = (
+        "plan_event_executed",
+        "plan_event_switched",
+        "plan_event_broken",
+        "plan_event_cancelled",
+        "reveal_cover",
+        "reveal_battle_anon",
+        "reveal_ai",
+        "matchup_v1",
+        "matchup_ai",
+        "forfeit_both",
+        "forfeit_side",
+        "side_attacker",
+        "side_defender",
+        "noshow_side",
+        "noshow_both",
+        "score_reminder_dm",
+        "auto_dispute",
+        "score_resolved",
+    )
+    for key in keys:
+        assert key in DEFAULTS["fr"], key
+        assert key in DEFAULTS["en"], key

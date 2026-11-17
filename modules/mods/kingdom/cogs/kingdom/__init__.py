@@ -103,6 +103,15 @@ def setup_hook(bot: Any) -> None:
         except Exception:  # noqa: S110 — idempotent across restarts
             pass
 
+    # P4.1b tranche 2e: the attack phases loop (plans, reveals, DMs,
+    # rooms, forfeits, scores) — the test journeys gate it off.
+    from .phases import start_attack_refresher
+
+    try:
+        start_attack_refresher(bot)
+    except Exception:  # noqa: S110 — a loop failure never blocks the boot
+        pass
+
 
 def close(bot: Any) -> None:
     """Stop the mod's background tasks (best-effort)."""

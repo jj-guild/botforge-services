@@ -156,6 +156,24 @@ DEFAULTS: dict[str, dict[str, str]] = {
         "matchup_note": (
             "⚔️ **{attacker}** 🆚 **{defender}** — les deux drafts sont résolus : RDV à l'heure prévue."
         ),
+        "matchup_v1": (
+            "🆚 **{attacker}** VS **{defender}** — les deux drafts sont armés,"
+            " la rencontre peut commencer !"
+        ),
+        "matchup_ai": (
+            "🆚 **{attacker}** VS **IA {kingdom}** — niveau de l'IA : **{level}**/5.\n"
+            "🎮 Rappel : l'attaquant crée la partie en **multijoueur** (jamais en local)"
+            " avec **spectateurs autorisés**."
+        ),
+        "reveal_battle_anon": "⚔️ Bataille en vue",
+        "forfeit_both": (
+            "🏳️ Forfait général sur **{map}** — personne n'a validé : l'attaquant, présent, l'emporte (**{kingdom}**)."
+        ),
+        "forfeit_side": "🏳️ Forfait sur **{map}** — **{side}** a manqué la validation : victoire de **{kingdom}**.",
+        "side_attacker": "l'attaquant",
+        "side_defender": "le défenseur",
+        "noshow_side": "🏳️ **{map}** — **{side}** a manqué le RDV : victoire de **{kingdom}**.",
+        "noshow_both": "🏳️ **{map}** — double forfait : aucun joueur au RDV, le territoire reste à son propriétaire.",
         "pickban_dm": (
             "⚔️ **Pick & ban — {map}**\nClasse tes **{count}** pick de civilisation par ordre de préférence "
             "(ton classement ordonne les replis).\n"
@@ -317,6 +335,14 @@ DEFAULTS: dict[str, dict[str, str]] = {
         "score_disputed": (
             "⚖️ Déclaration contradictoire — les admins arbitrent (game {game})."
             "\nVeuillez prendre contact avec un admin."
+        ),
+        "score_reminder_dm": (
+            "⏰ **RDV — {map}** : aucun résultat déclaré depuis 3h — déclare le"
+            " résultat de la game avec le bouton 🏆 du salon de la bataille !"
+        ),
+        "auto_dispute": (
+            "⚖️ **Litige auto-ouvert sur {map}** — aucun résultat déclaré 15 h après"
+            " l'ouverture de la partie : un admin tranche via la console (`resultat`)."
         ),
         "conquest_title": "⚔️ Le Royaume **{winner}** a conquis **{map}** !",
         "conquest_defense_title": "🛡️ Le Royaume **{winner}** a défendu **{map}** !",
@@ -554,6 +580,24 @@ DEFAULTS: dict[str, dict[str, str]] = {
         "matchup_note": (
             "⚔️ **{attacker}** 🆚 **{defender}** — both drafts resolved: meeting at the planned hour."
         ),
+        "matchup_v1": (
+            "🆚 **{attacker}** VS **{defender}** — both drafts are locked,"
+            " the match can begin!"
+        ),
+        "matchup_ai": (
+            "🆚 **{attacker}** VS **AI {kingdom}** — AI level: **{level}**/5.\n"
+            "🎮 Reminder: the attacker creates the game in **multiplayer** (never local)"
+            " with **spectators allowed**."
+        ),
+        "reveal_battle_anon": "⚔️ Battle ahead",
+        "forfeit_both": (
+            "🏳️ General forfeit on **{map}** — nobody validated: the attacker, present, wins (**{kingdom}**)."
+        ),
+        "forfeit_side": "🏳️ Forfeit on **{map}** — **{side}** missed the validation: victory of **{kingdom}**.",
+        "side_attacker": "the attacker",
+        "side_defender": "the defender",
+        "noshow_side": "🏳️ **{map}** — **{side}** missed the meeting: victory of **{kingdom}**.",
+        "noshow_both": "🏳️ **{map}** — double forfeit: no player at the meeting, the territory stays with its owner.",
         "pickban_dm": (
             "⚔️ **Pick & ban — {map}**\nRank your **{count}** civilization picks by order of"
             " preference (your ranking orders the fallbacks).\n"
@@ -706,6 +750,14 @@ DEFAULTS: dict[str, dict[str, str]] = {
         "score_disputed": (
             "⚖️ Contradictory declarations — the admins arbitrate (game {game})."
             "\nPlease get in touch with an admin."
+        ),
+        "score_reminder_dm": (
+            "⏰ **Meeting — {map}**: no result declared for 3 hours — declare the"
+            " game result with the 🏆 button of the battle room!"
+        ),
+        "auto_dispute": (
+            "⚖️ **Dispute auto-opened on {map}** — no result declared 15h after the"
+            " game opened: an admin arbitrates through the console (`resultat`)."
         ),
         "conquest_title": "⚔️ Kingdom **{winner}** conquered **{map}**!",
         "conquest_defense_title": "🛡️ Kingdom **{winner}** defended **{map}**!",
