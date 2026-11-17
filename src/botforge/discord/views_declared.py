@@ -76,7 +76,7 @@ def declare_views_from_config(config_dir: Path | str | None = None) -> None:
             raise ValueError(f"views config: {view_id}: a view must be a mapping")
         kind = str(raw.get("kind", ""))
         if kind not in (KIND_MENU, KIND_PANEL, KIND_SURFACE):
-            raise ValueError(f"views config: {view_id}: kind must be menu or panel, got {kind!r}")
+            raise ValueError(f"views config: {view_id}: kind must be menu, panel or surface, got {kind!r}")
         buttons = tuple(_parse_button(view_id, b) for b in raw.get("buttons", []) or ())
         if kind == KIND_SURFACE and buttons:
             raise ValueError(
@@ -111,9 +111,8 @@ def _load_mod_views(config_dir: Path | str | None = None) -> dict[str, Any]:
     navigation), a broken one fails loudly (the registry is the
     single navigation source — a half-loaded menu tree is a bug).
     """
-    from botforge.core.services.mod_registry import load_mod_definitions
-
     from botforge.core.services.mod_layout import ModLayout, default_repo_root
+    from botforge.core.services.mod_registry import load_mod_definitions
 
     base = Path(config_dir) if config_dir else VIEWS_CONFIG.parent
     repo_root = default_repo_root()
