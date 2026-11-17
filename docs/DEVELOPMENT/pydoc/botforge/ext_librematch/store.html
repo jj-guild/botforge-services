@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Python: botforge.ext_librematch.store</title>
+</head><body>
+
+<table class="heading">
+<tr class="heading-text decor">
+<td class="title">&nbsp;<br><strong class="title"><a href="botforge.html" class="white">botforge</a>.<a href="botforge.ext_librematch.html" class="white">ext_librematch</a>.store</strong></td>
+<td class="extra"><a href=".">index</a><br><a href="file:SOURCE_ROOT/ext_librematch/store.py">SOURCE_ROOT/ext_librematch/store.py</a></td></tr></table>
+    <p><span class="code">libre:match&nbsp;stats&nbsp;store&nbsp;—&nbsp;the&nbsp;provider's&nbsp;OWN&nbsp;history&nbsp;database&nbsp;(#404&nbsp;T1).<br>
+&nbsp;<br>
+The&nbsp;provider&nbsp;is&nbsp;the&nbsp;source&nbsp;of&nbsp;truth&nbsp;of&nbsp;its&nbsp;perimeter:&nbsp;the&nbsp;RAW&nbsp;match<br>
+documents&nbsp;and&nbsp;the&nbsp;per-account&nbsp;status&nbsp;live&nbsp;HERE,&nbsp;in&nbsp;the&nbsp;provider's<br>
+namespaced&nbsp;collections&nbsp;—&nbsp;never&nbsp;filtered&nbsp;at&nbsp;ingestion&nbsp;(store&nbsp;first,<br>
+exploit&nbsp;later),&nbsp;never&nbsp;read&nbsp;by&nbsp;another&nbsp;service's&nbsp;process.<br>
+&nbsp;<br>
+Collections&nbsp;(all&nbsp;under&nbsp;the&nbsp;``librematch:``&nbsp;namespace):<br>
+&nbsp;<br>
+-&nbsp;``librematch:matches``&nbsp;—&nbsp;one&nbsp;document&nbsp;per&nbsp;(match,&nbsp;leaderboard):&nbsp;the<br>
+&nbsp;&nbsp;raw&nbsp;upstream&nbsp;payload&nbsp;plus&nbsp;the&nbsp;exploited&nbsp;projection&nbsp;(participants,<br>
+&nbsp;&nbsp;elo&nbsp;deltas,&nbsp;outcome);<br>
+-&nbsp;``librematch:accounts``&nbsp;—&nbsp;one&nbsp;document&nbsp;per&nbsp;known&nbsp;account:&nbsp;the&nbsp;elo<br>
+&nbsp;&nbsp;status&nbsp;per&nbsp;leaderboard&nbsp;(current&nbsp;+&nbsp;MAX)&nbsp;and&nbsp;the&nbsp;sync&nbsp;freshness;<br>
+-&nbsp;``librematch:bindings``&nbsp;—&nbsp;the&nbsp;profile&nbsp;-&gt;&nbsp;platform-user&nbsp;mapping&nbsp;pushed<br>
+&nbsp;&nbsp;by&nbsp;the&nbsp;core&nbsp;through&nbsp;``UpdateSubscriptions``&nbsp;(the&nbsp;per-USER<br>
+&nbsp;&nbsp;unification's&nbsp;key).</span></p>
+<p>
+<table class="section">
+<tr class="decor pkg-content-decor heading-text">
+<td class="section-title" colspan=3>&nbsp;<br><strong class="bigsection">Modules</strong></td></tr>
+    
+<tr><td class="decor pkg-content-decor"><span class="code">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span></td><td>&nbsp;</td>
+<td class="singlecolumn"><table><tr><td class="multicolumn"><a href="logging.html">logging</a><br>
+</td><td class="multicolumn"></td><td class="multicolumn"></td><td class="multicolumn"></td></tr></table></td></tr></table><p>
+<table class="section">
+<tr class="decor index-decor heading-text">
+<td class="section-title" colspan=3>&nbsp;<br><strong class="bigsection">Classes</strong></td></tr>
+    
+<tr><td class="decor index-decor"><span class="code">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span></td><td>&nbsp;</td>
+<td class="singlecolumn"><dl>
+<dt class="heading-text"><a href="builtins.html#object">builtins.object</a>
+</dt><dd>
+<dl>
+<dt class="heading-text"><a href="botforge.ext_librematch.store.html#LibrematchStore">LibrematchStore</a>
+</dt></dl>
+</dd>
+</dl>
+ <p>
+<table class="section">
+<tr class="decor title-decor heading-text">
+<td class="section-title" colspan=3>&nbsp;<br><a name="LibrematchStore">class <strong>LibrematchStore</strong></a>(<a href="builtins.html#object">builtins.object</a>)</td></tr>
+    
+<tr><td class="decor title-decor" rowspan=2><span class="code">&nbsp;&nbsp;&nbsp;</span></td>
+<td class="decor title-decor" colspan=2><span class="code"><a href="#LibrematchStore">LibrematchStore</a>(database:&nbsp;'Any')&nbsp;-&amp;gt;&nbsp;'None'<br>
+&nbsp;<br>
+The&nbsp;provider's&nbsp;own&nbsp;persistence&nbsp;seam&nbsp;over&nbsp;async&nbsp;MongoDB.<br>&nbsp;</span></td></tr>
+<tr><td>&nbsp;</td>
+<td class="singlecolumn">Methods defined here:<br>
+<dl><dt><a name="LibrematchStore-__init__"><strong>__init__</strong></a>(self, database: 'Any') -&gt; 'None'</dt><dd><span class="code">Wrap&nbsp;the&nbsp;provider's&nbsp;async&nbsp;Mongo&nbsp;database.</span></dd></dl>
+
+<dl><dt>async <a name="LibrematchStore-count_matches_since"><strong>count_matches_since</strong></a>(self, profile_ids: 'list[str]', since_s: 'int') -&gt; 'int'</dt><dd><span class="code">Count&nbsp;the&nbsp;matches&nbsp;of&nbsp;the&nbsp;profiles&nbsp;finished&nbsp;after&nbsp;``since_s``.</span></dd></dl>
+
+<dl><dt>async <a name="LibrematchStore-find_accounts"><strong>find_accounts</strong></a>(self, profile_ids: 'list[str]') -&gt; 'list[dict[str, Any]]'</dt><dd><span class="code">Return&nbsp;the&nbsp;status&nbsp;documents&nbsp;of&nbsp;the&nbsp;accounts&nbsp;(missing&nbsp;ones&nbsp;absent).</span></dd></dl>
+
+<dl><dt>async <a name="LibrematchStore-find_matches"><strong>find_matches</strong></a>(self, profile_ids: 'list[str]', limit: 'int' = 0, since_s: 'int' = 0, leaderboard_id: 'str' = '') -&gt; 'list[dict[str, Any]]'</dt><dd><span class="code">Query&nbsp;the&nbsp;stored&nbsp;history:&nbsp;matches&nbsp;of&nbsp;the&nbsp;profiles,&nbsp;newest&nbsp;first.<br>
+&nbsp;<br>
+An&nbsp;empty&nbsp;``profile_ids``&nbsp;means&nbsp;every&nbsp;known&nbsp;account's&nbsp;matches.</span></dd></dl>
+
+<dl><dt>async <a name="LibrematchStore-find_profiles_of_user"><strong>find_profiles_of_user</strong></a>(self, user_id: 'str') -&gt; 'list[str]'</dt><dd><span class="code">Return&nbsp;the&nbsp;platform&nbsp;user's&nbsp;known&nbsp;accounts&nbsp;(the&nbsp;unification's&nbsp;key).</span></dd></dl>
+
+<dl><dt>async <a name="LibrematchStore-find_user_of_profile"><strong>find_user_of_profile</strong></a>(self, profile_id: 'str') -&gt; 'str'</dt><dd><span class="code">Return&nbsp;the&nbsp;account's&nbsp;platform&nbsp;owner;&nbsp;empty&nbsp;when&nbsp;unknown.</span></dd></dl>
+
+<dl><dt>async <a name="LibrematchStore-list_known_profiles"><strong>list_known_profiles</strong></a>(self) -&gt; 'list[str]'</dt><dd><span class="code">List&nbsp;every&nbsp;account&nbsp;the&nbsp;store&nbsp;has&nbsp;a&nbsp;status&nbsp;or&nbsp;binding&nbsp;for.</span></dd></dl>
+
+<dl><dt>async <a name="LibrematchStore-upsert_account"><strong>upsert_account</strong></a>(self, document: 'dict[str, Any]') -&gt; 'None'</dt><dd><span class="code">Insert&nbsp;or&nbsp;replace&nbsp;one&nbsp;account's&nbsp;status&nbsp;document.</span></dd></dl>
+
+<dl><dt>async <a name="LibrematchStore-upsert_bindings"><strong>upsert_bindings</strong></a>(self, profile_ids: 'list[str]', user_ids: 'list[str]') -&gt; 'int'</dt><dd><span class="code">Record&nbsp;the&nbsp;profile&nbsp;-&gt;&nbsp;user&nbsp;mapping&nbsp;pushed&nbsp;by&nbsp;the&nbsp;core.<br>
+&nbsp;<br>
+``user_ids``&nbsp;is&nbsp;parallel&nbsp;to&nbsp;``profile_ids``;&nbsp;an&nbsp;empty&nbsp;owner<br>
+entry&nbsp;keeps&nbsp;whatever&nbsp;mapping&nbsp;is&nbsp;already&nbsp;stored&nbsp;(the&nbsp;core&nbsp;may<br>
+push&nbsp;a&nbsp;list&nbsp;without&nbsp;owners&nbsp;—&nbsp;the&nbsp;realtime&nbsp;reconciliation).</span></dd></dl>
+
+<dl><dt>async <a name="LibrematchStore-upsert_matches"><strong>upsert_matches</strong></a>(self, documents: 'list[dict[str, Any]]') -&gt; 'int'</dt><dd><span class="code">Insert&nbsp;or&nbsp;replace&nbsp;the&nbsp;raw&nbsp;match&nbsp;documents;&nbsp;return&nbsp;the&nbsp;new&nbsp;count.<br>
+&nbsp;<br>
+The&nbsp;document&nbsp;``_id``&nbsp;is&nbsp;``&lt;match_id&gt;:&lt;leaderboard_id&gt;``&nbsp;—&nbsp;the<br>
+upstream&nbsp;may&nbsp;list&nbsp;the&nbsp;same&nbsp;match&nbsp;id&nbsp;under&nbsp;several&nbsp;leaderboards.</span></dd></dl>
+
+<hr>
+Data descriptors defined here:<br>
+<dl><dt><strong>__dict__</strong></dt>
+<dd><span class="code">dictionary&nbsp;for&nbsp;instance&nbsp;variables</span></dd>
+</dl>
+<dl><dt><strong>__weakref__</strong></dt>
+<dd><span class="code">list&nbsp;of&nbsp;weak&nbsp;references&nbsp;to&nbsp;the&nbsp;object</span></dd>
+</dl>
+</td></tr></table></td></tr></table><p>
+<table class="section">
+<tr class="decor data-decor heading-text">
+<td class="section-title" colspan=3>&nbsp;<br><strong class="bigsection">Data</strong></td></tr>
+    
+<tr><td class="decor data-decor"><span class="code">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span></td><td>&nbsp;</td>
+<td class="singlecolumn"><strong>ACCOUNTS_COLLECTION</strong> = 'librematch:accounts'<br>
+<strong>BINDINGS_COLLECTION</strong> = 'librematch:bindings'<br>
+<strong>DEFAULT_HISTORY_LIMIT</strong> = 50<br>
+<strong>MATCHES_COLLECTION</strong> = 'librematch:matches'<br>
+<strong>logger</strong> = &lt;Logger botforge.ext_librematch.store (INFO)&gt;</td></tr></table>
+</body></html>

@@ -42,12 +42,38 @@ service Game {
   // adds subscribe, removes unsubscribe. Game-agnostic: the ids are the
   // game-side profile ids of the users registered on the platform.
   rpc UpdateSubscriptions(UpdateSubscriptionsRequest) returns (UpdateSubscriptionsResponse);
+
+  // ---- The stats layer (botforge-services#404) --------------------------
+  // The provider is the source of truth of its perimeter: it STORES the
+  // raw history of the known (subscribed) accounts, EXPLOITS it (per
+  // account status, per-user unification) and EXPOSES it here. The
+  // consumers never call the external API, never read the provider DB.
+
+  // Trigger a history sync now (on-demand: profile binding, application).
+  // An empty profile_ids list syncs every known account.
+  rpc SyncStats(SyncStatsRequest) returns (SyncStatsReply);
+
+  // The stored match history of the given profiles (all leaderboards the
+  // provider keeps, optionally narrowed), newest first, decoded fields
+  // included once the provider exploits them (T2).
+  rpc GetMatchHistory(MatchHistoryRequest) returns (MatchHistoryReply);
+
+  // The per-account status: current elo + MAX elo per leaderboard.
+  rpc GetAccountStats(AccountStatsRequest) returns (AccountStatsReply);
+
+  // The per-USER unified view: the accounts of one platform user
+  // aggregated (best current/max elo per leaderboard, matches window).
+  rpc GetUserStats(UserStatsRequest) returns (UserStatsReply);
 }
 
 message UpdateSubscriptionsRequest {
   // Full current list of subscribed profile ids (idempotent reconciliation:
   // the provider diffs against its previous list and applies the delta).
   repeated string profile_ids = 1;
+  // Parallel to profile_ids: the platform user owning each profile (""
+  // when unknown). The stats store keeps the profile -> user mapping so
+  // the per-USER unification answers by user_id (botforge-services#404).
+  repeated string user_ids = 2;
 }
 
 message UpdateSubscriptionsResponse {
@@ -173,4 +199,85 @@ message GameMap {
   string name = 2;
   string map_type = 3;    // e.g. "random_map", "real_world", "custom"
   string resource_url = 4; // presentation link, may be empty
+}
+
+// ---- The stats layer messages (botforge-services#404) ----------------
+
+message SyncStatsRequest {
+  repeated string profile_ids = 1;  // empty: every known account
+  bool wait = 2;                    // true: reply after the sync ran
+}
+
+message SyncStatsReply {
+  bool ok = 1;
+  int32 synced = 2;      // accounts the sync covered
+  string error = 3;      // functional error, empty when ok
+}
+
+message MatchHistoryRequest {
+  repeated string profile_ids = 1;  // empty: every known account
+  int32 limit = 2;                   // 0: the provider's default
+  int64 since_s = 3;                 // only matches finished after (epoch s)
+  string leaderboard_id = 4;         // "" : every leaderboard
+}
+
+message MatchHistoryEntry {
+  string match_id = 1;               // provider-side, opaque
+  string leaderboard_id = 2;
+  int64 started_at = 3;              // epoch s
+  int64 finished_at = 4;             // epoch s
+  string map_name = 5;
+  repeated string profile_ids = 6;   // the known participants
+  map<string, int64> rating_before = 7;  // profile_id -> elo before
+  map<string, int64> rating_after = 8;   // profile_id -> elo after
+  map<string, int32> teams = 9;          // profile_id -> team id
+  repeated string winners = 10;          // profile_ids of the winners
+  string options_json = 11;           // decoded game options (T2), "" when undecoded
+  string slots_json = 12;             // decoded slots/teams/civs (T2), "" when undecoded
+}
+
+message MatchHistoryReply {
+  repeated MatchHistoryEntry matches = 1;  // newest first
+}
+
+message AccountStatsRequest {
+  repeated string profile_ids = 1;
+}
+
+message LeaderboardElo {
+  string leaderboard_id = 1;   // provider-side id ("0", "3", "4", ...)
+  string name = 2;             // logical name (rm_1v1, dm_1v1, ...)
+  int32 current = 3;           // current rating, 0 when unrated
+  int32 max = 4;               // highest rating ever seen (stored history)
+  int32 rank = 5;              // 0 when unknown
+  int32 wins = 6;
+  int32 losses = 7;
+}
+
+message AccountStats {
+  string profile_id = 1;
+  repeated LeaderboardElo leaderboards = 2;
+  int64 last_synced_at = 3;    // epoch ms, 0 when never synced
+  bool known = 4;              // false: no stored status yet
+}
+
+message AccountStatsReply {
+  repeated AccountStats accounts = 1;
+}
+
+message UserStatsRequest {
+  string user_id = 1;      // the platform user id
+  int32 window_days = 2;   // >0: count the matches of the last N days
+}
+
+message UserStats {
+  string user_id = 1;
+  repeated string profile_ids = 2;  // the user's known accounts
+  repeated LeaderboardElo leaderboards = 3;  // unified: best current/max per board
+  int32 matches_in_window = 4;     // matches of the window (0 when not asked)
+  bool known = 5;                  // false: no known account for this user
+}
+
+message UserStatsReply {
+  UserStats stats = 1;
 }

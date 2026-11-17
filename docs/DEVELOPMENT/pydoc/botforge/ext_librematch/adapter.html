@@ -60,6 +60,20 @@ an&nbsp;empty&nbsp;answer,&nbsp;never&nbsp;an&nbsp;error.<br>&nbsp;</span></td><
 
 <dl><dt>async <a name="LibrematchAdapter-fetch_lobbies"><strong>fetch_lobbies</strong></a>(self) -&gt; 'list[dict[str, Any]]'</dt><dd><span class="code">Fetch&nbsp;the&nbsp;current&nbsp;public&nbsp;lobby&nbsp;listings&nbsp;(raw&nbsp;API&nbsp;payloads).</span></dd></dl>
 
+<dl><dt>async <a name="LibrematchAdapter-fetch_match_history_raw"><strong>fetch_match_history_raw</strong></a>(self, profile_id: 'str', leaderboard_id: 'str' = '', count: 'int' = 1000) -&gt; 'list[dict[str, Any]]'</dt><dd><span class="code">Fetch&nbsp;a&nbsp;profile's&nbsp;recent&nbsp;finished&nbsp;matches&nbsp;as&nbsp;RAW&nbsp;payloads&nbsp;(#404).<br>
+&nbsp;<br>
+``GetRecentMatchHistory``&nbsp;with&nbsp;a&nbsp;real&nbsp;``count``&nbsp;—&nbsp;the&nbsp;history<br>
+store&nbsp;ingests&nbsp;the&nbsp;raw&nbsp;documents&nbsp;first&nbsp;(store&nbsp;now,&nbsp;exploit<br>
+later),&nbsp;never&nbsp;a&nbsp;filtered&nbsp;projection.&nbsp;The&nbsp;leaderboard&nbsp;narrows<br>
+the&nbsp;upstream&nbsp;query&nbsp;when&nbsp;given;&nbsp;transport&nbsp;failures&nbsp;degrade&nbsp;to<br>
+an&nbsp;empty&nbsp;list,&nbsp;never&nbsp;an&nbsp;error.</span></dd></dl>
+
+<dl><dt>async <a name="LibrematchAdapter-fetch_personal_stat_raw"><strong>fetch_personal_stat_raw</strong></a>(self, profile_id: 'str', leaderboard_id: 'str') -&gt; 'dict[str, Any]'</dt><dd><span class="code">Fetch&nbsp;one&nbsp;leaderboard's&nbsp;personal-stat&nbsp;payload,&nbsp;RAW&nbsp;(#404).<br>
+&nbsp;<br>
+The&nbsp;account&nbsp;status&nbsp;(current&nbsp;elo,&nbsp;rank,&nbsp;wins/losses)&nbsp;reads&nbsp;from<br>
+the&nbsp;raw&nbsp;reply&nbsp;—&nbsp;the&nbsp;store&nbsp;keeps&nbsp;it&nbsp;verbatim;&nbsp;a&nbsp;transport<br>
+failure&nbsp;degrades&nbsp;to&nbsp;an&nbsp;empty&nbsp;payload.</span></dd></dl>
+
 <dl><dt>async <a name="LibrematchAdapter-list_maps"><strong>list_maps</strong></a>(self) -&gt; 'list[GameMap]'</dt><dd><span class="code">Serve&nbsp;the&nbsp;map&nbsp;catalog&nbsp;seen&nbsp;across&nbsp;the&nbsp;current&nbsp;lobbies.<br>
 &nbsp;<br>
 The&nbsp;Community&nbsp;API&nbsp;exposes&nbsp;no&nbsp;dedicated&nbsp;map&nbsp;catalog;&nbsp;the&nbsp;distinct<br>

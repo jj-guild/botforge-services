@@ -101,6 +101,16 @@ service GameData {
   // The providers' health-test results for a game: the game service
   // probes its providers periodically (capabilities ping, live stream
   // liveness) and serves the last results per provider.
+
+  // ---- The stats layer, PROXIED (botforge-services#404) ---------------
+  // Rule 4: the bot and the mods talk to the game service, never to an
+  // ext. The wire messages are the Game contract's own — one shape, no
+  // copy. The service caches the answers (Redis, adapted TTLs) so a
+  // click never costs a provider call.
+  rpc SyncStats(botforge.v1.SyncStatsRequest) returns (botforge.v1.SyncStatsReply);
+  rpc GetMatchHistory(botforge.v1.MatchHistoryRequest) returns (botforge.v1.MatchHistoryReply);
+  rpc GetAccountStats(botforge.v1.AccountStatsRequest) returns (botforge.v1.AccountStatsReply);
+  rpc GetUserStats(botforge.v1.UserStatsRequest) returns (botforge.v1.UserStatsReply);
 }
 
 message CoverageRequest {}

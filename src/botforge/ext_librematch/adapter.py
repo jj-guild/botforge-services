@@ -186,6 +186,70 @@ class LibrematchAdapter:
             return None
         return PlayerStats(profile_id=profile_id, blocks=tuple(blocks))
 
+    async def fetch_match_history_raw(
+        self, profile_id: str, leaderboard_id: str = "", count: int = 1000
+    ) -> list[dict[str, Any]]:
+        """Fetch a profile's recent finished matches as RAW payloads (#404).
+
+        ``GetRecentMatchHistory`` with a real ``count`` — the history
+        store ingests the raw documents first (store now, exploit
+        later), never a filtered projection. The leaderboard narrows
+        the upstream query when given; transport failures degrade to
+        an empty list, never an error.
+        """
+        if not profile_id:
+            return []
+        if not await self._allowed():
+            logger.warning("librematch call over rate budget; degrading history to empty")
+            return []
+        params: dict[str, str] = {"title": "age2", "profile_ids": f'["{profile_id}"]', "count": str(count)}
+        if leaderboard_id:
+            params["leaderboard_id"] = leaderboard_id
+        async with self._client() as client:
+            try:
+                reply = await client.get(
+                    urljoin(self._base_url + "/", RECENT_MATCH_PATH.lstrip("/")),
+                    params=params,
+                )
+                reply.raise_for_status()
+                payload = reply.json()
+            except Exception:
+                logger.warning("history fetch failed (profile %s)", profile_id, exc_info=True)
+                return []
+        matches = payload.get("matchHistoryStats") or []
+        return [dict(m) for m in matches if isinstance(m, dict)]
+
+    async def fetch_personal_stat_raw(
+        self, profile_id: str, leaderboard_id: str
+    ) -> dict[str, Any]:
+        """Fetch one leaderboard's personal-stat payload, RAW (#404).
+
+        The account status (current elo, rank, wins/losses) reads from
+        the raw reply — the store keeps it verbatim; a transport
+        failure degrades to an empty payload.
+        """
+        if not profile_id:
+            return {}
+        if not await self._allowed():
+            logger.warning("librematch call over rate budget; degrading stat to empty")
+            return {}
+        async with self._client() as client:
+            try:
+                reply = await client.get(
+                    urljoin(self._base_url + "/", PERSONAL_STAT_PATH.lstrip("/")),
+                    params={
+                        "title": "age2",
+                        "profile_ids": f'["{profile_id}"]',
+                        "leaderboard_id": leaderboard_id,
+                    },
+                )
+                reply.raise_for_status()
+                payload = reply.json()
+            except Exception:
+                logger.warning("personal stat fetch failed (profile %s)", profile_id, exc_info=True)
+                return {}
+        return payload if isinstance(payload, dict) else {}
+
     async def recent_match_result(self, profile_ids: list[str], since_epoch_s: int) -> MatchResult | None:
         """Fetch the latest finished match of the profiles (WorldsEdge).
 
