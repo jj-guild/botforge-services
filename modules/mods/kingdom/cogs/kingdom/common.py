@@ -359,37 +359,73 @@ async def attack_salon_send_safe(guild: Any, attack: Any, content: str) -> Any:
         return None
 
 
-def salon_overwrites(guild: Any) -> dict[Any, discord.PermissionOverwrite]:
-    """The attack salon's overwrite set (permissions-serveur-v1).
+# The attack salon's overwrite set (permissions-serveur-v1) — the
+# seam's DATA form (#408): logical targets (@everyone, @me, named
+# roles) resolved at creation time by the platform seam, never
+# Discord objects in the mod.
+# ⚠️ lesson Check 75: the set MUST carry an explicit @me entry (the
+# bot is no admin) or it locks itself out of its own salon.
+SALON_OVERWRITES: dict[str, dict[str, bool]] = {
+    "@everyone": {"view_channel": False, "send_messages": False, "read_message_history": False},
+    "Kingdom Lord": {"view_channel": True, "send_messages": False, "read_message_history": True},
+    "Kingdom King": {"view_channel": True, "send_messages": False, "read_message_history": True},
+    "Kingdom Admin": {"view_channel": True, "send_messages": False, "read_message_history": True},
+    "@me": {"view_channel": True, "send_messages": True, "read_message_history": True, "manage_messages": True},
+}
 
-    ⚠️ lesson Check 75: the set MUST carry an explicit guild.me entry
-    (the bot is no admin) or it locks itself out of its own salon.
+# The FFA salon (#367): public to read, @everyone denied send — same
+# @me carry-along as the attack salons.
+FFA_SALON_OVERWRITES: dict[str, dict[str, bool]] = {
+    "@everyone": {"view_channel": True, "send_messages": False, "read_message_history": True},
+    "@me": {"view_channel": True, "send_messages": True, "read_message_history": True, "manage_messages": True},
+}
+
+
+async def open_dynamic_channel_safe(
+    guild: Any,
+    name: str,
+    *,
+    category: Any = None,
+    kind: str = "text",
+    overwrites: dict[str, dict[str, bool]] | None = None,
+    position: int | None = None,
+    options: dict[str, Any] | None = None,
+) -> Any:
+    """Best-effort dynamic channel via the platform seam (#408) — the channel, or None.
+
+    The mod owns the best-effort policy, the seam owns the plumbing
+    (data overwrites → Discord objects, role names resolved there).
     """
-    overwrites: dict[Any, discord.PermissionOverwrite] = {}
-    everyone = getattr(guild, "default_role", None)
-    if everyone is not None:
-        overwrites[everyone] = discord.PermissionOverwrite(
-            view_channel=False,
-            send_messages=False,
-            read_message_history=False,
+    from botforge.discord.dynamic_channels import DiscordDynamicChannelsPlatform
+
+    client = getattr(guild, "client", None)
+    if client is None:
+        logger.warning("kingdom: no client on the guild — dynamic channel skipped (%s)", name)
+        return None
+    category_id = str(getattr(category, "id", "") or "") if category is not None else None
+    try:
+        return await DiscordDynamicChannelsPlatform(client).create_channel(
+            str(getattr(guild, "id", "")),
+            name,
+            category_id=category_id,
+            kind=kind,
+            overwrites=overwrites,
+            position=position,
+            options=options,
         )
-    for role_name in ("Kingdom Lord", "Kingdom King", "Kingdom Admin"):
-        role = discord.utils.get(getattr(guild, "roles", []), name=role_name)
-        if role is not None:
-            overwrites[role] = discord.PermissionOverwrite(
-                view_channel=True,
-                send_messages=False,
-                read_message_history=True,
-            )
-    me = getattr(guild, "me", None)
-    if me is not None:
-        overwrites[me] = discord.PermissionOverwrite(
-            view_channel=True,
-            send_messages=True,
-            read_message_history=True,
-            manage_messages=True,
-        )
-    return overwrites
+    except Exception:
+        logger.warning("kingdom: dynamic channel creation failed (%s)", name, exc_info=True)
+        return None
+
+
+async def delete_dynamic_channel_safe(bot: Any, channel_id: Any) -> None:
+    """Best-effort dynamic channel delete via the seam (#408) — a miss never blocks."""
+    from botforge.discord.dynamic_channels import DiscordDynamicChannelsPlatform
+
+    try:
+        await DiscordDynamicChannelsPlatform(bot).delete_channel(str(channel_id or ""))
+    except Exception:
+        logger.warning("kingdom: dynamic channel delete failed", exc_info=True)
 
 
 def room_channel_name(guild: Any, prefix: str, *parts: str) -> str:
@@ -550,7 +586,10 @@ __all__ = [
     "room_channel_name",
     "room_key",
     "room_side_of",
-    "salon_overwrites",
+    "SALON_OVERWRITES",
+    "FFA_SALON_OVERWRITES",
+    "open_dynamic_channel_safe",
+    "delete_dynamic_channel_safe",
     "score_players",
     "shuffled_civs",
     "side_of",

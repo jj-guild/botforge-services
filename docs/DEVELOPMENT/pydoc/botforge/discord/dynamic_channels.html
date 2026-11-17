@@ -58,7 +58,7 @@ discord.py&nbsp;implementation&nbsp;of&nbsp;the&nbsp;dynamic-channel&nbsp;seam&n
 <td class="singlecolumn">Methods defined here:<br>
 <dl><dt><a name="DiscordDynamicChannelsPlatform-__init__"><strong>__init__</strong></a>(self, bot: 'discord.Client') -&gt; 'None'</dt><dd><span class="code">Keep&nbsp;a&nbsp;client&nbsp;reference&nbsp;for&nbsp;guild&nbsp;and&nbsp;channel&nbsp;lookups.</span></dd></dl>
 
-<dl><dt>async <a name="DiscordDynamicChannelsPlatform-create_channel"><strong>create_channel</strong></a>(self, guild_id: 'str', name: 'str', category_id: 'str | None' = None, kind: 'str' = 'text', overwrites: 'Mapping[str, Mapping[str, bool]] | None' = None, position: 'int | None' = None) -&gt; 'discord.abc.GuildChannel'</dt><dd><span class="code">Create&nbsp;the&nbsp;text&nbsp;or&nbsp;voice&nbsp;channel&nbsp;—&nbsp;raises&nbsp;when&nbsp;the&nbsp;guild&nbsp;is&nbsp;unreachable.</span></dd></dl>
+<dl><dt>async <a name="DiscordDynamicChannelsPlatform-create_channel"><strong>create_channel</strong></a>(self, guild_id: 'str', name: 'str', category_id: 'str | None' = None, kind: 'str' = 'text', overwrites: 'Mapping[str, Mapping[str, bool]] | None' = None, position: 'int | None' = None, options: 'Mapping[str, Any] | None' = None) -&gt; 'discord.abc.GuildChannel'</dt><dd><span class="code">Create&nbsp;the&nbsp;text&nbsp;or&nbsp;voice&nbsp;channel&nbsp;—&nbsp;raises&nbsp;when&nbsp;the&nbsp;guild&nbsp;is&nbsp;unreachable.</span></dd></dl>
 
 <dl><dt>async <a name="DiscordDynamicChannelsPlatform-delete_channel"><strong>delete_channel</strong></a>(self, channel_id: 'str') -&gt; 'None'</dt><dd><span class="code">Delete&nbsp;the&nbsp;channel&nbsp;—&nbsp;best-effort,&nbsp;a&nbsp;miss&nbsp;is&nbsp;never&nbsp;an&nbsp;error.</span></dd></dl>
 

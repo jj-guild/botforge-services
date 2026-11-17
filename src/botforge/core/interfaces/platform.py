@@ -128,6 +128,7 @@ class IPlatform(Protocol):
         kind: str = "text",
         overwrites: Mapping[str, Mapping[str, bool]] | None = None,
         position: int | None = None,
+        options: Mapping[str, Any] | None = None,
     ) -> IChannel:
         """Create a channel in a guild — the dynamic-channel seam (#408).
 
@@ -137,6 +138,8 @@ class IPlatform(Protocol):
         lesson of locking a bot out of its own channel), or a role NAME
         resolved through the guild's roles. ``position`` is the channel's
         position hint (below a declared channel, for a sidebar that reads).
+        ``options`` carries the kind-specific extras (``user_limit`` for a
+        voice room) — data, pass-through, never platform types.
         """
         ...
 

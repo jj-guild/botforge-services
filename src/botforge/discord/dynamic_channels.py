@@ -75,6 +75,7 @@ class DiscordDynamicChannelsPlatform:
         kind: str = "text",
         overwrites: Mapping[str, Mapping[str, bool]] | None = None,
         position: int | None = None,
+        options: Mapping[str, Any] | None = None,
     ) -> discord.abc.GuildChannel:
         """Create the text or voice channel — raises when the guild is unreachable."""
         guild = await self._guild(guild_id)
@@ -94,6 +95,7 @@ class DiscordDynamicChannelsPlatform:
             kwargs["position"] = position
         if resolved:
             kwargs["overwrites"] = resolved
+        kwargs.update(options or {})
         if kind == "voice":
             return await guild.create_voice_channel(name, **kwargs)
         return await guild.create_text_channel(name, **kwargs)

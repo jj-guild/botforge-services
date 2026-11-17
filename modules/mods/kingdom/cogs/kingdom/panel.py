@@ -40,9 +40,10 @@ from .common import (
     lord_of,
     locale_of,
     open_unique_ephemeral,
+    open_dynamic_channel_safe,
     room_channel_name,
     room_key,
-    salon_overwrites,
+    SALON_OVERWRITES,
     surface_footer,
     silent_ack,
     strings_for,
@@ -875,17 +876,15 @@ async def _open_attack_salon_safe(
     else:
         attacker_kingdom_name = await kingdom_name(stack.kingdoms, attack.attacker_kingdom_id)
     name = room_channel_name(guild, "🗡️", shown_name, defender_name)
-    overwrites = salon_overwrites(guild)
     position = int(getattr(declare, "position", 0) or 0) + 1
-    try:
-        channel = await guild.create_text_channel(
-            name,
-            category=getattr(declare, "category", None),
-            position=position,
-            overwrites=overwrites,
-        )
-    except Exception:
-        logger.warning("kingdom: attack salon creation failed", exc_info=True)
+    channel = await open_dynamic_channel_safe(
+        guild,
+        name,
+        category=getattr(declare, "category", None),
+        position=position,
+        overwrites=SALON_OVERWRITES,
+    )
+    if channel is None:
         return
     await _record_safe(stack, "record_attack_channel", attack, int(channel.id))
     content = str(strings["announce_v1"]).format(

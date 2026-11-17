@@ -63,6 +63,7 @@ from .common import (
     lord_of,
     locale_of,
     open_unique_ephemeral,
+    open_dynamic_channel_safe,
     room_channel_name,
     room_key,
     room_side_of,
@@ -272,28 +273,23 @@ async def refresh_room_message_safe(bot: Any, stack: Any, attack: Any, locale: s
 # ---------------------------------------------------------------------------
 
 
-def _battle_room_overwrites(guild: Any, role: Any) -> dict[Any, discord.PermissionOverwrite]:
-    """Build the battle-room channel overwrites (players' role only).
+def _battle_room_overwrites(role_name: str) -> dict[str, dict[str, bool]]:
+    """Build the battle-room channel overwrites (players' role only) — DATA form (#408).
 
     Check 75 live: the @everyone deny locked the BOT itself out of
     the channel it had just created — the bot carries its own
-    overwrites.
+    overwrites (@me).
     """
-    overwrites: dict[Any, discord.PermissionOverwrite] = {
-        role: discord.PermissionOverwrite(connect=True, view_channel=True),
+    return {
+        role_name: {"connect": True, "view_channel": True},
+        "@me": {
+            "view_channel": True,
+            "connect": True,
+            "send_messages": True,
+            "read_message_history": True,
+        },
+        "@everyone": {"connect": False, "view_channel": False},
     }
-    me = getattr(guild, "me", None)
-    if me is not None:
-        overwrites[me] = discord.PermissionOverwrite(
-            view_channel=True,
-            connect=True,
-            send_messages=True,
-            read_message_history=True,
-        )
-    everyone = getattr(guild, "default_role", None)
-    if everyone is not None:
-        overwrites[everyone] = discord.PermissionOverwrite(connect=False, view_channel=False)
-    return overwrites
 
 
 async def _grant_battle_room_role_safe(guild: Any, role: Any, player_id: str) -> None:
@@ -364,12 +360,16 @@ async def open_battle_room(bot: Any, stack: Any, guild: Any, attack: Any, locale
             logger.warning(
                 "kingdom: battlefield category not found — battle room created at the guild root"
             )
-        channel = await guild.create_voice_channel(
+        channel = await open_dynamic_channel_safe(
+            guild,
             room_channel_name(guild, "⚔️", attacker, defender),
             category=category,
-            user_limit=2,
-            overwrites=_battle_room_overwrites(guild, role),
+            kind="voice",
+            overwrites=_battle_room_overwrites(role.name),
+            options={"user_limit": 2},
         )
+        if channel is None:
+            return
         await _record_safe(stack, "record_battle_room", attack.id, channel.id, role.id)
         # The meeting lives on ONE message in the ATTACK SALON — the
         # voice channel keeps only the voice (restructuration-serveur-v1 b).

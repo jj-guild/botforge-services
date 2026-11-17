@@ -914,7 +914,7 @@ async def _open_ffa_salon_safe(
     announcement with the persistent join button; the salon dies with
     the FFA.
     """
-    from .common import slug
+    from .common import FFA_SALON_OVERWRITES, delete_dynamic_channel_safe, open_dynamic_channel_safe, slug
     from .panel import _declare_channel
 
     declare = await _declare_channel(guild)
@@ -926,38 +926,18 @@ async def _open_ffa_salon_safe(
     # purged first — the name is fixed, so at most one lives at a time.
     for channel in list(getattr(guild, "text_channels", []) or []):
         if slug(getattr(channel, "name", "")) == wanted:
-            try:
-                await channel.delete()
-            except Exception:  # noqa: BLE001
-                logger.warning("kingdom: leftover FFA salon purge failed", exc_info=True)
-    overwrites: dict[Any, Any] = {}
-    everyone = getattr(guild, "default_role", None)
-    if everyone is not None:
-        overwrites[everyone] = discord.PermissionOverwrite(
-            view_channel=True,
-            send_messages=False,
-            read_message_history=True,
-        )
-    me = getattr(guild, "me", None)
-    if me is None:
-        me = getattr(bot, "user", None)
-    if me is not None:
-        overwrites[me] = discord.PermissionOverwrite(
-            view_channel=True,
-            send_messages=True,
-            read_message_history=True,
-            manage_messages=True,
-        )
+            await delete_dynamic_channel_safe(bot, channel.id)
     position = int(getattr(declare, "position", 0) or 0) + 1
-    try:
-        channel = await guild.create_text_channel(
-            title,
-            category=getattr(declare, "category", None),
-            position=position,
-            overwrites=overwrites,
-        )
-    except Exception:  # noqa: BLE001
-        logger.warning("kingdom: FFA salon creation failed", exc_info=True)
+    channel = await open_dynamic_channel_safe(
+        guild,
+        title,
+        category=getattr(declare, "category", None),
+        kind="text",
+        overwrites=FFA_SALON_OVERWRITES,
+        position=position,
+    )
+    if channel is None:
+        logger.warning("kingdom: FFA salon creation failed")
         return
     try:
         await ffa_service.record_salon(ffa, int(channel.id))
