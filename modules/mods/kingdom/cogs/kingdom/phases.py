@@ -770,9 +770,13 @@ async def run_ffa_tick_safe(bot: Any) -> None:
     Géopolitique 2h before — the announcement carries the persistent
     « Aller explorer » button and opens the enrollments; at the drawn
     hour the game starts. Every step replays safely through the
-    persisted document (announced/started flags). The ref's ephemeral
-    FFA salon is NOT ported (the mod keeps a single Géopolitique
-    window — one less channel to provision).
+    persisted document (announced/started flags).
+
+    #367 conformance: the announcement ALSO opens the FFA's ephemeral
+    salon (restructuration-serveur-v1 c) right under « Déclarer une
+    attaque » — visible to everyone, @everyone denied send — carrying
+    the same persistent join button; the start line lands there too,
+    and a finished FFA takes its salon with it (idempotent purge).
     """
     from zoneinfo import ZoneInfo
 
@@ -798,6 +802,9 @@ async def run_ffa_tick_safe(bot: Any) -> None:
         return
     if ffa is None:
         return
+    if getattr(ffa, "finished", False) and getattr(ffa, "salon_id", None):
+        for guild in list(getattr(bot, "guilds", []) or []):
+            await _ffa_salon_purge_safe(guild, ffa)
     events_settings = getattr(stack.config, "events", None)
     tz = ZoneInfo(str(getattr(events_settings, "schedule_timezone", "UTC") or "UTC"))
     if ffa_service.due_announce(ffa, now):
@@ -826,6 +833,11 @@ async def run_ffa_tick_safe(bot: Any) -> None:
                 await channel.send(text, view=view)
             except Exception:  # noqa: BLE001
                 logger.warning("kingdom: FFA announcement failed — best-effort", exc_info=True)
+                continue
+            try:
+                await _open_ffa_salon_safe(bot, ffa_service, ffa, guild, strings, text, view)
+            except Exception:  # noqa: BLE001
+                logger.warning("kingdom: FFA salon open failed — best-effort", exc_info=True)
         return
     if ffa_service.due_start(ffa, now):
         started = None
@@ -838,18 +850,119 @@ async def run_ffa_tick_safe(bot: Any) -> None:
         for guild in list(getattr(bot, "guilds", []) or []):
             locale = await _guild_locale(bot, str(guild.id))
             strings = strings_by_locale(locale)
+            start_text = str(strings["ffa_start"]).format(
+                len(started.participants),
+                int(getattr(events_settings, "ffa_game_minutes", 75)),
+            )
             try:
                 channel = _geopolitics_channel(guild)
                 if channel is None:
                     continue
-                await channel.send(
-                    str(strings["ffa_start"]).format(
-                        len(started.participants),
-                        int(getattr(events_settings, "ffa_game_minutes", 75)),
-                    )
-                )
+                await channel.send(start_text)
             except Exception:  # noqa: BLE001
                 logger.warning("kingdom: FFA start announcement failed", exc_info=True)
+            salon = _ffa_salon(guild, started)
+            if salon is not None:
+                try:
+                    await salon.send(start_text)
+                except Exception:  # noqa: BLE001
+                    logger.warning("kingdom: FFA salon start message failed", exc_info=True)
+
+
+def _ffa_salon(guild: Any, ffa: Any) -> Any:
+    """Return the FFA's ephemeral salon by its STORED ref (never a name)."""
+    if guild is None:
+        return None
+    channel_id = int(getattr(ffa, "salon_id", 0) or 0)
+    if not channel_id:
+        return None
+    return getattr(guild, "get_channel", lambda _id: None)(channel_id)
+
+
+async def _ffa_salon_purge_safe(guild: Any, ffa: Any) -> None:
+    """Delete the FFA's ephemeral salon once the FFA is over (idempotent)."""
+    channel = _ffa_salon(guild, ffa)
+    if channel is None:
+        return
+    try:
+        await channel.delete()
+        logger.info("kingdom: FFA salon deleted (FFA over)")
+    except Exception:  # noqa: BLE001
+        logger.warning("kingdom: FFA salon deletion failed — best-effort", exc_info=True)
+
+
+async def _open_ffa_salon_safe(
+    bot: Any,
+    ffa_service: Any,
+    ffa: Any,
+    guild: Any,
+    strings: dict[str, str],
+    text: str,
+    view: Any,
+) -> None:
+    """Open the FFA's ephemeral salon and pin its base message.
+
+    restructuration-serveur-v1 c, #367: a dedicated salon — same logic
+    as the per-attack salons — opens right under « Déclarer une attaque »
+    so the sidebar shows what is being played. Visible to everyone,
+    @everyone denied send (the overwrite set carries an explicit
+    guild.me entry — lesson Check 75). The base message repeats the
+    announcement with the persistent join button; the salon dies with
+    the FFA.
+    """
+    from .common import slug
+    from .panel import _declare_channel
+
+    declare = await _declare_channel(guild)
+    if declare is None:
+        return
+    title = str(strings["ffa_salon_title"])
+    wanted = slug(title)
+    # A leftover salon from a previous Saturday (or a wipe mid-week) is
+    # purged first — the name is fixed, so at most one lives at a time.
+    for channel in list(getattr(guild, "text_channels", []) or []):
+        if slug(getattr(channel, "name", "")) == wanted:
+            try:
+                await channel.delete()
+            except Exception:  # noqa: BLE001
+                logger.warning("kingdom: leftover FFA salon purge failed", exc_info=True)
+    overwrites: dict[Any, Any] = {}
+    everyone = getattr(guild, "default_role", None)
+    if everyone is not None:
+        overwrites[everyone] = discord.PermissionOverwrite(
+            view_channel=True,
+            send_messages=False,
+            read_message_history=True,
+        )
+    me = getattr(guild, "me", None)
+    if me is None:
+        me = getattr(bot, "user", None)
+    if me is not None:
+        overwrites[me] = discord.PermissionOverwrite(
+            view_channel=True,
+            send_messages=True,
+            read_message_history=True,
+            manage_messages=True,
+        )
+    position = int(getattr(declare, "position", 0) or 0) + 1
+    try:
+        channel = await guild.create_text_channel(
+            title,
+            category=getattr(declare, "category", None),
+            position=position,
+            overwrites=overwrites,
+        )
+    except Exception:  # noqa: BLE001
+        logger.warning("kingdom: FFA salon creation failed", exc_info=True)
+        return
+    try:
+        await ffa_service.record_salon(ffa, int(channel.id))
+    except Exception:  # noqa: BLE001
+        logger.warning("kingdom: FFA salon ref not stored", exc_info=True)
+    try:
+        await channel.send(text, view=view)
+    except Exception:  # noqa: BLE001
+        logger.warning("kingdom: FFA salon base message failed", exc_info=True)
 
 
 def start_attack_refresher(bot: Any) -> None:

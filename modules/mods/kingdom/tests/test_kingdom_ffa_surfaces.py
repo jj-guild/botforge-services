@@ -72,3 +72,37 @@ async def test_ffa_tick_degrades_without_stack() -> None:
         guilds: list = []
 
     await phases.run_ffa_tick_safe(_Bot())
+
+
+def test_ffa_salon_resolves_by_stored_ref_only() -> None:
+    """The FFA salon resolves by its STORED ref, never by name (#367)."""
+    from botforge.mods.kingdom.cogs.kingdom.phases import _ffa_salon
+
+    class _Channel:
+        id = 555
+
+    class _Guild:
+        def get_channel(self, channel_id: int) -> object | None:
+            return _Channel() if channel_id == 555 else None
+
+    class _FFA:
+        salon_id = "555"
+
+    class _NoSalon:
+        salon_id = None
+
+    class _Other:
+        salon_id = "999"
+
+    assert _ffa_salon(_Guild(), _FFA()) is not None
+    assert _ffa_salon(_Guild(), _NoSalon()) is None
+    assert _ffa_salon(_Guild(), _Other()) is None
+    assert _ffa_salon(None, _FFA()) is None
+
+
+def test_ffa_salon_title_string_exists() -> None:
+    """The salon's title key exists in both locales (the channel name)."""
+    from botforge.mods.kingdom.cogs.kingdom.strings import strings
+
+    for locale in ("fr", "en"):
+        assert strings(locale)["ffa_salon_title"]

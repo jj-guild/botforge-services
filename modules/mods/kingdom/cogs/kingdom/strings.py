@@ -631,6 +631,7 @@ DEFAULTS: dict[str, dict[str, str]] = {
             "🧭 **L'expédition commence maintenant** — {0} participant(s),"
             " {1} minutes. Bonne chance !"
         ),
+        "ffa_salon_title": "🗺️ Expédition",
         "ffa_mode_one": "1 seigneur par royaume",
         "ffa_mode_free": "places libres",
     },
@@ -1241,6 +1242,7 @@ DEFAULTS: dict[str, dict[str, str]] = {
             "🧭 **The Expedition starts now** — {0} participant(s),"
             " {1} minutes. Good luck!"
         ),
+        "ffa_salon_title": "🗺️ Expedition",
         "ffa_mode_one": "one lord per kingdom",
         "ffa_mode_free": "free slots",
     },
