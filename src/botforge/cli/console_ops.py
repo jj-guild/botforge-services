@@ -34,9 +34,17 @@ import asyncio
 import logging
 import os
 import sys
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    import discord
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
 logger = logging.getLogger("botforge.cli.console_ops")
+
+# The gateway must come up within this window or the run fails loudly
+# (env-console.yml has no step timeout of its own).
+_READY_TIMEOUT_S = 60
 
 PROD_ENV_NAMES = ("prod", "production")
 
@@ -82,16 +90,32 @@ def _parse_list(raw: str | None) -> list[str]:
     return [item.strip() for item in (raw or "").split(",") if item.strip()]
 
 
-async def _run(action: str, guilds: list[str], mods: list[str], games: list[str], propagate: bool) -> int:
-    """Run one action against each target guild through a real Discord client."""
-    import discord
-
+async def _apply_action(guild: discord.Guild, action: str, mods: list[str], games: list[str], propagate: bool) -> None:
+    """Run one console action against one guild (the client is already ready)."""
     from botforge.discord.console import (
         _delete_managed_for_guild,
         _nuke_everything_for_guild,
         _reset_guild_data,
     )
     from botforge.discord.console_ops_runner import apply_install_for_guild
+
+    if action == "clean-managed":
+        channels, roles = await _delete_managed_for_guild(guild)
+        print(f"clean-managed done: {channels} channel(s), {roles} role(s) deleted")
+    elif action == "nuke":
+        channels, roles = await _nuke_everything_for_guild(guild)
+        print(f"nuke done: {channels} channel(s), {roles} role(s) deleted")
+    elif action == "reset-data":
+        deleted = await _reset_guild_data(str(guild.id))
+        for name, count in sorted(deleted.items()):
+            print(f"reset-data {name}: {count} document(s)")
+    elif action == "install":
+        print(await apply_install_for_guild(guild, mods, games, propagate))
+
+
+async def _run(action: str, guilds: list[str], mods: list[str], games: list[str], propagate: bool) -> int:
+    """Run one action against each target guild through a real Discord client."""
+    import discord
 
     token = os.environ.get("DISCORD_TOKEN", "")
     if not token:
@@ -103,9 +127,25 @@ async def _run(action: str, guilds: list[str], mods: list[str], games: list[str]
     intents.members = True
     client = discord.Client(intents=intents)
 
+    ready: asyncio.Event = asyncio.Event()
+
+    @client.event
+    async def on_ready() -> None:
+        ready.set()
+
     async with client:
-        await client.login(token)
-        await client.wait_until_ready()
+        # login() only authenticates over HTTP; the gateway must run for
+        # wait_until_ready() to ever fire — start it as a task and wait for
+        # the ready event with a hard timeout (a hung gateway must fail the
+        # workflow instead of wedging the job forever).
+        gateway = asyncio.create_task(client.start(token))
+        try:
+            await asyncio.wait_for(ready.wait(), timeout=_READY_TIMEOUT_S)
+        except TimeoutError:
+            print(f"::error::the Discord gateway never became ready within {_READY_TIMEOUT_S}s")
+            await client.close()
+            await asyncio.gather(gateway, return_exceptions=True)
+            return 1
         exit_code = 0
         for guild_id in guilds:
             guild = client.get_guild(int(guild_id))
@@ -115,22 +155,12 @@ async def _run(action: str, guilds: list[str], mods: list[str], games: list[str]
                 continue
             print(f"=== console {action} on guild {guild_id} ({guild.name}) ===")
             try:
-                if action == "clean-managed":
-                    channels, roles = await _delete_managed_for_guild(guild)
-                    print(f"clean-managed done: {channels} channel(s), {roles} role(s) deleted")
-                elif action == "nuke":
-                    channels, roles = await _nuke_everything_for_guild(guild)
-                    print(f"nuke done: {channels} channel(s), {roles} role(s) deleted")
-                elif action == "reset-data":
-                    deleted = await _reset_guild_data(guild_id)
-                    for name, count in sorted(deleted.items()):
-                        print(f"reset-data {name}: {count} document(s)")
-                elif action == "install":
-                    summary = await apply_install_for_guild(guild, mods, games, propagate)
-                    print(summary)
+                await _apply_action(guild, action, mods, games, propagate)
             except Exception:
                 logger.exception("console %s failed on guild %s", action, guild_id)
                 exit_code = 1
+        await client.close()
+        await asyncio.gather(gateway, return_exceptions=True)
         return exit_code
 
 
