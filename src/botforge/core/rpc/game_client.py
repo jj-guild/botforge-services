@@ -354,3 +354,39 @@ class GameProviderClient:
         async with build_channel(self._provider_uri) as channel:
             stub = game_pb2_grpc.GameStub(channel)
             return await call_with_retry(stub.GetUserStats, request)
+
+    async def get_live_matches(self, limit: int = 0) -> list[dict[str, Any]]:
+        """Fetch the live matches the provider sees (#404 T3).
+
+        Degrades to an empty list — an unreachable provider reads as
+        "nothing live right now".
+        """
+        async with build_channel(self._provider_uri) as channel:
+            stub = game_pb2_grpc.GameStub(channel)
+            try:
+                reply = await call_with_retry(
+                    stub.GetLiveMatches,
+                    game_pb2.LiveMatchesRequest(limit=limit),
+                )
+            except grpc.aio.AioRpcError as exc:
+                if exc.code() in (
+                    grpc.StatusCode.UNIMPLEMENTED,
+                    grpc.StatusCode.UNAVAILABLE,
+                ):
+                    return []
+                raise
+        return [
+            {
+                "match_ref": m.match_ref,
+                "status": m.status,
+                "map_name": m.map_name,
+                "format": m.format,
+                "profile_ids": list(m.profile_ids),
+                "players_json": m.players_json,
+                "lobby_url": m.lobby_url,
+                "spectate_url": m.spectate_url,
+                "updated_at": m.updated_at,
+                "metadata": dict(m.metadata),
+            }
+            for m in reply.matches
+        ]

@@ -51,6 +51,8 @@ profile_id&nbsp;and&nbsp;faction_key&nbsp;are&nbsp;opaque&nbsp;strings&nbsp;at&n
 
 <dl><dt><a name="Game-GetCapabilities"><strong>GetCapabilities</strong></a>(request, target, options=(), channel_credentials=None, call_credentials=None, insecure=False, compression=None, wait_for_ready=None, timeout=None, metadata=None)</dt></dl>
 
+<dl><dt><a name="Game-GetLiveMatches"><strong>GetLiveMatches</strong></a>(request, target, options=(), channel_credentials=None, call_credentials=None, insecure=False, compression=None, wait_for_ready=None, timeout=None, metadata=None)</dt></dl>
+
 <dl><dt><a name="Game-GetMatchDetails"><strong>GetMatchDetails</strong></a>(request, target, options=(), channel_credentials=None, call_credentials=None, insecure=False, compression=None, wait_for_ready=None, timeout=None, metadata=None)</dt></dl>
 
 <dl><dt><a name="Game-GetMatchHistory"><strong>GetMatchHistory</strong></a>(request, target, options=(), channel_credentials=None, call_credentials=None, insecure=False, compression=None, wait_for_ready=None, timeout=None, metadata=None)</dt></dl>
@@ -97,6 +99,10 @@ profile_id&nbsp;and&nbsp;faction_key&nbsp;are&nbsp;opaque&nbsp;strings&nbsp;at&n
 
 <dl><dt><a name="GameServicer-GetCapabilities"><strong>GetCapabilities</strong></a>(self, request, context)</dt><dd><span class="code">Declare&nbsp;what&nbsp;this&nbsp;provider&nbsp;actually&nbsp;supports.&nbsp;The&nbsp;core&nbsp;degrades<br>
 cleanly&nbsp;on&nbsp;anything&nbsp;absent&nbsp;(reference:&nbsp;ladder&nbsp;spec&nbsp;1.2).</span></dd></dl>
+
+<dl><dt><a name="GameServicer-GetLiveMatches"><strong>GetLiveMatches</strong></a>(self, request, context)</dt><dd><span class="code">The&nbsp;live&nbsp;matches&nbsp;the&nbsp;provider&nbsp;currently&nbsp;sees&nbsp;(the&nbsp;ones&nbsp;with&nbsp;at<br>
+least&nbsp;one&nbsp;known&nbsp;player)&nbsp;—&nbsp;the&nbsp;lobby&nbsp;covers&nbsp;the&nbsp;present,&nbsp;the<br>
+history&nbsp;store&nbsp;covers&nbsp;the&nbsp;past&nbsp;(#404&nbsp;T3).</span></dd></dl>
 
 <dl><dt><a name="GameServicer-GetMatchDetails"><strong>GetMatchDetails</strong></a>(self, request, context)</dt><dd><span class="code">Full&nbsp;match&nbsp;details:&nbsp;map,&nbsp;slotinfo&nbsp;(per-slot&nbsp;state)&nbsp;and&nbsp;the&nbsp;raw<br>
 game&nbsp;options&nbsp;(map&nbsp;size,&nbsp;speed,&nbsp;victory&nbsp;condition,&nbsp;...).</span></dd></dl>

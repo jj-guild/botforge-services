@@ -9,6 +9,7 @@ between the wire contract and plain core models.
 from __future__ import annotations
 
 from collections.abc import AsyncIterator, Awaitable, Callable
+from typing import Any
 
 import grpc
 
@@ -338,6 +339,7 @@ class GameServicer(game_pb2_grpc.GameServicer):
         match_history: Callable[[list[str], int, int, str], Awaitable[list[MatchHistoryEntry]]] | None = None,
         account_stats: Callable[[list[str]], Awaitable[list[AccountEloStatus]]] | None = None,
         user_stats: Callable[[str, int], Awaitable[UserEloStats | None]] | None = None,
+        live_matches: Callable[[int], Awaitable[list[dict[str, Any]]]] | None = None,
     ) -> None:
         self._capabilities = capabilities
         self._match_details = match_details
@@ -350,6 +352,7 @@ class GameServicer(game_pb2_grpc.GameServicer):
         self._match_history = match_history
         self._account_stats = account_stats
         self._user_stats = user_stats
+        self._live_matches = live_matches
 
     async def GetCapabilities(
         self,
@@ -491,3 +494,30 @@ class GameServicer(game_pb2_grpc.GameServicer):
         if stats is None:
             return game_pb2.UserStatsReply(stats=game_pb2.UserStats(user_id=request.user_id))
         return game_pb2.UserStatsReply(stats=user_stats_to_wire(stats))
+
+    async def GetLiveMatches(
+        self,
+        request: game_pb2.LiveMatchesRequest,
+        context: grpc.aio.ServicerContext,
+    ) -> game_pb2.LiveMatchesReply:
+        """Serve the live matches the provider currently sees (#404 T3)."""
+        if self._live_matches is None:
+            await context.abort(grpc.StatusCode.UNIMPLEMENTED, "live matches not available")
+        matches = await self._live_matches(int(request.limit))
+        return game_pb2.LiveMatchesReply(
+            matches=[
+                game_pb2.LiveMatch(
+                    match_ref=str(m.get("match_ref", "")),
+                    status=str(m.get("status", "")),
+                    map_name=str(m.get("map_name", "")),
+                    format=str(m.get("format", "")),
+                    profile_ids=[str(p) for p in m.get("profile_ids") or ()],
+                    players_json=str(m.get("players_json", "")),
+                    lobby_url=str(m.get("lobby_url", "")),
+                    spectate_url=str(m.get("spectate_url", "")),
+                    updated_at=int(m.get("updated_at", 0)),
+                    metadata={str(k): str(v) for k, v in (m.get("metadata") or {}).items()},
+                )
+                for m in matches
+            ]
+        )
