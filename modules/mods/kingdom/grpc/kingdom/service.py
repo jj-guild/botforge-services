@@ -28,12 +28,18 @@ class _KingdomStackImpl(KingdomStackContract):
         from botforge.mods.kingdom.service import KingdomService as EnrollmentService
         from botforge.mods.kingdom.territories import TerritoryService
         from botforge.mods.kingdom.attacks import AttackService
+        from botforge.mods.kingdom.diplomacy import DiplomacyService
+        from botforge.mods.kingdom.events import EventService
 
         self._store = store
         self._config = config
         self._kingdoms = EnrollmentService(store, config)
         self._territories = TerritoryService(store, config, self._kingdoms)
         self._attacks = AttackService(store, config, self._kingdoms, self._territories)
+        self._diplomacy = DiplomacyService(store, config, self._kingdoms, self._territories)
+        self._events = EventService(
+            store, config, self._kingdoms, self._territories, self._attacks, self._diplomacy
+        )
 
     @property
     def kingdoms(self) -> Any:
@@ -46,6 +52,14 @@ class _KingdomStackImpl(KingdomStackContract):
     @property
     def attacks(self) -> Any:
         return self._attacks
+
+    @property
+    def diplomacy(self) -> Any:
+        return self._diplomacy
+
+    @property
+    def events(self) -> Any:
+        return self._events
 
     @property
     def config(self) -> Any:

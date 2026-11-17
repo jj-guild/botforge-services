@@ -48,6 +48,8 @@ from .common import (
     wiring,
 )
 from .plan import PlanButton
+from .marry import MarryButton
+from .alliances import AlliancesButton
 
 logger = logging.getLogger("kingdom.attack.panel")
 
@@ -92,6 +94,10 @@ async def build_attack_panel(guild_id: str) -> discord.ui.LayoutView:
                 HistoryButton(strings_dict["history_button"]),
                 InfoButton(strings_dict["attack_info_button"]),
                 PlanButton(strings_dict["plan_button"]),
+            ),
+            discord.ui.ActionRow(
+                MarryButton(strings_dict["marry_button"]),
+                AlliancesButton(strings_dict["alliances_button"]),
             ),
             discord.ui.TextDisplay(f"-# `{PANEL_VIEW_KEY}`"),
             accent_colour=discord.Colour(0xA72D2D),

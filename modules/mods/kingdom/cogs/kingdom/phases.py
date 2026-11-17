@@ -564,6 +564,70 @@ async def run_attack_phases_safe(bot: Any) -> None:
             logger.warning("kingdom: battle rooms cleanup failed", exc_info=True)
 
 
+async def _event_report_text(strings: dict[str, str], report: dict[str, Any]) -> str:
+    """Render one due report as a salon announcement (best effort)."""
+    kind = str(report.get("kind", "cycle"))
+    if kind == "age":
+        return str(strings["event_age"]).format(
+            age=str(report.get("display_name", report.get("age", "?"))),
+            tech=report.get("tech_points", 0),
+            marriages=report.get("extra_marriages", 0),
+        )
+    if kind == "end":
+        if report.get("showmatch"):
+            return str(strings["event_end_showmatch"])
+        return str(strings["event_end"]).format(winner=str(report.get("winner_name") or "?"))
+    return str(strings["event_cycle"]).format(
+        cycle=report.get("cycle", "?"),
+        maps=len(report.get("gaia_new_maps", []) or []),
+    )
+
+
+async def run_event_slots_safe(bot: Any) -> None:
+    """Replay the due weekly slots (cycle/age/season end) and announce.
+
+    The core season refresher's pattern (``EventService.run_due`` is
+    restart-safe: the season state consumes the slots), with Drasah's
+    pause rules — a FROZEN season and a season still in ``setup``
+    replay no slot. The reports land in each guild's Géopolitique
+    salon, best effort per guild.
+    """
+    from .battle import _geopolitics_channel
+    from .common import strings_by_locale, wiring
+
+    stack = wiring()
+    if stack is None:
+        return
+    from botforge.mods.kingdom.game_clock import game_now, sync_game_offset
+
+    await sync_game_offset(stack.kingdoms)
+    try:
+        season = await stack.kingdoms.current_season()
+    except Exception:
+        logger.warning("kingdom: events season read failed — best-effort", exc_info=True)
+        return
+    if season is None or season.frozen or season.phase == "setup":
+        return
+    try:
+        reports = await stack.events.run_due(game_now())
+    except Exception:
+        logger.warning("kingdom: due-slot replay failed — best-effort", exc_info=True)
+        return
+    if not reports:
+        return
+    logger.info("kingdom: %s due slot(s) replayed", len(reports))
+    for guild in list(getattr(bot, "guilds", []) or []):
+        locale = await _guild_locale(bot, str(guild.id))
+        strings = strings_by_locale(locale)
+        for report in reports:
+            try:
+                channel = _geopolitics_channel(guild)
+                if channel is not None:
+                    await channel.send(_event_report_text(strings, report))
+            except Exception:
+                logger.warning("kingdom: one event report announcement failed", exc_info=True)
+
+
 def start_attack_refresher(bot: Any) -> None:
     """Start the attack phases loop (every 5 minutes).
 
@@ -585,6 +649,10 @@ def start_attack_refresher(bot: Any) -> None:
             await run_attack_phases_safe(bot)
         except Exception:
             logger.warning("kingdom: attack phases pass failed — best-effort", exc_info=True)
+        try:
+            await run_event_slots_safe(bot)
+        except Exception:
+            logger.warning("kingdom: event slots pass failed — best-effort", exc_info=True)
 
     _loop.start()
     logger.info("kingdom: attack phases loop started (every 5 minutes)")

@@ -3195,6 +3195,29 @@ class AttackService:
             await self._apply_attacker_win(attack)
         await self._store.upsert_attack(attack.to_mongo())
         await self._record_verdicts(attack)
+        await self._flag_defeat(attack)
+
+    async def _flag_defeat(self, attack: AttackModel) -> None:
+        """Flag the losing kingdom for the marriage-loss pass (D34/D53).
+
+        The defeat drops the kingdom's NON-ROYAL marriages at the next
+        cycle recalculation (DiplomacyService reads
+        ``season.pending_marriage_losses``) — a royal marriage (Reine)
+        survives every defeat until the season ends.
+        """
+        if attack.winner_kingdom_id is None:
+            return
+        loser = (
+            attack.defender_kingdom_id
+            if attack.winner_kingdom_id == attack.attacker_kingdom_id
+            else attack.attacker_kingdom_id
+        )
+        season = await self._kingdoms.current_season()
+        if season is None or loser in season.pending_marriage_losses:
+            return
+        season.pending_marriage_losses = [*season.pending_marriage_losses, loser]
+        await self._store.upsert_season(season.to_mongo())
+        logger.info("kingdom: %s flagged for marriage loss at next cycle", loser)
 
     async def _require_meeting(self, attack_id: str) -> AttackModel:
         """Fetch the attack and enforce the open score phase."""
@@ -3353,6 +3376,7 @@ class AttackService:
             await self._apply_attacker_win(attack)
         await self._store.upsert_attack(attack.to_mongo())
         await self._record_verdicts(attack)
+        await self._flag_defeat(attack)
         logger.info("kingdom: attack on %s resolved for %s", attack.map_key, winner_kingdom_id)
         return attack
 

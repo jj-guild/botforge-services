@@ -433,6 +433,86 @@ DEFAULTS: dict[str, dict[str, str]] = {
         ),
         "plan_event_cancelled": "❌ Ta plannification a été annulée — aucun budget n'a été consommé.",
         "plan_no_service": "❌ Le service des attaques est indisponible.",
+        "marry_button": "💍 Se marier",
+        "alliances_button": "🤝 Alliances",
+        "church_marry_intro": "👰 Choisissez la Princesse de ton mariage :",
+        "church_marry_view_title": "💍 Se marier — {0}",
+        "church_marry_badge": "MARIAGE ROYAL",
+        "church_marry_rules": (
+            "**Un seul mariage actif** — la civilisation choisie devient"
+            " **exclusive** à ton royaume.\n"
+            "💍 **{0} bague(s)** seront consommées à la célébration.\n"
+            "👑 Ton lien est **garanti jusqu'à la fin de la saison**, même"
+            " en cas de défaite.\n"
+            "🔒 Verrou de combat : **{1}h** — fin à titre indicatif du"
+            " verrouillage au moment du clic : {2}.\n"
+            "🛡️ État verrouillage : si tu es verrouillé, tu ne peux"
+            " **ni attaquer, ni défendre, ni utiliser de carte"
+            " technologique**."
+        ),
+        "church_marry_rules_royal": (
+            "👑 Ton lien est **garanti jusqu'à la fin de la saison**, même"
+            " en cas de défaite."
+        ),
+        "church_marry_princess": "Princesse {0}",
+        "church_marry_lock_today": "aujourd'hui à **{0}**",
+        "church_marry_lock_tomorrow": "demain à **{0}**",
+        "church_marry_confirm_title": "💍 Confirmer ton mariage",
+        "church_marry_confirm_sub": "princesse pressentie · {0} bague(s) · verrou {1}h",
+        "church_marry_yes_button": "💍 Oui, je le veux",
+        "church_marry_edit_button": "✏️ Modifier",
+        "church_marry_sealed_title": "💍 Mariage scellé : **{0}**",
+        "church_marry_sealed_note": (
+            "Le royaume en est informé — l'annonce vient d'être publiée"
+            " dans **Géopolitique**."
+        ),
+        "church_wedding_announce": (
+            "💍 Mariage scellé — {0} des {1} épouse les **{2}** · 🔒 verrou"
+            " {3}h · 🎁 Offrande +{4} ⚙️ · la civilisation est désormais"
+            " **exclusive** au royaume {1} jusqu'à brisure du lien."
+        ),
+        "church_marry_already": (
+            "💍 Tu as déjà un mariage actif — un seul à la fois (D34)."
+        ),
+        "church_marry_no_options": (
+            "💔 Aucune Princesse disponible — ta main est vide ou déjà épousée."
+        ),
+        "church_marry_no_points": "❌ Ton royaume n'a plus de point de mariage (D59).",
+        "church_marry_no_points_royal": "❌ Un mariage royal (Reine) coûte 2 points de mariage.",
+        "church_marry_not_in_hand": (
+            "❌ Cette civilisation n'est pas dans la main de ton royaume (Alliances)."
+        ),
+        "marry_error": "❌ Le mariage a échoué : {0}",
+        "alliances_title": "🤝 Alliances — {0}",
+        "alliances_points": (
+            "💍 Points de mariage : **{0}** · Jetons mariage arrangé : **{1}**"
+        ),
+        "alliances_hand": "🃏 Main actuelle ({0})",
+        "alliances_next_intro": "🔮 Prochain cycle (projection)",
+        "alliances_next_kept": "✅ Conservées : {0}",
+        "alliances_next_arriving": "➕ Arrivantes : {0}",
+        "alliances_next_dropping": "➖ Perdues : {0}",
+        "alliances_next_elsewhere": "🔒 Épousées ailleurs : {0}",
+        "alliances_near_title": "🎯 Presque déverrouillées",
+        "alliances_near_line": "• **{0}** — {1}",
+        "alliances_none": "—",
+        "alliances_no_data": "❌ Aucune donnée d'alliance pour l'instant.",
+        "event_cycle": (
+            "🔄 **Cycle {cycle}** — budgets hebdomadaires rechargés, "
+            "{maps} nouvelles cartes pour Gaïa."
+        ),
+        "event_age": (
+            "🏺 **{age}** — chaque royaume gagne {tech} point(s) tech "
+            "et {marriages} emplacement(s) de mariage."
+        ),
+        "event_end": (
+            "🏁 **Fin de saison** — les attaques en cours sont annulées "
+            "et le verdict est tombé : {winner}."
+        ),
+        "event_end_showmatch": (
+            "🏁 **Fin de saison** — les attaques en cours sont annulées, "
+            "les royaumes de tête sont à égalité : le ShowMatch tranche !"
+        ),
     },
     "en": {
         "panel_title": "⚔️ Battlefield — Attack",
@@ -844,6 +924,85 @@ DEFAULTS: dict[str, dict[str, str]] = {
         ),
         "plan_event_cancelled": "❌ Your planning was cancelled — no budget was consumed.",
         "plan_no_service": "❌ The attack service is unavailable.",
+        "marry_button": "💍 Marry",
+        "alliances_button": "🤝 Alliances",
+        "church_marry_intro": "👰 Choose the Princess of your marriage:",
+        "church_marry_view_title": "💍 Marry — {0}",
+        "church_marry_badge": "ROYAL MARRIAGE",
+        "church_marry_rules": (
+            "**One active marriage only** — the chosen civilization"
+            " becomes **exclusive** to your kingdom.\n"
+            "💍 **{0} ring(s)** will be consumed at the celebration.\n"
+            "👑 Your bond is **guaranteed until the season ends**, even"
+            " on defeat.\n"
+            "🔒 Combat lock: **{1}h** — indicative end of the lock counted"
+            " from the click: {2}.\n"
+            "🛡️ Lock state: while locked you can **neither attack, nor"
+            " defend, nor use a technology card**."
+        ),
+        "church_marry_rules_royal": (
+            "👑 Your bond is **guaranteed until the season ends**, even on"
+            " defeat."
+        ),
+        "church_marry_princess": "Princess {0}",
+        "church_marry_lock_today": "today at **{0}**",
+        "church_marry_lock_tomorrow": "tomorrow at **{0}**",
+        "church_marry_confirm_title": "💍 Confirm your marriage",
+        "church_marry_confirm_sub": "princess to be · {0} ring(s) · lock {1}h",
+        "church_marry_yes_button": "💍 Yes, I do",
+        "church_marry_edit_button": "✏️ Change",
+        "church_marry_sealed_title": "💍 Marriage sealed: **{0}**",
+        "church_marry_sealed_note": (
+            "The kingdom is informed — the announcement was just published"
+            " in **Geopolitics**."
+        ),
+        "church_wedding_announce": (
+            "💍 Marriage sealed — {0} of the {1} weds the **{2}** · 🔒 lock"
+            " {3}h · 🎁 Offering +{4} ⚙️ · the civilization is now"
+            " **exclusive** to the {1} kingdom until the bond breaks."
+        ),
+        "church_marry_already": (
+            "💍 You already hold an active marriage — one at a time (D34)."
+        ),
+        "church_marry_no_options": (
+            "💔 No Princess available — your hand is empty or already wed."
+        ),
+        "church_marry_no_points": "❌ Your kingdom holds no marriage point left (D59).",
+        "church_marry_no_points_royal": "❌ A royal marriage (Reine) costs 2 marriage points.",
+        "church_marry_not_in_hand": (
+            "❌ This civilization is not in your kingdom's hand (Alliances)."
+        ),
+        "marry_error": "❌ The marriage failed: {0}",
+        "alliances_title": "🤝 Alliances — {0}",
+        "alliances_points": (
+            "💍 Marriage points: **{0}** · Arranged-marriage tokens: **{1}**"
+        ),
+        "alliances_hand": "🃏 Current hand ({0})",
+        "alliances_next_intro": "🔮 Next cycle (projection)",
+        "alliances_next_kept": "✅ Kept: {0}",
+        "alliances_next_arriving": "➕ Arriving: {0}",
+        "alliances_next_dropping": "➖ Dropping: {0}",
+        "alliances_next_elsewhere": "🔒 Wed elsewhere: {0}",
+        "alliances_near_title": "🎯 Near unlocks",
+        "alliances_near_line": "• **{0}** — {1}",
+        "alliances_none": "—",
+        "alliances_no_data": "❌ No alliances data yet.",
+        "event_cycle": (
+            "🔄 **Cycle {cycle}** — weekly budgets recharged, "
+            "{maps} new maps for Gaïa."
+        ),
+        "event_age": (
+            "🏺 **{age}** — every kingdom gains {tech} tech point(s) "
+            "and {marriages} marriage slot(s)."
+        ),
+        "event_end": (
+            "🏁 **End of the season** — the attacks are cancelled and "
+            "the verdict is in: {winner}."
+        ),
+        "event_end_showmatch": (
+            "🏁 **End of the season** — the attacks are cancelled and "
+            "the top kingdoms are tied: the ShowMatch decides!"
+        ),
     },
 }
 

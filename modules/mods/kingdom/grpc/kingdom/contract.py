@@ -31,6 +31,16 @@ class KingdomStack(Protocol):
         ...
 
     @property
+    def diplomacy(self) -> Any:
+        """The civilization-conditions & marriage service (DiplomacyService)."""
+        ...
+
+    @property
+    def events(self) -> Any:
+        """The weekly event orchestrator (EventService)."""
+        ...
+
+    @property
     def config(self) -> Any:
         """The validated season configuration (KingdomSeasonConfig)."""
         ...
