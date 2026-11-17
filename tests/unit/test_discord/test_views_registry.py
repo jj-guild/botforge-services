@@ -127,6 +127,82 @@ async def test_a_mod_declares_its_own_views(tmp_path) -> None:
     assert not validate_registry(), "the cross-references validate both ways"
 
 
+def test_a_surface_anchor_is_declared_and_never_navigates(tmp_path) -> None:
+    """A ``kind: surface`` view anchors feedback without buttons (#381).
+
+    A mod's one-shot ephemeral surfaces declare their id so every
+    footer names a real anchor; a surface that carried a button would
+    be a menu in disguise — the config loader must refuse it.
+    """
+    import yaml
+
+    (tmp_path / "views.yaml").write_text(
+        yaml.safe_dump({"views": {"surface:mymod:window": {"kind": "surface"}}}),
+        encoding="utf-8",
+    )
+
+    clear_registry()
+    from botforge.discord.views_declared import declare_views_from_config
+
+    declare_views_from_config(tmp_path)
+    decl = get_view("surface:mymod:window")
+    assert decl is not None, "the surface anchor merged into the registry"
+    assert decl.kind == "surface" and not decl.buttons, "a surface never navigates"
+    assert not validate_registry(), "an anchor adds no drift"
+
+    (tmp_path / "views.yaml").write_text(
+        yaml.safe_dump(
+            {
+                "views": {
+                    "surface:mymod:buttoned": {
+                        "kind": "surface",
+                        "buttons": [{"target": "panel:profile", "label": "x"}],
+                    }
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+    clear_registry()
+    with pytest.raises(ValueError, match="never carries buttons"):
+        declare_views_from_config(tmp_path)
+
+
+def test_a_modular_mod_declares_its_views_next_to_its_mod_yaml(tmp_path, monkeypatch) -> None:
+    """A §7 modular mod's views ride its own ``conf/`` directory.
+
+    The kingdom mod ships ``modules/mods/<mod>/conf/views.yaml`` next
+    to its declaration — the loader must discover it through the
+    modular layout (botforge#179/#221), not only the legacy
+    ``config/mods/<mod>.views.yaml`` sidecar.
+    """
+    import yaml
+
+    from botforge.core.services import mod_layout
+
+    conf = tmp_path / "modules" / "mods" / "kingdom" / "conf"
+    conf.mkdir(parents=True)
+    (conf / "mod.yaml").write_text(
+        yaml.safe_dump({"id": "kingdom", "enabled": True, "seasonal": False}), encoding="utf-8"
+    )
+    (conf / "views.yaml").write_text(
+        yaml.safe_dump({"views": {"surface:mod:kingdom:status": {"kind": "surface"}}}),
+        encoding="utf-8",
+    )
+    (tmp_path / "views.yaml").write_text(yaml.safe_dump({"views": {}}), encoding="utf-8")
+    (tmp_path / "pyproject.toml").write_text("[project]\n", encoding="utf-8")
+    monkeypatch.setattr(mod_layout, "default_repo_root", lambda: tmp_path)
+
+    clear_registry()
+    from botforge.discord.views_declared import declare_views_from_config
+
+    declare_views_from_config(tmp_path)
+    assert get_view("surface:mod:kingdom:status") is not None, (
+        "the modular mod's conf/views.yaml merged into the registry"
+    )
+    assert not validate_registry(), "a declared surface anchor adds no drift"
+
+
 @pytest.mark.asyncio
 async def test_the_menu_builder_honors_the_pin_builder_contract() -> None:
     """The declared menu builder takes the guild_id at build time.

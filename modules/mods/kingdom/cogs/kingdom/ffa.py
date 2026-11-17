@@ -44,9 +44,12 @@ def _ffa_error_note(exc: Exception, strings: dict[str, str]) -> str | None:
 
 def _ffa_join_view(strings: dict[str, str]) -> discord.ui.LayoutView:
     """The persistent join button view riding the Géopolitique announce."""
-    view = discord.ui.LayoutView(timeout=None)
-    view.add_item(discord.ui.ActionRow(FFAJoinButton(strings["ffa_join_button"])))
-    return view
+    from .common import surface
+
+    return surface(
+        "surface:mod:kingdom:ffa",
+        discord.ui.ActionRow(FFAJoinButton(strings["ffa_join_button"])),
+    )
 
 
 class FFAJoinButton(

@@ -23,6 +23,7 @@ import yaml
 from botforge.discord.views_registry import (
     KIND_MENU,
     KIND_PANEL,
+    KIND_SURFACE,
     ButtonDecl,
     ViewDecl,
     register_view,
@@ -74,9 +75,14 @@ def declare_views_from_config(config_dir: Path | str | None = None) -> None:
         if not isinstance(raw, dict):
             raise ValueError(f"views config: {view_id}: a view must be a mapping")
         kind = str(raw.get("kind", ""))
-        if kind not in (KIND_MENU, KIND_PANEL):
+        if kind not in (KIND_MENU, KIND_PANEL, KIND_SURFACE):
             raise ValueError(f"views config: {view_id}: kind must be menu or panel, got {kind!r}")
         buttons = tuple(_parse_button(view_id, b) for b in raw.get("buttons", []) or ())
+        if kind == KIND_SURFACE and buttons:
+            raise ValueError(
+                f"views config: {view_id}: a surface never carries buttons — "
+                "it anchors, it does not navigate"
+            )
         register_view(
             ViewDecl(
                 id=str(view_id),
@@ -107,20 +113,33 @@ def _load_mod_views(config_dir: Path | str | None = None) -> dict[str, Any]:
     """
     from botforge.core.services.mod_registry import load_mod_definitions
 
+    from botforge.core.services.mod_layout import ModLayout, default_repo_root
+
     base = Path(config_dir) if config_dir else VIEWS_CONFIG.parent
+    repo_root = default_repo_root()
     try:
-        definitions = load_mod_definitions(base)
+        definitions = load_mod_definitions(base, repo_root=repo_root)
     except Exception:
         logger.warning("VIEWS: mod declarations unreadable — mod views skipped", exc_info=True)
         return {}
+    layouts: dict[str, ModLayout] = {}
+    if repo_root is not None:
+        from botforge.core.services.mod_layout import discover_mods
+
+        layouts = discover_mods(Path(repo_root))
     merged: dict[str, Any] = {}
     for name in definitions:
-        # today the declarations live flat (config/mods/<mod>.yaml), so
-        # a mod's views ride <mod>.views.yaml next to it; when botforge#179
-        # moves each mod into its own directory, the path becomes
-        # config/mods/<mod>/views.yaml — this helper is the only seam.
-        mod_views = base / "mods" / f"{name}.views.yaml"
-        if not mod_views.is_file():
+        # the legacy declarations live flat (config/mods/<mod>.yaml) and a
+        # legacy mod's views ride <mod>.views.yaml next to it; the
+        # modular §7 mods ship their views in their OWN conf directory
+        # (botforge#179/#221: a mod's files never scatter) —
+        # conf/views.yaml next to the declaration.
+        candidates = [base / "mods" / f"{name}.views.yaml"]
+        layout = layouts.get(name)
+        if layout is not None:
+            candidates.insert(0, layout.declaration.parent / "views.yaml")
+        mod_views = next((path for path in candidates if path.is_file()), None)
+        if mod_views is None:
             continue
         with open(mod_views, encoding="utf-8") as fh:
             data = yaml.safe_load(fh)

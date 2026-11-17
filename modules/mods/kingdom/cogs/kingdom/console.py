@@ -67,7 +67,8 @@ async def _console_guard(interaction: discord.Interaction) -> bool:
 
 def _confirm_view(strings: dict[str, str], action_key: str) -> discord.ui.LayoutView:
     """The confirm card of a destructive console op (inline, one window)."""
-    view = discord.ui.LayoutView(timeout=None)
+    from .common import surface
+
     yes: discord.ui.Button[Any] = discord.ui.Button(
         label=str(strings["console_confirm_button"])[:80],
         custom_id=f"kingdom:console:{action_key}yes",
@@ -113,8 +114,7 @@ def _confirm_view(strings: dict[str, str], action_key: str) -> discord.ui.Layout
     row.add_item(yes)
     row.add_item(no)
     container.add_item(row)
-    view.add_item(container)
-    return view
+    return surface("surface:mod:kingdom:console:confirm", container)
 
 
 class KingdomRelaunchButton(

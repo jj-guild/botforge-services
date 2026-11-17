@@ -161,11 +161,14 @@ async def _wizard_view(
         await target.response.edit_message(view=confirm)
 
     select.callback = on_choose  # type: ignore[method-assign, assignment]
-    view = discord.ui.LayoutView(timeout=None)
-    view.add_item(discord.ui.TextDisplay(header))
-    view.add_item(discord.ui.TextDisplay(rules))
-    view.add_item(discord.ui.ActionRow(select))
-    return view
+    from .common import surface
+
+    return surface(
+        "surface:mod:kingdom:church:marry",
+        discord.ui.TextDisplay(header),
+        discord.ui.TextDisplay(rules),
+        discord.ui.ActionRow(select),
+    )
 
 
 def _confirm_view(
@@ -234,10 +237,13 @@ def _confirm_view(
 
     yes.callback = on_yes  # type: ignore[method-assign, assignment]
     edit.callback = on_edit  # type: ignore[method-assign, assignment]
-    view = discord.ui.LayoutView(timeout=None)
-    view.add_item(discord.ui.TextDisplay(body))
-    view.add_item(discord.ui.ActionRow(yes, edit))
-    return view
+    from .common import surface
+
+    return surface(
+        "surface:mod:kingdom:church:confirm",
+        discord.ui.TextDisplay(body),
+        discord.ui.ActionRow(yes, edit),
+    )
 
 
 class MarryButton(

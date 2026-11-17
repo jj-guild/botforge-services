@@ -143,16 +143,23 @@ def _tavern_view(stack: Any, lord: Any, strings: dict[str, str]) -> discord.ui.L
                 await target.followup.send(note, ephemeral=True)
 
         yes.callback = on_yes  # type: ignore[method-assign, assignment]
-        view = discord.ui.LayoutView(timeout=None)
-        view.add_item(discord.ui.TextDisplay(body))
-        view.add_item(discord.ui.ActionRow(yes))
+        from .common import surface
+
+        view = surface(
+            "surface:mod:kingdom:tavern:confirm",
+            discord.ui.TextDisplay(body),
+            discord.ui.ActionRow(yes),
+        )
         await target.response.edit_message(content=None, view=view)
 
     select.callback = on_pick  # type: ignore[method-assign, assignment]
-    view = discord.ui.LayoutView(timeout=None)
-    view.add_item(discord.ui.TextDisplay("\n".join(lines)))
-    view.add_item(discord.ui.ActionRow(select))
-    return view
+    from .common import surface
+
+    return surface(
+        "surface:mod:kingdom:tavern",
+        discord.ui.TextDisplay("\n".join(lines)),
+        discord.ui.ActionRow(select),
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -199,11 +206,14 @@ def _mercenary_view(
     """The market window — the lots, a bid ladder, a withdraw button."""
     names = _civ_names(stack)
     lord_id = str(lord.id)
+    from .common import surface
+
     lines = _market_lines(doc, lord_id, strings, names)
-    view = discord.ui.LayoutView(timeout=None)
-    view.add_item(discord.ui.TextDisplay("\n".join(lines)))
     if bool(doc.get("closed", False)):
-        return view
+        return surface(
+            "surface:mod:kingdom:mercenary",
+            discord.ui.TextDisplay("\n".join(lines)),
+        )
 
     options = [
         discord.SelectOption(
@@ -266,8 +276,12 @@ def _mercenary_view(
                 await target.followup.send(note, ephemeral=True)
 
         amount_select.callback = on_amount  # type: ignore[method-assign, assignment]
-        ladder = discord.ui.LayoutView(timeout=None)
-        ladder.add_item(discord.ui.ActionRow(amount_select))
+        from .common import surface as _surface
+
+        ladder = _surface(
+            "surface:mod:kingdom:mercenary:ladder",
+            discord.ui.ActionRow(amount_select),
+        )
         await target.response.edit_message(content=None, view=ladder)
 
     select.callback = on_lot  # type: ignore[method-assign, assignment]
@@ -295,8 +309,13 @@ def _mercenary_view(
             await target.followup.send(strings["mercenary_withdraw_done"], ephemeral=True)
 
     withdraw.callback = on_withdraw  # type: ignore[method-assign, assignment]
-    view.add_item(discord.ui.ActionRow(select, withdraw))
-    return view
+    from .common import surface
+
+    return surface(
+        "surface:mod:kingdom:mercenary",
+        discord.ui.TextDisplay("\n".join(lines)),
+        discord.ui.ActionRow(select, withdraw),
+    )
 
 
 # ---------------------------------------------------------------------------

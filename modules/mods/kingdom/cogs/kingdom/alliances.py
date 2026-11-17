@@ -118,6 +118,11 @@ class AlliancesButton(
             return
         catalog = getattr(stack.config, "civilizations", ()) or ()
         names = {str(civ.key): str(getattr(civ, "display_name", civ.key)) for civ in catalog}
+        from .common import surface_footer
+
         await open_unique_ephemeral(
-            interaction, alliances_text(strings, kingdom, projection, names)
+            interaction,
+            alliances_text(strings, kingdom, projection, names)
+            + "\n"
+            + surface_footer("surface:mod:kingdom:alliances"),
         )

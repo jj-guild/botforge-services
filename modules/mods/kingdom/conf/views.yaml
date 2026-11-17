@@ -1,0 +1,53 @@
+# Kingdom mod — the declared view ids (#381 ruling 1, Merlin 17/11:
+# « les éphémères doivent-elles aussi être déclarées ? — oui »).
+#
+# Every player-facing surface the mod renders carries its id as its
+# footer line (build_view appends it): the pinned panel, the ephemeral
+# windows, the confirm cards. A surface anchors feedback — it never
+# navigates (no buttons): a menu opening a surface is a drift the
+# registry validation catches.
+#
+# The ids live HERE, next to the mod's declaration (#221: a mod's
+# files never scatter) — the platform loader merges them at boot.
+views:
+  # the pinned « Déclarer une attaque » panel (the static pin key)
+  view:mod:kingdom:attack:
+    kind: surface
+  # the /kingdom service status card
+  surface:mod:kingdom:status:
+    kind: surface
+  # the ephemeral history pager
+  surface:mod:kingdom:attack:history:
+    kind: surface
+  # the Church's marriage wizard + confirm
+  surface:mod:kingdom:church:marry:
+    kind: surface
+  surface:mod:kingdom:church:confirm:
+    kind: surface
+  # the Market window + the Chambre des comptes + a card's use window
+  surface:mod:kingdom:market:
+    kind: surface
+  surface:mod:kingdom:chamber:
+    kind: surface
+  surface:mod:kingdom:card:
+    kind: surface
+  # the Taverne: the window, the drink confirm, the Mercenary + ladder
+  surface:mod:kingdom:tavern:
+    kind: surface
+  surface:mod:kingdom:tavern:confirm:
+    kind: surface
+  surface:mod:kingdom:mercenary:
+    kind: surface
+  surface:mod:kingdom:mercenary:ladder:
+    kind: surface
+  # the Expedition's join card (ephemeral note + the salon base line)
+  surface:mod:kingdom:ffa:
+    kind: surface
+  surface:mod:kingdom:ffa:salon:
+    kind: surface
+  # the ops console's confirm card (test guilds only)
+  surface:mod:kingdom:console:confirm:
+    kind: surface
+  # the alliances rubric window
+  surface:mod:kingdom:alliances:
+    kind: surface

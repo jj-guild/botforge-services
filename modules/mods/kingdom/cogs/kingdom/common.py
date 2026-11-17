@@ -125,6 +125,36 @@ async def close_previous_ephemeral(user_id: str) -> None:
         logger.info("kingdom: previous ephemeral window close failed (ignored)")
 
 
+def surface(view_id: str, *items: Any) -> "discord.ui.LayoutView":
+    """Build one declared mod surface — the id footer appended, always.
+
+    #381 ruling 1 (Merlin 17/11): every ephemeral surface is DECLARED
+    (``conf/views.yaml``) and carries its view-id footer — the anchor
+    every human feedback refers to. A missing declaration is logged
+    loudly but never kills a live game surface (the drift is caught by
+    the tests, the player still gets his window).
+    """
+    from botforge.discord.ui.view_footer import build_view, require_declared_view_id
+
+    try:
+        require_declared_view_id(view_id)
+    except ValueError:
+        logger.error("kingdom: surface %s is NOT declared in conf/views.yaml", view_id)
+    return build_view(view_id, *items)
+
+
+def surface_footer(view_id: str) -> str:
+    """The id footer line for a content-only surface (text, not a view)."""
+    from botforge.core.ids import footer
+    from botforge.discord.ui.view_footer import require_declared_view_id
+
+    try:
+        require_declared_view_id(view_id)
+    except ValueError:
+        logger.error("kingdom: surface %s is NOT declared in conf/views.yaml", view_id)
+    return footer(view_id)
+
+
 async def open_unique_ephemeral(
     interaction: discord.Interaction, content: str | None = None, **kwargs: Any
 ) -> None:
@@ -516,6 +546,8 @@ __all__ = [
     "lord_of",
     "locale_of",
     "open_unique_ephemeral",
+    "surface",
+    "surface_footer",
     "own_picks_line",
     "pickban_staged",
     "ready_key",

@@ -828,8 +828,12 @@ async def run_ffa_tick_safe(bot: Any) -> None:
                     maximum,
                     str(strings[mode_key]),
                 )
-                view = discord.ui.LayoutView(timeout=None)
-                view.add_item(discord.ui.ActionRow(FFAJoinButton(strings["ffa_join_button"])))
+                from .common import surface as _surface
+
+                view = _surface(
+                    "surface:mod:kingdom:ffa:salon",
+                    discord.ui.ActionRow(FFAJoinButton(strings["ffa_join_button"])),
+                )
                 await channel.send(text, view=view)
             except Exception:  # noqa: BLE001
                 logger.warning("kingdom: FFA announcement failed — best-effort", exc_info=True)

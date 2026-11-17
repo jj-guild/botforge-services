@@ -84,8 +84,9 @@ async def build_attack_panel(guild_id: str) -> discord.ui.LayoutView:
     from .strings import strings
 
     strings_dict = strings(await _guild_locale(guild_id))
-    view = discord.ui.LayoutView(timeout=None)
-    view.add_item(
+    from .common import surface
+
+    container = (
         discord.ui.Container(
             discord.ui.TextDisplay(f"# {strings_dict['panel_title']}"),
             discord.ui.TextDisplay(strings_dict["panel_help"]),
@@ -109,11 +110,10 @@ async def build_attack_panel(guild_id: str) -> discord.ui.LayoutView:
                 TavernButton(strings_dict["tavern_button"]),
                 MercenaryButton(strings_dict["mercenary_button"]),
             ),
-            discord.ui.TextDisplay(f"-# `{PANEL_VIEW_KEY}`"),
             accent_colour=discord.Colour(0xA72D2D),
         )
     )
-    return view
+    return surface("view:mod:kingdom:attack", container)
 
 
 _PANEL_BOT: Any = None
@@ -246,6 +246,8 @@ class HistoryButton(
         if not lines:
             await open_unique_ephemeral(interaction, strings["history_empty"])
             return
+        from .common import surface_footer
+
         pages = ["\n".join(lines[start : start + 10]) for start in range(0, len(lines), 10)]
         await open_unique_ephemeral(
             interaction,
@@ -256,6 +258,8 @@ class HistoryButton(
                     pages[0],
                     "",
                     strings["history_page"].format(page=1, pages=len(pages)),
+                    "",
+                    surface_footer("surface:mod:kingdom:attack:history"),
                 )
             ),
             view=_history_page_view(strings, pages, 0),

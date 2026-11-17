@@ -123,13 +123,14 @@ def _market_view(stack: Any, wallet: int, strings: dict[str, str], kingdom_id: s
         await _confirm_purchase(target, stack, strings, chosen[0], label, kingdom_id)
 
     select.callback = on_pick  # type: ignore[method-assign, assignment]
-    view = discord.ui.LayoutView(timeout=None)
-    view.add_item(
-        discord.ui.TextDisplay(f"## {strings['market_title']}\n{strings['market_rules']}")
+    from .common import surface
+
+    return surface(
+        "surface:mod:kingdom:market",
+        discord.ui.TextDisplay(f"## {strings['market_title']}\n{strings['market_rules']}"),
+        discord.ui.TextDisplay(str(strings["market_wallet"]).format(wallet)),
+        discord.ui.ActionRow(select),
     )
-    view.add_item(discord.ui.TextDisplay(str(strings["market_wallet"]).format(wallet)))
-    view.add_item(discord.ui.ActionRow(select))
-    return view
 
 
 async def _confirm_purchase(
@@ -177,9 +178,13 @@ async def _confirm_purchase(
             )
 
     yes.callback = on_yes  # type: ignore[method-assign, assignment]
-    view = discord.ui.LayoutView(timeout=None)
-    view.add_item(discord.ui.TextDisplay(body))
-    view.add_item(discord.ui.ActionRow(yes))
+    from .common import surface
+
+    view = surface(
+        "surface:mod:kingdom:card",
+        discord.ui.TextDisplay(body),
+        discord.ui.ActionRow(yes),
+    )
     await interaction.response.edit_message(content=None, view=view)
 
 
@@ -339,8 +344,9 @@ async def _wizard_edit(
         options=options,
     )
     select.callback = on_pick  # type: ignore[method-assign, assignment]
-    view = discord.ui.LayoutView(timeout=None)
-    view.add_item(discord.ui.ActionRow(select))
+    from .common import surface
+
+    view = surface("surface:mod:kingdom:card", discord.ui.ActionRow(select))
     await interaction.response.edit_message(content=None, view=view)
 
 
@@ -457,8 +463,9 @@ class ChamberButton(
             ("garde_royale", int(p.get("garde_royale_stock", 0) or 0) > 0),
             ("patrouille", "patrouille_unlock_1" in p or "patrouille_unlock_2" in p),
         ]
-        view = discord.ui.LayoutView(timeout=None)
-        view.add_item(discord.ui.TextDisplay(text))
+        from .common import surface
+
+        items: list[Any] = [discord.ui.TextDisplay(text)]
         row: list[discord.ui.Button[Any]] = []
         labels = {
             "explorateur": "chamber_use_explorateur",
@@ -484,5 +491,6 @@ class ChamberButton(
             button.callback = on_use  # type: ignore[method-assign, assignment]
             row.append(button)
         if row:
-            view.add_item(discord.ui.ActionRow(*row[:5]))
-        await open_unique_ephemeral(interaction, content=text, view=view if row else None)
+            items.append(discord.ui.ActionRow(*row[:5]))
+        view = surface("surface:mod:kingdom:chamber", *items)
+        await open_unique_ephemeral(interaction, view=view)
