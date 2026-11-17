@@ -49,6 +49,12 @@ def register(bot: Any, config: Any) -> None:
 
     bot.tree.add_command(_cmd)
 
+    # #339 (console ops): the mod's ops ride the platform console
+    # (relaunch/reset/clock — the registry's three gates guard them).
+    from .console import register_console_actions
+
+    register_console_actions()
+
 
 def setup_hook(bot: Any) -> None:
     """Re-register persistent UI after a restart (dynamic items)."""
@@ -81,6 +87,7 @@ def setup_hook(bot: Any) -> None:
     from .market import ChamberButton, MarketButton
     from .tavern import MercenaryButton, TavernButton
     from .ffa import FFAJoinButton
+    from .console import KingdomClockButton, KingdomRelaunchButton, KingdomResetButton
 
     for item in (
         DeclareButton,
@@ -109,6 +116,9 @@ def setup_hook(bot: Any) -> None:
         TavernButton,
         MercenaryButton,
         FFAJoinButton,
+        KingdomRelaunchButton,
+        KingdomResetButton,
+        KingdomClockButton,
     ):
         try:
             bot.add_dynamic_items(item)

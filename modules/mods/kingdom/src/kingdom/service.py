@@ -271,6 +271,29 @@ class KingdomService:
         logger.info("kingdom: season %s phase set to %s", season.id, phase)
         return season
 
+    async def set_clock_offset(self, seconds: int) -> SeasonState:
+        """Move the game clock forward (machine-temps-v2, console-only).
+
+        The ops console's clock button lands here: the offset is the
+        SECONDS the game clock runs ahead of the real clock — a strictly
+        positive test jump (« 90m », « 2h », « 3d »). The offset persists
+        on the season doc (a restart converges back via
+        ``sync_game_offset``) and the process cache moves at once. A
+        rewind NEVER goes through the clock: negative values are
+        refused loudly (the snapshots own the rewinds).
+        """
+        from .game_clock import set_game_offset
+
+        value = int(seconds)
+        if value < 0:
+            raise ValueError("the game-clock offset can never be negative")
+        season = await self._require_season()
+        season.clock_offset = value
+        await self._store.upsert_season(season.to_mongo())
+        set_game_offset(value)
+        logger.info("kingdom: season %s clock offset set to %ss", season.id, value)
+        return season
+
     async def save_kingdom(self, kingdom: KingdomModel) -> KingdomModel:
         """Persist one kingdom document (conseil-objectif-v1 surface seam).
 

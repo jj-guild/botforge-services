@@ -634,6 +634,28 @@ DEFAULTS: dict[str, dict[str, str]] = {
         "ffa_salon_title": "🗺️ Expédition",
         "ffa_mode_one": "1 seigneur par royaume",
         "ffa_mode_free": "places libres",
+        "console_relaunch_label": "🔁 Relancer la saison",
+        "console_reset_label": "🧹 Réinitialiser les données",
+        "console_clock_label": "⏩ Horloge de jeu",
+        "console_relaunch_confirm": (
+            "🔁 **Relancer la saison ?**\n"
+            "Les données actuelles sont archivées puis effacées, et une nouvelle"
+            " saison démarre (nouvelles candidatures)."
+        ),
+        "console_reset_confirm": (
+            "🧹 **Réinitialiser les données ?**\n"
+            "Les données actuelles sont archivées puis effacées — aucune"
+            " nouvelle saison n'est lancée."
+        ),
+        "console_confirm_button": "⚠️ Confirmer",
+        "console_cancel_button": "Annuler",
+        "console_cancelled": "❌ Annulé — rien n'a été touché.",
+        "console_relaunch_done": "✅ Saison relancée — les anciennes données sont archivées.",
+        "console_reset_done": "✅ Données réinitialisées — les anciennes données sont archivées.",
+        "console_error": "❌ {0}",
+        "console_clock_modal_title": "⏩ Avancer l'horloge",
+        "console_clock_bad": "❌ {0}",
+        "console_clock_done": "✅ Horloge de jeu avancée : **{0}**.",
     },
     "en": {
         "panel_title": "⚔️ Battlefield — Attack",
@@ -1245,6 +1267,28 @@ DEFAULTS: dict[str, dict[str, str]] = {
         "ffa_salon_title": "🗺️ Expedition",
         "ffa_mode_one": "one lord per kingdom",
         "ffa_mode_free": "free slots",
+        "console_relaunch_label": "🔁 Relaunch the season",
+        "console_reset_label": "🧹 Reset the data",
+        "console_clock_label": "⏩ Game clock",
+        "console_relaunch_confirm": (
+            "🔁 **Relaunch the season?**\n"
+            "The current data is archived then wiped, and a fresh season"
+            " starts (new candidatures)."
+        ),
+        "console_reset_confirm": (
+            "🧹 **Reset the data?**\n"
+            "The current data is archived then wiped — no new season"
+            " is launched."
+        ),
+        "console_confirm_button": "⚠️ Confirm",
+        "console_cancel_button": "Cancel",
+        "console_cancelled": "❌ Cancelled — nothing was touched.",
+        "console_relaunch_done": "✅ Season relaunched — the old data is archived.",
+        "console_reset_done": "✅ Data reset — the old data is archived.",
+        "console_error": "❌ {0}",
+        "console_clock_modal_title": "⏩ Advance the clock",
+        "console_clock_bad": "❌ {0}",
+        "console_clock_done": "✅ Game clock advanced: **{0}**.",
     },
 }
 
