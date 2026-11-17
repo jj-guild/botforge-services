@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import pytest
 
+from botforge.discord.ui import ephemeral_windows
 from botforge.discord.ui.ephemeral_windows import (
     PLATFORM_SCOPE,
     EphemeralWindowMode,
@@ -16,7 +17,6 @@ from botforge.discord.ui.ephemeral_windows import (
     set_window_mode,
     window_mode,
 )
-from botforge.discord.ui import ephemeral_windows
 
 
 class _Response:

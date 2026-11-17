@@ -24,9 +24,9 @@ Discord side — the deleted window is a no-op, swallowed).
 
 from __future__ import annotations
 
-from enum import StrEnum
 import logging
 import time
+from enum import StrEnum
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:  # the seam is duck-typed at runtime — no discord import
@@ -95,8 +95,8 @@ async def open_ephemeral_window(
 
 
 __all__ = [
-    "EphemeralWindowMode",
     "PLATFORM_SCOPE",
+    "EphemeralWindowMode",
     "close_ephemeral_window",
     "open_ephemeral_window",
     "set_window_mode",
