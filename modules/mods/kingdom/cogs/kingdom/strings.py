@@ -609,6 +609,33 @@ DEFAULTS: dict[str, dict[str, str]] = {
             " les enchères ferment à l'heure affichée sur place. À la Taverne !"
         ),
         "mercenary_close_note": "🗡️ La bourse aux mercenaires est close — **{0}** lot(s) attribué(s).",
+        "ffa_join_button": "🗺️ Partir en expédition",
+        "ffa_join_note": (
+            "✅ **{0}** tient un créneau de l'Expédition — {1}/{2} participant(s)."
+        ),
+        "ffa_left_note": "🚪 **{0}** a libéré son créneau — {1}/{2} participant(s).",
+        "ffa_not_open": "❌ Aucune expédition n'est ouverte aux inscriptions pour le moment.",
+        "ffa_full": "❌ L'expédition est complète.",
+        "ffa_kingdom_full": (
+            "❌ Ton royaume tient déjà un créneau (mode : 1 seigneur par royaume)."
+        ),
+        "ffa_locked": (
+            "❌ Tu es verrouillé (verrou Explorateur 48h en cours ou FFA manqué)"
+            " — inscription impossible."
+        ),
+        "ffa_announce": (
+            "🧭 **Expédition — samedi {0} (heure de Paris)**\n"
+            "Une partie GRATUITE de {1} minutes contre l'IA Gaïa et les autres"
+            " participants — {2} places, mode : {3}. Clique sur"
+            " **« Partir en expédition »** pour réserver ton créneau (1er arrivé,"
+            " 1er servi ; re-clique pour le libérer)."
+        ),
+        "ffa_start": (
+            "🧭 **L'expédition commence maintenant** — {0} participant(s),"
+            " {1} minutes. Bonne chance !"
+        ),
+        "ffa_mode_one": "1 seigneur par royaume",
+        "ffa_mode_free": "places libres",
     },
     "en": {
         "panel_title": "⚔️ Battlefield — Attack",
@@ -1195,6 +1222,33 @@ DEFAULTS: dict[str, dict[str, str]] = {
             " the bids close at the time shown on the spot. At the Taverne!"
         ),
         "mercenary_close_note": "🗡️ The mercenary market is closed — **{0}** lot(s) awarded.",
+        "ffa_join_button": "🗺️ Join the Expedition",
+        "ffa_join_note": (
+            "✅ **{0}** holds an Expedition slot — {1}/{2} participant(s)."
+        ),
+        "ffa_left_note": "🚪 **{0}** released their slot — {1}/{2} participant(s).",
+        "ffa_not_open": "❌ No Expedition is open for enrollment right now.",
+        "ffa_full": "❌ The Expedition is full.",
+        "ffa_kingdom_full": (
+            "❌ Your kingdom already holds a slot (mode: one lord per kingdom)."
+        ),
+        "ffa_locked": (
+            "❌ You are locked (a fresh Explorateur 48h lock or a missed FFA)"
+            " — you cannot enroll."
+        ),
+        "ffa_announce": (
+            "🧭 **Expedition — Saturday {0} (Paris time)**\n"
+            "One FREE {1}-minute game against the Gaïa AI and the other"
+            " participants — {2} slots, mode: {3}. Click"
+            " **« Join the Expedition »** to reserve yours (first come, first"
+            " served; click again to release it)."
+        ),
+        "ffa_start": (
+            "🧭 **The Expedition starts now** — {0} participant(s),"
+            " {1} minutes. Good luck!"
+        ),
+        "ffa_mode_one": "one lord per kingdom",
+        "ffa_mode_free": "free slots",
     },
 }
 

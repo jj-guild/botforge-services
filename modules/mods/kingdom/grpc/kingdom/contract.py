@@ -56,6 +56,11 @@ class KingdomStack(Protocol):
         ...
 
     @property
+    def ffa(self) -> Any:
+        """The Saturday FFA Exploration (FFAExplorationService)."""
+        ...
+
+    @property
     def config(self) -> Any:
         """The validated season configuration (KingdomSeasonConfig)."""
         ...

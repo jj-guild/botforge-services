@@ -31,6 +31,7 @@ class _KingdomStackImpl(KingdomStackContract):
         from botforge.mods.kingdom.diplomacy import DiplomacyService
         from botforge.mods.kingdom.economy import EconomyService
         from botforge.mods.kingdom.events import EventService
+        from botforge.mods.kingdom.ffa_exploration import FFAExplorationService
         from botforge.mods.kingdom.mercenary import MercenaryService
         from botforge.mods.kingdom.tavern import TavernService
 
@@ -50,6 +51,9 @@ class _KingdomStackImpl(KingdomStackContract):
         )
         self._economy = EconomyService(
             store, config, self._kingdoms, self._territories, self._attacks
+        )
+        self._ffa = FFAExplorationService(
+            store, config, self._kingdoms, self._events
         )
         self._tavern = TavernService(store, config, self._kingdoms)
 
@@ -84,6 +88,10 @@ class _KingdomStackImpl(KingdomStackContract):
     @property
     def mercenary(self) -> Any:
         return self._mercenary
+
+    @property
+    def ffa(self) -> Any:
+        return self._ffa
 
     @property
     def config(self) -> Any:

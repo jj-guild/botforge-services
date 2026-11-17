@@ -17,6 +17,8 @@ from __future__ import annotations
 import logging
 from typing import Any
 
+import discord
+
 logger = logging.getLogger("kingdom.attack")
 
 
@@ -761,6 +763,95 @@ async def run_mercenary_tick_safe(bot: Any) -> None:
             logger.warning("kingdom: one mercenary announcement failed — best-effort", exc_info=True)
 
 
+async def run_ffa_tick_safe(bot: Any) -> None:
+    """Run the Saturday FFA Exploration tick (ffa-exploration-v1).
+
+    Draw (or read back) this Saturday's random start hour; announce in
+    Géopolitique 2h before — the announcement carries the persistent
+    « Aller explorer » button and opens the enrollments; at the drawn
+    hour the game starts. Every step replays safely through the
+    persisted document (announced/started flags). The ref's ephemeral
+    FFA salon is NOT ported (the mod keeps a single Géopolitique
+    window — one less channel to provision).
+    """
+    from zoneinfo import ZoneInfo
+
+    from .battle import _geopolitics_channel
+    from .common import strings_by_locale, wiring
+    from .ffa import FFAJoinButton
+
+    stack = wiring()
+    if stack is None:
+        return
+    ffa_service = getattr(stack, "ffa", None)
+    if ffa_service is None:
+        return
+    if not list(getattr(bot, "guilds", []) or []):
+        return
+    from botforge.mods.kingdom.game_clock import game_now
+
+    now = game_now()
+    try:
+        ffa = await ffa_service.draw_or_get(now)
+    except Exception:  # noqa: BLE001 — a draw failure defers to the next tick
+        logger.warning("kingdom: FFA draw failed — best-effort", exc_info=True)
+        return
+    if ffa is None:
+        return
+    events_settings = getattr(stack.config, "events", None)
+    tz = ZoneInfo(str(getattr(events_settings, "schedule_timezone", "UTC") or "UTC"))
+    if ffa_service.due_announce(ffa, now):
+        try:
+            await ffa_service.mark_announced(ffa)
+        except Exception:  # noqa: BLE001
+            logger.warning("kingdom: FFA announce flag failed — best-effort", exc_info=True)
+        time_label = ffa.start_at.astimezone(tz).strftime("%Hh%M")
+        maximum = int(ffa_service.max_participants())
+        mode_key = "ffa_mode_one" if ffa.one_lord_per_kingdom else "ffa_mode_free"
+        for guild in list(getattr(bot, "guilds", []) or []):
+            locale = await _guild_locale(bot, str(guild.id))
+            strings = strings_by_locale(locale)
+            try:
+                channel = _geopolitics_channel(guild)
+                if channel is None:
+                    continue
+                text = str(strings["ffa_announce"]).format(
+                    time_label,
+                    int(getattr(events_settings, "ffa_game_minutes", 75)),
+                    maximum,
+                    str(strings[mode_key]),
+                )
+                view = discord.ui.LayoutView(timeout=None)
+                view.add_item(discord.ui.ActionRow(FFAJoinButton(strings["ffa_join_button"])))
+                await channel.send(text, view=view)
+            except Exception:  # noqa: BLE001
+                logger.warning("kingdom: FFA announcement failed — best-effort", exc_info=True)
+        return
+    if ffa_service.due_start(ffa, now):
+        started = None
+        try:
+            started = await ffa_service.start_due(now)
+        except Exception:  # noqa: BLE001
+            logger.warning("kingdom: FFA start failed — best-effort", exc_info=True)
+        if started is None:
+            return
+        for guild in list(getattr(bot, "guilds", []) or []):
+            locale = await _guild_locale(bot, str(guild.id))
+            strings = strings_by_locale(locale)
+            try:
+                channel = _geopolitics_channel(guild)
+                if channel is None:
+                    continue
+                await channel.send(
+                    str(strings["ffa_start"]).format(
+                        len(started.participants),
+                        int(getattr(events_settings, "ffa_game_minutes", 75)),
+                    )
+                )
+            except Exception:  # noqa: BLE001
+                logger.warning("kingdom: FFA start announcement failed", exc_info=True)
+
+
 def start_attack_refresher(bot: Any) -> None:
     """Start the attack phases loop (every 5 minutes).
 
@@ -794,6 +885,10 @@ def start_attack_refresher(bot: Any) -> None:
             await run_mercenary_tick_safe(bot)
         except Exception:
             logger.warning("kingdom: mercenary tick failed — best-effort", exc_info=True)
+        try:
+            await run_ffa_tick_safe(bot)
+        except Exception:
+            logger.warning("kingdom: FFA tick failed — best-effort", exc_info=True)
 
     _loop.start()
     logger.info("kingdom: attack phases loop started (every 5 minutes)")
