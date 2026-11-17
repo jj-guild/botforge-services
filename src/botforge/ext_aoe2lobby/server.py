@@ -96,8 +96,14 @@ def main() -> None:
         finally:
             hub.unsubscribe(queue)
 
-    async def update_subscriptions(profile_ids: list[str]) -> bool:
-        """Reconcile the upstream players subscription in place (one session)."""
+    async def update_subscriptions(profile_ids: list[str], user_ids: list[str]) -> bool:
+        """Reconcile the upstream players subscription in place (one session).
+
+        ``user_ids`` (parallel to profile_ids) ride the wire so the
+        stats store can keep the profile -> user mapping; the lobby
+        provider itself only subscribes the profile ids.
+        """
+        del user_ids
         return await adapter.set_subscribed_profiles(profile_ids)
 
     async def _boot() -> None:

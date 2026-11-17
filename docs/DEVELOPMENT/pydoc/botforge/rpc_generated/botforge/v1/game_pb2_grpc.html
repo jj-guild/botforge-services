@@ -47,9 +47,13 @@ The&nbsp;core&nbsp;never&nbsp;interprets&nbsp;provider-internal&nbsp;identifiers
 profile_id&nbsp;and&nbsp;faction_key&nbsp;are&nbsp;opaque&nbsp;strings&nbsp;at&nbsp;the&nbsp;contract&nbsp;level.<br>&nbsp;</span></td></tr>
 <tr><td>&nbsp;</td>
 <td class="singlecolumn">Static methods defined here:<br>
+<dl><dt><a name="Game-GetAccountStats"><strong>GetAccountStats</strong></a>(request, target, options=(), channel_credentials=None, call_credentials=None, insecure=False, compression=None, wait_for_ready=None, timeout=None, metadata=None)</dt></dl>
+
 <dl><dt><a name="Game-GetCapabilities"><strong>GetCapabilities</strong></a>(request, target, options=(), channel_credentials=None, call_credentials=None, insecure=False, compression=None, wait_for_ready=None, timeout=None, metadata=None)</dt></dl>
 
 <dl><dt><a name="Game-GetMatchDetails"><strong>GetMatchDetails</strong></a>(request, target, options=(), channel_credentials=None, call_credentials=None, insecure=False, compression=None, wait_for_ready=None, timeout=None, metadata=None)</dt></dl>
+
+<dl><dt><a name="Game-GetMatchHistory"><strong>GetMatchHistory</strong></a>(request, target, options=(), channel_credentials=None, call_credentials=None, insecure=False, compression=None, wait_for_ready=None, timeout=None, metadata=None)</dt></dl>
 
 <dl><dt><a name="Game-GetMatchLinks"><strong>GetMatchLinks</strong></a>(request, target, options=(), channel_credentials=None, call_credentials=None, insecure=False, compression=None, wait_for_ready=None, timeout=None, metadata=None)</dt></dl>
 
@@ -57,11 +61,15 @@ profile_id&nbsp;and&nbsp;faction_key&nbsp;are&nbsp;opaque&nbsp;strings&nbsp;at&n
 
 <dl><dt><a name="Game-GetPlayerStats"><strong>GetPlayerStats</strong></a>(request, target, options=(), channel_credentials=None, call_credentials=None, insecure=False, compression=None, wait_for_ready=None, timeout=None, metadata=None)</dt></dl>
 
+<dl><dt><a name="Game-GetUserStats"><strong>GetUserStats</strong></a>(request, target, options=(), channel_credentials=None, call_credentials=None, insecure=False, compression=None, wait_for_ready=None, timeout=None, metadata=None)</dt></dl>
+
 <dl><dt><a name="Game-ListMaps"><strong>ListMaps</strong></a>(request, target, options=(), channel_credentials=None, call_credentials=None, insecure=False, compression=None, wait_for_ready=None, timeout=None, metadata=None)</dt></dl>
 
 <dl><dt><a name="Game-ResolveProfile"><strong>ResolveProfile</strong></a>(request, target, options=(), channel_credentials=None, call_credentials=None, insecure=False, compression=None, wait_for_ready=None, timeout=None, metadata=None)</dt></dl>
 
 <dl><dt><a name="Game-StreamMatchEvents"><strong>StreamMatchEvents</strong></a>(request, target, options=(), channel_credentials=None, call_credentials=None, insecure=False, compression=None, wait_for_ready=None, timeout=None, metadata=None)</dt></dl>
+
+<dl><dt><a name="Game-SyncStats"><strong>SyncStats</strong></a>(request, target, options=(), channel_credentials=None, call_credentials=None, insecure=False, compression=None, wait_for_ready=None, timeout=None, metadata=None)</dt></dl>
 
 <dl><dt><a name="Game-UpdateSubscriptions"><strong>UpdateSubscriptions</strong></a>(request, target, options=(), channel_credentials=None, call_credentials=None, insecure=False, compression=None, wait_for_ready=None, timeout=None, metadata=None)</dt></dl>
 
@@ -85,11 +93,17 @@ The&nbsp;core&nbsp;never&nbsp;interprets&nbsp;provider-internal&nbsp;identifiers
 profile_id&nbsp;and&nbsp;faction_key&nbsp;are&nbsp;opaque&nbsp;strings&nbsp;at&nbsp;the&nbsp;contract&nbsp;level.<br>&nbsp;</span></td></tr>
 <tr><td>&nbsp;</td>
 <td class="singlecolumn">Methods defined here:<br>
+<dl><dt><a name="GameServicer-GetAccountStats"><strong>GetAccountStats</strong></a>(self, request, context)</dt><dd><span class="code">The&nbsp;per-account&nbsp;status:&nbsp;current&nbsp;elo&nbsp;+&nbsp;MAX&nbsp;elo&nbsp;per&nbsp;leaderboard.</span></dd></dl>
+
 <dl><dt><a name="GameServicer-GetCapabilities"><strong>GetCapabilities</strong></a>(self, request, context)</dt><dd><span class="code">Declare&nbsp;what&nbsp;this&nbsp;provider&nbsp;actually&nbsp;supports.&nbsp;The&nbsp;core&nbsp;degrades<br>
 cleanly&nbsp;on&nbsp;anything&nbsp;absent&nbsp;(reference:&nbsp;ladder&nbsp;spec&nbsp;1.2).</span></dd></dl>
 
 <dl><dt><a name="GameServicer-GetMatchDetails"><strong>GetMatchDetails</strong></a>(self, request, context)</dt><dd><span class="code">Full&nbsp;match&nbsp;details:&nbsp;map,&nbsp;slotinfo&nbsp;(per-slot&nbsp;state)&nbsp;and&nbsp;the&nbsp;raw<br>
 game&nbsp;options&nbsp;(map&nbsp;size,&nbsp;speed,&nbsp;victory&nbsp;condition,&nbsp;...).</span></dd></dl>
+
+<dl><dt><a name="GameServicer-GetMatchHistory"><strong>GetMatchHistory</strong></a>(self, request, context)</dt><dd><span class="code">The&nbsp;stored&nbsp;match&nbsp;history&nbsp;of&nbsp;the&nbsp;given&nbsp;profiles&nbsp;(all&nbsp;leaderboards&nbsp;the<br>
+provider&nbsp;keeps,&nbsp;optionally&nbsp;narrowed),&nbsp;newest&nbsp;first,&nbsp;decoded&nbsp;fields<br>
+included&nbsp;once&nbsp;the&nbsp;provider&nbsp;exploits&nbsp;them&nbsp;(T2).</span></dd></dl>
 
 <dl><dt><a name="GameServicer-GetMatchLinks"><strong>GetMatchLinks</strong></a>(self, request, context)</dt><dd><span class="code"><a href="#Game">Game</a>&nbsp;action&nbsp;links&nbsp;(join/spectate/insights)&nbsp;as&nbsp;opaque&nbsp;label+url&nbsp;pairs.</span></dd></dl>
 
@@ -98,6 +112,9 @@ game&nbsp;options&nbsp;(map&nbsp;size,&nbsp;speed,&nbsp;victory&nbsp;condition,&
 <dl><dt><a name="GameServicer-GetPlayerStats"><strong>GetPlayerStats</strong></a>(self, request, context)</dt><dd><span class="code">Named&nbsp;stats&nbsp;blocks&nbsp;for&nbsp;a&nbsp;player&nbsp;profile&nbsp;(rendered&nbsp;by&nbsp;the&nbsp;platform<br>
 adapter;&nbsp;the&nbsp;core&nbsp;never&nbsp;formats&nbsp;them).</span></dd></dl>
 
+<dl><dt><a name="GameServicer-GetUserStats"><strong>GetUserStats</strong></a>(self, request, context)</dt><dd><span class="code">The&nbsp;per-USER&nbsp;unified&nbsp;view:&nbsp;the&nbsp;accounts&nbsp;of&nbsp;one&nbsp;platform&nbsp;user<br>
+aggregated&nbsp;(best&nbsp;current/max&nbsp;elo&nbsp;per&nbsp;leaderboard,&nbsp;matches&nbsp;window).</span></dd></dl>
+
 <dl><dt><a name="GameServicer-ListMaps"><strong>ListMaps</strong></a>(self, request, context)</dt><dd><span class="code">The&nbsp;maps&nbsp;this&nbsp;provider&nbsp;knows&nbsp;about&nbsp;for&nbsp;its&nbsp;game&nbsp;(catalog&nbsp;data).</span></dd></dl>
 
 <dl><dt><a name="GameServicer-ResolveProfile"><strong>ResolveProfile</strong></a>(self, request, context)</dt><dd><span class="code">Resolve&nbsp;which&nbsp;mod&nbsp;user&nbsp;matches&nbsp;a&nbsp;game&nbsp;profile.&nbsp;Used&nbsp;for&nbsp;profile<br>
@@ -105,6 +122,15 @@ validation&nbsp;at&nbsp;registration&nbsp;and&nbsp;for&nbsp;match&nbsp;participa
 
 <dl><dt><a name="GameServicer-StreamMatchEvents"><strong>StreamMatchEvents</strong></a>(self, request, context)</dt><dd><span class="code">Stream&nbsp;match&nbsp;lifecycle&nbsp;events&nbsp;(lobby_opened,&nbsp;lobby_closed,<br>
 game_started,&nbsp;game_ended)&nbsp;for&nbsp;the&nbsp;matches&nbsp;this&nbsp;provider&nbsp;can&nbsp;see.</span></dd></dl>
+
+<dl><dt><a name="GameServicer-SyncStats"><strong>SyncStats</strong></a>(self, request, context)</dt><dd><span class="code">----&nbsp;The&nbsp;stats&nbsp;layer&nbsp;(botforge-services#404)&nbsp;--------------------------<br>
+The&nbsp;provider&nbsp;is&nbsp;the&nbsp;source&nbsp;of&nbsp;truth&nbsp;of&nbsp;its&nbsp;perimeter:&nbsp;it&nbsp;STORES&nbsp;the<br>
+raw&nbsp;history&nbsp;of&nbsp;the&nbsp;known&nbsp;(subscribed)&nbsp;accounts,&nbsp;EXPLOITS&nbsp;it&nbsp;(per<br>
+account&nbsp;status,&nbsp;per-user&nbsp;unification)&nbsp;and&nbsp;EXPOSES&nbsp;it&nbsp;here.&nbsp;The<br>
+consumers&nbsp;never&nbsp;call&nbsp;the&nbsp;external&nbsp;API,&nbsp;never&nbsp;read&nbsp;the&nbsp;provider&nbsp;DB.<br>
+&nbsp;<br>
+Trigger&nbsp;a&nbsp;history&nbsp;sync&nbsp;now&nbsp;(on-demand:&nbsp;profile&nbsp;binding,&nbsp;application).<br>
+An&nbsp;empty&nbsp;profile_ids&nbsp;list&nbsp;syncs&nbsp;every&nbsp;known&nbsp;account.</span></dd></dl>
 
 <dl><dt><a name="GameServicer-UpdateSubscriptions"><strong>UpdateSubscriptions</strong></a>(self, request, context)</dt><dd><span class="code">Push&nbsp;the&nbsp;subscribed&nbsp;profile&nbsp;ids&nbsp;to&nbsp;a&nbsp;realtime&nbsp;provider.&nbsp;The&nbsp;provider<br>
 updates&nbsp;its&nbsp;upstream&nbsp;subscriptions&nbsp;in&nbsp;place&nbsp;(no&nbsp;session&nbsp;teardown):<br>

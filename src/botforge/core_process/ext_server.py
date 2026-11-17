@@ -27,6 +27,10 @@ async def serve_game_provider(
     player_stats: object | None = None,
     update_subscriptions: object | None = None,
     match_result: object | None = None,
+    sync_stats: object | None = None,
+    match_history: object | None = None,
+    account_stats: object | None = None,
+    user_stats: object | None = None,
 ) -> None:
     """Serve the botforge.v1.Game contract until terminated.
 
@@ -44,6 +48,10 @@ async def serve_game_provider(
             player_stats=player_stats,
             update_subscriptions=update_subscriptions,
             match_result=match_result,
+            sync_stats=sync_stats,
+            match_history=match_history,
+            account_stats=account_stats,
+            user_stats=user_stats,
         ),
         server,
     )

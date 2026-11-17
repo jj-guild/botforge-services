@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Python: botforge.game_aoe2.stats_cache</title>
+</head><body>
+
+<table class="heading">
+<tr class="heading-text decor">
+<td class="title">&nbsp;<br><strong class="title"><a href="botforge.html" class="white">botforge</a>.<a href="botforge.game_aoe2.html" class="white">game_aoe2</a>.stats_cache</strong></td>
+<td class="extra"><a href=".">index</a><br><a href="file:SOURCE_ROOT/game_aoe2/stats_cache.py">SOURCE_ROOT/game_aoe2/stats_cache.py</a></td></tr></table>
+    <p><span class="code">The&nbsp;game&nbsp;service's&nbsp;stats&nbsp;answer&nbsp;cache&nbsp;(#404&nbsp;T4).<br>
+&nbsp;<br>
+A&nbsp;click&nbsp;never&nbsp;costs&nbsp;a&nbsp;provider&nbsp;call:&nbsp;the&nbsp;GameData&nbsp;proxies&nbsp;cache&nbsp;the<br>
+stats&nbsp;answers&nbsp;with&nbsp;adapted&nbsp;TTLs&nbsp;—&nbsp;Redis&nbsp;when&nbsp;the&nbsp;service&nbsp;runs&nbsp;with&nbsp;a<br>
+``REDIS_URI``&nbsp;(shared&nbsp;across&nbsp;restarts),&nbsp;an&nbsp;in-memory&nbsp;dict&nbsp;otherwise<br>
+(the&nbsp;dev&nbsp;sandbox).&nbsp;The&nbsp;sync&nbsp;(periodic&nbsp;+&nbsp;on-demand)&nbsp;refreshes&nbsp;the<br>
+source;&nbsp;the&nbsp;cache&nbsp;only&nbsp;paces&nbsp;the&nbsp;reads.</span></p>
+<p>
+<table class="section">
+<tr class="decor pkg-content-decor heading-text">
+<td class="section-title" colspan=3>&nbsp;<br><strong class="bigsection">Modules</strong></td></tr>
+    
+<tr><td class="decor pkg-content-decor"><span class="code">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span></td><td>&nbsp;</td>
+<td class="singlecolumn"><table><tr><td class="multicolumn"><a href="json.html">json</a><br>
+</td><td class="multicolumn"><a href="logging.html">logging</a><br>
+</td><td class="multicolumn"><a href="time.html">time</a><br>
+</td><td class="multicolumn"></td></tr></table></td></tr></table><p>
+<table class="section">
+<tr class="decor index-decor heading-text">
+<td class="section-title" colspan=3>&nbsp;<br><strong class="bigsection">Classes</strong></td></tr>
+    
+<tr><td class="decor index-decor"><span class="code">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span></td><td>&nbsp;</td>
+<td class="singlecolumn"><dl>
+<dt class="heading-text"><a href="builtins.html#object">builtins.object</a>
+</dt><dd>
+<dl>
+<dt class="heading-text"><a href="botforge.game_aoe2.stats_cache.html#StatsCache">StatsCache</a>
+</dt></dl>
+</dd>
+</dl>
+ <p>
+<table class="section">
+<tr class="decor title-decor heading-text">
+<td class="section-title" colspan=3>&nbsp;<br><a name="StatsCache">class <strong>StatsCache</strong></a>(<a href="builtins.html#object">builtins.object</a>)</td></tr>
+    
+<tr><td class="decor title-decor" rowspan=2><span class="code">&nbsp;&nbsp;&nbsp;</span></td>
+<td class="decor title-decor" colspan=2><span class="code"><a href="#StatsCache">StatsCache</a>(redis_client:&nbsp;'_RedisLike&nbsp;|&nbsp;None'&nbsp;=&nbsp;None)&nbsp;-&amp;gt;&nbsp;'None'<br>
+&nbsp;<br>
+A&nbsp;TTL&nbsp;cache&nbsp;over&nbsp;the&nbsp;provider's&nbsp;stats&nbsp;answers.<br>&nbsp;</span></td></tr>
+<tr><td>&nbsp;</td>
+<td class="singlecolumn">Methods defined here:<br>
+<dl><dt><a name="StatsCache-__init__"><strong>__init__</strong></a>(self, redis_client: '_RedisLike | None' = None) -&gt; 'None'</dt><dd><span class="code">Initialize&nbsp;self.&nbsp;&nbsp;See&nbsp;help(type(self))&nbsp;for&nbsp;accurate&nbsp;signature.</span></dd></dl>
+
+<dl><dt>async <a name="StatsCache-get_json"><strong>get_json</strong></a>(self, key: 'str') -&gt; 'Any | None'</dt><dd><span class="code">Return&nbsp;the&nbsp;cached&nbsp;JSON&nbsp;value;&nbsp;None&nbsp;when&nbsp;absent&nbsp;or&nbsp;expired.</span></dd></dl>
+
+<dl><dt>async <a name="StatsCache-set_json"><strong>set_json</strong></a>(self, key: 'str', value: 'Any', ttl_s: 'int') -&gt; 'None'</dt><dd><span class="code">Cache&nbsp;one&nbsp;JSON&nbsp;value&nbsp;for&nbsp;``ttl_s``&nbsp;seconds&nbsp;(best-effort).</span></dd></dl>
+
+<hr>
+Data descriptors defined here:<br>
+<dl><dt><strong>__dict__</strong></dt>
+<dd><span class="code">dictionary&nbsp;for&nbsp;instance&nbsp;variables</span></dd>
+</dl>
+<dl><dt><strong>__weakref__</strong></dt>
+<dd><span class="code">list&nbsp;of&nbsp;weak&nbsp;references&nbsp;to&nbsp;the&nbsp;object</span></dd>
+</dl>
+</td></tr></table></td></tr></table><p>
+<table class="section">
+<tr class="decor data-decor heading-text">
+<td class="section-title" colspan=3>&nbsp;<br><strong class="bigsection">Data</strong></td></tr>
+    
+<tr><td class="decor data-decor"><span class="code">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span></td><td>&nbsp;</td>
+<td class="singlecolumn"><strong>TTL_ACCOUNT_STATS_S</strong> = 600<br>
+<strong>TTL_MATCH_HISTORY_S</strong> = 300<br>
+<strong>TTL_USER_STATS_S</strong> = 600<br>
+<strong>logger</strong> = &lt;Logger botforge.game_aoe2.stats_cache (INFO)&gt;</td></tr></table>
+</body></html>

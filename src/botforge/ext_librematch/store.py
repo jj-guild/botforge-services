@@ -1,0 +1,148 @@
+"""libre:match stats store — the provider's OWN history database (#404 T1).
+
+The provider is the source of truth of its perimeter: the RAW match
+documents and the per-account status live HERE, in the provider's
+namespaced collections — never filtered at ingestion (store first,
+exploit later), never read by another service's process.
+
+Collections (all under the ``librematch:`` namespace):
+
+- ``librematch:matches`` — one document per (match, leaderboard): the
+  raw upstream payload plus the exploited projection (participants,
+  elo deltas, outcome);
+- ``librematch:accounts`` — one document per known account: the elo
+  status per leaderboard (current + MAX) and the sync freshness;
+- ``librematch:bindings`` — the profile -> platform-user mapping pushed
+  by the core through ``UpdateSubscriptions`` (the per-USER
+  unification's key).
+"""
+
+from __future__ import annotations
+
+import logging
+from typing import Any
+
+logger = logging.getLogger("botforge.ext_librematch.store")
+
+MATCHES_COLLECTION = "librematch:matches"
+ACCOUNTS_COLLECTION = "librematch:accounts"
+BINDINGS_COLLECTION = "librematch:bindings"
+
+DEFAULT_HISTORY_LIMIT = 50
+
+
+class LibrematchStore:
+    """The provider's own persistence seam over async MongoDB."""
+
+    def __init__(self, database: Any) -> None:
+        """Wrap the provider's async Mongo database."""
+        self._db = database
+
+    def _matches(self) -> Any:
+        """Return the raw match documents collection."""
+        return self._db[MATCHES_COLLECTION]
+
+    def _accounts(self) -> Any:
+        """Return the per-account status collection."""
+        return self._db[ACCOUNTS_COLLECTION]
+
+    def _bindings(self) -> Any:
+        """Return the profile -> user mapping collection."""
+        return self._db[BINDINGS_COLLECTION]
+
+    async def upsert_matches(self, documents: list[dict[str, Any]]) -> int:
+        """Insert or replace the raw match documents; return the new count.
+
+        The document ``_id`` is ``<match_id>:<leaderboard_id>`` — the
+        upstream may list the same match id under several leaderboards.
+        """
+        count = 0
+        for doc in documents:
+            await self._matches().replace_one({"_id": doc["_id"]}, doc, upsert=True)
+            count += 1
+        return count
+
+    async def find_matches(
+        self,
+        profile_ids: list[str],
+        limit: int = 0,
+        since_s: int = 0,
+        leaderboard_id: str = "",
+    ) -> list[dict[str, Any]]:
+        """Query the stored history: matches of the profiles, newest first.
+
+        An empty ``profile_ids`` means every known account's matches.
+        """
+        query: dict[str, Any] = {}
+        if profile_ids:
+            query["profile_ids"] = {"$in": [str(p) for p in profile_ids]}
+        if since_s > 0:
+            query["finished_at"] = {"$gte": since_s}
+        if leaderboard_id:
+            query["leaderboard_id"] = str(leaderboard_id)
+        cursor = self._matches().find(query)
+        cursor = cursor.sort("finished_at", -1)
+        if limit > 0:
+            cursor = cursor.limit(limit)
+        return [dict(doc) async for doc in cursor]
+
+    async def count_matches_since(self, profile_ids: list[str], since_s: int) -> int:
+        """Count the matches of the profiles finished after ``since_s``."""
+        query: dict[str, Any] = {"finished_at": {"$gte": since_s}}
+        if profile_ids:
+            query["profile_ids"] = {"$in": [str(p) for p in profile_ids]}
+        return int(await self._matches().count_documents(query))
+
+    async def upsert_account(self, document: dict[str, Any]) -> None:
+        """Insert or replace one account's status document."""
+        await self._accounts().replace_one({"_id": document["_id"]}, document, upsert=True)
+
+    async def find_accounts(self, profile_ids: list[str]) -> list[dict[str, Any]]:
+        """Return the status documents of the accounts (missing ones absent)."""
+        if not profile_ids:
+            return []
+        cursor = self._accounts().find({"_id": {"$in": [str(p) for p in profile_ids]}})
+        return [dict(doc) async for doc in cursor]
+
+    async def list_known_profiles(self) -> list[str]:
+        """List every account the store has a status or binding for."""
+        cursor = self._accounts().find({}, {"_id": 1})
+        profiles = {str(doc["_id"]) async for doc in cursor}
+        cursor = self._bindings().find({}, {"_id": 1})
+        profiles |= {str(doc["_id"]) async for doc in cursor}
+        return sorted(profiles)
+
+    async def upsert_bindings(self, profile_ids: list[str], user_ids: list[str]) -> int:
+        """Record the profile -> user mapping pushed by the core.
+
+        ``user_ids`` is parallel to ``profile_ids``; an empty owner
+        entry keeps whatever mapping is already stored (the core may
+        push a list without owners — the realtime reconciliation).
+        """
+        count = 0
+        for profile_id, user_id in zip(
+            [str(p) for p in profile_ids],
+            [str(u) for u in user_ids],
+            strict=False,
+        ):
+            if not user_id:
+                count += 1
+                continue
+            await self._bindings().replace_one(
+                {"_id": profile_id},
+                {"_id": profile_id, "user_id": user_id},
+                upsert=True,
+            )
+            count += 1
+        return count
+
+    async def find_profiles_of_user(self, user_id: str) -> list[str]:
+        """Return the platform user's known accounts (the unification's key)."""
+        cursor = self._bindings().find({"user_id": str(user_id)}, {"_id": 1})
+        profiles = [str(doc["_id"]) async for doc in cursor]
+        return sorted(profiles)
+
+    async def find_user_of_profile(self, profile_id: str) -> str:
+        """Return the account's platform owner; empty when unknown."""
+        doc = await self._bindings().find_one({"_id": str(profile_id)})
+        return str(doc.get("user_id", "")) if doc is not None else ""
