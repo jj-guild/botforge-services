@@ -55,6 +55,25 @@ def register(bot: Any, config: Any) -> None:
 
     bot.tree.add_command(_cmd)
 
+    # #339 (candidates dashboard): the detailed validation view pinned in
+    # the declared « realms » admin salon — pending rows with the decision
+    # buttons + the accepted/refused tables (D70 rule 35).
+    from .validation import build_validation_panel
+
+    async def _resolve_realms_channel(guild_id: str) -> str:
+        return await stored_channel_id(guild_id, "mod/kingdom", "realms") or ""
+
+    register_static_pin(
+        StaticPinnedView(
+            key="view:mod:kingdom:candidates",
+            mark_suffix="view:mod:kingdom:candidates",
+            resolve_channel=_resolve_realms_channel,
+            build_layout=build_validation_panel,
+            registry=getattr(bot, "message_registry", None),
+            scope="mod/kingdom",
+        )
+    )
+
     # #339 (console ops): the mod's ops ride the platform console
     # (relaunch/reset/clock — the registry's three gates guard them).
     from .console import register_console_actions
@@ -94,6 +113,7 @@ def setup_hook(bot: Any) -> None:
     from .tavern import MercenaryButton, TavernButton
     from .ffa import FFAJoinButton
     from .console import KingdomClockButton, KingdomRelaunchButton, KingdomResetButton
+    from .validation import ValidationDecisionButton
 
     for item in (
         DeclareButton,
@@ -125,6 +145,7 @@ def setup_hook(bot: Any) -> None:
         KingdomRelaunchButton,
         KingdomResetButton,
         KingdomClockButton,
+        ValidationDecisionButton,
     ):
         try:
             bot.add_dynamic_items(item)

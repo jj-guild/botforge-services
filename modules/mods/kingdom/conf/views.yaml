@@ -13,6 +13,10 @@ views:
   # the pinned « Déclarer une attaque » panel (the static pin key)
   view:mod:kingdom:attack:
     kind: surface
+  # the pinned kingdom-validation dashboard (the « realms » admin salon,
+  # #339's detailed candidates view: pending rows + accepted/refused tables)
+  view:mod:kingdom:candidates:
+    kind: surface
   # the /kingdom service status card
   surface:mod:kingdom:status:
     kind: surface
