@@ -36,6 +36,7 @@ from botforge.mods.kingdom.game_clock import game_now
 
 from .common import (
     dm_user_safe,
+    dm_view,
     fmt_paris,
     lord_of,
     locale_of,
@@ -188,8 +189,7 @@ async def _confirm_step(
             await target.followup.send(message, ephemeral=True)
             return
         content = await recap_with_declare(stack, plan, strings)
-        cancel_view = discord.ui.View(timeout=None)
-        cancel_view.add_item(PlanCancelButton(plan.id, strings["plan_cancel_button"]))
+        cancel_view = dm_view(PlanCancelButton(plan.id, strings["plan_cancel_button"]), timeout=None)
         dm = await dm_user_safe(target.client, str(target.user.id), content, cancel_view)
         if dm is not None:
             try:

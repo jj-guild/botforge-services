@@ -38,6 +38,7 @@ from .common import (
     close_previous_ephemeral,
     delete_dm_message_safe,
     dm_user_safe,
+    dm_view,
     edit_dm_message_safe,
     fmt_paris,
     kingdom_by_id,
@@ -182,7 +183,7 @@ async def pickban_dm_view(
     hand = await pickban_hand_safe(stack, kingdom_id, str(player_id))
     picks = pickban_staged(dict(attack.pickban or {}), side)
     count = min(3, len(hand) or 1)
-    view = discord.ui.View(timeout=None)
+    view = dm_view(timeout=None)
     for index in range(count):
         own = picks[index]
         offered = [civ for civ in hand if civ not in picks or civ == own]
@@ -711,7 +712,7 @@ async def sabotage_dm_view(stack: Any, attack: Any, side: str, strings: dict[str
     """The persistent sabotage-phase view of one player's DM."""
     player_id = str(attack.attacker_lord_id if side == "attacker" else attack.defender_lord_id)
     available = await sabotage_open_available(stack, attack, side, strings)
-    view = discord.ui.View(timeout=None)
+    view = dm_view(timeout=None)
     view.add_item(
         SabotageOpenButton(str(attack.id), player_id, strings["sab_open_button"], available=available)
     )

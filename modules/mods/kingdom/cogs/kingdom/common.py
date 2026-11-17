@@ -553,6 +553,19 @@ async def delete_dm_message_safe(bot: Any, ref: Any) -> None:
         logger.warning("kingdom: old DM delete failed", exc_info=True)
 
 
+def dm_view(*items: Any, timeout: float | None = None) -> Any:
+    """Build one interactive DM view through the UI SDK (#407 complément).
+
+    Rule #367 arbitrage 2 : toujours le SDK UI — the mod never
+    constructs a raw ``discord.ui.View`` itself; the composed-view
+    builder owns the base (permission checks, delivery policies, the
+    mod anchor), the mod only brings its gameplay items.
+    """
+    from botforge.discord.ui.views import ComposedView
+
+    return ComposedView(*items, timeout=timeout, mod="kingdom")
+
+
 __all__ = [
     "PICKBAN_RANKS",
     "attack_by_id",
@@ -562,6 +575,7 @@ __all__ = [
     "close_previous_ephemeral",
     "combat_failure_note",
     "delete_dm_message_safe",
+    "dm_view",
     "dm_user_safe",
     "edit_dm_message_safe",
     "final_civ",

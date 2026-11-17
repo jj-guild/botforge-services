@@ -48,6 +48,7 @@ from typing import Any
 
 import discord
 
+from botforge.discord.ui.views import ComposedView
 from botforge.mods.kingdom.game_clock import game_now
 from botforge.mods.kingdom.models import AttackState
 
@@ -55,6 +56,7 @@ from .common import (
     attack_by_id,
     attack_salon,
     dm_user_safe,
+    dm_view,
     fmt_paris,
     final_civ,
     kingdom_name,
@@ -907,7 +909,7 @@ async def send_dispute_dm_round_safe(bot: Any, stack: Any, attack: Any, locale: 
         declaration = declarations.get(str(player_id)) or {}
         winner_name = await kingdom_name(stack.kingdoms, str(declaration.get("winner") or ""))
         content = strings["dispute_dm_open"].format(winner=winner_name or "—")
-        view = discord.ui.View(timeout=None)
+        view = dm_view(timeout=None)
         view.add_item(DisputeChoiceSelect(str(attack.id), options, strings["result_select_placeholder"]))
         view.add_item(DisputeConfirmButton(str(attack.id), strings["dispute_confirm_button"]))
         message = await dm_user_safe(bot, str(player_id), content, view)
@@ -1748,11 +1750,11 @@ class DisputeConfirmButton(
         )
 
 
-class DisputeView(discord.ui.View):
+class DisputeView(ComposedView):
     """The admin arbitration view of a disputed meeting (bot-admin only)."""
 
     def __init__(self, attack_id: str, locale: str) -> None:
-        super().__init__(timeout=None)
+        super().__init__(mod="kingdom", timeout=None)
         self.attack_id = attack_id
         strings = strings_by_locale(locale)
         self.strings = strings
