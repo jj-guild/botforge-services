@@ -227,6 +227,136 @@ DEFAULTS: dict[str, dict[str, str]] = {
         "sab_again_ask": "🗡️ Veux-tu saboter une autre civilisation ?",
         "sab_again_yes": "Oui — un autre sabotage",
         "sab_again_no": "Non — j'ai fini",
+        # -- battle room / meeting (P4.1b tranche 2b) --
+        "room_not_player": "❌ Seuls les deux joueurs du match peuvent agir ici.",
+        "defender_ai": "IA 🤖",
+        "room_role": "Bataille {map}",
+        "room_scoreboard_map": "⚔️ {map}",
+        "room_scoreboard_id": "🆔 ID : {id}",
+        "room_side_attacker": "Attaquant",
+        "room_side_defender": "Défenseur",
+        "room_side_ready": "✅ Prêt",
+        "room_side_wait": "⏳ en attente du Prêt",
+        "room_side_none": "🔗 en attente de l'ID",
+        "room_side_ai": "🤖 IA — niv. {level}/5",
+        "room_ai_disclaimer": (
+            "⚠️ **IA de niveau {level}/5** — la partie se joue en multijoueur"
+            " avec un ID (jamais en local) pour rester traçable et vérifiable"
+            " post-game. Le joueur est cru sur parole ; toute fraude présumée"
+            " peut être contestée ⚖️ puis arbitrée par les admins."
+        ),
+        "room_id_button": "🔗 Renseigner l'ID",
+        "room_id_modify_button": "🔴 Modifier l'ID",
+        "room_id_pending_button": "⏳ Saisie de l'ID en cours…",
+        "room_id_locked_other": (
+            "⏳ L'autre joueur saisit l'ID de la partie en ce moment — réessaie dans un instant."
+        ),
+        "room_ready_button": "✅ Prêt",
+        "room_ready_attacker_button": "⚔️ Prêt — {player}",
+        "room_ready_defender_button": "Prêt 🛡️ — {player}",
+        "room_ready_done_attacker_button": "⚔️ Je suis prêt ! — {player}",
+        "room_ready_done_defender_button": "Je suis prêt ! 🛡️ — {player}",
+        "room_not_your_side": "⛔ Ce bouton Prêt est réservé à votre adversaire.",
+        "room_ready_needs_url": (
+            "🔗 Renseigne d'abord l'ID de la partie (bouton 🔗) — le bouton ✅ Prêt n'apparaît qu'après."
+        ),
+        "room_scoreboard_footer": (
+            "🎮 Les deux joueurs sont prêts — bonne game ! Déclarez le vainqueur avec 🏆."
+        ),
+        "room_ping_message": (
+            "⚔️ {attacker} {defender} — la salle de bataille est ouverte, à vos armes !"
+        ),
+        "room_ping_attacker_only": "⚔️ {attacker} — la salle de bataille est ouverte, à vos armes !",
+        "room_ping_winner": "🏆 Vainqueur : **{winner}**",
+        "room_dm": (
+            "🏟️ **Tiens-toi prêt — {map}**\n"
+            "Rejoins ton adversaire en vocal : {room}\n"
+            "Rejoins le salon textuel pour continuer : {salon}"
+        ),
+        "room_dm_deadline": (
+            "\n\n⏳ Présence obligatoire (vocal ou ✅ Prêt) avant {deadline} —"
+            " passé ce délai, un absent est déclaré forfait."
+        ),
+        "room_dm_luck": "\n\nBonne chance ! 🍀",
+        "room_event_name": "⚔️ {map} — {attacker} 🆚 {defender}",
+        "room_event_description": (
+            "⚔️ Bataille Kingdoms en direct — {attacker} 🆚 {defender}.\n"
+            "Civilisations et boutons de jeu : dans le salon vocal de la bataille."
+        ),
+        "draft_button": "📜 Voir la draft",
+        "draft_sheet": "📜 Draft — {map}",
+        "draft_mode_player": "Choix du joueur",
+        "draft_mode_random": "Choix aléatoire",
+        "draft_sheet_help": (
+            "Ordre des choix des joueurs durant la draft — ordre réel"
+            " une fois la phase de sabotage terminée (aléatoire et"
+            " classement secret pendant la phase), les sabotées barrées :"
+        ),
+        "result_button": "🏆 Déclarer le vainqueur",
+        "result_select_title": "🏆 **Qui remporte la partie ?**",
+        "result_select_placeholder": "Le vainqueur de la game",
+        "result_confirm_title": "🏆 **Vainqueur : {winner}** — confirmer ce résultat ?",
+        "result_confirm_button": "✅ Confirmer",
+        "result_edit_button": "✏️ Modifier",
+        "result_review_title": "⏳ **{player} a déclaré {winner} vainqueur.**",
+        "result_review_confirm_button": "✅ Confirmer le résultat",
+        "result_review_contest_button": "⚖️ Contester",
+        "result_mine_title": "⏳ **Ton choix : {winner}** — tu peux le modifier ci-dessous.",
+        "result_not_ready": (
+            "⏳ Le bouton Déclarer le vainqueur apparaît une fois que les deux joueurs sont Prêts."
+        ),
+        "score_url_modal_title": "ID de la partie",
+        "score_url_modal_label": "ID de la partie",
+        "score_url_modal_placeholder": "ex. 123456",
+        "score_pending": (
+            "⏳ Résultat enregistré (game {game}) — il sera appliqué sauf"
+            " contestation de l'autre joueur dans les {minutes} prochaines minutes."
+        ),
+        "score_resolved": "🏆 Résultat enregistré — **{winner}** remporte **{map}** (game {game}).",
+        "score_already": "✅ Ce résultat était déjà enregistré — rien à faire.",
+        "score_disputed": (
+            "⚖️ Déclaration contradictoire — les admins arbitrent (game {game})."
+            "\nVeuillez prendre contact avec un admin."
+        ),
+        "conquest_title": "⚔️ Le Royaume **{winner}** a conquis **{map}** !",
+        "conquest_defense_title": "🛡️ Le Royaume **{winner}** a défendu **{map}** !",
+        "conquest_thread": "Détail de la conquête",
+        "conquest_thread_defense": "Détail de la défense",
+        "conquest_attacker_line": "⚔️ Attaquant : **{player}** ({kingdom})",
+        "conquest_defense_line": "🛡️ Défense : **{player}** ({kingdom})",
+        "conquest_ai_defense": "🛡️ Défense : IA du royaume **{kingdom}** (niveau {level})",
+        "conquest_civ_line": "🎯 {player} jouait **{civ}**",
+        "conquest_embuscade_line": "🥷 Embuscade utilisée",
+        "conquest_sabotages_line": "🧨 Sabotages ({side}, Faucon/Techno) : {civs}",
+        "conquest_id_line": "🔗 ID de la partie : **{game}**",
+        "conquest_none": "aucune",
+        "conquest_side_attacker": "attaquant",
+        "conquest_side_defender": "défenseur",
+        "conquest_married_lost": "💔 **{player}** perd son lien sacré avec la civilisation **{civ}**.",
+        "dispute_admin_dm": "⚖️ **Litige — {map}**\n{declarations}\nTranche le résultat (game {game}).",
+        "dispute_dm_open": (
+            "⚖️ Il semblerait que vous n'ayez pas choisi le même vainqueur de la "
+            "partie, votre choix était **{winner}**.\n"
+            "Nous vous proposons de modifier ou de confirmer votre choix.\n"
+            "-# En cas de litige, un admin prendra le relais."
+        ),
+        "dispute_dm_confirmed": (
+            "✅ Ton choix (**{winner}**) est enregistré — en attente de ton "
+            "adversaire.\n-# En cas de litige, un admin prendra le relais."
+        ),
+        "dispute_dm_handover": (
+            "⚖️ Le litige persiste — un admin prend le relais et vous contactera ici."
+        ),
+        "dispute_dm_resolved": (
+            "✅ Litige clos — vous avez désigné le même vainqueur : **{winner}**."
+        ),
+        "dispute_confirm_button": "✅ Confirmer mon choix",
+        "dispute_win_attacker": "⚖️ Tranche : attaquant",
+        "dispute_win_defender": "⚖️ Tranche : défenseur",
+        "dispute_double": "🏳️ Double forfait",
+        "dispute_applied": "⚖️ Arbitrage appliqué — **{kingdom}** remporte **{map}**.",
+        "dispute_forfeit": "⚖️ Arbitrage appliqué — double forfait sur **{map}**.",
+        "dispute_not_admin": "❌ Seuls les bot-admins arbitrent un litige.",
     },
     "en": {
         "panel_title": "⚔️ Battlefield — Attack",
@@ -440,6 +570,128 @@ DEFAULTS: dict[str, dict[str, str]] = {
         "sab_again_ask": "🗡️ Do you want to sabotage another civilization?",
         "sab_again_yes": "Yes — another sabotage",
         "sab_again_no": "No — I'm done",
+        # -- battle room / meeting (P4.1b tranche 2b) --
+        "room_not_player": "❌ Only the two players of the match may act here.",
+        "defender_ai": "AI 🤖",
+        "room_role": "Battle {map}",
+        "room_scoreboard_map": "⚔️ {map}",
+        "room_scoreboard_id": "🆔 Game ID: {id}",
+        "room_side_attacker": "Attacker",
+        "room_side_defender": "Defender",
+        "room_side_ready": "✅ Ready",
+        "room_side_wait": "⏳ waiting for Ready",
+        "room_side_none": "🔗 waiting for the game ID",
+        "room_side_ai": "🤖 AI — lvl {level}/5",
+        "room_ai_disclaimer": (
+            "⚠️ **AI of level {level}/5** — the game is played in multiplayer"
+            " with a game ID (never locally) to stay traceable and verifiable"
+            " post-game. The player is believed on their word; any presumed"
+            " fraud may be contested ⚖️ then arbitrated by the admins."
+        ),
+        "room_id_button": "🔗 Enter the game ID",
+        "room_id_modify_button": "🔴 Change the game ID",
+        "room_id_pending_button": "⏳ Game ID being entered…",
+        "room_id_locked_other": (
+            "⏳ The other player is entering the game ID right now — try again in a moment."
+        ),
+        "room_ready_button": "✅ Ready",
+        "room_ready_attacker_button": "⚔️ Ready — {player}",
+        "room_ready_defender_button": "Ready 🛡️ — {player}",
+        "room_ready_done_attacker_button": "⚔️ I'm ready! — {player}",
+        "room_ready_done_defender_button": "I'm ready! 🛡️ — {player}",
+        "room_not_your_side": "⛔ This Ready button belongs to your adversary.",
+        "room_ready_needs_url": (
+            "🔗 Enter the game ID first (🔗 button) — the ✅ Ready button appears afterwards."
+        ),
+        "room_scoreboard_footer": (
+            "🎮 Both players are ready — good luck! Declare the winner with 🏆."
+        ),
+        "room_ping_message": "⚔️ {attacker} {defender} — the battle room is open, to arms!",
+        "room_ping_attacker_only": "⚔️ {attacker} — the battle room is open, to arms!",
+        "room_ping_winner": "🏆 Winner: **{winner}**",
+        "room_dm": (
+            "🏟️ **Stand ready — {map}**\n"
+            "Join your adversary in voice: {room}\n"
+            "Join the text salon to go on: {salon}"
+        ),
+        "room_dm_deadline": (
+            "\n\n⏳ Presence required (voice or ✅ Ready) before {deadline} —"
+            " past it, an absent player is declared forfeit."
+        ),
+        "room_dm_luck": "\n\nGood luck! 🍀",
+        "room_event_name": "⚔️ {map} — {attacker} 🆚 {defender}",
+        "room_event_description": (
+            "⚔️ Live Kingdoms battle — {attacker} 🆚 {defender}.\n"
+            "Civilizations and game buttons: in the battle's voice channel."
+        ),
+        "draft_button": "📜 View the draft",
+        "draft_sheet": "📜 Draft — {map}",
+        "draft_mode_player": "Player's choice",
+        "draft_mode_random": "Random pick",
+        "draft_sheet_help": (
+            "The players' pick order during the draft — the real order"
+            " once the sabotage phase is over (random, ranking secret"
+            " during the phase), sabotaged picks struck through:"
+        ),
+        "result_button": "🏆 Declare the winner",
+        "result_select_title": "🏆 **Who wins the game?**",
+        "result_select_placeholder": "The game's winner",
+        "result_confirm_title": "🏆 **Winner: {winner}** — confirm this result?",
+        "result_confirm_button": "✅ Confirm",
+        "result_edit_button": "✏️ Change",
+        "result_review_title": "⏳ **{player} declared {winner} the winner.**",
+        "result_review_confirm_button": "✅ Confirm the result",
+        "result_review_contest_button": "⚖️ Contest",
+        "result_mine_title": "⏳ **Your choice: {winner}** — you may change it below.",
+        "result_not_ready": "⏳ The Declare-the-winner button appears once both players are Ready.",
+        "score_url_modal_title": "Game URL",
+        "score_url_modal_label": "Game lobby URL",
+        "score_url_modal_placeholder": "ex. 123456",
+        "score_pending": (
+            "⏳ Result recorded (game {game}) — it applies unless the other"
+            " player contests it within the next {minutes} minutes."
+        ),
+        "score_resolved": "🏆 Result recorded — **{winner}** wins **{map}** (game {game}).",
+        "score_already": "✅ This result was already recorded — nothing to do.",
+        "score_disputed": (
+            "⚖️ Contradictory declarations — the admins arbitrate (game {game})."
+            "\nPlease get in touch with an admin."
+        ),
+        "conquest_title": "⚔️ Kingdom **{winner}** conquered **{map}**!",
+        "conquest_defense_title": "🛡️ Kingdom **{winner}** defended **{map}**!",
+        "conquest_thread": "Conquest details",
+        "conquest_thread_defense": "Defense details",
+        "conquest_attacker_line": "⚔️ Attacker: **{player}** ({kingdom})",
+        "conquest_defense_line": "🛡️ Defense: **{player}** ({kingdom})",
+        "conquest_ai_defense": "🛡️ Defense: the kingdom **{kingdom}**'s AI (level {level})",
+        "conquest_civ_line": "🎯 {player} played **{civ}**",
+        "conquest_embuscade_line": "🥷 Ambush used",
+        "conquest_sabotages_line": "🧨 Sabotages ({side}, Falcon/Tech): {civs}",
+        "conquest_id_line": "🔗 Game ID: **{game}**",
+        "conquest_none": "none",
+        "conquest_side_attacker": "attacker",
+        "conquest_side_defender": "defender",
+        "conquest_married_lost": "💔 **{player}** loses their sacred bond with civilization **{civ}**.",
+        "dispute_admin_dm": "⚖️ **Dispute — {map}**\n{declarations}\nCut the result (game {game}).",
+        "dispute_dm_open": (
+            "⚖️ It seems you did not choose the same winner of the game, "
+            "your choice was **{winner}**.\n"
+            "We suggest you modify or confirm your choice.\n"
+            "-# In case of a dispute, an admin will take over."
+        ),
+        "dispute_dm_confirmed": (
+            "✅ Your choice (**{winner}**) is recorded — waiting for your "
+            "adversary.\n-# In case of a dispute, an admin will take over."
+        ),
+        "dispute_dm_handover": "⚖️ The dispute stands — an admin takes over and will reach you here.",
+        "dispute_dm_resolved": "✅ Dispute closed — you both named the same winner: **{winner}**.",
+        "dispute_confirm_button": "✅ Confirm my choice",
+        "dispute_win_attacker": "⚖️ Rule: attacker",
+        "dispute_win_defender": "⚖️ Rule: defender",
+        "dispute_double": "🏳️ Double forfeit",
+        "dispute_applied": "⚖️ Arbitration applied — **{kingdom}** wins **{map}**.",
+        "dispute_forfeit": "⚖️ Arbitration applied — double forfeit on **{map}**.",
+        "dispute_not_admin": "❌ Only bot-admins arbitrate a dispute.",
     },
 }
 

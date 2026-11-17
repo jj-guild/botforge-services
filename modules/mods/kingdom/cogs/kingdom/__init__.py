@@ -67,6 +67,14 @@ def setup_hook(bot: Any) -> None:
         SabotageOpenButton,
         SabotagePassButton,
     )
+    from .battle import (
+        DisputeChoiceSelect,
+        DisputeConfirmButton,
+        DraftViewButton,
+        RoomReadyButton,
+        RoomResultButton,
+        RoomUrlButton,
+    )
 
     for item in (
         DeclareButton,
@@ -80,6 +88,12 @@ def setup_hook(bot: Any) -> None:
         PickBanValidateButton,
         SabotageOpenButton,
         SabotagePassButton,
+        DraftViewButton,
+        RoomUrlButton,
+        RoomReadyButton,
+        RoomResultButton,
+        DisputeChoiceSelect,
+        DisputeConfirmButton,
     ):
         try:
             bot.add_dynamic_items(item)

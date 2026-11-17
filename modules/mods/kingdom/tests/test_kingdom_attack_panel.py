@@ -89,3 +89,26 @@ def test_pickban_helpers_stay_stable() -> None:
     assert score_players(_Attack()) == ["1", "2"]
     _Attack.ai_defender = True
     assert score_players(_Attack()) == ["1"]
+
+
+def test_battle_scoreboard_helpers_stay_stable() -> None:
+    """The monospace scoreboard keeps its alignment + key parity FR/EN."""
+    from botforge.mods.kingdom.cogs.kingdom.battle import _score_center, _score_row
+    from botforge.mods.kingdom.cogs.kingdom.strings import DEFAULTS
+
+    line = _score_center("⚔️ Map")
+    assert len(line) == 46
+    row = _score_row("Alice", "Bob")
+    assert len(row) == 46
+    assert set(DEFAULTS["fr"]) == set(DEFAULTS["en"])
+    for key in ("room_dm", "result_button", "dispute_not_admin", "conquest_title"):
+        assert key in DEFAULTS["fr"], key
+
+
+@pytest.mark.asyncio
+async def test_battle_degrades_without_stack() -> None:
+    """A None stack never raises — the surfaces show no-service notes."""
+    from botforge.mods.kingdom.cogs.kingdom import battle
+
+    assert await battle.resolve_room_key(None, "abc") == ""
+    await battle.refresh_room_message_safe(None, None, None, "fr")
