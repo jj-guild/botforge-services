@@ -82,3 +82,5 @@ def simcord_bot(botforge_bot: BotforgeBot) -> BotforgeBot:
 # the season posts' refresher stays OFF in the journeys: a background
 # loop never settles (simcord's contract waits for the outstanding work)
 os.environ.setdefault("BOTFORGE_SEASON_REFRESHER", "off")
+# the kingdom mod's attack phases loop follows the same contract
+os.environ.setdefault("BOTFORGE_KINGDOM_ATTACK_REFRESHER", "off")
