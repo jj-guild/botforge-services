@@ -25,10 +25,20 @@ logger = logging.getLogger("kingdom.attack")
 _PARIS = ZoneInfo("Europe/Paris")
 _ACCENTS = re.compile(r"[\W_]+", re.UNICODE)
 
-# the fenêtre-unique registry: ONE live ephemeral window per player
-# (fenetre-unique-v3, Drasah 28/10). A new flow entry closes the
-# player's previous window instead of stacking bubbles.
-_EPHEMERAL_WINDOWS: dict[str, tuple[discord.Interaction, float]] = {}
+# the fenêtre unique rides the platform seam (#381 ruling 3): the mod
+# DECLARES its navigation mode (SINGLE — one live window per player,
+# fenetre-unique-v3, Drasah 28/10) and the seam owns the plumbing.
+KINGDOM_WINDOW_SCOPE = "mod/kingdom"
+
+
+def _declare_window_mode() -> None:
+    """Idempotent mode registration (import time and register time)."""
+    from botforge.discord.ui.ephemeral_windows import EphemeralWindowMode, set_window_mode
+
+    set_window_mode(KINGDOM_WINDOW_SCOPE, EphemeralWindowMode.SINGLE)
+
+
+_declare_window_mode()
 
 
 # ---------------------------------------------------------------------------
@@ -114,15 +124,9 @@ def strings_for(interaction: discord.Interaction) -> dict[str, str]:
 
 async def close_previous_ephemeral(user_id: str) -> None:
     """Best-effort: delete the player's previous ephemeral window."""
-    previous = _EPHEMERAL_WINDOWS.pop(user_id, None)
-    if previous is None:
-        return
-    old_interaction = previous[0]
-    try:
-        await old_interaction.delete_original_response()
-        logger.info("kingdom: previous ephemeral window closed for %s", user_id)
-    except Exception:
-        logger.info("kingdom: previous ephemeral window close failed (ignored)")
+    from botforge.discord.ui.ephemeral_windows import close_ephemeral_window
+
+    await close_ephemeral_window(KINGDOM_WINDOW_SCOPE, user_id)
 
 
 def surface(view_id: str, *items: Any) -> "discord.ui.LayoutView":
@@ -158,14 +162,10 @@ def surface_footer(view_id: str) -> str:
 async def open_unique_ephemeral(
     interaction: discord.Interaction, content: str | None = None, **kwargs: Any
 ) -> None:
-    """Open THE player's single ephemeral window (shared registry)."""
-    user_id = str(interaction.user.id)
-    await close_previous_ephemeral(user_id)
-    kwargs["ephemeral"] = True
-    await interaction.response.send_message(content, **kwargs)
-    import time
+    """Open THE player's single ephemeral window (the declared mode)."""
+    from botforge.discord.ui.ephemeral_windows import open_ephemeral_window
 
-    _EPHEMERAL_WINDOWS[user_id] = (interaction, time.monotonic())
+    await open_ephemeral_window(interaction, KINGDOM_WINDOW_SCOPE, content, **kwargs)
 
 
 async def silent_ack(interaction: discord.Interaction) -> None:
@@ -528,6 +528,7 @@ __all__ = [
     "attack_by_id",
     "attack_salon",
     "attack_salon_send_safe",
+    "KINGDOM_WINDOW_SCOPE",
     "close_previous_ephemeral",
     "combat_failure_note",
     "delete_dm_message_safe",

@@ -25,6 +25,12 @@ def register(bot: Any, config: Any) -> None:
 
     remember_bot(bot)
 
+    # #381 ruling 3: the mod DECLARES its ephemeral navigation mode
+    # (the seam owns the plumbing — idempotent with the import-time one).
+    from .common import _declare_window_mode
+
+    _declare_window_mode()
+
     async def _resolve_channel(guild_id: str) -> str:
         return await stored_channel_id(guild_id, "mod/kingdom", "attack") or ""
 
