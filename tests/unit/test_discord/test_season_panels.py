@@ -9,7 +9,7 @@ candidates channel. Regression pins:
 - the 5-per-row rule stays hardcoded in the SDK (``split_action_rows``);
 - Postuler never asks the pseudo or the AoE2 profile ids in a form:
   both resolve from the core; a player missing either one is
-  redirected to #general (``/register``).
+  redirected to the home profile menu (``/home`` → Profil).
 """
 
 from __future__ import annotations
@@ -189,7 +189,7 @@ class TestPostulerFlow:
         assert enrollment.calls == []
         assert interaction.followup.send.await_count == 1
         text = interaction.followup.send.await_args.args[0]
-        assert "<#555>" in text and "/register" in text
+        assert "/home" in text and "Profil" in text
 
     async def test_a_missing_profile_alone_also_redirects(self, general_channel: None) -> None:
         enrollment = _RecordingEnrollment()
@@ -198,7 +198,7 @@ class TestPostulerFlow:
         await SeasonApplyButton("kingdom").callback(interaction)
         assert enrollment.calls == []
         text = interaction.followup.send.await_args.args[0]
-        assert "<#555>" in text and "/register" in text
+        assert "/home" in text and "Profil" in text
 
     async def test_a_missing_name_alone_also_redirects(self, general_channel: None) -> None:
         enrollment = _RecordingEnrollment()
@@ -209,4 +209,4 @@ class TestPostulerFlow:
         await SeasonApplyButton("kingdom").callback(interaction)
         assert enrollment.calls == []
         text = interaction.followup.send.await_args.args[0]
-        assert "<#555>" in text and "/register" in text
+        assert "/home" in text and "Profil" in text

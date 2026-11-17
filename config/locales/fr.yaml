@@ -597,10 +597,10 @@ fr:
       game_menu_failed: Le menu du jeu a échoué à s'ouvrir (voir les logs).
       game_menu_not_sent: Le menu du jeu n'a pas pu être envoyé (voir les logs).
       global_maps_admins: Les maps globales sont réservées aux bot admins.
-      unexpected_state: État inattendu — recommence avec /register.
-      no_enrollment: Aucune inscription en cours — recommence avec /register.
+      unexpected_state: État inattendu — recommence depuis `/home` → Profil.
+      no_enrollment: Aucune inscription en cours — ouvre `/home` → Profil pour lier ton compte.
       enrolled: Inscription terminée ! Ton profil AoE2 `{profile}` est lié — tu peux rejoindre le ladder.
-      enrolled_cancelled: Inscription annulée — /register quand tu veux.
+      enrolled_cancelled: Inscription annulée — `/home` → Profil quand tu veux.
       enrolled_cancelled_short: Inscription annulée.
       unknown_panel: Panneau inconnu
       registered: Inscrit ({value}).

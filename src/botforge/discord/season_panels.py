@@ -1127,13 +1127,11 @@ class SeasonApplyButton(
         profiles = await _linked_profile_ids(bot, user_id, _mod_game_key(bot, self.mod))
         if not core_name or not profiles:
             # a missing pseudo OR a missing bound game profile: the player
-            # registers first — the /register flow lives in #general
-            from botforge.discord.ui.panels_provisioning import stored_channel_id
-
-            general = await stored_channel_id(guild_id, "root", "general")
-            mention = f"<#{general}>" if general else "#général"
+            # links the account (and picks the pseudo) first — the profile
+            # menu of /home is THE door (there is no /register command)
             await interaction.followup.send(
-                f"Pseudo ou profil de jeu manquant — inscris-toi d'abord dans {mention} avec `/register`.",
+                "Pseudo ou profil de jeu manquant — lie ton compte de jeu (et ton "
+                "pseudo) via `/home` → **Profil** → *Ajouter un compte*.",
                 ephemeral=True,
             )
             return
