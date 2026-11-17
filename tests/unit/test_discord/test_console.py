@@ -248,10 +248,20 @@ def test_console_ops_cli_all_targets_are_allowlisted(monkeypatch: Any) -> None:
 
 
 async def test_console_action_registry_renders_extensions(monkeypatch: Any) -> None:
-    """An extension action renders its button and rides the boot wiring."""
+    """An extension action renders its button and rides the boot wiring.
+
+    The registry is process-global and the real boot wires the enabled
+    mods' own console actions (botforge-services#339: a mod's ops ride
+    the registry) — a simcord journey may therefore have registered
+    them long before this test runs. The test rides an ISOLATED copy of
+    the registry: it asserts the extension mechanism itself, never the
+    boot-time population.
+    """
     import discord
 
     import botforge.discord.console as console_mod
+
+    monkeypatch.setattr(console_mod, "_ACTIONS", dict(console_mod._ACTIONS))
 
     # a registered action reuses a concrete DynamicItem class — an
     # extension registers its own class the same way
@@ -264,7 +274,7 @@ async def test_console_action_registry_renders_extensions(monkeypatch: Any) -> N
     console_mod.register_console_action(action)
     try:
         keys = [a.key for a in console_mod.registered_console_actions()]
-        assert keys == ["ext-test"]
+        assert "ext-test" in keys
 
         # the home renders the extension's button (disabled off-allowlist)
         view = await console_mod._console_view(None)
