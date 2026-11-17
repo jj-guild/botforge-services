@@ -216,6 +216,19 @@ async def _profile_game_blocks(
             logger.warning("HOME: profile enricher failed", exc_info=True)
     blocks: list[discord.ui.TextDisplay[discord.ui.LayoutView]] = []
     resolved = await _resolve_profile_names(interaction, bindings)
+    # The stats enrichment (#404 T6): the profile view carries each
+    # account's current elo and its stored peak — best-effort, the
+    # account line stays as it was when the stats are unknown.
+    from botforge.discord.stats_views import account_elo_by_profile
+
+    elo_lines: dict[str, str] = {}
+    try:
+        elo_lines = await account_elo_by_profile(
+            interaction.client,
+            [str(e.get("profile_id", "")) for e in bindings],
+        )
+    except Exception:
+        logger.warning("HOME: the account stats enrichment failed", exc_info=True)
     for game, entries in sorted(by_game.items()):
         lines = [f"## {_game_label(game)}"]
         for entry in entries:
@@ -223,6 +236,9 @@ async def _profile_game_blocks(
             name = resolved.get(pid) or pid
             player = players_by_id.get(user_id)
             elo = f" — {player.get('rating')} elo" if player else ""
+            stored = elo_lines.get(pid)
+            if stored:
+                elo = f" — {stored}" if not elo else f"{elo} · {stored}"
             url = _game_account_url(game, str(pid))
             account = f"[{name}]({url}) (`{pid}`)" if url else f"{name} (`{pid}`)"
             lines.append(f"• {account}{elo}")
