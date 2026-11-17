@@ -24,15 +24,11 @@ class _Response:
 
     def __init__(self) -> None:
         self.sent: list[dict[str, object]] = []
-        self.deleted: list[str] = []
         self._done = False
 
     async def send_message(self, content, **kwargs):  # type: ignore[no-untyped-def]
         self.sent.append({"content": content, **kwargs})
         self._done = True
-
-    async def delete_original_response(self) -> None:
-        self.deleted.append("original")
 
     def is_done(self) -> bool:
         return self._done
@@ -44,6 +40,10 @@ class _Interaction:
     def __init__(self, user_id: str) -> None:
         self.user = type("U", (), {"id": user_id})()
         self.response = _Response()
+        self.deleted: list[str] = []
+
+    async def delete_original_response(self) -> None:
+        self.deleted.append("original")
 
 
 @pytest.fixture(autouse=True)
@@ -78,8 +78,8 @@ async def test_single_closes_the_previous_window() -> None:
     await open_ephemeral_window(first, "mod/kingdom", "one")
     await open_ephemeral_window(second, "mod/kingdom", "two")
 
-    assert len(first.response.deleted) == 1, "the previous window closed"
-    assert not second.response.deleted, "the LIVE window is never closed"
+    assert len(first.deleted) == 1, "the previous window closed"
+    assert not second.deleted, "the LIVE window is never closed"
     assert second.response.sent[0]["content"] == "two"
     assert second.response.sent[0]["ephemeral"] is True
 
@@ -93,7 +93,7 @@ async def test_plain_sends_without_tracking() -> None:
     await open_ephemeral_window(first, PLATFORM_SCOPE, "one")
     await open_ephemeral_window(second, PLATFORM_SCOPE, "two")
 
-    assert not first.response.deleted and not second.response.deleted
+    assert not first.deleted and not second.deleted
     assert ephemeral_windows._live == {}, "PLAIN tracks nothing"
 
 
@@ -107,6 +107,6 @@ async def test_scopes_never_close_each_other() -> None:
     await open_ephemeral_window(platform_window, PLATFORM_SCOPE, "platform")
     await open_ephemeral_window(mod_window, "mod/kingdom", "mod")
 
-    assert not platform_window.response.deleted, "the platform's window lives on"
+    assert not platform_window.deleted, "the platform's window lives on"
     await close_ephemeral_window("mod/kingdom", "42")
-    assert mod_window.response.deleted, "the mod's window closed on demand"
+    assert mod_window.deleted, "the mod's window closed on demand"

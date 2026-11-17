@@ -59,7 +59,7 @@ def window_mode(scope: str) -> EphemeralWindowMode:
 
 
 async def close_ephemeral_window(scope: str, owner: str) -> None:
-    """Best-effort close of the owner's live window in this scope."""
+    """Close the owner's live window in this scope, best-effort."""
     window = _live.pop((str(scope), str(owner)), None)
     if window is None:
         return
