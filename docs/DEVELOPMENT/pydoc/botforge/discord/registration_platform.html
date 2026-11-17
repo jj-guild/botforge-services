@@ -103,7 +103,11 @@ Async&nbsp;MongoDB&nbsp;adapter&nbsp;for&nbsp;the&nbsp;RegistrationService&nbsp;
 
 <dl><dt>async <a name="MongoRegistrationDatabase-delete_binding"><strong>delete_binding</strong></a>(self, game_key: 'str', user_id: 'str', profile_id: 'str') -&gt; 'bool'</dt><dd><span class="code">Drop&nbsp;one&nbsp;profile&nbsp;binding;&nbsp;True&nbsp;when&nbsp;one&nbsp;existed.</span></dd></dl>
 
-<dl><dt>async <a name="MongoRegistrationDatabase-find_binding_by_profile"><strong>find_binding_by_profile</strong></a>(self, game_key: 'str', profile_id: 'str') -&gt; 'dict[str, Any] | None'</dt><dd><span class="code">Return&nbsp;the&nbsp;binding&nbsp;owning&nbsp;a&nbsp;profile;&nbsp;None&nbsp;when&nbsp;unbound.</span></dd></dl>
+<dl><dt>async <a name="MongoRegistrationDatabase-find_binding_by_profile"><strong>find_binding_by_profile</strong></a>(self, game_key: 'str', profile_id: 'str') -&gt; 'dict[str, Any] | None'</dt><dd><span class="code">Return&nbsp;the&nbsp;binding&nbsp;owning&nbsp;a&nbsp;profile;&nbsp;None&nbsp;when&nbsp;unbound.<br>
+&nbsp;<br>
+The&nbsp;profile&nbsp;is&nbsp;addressable&nbsp;by&nbsp;EITHER&nbsp;id&nbsp;(#402):&nbsp;the&nbsp;relic&nbsp;id<br>
+the&nbsp;provider&nbsp;validated,&nbsp;or&nbsp;the&nbsp;aoe2insights&nbsp;user&nbsp;id&nbsp;the&nbsp;player<br>
+pasted&nbsp;—&nbsp;the&nbsp;binding&nbsp;stores&nbsp;both.</span></dd></dl>
 
 <dl><dt>async <a name="MongoRegistrationDatabase-find_bindings_by_profiles"><strong>find_bindings_by_profiles</strong></a>(self, game_key: 'str', profile_ids: 'list[str]') -&gt; 'list[dict[str, Any]]'</dt><dd><span class="code">Read&nbsp;many&nbsp;profiles'&nbsp;bindings&nbsp;in&nbsp;ONE&nbsp;batched&nbsp;find($in).</span></dd></dl>
 
@@ -224,6 +228,7 @@ Returns&nbsp;None&nbsp;when&nbsp;nothing&nbsp;resolves&nbsp;(unknown&nbsp;id,&nb
     
 <tr><td class="decor data-decor"><span class="code">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span></td><td>&nbsp;</td>
 <td class="singlecolumn"><strong>INSIGHTS_BASE_URL</strong> = 'https://www.aoe2insights.com'<br>
+<strong>INSIGHTS_RELIC_URL_RE</strong> = re.compile('^https?://(?:www\\.)?aoe2insights\\....r/relic/(\\d{1,15})(?:[/?#].*)?$', re.IGNORECASE)<br>
 <strong>INSIGHTS_URL_RE</strong> = re.compile('^https?://(?:www\\.)?aoe2insights\\.com/user/(\\d{1,15})(?:[/?#].*)?$', re.IGNORECASE)<br>
 <strong>PROFILE_BINDINGS_COLLECTION</strong> = 'profile_bindings'</td></tr></table>
 </body></html>
