@@ -66,6 +66,9 @@ fr:
       add_game_unconfigured: 'Ajout échoué : le jeu {game} n''est pas configuré pour l''inscription.'
       add_unknown: 'Ajout échoué : aucun profil trouvé pour {profile}. Colle l''URL de ta page aoe2insights
         (ou l''id qu''elle contient) — le bon id sera récupéré automatiquement.'
+      add_blocked: 'Ajout échoué : aoe2insights bloque ce serveur, l''id insights ne peut pas être
+        récupéré automatiquement. Colle la forme /user/relic/<id>/ de ton URL insights, ou ton
+        Relic ID (le Relic ID affiché sur ton profil insights).'
       add_provider_error: 'Ajout échoué : le provider {provider} ne répond pas correctement — le détail
         part aux admins (vois les logs du bot).'
       add_not_configured: 'Ajout échoué : le provider {provider} ne sert pas les stats de profil — vois

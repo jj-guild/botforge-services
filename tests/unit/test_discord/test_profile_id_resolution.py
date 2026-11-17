@@ -71,12 +71,23 @@ def _seam(monkeypatch: pytest.MonkeyPatch, client: _FakeProviderClient) -> Aoe2P
 def _fake_insights(monkeypatch: pytest.MonkeyPatch, mapping: dict[str, str]) -> None:
     """Point the seam's resolver at the fake insights transport."""
 
-    original = platform.resolve_relic_id
+    original = platform.resolve_relic_id_outcome
 
-    async def _resolve(typed_id: str, transport: Any = None) -> str | None:
+    async def _resolve_outcome(
+        typed_id: str, transport: Any = None
+    ) -> tuple[str | None, str]:
         return await original(typed_id, transport=_FakeInsightsTransport(mapping))
 
-    monkeypatch.setattr(platform, "resolve_relic_id", _resolve)
+    monkeypatch.setattr(platform, "resolve_relic_id_outcome", _resolve_outcome)
+
+
+def _fake_blocked_insights(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The live 2026-11-17 finding: the bot filter 403s the server."""
+
+    async def _always_403(typed_id: str, transport: Any = None) -> tuple[str | None, str]:
+        return None, platform.RELIC_BLOCKED
+
+    monkeypatch.setattr(platform, "resolve_relic_id_outcome", _always_403)
 
 
 async def test_insights_url_with_differing_ids_resolves_the_relic_id(
@@ -213,23 +224,31 @@ async def test_resolve_retries_with_a_browser_ua_on_403(monkeypatch: Any) -> Non
     assert attempts[1] != attempts[0]  # the browser-compatible retry
 
 
-async def test_seam_falls_back_to_the_typed_id_when_the_site_is_down(
+async def test_a_bot_filter_403_refuses_instead_of_blindly_binding(
     monkeypatch: Any,
 ) -> None:
-    """The ids are sometimes EQUAL: the typed id gets one chance as relic.
+    """The live 2026-11-17 finding: the Cloudflare challenge blocks the
+    relic-id endpoint for EVERY user agent from this server.
 
-    The site being unreachable (the live 403) must not block the binding
-    when the pasted id already IS the relic id.
+    The old fallback validated the typed insights id as a relic id —
+    which bound the WRONG player whenever the ids differ (the typed
+    number can be someone else's relic id). The binding must refuse and
+    guide the player to the relic-keyed URL shape instead.
     """
-    client = _FakeProviderClient({INSIGHTS_ID})
+    from botforge.core.services.registration import InvalidProfileError
 
-    async def _unavailable(typed_id: str, transport: Any = None) -> str | None:
-        return None
-
-    monkeypatch.setattr(platform, "resolve_relic_id", _unavailable)
+    client = _FakeProviderClient({INSIGHTS_ID})  # the trap: it WOULD validate
+    _fake_blocked_insights(monkeypatch)
     seam = _seam(monkeypatch, client)
 
-    validated = await seam.validate_profile(f"https://www.aoe2insights.com/user/{INSIGHTS_ID}/")
+    with pytest.raises(InvalidProfileError, match="blocks this server"):
+        await seam.validate_profile(f"https://www.aoe2insights.com/user/{INSIGHTS_ID}/")
+    assert client.asked == []  # the wrong id is never even asked of the provider
+
+    # the relic-keyed shape needs no resolution — the blocked site cannot
+    # block a direct relic id
+    validated = await seam.validate_profile(
+        f"https://www.aoe2insights.com/user/relic/{INSIGHTS_ID}/"
+    )
     assert validated is not None
-    assert validated["profile_id"] == INSIGHTS_ID  # validated as a relic id
-    assert validated["site_ids"]["aoe2insights"] == INSIGHTS_ID  # still stored
+    assert validated["profile_id"] == INSIGHTS_ID

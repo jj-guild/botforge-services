@@ -559,6 +559,8 @@ class ProfileAddAccountModal(discord.ui.Modal):
                 note = await reply(interaction, "profile.add_game_unconfigured", game=chosen)
             elif "player_stats" in reason or "mal configur" in reason:
                 note = await reply(interaction, "profile.add_provider_error", provider=PROFILE_PROVIDER)
+            elif "blocks this server" in reason:
+                note = await reply(interaction, "profile.add_blocked")
             elif "valid" in reason or "inconnu" in reason:
                 note = (
                     f"Add failed: no profile found for "

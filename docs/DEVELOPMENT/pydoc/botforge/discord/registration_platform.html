@@ -206,28 +206,29 @@ the&nbsp;downstream&nbsp;request&nbsp;URL&nbsp;cannot&nbsp;be&nbsp;tampered&nbsp
 shape&nbsp;(``/user/relic/&lt;id&gt;``)&nbsp;does&nbsp;NOT&nbsp;match:&nbsp;its&nbsp;id&nbsp;is&nbsp;a&nbsp;relic&nbsp;id.</span></dd></dl>
  <dl><dt>async <a name="-resolve_relic_id"><strong>resolve_relic_id</strong></a>(typed_id: 'str', transport: 'httpx.AsyncBaseTransport | None' = None) -&gt; 'str | None'</dt><dd><span class="code">Resolve&nbsp;whatever&nbsp;id&nbsp;the&nbsp;user&nbsp;typed&nbsp;into&nbsp;the&nbsp;relic&nbsp;profile&nbsp;id.<br>
 &nbsp;<br>
-The&nbsp;user&nbsp;may&nbsp;paste&nbsp;either&nbsp;id&nbsp;(the&nbsp;2026-10-16&nbsp;UX&nbsp;lesson:&nbsp;the&nbsp;insights<br>
-URL&nbsp;id&nbsp;and&nbsp;the&nbsp;relic&nbsp;id&nbsp;are&nbsp;different&nbsp;numbers&nbsp;and&nbsp;only&nbsp;the&nbsp;relic&nbsp;id<br>
-works&nbsp;with&nbsp;librematch/aoe2lobby):<br>
+Returns&nbsp;the&nbsp;relic&nbsp;id,&nbsp;or&nbsp;None&nbsp;when&nbsp;nothing&nbsp;resolves&nbsp;(unknown&nbsp;id,<br>
+insights&nbsp;down,&nbsp;or&nbsp;the&nbsp;site's&nbsp;bot&nbsp;filter&nbsp;refusing&nbsp;this&nbsp;server&nbsp;—<br>
+:func:`resolve_relic_id_outcome`&nbsp;tells&nbsp;them&nbsp;apart).</span></dd></dl>
+ <dl><dt>async <a name="-resolve_relic_id_outcome"><strong>resolve_relic_id_outcome</strong></a>(typed_id: 'str', transport: 'httpx.AsyncBaseTransport | None' = None) -&gt; 'tuple[str | None, str]'</dt><dd><span class="code">Resolve&nbsp;whatever&nbsp;id&nbsp;the&nbsp;user&nbsp;typed&nbsp;into&nbsp;``(relic_id,&nbsp;outcome)``.<br>
 &nbsp;<br>
--&nbsp;a&nbsp;relic&nbsp;id&nbsp;(what&nbsp;we&nbsp;want)&nbsp;—&nbsp;validates&nbsp;as-is;<br>
--&nbsp;an&nbsp;aoe2insights&nbsp;user&nbsp;id&nbsp;—&nbsp;resolved&nbsp;through&nbsp;the&nbsp;site,&nbsp;which&nbsp;answers<br>
-&nbsp;&nbsp;the&nbsp;relic&nbsp;id&nbsp;in&nbsp;plain&nbsp;text;<br>
--&nbsp;a&nbsp;full&nbsp;insights&nbsp;URL,&nbsp;however&nbsp;long&nbsp;—&nbsp;the&nbsp;id&nbsp;is&nbsp;extracted&nbsp;first<br>
-&nbsp;&nbsp;(``extract_insights_user_id``),&nbsp;then&nbsp;mapped&nbsp;to&nbsp;the&nbsp;relic&nbsp;id.<br>
+See&nbsp;:func:`resolve_relic_id`&nbsp;for&nbsp;the&nbsp;resolution&nbsp;contract;&nbsp;this&nbsp;is&nbsp;the<br>
+seam&nbsp;that&nbsp;carries&nbsp;WHY&nbsp;a&nbsp;resolution&nbsp;failed:<br>
 &nbsp;<br>
-Resilience&nbsp;by&nbsp;design&nbsp;(#402&nbsp;live&nbsp;finding:&nbsp;the&nbsp;relic-id&nbsp;page&nbsp;answers<br>
-403&nbsp;to&nbsp;datacenter&nbsp;requests):&nbsp;the&nbsp;identified&nbsp;project&nbsp;User-Agent&nbsp;is<br>
-tried&nbsp;first&nbsp;(repo&nbsp;rule&nbsp;#277),&nbsp;a&nbsp;browser-compatible&nbsp;one&nbsp;on&nbsp;a&nbsp;403.<br>
-The&nbsp;relic-id&nbsp;page&nbsp;is&nbsp;the&nbsp;ONLY&nbsp;source&nbsp;read&nbsp;—&nbsp;the&nbsp;profile&nbsp;pages&nbsp;are<br>
-never&nbsp;scraped.<br>
+-&nbsp;``resolved``&nbsp;—&nbsp;the&nbsp;site&nbsp;answered&nbsp;the&nbsp;relic&nbsp;id&nbsp;in&nbsp;plain&nbsp;text;<br>
+-&nbsp;``blocked``&nbsp;—&nbsp;the&nbsp;site&nbsp;refuses&nbsp;this&nbsp;server&nbsp;(its&nbsp;bot&nbsp;filter):<br>
+&nbsp;&nbsp;the&nbsp;id&nbsp;is&nbsp;NOT&nbsp;trusted&nbsp;as&nbsp;a&nbsp;relic&nbsp;id,&nbsp;the&nbsp;binding&nbsp;refuses&nbsp;and&nbsp;the<br>
+&nbsp;&nbsp;player&nbsp;is&nbsp;guided&nbsp;to&nbsp;the&nbsp;relic-keyed&nbsp;URL&nbsp;shape&nbsp;instead;<br>
+-&nbsp;``unknown``&nbsp;—&nbsp;the&nbsp;site&nbsp;answered&nbsp;and&nbsp;this&nbsp;id&nbsp;maps&nbsp;to&nbsp;nothing;<br>
+-&nbsp;``unreachable``&nbsp;—&nbsp;network-level&nbsp;failure.<br>
 &nbsp;<br>
-Injection&nbsp;safety:&nbsp;the&nbsp;request&nbsp;URL&nbsp;is&nbsp;built&nbsp;ONLY&nbsp;from&nbsp;a<br>
-regex-validated&nbsp;digit&nbsp;string&nbsp;(&lt;=&nbsp;15&nbsp;chars);&nbsp;the&nbsp;plain-text&nbsp;reply&nbsp;must<br>
-be&nbsp;a&nbsp;bare&nbsp;numeric&nbsp;id&nbsp;—&nbsp;any&nbsp;HTML,&nbsp;extra&nbsp;text&nbsp;or&nbsp;mismatch&nbsp;is&nbsp;rejected.<br>
-&nbsp;<br>
-``transport``&nbsp;is&nbsp;the&nbsp;test&nbsp;seam;&nbsp;None&nbsp;means&nbsp;the&nbsp;real&nbsp;network.<br>
-Returns&nbsp;None&nbsp;when&nbsp;nothing&nbsp;resolves&nbsp;(unknown&nbsp;id,&nbsp;insights&nbsp;down).</span></dd></dl>
+The&nbsp;live&nbsp;2026-11-17&nbsp;finding&nbsp;drives&nbsp;the&nbsp;``blocked``&nbsp;distinction:&nbsp;the<br>
+relic-id&nbsp;endpoint&nbsp;sits&nbsp;behind&nbsp;a&nbsp;Cloudflare&nbsp;JavaScript&nbsp;challenge<br>
+("Just&nbsp;a&nbsp;moment...")&nbsp;on&nbsp;datacenter&nbsp;egress&nbsp;—&nbsp;NO&nbsp;User-Agent&nbsp;passes,<br>
+not&nbsp;even&nbsp;a&nbsp;browser-compatible&nbsp;one,&nbsp;and&nbsp;a&nbsp;TLS-impersonating&nbsp;client<br>
+fares&nbsp;no&nbsp;better.&nbsp;The&nbsp;un-distinguishable&nbsp;failure&nbsp;previously&nbsp;fed&nbsp;the<br>
+silent&nbsp;typed-id-as-relic&nbsp;fallback,&nbsp;which&nbsp;bound&nbsp;the&nbsp;WRONG&nbsp;profile<br>
+(an&nbsp;insights&nbsp;id&nbsp;that&nbsp;happens&nbsp;to&nbsp;be&nbsp;someone&nbsp;else's&nbsp;relic&nbsp;id)&nbsp;—&nbsp;the<br>
+binding&nbsp;must&nbsp;fail&nbsp;loudly&nbsp;instead.</span></dd></dl>
 </td></tr></table><p>
 <table class="section">
 <tr class="decor data-decor heading-text">
@@ -237,5 +238,9 @@ Returns&nbsp;None&nbsp;when&nbsp;nothing&nbsp;resolves&nbsp;(unknown&nbsp;id,&nb
 <td class="singlecolumn"><strong>INSIGHTS_BASE_URL</strong> = 'https://www.aoe2insights.com'<br>
 <strong>INSIGHTS_RELIC_URL_RE</strong> = re.compile('^https?://(?:www\\.)?aoe2insights\\....r/relic/(\\d{1,15})(?:[/?#].*)?$', re.IGNORECASE)<br>
 <strong>INSIGHTS_URL_RE</strong> = re.compile('aoe2insights\\.com/user/(?!relic/)(\\d{1,15})(?!\\d)', re.IGNORECASE)<br>
-<strong>PROFILE_BINDINGS_COLLECTION</strong> = 'profile_bindings'</td></tr></table>
+<strong>PROFILE_BINDINGS_COLLECTION</strong> = 'profile_bindings'<br>
+<strong>RELIC_BLOCKED</strong> = 'blocked'<br>
+<strong>RELIC_RESOLVED</strong> = 'resolved'<br>
+<strong>RELIC_UNKNOWN</strong> = 'unknown'<br>
+<strong>RELIC_UNREACHABLE</strong> = 'unreachable'</td></tr></table>
 </body></html>
