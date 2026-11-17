@@ -10,6 +10,7 @@ Reference: docs/ARCHITECTURE.md (botforge repo) and botforge-services#3.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
 
 if TYPE_CHECKING:
@@ -119,8 +120,28 @@ class IPlatform(Protocol):
         """
         ...
 
-    async def create_channel(self, guild_id: str, category: str) -> IChannel:
-        """Create a channel in a guild under a channel category."""
+    async def create_channel(
+        self,
+        guild_id: str,
+        name: str,
+        category_id: str | None = None,
+        kind: str = "text",
+        overwrites: Mapping[str, Mapping[str, bool]] | None = None,
+        position: int | None = None,
+    ) -> IChannel:
+        """Create a channel in a guild — the dynamic-channel seam (#408).
+
+        ``kind`` is "text" or "voice". ``overwrites`` is DATA (#221), never
+        platform objects: a mapping of target key to permission flags.
+        Target keys: ``@everyone``, ``@me`` (the bot itself — the
+        lesson of locking a bot out of its own channel), or a role NAME
+        resolved through the guild's roles. ``position`` is the channel's
+        position hint (below a declared channel, for a sidebar that reads).
+        """
+        ...
+
+    async def delete_channel(self, channel_id: str) -> None:
+        """Delete a channel — best-effort (already gone is not an error)."""
         ...
 
     async def assign_role(self, user: IUser, role_key: str) -> None:

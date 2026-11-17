@@ -200,7 +200,16 @@ Methods defined here:<br>
 
 <dl><dt>async <a name="IPlatform-assign_role"><strong>assign_role</strong></a>(self, user: 'IUser', role_key: 'str') -&gt; 'None'</dt><dd><span class="code">Assign&nbsp;a&nbsp;role&nbsp;(referenced&nbsp;by&nbsp;logical&nbsp;role&nbsp;key)&nbsp;to&nbsp;a&nbsp;user.</span></dd></dl>
 
-<dl><dt>async <a name="IPlatform-create_channel"><strong>create_channel</strong></a>(self, guild_id: 'str', category: 'str') -&gt; 'IChannel'</dt><dd><span class="code">Create&nbsp;a&nbsp;channel&nbsp;in&nbsp;a&nbsp;guild&nbsp;under&nbsp;a&nbsp;channel&nbsp;category.</span></dd></dl>
+<dl><dt>async <a name="IPlatform-create_channel"><strong>create_channel</strong></a>(self, guild_id: 'str', name: 'str', category_id: 'str | None' = None, kind: 'str' = 'text', overwrites: 'Mapping[str, Mapping[str, bool]] | None' = None, position: 'int | None' = None) -&gt; 'IChannel'</dt><dd><span class="code">Create&nbsp;a&nbsp;channel&nbsp;in&nbsp;a&nbsp;guild&nbsp;—&nbsp;the&nbsp;dynamic-channel&nbsp;seam&nbsp;(#408).<br>
+&nbsp;<br>
+``kind``&nbsp;is&nbsp;"text"&nbsp;or&nbsp;"voice".&nbsp;``overwrites``&nbsp;is&nbsp;DATA&nbsp;(#221),&nbsp;never<br>
+platform&nbsp;objects:&nbsp;a&nbsp;mapping&nbsp;of&nbsp;target&nbsp;key&nbsp;to&nbsp;permission&nbsp;flags.<br>
+Target&nbsp;keys:&nbsp;``@everyone``,&nbsp;``@me``&nbsp;(the&nbsp;bot&nbsp;itself&nbsp;—&nbsp;the<br>
+lesson&nbsp;of&nbsp;locking&nbsp;a&nbsp;bot&nbsp;out&nbsp;of&nbsp;its&nbsp;own&nbsp;channel),&nbsp;or&nbsp;a&nbsp;role&nbsp;NAME<br>
+resolved&nbsp;through&nbsp;the&nbsp;guild's&nbsp;roles.&nbsp;``position``&nbsp;is&nbsp;the&nbsp;channel's<br>
+position&nbsp;hint&nbsp;(below&nbsp;a&nbsp;declared&nbsp;channel,&nbsp;for&nbsp;a&nbsp;sidebar&nbsp;that&nbsp;reads).</span></dd></dl>
+
+<dl><dt>async <a name="IPlatform-delete_channel"><strong>delete_channel</strong></a>(self, channel_id: 'str') -&gt; 'None'</dt><dd><span class="code">Delete&nbsp;a&nbsp;channel&nbsp;—&nbsp;best-effort&nbsp;(already&nbsp;gone&nbsp;is&nbsp;not&nbsp;an&nbsp;error).</span></dd></dl>
 
 <dl><dt>async <a name="IPlatform-delete_dm"><strong>delete_dm</strong></a>(self, message: 'IMessage') -&gt; 'None'</dt><dd><span class="code">Delete&nbsp;a&nbsp;previously&nbsp;sent&nbsp;direct&nbsp;message&nbsp;(best-effort).<br>
 &nbsp;<br>
@@ -239,7 +248,7 @@ Data and other attributes defined here:<br>
 
 <dl><dt><strong>__parameters__</strong> = ()</dl>
 
-<dl><dt><strong>__protocol_attrs__</strong> = {'assign_role', 'create_channel', 'delete_dm', 'edit_dm', 'send_dm', 'send_message'}</dl>
+<dl><dt><strong>__protocol_attrs__</strong> = {'assign_role', 'create_channel', 'delete_channel', 'delete_dm', 'edit_dm', 'send_dm', ...}</dl>
 
 <hr>
 Class methods inherited from <a href="typing.html#Protocol">typing.Protocol</a>:<br>

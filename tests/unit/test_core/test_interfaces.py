@@ -70,8 +70,19 @@ class FakePlatform:
     async def delete_dm(self, message: IMessage) -> None:
         return None
 
-    async def create_channel(self, guild_id: str, category: str) -> IChannel:
+    async def create_channel(
+        self,
+        guild_id: str,
+        name: str,
+        category_id: str | None = None,
+        kind: str = "text",
+        overwrites: dict[str, dict[str, bool]] | None = None,
+        position: int | None = None,
+    ) -> IChannel:
         return FakeChannel()
+
+    async def delete_channel(self, channel_id: str) -> None:
+        return None
 
     async def assign_role(self, user: IUser, role_key: str) -> None:
         return None
