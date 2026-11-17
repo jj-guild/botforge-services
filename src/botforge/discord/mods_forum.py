@@ -981,7 +981,6 @@ class ModUninstallModal(discord.ui.Modal):
         guild_id = str(interaction.guild_id or "")
 
         async def tr(key: str, fallback: str) -> str:
-            """Resolve one locale string for the guild, falling back to en."""
             return await _tr(bot, guild_id, key, fallback)
 
         return cls(

@@ -62,19 +62,18 @@ views:
     kind: menu
     scope: games/aoe2/general
     buttons:
-    # the GENERIC Profile button (#333/#363): the panel is game-agnostic
-    # (the user's linked accounts; the game's details ride its enricher —
-    # data, never code); every game menu declares the same target — and it
-    # opens the game's home menu first (#409)
-    - target: panel:profile
-      label: ui.homes.btn_profile
-      emoji: 👤
     - target: panel:game:aoe2:live
       label: ui.homes.btn_live
       emoji: 📡
     - target: panel:game:aoe2:players
       label: ui.homes.btn_users
       emoji: 👥
+    # the GENERIC Profile button (#333/#363): the panel is game-agnostic
+    # (the user's linked accounts; the game's details ride its enricher —
+    # data, never code); every game menu declares the same target
+    - target: panel:profile
+      label: ui.homes.btn_profile
+      emoji: 👤
     - target: menu:game:aoe2:admin
       label: ui.homes.btn_admin
       admin: true
