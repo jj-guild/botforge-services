@@ -66,6 +66,9 @@ en:
       add_game_unconfigured: 'Add failed: the game {game} is not configured for registration.'
       add_unknown: 'Add failed: no profile found for {profile}. Paste your aoe2insights page URL (or the
         id it holds) — the right id will be resolved automatically.'
+      add_blocked: 'Add failed: aoe2insights blocks this server, so the insights id cannot be resolved
+        automatically. Paste the /user/relic/<id>/ form of your insights URL, or your Relic ID
+        (the Relic ID shown on your insights profile).'
       add_provider_error: 'Add failed: the provider {provider} did not answer properly — the details go
         to the admins (see the bot logs).'
       add_not_configured: 'Add failed: the provider {provider} does not serve profile stats — see the
