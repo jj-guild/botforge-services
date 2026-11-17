@@ -40,6 +40,7 @@ LOBBIES_PATH = "/community/advertisement/findAdvertisements"
 LEADERBOARDS_PATH = "/api/leaderboard"
 PERSONAL_STAT_PATH = "/community/leaderboard/GetPersonalStat"
 RECENT_MATCH_PATH = "/community/leaderboard/GetRecentMatchHistory"
+MATCH_DETAILS_HISTORY_PATH = "/community/leaderboard/GetMatchHistory"
 LOBBIES_QUERY_PARAMS = {"title": "age2"}
 LEADERBOARD_KEYS = {"0": "rm_1v1", "1": "rm_team", "2": "unranked", "3": "dm_1v1", "4": "dm_team"}
 
@@ -249,6 +250,37 @@ class LibrematchAdapter:
                 logger.warning("personal stat fetch failed (profile %s)", profile_id, exc_info=True)
                 return {}
         return payload if isinstance(payload, dict) else {}
+
+    async def fetch_match_details_raw(self, match_id: str) -> dict[str, Any]:
+        """Fetch one stored match's detailed payload, RAW (#288, T2).
+
+        ``GetMatchHistory`` answers a match's full record once its id
+        is known — including the ``options`` and ``slotinfo`` blobs the
+        decode step (T2) exploits. The raw payload is returned
+        verbatim; transport failures degrade to an empty payload, never
+        an error.
+        """
+        if not match_id:
+            return {}
+        if not await self._allowed():
+            logger.warning("librematch call over rate budget; degrading details to empty")
+            return {}
+        async with self._client() as client:
+            try:
+                reply = await client.get(
+                    urljoin(self._base_url + "/", MATCH_DETAILS_HISTORY_PATH.lstrip("/")),
+                    params={"title": "age2", "match_ids": f'["{match_id}"]'},
+                )
+                reply.raise_for_status()
+                payload = reply.json()
+            except Exception:
+                logger.warning("match details fetch failed (match %s)", match_id, exc_info=True)
+                return {}
+        entries = payload if isinstance(payload, list) else payload.get("matches") or [payload]
+        for entry in entries:
+            if isinstance(entry, dict) and str(entry.get("id", "")) == str(match_id):
+                return entry
+        return entries[0] if entries and isinstance(entries[0], dict) else {}
 
     async def recent_match_result(self, profile_ids: list[str], since_epoch_s: int) -> MatchResult | None:
         """Fetch the latest finished match of the profiles (WorldsEdge).

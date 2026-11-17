@@ -86,6 +86,25 @@ class LibrematchStore:
             cursor = cursor.limit(limit)
         return [dict(doc) async for doc in cursor]
 
+    async def find_undecoded_matches(
+        self, profile_ids: list[str], limit: int = 25
+    ) -> list[dict[str, Any]]:
+        """List the stored matches whose encoded fields are not decoded yet.
+
+        The decode step (T2) exploits the stored documents AFTER the
+        ingestion — this is its work queue, newest first.
+        """
+        query: dict[str, Any] = {"options_json": ""}
+        if profile_ids:
+            query["profile_ids"] = {"$in": [str(p) for p in profile_ids]}
+        cursor = self._matches().find(query)
+        cursor = cursor.sort("finished_at", -1)
+        return [dict(doc) async for doc in cursor.limit(limit)]
+
+    async def update_match_fields(self, doc_id: str, fields: dict[str, Any]) -> None:
+        """Patch the projection fields of one stored match document."""
+        await self._matches().update_one({"_id": doc_id}, {"$set": fields})
+
     async def count_matches_since(self, profile_ids: list[str], since_s: int) -> int:
         """Count the matches of the profiles finished after ``since_s``."""
         query: dict[str, Any] = {"finished_at": {"$gte": since_s}}

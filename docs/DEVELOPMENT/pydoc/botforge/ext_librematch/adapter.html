@@ -60,6 +60,14 @@ an&nbsp;empty&nbsp;answer,&nbsp;never&nbsp;an&nbsp;error.<br>&nbsp;</span></td><
 
 <dl><dt>async <a name="LibrematchAdapter-fetch_lobbies"><strong>fetch_lobbies</strong></a>(self) -&gt; 'list[dict[str, Any]]'</dt><dd><span class="code">Fetch&nbsp;the&nbsp;current&nbsp;public&nbsp;lobby&nbsp;listings&nbsp;(raw&nbsp;API&nbsp;payloads).</span></dd></dl>
 
+<dl><dt>async <a name="LibrematchAdapter-fetch_match_details_raw"><strong>fetch_match_details_raw</strong></a>(self, match_id: 'str') -&gt; 'dict[str, Any]'</dt><dd><span class="code">Fetch&nbsp;one&nbsp;stored&nbsp;match's&nbsp;detailed&nbsp;payload,&nbsp;RAW&nbsp;(#288,&nbsp;T2).<br>
+&nbsp;<br>
+``GetMatchHistory``&nbsp;answers&nbsp;a&nbsp;match's&nbsp;full&nbsp;record&nbsp;once&nbsp;its&nbsp;id<br>
+is&nbsp;known&nbsp;—&nbsp;including&nbsp;the&nbsp;``options``&nbsp;and&nbsp;``slotinfo``&nbsp;blobs&nbsp;the<br>
+decode&nbsp;step&nbsp;(T2)&nbsp;exploits.&nbsp;The&nbsp;raw&nbsp;payload&nbsp;is&nbsp;returned<br>
+verbatim;&nbsp;transport&nbsp;failures&nbsp;degrade&nbsp;to&nbsp;an&nbsp;empty&nbsp;payload,&nbsp;never<br>
+an&nbsp;error.</span></dd></dl>
+
 <dl><dt>async <a name="LibrematchAdapter-fetch_match_history_raw"><strong>fetch_match_history_raw</strong></a>(self, profile_id: 'str', leaderboard_id: 'str' = '', count: 'int' = 1000) -&gt; 'list[dict[str, Any]]'</dt><dd><span class="code">Fetch&nbsp;a&nbsp;profile's&nbsp;recent&nbsp;finished&nbsp;matches&nbsp;as&nbsp;RAW&nbsp;payloads&nbsp;(#404).<br>
 &nbsp;<br>
 ``GetRecentMatchHistory``&nbsp;with&nbsp;a&nbsp;real&nbsp;``count``&nbsp;—&nbsp;the&nbsp;history<br>
@@ -128,6 +136,7 @@ Data descriptors defined here:<br>
 <strong>LEADERBOARD_KEYS</strong> = {'0': 'rm_1v1', '1': 'rm_team', '2': 'unranked', '3': 'dm_1v1', '4': 'dm_team'}<br>
 <strong>LOBBIES_PATH</strong> = '/community/advertisement/findAdvertisements'<br>
 <strong>LOBBIES_QUERY_PARAMS</strong> = {'title': 'age2'}<br>
+<strong>MATCH_DETAILS_HISTORY_PATH</strong> = '/community/leaderboard/GetMatchHistory'<br>
 <strong>PERSONAL_STAT_PATH</strong> = '/community/leaderboard/GetPersonalStat'<br>
 <strong>RECENT_MATCH_PATH</strong> = '/community/leaderboard/GetRecentMatchHistory'<br>
 <strong>logger</strong> = &lt;Logger botforge.ext_librematch.adapter (INFO)&gt;</td></tr></table>
