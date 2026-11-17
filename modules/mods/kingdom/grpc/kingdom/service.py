@@ -29,6 +29,7 @@ class _KingdomStackImpl(KingdomStackContract):
         from botforge.mods.kingdom.territories import TerritoryService
         from botforge.mods.kingdom.attacks import AttackService
         from botforge.mods.kingdom.diplomacy import DiplomacyService
+        from botforge.mods.kingdom.economy import EconomyService
         from botforge.mods.kingdom.events import EventService
 
         self._store = store
@@ -39,6 +40,9 @@ class _KingdomStackImpl(KingdomStackContract):
         self._diplomacy = DiplomacyService(store, config, self._kingdoms, self._territories)
         self._events = EventService(
             store, config, self._kingdoms, self._territories, self._attacks, self._diplomacy
+        )
+        self._economy = EconomyService(
+            store, config, self._kingdoms, self._territories, self._attacks
         )
 
     @property
@@ -60,6 +64,10 @@ class _KingdomStackImpl(KingdomStackContract):
     @property
     def events(self) -> Any:
         return self._events
+
+    @property
+    def economy(self) -> Any:
+        return self._economy
 
     @property
     def config(self) -> Any:

@@ -583,6 +583,69 @@ async def _event_report_text(strings: dict[str, str], report: dict[str, Any]) ->
     )
 
 
+async def run_economy_due_safe(bot: Any) -> None:
+    """Resolve the due explorations and sailing expeditions (the tick).
+
+    marche-v2 art. 6: a 48h exploration ends with a fresh map (or a
+    refund). exploration-refonte-v1: a due boarding WITH a captain
+    launches itself; exploration-retour-v1: a due sailing flips to its
+    RETURNED face. Every pass is idempotent — a restart mid-sail
+    never resolves twice. The announcements land in Géopolitique,
+    best effort per guild.
+    """
+    from .battle import _geopolitics_channel
+    from .common import strings_by_locale, wiring
+
+    stack = wiring()
+    if stack is None:
+        return
+    from botforge.mods.kingdom.game_clock import game_now
+
+    now = game_now()
+    try:
+        await stack.economy.resolve_due_explorations(now=now)
+    except Exception:
+        logger.warning("kingdom: exploration resolution failed — best-effort", exc_info=True)
+    try:
+        launches = await stack.economy.auto_launch_due_expeditions(now=now)
+    except Exception:
+        launches = []
+        logger.warning("kingdom: expedition auto-launch failed — best-effort", exc_info=True)
+    try:
+        returns = await stack.economy.resolve_due_expeditions(now=now)
+    except Exception:
+        returns = []
+        logger.warning("kingdom: expedition resolution failed — best-effort", exc_info=True)
+    if not launches and not returns:
+        return
+
+    def _notes(strings: dict[str, str]) -> list[str]:
+        out: list[str] = []
+        for kingdom, kind, _value, _salon in launches:
+            name = str(getattr(kingdom, "name", kingdom.id))
+            out.append(str(strings["expedition_launch_note"]).format(name))
+        for kingdom, kind, value, _salon in returns:
+            name = str(getattr(kingdom, "name", kingdom.id))
+            key = {"map": "expedition_return_map", "civ": "expedition_return_civ"}.get(kind)
+            if key is None:
+                out.append(str(strings["expedition_return_tech"]).format(name))
+            else:
+                out.append(str(strings[key]).format(name, str(value)))
+        return out
+
+    for guild in list(getattr(bot, "guilds", []) or []):
+        locale = await _guild_locale(bot, str(guild.id))
+        strings = strings_by_locale(locale)
+        try:
+            channel = _geopolitics_channel(guild)
+            if channel is None:
+                continue
+            for note in _notes(strings):
+                await channel.send(note)
+        except Exception:
+            logger.warning("kingdom: one expedition announcement failed", exc_info=True)
+
+
 async def run_event_slots_safe(bot: Any) -> None:
     """Replay the due weekly slots (cycle/age/season end) and announce.
 
@@ -653,6 +716,10 @@ def start_attack_refresher(bot: Any) -> None:
             await run_event_slots_safe(bot)
         except Exception:
             logger.warning("kingdom: event slots pass failed — best-effort", exc_info=True)
+        try:
+            await run_economy_due_safe(bot)
+        except Exception:
+            logger.warning("kingdom: economy due pass failed — best-effort", exc_info=True)
 
     _loop.start()
     logger.info("kingdom: attack phases loop started (every 5 minutes)")

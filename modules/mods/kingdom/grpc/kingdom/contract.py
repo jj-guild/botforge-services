@@ -41,6 +41,11 @@ class KingdomStack(Protocol):
         ...
 
     @property
+    def economy(self) -> Any:
+        """The tech-point wallet & special actions (EconomyService)."""
+        ...
+
+    @property
     def config(self) -> Any:
         """The validated season configuration (KingdomSeasonConfig)."""
         ...

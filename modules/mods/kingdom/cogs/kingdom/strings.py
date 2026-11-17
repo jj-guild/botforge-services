@@ -433,6 +433,59 @@ DEFAULTS: dict[str, dict[str, str]] = {
         ),
         "plan_event_cancelled": "❌ Ta plannification a été annulée — aucun budget n'a été consommé.",
         "plan_no_service": "❌ Le service des attaques est indisponible.",
+        "market_button": "🛒 Marché",
+        "chamber_button": "🏛️ Comptes",
+        "market_title": "🛒 Marché",
+        "market_rules": (
+            "**Paiement d'abord** — tout achat débite la banque du royaume.\n"
+            "Une carte achetée vit dans la Chambre des comptes."
+        ),
+        "market_wallet": "💰 Banque du royaume : **{0}** ⚙️",
+        "market_intro": "Choisissez une carte à acheter :",
+        "market_item_technology": "🔬 {0}",
+        "market_item_mariage_arrange": "💍 Jeton mariage arrangé",
+        "market_item_explorateur": "🧭 Jeton Explorateur",
+        "market_item_corruption": "🎭 Jeton Corruption",
+        "market_item_jeu_d_armes": "⚔️ Jeton Jeu d'armes",
+        "market_item_garde_royale": "🛡️ Garde Royale",
+        "market_item_patrouille": "🚨 Slot Patrouille",
+        "market_confirm_title": "🛒 Confirmer l'achat",
+        "market_confirm_sub": "Coût : **{0}** ⚙️",
+        "market_yes": "✅ Acheter",
+        "market_edit": "✏️ Changer",
+        "market_bought": "✅ Achat effectué : {0}",
+        "market_no_points": "❌ Le royaume manque de points de technologie.",
+        "market_limit": "❌ La limite d'achat par saison est atteinte.",
+        "market_error": "❌ L'achat a échoué : {0}",
+        "chamber_title": "🏛️ Chambre des comptes — {0}",
+        "chamber_stock_explorateur": "🧭 Jetons Explorateur : **{0}**",
+        "chamber_stock_corruption": "🎭 Jetons Corruption : **{0}**",
+        "chamber_stock_jeu_d_armes": "⚔️ Jetons Jeu d'armes : **{0}**",
+        "chamber_stock_garde": "🛡️ Gardes Royales : **{0}**",
+        "chamber_patrouille": "🚨 Patrouille : {0}",
+        "chamber_use_explorateur": "🧭 Envoyer explorer",
+        "chamber_use_corruption": "🎭 Corrompre",
+        "chamber_use_jeu_d_armes": "⚔️ Utiliser",
+        "chamber_use_garde": "🛡️ Placer la garde",
+        "chamber_use_patrouille": "🚨 Placer la patrouille",
+        "chamber_select_lord": "Choisissez le seigneur qui part explorer :",
+        "chamber_select_territory": "Choisissez le territoire à corrompre :",
+        "chamber_select_own_territory": "Choisissez le territoire à protéger :",
+        "chamber_select_hour": "Choisissez la tranche horaire (2h, tous les jours) :",
+        "chamber_done": "✅ C'est fait — le registre du royaume est à jour.",
+        "chamber_no_stock": "❌ Aucune carte utilisable en réserve.",
+        "expedition_launch_note": (
+            "🧭 L'expédition des **{0}** lève l'ancre — l'équipage est en mer."
+        ),
+        "expedition_return_map": (
+            "🧭 L'expédition des **{0}** est de retour — la carte **{1}** est révélée !"
+        ),
+        "expedition_return_civ": (
+            "🧭 L'expédition des **{0}** est de retour — la civilisation **{1}** rejoint le royaume !"
+        ),
+        "expedition_return_tech": (
+            "🧭 L'expédition des **{0}** est de retour — compensation : +2 ⚙️."
+        ),
         "marry_button": "💍 Se marier",
         "alliances_button": "🤝 Alliances",
         "church_marry_intro": "👰 Choisissez la Princesse de ton mariage :",
@@ -924,6 +977,59 @@ DEFAULTS: dict[str, dict[str, str]] = {
         ),
         "plan_event_cancelled": "❌ Your planning was cancelled — no budget was consumed.",
         "plan_no_service": "❌ The attack service is unavailable.",
+        "market_button": "🛒 Market",
+        "chamber_button": "🏛️ Treasury",
+        "market_title": "🛒 Market",
+        "market_rules": (
+            "**Payment first** — every purchase debits the kingdom bank.\n"
+            "A bought card lives in the Chambre des comptes."
+        ),
+        "market_wallet": "💰 Kingdom bank: **{0}** ⚙️",
+        "market_intro": "Choose a card to buy:",
+        "market_item_technology": "🔬 {0}",
+        "market_item_mariage_arrange": "💍 Arranged-marriage token",
+        "market_item_explorateur": "🧭 Explorer token",
+        "market_item_corruption": "🎭 Corruption token",
+        "market_item_jeu_d_armes": "⚔️ Arms-mastery token",
+        "market_item_garde_royale": "🛡️ Royal Guard",
+        "market_item_patrouille": "🚨 Patrol slot",
+        "market_confirm_title": "🛒 Confirm the purchase",
+        "market_confirm_sub": "Cost: **{0}** ⚙️",
+        "market_yes": "✅ Buy",
+        "market_edit": "✏️ Change",
+        "market_bought": "✅ Purchase done: {0}",
+        "market_no_points": "❌ The kingdom lacks tech points.",
+        "market_limit": "❌ The per-season purchase limit is reached.",
+        "market_error": "❌ The purchase failed: {0}",
+        "chamber_title": "🏛️ Chambre des comptes — {0}",
+        "chamber_stock_explorateur": "🧭 Explorer tokens: **{0}**",
+        "chamber_stock_corruption": "🎭 Corruption tokens: **{0}**",
+        "chamber_stock_jeu_d_armes": "⚔️ Arms-mastery tokens: **{0}**",
+        "chamber_stock_garde": "🛡️ Royal guards: **{0}**",
+        "chamber_patrouille": "🚨 Patrol: {0}",
+        "chamber_use_explorateur": "🧭 Send exploring",
+        "chamber_use_corruption": "🎭 Corrupt",
+        "chamber_use_jeu_d_armes": "⚔️ Use",
+        "chamber_use_garde": "🛡️ Place the guard",
+        "chamber_use_patrouille": "🚨 Place the patrol",
+        "chamber_select_lord": "Choose the lord who goes exploring:",
+        "chamber_select_territory": "Choose the territory to corrupt:",
+        "chamber_select_own_territory": "Choose the territory to shield:",
+        "chamber_select_hour": "Choose the daily 2h tranche:",
+        "chamber_done": "✅ Done — the kingdom's ledger is up to date.",
+        "chamber_no_stock": "❌ No usable card in reserve.",
+        "expedition_launch_note": (
+            "🧭 The expedition of the **{0}** casts off — the crew is at sea."
+        ),
+        "expedition_return_map": (
+            "🧭 The expedition of the **{0}** is back — the map **{1}** is revealed!"
+        ),
+        "expedition_return_civ": (
+            "🧭 The expedition of the **{0}** is back — the civilization **{1}** joins the kingdom!"
+        ),
+        "expedition_return_tech": (
+            "🧭 The expedition of the **{0}** is back — compensation: +2 ⚙️."
+        ),
         "marry_button": "💍 Marry",
         "alliances_button": "🤝 Alliances",
         "church_marry_intro": "👰 Choose the Princess of your marriage:",
