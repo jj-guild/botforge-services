@@ -173,3 +173,69 @@ async def test_event_audit_trail_lists_oldest_first() -> None:
 
     events = await store.list_events("abc")
     assert [e["type"] for e in events] == ["lobby_opened", "game_started", "game_ended"]
+
+
+async def test_the_events_seam_is_callable_and_fresh_per_consumer() -> None:
+    """Each StreamMatchEvents consumer gets its OWN generator (#404).
+
+    The merlin-env regression: the server handed the servicer a
+    pre-built generator OBJECT — the servicer calls the seam once per
+    request, so every stream after the first iterated a dead
+    generator and the live feed went silent ("stream lost" loop).
+    """
+    import asyncio
+
+    from botforge.core.models.game import MatchEvent
+    from botforge.ext_aoe2lobby.server import _match_events, _StreamHub
+
+    class _Adapter:
+        def current_state_events(self) -> list[dict[str, Any]]:
+            return [
+                {
+                    "match_ref": "abc",
+                    "type": "lobby_opened",
+                    "occurred_at": 100,
+                    "profile_ids": ["123"],
+                    "metadata": {"map": "Arabia"},
+                }
+            ]
+
+    async def _persist(frame: dict[str, Any]) -> None:
+        del frame
+
+    hub = _StreamHub(_Adapter())
+    seam = _match_events(_Adapter(), hub, _persist)
+    assert callable(seam), "the servicer calls the seam per StreamMatchEvents request"
+
+    async def _drain(count: int) -> list[MatchEvent]:
+        events: list[MatchEvent] = []
+        generator = seam()
+        async for event in generator:
+            events.append(event)
+            if len(events) >= count:
+                await generator.aclose()  # the consumer's end
+                break
+        return events
+
+    first = await _drain(1)
+    assert [e.match_ref for e in first] == ["abc"]
+
+    # the second consumer: a FRESH generator (its own hub queue) — feed
+    # one live frame instead of awaiting forever
+    async def _drain_two() -> list[MatchEvent]:
+        return await _drain(2)
+
+    second_task = asyncio.ensure_future(_drain_two())
+    await asyncio.sleep(0)
+    for queue in list(hub._subscribers):
+        queue.put_nowait(
+            {
+                "match_ref": "live1",
+                "type": "game_started",
+                "occurred_at": 200,
+                "profile_ids": ["123"],
+                "metadata": {},
+            }
+        )
+    second = await asyncio.wait_for(second_task, timeout=5)
+    assert [e.match_ref for e in second] == ["abc", "live1"]
