@@ -140,7 +140,7 @@ async def _confirm_purchase(
     label: str,
     kingdom_id: str,
 ) -> None:
-    """The confirm card — one Yes + one Change (back to the select)."""
+    """The confirm card — one Yes (no back button, norm #381.2)."""
     cost = _cost(stack, value.split(":", 1)[1])
     body = (
         f"## {strings['market_confirm_title']}\n"
@@ -151,12 +151,6 @@ async def _confirm_purchase(
         custom_id="kingdom:attack:marketyes",
         style=discord.ButtonStyle.success,
     )
-    edit: discord.ui.Button[Any] = discord.ui.Button(
-        label=str(strings["market_edit"])[:80],
-        custom_id="kingdom:attack:marketedit",
-        style=discord.ButtonStyle.secondary,
-    )
-
     async def on_yes(target: discord.Interaction) -> None:
         await target.response.defer()
         kind, key = value.split(":", 1)
@@ -182,20 +176,10 @@ async def _confirm_purchase(
                 str(strings["market_bought"]).format(label), ephemeral=True
             )
 
-    async def on_edit(target: discord.Interaction) -> None:
-        try:
-            wallet = int(await stack.economy.wallet(kingdom_id))
-        except Exception:
-            wallet = 0
-        await target.response.edit_message(
-            content=None, view=_market_view(stack, wallet, strings, kingdom_id)
-        )
-
     yes.callback = on_yes  # type: ignore[method-assign, assignment]
-    edit.callback = on_edit  # type: ignore[method-assign, assignment]
     view = discord.ui.LayoutView(timeout=None)
     view.add_item(discord.ui.TextDisplay(body))
-    view.add_item(discord.ui.ActionRow(yes, edit))
+    view.add_item(discord.ui.ActionRow(yes))
     await interaction.response.edit_message(content=None, view=view)
 
 

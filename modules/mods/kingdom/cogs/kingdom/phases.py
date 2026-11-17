@@ -805,7 +805,7 @@ async def run_ffa_tick_safe(bot: Any) -> None:
             await ffa_service.mark_announced(ffa)
         except Exception:  # noqa: BLE001
             logger.warning("kingdom: FFA announce flag failed — best-effort", exc_info=True)
-        time_label = ffa.start_at.astimezone(tz).strftime("%Hh%M")
+        time_label = int(ffa.start_at.timestamp())
         maximum = int(ffa_service.max_participants())
         mode_key = "ffa_mode_one" if ffa.one_lord_per_kingdom else "ffa_mode_free"
         for guild in list(getattr(bot, "guilds", []) or []):

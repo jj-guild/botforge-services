@@ -90,12 +90,10 @@ def _tavern_view(stack: Any, lord: Any, strings: dict[str, str]) -> discord.ui.L
     lines = [f"## {strings['tavern_title']}", str(strings["tavern_purse"]).format(purse)]
     cooldown = getattr(lord, "tavern_next_drink_at", None)
     if cooldown is not None and int(cooldown) > now_ts:
-        hours = max(1, round((int(cooldown) - now_ts) / 3600))
-        lines.append(str(strings["tavern_cooldown"]).format(hours))
+        lines.append(str(strings["tavern_cooldown"]).format(int(cooldown)))
     locked = getattr(lord, "tavern_locked_until", None)
     if locked is not None and int(locked) > now_ts:
-        hours = max(1, round((int(locked) - now_ts) / 3600))
-        lines.append(str(strings["tavern_locked"]).format(hours))
+        lines.append(str(strings["tavern_locked"]).format(int(locked)))
     select: discord.ui.Select[Any] = discord.ui.Select(
         custom_id="kingdom:attack:tavernpick",
         placeholder=str(strings["tavern_select"])[:100],
@@ -127,12 +125,6 @@ def _tavern_view(stack: Any, lord: Any, strings: dict[str, str]) -> discord.ui.L
             custom_id="kingdom:attack:taveryes",
             style=discord.ButtonStyle.success,
         )
-        back: discord.ui.Button[Any] = discord.ui.Button(
-            label=str(strings["tavern_edit"])[:80],
-            custom_id="kingdom:attack:taveredit",
-            style=discord.ButtonStyle.secondary,
-        )
-
         async def on_yes(target: discord.Interaction) -> None:
             await target.response.defer()
             try:
@@ -150,18 +142,10 @@ def _tavern_view(stack: Any, lord: Any, strings: dict[str, str]) -> discord.ui.L
             except Exception:
                 await target.followup.send(note, ephemeral=True)
 
-        async def on_back(target: discord.Interaction) -> None:
-            fresh = await lord_of(stack.kingdoms, str(interaction.user.id), target)
-            if fresh is None:
-                await target.response.edit_message(content=strings["not_a_lord"], view=None)
-                return
-            await target.response.edit_message(content=None, view=_tavern_view(stack, fresh, strings))
-
         yes.callback = on_yes  # type: ignore[method-assign, assignment]
-        back.callback = on_back  # type: ignore[method-assign, assignment]
         view = discord.ui.LayoutView(timeout=None)
         view.add_item(discord.ui.TextDisplay(body))
-        view.add_item(discord.ui.ActionRow(yes, back))
+        view.add_item(discord.ui.ActionRow(yes))
         await target.response.edit_message(content=None, view=view)
 
     select.callback = on_pick  # type: ignore[method-assign, assignment]

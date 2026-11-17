@@ -452,7 +452,6 @@ DEFAULTS: dict[str, dict[str, str]] = {
         "market_confirm_title": "🛒 Confirmer l'achat",
         "market_confirm_sub": "Coût : **{0}** ⚙️",
         "market_yes": "✅ Acheter",
-        "market_edit": "✏️ Changer",
         "market_bought": "✅ Achat effectué : {0}",
         "market_no_points": "❌ Le royaume manque de points de technologie.",
         "market_limit": "❌ La limite d'achat par saison est atteinte.",
@@ -508,8 +507,7 @@ DEFAULTS: dict[str, dict[str, str]] = {
             " en cas de défaite."
         ),
         "church_marry_princess": "Princesse {0}",
-        "church_marry_lock_today": "aujourd'hui à **{0}**",
-        "church_marry_lock_tomorrow": "demain à **{0}**",
+        "church_marry_lock": "fin du verrou <t:{0}:R>",
         "church_marry_confirm_title": "💍 Confirmer ton mariage",
         "church_marry_confirm_sub": "princesse pressentie · {0} bague(s) · verrou {1}h",
         "church_marry_yes_button": "💍 Oui, je le veux",
@@ -570,15 +568,14 @@ DEFAULTS: dict[str, dict[str, str]] = {
         "mercenary_button": "🗡️ Mercenaires",
         "tavern_title": "🍺 La Taverne",
         "tavern_purse": "🪙 Ta bourse : **{0}** écu(s)",
-        "tavern_cooldown": "⏳ Prochain service possible dans ~{0} heure(s) (cooldown global de 24h).",
-        "tavern_locked": "🔒 Verrou de combat en cours pendant encore ~{0} heure(s).",
+        "tavern_cooldown": "⏳ Prochain service possible <t:{0}:R> (cooldown global de 24h).",
+        "tavern_locked": "🔒 Verrou de combat en cours — fin <t:{0}:R>.",
         "tavern_select": "Choisissez une boisson :",
         "tavern_drink_line": "{0} — {1} 🪙",
         "tavern_lock_line": "Verrou {0} min",
         "tavern_confirm_title": "🍺 Confirmer la commande",
         "tavern_confirm_sub": "Prix : **{0}** 🪙 — verrou de combat : **{1}** minutes.",
         "tavern_yes": "Boire",
-        "tavern_edit": "Changer",
         "tavern_drunk": "🍺 Tu as bu **{0}** — il te reste **{1}** écu(s).",
         "tavern_cooldown_note": "⏳ Le cooldown global de 24h n'est pas encore écoulé.",
         "tavern_no_purse": "❌ Ta bourse ne suffit pas.",
@@ -624,7 +621,7 @@ DEFAULTS: dict[str, dict[str, str]] = {
             " — inscription impossible."
         ),
         "ffa_announce": (
-            "🧭 **Expédition — samedi {0} (heure de Paris)**\n"
+            "🧭 **Expédition — samedi <t:{0}:F>**\n"
             "Une partie GRATUITE de {1} minutes contre l'IA Gaïa et les autres"
             " participants — {2} places, mode : {3}. Clique sur"
             " **« Partir en expédition »** pour réserver ton créneau (1er arrivé,"
@@ -1066,7 +1063,6 @@ DEFAULTS: dict[str, dict[str, str]] = {
         "market_confirm_title": "🛒 Confirm the purchase",
         "market_confirm_sub": "Cost: **{0}** ⚙️",
         "market_yes": "✅ Buy",
-        "market_edit": "✏️ Change",
         "market_bought": "✅ Purchase done: {0}",
         "market_no_points": "❌ The kingdom lacks tech points.",
         "market_limit": "❌ The per-season purchase limit is reached.",
@@ -1121,8 +1117,7 @@ DEFAULTS: dict[str, dict[str, str]] = {
             " defeat."
         ),
         "church_marry_princess": "Princess {0}",
-        "church_marry_lock_today": "today at **{0}**",
-        "church_marry_lock_tomorrow": "tomorrow at **{0}**",
+        "church_marry_lock": "lock ends <t:{0}:R>",
         "church_marry_confirm_title": "💍 Confirm your marriage",
         "church_marry_confirm_sub": "princess to be · {0} ring(s) · lock {1}h",
         "church_marry_yes_button": "💍 Yes, I do",
@@ -1183,15 +1178,14 @@ DEFAULTS: dict[str, dict[str, str]] = {
         "mercenary_button": "🗡️ Mercenaires",
         "tavern_title": "🍺 The Taverne",
         "tavern_purse": "🪙 Your purse: **{0}** écu(s)",
-        "tavern_cooldown": "⏳ Next round possible in ~{0} hour(s) (global 24h cooldown).",
-        "tavern_locked": "🔒 A combat lock is still running for ~{0} hour(s).",
+        "tavern_cooldown": "⏳ Next round possible <t:{0}:R> (global 24h cooldown).",
+        "tavern_locked": "🔒 A combat lock is still running — ends <t:{0}:R>.",
         "tavern_select": "Choose a drink:",
         "tavern_drink_line": "{0} — {1} 🪙",
         "tavern_lock_line": "Lock {0} min",
         "tavern_confirm_title": "🍺 Confirm the order",
         "tavern_confirm_sub": "Price: **{0}** 🪙 — combat lock: **{1}** minutes.",
         "tavern_yes": "Drink",
-        "tavern_edit": "Change",
         "tavern_drunk": "🍺 You drank **{0}** — **{1}** écu(s) left in your purse.",
         "tavern_cooldown_note": "⏳ The global 24h cooldown is still running.",
         "tavern_no_purse": "❌ Your purse cannot afford it.",
@@ -1237,7 +1231,7 @@ DEFAULTS: dict[str, dict[str, str]] = {
             " — you cannot enroll."
         ),
         "ffa_announce": (
-            "🧭 **Expedition — Saturday {0} (Paris time)**\n"
+            "🧭 **Expedition — Saturday <t:{0}:F>**\n"
             "One FREE {1}-minute game against the Gaïa AI and the other"
             " participants — {2} slots, mode: {3}. Click"
             " **« Join the Expedition »** to reserve yours (first come, first"

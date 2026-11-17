@@ -55,17 +55,16 @@ def _princess_label(
 
 
 def _fmt_marriage_lock_end(hours: int, strings: dict[str, str]) -> str:
-    """The INDICATIVE end of the combat lock — Paris « aujourd'hui/demain HH:MM »."""
+    """The INDICATIVE end of the combat lock — a Discord <t:..:R> epoch.
+
+    The discord-ui norm (#381): a user-facing instant never renders as a
+    formatted string — the epoch localizes per viewer, never a timezone.
+    """
     from botforge.mods.kingdom.game_clock import game_now
 
     now = game_now()
-    local_end = (now + timedelta(hours=int(hours or 0))).astimezone(_PARIS)
-    key = (
-        "church_marry_lock_tomorrow"
-        if local_end.date() != now.astimezone(_PARIS).date()
-        else "church_marry_lock_today"
-    )
-    return str(strings[key]).format(local_end.strftime("%H:%M"))
+    end_epoch = int((now + timedelta(hours=int(hours or 0))).timestamp())
+    return str(strings["church_marry_lock"]).format(end_epoch)
 
 
 def _marry_error_note(exc: Exception, strings: dict[str, str]) -> str:
