@@ -178,7 +178,13 @@ async def test_min_matches_window_evaluates() -> None:
     assert any("matches" in r for r in application.reasons)
 
 
-async def test_unknown_stat_degrades_to_manual_review_refusal_reason() -> None:
+async def test_unknown_stat_degrades_to_manual_review_pending() -> None:
+    """An unreadable stat is neither a pass nor a fail: the queue decides.
+
+    The unknown stat NEVER refuses silently (#404 T5) — the application
+    waits in the pending queue for an admin, the criterion's reason
+    carries the manual-review mention.
+    """
     db = MemoryDB()
     service = EnrollmentService(
         "demo",
@@ -188,8 +194,11 @@ async def test_unknown_stat_degrades_to_manual_review_refusal_reason() -> None:
         criteria={"min_elo": 1200},
     )
     application = await service.apply("g1", "u1", "Alice", now=100)
-    assert application.state == STATE_REFUSED
-    assert any("manual review" in r for r in application.reasons)
+    assert application.state == STATE_PENDING
+    assert any("manual review" in r.reason for r in application.criteria_results)
+    # the admin dashboard still sees the candidate
+    dashboard = await service.dashboard("g1")
+    assert [a.user_id for a in dashboard["pending"]] == ["u1"]
 
 
 async def test_refuse_records_reason_and_blocks_reaccept() -> None:
