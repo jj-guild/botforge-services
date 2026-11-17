@@ -1,4 +1,4 @@
-"""Platform abstraction contracts (IPlatform, IMessage, IChannel, IUser, IWorkflow).
+"""Platform abstraction contracts (IPlatform, IMessage, IChannel, IUser, IView, IWorkflow).
 
 Structural typing via ``typing.Protocol`` (ADR-0011): implementations do not
 inherit from these classes, they just satisfy the shape, checked by mypy.
@@ -72,6 +72,20 @@ class IMessage(Protocol):
 
 
 @runtime_checkable
+class IView(Protocol):
+    """Opaque handle to an interactive component set (buttons, selects).
+
+    The contract carries a HANDLE, never a platform type (ADR-0011,
+    botforge-services#221): an implementation receives it and renders it
+    the way its platform knows — the Discord seam passes a
+    ``discord.ui.View`` through, a future platform maps the same
+    interactions to its own widgets. There is intentionally nothing to
+    read on this surface: interactivity is behavior, and behavior is the
+    implementation's business, not the contract's.
+    """
+
+
+@runtime_checkable
 class IPlatform(Protocol):
     """Platform abstraction: messaging, channel management, roles, DMs.
 
@@ -82,8 +96,27 @@ class IPlatform(Protocol):
         """Send a text message to a channel."""
         ...
 
-    async def send_dm(self, user: IUser, content: str) -> IMessage:
-        """Send a direct message to a user."""
+    async def send_dm(self, user: IUser, content: str, view: IView | None = None) -> IMessage:
+        """Send a direct message to a user, optionally with a view.
+
+        DMs are interactive when a view rides along (botforge-services#407):
+        the view handle is opaque to the contract (#221) and rendered by
+        the platform implementation.
+        """
+        ...
+
+    async def edit_dm(
+        self, message: IMessage, content: str, view: IView | None = None
+    ) -> IMessage:
+        """Edit a previously sent direct message in place."""
+        ...
+
+    async def delete_dm(self, message: IMessage) -> None:
+        """Delete a previously sent direct message (best-effort).
+
+        A message already gone is not an error: the platform may skip
+        silently, exactly like every ephemeral cleanup.
+        """
         ...
 
     async def create_channel(self, guild_id: str, category: str) -> IChannel:

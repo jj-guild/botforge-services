@@ -2,7 +2,14 @@
 
 from __future__ import annotations
 
-from botforge.core.interfaces.platform import IChannel, IMessage, IPlatform, IUser, IWorkflow
+from botforge.core.interfaces.platform import (
+    IChannel,
+    IMessage,
+    IPlatform,
+    IUser,
+    IView,
+    IWorkflow,
+)
 from botforge.core.models.workflow import WorkflowStatus, WorkflowTransition
 
 
@@ -44,12 +51,24 @@ class FakeMessage:
         return FakeChannel()
 
 
+class FakeView:
+    """A view handle: opaque by contract, whatever it carries is the impl's business."""
+
+
 class FakePlatform:
     async def send_message(self, channel: IChannel, content: str) -> IMessage:
         return FakeMessage()
 
-    async def send_dm(self, user: IUser, content: str) -> IMessage:
+    async def send_dm(self, user: IUser, content: str, view: IView | None = None) -> IMessage:
         return FakeMessage()
+
+    async def edit_dm(
+        self, message: IMessage, content: str, view: IView | None = None
+    ) -> IMessage:
+        return FakeMessage()
+
+    async def delete_dm(self, message: IMessage) -> None:
+        return None
 
     async def create_channel(self, guild_id: str, category: str) -> IChannel:
         return FakeChannel()
