@@ -209,6 +209,18 @@ def room_key(attack_id: str) -> str:
     return hashlib.sha256(str(attack_id).encode()).hexdigest()[:16]
 
 
+def ready_key(attack_id: str, player_id: str) -> str:
+    """The 16-hex digest keying a per-player DM component (Check 73)."""
+    return hashlib.sha256(f"{attack_id}:{player_id}".encode()).hexdigest()[:16]
+
+
+def strings_by_locale(locale: str) -> dict[str, str]:
+    """The strings of one locale (the DM surfaces' accessor)."""
+    from .strings import strings
+
+    return strings(locale)
+
+
 # ---------------------------------------------------------------------------
 # Name resolvers + failures
 # ---------------------------------------------------------------------------
@@ -258,6 +270,26 @@ def kingdom_mention(guild: Any, name: str) -> str:
     if role is not None:
         return str(getattr(role, "mention", f"**{name}**"))
     return f"**{name}**"
+
+
+async def kingdom_by_id(kingdoms: Any, kingdom_id: str | None) -> Any:
+    """One kingdom record by id (None on any miss)."""
+    if kingdoms is None or not kingdom_id:
+        return None
+    try:
+        return next((item for item in await kingdoms.kingdoms() if str(item.id) == str(kingdom_id)), None)
+    except Exception:
+        return None
+
+
+async def attack_by_id(stack: Any, attack_id: str) -> Any:
+    """One attack record by id (None on any miss)."""
+    if stack is None or not attack_id:
+        return None
+    try:
+        return next((item for item in await stack.attacks.attacks() if str(item.id) == str(attack_id)), None)
+    except Exception:
+        return None
 
 
 def combat_failure_note(exc: Exception, strings: dict[str, str]) -> str:
@@ -343,15 +375,140 @@ def room_channel_name(guild: Any, prefix: str, *parts: str) -> str:
     return f"{base}-{suffix}"
 
 
+# ---------------------------------------------------------------------------
+# The pick & ban document helpers (the engine's pickban dict, D77)
+# ---------------------------------------------------------------------------
+
+PICKBAN_RANKS = ("1️⃣", "2️⃣", "3️⃣")
+
+
+def pickban_staged(pickban: dict[str, Any], side: str) -> list[str]:
+    """The STAGED draft picks of one side (``{side}_draft``, padded to 3)."""
+    staged = [str(x) for x in (pickban.get(f"{side}_draft") or [])]
+    while len(staged) < 3:
+        staged.append("")
+    return staged[:3]
+
+
+def side_of(attack: Any, player_id: str) -> str:
+    """The draft side a player speaks for (defender by default)."""
+    if str(attack.attacker_lord_id) == str(player_id):
+        return "attacker"
+    return "defender"
+
+
+def room_side_of(attack: Any, user_id: str) -> str:
+    """The meeting side of a user ('' when a spectator)."""
+    if user_id == str(attack.attacker_lord_id):
+        return "attacker"
+    if user_id == str(attack.defender_lord_id) and not getattr(attack, "ai_defender", False):
+        return "defender"
+    return ""
+
+
+def score_players(attack: Any) -> list[str]:
+    """The HUMAN players of a meeting (the AI never declares)."""
+    players = [str(attack.attacker_lord_id)]
+    if attack.defender_lord_id and not getattr(attack, "ai_defender", False):
+        players.append(str(attack.defender_lord_id))
+    return players
+
+
+def shuffled_civs(seed: str, picks: Any) -> list[str]:
+    """Seeded shuffle of one side's picks (draft-sheet order, stable)."""
+    import random as _random
+
+    pool = [str(civ) for civ in (picks or [])]
+    _random.Random(f"sheet:{seed}").shuffle(pool)
+    return pool
+
+
+def reveal_civs(seed: str, picks: Any) -> list[str]:
+    """Seeded shuffle of the reveal (stable across every refresh)."""
+    import random as _random
+
+    pool = [str(civ) for civ in (picks or [])]
+    _random.Random(f"reveal:{seed}").shuffle(pool)
+    return pool
+
+
+def final_civ(pickban: dict[str, Any], side: str) -> str:
+    """The FINAL civilization of one side (first non-struck pick)."""
+    picks = [str(civ) for civ in (pickban.get(f"{side}_picks") or [])]
+    enemy = "defender" if side == "attacker" else "attacker"
+    struck = [str(civ) for civ in (pickban.get(f"{enemy}_sabotages") or [])]
+    return next((civ for civ in picks if civ not in struck), "")
+
+
+def own_picks_line(own: list[str]) -> str:
+    """The « 1️⃣ X · 2️⃣ Y · 3️⃣ Z » line of one side's stored picks."""
+    return " · ".join(f"{PICKBAN_RANKS[i]} {civ}" for i, civ in enumerate(own[: len(PICKBAN_RANKS)]))
+
+
+# ---------------------------------------------------------------------------
+# The DM lane (pick & ban, sabotage, RDV — best effort, never raises)
+# ---------------------------------------------------------------------------
+
+
+async def dm_user_safe(bot: Any, user_id: str, content: str, view: Any = None) -> Any:
+    """Best-effort DM to one player — returns the message (or None)."""
+    try:
+        user = getattr(bot, "get_user", lambda _id: None)(user_id)
+        if user is None:
+            user = await bot.fetch_user(int(user_id))
+        if user is not None:
+            return await user.send(content, view=view)
+    except Exception:
+        logger.warning("kingdom: player DM failed (%s)", user_id, exc_info=True)
+    return None
+
+
+async def edit_dm_message_safe(bot: Any, ref: Any, content: str, view: Any = None) -> bool:
+    """Edit a stored DM message (channel_id + message_id) — best effort."""
+    try:
+        channel = getattr(bot, "get_channel", lambda _id: None)(int(ref["channel_id"]))
+        if channel is None:
+            channel = await bot.fetch_channel(int(ref["channel_id"]))
+        message = await channel.fetch_message(int(ref["message_id"]))
+        await message.edit(content=content, view=view)
+        return True
+    except Exception:
+        logger.warning("kingdom: DM edit failed — falling back to a new DM", exc_info=True)
+        return False
+
+
+async def delete_dm_message_safe(bot: Any, ref: Any) -> None:
+    """Delete a stored DM message — best effort (a miss never blocks)."""
+    try:
+        channel_id = int(ref.get("channel_id") or 0)
+        message_id = int(ref.get("message_id") or 0)
+        if not channel_id or not message_id:
+            return
+        channel = getattr(bot, "get_channel", lambda _id: None)(channel_id)
+        if channel is None:
+            channel = await bot.fetch_channel(channel_id)
+        message = await channel.fetch_message(message_id)
+        await message.delete()
+    except Exception:
+        logger.warning("kingdom: old DM delete failed", exc_info=True)
+
+
 __all__ = [
+    "PICKBAN_RANKS",
+    "attack_by_id",
     "attack_salon",
     "attack_salon_send_safe",
     "close_previous_ephemeral",
     "combat_failure_note",
+    "delete_dm_message_safe",
+    "dm_user_safe",
+    "edit_dm_message_safe",
+    "final_civ",
     "fmt_delay",
     "fmt_paris",
     "fmt_rdv_auto",
     "fmt_when_paris",
+    "kingdom_by_id",
     "kingdom_mention",
     "kingdom_name",
     "lord_kingdom_name",
@@ -359,11 +516,20 @@ __all__ = [
     "lord_of",
     "locale_of",
     "open_unique_ephemeral",
+    "own_picks_line",
+    "pickban_staged",
+    "ready_key",
+    "reveal_civs",
     "room_channel_name",
     "room_key",
+    "room_side_of",
     "salon_overwrites",
+    "score_players",
+    "shuffled_civs",
+    "side_of",
     "silent_ack",
     "slug",
+    "strings_by_locale",
     "strings_for",
     "wiring",
 ]

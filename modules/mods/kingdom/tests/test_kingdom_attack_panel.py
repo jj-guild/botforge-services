@@ -13,7 +13,7 @@ import pytest
 
 def test_cog_modules_import() -> None:
     """The cog package's modules import (contract, wiring, panels)."""
-    from botforge.mods.kingdom.cogs.kingdom import common, panel, strings  # noqa: F401
+    from botforge.mods.kingdom.cogs.kingdom import common, panel, pickban, strings  # noqa: F401
 
 
 def test_strings_cover_both_locales() -> None:
@@ -60,3 +60,32 @@ async def test_wiring_never_raises_without_mongo() -> None:
     from botforge.mods.kingdom.cogs.kingdom.common import wiring
 
     wiring()
+
+
+def test_pickban_helpers_stay_stable() -> None:
+    """The draft/sabotage digests and shuffles are stable + distinct."""
+    from botforge.mods.kingdom.cogs.kingdom.common import (
+        final_civ,
+        ready_key,
+        reveal_civs,
+        room_side_of,
+        score_players,
+    )
+
+    assert ready_key("a1", "p1") == ready_key("a1", "p1")
+    assert ready_key("a1", "p1") != ready_key("a1", "p2")
+    assert reveal_civs("seed", ["a", "b", "c"]) == reveal_civs("seed", ["a", "b", "c"])
+    assert reveal_civs("seed", ["a", "b", "c"]) != reveal_civs("other", ["a", "b", "c"])
+    assert final_civ({"attacker_picks": ["x", "y"], "defender_sabotages": ["x"]}, "attacker") == "y"
+
+    class _Attack:
+        attacker_lord_id = "1"
+        defender_lord_id = "2"
+        ai_defender = False
+
+    assert room_side_of(_Attack(), "1") == "attacker"
+    assert room_side_of(_Attack(), "2") == "defender"
+    assert room_side_of(_Attack(), "3") == ""
+    assert score_players(_Attack()) == ["1", "2"]
+    _Attack.ai_defender = True
+    assert score_players(_Attack()) == ["1"]

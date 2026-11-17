@@ -143,6 +143,90 @@ DEFAULTS: dict[str, dict[str, str]] = {
             " défense devient Facile pendant 6h et les mariages scellés prennent +2h"
             " de verrou."
         ),
+        "reveal_cover": (
+            "🕶️ Reveal — l'attaque sur **{map}** était menée par **{attacker}** du"
+            " royaume **{attacker_kingdom}**, sous la couverture de **{cover}** du"
+            " royaume **{cover_kingdom}**. La couverture tombe."
+        ),
+        "reveal_ai": (
+            "🤖 Personne n'a défendu **{map}** — l'IA du royaume **{kingdom}** prend la défense"
+            " (niveau **{level}**/5) !"
+        ),
+        "reveal_defense": "🛡️ La défense de **{map}** est verrouillée — RDV **{time}** (Paris).",
+        "matchup_note": (
+            "⚔️ **{attacker}** 🆚 **{defender}** — les deux drafts sont résolus : RDV à l'heure prévue."
+        ),
+        "pickban_dm": (
+            "⚔️ **Pick & ban — {map}**\nClasse tes **{count}** pick de civilisation par ordre de préférence "
+            "(ton classement ordonne les replis).\n"
+            "🕒 **Fermeture de la fenêtre : {deadline}** (heure du RDV).\n"
+            "Si tu possèdes un Sabotage ou un Faucon, tu pourras en faire usage dans le salon de la bataille.\n"
+            "\n"
+            "⚠️ **Règle anti-blocage** : si tu ne valides aucun choix avant le RDV, "
+            "3 civilisations seront tirées **au hasard** de ta main — et aucun "
+            "sabotage ni faucon ne s'appliquera. Le RDV a lieu quoi qu'il arrive.\n"
+            "Ta main : {hand}\nMain adverse : {theirs}"
+        ),
+        "pickban_pick": "Choix {n}",
+        "pickban_validate": "✅ Valider",
+        "pickban_missing": "❌ Classe d'abord tes {count} civilisations.",
+        "pickban_duplicate": (
+            "❌ Vous ne pouvez pas avoir de doublons dans vos choix de civilisations."
+        ),
+        "pickban_waiting": "⏳ Picks enregistrés et validés — en attente de l'adversaire.",
+        "pickban_modify_button": "✏️ Modifier",
+        "pickban_reveal_adversary": "**Draft de votre adversaire :**",
+        "pickban_own_picks_line": "**Tes picks :** {picks}",
+        "pickban_reveal_dm": (
+            "🎭 **Reveal — {map}**\n🕒 **RDV : {deadline}** — la fenêtre de"
+            " sabotage se ferme à cette heure.\n🗡️ Veux-tu saboter ou"
+            " utiliser un Faucon ? — jusqu'à 2 civilisations adverses"
+            " retirées par camp.\n⚔️ Sinon, valide avec Passer — un joueur"
+            " absent du salon vocal à l'heure du RDV est déclaré forfait !"
+        ),
+        "pickban_default_reveal_dm": (
+            "🎭 **Reveal — {map}**\n⏱️ Le draft a été clôturé à l'heure : les"
+            " civilisations jamais classées ont été tirées au sort (aucun"
+            " sabotage ni Faucon).\n🕒 Le RDV a lieu maintenant — rejoins le"
+            " salon vocal."
+        ),
+        "attack_cancelled_dm": "❌ L'attaque sur **{map}** a été annulée — le draft est clos.",
+        "sab_open_button": "🗡️ Saboter / Utiliser un Faucon",
+        "sab_pass_button": "⚔️ Passer — je suis prêt",
+        "sab_no_resources": (
+            "🕊️ **Vous ne disposez pas de sabotage ni de Faucon** — en attente"
+            " de ton adversaire. Tu peux valider avec ⚔️ Passer."
+        ),
+        "sab_faucon": "🦅 Faucon",
+        "sab_techno": "🧪 Sabotage",
+        "sab_choose": "🎯 **Choisis la civilisation adverse à retirer :**",
+        "sab_pick_line": "🎯 {action} : **{civ}**",
+        "sab_modify_button": "✏️ Modifier",
+        "sab_validate_button": "✅ Valider",
+        "sab_cancel_button": "❌ Annuler",
+        "sab_done": "🪶 **{civ}** retirée du camp adverse.",
+        "sab_settled": "✅ Ton camp a validé — en attente de l'autre camp…",
+        "sab_phase_done": (
+            "🎭 **Phase de sabotage terminée — {map}**\nRejoins le salon vocal à"
+            " l'heure du RDV : les civilisations finales y seront affichées."
+        ),
+        "sab_over": "🕊️ La phase de sabotage est terminée.",
+        "sab_empty": "🕊️ Aucune civilisation adverse disponible.",
+        "sab_not_player": "❌ Seuls les deux joueurs du match peuvent agir ici.",
+        "sab_stock_line": (
+            "🗡️ Sabotage : {sabotage} · 🦅 Faucon : {faucon}\n"
+            "Un camp ne peut subir que 2 civilisations sabotées maximum."
+        ),
+        "sab_faucon_ready": "dispo",
+        "sab_faucon_flying": "en vol jusqu'à {time}",
+        "sab_faucon_absent": "absent",
+        "sab_panel_title": "🪶 **Sabotage** — {used}/2 civilisations retirées sur cette attaque",
+        "sab_panel_used": "Retirées : {list}",
+        "sab_panel_none": "Aucune civilisation retirée pour l'instant.",
+        "sab_panel_done": "🪶 **{civ}** retirée du camp adverse — {used}/2.",
+        "sab_again_ask": "🗡️ Veux-tu saboter une autre civilisation ?",
+        "sab_again_yes": "Oui — un autre sabotage",
+        "sab_again_no": "Non — j'ai fini",
     },
     "en": {
         "panel_title": "⚔️ Battlefield — Attack",
@@ -277,6 +361,85 @@ DEFAULTS: dict[str, dict[str, str]] = {
             "🪤 A kingdom may activate a Traquenard on its adversary: the defense AI"
             " becomes Easy for 6h and sealed marriages take a +2h lock."
         ),
+        "reveal_cover": (
+            "🕶️ Reveal — the attack on **{map}** was led by **{attacker}** of"
+            " kingdom **{attacker_kingdom}**, under the cover of **{cover}** of"
+            " kingdom **{cover_kingdom}**. The cover drops."
+        ),
+        "reveal_ai": (
+            "🤖 Nobody defended **{map}** — kingdom **{kingdom}**'s AI takes the defense"
+            " (level **{level}**/5)!"
+        ),
+        "reveal_defense": "🛡️ **{map}**'s defense is locked — meeting **{time}** (Paris).",
+        "matchup_note": (
+            "⚔️ **{attacker}** 🆚 **{defender}** — both drafts resolved: meeting at the planned hour."
+        ),
+        "pickban_dm": (
+            "⚔️ **Pick & ban — {map}**\nRank your **{count}** civilization picks by order of"
+            " preference (your ranking orders the fallbacks).\n"
+            "🕒 **Window closes: {deadline}** (meeting hour).\n"
+            "If you own a Sabotage or a Faucon, you will use it in the battle room.\n"
+            "\n"
+            "⚠️ **Anti-blocking rule**: no choice validated before the meeting → "
+            "3 **random** civilizations from your hand — and no sabotage or faucon "
+            "applies. The meeting happens anyway.\n"
+            "Your hand: {hand}\nAdversary hand: {theirs}"
+        ),
+        "pickban_pick": "Choice {n}",
+        "pickban_validate": "✅ Validate",
+        "pickban_missing": "❌ Rank your {count} civilizations first.",
+        "pickban_duplicate": "❌ You cannot have duplicates in your civilization choices.",
+        "pickban_waiting": "⏳ Picks recorded and validated — waiting for the adversary.",
+        "pickban_modify_button": "✏️ Modify",
+        "pickban_reveal_adversary": "**Your adversary's draft:**",
+        "pickban_own_picks_line": "**Your picks:** {picks}",
+        "pickban_reveal_dm": (
+            "🎭 **Reveal — {map}**\n🕒 **Meeting: {deadline}** — the sabotage"
+            " window closes at that time.\n🗡️ Do you want to sabotage or use"
+            " a Faucon? — up to 2 enemy civilizations removed per side.\n⚔️"
+            " Otherwise confirm with Pass — a player missing from the voice"
+            " room at the meeting time is a forfeit!"
+        ),
+        "pickban_default_reveal_dm": (
+            "🎭 **Reveal — {map}**\n⏱️ The draft closed on time: the"
+            " never-ranked civilizations were drawn at random (no sabotage,"
+            " no Faucon).\n🕒 The meeting is NOW — join the voice salon."
+        ),
+        "attack_cancelled_dm": "❌ The attack on **{map}** was cancelled — the draft is closed.",
+        "sab_open_button": "🗡️ Sabotage / Use a Faucon",
+        "sab_pass_button": "⚔️ Pass — I am ready",
+        "sab_no_resources": (
+            "🕊️ **You have no sabotage nor a Faucon** — waiting for your adversary. You can confirm with ⚔️ Pass."
+        ),
+        "sab_faucon": "🦅 Faucon",
+        "sab_techno": "🧪 Sabotage",
+        "sab_choose": "🎯 **Pick the enemy civilization to remove:**",
+        "sab_pick_line": "🎯 {action}: **{civ}**",
+        "sab_modify_button": "✏️ Modify",
+        "sab_validate_button": "✅ Validate",
+        "sab_cancel_button": "❌ Cancel",
+        "sab_done": "🪶 **{civ}** removed from the enemy side.",
+        "sab_settled": "✅ Your side confirmed — waiting for the other side…",
+        "sab_phase_done": (
+            "🎭 **Sabotage phase over — {map}**\nJoin the voice room at the"
+            " meeting time: the final civilizations are shown there."
+        ),
+        "sab_over": "🕊️ The sabotage phase is over.",
+        "sab_empty": "🕊️ No enemy civilization available.",
+        "sab_not_player": "❌ Only the two players of the match may act here.",
+        "sab_stock_line": (
+            "🗡️ Sabotage: {sabotage} · 🦅 Faucon: {faucon}\nOne side can suffer at most 2 sabotaged civilizations."
+        ),
+        "sab_faucon_ready": "ready",
+        "sab_faucon_flying": "flying until {time}",
+        "sab_faucon_absent": "absent",
+        "sab_panel_title": "🪶 **Sabotage** — {used}/2 civilizations removed in this attack",
+        "sab_panel_used": "Removed: {list}",
+        "sab_panel_none": "No civilization removed yet.",
+        "sab_panel_done": "🪶 **{civ}** removed from the enemy side — {used}/2.",
+        "sab_again_ask": "🗡️ Do you want to sabotage another civilization?",
+        "sab_again_yes": "Yes — another sabotage",
+        "sab_again_no": "No — I'm done",
     },
 }
 

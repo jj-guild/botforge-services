@@ -60,8 +60,27 @@ def setup_hook(bot: Any) -> None:
         InfoButton,
         JoinButton,
     )
+    from .pickban import (
+        PickBanModifyButton,
+        PickBanSelect,
+        PickBanValidateButton,
+        SabotageOpenButton,
+        SabotagePassButton,
+    )
 
-    for item in (DeclareButton, HistoryButton, InfoButton, DefendButton, JoinButton, CancelButton):
+    for item in (
+        DeclareButton,
+        HistoryButton,
+        InfoButton,
+        DefendButton,
+        JoinButton,
+        CancelButton,
+        PickBanSelect,
+        PickBanModifyButton,
+        PickBanValidateButton,
+        SabotageOpenButton,
+        SabotagePassButton,
+    ):
         try:
             bot.add_dynamic_items(item)
         except Exception:  # noqa: S110 — idempotent across restarts
