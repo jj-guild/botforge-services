@@ -566,6 +566,49 @@ DEFAULTS: dict[str, dict[str, str]] = {
             "🏁 **Fin de saison** — les attaques en cours sont annulées, "
             "les royaumes de tête sont à égalité : le ShowMatch tranche !"
         ),
+        "tavern_button": "🍺 Taverne",
+        "mercenary_button": "🗡️ Mercenaires",
+        "tavern_title": "🍺 La Taverne",
+        "tavern_purse": "🪙 Ta bourse : **{0}** écu(s)",
+        "tavern_cooldown": "⏳ Prochain service possible dans ~{0} heure(s) (cooldown global de 24h).",
+        "tavern_locked": "🔒 Verrou de combat en cours pendant encore ~{0} heure(s).",
+        "tavern_select": "Choisissez une boisson :",
+        "tavern_drink_line": "{0} — {1} 🪙",
+        "tavern_lock_line": "Verrou {0} min",
+        "tavern_confirm_title": "🍺 Confirmer la commande",
+        "tavern_confirm_sub": "Prix : **{0}** 🪙 — verrou de combat : **{1}** minutes.",
+        "tavern_yes": "Boire",
+        "tavern_edit": "Changer",
+        "tavern_drunk": "🍺 Tu as bu **{0}** — il te reste **{1}** écu(s).",
+        "tavern_cooldown_note": "⏳ Le cooldown global de 24h n'est pas encore écoulé.",
+        "tavern_no_purse": "❌ Ta bourse ne suffit pas.",
+        "tavern_no_season": "❌ Aucune saison en cours.",
+        "tavern_season_closed": "❌ La saison est terminée — le comptoir est fermé.",
+        "tavern_error": "❌ La Taverne refuse : {0}",
+        "mercenary_title": "🗡️ Le Chef Mercenaire",
+        "mercenary_lot_line": "• **{0}** ({1} usage(s)) — plus haute offre : **{2}** 🪙",
+        "mercenary_own_bid": "_Tu as misé {0} 🪙._",
+        "mercenary_winners": "🏆 Lots remportés : {0}",
+        "mercenary_no_winner": "🍂 Aucun lot n'a trouvé preneur.",
+        "mercenary_select_lot": "Choisissez un lot pour enchérir :",
+        "mercenary_select_amount": "Montant de ton offre (écus) :",
+        "mercenary_bid_placed": "🗡️ Offre de **{1}** 🪙 placée sur **{0}** — les écus sont séquestrés.",
+        "mercenary_withdraw": "Retirer mon offre",
+        "mercenary_withdraw_done": "✅ Ton offre est retirée — les écus séquestrés sont remboursés.",
+        "mercenary_withdraw_none": "ℹ️ Tu n'as aucune offre en cours.",
+        "mercenary_none": (
+            "🍂 Le Chef Mercenaire n'est pas là — il se tient à la Taverne"
+            " entre 20h et 21h (heure de Paris)."
+        ),
+        "mercenary_bid_too_low": "❌ L'offre doit STRICTEMENT dépasser la plus haute en cours.",
+        "mercenary_not_open_yet": "⏳ Les enchères ne sont pas encore ouvertes.",
+        "mercenary_closed_note": "❌ Le marché est fermé.",
+        "mercenary_already_held": "❌ Un seul peuple mercenaire à la fois — tu en tiens déjà un.",
+        "mercenary_open_note": (
+            "🗡️ **Le Chef Mercenaire est là** — la bourse aux mercenaires est ouverte,"
+            " les enchères ferment à l'heure affichée sur place. À la Taverne !"
+        ),
+        "mercenary_close_note": "🗡️ La bourse aux mercenaires est close — **{0}** lot(s) attribué(s).",
     },
     "en": {
         "panel_title": "⚔️ Battlefield — Attack",
@@ -1109,6 +1152,49 @@ DEFAULTS: dict[str, dict[str, str]] = {
             "🏁 **End of the season** — the attacks are cancelled and "
             "the top kingdoms are tied: the ShowMatch decides!"
         ),
+        "tavern_button": "🍺 Taverne",
+        "mercenary_button": "🗡️ Mercenaires",
+        "tavern_title": "🍺 The Taverne",
+        "tavern_purse": "🪙 Your purse: **{0}** écu(s)",
+        "tavern_cooldown": "⏳ Next round possible in ~{0} hour(s) (global 24h cooldown).",
+        "tavern_locked": "🔒 A combat lock is still running for ~{0} hour(s).",
+        "tavern_select": "Choose a drink:",
+        "tavern_drink_line": "{0} — {1} 🪙",
+        "tavern_lock_line": "Lock {0} min",
+        "tavern_confirm_title": "🍺 Confirm the order",
+        "tavern_confirm_sub": "Price: **{0}** 🪙 — combat lock: **{1}** minutes.",
+        "tavern_yes": "Drink",
+        "tavern_edit": "Change",
+        "tavern_drunk": "🍺 You drank **{0}** — **{1}** écu(s) left in your purse.",
+        "tavern_cooldown_note": "⏳ The global 24h cooldown is still running.",
+        "tavern_no_purse": "❌ Your purse cannot afford it.",
+        "tavern_no_season": "❌ No season is running.",
+        "tavern_season_closed": "❌ The season is over — the counter is closed.",
+        "tavern_error": "❌ The Taverne refuses: {0}",
+        "mercenary_title": "🗡️ The Mercenary Chief",
+        "mercenary_lot_line": "• **{0}** ({1} use(s)) — highest bid: **{2}** 🪙",
+        "mercenary_own_bid": "_You bid {0} 🪙._",
+        "mercenary_winners": "🏆 Lots awarded: {0}",
+        "mercenary_no_winner": "🍂 No lot found a buyer.",
+        "mercenary_select_lot": "Choose a lot to bid on:",
+        "mercenary_select_amount": "Your bid amount (écus):",
+        "mercenary_bid_placed": "🗡️ Bid of **{1}** 🪙 placed on **{0}** — the écus are escrowed.",
+        "mercenary_withdraw": "Withdraw my bid",
+        "mercenary_withdraw_done": "✅ Your bid is withdrawn — the escrowed écus are refunded.",
+        "mercenary_withdraw_none": "ℹ️ You hold no bid.",
+        "mercenary_none": (
+            "🍂 The Mercenary Chief is not here — he stands at the Taverne"
+            " between 8pm and 9pm Paris time."
+        ),
+        "mercenary_bid_too_low": "❌ The bid must STRICTLY exceed the current highest.",
+        "mercenary_not_open_yet": "⏳ The bids are not open yet.",
+        "mercenary_closed_note": "❌ The market is closed.",
+        "mercenary_already_held": "❌ One mercenary civilization at a time — you already hold one.",
+        "mercenary_open_note": (
+            "🗡️ **The Mercenary Chief is here** — the mercenary market is open,"
+            " the bids close at the time shown on the spot. At the Taverne!"
+        ),
+        "mercenary_close_note": "🗡️ The mercenary market is closed — **{0}** lot(s) awarded.",
     },
 }
 

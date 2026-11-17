@@ -31,12 +31,19 @@ class _KingdomStackImpl(KingdomStackContract):
         from botforge.mods.kingdom.diplomacy import DiplomacyService
         from botforge.mods.kingdom.economy import EconomyService
         from botforge.mods.kingdom.events import EventService
+        from botforge.mods.kingdom.mercenary import MercenaryService
+        from botforge.mods.kingdom.tavern import TavernService
 
         self._store = store
         self._config = config
         self._kingdoms = EnrollmentService(store, config)
         self._territories = TerritoryService(store, config, self._kingdoms)
-        self._attacks = AttackService(store, config, self._kingdoms, self._territories)
+        # chef-mercenaire-v1 T2c: the pick & ban consumes the LIVE held
+        # civilization through the seam (the service is built first).
+        self._mercenary = MercenaryService(store, config, self._kingdoms)
+        self._attacks = AttackService(
+            store, config, self._kingdoms, self._territories, mercenary=self._mercenary
+        )
         self._diplomacy = DiplomacyService(store, config, self._kingdoms, self._territories)
         self._events = EventService(
             store, config, self._kingdoms, self._territories, self._attacks, self._diplomacy
@@ -44,6 +51,7 @@ class _KingdomStackImpl(KingdomStackContract):
         self._economy = EconomyService(
             store, config, self._kingdoms, self._territories, self._attacks
         )
+        self._tavern = TavernService(store, config, self._kingdoms)
 
     @property
     def kingdoms(self) -> Any:
@@ -68,6 +76,14 @@ class _KingdomStackImpl(KingdomStackContract):
     @property
     def economy(self) -> Any:
         return self._economy
+
+    @property
+    def tavern(self) -> Any:
+        return self._tavern
+
+    @property
+    def mercenary(self) -> Any:
+        return self._mercenary
 
     @property
     def config(self) -> Any:

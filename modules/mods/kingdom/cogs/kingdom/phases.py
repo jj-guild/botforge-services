@@ -691,6 +691,76 @@ async def run_event_slots_safe(bot: Any) -> None:
                 logger.warning("kingdom: one event report announcement failed", exc_info=True)
 
 
+async def run_mercenary_tick_safe(bot: Any) -> None:
+    """Run the Chef Mercenaire tick (chef-mercenaire-v1).
+
+    The Chief's clock is REAL Paris wall time (never the offset game
+    clock): inside the 20h-21h window the daily market opens
+    (idempotent — a CLOSED market of TODAY stays displayed, a closed
+    market of ANOTHER day lets a fresh one open) and every tick closes
+    the due market (replay-safe awards/refunds). The opening is
+    skipped on a paused (frozen/setup) season, but a live market
+    still closes — the escrowed écus must always come home. The open
+    and close notes land in Géopolitique, best effort per guild.
+    """
+    from datetime import UTC, datetime
+    from zoneinfo import ZoneInfo
+
+    from .battle import _geopolitics_channel
+    from .common import strings_by_locale, wiring
+
+    stack = wiring()
+    if stack is None:
+        return
+    mercenary = getattr(stack, "mercenary", None)
+    if mercenary is None:
+        return
+    moment = datetime.now(UTC)
+    paris_today = moment.astimezone(ZoneInfo("Europe/Paris")).strftime("%Y-%m-%d")
+
+    opened = False
+    try:
+        doc = await mercenary.market()
+    except Exception:  # noqa: BLE001 — a read failure defers to the next tick
+        logger.warning("kingdom: mercenary market read failed — best-effort", exc_info=True)
+        return
+    opens = False
+    if doc is None:
+        opens = True
+    elif doc.get("closed", False):
+        opens = str(doc.get("date")) != paris_today
+    if opens and mercenary.inside_window(moment):
+        try:
+            season = await stack.kingdoms.current_season()
+            if season is not None and not season.frozen and season.phase != "setup":
+                await mercenary.open_market(now=moment)
+                opened = True
+                logger.info("kingdom: mercenary market opened (window)")
+        except Exception:  # noqa: BLE001 — the window guard raced us, next tick retries
+            logger.warning("kingdom: mercenary open failed — best-effort", exc_info=True)
+    awards: list[Any] = []
+    try:
+        awards = await mercenary.close_if_due(now=moment)
+    except Exception:  # noqa: BLE001
+        logger.warning("kingdom: mercenary close failed — best-effort", exc_info=True)
+        return
+    if not opened and not awards:
+        return
+    for guild in list(getattr(bot, "guilds", []) or []):
+        locale = await _guild_locale(bot, str(guild.id))
+        strings = strings_by_locale(locale)
+        try:
+            channel = _geopolitics_channel(guild)
+            if channel is None:
+                continue
+            if opened:
+                await channel.send(str(strings["mercenary_open_note"]))
+            if awards:
+                await channel.send(str(strings["mercenary_close_note"]).format(len(awards)))
+        except Exception:  # noqa: BLE001
+            logger.warning("kingdom: one mercenary announcement failed — best-effort", exc_info=True)
+
+
 def start_attack_refresher(bot: Any) -> None:
     """Start the attack phases loop (every 5 minutes).
 
@@ -720,6 +790,10 @@ def start_attack_refresher(bot: Any) -> None:
             await run_economy_due_safe(bot)
         except Exception:
             logger.warning("kingdom: economy due pass failed — best-effort", exc_info=True)
+        try:
+            await run_mercenary_tick_safe(bot)
+        except Exception:
+            logger.warning("kingdom: mercenary tick failed — best-effort", exc_info=True)
 
     _loop.start()
     logger.info("kingdom: attack phases loop started (every 5 minutes)")

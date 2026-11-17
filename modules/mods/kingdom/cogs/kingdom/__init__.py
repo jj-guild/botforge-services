@@ -79,6 +79,7 @@ def setup_hook(bot: Any) -> None:
     from .marry import MarryButton
     from .alliances import AlliancesButton
     from .market import ChamberButton, MarketButton
+    from .tavern import MercenaryButton, TavernButton
 
     for item in (
         DeclareButton,
@@ -104,6 +105,8 @@ def setup_hook(bot: Any) -> None:
         AlliancesButton,
         MarketButton,
         ChamberButton,
+        TavernButton,
+        MercenaryButton,
     ):
         try:
             bot.add_dynamic_items(item)

@@ -46,6 +46,16 @@ class KingdomStack(Protocol):
         ...
 
     @property
+    def tavern(self) -> Any:
+        """The purse-and-drinks economy (TavernService)."""
+        ...
+
+    @property
+    def mercenary(self) -> Any:
+        """The daily mercenary auction (MercenaryService)."""
+        ...
+
+    @property
     def config(self) -> Any:
         """The validated season configuration (KingdomSeasonConfig)."""
         ...

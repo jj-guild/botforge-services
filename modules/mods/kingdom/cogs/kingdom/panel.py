@@ -51,6 +51,7 @@ from .plan import PlanButton
 from .marry import MarryButton
 from .alliances import AlliancesButton
 from .market import ChamberButton, MarketButton
+from .tavern import MercenaryButton, TavernButton
 
 logger = logging.getLogger("kingdom.attack.panel")
 
@@ -103,6 +104,10 @@ async def build_attack_panel(guild_id: str) -> discord.ui.LayoutView:
             discord.ui.ActionRow(
                 MarketButton(strings_dict["market_button"]),
                 ChamberButton(strings_dict["chamber_button"]),
+            ),
+            discord.ui.ActionRow(
+                TavernButton(strings_dict["tavern_button"]),
+                MercenaryButton(strings_dict["mercenary_button"]),
             ),
             discord.ui.TextDisplay(f"-# `{PANEL_VIEW_KEY}`"),
             accent_colour=discord.Colour(0xA72D2D),
