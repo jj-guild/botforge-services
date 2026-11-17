@@ -75,6 +75,7 @@ def setup_hook(bot: Any) -> None:
         RoomResultButton,
         RoomUrlButton,
     )
+    from .plan import PlanButton, PlanCancelButton
 
     for item in (
         DeclareButton,
@@ -94,6 +95,8 @@ def setup_hook(bot: Any) -> None:
         RoomResultButton,
         DisputeChoiceSelect,
         DisputeConfirmButton,
+        PlanButton,
+        PlanCancelButton,
     ):
         try:
             bot.add_dynamic_items(item)

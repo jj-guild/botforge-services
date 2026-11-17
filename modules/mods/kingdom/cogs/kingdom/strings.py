@@ -357,6 +357,56 @@ DEFAULTS: dict[str, dict[str, str]] = {
         "dispute_applied": "⚖️ Arbitrage appliqué — **{kingdom}** remporte **{map}**.",
         "dispute_forfeit": "⚖️ Arbitrage appliqué — double forfait sur **{map}**.",
         "dispute_not_admin": "❌ Seuls les bot-admins arbitrent un litige.",
+        # -- planning (P4.1b tranche 2d) --
+        "plan_button": "📅 Planifier une attaque",
+        "plan_disclaimer": (
+            "⚠️ Une plannification ne réserve pas le territoire : si un autre royaume déclare"
+            " une attaque dessus avant l'heure choisie, ta plannification basculera sur ton"
+            " choix suivant — ou sera rompue s'il n'en reste aucun."
+        ),
+        "plan_wizard_title": "📅 Planifier une attaque",
+        "plan_time_day_label": "Jour du RDV",
+        "plan_time_day_today": "Aujourd'hui — {date}",
+        "plan_time_day_tomorrow": "Demain — {date}",
+        "plan_time_hour_label": "Heure",
+        "plan_time_minute_label": "Minute",
+        "plan_time_hint": (
+            "Choisis le jour, l'heure et la minute du RDV (heure de Paris), puis valide."
+            " Règle d'or : 24h maximum à l'avance."
+        ),
+        "plan_time_validate_button": "✅ Valider l'heure",
+        "plan_time_invalid": (
+            "❌ Ce RDV est impossible : il doit être dans le futur et dans les 24h."
+            " Choisis un autre créneau."
+        ),
+        "plan_confirm_title": "📅 Planification — choix 1 : **{map}** · RDV **{time}** (Paris)",
+        "plan_choice2_placeholder": "Choix 2 (facultatif)",
+        "plan_choice3_placeholder": "Choix 3 (facultatif)",
+        "plan_confirm_button": "✅ Confirmer la planification",
+        "plan_dm_header": "📅 Plannification d'attaque — {map}",
+        "plan_choices_line": "Choix {n} : **{map}**{active}",
+        "plan_active_tag": " ✅",
+        "plan_dm_time": "RDV : **{time}** (Paris) — déclaration automatique à **{declare_time}** (Paris).",
+        "plan_dm_budget": "Le budget d'attaque (⚔️) sera consommé à la DÉCLARATION — pas maintenant.",
+        "plan_created_note": "📅 Plannification enregistrée — le récap est dans tes messages privés.",
+        "plan_no_dm": "⚠️ Plannification enregistrée, mais l'envoi du MP a échoué (MPs fermés ?).",
+        "plan_failed": "❌ La plannification a échoué : {message}",
+        "plan_cancel_button": "❌ Annuler ma plannification",
+        "plan_cancelled_ephemeral": "❌ Plannification annulée — aucun budget n'a été consommé.",
+        "plan_event_executed": (
+            "✅ Ton attaque planifiée a été DÉCLARÉE sur **{map}** — RDV **{time}** (Paris)."
+            " Le budget d'attaque a été consommé à la déclaration."
+        ),
+        "plan_event_switched": (
+            "⚠️ Ton choix sur **{old}** ne peut aboutir (la bataille a déjà été déclarée dessus)"
+            " — bascule sur le choix suivant : **{map}**."
+        ),
+        "plan_event_broken": (
+            "⛔ Ton attaque planifiée ne peut aboutir : la bataille a déjà été déclarée"
+            " sur **{map}** et aucun autre choix n'est disponible. Aucun budget n'a été consommé."
+        ),
+        "plan_event_cancelled": "❌ Ta plannification a été annulée — aucun budget n'a été consommé.",
+        "plan_no_service": "❌ Le service des attaques est indisponible.",
     },
     "en": {
         "panel_title": "⚔️ Battlefield — Attack",
@@ -692,6 +742,56 @@ DEFAULTS: dict[str, dict[str, str]] = {
         "dispute_applied": "⚖️ Arbitration applied — **{kingdom}** wins **{map}**.",
         "dispute_forfeit": "⚖️ Arbitration applied — double forfeit on **{map}**.",
         "dispute_not_admin": "❌ Only bot-admins arbitrate a dispute.",
+        # -- planning (P4.1b tranche 2d) --
+        "plan_button": "📅 Plan an attack",
+        "plan_disclaimer": (
+            "⚠️ A planning reserves NOTHING: if another kingdom declares an attack on the"
+            " territory before your chosen hour, your planning switches to your next choice"
+            " — or breaks when none remains."
+        ),
+        "plan_wizard_title": "📅 Plan an attack",
+        "plan_time_day_label": "Meeting day",
+        "plan_time_day_today": "Today — {date}",
+        "plan_time_day_tomorrow": "Tomorrow — {date}",
+        "plan_time_hour_label": "Hour",
+        "plan_time_minute_label": "Minute",
+        "plan_time_hint": (
+            "Pick the meeting day, hour and minute (Paris time), then validate."
+            " Golden rule: 24h maximum ahead."
+        ),
+        "plan_time_validate_button": "✅ Validate the time",
+        "plan_time_invalid": (
+            "❌ That meeting is impossible: it must be in the future and within 24h."
+            " Pick another slot."
+        ),
+        "plan_confirm_title": "📅 Planning — choice 1: **{map}** · meeting **{time}** (Paris)",
+        "plan_choice2_placeholder": "Choice 2 (optional)",
+        "plan_choice3_placeholder": "Choice 3 (optional)",
+        "plan_confirm_button": "✅ Confirm the planning",
+        "plan_dm_header": "📅 Attack planning — {map}",
+        "plan_choices_line": "Choice {n}: **{map}**{active}",
+        "plan_active_tag": " ✅",
+        "plan_dm_time": "Meeting: **{time}** (Paris) — automatic declaration at **{declare_time}** (Paris).",
+        "plan_dm_budget": "The attack budget (⚔️) is consumed at the DECLARATION — not now.",
+        "plan_created_note": "📅 Planning saved — the recap is in your DMs.",
+        "plan_no_dm": "⚠️ Planning saved, but the DM failed (DMs closed?).",
+        "plan_failed": "❌ The planning failed: {message}",
+        "plan_cancel_button": "❌ Cancel my planning",
+        "plan_cancelled_ephemeral": "❌ Planning cancelled — no budget was consumed.",
+        "plan_event_executed": (
+            "✅ Your planned attack was DECLARED on **{map}** — meeting **{time}** (Paris)."
+            " The attack budget was consumed at the declaration."
+        ),
+        "plan_event_switched": (
+            "⚠️ Your choice on **{old}** cannot proceed (the battle was already declared there)"
+            " — switched to the next choice: **{map}**."
+        ),
+        "plan_event_broken": (
+            "⛔ Your planned attack cannot proceed: the battle was already declared on"
+            " **{map}** and no other choice is available. No budget was consumed."
+        ),
+        "plan_event_cancelled": "❌ Your planning was cancelled — no budget was consumed.",
+        "plan_no_service": "❌ The attack service is unavailable.",
     },
 }
 

@@ -47,6 +47,7 @@ from .common import (
     strings_for,
     wiring,
 )
+from .plan import PlanButton
 
 logger = logging.getLogger("kingdom.attack.panel")
 
@@ -90,6 +91,7 @@ async def build_attack_panel(guild_id: str) -> discord.ui.LayoutView:
                 DeclareButton(strings_dict["declare_button"]),
                 HistoryButton(strings_dict["history_button"]),
                 InfoButton(strings_dict["attack_info_button"]),
+                PlanButton(strings_dict["plan_button"]),
             ),
             discord.ui.TextDisplay(f"-# `{PANEL_VIEW_KEY}`"),
             accent_colour=discord.Colour(0xA72D2D),

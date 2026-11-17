@@ -112,3 +112,24 @@ async def test_battle_degrades_without_stack() -> None:
 
     assert await battle.resolve_room_key(None, "abc") == ""
     await battle.refresh_room_message_safe(None, None, None, "fr")
+
+
+def test_plan_helpers_stay_stable() -> None:
+    """The plan time composer enforces the 24h golden rule."""
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+
+    from botforge.mods.kingdom.cogs.kingdom.plan import _meeting_from_selections
+
+    tz = ZoneInfo("Europe/Paris")
+    now = datetime(2026, 11, 17, 10, 0, tzinfo=tz)
+    ok = _meeting_from_selections(0, 20, 0, now)
+    assert ok.hour == 20
+    assert _meeting_from_selections(0, 11, 0, now).hour == 11
+    for args in ((0, 9, 0), (2, 20, 0)):
+        try:
+            _meeting_from_selections(*args, now)
+            raised = False
+        except ValueError:
+            raised = True
+        assert raised, args
