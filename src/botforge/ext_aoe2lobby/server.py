@@ -54,10 +54,10 @@ def main() -> None:
         level=os.environ.get("LOG_LEVEL", "INFO").upper(),
         format="%(asctime)s %(levelname)s %(name)s %(message)s",
     )
-    from botforge.core.models.game import MatchEvent
     from botforge.core_process.ext_server import serve_game_provider
     from botforge.ext_aoe2lobby import DECLARED_CAPABILITIES, PROVIDER_ID
     from botforge.ext_aoe2lobby.adapter import Aoe2LobbyAdapter
+    from botforge.ext_aoe2lobby.store import STATUS_GAME, STATUS_LOBBY, LobbyStore
 
     adapter = Aoe2LobbyAdapter(
         ws_url=os.environ.get("AOE2LOBBY_WS_URL", "") or "wss://data.aoe2lobby.com/ws/",
@@ -66,35 +66,35 @@ def main() -> None:
 
     hub = _StreamHub(adapter)
 
-    async def match_events() -> AsyncIterator[MatchEvent]:
-        """Yield the current world, then the live transitions.
+    # The live store (#404 T3): the provider's OWN database — every
+    # interesting match (with at least one known player) is stored as
+    # the frames arrive, raw first. No MONGO_URI means no live store:
+    # the GetLiveMatches RPC answers UNIMPLEMENTED and the core keeps
+    # the in-memory stream it always had.
+    store = None
+    if os.environ.get("MONGO_URI", ""):
+        from botforge.core.models.db import get_async_database
 
-        The handshake first: a fresh consumer receives the CURRENT
-        state (every enrolled profile's live lobby/game), then the
-        live transitions from its OWN broadcast queue — the boot task
-        owns the single WS stream, the consumers never carry its life.
-        """
-        for frame in adapter.current_state_events():
-            yield MatchEvent(
-                match_ref=frame["match_ref"],
-                type=frame["type"],
-                occurred_at=frame["occurred_at"],
-                profile_ids=tuple(frame["profile_ids"]),
-                metadata=tuple(sorted(frame["metadata"].items())),
-            )
-        queue = hub.subscribe()
+        store = LobbyStore(get_async_database())
+
+    async def _persist(frame: dict[str, Any]) -> None:
+        """Store one frame (raw + projection); failures never crash."""
+        if store is None:
+            return
         try:
-            while True:
-                frame = await queue.get()
-                yield MatchEvent(
-                    match_ref=frame["match_ref"],
-                    type=frame["type"],
-                    occurred_at=frame["occurred_at"],
-                    profile_ids=tuple(frame["profile_ids"]),
-                    metadata=tuple(sorted(frame["metadata"].items())),
-                )
-        finally:
-            hub.unsubscribe(queue)
+            await store.apply_event(frame)
+        except Exception:
+            logging.getLogger("botforge.ext_aoe2lobby.store").warning(
+                "live frame store failed", exc_info=True
+            )
+
+    match_events = _match_events(adapter, hub, _persist)
+
+    async def live_matches(limit: int) -> list[dict[str, Any]]:
+        """Serve the stored live state (lobby + in-game matches)."""
+        if store is None:
+            return []
+        return await store.list_matches([STATUS_LOBBY, STATUS_GAME], limit)
 
     async def update_subscriptions(profile_ids: list[str], user_ids: list[str]) -> bool:
         """Reconcile the upstream players subscription in place (one session).
@@ -113,9 +113,57 @@ def main() -> None:
             PROVIDER_ID,
             match_events=match_events,
             update_subscriptions=update_subscriptions,
+            live_matches=live_matches,
         )
 
     asyncio.run(_boot())
+
+
+def _match_events(
+    adapter: Any,
+    hub: _StreamHub,
+    persist: Any,
+) -> Any:
+    """Build the events generator: the current world, then the live feed.
+
+    The handshake first: a fresh consumer receives the CURRENT state
+    (every enrolled profile's live lobby/game), then the live
+    transitions from its OWN broadcast queue — the boot task owns the
+    single WS stream, the consumers never carry its life.
+
+    Every frame rides the live store (#404 T3) on its way through: the
+    raw frames are kept, the match documents fold the current state —
+    the GetLiveMatches RPC answers from the store.
+    """
+    from botforge.core.models.game import MatchEvent
+
+    async def generator() -> AsyncIterator[MatchEvent]:
+        """Yield the stored-then-live frames as MatchEvent models."""
+        for frame in adapter.current_state_events():
+            await persist(frame)
+            yield MatchEvent(
+                match_ref=frame["match_ref"],
+                type=frame["type"],
+                occurred_at=frame["occurred_at"],
+                profile_ids=tuple(frame["profile_ids"]),
+                metadata=tuple(sorted(frame["metadata"].items())),
+            )
+        queue = hub.subscribe()
+        try:
+            while True:
+                frame = await queue.get()
+                await persist(frame)
+                yield MatchEvent(
+                    match_ref=frame["match_ref"],
+                    type=frame["type"],
+                    occurred_at=frame["occurred_at"],
+                    profile_ids=tuple(frame["profile_ids"]),
+                    metadata=tuple(sorted(frame["metadata"].items())),
+                )
+        finally:
+            hub.unsubscribe(queue)
+
+    return generator()
 
 
 if __name__ == "__main__":

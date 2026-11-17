@@ -104,6 +104,11 @@ class GameStub:
                 request_serializer=botforge_dot_v1_dot_game__pb2.UserStatsRequest.SerializeToString,
                 response_deserializer=botforge_dot_v1_dot_game__pb2.UserStatsReply.FromString,
                 _registered_method=True)
+        self.GetLiveMatches = channel.unary_unary(
+                '/botforge.v1.Game/GetLiveMatches',
+                request_serializer=botforge_dot_v1_dot_game__pb2.LiveMatchesRequest.SerializeToString,
+                response_deserializer=botforge_dot_v1_dot_game__pb2.LiveMatchesReply.FromString,
+                _registered_method=True)
 
 
 class GameServicer:
@@ -223,6 +228,15 @@ class GameServicer:
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
+    def GetLiveMatches(self, request, context):
+        """The live matches the provider currently sees (the ones with at
+        least one known player) — the lobby covers the present, the
+        history store covers the past (#404 T3).
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
 
 def add_GameServicer_to_server(servicer, server):
     rpc_method_handlers = {
@@ -290,6 +304,11 @@ def add_GameServicer_to_server(servicer, server):
                     servicer.GetUserStats,
                     request_deserializer=botforge_dot_v1_dot_game__pb2.UserStatsRequest.FromString,
                     response_serializer=botforge_dot_v1_dot_game__pb2.UserStatsReply.SerializeToString,
+            ),
+            'GetLiveMatches': grpc.unary_unary_rpc_method_handler(
+                    servicer.GetLiveMatches,
+                    request_deserializer=botforge_dot_v1_dot_game__pb2.LiveMatchesRequest.FromString,
+                    response_serializer=botforge_dot_v1_dot_game__pb2.LiveMatchesReply.SerializeToString,
             ),
     }
     generic_handler = grpc.method_handlers_generic_handler(
@@ -648,6 +667,33 @@ class Game:
             '/botforge.v1.Game/GetUserStats',
             botforge_dot_v1_dot_game__pb2.UserStatsRequest.SerializeToString,
             botforge_dot_v1_dot_game__pb2.UserStatsReply.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def GetLiveMatches(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/botforge.v1.Game/GetLiveMatches',
+            botforge_dot_v1_dot_game__pb2.LiveMatchesRequest.SerializeToString,
+            botforge_dot_v1_dot_game__pb2.LiveMatchesReply.FromString,
             options,
             channel_credentials,
             insecure,

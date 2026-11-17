@@ -63,6 +63,11 @@ Typed&nbsp;client&nbsp;for&nbsp;a&nbsp;botforge.v1.Game&nbsp;provider&nbsp;proce
 
 <dl><dt>async <a name="GameProviderClient-get_capabilities"><strong>get_capabilities</strong></a>(self) -&gt; 'ProviderCapabilities'</dt><dd><span class="code">Fetch&nbsp;the&nbsp;provider's&nbsp;declared&nbsp;capabilities,&nbsp;degrading&nbsp;to&nbsp;zero.</span></dd></dl>
 
+<dl><dt>async <a name="GameProviderClient-get_live_matches"><strong>get_live_matches</strong></a>(self, limit: 'int' = 0) -&gt; 'list[dict[str, Any]]'</dt><dd><span class="code">Fetch&nbsp;the&nbsp;live&nbsp;matches&nbsp;the&nbsp;provider&nbsp;sees&nbsp;(#404&nbsp;T3).<br>
+&nbsp;<br>
+Degrades&nbsp;to&nbsp;an&nbsp;empty&nbsp;list&nbsp;—&nbsp;an&nbsp;unreachable&nbsp;provider&nbsp;reads&nbsp;as<br>
+"nothing&nbsp;live&nbsp;right&nbsp;now".</span></dd></dl>
+
 <dl><dt>async <a name="GameProviderClient-get_match_details"><strong>get_match_details</strong></a>(self, match_ref: 'str') -&gt; 'MatchDetails | None'</dt><dd><span class="code">Fetch&nbsp;a&nbsp;match's&nbsp;slotinfo&nbsp;and&nbsp;raw&nbsp;options,&nbsp;degrading&nbsp;to&nbsp;None.<br>
 &nbsp;<br>
 A&nbsp;provider&nbsp;that&nbsp;cannot&nbsp;serve&nbsp;match&nbsp;details&nbsp;(unsupported&nbsp;or<br>

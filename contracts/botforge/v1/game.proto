@@ -64,6 +64,11 @@ service Game {
   // The per-USER unified view: the accounts of one platform user
   // aggregated (best current/max elo per leaderboard, matches window).
   rpc GetUserStats(UserStatsRequest) returns (UserStatsReply);
+
+  // The live matches the provider currently sees (the ones with at
+  // least one known player) — the lobby covers the present, the
+  // history store covers the past (#404 T3).
+  rpc GetLiveMatches(LiveMatchesRequest) returns (LiveMatchesReply);
 }
 
 message UpdateSubscriptionsRequest {
@@ -280,4 +285,25 @@ message UserStats {
 
 message UserStatsReply {
   UserStats stats = 1;
+}
+
+message LiveMatchesRequest {
+  int32 limit = 1;   // 0: the provider's default
+}
+
+message LiveMatch {
+  string match_ref = 1;      // provider-side, opaque
+  string status = 2;         // lobby | game | ended
+  string map_name = 3;
+  string format = 4;         // e.g. "1v1", "2v2", "FFA"
+  repeated string profile_ids = 5;  // the known participants
+  string players_json = 6;   // per-slot summary (name, civ, team, avatar)
+  string lobby_url = 7;
+  string spectate_url = 8;
+  int64 updated_at = 9;       // epoch ms of the last frame seen
+  map<string, string> metadata = 10;  // summary extras (host, match_type...)
+}
+
+message LiveMatchesReply {
+  repeated LiveMatch matches = 1;
 }
