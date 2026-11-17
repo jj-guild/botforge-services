@@ -319,13 +319,27 @@ class LiquipediaMapsProvider:
             #   circuit: the old 3-retry storm answered a throttling API
             #   with more traffic, the exact opposite of what it asked for.
             global _shared_last_request_at, _shared_last_parse_at
-            retry_after = float(response.headers.get("Retry-After") or 0.0)
+            retry_after_header = response.headers.get("Retry-After")
+            try:
+                retry_after = float(retry_after_header) if retry_after_header else 0.0
+            except ValueError:
+                retry_after = 0.0
             # The rate-limit headers ride EVERY 429 branch (backoff and
             # circuit alike) at WARNING: the CI battery must see which
             # bucket throttled the request — a DEBUG line never shows
             # in the run's log (the 2026-11-13 CI 429s were blind).
             logger.warning("LIQUIPEDIA 429 response headers: %s", dict(response.headers))
-            if retry_after >= _429_RETRY_AFTER_CIRCUIT_S or attempt >= _429_MAX_RETRIES:
+            # No Retry-After at all (absent or unparseable — issue
+            # botforge-services#397): the server said "stop" without
+            # scheduling a return, so a retry is a guess the ToS
+            # punish with more throttle. The circuit opens on the
+            # FIRST 429 and the caller fails with the rate-limit
+            # verdict — zero further traffic, no blind backoff wait.
+            if (
+                not retry_after_header
+                or retry_after >= _429_RETRY_AFTER_CIRCUIT_S
+                or attempt >= _429_MAX_RETRIES
+            ):
                 self._open_circuit(retry_after)
                 break
             wait = max(retry_after, _429_BACKOFF_BASE_S)

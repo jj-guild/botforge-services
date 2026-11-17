@@ -64,6 +64,63 @@ async def test_battery_validates_query_shape_with_contact(
     assert results[0].skipped is False
 
 
+async def test_battery_fails_with_clear_rate_limit_detail_on_429(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A 429 that survived the bounded retry FAILS (never masked) with a
+    message naming the external rate limit (#397) — a red CI must read
+    as "rerun later", not as a code regression.
+    """
+    import httpx
+
+    monkeypatch.setenv("PROVIDER_CONTACT", "dev@example.com")
+    import botforge.ext_liquipedia.liquipedia as lp
+
+    class _ThrottledProvider:
+        def __init__(self, *args: Any, **kwargs: Any) -> None:
+            del args, kwargs
+
+        def map_data_batch(self, page_names: list[str]) -> dict[str, Any]:
+            del page_names
+            raise httpx.HTTPStatusError(
+                "Client error '429 Too Many Requests'",
+                request=httpx.Request("GET", "https://liquipedia.net/api.php"),
+                response=httpx.Response(429),
+            )
+
+    monkeypatch.setattr(lp, "LiquipediaMapsProvider", _ThrottledProvider)
+    results = await battery()
+    assert results[0].ok is False, "a persistent 429 stays an honest FAIL"
+    assert results[0].skipped is False
+    assert "rate limit" in results[0].detail
+    assert "429" in results[0].detail
+
+
+async def test_battery_fails_with_clear_rate_limit_detail_on_open_circuit(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The circuit-open error (the provider already failed fast) rides
+    the same rate-limit verdict as a raw 429 (#397)."""
+    monkeypatch.setenv("PROVIDER_CONTACT", "dev@example.com")
+    import botforge.ext_liquipedia.liquipedia as lp
+
+    class _CircuitedProvider:
+        def __init__(self, *args: Any, **kwargs: Any) -> None:
+            del args, kwargs
+
+        def map_data_batch(self, page_names: list[str]) -> dict[str, Any]:
+            del page_names
+            raise lp.LiquipediaCircuitOpenError(
+                "Liquipedia circuit open — the API is rate-limiting this IP; retry in 1800 s"
+            )
+
+    monkeypatch.setattr(lp, "LiquipediaMapsProvider", _CircuitedProvider)
+    results = await battery()
+    assert results[0].ok is False
+    assert results[0].skipped is False
+    assert "rate limit" in results[0].detail
+
+
 async def test_battery_fails_when_known_map_missing(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
