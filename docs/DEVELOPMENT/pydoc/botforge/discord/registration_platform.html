@@ -195,14 +195,15 @@ Data descriptors inherited from <a href="builtins.html#BaseException">builtins.B
 <td class="section-title" colspan=3>&nbsp;<br><strong class="bigsection">Functions</strong></td></tr>
     
 <tr><td class="decor functions-decor"><span class="code">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span></td><td>&nbsp;</td>
-<td class="singlecolumn"><dl><dt><a name="-extract_insights_user_id"><strong>extract_insights_user_id</strong></a>(typed: 'str') -&gt; 'str | None'</dt><dd><span class="code">Extract&nbsp;the&nbsp;aoe2insights&nbsp;user&nbsp;id&nbsp;from&nbsp;a&nbsp;pasted&nbsp;URL,&nbsp;strictly.<br>
+<td class="singlecolumn"><dl><dt><a name="-extract_insights_user_id"><strong>extract_insights_user_id</strong></a>(typed: 'str') -&gt; 'str | None'</dt><dd><span class="code">Extract&nbsp;the&nbsp;aoe2insights&nbsp;user&nbsp;id&nbsp;from&nbsp;a&nbsp;pasted&nbsp;URL,&nbsp;resiliently.<br>
 &nbsp;<br>
-Only&nbsp;an&nbsp;aoe2insights.com&nbsp;URL&nbsp;of&nbsp;the&nbsp;exact&nbsp;shape<br>
-``<a href="https://www.aoe2insights.com/user/&lt;digits">https://www.aoe2insights.com/user/&lt;digits</a>&gt;...``&nbsp;matches&nbsp;—&nbsp;anything<br>
-else&nbsp;(another&nbsp;host,&nbsp;a&nbsp;path-injection&nbsp;attempt,&nbsp;a&nbsp;query&nbsp;trick)&nbsp;is<br>
-rejected.&nbsp;Double&nbsp;gate:&nbsp;the&nbsp;anchored&nbsp;regex&nbsp;AND&nbsp;a&nbsp;parsed-URL&nbsp;host&nbsp;check<br>
-(the&nbsp;id&nbsp;never&nbsp;leaves&nbsp;the&nbsp;regex's&nbsp;capture&nbsp;group,&nbsp;so&nbsp;the&nbsp;downstream<br>
-request&nbsp;URL&nbsp;cannot&nbsp;be&nbsp;tampered&nbsp;with).</span></dd></dl>
+The&nbsp;pasted&nbsp;URL&nbsp;may&nbsp;be&nbsp;LONGER&nbsp;than&nbsp;the&nbsp;canonical&nbsp;profile&nbsp;page&nbsp;(a&nbsp;deep<br>
+link,&nbsp;a&nbsp;trailing&nbsp;path,&nbsp;a&nbsp;query,&nbsp;a&nbsp;fragment)&nbsp;—&nbsp;the&nbsp;insights&nbsp;id&nbsp;is&nbsp;the<br>
+``/user/&lt;digits&gt;``&nbsp;segment&nbsp;and&nbsp;that&nbsp;is&nbsp;ALL&nbsp;we&nbsp;keep&nbsp;(#402:&nbsp;store&nbsp;the<br>
+insights&nbsp;id,&nbsp;resolve&nbsp;the&nbsp;relic&nbsp;id).&nbsp;Double&nbsp;gate:&nbsp;the&nbsp;host&nbsp;is&nbsp;checked<br>
+on&nbsp;the&nbsp;parsed&nbsp;URL,&nbsp;the&nbsp;id&nbsp;never&nbsp;leaves&nbsp;the&nbsp;regex's&nbsp;capture&nbsp;group&nbsp;—<br>
+the&nbsp;downstream&nbsp;request&nbsp;URL&nbsp;cannot&nbsp;be&nbsp;tampered&nbsp;with.&nbsp;The&nbsp;relic-keyed<br>
+shape&nbsp;(``/user/relic/&lt;id&gt;``)&nbsp;does&nbsp;NOT&nbsp;match:&nbsp;its&nbsp;id&nbsp;is&nbsp;a&nbsp;relic&nbsp;id.</span></dd></dl>
  <dl><dt>async <a name="-resolve_relic_id"><strong>resolve_relic_id</strong></a>(typed_id: 'str', transport: 'httpx.AsyncBaseTransport | None' = None) -&gt; 'str | None'</dt><dd><span class="code">Resolve&nbsp;whatever&nbsp;id&nbsp;the&nbsp;user&nbsp;typed&nbsp;into&nbsp;the&nbsp;relic&nbsp;profile&nbsp;id.<br>
 &nbsp;<br>
 The&nbsp;user&nbsp;may&nbsp;paste&nbsp;either&nbsp;id&nbsp;(the&nbsp;2026-10-16&nbsp;UX&nbsp;lesson:&nbsp;the&nbsp;insights<br>
@@ -210,14 +211,20 @@ URL&nbsp;id&nbsp;and&nbsp;the&nbsp;relic&nbsp;id&nbsp;are&nbsp;different&nbsp;nu
 works&nbsp;with&nbsp;librematch/aoe2lobby):<br>
 &nbsp;<br>
 -&nbsp;a&nbsp;relic&nbsp;id&nbsp;(what&nbsp;we&nbsp;want)&nbsp;—&nbsp;validates&nbsp;as-is;<br>
--&nbsp;an&nbsp;aoe2insights&nbsp;user&nbsp;id&nbsp;—&nbsp;resolved&nbsp;through<br>
-&nbsp;&nbsp;``/user/&lt;id&gt;/relic-id/``,&nbsp;which&nbsp;answers&nbsp;the&nbsp;relic&nbsp;id&nbsp;in&nbsp;plain&nbsp;text;<br>
--&nbsp;a&nbsp;full&nbsp;insights&nbsp;URL&nbsp;—&nbsp;**always&nbsp;resolved**:&nbsp;the&nbsp;user&nbsp;id&nbsp;is&nbsp;extracted<br>
-&nbsp;&nbsp;by&nbsp;the&nbsp;strict&nbsp;URL&nbsp;pattern,&nbsp;then&nbsp;mapped&nbsp;to&nbsp;the&nbsp;relic&nbsp;id.<br>
+-&nbsp;an&nbsp;aoe2insights&nbsp;user&nbsp;id&nbsp;—&nbsp;resolved&nbsp;through&nbsp;the&nbsp;site,&nbsp;which&nbsp;answers<br>
+&nbsp;&nbsp;the&nbsp;relic&nbsp;id&nbsp;in&nbsp;plain&nbsp;text;<br>
+-&nbsp;a&nbsp;full&nbsp;insights&nbsp;URL,&nbsp;however&nbsp;long&nbsp;—&nbsp;the&nbsp;id&nbsp;is&nbsp;extracted&nbsp;first<br>
+&nbsp;&nbsp;(``extract_insights_user_id``),&nbsp;then&nbsp;mapped&nbsp;to&nbsp;the&nbsp;relic&nbsp;id.<br>
+&nbsp;<br>
+Resilience&nbsp;by&nbsp;design&nbsp;(#402&nbsp;live&nbsp;finding:&nbsp;the&nbsp;relic-id&nbsp;page&nbsp;answers<br>
+403&nbsp;to&nbsp;datacenter&nbsp;requests):&nbsp;the&nbsp;identified&nbsp;project&nbsp;User-Agent&nbsp;is<br>
+tried&nbsp;first&nbsp;(repo&nbsp;rule&nbsp;#277),&nbsp;a&nbsp;browser-compatible&nbsp;one&nbsp;on&nbsp;a&nbsp;403.<br>
+The&nbsp;relic-id&nbsp;page&nbsp;is&nbsp;the&nbsp;ONLY&nbsp;source&nbsp;read&nbsp;—&nbsp;the&nbsp;profile&nbsp;pages&nbsp;are<br>
+never&nbsp;scraped.<br>
 &nbsp;<br>
 Injection&nbsp;safety:&nbsp;the&nbsp;request&nbsp;URL&nbsp;is&nbsp;built&nbsp;ONLY&nbsp;from&nbsp;a<br>
-regex-validated&nbsp;digit&nbsp;string&nbsp;(&lt;=&nbsp;15&nbsp;chars);&nbsp;the&nbsp;reply&nbsp;must&nbsp;be&nbsp;a<br>
-bare&nbsp;numeric&nbsp;id&nbsp;—&nbsp;any&nbsp;HTML,&nbsp;extra&nbsp;text&nbsp;or&nbsp;mismatch&nbsp;is&nbsp;rejected.<br>
+regex-validated&nbsp;digit&nbsp;string&nbsp;(&lt;=&nbsp;15&nbsp;chars);&nbsp;the&nbsp;plain-text&nbsp;reply&nbsp;must<br>
+be&nbsp;a&nbsp;bare&nbsp;numeric&nbsp;id&nbsp;—&nbsp;any&nbsp;HTML,&nbsp;extra&nbsp;text&nbsp;or&nbsp;mismatch&nbsp;is&nbsp;rejected.<br>
 &nbsp;<br>
 ``transport``&nbsp;is&nbsp;the&nbsp;test&nbsp;seam;&nbsp;None&nbsp;means&nbsp;the&nbsp;real&nbsp;network.<br>
 Returns&nbsp;None&nbsp;when&nbsp;nothing&nbsp;resolves&nbsp;(unknown&nbsp;id,&nbsp;insights&nbsp;down).</span></dd></dl>
@@ -229,6 +236,6 @@ Returns&nbsp;None&nbsp;when&nbsp;nothing&nbsp;resolves&nbsp;(unknown&nbsp;id,&nb
 <tr><td class="decor data-decor"><span class="code">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span></td><td>&nbsp;</td>
 <td class="singlecolumn"><strong>INSIGHTS_BASE_URL</strong> = 'https://www.aoe2insights.com'<br>
 <strong>INSIGHTS_RELIC_URL_RE</strong> = re.compile('^https?://(?:www\\.)?aoe2insights\\....r/relic/(\\d{1,15})(?:[/?#].*)?$', re.IGNORECASE)<br>
-<strong>INSIGHTS_URL_RE</strong> = re.compile('^https?://(?:www\\.)?aoe2insights\\.com/user/(\\d{1,15})(?:[/?#].*)?$', re.IGNORECASE)<br>
+<strong>INSIGHTS_URL_RE</strong> = re.compile('aoe2insights\\.com/user/(?!relic/)(\\d{1,15})(?!\\d)', re.IGNORECASE)<br>
 <strong>PROFILE_BINDINGS_COLLECTION</strong> = 'profile_bindings'</td></tr></table>
 </body></html>
