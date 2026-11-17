@@ -161,3 +161,75 @@ async def test_nothing_resolves_is_none_not_a_silent_binding(
     assert await seam.validate_profile(INSIGHTS_ID) is None
     assert await seam.validate_profile(f"https://www.aoe2insights.com/user/{INSIGHTS_ID}/") is None
     assert await seam.validate_profile(RELIC_ID) is None
+
+
+def test_extract_survives_longer_urls() -> None:
+    """A longer pasted URL still yields the insights id (#402)."""
+    from botforge.discord.registration_platform import extract_insights_user_id
+
+    assert extract_insights_user_id("https://www.aoe2insights.com/user/12488557/") == INSIGHTS_ID
+    assert extract_insights_user_id("https://www.aoe2insights.com/user/12488557") == INSIGHTS_ID
+    assert (
+        extract_insights_user_id("https://www.aoe2insights.com/user/12488557/matches")
+        == INSIGHTS_ID
+    )
+    assert (
+        extract_insights_user_id("https://aoe2insights.com/user/12488557/?tab=overview#x")
+        == INSIGHTS_ID
+    )
+    # the relic-keyed shape carries a RELIC id, never the insights id
+    assert (
+        extract_insights_user_id(f"https://www.aoe2insights.com/user/relic/{RELIC_ID}/")
+        is None
+    )
+    # another host never matches
+    assert extract_insights_user_id("https://evil.com/user/12488557/") is None
+    assert extract_insights_user_id("https://aoe2insights.com.evil.com/user/12488557/") is None
+
+
+async def test_resolve_retries_with_a_browser_ua_on_403(monkeypatch: Any) -> None:
+    """The live #402 finding: the relic-id page 403s a datacenter call.
+
+    The identified project UA is tried first (repo rule #277); a 403
+    retries once with the browser-compatible UA — the resolution must
+    not die on the bot filter.
+    """
+    import httpx
+
+    from botforge.discord.registration_platform import resolve_relic_id
+
+    attempts: list[str] = []
+
+    class _Transport(httpx.AsyncBaseTransport):
+        async def handle_async_request(self, request: httpx.Request) -> httpx.Response:
+            attempts.append(request.headers.get("user-agent", ""))
+            if len(attempts) == 1:
+                return httpx.Response(403, text="forbidden")
+            return httpx.Response(200, text=RELIC_ID)
+
+    assert await resolve_relic_id(INSIGHTS_ID, transport=_Transport()) == RELIC_ID
+    assert len(attempts) == 2
+    assert "botforge-bot" in attempts[0]  # the identified UA first
+    assert attempts[1] != attempts[0]  # the browser-compatible retry
+
+
+async def test_seam_falls_back_to_the_typed_id_when_the_site_is_down(
+    monkeypatch: Any,
+) -> None:
+    """The ids are sometimes EQUAL: the typed id gets one chance as relic.
+
+    The site being unreachable (the live 403) must not block the binding
+    when the pasted id already IS the relic id.
+    """
+    client = _FakeProviderClient({INSIGHTS_ID})
+
+    async def _unavailable(typed_id: str, transport: Any = None) -> str | None:
+        return None
+
+    monkeypatch.setattr(platform, "resolve_relic_id", _unavailable)
+    seam = _seam(monkeypatch, client)
+
+    validated = await seam.validate_profile(f"https://www.aoe2insights.com/user/{INSIGHTS_ID}/")
+    assert validated is not None
+    assert validated["profile_id"] == INSIGHTS_ID  # validated as a relic id
+    assert validated["site_ids"]["aoe2insights"] == INSIGHTS_ID  # still stored
