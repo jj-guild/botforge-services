@@ -42,6 +42,7 @@ from .common import (
     open_unique_ephemeral,
     room_key,
     strings_by_locale,
+    surface_footer,
     wiring,
 )
 
@@ -247,6 +248,7 @@ async def _confirm_step(
             ),
             strings["plan_dm_budget"],
             strings["plan_disclaimer"],
+            surface_footer("surface:mod:kingdom:attack:plan"),
         ]
         return "\n".join(lines)
 
@@ -306,7 +308,13 @@ async def _time_step(
     )
 
     def _hint() -> str:
-        return "\n".join([str(strings["plan_wizard_title"]), strings["plan_time_hint"]])
+        return "\n".join(
+            [
+                str(strings["plan_wizard_title"]),
+                strings["plan_time_hint"],
+                surface_footer("surface:mod:kingdom:attack:plan"),
+            ]
+        )
 
     view = discord.ui.View(timeout=600)
 
@@ -416,6 +424,7 @@ class PlanButton(
         view = discord.ui.View(timeout=600)
         view.add_item(select)
         lines = [str(strings["plan_wizard_title"]), strings["plan_disclaimer"]]
+        lines.append(surface_footer("surface:mod:kingdom:attack:plan"))
         await open_unique_ephemeral(interaction, "\n".join(lines), view=view)
 
 

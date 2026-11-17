@@ -43,6 +43,7 @@ from .common import (
     room_channel_name,
     room_key,
     salon_overwrites,
+    surface_footer,
     silent_ack,
     strings_for,
     wiring,
@@ -246,8 +247,6 @@ class HistoryButton(
         if not lines:
             await open_unique_ephemeral(interaction, strings["history_empty"])
             return
-        from .common import surface_footer
-
         pages = ["\n".join(lines[start : start + 10]) for start in range(0, len(lines), 10)]
         await open_unique_ephemeral(
             interaction,
@@ -339,6 +338,8 @@ def _history_page_view(
                     pages[target_page],
                     "",
                     strings["history_page"].format(page=target_page + 1, pages=len(pages)),
+                    "",
+                    surface_footer("surface:mod:kingdom:attack:history"),
                 )
             ),
             view=_history_page_view(strings, pages, target_page),
@@ -487,6 +488,7 @@ async def _kingdom_select_view(
     if protected:
         lines.append(str(strings["protected_line"]).format(kingdoms=" · ".join(protected)))
     lines.append(str(strings["traquenard_hint"]))
+    lines.append(surface_footer("surface:mod:kingdom:attack:declare"))
     return "\n".join(lines), view
 
 
@@ -573,6 +575,7 @@ async def _territory_select_view(
     if delay_minutes:
         lines.append(str(strings["itinerary_line"]).format(minutes=delay_minutes))
     lines.append(str(strings["traquenard_hint"]))
+    lines.append(surface_footer("surface:mod:kingdom:attack:declare"))
     return "\n".join(lines), view
 
 
@@ -635,6 +638,7 @@ async def _attack_mode_select_view(
     view.add_item(classic)
     view.add_item(embuscade)
     lines = [str(strings["mode_choose"]), str(strings["traquenard_hint"])]
+    lines.append(surface_footer("surface:mod:kingdom:attack:declare"))
     return "\n".join(lines), view
 
 
@@ -804,7 +808,10 @@ async def _open_cover_step(
         select.callback = on_cover  # type: ignore[method-assign, assignment]
         cover_view = discord.ui.View(timeout=600)
         cover_view.add_item(select)
-        await target.response.edit_message(content=str(strings["choose_cover"]), view=cover_view)
+        cover_content = "\n".join(
+            (str(strings["choose_cover"]), surface_footer("surface:mod:kingdom:attack:declare"))
+        )
+        await target.response.edit_message(content=cover_content, view=cover_view)
 
     async def on_no(target: discord.Interaction[Any]) -> None:
         await open_lobby(None, target)
@@ -824,7 +831,11 @@ async def _open_cover_step(
     view.add_item(yes)
     view.add_item(no)
     await interaction.response.send_message(
-        content=str(strings["cover_question"]), view=view, ephemeral=True
+        content="\n".join(
+            (str(strings["cover_question"]), surface_footer("surface:mod:kingdom:attack:declare"))
+        ),
+        view=view,
+        ephemeral=True,
     )
 
 
@@ -888,6 +899,7 @@ async def _open_attack_salon_safe(
     if getattr(attack, "kind", None) is AttackKind.GAIA:
         gaia_max = int(getattr(stack.attacks, "gaia_max_participants", 7) or 7)
         content += str(strings["announce_v1_gaia"]).format(max=gaia_max)
+    content += "\n" + surface_footer("surface:mod:kingdom:attack:salon")
     try:
         message = await channel.send(content, view=_attack_salon_view(strings, attack))
         await _record_safe(stack, "record_attack_base_message", attack, int(message.id))

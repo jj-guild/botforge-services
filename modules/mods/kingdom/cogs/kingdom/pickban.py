@@ -43,6 +43,7 @@ from .common import (
     kingdom_by_id,
     own_picks_line,
     pickban_staged,
+    surface_footer,
     ready_key,
     reveal_civs,
     room_side_of,
@@ -792,6 +793,7 @@ async def sabotage_panel_content(
     stock = await sabotage_stock_line(stack, attack, side, strings)
     if stock:
         lines.append(stock)
+    lines.append(surface_footer("surface:mod:kingdom:sabotage"))
     view = await sabotage_menu_view(stack, attack, side, strings)
     return "\n".join(lines), view
 

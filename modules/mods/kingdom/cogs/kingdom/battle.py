@@ -58,6 +58,7 @@ from .common import (
     fmt_paris,
     final_civ,
     kingdom_name,
+    surface_footer,
     lord_name,
     lord_of,
     locale_of,
@@ -172,6 +173,7 @@ async def room_body_text(stack: Any, attack: Any, strings: dict[str, str]) -> st
         body += "\n" + strings["room_ai_disclaimer"].format(level=level)
     if score.get("all_ready"):
         body += "\n" + strings["room_scoreboard_footer"]
+    body += "\n" + surface_footer("surface:mod:kingdom:battle:room")
     return body
 
 
@@ -1303,7 +1305,9 @@ class DraftViewButton(
             await open_unique_ephemeral(interaction, strings["gaia_gone"])
             return
         embed = await draft_sheet_embed(stack, attack, strings)
-        await open_unique_ephemeral(interaction, "", embed=embed)
+        await open_unique_ephemeral(
+            interaction, surface_footer("surface:mod:kingdom:battle:draft"), embed=embed
+        )
 
 
 async def draft_sheet_embed(stack: Any, attack: Any, strings: dict[str, str]) -> discord.Embed:

@@ -19,6 +19,24 @@ views:
   # the ephemeral history pager
   surface:mod:kingdom:attack:history:
     kind: surface
+  # the guided « Déclarer une attaque » wizard (all its steps edit one window)
+  surface:mod:kingdom:attack:declare:
+    kind: surface
+  # the planifier wizard (steps + récap)
+  surface:mod:kingdom:attack:plan:
+    kind: surface
+  # an attack's OWN salon base message (the pinned announcement)
+  surface:mod:kingdom:attack:salon:
+    kind: surface
+  # the sabotage ephemeral panel (X/2 récap, pick, again-confirm)
+  surface:mod:kingdom:sabotage:
+    kind: surface
+  # the battle meeting message (scoreboard + draft/ready/id buttons)
+  surface:mod:kingdom:battle:room:
+    kind: surface
+  # the 📜 draft sheet (the meeting's ephemeral embed)
+  surface:mod:kingdom:battle:draft:
+    kind: surface
   # the Church's marriage wizard + confirm
   surface:mod:kingdom:church:marry:
     kind: surface
