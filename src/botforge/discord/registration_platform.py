@@ -20,6 +20,14 @@ from botforge.core.services.registration import (
 )
 
 INSIGHTS_BASE_URL = "https://www.aoe2insights.com"
+# The relic-keyed insights URL shape: /user/relic/<relic_id>. Every
+# OTHER /user/<id> shape carries the site's OWN id — the insights user
+# id, which differs from the relic id (#402): it must resolve through
+# the relic-id page, never validate as-is.
+INSIGHTS_RELIC_URL_RE = re.compile(
+    r"^https?://(?:www\.)?aoe2insights\.com/user/relic/(\d{1,15})(?:[/?#].*)?$",
+    re.IGNORECASE,
+)
 INSIGHTS_URL_RE = re.compile(
     r"^https?://(?:www\.)?aoe2insights\.com/user/(\d{1,15})(?:[/?#].*)?$", re.IGNORECASE
 )
@@ -125,10 +133,20 @@ class MongoRegistrationDatabase:
         return [dict(doc) async for doc in cursor]
 
     async def find_binding_by_profile(self, game_key: str, profile_id: str) -> dict[str, Any] | None:
-        """Return the binding owning a profile; None when unbound."""
+        """Return the binding owning a profile; None when unbound.
+
+        The profile is addressable by EITHER id (#402): the relic id
+        the provider validated, or the aoe2insights user id the player
+        pasted — the binding stores both.
+        """
         doc = await self._database[PROFILE_BINDINGS_COLLECTION].find_one(
             {"game_key": game_key, "profile_id": profile_id}
         )
+        if doc is None:
+            # the insights user id addresses the same binding (#402)
+            doc = await self._database[PROFILE_BINDINGS_COLLECTION].find_one(
+                {"game_key": game_key, "profile.site_ids.aoe2insights": profile_id}
+            )
         return dict(doc) if doc is not None else None
 
     async def delete_binding(self, game_key: str, user_id: str, profile_id: str) -> bool:
@@ -147,7 +165,19 @@ class MongoRegistrationDatabase:
         cursor = self._database["profile_bindings"].find(
             {"game_key": game_key, "profile_id": {"$in": list(profile_ids)}}
         )
-        return [dict(doc) async for doc in cursor]
+        bindings = {str(doc.get("profile_id", "")): dict(doc) async for doc in cursor}
+        missing = [pid for pid in profile_ids if str(pid) not in bindings]
+        if missing:
+            # the insights user ids address the same bindings (#402)
+            cursor = self._database["profile_bindings"].find(
+                {
+                    "game_key": game_key,
+                    "profile.site_ids.aoe2insights": {"$in": [str(p) for p in missing]},
+                }
+            )
+            async for doc in cursor:
+                bindings[str(doc.get("profile_id", ""))] = dict(doc)
+        return list(bindings.values())
 
     async def list_bindings_for_game(self, game_key: str) -> list[dict[str, Any]]:
         """List every profile binding of a game (live dashboard reuse, #147)."""
@@ -212,21 +242,24 @@ class Aoe2ProfileValidationSeam:
         typed = profile_id.strip()
         # Any known site's URL parses through the profile-sites registry:
         # a relic-keyed site (aoe2.GG, ageofempires.com) carries the relic
-        # id directly — no resolution needed; the insights URL keeps its
-        # resolve path (its id is the site's own).
+        # id directly — no resolution needed. The insights URL is the
+        # #402 trap: only /user/relic/<id> carries the relic id; every
+        # other /user/<id> carries the site's OWN id — resolve it, then
+        # keep BOTH ids on the binding so the player is addressable by
+        # either one.
         from botforge.core.services.profile_sites import ID_KIND_RELIC, parse_profile_url
 
         parsed = parse_profile_url("aoe2", typed)
         if parsed is not None:
-            _site_key, site_id = parsed
-            site = _site_of(parsed[0])
+            site_key, site_id = parsed
+            site = _site_of(site_key)
             if site is not None and site.id_kind == ID_KIND_RELIC:
+                if site_key == "aoe2insights" and not INSIGHTS_RELIC_URL_RE.match(typed):
+                    return await self._resolve_insights(client, site_id)
                 return await self._validate_with_client(client, site_id)
         if extract_insights_user_id(typed) is not None:
-            relic_id = await resolve_relic_id(typed)
-            if relic_id is None:
-                return None
-            return await self._validate_with_client(client, relic_id)
+            url_id = extract_insights_user_id(typed) or ""
+            return await self._resolve_insights(client, url_id)
         # A plain id: try the provider first (a relic id validates directly),
         # then resolve through insights (the user typed the insights id).
         validated = await self._validate_with_client(client, typed)
@@ -235,7 +268,26 @@ class Aoe2ProfileValidationSeam:
         relic_id = await resolve_relic_id(typed)
         if relic_id is None:
             return None
-        return await self._validate_with_client(client, relic_id)
+        validated = await self._validate_with_client(client, relic_id)
+        if validated is not None:
+            validated["site_ids"] = {"aoe2insights": typed}
+        return validated
+
+    async def _resolve_insights(self, client: Any, insights_id: str) -> dict[str, Any] | None:
+        """Resolve an insights user id into the relic id, keeping both.
+
+        The insights id is what the player pastes; the relic id is what
+        the provider validates (#402). The binding stores both, so a
+        lookup by EITHER id resolves to the same player.
+        """
+        relic_id = await resolve_relic_id(insights_id)
+        if relic_id is None:
+            return None
+        validated = await self._validate_with_client(client, relic_id)
+        if validated is None:
+            return None
+        validated["site_ids"] = {"aoe2insights": insights_id}
+        return validated
 
     @staticmethod
     async def _validate_with_client(client: Any, profile_id: str) -> dict[str, Any] | None:

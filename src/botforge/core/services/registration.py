@@ -108,7 +108,10 @@ class RegistrationService:
             raise ValueError(f"unknown game {game_key!r}: no profile seam registered")
         validated = await seam.validate_profile(profile_id)
         if validated is None:
-            raise InvalidProfileError(f"profile {profile_id!r} is not valid for game {game_key!r}")
+            raise InvalidProfileError(
+                f"profile {profile_id!r} is not valid for game {game_key!r} — tried as a "
+                "relic id and as an aoe2insights id, neither resolved (#402)"
+            )
         # The seam may have resolved the typed id (an aoe2insights user id)
         # into the canonical relic id — the binding always stores the
         # relic id the provider validated.
