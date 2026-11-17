@@ -163,7 +163,12 @@ def _match_events(
         finally:
             hub.unsubscribe(queue)
 
-    return generator()
+    # The servicer CALLS this seam once per StreamMatchEvents request
+    # (a fresh consumer = a fresh generator, its own hub queue): the
+    # function is returned, never a pre-built generator object — a
+    # shared object dies with its first consumer and every later
+    # stream ends empty (the merlin-env finding: "stream lost" loops).
+    return generator
 
 
 if __name__ == "__main__":
