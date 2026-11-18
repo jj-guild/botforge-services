@@ -23,6 +23,7 @@ Usage (inside the env's botforge-core container, by env-console.yml):
     python -m botforge.cli.console_ops clean-managed --guild <id|all>
     python -m botforge.cli.console_ops nuke            --guild <id|all>
     python -m botforge.cli.console_ops reset-data      --guild <id|all>
+    python -m botforge.cli.console_ops ensure-tree    --guild <id|all>
     python -m botforge.cli.console_ops install --guild <id|all> \\
         --mods mod1,mod2 --games game1 [--no-propagate]
 """
@@ -97,7 +98,7 @@ async def _apply_action(guild: discord.Guild, action: str, mods: list[str], game
         _nuke_everything_for_guild,
         _reset_guild_data,
     )
-    from botforge.discord.console_ops_runner import apply_install_for_guild
+    from botforge.discord.console_ops_runner import apply_ensure_tree_for_guild, apply_install_for_guild
 
     if action == "clean-managed":
         channels, roles = await _delete_managed_for_guild(guild)
@@ -111,6 +112,8 @@ async def _apply_action(guild: discord.Guild, action: str, mods: list[str], game
             print(f"reset-data {name}: {count} document(s)")
     elif action == "install":
         print(await apply_install_for_guild(guild, mods, games, propagate))
+    elif action == "ensure-tree":
+        print(await apply_ensure_tree_for_guild(guild))
 
 
 async def _run(action: str, guilds: list[str], mods: list[str], games: list[str], propagate: bool) -> int:
@@ -176,6 +179,7 @@ def main(argv: list[str] | None = None) -> int:
         ("nuke", "delete every channel, category and role of the target guild(s)"),
         ("reset-data", "wipe the target guild(s) persisted data — isolated, nothing global"),
         ("install", "set the mods/games grants, clean uninstalled, provision installed"),
+        ("ensure-tree", "re-provision the guild's declared platform tree (the reset-data inverse)"),
     ]:
         action_parser = sub.add_parser(name, help=help_text)
         action_parser.add_argument(

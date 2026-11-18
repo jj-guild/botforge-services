@@ -125,6 +125,58 @@ async def apply_install_for_guild(
     return "\n".join(lines)
 
 
+async def apply_ensure_tree_for_guild(guild: discord.Guild) -> str:
+    """Re-provision the guild's declared platform tree, headless.
+
+    The inverse of reset-data (which wipes the stored channel
+    resolutions): a nuked guild has no admin channel left, so no
+    Synchroniser button is reachable — the boot deliberately never
+    creates (a member deleting a salon owns the decision), and
+    install provisions mod channels only. This action rebuilds the
+    PLATFORM scopes (bot, games, mods, and every granted game's scope)
+    through the same provision + persist seam the Synchroniser uses,
+    behind the console's own gates.
+    """
+    from botforge.core.models.db import get_async_database
+    from botforge.core.services.guild_access import GuildAccessService
+    from botforge.core.services.guild_access_mongo import MongoGuildAccessDatabase
+    from botforge.discord.ui.panels import registered_scopes
+    from botforge.discord.ui.panels_provisioning import persist_resolutions, provision_scope
+    from botforge.discord.ui.panels_scopes import register_platform_scopes
+
+    wirings = build_console_wirings(_client_of(guild))
+    if wirings is None:
+        return "Wiring unavailable (MONGO_URI/REDIS_URI) — the tree cannot be provisioned."
+    register_platform_scopes()
+
+    access = GuildAccessService(
+        MongoGuildAccessDatabase(get_async_database()),
+        games=_all_games(),
+        mods=_all_mods(wirings["registry"]),
+    )
+    granted_games = set(await access.enabled_games(str(guild.id)))
+
+    lines: list[str] = []
+    for spec in registered_scopes():
+        if spec.scope.startswith("games/"):
+            game_key = spec.scope.split("/", 1)[1]
+            if game_key not in granted_games:
+                lines.append(f"{spec.scope}: skipped (game not granted).")
+                continue
+        try:
+            resolved = await provision_scope(guild, spec, "en", lambda key, locale: key)
+            await persist_resolutions(str(guild.id), spec.scope, resolved)
+            lines.append(f"{spec.scope}: {len(resolved)} channel(s) ensured.")
+        except Exception:
+            logger.warning("CONSOLE OPS tree ensure failed (%s)", spec.scope, exc_info=True)
+            lines.append(f"{spec.scope}: failed (see the logs).")
+    lines.append(
+        "Restart the bot (env-control) so the boot routing pins the "
+        "menus into the fresh channels."
+    )
+    return "\n".join(lines)
+
+
 def _client_of(guild: discord.Guild) -> discord.Client:
     """Recover the client from a guild object (discord.py state seam)."""
     return guild._state._get_client()
