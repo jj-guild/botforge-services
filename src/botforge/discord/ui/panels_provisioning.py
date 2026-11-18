@@ -305,6 +305,60 @@ async def _ensure_group_category(
     return await platform.ensure_category(group_name)
 
 
+async def _apply_category_access(
+    guild: discord.Guild, category_id: str, view_role_ids: tuple[str, ...] = ()
+) -> None:
+    """Apply the scope category's gate (the machine-room rule, best-effort).
+
+    The bot's own member always carries an explicit allow — without it
+    the category's ``view_channel=False`` for @everyone locks the bot
+    out of the folder it provisioned (the same lesson as the channels).
+    The view roles ride as RESOLVED IDS (the persisted mapping is the
+    resolver — a renamed role keeps its grant).
+    """
+    category = guild.get_channel(int(category_id)) if category_id.isdigit() else None
+    if category is None:
+        return
+    try:
+        me = guild.me
+        if me is not None:
+            await category.set_permissions(
+                me,
+                overwrite=discord.PermissionOverwrite(
+                    view_channel=True,
+                    send_messages=True,
+                    manage_messages=True,
+                    read_message_history=True,
+                ),
+                reason="botforge: the bot operates its own category",
+            )
+        await category.set_permissions(
+            guild.default_role,
+            overwrite=discord.PermissionOverwrite(view_channel=False),
+            reason="botforge: the declared category gate hides @everyone",
+        )
+        for role_id in view_role_ids or ():
+            role = guild.get_role(int(role_id)) if str(role_id).isdigit() else None
+            if role is None:
+                logger.warning(
+                    "panels provisioning: the category view role id %r is not resolved — skipped",
+                    role_id,
+                )
+                continue
+            await category.set_permissions(
+                role,
+                overwrite=discord.PermissionOverwrite(
+                    view_channel=True, read_message_history=True
+                ),
+                reason="botforge: the declared category gate grants the view role",
+            )
+    except Exception:
+        logger.warning(
+            "panels provisioning: the category gate apply failed — best-effort",
+            exc_info=True,
+        )
+
+
 async def provision_scope(
     guild: discord.Guild,
     spec: ScopeSpec,
@@ -323,6 +377,13 @@ async def provision_scope(
         category_name = translate(spec.category_key, locale)
         category_id = await _ensure_scope_category(guild, platform, spec.scope, category_name)
         resolved["category"] = category_id
+        # the scope category's own gate (the machine-room rule): the
+        # folder's front door hides from @everyone, the rooms' bands
+        # stay untouched
+        if getattr(spec, "category_admin_only", False) and category_id:
+            await _apply_category_access(
+                guild, category_id, tuple(getattr(spec, "category_view_role_ids", ()) or ())
+            )
     # the GROUP categories (the mods' salons-as-data structure, #216
     # tranche I): a channel declaring a group lives in the group's own
     # category — created lazily, stored under cat:<group>, the channel

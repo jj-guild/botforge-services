@@ -102,6 +102,17 @@ class ScopeSpec:
     category_key: str
     channels: tuple[ChannelDecl, ...] = field(default_factory=tuple)
     panels: tuple[PanelSpec, ...] = field(default_factory=tuple)
+    # the scope CATEGORY's own gate (the machine-room rule, Drasah
+    # 18/11): when True the category denies @everyone view — only the
+    # bot, the server staff and the resolved view roles see it. The
+    # channels inside keep their own access bands (the gate is the
+    # folder's front door, never the rooms'). Data-declared: views.yaml
+    # (the platform scopes) or the mod's home_admin_only flag.
+    category_admin_only: bool = False
+    category_view_roles: tuple[str, ...] = ()
+    # the view roles RESOLVED TO IDS (the persisted mapping is the
+    # resolver — the display name is renamable)
+    category_view_role_ids: tuple[str, ...] = ()
 
 
 _REGISTRY: dict[str, ScopeSpec] = {}

@@ -12,6 +12,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
+import discord
 import pytest
 
 from botforge.core.services.i18n import MessageCatalog
@@ -22,7 +23,9 @@ from botforge.discord.ui.panels_provisioning import (
 )
 from botforge.discord.ui.panels_scopes import register_platform_scopes, scopes_from_config
 from tests.mocks.discord_mock import (
+    MockCategoryChannel,
     MockGuild,
+    MockRole,
     MockTextChannel,
 )
 
@@ -152,3 +155,67 @@ class TestAdoptionSeams:
         assert channel_id == str(stray.id)
         assert stray.category is not None
         assert stray.category.name == "games"
+
+
+class TestCategoryGate:
+    """The machine-room rule (Drasah 18/11): a scope's category may
+    declare itself staff-only — the folder's front door hides from
+    @everyone, the rooms' access bands stay untouched."""
+
+    def test_the_games_scope_declares_the_gate(self) -> None:
+        assert GAMES_SCOPE.category_admin_only is True
+        assert ROOT_SCOPE.category_admin_only is False
+        assert BOT_SCOPE.category_admin_only is False
+
+    @pytest.mark.asyncio
+    async def test_a_gated_scope_denies_everyone_on_its_category(self) -> None:
+        guild = MockGuild()
+        await provision_scope(guild, GAMES_SCOPE, "fr", _translate)
+        assert guild.categories
+        category = guild.categories[0]
+        assert isinstance(category, MockCategoryChannel)
+        everyone = category.permission_overwrite_for(guild.default_role)
+        assert everyone is not None
+        assert everyone.view_channel is False
+        # the bot operates its own category
+        me = category.permission_overwrite_for(guild.me)
+        assert me is not None
+        assert me.view_channel is True
+
+    @pytest.mark.asyncio
+    async def test_an_open_scope_keeps_its_category_public(self) -> None:
+        guild = MockGuild()
+        await provision_scope(guild, BOT_SCOPE, "fr", _translate)
+        assert guild.categories
+        assert guild.categories[0].permission_overwrite_for(guild.default_role) is None
+
+    @pytest.mark.asyncio
+    async def test_the_gate_grants_the_resolved_view_roles(self) -> None:
+        from botforge.discord.ui.panels import ScopeSpec
+
+        role = MockRole(name="Kingdom Admin")
+        guild = MockGuild()
+        guild._roles[role.id] = role
+        spec = ScopeSpec(
+            scope="mod/test",
+            category_key="Test Home",
+            category_admin_only=True,
+            category_view_role_ids=(str(role.id),),
+        )
+        await provision_scope(guild, spec, "fr", _translate)
+        assert guild.categories
+        grant = guild.categories[0].permission_overwrite_for(role)
+        assert grant is not None
+        assert grant.view_channel is True
+
+    @pytest.mark.asyncio
+    async def test_the_rooms_keep_their_own_bands_under_the_gate(self) -> None:
+        """The gate is the folder's front door, never the rooms'."""
+        guild = MockGuild()
+        await provision_scope(guild, GAMES_SCOPE, "fr", _translate)
+        general = discord.utils.get(guild.text_channels, category=guild.categories[0])
+        assert general is not None
+        # the readonly band (send denied for @everyone) still applies on
+        # the channel itself — the gate added no @everyone view deny there
+        overwrite = general.permission_overwrite_for(guild.default_role)
+        assert overwrite is None or overwrite.view_channel is not False

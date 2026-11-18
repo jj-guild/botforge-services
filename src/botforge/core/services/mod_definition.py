@@ -99,6 +99,15 @@ class ModDefinition:
     owner_ids: tuple[str, ...] = field(default_factory=tuple)
     default_active: bool = False
     emoji: str = ""
+    # the mod's HOME folder (the auto-provisioned « mod/<name> » scope
+    # category) is STAFF-ONLY (the machine-room rule, Drasah 18/11): the
+    # home's plumbing surfaces stay functional (the bot keeps operating
+    # them) but @never visible to players — the players' surfaces are the
+    # declared channel groups, never the home folder. The view roles are
+    # the staff allowed through the gate (display names, resolved to ids
+    # by the persisted role mapping at provisioning time).
+    home_admin_only: bool = False
+    home_view_roles: tuple[str, ...] = field(default_factory=tuple)
 
     def is_private(self) -> bool:
         """Whether the mod is reserved (bot admins + declared owners)."""

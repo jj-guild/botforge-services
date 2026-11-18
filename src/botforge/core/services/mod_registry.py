@@ -146,6 +146,16 @@ def _parse_mod_yaml(data: dict[str, object], source: Path) -> ModDefinition:
 
     default_active = bool(data.get("default_active", False))
     emoji = str(data.get("emoji", "") or "")
+    # the home folder's gate (the machine-room rule): data-declared,
+    # the view roles resolve by display name through the persisted
+    # mapping — an undeclared (or false) flag keeps the home public
+    home_admin_only = bool(data.get("home_admin_only", False))
+    raw_home_roles = data.get("home_view_roles", [])
+    if raw_home_roles is None:
+        raw_home_roles = []
+    if not isinstance(raw_home_roles, list):
+        raise ValueError(f"{source}: 'home_view_roles' must be a list of role display names")
+    home_view_roles = tuple(str(role) for role in raw_home_roles if str(role).strip())
     private = bool(data.get("private", False))
     raw_owners = data.get("owner_discord_ids", [])
     if raw_owners is None:
@@ -165,6 +175,8 @@ def _parse_mod_yaml(data: dict[str, object], source: Path) -> ModDefinition:
         owner_ids=owner_ids,
         default_active=default_active,
         emoji=emoji,
+        home_admin_only=home_admin_only,
+        home_view_roles=home_view_roles,
         channel_categories=tuple(categories),
         roles=tuple(roles),
         workflows=tuple(workflows),

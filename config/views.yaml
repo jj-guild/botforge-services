@@ -143,6 +143,9 @@ scopes:
       description: ui.panels.channels.decisions_description
   games:
     category: ui.panels.categories.games
+    # machine-room rule (Drasah 18/11): the games folder is plumbing —
+    # staff-only at the category level, the channels keep their bands
+    admin_only: true
     channels:
     - key: general
       label: ui.panels.channels.general

@@ -80,6 +80,27 @@ def register(bot: Any, config: Any) -> None:
 
     register_console_actions()
 
+    # postuler-hybride-v1 (Drasah 18/11): the PLAYERS' enrollment door —
+    # the golden Postuler panel pinned in the public « apply » salon
+    # (the Conscription group); its single button opens the adaptive
+    # window (account → season → withdraw), the engine stays the
+    # platform's.
+    from .apply_flow import APPLY_VIEW_KEY, KingdomApplyOpenButton, build_apply_panel
+
+    async def _resolve_apply_channel(guild_id: str) -> str:
+        return await stored_channel_id(guild_id, "mod/kingdom", "apply") or ""
+
+    register_static_pin(
+        StaticPinnedView(
+            key=APPLY_VIEW_KEY,
+            mark_suffix=APPLY_VIEW_KEY,
+            resolve_channel=_resolve_apply_channel,
+            build_layout=build_apply_panel,
+            registry=getattr(bot, "message_registry", None),
+            scope="mod/kingdom",
+        )
+    )
+
 
 def setup_hook(bot: Any) -> None:
     """Re-register persistent UI after a restart (dynamic items)."""
@@ -114,6 +135,7 @@ def setup_hook(bot: Any) -> None:
     from .ffa import FFAJoinButton
     from .console import KingdomClockButton, KingdomRelaunchButton, KingdomResetButton
     from .validation import ValidationDecisionButton
+    from .apply_flow import KingdomApplyOpenButton
 
     for item in (
         DeclareButton,
@@ -146,6 +168,7 @@ def setup_hook(bot: Any) -> None:
         KingdomResetButton,
         KingdomClockButton,
         ValidationDecisionButton,
+        KingdomApplyOpenButton,
     ):
         try:
             bot.add_dynamic_items(item)

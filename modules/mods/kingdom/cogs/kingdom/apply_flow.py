@@ -1,0 +1,323 @@
+"""The golden Postuler panel + the adaptive enrollment window (postuler-hybride-v1).
+
+The players' enrollment door (Drasah 18/11): one PUBLIC salon in the
+Conscription group (``apply``, declared in ``mod.yaml``) carrying the
+designer's golden panel — and the 3-tier model the panel fronts:
+
+1. the PROJECT account (pseudo + linked AoE2 profile) is free,
+   self-service, never admin-gated (generic, OAuth-ready #182);
+2. entering the Kingdom SEASON is the admin gate (the platform's
+   enrollment engine, the validation dashboard decides);
+3. joining/founding a kingdom comes LATER, in the kingdom flow — the
+   camp choice no longer lives here.
+
+The panel is the fixed poster (Discord panels are static); the single
+button opens the ADAPTIVE ephemeral window — the intelligence lives at
+click time, on the platform seams, and every branch reuses the
+platform's engine (SeasonApplyButton, the withdraw confirm): the mod
+owns the shape, the core owns the mechanics.
+"""
+
+from __future__ import annotations
+
+import logging
+from typing import Any
+
+import discord
+
+from .common import mod_catalog, open_unique_ephemeral, surface, wiring
+
+logger = logging.getLogger("kingdom.apply")
+
+APPLY_VIEW_KEY = "view:mod:kingdom:apply"
+APPLY_WINDOW_KEY = "surface:mod:kingdom:apply"
+
+_NS = "kingdom:apply"
+
+GOLD = discord.Colour(0xE6B800)
+
+MOD = "kingdom"
+
+
+async def _guild_locale(guild_id: str) -> str:
+    """The guild's effective locale (stored choice first, fr fallback)."""
+    from .panel import _guild_locale as _panel_locale
+
+    return await _panel_locale(guild_id)
+
+
+async def _strings_async(guild_id: str) -> dict[str, str]:
+    """The apply strings in the guild's locale."""
+    return mod_catalog().section("kingdom.apply", await _guild_locale(guild_id))
+
+
+async def _kingdoms_in_play() -> int | None:
+    """Count the APPROVED player kingdoms (the panel's counter)."""
+    stack = wiring()
+    if stack is None:
+        return None
+    try:
+        from botforge.mods.kingdom.models import KingdomValidation
+
+        kingdoms = await stack.kingdoms.kingdoms()
+        return sum(
+            1
+            for kingdom in kingdoms
+            if not kingdom.is_gaia and kingdom.validation is KingdomValidation.APPROVED
+        )
+    except Exception:
+        logger.warning("kingdom: the apply counter read failed", exc_info=True)
+        return None
+
+
+async def build_apply_panel(guild_id: str) -> discord.ui.LayoutView:
+    """Build the pinned golden Postuler panel (guild-locale strings)."""
+    strings = await _strings_async(guild_id)
+    blocks: list[discord.ui.Item[discord.ui.LayoutView]] = [
+        discord.ui.TextDisplay(f"# {strings['panel_title']}"),
+        discord.ui.Separator(),
+        discord.ui.TextDisplay(str(strings["tagline"])),
+    ]
+    count = await _kingdoms_in_play()
+    if count is not None:
+        if count <= 0:
+            blocks.append(discord.ui.TextDisplay(str(strings["kingdoms_none"])))
+        else:
+            blocks.append(
+                discord.ui.TextDisplay(
+                    str(strings["kingdoms_line"]).format(
+                        count=count, s="" if count == 1 else "s"
+                    )
+                )
+            )
+    blocks.append(discord.ui.Separator())
+    join_row: Any = discord.ui.ActionRow()
+    join_row.add_item(KingdomApplyOpenButton(str(strings["join_button"])[:80]))
+    blocks.append(join_row)
+    return surface(
+        APPLY_VIEW_KEY,
+        discord.ui.Container(*blocks, accent_colour=GOLD),
+    )
+
+
+def _window(strings: dict[str, str], *rows: Any) -> discord.ui.LayoutView:
+    """Build the adaptive window's layout (the declared surface id)."""
+    return surface(
+        APPLY_WINDOW_KEY,
+        discord.ui.Container(
+            discord.ui.TextDisplay(f"# {strings['w_title']}"),
+            *rows,
+            accent_colour=GOLD,
+        ),
+    )
+
+
+def _apply_button_row() -> Any:
+    """The platform's own apply button, riding in the mod's window."""
+    from botforge.discord.season_panels import SeasonApplyButton
+
+    row: Any = discord.ui.ActionRow()
+    row.add_item(SeasonApplyButton(MOD).item)
+    return row
+
+
+def _withdraw_button_row(user_id: str) -> Any:
+    """The platform's own withdraw confirm button (the engine's, verbatim)."""
+    from botforge.discord.season_panels import SeasonWithdrawConfirmButton
+
+    row: Any = discord.ui.ActionRow()
+    row.add_item(SeasonWithdrawConfirmButton(MOD, user_id))
+    return row
+
+
+def decide_apply_branch(
+    *,
+    account_ok: bool,
+    enrollment_wired: bool,
+    already: bool,
+    season_id: str,
+    phase: str,
+) -> str:
+    """The adaptive window's pure branch decision (one answer, always).
+
+    The 3-tier model as data: the free account first, the admin-gated
+    season second, the kingdom later (never here). The branch names are
+    the window's contract — the callback maps them, the tests pin them.
+    """
+    if not account_ok:
+        # tier 1: the free project account comes first
+        return "no_account"
+    if not enrollment_wired:
+        # unwired: the platform button reports it — never a dead end
+        return "unwired"
+    if already and phase != "ouverte":
+        # the SAME click offers the withdraw (never a silent drop)
+        return "already"
+    if not season_id:
+        return "no_season"
+    if phase != "inscriptions":
+        return "closed"
+    return "ready"
+
+
+class KingdomApplyOpenButton(
+    discord.ui.DynamicItem[discord.ui.Button[Any]],
+    template=rf"{_NS}:open",
+):
+    """The panel's single call-to-action — the adaptive window's opener."""
+
+    def __init__(self, label: str = "⚔️ Rejoins l'aventure") -> None:
+        super().__init__(
+            discord.ui.Button(
+                custom_id=f"{_NS}:open",
+                label=label[:80],
+                style=discord.ButtonStyle.primary,
+            )
+        )
+
+    @classmethod
+    async def from_custom_id(
+        cls,
+        interaction: discord.Interaction,
+        item: discord.ui.Item[Any],
+        match: Any,
+        /,
+    ) -> KingdomApplyOpenButton:
+        """Rebuild the button at click time (locale-aware label)."""
+        from .common import locale_of
+
+        strings = mod_catalog().section("kingdom.apply", locale_of(interaction))
+        return cls(str(strings.get("join_button", "⚔️ Rejoins l'aventure")))
+
+    async def callback(self, interaction: discord.Interaction) -> None:
+        """Open the ADAPTIVE window — the branches reuse the engine.
+
+        The mod owns the shape (which window opens); the platform owns
+        the mechanics — the final action is always the platform's own
+        SeasonApplyButton (or its withdraw confirm), never a local
+        re-implementation.
+        """
+        from .common import locale_of
+
+        bot = interaction.client
+        guild_id = str(interaction.guild_id or "")
+        user_id = str(interaction.user.id)
+        strings = mod_catalog().section("kingdom.apply", locale_of(interaction))
+
+        # the platform's enrollment seams (private helpers — the graceful
+        # degrade hands the whole click to the platform button, which
+        # re-checks everything itself; never a silent dead click)
+        try:
+            from botforge.discord import season_panels as _sp
+        except Exception:  # pragma: no cover — the platform always ships
+            logger.warning("kingdom: the season panels seam is unreachable", exc_info=True)
+            await open_unique_ephemeral(
+                interaction,
+                view=_window(strings, _apply_button_row()),
+            )
+            return
+
+        core_name = await _sp._core_display_name(bot, user_id)
+        profiles = await _sp._linked_profile_ids(bot, user_id, _sp._mod_game_key(bot, MOD))
+        account_ok = bool(core_name and profiles)
+
+        from botforge.core.services.season_stack import season_stack_for
+
+        stack = season_stack_for(bot, MOD, guild_id)
+        enrollment_wired = stack is not None and stack.enrollment is not None
+
+        season_id = ""
+        phase = "preparation"
+        season_name = "—"
+        already = False
+        if enrollment_wired:
+            config = await _sp._current_season_config(bot, MOD, guild_id)
+            season_id = str(config.get("season_id", "") or "")
+            phase = _sp._phase_of(config)
+            season_name = str(config.get("name") or season_id or "—")
+            existing = await _sp._find_application(stack, guild_id, user_id)
+            already = existing is not None
+
+        branch = decide_apply_branch(
+            account_ok=account_ok,
+            enrollment_wired=enrollment_wired,
+            already=already,
+            season_id=season_id,
+            phase=phase,
+        )
+
+        if branch == "no_account":
+            general = ""
+            try:
+                from botforge.discord.ui.panels_provisioning import stored_channel_id
+
+                general = await stored_channel_id(guild_id, "root", "general") or ""
+            except Exception:
+                logger.warning("kingdom: the general channel lookup failed", exc_info=True)
+            mention = f"<#{general}>" if general else "#général"
+            await open_unique_ephemeral(
+                interaction,
+                view=_window(
+                    strings,
+                    discord.ui.TextDisplay(str(strings["w_no_account"]).format(general=mention)),
+                ),
+            )
+            return
+
+        if branch == "unwired":
+            await open_unique_ephemeral(
+                interaction,
+                view=_window(strings, _apply_button_row()),
+            )
+            return
+
+        if branch == "already":
+            await open_unique_ephemeral(
+                interaction,
+                view=_window(
+                    strings,
+                    discord.ui.TextDisplay(str(strings["w_already"])),
+                    _withdraw_button_row(user_id),
+                ),
+            )
+            return
+
+        if branch == "no_season":
+            await open_unique_ephemeral(
+                interaction,
+                view=_window(strings, discord.ui.TextDisplay(str(strings["w_no_season"]))),
+            )
+            return
+
+        if branch == "closed":
+            await open_unique_ephemeral(
+                interaction,
+                view=_window(
+                    strings,
+                    discord.ui.TextDisplay(
+                        str(strings["w_closed"]).format(
+                            season=season_name, phase=_sp._PHASE_LABELS.get(phase, phase)
+                        )
+                    ),
+                ),
+            )
+            return
+
+        await open_unique_ephemeral(
+            interaction,
+            view=_window(
+                strings,
+                discord.ui.TextDisplay(
+                    str(strings["w_account_ready"]).format(season=season_name)
+                ),
+                _apply_button_row(),
+            ),
+        )
+
+
+__all__ = [
+    "APPLY_VIEW_KEY",
+    "KingdomApplyOpenButton",
+    "build_apply_panel",
+    "decide_apply_branch",
+]

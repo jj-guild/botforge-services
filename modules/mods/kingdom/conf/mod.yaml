@@ -12,6 +12,12 @@ enabled: true
 # the visual identity is data (#334)
 emoji: "👑"
 seasonal: true
+# machine-room rule (Drasah 18/11): the mod's HOME folder (the
+# auto-provisioned « Kingdom » category) is staff-only — the players'
+# surfaces are the declared channel groups (the Conscription door),
+# never the home plumbing. The gate grants the mod's admin role.
+home_admin_only: true
+home_view_roles: ["Kingdom Admin"]
 settings: {}
 channel_groups:
   - key: profiles
@@ -37,6 +43,19 @@ channel_groups:
     display_name: ⚙️ ᴀᴅᴍɪɴ
     admin_only: true
 channels:
+  # postuler-hybride-v1 (Drasah 18/11): the PLAYERS' enrollment door —
+  # one public salon in the Conscription group carrying the golden
+  # Postuler panel (the account/season/kingdom 3-tier model: the
+  # account is free, the season is the admin gate, the kingdom comes
+  # later). The panel's single button opens the adaptive ephemeral
+  # window; the enrollment engine stays the platform's.
+  - key: apply
+    display_name: 📝 postuler
+    description: The public enrollment door — the golden Postuler panel
+    group: conscription
+    access:
+      everyone_view: true
+      everyone_post: false
   # restructuration-serveur-v1 e (Drasah 19/10): the general group and
   # its Taverne are RETIRED — the category disappears at the next
   # provisioning (the legacy cleanup sweeps both).

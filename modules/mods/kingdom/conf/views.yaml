@@ -73,3 +73,10 @@ views:
   # the alliances rubric window
   surface:mod:kingdom:alliances:
     kind: surface
+  # the pinned golden Postuler panel (the « apply » public salon, the
+  # players' enrollment door — postuler-hybride-v1, Drasah 18/11)
+  view:mod:kingdom:apply:
+    kind: surface
+  # the adaptive enrollment window (account ready / season / withdraw)
+  surface:mod:kingdom:apply:
+    kind: surface
