@@ -14,8 +14,10 @@ designer's golden panel — and the 3-tier model the panel fronts:
 The panel is the fixed poster (Discord panels are static); the single
 button opens the ADAPTIVE ephemeral window — the intelligence lives at
 click time, on the platform seams, and every branch reuses the
-platform's engine (SeasonApplyButton, the withdraw confirm): the mod
-owns the shape, the core owns the mechanics.
+platform's engine (SeasonApplyButton, the withdraw confirm, the
+profile panel router): the mod owns the shape, the core owns the
+mechanics. The player NEVER leaves the ephemeral flow — the hidden
+machine-room categories (Kingdom, Game/AoE2) stay admin-only.
 """
 
 from __future__ import annotations
@@ -37,6 +39,12 @@ _NS = "kingdom:apply"
 GOLD = discord.Colour(0xE6B800)
 
 MOD = "kingdom"
+
+# the platform's generic profile-panel route (views_routing): any
+# button carrying this id opens the OFFICIAL account surface in the
+# same ephemeral flow — never a link to a hidden category, never a
+# re-implemented registration.
+PROFILE_ROUTE = "view:open:panel:profile"
 
 
 async def _guild_locale(guild_id: str) -> str:
@@ -61,9 +69,7 @@ async def _kingdoms_in_play() -> int | None:
 
         kingdoms = await stack.kingdoms.kingdoms()
         return sum(
-            1
-            for kingdom in kingdoms
-            if not kingdom.is_gaia and kingdom.validation is KingdomValidation.APPROVED
+            1 for kingdom in kingdoms if not kingdom.is_gaia and kingdom.validation is KingdomValidation.APPROVED
         )
     except Exception:
         logger.warning("kingdom: the apply counter read failed", exc_info=True)
@@ -79,20 +85,13 @@ async def build_apply_panel(guild_id: str) -> discord.ui.LayoutView:
         discord.ui.TextDisplay(str(strings["tagline"])),
     ]
     count = await _kingdoms_in_play()
-    if count is not None:
-        if count <= 0:
-            blocks.append(discord.ui.TextDisplay(str(strings["kingdoms_none"])))
-        else:
-            blocks.append(
-                discord.ui.TextDisplay(
-                    str(strings["kingdoms_line"]).format(
-                        count=count, s="" if count == 1 else "s"
-                    )
-                )
-            )
-    blocks.append(discord.ui.Separator())
+    if count:
+        blocks.append(discord.ui.TextDisplay(strings["kingdoms_line"].format(count=count, s="s" if count > 1 else "")))
+    else:
+        blocks.append(discord.ui.TextDisplay(str(strings["kingdoms_none"])))
     join_row: Any = discord.ui.ActionRow()
-    join_row.add_item(KingdomApplyOpenButton(str(strings["join_button"])[:80]))
+    join_row.add_item(KingdomApplyOpenButton(str(strings["join_button"])).item)
+    blocks.append(discord.ui.Separator())
     blocks.append(join_row)
     return surface(
         APPLY_VIEW_KEY,
@@ -100,12 +99,12 @@ async def build_apply_panel(guild_id: str) -> discord.ui.LayoutView:
     )
 
 
-def _window(strings: dict[str, str], *rows: Any) -> discord.ui.LayoutView:
+def _window(strings: dict[str, str], *rows: Any, title: str = "") -> discord.ui.LayoutView:
     """Build the adaptive window's layout (the declared surface id)."""
     return surface(
         APPLY_WINDOW_KEY,
         discord.ui.Container(
-            discord.ui.TextDisplay(f"# {strings['w_title']}"),
+            discord.ui.TextDisplay(f"# {title or strings['w_title']}"),
             *rows,
             accent_colour=GOLD,
         ),
@@ -126,7 +125,26 @@ def _withdraw_button_row(user_id: str) -> Any:
     from botforge.discord.season_panels import SeasonWithdrawConfirmButton
 
     row: Any = discord.ui.ActionRow()
-    row.add_item(SeasonWithdrawConfirmButton(MOD, user_id))
+    row.add_item(SeasonWithdrawConfirmButton(MOD, user_id).item)
+    return row
+
+
+def _account_button_row(strings: dict[str, str]) -> Any:
+    """The free-account call-to-action: the platform's profile route.
+
+    The custom_id IS the platform's generic navigation contract
+    (``view:open:panel:profile`` — the router opens the wired profile
+    panel in the same ephemeral flow): zero local registration logic,
+    the button only carries the shape (label, green style).
+    """
+    row: Any = discord.ui.ActionRow()
+    row.add_item(
+        discord.ui.Button(
+            style=discord.ButtonStyle.success,
+            label=str(strings.get("account_button", "🪙 Créer mon compte"))[:80],
+            custom_id=PROFILE_ROUTE,
+        )
+    )
     return row
 
 
@@ -158,6 +176,50 @@ def decide_apply_branch(
     if phase != "inscriptions":
         return "closed"
     return "ready"
+
+
+def render_apply_branch(
+    branch: str,
+    strings: dict[str, str],
+    *,
+    user_id: str = "",
+    season_name: str = "—",
+    phase: str = "",
+    phase_label: str = "",
+) -> discord.ui.LayoutView:
+    """Render the branch's window (pure — the tests pin every branch).
+
+    Every branch reuses a platform engine piece: the account route, the
+    SeasonApplyButton, the withdraw confirm — the mod never
+    re-implements a mechanic, it only shapes the window.
+    """
+    if branch == "no_account":
+        # the WELCOME window (Drasah 18/11): no /command plumbing — one
+        # green call-to-action opening the platform's account surface
+        return _window(
+            strings,
+            discord.ui.TextDisplay(str(strings["w_no_account"])),
+            discord.ui.Separator(),
+            _account_button_row(strings),
+            title=strings["w_welcome_title"],
+        )
+    if branch == "unwired":
+        return _window(strings, _apply_button_row())
+    if branch == "already":
+        return _window(strings, discord.ui.TextDisplay(str(strings["w_already"])), _withdraw_button_row(user_id))
+    if branch == "no_season":
+        return _window(strings, discord.ui.TextDisplay(str(strings["w_no_season"])))
+    if branch == "closed":
+        return _window(
+            strings,
+            discord.ui.TextDisplay(str(strings["w_closed"]).format(season=season_name, phase=phase_label or phase)),
+        )
+    # ready: the account exists, the season takes applications
+    return _window(
+        strings,
+        discord.ui.TextDisplay(str(strings["w_account_ready"]).format(season=season_name)),
+        _apply_button_row(),
+    )
 
 
 class KingdomApplyOpenButton(
@@ -194,8 +256,8 @@ class KingdomApplyOpenButton(
 
         The mod owns the shape (which window opens); the platform owns
         the mechanics — the final action is always the platform's own
-        SeasonApplyButton (or its withdraw confirm), never a local
-        re-implementation.
+        SeasonApplyButton (or its withdraw confirm, or the profile
+        route), never a local re-implementation.
         """
         from .common import locale_of
 
@@ -213,7 +275,7 @@ class KingdomApplyOpenButton(
             logger.warning("kingdom: the season panels seam is unreachable", exc_info=True)
             await open_unique_ephemeral(
                 interaction,
-                view=_window(strings, _apply_button_row()),
+                view=render_apply_branch("unwired", strings),
             )
             return
 
@@ -245,72 +307,15 @@ class KingdomApplyOpenButton(
             season_id=season_id,
             phase=phase,
         )
-
-        if branch == "no_account":
-            general = ""
-            try:
-                from botforge.discord.ui.panels_provisioning import stored_channel_id
-
-                general = await stored_channel_id(guild_id, "root", "general") or ""
-            except Exception:
-                logger.warning("kingdom: the general channel lookup failed", exc_info=True)
-            mention = f"<#{general}>" if general else "#général"
-            await open_unique_ephemeral(
-                interaction,
-                view=_window(
-                    strings,
-                    discord.ui.TextDisplay(str(strings["w_no_account"]).format(general=mention)),
-                ),
-            )
-            return
-
-        if branch == "unwired":
-            await open_unique_ephemeral(
-                interaction,
-                view=_window(strings, _apply_button_row()),
-            )
-            return
-
-        if branch == "already":
-            await open_unique_ephemeral(
-                interaction,
-                view=_window(
-                    strings,
-                    discord.ui.TextDisplay(str(strings["w_already"])),
-                    _withdraw_button_row(user_id),
-                ),
-            )
-            return
-
-        if branch == "no_season":
-            await open_unique_ephemeral(
-                interaction,
-                view=_window(strings, discord.ui.TextDisplay(str(strings["w_no_season"]))),
-            )
-            return
-
-        if branch == "closed":
-            await open_unique_ephemeral(
-                interaction,
-                view=_window(
-                    strings,
-                    discord.ui.TextDisplay(
-                        str(strings["w_closed"]).format(
-                            season=season_name, phase=_sp._PHASE_LABELS.get(phase, phase)
-                        )
-                    ),
-                ),
-            )
-            return
-
         await open_unique_ephemeral(
             interaction,
-            view=_window(
+            view=render_apply_branch(
+                branch,
                 strings,
-                discord.ui.TextDisplay(
-                    str(strings["w_account_ready"]).format(season=season_name)
-                ),
-                _apply_button_row(),
+                user_id=user_id,
+                season_name=season_name,
+                phase=phase,
+                phase_label=str(_sp._PHASE_LABELS.get(phase, phase)),
             ),
         )
 
@@ -320,4 +325,5 @@ __all__ = [
     "KingdomApplyOpenButton",
     "build_apply_panel",
     "decide_apply_branch",
+    "render_apply_branch",
 ]
