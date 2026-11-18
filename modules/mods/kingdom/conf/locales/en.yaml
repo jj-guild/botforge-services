@@ -29,6 +29,7 @@ en:
       w_welcome_title: "⚔️ Welcome, future conqueror!"
       w_no_account: "Set out to conquer the territories! Before joining the battle, create your project account — it's **free** and takes a minute: you'll link your AoE2 profile to your Discord account.\n\n**The path:** 🪙 Create your account → 📜 Apply for the season → 🏰 Found or join a kingdom."
       account_button: "🪙 Create my account"
+      postuler_button: "📜 Apply"
       w_account_ready: "Your account is ready ✅ — sign up for season **{season}**!"
       w_no_season: "Your account is ready ✅ — but no season is open yet. Come back soon!"
       w_closed: "Your account is ready ✅ — but season **{season}** no longer takes sign-ups ({phase})."

@@ -136,24 +136,43 @@ def test_the_already_branch_still_offers_withdraw_once_started() -> None:
     )
 
 
-def test_the_no_account_window_is_a_button_not_a_command() -> None:
-    """The welcome branch: ONE green button routing to the platform profile.
-
-    Drasah 18/11: no /command plumbing, no link to a hidden category —
-    the button's custom_id IS the platform's generic profile route and
-    the window stays in the ephemeral flow.
-    """
+def _fr_strings() -> Any:
     from botforge.core.services.i18n import MessageCatalog
+
+    return MessageCatalog("modules/mods/kingdom/conf").section("kingdom.apply", "fr")
+
+
+def test_the_window_shows_the_whole_parcours_at_once() -> None:
+    """ONE window: BOTH call-to-actions always visible (Drasah 18/11).
+
+    The state PAINTS them: a missing account greens « Créer mon compte »,
+    a ready season greens « Postuler » — and the red ones stay clickable
+    (the engines self-guard). No command plumbing, no hidden link.
+    """
     from botforge.mods.kingdom.cogs.apply_flow import PROFILE_ROUTE, render_apply_branch
 
-    catalog = MessageCatalog("modules/mods/kingdom/conf")
-    strings = catalog.section("kingdom.apply", "fr")
+    strings = _fr_strings()
     view = render_apply_branch("no_account", strings)
     buttons = _buttons(view)
     customs = [str(b.get("custom_id", "")) for b in buttons]
-    assert customs == [PROFILE_ROUTE], "one call-to-action, the platform's route"
+    styles = [b.get("style") for b in buttons]
+    assert customs == [PROFILE_ROUTE, "kingdom:apply:postuler:kingdom"], (
+        "the account route + the postuler shape, always both"
+    )
+    assert styles[0] == 3, "the missing account paints Créer mon compte GREEN (success)"
+    assert styles[1] == 4, "the unready season paints Postuler RED (danger)"
     assert "Bienvenue" in " ".join(_texts(view)), "the welcoming title"
     assert "/register" not in " ".join(_texts(view)), "no command plumbing"
+
+    # ready: the states flip — account red, postuler green
+    view = render_apply_branch("ready", strings)
+    styles = [b.get("style") for b in _buttons(view)]
+    assert styles == [4, 3], "an existing account reds the CTA, the ready POSTULER greens"
+
+    # already: the withdraw confirm still closes the loop
+    view = render_apply_branch("already", strings, user_id="42")
+    customs = [str(b.get("custom_id", "")) for b in _buttons(view)]
+    assert any("withdraw" in c for c in customs), "the already branch keeps the withdraw"
 
 
 def test_no_locale_mentions_the_command() -> None:

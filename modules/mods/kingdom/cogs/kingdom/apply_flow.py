@@ -137,23 +137,74 @@ def _withdraw_button_row(user_id: str) -> Any:
     return row
 
 
-def _account_button_row(strings: dict[str, str]) -> Any:
-    """The free-account call-to-action: the platform's profile route.
+def _state_button_row(strings: dict[str, str], *, account_ready: bool, postuler_ready: bool) -> Any:
+    """The window's TWO call-to-actions, always visible (Drasah 18/11).
 
-    The custom_id IS the platform's generic navigation contract
-    (``view:open:panel:profile`` — the router opens the wired profile
-    panel in the same ephemeral flow): zero local registration logic,
-    the button only carries the shape (label, green style).
+    « Créer mon compte » green when the account is MISSING, red when it
+    exists; « Postuler » green when everything is READY, red otherwise —
+    the state paints the buttons, the player reads the whole parcours
+    in ONE window. Both stay clickable (a red click answers a helpful
+    message): the account route is the platform's generic navigation,
+    the Postuler click DELEGATES to the platform's SeasonApplyButton —
+    the mod owns the shape, the core owns the mechanics.
     """
     row: Any = discord.ui.ActionRow()
     row.add_item(
         discord.ui.Button(
-            style=discord.ButtonStyle.success,
+            style=discord.ButtonStyle.success if not account_ready else discord.ButtonStyle.danger,
             label=str(strings.get("account_button", "🪙 Créer mon compte"))[:80],
             custom_id=PROFILE_ROUTE,
         )
     )
+    label = str(strings.get("postuler_button", "📜 Postuler"))
+    row.add_item(KingdomPostulerButton(MOD, label, active=postuler_ready).item)
     return row
+
+
+class KingdomPostulerButton(
+    discord.ui.DynamicItem[discord.ui.Button[Any]],
+    template=rf"{_NS}:postuler",
+):
+    """The Postuler shape (green when ready) — the MECHANIC is the platform's.
+
+    The callback delegates verbatim to the platform's SeasonApplyButton
+    (self-guarding: no account, already-in, unwired — every case is the
+    engine's own answer): zero local enrollment logic, the button only
+    carries the look.
+    """
+
+    def __init__(self, mod: str, label: str, active: bool) -> None:
+        super().__init__(
+            discord.ui.Button(
+                custom_id=f"{_NS}:postuler:{mod}"[:100],
+                label=label[:80],
+                style=discord.ButtonStyle.success if active else discord.ButtonStyle.danger,
+            )
+        )
+        self.mod = mod
+
+    @classmethod
+    async def from_custom_id(
+        cls,
+        interaction: discord.Interaction,
+        item: discord.ui.Item[Any],
+        match: Any,
+        /,
+    ) -> KingdomPostulerButton:
+        """Rebuild at click time — the state re-reads live anyway."""
+        del interaction
+        from .common import locale_of  # noqa: F401 — the label keeps the wire's
+
+        button = item if isinstance(item, discord.ui.Button) else None
+        label = (button.label if button is not None else None) or "📜 Postuler"
+        match_dict = match.groupdict() if hasattr(match, "groupdict") else {}
+        return cls(str(match_dict.get("mod", MOD)), label, active=False)
+
+    async def callback(self, interaction: discord.Interaction) -> None:
+        """Delegate the WHOLE click to the platform's own apply button."""
+        from botforge.discord.season_panels import SeasonApplyButton
+
+        await SeasonApplyButton(self.mod).callback(interaction)
 
 
 def decide_apply_branch(
@@ -197,36 +248,54 @@ def render_apply_branch(
 ) -> discord.ui.LayoutView:
     """Render the branch's window (pure — the tests pin every branch).
 
-    Every branch reuses a platform engine piece: the account route, the
-    SeasonApplyButton, the withdraw confirm — the mod never
-    re-implements a mechanic, it only shapes the window.
+    ONE window, ONE parcours: the TWO call-to-actions are ALWAYS visible
+    (Drasah 18/11), the branch paints them — the missing account greens
+    « Créer mon compte », the ready season greens « Postuler », both
+    stay clickable (the engines self-guard and answer; never a dead
+    button, never a stacked ephemeral).
     """
+    account_ready = branch != "no_account"
+    postuler_ready = branch == "ready"
+    row = _state_button_row(strings, account_ready=account_ready, postuler_ready=postuler_ready)
+
     if branch == "no_account":
-        # the WELCOME window (Drasah 18/11): no /command plumbing — one
-        # green call-to-action opening the platform's account surface
+        # the WELCOME window: the parcours text + the two buttons
         return _window(
             strings,
             discord.ui.TextDisplay(str(strings["w_no_account"])),
             discord.ui.Separator(),
-            _account_button_row(strings),
+            row,
             title=strings["w_welcome_title"],
         )
     if branch == "unwired":
-        return _window(strings, _apply_button_row())
+        # the platform's own button reports it (never a dead end)
+        return _window(strings, row)
     if branch == "already":
-        return _window(strings, discord.ui.TextDisplay(str(strings["w_already"])), _withdraw_button_row(user_id))
+        return _window(
+            strings,
+            discord.ui.TextDisplay(str(strings["w_already"])),
+            row,
+            _withdraw_button_row(user_id),
+        )
     if branch == "no_season":
-        return _window(strings, discord.ui.TextDisplay(str(strings["w_no_season"])))
+        return _window(
+            strings,
+            discord.ui.TextDisplay(str(strings["w_no_season"])),
+            row,
+        )
     if branch == "closed":
         return _window(
             strings,
-            discord.ui.TextDisplay(str(strings["w_closed"]).format(season=season_name, phase=phase_label or phase)),
+            discord.ui.TextDisplay(
+                str(strings["w_closed"]).format(season=season_name, phase=phase_label or phase)
+            ),
+            row,
         )
     # ready: the account exists, the season takes applications
     return _window(
         strings,
         discord.ui.TextDisplay(str(strings["w_account_ready"]).format(season=season_name)),
-        _apply_button_row(),
+        row,
     )
 
 
@@ -333,5 +402,6 @@ __all__ = [
     "KingdomApplyOpenButton",
     "build_apply_panel",
     "decide_apply_branch",
+    "KingdomPostulerButton",
     "render_apply_branch",
 ]

@@ -85,7 +85,7 @@ def register(bot: Any, config: Any) -> None:
     # (the Conscription group); its single button opens the adaptive
     # window (account → season → withdraw), the engine stays the
     # platform's.
-    from .apply_flow import APPLY_VIEW_KEY, KingdomApplyOpenButton, build_apply_panel
+    from .apply_flow import APPLY_VIEW_KEY, build_apply_panel
 
     async def _resolve_apply_channel(guild_id: str) -> str:
         return await stored_channel_id(guild_id, "mod/kingdom", "apply") or ""
@@ -135,7 +135,7 @@ def setup_hook(bot: Any) -> None:
     from .ffa import FFAJoinButton
     from .console import KingdomClockButton, KingdomRelaunchButton, KingdomResetButton
     from .validation import ValidationDecisionButton
-    from .apply_flow import KingdomApplyOpenButton
+    from .apply_flow import KingdomApplyOpenButton, KingdomPostulerButton
 
     for item in (
         DeclareButton,
@@ -169,6 +169,7 @@ def setup_hook(bot: Any) -> None:
         KingdomClockButton,
         ValidationDecisionButton,
         KingdomApplyOpenButton,
+        KingdomPostulerButton,
     ):
         try:
             bot.add_dynamic_items(item)
