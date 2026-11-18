@@ -329,8 +329,7 @@ def _confirm_card(strings: dict[str, str], action: str) -> discord.ui.LayoutView
     no.callback = on_no
     container: discord.ui.Container[discord.ui.LayoutView] = discord.ui.Container(
         discord.ui.TextDisplay(
-            f"**{strings[f'settings_{action}_confirm_title']}**
-"
+            f"**{strings[f'settings_{action}_confirm_title']}**\n"
             f"{strings[f'settings_{action}_confirm_hint']}"
         ),
         accent_colour=discord.Colour(0xED4245),
@@ -569,8 +568,7 @@ async def _status(interaction: discord.Interaction, strings: dict[str, str]) -> 
             f"{queued or strings['settings_status_empty']}",
         ]
     )
-    await open_unique_ephemeral(interaction, "
-".join(lines))
+    await open_unique_ephemeral(interaction, "\n".join(lines))
 
 
 async def _hat(interaction: discord.Interaction, strings: dict[str, str]) -> None:
