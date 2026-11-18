@@ -36,6 +36,9 @@ class FakeRegistrationDatabase:
     async def find_user_bindings(self, user_id: str) -> list[dict[str, Any]]:
         return [d for d in self._collection(PROFILE_BINDINGS_COLLECTION).values() if d["user_id"] == user_id]
 
+    async def find_bindings_by_guild(self, guild_id: str) -> list[dict[str, Any]]:
+        return [d for d in self._collection(PROFILE_BINDINGS_COLLECTION).values() if d.get("guild_id") == guild_id]
+
     async def find_binding_by_profile(self, game_key: str, profile_id: str) -> dict[str, Any] | None:
         for d in self._collection(PROFILE_BINDINGS_COLLECTION).values():
             if d["game_key"] == game_key and d["profile_id"] == profile_id:
@@ -290,3 +293,24 @@ async def test_attach_events_replaces_the_seam_after_construction() -> None:
     svc.attach_events(events)
     await svc.bind_profile("user:1", "aoe2", "123456", guild_id="123")
     assert any(intent == "profile.bound" for intent, _ in events.intents)
+
+
+@pytest.mark.asyncio
+async def test_list_guild_registrant_ids_reads_the_declared_guild_context() -> None:
+    """The boot heal reads the bindings' guild context (unique user ids)."""
+    svc, _, _ = _env(valid={"123456", "654321", "111111"})
+    await svc.bind_profile("user:1", "aoe2", "123456", guild_id="77")
+    await svc.bind_profile("user:1", "aoe2", "654321", guild_id="77")
+    await svc.bind_profile("user:2", "aoe2", "111111", guild_id="")  # bound guild-less
+
+    ids = await svc.list_guild_registrant_ids("77")
+    assert sorted(ids) == ["user:1"], "one unique registrant for the guild"
+    assert await svc.list_guild_registrant_ids("88") == [], "nothing bound in another guild"
+
+
+@pytest.mark.asyncio
+async def test_bindings_without_guild_context_never_heal_a_guild() -> None:
+    """A guild-less binding (old data) is nobody's salon-gate key."""
+    svc, _, _ = _env(valid={"123456"})
+    await svc.bind_profile("user:1", "aoe2", "123456")  # no guild_id at all
+    assert await svc.list_guild_registrant_ids("77") == []

@@ -320,6 +320,8 @@ Methods defined here:<br>
 
 <dl><dt>async <a name="RegistrationDatabase-find_binding_by_profile"><strong>find_binding_by_profile</strong></a>(self, game_key: 'str', profile_id: 'str') -&gt; 'dict[str, Any] | None'</dt><dd><span class="code">Return&nbsp;the&nbsp;binding&nbsp;owning&nbsp;a&nbsp;profile;&nbsp;None&nbsp;when&nbsp;unbound.</span></dd></dl>
 
+<dl><dt>async <a name="RegistrationDatabase-find_bindings_by_guild"><strong>find_bindings_by_guild</strong></a>(self, guild_id: 'str') -&gt; 'list[dict[str, Any]]'</dt><dd><span class="code">List&nbsp;the&nbsp;bindings&nbsp;performed&nbsp;in&nbsp;one&nbsp;guild&nbsp;(the&nbsp;salon&nbsp;gate's&nbsp;heal).</span></dd></dl>
+
 <dl><dt>async <a name="RegistrationDatabase-find_bindings_by_profiles"><strong>find_bindings_by_profiles</strong></a>(self, game_key: 'str', profile_ids: 'list[str]') -&gt; 'list[dict[str, Any]]'</dt><dd><span class="code">Return&nbsp;the&nbsp;bindings&nbsp;of&nbsp;many&nbsp;profiles&nbsp;in&nbsp;ONE&nbsp;batch&nbsp;(the&nbsp;panels).</span></dd></dl>
 
 <dl><dt>async <a name="RegistrationDatabase-find_entry"><strong>find_entry</strong></a>(self, collection: 'str', entry_id: 'str') -&gt; 'dict[str, Any] | None'</dt><dd><span class="code">Return&nbsp;one&nbsp;document&nbsp;by&nbsp;``_id``;&nbsp;None&nbsp;when&nbsp;absent.</span></dd></dl>
@@ -348,7 +350,7 @@ Data and other attributes defined here:<br>
 
 <dl><dt><strong>__parameters__</strong> = ()</dl>
 
-<dl><dt><strong>__protocol_attrs__</strong> = {'delete_binding', 'find_binding_by_profile', 'find_bindings_by_profiles', 'find_entry', 'find_user_bindings', 'upsert_entry'}</dl>
+<dl><dt><strong>__protocol_attrs__</strong> = {'delete_binding', 'find_binding_by_profile', 'find_bindings_by_guild', 'find_bindings_by_profiles', 'find_entry', 'find_user_bindings', ...}</dl>
 
 <hr>
 Class methods inherited from <a href="typing.html#Protocol">typing.Protocol</a>:<br>
@@ -461,6 +463,13 @@ all&nbsp;use&nbsp;``list_bindings_for_game``/``list_bindings``.</span></dd></dl>
 <dl><dt>async <a name="RegistrationService-has_any_profile"><strong>has_any_profile</strong></a>(self, user_id: 'str') -&gt; 'bool'</dt><dd><span class="code">Ladder&nbsp;join&nbsp;precondition:&nbsp;at&nbsp;least&nbsp;one&nbsp;linked&nbsp;game&nbsp;profile.</span></dd></dl>
 
 <dl><dt>async <a name="RegistrationService-list_bindings"><strong>list_bindings</strong></a>(self, user_id: 'str') -&gt; 'list[dict[str, Any]]'</dt><dd><span class="code">List&nbsp;all&nbsp;of&nbsp;a&nbsp;user's&nbsp;game-profile&nbsp;bindings.</span></dd></dl>
+
+<dl><dt>async <a name="RegistrationService-list_guild_registrant_ids"><strong>list_guild_registrant_ids</strong></a>(self, guild_id: 'str') -&gt; 'list[str]'</dt><dd><span class="code">Return&nbsp;the&nbsp;unique&nbsp;user&nbsp;ids&nbsp;with&nbsp;a&nbsp;binding&nbsp;performed&nbsp;in&nbsp;this&nbsp;guild.<br>
+&nbsp;<br>
+salon-parcours-v2&nbsp;(Drasah&nbsp;18/11):&nbsp;the&nbsp;gate's&nbsp;self-heal&nbsp;reads&nbsp;the<br>
+DECLARED&nbsp;truth&nbsp;(the&nbsp;bindings'&nbsp;guild_id),&nbsp;never&nbsp;the&nbsp;live&nbsp;Discord<br>
+role&nbsp;state&nbsp;—&nbsp;an&nbsp;account&nbsp;bound&nbsp;before&nbsp;a&nbsp;restart&nbsp;(or&nbsp;while&nbsp;the<br>
+access&nbsp;role&nbsp;didn't&nbsp;exist&nbsp;yet)&nbsp;is&nbsp;re-granted&nbsp;at&nbsp;the&nbsp;next&nbsp;boot.</span></dd></dl>
 
 <dl><dt>async <a name="RegistrationService-request_enrollment"><strong>request_enrollment</strong></a>(self, user_id: 'str', guild_id: 'str') -&gt; 'dict[str, Any]'</dt><dd><span class="code">Record&nbsp;an&nbsp;enrollment&nbsp;request&nbsp;and&nbsp;notify&nbsp;admins&nbsp;(acceptance&nbsp;is&nbsp;admin-side).</span></dd></dl>
 

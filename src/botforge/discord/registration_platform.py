@@ -124,6 +124,11 @@ class MongoRegistrationDatabase:
         cursor = self._database[PROFILE_BINDINGS_COLLECTION].find({"user_id": user_id})
         return [dict(doc) async for doc in cursor]
 
+    async def find_bindings_by_guild(self, guild_id: str) -> list[dict[str, Any]]:
+        """List the bindings performed in one guild (the salon gate's heal)."""
+        cursor = self._database[PROFILE_BINDINGS_COLLECTION].find({"guild_id": guild_id})
+        return [dict(doc) async for doc in cursor]
+
     async def find_binding_by_profile(self, game_key: str, profile_id: str) -> dict[str, Any] | None:
         """Return the binding owning a profile; None when unbound."""
         doc = await self._database[PROFILE_BINDINGS_COLLECTION].find_one(

@@ -293,3 +293,129 @@ def test_the_gate_toggles_the_access_role() -> None:
     revoked.clear()
     asyncio.run(profile_event_handler("profile.unbound", {"user_id": "42", "guild_id": "123", "remaining": True}))
     assert not revoked, "a remaining binding keeps the salon open"
+
+
+def test_the_gate_falls_back_to_fetch_when_the_member_cache_is_empty() -> None:
+    """2026-11-18 live incident: without the members intent get_member is
+    None — the grant must not silently skip (fetch_member fallback)."""
+    from botforge.mods.kingdom.cogs.registration_gate import profile_event_handler
+
+    granted: list[Any] = []
+    role = NS(id=777)
+
+    class _Member:
+        roles: tuple[Any, ...] = ()
+
+        async def add_roles(self, r: Any, reason: str = "") -> None:
+            self.roles = tuple(self.roles) + (r,)
+            granted.append("grant")
+
+    member = _Member()
+
+    class _Guild:
+        id = 123
+
+        def get_role(self, role_id: int) -> Any:
+            return role if role_id == 777 else None
+
+        def get_member(self, user_id: int) -> Any:
+            return None  # the members intent is OFF — the live failure
+
+        async def fetch_member(self, user_id: int) -> Any:
+            return member
+
+    class _Bot:
+        mod_roles_service = None
+
+        def get_guild(self, guild_id: int) -> Any:
+            return _Guild()
+
+    class _RolesService:
+        async def resolve_role_id(self, guild_id: str, mod: str, role_key: str) -> str:
+            return "777" if role_key == "enregistre" else ""
+
+    _Bot.mod_roles_service = _RolesService()
+
+    import botforge.mods.kingdom.cogs.panel as panel_module
+
+    panel_module.remember_bot(_Bot())
+    asyncio.run(profile_event_handler("profile.bound", {"user_id": "42", "guild_id": "123"}))
+    assert granted, "the fetch fallback grants the role the cache could not see"
+
+
+def test_the_gate_boot_heal_regrants_the_declared_registrants() -> None:
+    """Accounts bound before the gate existed never fire profile.bound —
+    the boot reconcile reads the bindings' guild context (the declared
+    truth) and re-grants the access role."""
+    from botforge.mods.kingdom.cogs.registration_gate import reconcile_guild_access
+
+    granted: list[Any] = []
+    role = NS(id=777)
+
+    class _Member:
+        def __init__(self) -> None:
+            self.roles: tuple[Any, ...] = ()
+
+        async def add_roles(self, r: Any, reason: str = "") -> None:
+            self.roles = tuple(self.roles) + (r,)
+            granted.append("grant")
+
+    members: dict[int, _Member] = {}
+
+    class _Guild:
+        id = 123
+
+        def get_role(self, role_id: int) -> Any:
+            return role if role_id == 777 else None
+
+        def get_member(self, user_id: int) -> Any:
+            if user_id not in members:
+                members[user_id] = _Member()  # one member per registrant
+            return members[user_id]
+
+    class _Registration:
+        async def list_guild_registrant_ids(self, guild_id: str) -> list[str]:
+            return ["42", "43"] if guild_id == "123" else []
+
+    class _RolesService:
+        async def resolve_role_id(self, guild_id: str, mod: str, role_key: str) -> str:
+            return "777" if role_key == "enregistre" else ""
+
+    class _Bot:
+        mod_roles_service = None
+        registration_service = None
+        guilds = None
+
+        def get_guild(self, guild_id: int) -> Any:
+            return _Guild()
+
+    _Bot.mod_roles_service = _RolesService()
+    _Bot.registration_service = _Registration()
+    _Bot.guilds = [_Guild()]
+
+    asyncio.run(reconcile_guild_access(_Bot()))
+    assert len(granted) == 2, "every declared registrant carries the access role after the boot heal"
+
+
+def test_the_gate_boot_heal_survives_a_missing_role() -> None:
+    """No provisioned role → LOUD skip, no crash, no grant."""
+    from botforge.mods.kingdom.cogs.registration_gate import reconcile_guild_access
+
+    class _RolesService:
+        async def resolve_role_id(self, guild_id: str, mod: str, role_key: str) -> str:
+            return ""
+
+    class _Registration:
+        async def list_guild_registrant_ids(self, guild_id: str) -> list[str]:
+            return ["42"]
+
+    class _Bot:
+        mod_roles_service = None
+        registration_service = None
+        guilds = None
+
+    _Bot.mod_roles_service = _RolesService()
+    _Bot.registration_service = _Registration()
+    _Bot.guilds = [NS(id=123)]
+
+    asyncio.run(reconcile_guild_access(_Bot()))  # must not raise

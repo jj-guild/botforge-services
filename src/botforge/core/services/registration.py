@@ -34,6 +34,10 @@ class RegistrationDatabase(Protocol):
         """List the game-profile bindings of a user (all games)."""
         ...
 
+    async def find_bindings_by_guild(self, guild_id: str) -> list[dict[str, Any]]:
+        """List the bindings performed in one guild (the salon gate's heal)."""
+        ...
+
     async def find_binding_by_profile(self, game_key: str, profile_id: str) -> dict[str, Any] | None:
         """Return the binding owning a profile; None when unbound."""
         ...
@@ -134,6 +138,11 @@ class RegistrationService:
             "profile_id": canonical_id,
             "profile": validated,
             "bound_at": _now_ms(),
+            # the guild context of the bind (salon-parcours-v2, Drasah
+            # 18/11): the salon gate's boot heal reads it (an event is
+            # a moment, the binding is the durable truth). Empty for
+            # guild-less binds (CLI, imports).
+            "guild_id": guild_id,
         }
         await self._db.upsert_entry(PROFILE_BINDINGS_COLLECTION, binding)
         await self._audit_record("profile.bind", {"user_id": user_id, "game_key": game_key, "profile_id": canonical_id})
@@ -162,6 +171,17 @@ class RegistrationService:
         if not profile_ids:
             return []
         return await self._db.find_bindings_by_profiles(game_key, profile_ids)
+
+    async def list_guild_registrant_ids(self, guild_id: str) -> list[str]:
+        """Return the unique user ids with a binding performed in this guild.
+
+        salon-parcours-v2 (Drasah 18/11): the gate's self-heal reads the
+        DECLARED truth (the bindings' guild_id), never the live Discord
+        role state — an account bound before a restart (or while the
+        access role didn't exist yet) is re-granted at the next boot.
+        """
+        bindings = await self._db.find_bindings_by_guild(guild_id)
+        return list({str(b["user_id"]) for b in bindings if b.get("user_id")})
 
     async def get_binding(self, user_id: str, game_key: str) -> dict[str, Any] | None:
         """Return the user's first binding for a game; None when unbound.
