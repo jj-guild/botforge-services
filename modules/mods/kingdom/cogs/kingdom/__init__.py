@@ -257,6 +257,16 @@ def setup_hook(bot: Any) -> None:
     except Exception:  # noqa: S110 — a loop failure never blocks the boot
         pass
 
+    # The boot self-heal (epic #412): ~30 s after the gateway is ready,
+    # one pass per guild — the pins land (the Repair seam) and the
+    # /kingdom slash exists even outside the platform's sync guild.
+    try:
+        from .selfheal import arm_boot_self_heal
+
+        arm_boot_self_heal(bot)
+    except Exception:  # noqa: S110 — the self-heal never blocks the boot
+        pass
+
 
 def close(bot: Any) -> None:
     """Stop the mod's background tasks (best-effort)."""
