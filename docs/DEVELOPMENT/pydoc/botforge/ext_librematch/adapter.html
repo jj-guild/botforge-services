@@ -117,6 +117,17 @@ Returns&nbsp;None&nbsp;on&nbsp;transport&nbsp;failure&nbsp;or&nbsp;when&nbsp;not
 (the&nbsp;upstream&nbsp;has&nbsp;not&nbsp;recorded&nbsp;the&nbsp;match&nbsp;yet&nbsp;—&nbsp;the&nbsp;caller<br>
 retries&nbsp;with&nbsp;a&nbsp;backoff).</span></dd></dl>
 
+<dl><dt>async <a name="LibrematchAdapter-search_profiles"><strong>search_profiles</strong></a>(self, alias: 'str', match_count: 'int' = 3) -&gt; 'list[dict[str, Any]]'</dt><dd><span class="code">Search&nbsp;profiles&nbsp;by&nbsp;exact&nbsp;in-game&nbsp;alias&nbsp;(the&nbsp;#402&nbsp;name&nbsp;path).<br>
+&nbsp;<br>
+``GetPersonalStat``&nbsp;accepts&nbsp;``aliases``&nbsp;instead&nbsp;of<br>
+``profile_ids``&nbsp;(ONE&nbsp;identifier&nbsp;type&nbsp;per&nbsp;call&nbsp;—&nbsp;the&nbsp;upstream<br>
+contract):&nbsp;the&nbsp;reply's&nbsp;``statGroups[].members[]``&nbsp;carries&nbsp;the<br>
+relic&nbsp;profile_id,&nbsp;the&nbsp;alias,&nbsp;the&nbsp;steam&nbsp;name&nbsp;and&nbsp;the&nbsp;country&nbsp;of<br>
+every&nbsp;exact-alias&nbsp;match.&nbsp;Homonyms&nbsp;ride&nbsp;along:&nbsp;each&nbsp;candidate<br>
+—&nbsp;capped&nbsp;at&nbsp;5&nbsp;—&nbsp;is&nbsp;enriched&nbsp;with&nbsp;the&nbsp;profile's&nbsp;last&nbsp;matches&nbsp;so<br>
+the&nbsp;player&nbsp;recognizes&nbsp;THEIR&nbsp;account&nbsp;by&nbsp;what&nbsp;they&nbsp;played,&nbsp;not<br>
+by&nbsp;an&nbsp;id.&nbsp;Transport&nbsp;failures&nbsp;degrade&nbsp;to&nbsp;an&nbsp;empty&nbsp;list.</span></dd></dl>
+
 <hr>
 Data descriptors defined here:<br>
 <dl><dt><strong>__dict__</strong></dt>

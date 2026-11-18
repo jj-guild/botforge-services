@@ -111,6 +111,11 @@ class GameDataStub:
                 request_serializer=botforge_dot_v1_dot_game__pb2.UserStatsRequest.SerializeToString,
                 response_deserializer=botforge_dot_v1_dot_game__pb2.UserStatsReply.FromString,
                 _registered_method=True)
+        self.SearchProfiles = channel.unary_unary(
+                '/botforge.v1.GameData/SearchProfiles',
+                request_serializer=botforge_dot_v1_dot_game__pb2.SearchProfilesRequest.SerializeToString,
+                response_deserializer=botforge_dot_v1_dot_game__pb2.ProfileSearchReply.FromString,
+                _registered_method=True)
 
 
 class GameDataServicer:
@@ -236,6 +241,15 @@ class GameDataServicer:
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
+    def SearchProfiles(self, request, context):
+        """Alias search proxied to the owner provider (same wire shapes as the
+        game contract — one shape, no copy) so profile binding resolves a
+        typed in-game name into candidates (#402).
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
 
 def add_GameDataServicer_to_server(servicer, server):
     rpc_method_handlers = {
@@ -313,6 +327,11 @@ def add_GameDataServicer_to_server(servicer, server):
                     servicer.GetUserStats,
                     request_deserializer=botforge_dot_v1_dot_game__pb2.UserStatsRequest.FromString,
                     response_serializer=botforge_dot_v1_dot_game__pb2.UserStatsReply.SerializeToString,
+            ),
+            'SearchProfiles': grpc.unary_unary_rpc_method_handler(
+                    servicer.SearchProfiles,
+                    request_deserializer=botforge_dot_v1_dot_game__pb2.SearchProfilesRequest.FromString,
+                    response_serializer=botforge_dot_v1_dot_game__pb2.ProfileSearchReply.SerializeToString,
             ),
     }
     generic_handler = grpc.method_handlers_generic_handler(
@@ -720,6 +739,33 @@ class GameData:
             '/botforge.v1.GameData/GetUserStats',
             botforge_dot_v1_dot_game__pb2.UserStatsRequest.SerializeToString,
             botforge_dot_v1_dot_game__pb2.UserStatsReply.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def SearchProfiles(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/botforge.v1.GameData/SearchProfiles',
+            botforge_dot_v1_dot_game__pb2.SearchProfilesRequest.SerializeToString,
+            botforge_dot_v1_dot_game__pb2.ProfileSearchReply.FromString,
             options,
             channel_credentials,
             insecure,

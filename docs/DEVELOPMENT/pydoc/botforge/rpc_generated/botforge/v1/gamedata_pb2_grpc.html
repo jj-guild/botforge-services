@@ -66,6 +66,8 @@
 
 <dl><dt><a name="GameData-GetUserStats"><strong>GetUserStats</strong></a>(request, target, options=(), channel_credentials=None, call_credentials=None, insecure=False, compression=None, wait_for_ready=None, timeout=None, metadata=None)</dt></dl>
 
+<dl><dt><a name="GameData-SearchProfiles"><strong>SearchProfiles</strong></a>(request, target, options=(), channel_credentials=None, call_credentials=None, insecure=False, compression=None, wait_for_ready=None, timeout=None, metadata=None)</dt></dl>
+
 <dl><dt><a name="GameData-SyncContent"><strong>SyncContent</strong></a>(request, target, options=(), channel_credentials=None, call_credentials=None, insecure=False, compression=None, wait_for_ready=None, timeout=None, metadata=None)</dt></dl>
 
 <dl><dt><a name="GameData-SyncStats"><strong>SyncStats</strong></a>(request, target, options=(), channel_credentials=None, call_credentials=None, insecure=False, compression=None, wait_for_ready=None, timeout=None, metadata=None)</dt></dl>
@@ -118,6 +120,10 @@ wire&nbsp;messages&nbsp;are&nbsp;the&nbsp;Game&nbsp;contract's&nbsp;own&nbsp;—
 <dl><dt><a name="GameDataServicer-GetProviderCapabilities"><strong>GetProviderCapabilities</strong></a>(self, request, context)</dt><dd><span class="code">Missing&nbsp;associated&nbsp;documentation&nbsp;comment&nbsp;in&nbsp;.proto&nbsp;file.</span></dd></dl>
 
 <dl><dt><a name="GameDataServicer-GetUserStats"><strong>GetUserStats</strong></a>(self, request, context)</dt><dd><span class="code">Missing&nbsp;associated&nbsp;documentation&nbsp;comment&nbsp;in&nbsp;.proto&nbsp;file.</span></dd></dl>
+
+<dl><dt><a name="GameDataServicer-SearchProfiles"><strong>SearchProfiles</strong></a>(self, request, context)</dt><dd><span class="code">Alias&nbsp;search&nbsp;proxied&nbsp;to&nbsp;the&nbsp;owner&nbsp;provider&nbsp;(same&nbsp;wire&nbsp;shapes&nbsp;as&nbsp;the<br>
+game&nbsp;contract&nbsp;—&nbsp;one&nbsp;shape,&nbsp;no&nbsp;copy)&nbsp;so&nbsp;profile&nbsp;binding&nbsp;resolves&nbsp;a<br>
+typed&nbsp;in-game&nbsp;name&nbsp;into&nbsp;candidates&nbsp;(#402).</span></dd></dl>
 
 <dl><dt><a name="GameDataServicer-SyncContent"><strong>SyncContent</strong></a>(self, request, context)</dt><dd><span class="code">The&nbsp;content&nbsp;sync&nbsp;(civs,&nbsp;maps):&nbsp;the&nbsp;game&nbsp;service&nbsp;runs&nbsp;it&nbsp;against&nbsp;ITS<br>
 providers&nbsp;—&nbsp;the&nbsp;bot&nbsp;never&nbsp;touches&nbsp;a&nbsp;provider,&nbsp;it&nbsp;asks&nbsp;the&nbsp;service.</span></dd></dl>

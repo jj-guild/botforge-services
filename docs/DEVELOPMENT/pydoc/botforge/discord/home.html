@@ -624,7 +624,11 @@ The&nbsp;add-account&nbsp;form:&nbsp;game&nbsp;select&nbsp;(aoe2&nbsp;preselecte
 Methods defined here:<br>
 <dl><dt><a name="ProfileAddAccountModal-__init__"><strong>__init__</strong></a>(self, options: 'list[discord.SelectOption] | None' = None, origin: 'Any' = None) -&gt; 'None'</dt><dd><span class="code">Initialize&nbsp;self.&nbsp;&nbsp;See&nbsp;help(type(self))&nbsp;for&nbsp;accurate&nbsp;signature.</span></dd></dl>
 
-<dl><dt>async <a name="ProfileAddAccountModal-on_submit"><strong>on_submit</strong></a>(self, interaction: 'discord.Interaction') -&gt; 'None'</dt><dd><span class="code">Bind&nbsp;the&nbsp;account,&nbsp;audit,&nbsp;confirm,&nbsp;then&nbsp;refresh&nbsp;the&nbsp;profile&nbsp;view.</span></dd></dl>
+<dl><dt>async <a name="ProfileAddAccountModal-on_submit"><strong>on_submit</strong></a>(self, interaction: 'discord.Interaction') -&gt; 'None'</dt><dd><span class="code">Bind&nbsp;the&nbsp;account,&nbsp;audit,&nbsp;confirm,&nbsp;then&nbsp;refresh&nbsp;the&nbsp;profile&nbsp;view.<br>
+&nbsp;<br>
+A&nbsp;typed&nbsp;NAME&nbsp;never&nbsp;goes&nbsp;to&nbsp;bind_profile:&nbsp;it&nbsp;searches&nbsp;the<br>
+provider's&nbsp;alias&nbsp;index&nbsp;(#402's&nbsp;name&nbsp;path)&nbsp;and&nbsp;the&nbsp;player&nbsp;picks<br>
+their&nbsp;account&nbsp;among&nbsp;the&nbsp;homonyms&nbsp;in&nbsp;a&nbsp;followup&nbsp;view.</span></dd></dl>
 
 <hr>
 Data and other attributes defined here:<br>

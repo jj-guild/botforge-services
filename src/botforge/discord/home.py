@@ -512,6 +512,119 @@ async def _game_select_options() -> list[discord.SelectOption]:
 
 
 
+def _is_name_input(typed: str) -> bool:
+    """Tell whether the typed input reads as an in-game name, not an id/URL.
+
+    The #402 name path: ids are digits, URLs carry a scheme/host —
+    anything else is a name the provider searches by alias.
+    """
+    stripped = typed.strip()
+    if not stripped:
+        return False
+    if stripped.isdigit():
+        return False
+    return "http://" not in stripped and "https://" not in stripped and ".com" not in stripped
+
+
+def _candidate_line(candidate: dict[str, Any]) -> str:
+    """One candidate's preview line: what they played, against whom."""
+    country = str(candidate.get("country", ""))
+    head = str(candidate.get("alias", "")) + (f" ({country.upper()})" if country else "")
+    matches = candidate.get("matches") or ()
+    if not matches:
+        return head[:100]
+    last = matches[0]
+    where = str(last.get("map_name", "")) or "?"
+    foes = ", ".join(str(o) for o in (last.get("opponents") or ())[:2])
+    line = f"{head} \u2014 {where}"
+    if foes:
+        line = f"{line} vs {foes}"
+    return line[:100]
+
+
+async def _bind_error_note(interaction: discord.Interaction, exc: Exception, game: str, typed: str) -> str:
+    """Map a binding failure to its player-facing note (the add flow)."""
+    await _report_profile_error(interaction, "profile.add", game, exc)
+    reason = str(exc).lower()
+    if "d\u00e9j\u00e0" in reason or "already" in reason:
+        return await reply(interaction, "profile.add_taken")
+    if "no profile seam" in reason or "unknown game" in reason:
+        return await reply(interaction, "profile.add_game_unconfigured", game=game)
+    if "player_stats" in reason or "mal configur" in reason:
+        return await reply(interaction, "profile.add_provider_error", provider=PROFILE_PROVIDER)
+    if "blocks this server" in reason:
+        return await reply(interaction, "profile.add_blocked", name=typed)
+    if "valid" in reason or "inconnu" in reason:
+        return await reply(interaction, "profile.add_unknown", profile=typed)
+    return (
+        f"Add failed: the provider {PROFILE_PROVIDER} did not answer "
+        "\u2014 the exact error went to the admins."
+    )
+
+
+async def _finish_bind(
+    interaction: discord.Interaction, game: str, profile_id: str, origin: Any
+) -> None:
+    """Confirm a successful bind: the DM notice, then the refreshed profile."""
+    bound_url = _game_account_url(game, profile_id)
+    await _dm_profile_notice(
+        interaction,
+        "account_added",
+        account=f"[{game} {profile_id}]({bound_url})" if bound_url else game,
+    )
+    await _profile_followup(
+        interaction,
+        banner=await reply(interaction, "profile.add_success"),
+        origin=origin,
+    )
+
+
+class _AccountCandidateSelect(discord.ui.Select[Any]):
+    """The homonym picker: each option is one profile's last played preview."""
+
+    def __init__(self, candidates: list[dict[str, Any]], game: str, origin: Any) -> None:
+        super().__init__(
+            custom_id="home:profile:add:candidate",
+            placeholder="Pick your account...",
+            options=[
+                discord.SelectOption(
+                    label=(_candidate_line(c) or str(c.get("profile_id", "")))[:100],
+                    description=str(c.get("steam_name", ""))[:100],
+                    value=str(c.get("profile_id", "")),
+                )
+                for c in candidates[:25]
+            ],
+            min_values=1,
+            max_values=1,
+        )
+        self.game = game
+        self.origin = origin
+
+    async def callback(self, interaction: discord.Interaction) -> None:
+        """Bind the picked candidate \u2014 selection IS the validation."""
+        registration = getattr(interaction.client, "registration_service", None)
+        if registration is None:
+            await interaction.response.send_message(await reply(interaction, "not_configured"), ephemeral=True)
+            return
+        profile_id = str((self.values or [""])[0])
+        await interaction.response.defer(ephemeral=True, thinking=True)
+        try:
+            await registration.bind_profile(str(interaction.user.id), self.game, profile_id)
+        except Exception as exc:
+            note = await _bind_error_note(interaction, exc, self.game, profile_id)
+            await interaction.followup.send(note, ephemeral=True)
+            return
+        await _finish_bind(interaction, self.game, profile_id, self.origin)
+
+
+class _AccountCandidateView(discord.ui.View):
+    """Ephemeral: pick your account among the alias-search candidates."""
+
+    def __init__(self, candidates: list[dict[str, Any]], game: str, origin: Any) -> None:
+        super().__init__(timeout=180)
+        self.add_item(_AccountCandidateSelect(candidates, game, origin))
+
+
 class ProfileAddAccountModal(discord.ui.Modal):
     """The add-account form: game select (aoe2 preselected) + profile id."""
 
@@ -528,8 +641,8 @@ class ProfileAddAccountModal(discord.ui.Modal):
             max_values=1,
         )
         self.profile_id: discord.ui.TextInput[Any] = discord.ui.TextInput(
-            label="Ton id aoe2insights ou ton relic id",
-            placeholder="Ex. 17190369 ou https://www.aoe2insights.com/user/12488557/",
+            label="Ton pseudo en jeu, relic id ou URL insights",
+            placeholder="Ex. JeanJack, 17190369 ou https://www.aoe2insights.com/user/12488557/",
             max_length=64,
             required=True,
         )
@@ -537,55 +650,45 @@ class ProfileAddAccountModal(discord.ui.Modal):
         self.add_item(self.profile_id)
 
     async def on_submit(self, interaction: discord.Interaction) -> None:
-        """Bind the account, audit, confirm, then refresh the profile view."""
+        """Bind the account, audit, confirm, then refresh the profile view.
+
+        A typed NAME never goes to bind_profile: it searches the
+        provider's alias index (#402's name path) and the player picks
+        their account among the homonyms in a followup view.
+        """
         registration = getattr(interaction.client, "registration_service", None)
         if registration is None:
             await interaction.response.send_message(await reply(interaction, "not_configured"), ephemeral=True)
             return
         chosen = (self.game.values or ["aoe2"])[0]
+        typed = str(self.profile_id.value).strip()
         # the ONLY valid ephemeral modal defer (discord.py): thinking=True —
         # the bind takes seconds, the 3s window survives it
         await interaction.response.defer(ephemeral=True, thinking=True)
-        try:
-            await registration.bind_profile(
-                str(interaction.user.id), str(chosen), str(self.profile_id.value).strip()
+        if _is_name_input(typed):
+            try:
+                candidates = await registration.search_candidates(str(chosen), typed)
+            except Exception as exc:
+                note = await _bind_error_note(interaction, exc, chosen, typed)
+                await interaction.followup.send(note, ephemeral=True)
+                return
+            if not candidates:
+                note = await reply(interaction, "profile.add_unknown", profile=typed)
+                await interaction.followup.send(note, ephemeral=True)
+                return
+            await interaction.followup.send(
+                await reply(interaction, "profile.add_pick", name=typed),
+                view=_AccountCandidateView(candidates, chosen, self.origin),
+                ephemeral=True,
             )
+            return
+        try:
+            await registration.bind_profile(str(interaction.user.id), str(chosen), typed)
         except Exception as exc:
-            await _report_profile_error(interaction, "profile.add", chosen, exc)
-            reason = str(exc).lower()
-            if "déjà" in reason or "already" in reason:
-                note = await reply(interaction, "profile.add_taken")
-            elif "no profile seam" in reason or "unknown game" in reason:
-                note = await reply(interaction, "profile.add_game_unconfigured", game=chosen)
-            elif "player_stats" in reason or "mal configur" in reason:
-                note = await reply(interaction, "profile.add_provider_error", provider=PROFILE_PROVIDER)
-            elif "blocks this server" in reason:
-                note = await reply(interaction, "profile.add_blocked")
-            elif "valid" in reason or "inconnu" in reason:
-                note = (
-                    f"Add failed: no profile found for "
-                    f"`{str(self.profile_id.value).strip()}`. Paste your aoe2insights "
-                    "page URL (or the id it contains) \u2014 the right id resolves "
-                    "automatically."
-                )
-            else:
-                note = (
-                    f"Add failed: the provider {PROFILE_PROVIDER} did not answer "
-                    "\u2014 the exact error went to the admins."
-                )
+            note = await _bind_error_note(interaction, exc, chosen, typed)
             await interaction.followup.send(note, ephemeral=True)
             return
-        bound_url = _game_account_url(str(chosen), str(self.profile_id.value).strip())
-        await _dm_profile_notice(
-            interaction,
-            "account_added",
-            account=f"[{chosen} {self.profile_id.value}]({bound_url})" if bound_url else str(chosen),
-        )
-        await _profile_followup(
-            interaction,
-            banner=await reply(interaction, "profile.add_success"),
-            origin=self.origin,
-        )
+        await _finish_bind(interaction, str(chosen), typed, self.origin)
 
 
 async def _profile_header(interaction: discord.Interaction, user_id: str) -> str:

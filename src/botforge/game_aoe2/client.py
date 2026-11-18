@@ -99,6 +99,46 @@ class GameDataClient:
             )
         return [match_history_from_wire(e) for e in reply.matches]
 
+    async def search_profiles(self, alias: str) -> list[dict[str, Any]]:
+        """Search profiles by exact in-game alias (the #402 name path).
+
+        Degrades to an empty list when the service is unreachable —
+        the caller shows "no candidate" and keeps guiding the player.
+        """
+        from botforge.core.rpc.client import build_channel
+        from botforge.rpc_generated.botforge.v1 import game_pb2, gamedata_pb2_grpc
+
+        if not alias:
+            return []
+        async with build_channel(self._uri) as channel:
+            stub = gamedata_pb2_grpc.GameDataStub(channel)
+            try:
+                reply = await stub.SearchProfiles(
+                    game_pb2.SearchProfilesRequest(alias=alias), timeout=15.0
+                )
+            except Exception as exc:
+                if _is_not_found(exc):
+                    return []
+                raise
+        return [
+            {
+                "profile_id": c.profile_id,
+                "alias": c.alias,
+                "steam_name": c.steam_name,
+                "country": c.country,
+                "matches": [
+                    {
+                        "map_name": m.map_name,
+                        "description": m.description,
+                        "completed_at": m.completed_at,
+                        "opponents": list(m.opponents),
+                    }
+                    for m in c.matches
+                ],
+            }
+            for c in reply.candidates
+        ]
+
     async def sync_stats(self, profile_ids: list[str], wait: bool = False) -> dict[str, Any]:
         """Trigger the on-demand history sync through the game service (T4)."""
         from botforge.core.rpc.client import build_channel

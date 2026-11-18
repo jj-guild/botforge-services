@@ -372,6 +372,29 @@ class Aoe2ProfileValidationSeam:
             return None
         validated["site_ids"] = {"aoe2insights": insights_id}
         return validated
+    async def search_profiles(self, alias: str) -> list[dict[str, Any]]:
+        """Search the provider's profiles by in-game alias (#402's name path).
+
+        The Cloudflare finding forced a resolution path that never
+        touches aoe2insights: the provider's own upstream (World's
+        Edge) answers exact-alias lookups, so the player types their
+        in-game name and picks their account among the homonyms. The
+        candidates carry their last matches — the player recognizes
+        what THEY played, not an id. Degrades to an empty list.
+        """
+        from botforge.game_aoe2.client import GameDataClient
+
+        typed = alias.strip()
+        if not typed or len(typed) > 64:
+            return []
+        try:
+            client = GameDataClient(self._provider_uri)
+            return await client.search_profiles(typed)
+        except Exception:
+            logging.getLogger("botforge.registration.seam").warning(
+                "PROFILE SEARCH failed (alias %s)", typed, exc_info=True
+            )
+            return []
 
     @staticmethod
     async def _validate_with_client(client: Any, profile_id: str) -> dict[str, Any] | None:

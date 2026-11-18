@@ -19,6 +19,10 @@ logger = logging.getLogger("botforge.game_aoe2.stats_cache")
 TTL_USER_STATS_S = 600
 TTL_ACCOUNT_STATS_S = 600
 TTL_MATCH_HISTORY_S = 300
+# The alias search: a binding flow reads it a handful of times while
+# the player picks their account — short, the homonym previews must
+# not go stale across a session.
+TTL_PROFILE_SEARCH_S = 300
 
 
 class _RedisLike(Protocol):

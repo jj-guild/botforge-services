@@ -56,6 +56,15 @@ class GameProfileSeam(Protocol):
         """Validate a game profile id; return its public data, None when invalid."""
         ...
 
+    async def search_profiles(self, alias: str) -> list[dict[str, Any]]:
+        """Search profiles by in-game alias (#402's name path).
+
+        Returns the candidates (profile id, alias, steam name, country,
+        last matches) — homonyms included: the player picks their
+        account; an empty list reads as "no candidate".
+        """
+        ...
+
 
 class RegistrationEvents(Protocol):
     """Notification-intent seam (registration.requested/accepted/refused)."""
@@ -142,6 +151,19 @@ class RegistrationService:
         if not profile_ids:
             return []
         return await self._db.find_bindings_by_profiles(game_key, profile_ids)
+
+    async def search_candidates(self, game_key: str, alias: str) -> list[dict[str, Any]]:
+        """Search the game's profiles by in-game alias — no binding here.
+
+        The #402 name path: the player types their in-game name, the
+        seam lists the matching profiles (homonyms included, each with
+        its last matches) and the player SELECTS their account; the
+        binding happens on selection, through bind_profile as always.
+        """
+        seam = self._seams.get(game_key)
+        if seam is None:
+            raise ValueError(f"unknown game {game_key!r}: no profile seam registered")
+        return await seam.search_profiles(alias)
 
     async def get_binding(self, user_id: str, game_key: str) -> dict[str, Any] | None:
         """Return the user's first binding for a game; None when unbound.

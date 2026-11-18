@@ -69,6 +69,8 @@ profile_id&nbsp;and&nbsp;faction_key&nbsp;are&nbsp;opaque&nbsp;strings&nbsp;at&n
 
 <dl><dt><a name="Game-ResolveProfile"><strong>ResolveProfile</strong></a>(request, target, options=(), channel_credentials=None, call_credentials=None, insecure=False, compression=None, wait_for_ready=None, timeout=None, metadata=None)</dt></dl>
 
+<dl><dt><a name="Game-SearchProfiles"><strong>SearchProfiles</strong></a>(request, target, options=(), channel_credentials=None, call_credentials=None, insecure=False, compression=None, wait_for_ready=None, timeout=None, metadata=None)</dt></dl>
+
 <dl><dt><a name="Game-StreamMatchEvents"><strong>StreamMatchEvents</strong></a>(request, target, options=(), channel_credentials=None, call_credentials=None, insecure=False, compression=None, wait_for_ready=None, timeout=None, metadata=None)</dt></dl>
 
 <dl><dt><a name="Game-SyncStats"><strong>SyncStats</strong></a>(request, target, options=(), channel_credentials=None, call_credentials=None, insecure=False, compression=None, wait_for_ready=None, timeout=None, metadata=None)</dt></dl>
@@ -125,6 +127,11 @@ aggregated&nbsp;(best&nbsp;current/max&nbsp;elo&nbsp;per&nbsp;leaderboard,&nbsp;
 
 <dl><dt><a name="GameServicer-ResolveProfile"><strong>ResolveProfile</strong></a>(self, request, context)</dt><dd><span class="code">Resolve&nbsp;which&nbsp;mod&nbsp;user&nbsp;matches&nbsp;a&nbsp;game&nbsp;profile.&nbsp;Used&nbsp;for&nbsp;profile<br>
 validation&nbsp;at&nbsp;registration&nbsp;and&nbsp;for&nbsp;match&nbsp;participant&nbsp;resolution.</span></dd></dl>
+
+<dl><dt><a name="GameServicer-SearchProfiles"><strong>SearchProfiles</strong></a>(self, request, context)</dt><dd><span class="code">Search&nbsp;profiles&nbsp;by&nbsp;in-game&nbsp;alias&nbsp;(exact,&nbsp;case-sensitive).&nbsp;The&nbsp;name<br>
+resolution&nbsp;path&nbsp;for&nbsp;profile&nbsp;binding&nbsp;(botforge-services#402):&nbsp;the<br>
+relic-id&nbsp;relay&nbsp;of&nbsp;aoe2insights&nbsp;is&nbsp;Cloudflare-blocked&nbsp;from&nbsp;servers,<br>
+but&nbsp;the&nbsp;provider's&nbsp;own&nbsp;upstream&nbsp;answers&nbsp;alias&nbsp;lookups.</span></dd></dl>
 
 <dl><dt><a name="GameServicer-StreamMatchEvents"><strong>StreamMatchEvents</strong></a>(self, request, context)</dt><dd><span class="code">Stream&nbsp;match&nbsp;lifecycle&nbsp;events&nbsp;(lobby_opened,&nbsp;lobby_closed,<br>
 game_started,&nbsp;game_ended)&nbsp;for&nbsp;the&nbsp;matches&nbsp;this&nbsp;provider&nbsp;can&nbsp;see.</span></dd></dl>

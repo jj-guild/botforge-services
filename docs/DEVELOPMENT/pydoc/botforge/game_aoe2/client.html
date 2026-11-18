@@ -72,6 +72,11 @@ Degrades&nbsp;to&nbsp;None&nbsp;when&nbsp;the&nbsp;user&nbsp;owns&nbsp;no&nbsp;k
 service&nbsp;is&nbsp;unreachable&nbsp;—&nbsp;the&nbsp;caller&nbsp;reads&nbsp;"unknown&nbsp;stats"&nbsp;and<br>
 falls&nbsp;back&nbsp;to&nbsp;manual&nbsp;review,&nbsp;never&nbsp;a&nbsp;crash.</span></dd></dl>
 
+<dl><dt>async <a name="GameDataClient-search_profiles"><strong>search_profiles</strong></a>(self, alias: 'str') -&gt; 'list[dict[str, Any]]'</dt><dd><span class="code">Search&nbsp;profiles&nbsp;by&nbsp;exact&nbsp;in-game&nbsp;alias&nbsp;(the&nbsp;#402&nbsp;name&nbsp;path).<br>
+&nbsp;<br>
+Degrades&nbsp;to&nbsp;an&nbsp;empty&nbsp;list&nbsp;when&nbsp;the&nbsp;service&nbsp;is&nbsp;unreachable&nbsp;—<br>
+the&nbsp;caller&nbsp;shows&nbsp;"no&nbsp;candidate"&nbsp;and&nbsp;keeps&nbsp;guiding&nbsp;the&nbsp;player.</span></dd></dl>
+
 <dl><dt>async <a name="GameDataClient-stream_player_events"><strong>stream_player_events</strong></a>(self, game_key: 'str' = '')</dt><dd><span class="code">Yield&nbsp;normalized&nbsp;player&nbsp;transitions&nbsp;continuously,&nbsp;forever.</span></dd></dl>
 
 <dl><dt>async <a name="GameDataClient-stream_snapshots"><strong>stream_snapshots</strong></a>(self, game_key: 'str')</dt><dd><span class="code">Yield&nbsp;dashboard&nbsp;snapshots&nbsp;continuously:&nbsp;one&nbsp;per&nbsp;effective&nbsp;change.</span></dd></dl>

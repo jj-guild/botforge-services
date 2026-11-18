@@ -55,6 +55,7 @@ def main() -> None:
             player_stats=adapter.player_stats,
             match_result=adapter.recent_match_result,
             update_subscriptions=update_subscriptions,
+            search_profiles=adapter.search_profiles,
             **stats_handlers,
         )
 

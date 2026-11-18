@@ -497,6 +497,7 @@ class GameDataServicer(gamedata_pb2_grpc.GameDataServicer):
             "user": game_pb2.UserStatsReply,
             "account": game_pb2.AccountStatsReply,
             "history": game_pb2.MatchHistoryReply,
+            "search": game_pb2.ProfileSearchReply,
         }[prefix]
 
     async def SyncStats(
@@ -572,6 +573,26 @@ class GameDataServicer(gamedata_pb2_grpc.GameDataServicer):
         return await self._cached(
             "user", TTL_USER_STATS_S, [request.user_id, str(request.window_days)], fetch
         )
+
+    async def SearchProfiles(
+        self,
+        request: Any,
+        context: grpc.aio.ServicerContext,
+    ) -> Any:
+        """Proxy the alias search to the stats provider (rule 4), cached.
+
+        The binding flow reads the same search a few times while the
+        player picks their account — the TTL cache absorbs the re-reads.
+        """
+        if self._stats_provider is None:
+            await context.abort(grpc.StatusCode.UNIMPLEMENTED, "stats provider not wired")
+            raise AssertionError
+        from botforge.game_aoe2.stats_cache import TTL_PROFILE_SEARCH_S
+
+        async def fetch() -> Any:
+            return await self._stats_provider.search_profiles_wire(request.alias)
+
+        return await self._cached("search", TTL_PROFILE_SEARCH_S, [request.alias], fetch)
 
     async def UpdateEnrollments(
         self,

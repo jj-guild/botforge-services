@@ -109,6 +109,11 @@ class GameStub:
                 request_serializer=botforge_dot_v1_dot_game__pb2.LiveMatchesRequest.SerializeToString,
                 response_deserializer=botforge_dot_v1_dot_game__pb2.LiveMatchesReply.FromString,
                 _registered_method=True)
+        self.SearchProfiles = channel.unary_unary(
+                '/botforge.v1.Game/SearchProfiles',
+                request_serializer=botforge_dot_v1_dot_game__pb2.SearchProfilesRequest.SerializeToString,
+                response_deserializer=botforge_dot_v1_dot_game__pb2.ProfileSearchReply.FromString,
+                _registered_method=True)
 
 
 class GameServicer:
@@ -237,6 +242,16 @@ class GameServicer:
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
+    def SearchProfiles(self, request, context):
+        """Search profiles by in-game alias (exact, case-sensitive). The name
+        resolution path for profile binding (botforge-services#402): the
+        relic-id relay of aoe2insights is Cloudflare-blocked from servers,
+        but the provider's own upstream answers alias lookups.
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
 
 def add_GameServicer_to_server(servicer, server):
     rpc_method_handlers = {
@@ -309,6 +324,11 @@ def add_GameServicer_to_server(servicer, server):
                     servicer.GetLiveMatches,
                     request_deserializer=botforge_dot_v1_dot_game__pb2.LiveMatchesRequest.FromString,
                     response_serializer=botforge_dot_v1_dot_game__pb2.LiveMatchesReply.SerializeToString,
+            ),
+            'SearchProfiles': grpc.unary_unary_rpc_method_handler(
+                    servicer.SearchProfiles,
+                    request_deserializer=botforge_dot_v1_dot_game__pb2.SearchProfilesRequest.FromString,
+                    response_serializer=botforge_dot_v1_dot_game__pb2.ProfileSearchReply.SerializeToString,
             ),
     }
     generic_handler = grpc.method_handlers_generic_handler(
@@ -694,6 +714,33 @@ class Game:
             '/botforge.v1.Game/GetLiveMatches',
             botforge_dot_v1_dot_game__pb2.LiveMatchesRequest.SerializeToString,
             botforge_dot_v1_dot_game__pb2.LiveMatchesReply.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def SearchProfiles(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/botforge.v1.Game/SearchProfiles',
+            botforge_dot_v1_dot_game__pb2.SearchProfilesRequest.SerializeToString,
+            botforge_dot_v1_dot_game__pb2.ProfileSearchReply.FromString,
             options,
             channel_credentials,
             insecure,
