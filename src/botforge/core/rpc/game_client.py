@@ -355,6 +355,18 @@ class GameProviderClient:
             stub = game_pb2_grpc.GameStub(channel)
             return await call_with_retry(stub.GetUserStats, request)
 
+    async def search_profiles_wire(self, alias: str) -> Any:
+        """Fetch the alias search as the wire reply (#402 name path)."""
+        if not alias:
+            from botforge.rpc_generated.botforge.v1 import game_pb2
+
+            return game_pb2.ProfileSearchReply()
+        async with build_channel(self._provider_uri) as channel:
+            stub = game_pb2_grpc.GameStub(channel)
+            return await call_with_retry(
+                stub.SearchProfiles, game_pb2.SearchProfilesRequest(alias=alias)
+            )
+
     async def get_live_matches(self, limit: int = 0) -> list[dict[str, Any]]:
         """Fetch the live matches the provider sees (#404 T3).
 
@@ -389,4 +401,45 @@ class GameProviderClient:
                 "metadata": dict(m.metadata),
             }
             for m in reply.matches
+        ]
+
+    async def search_profiles(self, alias: str) -> list[dict[str, Any]]:
+        """Search profiles by exact in-game alias (the #402 name path).
+
+        Degrades to an empty list — an unreachable provider reads as
+        "no candidate" and the caller keeps guiding the player.
+        """
+        if not alias:
+            return []
+        async with build_channel(self._provider_uri) as channel:
+            stub = game_pb2_grpc.GameStub(channel)
+            try:
+                reply = await call_with_retry(
+                    stub.SearchProfiles,
+                    game_pb2.SearchProfilesRequest(alias=alias),
+                )
+            except grpc.aio.AioRpcError as exc:
+                if exc.code() in (
+                    grpc.StatusCode.UNIMPLEMENTED,
+                    grpc.StatusCode.UNAVAILABLE,
+                ):
+                    return []
+                raise
+        return [
+            {
+                "profile_id": c.profile_id,
+                "alias": c.alias,
+                "steam_name": c.steam_name,
+                "country": c.country,
+                "matches": [
+                    {
+                        "map_name": m.map_name,
+                        "description": m.description,
+                        "completed_at": m.completed_at,
+                        "opponents": list(m.opponents),
+                    }
+                    for m in c.matches
+                ],
+            }
+            for c in reply.candidates
         ]

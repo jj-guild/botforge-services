@@ -69,6 +69,12 @@ service Game {
   // least one known player) — the lobby covers the present, the
   // history store covers the past (#404 T3).
   rpc GetLiveMatches(LiveMatchesRequest) returns (LiveMatchesReply);
+
+  // Search profiles by in-game alias (exact, case-sensitive). The name
+  // resolution path for profile binding (botforge-services#402): the
+  // relic-id relay of aoe2insights is Cloudflare-blocked from servers,
+  // but the provider's own upstream answers alias lookups.
+  rpc SearchProfiles(SearchProfilesRequest) returns (ProfileSearchReply);
 }
 
 message UpdateSubscriptionsRequest {
@@ -306,4 +312,31 @@ message LiveMatch {
 
 message LiveMatchesReply {
   repeated LiveMatch matches = 1;
+}
+
+message SearchProfilesRequest {
+  string alias = 1;  // the exact in-game alias (case-sensitive upstream)
+}
+
+message MatchPreview {
+  string map_name = 1;        // the raw upstream map label, e.g. "arabiablitz"
+  string description = 2;    // e.g. "AUTOMATCH"
+  int64 completed_at = 3;    // epoch seconds; 0 when the match is live
+  repeated string opponents = 4;  // the other players' aliases
+}
+
+message ProfileCandidate {
+  string profile_id = 1;  // the relic profile id
+  string alias = 2;        // the in-game display name
+  string steam_name = 3;   // "/steam/<id64>" when known
+  string country = 4;      // ISO country code when known
+  repeated MatchPreview matches = 5;  // the last matches: homonym
+  // disambiguation \u2014 the player recognizes their account by what
+  // they played, not by an id (#402)
+}
+
+message ProfileSearchReply {
+  repeated ProfileCandidate candidates = 1;  // homonyms included: the
+  // player picks theirs; an exact-alias search can match several
+  // steam accounts
 }

@@ -340,6 +340,7 @@ class GameServicer(game_pb2_grpc.GameServicer):
         account_stats: Callable[[list[str]], Awaitable[list[AccountEloStatus]]] | None = None,
         user_stats: Callable[[str, int], Awaitable[UserEloStats | None]] | None = None,
         live_matches: Callable[[int], Awaitable[list[dict[str, Any]]]] | None = None,
+        search_profiles: Callable[[str], Awaitable[list[dict[str, str]]]] | None = None,
     ) -> None:
         self._capabilities = capabilities
         self._match_details = match_details
@@ -353,7 +354,7 @@ class GameServicer(game_pb2_grpc.GameServicer):
         self._account_stats = account_stats
         self._user_stats = user_stats
         self._live_matches = live_matches
-
+        self._search_profiles = search_profiles
     async def GetCapabilities(
         self,
         request: game_pb2.CapabilitiesRequest,
@@ -519,5 +520,35 @@ class GameServicer(game_pb2_grpc.GameServicer):
                     metadata={str(k): str(v) for k, v in (m.get("metadata") or {}).items()},
                 )
                 for m in matches
+            ]
+        )
+
+    async def SearchProfiles(
+        self,
+        request: game_pb2.SearchProfilesRequest,
+        context: grpc.aio.ServicerContext,
+    ) -> game_pb2.ProfileSearchReply:
+        """Serve the alias search (the #402 name resolution path)."""
+        if self._search_profiles is None:
+            await context.abort(grpc.StatusCode.UNIMPLEMENTED, "profile search not available")
+        candidates = await self._search_profiles(request.alias)
+        return game_pb2.ProfileSearchReply(
+            candidates=[
+                game_pb2.ProfileCandidate(
+                    profile_id=str(c.get("profile_id", "")),
+                    alias=str(c.get("alias", "")),
+                    steam_name=str(c.get("steam_name", "")),
+                    country=str(c.get("country", "")),
+                    matches=[
+                        game_pb2.MatchPreview(
+                            map_name=str(m.get("map_name", "")),
+                            description=str(m.get("description", "")),
+                            completed_at=int(m.get("completed_at", 0)),
+                            opponents=[str(o) for o in m.get("opponents") or ()],
+                        )
+                        for m in c.get("matches") or ()
+                    ],
+                )
+                for c in candidates
             ]
         )

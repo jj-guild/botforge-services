@@ -65,10 +65,11 @@ fr:
       add_taken: Ce profil est déjà lié — retire-le d'abord ou choisis un autre profil.
       add_game_unconfigured: 'Ajout échoué : le jeu {game} n''est pas configuré pour l''inscription.'
       add_unknown: 'Ajout échoué : aucun profil trouvé pour {profile}. Colle l''URL de ta page aoe2insights
-        (ou l''id qu''elle contient) — le bon id sera récupéré automatiquement.'
+        (ou l''id qu''elle contient), ou ton pseudo en jeu — le bon id sera récupéré automatiquement.'
+      add_pick: 'Choisis ton compte pour **{name}** — chaque option montre ce que ce profil a joué en dernier :'
       add_blocked: 'Ajout échoué : aoe2insights bloque ce serveur, l''id insights ne peut pas être
-        récupéré automatiquement. Colle la forme /user/relic/<id>/ de ton URL insights, ou ton
-        Relic ID (le Relic ID affiché sur ton profil insights).'
+        récupéré automatiquement. Colle ton pseudo en jeu (ex. {name}), la forme /user/relic/<id>/ de ton
+        URL insights, ou ton Relic ID (le Relic ID affiché sur ton profil insights).'
       add_provider_error: 'Ajout échoué : le provider {provider} ne répond pas correctement — le détail
         part aux admins (vois les logs du bot).'
       add_not_configured: 'Ajout échoué : le provider {provider} ne sert pas les stats de profil — vois

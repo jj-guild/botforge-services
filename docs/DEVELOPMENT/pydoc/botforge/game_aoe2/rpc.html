@@ -93,6 +93,11 @@ asks&nbsp;its&nbsp;provider&nbsp;—&nbsp;the&nbsp;caller&nbsp;never&nbsp;sees&n
 
 <dl><dt>async <a name="GameDataServicer-GetUserStats"><strong>GetUserStats</strong></a>(self, request: 'Any', context: 'grpc.aio.ServicerContext') -&gt; 'Any'</dt><dd><span class="code">Proxy&nbsp;the&nbsp;per-user&nbsp;unified&nbsp;stats&nbsp;through&nbsp;the&nbsp;TTL&nbsp;cache.</span></dd></dl>
 
+<dl><dt>async <a name="GameDataServicer-SearchProfiles"><strong>SearchProfiles</strong></a>(self, request: 'Any', context: 'grpc.aio.ServicerContext') -&gt; 'Any'</dt><dd><span class="code">Proxy&nbsp;the&nbsp;alias&nbsp;search&nbsp;to&nbsp;the&nbsp;stats&nbsp;provider&nbsp;(rule&nbsp;4),&nbsp;cached.<br>
+&nbsp;<br>
+The&nbsp;binding&nbsp;flow&nbsp;reads&nbsp;the&nbsp;same&nbsp;search&nbsp;a&nbsp;few&nbsp;times&nbsp;while&nbsp;the<br>
+player&nbsp;picks&nbsp;their&nbsp;account&nbsp;—&nbsp;the&nbsp;TTL&nbsp;cache&nbsp;absorbs&nbsp;the&nbsp;re-reads.</span></dd></dl>
+
 <dl><dt>async <a name="GameDataServicer-SyncContent"><strong>SyncContent</strong></a>(self, request: 'gamedata_pb2.SyncContentRequest', context: 'grpc.aio.ServicerContext') -&gt; 'gamedata_pb2.SyncContentReply'</dt><dd><span class="code">Run&nbsp;the&nbsp;content&nbsp;sync&nbsp;against&nbsp;the&nbsp;game's&nbsp;providers,&nbsp;in&nbsp;here.<br>
 &nbsp;<br>
 The&nbsp;civs&nbsp;sync&nbsp;rides&nbsp;the&nbsp;aoe2techtree&nbsp;content&nbsp;provider,&nbsp;the&nbsp;maps<br>

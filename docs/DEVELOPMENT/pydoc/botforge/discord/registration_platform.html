@@ -68,6 +68,15 @@ in&nbsp;when&nbsp;the&nbsp;environment&nbsp;declares&nbsp;no&nbsp;URI:&nbsp;the&
 always&nbsp;carries&nbsp;the&nbsp;provider,&nbsp;and&nbsp;an&nbsp;empty&nbsp;URI&nbsp;made&nbsp;the&nbsp;seam<br>
 reject&nbsp;every&nbsp;profile&nbsp;silently&nbsp;(the&nbsp;2026-10-16&nbsp;test&nbsp;findings).</span></dd></dl>
 
+<dl><dt>async <a name="Aoe2ProfileValidationSeam-search_profiles"><strong>search_profiles</strong></a>(self, alias: 'str') -&gt; 'list[dict[str, Any]]'</dt><dd><span class="code">Search&nbsp;the&nbsp;provider's&nbsp;profiles&nbsp;by&nbsp;in-game&nbsp;alias&nbsp;(#402's&nbsp;name&nbsp;path).<br>
+&nbsp;<br>
+The&nbsp;Cloudflare&nbsp;finding&nbsp;forced&nbsp;a&nbsp;resolution&nbsp;path&nbsp;that&nbsp;never<br>
+touches&nbsp;aoe2insights:&nbsp;the&nbsp;provider's&nbsp;own&nbsp;upstream&nbsp;(World's<br>
+Edge)&nbsp;answers&nbsp;exact-alias&nbsp;lookups,&nbsp;so&nbsp;the&nbsp;player&nbsp;types&nbsp;their<br>
+in-game&nbsp;name&nbsp;and&nbsp;picks&nbsp;their&nbsp;account&nbsp;among&nbsp;the&nbsp;homonyms.&nbsp;The<br>
+candidates&nbsp;carry&nbsp;their&nbsp;last&nbsp;matches&nbsp;—&nbsp;the&nbsp;player&nbsp;recognizes<br>
+what&nbsp;THEY&nbsp;played,&nbsp;not&nbsp;an&nbsp;id.&nbsp;Degrades&nbsp;to&nbsp;an&nbsp;empty&nbsp;list.</span></dd></dl>
+
 <dl><dt>async <a name="Aoe2ProfileValidationSeam-validate_profile"><strong>validate_profile</strong></a>(self, profile_id: 'str') -&gt; 'dict[str, Any] | None'</dt><dd><span class="code">Return&nbsp;the&nbsp;profile's&nbsp;public&nbsp;data&nbsp;when&nbsp;the&nbsp;provider&nbsp;knows&nbsp;it.<br>
 &nbsp;<br>
 The&nbsp;typed&nbsp;id&nbsp;may&nbsp;be&nbsp;either&nbsp;the&nbsp;relic&nbsp;id&nbsp;(what&nbsp;the&nbsp;provider&nbsp;wants)<br>

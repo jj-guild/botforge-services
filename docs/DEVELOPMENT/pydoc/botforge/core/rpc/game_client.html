@@ -96,6 +96,13 @@ manual-review&nbsp;fallback).</span></dd></dl>
 
 <dl><dt>async <a name="GameProviderClient-list_maps"><strong>list_maps</strong></a>(self) -&gt; 'list[GameMap]'</dt><dd><span class="code">Fetch&nbsp;the&nbsp;provider's&nbsp;map&nbsp;catalog,&nbsp;degrading&nbsp;to&nbsp;an&nbsp;empty&nbsp;list.</span></dd></dl>
 
+<dl><dt>async <a name="GameProviderClient-search_profiles"><strong>search_profiles</strong></a>(self, alias: 'str') -&gt; 'list[dict[str, Any]]'</dt><dd><span class="code">Search&nbsp;profiles&nbsp;by&nbsp;exact&nbsp;in-game&nbsp;alias&nbsp;(the&nbsp;#402&nbsp;name&nbsp;path).<br>
+&nbsp;<br>
+Degrades&nbsp;to&nbsp;an&nbsp;empty&nbsp;list&nbsp;—&nbsp;an&nbsp;unreachable&nbsp;provider&nbsp;reads&nbsp;as<br>
+"no&nbsp;candidate"&nbsp;and&nbsp;the&nbsp;caller&nbsp;keeps&nbsp;guiding&nbsp;the&nbsp;player.</span></dd></dl>
+
+<dl><dt>async <a name="GameProviderClient-search_profiles_wire"><strong>search_profiles_wire</strong></a>(self, alias: 'str') -&gt; 'Any'</dt><dd><span class="code">Fetch&nbsp;the&nbsp;alias&nbsp;search&nbsp;as&nbsp;the&nbsp;wire&nbsp;reply&nbsp;(#402&nbsp;name&nbsp;path).</span></dd></dl>
+
 <dl><dt><a name="GameProviderClient-stream_match_events"><strong>stream_match_events</strong></a>(self, since: 'int')</dt><dd><span class="code">Stream&nbsp;live&nbsp;match&nbsp;events&nbsp;from&nbsp;the&nbsp;provider,&nbsp;degrading&nbsp;to&nbsp;silence.<br>
 &nbsp;<br>
 The&nbsp;generator&nbsp;yields&nbsp;MatchEvent&nbsp;models&nbsp;as&nbsp;they&nbsp;arrive;&nbsp;on&nbsp;a<br>

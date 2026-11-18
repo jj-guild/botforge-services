@@ -187,6 +187,103 @@ class LibrematchAdapter:
             return None
         return PlayerStats(profile_id=profile_id, blocks=tuple(blocks))
 
+    async def search_profiles(self, alias: str, match_count: int = 3) -> list[dict[str, Any]]:
+        """Search profiles by exact in-game alias (the #402 name path).
+
+        ``GetPersonalStat`` accepts ``aliases`` instead of
+        ``profile_ids`` (ONE identifier type per call — the upstream
+        contract): the reply's ``statGroups[].members[]`` carries the
+        relic profile_id, the alias, the steam name and the country of
+        every exact-alias match. Homonyms ride along: each candidate
+        \u2014 capped at 5 \u2014 is enriched with the profile's last matches so
+        the player recognizes THEIR account by what they played, not
+        by an id. Transport failures degrade to an empty list.
+        """
+        if not alias:
+            return []
+        if not await self._allowed():
+            logger.warning("librematch call over rate budget; degrading search to empty")
+            return []
+        async with self._client() as client:
+            try:
+                reply = await client.get(
+                    urljoin(self._base_url + "/", PERSONAL_STAT_PATH.lstrip("/")),
+                    params={"title": "age2", "aliases": f'["{alias}"]', "leaderboard_id": "3"},
+                )
+                reply.raise_for_status()
+                payload = reply.json()
+            except Exception:
+                logger.warning("alias search failed (alias %s)", alias, exc_info=True)
+                return []
+        candidates: list[dict[str, Any]] = []
+        for group in payload.get("statGroups") or []:
+            member = next(iter(group.get("members") or []), None)
+            if not isinstance(member, dict) or not member.get("profile_id"):
+                continue
+            candidates.append(
+                {
+                    "profile_id": str(member["profile_id"]),
+                    "alias": str(member.get("alias", alias)),
+                    "steam_name": str(member.get("name", "")),
+                    "country": str(member.get("country", "")),
+                }
+            )
+            if len(candidates) >= 5:  # the upstream can answer dozens of homonyms
+                break
+        for candidate in candidates:
+            candidate["matches"] = await self._match_previews(
+                str(candidate["profile_id"]), match_count
+            )
+        return candidates
+
+    async def _match_previews(self, profile_id: str, count: int) -> list[dict[str, Any]]:
+        """Summarize a profile's last matches for the candidate list.
+
+        The alias map of the WHOLE reply (``profiles[]``) turns the
+        opponents' profile ids into aliases \u2014 a preview the player
+        reads, not ids.
+        """
+        if not await self._allowed():
+            return []
+        async with self._client() as client:
+            try:
+                reply = await client.get(
+                    urljoin(self._base_url + "/", RECENT_MATCH_PATH.lstrip("/")),
+                    params={"title": "age2", "profile_ids": f'["{profile_id}"]', "count": str(count)},
+                )
+                reply.raise_for_status()
+                payload = reply.json()
+            except Exception:
+                logger.warning("preview fetch failed (profile %s)", profile_id, exc_info=True)
+                return []
+        aliases = {
+            str(p.get("profile_id")): str(p.get("alias", ""))
+            for p in payload.get("profiles") or []
+            if isinstance(p, dict)
+        }
+        previews: list[dict[str, Any]] = []
+        for raw in payload.get("matchHistoryStats") or []:
+            if not isinstance(raw, dict):
+                continue
+            opponents = sorted(
+                {
+                    aliases.get(str(r.get("profile_id")), str(r.get("profile_id")))
+                    for r in raw.get("matchhistoryreportresults") or []
+                    if isinstance(r, dict) and str(r.get("profile_id")) != profile_id
+                }
+            )
+            previews.append(
+                {
+                    "map_name": str(raw.get("mapname", "")),
+                    "description": str(raw.get("description", "")),
+                    "completed_at": int(raw.get("completiontime", 0)),
+                    "opponents": opponents[:4],
+                }
+            )
+            if len(previews) >= count:
+                break
+        return previews
+
     async def fetch_match_history_raw(
         self, profile_id: str, leaderboard_id: str = "", count: int = 1000
     ) -> list[dict[str, Any]]:

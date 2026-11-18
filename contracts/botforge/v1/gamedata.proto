@@ -111,6 +111,11 @@ service GameData {
   rpc GetMatchHistory(botforge.v1.MatchHistoryRequest) returns (botforge.v1.MatchHistoryReply);
   rpc GetAccountStats(botforge.v1.AccountStatsRequest) returns (botforge.v1.AccountStatsReply);
   rpc GetUserStats(botforge.v1.UserStatsRequest) returns (botforge.v1.UserStatsReply);
+
+  // Alias search proxied to the owner provider (same wire shapes as the
+  // game contract — one shape, no copy) so profile binding resolves a
+  // typed in-game name into candidates (#402).
+  rpc SearchProfiles(botforge.v1.SearchProfilesRequest) returns (botforge.v1.ProfileSearchReply);
 }
 
 message CoverageRequest {}
