@@ -208,24 +208,35 @@ class LibrematchAdapter:
             try:
                 reply = await client.get(
                     urljoin(self._base_url + "/", PERSONAL_STAT_PATH.lstrip("/")),
-                    params={"title": "age2", "aliases": f'["{alias}"]', "leaderboard_id": "3"},
+                    params={"title": "age2", "aliases": f'["{alias}"]'},
                 )
                 reply.raise_for_status()
                 payload = reply.json()
             except Exception:
                 logger.warning("alias search failed (alias %s)", alias, exc_info=True)
                 return []
+        # ONE call answers the identity AND every leaderboard's stats:
+        # leaderboardStats[].statgroup_id joins members[].personal_statgroup_id
+        boards: dict[int, dict[int, int]] = {}
+        for stat in payload.get("leaderboardStats") or []:
+            if isinstance(stat, dict) and stat.get("statgroup_id") is not None:
+                per_group = boards.setdefault(int(stat["statgroup_id"]), {})
+                per_group[int(stat.get("leaderboard_id", 0))] = int(stat.get("rating", 0))
         candidates: list[dict[str, Any]] = []
         for group in payload.get("statGroups") or []:
             member = next(iter(group.get("members") or []), None)
             if not isinstance(member, dict) or not member.get("profile_id"):
                 continue
+            stats = boards.get(int(member.get("personal_statgroup_id", 0)), {})
             candidates.append(
                 {
                     "profile_id": str(member["profile_id"]),
                     "alias": str(member.get("alias", alias)),
                     "steam_name": str(member.get("name", "")),
                     "country": str(member.get("country", "")),
+                    "clan": str(member.get("clanlist_name", "")),
+                    "elo_1v1": stats.get(3, 0),
+                    "elo_tg": stats.get(4, 0),
                 }
             )
             if len(candidates) >= 5:  # the upstream can answer dozens of homonyms

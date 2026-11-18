@@ -299,6 +299,9 @@ class TestNameSearchPath:
             "alias": "JeanJack",
             "steam_name": "/steam/76561199557469290",
             "country": "fr",
+            "clan": "JJ",
+            "elo_1v1": 1185,
+            "elo_tg": 1374,
             "matches": [
                 {
                     "map_name": "arabiablitz",
@@ -361,11 +364,12 @@ class TestNameSearchPath:
         assert not _is_name_input("https://www.aoe2insights.com/user/12488557/")
         assert not _is_name_input("")
 
-    def test_the_candidate_line_reads_as_a_player_preview(self) -> None:
+    def test_the_candidate_line_carries_clan_country_and_elos(self) -> None:
         from botforge.discord.home import _candidate_line
 
         line = _candidate_line(self.CANDIDATES[0])
-        assert "JeanJack (FR)" in line
-        assert "arabiablitz" in line
-        assert "Hera" in line
-        assert _candidate_line(self.CANDIDATES[1]).startswith("JeanJack (BE)")
+        assert "JeanJack [JJ] (FR)" in line
+        assert "1v1 1185" in line
+        assert "TG 1374" in line
+        no_stats = _candidate_line({"alias": "NoStats", "country": "be"})
+        assert no_stats == "NoStats (BE) \u2014 1v1 ? \u00b7 TG ?"

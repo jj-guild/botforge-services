@@ -539,6 +539,9 @@ class GameServicer(game_pb2_grpc.GameServicer):
                     alias=str(c.get("alias", "")),
                     steam_name=str(c.get("steam_name", "")),
                     country=str(c.get("country", "")),
+                    clan=str(c.get("clan", "")),
+                    elo_1v1=int(c.get("elo_1v1", 0)),
+                    elo_tg=int(c.get("elo_tg", 0)),
                     matches=[
                         game_pb2.MatchPreview(
                             map_name=str(m.get("map_name", "")),
