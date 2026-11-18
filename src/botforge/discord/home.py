@@ -1518,3 +1518,50 @@ async def _resolve_menu_message_id(bot: discord.Client, guild_id: str) -> str | 
         except Exception:
             logger.warning("PINNED HOME MENU registry resolve failed - best-effort")
     store = getattr(bot, "_home_menu_message_ids", None)
+    if isinstance(store, dict):
+        value = store.get(guild_id)
+        return str(value) if value is not None else None
+    return None
+
+
+async def _register_menu_message(bot: discord.Client, guild_id: str, channel_id: str, message_id: str) -> None:
+    """Persist the new menu id: memory fallback + registry (durable)."""
+    store = getattr(bot, "_home_menu_message_ids", None)
+    if not isinstance(store, dict):
+        store = {}
+        bot._home_menu_message_ids = store  # type: ignore[attr-defined]
+    store[guild_id] = message_id
+    registry = getattr(bot, "message_registry", None)
+    if registry is None:
+        return
+    try:
+        await registry.register(
+            platform=HOME_MESSAGE_PLATFORM,
+            message_key=HOME_MESSAGE_KEY,
+            entity_id=guild_id,
+            channel_id=channel_id,
+            message_id=message_id,
+            guild_id=guild_id,
+        )
+    except Exception:
+        logger.warning("PINNED HOME MENU registry register failed - best-effort")
+
+
+def register_home_command(
+    tree: app_commands.CommandTree[discord.Client],
+    home: HomeService,
+    catalog: MessageCatalog | None = None,
+) -> None:
+    """Register the /home slash command and the persistent home buttons."""
+
+    @tree.command(
+        name=localized("commands.home_name", "home"),
+        description=localized("commands.home_description", "The guild's home menu"),
+    )
+    async def home_command(interaction: discord.Interaction) -> None:
+        """Answer /home with the declared home menu (ephemeral, localized)."""
+        from botforge.discord.views_routing import open_declared_view
+
+        await open_declared_view(interaction, "menu:home")
+
+
