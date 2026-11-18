@@ -125,6 +125,25 @@ def register(bot: Any, config: Any) -> None:
     # idempotent (the sink keeps one handler reference per bot)
     subscribe_profile_gate(bot)
 
+    # epic #412 T1 (Drasah 18/11): the ⚙️ Paramètres panel — the admin
+    # season cockpit pinned in the admin settings salon (the reference's
+    # 12 buttons on the platform's provisioning/service seams).
+    from .settings_panel import SETTINGS_VIEW_KEY, SettingsActionButton, build_settings_panel
+
+    async def _resolve_settings_channel(guild_id: str) -> str:
+        return await stored_channel_id(guild_id, "mod/kingdom", "settings") or ""
+
+    register_static_pin(
+        StaticPinnedView(
+            key=SETTINGS_VIEW_KEY,
+            mark_suffix=SETTINGS_VIEW_KEY,
+            resolve_channel=_resolve_settings_channel,
+            build_layout=build_settings_panel,
+            registry=getattr(bot, "message_registry", None),
+            scope="mod/kingdom",
+        )
+    )
+
 
 def setup_hook(bot: Any) -> None:
     """Re-register persistent UI after a restart (dynamic items)."""
@@ -160,6 +179,7 @@ def setup_hook(bot: Any) -> None:
     from .console import KingdomClockButton, KingdomRelaunchButton, KingdomResetButton
     from .validation import ValidationDecisionButton
     from .apply_flow import KingdomApplyOpenButton, KingdomPostulerButton
+    from .settings_panel import SettingsActionButton
 
     for item in (
         DeclareButton,
@@ -194,6 +214,7 @@ def setup_hook(bot: Any) -> None:
         ValidationDecisionButton,
         KingdomApplyOpenButton,
         KingdomPostulerButton,
+        SettingsActionButton,
     ):
         try:
             bot.add_dynamic_items(item)

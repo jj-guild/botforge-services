@@ -84,3 +84,10 @@ views:
   # the adaptive enrollment window (account ready / season / withdraw)
   surface:mod:kingdom:apply:
     kind: surface
+  # the pinned ⚙️ Paramètres panel (the admin settings salon — the
+  # 12-button season cockpit, epic #412 T1, Drasah 18/11)
+  view:mod:kingdom:settings:
+    kind: surface
+  # the settings panel's inline confirm card (deploy/sync/reset)
+  surface:mod:kingdom:settings:confirm:
+    kind: surface
