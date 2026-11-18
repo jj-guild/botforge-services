@@ -527,19 +527,21 @@ def _is_name_input(typed: str) -> bool:
 
 
 def _candidate_line(candidate: dict[str, Any]) -> str:
-    """One candidate's preview line: what they played, against whom."""
+    """One candidate's discriminator line: what the ACCOUNT carries.
+
+    The player picks among homonyms by the account's own identity —
+    clan, country and the two elos. The maps ride the MATCHES, never
+    the account, so they never headline the candidate (#402).
+    """
+    alias = str(candidate.get("alias", ""))
+    clan = str(candidate.get("clan", ""))
     country = str(candidate.get("country", ""))
-    head = str(candidate.get("alias", "")) + (f" ({country.upper()})" if country else "")
-    matches = candidate.get("matches") or ()
-    if not matches:
-        return head[:100]
-    last = matches[0]
-    where = str(last.get("map_name", "")) or "?"
-    foes = ", ".join(str(o) for o in (last.get("opponents") or ())[:2])
-    line = f"{head} \u2014 {where}"
-    if foes:
-        line = f"{line} vs {foes}"
-    return line[:100]
+    head = alias + (f" [{clan}]" if clan else "")
+    if country:
+        head = f"{head} ({country.upper()})"
+    elo_1v1 = int(candidate.get("elo_1v1", 0))
+    elo_tg = int(candidate.get("elo_tg", 0))
+    return f"{head} \u2014 1v1 {elo_1v1 or '?'} \u00b7 TG {elo_tg or '?'}"[:100]
 
 
 async def _bind_error_note(interaction: discord.Interaction, exc: Exception, game: str, typed: str) -> str:

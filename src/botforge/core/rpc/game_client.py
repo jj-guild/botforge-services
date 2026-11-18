@@ -431,6 +431,9 @@ class GameProviderClient:
                 "alias": c.alias,
                 "steam_name": c.steam_name,
                 "country": c.country,
+                "clan": c.clan,
+                "elo_1v1": c.elo_1v1,
+                "elo_tg": c.elo_tg,
                 "matches": [
                     {
                         "map_name": m.map_name,

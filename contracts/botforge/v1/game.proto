@@ -330,9 +330,13 @@ message ProfileCandidate {
   string alias = 2;        // the in-game display name
   string steam_name = 3;   // "/steam/<id64>" when known
   string country = 4;      // ISO country code when known
-  repeated MatchPreview matches = 5;  // the last matches: homonym
-  // disambiguation \u2014 the player recognizes their account by what
-  // they played, not by an id (#402)
+  repeated MatchPreview matches = 5;  // the last matches (preview)
+  string clan = 6;          // the clan tag when known
+  int32 elo_1v1 = 7;       // the 1v1 RM rating (leaderboard 3), 0 unknown
+  int32 elo_tg = 8;         // the team RM rating (leaderboard 4), 0 unknown
+  // The three discriminators the player actually reads: clan, country
+  // and the two elos \u2014 what an ACCOUNT carries. The maps ride the
+  // matches, never the account (#402).
 }
 
 message ProfileSearchReply {
