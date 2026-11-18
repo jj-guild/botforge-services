@@ -10,6 +10,7 @@ the whole flow against fakes (no Mongo, no provider).
 from __future__ import annotations
 
 import re
+from pathlib import Path
 from typing import Any
 
 import discord
@@ -551,3 +552,40 @@ async def test_resolve_relic_id_caps_the_input() -> None:
     assert await resolve_relic_id("", transport=_NoNetworkTransport()) is None
     assert await resolve_relic_id("9" * 101, transport=_NoNetworkTransport()) is None
     assert await resolve_relic_id("abc", transport=_NoNetworkTransport()) is None
+
+
+class TestProfileHeaderLocalized:
+    """The header rides the catalog — no hardcoded English island."""
+
+    @staticmethod
+    def _fr_interaction() -> Any:
+        from botforge.core.services.i18n import MessageCatalog
+
+        interaction = _Interaction()
+        interaction.client.messages = MessageCatalog(Path("config"))
+        interaction.locale = "fr"
+        return interaction
+
+    @pytest.mark.asyncio
+    async def test_no_name_renders_french(self) -> None:
+        interaction = self._fr_interaction()
+        header = await home_module._profile_header(interaction, "42")
+        assert "Ton profil" in header, header
+        assert "Your profile" not in header, "the header must not leak English"
+
+    @pytest.mark.asyncio
+    async def test_with_name_renders_french(self) -> None:
+        interaction = self._fr_interaction()
+        identity = _FakeIdentity()
+        identity.users["discord:42"] = "Merlin"
+        interaction.client.identity_service = identity
+
+        header = await home_module._profile_header(interaction, "42")
+        assert "Ton profil" in header, header
+        assert "Merlin" in header, header
+
+    @pytest.mark.asyncio
+    async def test_catalog_missing_falls_back_english(self) -> None:
+        interaction = _Interaction()  # client.messages stays None
+        header = await home_module._profile_header(interaction, "42")
+        assert header == "# 👤 Your profile\nNickname: *(unset)*"
