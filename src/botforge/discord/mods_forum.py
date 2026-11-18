@@ -771,17 +771,12 @@ class ModRepairButton(
         # roles to the provisioned ids), then the channels
         roles = await provision_mod_roles(interaction.client, guild_id, self.name)
         channels = await provision_mod_channels(interaction.client, guild_id, self.name)
-        from botforge.discord.scope_pins import ensure_mod_pins_report
+        from botforge.discord.scope_pins import ensure_mod_pins
 
-        landed, issues = await ensure_mod_pins_report(interaction.client, guild_id, self.name)
+        await ensure_mod_pins(interaction.client, guild_id, self.name)
         message = (await _tr(interaction.client, guild_id, "repaired", "Repaired.")).format(
             channels=channels, roles=roles
         )
-        # the pins' report rides the reply (Drasah 18/11): a panel that
-        # silently missed its salon is the UNDEBUGGABLE kind of failure
-        if issues:
-            lines = "\n".join(f"⚠️ panel `{key}` — {reason}" for key, reason in issues)
-            message = f"{message}\n{lines}"
         await interaction.followup.send(message, ephemeral=True)
 
 
@@ -895,21 +890,14 @@ class ModInstallButton(
         if self.kind == "mod":
             ensured = await provision_mod_roles(interaction.client, guild_id, self.name)
             ensured += await provision_mod_channels(interaction.client, guild_id, self.name)
-            from botforge.discord.scope_pins import ensure_mod_pins_report
+            from botforge.discord.scope_pins import ensure_mod_pins
 
-            _landed, issues = await ensure_mod_pins_report(interaction.client, guild_id, self.name)
-        else:
-            issues = []
+            await ensure_mod_pins(interaction.client, guild_id, self.name)
         message = await _tr(interaction.client, guild_id, "installed_done", "Installed.")
         if ensured:
             key = "installed_game" if self.kind == "game" else "installed_mod"
             fallback = "{count} channels" if self.kind == "game" else "{count} roles"
             message += " " + (await _tr(interaction.client, guild_id, key, fallback)).format(count=ensured)
-        # the pins' report rides the reply (Drasah 18/11): a panel that
-        # silently missed its salon is the UNDEBUGGABLE kind of failure
-        if issues:
-            lines = "\n".join(f"⚠️ panel `{key}` — {reason}" for key, reason in issues)
-            message = f"{message}\n{lines}"
         # the ephemeral action bar REFRESHES in place: the button flips
         # to the item's new state (the confirmation rides the edit)
         try:

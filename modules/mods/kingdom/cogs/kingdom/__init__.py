@@ -52,6 +52,33 @@ def register(bot: Any, config: Any) -> None:
     async def _cmd(interaction: discord.Interaction) -> None:
         view = await status_view(str(interaction.guild_id or ""))
         await interaction.response.send_message(view=view, ephemeral=True)
+        # the admin pin diagnosis rides the same slash (epic #412 T1,
+        # kingdom-tests): the pin-ensure cycle is best-effort SILENT —
+        # here it becomes readable in Discord. Admins only (the silent
+        # ``is_admin`` guard — the players' status card never changes).
+        try:
+            from botforge.discord.guards import is_admin
+
+            admins = tuple(
+                getattr(getattr(interaction.client, "status_service", None), "bot_admins", ())
+                or ()
+            )
+            if await is_admin(
+                interaction, admins, getattr(interaction.client, "roles_service", None)
+            ):
+                from .pins_diag import admin_pin_lines
+
+                lines = await admin_pin_lines(
+                    interaction.client, str(interaction.guild_id or "")
+                )
+                if lines:
+                    await interaction.followup.send("\n".join(lines), ephemeral=True)
+        except Exception:  # noqa: BLE001 — the diagnosis never breaks /kingdom
+            import logging
+
+            logging.getLogger("kingdom.register").warning(
+                "kingdom: the pins diagnosis skipped — best-effort", exc_info=True
+            )
 
     bot.tree.add_command(_cmd)
 
