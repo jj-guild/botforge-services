@@ -232,7 +232,7 @@ is&nbsp;a&nbsp;read-only&nbsp;view&nbsp;of&nbsp;the&nbsp;internal&nbsp;mapping.<
 <td class="section-title" colspan=3>&nbsp;<br><a name="ScopeSpec">class <strong>ScopeSpec</strong></a>(<a href="builtins.html#object">builtins.object</a>)</td></tr>
     
 <tr><td class="decor title-decor" rowspan=2><span class="code">&nbsp;&nbsp;&nbsp;</span></td>
-<td class="decor title-decor" colspan=2><span class="code"><a href="#ScopeSpec">ScopeSpec</a>(scope:&nbsp;'str',&nbsp;category_key:&nbsp;'str',&nbsp;channels:&nbsp;'tuple[<a href="#ChannelDecl">ChannelDecl</a>,&nbsp;...]'&nbsp;=&nbsp;&amp;lt;factory&amp;gt;,&nbsp;panels:&nbsp;'tuple[<a href="#PanelSpec">PanelSpec</a>,&nbsp;...]'&nbsp;=&nbsp;&amp;lt;factory&amp;gt;)&nbsp;-&amp;gt;&nbsp;None<br>
+<td class="decor title-decor" colspan=2><span class="code"><a href="#ScopeSpec">ScopeSpec</a>(scope:&nbsp;'str',&nbsp;category_key:&nbsp;'str',&nbsp;channels:&nbsp;'tuple[<a href="#ChannelDecl">ChannelDecl</a>,&nbsp;...]'&nbsp;=&nbsp;&amp;lt;factory&amp;gt;,&nbsp;panels:&nbsp;'tuple[<a href="#PanelSpec">PanelSpec</a>,&nbsp;...]'&nbsp;=&nbsp;&amp;lt;factory&amp;gt;,&nbsp;category_admin_only:&nbsp;'bool'&nbsp;=&nbsp;False,&nbsp;category_view_roles:&nbsp;'tuple[str,&nbsp;...]'&nbsp;=&nbsp;(),&nbsp;category_view_role_ids:&nbsp;'tuple[str,&nbsp;...]'&nbsp;=&nbsp;())&nbsp;-&amp;gt;&nbsp;None<br>
 &nbsp;<br>
 One&nbsp;scope&nbsp;folder&nbsp;(a&nbsp;game&nbsp;or&nbsp;a&nbsp;mod)&nbsp;and&nbsp;its&nbsp;panels.<br>
 &nbsp;<br>
@@ -247,7 +247,7 @@ décisions&nbsp;—&nbsp;``position``&nbsp;breaks&nbsp;ties&nbsp;inside&nbsp;a&n
 
 <dl><dt><a name="ScopeSpec-__hash__"><strong>__hash__</strong></a>(self)</dt><dd><span class="code">Return&nbsp;hash(self).</span></dd></dl>
 
-<dl><dt><a name="ScopeSpec-__init__"><strong>__init__</strong></a>(self, scope: 'str', category_key: 'str', channels: 'tuple[ChannelDecl, ...]' = &lt;factory&gt;, panels: 'tuple[PanelSpec, ...]' = &lt;factory&gt;) -&gt; None</dt><dd><span class="code">Initialize&nbsp;self.&nbsp;&nbsp;See&nbsp;help(type(self))&nbsp;for&nbsp;accurate&nbsp;signature.</span></dd></dl>
+<dl><dt><a name="ScopeSpec-__init__"><strong>__init__</strong></a>(self, scope: 'str', category_key: 'str', channels: 'tuple[ChannelDecl, ...]' = &lt;factory&gt;, panels: 'tuple[PanelSpec, ...]' = &lt;factory&gt;, category_admin_only: 'bool' = False, category_view_roles: 'tuple[str, ...]' = (), category_view_role_ids: 'tuple[str, ...]' = ()) -&gt; None</dt><dd><span class="code">Initialize&nbsp;self.&nbsp;&nbsp;See&nbsp;help(type(self))&nbsp;for&nbsp;accurate&nbsp;signature.</span></dd></dl>
 
 <dl><dt><a name="ScopeSpec-__repr__"><strong>__repr__</strong></a>(self)</dt><dd><span class="code">Return&nbsp;repr(self).</span></dd></dl>
 
@@ -263,13 +263,19 @@ Data descriptors defined here:<br>
 </dl>
 <hr>
 Data and other attributes defined here:<br>
-<dl><dt><strong>__annotations__</strong> = {'category_key': 'str', 'channels': 'tuple[ChannelDecl, ...]', 'panels': 'tuple[PanelSpec, ...]', 'scope': 'str'}</dl>
+<dl><dt><strong>__annotations__</strong> = {'category_admin_only': 'bool', 'category_key': 'str', 'category_view_role_ids': 'tuple[str, ...]', 'category_view_roles': 'tuple[str, ...]', 'channels': 'tuple[ChannelDecl, ...]', 'panels': 'tuple[PanelSpec, ...]', 'scope': 'str'}</dl>
 
-<dl><dt><strong>__dataclass_fields__</strong> = {'category_key': Field(name='category_key',type='str',default=&lt;da...appingproxy({}),kw_only=False,_field_type=_FIELD), 'channels': Field(name='channels',type='tuple[ChannelDecl, ....appingproxy({}),kw_only=False,_field_type=_FIELD), 'panels': Field(name='panels',type='tuple[PanelSpec, ...]'...appingproxy({}),kw_only=False,_field_type=_FIELD), 'scope': Field(name='scope',type='str',default=&lt;dataclass...appingproxy({}),kw_only=False,_field_type=_FIELD)}</dl>
+<dl><dt><strong>__dataclass_fields__</strong> = {'category_admin_only': Field(name='category_admin_only',type='bool',def...appingproxy({}),kw_only=False,_field_type=_FIELD), 'category_key': Field(name='category_key',type='str',default=&lt;da...appingproxy({}),kw_only=False,_field_type=_FIELD), 'category_view_role_ids': Field(name='category_view_role_ids',type='tuple[...appingproxy({}),kw_only=False,_field_type=_FIELD), 'category_view_roles': Field(name='category_view_roles',type='tuple[str...appingproxy({}),kw_only=False,_field_type=_FIELD), 'channels': Field(name='channels',type='tuple[ChannelDecl, ....appingproxy({}),kw_only=False,_field_type=_FIELD), 'panels': Field(name='panels',type='tuple[PanelSpec, ...]'...appingproxy({}),kw_only=False,_field_type=_FIELD), 'scope': Field(name='scope',type='str',default=&lt;dataclass...appingproxy({}),kw_only=False,_field_type=_FIELD)}</dl>
 
 <dl><dt><strong>__dataclass_params__</strong> = _DataclassParams(init=True,repr=True,eq=True,ord...rue,kw_only=False,slots=False,weakref_slot=False)</dl>
 
-<dl><dt><strong>__match_args__</strong> = ('scope', 'category_key', 'channels', 'panels')</dl>
+<dl><dt><strong>__match_args__</strong> = ('scope', 'category_key', 'channels', 'panels', 'category_admin_only', 'category_view_roles', 'category_view_role_ids')</dl>
+
+<dl><dt><strong>category_admin_only</strong> = False</dl>
+
+<dl><dt><strong>category_view_role_ids</strong> = ()</dl>
+
+<dl><dt><strong>category_view_roles</strong> = ()</dl>
 
 </td></tr></table></td></tr></table><p>
 <table class="section">
