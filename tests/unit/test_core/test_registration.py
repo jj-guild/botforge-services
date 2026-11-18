@@ -246,3 +246,47 @@ async def test_unlink_unknown_profile_returns_false() -> None:
     """Unlinking a profile that was never bound is a no-op (idempotent)."""
     svc, _, _ = _env()
     assert await svc.unlink_profile("user:1", "aoe2", "123456") is False
+
+
+@pytest.mark.asyncio
+async def test_bind_emits_profile_bound_with_guild_context() -> None:
+    """The bind fans the salon-gating intent out (guild context included).
+
+    salon-parcours-v2 (Drasah 18/11): the gated salons' access roles ride
+    this very event — the payload carries the guild the bind happened
+    in, so the Discord sink can grant the role without re-reading state.
+    """
+    svc, _, events = _env()
+    await svc.bind_profile("user:1", "aoe2", "123456", guild_id="123")
+    bound = [payload for intent, payload in events.intents if intent == "profile.bound"]
+    assert bound, "the bind emits profile.bound"
+    assert bound[0]["user_id"] == "user:1"
+    assert bound[0]["guild_id"] == "123", "the guild context rides the payload"
+    assert bound[0]["profile_id"] == "123456"
+
+
+@pytest.mark.asyncio
+async def test_unbind_emits_profile_unbound_with_remaining_flag() -> None:
+    """The unbind tells whether the player keeps another binding."""
+    svc, _, events = _env(valid={"123456", "654321"})
+    await svc.bind_profile("user:1", "aoe2", "123456")
+    await svc.bind_profile("user:1", "aoe2", "654321")
+
+    assert await svc.unlink_profile("user:1", "aoe2", "123456", guild_id="123")
+    kept = [p for i, p in events.intents if i == "profile.unbound"][-1]
+    assert kept["remaining"] is True, "one binding left — the salon gate stays open"
+
+    assert await svc.unlink_profile("user:1", "aoe2", "654321", guild_id="123")
+    last = [p for i, p in events.intents if i == "profile.unbound"][-1]
+    assert last["remaining"] is False, "the last binding goes — the gate closes"
+
+
+@pytest.mark.asyncio
+async def test_attach_events_replaces_the_seam_after_construction() -> None:
+    """The factory attaches the Discord sink once the bot exists."""
+    db, seam = FakeRegistrationDatabase(), FakeProfileSeam({"123456"})
+    svc = RegistrationService(db, {"aoe2": seam})  # bare, like the test builds
+    events = FakeEvents()
+    svc.attach_events(events)
+    await svc.bind_profile("user:1", "aoe2", "123456", guild_id="123")
+    assert any(intent == "profile.bound" for intent, _ in events.intents)

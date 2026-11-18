@@ -85,7 +85,8 @@ def register(bot: Any, config: Any) -> None:
     # (the Conscription group); its single button opens the adaptive
     # window (account → season → withdraw), the engine stays the
     # platform's.
-    from .apply_flow import APPLY_VIEW_KEY, build_apply_panel
+    from .apply_flow import APPLY_VIEW_KEY, REGISTER_VIEW_KEY, build_apply_panel, build_register_panel
+    from .registration_gate import subscribe_profile_gate
 
     async def _resolve_apply_channel(guild_id: str) -> str:
         return await stored_channel_id(guild_id, "mod/kingdom", "apply") or ""
@@ -100,6 +101,29 @@ def register(bot: Any, config: Any) -> None:
             scope="mod/kingdom",
         )
     )
+
+    # salon-parcours-v2 (Drasah 18/11): the parcours' FIRST door — the
+    # public « register » salon carries the s'enregistrer poster (ONE
+    # CTA: the platform's official profile route). The Postuler salon
+    # above stays gated to the registered players (the access role is
+    # granted by the profile.bound event — registration_gate).
+    async def _resolve_register_channel(guild_id: str) -> str:
+        return await stored_channel_id(guild_id, "mod/kingdom", "register") or ""
+
+    register_static_pin(
+        StaticPinnedView(
+            key=REGISTER_VIEW_KEY,
+            mark_suffix=REGISTER_VIEW_KEY,
+            resolve_channel=_resolve_register_channel,
+            build_layout=build_register_panel,
+            registry=getattr(bot, "message_registry", None),
+            scope="mod/kingdom",
+        )
+    )
+
+    # the salon gate's subscription (profile.bound → the access role):
+    # idempotent (the sink keeps one handler reference per bot)
+    subscribe_profile_gate(bot)
 
 
 def setup_hook(bot: Any) -> None:

@@ -1026,7 +1026,14 @@ def create_bot(config: BotConfig | None = None) -> BotforgeBot:  # noqa: C901
     sync_target = f"guild {guild_id}" if guild_id.isdigit() else "global"
     register_status_command(bot.tree, status, sync_target=sync_target, catalog=bot.messages)
     register_live_command(bot.tree, catalog=bot.messages, games=games)
-    registration_engine, registration_service = _build_registration(resolved, state=shared_state)
+    registration_engine, registration_service = _build_registration(resolved, state=shared_state, bot=bot)
+    if registration_service is not None:
+        # the Discord-side event sink (salon-gating subscriptions): the
+        # core emits transport-free intents, the bot fans them out
+        from botforge.discord.registration_events import RegistrationEventSink
+
+        bot.registration_event_sink = RegistrationEventSink(bot)  # type: ignore[attr-defined]
+        registration_service.attach_events(bot.registration_event_sink)  # type: ignore[attr-defined]
     bot.registration_engine = registration_engine
     bot.registration_service = registration_service
     bot.identity_service = _build_identity_service(resolved, state=shared_state)
@@ -1186,6 +1193,7 @@ def _build_permission_service(
 def _build_registration(
     config: BotConfig,
     state: StateService | None = None,
+    bot: Any = None,
 ) -> tuple[WorkflowEngine | None, RegistrationService | None]:
     """Wire the DM enrollment stack (#133): engine + AoE2-validated service.
 

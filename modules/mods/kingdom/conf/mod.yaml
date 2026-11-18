@@ -43,15 +43,24 @@ channel_groups:
     display_name: ⚙️ ᴀᴅᴍɪɴ
     admin_only: true
 channels:
-  # postuler-hybride-v1 (Drasah 18/11): the PLAYERS' enrollment door —
-  # one public salon in the Conscription group carrying the golden
-  # Postuler panel (the account/season/kingdom 3-tier model: the
-  # account is free, the season is the admin gate, the kingdom comes
-  # later). The panel's single button opens the adaptive ephemeral
-  # window; the enrollment engine stays the platform's.
+  # salon-parcours-v2 (Drasah 18/11): the enrollment door is TWO salons
+  # — « register » (public, the s'enregistrer poster, ONE CTA: the
+  # account) then « apply » (the Postuler panel, DENIED to @everyone:
+  # it opens only to the players whose account exists — the
+  # « Kingdom Enregistré » access role, granted by the platform's
+  # profile.bound event, revoked when the last binding goes). The
+  # 3-tier model rides the same: account free (salon 1), the season is
+  # the admin gate (salon 2), the kingdom comes later.
   - key: apply
-    display_name: 📝 postuler
-    description: The public enrollment door — the golden Postuler panel
+    display_name: 📜 postuler
+    description: The season application door (opens once registered)
+    group: conscription
+    access:
+      everyone_view: false
+      view: [Kingdom Enregistré, Kingdom Admin]
+  - key: register
+    display_name: 🪙 s'enregistrer
+    description: The account poster — create the project account and link AoE2
     group: conscription
     access:
       everyone_view: true
@@ -228,6 +237,13 @@ roles:
     display_name: Kingdom Admin
     color: 0xE74C3C
     hoisted: true
+  # salon-parcours-v2 (Drasah 18/11): the Postuler salon's access
+  # role — the platform's profile.bound event grants it (the gate
+  # rides the registration seam, registration_gate.py), the last
+  # unbind revokes it
+  - key: enregistre
+    display_name: "🪙 Kingdom Enregistré"
+    color: 0x5865F2
   # the season enrollment's roles (the owner's spec): the candidate
   # role lands at apply, the member role at accept; the membership
   # resets each season (the roles stay)

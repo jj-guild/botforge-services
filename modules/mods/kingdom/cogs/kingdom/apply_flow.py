@@ -32,6 +32,7 @@ from .common import mod_catalog, open_unique_ephemeral, surface, wiring
 logger = logging.getLogger("kingdom.apply")
 
 APPLY_VIEW_KEY = "view:mod:kingdom:apply"
+REGISTER_VIEW_KEY = "view:mod:kingdom:register"
 APPLY_WINDOW_KEY = "surface:mod:kingdom:apply"
 
 _NS = "kingdom:apply"
@@ -107,6 +108,45 @@ async def build_apply_panel(guild_id: str) -> discord.ui.LayoutView:
     )
 
 
+async def build_register_panel(guild_id: str) -> discord.ui.LayoutView:
+    """Build the pinned « s'enregistrer » panel (the parcours' first door).
+
+    salon-parcours-v2 (Drasah 18/11): the enrollment door is TWO salons
+    — the public « register » salon carries THIS poster (one CTA: create
+    the project account via the platform's official profile route), the
+    gated « apply » salon carries the Postuler panel (visible once the
+    player's account exists — the access role is granted by the
+    registration event, see registration_gate).
+    """
+    strings = await _strings_async(guild_id)
+    blocks: list[discord.ui.Item[discord.ui.LayoutView]] = []
+    artwork = str(strings.get("artwork", "") or "")
+    if artwork:
+        blocks.append(discord.ui.MediaGallery(discord.MediaGalleryItem(artwork)))
+    blocks.extend(
+        [
+            discord.ui.TextDisplay(f"# {strings['register_title']}"),
+            discord.ui.Separator(),
+            discord.ui.TextDisplay(str(strings["register_text"])),
+            discord.ui.Separator(),
+            discord.ui.TextDisplay(str(strings["register_hint"])),
+        ]
+    )
+    row: Any = discord.ui.ActionRow()
+    row.add_item(
+        discord.ui.Button(
+            style=discord.ButtonStyle.success,
+            label=str(strings.get("account_button", "🪙 Créer mon compte"))[:80],
+            custom_id=PROFILE_ROUTE,
+        )
+    )
+    blocks.append(row)
+    return surface(
+        REGISTER_VIEW_KEY,
+        discord.ui.Container(*blocks, accent_colour=GOLD),
+    )
+
+
 def _window(strings: dict[str, str], *rows: Any, title: str = "") -> discord.ui.LayoutView:
     """Build the adaptive window's layout (the declared surface id)."""
     return surface(
@@ -138,26 +178,26 @@ def _withdraw_button_row(user_id: str) -> Any:
 
 
 def _state_button_row(strings: dict[str, str], *, account_ready: bool, postuler_ready: bool) -> Any:
-    """The window's TWO call-to-actions, always visible (Drasah 18/11).
+    """The window's call-to-actions, painted BY STATE (Drasah 18/11).
 
-    « Créer mon compte » green when the account is MISSING, red when it
-    exists; « Postuler » green when everything is READY, red otherwise —
-    the state paints the buttons, the player reads the whole parcours
-    in ONE window. Both stay clickable (a red click answers a helpful
-    message): the account route is the platform's generic navigation,
-    the Postuler click DELEGATES to the platform's SeasonApplyButton —
-    the mod owns the shape, the core owns the mechanics.
+    salon-parcours-v2 rule: an IMPOSSIBLE action is NOT clickable — a red
+    button is DISABLED (never a dead click, never a waiting timeout). «
+    Créer mon compte » is green+enabled when the account is MISSING, red
+    +disabled when it exists; « Postuler » green+enabled only when the
+    season takes applications, red+disabled otherwise. The withdraw
+    stays its own possible action (the already branch's row).
     """
     row: Any = discord.ui.ActionRow()
     row.add_item(
         discord.ui.Button(
             style=discord.ButtonStyle.success if not account_ready else discord.ButtonStyle.danger,
+            disabled=account_ready,
             label=str(strings.get("account_button", "🪙 Créer mon compte"))[:80],
             custom_id=PROFILE_ROUTE,
         )
     )
     label = str(strings.get("postuler_button", "📜 Postuler"))
-    row.add_item(KingdomPostulerButton(MOD, label, active=postuler_ready).item)
+    row.add_item(KingdomPostulerButton(MOD, label, active=postuler_ready, disabled=not postuler_ready).item)
     return row
 
 
@@ -173,12 +213,13 @@ class KingdomPostulerButton(
     carries the look.
     """
 
-    def __init__(self, mod: str, label: str, active: bool) -> None:
+    def __init__(self, mod: str, label: str, active: bool, disabled: bool = False) -> None:
         super().__init__(
             discord.ui.Button(
                 custom_id=f"{_NS}:postuler:{mod}"[:100],
                 label=label[:80],
                 style=discord.ButtonStyle.success if active else discord.ButtonStyle.danger,
+                disabled=disabled,
             )
         )
         self.mod = mod
@@ -248,11 +289,10 @@ def render_apply_branch(
 ) -> discord.ui.LayoutView:
     """Render the branch's window (pure — the tests pin every branch).
 
-    ONE window, ONE parcours: the TWO call-to-actions are ALWAYS visible
-    (Drasah 18/11), the branch paints them — the missing account greens
-    « Créer mon compte », the ready season greens « Postuler », both
-    stay clickable (the engines self-guard and answer; never a dead
-    button, never a stacked ephemeral).
+    ONE window, ONE parcours: the call-to-actions stay visible and the
+    branch paints them (Drasah 18/11) — but an IMPOSSIBLE action is
+    DISABLED, never clickable (the salon-parcours-v2 rule: no dead
+    clicks, no waiting timeouts; the engines keep the possible ones).
     """
     account_ready = branch != "no_account"
     postuler_ready = branch == "ready"

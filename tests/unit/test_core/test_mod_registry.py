@@ -118,9 +118,10 @@ def test_the_channel_groups_resolve_to_display_names() -> None:
 
 
 def test_the_kingdom_declaration_declares_the_machine_room() -> None:
-    """postuler-hybride-v1 (Drasah 18/11): the home folder is staff-only
-    (the machine-room rule) and the players' door is the public « apply »
-    salon in the Conscription group."""
+    """salon-parcours-v2 (Drasah 18/11): the home folder is staff-only (the
+    machine-room rule); the players' parcours is TWO doors — the public
+    « register » salon, then the « apply » salon which DENIES @everyone and
+    opens only to the players carrying the registration access role."""
     from pathlib import Path
 
     from botforge.core.services.mod_registry import load_mod_definitions
@@ -130,9 +131,13 @@ def test_the_kingdom_declaration_declares_the_machine_room() -> None:
     assert kingdom is not None
     assert kingdom.home_admin_only is True
     assert "Kingdom Admin" in kingdom.home_view_roles
+    register_channel = kingdom.channel_category("register")
+    assert register_channel.group, "the register salon lives in the Conscription group"
+    assert register_channel.access.everyone_view is True, "the parcours' first door is public"
     apply_channel = kingdom.channel_category("apply")
     assert apply_channel.group, "the apply salon lives in the Conscription group"
-    assert apply_channel.access.everyone_view is True
+    assert apply_channel.access.everyone_view is False, "the apply salon denies @everyone"
+    assert "Kingdom Enregistré" in apply_channel.access.view, "the gate role opens the apply salon"
 
 
 def test_home_view_roles_must_be_a_list(tmp_path: Path) -> None:

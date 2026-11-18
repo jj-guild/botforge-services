@@ -127,6 +127,11 @@ def remember_bot(bot: Any) -> None:
     _PANEL_BOT = bot
 
 
+def current_bot() -> Any:
+    """The bot remembered at register (None when the cog never loaded)."""
+    return _PANEL_BOT
+
+
 async def _guild_locale(guild_id: str) -> str:
     """The guild's effective locale (stored choice first, fr fallback)."""
     try:

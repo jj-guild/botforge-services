@@ -532,7 +532,10 @@ class ProfileAddAccountModal(discord.ui.Modal):
         await interaction.response.defer(ephemeral=True, thinking=True)
         try:
             await registration.bind_profile(
-                str(interaction.user.id), str(chosen), str(self.profile_id.value).strip()
+                str(interaction.user.id),
+                str(chosen),
+                str(self.profile_id.value).strip(),
+                guild_id=str(getattr(interaction.guild_id, "", "") or ""),
             )
         except Exception as exc:
             await _report_profile_error(interaction, "profile.add", chosen, exc)
@@ -849,7 +852,12 @@ class ProfileRemoveAccountModal(discord.ui.Modal):
         for entry in chosen:
             game_key, _, profile_id = str(entry).partition("|")
             try:
-                if await registration.unlink_profile(str(interaction.user.id), game_key, profile_id):
+                if await registration.unlink_profile(
+                    str(interaction.user.id),
+                    game_key,
+                    profile_id,
+                    guild_id=str(getattr(interaction.guild_id, "", "") or ""),
+                ):
                     url = _game_account_url(game_key, str(profile_id))
                     removed.append(f"[{game_key} {profile_id}]({url})" if url else f"{game_key} (`{profile_id}`)")
                 else:

@@ -163,11 +163,16 @@ def test_the_window_shows_the_whole_parcours_at_once() -> None:
     assert styles[1] == 4, "the unready season paints Postuler RED (danger)"
     assert "Bienvenue" in " ".join(_texts(view)), "the welcoming title"
     assert "/register" not in " ".join(_texts(view)), "no command plumbing"
+    # salon-parcours-v2 (Drasah 18/11): an IMPOSSIBLE action is disabled
+    disabled = [bool(b.get("disabled")) for b in _buttons(view)]
+    assert disabled == [False, True], "a red button is NOT clickable: no dead click, no timeout"
 
-    # ready: the states flip — account red, postuler green
+    # ready: the states flip — account red+disabled, postuler green+enabled
     view = render_apply_branch("ready", strings)
-    styles = [b.get("style") for b in _buttons(view)]
+    buttons = _buttons(view)
+    styles = [b.get("style") for b in buttons]
     assert styles == [4, 3], "an existing account reds the CTA, the ready POSTULER greens"
+    assert [bool(b.get("disabled")) for b in buttons] == [True, False], "only possible actions are clickable"
 
     # already: the withdraw confirm still closes the loop
     view = render_apply_branch("already", strings, user_id="42")
@@ -202,3 +207,89 @@ def test_the_panel_carries_the_designers_artwork(monkeypatch: Any) -> None:
     wire = _json.dumps(dumped)
     assert "roi.webp" in wire, "the artwork rides the panel"
     assert "roi.webp" in _json.dumps(dumped[0]), "the illustration heads the panel"
+
+
+def test_the_register_panel_is_the_parcours_first_door(monkeypatch: Any) -> None:
+    """The public « register » salon's poster: ONE CTA (salon-parcours-v2).
+
+    The button is the platform's official profile route — the account is
+    the free first tier, and the gated Postuler salon opens through the
+    registration role, never through a link from here.
+    """
+    import botforge.mods.kingdom.cogs.panel as panel_module
+    from botforge.mods.kingdom.cogs.apply_flow import PROFILE_ROUTE, build_register_panel
+
+    async def _fr(guild_id: str) -> str:
+        return "fr"
+
+    monkeypatch.setattr(panel_module, "_guild_locale", _fr)
+    view = asyncio.run(build_register_panel("123"))
+    buttons = _buttons(view)
+    assert len(buttons) == 1, "the register poster carries ONE call-to-action"
+    assert buttons[0].get("custom_id") == PROFILE_ROUTE, "the account route, the platform's own"
+    assert not buttons[0].get("disabled"), "the account is always possible here (green + clickable)"
+    assert buttons[0].get("style") == 3, "the green create-account CTA"
+    texts = " ".join(_texts(view))
+    assert "S'ENREGISTRER" in texts, "the register salon's own title"
+    assert "postuler" in texts, "the hint names the next door"
+
+
+def test_the_gate_toggles_the_access_role() -> None:
+    """profile.bound grants « Kingdom Enregistré »; the last unbind revokes."""
+    from botforge.mods.kingdom.cogs.registration_gate import profile_event_handler
+
+    granted: list[str] = []
+    revoked: list[str] = []
+    role = NS(id=777)
+
+    class _Member:
+        roles: tuple[Any, ...] = ()
+
+        async def add_roles(self, r: Any, reason: str = "") -> None:
+            self.roles = tuple(self.roles) + (r,)
+            granted.append("grant")
+
+        async def remove_roles(self, r: Any, reason: str = "") -> None:
+            self.roles = ()
+            revoked.append("revoke")
+
+    class _Bot:
+        mod_roles_service = None
+
+        def __init__(self) -> None:
+            self.member = _Member()
+
+        def get_guild(self, guild_id: int) -> Any:
+            bot = self
+
+            class _Guild:
+                def get_role(self, role_id: int) -> Any:
+                    return role if role_id == 777 else None
+
+                def get_member(self, user_id: int) -> Any:
+                    return bot.member  # ONE member across the events
+
+            return _Guild()
+
+    class _RolesService:
+        async def resolve_role_id(self, guild_id: str, mod: str, role_key: str) -> str:
+            return "777" if role_key == "enregistre" else ""
+
+    class _RolesBot(_Bot):
+        mod_roles_service = _RolesService()
+
+    import botforge.mods.kingdom.cogs.panel as panel_module
+
+    panel_module.remember_bot(_RolesBot())
+    asyncio.run(profile_event_handler("profile.bound", {"user_id": "42", "guild_id": "123"}))
+    assert granted, "the bind grants the access role"
+    assert not revoked
+
+    # the member now holds the granted role → the revoke path fires
+    asyncio.run(profile_event_handler("profile.unbound", {"user_id": "42", "guild_id": "123", "remaining": False}))
+    assert revoked, "the last unbind revokes the access role"
+
+    # a remaining binding keeps the role (multi-profile)
+    revoked.clear()
+    asyncio.run(profile_event_handler("profile.unbound", {"user_id": "42", "guild_id": "123", "remaining": True}))
+    assert not revoked, "a remaining binding keeps the salon open"

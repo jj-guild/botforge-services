@@ -97,7 +97,18 @@ class RegistrationService:
         self._events = events
         self._audit = audit
 
-    async def bind_profile(self, user_id: str, game_key: str, profile_id: str) -> dict[str, Any]:
+    def attach_events(self, events: RegistrationEvents) -> None:
+        """Attach (or replace) the notification seam after construction.
+
+        The live wiring attaches the Discord sink once the bot exists —
+        the core constructor stays bot-free (tests build the service
+        bare, the factory attaches the transport).
+        """
+        self._events = events
+
+    async def bind_profile(
+        self, user_id: str, game_key: str, profile_id: str, guild_id: str = ""
+    ) -> dict[str, Any]:
         """Validate then bind a game profile to a user (permanent, once per profile).
 
         Validation is delegated to the game seam; a profile already bound
@@ -126,6 +137,18 @@ class RegistrationService:
         }
         await self._db.upsert_entry(PROFILE_BINDINGS_COLLECTION, binding)
         await self._audit_record("profile.bind", {"user_id": user_id, "game_key": game_key, "profile_id": canonical_id})
+        # the bound event rides the notification seam (salon-gating
+        # listeners grant access roles; the payload carries the guild
+        # context when the bind came from an interaction)
+        await self._emit(
+            "profile.bound",
+            {
+                "user_id": user_id,
+                "game_key": game_key,
+                "profile_id": canonical_id,
+                "guild_id": guild_id,
+            },
+        )
         return binding
 
     async def find_bindings_by_profiles(
@@ -156,7 +179,9 @@ class RegistrationService:
         """List all of a user's game-profile bindings."""
         return await self._db.find_user_bindings(user_id)
 
-    async def unlink_profile(self, user_id: str, game_key: str, profile_id: str) -> bool:
+    async def unlink_profile(
+        self, user_id: str, game_key: str, profile_id: str, guild_id: str = ""
+    ) -> bool:
         """Remove one profile binding; True when one existed.
 
         Multi-profile by design: a user may hold several bindings per
@@ -166,6 +191,16 @@ class RegistrationService:
         if removed:
             await self._audit_record(
                 "profile.unbind", {"user_id": user_id, "game_key": game_key, "profile_id": profile_id}
+            )
+            await self._emit(
+                "profile.unbound",
+                {
+                    "user_id": user_id,
+                    "game_key": game_key,
+                    "profile_id": profile_id,
+                    "guild_id": guild_id,
+                    "remaining": bool(await self._db.find_user_bindings(user_id)),
+                },
             )
         return removed
 
