@@ -1,203 +1,229 @@
-"""The admin pin diagnosis (kingdom-tests 18/11, epic #412 T1).
+"""The /kingdom pin diagnosis (epic #412 T1) — one status per panel.
 
-The platform's pin cycle is best-effort SILENT — the settings-panel
-regression was invisible (the salon resynced, the panel never landed,
-no message anywhere). ``pins_report`` must name the failing step for
-every one of the mod's pinned surfaces, using only the platform's
-public seams, and never raise.
+R6 discipline (tests/architecture/test_layering.py): a file under
+modules/ OUTSIDE cogs/ may never import discord. These tests reach the
+diagnosis module lazily (``_diag()``) and reuse ITS discord namespace
+(``_diag().discord.NotFound``), and reach the pin registry through
+importlib — no discord import line in this file.
 """
 
 from __future__ import annotations
 
+import asyncio
+import importlib
 from types import SimpleNamespace
-from typing import Any
 
-import discord
-
-from botforge.discord.static_pins import (
-    StaticPinnedView,
-    register_static_pin,
-    reset_static_pins,
-)
-from botforge.mods.kingdom.cogs.pins_diag import admin_pin_lines, pins_report
+_CLIENT_ID = "42"
+_GUILD_ID = "1234"
+_CHANNEL_ID = "5678"
 
 
 class _Resp:
-    """A minimal HTTP response for discord.NotFound construction."""
+    """A minimal HTTP response for discord exception construction."""
 
-    status = 404
-    reason = "Not Found"
+    def __init__(self, status: int = 404) -> None:
+        self.status = status
+        self.reason = "Not Found"
 
 
 class _Message:
-    def __init__(self, pinned: bool = True) -> None:
+    def __init__(self, *, pinned: bool = True) -> None:
+        self.id = 999
         self.pinned = pinned
-        self.id = 777
 
 
 class _Channel:
-    """fetch_message(777) → the message; anything else → NotFound."""
-
-    def __init__(self, message: _Message | None) -> None:
-        self._message = message
+    def __init__(self, *, exc: BaseException | None = None, pinned: bool = True) -> None:
+        self._exc = exc
+        self._message = _Message(pinned=pinned)
 
     async def fetch_message(self, message_id: int) -> _Message:
-        if self._message is not None and message_id == self._message.id:
-            return self._message
-        raise discord.NotFound(_Resp(), "unknown message")  # type: ignore[arg-type]
+        if self._exc is not None:
+            raise self._exc
+        return self._message
 
 
 class _Guild:
-    def __init__(self, has_channel: bool, message: _Message | None) -> None:
-        self._has = has_channel
-        self._message = message
+    def __init__(self, *, channel: object | None) -> None:
+        self._channel = channel
 
-    def get_channel(self, channel_id: int) -> _Channel | None:
-        if not self._has:
-            return None
-        assert self._message is not None
-        return _Channel(self._message)
+    def get_channel(self, channel_id: int) -> object | None:
+        return self._channel
 
 
 class _Client:
-    def __init__(self, guild: _Guild | None) -> None:
+    def __init__(self, *, guild: object | None) -> None:
         self._guild = guild
 
-    def get_guild(self, guild_id: int) -> _Guild | None:
+    def get_guild(self, guild_id: int) -> object | None:
         return self._guild
 
 
-class _Registry:
-    """The message registry's minimal surface (resolve → id or None)."""
+def _diag():
+    from botforge.mods.kingdom.cogs.kingdom import pins_diag
 
-    def __init__(self, message_id: str | None) -> None:
-        self._message_id = message_id
-
-    async def resolve(self, platform: str, message_key: str, entity_id: str) -> Any:
-        if self._message_id is None:
-            return None
-        return SimpleNamespace(message_id=self._message_id)
+    return pins_diag
 
 
-def _pin(
-    channel_id: str | None,
-    message_id: str | None,
+def _static_pins():
+    return importlib.import_module("botforge.discord.static_pins")
+
+
+def _spec(
+    key: str,
+    *,
     scope: str = "mod/kingdom",
-    key: str = "view:mod:kingdom:settings",
-) -> StaticPinnedView:
-    async def _channel(guild_id: str) -> str | None:
+    channel_id: str | None = _CHANNEL_ID,
+    message_id: str | None = "777",
+):
+    async def resolve_channel(guild_id: str) -> str | None:
         return channel_id
 
-    def _layout(guild_id: str) -> None:
-        return None
+    async def resolve_message_id(guild_id: str) -> str | None:
+        return message_id
 
-    return StaticPinnedView(
+    return SimpleNamespace(
         key=key,
-        mark_suffix=key,
-        resolve_channel=_channel,
-        build_layout=_layout,  # type: ignore[arg-type,return-value]
-        registry=_Registry(message_id),
         scope=scope,
+        resolve_channel=resolve_channel,
+        resolve_message_id=resolve_message_id,
     )
 
 
-def setup_function() -> None:
-    reset_static_pins()
+def _patch_registry(monkeypatch, specs: list) -> None:
+    monkeypatch.setattr(_static_pins(), "registered_static_pins", lambda: list(specs))
 
 
-def teardown_function() -> None:
-    reset_static_pins()
+def test_the_report_skips_foreign_scopes(monkeypatch) -> None:
+    """Only mod/kingdom surfaces ride the diagnosis."""
+    diag = _diag()
+    _patch_registry(
+        monkeypatch,
+        [
+            _spec("view:mod:kingdom:home"),
+            _spec("view:mod:other:home", scope="mod/other"),
+            _spec("view:home", scope=""),
+        ],
+    )
+    client = _Client(guild=None)
+    out = asyncio.run(diag.pins_report(client, _GUILD_ID))
+    assert [key for key, _status in out] == ["view:mod:kingdom:home"]
 
 
-async def test_the_report_names_the_missing_resolution() -> None:
-    """A pin with no stored salon resolution says so, in French."""
-    register_static_pin(_pin(None, None))
+def test_the_report_rejects_non_numeric_guild_ids(monkeypatch) -> None:
+    """A garbage guild id degrades to an empty report, never a raise."""
+    diag = _diag()
+    _patch_registry(monkeypatch, [_spec("view:mod:kingdom:home")])
+    assert asyncio.run(diag.pins_report(_Client(guild=None), "")) == []
+    assert asyncio.run(diag.pins_report(_Client(guild=None), "abc")) == []
 
-    report = await pins_report(_Client(None), "1")
 
-    assert report == [
+def test_the_report_names_the_unprovisioned_channel(monkeypatch) -> None:
+    """Step 1 — no stored channel resolution: rerun the Repair."""
+    diag = _diag()
+    _patch_registry(monkeypatch, [_spec("view:mod:kingdom:settings", channel_id=None)])
+    out = asyncio.run(diag.pins_report(_Client(guild=_Guild(channel=None)), _GUILD_ID))
+    assert out == [("view:mod:kingdom:settings", "salon non provisionné (résolution absente — refaire un Repair)")]
+
+
+def test_the_report_names_the_uncached_guild(monkeypatch) -> None:
+    """Step 2 — the guild left the bot's cache."""
+    diag = _diag()
+    _patch_registry(monkeypatch, [_spec("view:mod:kingdom:settings")])
+    out = asyncio.run(diag.pins_report(_Client(guild=None), _GUILD_ID))
+    assert out == [("view:mod:kingdom:settings", f"serveur {_GUILD_ID} hors cache du bot")]
+
+
+def test_the_report_names_the_uncached_channel(monkeypatch) -> None:
+    """Step 3 — the channel exists but the bot cannot see it."""
+    diag = _diag()
+    _patch_registry(monkeypatch, [_spec("view:mod:kingdom:settings")])
+    out = asyncio.run(diag.pins_report(_Client(guild=_Guild(channel=None)), _GUILD_ID))
+    assert out == [("view:mod:kingdom:settings", f"salon <#{_CHANNEL_ID}> hors cache du bot (droits salon cassés ?)")]
+
+
+def test_the_report_names_the_never_pinned_panel(monkeypatch) -> None:
+    """Step 4 — the channel is found but the pin never landed."""
+    diag = _diag()
+    _patch_registry(monkeypatch, [_spec("view:mod:kingdom:settings", message_id=None)])
+    client = _Client(guild=_Guild(channel=_Channel()))
+    out = asyncio.run(diag.pins_report(client, _GUILD_ID))
+    assert out == [
         (
             "view:mod:kingdom:settings",
-            "salon non provisionné (résolution absente — refaire un Repair)",
+            f"jamais épinglé (salon <#{_CHANNEL_ID}> trouvé — l'épinglage n'y est jamais passé)",
         )
     ]
 
 
-async def test_the_report_names_the_channel_out_of_cache() -> None:
-    """A stored id the bot's cache no longer holds."""
-    register_static_pin(_pin("55", None))
-
-    report = await pins_report(_Client(_Guild(has_channel=False, message=_Message())), "1")
-
-    assert report[0][0] == "view:mod:kingdom:settings"
-    assert "hors cache du bot" in report[0][1]
-
-
-async def test_the_report_names_the_never_pinned_panel() -> None:
-    """The salon is reachable but no pin message was ever registered."""
-    register_static_pin(_pin("55", None))
-
-    report = await pins_report(_Client(_Guild(has_channel=True, message=_Message())), "1")
-
-    assert "jamais épinglé" in report[0][1]
+def test_the_report_names_the_deleted_message(monkeypatch) -> None:
+    """Step 5 — the pinned message was deleted since the last pass."""
+    diag = _diag()
+    _patch_registry(monkeypatch, [_spec("view:mod:kingdom:settings")])
+    channel = _Channel(exc=diag.discord.NotFound(_Resp()))  # type: ignore[arg-type]
+    client = _Client(guild=_Guild(channel=channel))
+    out = asyncio.run(diag.pins_report(client, _GUILD_ID))
+    assert out == [("view:mod:kingdom:settings", "message 777 supprimé — le prochain passage doit le recréer")]
 
 
-async def test_the_report_names_the_deleted_pin_message() -> None:
-    """A registered pin id whose message is gone — the heal contract."""
-    register_static_pin(_pin("55", "777"))
-
-    # the channel holds NOTHING: fetch_message(777) → NotFound
-    report = await pins_report(_Client(_Guild(has_channel=True, message=None)), "1")
-
-    assert "supprimé" in report[0][1]
-
-
-async def test_the_report_confirms_the_healthy_pin() -> None:
-    """A pinned, fetchable message reads as OK."""
-    register_static_pin(_pin("55", "777"))
-
-    report = await pins_report(_Client(_Guild(has_channel=True, message=_Message())), "1")
-
-    assert "épinglé dans" in report[0][1]
+def test_the_report_names_an_unreadable_message(monkeypatch) -> None:
+    """Step 5b — an HTTP error reads as a permissions hint."""
+    diag = _diag()
+    _patch_registry(monkeypatch, [_spec("view:mod:kingdom:settings")])
+    channel = _Channel(exc=diag.discord.HTTPException(_Resp(status=403)))  # type: ignore[arg-type]
+    client = _Client(guild=_Guild(channel=channel))
+    out = asyncio.run(diag.pins_report(client, _GUILD_ID))
+    assert out == [("view:mod:kingdom:settings", "message 777 illisible (HTTP 403 — droits lecture du bot ?)")]
 
 
-async def test_the_report_ignores_other_scopes() -> None:
-    """Only the mod's own pins ride the diagnosis."""
-    register_static_pin(_pin("55", "777", scope="mod/other", key="view:mod:other:home"))
-    register_static_pin(_pin("55", "777", scope="", key="view:home"))
-
-    assert await pins_report(_Client(None), "1") == []
-
-
-async def test_admin_pin_lines_render_one_line_per_pin() -> None:
-    """The /kingdom followup carries a title + one line per pin."""
-    register_static_pin(_pin("55", "777"))
-    register_static_pin(_pin(None, None, key="view:mod:kingdom:apply"))
-
-    lines = await admin_pin_lines(_Client(_Guild(has_channel=True, message=_Message())), "1")
-
-    assert lines[0] == "**Panneaux du mod — diagnostic**"
-    assert len(lines) == 3
-    assert "view:mod:kingdom:settings" in lines[2]
-    assert "view:mod:kingdom:apply" in lines[1]
-    assert "résolution absente" in lines[1]
-
-
-async def test_the_report_never_raises() -> None:
-    """A raising seam becomes its own line — the report survives."""
-
-    async def _boom(guild_id: str) -> Any:
-        raise RuntimeError("boom")
-
-    spec = StaticPinnedView(
-        key="view:mod:kingdom:settings",
-        mark_suffix="x",
-        resolve_channel=_boom,
-        build_layout=lambda guild_id: None,  # type: ignore[arg-type,return-value]
-        scope="mod/kingdom",
+def test_the_report_distinguishes_pinned_from_unpinned(monkeypatch) -> None:
+    """The two healthy endings: pinned, and present-but-unpinned."""
+    diag = _diag()
+    _patch_registry(
+        monkeypatch,
+        [
+            _spec("view:mod:kingdom:settings"),
+            _spec("view:mod:kingdom:apply", message_id="888"),
+        ],
     )
-    register_static_pin(spec)
+    client = _Client(guild=_Guild(channel=_Channel(pinned=False)))
+    out = dict(asyncio.run(diag.pins_report(client, _GUILD_ID)))
+    assert out == {
+        "view:mod:kingdom:settings": f"épinglé dans <#{_CHANNEL_ID}>",
+        "view:mod:kingdom:apply": f"présent dans <#{_CHANNEL_ID}> mais NON épinglé (999)",
+    }
 
-    report = await pins_report(_Client(None), "1")
 
-    assert report == [("view:mod:kingdom:settings", "erreur : RuntimeError")]
+def test_the_report_never_raises(monkeypatch) -> None:
+    """A broken seam (resolve_channel raising) becomes an error line."""
+    diag = _diag()
+
+    async def boom(guild_id: str) -> str | None:
+        raise TypeError("seam down")
+
+    spec = SimpleNamespace(
+        key="view:mod:kingdom:settings",
+        scope="mod/kingdom",
+        resolve_channel=boom,
+        resolve_message_id=noop_resolver(),
+    )
+    _patch_registry(monkeypatch, [spec])
+    out = asyncio.run(diag.pins_report(_Client(guild=None), _GUILD_ID))
+    assert out == [("view:mod:kingdom:settings", "erreur : TypeError")]
+
+
+def noop_resolver():
+    async def resolve_message_id(guild_id: str) -> str | None:
+        return None
+
+    return resolve_message_id
+
+
+def test_admin_pin_lines_format_the_followup(monkeypatch) -> None:
+    """The admin followup: a bold title, one bullet per surface."""
+    diag = _diag()
+    _patch_registry(monkeypatch, [_spec("view:mod:kingdom:settings", channel_id=None)])
+    lines = asyncio.run(diag.admin_pin_lines(_Client(guild=None), _GUILD_ID))
+    assert lines[0] == "**Panneaux du mod — diagnostic**"
+    assert lines[1].startswith("• `view:mod:kingdom:settings` — ")
+    assert asyncio.run(diag.admin_pin_lines(_Client(guild=None), "")) == []
