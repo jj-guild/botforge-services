@@ -456,12 +456,19 @@ def _mod_pin_specs(bot: Any, name: str) -> list[Any]:
     ]
 
 
-async def ensure_mod_pins(bot: Any, guild_id: str, name: str) -> int:
-    """(Re-)pin one mod's home and admin menus (install/repair path).
+async def ensure_mod_pins_report(
+    bot: Any, guild_id: str, name: str
+) -> tuple[int, list[tuple[str, str]]]:
+    """(Re-)pin one mod's pins and REPORT the per-spec outcome (Drasah 18/11).
 
-    The SDK owns the mod's surface lifecycle: the declaration carries
-    the channels, the boot registers the specs, and the install/repair
-    lands the pins right away \u2014 a mod dev never wires a pin.
+    The repair's contract (kingdom-tests panel missing): a silent
+    best-effort pin is UNDEBUGGABLE — the moderator clicks Repair, the
+    channels resync, a panel silently misses its salon and nobody can
+    tell WHY. The report pair feeds the repair button's reply: the
+    landed count plus (key, human reason) for every spec that did not
+    land, the reason naming the failing step (no resolution, channel
+    out of cache, exception). ``ensure_mod_pins`` keeps its int
+    contract and discards the report.
     """
     import logging
 
@@ -470,12 +477,37 @@ async def ensure_mod_pins(bot: Any, guild_id: str, name: str) -> int:
     logger = logging.getLogger("botforge.scope_pins")
     register_mod_pins(bot)
     landed = 0
+    report: list[tuple[str, str]] = []
     for spec in _mod_pin_specs(bot, name):
+        reason = ""
         try:
-            await ensure_static_pin(bot, spec, guild_id)
+            channel_id = await spec.resolve_channel(guild_id)
+            if not channel_id or not str(channel_id).isdigit():
+                reason = "le salon n'est pas provisionné (résolution absente)"
+            else:
+                guild = bot.get_guild(int(guild_id)) if str(guild_id).isdigit() else None
+                if guild is None or guild.get_channel(int(channel_id)) is None:
+                    reason = f"salon {channel_id} introuvable (hors cache du bot)"
+            if not reason:
+                await ensure_static_pin(bot, spec, guild_id)
+        except Exception as exc:
+            reason = f"{type(exc).__name__}: {exc}"[:150]
+        if reason:
+            logger.warning("mod pin ensure failed (%s) — %s", spec.key, reason, exc_info=True)
+            report.append((spec.key, reason))
+        else:
             landed += 1
-        except Exception:
-            logger.warning("mod pin ensure failed (%s) \u2014 best-effort", spec.key, exc_info=True)
+    return landed, report
+
+
+async def ensure_mod_pins(bot: Any, guild_id: str, name: str) -> int:
+    """(Re-)pin one mod's home and admin menus (install/repair path).
+
+    The SDK owns the mod's surface lifecycle: the declaration carries
+    the channels, the boot registers the specs, and the install/repair
+    lands the pins right away \u2014 a mod dev never wires a pin.
+    """
+    landed, _report = await ensure_mod_pins_report(bot, guild_id, name)
     return landed
 
 
@@ -502,4 +534,10 @@ async def remove_mod_pins(bot: Any, guild_id: str, name: str) -> int:
     return removed
 
 
-__all__ = ["ensure_mod_pins", "register_mod_pins", "register_scope_pins", "remove_mod_pins"]
+__all__ = [
+    "ensure_mod_pins",
+    "ensure_mod_pins_report",
+    "register_mod_pins",
+    "register_scope_pins",
+    "remove_mod_pins",
+]
