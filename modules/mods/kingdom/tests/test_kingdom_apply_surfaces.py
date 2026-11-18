@@ -164,3 +164,22 @@ def test_no_locale_mentions_the_command() -> None:
     for locale in ("fr", "en"):
         flat = str(catalog.section("kingdom.apply", locale))
         assert "/register" not in flat, f"the {locale} apply strings mention no command"
+
+
+
+def test_the_panel_carries_the_designers_artwork(monkeypatch: Any) -> None:
+    """The poster's head: the artwork gallery ABOVE the title (data-driven)."""
+    import json as _json
+
+    import botforge.mods.kingdom.cogs.panel as panel_module
+    from botforge.mods.kingdom.cogs.apply_flow import build_apply_panel
+
+    async def _fr(guild_id: str) -> str:
+        return "fr"
+
+    monkeypatch.setattr(panel_module, "_guild_locale", _fr)
+    view = asyncio.run(build_apply_panel("123"))
+    dumped = view.to_components()
+    wire = _json.dumps(dumped)
+    assert "roi.webp" in wire, "the artwork rides the panel"
+    assert "roi.webp" in _json.dumps(dumped[0]), "the illustration heads the panel"

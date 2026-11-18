@@ -18,6 +18,9 @@ en:
       refused_note: "🚫 **{name}** refused — its members return to the queue."
     apply:
       panel_title: "⚔️ SIGN-UP — KINGDOMS SEASON II"
+      # the panel's illustration (the mod's artwork, data — swap the URL;
+      # image: modules/mods/kingdom/assets/roi.webp)
+      artwork: "https://raw.githubusercontent.com/jj-guild/botforge-services/2fe4442/modules/mods/kingdom/assets/roi.webp"
       tagline: "Set out to conquer the territories! Apply to join the adventure."
       kingdoms_line: "👑 **{count}** kingdom{s} in play — join the adventure!"
       kingdoms_none: "👑 No kingdom in play yet — the first to apply founds theirs!"

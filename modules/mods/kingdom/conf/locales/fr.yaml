@@ -18,6 +18,9 @@ fr:
       refused_note: "🚫 **{name}** refusé — ses membres retournent dans la file."
     apply:
       panel_title: "⚔️ INSCRIPTION — KINGDOMS SAISON II"
+      # l'illustration du panneau (l'artwork du mod, données — remplacable
+      # en changeant l'URL ; image: modules/mods/kingdom/assets/roi.webp)
+      artwork: "https://raw.githubusercontent.com/jj-guild/botforge-services/2fe4442/modules/mods/kingdom/assets/roi.webp"
       tagline: "Pars à la conquête des territoires ! Postule pour rejoindre l'aventure."
       kingdoms_line: "👑 **{count}** royaume{s} en jeu — rejoins l'aventure !"
       kingdoms_none: "👑 Aucun royaume en jeu pour l'instant — le premier à postuler fondera le sien !"

@@ -79,11 +79,19 @@ async def _kingdoms_in_play() -> int | None:
 async def build_apply_panel(guild_id: str) -> discord.ui.LayoutView:
     """Build the pinned golden Postuler panel (guild-locale strings)."""
     strings = await _strings_async(guild_id)
-    blocks: list[discord.ui.Item[discord.ui.LayoutView]] = [
-        discord.ui.TextDisplay(f"# {strings['panel_title']}"),
-        discord.ui.Separator(),
-        discord.ui.TextDisplay(str(strings["tagline"])),
-    ]
+    blocks: list[discord.ui.Item[discord.ui.LayoutView]] = []
+    artwork = str(strings.get("artwork", "") or "")
+    if artwork:
+        # the designer's illustration, HEAD of the poster (data-driven:
+        # the URL lives in the locales, swapping art is a data change)
+        blocks.append(discord.ui.MediaGallery(discord.MediaGalleryItem(artwork)))
+    blocks.extend(
+        [
+            discord.ui.TextDisplay(f"# {strings['panel_title']}"),
+            discord.ui.Separator(),
+            discord.ui.TextDisplay(str(strings["tagline"])),
+        ]
+    )
     count = await _kingdoms_in_play()
     if count:
         blocks.append(discord.ui.TextDisplay(strings["kingdoms_line"].format(count=count, s="s" if count > 1 else "")))
