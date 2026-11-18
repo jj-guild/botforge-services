@@ -437,7 +437,13 @@ Bind&nbsp;platform&nbsp;users&nbsp;to&nbsp;validated&nbsp;game&nbsp;profiles&nbs
 <td class="singlecolumn">Methods defined here:<br>
 <dl><dt><a name="RegistrationService-__init__"><strong>__init__</strong></a>(self, database: 'RegistrationDatabase', profile_seams: 'dict[str, GameProfileSeam] | None' = None, events: 'RegistrationEvents | None' = None, audit: 'RegistrationAudit | None' = None) -&gt; 'None'</dt><dd><span class="code">Wire&nbsp;persistence,&nbsp;per-game&nbsp;validation&nbsp;seams&nbsp;and&nbsp;event/audit&nbsp;seams.</span></dd></dl>
 
-<dl><dt>async <a name="RegistrationService-bind_profile"><strong>bind_profile</strong></a>(self, user_id: 'str', game_key: 'str', profile_id: 'str') -&gt; 'dict[str, Any]'</dt><dd><span class="code">Validate&nbsp;then&nbsp;bind&nbsp;a&nbsp;game&nbsp;profile&nbsp;to&nbsp;a&nbsp;user&nbsp;(permanent,&nbsp;once&nbsp;per&nbsp;profile).<br>
+<dl><dt><a name="RegistrationService-attach_events"><strong>attach_events</strong></a>(self, events: 'RegistrationEvents') -&gt; 'None'</dt><dd><span class="code">Attach&nbsp;(or&nbsp;replace)&nbsp;the&nbsp;notification&nbsp;seam&nbsp;after&nbsp;construction.<br>
+&nbsp;<br>
+The&nbsp;live&nbsp;wiring&nbsp;attaches&nbsp;the&nbsp;Discord&nbsp;sink&nbsp;once&nbsp;the&nbsp;bot&nbsp;exists&nbsp;—<br>
+the&nbsp;core&nbsp;constructor&nbsp;stays&nbsp;bot-free&nbsp;(tests&nbsp;build&nbsp;the&nbsp;service<br>
+bare,&nbsp;the&nbsp;factory&nbsp;attaches&nbsp;the&nbsp;transport).</span></dd></dl>
+
+<dl><dt>async <a name="RegistrationService-bind_profile"><strong>bind_profile</strong></a>(self, user_id: 'str', game_key: 'str', profile_id: 'str', guild_id: 'str' = '') -&gt; 'dict[str, Any]'</dt><dd><span class="code">Validate&nbsp;then&nbsp;bind&nbsp;a&nbsp;game&nbsp;profile&nbsp;to&nbsp;a&nbsp;user&nbsp;(permanent,&nbsp;once&nbsp;per&nbsp;profile).<br>
 &nbsp;<br>
 Validation&nbsp;is&nbsp;delegated&nbsp;to&nbsp;the&nbsp;game&nbsp;seam;&nbsp;a&nbsp;profile&nbsp;already&nbsp;bound<br>
 to&nbsp;another&nbsp;user&nbsp;is&nbsp;refused.&nbsp;The&nbsp;binding&nbsp;is&nbsp;stored&nbsp;game-side.</span></dd></dl>
@@ -458,7 +464,7 @@ all&nbsp;use&nbsp;``list_bindings_for_game``/``list_bindings``.</span></dd></dl>
 
 <dl><dt>async <a name="RegistrationService-request_enrollment"><strong>request_enrollment</strong></a>(self, user_id: 'str', guild_id: 'str') -&gt; 'dict[str, Any]'</dt><dd><span class="code">Record&nbsp;an&nbsp;enrollment&nbsp;request&nbsp;and&nbsp;notify&nbsp;admins&nbsp;(acceptance&nbsp;is&nbsp;admin-side).</span></dd></dl>
 
-<dl><dt>async <a name="RegistrationService-unlink_profile"><strong>unlink_profile</strong></a>(self, user_id: 'str', game_key: 'str', profile_id: 'str') -&gt; 'bool'</dt><dd><span class="code">Remove&nbsp;one&nbsp;profile&nbsp;binding;&nbsp;True&nbsp;when&nbsp;one&nbsp;existed.<br>
+<dl><dt>async <a name="RegistrationService-unlink_profile"><strong>unlink_profile</strong></a>(self, user_id: 'str', game_key: 'str', profile_id: 'str', guild_id: 'str' = '') -&gt; 'bool'</dt><dd><span class="code">Remove&nbsp;one&nbsp;profile&nbsp;binding;&nbsp;True&nbsp;when&nbsp;one&nbsp;existed.<br>
 &nbsp;<br>
 Multi-profile&nbsp;by&nbsp;design:&nbsp;a&nbsp;user&nbsp;may&nbsp;hold&nbsp;several&nbsp;bindings&nbsp;per<br>
 game;&nbsp;unlinking&nbsp;one&nbsp;never&nbsp;touches&nbsp;the&nbsp;others.</span></dd></dl>
