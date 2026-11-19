@@ -133,7 +133,9 @@ class KingdomServiceImpl(KingdomContract):
         from botforge.mods.kingdom.config import load_season_config
         from botforge.mods.kingdom.storage import MongoKingdomStore
 
-        conf_dir = Path(__file__).resolve().parents[3] / "conf"
+        # grpc/kingdom/service.py -> the mod's conf/ is two levels up
+        # (modules/mods/<name>/conf), not three (that would be modules/mods/conf)
+        conf_dir = Path(__file__).resolve().parents[2] / "conf"
         config = load_season_config(conf_dir)
         store = MongoKingdomStore(ModStorage(database, "kingdom"))
         self._stack = _KingdomStackImpl(store, config)
