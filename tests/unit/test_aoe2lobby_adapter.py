@@ -8,9 +8,12 @@ period, and per-profile transitions come out in the MatchEvent shape.
 from __future__ import annotations
 
 import json
+import logging
 from typing import Any
 
 from botforge.ext_aoe2lobby.adapter import Aoe2LobbyAdapter
+
+ADAPTER_LOGGER = "botforge.ext_aoe2lobby.adapter"
 
 
 def _frame(adapter: Aoe2LobbyAdapter, payload: dict[str, Any]) -> list[dict[str, Any]]:
@@ -22,9 +25,7 @@ def _lobby(match_id: str, profile_ids: list[Any]) -> dict[str, Any]:
         "matchid": int(match_id),
         "map_name": "Arabia",
         "slots": {
-            f"s{i}": {"profileid": pid, "status": 3}
-            for i, pid in enumerate(profile_ids, start=1)
-            if pid is not None
+            f"s{i}": {"profileid": pid, "status": 3} for i, pid in enumerate(profile_ids, start=1) if pid is not None
         },
     }
 
@@ -387,3 +388,38 @@ async def test_no_subscribers_emits_nothing() -> None:
     adapter = Aoe2LobbyAdapter()
     events = _frame(adapter, {"lobby_match_all": {"111": _lobby("111", [123])}})
     assert events == []
+
+
+async def test_stranger_match_logs_debug_not_info(caplog: Any) -> None:
+    """#423 taxonomy: lobby counts / stranger matches never pollute INFO."""
+    adapter = Aoe2LobbyAdapter()
+    await adapter.set_subscribed_profiles(["123"])
+    with caplog.at_level(logging.DEBUG, logger=ADAPTER_LOGGER):
+        events = _frame(adapter, {"lobby_match_all": {"111": _lobby("111", [999])}})
+    assert events == []
+    records = [r for r in caplog.records if r.name == ADAPTER_LOGGER]
+    assert records  # the frame is still diagnosed…
+    assert all(r.levelno < logging.INFO for r in records)  # …but at DEBUG
+
+
+async def test_known_player_event_logs_info_with_name(caplog: Any) -> None:
+    """#423 taxonomy: a subscribed player's transition is INFO and NAMED."""
+    adapter = Aoe2LobbyAdapter()
+    await adapter.set_subscribed_profiles(["123"])
+    lobby = _lobby("111", [123])
+    lobby["slots"]["s1"]["name"] = "Alice"
+    with caplog.at_level(logging.INFO, logger=ADAPTER_LOGGER):
+        events = _frame(adapter, {"lobby_match_all": {"111": lobby}})
+    assert [e["type"] for e in events] == ["lobby_opened"]
+    info_lines = [r.getMessage() for r in caplog.records if r.name == ADAPTER_LOGGER and r.levelno == logging.INFO]
+    assert any("Alice" in line and "lobby_opened" in line and "111" in line for line in info_lines)
+
+
+async def test_subscription_delta_logs_info_naming_profiles(caplog: Any) -> None:
+    """#423 taxonomy: the enrollment deltas are INFO and name the profiles."""
+    adapter = Aoe2LobbyAdapter()
+    with caplog.at_level(logging.INFO, logger=ADAPTER_LOGGER):
+        await adapter.set_subscribed_profiles(["123", "456"])
+    info_lines = [r.getMessage() for r in caplog.records if r.name == ADAPTER_LOGGER and r.levelno == logging.INFO]
+    # no name known yet: the profile ids name the players (fallback rule)
+    assert any("123" in line and "456" in line for line in info_lines)
