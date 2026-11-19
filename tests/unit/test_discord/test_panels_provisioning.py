@@ -288,6 +288,31 @@ class TestCategoryGate:
             assert everyone is None or everyone.view_channel is not False
 
     @pytest.mark.asyncio
+    async def test_install_gates_categories_without_stored_ids_by_name(self) -> None:
+        """The name fallback: a guild whose ids were never persisted still
+        gets gated — the platform categories resolve by their translated
+        name (the fr/en renders of the declared category key) when the
+        stored id is missing (the Kingdoms - Tests guild case)."""
+        from botforge.discord.ui.panels_provisioning import set_platform_categories_private
+        from botforge.discord.ui.panels_scopes import register_platform_scopes
+
+        register_platform_scopes(CONFIG_DIR)
+        guild = MockGuild()
+        await provision_scope(guild, BOT_SCOPE, "fr", _translate)
+        assert _STORED == {}, "no stored id: the resolution was never persisted"
+        n = await set_platform_categories_private(guild, True)
+        assert n >= 1
+        cat = next(
+            c for c in guild.categories if c.name == _translate(BOT_SCOPE.category_key, "fr")
+        )
+        everyone = cat.permission_overwrite_for(guild.default_role)
+        me = cat.permission_overwrite_for(guild.me)
+        assert everyone is not None and everyone.view_channel is False
+        assert me is not None and me.view_channel is True and me.manage_channels is True
+        await set_platform_categories_private(guild, False)
+        assert cat.permission_overwrite_for(guild.default_role) is None
+
+    @pytest.mark.asyncio
     async def test_the_rooms_keep_their_own_bands_under_the_gate(self) -> None:
         """The gate is the folder's front door, never the rooms'."""
         guild = MockGuild()

@@ -426,6 +426,54 @@ async def _restore_category_access(guild: discord.Guild, category_id: str) -> No
         )
 
 
+def _category_label_names(spec: ScopeSpec) -> set[str]:
+    """Render a scope's category label in every locale — the name fallback.
+
+    The stored id is the primary resolution, but a guild provisioned
+    before its ids were persisted (or with an unwired Mongo at the
+    time) has live categories with NO stored id — the translated name
+    (fr and en renders of the declared category key) finds them.
+    """
+    names: set[str] = set()
+    try:
+        from botforge.core.services.i18n import MessageCatalog
+        from botforge.core.services.mod_layout import default_repo_root
+
+        root = default_repo_root()
+        if root is None:
+            return names
+        catalog = MessageCatalog(str(root / "config"))
+        for locale in ("fr", "en"):
+            rendered = str(catalog.render(spec.category_key, locale))
+            if rendered and rendered != spec.category_key:
+                names.add(rendered)
+    except Exception:
+        logger.warning(
+            "panels provisioning: category label render failed (scope %s) — stored ids only",
+            spec.scope,
+            exc_info=True,
+        )
+    return names
+
+
+async def _platform_category_candidates(guild: discord.Guild, spec: ScopeSpec) -> list[str]:
+    """Resolve one platform scope's category ids: stored id first, then name.
+
+    The name fallback (the fr/en renders of the declared category key)
+    covers guilds whose ids were never persisted — the Kingdoms - Tests
+    case: the categories exist, the stored ids are missing.
+    """
+    candidates: list[str] = []
+    stored = await stored_channel_id(str(guild.id), spec.scope, "category")
+    if stored and str(stored).isdigit():
+        candidates.append(str(stored))
+    for name in _category_label_names(spec):
+        category = discord.utils.get(guild.categories, name=name)
+        if category is not None:
+            candidates.append(str(category.id))
+    return list(dict.fromkeys(candidates))
+
+
 async def set_platform_categories_private(guild: discord.Guild, private: bool) -> int:
     """Gate (or restore) every PLATFORM scope's category — the install rule.
 
@@ -438,22 +486,24 @@ async def set_platform_categories_private(guild: discord.Guild, private: bool) -
     categories were touched.
     """
     touched = 0
+    seen: set[str] = set()
     for spec in registered_scopes():
-        if spec.scope.startswith("mod/"):
+        if spec.scope.startswith("mod/") or not spec.category_key:
             continue
-        if not spec.category_key:
-            continue
-        stored = await stored_channel_id(str(guild.id), spec.scope, "category")
-        if not stored or not str(stored).isdigit():
-            continue
-        category = guild.get_channel(int(stored))
-        if not isinstance(category, discord.CategoryChannel):
-            continue
-        if private:
-            await _apply_category_access(guild, str(stored), ())
-        else:
-            await _restore_category_access(guild, str(stored))
-        touched += 1
+        candidates = await _platform_category_candidates(guild, spec)
+        view_role_ids = tuple(getattr(spec, "category_view_role_ids", ()) or ())
+        for category_id in candidates:
+            if category_id in seen:
+                continue
+            category = guild.get_channel(int(category_id)) if category_id.isdigit() else None
+            if not isinstance(category, discord.CategoryChannel):
+                continue
+            seen.add(category_id)
+            if private:
+                await _apply_category_access(guild, category_id, view_role_ids)
+            else:
+                await _restore_category_access(guild, category_id)
+            touched += 1
     return touched
 
 
