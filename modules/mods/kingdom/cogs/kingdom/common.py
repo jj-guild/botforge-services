@@ -360,6 +360,25 @@ def combat_failure_note(exc: Exception, strings: dict[str, str]) -> str:
     return str(strings["failed"]).format(message=message)
 
 
+def service_failure_note(strings: dict[str, str], fallback_key: str, exc: Exception) -> str:
+    """Map a service failure to its USER-FACING note — the log is never the only report.
+
+    A ``KingdomError`` carries a stable ``code`` (``KINGDOMS_NO_SEASON``,
+    ``KINGDOMS_KINGDOM_LIMIT``, …): the catalog key ``settings_err_<code>``
+    (lowercased) wins when present; otherwise the generic failure note
+    with the raw message. The caller always answers the user.
+    """
+    from botforge.mods.kingdom.errors import KingdomError
+
+    if isinstance(exc, KingdomError):
+        code = str(getattr(exc, "code", "") or "")
+        if code:
+            key = f"settings_err_{code.lower()}"
+            if strings.get(key):
+                return str(strings[key])
+    return str(strings[fallback_key]).format(str(exc)[:150])
+
+
 # ---------------------------------------------------------------------------
 # The attack salons (restructuration-serveur-v1 b)
 # ---------------------------------------------------------------------------
@@ -631,6 +650,7 @@ __all__ = [
     "open_dynamic_channel_safe",
     "delete_dynamic_channel_safe",
     "score_players",
+    "service_failure_note",
     "shuffled_civs",
     "side_of",
     "silent_ack",

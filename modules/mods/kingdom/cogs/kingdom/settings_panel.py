@@ -33,7 +33,7 @@ import discord
 
 from botforge.discord.console import mod_console_view_id
 
-from .common import locale_of, open_unique_ephemeral, surface, wiring
+from .common import locale_of, open_unique_ephemeral, service_failure_note, surface, wiring
 
 logger = logging.getLogger("kingdom.settings")
 
@@ -320,7 +320,7 @@ async def _start_season(interaction: discord.Interaction, strings: dict[str, str
         note = str(strings["settings_start_season_done"])
     except Exception as exc:  # the panel reports, never raises
         logger.warning("kingdom: start_season failed", exc_info=True)
-        note = str(strings["settings_start_season_failed"]).format(str(exc)[:150])
+        note = service_failure_note(strings, "settings_start_season_failed", exc)
     await interaction.followup.send(note, ephemeral=True)
 
 
@@ -340,7 +340,7 @@ async def _season_mode(interaction: discord.Interaction, strings: dict[str, str]
         )
     except Exception as exc:  # the panel reports, never raises
         logger.warning("kingdom: season-mode toggle failed", exc_info=True)
-        note = str(strings["settings_failed"]).format(str(exc)[:150])
+        note = service_failure_note(strings, "settings_failed", exc)
     await interaction.followup.send(note, ephemeral=True)
 
 
@@ -362,7 +362,7 @@ async def _start_beta(interaction: discord.Interaction, strings: dict[str, str])
             note = str(strings["settings_beta_started"])
     except Exception as exc:  # the panel reports, never raises
         logger.warning("kingdom: beta toggle failed", exc_info=True)
-        note = str(strings["settings_failed"]).format(str(exc)[:150])
+        note = service_failure_note(strings, "settings_failed", exc)
     await interaction.followup.send(note, ephemeral=True)
 
 
@@ -434,27 +434,30 @@ async def _hat(interaction: discord.Interaction, strings: dict[str, str]) -> Non
             note = str(strings["settings_hat_off"])
     except Exception as exc:  # the panel reports, never raises
         logger.warning("kingdom: hat toggle failed", exc_info=True)
-        note = str(strings["settings_failed"]).format(str(exc)[:150])
+        note = service_failure_note(strings, "settings_failed", exc)
     await interaction.followup.send(note, ephemeral=True)
 
 
 class _LaunchModal(discord.ui.Modal):
     """Lancer la saison — optional comma-separated imposed kingdom names."""
 
-    names = discord.ui.TextInput(
-        label="Imposed names (optional)",
-        placeholder="Kingdom A, Kingdom B",
-        required=False,
-        max_length=200,
-    )
-
     def __init__(self, strings: dict[str, str]) -> None:
         super().__init__(title=str(strings["settings_launch_modal_title"])[:45])
         self._strings = strings
-        # TextInput labels cap at 45 chars (Discord 50035) — the label and
-        # placeholder ride the i18n catalog, clamped here
-        self.names.label = str(strings["settings_launch_modal_names_label"])[:45]
-        self.names.placeholder = str(strings["settings_launch_modal_names_placeholder"])[:100]
+        # discord.py 2.7: a TextInput rides a discord.ui.Label (the label
+        # property is deprecated); the Label text caps at 45 chars (50035)
+        self.names = discord.ui.TextInput(
+            placeholder=str(strings["settings_launch_modal_names_placeholder"])[:100],
+            required=False,
+            max_length=200,
+            custom_id="kingdom:settings:launch:names",
+        )
+        self.add_item(
+            discord.ui.Label(
+                text=str(strings["settings_launch_modal_names_label"])[:45],
+                component=self.names,
+            )
+        )
 
     async def on_submit(self, interaction: discord.Interaction) -> None:
         await interaction.response.defer(ephemeral=True)
@@ -471,25 +474,40 @@ class _LaunchModal(discord.ui.Modal):
             note = str(strings["settings_launch_done"])
         except Exception as exc:  # the panel reports, never raises
             logger.warning("kingdom: launch failed", exc_info=True)
-            note = str(strings["settings_launch_failed"]).format(str(exc)[:150])
+            note = service_failure_note(strings, "settings_launch_failed", exc)
         await interaction.followup.send(note, ephemeral=True)
 
 
 class _AssignModal(discord.ui.Modal):
     """Affecter un joueur en attente — id, royaume, rôle."""
 
-    player_id = discord.ui.TextInput(label="Player ID", required=True, max_length=32)
-    kingdom = discord.ui.TextInput(label="Kingdom name", required=True, max_length=64)
-    role = discord.ui.TextInput(
-        label="Role (king or lord)", placeholder="king", required=True, max_length=8
-    )
-
     def __init__(self, strings: dict[str, str]) -> None:
         super().__init__(title=str(strings["settings_assign_modal_title"])[:45])
         self._strings = strings
-        self.player_id.label = str(strings["settings_assign_modal_player_label"])[:45]
-        self.kingdom.label = str(strings["settings_assign_modal_kingdom_label"])[:45]
-        self.role.label = str(strings["settings_assign_modal_role_label"])[:45]
+        # discord.py 2.7: TextInputs ride discord.ui.Label wrappers
+        self.player_id = discord.ui.TextInput(required=True, max_length=32, custom_id="kingdom:settings:assign:player")
+        self.kingdom = discord.ui.TextInput(required=True, max_length=64, custom_id="kingdom:settings:assign:kingdom")
+        self.role = discord.ui.TextInput(
+            placeholder="king", required=True, max_length=8, custom_id="kingdom:settings:assign:role"
+        )
+        self.add_item(
+            discord.ui.Label(
+                text=str(strings["settings_assign_modal_player_label"])[:45],
+                component=self.player_id,
+            )
+        )
+        self.add_item(
+            discord.ui.Label(
+                text=str(strings["settings_assign_modal_kingdom_label"])[:45],
+                component=self.kingdom,
+            )
+        )
+        self.add_item(
+            discord.ui.Label(
+                text=str(strings["settings_assign_modal_role_label"])[:45],
+                component=self.role,
+            )
+        )
 
     async def on_submit(self, interaction: discord.Interaction) -> None:
         await interaction.response.defer(ephemeral=True)
@@ -514,19 +532,25 @@ class _AssignModal(discord.ui.Modal):
             note = str(strings["settings_assign_done"])
         except Exception as exc:  # the panel reports, never raises
             logger.warning("kingdom: assign failed", exc_info=True)
-            note = str(strings["settings_assign_failed"]).format(str(exc)[:150])
+            note = service_failure_note(strings, "settings_assign_failed", exc)
         await interaction.followup.send(note, ephemeral=True)
 
 
 class _AddKingdomModal(discord.ui.Modal):
     """Ajouter un royaume manuellement."""
 
-    name = discord.ui.TextInput(label="Kingdom name", required=True, max_length=64)
-
     def __init__(self, strings: dict[str, str]) -> None:
         super().__init__(title=str(strings["settings_add_kingdom_modal_title"])[:45])
         self._strings = strings
-        self.name.label = str(strings["settings_add_kingdom_modal_name_label"])[:45]
+        self.name = discord.ui.TextInput(
+            required=True, max_length=64, custom_id="kingdom:settings:add-kingdom:name"
+        )
+        self.add_item(
+            discord.ui.Label(
+                text=str(strings["settings_add_kingdom_modal_name_label"])[:45],
+                component=self.name,
+            )
+        )
 
     async def on_submit(self, interaction: discord.Interaction) -> None:
         await interaction.response.defer(ephemeral=True)
@@ -542,23 +566,34 @@ class _AddKingdomModal(discord.ui.Modal):
             )
         except Exception as exc:  # the panel reports, never raises
             logger.warning("kingdom: add_kingdom failed", exc_info=True)
-            note = str(strings["settings_add_kingdom_failed"]).format(str(exc)[:150])
+            note = service_failure_note(strings, "settings_add_kingdom_failed", exc)
         await interaction.followup.send(note, ephemeral=True)
 
 
 class _RemoveModal(discord.ui.Modal):
     """Retirer un joueur/candidat — id + motif."""
 
-    player_id = discord.ui.TextInput(label="Player ID", required=True, max_length=32)
-    reason = discord.ui.TextInput(
-        label="Reason", placeholder="ss", required=False, max_length=200
-    )
-
     def __init__(self, strings: dict[str, str]) -> None:
         super().__init__(title=str(strings["settings_remove_modal_title"])[:45])
         self._strings = strings
-        self.player_id.label = str(strings["settings_remove_modal_player_label"])[:45]
-        self.reason.label = str(strings["settings_remove_modal_reason_label"])[:45]
+        self.player_id = discord.ui.TextInput(
+            required=True, max_length=32, custom_id="kingdom:settings:remove:player"
+        )
+        self.reason = discord.ui.TextInput(
+            placeholder="ss", required=False, max_length=200, custom_id="kingdom:settings:remove:reason"
+        )
+        self.add_item(
+            discord.ui.Label(
+                text=str(strings["settings_remove_modal_player_label"])[:45],
+                component=self.player_id,
+            )
+        )
+        self.add_item(
+            discord.ui.Label(
+                text=str(strings["settings_remove_modal_reason_label"])[:45],
+                component=self.reason,
+            )
+        )
 
     async def on_submit(self, interaction: discord.Interaction) -> None:
         await interaction.response.defer(ephemeral=True)
@@ -576,7 +611,7 @@ class _RemoveModal(discord.ui.Modal):
             )
         except Exception as exc:  # the panel reports, never raises
             logger.warning("kingdom: leave failed", exc_info=True)
-            note = str(strings["settings_remove_failed"]).format(str(exc)[:150])
+            note = service_failure_note(strings, "settings_remove_failed", exc)
         await interaction.followup.send(note, ephemeral=True)
 
 

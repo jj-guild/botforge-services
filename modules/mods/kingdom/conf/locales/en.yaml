@@ -56,6 +56,12 @@ en:
       settings_beta_started: ✅ Beta phase entered — the rules bend.
       settings_cancelled: ❌ Cancelled — nothing was touched.
       settings_denied: ❌ Reserved for the bot admins.
+      settings_err_kingdoms_already_enrolled: ❌ Already enrolled in the season.
+      settings_err_kingdoms_kingdom_full: ❌ That kingdom is full.
+      settings_err_kingdoms_kingdom_limit: ❌ The season already counts its maximum of kingdoms.
+      settings_err_kingdoms_kingdom_not_found: ❌ Kingdom not found.
+      settings_err_kingdoms_name_invalid: ❌ Invalid kingdom name.
+      settings_err_kingdoms_no_season: ❌ No season is running — launch one first.
       settings_deploy_button: 🚀 Deploy salons + panels
       settings_deploy_cancel_button: ❌ Cancel
       settings_deploy_confirm_button: ✅ Yes, deploy

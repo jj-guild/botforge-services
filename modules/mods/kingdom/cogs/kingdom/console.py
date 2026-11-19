@@ -95,7 +95,9 @@ def _confirm_view(strings: dict[str, str], action_key: str) -> discord.ui.Layout
                 note = str(strings["console_reset_done"])
         except Exception as exc:  # noqa: BLE001 — the console reports, never raises
             logger.warning("kingdom: console %s failed", action_key, exc_info=True)
-            note = str(strings["console_error"]).format(str(exc)[:150])
+            from .common import service_failure_note
+
+            note = service_failure_note(strings, "console_error", exc)
         try:
             await target.followup.send(note, ephemeral=True)
         except Exception:  # noqa: S110 — a vanished window is fine
@@ -190,17 +192,24 @@ class KingdomResetButton(
 class _ClockOffsetModal(discord.ui.Modal):
     """The free-jump modal (« 90m », « 2h », « 1d2h30m »)."""
 
-    duration = discord.ui.TextInput(
-        label="Durée (90m, 2h, 3d…)",
-        placeholder="90m",
-        min_length=1,
-        max_length=20,
-        required=True,
-    )
-
     def __init__(self, strings: dict[str, str]) -> None:
         super().__init__(title=str(strings["console_clock_modal_title"])[:45])
         self._strings = strings
+        # discord.py 2.7: a TextInput rides a discord.ui.Label (the label
+        # property is deprecated)
+        self.duration = discord.ui.TextInput(
+            placeholder="90m",
+            min_length=1,
+            max_length=20,
+            required=True,
+            custom_id="kingdom:console:clock:duration",
+        )
+        self.add_item(
+            discord.ui.Label(
+                text=str(strings["console_clock_duration_label"])[:45],
+                component=self.duration,
+            )
+        )
 
     async def on_submit(self, interaction: discord.Interaction) -> None:
         from botforge.mods.kingdom.game_clock import format_offset, parse_duration

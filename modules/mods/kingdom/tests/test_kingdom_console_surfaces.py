@@ -53,6 +53,7 @@ def test_console_strings_parity() -> None:
             "console_relaunch_done",
             "console_reset_done",
             "console_clock_modal_title",
+            "console_clock_duration_label",
         ):
             assert s[key]
         s["console_error"].format("boom")

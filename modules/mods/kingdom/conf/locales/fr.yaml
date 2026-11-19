@@ -56,6 +56,12 @@ fr:
       settings_beta_started: ✅ Phase bêta activée — les règles se plient.
       settings_cancelled: ❌ Annulé — rien n'a été touché.
       settings_denied: ❌ Réservé aux admins du bot.
+      settings_err_kingdoms_already_enrolled: ❌ Déjà inscrit à la saison.
+      settings_err_kingdoms_kingdom_full: ❌ Ce royaume est complet.
+      settings_err_kingdoms_kingdom_limit: ❌ La saison a déjà atteint son maximum de royaumes.
+      settings_err_kingdoms_kingdom_not_found: ❌ Royaume introuvable.
+      settings_err_kingdoms_name_invalid: ❌ Nom de royaume invalide.
+      settings_err_kingdoms_no_season: ❌ Aucune saison en cours — lance d'abord la saison.
       settings_deploy_button: 🚀 Déployer salons + panels
       settings_deploy_cancel_button: ❌ Annuler
       settings_deploy_confirm_button: ✅ Oui, déployer

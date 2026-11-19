@@ -154,3 +154,61 @@ def test_the_settings_panel_builds_with_a_fake_service() -> None:
 
     view = asyncio.run(build_settings_panel("123"))
     assert view is not None
+
+
+def test_modals_build_without_deprecation_warnings() -> None:
+    """discord.py 2.7: a TextInput rides a discord.ui.Label — the label
+    property is deprecated (DeprecationWarning in the bot logs)."""
+    import warnings
+
+    from botforge.mods.kingdom.cogs.settings_panel import (
+        _AddKingdomModal,
+        _AssignModal,
+        _LaunchModal,
+        _RemoveModal,
+        settings_strings,
+    )
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("error", DeprecationWarning)
+        for cls in (_LaunchModal, _AssignModal, _AddKingdomModal, _RemoveModal):
+            modal = cls(settings_strings("fr"))
+            labels = [c for c in modal.walk_children() if type(c).__name__ == "Label"]
+            assert labels, f"{cls.__name__}: every input must ride a discord.ui.Label"
+            for label in labels:
+                assert len(label.text) <= 45, "Label text caps at 45 chars (Discord 50035)"
+
+
+def test_service_failures_map_to_user_facing_notes() -> None:
+    """A KingdomError code maps to its i18n note (the user ALWAYS gets an
+    answer — the log is never the only report); unknown errors fall back
+    to the generic failure note."""
+    from botforge.mods.kingdom.cogs.common import service_failure_note
+    from botforge.mods.kingdom.cogs.settings_panel import settings_strings
+    from botforge.mods.kingdom.service import KingdomLimitError, NoSeasonError
+
+    err_keys = (
+        "settings_err_kingdoms_no_season",
+        "settings_err_kingdoms_kingdom_limit",
+        "settings_err_kingdoms_kingdom_not_found",
+        "settings_err_kingdoms_kingdom_full",
+        "settings_err_kingdoms_name_invalid",
+        "settings_err_kingdoms_already_enrolled",
+    )
+    for locale in ("fr", "en"):
+        s = settings_strings(locale)
+        for key in err_keys:
+            assert s.get(key), f"missing {key} in {locale}"
+    s = settings_strings("fr")
+    assert (
+        service_failure_note(s, "settings_failed", NoSeasonError("no season is running"))
+        == s["settings_err_kingdoms_no_season"]
+    )
+    assert (
+        service_failure_note(s, "settings_failed", KingdomLimitError("limit"))
+        == s["settings_err_kingdoms_kingdom_limit"]
+    )
+    assert (
+        service_failure_note(s, "settings_failed", RuntimeError("boom"))
+        == s["settings_failed"].format("boom")
+    )
