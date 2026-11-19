@@ -88,6 +88,20 @@ class DiscordDynamicChannelsPlatform:
             # the degradation) — duck-typed like the rest of the seam.
             category = cast("discord.CategoryChannel | None", self._bot.get_channel(int(category_id)))
         resolved = self._overwrites(guild, overwrites)
+        # The bot never locks itself out of the channel it provisions:
+        # @me always carries the full bot allow (manage_channels included —
+        # purging an ephemeral room needs it), above all inside a private
+        # parent category (#413). An explicit @me from the caller is
+        # normalized to that allow — view_channel is never denied.
+        me = getattr(guild, "me", None)
+        if me is not None:
+            resolved[me] = discord.PermissionOverwrite(
+                view_channel=True,
+                send_messages=True,
+                read_message_history=True,
+                manage_messages=True,
+                manage_channels=True,
+            )
         # The optional data forms map onto discord.py's call — a position
         # of None means "no hint", not "position zero".
         kwargs: dict[str, Any] = {"category": category}

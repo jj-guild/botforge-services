@@ -259,19 +259,28 @@ async def _decl_category(
     category_id: str,
     group_categories: dict[str, str],
     resolved: dict[str, str],
+    group_view_roles: dict[str, tuple[str, ...]] | None = None,
 ) -> str:
     """Resolve one channel's category: its declared group's, or the scope's.
 
     The group categories are created lazily (once per group) and ride
     the resolved dict — ``persist_resolutions`` stores them under
-    ``tree:<scope>:cat:<group>``.
+    ``tree:<scope>:cat:<group>``. A group declared admin-only gates its
+    category (bot allow + @everyone deny + the group's view roles).
     """
     group_name = str(getattr(decl, "group", "") or "")
     if not group_name:
         return category_id
     channel_category = group_categories.get(group_name, "")
     if not channel_category:
-        channel_category = await _ensure_group_category(guild, platform, spec.scope, group_name)
+        channel_category = await _ensure_group_category(
+            guild,
+            platform,
+            spec.scope,
+            group_name,
+            admin_only=bool(getattr(decl, "group_admin_only", False)),
+            view_role_ids=tuple((group_view_roles or {}).get(group_name, ())),
+        )
         group_categories[group_name] = channel_category
         resolved[f"cat:{group_name}"] = channel_category
     return channel_category
@@ -282,14 +291,19 @@ async def _ensure_group_category(
     platform: _Platform,
     scope: str,
     group_name: str,
+    admin_only: bool = False,
+    view_role_ids: tuple[str, ...] = (),
 ) -> str:
     """Resolve (or create) one GROUP category of a scope (the mods' structure).
 
     Stored under ``cat:<group>`` inside the scope — the group's
     channels keep their own resolution keys; a label refresh renames
-    in place, never a duplicate.
+    in place, never a duplicate. A group declared admin-only carries
+    the gate on its category (bot allow + @everyone deny + view roles),
+    exactly like a gated scope category.
     """
     storage_key = f"cat:{group_name}"
+    category_id = ""
     stored = await stored_channel_id(str(guild.id), scope, storage_key)
     if stored and stored.isdigit():
         category = guild.get_channel(int(stored))
@@ -298,11 +312,17 @@ async def _ensure_group_category(
                 await category.edit(
                     name=group_name, reason="botforge: panels provisioning (label refresh)"
                 )
-            return stored
-    for category in guild.categories:
-        if category.name == group_name:
-            return str(category.id)
-    return await platform.ensure_category(group_name)
+            category_id = stored
+    if not category_id:
+        for category in guild.categories:
+            if category.name == group_name:
+                category_id = str(category.id)
+                break
+    if not category_id:
+        category_id = await platform.ensure_category(group_name)
+    if admin_only and category_id:
+        await _apply_category_access(guild, category_id, view_role_ids)
+    return category_id
 
 
 async def _apply_category_access(
@@ -328,6 +348,11 @@ async def _apply_category_access(
                     view_channel=True,
                     send_messages=True,
                     manage_messages=True,
+                    manage_threads=True,
+                    # without manage_channels on the category a private
+                    # folder locks the bot out of creating/purging the
+                    # rooms inside it (the console's blocker, #413)
+                    manage_channels=True,
                     read_message_history=True,
                 ),
                 reason="botforge: the bot operates its own category",
@@ -357,6 +382,20 @@ async def _apply_category_access(
             "panels provisioning: the category gate apply failed — best-effort",
             exc_info=True,
         )
+
+
+def _group_view_role_map(spec: ScopeSpec) -> dict[str, tuple[str, ...]]:
+    """Map each declared group to the union of its channels' view role ids."""
+    out: dict[str, tuple[str, ...]] = {}
+    for decl in spec.channels:
+        gname = str(getattr(decl, "group", "") or "")
+        if gname:
+            out[gname] = tuple(
+                dict.fromkeys(
+                    out.get(gname, ()) + tuple(getattr(decl, "view_role_ids", ()) or ())
+                )
+            )
+    return out
 
 
 async def provision_scope(
@@ -389,6 +428,9 @@ async def provision_scope(
     # category — created lazily, stored under cat:<group>, the channel
     # resolution keys stay tree:<scope>:<key> (the doors keep working)
     group_categories: dict[str, str] = {}
+    # each group's view roles = the union of its channels' resolved view
+    # role ids (the gate on the group's category grants them all)
+    group_view_roles = _group_view_role_map(spec)
     # an empty category_key is the guild root: its channels live uncategorised
     for decl in _sorted_channels(spec):
         name = translate(decl.label_key, locale)
@@ -400,6 +442,7 @@ async def provision_scope(
             category_id,
             group_categories,
             resolved,
+            group_view_roles=group_view_roles,
         )
         try:
             stored = await stored_channel_id(str(guild.id), spec.scope, decl.key)

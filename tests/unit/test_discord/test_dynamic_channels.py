@@ -97,7 +97,8 @@ async def test_the_overwrites_translate_data_into_discord_objects() -> None:
 async def test_a_missing_role_is_skipped_never_fatal() -> None:
     platform, guild, _ = _platform()
     await platform.create_channel("1", "salon", overwrites={"Ghost Role": {"view_channel": True}})
-    assert "overwrites" not in guild.created_text[0], "no resolvable target, no overwrites kwarg"
+    overwrites = guild.created_text[0]["overwrites"]
+    assert list(overwrites) == [guild.me], "only the bot allow survives a fully-missed role list"
 
 
 async def test_kind_voice_provisions_a_voice_channel() -> None:
@@ -105,6 +106,35 @@ async def test_kind_voice_provisions_a_voice_channel() -> None:
     await platform.create_channel("1", "room", kind="voice")
     assert guild.created_voice[0]["name"] == "room"
     assert not guild.created_text
+
+
+async def test_create_channel_always_grants_the_bot_its_own_channel() -> None:
+    """@me is added automatically — above all inside a private parent
+    category: the bot must keep view AND manage_channels on the room
+    it provisions, or the purge fails with 403 (#413)."""
+    platform, guild, _ = _platform()
+    await platform.create_channel(
+        "1", "battle-room", overwrites={"@everyone": {"view_channel": False}}
+    )
+    overwrites = guild.created_text[0]["overwrites"]
+    assert guild.me in overwrites
+    me_overwrite = overwrites[guild.me]
+    assert me_overwrite.view_channel is True
+    assert me_overwrite.manage_channels is True
+    assert me_overwrite.send_messages is True
+    assert me_overwrite.read_message_history is True
+
+
+async def test_an_explicit_bot_overwrite_is_normalized_to_the_full_bot_allow() -> None:
+    """A caller-supplied @me can never lock the bot out: it is normalized
+    to the standard bot allow (view + manage_channels always granted)."""
+    platform, guild, _ = _platform()
+    await platform.create_channel(
+        "1", "room", overwrites={"@me": {"view_channel": False, "manage_channels": False}}
+    )
+    me_overwrite = guild.created_text[0]["overwrites"][guild.me]
+    assert me_overwrite.view_channel is True
+    assert me_overwrite.manage_channels is True
 
 
 async def test_create_channel_raises_when_the_guild_is_unreachable() -> None:

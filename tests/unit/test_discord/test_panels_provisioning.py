@@ -177,10 +177,12 @@ class TestCategoryGate:
         everyone = category.permission_overwrite_for(guild.default_role)
         assert everyone is not None
         assert everyone.view_channel is False
-        # the bot operates its own category
+        # the bot operates its own category — including creating and
+        # purging the rooms inside a private folder (#413)
         me = category.permission_overwrite_for(guild.me)
         assert me is not None
         assert me.view_channel is True
+        assert me.manage_channels is True
 
     @pytest.mark.asyncio
     async def test_an_open_scope_keeps_its_category_public(self) -> None:
@@ -207,6 +209,56 @@ class TestCategoryGate:
         grant = guild.categories[0].permission_overwrite_for(role)
         assert grant is not None
         assert grant.view_channel is True
+
+    @pytest.mark.asyncio
+    async def test_an_admin_only_group_gates_its_own_category(self) -> None:
+        """A channel group declared admin_only gates its category too —
+        not only its channels (the console's blocker, #413)."""
+        from botforge.discord.ui.panels import ChannelDecl, ScopeSpec
+
+        role = MockRole(name="Kingdom Admin")
+        guild = MockGuild()
+        guild._roles[role.id] = role
+        spec = ScopeSpec(
+            scope="mod/test",
+            category_key="Test Home",
+            channels=(
+                ChannelDecl(
+                    key="settings",
+                    label_key="settings",
+                    group="Admin",
+                    group_admin_only=True,
+                    access="admin",
+                    view_role_ids=(str(role.id),),
+                ),
+            ),
+        )
+        await provision_scope(guild, spec, "fr", _translate)
+        admin_cat = next(c for c in guild.categories if c.name == "Admin")
+        everyone = admin_cat.permission_overwrite_for(guild.default_role)
+        assert everyone is not None
+        assert everyone.view_channel is False
+        me = admin_cat.permission_overwrite_for(guild.me)
+        assert me is not None
+        assert me.view_channel is True
+        assert me.manage_channels is True
+        grant = admin_cat.permission_overwrite_for(role)
+        assert grant is not None
+        assert grant.view_channel is True
+
+    @pytest.mark.asyncio
+    async def test_an_open_group_keeps_its_category_public(self) -> None:
+        from botforge.discord.ui.panels import ChannelDecl, ScopeSpec
+
+        guild = MockGuild()
+        spec = ScopeSpec(
+            scope="mod/test",
+            category_key="Test Home",
+            channels=(ChannelDecl(key="general", label_key="general", group="Public"),),
+        )
+        await provision_scope(guild, spec, "fr", _translate)
+        public_cat = next(c for c in guild.categories if c.name == "Public")
+        assert public_cat.permission_overwrite_for(guild.default_role) is None
 
     @pytest.mark.asyncio
     async def test_the_rooms_keep_their_own_bands_under_the_gate(self) -> None:
