@@ -42,11 +42,15 @@ en:
       settings_add_kingdom_button: + Add a kingdom manually
       settings_add_kingdom_done: ✅ Kingdom **{0}** added.
       settings_add_kingdom_failed: ❌ The add failed — {0}
+      settings_add_kingdom_modal_name_label: Kingdom name
       settings_add_kingdom_modal_title: Add a kingdom
       settings_assign_bad_role: ❌ The role must be 'king' or 'lord'.
       settings_assign_button: 📥 Assign a waiting player
       settings_assign_done: ✅ Player assigned to the kingdom.
       settings_assign_failed: ❌ The assignment failed — {0}
+      settings_assign_modal_kingdom_label: Kingdom name
+      settings_assign_modal_player_label: Player ID
+      settings_assign_modal_role_label: Role (king or lord)
       settings_assign_modal_title: 📥 Assign a player
       settings_beta_exited: ✅ Beta phase left — the rules straighten back.
       settings_beta_started: ✅ Beta phase entered — the rules bend.
@@ -66,6 +70,8 @@ en:
       settings_launch_button: ▶️ Launch the season
       settings_launch_done: ✅ Season launched — the imposed kingdoms (if any) are created.
       settings_launch_failed: ❌ The launch failed — {0}
+      settings_launch_modal_names_label: Imposed names (optional)
+      settings_launch_modal_names_placeholder: "Kingdom A, Kingdom B"
       settings_launch_modal_title: ▶️ Launch the season
       settings_mode_free: 'Season mode: **free** — the Kings found their kingdoms.'
       settings_mode_imposed: 'Season mode: **imposed** — the Kings cannot found a kingdom anymore.'
@@ -74,6 +80,8 @@ en:
       settings_remove_button: 🧹 Remove a player/candidate
       settings_remove_done: ✅ Player {0} removed from the season.
       settings_remove_failed: ❌ The removal failed — {0}
+      settings_remove_modal_player_label: Player ID
+      settings_remove_modal_reason_label: Reason
       settings_remove_modal_title: 🧹 Remove a player
       settings_reset_button: ♻️ Reset the salons
       settings_reset_cancel_button: ❌ Cancel
@@ -100,4 +108,4 @@ en:
       settings_sync_confirm_hint: The mod's pinned panels rebuild to the current state.
       settings_sync_confirm_title: Resynchronize the panels?
       settings_sync_done: '✅ Resynchronized: {pins} pinned panels.'
-      settings_title: ⚙️ Kingdoms — settings
+      settings_title: 🛠️ Kingdoms — console

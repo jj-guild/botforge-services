@@ -1,4 +1,4 @@
-"""The ⚙️ Paramètres panel — the admin season cockpit (epic #412 T1).
+"""The 🛠️ admin console — the admin season cockpit (epic #412 T1).
 
 The reference's 12-button settings panel (``kingdom_panels.py`` /
 ``kingdom_persistent.py``, capture image-12), ported onto the platform
@@ -31,12 +31,16 @@ from typing import Any
 
 import discord
 
+from botforge.discord.console import mod_console_view_id
+
 from .common import locale_of, open_unique_ephemeral, surface, wiring
 
 logger = logging.getLogger("kingdom.settings")
 
-CONSOLE_VIEW_KEY = "panel:mod:kingdom:admin:console"
 _MOD = "kingdom"
+# the mod console surface id is OWNED BY THE SDK (auto-declared for every
+# mod by mod_views.declare_mod_views) — this constant is the mod's anchor
+CONSOLE_VIEW_KEY = mod_console_view_id(_MOD)
 _ADMIN_COLOUR = discord.Colour(0x5865F2)
 
 # The designer's 12 actions, verbatim order (capture image-12):
@@ -58,13 +62,40 @@ _SETTINGS_ACTIONS: tuple[tuple[str, str, discord.ButtonStyle], ...] = (
 
 _CONFIRM_ACTIONS = frozenset({"deploy", "sync", "reset"})
 
-_ALL_ACTIONS = tuple(
-    action for action, _key, _style in _SETTINGS_ACTIONS
-) + tuple(
-    f"{action}{suffix}"
-    for action in _CONFIRM_ACTIONS
-    for suffix in ("-yes", "-no")
-)
+_ALL_ACTIONS = tuple(action for action, _key, _style in _SETTINGS_ACTIONS)
+
+
+async def _safe_send(interaction: discord.Interaction, content: str) -> None:
+    """Answer once, whatever the dispatch path (never a 40060)."""
+    try:
+        if not interaction.response.is_done():
+            await interaction.response.send_message(content, ephemeral=True)
+        else:
+            await interaction.followup.send(content, ephemeral=True)
+    except Exception:
+        logger.info("kingdom: console note lost", exc_info=True)
+
+
+async def _safe_followup(interaction: discord.Interaction, content: str) -> None:
+    """Send an ephemeral followup, tolerating a vanished channel.
+
+    The destructive ops (reset) may delete the very salon the console
+    window lives in: the followup webhook then targets an unknown
+    channel (10003) while the action itself SUCCEEDED — a clean warning,
+    never a traceback (same seam as the platform console's safe followup).
+    """
+    try:
+        await interaction.followup.send(content, ephemeral=True)
+    except discord.HTTPException as exc:
+        if getattr(exc, "code", None) == 10003:
+            logger.warning(
+                "kingdom: console verdict undeliverable "
+                "(the channel was deleted by the action itself) — the action succeeded"
+            )
+            return
+        raise
+    except Exception:
+        logger.info("kingdom: console verdict lost", exc_info=True)
 
 def settings_strings(locale: str) -> dict[str, str]:
     """Return the console's strings for one locale — pure data i18n.
@@ -85,7 +116,7 @@ def strings_of(interaction: discord.Interaction) -> dict[str, str]:
 
 
 async def build_settings_panel(guild_id: str) -> discord.ui.LayoutView:
-    """Build the pinned ⚙️ Paramètres panel (the admin cockpit)."""
+    """Build the mod admin console panel (the admin cockpit)."""
     from .apply_flow import _guild_locale
 
     strings = settings_strings(await _guild_locale(guild_id))
@@ -133,28 +164,34 @@ async def _panel_guard(interaction: discord.Interaction) -> bool:
 
 
 def _confirm_card(strings: dict[str, str], action: str) -> discord.ui.LayoutView:
-    """Build the inline confirm card of a destructive op (one ephemeral window)."""
+    """Build the inline confirm card of a destructive op (one ephemeral window).
+
+    The yes/no buttons carry their OWN custom-id namespace
+    (``kingdom:confirm:<action>:<choice>``) — never the settings actions'
+    ``kingdom:settings:`` template: discord.py 2.7 dispatches a click to
+    every registered dynamic template that fullmatches the id AND to the
+    message's stored view, so a colliding id fires the handler twice (the
+    second response dies with 40060 "already acknowledged").
+    """
     yes: discord.ui.Button[Any] = discord.ui.Button(
         label=str(strings[f"settings_{action}_confirm_button"])[:80],
-        custom_id=f"kingdom:settings:{action}-yes",
+        custom_id=f"kingdom:confirm:{action}:yes",
         style=discord.ButtonStyle.danger,
     )
     no: discord.ui.Button[Any] = discord.ui.Button(
         label=str(strings[f"settings_{action}_cancel_button"])[:80],
-        custom_id=f"kingdom:settings:{action}-no",
+        custom_id=f"kingdom:confirm:{action}:no",
         style=discord.ButtonStyle.secondary,
     )
 
     async def on_yes(target: discord.Interaction) -> None:
-        await target.response.defer()
+        if not target.response.is_done():
+            await target.response.defer(ephemeral=True)
         note = await _run_provisioning(target, action)
-        try:
-            await target.followup.send(note, ephemeral=True)
-        except Exception:  # a vanished window is fine — log it and move on
-            logger.info("kingdom: settings confirm note lost", exc_info=True)
+        await _safe_followup(target, note)
 
     async def on_no(target: discord.Interaction) -> None:
-        await open_unique_ephemeral(target, strings["settings_cancelled"])
+        await _safe_send(target, strings["settings_cancelled"])
 
     yes.callback = on_yes
     no.callback = on_no
@@ -211,7 +248,7 @@ class SettingsActionButton(
     discord.ui.DynamicItem[discord.ui.Button[Any]],
     template=r"kingdom:settings:(?P<action>[a-z0-9-]+)",
 ):
-    """One restart-proof admin action of the ⚙️ Paramètres panel."""
+    """One restart-proof admin action of the 🛠️ console."""
 
     def __init__(
         self, action: str, label: str, style: discord.ButtonStyle | None = None
@@ -239,26 +276,15 @@ class SettingsActionButton(
         styles: dict[str, discord.ButtonStyle] = {
             action: style for action, _key, style in _SETTINGS_ACTIONS
         }
-        style = styles.get(_base(action), discord.ButtonStyle.secondary)
-        if action.endswith("-yes"):
-            style = discord.ButtonStyle.danger
-        elif action.endswith("-no"):
-            style = discord.ButtonStyle.secondary
-        if action.endswith("-yes"):
-            label = strings.get(f"settings_{_base(action)}_confirm_button", "✅")
-        elif action.endswith("-no"):
-            label = strings.get(f"settings_{_base(action)}_cancel_button", "❌")
-        else:
-            label = strings.get(f"settings_{action}_button", "⚙️")
+        style = styles.get(action, discord.ButtonStyle.secondary)
+        label = strings.get(f"settings_{action}_button", "⚙️")
         return cls(action, str(label), style)
 
     async def callback(self, interaction: discord.Interaction) -> None:
         """Run the chosen admin action (guarded, ephemeral, best-effort)."""
         strings = strings_of(interaction)
         if self.action not in _ALL_ACTIONS:
-            await interaction.response.send_message(
-                strings["settings_denied"], ephemeral=True
-            )
+            await _safe_send(interaction, strings["settings_denied"])
             return
         if not await _panel_guard(interaction):
             return
@@ -267,26 +293,12 @@ class SettingsActionButton(
                 interaction, view=_confirm_card(strings, self.action)
             )
             return
-        if self.action.endswith("-no"):
-            await open_unique_ephemeral(interaction, strings["settings_cancelled"])
-            return
-        if self.action.endswith("-yes"):
-            await interaction.response.defer(ephemeral=True)
-            await interaction.followup.send(
-                await _run_provisioning(interaction, _base(self.action)), ephemeral=True
-            )
-            return
         await _SETTINGS_HANDLERS[self.action](interaction, strings)
 
 
 # ---------------------------------------------------------------------------
 # The season actions (§7 contract only — never the mod's internals)
 # ---------------------------------------------------------------------------
-
-
-def _base(action: str) -> str:
-    """Return the confirm card's base action (« deploy-yes » → « deploy »)."""
-    return re.sub(r"-(yes|no)$", "", action)
 
 
 def _needs_stack(strings: dict[str, str]) -> tuple[Any | None, str | None]:
@@ -430,8 +442,8 @@ class _LaunchModal(discord.ui.Modal):
     """Lancer la saison — optional comma-separated imposed kingdom names."""
 
     names = discord.ui.TextInput(
-        label="Noms imposés (optionnel, séparés par des virgules)",
-        placeholder="Royaume A, Royaume B",
+        label="Imposed names (optional)",
+        placeholder="Kingdom A, Kingdom B",
         required=False,
         max_length=200,
     )
@@ -439,6 +451,10 @@ class _LaunchModal(discord.ui.Modal):
     def __init__(self, strings: dict[str, str]) -> None:
         super().__init__(title=str(strings["settings_launch_modal_title"])[:45])
         self._strings = strings
+        # TextInput labels cap at 45 chars (Discord 50035) — the label and
+        # placeholder ride the i18n catalog, clamped here
+        self.names.label = str(strings["settings_launch_modal_names_label"])[:45]
+        self.names.placeholder = str(strings["settings_launch_modal_names_placeholder"])[:100]
 
     async def on_submit(self, interaction: discord.Interaction) -> None:
         await interaction.response.defer(ephemeral=True)
@@ -462,15 +478,18 @@ class _LaunchModal(discord.ui.Modal):
 class _AssignModal(discord.ui.Modal):
     """Affecter un joueur en attente — id, royaume, rôle."""
 
-    player_id = discord.ui.TextInput(label="ID du joueur", required=True, max_length=32)
-    kingdom = discord.ui.TextInput(label="Nom du royaume", required=True, max_length=64)
+    player_id = discord.ui.TextInput(label="Player ID", required=True, max_length=32)
+    kingdom = discord.ui.TextInput(label="Kingdom name", required=True, max_length=64)
     role = discord.ui.TextInput(
-        label="Rôle (king ou lord)", placeholder="king", required=True, max_length=8
+        label="Role (king or lord)", placeholder="king", required=True, max_length=8
     )
 
     def __init__(self, strings: dict[str, str]) -> None:
         super().__init__(title=str(strings["settings_assign_modal_title"])[:45])
         self._strings = strings
+        self.player_id.label = str(strings["settings_assign_modal_player_label"])[:45]
+        self.kingdom.label = str(strings["settings_assign_modal_kingdom_label"])[:45]
+        self.role.label = str(strings["settings_assign_modal_role_label"])[:45]
 
     async def on_submit(self, interaction: discord.Interaction) -> None:
         await interaction.response.defer(ephemeral=True)
@@ -502,11 +521,12 @@ class _AssignModal(discord.ui.Modal):
 class _AddKingdomModal(discord.ui.Modal):
     """Ajouter un royaume manuellement."""
 
-    name = discord.ui.TextInput(label="Nom du royaume", required=True, max_length=64)
+    name = discord.ui.TextInput(label="Kingdom name", required=True, max_length=64)
 
     def __init__(self, strings: dict[str, str]) -> None:
         super().__init__(title=str(strings["settings_add_kingdom_modal_title"])[:45])
         self._strings = strings
+        self.name.label = str(strings["settings_add_kingdom_modal_name_label"])[:45]
 
     async def on_submit(self, interaction: discord.Interaction) -> None:
         await interaction.response.defer(ephemeral=True)
@@ -529,14 +549,16 @@ class _AddKingdomModal(discord.ui.Modal):
 class _RemoveModal(discord.ui.Modal):
     """Retirer un joueur/candidat — id + motif."""
 
-    player_id = discord.ui.TextInput(label="ID du joueur", required=True, max_length=32)
+    player_id = discord.ui.TextInput(label="Player ID", required=True, max_length=32)
     reason = discord.ui.TextInput(
-        label="Motif", placeholder="ss", required=False, max_length=200
+        label="Reason", placeholder="ss", required=False, max_length=200
     )
 
     def __init__(self, strings: dict[str, str]) -> None:
         super().__init__(title=str(strings["settings_remove_modal_title"])[:45])
         self._strings = strings
+        self.player_id.label = str(strings["settings_remove_modal_player_label"])[:45]
+        self.reason.label = str(strings["settings_remove_modal_reason_label"])[:45]
 
     async def on_submit(self, interaction: discord.Interaction) -> None:
         await interaction.response.defer(ephemeral=True)

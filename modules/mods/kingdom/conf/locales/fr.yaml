@@ -42,11 +42,15 @@ fr:
       settings_add_kingdom_button: + Ajouter un royaume manuellement
       settings_add_kingdom_done: ✅ Royaume **{0}** ajouté.
       settings_add_kingdom_failed: ❌ L'ajout a échoué — {0}
+      settings_add_kingdom_modal_name_label: Nom du royaume
       settings_add_kingdom_modal_title: Ajouter un royaume
       settings_assign_bad_role: ❌ Le rôle doit être « king » ou « lord ».
       settings_assign_button: 📥 Affecter un joueur en attente
       settings_assign_done: ✅ Joueur affecté au royaume.
       settings_assign_failed: ❌ L'affectation a échoué — {0}
+      settings_assign_modal_kingdom_label: Nom du royaume
+      settings_assign_modal_player_label: ID du joueur
+      settings_assign_modal_role_label: Rôle (king ou lord)
       settings_assign_modal_title: 📥 Affecter un joueur
       settings_beta_exited: ✅ Phase bêta quittée — les règles se redressent.
       settings_beta_started: ✅ Phase bêta activée — les règles se plient.
@@ -66,6 +70,8 @@ fr:
       settings_launch_button: ▶️ Lancer la saison
       settings_launch_done: ✅ Saison lancée — les royaumes imposés (le cas échéant) sont créés.
       settings_launch_failed: ❌ Le lancement a échoué — {0}
+      settings_launch_modal_names_label: Noms imposés (optionnel)
+      settings_launch_modal_names_placeholder: "Royaume A, Royaume B"
       settings_launch_modal_title: ▶️ Lancer la saison
       settings_mode_free: 'Mode de saison : **libre** — les Rois peuvent fonder leurs royaumes.'
       settings_mode_imposed: 'Mode de saison : **imposé** — les Rois ne peuvent plus fonder de royaume.'
@@ -74,6 +80,8 @@ fr:
       settings_remove_button: 🧹 Retirer un joueur/candidat
       settings_remove_done: ✅ Joueur {0} retiré de la saison.
       settings_remove_failed: ❌ Le retrait a échoué — {0}
+      settings_remove_modal_player_label: ID du joueur
+      settings_remove_modal_reason_label: Motif
       settings_remove_modal_title: 🧹 Retirer un joueur
       settings_reset_button: ♻️ Réinitialiser les salons
       settings_reset_cancel_button: ❌ Annuler
@@ -100,4 +108,4 @@ fr:
       settings_sync_confirm_hint: Les panels épinglés du mod se reconstruisent à l'état courant.
       settings_sync_confirm_title: Resynchroniser les panels ?
       settings_sync_done: '✅ Resynchronisé : {pins} panels épinglés.'
-      settings_title: ⚙️ Kingdoms — paramètres
+      settings_title: 🛠️ Kingdoms — console

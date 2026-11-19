@@ -48,20 +48,43 @@ def test_settings_panel_is_one_template_of_twelve_actions() -> None:
     )
 
 
-def test_settings_buttons_custom_ids_restart_proof() -> None:
-    """The confirm card rides the same template (yes/no suffixes)."""
-    from botforge.mods.kingdom.cogs.settings_panel import SettingsActionButton
+def test_confirm_card_uses_its_own_custom_id_namespace() -> None:
+    """The confirm card's yes/no ids never match the actions' template.
 
-    assert (
-        SettingsActionButton("reset-yes", "x").custom_id == "kingdom:settings:reset-yes"
+    discord.py 2.7 dispatches a click to EVERY registered dynamic
+    template that fullmatches the id AND to the message's stored view:
+    a ``kingdom:settings:reset-yes`` id would fire BOTH handlers (the
+    second response dies with 40060) — the confirm card rides
+    ``kingdom:confirm:<action>:<choice>`` instead.
+    """
+    import re
+
+    from botforge.mods.kingdom.cogs.settings_panel import (
+        SettingsActionButton,
+        _confirm_card,
+        settings_strings,
     )
-    assert (
-        SettingsActionButton("deploy-no", "x").custom_id == "kingdom:settings:deploy-no"
+
+    card = _confirm_card(settings_strings("fr"), "reset")
+    ids = [
+        str(item.custom_id)
+        for item in card.walk_children()
+        if getattr(item, "custom_id", None)
+    ]
+    assert sorted(ids) == ["kingdom:confirm:reset:no", "kingdom:confirm:reset:yes"]
+    template = re.compile(SettingsActionButton.__discord_ui_compiled_template__.pattern)
+    assert not any(template.fullmatch(i) for i in ids), (
+        "the confirm ids must NOT fullmatch the settings actions' template"
     )
 
 
 def test_settings_actions_declared_in_views_yaml() -> None:
-    """The panel template + its confirm card are declared surfaces."""
+    """The confirm card is declared by the mod; the console surface by the SDK.
+
+    ``panel:mod:kingdom:admin:console`` is auto-declared for every mod by
+    ``mod_views.declare_mod_views`` — the mod's views.yaml only carries
+    its own extras (the inline confirm card).
+    """
     from pathlib import Path
 
     views = (
@@ -69,8 +92,10 @@ def test_settings_actions_declared_in_views_yaml() -> None:
         / "conf"
         / "views.yaml"
     ).read_text(encoding="utf-8")
-    assert "panel:mod:kingdom:admin:console:" in views
     assert "panel:mod:kingdom:admin:console:confirm:" in views
+    assert "panel:mod:kingdom:admin:console:" not in views.replace(
+        "panel:mod:kingdom:admin:console:confirm:", ""
+    ), "the console surface itself belongs to the SDK, not the mod's yaml"
 
 
 def test_settings_strings_parity() -> None:
@@ -88,7 +113,29 @@ def test_settings_strings_parity() -> None:
         "settings_reset_done",
         "settings_mode_imposed",
         "settings_mode_free",
+        # the modals' TextInput labels (Discord caps them at 45 chars)
+        "settings_launch_modal_names_label",
+        "settings_launch_modal_names_placeholder",
+        "settings_assign_modal_player_label",
+        "settings_assign_modal_kingdom_label",
+        "settings_assign_modal_role_label",
+        "settings_add_kingdom_modal_name_label",
+        "settings_remove_modal_player_label",
+        "settings_remove_modal_reason_label",
     ]
+    for locale in ("fr", "en"):
+        for key in (
+            "settings_launch_modal_names_label",
+            "settings_assign_modal_player_label",
+            "settings_assign_modal_kingdom_label",
+            "settings_assign_modal_role_label",
+            "settings_add_kingdom_modal_name_label",
+            "settings_remove_modal_player_label",
+            "settings_remove_modal_reason_label",
+        ):
+            assert len(str(settings_strings(locale)[key])) <= 45, (
+                f"{key} exceeds Discord's 45-char TextInput label cap in {locale}"
+            )
     for locale in ("fr", "en"):
         s = settings_strings(locale)
         for key in keys:
