@@ -186,6 +186,49 @@ def active_lords_day_window(
 
 
 
+def next_cron_slot(
+    config: KingdomSeasonConfig, cron: str, now: datetime
+) -> datetime | None:
+    """The next occurrence of a weekly cron after ``now`` (machine-temps-v3).
+
+    The time machine's info lines read the SAME schedule the replays
+    run on (``cron_slots_between``) — never a re-derived copy: the
+    panel's « prochain cycle » always matches what ``run_due`` will do.
+    """
+    if now.tzinfo is None:
+        now = now.replace(tzinfo=UTC)
+    slots = cron_slots_between(cron, now, now + timedelta(days=8), _schedule_timezone(config))
+    return slots[0] if slots else None
+
+
+def verdict_slot(
+    config: KingdomSeasonConfig, season: SeasonState, now: datetime
+) -> datetime | None:
+    """The season's verdict instant (the last cycle slot + 29 minutes).
+
+    The END slot is the season's ``weeks``-th cycle slot (Drasah's
+    endcycle rule): no Lord's Day window, the verdict applies at 23:59
+    (the slot plus 29 minutes). None when the verdict's slot already
+    sits in the past (applied or replaying right now).
+    """
+    tz = _schedule_timezone(config)
+    start = season.started_at if season.started_at.tzinfo else season.started_at.replace(tzinfo=UTC)
+    if now.tzinfo is None:
+        now = now.replace(tzinfo=UTC)
+    slots = cron_slots_between(config.events.cycle_cron, start, now, tz)
+    consumed = len(slots)
+    if consumed >= config.weeks:
+        return None
+    upcoming = cron_slots_between(
+        config.events.cycle_cron, slots[-1] if slots else start, start + timedelta(weeks=config.weeks + 2), tz
+    )
+    remaining = upcoming[: config.weeks - consumed]
+    if not remaining:
+        return None
+    end = remaining[-1]
+    return end + timedelta(minutes=29)
+
+
 # ---------------------------------------------------------------------------
 # The orchestrator (P4.2 port: the cycle/age/end switches + the FFA rewards)
 # ---------------------------------------------------------------------------
@@ -424,6 +467,16 @@ class EventService:
         season.lords_day_forced_end = None
         await self._store.upsert_season(season.to_mongo())
         logger.info("kingdom: manual Lord's Day phase closed")
+
+    async def end_season(self) -> dict[str, object]:
+        """Apply the season-end verdict NOW (machine-temps-v3, admin seam).
+
+        The time machine's « Fin de saison » button lands here: the
+        public wrapper of the END slot's own closing pass (cancel the
+        ongoing attacks, count the territories, crown the winner,
+        phase ``ended``) — never a re-implementation.
+        """
+        return dict(await self._apply_season_end())
 
     # ------------------------------------------------------------------
     # Exploration (§17, D29/D30/D44)

@@ -294,6 +294,116 @@ class KingdomService:
         logger.info("kingdom: season %s clock offset set to %ss", season.id, value)
         return season
 
+    async def set_frozen(self, frozen: bool) -> SeasonState:
+        """Pause or resume the game clock (machine-temps-v3, 19/11).
+
+        The time machine's Pause/Reprendre lands here: a frozen season
+        replays NO weekly slot (the scheduler skips it), while the
+        manual jumps keep working — Drasah keeps testing while paused.
+        A snapshot RESTORE sets it automatically (a rewind must not be
+        instantly re-advanced by the real clock).
+        """
+        season = await self._require_season()
+        season.frozen = bool(frozen)
+        await self._store.upsert_season(season.to_mongo())
+        logger.info("kingdom: season %s frozen=%s", season.id, bool(frozen))
+        return season
+
+    async def snapshot(self, label: str = "manual") -> str:
+        """Photograph the whole current season data (machine-temps-v3).
+
+        The snapshot lives in the SAME ``kingdoms_season_archives``
+        collection as the pre-wipe archives, under a ``snapshot-``
+        prefixed id (the rewind targets); restore_snapshot replays it
+        verbatim. The camera accepts an empty data set (a setup-phase
+        season is a photographable state).
+        """
+        timestamp = game_now()
+        seasons = await self._find_all("find_seasons")
+        current = await self.current_season()
+        archive: dict[str, Any] = {
+            "_id": f"snapshot-{label}-{timestamp:%Y%m%d-%H%M%S}",
+            "archived_at": timestamp,
+            "season_id": current.id if current is not None else "none",
+            "seasons": seasons,
+            "kingdoms": await self._find_all("find_kingdoms"),
+            "lords": await self._find_all("find_lords"),
+            "territories": await self._find_all("find_territories"),
+            "technologies": await self._find_all("find_technologies"),
+            "attacks": await self._find_all("find_attacks"),
+            "showmatches": await self._find_all("find_showmatches"),
+            "ffas": await self._find_all("find_ffas"),
+            "plans": await self._find_all("find_plans"),
+        }
+        await self._store.upsert_season_archive(archive)
+        logger.info("kingdom: snapshot %s taken", archive["_id"])
+        return str(archive["_id"])
+
+    async def snapshots(self) -> list[dict[str, Any]]:
+        """Return the rewind targets (snapshot-prefixed archives, latest first)."""
+        return sorted(
+            (
+                doc
+                for doc in await self.season_archives()
+                if str(doc.get("_id", "")).startswith("snapshot-")
+            ),
+            key=lambda doc: str(doc.get("archived_at", "")),
+            reverse=True,
+        )
+
+    async def restore_snapshot(self, snapshot_id: str) -> None:
+        """Rewind the whole data set to one snapshot (machine-temps-v3).
+
+        The current data is archived first (the rewind is itself
+        photographed — the operator can undo his undo), then wiped and
+        rewritten from the snapshot verbatim. The season comes back
+        FROZEN (a rewind must not be instantly re-advanced) and the
+        process game-clock offset re-syncs from the restored season.
+        """
+        target = next(
+            (
+                doc
+                for doc in await self.season_archives()
+                if str(doc.get("_id", "")) == str(snapshot_id)
+            ),
+            None,
+        )
+        if target is None:
+            raise NoSeasonError(f"the snapshot {snapshot_id!r} does not exist")
+        await self._archive_current_data()
+        await self._store.wipe_season_data()
+        upserters = {
+            "seasons": "upsert_season",
+            "kingdoms": "upsert_kingdom",
+            "lords": "upsert_lord",
+            "territories": "upsert_territory",
+            "technologies": "upsert_technology",
+            "attacks": "upsert_attack",
+            "showmatches": "upsert_showmatch",
+            "ffas": "upsert_ffa",
+            "plans": "upsert_plan",
+        }
+        restored = 0
+        for section, upserter in upserters.items():
+            method = getattr(self._store, upserter, None)
+            if method is None:
+                continue
+            for document in target.get(section) or ():
+                await method(dict(document))
+                restored += 1
+        restored_season = await self.current_season()
+        if restored_season is not None:
+            restored_season.frozen = True
+            await self._store.upsert_season(restored_season.to_mongo())
+            from .game_clock import set_game_offset
+
+            set_game_offset(int(getattr(restored_season, "clock_offset", 0) or 0))
+        logger.info(
+            "kingdom: snapshot %s restored (%s documents) — the season is frozen",
+            snapshot_id,
+            restored,
+        )
+
     async def save_kingdom(self, kingdom: KingdomModel) -> KingdomModel:
         """Persist one kingdom document (conseil-objectif-v1 surface seam).
 
