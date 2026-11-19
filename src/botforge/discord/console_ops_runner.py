@@ -113,15 +113,32 @@ async def apply_install_for_guild(
     if removed:
         lines.append(f"Uninstalled mods cleaned (channels + roles): {sorted(removed)}.")
 
+    # The provision rides the SAME machinery as the console modal and the
+    # repair button (provision_mod_roles then provision_mod_channels): the
+    # mod's own folder (category), its convention channels (général, admin,
+    # the seasonal panels) and its declared channels — never the legacy
+    # ChannelService path, which created the declared channels at the guild
+    # ROOT with no folder (the merlin hierarchy bug of 2026-11-19).
+    from botforge.discord.locales import guild_locale
+    from botforge.discord.mods_forum import provision_mod_channels, provision_mod_roles
+
+    seam = _ProvisioningSeam(
+        _client_of(guild),
+        registry=registry,
+        mod_roles_service=mod_roles_service,
+        locale=guild_locale(guild),
+    )
     provisioned = 0
     for mod_name in mods:
         try:
-            await channel_service.setup_mod_channels(guild_id, mod_name)
-            await mod_roles_service.setup_mod_roles(guild_id, mod_name)
+            await provision_mod_roles(seam, guild_id, mod_name)
+            ensured = await provision_mod_channels(seam, guild_id, mod_name)
+            if ensured:
+                lines.append(f"{mod_name}: {ensured} channel(s) provisioned in its folder.")
             provisioned += 1
         except Exception:
             logger.warning("CONSOLE OPS provisioning failed (%s)", mod_name, exc_info=True)
-    lines.append(f"{provisioned} mod(s) provisioned.")
+    lines.append(f"{provisioned} mod(s) provisioned (roles + folder + channels).")
     return "\n".join(lines)
 
 
@@ -199,6 +216,47 @@ def _tree_translate(key: str, locale: str) -> str:
 def _client_of(guild: discord.Guild) -> discord.Client:
     """Recover the client from a guild object (discord.py state seam)."""
     return guild._state._get_client()
+
+
+class _ProvisioningSeam:
+    """The headless stand-in for the wired bot object (the provision path).
+
+    ``provision_mod_roles``/``provision_mod_channels`` read their
+    dependencies off the BOT (registry, mod_roles_service, the message
+    catalog, the logs seam for the locale) and recover the guild via
+    ``bot.get_guild`` — a bare console client carries none of the four.
+    Every other attribute delegates to the real client.
+    """
+
+    def __init__(
+        self,
+        client: discord.Client,
+        registry: Any,
+        mod_roles_service: Any,
+        locale: str,
+    ) -> None:
+        from botforge.core.services.i18n import MessageCatalog
+
+        self._client = client
+        self.registry = registry
+        self.mod_roles_service = mod_roles_service
+        self.messages = MessageCatalog(CONFIG_DIR)
+        logs_service = self._LocaleOnly(locale)
+        # mypy: the attribute shapes match the bot's (dynamic wiring)
+        self.logs_service = logs_service  # type: ignore[attr-defined]
+
+    class _LocaleOnly:
+        """A locale-only logs seam: the guild's language is already resolved."""
+
+        def __init__(self, locale: str) -> None:
+            self._locale = locale
+
+        async def get_locale(self, guild_id: str) -> str:
+            del guild_id  # resolved at the seam's construction — fail-safe
+            return self._locale
+
+    def __getattr__(self, item: str) -> Any:
+        return getattr(self._client, item)
 
 
 def _all_games() -> tuple[str, ...]:
