@@ -176,7 +176,7 @@ async def room_body_text(stack: Any, attack: Any, strings: dict[str, str]) -> st
         body += "\n" + strings["room_ai_disclaimer"].format(level=level)
     if score.get("all_ready"):
         body += "\n" + strings["room_scoreboard_footer"]
-    body += "\n" + surface_footer("surface:mod:kingdom:battle:room")
+    body += "\n" + surface_footer("panel:mod:kingdom:battle:room")
     return body
 
 
@@ -1308,7 +1308,7 @@ class DraftViewButton(
             return
         embed = await draft_sheet_embed(stack, attack, strings)
         await open_unique_ephemeral(
-            interaction, surface_footer("surface:mod:kingdom:battle:draft"), embed=embed
+            interaction, surface_footer("panel:mod:kingdom:battle:draft"), embed=embed
         )
 
 

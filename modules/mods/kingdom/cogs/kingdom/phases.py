@@ -828,7 +828,7 @@ async def run_ffa_tick_safe(bot: Any) -> None:
                 from .common import surface as _surface
 
                 view = _surface(
-                    "surface:mod:kingdom:ffa:salon",
+                    "panel:mod:kingdom:ffa:salon",
                     discord.ui.ActionRow(FFAJoinButton(strings["ffa_join_button"])),
                 )
                 await channel.send(text, view=view)

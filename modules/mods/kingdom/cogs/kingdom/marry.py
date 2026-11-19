@@ -164,7 +164,7 @@ async def _wizard_view(
     from .common import surface
 
     return surface(
-        "surface:mod:kingdom:church:marry",
+        "panel:mod:kingdom:church:marry",
         discord.ui.TextDisplay(header),
         discord.ui.TextDisplay(rules),
         discord.ui.ActionRow(select),
@@ -240,7 +240,7 @@ def _confirm_view(
     from .common import surface
 
     return surface(
-        "surface:mod:kingdom:church:confirm",
+        "panel:mod:kingdom:church:confirm",
         discord.ui.TextDisplay(body),
         discord.ui.ActionRow(yes, edit),
     )

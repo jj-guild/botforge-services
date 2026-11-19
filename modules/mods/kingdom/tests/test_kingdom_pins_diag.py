@@ -100,20 +100,20 @@ def test_the_report_skips_foreign_scopes(monkeypatch) -> None:
     _patch_registry(
         monkeypatch,
         [
-            _spec("view:mod:kingdom:home"),
-            _spec("view:mod:other:home", scope="mod/other"),
+            _spec("panel:mod:kingdom:home"),
+            _spec("panel:mod:other:home", scope="mod/other"),
             _spec("view:home", scope=""),
         ],
     )
     client = _Client(guild=None)
     out = asyncio.run(diag.pins_report(client, _GUILD_ID))
-    assert [key for key, _status in out] == ["view:mod:kingdom:home"]
+    assert [key for key, _status in out] == ["panel:mod:kingdom:home"]
 
 
 def test_the_report_rejects_non_numeric_guild_ids(monkeypatch) -> None:
     """A garbage guild id degrades to an empty report, never a raise."""
     diag = _diag()
-    _patch_registry(monkeypatch, [_spec("view:mod:kingdom:home")])
+    _patch_registry(monkeypatch, [_spec("panel:mod:kingdom:home")])
     assert asyncio.run(diag.pins_report(_Client(guild=None), "")) == []
     assert asyncio.run(diag.pins_report(_Client(guild=None), "abc")) == []
 
@@ -183,14 +183,14 @@ def test_the_report_distinguishes_pinned_from_unpinned(monkeypatch) -> None:
         monkeypatch,
         [
             _spec("panel:mod:kingdom:admin:console"),
-            _spec("view:mod:kingdom:apply", message_id="888"),
+            _spec("panel:mod:kingdom:apply", message_id="888"),
         ],
     )
     client = _Client(guild=_Guild(channel=_Channel(pinned=False)))
     out = dict(asyncio.run(diag.pins_report(client, _GUILD_ID)))
     assert out == {
         "panel:mod:kingdom:admin:console": f"épinglé dans <#{_CHANNEL_ID}>",
-        "view:mod:kingdom:apply": f"présent dans <#{_CHANNEL_ID}> mais NON épinglé (999)",
+        "panel:mod:kingdom:apply": f"présent dans <#{_CHANNEL_ID}> mais NON épinglé (999)",
     }
 
 

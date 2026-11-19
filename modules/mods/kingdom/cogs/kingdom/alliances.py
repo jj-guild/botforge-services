@@ -124,5 +124,5 @@ class AlliancesButton(
             interaction,
             alliances_text(strings, kingdom, projection, names)
             + "\n"
-            + surface_footer("surface:mod:kingdom:alliances"),
+            + surface_footer("panel:mod:kingdom:alliances"),
         )

@@ -57,7 +57,7 @@ from .tavern import MercenaryButton, TavernButton
 
 logger = logging.getLogger("kingdom.attack.panel")
 
-PANEL_VIEW_KEY = "view:mod:kingdom:attack"
+PANEL_VIEW_KEY = "panel:mod:kingdom:attack"
 
 # The 12 Drasah cadastre tags (cadastre-diplomatie-v1, 15/10).
 _MAP_TAG_KEYS: tuple[tuple[str, str], ...] = (
@@ -115,7 +115,7 @@ async def build_attack_panel(guild_id: str) -> discord.ui.LayoutView:
             accent_colour=discord.Colour(0xA72D2D),
         )
     )
-    return surface("view:mod:kingdom:attack", container)
+    return surface("panel:mod:kingdom:attack", container)
 
 
 _PANEL_BOT: Any = None
@@ -264,7 +264,7 @@ class HistoryButton(
                     "",
                     strings["history_page"].format(page=1, pages=len(pages)),
                     "",
-                    surface_footer("surface:mod:kingdom:attack:history"),
+                    surface_footer("panel:mod:kingdom:attack:history"),
                 )
             ),
             view=_history_page_view(strings, pages, 0),
@@ -345,7 +345,7 @@ def _history_page_view(
                     "",
                     strings["history_page"].format(page=target_page + 1, pages=len(pages)),
                     "",
-                    surface_footer("surface:mod:kingdom:attack:history"),
+                    surface_footer("panel:mod:kingdom:attack:history"),
                 )
             ),
             view=_history_page_view(strings, pages, target_page),
@@ -494,7 +494,7 @@ async def _kingdom_select_view(
     if protected:
         lines.append(str(strings["protected_line"]).format(kingdoms=" · ".join(protected)))
     lines.append(str(strings["traquenard_hint"]))
-    lines.append(surface_footer("surface:mod:kingdom:attack:declare"))
+    lines.append(surface_footer("panel:mod:kingdom:attack:declare"))
     return "\n".join(lines), view
 
 
@@ -581,7 +581,7 @@ async def _territory_select_view(
     if delay_minutes:
         lines.append(str(strings["itinerary_line"]).format(minutes=delay_minutes))
     lines.append(str(strings["traquenard_hint"]))
-    lines.append(surface_footer("surface:mod:kingdom:attack:declare"))
+    lines.append(surface_footer("panel:mod:kingdom:attack:declare"))
     return "\n".join(lines), view
 
 
@@ -644,7 +644,7 @@ async def _attack_mode_select_view(
     view.add_item(classic)
     view.add_item(embuscade)
     lines = [str(strings["mode_choose"]), str(strings["traquenard_hint"])]
-    lines.append(surface_footer("surface:mod:kingdom:attack:declare"))
+    lines.append(surface_footer("panel:mod:kingdom:attack:declare"))
     return "\n".join(lines), view
 
 
@@ -815,7 +815,7 @@ async def _open_cover_step(
         cover_view = discord.ui.View(timeout=600)
         cover_view.add_item(select)
         cover_content = "\n".join(
-            (str(strings["choose_cover"]), surface_footer("surface:mod:kingdom:attack:declare"))
+            (str(strings["choose_cover"]), surface_footer("panel:mod:kingdom:attack:declare"))
         )
         await target.response.edit_message(content=cover_content, view=cover_view)
 
@@ -838,7 +838,7 @@ async def _open_cover_step(
     view.add_item(no)
     await interaction.response.send_message(
         content="\n".join(
-            (str(strings["cover_question"]), surface_footer("surface:mod:kingdom:attack:declare"))
+            (str(strings["cover_question"]), surface_footer("panel:mod:kingdom:attack:declare"))
         ),
         view=view,
         ephemeral=True,
@@ -903,7 +903,7 @@ async def _open_attack_salon_safe(
     if getattr(attack, "kind", None) is AttackKind.GAIA:
         gaia_max = int(getattr(stack.attacks, "gaia_max_participants", 7) or 7)
         content += str(strings["announce_v1_gaia"]).format(max=gaia_max)
-    content += "\n" + surface_footer("surface:mod:kingdom:attack:salon")
+    content += "\n" + surface_footer("panel:mod:kingdom:attack:salon")
     try:
         message = await channel.send(content, view=_attack_salon_view(strings, attack))
         await _record_safe(stack, "record_attack_base_message", attack, int(message.id))

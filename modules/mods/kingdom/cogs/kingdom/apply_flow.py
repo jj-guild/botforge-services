@@ -31,9 +31,9 @@ from .common import mod_catalog, open_unique_ephemeral, surface, wiring
 
 logger = logging.getLogger("kingdom.apply")
 
-APPLY_VIEW_KEY = "view:mod:kingdom:apply"
-REGISTER_VIEW_KEY = "view:mod:kingdom:register"
-APPLY_WINDOW_KEY = "surface:mod:kingdom:apply"
+APPLY_VIEW_KEY = "panel:mod:kingdom:apply"
+REGISTER_VIEW_KEY = "panel:mod:kingdom:register"
+APPLY_WINDOW_KEY = "panel:mod:kingdom:apply"
 
 _NS = "kingdom:apply"
 

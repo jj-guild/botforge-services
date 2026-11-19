@@ -126,7 +126,7 @@ def _market_view(stack: Any, wallet: int, strings: dict[str, str], kingdom_id: s
     from .common import surface
 
     return surface(
-        "surface:mod:kingdom:market",
+        "panel:mod:kingdom:market",
         discord.ui.TextDisplay(f"## {strings['market_title']}\n{strings['market_rules']}"),
         discord.ui.TextDisplay(str(strings["market_wallet"]).format(wallet)),
         discord.ui.ActionRow(select),
@@ -181,7 +181,7 @@ async def _confirm_purchase(
     from .common import surface
 
     view = surface(
-        "surface:mod:kingdom:card",
+        "panel:mod:kingdom:card",
         discord.ui.TextDisplay(body),
         discord.ui.ActionRow(yes),
     )
@@ -346,7 +346,7 @@ async def _wizard_edit(
     select.callback = on_pick  # type: ignore[method-assign, assignment]
     from .common import surface
 
-    view = surface("surface:mod:kingdom:card", discord.ui.ActionRow(select))
+    view = surface("panel:mod:kingdom:card", discord.ui.ActionRow(select))
     await interaction.response.edit_message(content=None, view=view)
 
 
@@ -492,5 +492,5 @@ class ChamberButton(
             row.append(button)
         if row:
             items.append(discord.ui.ActionRow(*row[:5]))
-        view = surface("surface:mod:kingdom:chamber", *items)
+        view = surface("panel:mod:kingdom:chamber", *items)
         await open_unique_ephemeral(interaction, view=view)

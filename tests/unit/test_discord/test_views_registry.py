@@ -106,7 +106,7 @@ async def test_a_mod_declares_its_own_views(tmp_path) -> None:
 
     (tmp_path / "views.yaml").write_text(
         yaml.safe_dump(
-            {"views": {"menu:home": {"kind": "menu", "buttons": [{"target": "menu:mymod:home", "label": "x"}]}}}
+            {"views": {"menu:home": {"kind": "menu", "buttons": [{"target": "menu:mod:mymod:home", "label": "x"}]}}}
         ),
         encoding="utf-8",
     )
@@ -116,14 +116,14 @@ async def test_a_mod_declares_its_own_views(tmp_path) -> None:
         yaml.safe_dump({"id": "mymod", "enabled": True, "seasonal": False}), encoding="utf-8"
     )
     (mods / "mymod.views.yaml").write_text(
-        yaml.safe_dump({"views": {"menu:mymod:home": {"kind": "menu", "buttons": []}}}), encoding="utf-8"
+        yaml.safe_dump({"views": {"menu:mod:mymod:home": {"kind": "menu", "buttons": []}}}), encoding="utf-8"
     )
 
     clear_registry()
     from botforge.discord.views_declared import declare_views_from_config
 
     declare_views_from_config(tmp_path)
-    assert get_view("menu:mymod:home") is not None, "the mod's view merged into the registry"
+    assert get_view("menu:mod:mymod:home") is not None, "the mod's view merged into the registry"
     assert not validate_registry(), "the cross-references validate both ways"
 
 
@@ -186,7 +186,7 @@ def test_a_modular_mod_declares_its_views_next_to_its_mod_yaml(tmp_path, monkeyp
         yaml.safe_dump({"id": "kingdom", "enabled": True, "seasonal": False}), encoding="utf-8"
     )
     (conf / "views.yaml").write_text(
-        yaml.safe_dump({"views": {"surface:mod:kingdom:status": {"kind": "surface"}}}),
+        yaml.safe_dump({"views": {"panel:mod:kingdom:status": {"kind": "surface"}}}),
         encoding="utf-8",
     )
     (tmp_path / "views.yaml").write_text(yaml.safe_dump({"views": {}}), encoding="utf-8")
@@ -197,7 +197,7 @@ def test_a_modular_mod_declares_its_views_next_to_its_mod_yaml(tmp_path, monkeyp
     from botforge.discord.views_declared import declare_views_from_config
 
     declare_views_from_config(tmp_path)
-    assert get_view("surface:mod:kingdom:status") is not None, (
+    assert get_view("panel:mod:kingdom:status") is not None, (
         "the modular mod's conf/views.yaml merged into the registry"
     )
     assert not validate_registry(), "a declared surface anchor adds no drift"

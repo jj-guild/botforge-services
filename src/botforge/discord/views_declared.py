@@ -15,6 +15,7 @@ disabled, never dead.
 from __future__ import annotations
 
 import logging
+import re
 from pathlib import Path
 from typing import Any
 
@@ -146,8 +147,23 @@ def _load_mod_views(config_dir: Path | str | None = None) -> dict[str, Any]:
             continue
         if not isinstance(data, dict) or not isinstance(data.get("views"), dict):
             raise ValueError(f"{mod_views}: a mod views config must carry a 'views' mapping")
-        merged.update(data["views"])
-        logger.info("VIEWS declared by mod %s: %d views", name, len(data["views"]))
+        # R9: a mod's view ids follow the naming contract —
+        # panel:mod:<name>:… / menu:mod:<name>:… of its OWN mod. A legacy
+        # view:/surface: id is drift: it is skipped (loudly), never
+        # registered — the architecture test pins the rule.
+        contract = re.compile(rf"^(?:panel|menu):mod:{re.escape(str(name))}(?::|$)")
+        accepted = 0
+        for view_id, spec in data["views"].items():
+            if not contract.match(str(view_id)):
+                logger.error(
+                    "VIEWS: mod %s declares a non-contract id %r — skipped "
+                    "(a mod's view ids are panel:mod:%s:… or menu:mod:%s:…)",
+                    name, view_id, name, name,
+                )
+                continue
+            merged[str(view_id)] = spec
+            accepted += 1
+        logger.info("VIEWS declared by mod %s: %d views", name, accepted)
     return merged
 
 

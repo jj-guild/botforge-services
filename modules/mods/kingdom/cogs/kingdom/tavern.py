@@ -146,7 +146,7 @@ def _tavern_view(stack: Any, lord: Any, strings: dict[str, str]) -> discord.ui.L
         from .common import surface
 
         view = surface(
-            "surface:mod:kingdom:tavern:confirm",
+            "panel:mod:kingdom:tavern:confirm",
             discord.ui.TextDisplay(body),
             discord.ui.ActionRow(yes),
         )
@@ -156,7 +156,7 @@ def _tavern_view(stack: Any, lord: Any, strings: dict[str, str]) -> discord.ui.L
     from .common import surface
 
     return surface(
-        "surface:mod:kingdom:tavern",
+        "panel:mod:kingdom:tavern",
         discord.ui.TextDisplay("\n".join(lines)),
         discord.ui.ActionRow(select),
     )
@@ -211,7 +211,7 @@ def _mercenary_view(
     lines = _market_lines(doc, lord_id, strings, names)
     if bool(doc.get("closed", False)):
         return surface(
-            "surface:mod:kingdom:mercenary",
+            "panel:mod:kingdom:mercenary",
             discord.ui.TextDisplay("\n".join(lines)),
         )
 
@@ -279,7 +279,7 @@ def _mercenary_view(
         from .common import surface as _surface
 
         ladder = _surface(
-            "surface:mod:kingdom:mercenary:ladder",
+            "panel:mod:kingdom:mercenary:ladder",
             discord.ui.ActionRow(amount_select),
         )
         await target.response.edit_message(content=None, view=ladder)
@@ -312,7 +312,7 @@ def _mercenary_view(
     from .common import surface
 
     return surface(
-        "surface:mod:kingdom:mercenary",
+        "panel:mod:kingdom:mercenary",
         discord.ui.TextDisplay("\n".join(lines)),
         discord.ui.ActionRow(select, withdraw),
     )

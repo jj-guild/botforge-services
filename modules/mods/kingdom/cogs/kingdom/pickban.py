@@ -794,7 +794,7 @@ async def sabotage_panel_content(
     stock = await sabotage_stock_line(stack, attack, side, strings)
     if stock:
         lines.append(stock)
-    lines.append(surface_footer("surface:mod:kingdom:sabotage"))
+    lines.append(surface_footer("panel:mod:kingdom:sabotage"))
     view = await sabotage_menu_view(stack, attack, side, strings)
     return "\n".join(lines), view
 

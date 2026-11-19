@@ -42,17 +42,17 @@ def teardown_function() -> None:
 
 def test_the_mod_specs_cover_home_admin_and_the_mods_own_pins() -> None:
     """home + admin + the cog-declared panels — the WHOLE mod scope."""
-    register_static_pin(_spec("view:mod:kingdom:home", "mod/kingdom"))
-    register_static_pin(_spec("view:mod:kingdom:admin", "mod/kingdom"))
-    register_static_pin(_spec("view:mod:kingdom:apply", "mod/kingdom"))
+    register_static_pin(_spec("panel:mod:kingdom:home", "mod/kingdom"))
+    register_static_pin(_spec("panel:mod:kingdom:admin", "mod/kingdom"))
+    register_static_pin(_spec("panel:mod:kingdom:apply", "mod/kingdom"))
     register_static_pin(_spec("view:mod:other:home", "mod/other"))
     register_static_pin(_spec("view:home", ""))
 
     keys = {spec.key for spec in _mod_pin_specs(None, "kingdom")}
     assert keys == {
-        "view:mod:kingdom:home",
-        "view:mod:kingdom:admin",
-        "view:mod:kingdom:apply",
+        "panel:mod:kingdom:home",
+        "panel:mod:kingdom:admin",
+        "panel:mod:kingdom:apply",
     }, "the mod's own pinned surfaces ride the install/repair lifecycle"
 
 

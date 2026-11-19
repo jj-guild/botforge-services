@@ -47,7 +47,7 @@ def _ffa_join_view(strings: dict[str, str]) -> discord.ui.LayoutView:
     from .common import surface
 
     return surface(
-        "surface:mod:kingdom:ffa",
+        "panel:mod:kingdom:ffa",
         discord.ui.ActionRow(FFAJoinButton(strings["ffa_join_button"])),
     )
 

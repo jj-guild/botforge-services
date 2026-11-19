@@ -248,7 +248,7 @@ async def _confirm_step(
             ),
             strings["plan_dm_budget"],
             strings["plan_disclaimer"],
-            surface_footer("surface:mod:kingdom:attack:plan"),
+            surface_footer("panel:mod:kingdom:attack:plan"),
         ]
         return "\n".join(lines)
 
@@ -312,7 +312,7 @@ async def _time_step(
             [
                 str(strings["plan_wizard_title"]),
                 strings["plan_time_hint"],
-                surface_footer("surface:mod:kingdom:attack:plan"),
+                surface_footer("panel:mod:kingdom:attack:plan"),
             ]
         )
 
@@ -424,7 +424,7 @@ class PlanButton(
         view = discord.ui.View(timeout=600)
         view.add_item(select)
         lines = [str(strings["plan_wizard_title"]), strings["plan_disclaimer"]]
-        lines.append(surface_footer("surface:mod:kingdom:attack:plan"))
+        lines.append(surface_footer("panel:mod:kingdom:attack:plan"))
         await open_unique_ephemeral(interaction, "\n".join(lines), view=view)
 
 

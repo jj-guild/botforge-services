@@ -9,7 +9,7 @@ dashboard shape — #380's candidates-table form rendered as the pin's
 own blocks, the decision rides D70 rule 35).
 
 The template rule (#396): the whole surface is the declared
-``view:mod:kingdom:candidates`` id + its data — a pinned layout, not a
+``panel:mod:kingdom:candidates`` id + its data — a pinned layout, not a
 hand-rolled render; the decisions are restart-proof DynamicItems with
 stable custom ids, guarded at click time (the runtime check is the
 security boundary, the salon's visibility is only convenience).
@@ -26,7 +26,7 @@ from .common import _bot_admins, mod_catalog, strings_by_locale, surface, wiring
 
 logger = logging.getLogger("kingdom.validation")
 
-VALIDATION_VIEW_KEY = "view:mod:kingdom:candidates"
+VALIDATION_VIEW_KEY = "panel:mod:kingdom:candidates"
 
 _NS = "kingdom:valid"
 
