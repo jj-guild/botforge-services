@@ -563,6 +563,7 @@ def _operator_tools_last(items: list[Any]) -> list[Any]:
     builder decides.
     """
     def is_operator_tool(item: Any) -> bool:
+        """Tell an operator's tool (admin flip, repair) from a navigation entry."""
         # a DynamicItem WRAPS its component: the label and the emoji live
         # on ``item.item`` — reading the wrapper reads None and nothing
         # ever sorted (the 2026-11-13 merlin report: the repair stayed
