@@ -13,8 +13,8 @@ views:
   # the kingdom admin console (epic #412 T1) — the 12 season-management
   # operations as ONE ephemeral window, opened by the Console button the
   # SDK injects on menu:mod:kingdom:admin (no settings salon, no pin)
-  surface:mod:kingdom:console:
+  panel:mod:kingdom:admin:console:
     kind: surface
   # the console's inline confirm card (deploy/sync/reset)
-  surface:mod:kingdom:console:confirm:
+  panel:mod:kingdom:admin:console:confirm:
     kind: surface

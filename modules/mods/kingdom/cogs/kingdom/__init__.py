@@ -13,7 +13,6 @@ from typing import Any
 
 import discord
 
-from .cog import status_view
 
 
 def register(bot: Any, config: Any) -> None:
@@ -45,42 +44,6 @@ def register(bot: Any, config: Any) -> None:
         )
     )
 
-    @discord.app_commands.command(
-        name="kingdom",
-        description="Kingdom — statut du service",
-    )
-    async def _cmd(interaction: discord.Interaction) -> None:
-        view = await status_view(str(interaction.guild_id or ""))
-        await interaction.response.send_message(view=view, ephemeral=True)
-        # the admin pin diagnosis rides the same slash (epic #412 T1,
-        # kingdom-tests): the pin-ensure cycle is best-effort SILENT —
-        # here it becomes readable in Discord. Admins only (the silent
-        # ``is_admin`` guard — the players' status card never changes).
-        try:
-            from botforge.discord.guards import is_admin
-
-            admins = tuple(
-                getattr(getattr(interaction.client, "status_service", None), "bot_admins", ())
-                or ()
-            )
-            if await is_admin(
-                interaction, admins, getattr(interaction.client, "roles_service", None)
-            ):
-                from .pins_diag import admin_pin_lines
-
-                lines = await admin_pin_lines(
-                    interaction.client, str(interaction.guild_id or "")
-                )
-                if lines:
-                    await interaction.followup.send("\n".join(lines), ephemeral=True)
-        except Exception:  # noqa: BLE001 — the diagnosis never breaks /kingdom
-            import logging
-
-            logging.getLogger("kingdom.register").warning(
-                "kingdom: the pins diagnosis skipped — best-effort", exc_info=True
-            )
-
-    bot.tree.add_command(_cmd)
 
     # #339 (candidates dashboard): the detailed validation view pinned in
     # the declared « realms » admin salon — pending rows with the decision
@@ -155,7 +118,7 @@ def register(bot: Any, config: Any) -> None:
     # epic #412 T1: the kingdom admin console — the 12 season-management
     # operations as ONE ephemeral window (no settings salon, no pin). The
     # SDK injects the Console button on menu:mod:kingdom:admin because the
-    # mod declares surface:mod:kingdom:console; the router lands here.
+    # mod declares panel:mod:kingdom:admin:console; the router lands here.
     from botforge.discord.views_routing import wire_view
 
     from .common import open_unique_ephemeral
@@ -255,13 +218,24 @@ def setup_hook(bot: Any) -> None:
     except Exception:  # noqa: S110 — a loop failure never blocks the boot
         pass
 
-    # The boot self-heal (epic #412): ~30 s after the gateway is ready,
-    # one pass per guild — the pins land (the Repair seam) and the
-    # /kingdom slash exists even outside the platform's sync guild.
+    # The boot passes (epic #412): one pass per guild shortly after the
+    # gateway is ready — the pins land (the Repair seam) and the mod's
+    # declared surfaces exist on every served guild.
     try:
-        from .selfheal import arm_boot_self_heal
+        import asyncio
 
-        arm_boot_self_heal(bot)
+        from .registration_gate import boot_reconcile
+        from .selfheal import boot_self_heal
+
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            loop = None
+        if loop is not None:
+            # boot passes ride tasks: discord.py 2.7 has no add_listener
+            # and bot.event would override the core's on_ready
+            loop.create_task(boot_reconcile(bot))
+            loop.create_task(boot_self_heal(bot))
     except Exception:  # noqa: S110 — the self-heal never blocks the boot
         pass
 

@@ -114,7 +114,7 @@ def _confirm_view(strings: dict[str, str], action_key: str) -> discord.ui.Layout
     row.add_item(yes)
     row.add_item(no)
     container.add_item(row)
-    return surface("surface:mod:kingdom:console:confirm", container)
+    return surface("panel:mod:kingdom:admin:console:confirm", container)
 
 
 class KingdomRelaunchButton(

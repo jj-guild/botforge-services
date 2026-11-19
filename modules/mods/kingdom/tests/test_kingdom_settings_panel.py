@@ -1,6 +1,6 @@
 """The ⚙️ Paramètres panel (epic #412 T1) — wiring smoke tests.
 
-The admin cockpit is ONE template (``surface:mod:kingdom:console``)
+The admin cockpit is ONE template (``panel:mod:kingdom:admin:console``)
 instantiated by the ``SETTINGS_ACTIONS`` table: every action rides a
 platform seam (service contract, provisioning seams, beta phase
 toggle, ``require_admin``) — these tests pin the contract down.
@@ -16,7 +16,7 @@ def test_settings_panel_module_imports() -> None:
         build_settings_panel,
     )
 
-    assert CONSOLE_VIEW_KEY == "surface:mod:kingdom:console"
+    assert CONSOLE_VIEW_KEY == "panel:mod:kingdom:admin:console"
     assert callable(build_settings_panel)
 
 
@@ -69,8 +69,8 @@ def test_settings_actions_declared_in_views_yaml() -> None:
         / "conf"
         / "views.yaml"
     ).read_text(encoding="utf-8")
-    assert "surface:mod:kingdom:console:" in views
-    assert "surface:mod:kingdom:console:confirm:" in views
+    assert "panel:mod:kingdom:admin:console:" in views
+    assert "panel:mod:kingdom:admin:console:confirm:" in views
 
 
 def test_settings_strings_parity() -> None:

@@ -93,8 +93,8 @@ def test_a_broken_fetch_still_syncs() -> None:
     assert tree.synced == [111]
 
 
-def test_arm_boot_self_heal_is_idempotent(monkeypatch) -> None:
-    """Arming twice schedules ONE pass, and the pass runs once per bot."""
+def test_boot_self_heal_runs_once_per_bot(monkeypatch) -> None:
+    """The boot pass runs once per bot process (flag), via the setup_hook task."""
     selfheal = _selfheal()
     monkeypatch.setattr(selfheal, "_DELAY_S", 0)
 
@@ -105,16 +105,8 @@ def test_arm_boot_self_heal_is_idempotent(monkeypatch) -> None:
         return []
 
     monkeypatch.setattr(selfheal, "ensure_kingdom_surfaces", fake_pass)
-    listeners: list[tuple[object, str]] = []
-    bot = SimpleNamespace(guilds=[], tree=None, add_listener=lambda fn, name: listeners.append((fn, name)))
-    selfheal.arm_boot_self_heal(bot)
-    selfheal.arm_boot_self_heal(bot)
-    assert len(listeners) == 1
-    (run_once, name) = listeners[0]
-    assert name == "on_ready"
-
-    # First ready dispatch runs the pass; a reconnect (second dispatch) is a no-op.
-    asyncio.run(run_once())
-    asyncio.run(run_once())
+    bot = SimpleNamespace(guilds=[])
+    asyncio.run(selfheal.boot_self_heal(bot))
+    asyncio.run(selfheal.boot_self_heal(bot))
     assert runs == [True]
     assert getattr(bot, "_kingdom_selfheal_ran", False) is True

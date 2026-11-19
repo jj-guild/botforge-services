@@ -186,18 +186,18 @@ def subscribe_profile_gate(bot: Any) -> None:
     from botforge.discord.registration_events import subscribe_registration_events
 
     subscribe_registration_events(bot, profile_event_handler)
-    # the one-shot boot heal (on_ready fires per (re)connect; the flag
-    # keeps the reconcile to the boot that matters)
+
+
+async def boot_reconcile(bot: Any) -> None:
+    """The one-shot boot heal (launched from the mod's setup_hook task).
+
+    discord.py 2.7 removed ``Client.add_listener`` and ``bot.event``
+    would override the core's ``on_ready`` — the reconcile rides a task.
+    """
     if getattr(bot, "_kingdom_gate_reconciled", False):
         return
-
-    async def _on_ready_gate() -> None:
-        if getattr(bot, "_kingdom_gate_reconciled", False):
-            return
-        bot._kingdom_gate_reconciled = True
-        try:
-            await reconcile_guild_access(bot)
-        except Exception:
-            logger.exception("kingdom: the register gate self-heal crashed at boot (best-effort)")
-
-    bot.add_listener(_on_ready_gate, "on_ready")
+    bot._kingdom_gate_reconciled = True  # type: ignore[attr-defined]
+    try:
+        await reconcile_guild_access(bot)
+    except Exception:
+        logger.exception("kingdom: the register gate self-heal crashed at boot (best-effort)")

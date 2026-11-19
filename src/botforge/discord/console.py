@@ -76,9 +76,9 @@ class ConsoleAction:
     item_cls: type[discord.ui.DynamicItem[Any]]
     build: Callable[[bool], discord.ui.DynamicItem[Any]]
     description: str
-    # empty = the GLOBAL console (menu:console); a mod's name scopes the
+    # empty = the GLOBAL console (panel:admin:console); a mod's name scopes the
     # action to that mod's own console surface (e.g.
-    # surface:mod:kingdom:console) — never rendered by the global one
+    # panel:mod:kingdom:admin:console) — never rendered by the global one
     mod: str = ""
 
 
@@ -100,7 +100,7 @@ def registered_console_actions(mod: str | None = None) -> tuple[ConsoleAction, .
 
     ``mod=None`` returns everything; ``mod=""`` only the global console's
     actions; ``mod="kingdom"`` only that mod's (they belong to the mod's
-    own console surface, never to ``menu:console``).
+    own console surface, never to ``panel:admin:console``).
     """
     actions = tuple(_ACTIONS.values())
     if mod is None:
@@ -473,7 +473,7 @@ async def _console_view(guild_id: str | int | None, client: Any = None) -> disco
     view.add_item(container)
     from botforge.discord.ui.view_footer import add_view_footer, require_declared_view_id
 
-    return add_view_footer(view, require_declared_view_id("menu:console"))
+    return add_view_footer(view, require_declared_view_id("panel:admin:console"))
 
 
 class DevDangerButton(

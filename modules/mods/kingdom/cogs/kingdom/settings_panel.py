@@ -18,7 +18,7 @@ seams — the mod re-implements NOTHING:
   live, never assumed at render time).
 
 Announce-ready (#396): the panel is ONE named template
-(``surface:mod:kingdom:console``) instantiated by parameters (the
+(``panel:mod:kingdom:admin:console``) instantiated by parameters (the
 ``SETTINGS_ACTIONS`` table); the destructive ops wear the inline
 confirm card (one ephemeral window, never a stacked surface).
 """
@@ -35,7 +35,7 @@ from .common import locale_of, open_unique_ephemeral, surface, wiring
 
 logger = logging.getLogger("kingdom.settings")
 
-CONSOLE_VIEW_KEY = "surface:mod:kingdom:console"
+CONSOLE_VIEW_KEY = "panel:mod:kingdom:admin:console"
 _MOD = "kingdom"
 _ADMIN_COLOUR = discord.Colour(0x5865F2)
 
@@ -98,7 +98,7 @@ async def build_settings_panel(guild_id: str) -> discord.ui.LayoutView:
         )
 
     # the mod-scoped console ops (relaunch / reset / clock) ride the
-    # mod's own console, never the global menu:console (#412 cleanup)
+    # mod's own console, never the global panel:admin:console (#412 cleanup)
     from botforge.discord.console import registered_console_actions
 
     for action in registered_console_actions(mod="kingdom"):
@@ -169,7 +169,7 @@ def _confirm_card(strings: dict[str, str], action: str) -> discord.ui.LayoutView
     row.add_item(yes)
     row.add_item(no)
     container.add_item(row)
-    return surface("surface:mod:kingdom:console:confirm", container)
+    return surface("panel:mod:kingdom:admin:console:confirm", container)
 
 
 async def _run_provisioning(interaction: discord.Interaction, action: str) -> str:

@@ -306,7 +306,7 @@ async def test_console_action_registry_renders_extensions(monkeypatch: Any) -> N
 
 async def test_mod_scoped_actions_stay_out_of_the_global_console(monkeypatch: Any) -> None:
     """A mod-scoped action belongs to the MOD's console surface, never to
-    the global menu:console (the #412 cleanup: relancer/reset/horloge
+    the global panel:admin:console (the #412 cleanup: relancer/reset/horloge
     move from the global console to the kingdom console)."""
     import botforge.discord.console as console_mod
 

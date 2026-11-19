@@ -80,20 +80,19 @@ async def _ensure_commands(bot: Any, guild_id: str) -> str:
     return "synced"
 
 
-def arm_boot_self_heal(bot: Any) -> None:
-    """Schedule the one-shot pass on the next ready (idempotent per bot)."""
-    if getattr(bot, "_kingdom_selfheal_armed", False):
+async def boot_self_heal(bot: Any) -> None:
+    """The one-shot boot pass (launched from the mod's setup_hook task).
+
+    Runs once per bot process (the flag survives reconnects); never
+    breaks the boot — best-effort. discord.py 2.7 removed
+    ``Client.add_listener`` and ``bot.event`` would override the core's
+    ``on_ready``, so the pass rides a task instead of an event listener.
+    """
+    if getattr(bot, "_kingdom_selfheal_ran", False):
         return
-    bot._kingdom_selfheal_armed = True  # type: ignore[attr-defined]
-
-    async def _run_once() -> None:
-        if getattr(bot, "_kingdom_selfheal_ran", False):
-            return
-        bot._kingdom_selfheal_ran = True  # type: ignore[attr-defined]
-        await asyncio.sleep(_DELAY_S)
-        try:
-            await ensure_kingdom_surfaces(bot)
-        except Exception:  # noqa: BLE001 — never break on_ready
-            logger.warning("kingdom: self-heal pass failed — best-effort", exc_info=True)
-
-    bot.add_listener(_run_once, "on_ready")  # type: ignore[attr-defined]
+    bot._kingdom_selfheal_ran = True  # type: ignore[attr-defined]
+    await asyncio.sleep(_DELAY_S)
+    try:
+        await ensure_kingdom_surfaces(bot)
+    except Exception:  # noqa: BLE001 — never break the boot
+        logger.warning("kingdom: self-heal pass failed — best-effort", exc_info=True)

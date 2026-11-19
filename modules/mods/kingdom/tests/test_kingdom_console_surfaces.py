@@ -121,7 +121,7 @@ def test_console_register_is_idempotent(monkeypatch: Any) -> None:
 def test_console_ops_are_scoped_to_the_mod_console() -> None:
     """The kingdom ops (relaunch/reset/clock) carry mod="kingdom": they
     belong to the mod's own console surface, never to the global
-    menu:console (#412 cleanup). The scoping filter itself is pinned in
+    panel:admin:console (#412 cleanup). The scoping filter itself is pinned in
     the core test (tests/unit/test_discord/test_console.py)."""
     from botforge.mods.kingdom.cogs.console import kingdom_console_actions
 

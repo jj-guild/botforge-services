@@ -49,11 +49,7 @@ def _register_voice_listener(bot: Any) -> None:
     global _VOICE_LISTENER_REGISTERED
     if _VOICE_LISTENER_REGISTERED:
         return
-    add_listener = getattr(bot, "add_listener", None)
-    if add_listener is None:
-        return
-
-    async def _on_voice_state_update(member: Any, before: Any, after: Any) -> None:
+    async def on_voice_state_update(member: Any, before: Any, after: Any) -> None:
         from .common import wiring
 
         channel = getattr(after, "channel", None)
@@ -70,7 +66,8 @@ def _register_voice_listener(bot: Any) -> None:
             logger.warning("kingdom: voice join record failed", exc_info=True)
 
     try:
-        add_listener(_on_voice_state_update, "on_voice_state_update")
+        # discord.py 2.7 removed add_listener — extra events ride bot.event
+        bot.event(on_voice_state_update)
         _VOICE_LISTENER_REGISTERED = True
     except Exception:
         logger.warning("kingdom: voice listener registration failed", exc_info=True)

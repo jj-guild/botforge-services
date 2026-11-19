@@ -533,7 +533,7 @@ async def _menu_action_row(
             row.add_item(button)
         # a mod declaring its console surface gets the 🛠️ button on its
         # admin menu — data-driven: the declared surface is the trigger
-        console_surface = f"surface:mod:{mod_name}:console"
+        console_surface = f"panel:mod:{mod_name}:admin:console"
         if get_view(console_surface) is not None:
             row.add_item(
                 ViewOpenButton(
