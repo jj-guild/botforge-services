@@ -15,8 +15,8 @@ from botforge.discord.ui import BLURPLE, Container, Text, UILayout
 
 async def status_view(guild_id: str) -> discord.ui.LayoutView:
     """Render the service's status through the UI SDK."""
-    service = mod_service("kingdom")
-    status = await service.KingdomServiceImpl().status(guild_id)
+    service = mod_service("kingdom").service()
+    status = await service.status(guild_id)
     from botforge.discord.ui.view_footer import add_view_footer
 
     body = (
@@ -30,4 +30,4 @@ async def status_view(guild_id: str) -> discord.ui.LayoutView:
         .build()
     )
     # the declared-surface footer rides the built layout (#381 ruling 1)
-    return add_view_footer(body, "surface:mod:kingdom:status")
+    return add_view_footer(body, "panel:mod:kingdom:status")
