@@ -151,14 +151,16 @@ def main(argv: list[str] | None = None) -> int:
         action_parser.add_argument(
             "--guild", required=True, help="target guild id, or 'all' for every allowlisted guild"
         )
-        if name == "install":
-            action_parser.add_argument("--mods", default="", help="comma-separated mod ids to install")
-            action_parser.add_argument("--games", default="", help="comma-separated game keys to install")
-            action_parser.add_argument(
-                "--no-propagate",
-                action="store_true",
-                help="skip the mod→game / game→mod propagation rules",
-            )
+        # Registered on EVERY action: env-console passes the flags
+        # unconditionally (they are empty for the actions that ignore
+        # them), so the argparse shape must accept them everywhere.
+        action_parser.add_argument("--mods", default="", help="comma-separated mod ids (install only)")
+        action_parser.add_argument("--games", default="", help="comma-separated game keys (install only)")
+        action_parser.add_argument(
+            "--no-propagate",
+            action="store_true",
+            help="skip the mod→game / game→mod propagation rules (install only)",
+        )
     args = parser.parse_args(argv if argv is not None else sys.argv[1:])
 
     guilds = _resolve_targets(args.guild)
