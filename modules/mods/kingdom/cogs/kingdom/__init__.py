@@ -35,8 +35,8 @@ def register(bot: Any, config: Any) -> None:
 
     register_static_pin(
         StaticPinnedView(
-            key="view:mod:kingdom:attack",
-            mark_suffix="view:mod:kingdom:attack",
+            key="panel:mod:kingdom:attack",
+            mark_suffix="panel:mod:kingdom:attack",
             resolve_channel=_resolve_channel,
             build_layout=build_attack_panel,
             registry=getattr(bot, "message_registry", None),
@@ -55,8 +55,8 @@ def register(bot: Any, config: Any) -> None:
 
     register_static_pin(
         StaticPinnedView(
-            key="view:mod:kingdom:candidates",
-            mark_suffix="view:mod:kingdom:candidates",
+            key="panel:mod:kingdom:candidates",
+            mark_suffix="panel:mod:kingdom:candidates",
             resolve_channel=_resolve_realms_channel,
             build_layout=build_validation_panel,
             registry=getattr(bot, "message_registry", None),

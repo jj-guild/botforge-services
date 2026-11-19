@@ -52,9 +52,10 @@ async def open_declared_view(interaction: discord.Interaction, view_id: str) -> 
 
     decl = get_view(view_id)
     if decl is not None:
-        if str(view_id).startswith("surface:"):
+        if str(view_id).startswith("surface:") or getattr(decl, "kind", "") == "surface":
             # a surface is always wired by its owner (wire_view) — never
-            # rendered as a bare menu with raw i18n keys
+            # rendered as a bare menu with raw i18n keys (the mod surfaces
+            # are panel:mod:<name>:... declared kind=surface)
             await interaction.response.send_message(
                 await reply(interaction, "not_configured"), ephemeral=True
             )
@@ -531,18 +532,20 @@ async def _menu_action_row(
         mod_name = str(decl.id).split(":")[-2]
         for button in await beta_console_buttons(bot, guild_id, mod_name, _beta_tr):
             row.add_item(button)
-        # a mod declaring its console surface gets the 🛠️ button on its
-        # admin menu — data-driven: the declared surface is the trigger
-        console_surface = f"panel:mod:{mod_name}:admin:console"
-        if get_view(console_surface) is not None:
-            row.add_item(
-                ViewOpenButton(
-                    console_surface,
-                    _label(catalog, "ui.homes.btn_console", locale, "Console"),
-                    "\U0001F6E0\uFE0F",
-                    style=discord.ButtonStyle.danger,
-                )
+        # the mod's admin CONSOLE button is ALWAYS injected: the SDK
+        # auto-declares panel:mod:<name>:admin:console for every mod (a
+        # console exists as soon as a mod does) — danger style, the
+        # console's 🛠️ emoji, the i18n label (never an emoji in the label)
+        from botforge.discord.console import CONSOLE_EMOJI, mod_console_view_id
+
+        row.add_item(
+            ViewOpenButton(
+                mod_console_view_id(mod_name),
+                _label(catalog, "ui.homes.btn_console", locale, "Console"),
+                CONSOLE_EMOJI,
+                style=discord.ButtonStyle.danger,
             )
+        )
     items = list(row.children)
     row = discord.ui.ActionRow[discord.ui.LayoutView]()
     for item in _operator_tools_last(items):
@@ -702,11 +705,12 @@ def build_declared_menu(bot: Any, view_id: str) -> Any:
 
         standard_blocks = await mod_standard_blocks(bot, guild_id, view_id, _tr)
         header = f"# {title}"
-        # the SDK constraint: an admin surface ALWAYS carries the open
-        # padlock in its header (one glance tells the operator where they
-        # stand) — declared per view never again, admin_surface decides
-        title_emoji = "🔓" if getattr(decl, "admin_surface", False) else getattr(
-            decl, "title_emoji", ""
+        # the SDK constraint: an admin surface carries an emoji in its
+        # header (one glance tells the operator where they stand) — the
+        # DECLARED title_emoji wins, admin_surface only sets the default
+        # padlock (the mod admin menus declare the console's 🛠️)
+        title_emoji = getattr(decl, "title_emoji", "") or (
+            "🔓" if getattr(decl, "admin_surface", False) else ""
         )
         if title_emoji:
             header = f"{header} {title_emoji}"
@@ -752,7 +756,11 @@ def build_declared_menu(bot: Any, view_id: str) -> Any:
 
             if is_test_guild(guild_id):
                 console_row: discord.ui.ActionRow[discord.ui.LayoutView] = discord.ui.ActionRow()
-                console_row.add_item(AdminConsoleButton())
+                console_row.add_item(
+                    AdminConsoleButton(
+                        label=_label(catalog, "ui.homes.btn_console", locale, "Console")
+                    )
+                )
                 view.add_item(console_row)
         from botforge.discord.ui.view_footer import add_view_footer
 

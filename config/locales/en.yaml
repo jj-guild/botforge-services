@@ -620,7 +620,7 @@ en:
       <@{user_id}> — **{verb}** by <@{decided_by}>.'
 
   console:
-    title: "# ⚙️ Console"
+    title: "# 🛠️ Console"
     note_allowed: "This guild is on the test allowlist — the actions below apply to **this guild only**."
     note_denied: "This guild is **not** on the test allowlist — the actions are disabled (BOTFORGE_TEST_GUILD_IDS decides, env-defined)."
     danger_btn: "⚠️ Danger Zone"

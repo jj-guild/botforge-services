@@ -53,6 +53,22 @@ PROD_ENV_NAMES = ("prod", "production")
 
 _NS = "console"
 
+# The console surfaces' canonical ids and shared emoji (one visual anchor:
+# the 🛠️ rides every console — the buttons opening them and the headers of
+# the console panels themselves).
+GLOBAL_CONSOLE_VIEW_ID = "panel:admin:console"
+CONSOLE_EMOJI = "\U0001F6E0\uFE0F"
+
+
+def console_view_id() -> str:
+    """Return the global (bot-admin) console's declared view id."""
+    return GLOBAL_CONSOLE_VIEW_ID
+
+
+def mod_console_view_id(mod_name: str) -> str:
+    """Return a mod's own console surface id (auto-declared by the SDK)."""
+    return f"panel:mod:{mod_name}:admin:console"
+
 
 @dataclass(frozen=True)
 class ConsoleAction:
@@ -473,7 +489,7 @@ async def _console_view(guild_id: str | int | None, client: Any = None) -> disco
     view.add_item(container)
     from botforge.discord.ui.view_footer import add_view_footer, require_declared_view_id
 
-    return add_view_footer(view, require_declared_view_id("panel:admin:console"))
+    return add_view_footer(view, require_declared_view_id(GLOBAL_CONSOLE_VIEW_ID))
 
 
 class DevDangerButton(
@@ -771,13 +787,16 @@ class AdminConsoleButton(
     Rendered on the env-declared test guilds (allowlist); the click
     re-runs the full console guard (bot admin, never prod, allowlist)
     before opening the console view \u2014 the mandate: seeing the
-    button never implies being allowed to click it.
+    button never implies being allowed to click it. The button wears
+    the console's 🛠️ emoji (danger style: a destructive admin surface);
+    the label is the i18n text, never an emoji (one emoji per button).
     """
 
-    def __init__(self) -> None:
+    def __init__(self, label: str = "Console", emoji: str = CONSOLE_EMOJI) -> None:
         super().__init__(
             discord.ui.Button(
-                label="\u2699 Console",
+                label=label[:80],
+                emoji=discord.PartialEmoji.from_str(emoji) if emoji else None,
                 style=discord.ButtonStyle.danger,
                 custom_id=PIN_CONSOLE_BUTTON_ID,
             )
@@ -791,9 +810,16 @@ class AdminConsoleButton(
         match: re.Match[str],
         /,
     ) -> AdminConsoleButton:
-        """Rebuild the item from the wire."""
-        del interaction, item, match
-        return cls()
+        """Rebuild the item from the wire (label/emoji kept from the item)."""
+        del interaction, match
+        button = item if isinstance(item, discord.ui.Button) else None
+        label = (button.label if button is not None else None) or "Console"
+        emoji = (
+            button.emoji.name
+            if button is not None and isinstance(button.emoji, discord.PartialEmoji)
+            else CONSOLE_EMOJI
+        )
+        return cls(label, emoji)
 
     async def callback(self, interaction: discord.Interaction) -> None:
         """Open the console as a NEW ephemeral message (the navigation norm).

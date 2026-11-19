@@ -9,7 +9,11 @@ GENERATES them at boot, for every enabled mod (botforge-services#378,
   (admin-only flip to the admin surface)
 - ``menu:mod:<name>:admin`` — the admin: the standard content + the
   **repair button** (the declared channels and roles re-provision,
-  #384's label)
+  #384's label) + the **Console button** (🛠️ danger — opens the mod's
+  admin console)
+- ``panel:mod:<name>:admin:console`` — the mod's admin console surface,
+  ALWAYS declared (a console exists as soon as a mod is added); the mod
+  wires its content with ``wire_view``, the SDK injects the button
 
 The mods' home/admin menus (menu:mods:home, menu:mods:admin) list the
 entries automatically — installed ones enabled, the not-installed
@@ -23,15 +27,16 @@ from __future__ import annotations
 
 from typing import Any
 
+from botforge.discord.console import CONSOLE_EMOJI, mod_console_view_id
 from botforge.discord.views_registry import ButtonDecl, ViewDecl, register_view
 
 
 def declare_mod_views(registry: Any) -> int:
-    """Generate every enabled mod's home and admin views (boot-time).
+    """Generate every enabled mod's home, admin and console views (boot-time).
 
-    Idempotent: the auto-generated ids are stable (menu:mod:<name> and
-    menu:mod:<name>:admin), the last declaration wins. Returns how many
-    views were generated.
+    Idempotent: the auto-generated ids are stable (menu:mod:<name>,
+    menu:mod:<name>:admin and panel:mod:<name>:admin:console), the last
+    declaration wins. Returns how many views were generated.
     """
     declared = 0
     if registry is None:
@@ -61,7 +66,10 @@ def declare_mod_views(registry: Any) -> int:
                 kind="menu",
                 scope="mods/admin",
                 admin_surface=True,
-                title_emoji="🔓",
+                # the mod admin menu hosts the console: its header wears
+                # the console's 🛠️ (a declared title_emoji wins over the
+                # admin surfaces' default padlock)
+                title_emoji=CONSOLE_EMOJI,
                 buttons=(
                     ButtonDecl(
                         label_key="ui.homes.btn_sync",
@@ -70,7 +78,17 @@ def declare_mod_views(registry: Any) -> int:
                 ),
             )
         )
-        declared += 2
+        # the mod's admin console surface is ALWAYS declared — the console
+        # exists as soon as the mod does; the mod only wires its content
+        # (wire_view). An unwired surface answers not_configured.
+        register_view(
+            ViewDecl(
+                id=mod_console_view_id(name),
+                kind="surface",
+                scope="mods/admin",
+            )
+        )
+        declared += 3
     return declared
 
 

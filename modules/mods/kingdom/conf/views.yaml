@@ -9,12 +9,26 @@
 #
 # The ids live HERE, next to the mod's declaration (#221: a mod's
 # files never scatter) — the platform loader merges them at boot.
+#
+# The mod's admin CONSOLE surface (panel:mod:kingdom:admin:console) is
+# NOT declared here: the SDK auto-declares it for every mod
+# (mod_views.declare_mod_views) and injects the 🛠️ Console button on
+# menu:mod:kingdom:admin. The mod only wires its content
+# (wire_view in cogs/kingdom/__init__.py).
 views:
-  # the kingdom admin console (epic #412 T1) — the 12 season-management
-  # operations as ONE ephemeral window, opened by the Console button the
-  # SDK injects on menu:mod:kingdom:admin (no settings salon, no pin)
-  panel:mod:kingdom:admin:console:
-    kind: surface
   # the console's inline confirm card (deploy/sync/reset)
   panel:mod:kingdom:admin:console:confirm:
+    kind: surface
+  # the pinned / ephemeral gameplay surfaces (#381 ruling 1: every
+  # rendered surface is declared — an undeclared id logs an error at
+  # every pin refresh and answers "unknown view" if routed)
+  panel:mod:kingdom:attack:
+    kind: surface
+  panel:mod:kingdom:candidates:
+    kind: surface
+  panel:mod:kingdom:apply:
+    kind: surface
+  panel:mod:kingdom:register:
+    kind: surface
+  panel:mod:kingdom:status:
     kind: surface

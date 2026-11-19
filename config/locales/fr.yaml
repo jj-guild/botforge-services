@@ -622,7 +622,7 @@ fr:
       <@{user_id}> — **{verb}** par <@{decided_by}>.'
 
   console:
-    title: "# ⚙️ Console"
+    title: "# 🛠️ Console"
     note_allowed: "Cette guilde est sur la liste de test — les actions ci-dessous s'appliquent **à cette guilde uniquement**."
     note_denied: "Cette guilde n'est **pas** sur la liste de test — les actions sont désactivées (BOTFORGE_TEST_GUILD_IDS décide, défini par l'environnement)."
     danger_btn: "⚠️ Zone de danger"

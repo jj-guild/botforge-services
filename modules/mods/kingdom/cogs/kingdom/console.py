@@ -283,35 +283,42 @@ def kingdom_console_actions() -> tuple:
 
     Returned as data so tests can pin the scoping without importing the
     platform console (R6: nothing outside cogs/ imports botforge.discord).
+    The button labels are the i18n keys' texts (no "(kingdom)" tag — the
+    ops already live in the mod's OWN console); the initial render uses
+    the English strings, every click re-renders in the invoker's locale
+    (from_custom_id).
     """
     from botforge.discord.console import ConsoleAction
 
+    from .strings import strings as _strings
+
+    en = _strings("en")
     return (
         ConsoleAction(
             key="kingdom-relaunch",
             item_cls=KingdomRelaunchButton,
             build=lambda disabled: KingdomRelaunchButton(
-                "🔁 Relancer la saison (kingdom)", disabled
+                en["console_relaunch_label"], disabled
             ),
-            description="🔁 Relancer la saison (kingdom) — archive + wipe + nouvelle saison.",
+            description=en["console_relaunch_label"],
             mod="kingdom",
         ),
         ConsoleAction(
             key="kingdom-reset",
             item_cls=KingdomResetButton,
             build=lambda disabled: KingdomResetButton(
-                "🧹 Réinitialiser les données (kingdom)", disabled
+                en["console_reset_label"], disabled
             ),
-            description="🧹 Réinitialiser les données (kingdom) — archive + wipe, sans relance.",
+            description=en["console_reset_label"],
             mod="kingdom",
         ),
         ConsoleAction(
             key="kingdom-clock",
             item_cls=KingdomClockButton,
             build=lambda disabled: KingdomClockButton(
-                "⏩ Horloge de jeu (kingdom)", disabled
+                en["console_clock_label"], disabled
             ),
-            description="⏩ Horloge de jeu (kingdom) — avance le temps (90m, 2h, 3d).",
+            description=en["console_clock_label"],
             mod="kingdom",
         ),
     )

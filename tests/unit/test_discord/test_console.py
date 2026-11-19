@@ -369,3 +369,32 @@ def test_danger_modal_defaults_are_safe() -> None:
         DevDangerModal.DATA_MAPS,
         DevDangerModal.DATA_POOLS,
     }
+
+
+def test_console_view_id_helpers_and_shared_emoji() -> None:
+    """The SDK owns the console surfaces' ids and the shared 🛠️ emoji."""
+    from botforge.discord.console import (
+        CONSOLE_EMOJI,
+        GLOBAL_CONSOLE_VIEW_ID,
+        console_view_id,
+        mod_console_view_id,
+    )
+
+    assert GLOBAL_CONSOLE_VIEW_ID == "panel:admin:console"
+    assert console_view_id() == "panel:admin:console"
+    assert mod_console_view_id("kingdom") == "panel:mod:kingdom:admin:console"
+    assert CONSOLE_EMOJI == "\U0001F6E0\uFE0F"
+
+
+def test_admin_console_button_carries_the_console_emoji_once() -> None:
+    """The global console button: danger style, 🛠️ emoji, i18n label (no emoji in the label)."""
+    import discord
+
+    from botforge.discord.console import CONSOLE_EMOJI, AdminConsoleButton
+
+    button = AdminConsoleButton()
+    assert button.item.style == discord.ButtonStyle.danger
+    assert button.item.emoji is not None and button.item.emoji.name == CONSOLE_EMOJI
+    assert button.item.label == "Console", "the label carries no emoji — the button does"
+    custom = AdminConsoleButton(label="Console")
+    assert custom.item.label == "Console"
