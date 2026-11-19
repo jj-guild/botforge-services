@@ -137,20 +137,6 @@ channels:
       everyone_view: false
       view: [Kingdom Lord, Kingdom King, Kingdom Admin]
       post: [Kingdom Lord, Kingdom King, Kingdom Admin]
-  - key: settings
-    display_name: ⚙️ paramètres
-    description: Mod settings panel channel
-    group: admin
-    # permissions-serveur-v1: the admin category and its salons are
-    # admin-only — an explicit access block keeps the provisioning's
-    # policy application from re-granting @everyone view (the default
-    # policy is everyone_view: true).
-    access:
-      everyone_view: false
-      view: [Kingdom Admin]
-  # saison-removal-v1 (Drasah 27/10): the 🗓️ gestion saison salon is
-  # GONE — nothing in the mod ever targeted it (no panel, no command);
-  # the live salon is swept as a legacy slug at the next provisioning.
   - key: time_machine
     display_name: ⏱️ machine à temps
     description: Game-clock test panel — fast-forward and snapshots (admin only)

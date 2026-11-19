@@ -116,3 +116,16 @@ def test_console_register_is_idempotent(monkeypatch: Any) -> None:
     register_console_actions()
     keys = [action.key for action in console_mod.registered_console_actions()]
     assert "kingdom-relaunch" in keys and "kingdom-reset" in keys and "kingdom-clock" in keys
+
+
+def test_console_ops_are_scoped_to_the_mod_console() -> None:
+    """The kingdom ops (relaunch/reset/clock) belong to the mod's own
+    console surface, never to the global menu:console (#412 cleanup)."""
+    from botforge.discord.console import registered_console_actions
+    from botforge.mods.kingdom.cogs.kingdom.console import register_console_actions
+
+    register_console_actions()
+    mod_keys = {a.key for a in registered_console_actions(mod="kingdom")}
+    assert {"kingdom-relaunch", "kingdom-reset", "kingdom-clock"} <= mod_keys
+    global_keys = {a.key for a in registered_console_actions(mod="")}
+    assert not ({"kingdom-relaunch", "kingdom-reset", "kingdom-clock"} & global_keys)

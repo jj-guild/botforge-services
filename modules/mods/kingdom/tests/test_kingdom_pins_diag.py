@@ -121,36 +121,36 @@ def test_the_report_rejects_non_numeric_guild_ids(monkeypatch) -> None:
 def test_the_report_names_the_unprovisioned_channel(monkeypatch) -> None:
     """Step 1 — no stored channel resolution: rerun the Repair."""
     diag = _diag()
-    _patch_registry(monkeypatch, [_spec("view:mod:kingdom:settings", channel_id=None)])
+    _patch_registry(monkeypatch, [_spec("surface:mod:kingdom:console", channel_id=None)])
     out = asyncio.run(diag.pins_report(_Client(guild=_Guild(channel=None)), _GUILD_ID))
-    assert out == [("view:mod:kingdom:settings", "salon non provisionné (résolution absente — refaire un Repair)")]
+    assert out == [("surface:mod:kingdom:console", "salon non provisionné (résolution absente — refaire un Repair)")]
 
 
 def test_the_report_names_the_uncached_guild(monkeypatch) -> None:
     """Step 2 — the guild left the bot's cache."""
     diag = _diag()
-    _patch_registry(monkeypatch, [_spec("view:mod:kingdom:settings")])
+    _patch_registry(monkeypatch, [_spec("surface:mod:kingdom:console")])
     out = asyncio.run(diag.pins_report(_Client(guild=None), _GUILD_ID))
-    assert out == [("view:mod:kingdom:settings", f"serveur {_GUILD_ID} hors cache du bot")]
+    assert out == [("surface:mod:kingdom:console", f"serveur {_GUILD_ID} hors cache du bot")]
 
 
 def test_the_report_names_the_uncached_channel(monkeypatch) -> None:
     """Step 3 — the channel exists but the bot cannot see it."""
     diag = _diag()
-    _patch_registry(monkeypatch, [_spec("view:mod:kingdom:settings")])
+    _patch_registry(monkeypatch, [_spec("surface:mod:kingdom:console")])
     out = asyncio.run(diag.pins_report(_Client(guild=_Guild(channel=None)), _GUILD_ID))
-    assert out == [("view:mod:kingdom:settings", f"salon <#{_CHANNEL_ID}> hors cache du bot (droits salon cassés ?)")]
+    assert out == [("surface:mod:kingdom:console", f"salon <#{_CHANNEL_ID}> hors cache du bot (droits salon cassés ?)")]
 
 
 def test_the_report_names_the_never_pinned_panel(monkeypatch) -> None:
     """Step 4 — the channel is found but the pin never landed."""
     diag = _diag()
-    _patch_registry(monkeypatch, [_spec("view:mod:kingdom:settings", message_id=None)])
+    _patch_registry(monkeypatch, [_spec("surface:mod:kingdom:console", message_id=None)])
     client = _Client(guild=_Guild(channel=_Channel()))
     out = asyncio.run(diag.pins_report(client, _GUILD_ID))
     assert out == [
         (
-            "view:mod:kingdom:settings",
+            "surface:mod:kingdom:console",
             f"jamais épinglé (salon <#{_CHANNEL_ID}> trouvé — l'épinglage n'y est jamais passé)",
         )
     ]
@@ -159,21 +159,21 @@ def test_the_report_names_the_never_pinned_panel(monkeypatch) -> None:
 def test_the_report_names_the_deleted_message(monkeypatch) -> None:
     """Step 5 — the pinned message was deleted since the last pass."""
     diag = _diag()
-    _patch_registry(monkeypatch, [_spec("view:mod:kingdom:settings")])
+    _patch_registry(monkeypatch, [_spec("surface:mod:kingdom:console")])
     channel = _Channel(exc=diag.discord.NotFound(_Resp()))  # type: ignore[arg-type]
     client = _Client(guild=_Guild(channel=channel))
     out = asyncio.run(diag.pins_report(client, _GUILD_ID))
-    assert out == [("view:mod:kingdom:settings", "message 777 supprimé — le prochain passage doit le recréer")]
+    assert out == [("surface:mod:kingdom:console", "message 777 supprimé — le prochain passage doit le recréer")]
 
 
 def test_the_report_names_an_unreadable_message(monkeypatch) -> None:
     """Step 5b — an HTTP error reads as a permissions hint."""
     diag = _diag()
-    _patch_registry(monkeypatch, [_spec("view:mod:kingdom:settings")])
+    _patch_registry(monkeypatch, [_spec("surface:mod:kingdom:console")])
     channel = _Channel(exc=diag.discord.HTTPException(_Resp(status=403)))  # type: ignore[arg-type]
     client = _Client(guild=_Guild(channel=channel))
     out = asyncio.run(diag.pins_report(client, _GUILD_ID))
-    assert out == [("view:mod:kingdom:settings", "message 777 illisible (HTTP 403 — droits lecture du bot ?)")]
+    assert out == [("surface:mod:kingdom:console", "message 777 illisible (HTTP 403 — droits lecture du bot ?)")]
 
 
 def test_the_report_distinguishes_pinned_from_unpinned(monkeypatch) -> None:
@@ -182,14 +182,14 @@ def test_the_report_distinguishes_pinned_from_unpinned(monkeypatch) -> None:
     _patch_registry(
         monkeypatch,
         [
-            _spec("view:mod:kingdom:settings"),
+            _spec("surface:mod:kingdom:console"),
             _spec("view:mod:kingdom:apply", message_id="888"),
         ],
     )
     client = _Client(guild=_Guild(channel=_Channel(pinned=False)))
     out = dict(asyncio.run(diag.pins_report(client, _GUILD_ID)))
     assert out == {
-        "view:mod:kingdom:settings": f"épinglé dans <#{_CHANNEL_ID}>",
+        "surface:mod:kingdom:console": f"épinglé dans <#{_CHANNEL_ID}>",
         "view:mod:kingdom:apply": f"présent dans <#{_CHANNEL_ID}> mais NON épinglé (999)",
     }
 
@@ -202,14 +202,14 @@ def test_the_report_never_raises(monkeypatch) -> None:
         raise TypeError("seam down")
 
     spec = SimpleNamespace(
-        key="view:mod:kingdom:settings",
+        key="surface:mod:kingdom:console",
         scope="mod/kingdom",
         resolve_channel=boom,
         resolve_message_id=noop_resolver(),
     )
     _patch_registry(monkeypatch, [spec])
     out = asyncio.run(diag.pins_report(_Client(guild=None), _GUILD_ID))
-    assert out == [("view:mod:kingdom:settings", "erreur : TypeError")]
+    assert out == [("surface:mod:kingdom:console", "erreur : TypeError")]
 
 
 def noop_resolver():
@@ -222,8 +222,8 @@ def noop_resolver():
 def test_admin_pin_lines_format_the_followup(monkeypatch) -> None:
     """The admin followup: a bold title, one bullet per surface."""
     diag = _diag()
-    _patch_registry(monkeypatch, [_spec("view:mod:kingdom:settings", channel_id=None)])
+    _patch_registry(monkeypatch, [_spec("surface:mod:kingdom:console", channel_id=None)])
     lines = asyncio.run(diag.admin_pin_lines(_Client(guild=None), _GUILD_ID))
     assert lines[0] == "**Panneaux du mod — diagnostic**"
-    assert lines[1].startswith("• `view:mod:kingdom:settings` — ")
+    assert lines[1].startswith("• `surface:mod:kingdom:console` — ")
     assert asyncio.run(diag.admin_pin_lines(_Client(guild=None), "")) == []

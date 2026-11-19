@@ -512,8 +512,20 @@ async def _menu_action_row(
         from botforge.discord.mod_beta import beta_console_buttons
         from botforge.discord.scope_pins import _tr as _beta_tr
 
-        for button in await beta_console_buttons(bot, guild_id, str(decl.id).split(":")[-2], _beta_tr):
+        mod_name = str(decl.id).split(":")[-2]
+        for button in await beta_console_buttons(bot, guild_id, mod_name, _beta_tr):
             row.add_item(button)
+        # a mod declaring its console surface gets the 🛠️ button on its
+        # admin menu — data-driven: the declared surface is the trigger
+        console_surface = f"surface:mod:{mod_name}:console"
+        if get_view(console_surface) is not None:
+            row.add_item(
+                ViewOpenButton(
+                    console_surface,
+                    _label(catalog, "ui.homes.btn_console", locale, "Console"),
+                    "\U0001F6E0\uFE0F",
+                )
+            )
     items = list(row.children)
     row = discord.ui.ActionRow[discord.ui.LayoutView]()
     for item in _operator_tools_last(items):

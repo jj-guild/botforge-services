@@ -499,6 +499,7 @@ en:
       btn_ensure: Create missing channels
       bot_home_description: The bot's operation — logs, administration, decisions.
       btn_sync: Repair channels & roles
+      btn_console: "\U0001F6E0\uFE0F Console"
       btn_language: Language
     views:
       menu.home:

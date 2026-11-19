@@ -290,6 +290,7 @@ def register_console_actions() -> None:
                 "🔁 Relancer la saison (kingdom)", disabled
             ),
             description="🔁 Relancer la saison (kingdom) — archive + wipe + nouvelle saison.",
+            mod="kingdom",
         ),
         ConsoleAction(
             key="kingdom-reset",
@@ -298,6 +299,7 @@ def register_console_actions() -> None:
                 "🧹 Réinitialiser les données (kingdom)", disabled
             ),
             description="🧹 Réinitialiser les données (kingdom) — archive + wipe, sans relance.",
+            mod="kingdom",
         ),
         ConsoleAction(
             key="kingdom-clock",
@@ -306,6 +308,7 @@ def register_console_actions() -> None:
                 "⏩ Horloge de jeu (kingdom)", disabled
             ),
             description="⏩ Horloge de jeu (kingdom) — avance le temps (90m, 2h, 3d).",
+            mod="kingdom",
         ),
     )
     for action in actions:

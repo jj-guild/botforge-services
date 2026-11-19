@@ -304,6 +304,31 @@ async def test_console_action_registry_renders_extensions(monkeypatch: Any) -> N
 
 
 
+async def test_mod_scoped_actions_stay_out_of_the_global_console(monkeypatch: Any) -> None:
+    """A mod-scoped action belongs to the MOD's console surface, never to
+    the global menu:console (the #412 cleanup: relancer/reset/horloge
+    move from the global console to the kingdom console)."""
+    import botforge.discord.console as console_mod
+
+    monkeypatch.setattr(console_mod, "_ACTIONS", dict(console_mod._ACTIONS))
+    action = console_mod.ConsoleAction(
+        key="mod-test",
+        item_cls=console_mod.DevDangerButton,
+        build=lambda disabled: console_mod.DevDangerButton(disabled=disabled),
+        description="**Mod test** — a mod-scoped action.",
+        mod="kingdom",
+    )
+    console_mod.register_console_action(action)
+    try:
+        assert "mod-test" in [a.key for a in console_mod.registered_console_actions()]
+        assert "mod-test" in [a.key for a in console_mod.registered_console_actions(mod="kingdom")]
+        assert "mod-test" not in [a.key for a in console_mod.registered_console_actions(mod="")]
+        view = await console_mod._console_view(None)
+        assert "Mod test" not in str(view.to_components())
+    finally:
+        console_mod._ACTIONS.pop("mod-test", None)
+
+
 
 def test_danger_modal_defaults_are_safe() -> None:
     """The Danger Zone modal: action-titled labels, multi-select data, safe defaults."""

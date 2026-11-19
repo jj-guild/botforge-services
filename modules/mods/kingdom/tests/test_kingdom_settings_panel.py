@@ -1,6 +1,6 @@
 """The ⚙️ Paramètres panel (epic #412 T1) — wiring smoke tests.
 
-The admin cockpit is ONE template (``view:mod:kingdom:settings``)
+The admin cockpit is ONE template (``surface:mod:kingdom:console``)
 instantiated by the ``SETTINGS_ACTIONS`` table: every action rides a
 platform seam (service contract, provisioning seams, beta phase
 toggle, ``require_admin``) — these tests pin the contract down.
@@ -12,11 +12,11 @@ from __future__ import annotations
 def test_settings_panel_module_imports() -> None:
     """The panel exposes its template key, builder and button class."""
     from botforge.mods.kingdom.cogs.settings_panel import (
-        SETTINGS_VIEW_KEY,
+        CONSOLE_VIEW_KEY,
         build_settings_panel,
     )
 
-    assert SETTINGS_VIEW_KEY == "view:mod:kingdom:settings"
+    assert CONSOLE_VIEW_KEY == "surface:mod:kingdom:console"
     assert callable(build_settings_panel)
 
 
@@ -69,8 +69,8 @@ def test_settings_actions_declared_in_views_yaml() -> None:
         / "conf"
         / "views.yaml"
     ).read_text(encoding="utf-8")
-    assert "view:mod:kingdom:settings:" in views
-    assert "surface:mod:kingdom:settings:confirm:" in views
+    assert "surface:mod:kingdom:console:" in views
+    assert "surface:mod:kingdom:console:confirm:" in views
 
 
 def test_settings_strings_parity() -> None:

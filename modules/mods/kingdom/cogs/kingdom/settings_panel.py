@@ -18,7 +18,7 @@ seams — the mod re-implements NOTHING:
   live, never assumed at render time).
 
 Announce-ready (#396): the panel is ONE named template
-(``view:mod:kingdom:settings``) instantiated by parameters (the
+(``surface:mod:kingdom:console``) instantiated by parameters (the
 ``SETTINGS_ACTIONS`` table); the destructive ops wear the inline
 confirm card (one ephemeral window, never a stacked surface).
 """
@@ -35,7 +35,7 @@ from .common import locale_of, open_unique_ephemeral, surface, wiring
 
 logger = logging.getLogger("kingdom.settings")
 
-SETTINGS_VIEW_KEY = "view:mod:kingdom:settings"
+CONSOLE_VIEW_KEY = "surface:mod:kingdom:console"
 _MOD = "kingdom"
 _ADMIN_COLOUR = discord.Colour(0x5865F2)
 
@@ -275,6 +275,15 @@ async def build_settings_panel(guild_id: str) -> discord.ui.LayoutView:
             SettingsActionButton(action, str(strings[key]), style).item
         )
 
+    # the mod-scoped console ops (relaunch / reset / clock) ride the
+    # mod's own console, never the global menu:console (#412 cleanup)
+    from botforge.discord.console import registered_console_actions
+
+    for action in registered_console_actions(mod="kingdom"):
+        if not rows or len(rows[-1].children) >= 5:
+            rows.append(discord.ui.ActionRow())
+        rows[-1].add_item(action.build(False))
+
     container: discord.ui.Container[discord.ui.LayoutView] = discord.ui.Container(
         discord.ui.TextDisplay(f"# {strings['settings_title']}"),
         discord.ui.Separator(),
@@ -282,7 +291,7 @@ async def build_settings_panel(guild_id: str) -> discord.ui.LayoutView:
         discord.ui.Separator(),
         accent_colour=_ADMIN_COLOUR,
     )
-    return surface(SETTINGS_VIEW_KEY, container)
+    return surface(CONSOLE_VIEW_KEY, container)
 
 
 async def _panel_guard(interaction: discord.Interaction) -> bool:
@@ -338,7 +347,7 @@ def _confirm_card(strings: dict[str, str], action: str) -> discord.ui.LayoutView
     row.add_item(yes)
     row.add_item(no)
     container.add_item(row)
-    return surface("surface:mod:kingdom:settings:confirm", container)
+    return surface("surface:mod:kingdom:console:confirm", container)
 
 
 async def _run_provisioning(interaction: discord.Interaction, action: str) -> str:
@@ -759,7 +768,7 @@ _SETTINGS_HANDLERS: dict[str, Any] = {
 
 
 __all__ = [
-    "SETTINGS_VIEW_KEY",
+    "CONSOLE_VIEW_KEY",
     "SettingsActionButton",
     "build_settings_panel",
     "settings_strings",

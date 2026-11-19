@@ -10,84 +10,11 @@
 # The ids live HERE, next to the mod's declaration (#221: a mod's
 # files never scatter) — the platform loader merges them at boot.
 views:
-  # the pinned « Déclarer une attaque » panel (the static pin key)
-  view:mod:kingdom:attack:
+  # the kingdom admin console (epic #412 T1) — the 12 season-management
+  # operations as ONE ephemeral window, opened by the Console button the
+  # SDK injects on menu:mod:kingdom:admin (no settings salon, no pin)
+  surface:mod:kingdom:console:
     kind: surface
-  # the pinned kingdom-validation dashboard (the « realms » admin salon,
-  # #339's detailed candidates view: pending rows + accepted/refused tables)
-  view:mod:kingdom:candidates:
-    kind: surface
-  # the /kingdom service status card
-  surface:mod:kingdom:status:
-    kind: surface
-  # the ephemeral history pager
-  surface:mod:kingdom:attack:history:
-    kind: surface
-  # the guided « Déclarer une attaque » wizard (all its steps edit one window)
-  surface:mod:kingdom:attack:declare:
-    kind: surface
-  # the planifier wizard (steps + récap)
-  surface:mod:kingdom:attack:plan:
-    kind: surface
-  # an attack's OWN salon base message (the pinned announcement)
-  surface:mod:kingdom:attack:salon:
-    kind: surface
-  # the sabotage ephemeral panel (X/2 récap, pick, again-confirm)
-  surface:mod:kingdom:sabotage:
-    kind: surface
-  # the battle meeting message (scoreboard + draft/ready/id buttons)
-  surface:mod:kingdom:battle:room:
-    kind: surface
-  # the 📜 draft sheet (the meeting's ephemeral embed)
-  surface:mod:kingdom:battle:draft:
-    kind: surface
-  # the Church's marriage wizard + confirm
-  surface:mod:kingdom:church:marry:
-    kind: surface
-  surface:mod:kingdom:church:confirm:
-    kind: surface
-  # the Market window + the Chambre des comptes + a card's use window
-  surface:mod:kingdom:market:
-    kind: surface
-  surface:mod:kingdom:chamber:
-    kind: surface
-  surface:mod:kingdom:card:
-    kind: surface
-  # the Taverne: the window, the drink confirm, the Mercenary + ladder
-  surface:mod:kingdom:tavern:
-    kind: surface
-  surface:mod:kingdom:tavern:confirm:
-    kind: surface
-  surface:mod:kingdom:mercenary:
-    kind: surface
-  surface:mod:kingdom:mercenary:ladder:
-    kind: surface
-  # the Expedition's join card (ephemeral note + the salon base line)
-  surface:mod:kingdom:ffa:
-    kind: surface
-  surface:mod:kingdom:ffa:salon:
-    kind: surface
-  # the ops console's confirm card (test guilds only)
+  # the console's inline confirm card (deploy/sync/reset)
   surface:mod:kingdom:console:confirm:
-    kind: surface
-  # the alliances rubric window
-  surface:mod:kingdom:alliances:
-    kind: surface
-  # the pinned golden Postuler panel (the « apply » salon, the
-  # players' enrollment door — postuler-hybride-v1, Drasah 18/11)
-  view:mod:kingdom:apply:
-    kind: surface
-  # the pinned s'enregistrer poster (the public « register » salon, the
-  # parcours' first door — salon-parcours-v2, Drasah 18/11)
-  view:mod:kingdom:register:
-    kind: surface
-  # the adaptive enrollment window (account ready / season / withdraw)
-  surface:mod:kingdom:apply:
-    kind: surface
-  # the pinned ⚙️ Paramètres panel (the admin settings salon — the
-  # 12-button season cockpit, epic #412 T1, Drasah 18/11)
-  view:mod:kingdom:settings:
-    kind: surface
-  # the settings panel's inline confirm card (deploy/sync/reset)
-  surface:mod:kingdom:settings:confirm:
     kind: surface

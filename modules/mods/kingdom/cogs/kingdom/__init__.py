@@ -152,24 +152,22 @@ def register(bot: Any, config: Any) -> None:
     # idempotent (the sink keeps one handler reference per bot)
     subscribe_profile_gate(bot)
 
-    # epic #412 T1 (Drasah 18/11): the ⚙️ Paramètres panel — the admin
-    # season cockpit pinned in the admin settings salon (the reference's
-    # 12 buttons on the platform's provisioning/service seams).
-    from .settings_panel import SETTINGS_VIEW_KEY, SettingsActionButton, build_settings_panel
+    # epic #412 T1: the kingdom admin console — the 12 season-management
+    # operations as ONE ephemeral window (no settings salon, no pin). The
+    # SDK injects the Console button on menu:mod:kingdom:admin because the
+    # mod declares surface:mod:kingdom:console; the router lands here.
+    from botforge.discord.views_routing import wire_view
 
-    async def _resolve_settings_channel(guild_id: str) -> str:
-        return await stored_channel_id(guild_id, "mod/kingdom", "settings") or ""
+    from .common import open_unique_ephemeral
+    from .settings_panel import CONSOLE_VIEW_KEY, _panel_guard, build_settings_panel
 
-    register_static_pin(
-        StaticPinnedView(
-            key=SETTINGS_VIEW_KEY,
-            mark_suffix=SETTINGS_VIEW_KEY,
-            resolve_channel=_resolve_settings_channel,
-            build_layout=build_settings_panel,
-            registry=getattr(bot, "message_registry", None),
-            scope="mod/kingdom",
-        )
-    )
+    async def _open_kingdom_console(interaction: discord.Interaction) -> None:
+        if not await _panel_guard(interaction):
+            return
+        view = await build_settings_panel(str(interaction.guild_id or ""))
+        await open_unique_ephemeral(interaction, view=view)
+
+    wire_view(CONSOLE_VIEW_KEY, _open_kingdom_console)
 
 
 def setup_hook(bot: Any) -> None:

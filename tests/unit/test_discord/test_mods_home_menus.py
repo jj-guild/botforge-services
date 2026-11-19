@@ -118,3 +118,13 @@ def test_the_games_home_carries_no_door_buttons(rendered_menus: dict[str, Any]) 
     """The games home's doors live in the body's notice, not link buttons."""
     buttons = rendered_menus["menu:games:home"]["buttons"]
     assert all(b.get("url") is None for b in buttons), "the games home carries link buttons"
+
+
+def test_the_kingdom_admin_menu_carries_the_console_button(rendered_menus: dict[str, Any]) -> None:
+    """A mod declaring surface:mod:<name>:console gets the console button
+    on its admin menu, routed to that declared surface (epic #412)."""
+    buttons = rendered_menus["menu:mod:kingdom:admin"]["buttons"]
+    custom_ids = [str(b.get("custom_id", "")) for b in buttons]
+    assert "view:open:surface:mod:kingdom:console" in custom_ids, (
+        f"the admin menu must route to the declared console surface — got {custom_ids}"
+    )

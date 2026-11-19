@@ -76,6 +76,10 @@ class ConsoleAction:
     item_cls: type[discord.ui.DynamicItem[Any]]
     build: Callable[[bool], discord.ui.DynamicItem[Any]]
     description: str
+    # empty = the GLOBAL console (menu:console); a mod's name scopes the
+    # action to that mod's own console surface (e.g.
+    # surface:mod:kingdom:console) — never rendered by the global one
+    mod: str = ""
 
 
 _ACTIONS: dict[str, ConsoleAction] = {}
@@ -91,9 +95,17 @@ def register_console_action(action: ConsoleAction) -> ConsoleAction:
     return action
 
 
-def registered_console_actions() -> tuple[ConsoleAction, ...]:
-    """Return the registered actions in registration order."""
-    return tuple(_ACTIONS.values())
+def registered_console_actions(mod: str | None = None) -> tuple[ConsoleAction, ...]:
+    """Return the registered actions in registration order.
+
+    ``mod=None`` returns everything; ``mod=""`` only the global console's
+    actions; ``mod="kingdom"`` only that mod's (they belong to the mod's
+    own console surface, never to ``menu:console``).
+    """
+    actions = tuple(_ACTIONS.values())
+    if mod is None:
+        return actions
+    return tuple(a for a in actions if a.mod == mod)
 
 
 def console_action(key: str) -> ConsoleAction | None:
@@ -438,7 +450,9 @@ async def _console_view(guild_id: str | int | None, client: Any = None) -> disco
         )
     )
     note = await _tr_guild(client, guild_id, note_key, note_fallback)
-    intro = note + "\n" + "\n".join(action.description for action in registered_console_actions())
+    intro = note + "\n" + "\n".join(
+        action.description for action in registered_console_actions(mod="")
+    )
     container: discord.ui.Container[discord.ui.LayoutView] = discord.ui.Container(
         discord.ui.TextDisplay(await _tr_guild(client, guild_id, "title", "# \u2699 Console")),
         discord.ui.TextDisplay(intro),
@@ -452,7 +466,7 @@ async def _console_view(guild_id: str | int | None, client: Any = None) -> disco
         )
     )
     container.add_item(row)
-    for action in registered_console_actions():
+    for action in registered_console_actions(mod=""):
         ext_row: discord.ui.ActionRow[discord.ui.LayoutView] = discord.ui.ActionRow()
         ext_row.add_item(action.build(not allowed))
         container.add_item(ext_row)
