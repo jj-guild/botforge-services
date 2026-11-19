@@ -47,7 +47,7 @@ def register(bot: Any, config: Any) -> None:
 
     # #339 (candidates dashboard): the detailed validation view pinned in
     # the declared « realms » admin salon — pending rows with the decision
-    # buttons + the accepted/refused tables (D70 rule 35).
+    # buttons + the accepted and refused tables (D70 rule 35).
     from .validation import build_validation_panel
 
     async def _resolve_realms_channel(guild_id: str) -> str:
@@ -92,8 +92,8 @@ def register(bot: Any, config: Any) -> None:
         )
     )
 
-    # salon-parcours-v2 (Drasah 18/11): the parcours' FIRST door — the
-    # public « register » salon carries the s'enregistrer poster (ONE
+    # salon-parcours-v2 (Drasah 18/11): the parcours' FIRST door —
+    # the public « register » salon carries the s'enregistrer poster (ONE
     # CTA: the platform's official profile route). The Postuler salon
     # above stays gated to the registered players (the access role is
     # granted by the profile.bound event — registration_gate).
@@ -228,6 +228,7 @@ def setup_hook(bot: Any) -> None:
     from .settings_panel import SettingsActionButton
     from .time_machine import machine_dynamic_items
     from .distributor import distributor_dynamic_items
+    from .camp_beta import camp_dynamic_items
 
     for item in (
         DeclareButton,
@@ -265,6 +266,7 @@ def setup_hook(bot: Any) -> None:
         SettingsActionButton,
         *machine_dynamic_items(),
         *distributor_dynamic_items(),
+        *camp_dynamic_items(),
     ):
         try:
             bot.add_dynamic_items(item)

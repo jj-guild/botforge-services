@@ -26,7 +26,7 @@ en:
       kingdoms_none: "👑 No kingdom in play yet — the first to apply founds theirs!"
       join_button: "📜 Join the adventure"
       register_title: "🪙 SIGN UP — KINGDOMS"
-      register_text: "Welcome, future conqueror! Create your project account — it's **free** and takes a minute: you'll link your AoE2 profile to your Discord account."
+      register_text: "Welcome, future conqueror! Create your project account — it's **free** and takes a minute: you'll link your AoE profile to your Discord account."
       register_hint: "Once your account exists, the **📜 apply** salon opens to you: that's where you apply for the season. See you there!"
       w_title: "⚔️ Kingdoms — sign-up"
       w_welcome_title: "⚔️ Welcome, future conqueror!"
@@ -77,7 +77,7 @@ en:
       settings_launch_modal_names_placeholder: "Kingdom A, Kingdom B"
       settings_launch_modal_title: ▶️ Launch the season
       settings_mode_free: 'Season mode: **free** — the Kings found their kingdoms.'
-      settings_mode_imposed: 'Season mode: **imposed** — the Kings cannot found a kingdom anymore.'
+      settings_mode_imposed: 'Season mode: **imposed** — the Kings can no longer found a kingdom.'
       settings_no_service: ❌ The Kingdoms service is not ready.
       settings_phase_unknown: unknown
       settings_remove_button: 🧹 Remove a player/candidate
@@ -112,6 +112,36 @@ en:
       settings_sync_confirm_title: Resynchronize the panels?
       settings_sync_done: '✅ Resynchronized: {pins} pinned panels.'
       settings_title: 🛠️ Kingdoms — console
+    camp:
+      button: "⚔️ Pick my side — King or Lord"
+      window_title: "⚔️ King or Lord?"
+      window_help: "🧪 **Provisional system of the beta season**: found your kingdom or join one, no paperwork. On a normal season, the official path (account → application → throne or vassalage) will apply."
+      found_button: "👑 Found my kingdom"
+      join_button: "🛡️ Join a kingdom"
+      join_window_title: "🛡️ Join a kingdom"
+      join_help: "Pick the kingdom you serve — or take a seat in the waiting queue, an admin will assign you."
+      pick_placeholder: "Pick a kingdom…"
+      seats_left: "{0} lord seat(s) left"
+      queue_button: "⏳ Join the waiting queue"
+      modal_title: "👑 Found your kingdom"
+      modal_label: "Your kingdom's name"
+      found_done: "👑 Your kingdom **{0}** is founded and approved at once (beta) — welcome to the throne!"
+      join_done: "🛡️ You now serve **{0}**."
+      queue_done: "⏳ You are in the waiting queue — an admin will assign you a kingdom."
+      no_kingdoms: "No kingdom to join yet."
+      already_king_line: "👑 You reign over **{0}**."
+      already_lord_line: "🛡️ You serve **{0}**."
+      already_queue_line: "⏳ You are in the waiting queue."
+      none_note: "❌ The Kingdoms service is not ready."
+      err_kingdoms_already_enrolled: "❌ You are already enrolled in this season."
+      err_kingdoms_no_season: "❌ No season is running."
+      err_kingdoms_name_invalid: "❌ That kingdom name is invalid (length or characters)."
+      err_kingdoms_kingdom_limit: "❌ The season already counts its maximum of kingdoms."
+      err_kingdoms_kingdom_full: "❌ That kingdom is full."
+      err_kingdoms_not_enrollable: "❌ That kingdom does not recruit."
+      err_kingdoms_imposed: "❌ The kingdoms are imposed for this season — founding is closed."
+      err_kingdoms_kingdom_not_found: "❌ That kingdom does not exist anymore."
+      error: "❌ {0}"
     machine:
       title: "⏱️ Kingdoms time machine — the game clock"
       help: "Advance the clock, trigger the switches, snapshot the state — no calendar waiting. Every due slot replays onto a snapshot: « previous cycle / age » always lands exactly before the switch."

@@ -18,6 +18,10 @@ platform's engine (SeasonApplyButton, the withdraw confirm, the
 profile panel router): the mod owns the shape, the core owns the
 mechanics. The player NEVER leaves the ephemeral flow — the hidden
 machine-room categories (Kingdom, Game/AoE2) stay admin-only.
+
+camp-beta-v1 (Drasah 19/11): the 3rd tier shows PROVISIONALLY on BETA
+seasons only — the ⚔️ camp door button rides the pinned panel (see
+camp_beta.py); a normal season shows nothing provisional.
 """
 
 from __future__ import annotations
@@ -102,6 +106,16 @@ async def build_apply_panel(guild_id: str) -> discord.ui.LayoutView:
     join_row.add_item(KingdomApplyOpenButton(str(strings["join_button"])).item)
     blocks.append(discord.ui.Separator())
     blocks.append(join_row)
+    # camp-beta-v1 (Drasah 19/11): the PROVISIONAL Roi/Seigneur door —
+    # BETA seasons only. A NORMAL season shows nothing provisional:
+    # the official flow (account > dossier > throne or vasselage) will
+    # own the kingdom founding when it lands.
+    from .camp_beta import beta_armed, build_camp_button, camp_strings
+
+    if await beta_armed():
+        camp_row: Any = discord.ui.ActionRow()
+        camp_row.add_item(build_camp_button(camp_strings(await _guild_locale(guild_id))).item)
+        blocks.append(camp_row)
     return surface(
         APPLY_VIEW_KEY,
         discord.ui.Container(*blocks, accent_colour=GOLD),

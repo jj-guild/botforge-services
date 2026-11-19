@@ -46,3 +46,7 @@ views:
     kind: surface
   panel:mod:kingdom:distributor:window:
     kind: surface
+  # camp-beta-v1 (Drasah 19/11): the ⚔️ Roi ou Seigneur provisional
+  # window (the beta seasons' founding/joining door)
+  panel:mod:kingdom:camp:
+    kind: surface
