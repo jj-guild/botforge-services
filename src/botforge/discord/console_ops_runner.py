@@ -241,9 +241,7 @@ class _ProvisioningSeam:
         self.registry = registry
         self.mod_roles_service = mod_roles_service
         self.messages = MessageCatalog(CONFIG_DIR)
-        logs_service = self._LocaleOnly(locale)
-        # mypy: the attribute shapes match the bot's (dynamic wiring)
-        self.logs_service = logs_service  # type: ignore[attr-defined]
+        self.logs_service = self._LocaleOnly(locale)
 
     class _LocaleOnly:
         """A locale-only logs seam: the guild's language is already resolved."""
