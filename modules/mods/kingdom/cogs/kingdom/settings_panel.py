@@ -57,8 +57,10 @@ _SETTINGS_ACTIONS: tuple[tuple[str, str, discord.ButtonStyle], ...] = (
     ("add-kingdom", "settings_add_kingdom_button", discord.ButtonStyle.primary),
     ("season-mode", "settings_season_mode_button", discord.ButtonStyle.secondary),
     ("remove", "settings_remove_button", discord.ButtonStyle.danger),
-    ("hat", "settings_hat_button", discord.ButtonStyle.secondary),
 )
+# casquette-removal-v1 (Drasah 19/11): the hat op RETIRES from the
+# console (11 actions) — the bypass lives in the code's own seams and
+# the test kingdom rides the Distributeur's dedicated button.
 
 _CONFIRM_ACTIONS = frozenset({"deploy", "sync", "reset"})
 
@@ -115,11 +117,30 @@ def strings_of(interaction: discord.Interaction) -> dict[str, str]:
     return settings_strings(locale_of(interaction))
 
 
+def console_buttons(strings: dict[str, str], disabled: bool = False) -> tuple[Any, ...]:
+    """The three console ops, in ONE given locale (recette 19/11: FR).
+
+    The registry's builders render the EN defaults (the platform's
+    home/SDK surfaces); the panel here re-instantiates the SAME
+    restart-proof DynamicItems with the GUILD locale's labels — the
+    buttons keep their stable custom ids, only the visible text is
+    localized.
+    """
+    from .console import KingdomClockButton, KingdomRelaunchButton, KingdomResetButton
+
+    return (
+        KingdomRelaunchButton(str(strings["console_relaunch_label"]), disabled),
+        KingdomResetButton(str(strings["console_reset_label"]), disabled),
+        KingdomClockButton(str(strings["console_clock_label"]), disabled),
+    )
+
+
 async def build_settings_panel(guild_id: str) -> discord.ui.LayoutView:
     """Build the mod admin console panel (the admin cockpit)."""
     from .apply_flow import _guild_locale
 
-    strings = settings_strings(await _guild_locale(guild_id))
+    locale = await _guild_locale(guild_id)
+    strings = settings_strings(locale)
     rows: list[discord.ui.ActionRow[discord.ui.LayoutView]] = []
     for index, (action, key, style) in enumerate(_SETTINGS_ACTIONS):
         if index % 5 == 0:
@@ -128,14 +149,17 @@ async def build_settings_panel(guild_id: str) -> discord.ui.LayoutView:
             SettingsActionButton(action, str(strings[key]), style).item
         )
 
-    # the mod-scoped console ops (relaunch / reset / clock) ride the
-    # mod's own console, never the global panel:admin:console (#412 cleanup)
-    from botforge.discord.console import registered_console_actions
+    # the mod-scoped console ops (relaunch / reset / clock): the SAME
+    # restart-proof DynamicItems the registry owns, re-rendered in the
+    # GUILD's locale (the registry's own builder is EN-only — recette
+    # 19/11: the panel's buttons read in French)
+    from .common import strings_by_locale
 
-    for action in registered_console_actions(mod="kingdom"):
+    ops = strings_by_locale(locale)
+    for button in console_buttons(ops, False):
         if not rows or len(rows[-1].children) >= 5:
             rows.append(discord.ui.ActionRow())
-        rows[-1].add_item(action.build(False))
+        rows[-1].add_item(button.item)
 
     container: discord.ui.Container[discord.ui.LayoutView] = discord.ui.Container(
         discord.ui.TextDisplay(f"# {strings['settings_title']}"),
@@ -414,30 +438,6 @@ async def _status(interaction: discord.Interaction, strings: dict[str, str]) -> 
     await open_unique_ephemeral(interaction, "\n".join(lines))
 
 
-async def _hat(interaction: discord.Interaction, strings: dict[str, str]) -> None:
-    """Toggle the admin hat (Nilrem): the bypass + the test kingdom."""
-    await interaction.response.defer(ephemeral=True)
-    from botforge.mods.kingdom.admin_debug import (
-        admin_bypass_enabled,
-        set_admin_bypass,
-    )
-
-    stack, _busy = _needs_stack(strings)
-    enabled = not admin_bypass_enabled()
-    try:
-        set_admin_bypass(enabled, source="settings-panel")
-        if enabled:
-            if stack is not None:
-                await stack.kingdoms.ensure_test_kingdom()
-            note = str(strings["settings_hat_on"])
-        else:
-            note = str(strings["settings_hat_off"])
-    except Exception as exc:  # the panel reports, never raises
-        logger.warning("kingdom: hat toggle failed", exc_info=True)
-        note = service_failure_note(strings, "settings_failed", exc)
-    await interaction.followup.send(note, ephemeral=True)
-
-
 class _LaunchModal(discord.ui.Modal):
     """Lancer la saison — optional comma-separated imposed kingdom names."""
 
@@ -642,13 +642,13 @@ _SETTINGS_HANDLERS: dict[str, Any] = {
     "assign": _open_assign,
     "add-kingdom": _open_add_kingdom,
     "remove": _open_remove,
-    "hat": _hat,
 }
 
 
 __all__ = [
     "CONSOLE_VIEW_KEY",
     "SettingsActionButton",
+    "console_buttons",
     "build_settings_panel",
     "settings_strings",
 ]

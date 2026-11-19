@@ -33,12 +33,9 @@ channel_groups:
     display_name: 🏰 ᴋɪɴɢᴅᴏᴍs-ɢᴀɪᴀ
   - key: battlefield
     display_name: ⚔️ ᴄʜᴀᴍᴘs ᴅᴇ ʙᴀᴛᴀɪʟʟᴇ
-  # laboratoire-v1 (Drasah 05/11): the visual-validation lab — ONE
-  # admin-only category, ONE salon with the cockpit panel. The lab
-  # never touches the game salons (renders ride the Nilrem data).
-  - key: laboratoire
-    display_name: 🧪 ʟᴀʙᴏʀᴀᴛᴏɪʀᴇ
-    admin_only: true
+  # laboratoire-v3 (Drasah 19/11): the Labo group RETIRES — the visual
+  # validation lives with Mistral now; the lab salons (lab, lab_original,
+  # lab_travaux) are swept at the next provisioning as undeclared slugs.
   - key: admin
     display_name: ⚙️ ᴀᴅᴍɪɴ
     admin_only: true
@@ -153,6 +150,18 @@ channels:
     access:
       everyone_view: false
       view: [Kingdom Admin]
+  # casquette-removal-v1 + console-fr-v1 (Drasah 19/11): the console
+  # panel pins in its OWN declared settings salon (Admin > Paramètres),
+  # next to the ephemeral SDK window — the ops don't hunt for a
+  # discoverable button anymore.
+  - key: settings
+    display_name: 🛠️ paramètres
+    description: The admin console panel (pinned, admin only)
+    group: admin
+    admin_only: true
+    access:
+      everyone_view: false
+      view: [Kingdom Admin]
   # console-removal-v1 (Drasah 25/10): the console channel block is
   # GONE — the listener never booted in prod; the live flows live on
   # the ⚙️ Paramètres panel and the salon is swept as a legacy slug.
@@ -169,37 +178,6 @@ channels:
     display_name: 📜 journal-admin
     description: Timestamped admin actions log (admin only)
     group: admin
-    admin_only: true
-    access:
-      everyone_view: false
-      view: [Kingdom Admin]
-  # laboratoire-v1 (Drasah 05/11): the Labo salon — the pinned cockpit
-  # panel renders the mod's views in the salon (admin only, nothing
-  # interactive, Nilrem data, zero game-channel write).
-  - key: lab
-    display_name: 🧪 labo
-    description: The visual laboratory cockpit (admin only)
-    group: laboratoire
-    admin_only: true
-    access:
-      everyone_view: false
-      view: [Kingdom Admin]
-  # laboratoire-v2 (Drasah 05/11): the lab DISPATCHES every test into
-  # two version salons — 📜 original (the deployed code's render) and
-  # 🚧 travaux (the work-in-progress render) — the side-by-side
-  # comparison Drasah validates before confirming to Mistral.
-  - key: lab_original
-    display_name: 📜 original
-    description: The lab's original-version renders — the deployed code (admin only)
-    group: laboratoire
-    admin_only: true
-    access:
-      everyone_view: false
-      view: [Kingdom Admin]
-  - key: lab_travaux
-    display_name: 🚧 travaux
-    description: The lab's work-in-progress renders — the pending version (admin only)
-    group: laboratoire
     admin_only: true
     access:
       everyone_view: false
