@@ -48,13 +48,22 @@ async def open_declared_view(interaction: discord.Interaction, view_id: str) -> 
     if handler is not None:
         await handler(interaction)
         return
-    if get_view(view_id) is not None:
+    from botforge.discord.commands_i18n import reply
+
+    decl = get_view(view_id)
+    if decl is not None:
+        if str(view_id).startswith("surface:"):
+            # a surface is always wired by its owner (wire_view) — never
+            # rendered as a bare menu with raw i18n keys
+            await interaction.response.send_message(
+                await reply(interaction, "not_configured"), ephemeral=True
+            )
+            return
         guild_id = str(interaction.guild_id) if interaction.guild_id else ""
         builder = build_declared_menu(interaction.client, view_id)
         await interaction.response.defer(ephemeral=True, thinking=False)
         await interaction.followup.send(view=await builder(guild_id), ephemeral=True)
         return
-    from botforge.discord.commands_i18n import reply
 
     await interaction.response.send_message(await reply(interaction, "unknown_view"), ephemeral=True)
 

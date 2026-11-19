@@ -266,6 +266,35 @@ async def test_open_declared_view_answers_an_unwired_menu() -> None:
     assert unknown.response.sent_message, "an undeclared id answers unknown_view"
 
 
+@pytest.mark.asyncio
+async def test_an_unwired_surface_answers_not_configured_never_raw_keys() -> None:
+    """A declared surface is always wired (wire_view): unwired, the router
+    answers not_configured — never a bare menu rendering raw i18n keys."""
+    from botforge.discord.views_registry import ViewDecl, register_view
+    from botforge.discord.views_routing import open_declared_view
+
+    register_view(ViewDecl(id="surface:mod:ghost:console", kind="surface"))
+
+    class _Response:
+        def __init__(self) -> None:
+            self.sent_message = False
+
+        async def defer(self, **kwargs: object) -> None:
+            raise AssertionError("a surface must not defer into the menu builder")
+
+        async def send_message(self, *args: object, **kwargs: object) -> None:
+            self.sent_message = True
+
+    class _Inter:
+        guild_id = 42
+        client = None
+        response = _Response()
+
+    inter = _Inter()
+    await open_declared_view(inter, "surface:mod:ghost:console")  # type: ignore[arg-type]
+    assert inter.response.sent_message, "an unwired surface answers not_configured"
+
+
 def test_admin_menus_carry_a_scope_notice() -> None:
     """The admin surfaces resolve a tree scope (their channels/roles notice)."""
     for view_id in ("menu:admin", "menu:games:admin", "menu:game:aoe2:admin", "menu:mods:admin"):
