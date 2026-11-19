@@ -670,8 +670,21 @@ async def run_event_slots_safe(bot: Any) -> None:
         return
     if season is None or season.frozen or season.phase == "setup":
         return
+    async def _snapshotter(kind: str) -> None:
+        """machine-temps-v3: photograph the exact pre-slot state.
+
+        The run_due hook (Drasah's 19/11): every cycle/age/end slot
+        replays onto a fresh snapshot, so « Cycle/Âge précédent »
+        always finds the exact moment before the switch. Best-effort —
+        a failed camera never blocks the replay.
+        """
+        try:
+            await stack.kingdoms.snapshot(label=f"slot-{kind}")
+        except Exception:
+            logger.warning("kingdom: slot snapshot failed — best-effort", exc_info=True)
+
     try:
-        reports = await stack.events.run_due(game_now())
+        reports = await stack.events.run_due(game_now(), snapshotter=_snapshotter)
     except Exception:
         logger.warning("kingdom: due-slot replay failed — best-effort", exc_info=True)
         return

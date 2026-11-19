@@ -111,6 +111,64 @@ def register(bot: Any, config: Any) -> None:
         )
     )
 
+    # console-fr-v1 (Drasah 19/11): the admin console ALSO pins in its
+    # OWN declared settings salon (Admin > Paramètres) — the same
+    # restart-proof buttons, the ephemeral SDK window stays. The pin
+    # carries its own view id so the registry keeps two surfaces.
+    from .settings_panel import build_settings_panel
+
+    async def _resolve_settings_channel(guild_id: str) -> str:
+        return await stored_channel_id(guild_id, "mod/kingdom", "settings") or ""
+
+    register_static_pin(
+        StaticPinnedView(
+            key="panel:mod:kingdom:settings",
+            mark_suffix="panel:mod:kingdom:settings",
+            resolve_channel=_resolve_settings_channel,
+            build_layout=build_settings_panel,
+            registry=getattr(bot, "message_registry", None),
+            scope="mod/kingdom",
+        )
+    )
+
+    # machine-temps-v3 (Drasah 19/11): the ⏱️ machine à temps cockpit —
+    # the game clock, the switches, the snapshots — pinned in the
+    # declared time_machine salon, next to the ephemeral windows.
+    from .time_machine import build_time_machine_panel
+
+    async def _resolve_time_machine_channel(guild_id: str) -> str:
+        return await stored_channel_id(guild_id, "mod/kingdom", "time_machine") or ""
+
+    register_static_pin(
+        StaticPinnedView(
+            key="panel:mod:kingdom:time-machine",
+            mark_suffix="panel:mod:kingdom:time-machine",
+            resolve_channel=_resolve_time_machine_channel,
+            build_layout=build_time_machine_panel,
+            registry=getattr(bot, "message_registry", None),
+            scope="mod/kingdom",
+        )
+    )
+
+    # distributeur-v1 (Drasah 19/11): the 🎁 distributeur — the test
+    # injector pinned in the declared distributor salon (create/remove
+    # the test kingdom, hand kingdoms points/territories/civilizations).
+    from .distributor import build_distributor_panel
+
+    async def _resolve_distributor_channel(guild_id: str) -> str:
+        return await stored_channel_id(guild_id, "mod/kingdom", "distributor") or ""
+
+    register_static_pin(
+        StaticPinnedView(
+            key="panel:mod:kingdom:distributor",
+            mark_suffix="panel:mod:kingdom:distributor",
+            resolve_channel=_resolve_distributor_channel,
+            build_layout=build_distributor_panel,
+            registry=getattr(bot, "message_registry", None),
+            scope="mod/kingdom",
+        )
+    )
+
     # the salon gate's subscription (profile.bound → the access role):
     # idempotent (the sink keeps one handler reference per bot)
     subscribe_profile_gate(bot)
@@ -168,6 +226,8 @@ def setup_hook(bot: Any) -> None:
     from .validation import ValidationDecisionButton
     from .apply_flow import KingdomApplyOpenButton, KingdomPostulerButton
     from .settings_panel import SettingsActionButton
+    from .time_machine import machine_dynamic_items
+    from .distributor import distributor_dynamic_items
 
     for item in (
         DeclareButton,
@@ -203,6 +263,8 @@ def setup_hook(bot: Any) -> None:
         KingdomApplyOpenButton,
         KingdomPostulerButton,
         SettingsActionButton,
+        *machine_dynamic_items(),
+        *distributor_dynamic_items(),
     ):
         try:
             bot.add_dynamic_items(item)

@@ -32,3 +32,17 @@ views:
     kind: surface
   panel:mod:kingdom:status:
     kind: surface
+  # machine-temps-v3 (Drasah 19/11): the ⏱️ machine à temps surfaces —
+  # the pinned cockpit + the snapshot-restore picker window
+  panel:mod:kingdom:settings:
+    kind: surface
+  panel:mod:kingdom:time-machine:
+    kind: surface
+  panel:mod:kingdom:time-machine:restore:
+    kind: surface
+  # distributeur-v1 (Drasah 19/11): the 🎁 distributeur surfaces —
+  # the pinned panel + the injection window
+  panel:mod:kingdom:distributor:
+    kind: surface
+  panel:mod:kingdom:distributor:window:
+    kind: surface
