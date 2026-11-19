@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Python: botforge.aoe2.known_ids</title>
+</head><body>
+
+<table class="heading">
+<tr class="heading-text decor">
+<td class="title">&nbsp;<br><strong class="title"><a href="botforge.html" class="white">botforge</a>.<a href="botforge.aoe2.html" class="white">aoe2</a>.known_ids</strong></td>
+<td class="extra"><a href=".">index</a><br><a href="file:SOURCE_ROOT/aoe2/known_ids.py">SOURCE_ROOT/aoe2/known_ids.py</a></td></tr></table>
+    <p><span class="code">Known&nbsp;profile&nbsp;ids&nbsp;+&nbsp;display&nbsp;names,&nbsp;shared&nbsp;by&nbsp;the&nbsp;AoE2&nbsp;processes.<br>
+&nbsp;<br>
+botforge-services#423:&nbsp;the&nbsp;log&nbsp;taxonomy&nbsp;rides&nbsp;the&nbsp;known&nbsp;ids&nbsp;—&nbsp;a&nbsp;line<br>
+about&nbsp;a&nbsp;known&nbsp;profile&nbsp;(or&nbsp;a&nbsp;match&nbsp;it&nbsp;plays)&nbsp;is&nbsp;INFO&nbsp;and&nbsp;NAMES&nbsp;the<br>
+player;&nbsp;everything&nbsp;else&nbsp;(lobby&nbsp;counts,&nbsp;heartbeats,&nbsp;stranger&nbsp;matches)<br>
+is&nbsp;DEBUG.&nbsp;Both&nbsp;the&nbsp;game_aoe2&nbsp;aggregator&nbsp;(which&nbsp;owns&nbsp;the&nbsp;roster&nbsp;pushed<br>
+through&nbsp;UpdateEnrollments)&nbsp;and&nbsp;the&nbsp;ext_aoe2lobby&nbsp;adapter&nbsp;(which<br>
+forwards&nbsp;the&nbsp;same&nbsp;enrollments)&nbsp;resolve&nbsp;ids&nbsp;and&nbsp;names&nbsp;through&nbsp;this<br>
+module&nbsp;—&nbsp;one&nbsp;rule,&nbsp;one&nbsp;implementation&nbsp;(botforge.aoe2&nbsp;sits&nbsp;on&nbsp;the&nbsp;ext<br>
+providers'&nbsp;shared-utils&nbsp;whitelist,&nbsp;layering&nbsp;rule&nbsp;R1).</span></p>
+<p>
+<table class="section">
+<tr class="decor pkg-content-decor heading-text">
+<td class="section-title" colspan=3>&nbsp;<br><strong class="bigsection">Modules</strong></td></tr>
+    
+<tr><td class="decor pkg-content-decor"><span class="code">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span></td><td>&nbsp;</td>
+<td class="singlecolumn"><table><tr><td class="multicolumn"><a href="logging.html">logging</a><br>
+</td><td class="multicolumn"></td><td class="multicolumn"></td><td class="multicolumn"></td></tr></table></td></tr></table><p>
+<table class="section">
+<tr class="decor index-decor heading-text">
+<td class="section-title" colspan=3>&nbsp;<br><strong class="bigsection">Classes</strong></td></tr>
+    
+<tr><td class="decor index-decor"><span class="code">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span></td><td>&nbsp;</td>
+<td class="singlecolumn"><dl>
+<dt class="heading-text"><a href="builtins.html#object">builtins.object</a>
+</dt><dd>
+<dl>
+<dt class="heading-text"><a href="botforge.aoe2.known_ids.html#KnownIds">KnownIds</a>
+</dt></dl>
+</dd>
+</dl>
+ <p>
+<table class="section">
+<tr class="decor title-decor heading-text">
+<td class="section-title" colspan=3>&nbsp;<br><a name="KnownIds">class <strong>KnownIds</strong></a>(<a href="builtins.html#object">builtins.object</a>)</td></tr>
+    
+<tr><td class="decor title-decor" rowspan=2><span class="code">&nbsp;&nbsp;&nbsp;</span></td>
+<td class="decor title-decor" colspan=2><span class="code"><a href="#KnownIds">KnownIds</a>()&nbsp;-&amp;gt;&nbsp;'None'<br>
+&nbsp;<br>
+The&nbsp;known&nbsp;profile&nbsp;ids&nbsp;and&nbsp;their&nbsp;display&nbsp;names.<br>
+&nbsp;<br>
+The&nbsp;roster&nbsp;(the&nbsp;enrollments&nbsp;push)&nbsp;is&nbsp;the&nbsp;source&nbsp;of&nbsp;truth;&nbsp;a<br>
+nameless&nbsp;known&nbsp;profile&nbsp;falls&nbsp;back&nbsp;to&nbsp;its&nbsp;profile&nbsp;id&nbsp;rather&nbsp;than<br>
+being&nbsp;demoted&nbsp;out&nbsp;of&nbsp;INFO.&nbsp;Names&nbsp;observed&nbsp;in&nbsp;match&nbsp;slots&nbsp;refine<br>
+the&nbsp;roster&nbsp;without&nbsp;ever&nbsp;adding&nbsp;a&nbsp;stranger.<br>&nbsp;</span></td></tr>
+<tr><td>&nbsp;</td>
+<td class="singlecolumn">Methods defined here:<br>
+<dl><dt><a name="KnownIds-__init__"><strong>__init__</strong></a>(self) -&gt; 'None'</dt><dd><span class="code">Initialize&nbsp;self.&nbsp;&nbsp;See&nbsp;help(type(self))&nbsp;for&nbsp;accurate&nbsp;signature.</span></dd></dl>
+
+<dl><dt><a name="KnownIds-display_name"><strong>display_name</strong></a>(self, profile_id: 'Any') -&gt; 'str'</dt><dd><span class="code">Return&nbsp;the&nbsp;display&nbsp;name&nbsp;of&nbsp;a&nbsp;profile,&nbsp;falling&nbsp;back&nbsp;to&nbsp;its&nbsp;id.</span></dd></dl>
+
+<dl><dt><a name="KnownIds-display_names"><strong>display_names</strong></a>(self, profile_ids: 'Iterable[Any]') -&gt; 'str'</dt><dd><span class="code">Build&nbsp;a&nbsp;comma-joined,&nbsp;human-readable&nbsp;list&nbsp;of&nbsp;the&nbsp;given&nbsp;profiles.</span></dd></dl>
+
+<dl><dt><a name="KnownIds-is_known"><strong>is_known</strong></a>(self, profile_id: 'Any') -&gt; 'bool'</dt><dd><span class="code">Report&nbsp;whether&nbsp;one&nbsp;profile&nbsp;id&nbsp;is&nbsp;known&nbsp;(enrolled&nbsp;or&nbsp;tracked).</span></dd></dl>
+
+<dl><dt><a name="KnownIds-known_of"><strong>known_of</strong></a>(self, profile_ids: 'Iterable[Any]') -&gt; 'list[str]'</dt><dd><span class="code">Return&nbsp;the&nbsp;known&nbsp;ids&nbsp;among&nbsp;the&nbsp;given&nbsp;profile&nbsp;ids&nbsp;(input&nbsp;order&nbsp;kept).</span></dd></dl>
+
+<dl><dt><a name="KnownIds-learn_name"><strong>learn_name</strong></a>(self, profile_id: 'Any', name: 'str') -&gt; 'None'</dt><dd><span class="code">Record&nbsp;a&nbsp;display&nbsp;name&nbsp;observed&nbsp;for&nbsp;an&nbsp;already-known&nbsp;profile.</span></dd></dl>
+
+<dl><dt><a name="KnownIds-set_entries"><strong>set_entries</strong></a>(self, entries: 'Iterable[Any]') -&gt; 'None'</dt><dd><span class="code">Replace&nbsp;the&nbsp;known&nbsp;ids&nbsp;from&nbsp;enrollment&nbsp;entries.<br>
+&nbsp;<br>
+Entries&nbsp;are&nbsp;dicts&nbsp;(``profile_id``&nbsp;plus&nbsp;optional&nbsp;``user_id``&nbsp;/<br>
+``name``&nbsp;—&nbsp;the&nbsp;enrollments&nbsp;push&nbsp;shape)&nbsp;or&nbsp;bare&nbsp;profile&nbsp;id<br>
+strings&nbsp;(tests,&nbsp;degraded&nbsp;paths).</span></dd></dl>
+
+<dl><dt><a name="KnownIds-set_ids"><strong>set_ids</strong></a>(self, profile_ids: 'Iterable[Any]') -&gt; 'None'</dt><dd><span class="code">Replace&nbsp;the&nbsp;known&nbsp;ids&nbsp;from&nbsp;bare&nbsp;ids,&nbsp;keeping&nbsp;the&nbsp;learned&nbsp;names.</span></dd></dl>
+
+<hr>
+Data descriptors defined here:<br>
+<dl><dt><strong>__dict__</strong></dt>
+<dd><span class="code">dictionary&nbsp;for&nbsp;instance&nbsp;variables</span></dd>
+</dl>
+<dl><dt><strong>__weakref__</strong></dt>
+<dd><span class="code">list&nbsp;of&nbsp;weak&nbsp;references&nbsp;to&nbsp;the&nbsp;object</span></dd>
+</dl>
+</td></tr></table></td></tr></table><p>
+<table class="section">
+<tr class="decor functions-decor heading-text">
+<td class="section-title" colspan=3>&nbsp;<br><strong class="bigsection">Functions</strong></td></tr>
+    
+<tr><td class="decor functions-decor"><span class="code">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span></td><td>&nbsp;</td>
+<td class="singlecolumn"><dl><dt><a name="-log_match_event"><strong>log_match_event</strong></a>(logger: 'logging.Logger', label: 'str', event_type: 'str', match_ref: 'str', profile_ids: 'Iterable[Any]', known: 'KnownIds', metadata: 'dict[str, Any] | None' = None) -&gt; 'None'</dt><dd><span class="code">Log&nbsp;one&nbsp;match&nbsp;event&nbsp;under&nbsp;the&nbsp;#423&nbsp;taxonomy.<br>
+&nbsp;<br>
+INFO&nbsp;—&nbsp;and&nbsp;the&nbsp;player&nbsp;is&nbsp;NAMED&nbsp;—&nbsp;when&nbsp;the&nbsp;event&nbsp;concerns&nbsp;a&nbsp;known<br>
+profile;&nbsp;DEBUG&nbsp;when&nbsp;it&nbsp;concerns&nbsp;strangers&nbsp;only,&nbsp;so&nbsp;the&nbsp;INFO&nbsp;stream<br>
+carries&nbsp;exactly&nbsp;what&nbsp;the&nbsp;dashboard&nbsp;and&nbsp;the&nbsp;bot&nbsp;follow.</span></dd></dl>
+</td></tr></table>
+</body></html>
