@@ -122,3 +122,18 @@ class TestConsoleOpsSession:
         code = await console_ops._run("reset-data", ["1"], [], [], False)
         assert code == 1
         assert client.started
+
+
+def test_the_tree_translator_renders_real_labels() -> None:
+    """Regression: a stub translator named the channels after the i18n KEYS.
+
+    provision_scope builds the channel NAMES from the translate seam —
+    the merlin incident of 2026-11-19 (dozens of channels named
+    "uipanelschannelsgeneral"). The seam must render through the real
+    catalog, never echo the key.
+    """
+    from botforge.discord.console_ops_runner import _tree_translate
+
+    rendered = _tree_translate("ui.panels.channels.general", "en")
+    assert rendered != "ui.panels.channels.general"
+    assert rendered

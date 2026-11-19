@@ -164,7 +164,7 @@ async def apply_ensure_tree_for_guild(guild: discord.Guild) -> str:
                 lines.append(f"{spec.scope}: skipped (game not granted).")
                 continue
         try:
-            resolved = await provision_scope(guild, spec, "en", lambda key, locale: key)
+            resolved = await provision_scope(guild, spec, "en", _tree_translate)
             await persist_resolutions(str(guild.id), spec.scope, resolved)
             lines.append(f"{spec.scope}: {len(resolved)} channel(s) ensured.")
         except Exception:
@@ -175,6 +175,21 @@ async def apply_ensure_tree_for_guild(guild: discord.Guild) -> str:
         "menus into the fresh channels."
     )
     return "\n".join(lines)
+
+
+def _tree_translate(key: str, locale: str) -> str:
+    """Render a tree label through the REAL catalog — the channel NAME.
+
+    provision_scope uses the translate seam for the created channels'
+    names: a stub here once named the channels after the i18n KEYS
+    ("uipanelschannelsgeneral" — the merlin incident of 2026-11-19).
+    The guild locale first, the English catalog as the fallback.
+    """
+    from botforge.core.services.i18n import MessageCatalog
+
+    catalog = MessageCatalog(CONFIG_DIR)
+    rendered = catalog.render(key, locale)
+    return rendered if rendered != key else catalog.render(key, "en")
 
 
 def _client_of(guild: discord.Guild) -> discord.Client:
