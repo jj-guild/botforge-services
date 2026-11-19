@@ -268,15 +268,17 @@ jobs:
               gh workflow run env-logs.yml "${ARGS[@]}"
               ;;
             console)
-              # /console <env> <action> <guild|all> [--confirm NUKE]
+              # /console <env> <action> <guild|all> [--confirm NUKE] [--games ..] [--mods ..]
               # env-console.yml runs botforge.cli.console_ops in the env's
               # botforge-bot container. nuke requires the explicit --confirm
               # NUKE token (the Actions-side triple-click).
               CONSOLE_ACTION="$(echo "$COMMENT_BODY" | awk '{print $3}')"
               CONSOLE_GUILD="$(echo "$COMMENT_BODY" | awk '{print $4}')"
               [[ -n "$CONSOLE_ACTION" && -n "$CONSOLE_GUILD" ]] \
-                || { echo "::error::usage: /console <env> <clean-managed|nuke|reset-data|install> <guild_id|all> [--confirm NUKE]" >&2; exit 1; }
-              ARGS=(--repo jj-guild/botforge-infra --ref "deploy/$ENVIRONMENT" -f environment="$ENVIRONMENT" -f action="$CONSOLE_ACTION" -f guild="$CONSOLE_GUILD")
+                || { echo "::error::usage: /console <env> <clean-managed|nuke|reset-data|install|ensure-tree> <guild_id|all> [--confirm NUKE] [--games g1,g2] [--mods m1,m2]" >&2; exit 1; }
+              CONSOLE_GAMES="$(echo "$COMMENT_BODY" | grep -oE -- '--games [A-Za-z0-9_,-]+' | awk '{print $2}')"
+              CONSOLE_MODS="$(echo "$COMMENT_BODY" | grep -oE -- '--mods [A-Za-z0-9_,-]+' | awk '{print $2}')"
+              ARGS=(--repo jj-guild/botforge-infra --ref "deploy/$ENVIRONMENT" -f environment="$ENVIRONMENT" -f action="$CONSOLE_ACTION" -f guild="$CONSOLE_GUILD" -f mods="$CONSOLE_MODS" -f games="$CONSOLE_GAMES")
               if echo "$COMMENT_BODY" | grep -q -- '--confirm NUKE'; then
                 ARGS+=(-f confirm=NUKE)
               fi
