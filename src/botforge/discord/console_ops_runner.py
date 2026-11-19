@@ -149,6 +149,10 @@ async def apply_ensure_tree_for_guild(guild: discord.Guild) -> str:
         return "Wiring unavailable (MONGO_URI/REDIS_URI) — the tree cannot be provisioned."
     register_platform_scopes()
 
+    from botforge.discord.locales import guild_locale
+
+    locale = guild_locale(guild)  # Discord's own signal: the server's language
+
     access = GuildAccessService(
         MongoGuildAccessDatabase(get_async_database()),
         games=_all_games(),
@@ -164,7 +168,7 @@ async def apply_ensure_tree_for_guild(guild: discord.Guild) -> str:
                 lines.append(f"{spec.scope}: skipped (game not granted).")
                 continue
         try:
-            resolved = await provision_scope(guild, spec, "en", _tree_translate)
+            resolved = await provision_scope(guild, spec, locale, _tree_translate)
             await persist_resolutions(str(guild.id), spec.scope, resolved)
             lines.append(f"{spec.scope}: {len(resolved)} channel(s) ensured.")
         except Exception:
