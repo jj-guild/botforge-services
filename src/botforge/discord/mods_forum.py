@@ -894,6 +894,14 @@ class ModInstallButton(
             from botforge.discord.scope_pins import ensure_mod_pins
 
             await ensure_mod_pins(interaction.client, guild_id, self.name)
+            # install rule: while a mod is installed the bot's own
+            # categories go staff-only; the mod's folders keep their
+            # own declared permissions
+            from botforge.discord.ui.panels_provisioning import set_platform_categories_private
+
+            guild = interaction.client.get_guild(int(guild_id)) if guild_id.isdigit() else None
+            if guild is not None:
+                await set_platform_categories_private(guild, True)
         message = await _tr(interaction.client, guild_id, "installed_done", "Installed.")
         if ensured:
             key = "installed_game" if self.kind == "game" else "installed_mod"
@@ -971,6 +979,17 @@ async def _apply_uninstall_choice(bot: Any, guild_id: str, kind: str, name: str,
         from botforge.discord.scope_pins import remove_mod_pins
 
         await remove_mod_pins(bot, guild_id, name)
+        # uninstall rule: when the LAST mod leaves the guild, the bot's
+        # categories return to their normal (public) rights
+        from botforge.discord.wiring import build_guild_access_service
+
+        access = build_guild_access_service()
+        remaining = tuple(await access.enabled_mods(guild_id)) if access is not None else (name,)
+        guild = bot.get_guild(int(guild_id)) if guild_id.isdigit() else None
+        if guild is not None and not remaining:
+            from botforge.discord.ui.panels_provisioning import set_platform_categories_private
+
+            await set_platform_categories_private(guild, False)
     return deleted
 
 

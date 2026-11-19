@@ -261,6 +261,33 @@ class TestCategoryGate:
         assert public_cat.permission_overwrite_for(guild.default_role) is None
 
     @pytest.mark.asyncio
+    async def test_install_gates_and_uninstall_restores_platform_categories(self) -> None:
+        """The install rule: installing a mod gates every platform scope's
+        category (bot allow with manage_channels + @everyone deny); the
+        uninstall of the last mod restores the normal (public) rights."""
+        from botforge.discord.ui.panels_provisioning import set_platform_categories_private
+        from botforge.discord.ui.panels_scopes import register_platform_scopes
+
+        register_platform_scopes(CONFIG_DIR)
+        guild = MockGuild()
+        await provision_scope(guild, BOT_SCOPE, "fr", _translate)
+        await provision_scope(guild, GAMES_SCOPE, "fr", _translate)
+        for scope, spec in (("bot", BOT_SCOPE), ("games", GAMES_SCOPE)):
+            cat = next(c for c in guild.categories if c.name == _translate(spec.category_key, "fr"))
+            _STORED[f"{scope}:category"] = str(cat.id)
+        n = await set_platform_categories_private(guild, True)
+        assert n >= 2
+        for cat in guild.categories:
+            everyone = cat.permission_overwrite_for(guild.default_role)
+            me = cat.permission_overwrite_for(guild.me)
+            assert everyone is not None and everyone.view_channel is False
+            assert me is not None and me.view_channel is True and me.manage_channels is True
+        await set_platform_categories_private(guild, False)
+        for cat in guild.categories:
+            everyone = cat.permission_overwrite_for(guild.default_role)
+            assert everyone is None or everyone.view_channel is not False
+
+    @pytest.mark.asyncio
     async def test_the_rooms_keep_their_own_bands_under_the_gate(self) -> None:
         """The gate is the folder's front door, never the rooms'."""
         guild = MockGuild()

@@ -398,6 +398,65 @@ def _group_view_role_map(spec: ScopeSpec) -> dict[str, tuple[str, ...]]:
     return out
 
 
+async def _restore_category_access(guild: discord.Guild, category_id: str) -> None:
+    """Remove a category's gate overwrites (back to normal rights).
+
+    The uninstall counterpart of the gate: @everyone's deny and the
+    bot's explicit allow are both dropped — the folder returns to the
+    guild's default permissions.
+    """
+    category = guild.get_channel(int(category_id)) if category_id.isdigit() else None
+    if category is None:
+        return
+    try:
+        await category.set_permissions(
+            guild.default_role,
+            overwrite=None,
+            reason="botforge: restore normal rights (mod uninstalled)",
+        )
+        me = guild.me
+        if me is not None:
+            await category.set_permissions(
+                me, overwrite=None, reason="botforge: restore normal rights (mod uninstalled)"
+            )
+    except Exception:
+        logger.warning(
+            "panels provisioning: the category gate restore failed — best-effort",
+            exc_info=True,
+        )
+
+
+async def set_platform_categories_private(guild: discord.Guild, private: bool) -> int:
+    """Gate (or restore) every PLATFORM scope's category — the install rule.
+
+    Installing a mod makes the bot's own folders staff-only (the
+    machine-room rule extended: while a mod is installed, the platform
+    plumbing hides from players — the mod's declared categories carry
+    their own permissions). Uninstalling the last mod restores the
+    normal (public) rights. Mod scopes (``mod/<name>``) are never
+    touched here — they keep their own declared gates. Returns how many
+    categories were touched.
+    """
+    touched = 0
+    for spec in registered_scopes():
+        if spec.scope.startswith("mod/"):
+            continue
+        if not spec.category_key:
+            continue
+        stored = await stored_channel_id(str(guild.id), spec.scope, "category")
+        if not stored or not str(stored).isdigit():
+            continue
+        category = guild.get_channel(int(stored))
+        if not isinstance(category, discord.CategoryChannel):
+            continue
+        if private:
+            await _apply_category_access(guild, str(stored), ())
+        else:
+            await _restore_category_access(guild, str(stored))
+        touched += 1
+    return touched
+
+
 async def provision_scope(
     guild: discord.Guild,
     spec: ScopeSpec,
