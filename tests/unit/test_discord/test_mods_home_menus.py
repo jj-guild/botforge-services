@@ -124,7 +124,13 @@ def test_the_kingdom_admin_menu_carries_the_console_button(rendered_menus: dict[
     """A mod declaring surface:mod:<name>:console gets the console button
     on its admin menu, routed to that declared surface (epic #412)."""
     buttons = rendered_menus["menu:mod:kingdom:admin"]["buttons"]
-    custom_ids = [str(b.get("custom_id", "")) for b in buttons]
-    assert "view:open:surface:mod:kingdom:console" in custom_ids, (
-        f"the admin menu must route to the declared console surface — got {custom_ids}"
+    console = next(
+        (b for b in buttons if str(b.get("custom_id", "")) == "view:open:surface:mod:kingdom:console"),
+        None,
     )
+    assert console is not None, "the admin menu must route to the declared console surface"
+    # destructive admin action: danger style, single emoji (the label is
+    # the i18n key's text, the emoji rides the button — never both)
+    assert console.get("style") == 4, f"console button must be danger (red), got {console.get('style')}"
+    assert console.get("label") == "Console", f"label carries no emoji: {console.get('label')!r}"
+    assert (console.get("emoji") or {}).get("name") == "\U0001F6E0\uFE0F"

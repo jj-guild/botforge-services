@@ -119,13 +119,12 @@ def test_console_register_is_idempotent(monkeypatch: Any) -> None:
 
 
 def test_console_ops_are_scoped_to_the_mod_console() -> None:
-    """The kingdom ops (relaunch/reset/clock) belong to the mod's own
-    console surface, never to the global menu:console (#412 cleanup)."""
-    from botforge.discord.console import registered_console_actions
-    from botforge.mods.kingdom.cogs.kingdom.console import register_console_actions
+    """The kingdom ops (relaunch/reset/clock) carry mod="kingdom": they
+    belong to the mod's own console surface, never to the global
+    menu:console (#412 cleanup). The scoping filter itself is pinned in
+    the core test (tests/unit/test_discord/test_console.py)."""
+    from botforge.mods.kingdom.cogs.console import kingdom_console_actions
 
-    register_console_actions()
-    mod_keys = {a.key for a in registered_console_actions(mod="kingdom")}
-    assert {"kingdom-relaunch", "kingdom-reset", "kingdom-clock"} <= mod_keys
-    global_keys = {a.key for a in registered_console_actions(mod="")}
-    assert not ({"kingdom-relaunch", "kingdom-reset", "kingdom-clock"} & global_keys)
+    actions = kingdom_console_actions()
+    assert {a.key for a in actions} == {"kingdom-relaunch", "kingdom-reset", "kingdom-clock"}
+    assert all(a.mod == "kingdom" for a in actions)

@@ -38,3 +38,66 @@ fr:
       w_closed: "Ton compte est prêt ✅ — mais la saison **{season}** n'accepte plus d'inscriptions ({phase})."
       w_already: "Ta candidature est déjà en attente ⏳ — les admins décident."
       w_withdraw: "Se désister"
+    settings:
+      settings_add_kingdom_button: + Ajouter un royaume manuellement
+      settings_add_kingdom_done: ✅ Royaume **{0}** ajouté.
+      settings_add_kingdom_failed: ❌ L'ajout a échoué — {0}
+      settings_add_kingdom_modal_title: Ajouter un royaume
+      settings_assign_bad_role: ❌ Le rôle doit être « king » ou « lord ».
+      settings_assign_button: 📥 Affecter un joueur en attente
+      settings_assign_done: ✅ Joueur affecté au royaume.
+      settings_assign_failed: ❌ L'affectation a échoué — {0}
+      settings_assign_modal_title: 📥 Affecter un joueur
+      settings_beta_exited: ✅ Phase bêta quittée — les règles se redressent.
+      settings_beta_started: ✅ Phase bêta activée — les règles se plient.
+      settings_cancelled: ❌ Annulé — rien n'a été touché.
+      settings_denied: ❌ Réservé aux admins du bot.
+      settings_deploy_button: 🚀 Déployer salons + panels
+      settings_deploy_cancel_button: ❌ Annuler
+      settings_deploy_confirm_button: ✅ Oui, déployer
+      settings_deploy_confirm_hint: Les salons et rôles du mod se (re)provisionnent, les panels se réépinglent.
+      settings_deploy_confirm_title: Déployer les salons et les panels ?
+      settings_deploy_done: '✅ Déployé : {channels} salons, {roles} rôles, {pins} panels épinglés.'
+      settings_error: ❌ L'action a échoué — {0}
+      settings_failed: ❌ L'action a échoué — {0}
+      settings_hat_button: 🧪 Casquette test
+      settings_hat_off: 🧪 Casquette RETIRÉE — de retour sur ton royaume joueur.
+      settings_hat_on: 🧪 Casquette ENFILÉE — tu pilotes le royaume TEST (Nilrem) et les contrôles joueurs sont court-circuités.
+      settings_launch_button: ▶️ Lancer la saison
+      settings_launch_done: ✅ Saison lancée — les royaumes imposés (le cas échéant) sont créés.
+      settings_launch_failed: ❌ Le lancement a échoué — {0}
+      settings_launch_modal_title: ▶️ Lancer la saison
+      settings_mode_free: 'Mode de saison : **libre** — les Rois peuvent fonder leurs royaumes.'
+      settings_mode_imposed: 'Mode de saison : **imposé** — les Rois ne peuvent plus fonder de royaume.'
+      settings_no_service: ❌ Le service Kingdoms n'est pas prêt.
+      settings_phase_unknown: inconnue
+      settings_remove_button: 🧹 Retirer un joueur/candidat
+      settings_remove_done: ✅ Joueur {0} retiré de la saison.
+      settings_remove_failed: ❌ Le retrait a échoué — {0}
+      settings_remove_modal_title: 🧹 Retirer un joueur
+      settings_reset_button: ♻️ Réinitialiser les salons
+      settings_reset_cancel_button: ❌ Annuler
+      settings_reset_confirm_button: ✅ Oui, réinitialiser
+      settings_reset_confirm_hint: ⚠️ Tous les salons du mod sont supprimés puis recréés — les données de jeu ne sont PAS touchées.
+      settings_reset_confirm_title: Réinitialiser les salons ?
+      settings_reset_done: ✅ Salons réinitialisés ({channels} supprimés, tout est recréé).
+      settings_season_mode_button: 🔄 Mode de saison
+      settings_start_beta_button: 🚀 Démarrer la beta
+      settings_start_season_button: 🎯 Démarrer la saison
+      settings_start_season_done: ✅ Saison démarrée — que l'aventure commence !
+      settings_start_season_failed: ❌ Le démarrage a échoué — {0}
+      settings_status_button: 📊 Statut de la saison
+      settings_status_empty: —
+      settings_status_kingdoms: Royaumes
+      settings_status_lords: Seigneurs engagés
+      settings_status_mode: Mode
+      settings_status_phase: Phase
+      settings_status_queue: En file d'attente
+      settings_status_title: 📊 Statut de la saison
+      settings_sync_button: 🔄 Resynchroniser les panels
+      settings_sync_cancel_button: ❌ Annuler
+      settings_sync_confirm_button: ✅ Oui, resynchroniser
+      settings_sync_confirm_hint: Les panels épinglés du mod se reconstruisent à l'état courant.
+      settings_sync_confirm_title: Resynchroniser les panels ?
+      settings_sync_done: '✅ Resynchronisé : {pins} panels épinglés.'
+      settings_title: ⚙️ Kingdoms — paramètres

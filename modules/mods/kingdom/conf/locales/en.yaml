@@ -38,3 +38,66 @@ en:
       w_closed: "Your account is ready ✅ — but season **{season}** no longer takes sign-ups ({phase})."
       w_already: "Your application is already pending ⏳ — the admins decide."
       w_withdraw: "Withdraw"
+    settings:
+      settings_add_kingdom_button: + Add a kingdom manually
+      settings_add_kingdom_done: ✅ Kingdom **{0}** added.
+      settings_add_kingdom_failed: ❌ The add failed — {0}
+      settings_add_kingdom_modal_title: Add a kingdom
+      settings_assign_bad_role: ❌ The role must be 'king' or 'lord'.
+      settings_assign_button: 📥 Assign a waiting player
+      settings_assign_done: ✅ Player assigned to the kingdom.
+      settings_assign_failed: ❌ The assignment failed — {0}
+      settings_assign_modal_title: 📥 Assign a player
+      settings_beta_exited: ✅ Beta phase left — the rules straighten back.
+      settings_beta_started: ✅ Beta phase entered — the rules bend.
+      settings_cancelled: ❌ Cancelled — nothing was touched.
+      settings_denied: ❌ Reserved for the bot admins.
+      settings_deploy_button: 🚀 Deploy salons + panels
+      settings_deploy_cancel_button: ❌ Cancel
+      settings_deploy_confirm_button: ✅ Yes, deploy
+      settings_deploy_confirm_hint: The mod's salons and roles (re)provision, the panels repin.
+      settings_deploy_confirm_title: Deploy the salons and the panels?
+      settings_deploy_done: '✅ Deployed: {channels} salons, {roles} roles, {pins} pinned panels.'
+      settings_error: ❌ The action failed — {0}
+      settings_failed: ❌ The action failed — {0}
+      settings_hat_button: 🧪 Test hat
+      settings_hat_off: 🧪 Hat OFF — back on your player kingdom.
+      settings_hat_on: 🧪 Hat ON — you pilot the TEST kingdom (Nilrem) and the player gates are bypassed.
+      settings_launch_button: ▶️ Launch the season
+      settings_launch_done: ✅ Season launched — the imposed kingdoms (if any) are created.
+      settings_launch_failed: ❌ The launch failed — {0}
+      settings_launch_modal_title: ▶️ Launch the season
+      settings_mode_free: 'Season mode: **free** — the Kings found their kingdoms.'
+      settings_mode_imposed: 'Season mode: **imposed** — the Kings cannot found a kingdom anymore.'
+      settings_no_service: ❌ The Kingdoms service is not ready.
+      settings_phase_unknown: unknown
+      settings_remove_button: 🧹 Remove a player/candidate
+      settings_remove_done: ✅ Player {0} removed from the season.
+      settings_remove_failed: ❌ The removal failed — {0}
+      settings_remove_modal_title: 🧹 Remove a player
+      settings_reset_button: ♻️ Reset the salons
+      settings_reset_cancel_button: ❌ Cancel
+      settings_reset_confirm_button: ✅ Yes, reset
+      settings_reset_confirm_hint: ⚠️ Every mod salon is deleted then recreated — the game data is NOT touched.
+      settings_reset_confirm_title: Reset the salons?
+      settings_reset_done: ✅ Salons reset ({channels} deleted, everything recreated).
+      settings_season_mode_button: 🔄 Season mode
+      settings_start_beta_button: 🚀 Start the beta
+      settings_start_season_button: 🎯 Start the season
+      settings_start_season_done: ✅ Season started — let the adventure begin!
+      settings_start_season_failed: ❌ The start failed — {0}
+      settings_status_button: 📊 Season status
+      settings_status_empty: —
+      settings_status_kingdoms: Kingdoms
+      settings_status_lords: Enrolled lords
+      settings_status_mode: Mode
+      settings_status_phase: Phase
+      settings_status_queue: In queue
+      settings_status_title: 📊 Season status
+      settings_sync_button: 🔄 Resync the panels
+      settings_sync_cancel_button: ❌ Cancel
+      settings_sync_confirm_button: ✅ Yes, resync
+      settings_sync_confirm_hint: The mod's pinned panels rebuild to the current state.
+      settings_sync_confirm_title: Resynchronize the panels?
+      settings_sync_done: '✅ Resynchronized: {pins} pinned panels.'
+      settings_title: ⚙️ Kingdoms — settings

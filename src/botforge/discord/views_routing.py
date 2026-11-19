@@ -156,7 +156,14 @@ class ViewOpenButton(
     padlock alone carries the admin marker).
     """
 
-    def __init__(self, view_id: str, label: str, emoji: str = "", disabled: bool = False) -> None:
+    def __init__(
+        self,
+        view_id: str,
+        label: str,
+        emoji: str = "",
+        disabled: bool = False,
+        style: discord.ButtonStyle = discord.ButtonStyle.secondary,
+    ) -> None:
         from botforge.discord.views_registry import ADMIN_EMOJI
 
         super().__init__(
@@ -164,7 +171,7 @@ class ViewOpenButton(
                 custom_id=f"{ROUTER_NS}:{view_id}"[:100],
                 label=label,
                 emoji=discord.PartialEmoji.from_str(emoji) if emoji else None,
-                style=discord.ButtonStyle.secondary,
+                style=style,
                 disabled=disabled,
             )
         )
@@ -524,6 +531,7 @@ async def _menu_action_row(
                     console_surface,
                     _label(catalog, "ui.homes.btn_console", locale, "Console"),
                     "\U0001F6E0\uFE0F",
+                    style=discord.ButtonStyle.danger,
                 )
             )
     items = list(row.children)

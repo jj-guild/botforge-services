@@ -278,11 +278,15 @@ class KingdomClockButton(
         )
 
 
-def register_console_actions() -> None:
-    """Register the mod's ops onto the platform console (idempotent)."""
-    from botforge.discord.console import ConsoleAction, register_console_action
+def kingdom_console_actions() -> tuple:
+    """The mod's three console ops, scoped to the MOD's console (mod="kingdom").
 
-    actions = (
+    Returned as data so tests can pin the scoping without importing the
+    platform console (R6: nothing outside cogs/ imports botforge.discord).
+    """
+    from botforge.discord.console import ConsoleAction
+
+    return (
         ConsoleAction(
             key="kingdom-relaunch",
             item_cls=KingdomRelaunchButton,
@@ -311,7 +315,13 @@ def register_console_actions() -> None:
             mod="kingdom",
         ),
     )
-    for action in actions:
+
+
+def register_console_actions() -> None:
+    """Register the mod's ops onto the platform registry (idempotent)."""
+    from botforge.discord.console import register_console_action
+
+    for action in kingdom_console_actions():
         try:
             register_console_action(action)
         except ValueError:  # noqa: S110 — already registered (restart re-run)
