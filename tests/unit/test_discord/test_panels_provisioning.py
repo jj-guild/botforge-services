@@ -323,3 +323,42 @@ class TestCategoryGate:
         # the channel itself — the gate added no @everyone view deny there
         overwrite = general.permission_overwrite_for(guild.default_role)
         assert overwrite is None or overwrite.view_channel is not False
+
+
+@pytest.mark.asyncio
+async def test_the_boot_pass_gates_platform_categories_when_a_mod_is_installed(monkeypatch: Any) -> None:
+    """The install rule is state-driven, not only event-driven: at boot,
+    every guild with a mod installed gets the platform categories gated
+    (the install event may predate the stored ids — the name fallback
+    resolves them). A guild with no mod keeps the normal rights."""
+    from types import SimpleNamespace
+
+    import botforge.discord.wiring as wiring_mod
+    from botforge.discord.bot import factory
+    from botforge.discord.ui import panels_provisioning
+
+    guild = MockGuild()
+    bot = SimpleNamespace(guilds=[guild])
+
+    class _Access:
+        def __init__(self, mods: tuple[str, ...]) -> None:
+            self._mods = mods
+
+        async def enabled_mods(self, guild_id: str) -> tuple[str, ...]:
+            return self._mods
+
+    calls: list[tuple[str, bool]] = []
+
+    async def _fake_gate(g: Any, private: bool) -> int:
+        calls.append((str(g.id), private))
+        return 1
+
+    monkeypatch.setattr(panels_provisioning, "set_platform_categories_private", _fake_gate)
+    monkeypatch.setattr(wiring_mod, "build_guild_access_service", lambda: _Access(("kingdom",)))
+    await factory._boot_gate_platform_categories(bot)
+    assert calls == [(str(guild.id), True)]
+
+    monkeypatch.setattr(wiring_mod, "build_guild_access_service", lambda: _Access(()))
+    calls.clear()
+    await factory._boot_gate_platform_categories(bot)
+    assert calls == []
