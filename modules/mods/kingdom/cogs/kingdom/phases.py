@@ -402,13 +402,13 @@ async def _run_phases_announce_safe(
         refresh_room_message_safe,
         stamp_room_ping_winner_safe,
         sweep_reveal_notes_safe,
-        sweep_sabotage_dms_on_open_safe,
     )
     from .common import attack_salon_send_safe, kingdom_name
     from .pickban import (
         edit_pickban_dms_default_reveal,
         edit_pickban_dms_reveal,
         send_pickban_dm,
+        sweep_sabotage_dms_on_open_safe,
     )
 
     dirty = 0
