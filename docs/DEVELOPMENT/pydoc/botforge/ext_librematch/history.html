@@ -32,8 +32,9 @@ sync&nbsp;(periodic&nbsp;+&nbsp;on-demand,&nbsp;T4)&nbsp;keeps&nbsp;the&nbsp;sto
 <tr><td class="decor pkg-content-decor"><span class="code">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span></td><td>&nbsp;</td>
 <td class="singlecolumn"><table><tr><td class="multicolumn"><a href="json.html">json</a><br>
 </td><td class="multicolumn"><a href="logging.html">logging</a><br>
+</td><td class="multicolumn"><a href="re.html">re</a><br>
 </td><td class="multicolumn"><a href="time.html">time</a><br>
-</td><td class="multicolumn"></td></tr></table></td></tr></table><p>
+</td></tr></table></td></tr></table><p>
 <table class="section">
 <tr class="decor index-decor heading-text">
 <td class="section-title" colspan=3>&nbsp;<br><strong class="bigsection">Classes</strong></td></tr>
@@ -64,10 +65,12 @@ Pull&nbsp;the&nbsp;known&nbsp;accounts'&nbsp;history&nbsp;into&nbsp;the&nbsp;sto
 
 <dl><dt>async <a name="MatchHistorySyncer-decode_stored"><strong>decode_stored</strong></a>(self, profile_ids: 'list[str]', batch: 'int' = 25) -&gt; 'int'</dt><dd><span class="code">Decode&nbsp;the&nbsp;stored&nbsp;matches'&nbsp;encoded&nbsp;fields&nbsp;(#288,&nbsp;T2).<br>
 &nbsp;<br>
-The&nbsp;blobs&nbsp;ride&nbsp;the&nbsp;match-details&nbsp;endpoint&nbsp;of&nbsp;an&nbsp;already-stored<br>
-match&nbsp;id&nbsp;—&nbsp;the&nbsp;history&nbsp;itself&nbsp;is&nbsp;never&nbsp;re-fetched.&nbsp;A&nbsp;decode&nbsp;or<br>
-transport&nbsp;failure&nbsp;leaves&nbsp;the&nbsp;document&nbsp;untouched:&nbsp;the&nbsp;next&nbsp;sync<br>
-retries.&nbsp;Returns&nbsp;the&nbsp;number&nbsp;of&nbsp;decoded&nbsp;matches.</span></dd></dl>
+The&nbsp;blobs&nbsp;ride&nbsp;the&nbsp;stored&nbsp;``raw``&nbsp;payload&nbsp;verbatim&nbsp;—&nbsp;the&nbsp;history<br>
+fetch&nbsp;already&nbsp;returned&nbsp;them&nbsp;(the&nbsp;upstream's&nbsp;own&nbsp;fields,<br>
+base64+zlib&nbsp;per&nbsp;the&nbsp;LibreMatch&nbsp;wiki);&nbsp;the&nbsp;match-details<br>
+endpoint&nbsp;played&nbsp;that&nbsp;role&nbsp;earlier&nbsp;but&nbsp;World's&nbsp;Edge&nbsp;400s&nbsp;it,<br>
+so&nbsp;the&nbsp;decode&nbsp;re-fetches&nbsp;NOTHING.&nbsp;A&nbsp;decode&nbsp;failure&nbsp;leaves&nbsp;the<br>
+document&nbsp;untouched:&nbsp;the&nbsp;next&nbsp;pass&nbsp;retries.&nbsp;Returns&nbsp;the&nbsp;count.</span></dd></dl>
 
 <dl><dt>async <a name="MatchHistorySyncer-match_history"><strong>match_history</strong></a>(self, profile_ids: 'list[str]', limit: 'int' = 0, since_s: 'int' = 0, leaderboard_id: 'str' = '') -&gt; 'list[MatchHistoryEntry]'</dt><dd><span class="code">Serve&nbsp;the&nbsp;stored&nbsp;history&nbsp;as&nbsp;the&nbsp;exploited&nbsp;projection.</span></dd></dl>
 
@@ -118,6 +121,7 @@ Data descriptors defined here:<br>
 <strong>DEFAULT_QUICK_COUNT</strong> = 25<br>
 <strong>DEFAULT_SYNC_COUNT</strong> = 1000<br>
 <strong>LEADERBOARD_KEYS</strong> = {'0': 'unranked', '1': 'dm_1v1', '2': 'dm_team', '3': 'rm_1v1', '4': 'rm_team'}<br>
+<strong>OPTION_LOCATION</strong> = '10'<br>
 <strong>STATS_LEADERBOARDS</strong> = ('0', '3', '4')<br>
 <strong>logger</strong> = &lt;Logger botforge.ext_librematch.history (INFO)&gt;</td></tr></table>
 </body></html>

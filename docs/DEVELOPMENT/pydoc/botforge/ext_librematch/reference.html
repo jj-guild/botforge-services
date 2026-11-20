@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Python: botforge.ext_librematch.reference</title>
+</head><body>
+
+<table class="heading">
+<tr class="heading-text decor">
+<td class="title">&nbsp;<br><strong class="title"><a href="botforge.html" class="white">botforge</a>.<a href="botforge.ext_librematch.html" class="white">ext_librematch</a>.reference</strong></td>
+<td class="extra"><a href=".">index</a><br><a href="file:SOURCE_ROOT/ext_librematch/reference.py">SOURCE_ROOT/ext_librematch/reference.py</a></td></tr></table>
+    <p><span class="code">libre:match&nbsp;reference&nbsp;data&nbsp;—&nbsp;the&nbsp;map&nbsp;and&nbsp;civilization&nbsp;id&nbsp;tables.<br>
+&nbsp;<br>
+The&nbsp;provider&nbsp;consumes&nbsp;the&nbsp;FREE&nbsp;MATCH&nbsp;community&nbsp;mappings<br>
+(``maps_aoe2.json``,&nbsp;``civs_aoe2.json``&nbsp;—&nbsp;the&nbsp;files&nbsp;libre:match&nbsp;ships):<br>
+one&nbsp;entry&nbsp;per&nbsp;display&nbsp;name,&nbsp;and&nbsp;under&nbsp;it&nbsp;the&nbsp;id&nbsp;PER&nbsp;API&nbsp;VERSION<br>
+(``"1"``...&nbsp;the&nbsp;oldest&nbsp;epoch,&nbsp;``"8"``&nbsp;the&nbsp;newest).&nbsp;The&nbsp;upstream&nbsp;payloads<br>
+speak&nbsp;raw&nbsp;ids&nbsp;(the&nbsp;options&nbsp;blob's&nbsp;``10``/location&nbsp;key,&nbsp;a&nbsp;member's<br>
+``race_id``),&nbsp;so&nbsp;the&nbsp;tables&nbsp;are&nbsp;read&nbsp;as-is&nbsp;and&nbsp;reversed&nbsp;here.<br>
+&nbsp;<br>
+The&nbsp;files&nbsp;are&nbsp;DATA,&nbsp;owned&nbsp;by&nbsp;the&nbsp;provider's&nbsp;config&nbsp;directory<br>
+(``config/providers/librematch/``):&nbsp;a&nbsp;future&nbsp;table&nbsp;version&nbsp;is&nbsp;a&nbsp;file<br>
+drop,&nbsp;never&nbsp;a&nbsp;code&nbsp;change.&nbsp;``LIBREMATCH_REFERENCE_DIR``&nbsp;overrides&nbsp;the<br>
+location&nbsp;(tests,&nbsp;containers).&nbsp;Loaded&nbsp;ONCE&nbsp;at&nbsp;first&nbsp;use,&nbsp;cached.</span></p>
+<p>
+<table class="section">
+<tr class="decor pkg-content-decor heading-text">
+<td class="section-title" colspan=3>&nbsp;<br><strong class="bigsection">Modules</strong></td></tr>
+    
+<tr><td class="decor pkg-content-decor"><span class="code">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span></td><td>&nbsp;</td>
+<td class="singlecolumn"><table><tr><td class="multicolumn"><a href="json.html">json</a><br>
+</td><td class="multicolumn"><a href="logging.html">logging</a><br>
+</td><td class="multicolumn"><a href="os.html">os</a><br>
+</td><td class="multicolumn"></td></tr></table></td></tr></table><p>
+<table class="section">
+<tr class="decor functions-decor heading-text">
+<td class="section-title" colspan=3>&nbsp;<br><strong class="bigsection">Functions</strong></td></tr>
+    
+<tr><td class="decor functions-decor"><span class="code">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span></td><td>&nbsp;</td>
+<td class="singlecolumn"><dl><dt><a name="-civ_name_of"><strong>civ_name_of</strong></a>(civ_id: 'Any') -&gt; 'str'</dt><dd><span class="code">Return&nbsp;the&nbsp;display&nbsp;name&nbsp;of&nbsp;a&nbsp;civilization&nbsp;id&nbsp;(a&nbsp;member's&nbsp;race_id).</span></dd></dl>
+ <dl><dt><a name="-map_name_of"><strong>map_name_of</strong></a>(location_id: 'Any') -&gt; 'str'</dt><dd><span class="code">Return&nbsp;the&nbsp;display&nbsp;name&nbsp;of&nbsp;a&nbsp;map&nbsp;id&nbsp;(the&nbsp;options&nbsp;blob's&nbsp;location).</span></dd></dl>
+</td></tr></table><p>
+<table class="section">
+<tr class="decor data-decor heading-text">
+<td class="section-title" colspan=3>&nbsp;<br><strong class="bigsection">Data</strong></td></tr>
+    
+<tr><td class="decor data-decor"><span class="code">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span></td><td>&nbsp;</td>
+<td class="singlecolumn"><strong>CIVS_FILE</strong> = 'civs_aoe2.json'<br>
+<strong>DEFAULT_REFERENCE_DIR</strong> = 'config/providers/librematch'<br>
+<strong>MAPS_FILE</strong> = 'maps_aoe2.json'<br>
+<strong>logger</strong> = &lt;Logger botforge.ext_librematch.reference (INFO)&gt;</td></tr></table>
+</body></html>

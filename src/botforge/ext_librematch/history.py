@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 import time
 from typing import Any
 
@@ -30,6 +31,7 @@ from botforge.core.models.game import (
 )
 from botforge.ext_librematch.adapter import LEADERBOARD_KEYS
 from botforge.ext_librematch.decode import DECODE_BATCH, decode_match_payload
+from botforge.ext_librematch.reference import civ_name_of, map_name_of
 from botforge.ext_librematch.store import DEFAULT_HISTORY_LIMIT, LibrematchStore
 
 logger = logging.getLogger("botforge.ext_librematch.history")
@@ -47,6 +49,59 @@ _DAY_S = 86_400
 def _now_ms() -> int:
     """Epoch milliseconds, the repo's timestamp convention."""
     return int(time.time() * 1000)
+
+
+def _map_name(raw_map: Any) -> str:
+    """Normalize the upstream map filename into a readable map name.
+
+    The upstream sends the map's file name (``FrigidLake.rms``, the
+    community ``megarandom.rms2``, scenario files) and the literal
+    ``my map`` for custom lobbies — the readable name of a custom
+    lobby rides the lobby's own title. Strip the script extension
+    whatever its trailing digit is (``.rms`` and ``.rms2`` both live
+    in the wild).
+    """
+    name = str(raw_map or "").strip()
+    if not name:
+        return ""
+    return re.sub(r"\.rms\d*$", "", name, flags=re.IGNORECASE)
+
+
+#: the options blob's own key for the selected map (the community id
+#: tables' ``10`` — 'location' in the ustacode option-key table)
+OPTION_LOCATION = "10"
+
+
+def _map_label(raw_map: Any, options_json: str) -> str:
+    """Return the readable map name, crossing the upstream data sources.
+
+    The options blob's location key (``10``) carries the REAL map id
+    the provider's ``maps_aoe2.json`` reference table names — the
+    authoritative source (verified live 2026-11-20: a custom lobby's
+    ``FrigidLake.rms`` file name answered while the match played on
+    the table's ``Enclosed``; a ``my map`` lobby answered ``Murkwood``).
+    Fall back to the normalized file name (``Arena.rms``) when the
+    blob or the table stays silent, "" never.
+    """
+    try:
+        options = json.loads(options_json) if options_json else {}
+    except json.JSONDecodeError:
+        options = {}
+    named = map_name_of(options.get(OPTION_LOCATION))
+    if named:
+        return named
+    name = _map_name(raw_map)
+    if name.lower() == "my map":
+        return ""
+    return name
+
+
+def _member_civ(match: dict[str, Any], profile_id: str) -> Any:
+    """Return the raw civilization id of one member (``race_id`` upstream)."""
+    for member in match.get("matchhistorymember") or []:
+        if isinstance(member, dict) and str(member.get("profile_id", "")) == profile_id:
+            return member.get("race_id")
+    return None
 
 
 def _int(value: Any) -> int:
@@ -102,6 +157,12 @@ class MatchHistorySyncer:
                 [self._match_doc(m) for m in raw_matches]
             )
             stored_any = stored_any or inserted > 0
+            # The decode step (T2) rides the ingest now: the history
+            # payload ITSELF carries the encoded ``options``/``slotinfo``
+            # blobs (the LibreMatch wiki, community/leaderboard/
+            # getRecentMatchHistory), so exploiting them needs NO
+            # second endpoint call — the match-details fetch the earlier
+            # revision made 400s on World's Edge, every single time.
         # ONE stats fetch answers EVERY board at once: the reply joins
         # ``leaderboardStats[].statgroup_id`` with ``members[].
         # personal_statgroup_id`` (the same join the alias search rides).
@@ -110,8 +171,8 @@ class MatchHistorySyncer:
         if boards:
             stored_any = True
         await self._store.upsert_account(self._account_doc(profile_id, boards, previous))
-        # The decode step (T2): the stored documents are exploited AFTER
-        # the ingestion — no history re-fetch, only the details endpoint.
+        # The catch-up decode for documents stored by an older revision
+        # (their blobs sit verbatim in ``raw``): no network, no re-fetch.
         await self.decode_stored([profile_id])
         return stored_any
 
@@ -234,19 +295,18 @@ class MatchHistorySyncer:
     async def decode_stored(self, profile_ids: list[str], batch: int = DECODE_BATCH) -> int:
         """Decode the stored matches' encoded fields (#288, T2).
 
-        The blobs ride the match-details endpoint of an already-stored
-        match id — the history itself is never re-fetched. A decode or
-        transport failure leaves the document untouched: the next sync
-        retries. Returns the number of decoded matches.
+        The blobs ride the stored ``raw`` payload verbatim — the history
+        fetch already returned them (the upstream's own fields,
+        base64+zlib per the LibreMatch wiki); the match-details
+        endpoint played that role earlier but World's Edge 400s it,
+        so the decode re-fetches NOTHING. A decode failure leaves the
+        document untouched: the next pass retries. Returns the count.
         """
         decoded = 0
         pending = await self._store.find_undecoded_matches(profile_ids, batch)
         for doc in pending:
-            match_id = str(doc.get("match_id", ""))
-            if not match_id:
-                continue
-            raw = await self._adapter.fetch_match_details_raw(match_id)
-            if not raw:
+            raw = doc.get("raw")
+            if not isinstance(raw, dict):
                 continue
             options_json, slots_json = decode_match_payload(raw)
             if not options_json and not slots_json:
@@ -368,10 +428,14 @@ class MatchHistorySyncer:
                 rating_before[pid] = old
                 rating_after[pid] = new
         aliases = match.get("profile_aliases") or {}
+        civs = {
+            pid: civ_name_of(_member_civ(match, pid)) for pid in profile_ids
+        }
         players = [
             {
                 "profile_id": pid,
                 "alias": str(aliases.get(pid, "")),
+                "civ": civs.get(pid, ""),
                 "team": teams.get(pid, 0),
                 "rating_before": rating_before.get(pid, 0),
                 "rating_after": rating_after.get(pid, 0),
@@ -379,23 +443,27 @@ class MatchHistorySyncer:
             for pid in profile_ids
         ]
         board = str(match.get("leaderboard") or "")
+        lobby = str(match.get("description") or "").strip()
+        options_json, slots_json = decode_match_payload(match)
         return {
             "_id": f"{match.get('id', '')}:{board}" if board else f"{match.get('id', '')}",
             "match_id": str(match.get("id", "")),
             "leaderboard_id": board,
             "started_at": _int(match.get("startgametime")),
             "finished_at": _int(match.get("completiontime")),
-            "map_name": str(match.get("mapname") or "").removesuffix(".rms"),
+            "map_name": _map_label(match.get("mapname"), options_json),
+            "lobby_title": lobby,
             "profile_ids": profile_ids,
             "rating_before": rating_before,
             "rating_after": rating_after,
             "teams": teams,
             "winners": winners,
-            "description": str(match.get("description", "")),
+            "description": lobby,
             "players": players,
-            "options_json": "",
-            "slots_json": "",
+            "options_json": options_json,
+            "slots_json": slots_json,
             "raw": match,
+            "decoded_at": _now_ms() if (options_json or slots_json) else 0,
             "fetched_at": _now_ms(),
         }
 
