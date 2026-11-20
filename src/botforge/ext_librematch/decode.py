@@ -52,15 +52,36 @@ def decode_match_payload(raw: dict[str, Any]) -> tuple[str, str]:
 
 
 def _normalize_slot(slot: Any, index: int) -> dict[str, Any]:
-    """Normalize one decoded slot record into the stored projection."""
+    """Normalize one decoded slot record into the stored projection.
+
+    The LIVE payload keys are dotted (``profileInfo.id``, verified
+    2026-11-20) with ``raceID`` carrying the civilization — the older
+    nested ``profileInfo`` shape stays accepted for stored documents.
+    """
     if not isinstance(slot, dict):
         return {"slot_index": index}
     profile_info = slot.get("profileInfo") or slot.get("profile_info") or {}
     if not isinstance(profile_info, dict):
         profile_info = {}
-    profile_id = slot.get("profile_id") or slot.get("playerId") or profile_info.get("id")
-    civ = slot.get("civ") or slot.get("civilization") or slot.get("factionID") or slot.get("faction_id")
-    filled = bool(profile_id) or slot.get("filled") is True or slot.get("status") == 3
+    profile_id = (
+        slot.get("profile_id")
+        or slot.get("playerId")
+        or slot.get("profileInfo.id")
+        or profile_info.get("id")
+    )
+    civ = (
+        slot.get("civ")
+        or slot.get("civilization")
+        or slot.get("raceID")
+        or slot.get("factionID")
+        or slot.get("faction_id")
+    )
+    filled = (
+        bool(profile_id)
+        or slot.get("filled") is True
+        or slot.get("status") == 3
+        or slot.get("isReady") == 1
+    )
     return {
         "slot_index": int(slot.get("slot_index") or slot.get("stationID") or index),
         "profile_id": str(profile_id or ""),
