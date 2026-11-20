@@ -32,7 +32,7 @@ def test_tavern_error_hierarchy() -> None:
 
 def test_civ_names_reads_the_catalog() -> None:
     """The civ-name lookup reads the config's civilizations catalog."""
-    from botforge.mods.kingdom.cogs.kingdom.tavern import _civ_names
+    from botforge.mods.kingdom.cogs.tavern import _civ_names
 
     class _Civ:
         key = "britons"
@@ -54,8 +54,8 @@ def test_civ_names_reads_the_catalog() -> None:
 
 def test_tavern_error_note_maps_engine_errors() -> None:
     """Each tavern/mercenary engine refusal maps to its player-facing note."""
-    from botforge.mods.kingdom.cogs.kingdom.strings import strings
-    from botforge.mods.kingdom.cogs.kingdom.tavern import _error_note
+    from botforge.mods.kingdom.cogs.strings import strings
+    from botforge.mods.kingdom.cogs.tavern import _error_note
     from botforge.mods.kingdom.mercenary import (
         MercenaryBidTooLowError,
         MercenaryMarketClosedError,
@@ -76,8 +76,8 @@ def test_tavern_error_note_maps_engine_errors() -> None:
 
 def test_market_lines_carry_lots_and_own_bid() -> None:
     """The market view lists the lots, the highest bid and the own line."""
-    from botforge.mods.kingdom.cogs.kingdom.strings import strings
-    from botforge.mods.kingdom.cogs.kingdom.tavern import _market_lines
+    from botforge.mods.kingdom.cogs.strings import strings
+    from botforge.mods.kingdom.cogs.tavern import _market_lines
 
     doc = {
         "closed": False,
@@ -105,8 +105,8 @@ def test_market_lines_carry_lots_and_own_bid() -> None:
 
 def test_drinks_options_read_the_catalog() -> None:
     """The drinks select lists the configured catalog with prices."""
-    from botforge.mods.kingdom.cogs.kingdom.strings import strings
-    from botforge.mods.kingdom.cogs.kingdom.tavern import _drinks_options
+    from botforge.mods.kingdom.cogs.strings import strings
+    from botforge.mods.kingdom.cogs.tavern import _drinks_options
 
     class _Drink:
         key = "verre"

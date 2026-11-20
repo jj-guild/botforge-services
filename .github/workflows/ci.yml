@@ -62,7 +62,10 @@ jobs:
       - name: Run pytest
         run: |
           uv sync
-          uv run pytest
+          # tests/ (platform) + every mod's documented scenarios
+          # (modules/mods/<mod>/tests/test_scenarios.py — the SC-* ids of
+          # docs/MODS/<mod>/TESTS.md, enforced by the botforge docs check)
+          uv run pytest tests modules/mods/*/tests/test_scenarios.py
 
   cli-doctor:
     # botforge-services#188: the `botforge` CLI is the front door for

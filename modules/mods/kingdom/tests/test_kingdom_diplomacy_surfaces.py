@@ -18,7 +18,7 @@ def test_marry_modules_import() -> None:
 
 def test_marry_cost_adapts_to_role() -> None:
     """A lord pays one ring, a King pays two — and the doubled lock (D34/D45)."""
-    from botforge.mods.kingdom.cogs.kingdom.marry import _marry_cost
+    from botforge.mods.kingdom.cogs.marry import _marry_cost
 
     class _Tier:
         marriage_lock_hours = 12
@@ -36,8 +36,8 @@ def test_marry_cost_adapts_to_role() -> None:
 
 def test_princess_label_is_stable_and_named() -> None:
     """The princess label is seeded (stable) and names a Princess, never a civ."""
-    from botforge.mods.kingdom.cogs.kingdom.marry import _princess_label
-    from botforge.mods.kingdom.cogs.kingdom.strings import strings
+    from botforge.mods.kingdom.cogs.marry import _princess_label
+    from botforge.mods.kingdom.cogs.strings import strings
 
     s = strings("fr")
     names = {"bretons": "Bretons"}
@@ -50,8 +50,8 @@ def test_princess_label_is_stable_and_named() -> None:
 
 def test_alliances_text_composes_every_section() -> None:
     """The alliances window renders hand, projection and near-unlock hints."""
-    from botforge.mods.kingdom.cogs.kingdom.alliances import alliances_text
-    from botforge.mods.kingdom.cogs.kingdom.strings import strings
+    from botforge.mods.kingdom.cogs.alliances import alliances_text
+    from botforge.mods.kingdom.cogs.strings import strings
 
     class _Kingdom:
         name = "Bulgares"
@@ -76,8 +76,8 @@ def test_alliances_text_composes_every_section() -> None:
 
 def test_marry_error_note_maps_engine_errors() -> None:
     """Each diplomacy engine refusal maps to its player-facing note."""
-    from botforge.mods.kingdom.cogs.kingdom.marry import _marry_error_note
-    from botforge.mods.kingdom.cogs.kingdom.strings import strings
+    from botforge.mods.kingdom.cogs.marry import _marry_error_note
+    from botforge.mods.kingdom.cogs.strings import strings
     from botforge.mods.kingdom.diplomacy import (
         AlreadyMarriedError,
         MarriageError,
@@ -106,8 +106,8 @@ async def test_event_slots_degrade_without_stack() -> None:
 @pytest.mark.asyncio
 async def test_event_report_text_renders_each_kind() -> None:
     """Cycle, age and end reports render through the locale strings."""
-    from botforge.mods.kingdom.cogs.kingdom.phases import _event_report_text
-    from botforge.mods.kingdom.cogs.kingdom.strings import strings
+    from botforge.mods.kingdom.cogs.phases import _event_report_text
+    from botforge.mods.kingdom.cogs.strings import strings
 
     s = strings("fr")
     cycle = _event_report_text(s, {"kind": "cycle", "cycle": 3, "gaia_new_maps": ["a"]})

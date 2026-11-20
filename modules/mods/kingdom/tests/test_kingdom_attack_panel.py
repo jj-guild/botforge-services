@@ -18,7 +18,7 @@ def test_cog_modules_import() -> None:
 
 def test_strings_cover_both_locales() -> None:
     """FR/EN defaults carry the SAME key set (no half-translated panel)."""
-    from botforge.mods.kingdom.cogs.kingdom.strings import DEFAULTS
+    from botforge.mods.kingdom.cogs.strings import DEFAULTS
 
     assert set(DEFAULTS["fr"]) == set(DEFAULTS["en"])
     assert DEFAULTS["fr"]["defend_button"]
@@ -27,7 +27,7 @@ def test_strings_cover_both_locales() -> None:
 
 def test_strings_resolve_without_catalog() -> None:
     """``strings`` degrades to the defaults when no catalog is wired."""
-    from botforge.mods.kingdom.cogs.kingdom.strings import DEFAULTS, strings
+    from botforge.mods.kingdom.cogs.strings import DEFAULTS, strings
 
     assert strings("fr")["defend_button"] == DEFAULTS["fr"]["defend_button"]
     assert strings("en")["panel_title"] == DEFAULTS["en"]["panel_title"]
@@ -37,7 +37,7 @@ def test_strings_resolve_without_catalog() -> None:
 
 def test_room_key_is_short_and_stable() -> None:
     """The salon buttons' digests stay under Discord's custom-id limit."""
-    from botforge.mods.kingdom.cogs.kingdom.common import room_key
+    from botforge.mods.kingdom.cogs.common import room_key
 
     key = room_key("0123456789abcdef0123456789abcdef")
     assert len(key) == 16
@@ -48,7 +48,7 @@ def test_room_key_is_short_and_stable() -> None:
 @pytest.mark.asyncio
 async def test_panel_build_degrades_without_stack() -> None:
     """``build_attack_panel`` renders the pinned layout (locale fallback)."""
-    from botforge.mods.kingdom.cogs.kingdom.panel import build_attack_panel
+    from botforge.mods.kingdom.cogs.panel import build_attack_panel
 
     view = await build_attack_panel("123")
     assert view is not None
@@ -57,14 +57,14 @@ async def test_panel_build_degrades_without_stack() -> None:
 @pytest.mark.asyncio
 async def test_wiring_never_raises_without_mongo() -> None:
     """``wiring`` degrades (None) — the surfaces show no-service notes."""
-    from botforge.mods.kingdom.cogs.kingdom.common import wiring
+    from botforge.mods.kingdom.cogs.common import wiring
 
     wiring()
 
 
 def test_pickban_helpers_stay_stable() -> None:
     """The draft/sabotage digests and shuffles are stable + distinct."""
-    from botforge.mods.kingdom.cogs.kingdom.common import (
+    from botforge.mods.kingdom.cogs.common import (
         final_civ,
         ready_key,
         reveal_civs,
@@ -93,8 +93,8 @@ def test_pickban_helpers_stay_stable() -> None:
 
 def test_battle_scoreboard_helpers_stay_stable() -> None:
     """The monospace scoreboard keeps its alignment + key parity FR/EN."""
-    from botforge.mods.kingdom.cogs.kingdom.battle import _score_center, _score_row
-    from botforge.mods.kingdom.cogs.kingdom.strings import DEFAULTS
+    from botforge.mods.kingdom.cogs.battle import _score_center, _score_row
+    from botforge.mods.kingdom.cogs.strings import DEFAULTS
 
     line = _score_center("⚔️ Map")
     assert len(line) == 46
@@ -119,7 +119,7 @@ def test_plan_helpers_stay_stable() -> None:
     from datetime import datetime
     from zoneinfo import ZoneInfo
 
-    from botforge.mods.kingdom.cogs.kingdom.plan import _meeting_from_selections
+    from botforge.mods.kingdom.cogs.plan import _meeting_from_selections
 
     tz = ZoneInfo("Europe/Paris")
     now = datetime(2026, 11, 17, 10, 0, tzinfo=tz)
@@ -149,7 +149,7 @@ async def test_phases_tick_degrades_without_stack(monkeypatch) -> None:
 
 def test_phases_strings_are_phases_ready() -> None:
     """Every phase-run key exists FR and EN (the tick formats them)."""
-    from botforge.mods.kingdom.cogs.kingdom.strings import DEFAULTS
+    from botforge.mods.kingdom.cogs.strings import DEFAULTS
 
     keys = (
         "plan_event_executed",

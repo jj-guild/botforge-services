@@ -14,7 +14,7 @@ import pytest
 
 def test_console_modules_import() -> None:
     """The console surface imports and exposes its three actions."""
-    from botforge.mods.kingdom.cogs.kingdom.console import (  # noqa: F401
+    from botforge.mods.kingdom.cogs.console import (  # noqa: F401
         KingdomClockButton,
         KingdomRelaunchButton,
         KingdomResetButton,
@@ -24,7 +24,7 @@ def test_console_modules_import() -> None:
 
 def test_console_dynamic_item_custom_ids() -> None:
     """Each console action is a restart-proof DynamicItem (stable custom ids)."""
-    from botforge.mods.kingdom.cogs.kingdom.console import (
+    from botforge.mods.kingdom.cogs.console import (
         KingdomClockButton,
         KingdomRelaunchButton,
         KingdomResetButton,
@@ -37,7 +37,7 @@ def test_console_dynamic_item_custom_ids() -> None:
 
 def test_console_strings_parity() -> None:
     """The console keys exist in both locales and format with their arities."""
-    from botforge.mods.kingdom.cogs.kingdom.strings import strings
+    from botforge.mods.kingdom.cogs.strings import strings
 
     for locale in ("fr", "en"):
         s = strings(locale)
@@ -110,7 +110,7 @@ def test_console_register_is_idempotent(monkeypatch: Any) -> None:
     """
     import botforge.discord.console as console_mod
 
-    from botforge.mods.kingdom.cogs.kingdom.console import register_console_actions
+    from botforge.mods.kingdom.cogs.console import register_console_actions
 
     monkeypatch.setattr(console_mod, "_ACTIONS", dict(console_mod._ACTIONS))
     register_console_actions()

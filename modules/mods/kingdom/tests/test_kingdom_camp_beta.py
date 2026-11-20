@@ -54,7 +54,7 @@ def test_camp_surface_is_declared() -> None:
 
 def test_camp_strings_parity() -> None:
     """Every camp string exists in BOTH locales and formats cleanly."""
-    from botforge.mods.kingdom.cogs.kingdom.camp_beta import camp_strings
+    from botforge.mods.kingdom.cogs.camp_beta import camp_strings
 
     for locale in ("fr", "en"):
         strings = camp_strings(locale)
@@ -73,7 +73,7 @@ def test_camp_strings_parity() -> None:
 
 def test_camp_custom_ids() -> None:
     """Every camp door is a restart-proof DynamicItem with its stable id."""
-    from botforge.mods.kingdom.cogs.kingdom.camp_beta import (
+    from botforge.mods.kingdom.cogs.camp_beta import (
         CAMP_WINDOW_KEY,
         KingdomCampButton,
         KingdomCampFoundButton,
@@ -110,7 +110,7 @@ def test_beta_gate_off_without_a_season() -> None:
     """No service wired → the door never arms (a normal season shows nothing)."""
     import asyncio
 
-    from botforge.mods.kingdom.cogs.kingdom.camp_beta import beta_armed
+    from botforge.mods.kingdom.cogs.camp_beta import beta_armed
 
     assert asyncio.run(beta_armed()) is False
 
@@ -119,6 +119,6 @@ def test_apply_panel_builds_without_service() -> None:
     """The Postuler panel still builds in CI (the camp row only rides a beta)."""
     import asyncio
 
-    from botforge.mods.kingdom.cogs.kingdom.apply_flow import build_apply_panel
+    from botforge.mods.kingdom.cogs.apply_flow import build_apply_panel
 
     assert asyncio.run(build_apply_panel("123")) is not None

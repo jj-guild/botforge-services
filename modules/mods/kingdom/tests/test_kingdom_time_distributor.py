@@ -208,8 +208,8 @@ def test_machine_and_distributor_surfaces_are_declared() -> None:
 
 def test_machine_and_distributor_strings_parity() -> None:
     """Every machine/distributor string exists in BOTH locales."""
-    from botforge.mods.kingdom.cogs.kingdom.distributor import distributor_strings
-    from botforge.mods.kingdom.cogs.kingdom.time_machine import machine_strings
+    from botforge.mods.kingdom.cogs.distributor import distributor_strings
+    from botforge.mods.kingdom.cogs.time_machine import machine_strings
 
     for locale in ("fr", "en"):
         machine = machine_strings(locale)
@@ -255,7 +255,7 @@ def test_machine_and_distributor_strings_parity() -> None:
 
 def test_machine_custom_ids() -> None:
     """Every machine button is a restart-proof DynamicItem with its stable id."""
-    from botforge.mods.kingdom.cogs.kingdom.time_machine import (
+    from botforge.mods.kingdom.cogs.time_machine import (
         MACHINE_VIEW_KEY,
         MachineClockZeroButton,
         MachineFreeJumpButton,
@@ -290,7 +290,7 @@ def test_machine_custom_ids() -> None:
 
 def test_distributor_custom_ids() -> None:
     """The distributor's doors + the injector's kingdom-carrying ids are stable."""
-    from botforge.mods.kingdom.cogs.kingdom.distributor import (
+    from botforge.mods.kingdom.cogs.distributor import (
         DISTRIBUTOR_VIEW_KEY,
         DistributorCatButton,
         DistributorCivPageButton,
@@ -369,8 +369,8 @@ def test_machine_and_distributor_panels_build_without_service() -> None:
     """The pinned panels render even with no service wired (holes, not raises)."""
     import asyncio
 
-    from botforge.mods.kingdom.cogs.kingdom.distributor import build_distributor_panel
-    from botforge.mods.kingdom.cogs.kingdom.time_machine import build_time_machine_panel
+    from botforge.mods.kingdom.cogs.distributor import build_distributor_panel
+    from botforge.mods.kingdom.cogs.time_machine import build_time_machine_panel
 
     assert asyncio.run(build_time_machine_panel("123")) is not None
     assert asyncio.run(build_distributor_panel("123")) is not None
@@ -380,8 +380,8 @@ def test_console_buttons_render_in_the_guild_locale() -> None:
     """Recette 19/11: the panel's console ops read in FR, not the EN defaults."""
     import re
 
-    from botforge.mods.kingdom.cogs.kingdom.settings_panel import console_buttons
-    from botforge.mods.kingdom.cogs.kingdom.common import strings_by_locale
+    from botforge.mods.kingdom.cogs.settings_panel import console_buttons
+    from botforge.mods.kingdom.cogs.common import strings_by_locale
 
     ops = console_buttons(strings_by_locale("fr"))
     labels = [str(b.item.label) for b in ops]
@@ -394,7 +394,7 @@ def test_console_buttons_render_in_the_guild_locale() -> None:
         "kingdom:console:reset",
     ]
     # the settings actions' template must never fullmatch these ids
-    from botforge.mods.kingdom.cogs.kingdom.settings_panel import SettingsActionButton
+    from botforge.mods.kingdom.cogs.settings_panel import SettingsActionButton
 
     template = re.compile(SettingsActionButton.__discord_ui_compiled_template__.pattern)
     assert not any(template.fullmatch(i) for i in ids)
@@ -537,7 +537,7 @@ def test_snapshot_round_trip_on_a_fake_store() -> None:
 
 def test_settings_pin_falls_back_to_the_declared_salon_name() -> None:
     """settings-pin-fallback-v1: an empty Admin > Paramètres heals by name."""
-    from botforge.mods.kingdom.cogs.kingdom.common import channel_id_by_flattened_name
+    from botforge.mods.kingdom.cogs.common import channel_id_by_flattened_name
 
     class _Channel:
         def __init__(self, name: str, cid: int) -> None:

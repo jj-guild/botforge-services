@@ -28,7 +28,7 @@ def test_economy_error_hierarchy() -> None:
 
 def test_market_cost_reads_the_config() -> None:
     """The cost lookup reads the configured technologies section."""
-    from botforge.mods.kingdom.cogs.kingdom.market import _cost
+    from botforge.mods.kingdom.cogs.market import _cost
 
     class _Tech:
         corruption = 4
@@ -47,8 +47,8 @@ def test_market_cost_reads_the_config() -> None:
 
 def test_market_error_note_maps_engine_errors() -> None:
     """Each economy engine refusal maps to its player-facing note."""
-    from botforge.mods.kingdom.cogs.kingdom.market import _market_error_note
-    from botforge.mods.kingdom.cogs.kingdom.strings import strings
+    from botforge.mods.kingdom.cogs.market import _market_error_note
+    from botforge.mods.kingdom.cogs.strings import strings
     from botforge.mods.kingdom.economy import (
         EconomyError,
         EconomyLimitReachedError,
@@ -63,8 +63,8 @@ def test_market_error_note_maps_engine_errors() -> None:
 
 def test_market_options_carry_costs() -> None:
     """The market select lists the combat techs and the consumables."""
-    from botforge.mods.kingdom.cogs.kingdom.market import _market_options
-    from botforge.mods.kingdom.cogs.kingdom.strings import strings
+    from botforge.mods.kingdom.cogs.market import _market_options
+    from botforge.mods.kingdom.cogs.strings import strings
 
     class _Tech:
         embuscade = 1

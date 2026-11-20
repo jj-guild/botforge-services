@@ -35,8 +35,8 @@ def test_ffa_error_hierarchy() -> None:
 def test_ffa_error_note_maps_engine_errors() -> None:
     """Each FFA engine refusal maps to its player-facing note."""
     from botforge.mods.kingdom.attacks import LordLockedError
-    from botforge.mods.kingdom.cogs.kingdom.ffa import _ffa_error_note
-    from botforge.mods.kingdom.cogs.kingdom.strings import strings
+    from botforge.mods.kingdom.cogs.ffa import _ffa_error_note
+    from botforge.mods.kingdom.cogs.strings import strings
     from botforge.mods.kingdom.ffa_exploration import (
         FFAFullError,
         FFAKingdomFullError,
@@ -53,7 +53,7 @@ def test_ffa_error_note_maps_engine_errors() -> None:
 
 def test_ffa_strings_parity() -> None:
     """The FFA keys exist and format with the announce/start arities."""
-    from botforge.mods.kingdom.cogs.kingdom.strings import strings
+    from botforge.mods.kingdom.cogs.strings import strings
 
     for locale in ("fr", "en"):
         s = strings(locale)
@@ -76,7 +76,7 @@ async def test_ffa_tick_degrades_without_stack() -> None:
 
 def test_ffa_salon_resolves_by_stored_ref_only() -> None:
     """The FFA salon resolves by its STORED ref, never by name (#367)."""
-    from botforge.mods.kingdom.cogs.kingdom.phases import _ffa_salon
+    from botforge.mods.kingdom.cogs.phases import _ffa_salon
 
     class _Channel:
         id = 555
@@ -102,7 +102,7 @@ def test_ffa_salon_resolves_by_stored_ref_only() -> None:
 
 def test_ffa_salon_title_string_exists() -> None:
     """The salon's title key exists in both locales (the channel name)."""
-    from botforge.mods.kingdom.cogs.kingdom.strings import strings
+    from botforge.mods.kingdom.cogs.strings import strings
 
     for locale in ("fr", "en"):
         assert strings(locale)["ffa_salon_title"]

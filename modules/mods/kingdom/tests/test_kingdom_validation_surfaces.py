@@ -48,7 +48,7 @@ def _buttons(view: Any) -> list[dict[str, Any]]:
 
 def test_validation_module_import() -> None:
     """The validation surface exposes the panel and the decision button."""
-    from botforge.mods.kingdom.cogs.kingdom.validation import (  # noqa: F401
+    from botforge.mods.kingdom.cogs.validation import (  # noqa: F401
         ValidationDecisionButton,
         build_validation_panel,
     )
@@ -56,7 +56,7 @@ def test_validation_module_import() -> None:
 
 def test_validation_custom_ids_are_stable() -> None:
     """The decision buttons are restart-proof DynamicItems (stable ids)."""
-    from botforge.mods.kingdom.cogs.kingdom.validation import ValidationDecisionButton
+    from botforge.mods.kingdom.cogs.validation import ValidationDecisionButton
 
     assert (
         ValidationDecisionButton("k3", "ok", "x", _kv_module().discord.ButtonStyle.success).custom_id
@@ -70,7 +70,7 @@ def test_validation_custom_ids_are_stable() -> None:
 
 def test_validation_strings_parity() -> None:
     """The dashboard's yaml keys exist in both locales and format with their arities."""
-    from botforge.mods.kingdom.cogs.kingdom.common import mod_catalog
+    from botforge.mods.kingdom.cogs.common import mod_catalog
 
     for locale in ("fr", "en"):
         s = mod_catalog().section("kingdom.validation", locale)
