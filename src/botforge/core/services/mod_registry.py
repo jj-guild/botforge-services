@@ -160,6 +160,7 @@ def _parse_mod_yaml(data: dict[str, object], source: Path) -> ModDefinition:
     # the view roles resolve by display name through the persisted
     # mapping — an undeclared (or false) flag keeps the home public
     home_admin_only = bool(data.get("home_admin_only", False))
+    home_bottom = bool(data.get("home_bottom", False))
     raw_home_roles = data.get("home_view_roles", [])
     if raw_home_roles is None:
         raw_home_roles = []
@@ -186,6 +187,7 @@ def _parse_mod_yaml(data: dict[str, object], source: Path) -> ModDefinition:
         default_active=default_active,
         emoji=emoji,
         home_admin_only=home_admin_only,
+        home_bottom=home_bottom,
         home_view_roles=home_view_roles,
         channel_categories=tuple(categories),
         roles=tuple(roles),

@@ -755,9 +755,11 @@ async def _accept_season_entry(
             from .realms import deploy_realm_hub, ensure_realm_structure
 
             ids = await ensure_realm_structure(guild, realm, dormant=False)
+            hub_message = await deploy_realm_hub(guild, realm, locale=locale)
+            if hub_message:
+                ids["hub_message"] = hub_message
             if ids:
                 realm = await service.save_habitat(str(realm.id), ids)
-            await deploy_realm_hub(guild, realm, locale=locale)
         except Exception:  # noqa: BLE001
             logger.warning("kingdom: realm habitat wake failed", exc_info=True)
     return note

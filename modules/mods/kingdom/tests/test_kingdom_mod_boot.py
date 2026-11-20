@@ -15,7 +15,6 @@ from __future__ import annotations
 
 _EVERY_DECLARED_PIN = {
     "panel:mod:kingdom:attack",
-    "panel:mod:kingdom:candidates",
     "panel:mod:kingdom:apply",
     "panel:mod:kingdom:register",
     "panel:mod:kingdom:seigneurerie",

@@ -18,6 +18,9 @@ seasonal: true
 # never the home plumbing. The gate grants the mod's admin role.
 home_admin_only: true
 home_view_roles: ["Kingdom Admin"]
+# category-bottom (Drasah 20/11): the 👑 Kingdom machine room sinks to
+# the sidebar's very end (private to staff, invisible to the players)
+home_bottom: true
 settings: {}
 channel_groups:
   - key: profiles

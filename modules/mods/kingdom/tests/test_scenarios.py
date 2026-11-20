@@ -148,7 +148,7 @@ def test_SC_KING_010_the_mods_pins_are_declared() -> None:
     src = (_MOD_ROOT / "cogs" / "kingdom" / "__init__.py").read_text(encoding="utf-8")
     for pin_key in (
         "panel:mod:kingdom:attack",
-        "panel:mod:kingdom:candidates",
+        "panel:mod:kingdom:seigneurerie",
         "panel:mod:kingdom:console",
         "panel:mod:kingdom:time-machine",
         "panel:mod:kingdom:distributor",

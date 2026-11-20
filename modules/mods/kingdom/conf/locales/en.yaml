@@ -32,14 +32,14 @@ en:
       realm_accept_button: "✅ Enroll"
       realm_refuse_button: "❌ Refuse"
       realm_accepted_note: "🏰 **{name}** enters the season — engine kingdom **{kingdom}** created, halls awakened."
-      realm_refused_note: "🚫 **{name}** stays off-season — the request is withdrawn."
+      realm_refused_note: "❌ **{name}** stays off-season — the request is withdrawn."
       realm_entry_no_season: "❌ No season running — start a season before enrolling a realm."
       realm_entry_error: "❌ The season entry failed: {error}"
-      refused_header: "🚫 Refused"
+      refused_header: "❌ Refused"
       table_kingdom: "Kingdom"
       denied: "Validation is reserved for the bot's admins."
       approved_note: "✅ **{name}** approved — the kingdom joins the season."
-      refused_note: "🚫 **{name}** refused — its members return to the queue."
+      refused_note: "❌ **{name}** refused — its members return to the queue."
     apply:
       panel_title: "⚔️ SIGN-UP — KINGDOMS SEASON II"
       # the panel's illustration (the mod's artwork, data — swap the URL;
@@ -51,6 +51,7 @@ en:
       season_none_line: "🗡️ No season running — the conscription opens with the next one."
       season_normal_line: "📜 **{phase}** — classical season, age: {age}."
       season_beta_line: "⚡ **{phase}** — **beta** season (compressed time), age: {age}."
+      season_beta_apply_line: "⚡ **Beta** mode: no registration — apply directly, found or join a realm."
       season_phase_setup: Preparation
       season_phase_started: In game
       season_phase_age: Age cycle

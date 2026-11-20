@@ -141,12 +141,18 @@ async def build_apply_panel(guild_id: str) -> discord.ui.LayoutView:
     # the PROVISIONAL Roi/Seigneur door shows whenever a season is LIVE —
     # classical or beta. It is the only founding path until the
     # official flow (account > dossier > throne/vasselage) lands.
-    from .camp_beta import build_camp_button, camp_strings, season_door_open
+    from .camp_beta import build_camp_button, camp_strings, season_door_open, season_is_beta
 
     if await season_door_open():
         camp_row: Any = discord.ui.ActionRow()
         camp_row.add_item(build_camp_button(camp_strings(await _guild_locale(guild_id))).item)
         blocks.append(camp_row)
+        # hors-saison-v1 (Drasah 20/11): in beta the account step does
+        # NOT exist — the poster says it, plain and once
+        if await season_is_beta() and strings.get("season_beta_apply_line"):
+            blocks.append(
+                discord.ui.TextDisplay(str(strings["season_beta_apply_line"]))
+            )
     return surface(
         APPLY_VIEW_KEY,
         discord.ui.Container(*blocks, accent_colour=GOLD),

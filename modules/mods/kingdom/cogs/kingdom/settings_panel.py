@@ -581,6 +581,17 @@ class _LaunchModal(discord.ui.Modal):
                 note = service_failure_note(strings, "settings_launch_beta_failed", exc)
         else:
             note = str(strings["settings_launch_done"])
+        # hors-saison-v1 (Drasah 20/11): the conscription bends to the
+        # season's TYPE the moment it launches — beta masks #enregistrement
+        # and opens #postuler NOW, not at the next 5-min pass.
+        try:
+            from .conscription_gate import run_conscription_gate_pass
+
+            await run_conscription_gate_pass(
+                interaction.client, str(interaction.guild_id or "")
+            )
+        except Exception:  # noqa: BLE001 — the gate heals on the next pass
+            logger.warning("kingdom: the launch gate pass failed", exc_info=True)
         await interaction.followup.send(note, ephemeral=True)
 
 

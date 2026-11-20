@@ -117,6 +117,13 @@ class ScopeSpec:
     # the view roles RESOLVED TO IDS (the persisted mapping is the
     # resolver — the display name is renamable)
     category_view_role_ids: tuple[str, ...] = ()
+    # category-bottom (Drasah 20/11): a scope may declare its folder
+    # pinned to the SIDEBAR'S VERY END — the plumbing folders (games
+    # data, the mod machine rooms) sink below the players' surfaces.
+    # Data-declared (views.yaml ``bottom`` / the mod's ``home_bottom``),
+    # re-asserted by each provisioning pass AND the refresh cadence (a
+    # category founded later lands below until the next assertion).
+    category_bottom: bool = False
 
 
 _REGISTRY: dict[str, ScopeSpec] = {}

@@ -164,6 +164,11 @@ scopes:
       description: ui.panels.channels.catalog_description
   games/aoe2:
     category: ui.panels.categories.games_aoe2
+    # machine-room rule for the GAME data folder too (Drasah 20/11): the
+    # category + its salons are plumbing — staff/private at the front
+    # door, and the folder sinks to the sidebar's very end
+    admin_only: true
+    bottom: true
     channels:
     - key: general
       label: ui.panels.channels.general

@@ -32,14 +32,14 @@ fr:
       realm_accept_button: "✅ Inscrire"
       realm_refuse_button: "❌ Refuser"
       realm_accepted_note: "🏰 **{name}** entre en saison — royaume moteur **{kingdom}** créé, salons réveillés."
-      realm_refused_note: "🚫 **{name}** reste hors saison — la demande est retirée."
+      realm_refused_note: "❌ **{name}** reste hors saison — la demande est retirée."
       realm_entry_no_season: "❌ Aucune saison en cours — lancez la saison avant d'inscrire un royaume."
       realm_entry_error: "❌ L'entrée en saison a échoué : {error}"
-      refused_header: "🚫 Refusés"
+      refused_header: "❌ Refusés"
       table_kingdom: "Royaume"
       denied: "La validation est réservée aux admins du bot."
       approved_note: "✅ **{name}** validé — le royaume rejoint la saison."
-      refused_note: "🚫 **{name}** refusé — ses membres retournent dans la file."
+      refused_note: "❌ **{name}** refusé — ses membres retournent dans la file."
     apply:
       panel_title: "⚔️ INSCRIPTION — KINGDOMS SAISON II"
       # l'illustration du panneau (l'artwork du mod, données — remplacable
@@ -53,6 +53,7 @@ fr:
       season_none_line: "🗡️ Aucune saison en cours — la conscription ouvrira avec la prochaine."
       season_normal_line: "📜 **{phase}** — saison classique, âge : {age}."
       season_beta_line: "⚡ **{phase}** — saison **beta** (temps compressé), âge : {age}."
+      season_beta_apply_line: "⚡ Mode **beta** : pas d'enregistrement — poste directement, fonde ou rejoins un royaume."
       season_phase_setup: Préparation
       season_phase_started: En jeu
       season_phase_age: Cycle des âges

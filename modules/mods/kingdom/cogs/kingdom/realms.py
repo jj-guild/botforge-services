@@ -293,6 +293,11 @@ def _hub_marker() -> str:
     return f"[{HUB_SURFACE}]"
 
 
+# hub-content-v2: the last rendered fingerprint per (guild, realm) — an
+# unchanged hub costs NO edit (the static-pin idiom)
+_HUB_LAST_RENDER: dict[tuple[str, str], str] = {}
+
+
 def hub_layout(realm: Any, strings: dict[str, str], *, dormant: bool) -> discord.ui.LayoutView:
     """The 🏰 Le royaume panel — one template, two states (dormant/vivant)."""
     blocks: list[discord.ui.Item[discord.ui.LayoutView]] = []
@@ -337,41 +342,121 @@ def hub_layout(realm: Any, strings: dict[str, str], *, dormant: bool) -> discord
     )
 
 
-async def deploy_realm_hub(guild: Any, realm: Any, locale: str = "fr") -> bool:
-    """Post/refresh the hub panel in 🏰 Le royaume (idempotent by marker)."""
+async def deploy_realm_hub(guild: Any, realm: Any, locale: str = "fr") -> str | None:
+    """Land/refresh the hub panel in 🏰 Le royaume — the message id back.
+
+    hub-content-v2 (Drasah 20/11): the panel is a LayoutView (components
+    v2) — the API REJECTS any ``content`` alongside the v2 flag (50035),
+    so the old ``[panel:mod:kingdom:realm]`` marker made EVERY hub deploy
+    fail silently, dormant and awake alike (the designer's « le salon
+    Le royaume est vide, hors saison et en saison »). The surface id
+    rides the layout's own footer (the platform's pinned-mark idiom),
+    the message is found through the shell's ``discord['hub_message']``
+    (fetch → 404 = recreate), and a fingerprint guard keeps an
+    unchanged hub off the edit quota. Returns the message id, None when
+    the salon defeats us.
+    """
     category = _find_realm_category(guild, str(realm.name))
     channel = next(
         (c for c in (getattr(category, "channels", []) or []) if _slug(getattr(c, "name", "")) == _slug("🏰 Le royaume")),
         None,
     )
-    if category is None or channel is None:
+    if category is None or channel is None or not hasattr(channel, "send"):
         logger.warning("kingdom realms: hub salon not found for %s", getattr(realm, "name", "?"))
-        return False
+        return None
     from .realm_strings import realm_strings as catalog
 
     strings = catalog(locale)
     dormant = getattr(realm, "engagement", None) is None  # t2a — the season link decides
-    marker = _hub_marker()
-    history = getattr(channel, "history", None)
-    existing = None
-    if history is not None:
-        try:
-            async for message in channel.history(limit=25):
-                if marker in str(getattr(message, "content", "")):
-                    existing = message
-                    break
-        except Exception:  # noqa: BLE001
-            existing = None
     layout = hub_layout(realm, strings, dormant=dormant)
+    # the declared pin seam's own hash — one source of truth (the
+    # platform's static-pins idiom, reused, not reimplemented)
+    from botforge.discord.static_pins import _layout_fingerprint  # noqa: PLC2701 — same codebase
+
+    fingerprint = _layout_fingerprint(layout)
+    cache_key = (str(getattr(guild, "id", "")), str(getattr(realm, "id", "")))
+
+    message: Any = None
+    stored_id = str((getattr(realm, "discord", None) or {}).get("hub_message", "") or "")
+    fetch_message = getattr(channel, "fetch_message", None)
+    if stored_id.isdigit() and fetch_message is not None:
+        try:
+            message = await fetch_message(int(stored_id))
+        except Exception:  # noqa: BLE001 — a stale id is the normal recreate path
+            message = None
+    history = getattr(channel, "history", None)
+    if message is None and history is not None:
+        bot_id = getattr(getattr(guild, "me", None), "id", None)
+        try:
+            async for candidate in channel.history(limit=25):
+                if getattr(getattr(candidate, "author", None), "id", None) == bot_id:
+                    message = candidate
+                    break
+        except Exception:  # noqa: BLE001 — an unreadable history falls back to send
+            message = None
     try:
-        if existing is not None:
-            await existing.edit(content=marker, view=layout)
+        if message is not None:
+            if _HUB_LAST_RENDER.get(cache_key) != fingerprint:
+                await message.edit(view=layout)
+                _HUB_LAST_RENDER[cache_key] = fingerprint
         else:
-            await channel.send(content=marker, view=layout)
-        return True
+            # silent + NO content: components v2 owns the whole message
+            message = await channel.send(view=layout, silent=True)
+            _HUB_LAST_RENDER[cache_key] = fingerprint
+        return str(getattr(message, "id", "") or "")
     except Exception:  # noqa: BLE001
         logger.warning("kingdom realms: hub deploy failed", exc_info=True)
-        return False
+        return None
+
+
+async def _guild_locale_of(bot: Any, guild_id: str) -> str:
+    """The guild's effective locale (the platform's stored choice, fr default)."""
+    try:
+        from botforge.discord.scope_pins import _locale_of
+
+        return str(await _locale_of(bot, guild_id) or "fr")
+    except Exception:  # noqa: BLE001 — the locale degrades to fr, never a raise
+        return "fr"
+
+
+async def heal_realm_hubs(bot: Any) -> int:
+    """Re-ensure EVERY realm's hub panel (the pins-heal idiom, realms too).
+
+    The realm hubs are NOT declared static pins (one spec per realm),
+    so the 5-min refresher never saw them: a hub lost at founding (the
+    v2-content bug, an API storm) stayed empty forever. The pass rides
+    run_mod_pin_refresh_pass — idempotent, fingerprint-guarded, so a
+    converged guild costs one cheap fetch per realm and the hub_message
+    id lands on the shell when it was missing.
+    """
+    stack = wiring()
+    service = _realm_service(stack)
+    if service is None:
+        return 0
+    try:
+        realms = await service.realms()
+    except Exception:  # noqa: BLE001
+        logger.warning("kingdom realms: hub heal pass read failed", exc_info=True)
+        return 0
+    touched = 0
+    for guild in list(getattr(bot, "guilds", []) or []):
+        known_categories = {
+            str(getattr(c, "id", "")) for c in getattr(guild, "categories", []) or []
+        }
+        locale = await _guild_locale_of(bot, str(getattr(guild, "id", "")))
+        for realm in realms:
+            disc = dict(getattr(realm, "discord", None) or {})
+            if str(disc.get("category", "") or "") not in known_categories:
+                continue
+            message_id = await deploy_realm_hub(guild, realm, locale=locale)
+            if message_id and message_id != str(disc.get("hub_message", "") or ""):
+                disc["hub_message"] = message_id
+                try:
+                    await service.save_habitat(str(realm.id), disc)
+                except Exception:  # noqa: BLE001
+                    logger.warning("kingdom realms: hub heal persist failed", exc_info=True)
+            touched += 1
+    return touched
 
 
 # ---------------------------------------------------------------------------

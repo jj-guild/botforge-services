@@ -598,6 +598,8 @@ async def _build_mod_scope_spec(
         scope=f"mod/{mod_name}",
         category_key=category_name,
         category_admin_only=bool(getattr(definition, "home_admin_only", False)),
+        # the mod's home folder may sink to the sidebar's very end
+        category_bottom=bool(getattr(definition, "home_bottom", False)),
         category_view_role_ids=await _resolve_role_ids(
             getattr(definition, "home_view_roles", ()) or (), label="home view"
         ),

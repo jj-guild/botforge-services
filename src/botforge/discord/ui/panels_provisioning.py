@@ -260,6 +260,62 @@ async def _ensure_scope_category(
     return await platform.ensure_category(name)
 
 
+async def move_category_bottom(guild: discord.Guild, category_id: str) -> bool:
+    """Sink ONE category to the sidebar's very end (category-bottom, Drasah 20/11).
+
+    Idempotent: the position assertion costs NOTHING when the category
+    already sits last (a converged guild skips the bulk edit entirely —
+    the fix-reset-429 lesson). Best-effort: a failed move logs and lets
+    the next pass retry.
+    """
+    if not category_id.isdigit():
+        return False
+    category = guild.get_channel(int(category_id))
+    if not isinstance(category, discord.CategoryChannel):
+        return False
+    # guild.categories is Discord's own sorted sidebar — last means last
+    categories = list(guild.categories or [])
+    if not categories or categories[-1].id == category.id:
+        return False
+    try:
+        await category.move(end=True, reason="botforge: the declared folder sinks last")
+    except discord.HTTPException:
+        logger.warning(
+            "panels provisioning: sinking category %s to the bottom failed — best-effort",
+            category_id,
+            exc_info=True,
+        )
+        return False
+    return True
+
+
+async def enforce_bottom_categories(bot: discord.Client) -> int:
+    """Assert EVERY declared bottom folder sinks last (the 5-min idiom).
+
+    A category founded later (a realm's habitat) lands below the plumbing
+    folders until the next assertion — the mods' refresh cadence calls
+    this pass so the sidebar contract (the declaration) heals by itself,
+    exactly like the pins.
+    """
+    moved = 0
+    for guild in list(getattr(bot, "guilds", []) or []):
+        gid = str(guild.id)
+        for spec in registered_scopes():
+            if not getattr(spec, "category_bottom", False):
+                continue
+            try:
+                category_id = await stored_channel_id(gid, spec.scope, "category")
+                if not category_id:
+                    continue
+                if await move_category_bottom(guild, str(category_id)):
+                    moved += 1
+            except Exception:  # noqa: BLE001 — one folder never blocks the pass
+                logger.warning(
+                    "panels provisioning: the bottom pass failed (%s)", spec.scope, exc_info=True
+                )
+    return moved
+
+
 def _category_matches(channel: Any, category_id: str) -> bool:
     """Whether a live channel lives in the scope's declared folder.
 
@@ -565,6 +621,9 @@ async def provision_scope(
             await _apply_category_access(
                 guild, category_id, tuple(getattr(spec, "category_view_role_ids", ()) or ())
             )
+        # category-bottom (Drasah 20/11): the declared folder sinks last
+        if getattr(spec, "category_bottom", False) and category_id:
+            await move_category_bottom(guild, category_id)
     # the GROUP categories (the mods' salons-as-data structure, #216
     # tranche I): a channel declaring a group lives in the group's own
     # category — created lazily, stored under cat:<group>, the channel

@@ -893,6 +893,41 @@ async def run_mod_pin_refresh_pass(bot: Any) -> int:
                 logger.warning(
                     "kingdom: pin pass failed (%s, guild %s)", spec.key, guild_id, exc_info=True
                 )
+        # hors-saison-v1 (Drasah 20/11): the conscription rides the LIVE
+        # season's TYPE — beta masks #enregistrement entirely and opens
+        # #postuler to everyone; classical restores the declared parcours.
+        # Idempotent (converge-skip), so the cadence is free.
+        from .conscription_gate import run_conscription_gate_pass
+
+        try:
+            await run_conscription_gate_pass(bot, guild_id)
+        except Exception:  # noqa: BLE001 — the pass never raises
+            logger.warning("kingdom: conscription gate pass failed", exc_info=True)
+        # hub-content-v2 (Drasah 20/11): the realm hubs are not declared
+        # pins — this pass is their ONLY healing. A hub lost at founding
+        # heals here (fingerprint guard: converged = one cheap fetch).
+        from .realms import heal_realm_hubs
+
+        try:
+            await heal_realm_hubs(bot)
+        except Exception:  # noqa: BLE001 — the pass never raises
+            logger.warning("kingdom: realm hub heal failed", exc_info=True)
+        # pins-fusion-v1 (Drasah 20/11): a RETIRED pin key's message (the
+        # candidates/validation duplicate) is deleted by its registry id
+        from .legacy_pins import sweep_legacy_pins
+
+        try:
+            await sweep_legacy_pins(bot, guild_id)
+        except Exception:  # noqa: BLE001 — the pass never raises
+            logger.warning("kingdom: legacy pin sweep failed", exc_info=True)
+        # category-bottom (Drasah 20/11): the plumbing folders sink last —
+        # re-asserted here so a category founded later heals down in 5 min
+        from botforge.discord.ui.panels_provisioning import enforce_bottom_categories
+
+        try:
+            await enforce_bottom_categories(bot)
+        except Exception:  # noqa: BLE001 — the pass never raises
+            logger.warning("kingdom: bottom categories pass failed", exc_info=True)
     return touched
 
 

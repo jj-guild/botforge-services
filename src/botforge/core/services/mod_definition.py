@@ -125,6 +125,9 @@ class ModDefinition:
     # by the persisted role mapping at provisioning time).
     home_admin_only: bool = False
     home_view_roles: tuple[str, ...] = field(default_factory=tuple)
+    # home_bottom (Drasah 20/11): the mod's home folder sinks to the
+    # sidebar's very end — the machine-room plumbing stays out of sight
+    home_bottom: bool = False
 
     def is_private(self) -> bool:
         """Whether the mod is reserved (bot admins + declared owners)."""

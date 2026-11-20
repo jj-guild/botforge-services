@@ -84,6 +84,30 @@ async def season_door_open() -> bool:
     return season is not None and not bool(getattr(season, "finished", False))
 
 
+async def season_is_beta() -> bool:
+    """Whether the LIVE season runs the compressed beta type (hors-saison-v1).
+
+    The type is the SEASON's own data (``beta_name`` armed at launch by
+    ``_arm_compressed_beta``), never a mode flag: the conscription rides
+    on the season the players actually play. In beta the parcours skips
+    the account step entirely (Drasah 20/11 — « on postule directement,
+    sans compte »).
+    """
+    stack = wiring()
+    if stack is None:
+        return False
+    try:
+        season = await stack.kingdoms.current_season()
+    except Exception:  # noqa: BLE001 — an unreadable season is never a beta
+        logger.warning("kingdom: beta season read failed", exc_info=True)
+        return False
+    return (
+        season is not None
+        and not bool(getattr(season, "finished", False))
+        and bool(getattr(season, "beta_name", None))
+    )
+
+
 def build_camp_button(strings: dict[str, str]) -> KingdomCampButton:
     """The camp door button, painted with the given locale's label."""
     return KingdomCampButton(
@@ -452,9 +476,13 @@ class KingdomCampNameModal(discord.ui.Modal):
                 from .realms import deploy_realm_hub, ensure_realm_structure
 
                 ids = await ensure_realm_structure(guild, realm, dormant=True)
+                # hub-content-v2: the hub message id rides the shell's
+                # discord ids (fetch → edit; a stale id recreates)
+                hub_message = await deploy_realm_hub(guild, realm)
+                if hub_message:
+                    ids["hub_message"] = hub_message
                 if ids:
-                    await stack.realms.save_habitat(str(realm.id), ids)
-                await deploy_realm_hub(guild, realm)
+                    realm = await stack.realms.save_habitat(str(realm.id), ids)
             note = str(strings["found_done"]).format(str(realm.name))
         except Exception as exc:  # noqa: BLE001 — the window reports, never raises
             logger.warning("kingdom: realm founding failed", exc_info=True)

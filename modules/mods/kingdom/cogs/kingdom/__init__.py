@@ -45,9 +45,14 @@ def register(bot: Any, config: Any) -> None:
     )
 
 
-    # #339 (candidates dashboard): the detailed validation view pinned in
-    # the declared « realms » admin salon — pending rows with the decision
-    # buttons + the accepted and refused tables (D70 rule 35).
+    # pins-fusion-v1 (Drasah 20/11): the validation dashboard is ONE pin.
+    # The candidates + validation twin specs fought over the same salon
+    # and builder, un-pinning each other's message forever (the
+    # designer's duplicated « Validation des royaumes »). The surviving
+    # spec keeps the layout's own view id (VALIDATION_VIEW_KEY, declared
+    # in views.yaml) and carries legacy_key so a guild that only ever
+    # knew the candidates registry entry converges by EDIT-IN-PLACE; the
+    # orphan candidates message is swept by legacy_pins.
     from .validation import build_validation_panel
 
     async def _resolve_realms_channel(guild_id: str) -> str:
@@ -55,8 +60,9 @@ def register(bot: Any, config: Any) -> None:
 
     register_static_pin(
         StaticPinnedView(
-            key="panel:mod:kingdom:candidates",
-            mark_suffix="panel:mod:kingdom:candidates",
+            key="panel:mod:kingdom:validation",
+            mark_suffix="panel:mod:kingdom:validation",
+            legacy_key="panel:mod:kingdom:candidates",
             resolve_channel=_resolve_realms_channel,
             build_layout=build_validation_panel,
             registry=getattr(bot, "message_registry", None),
@@ -208,22 +214,8 @@ def register(bot: Any, config: Any) -> None:
         )
     )
 
-    # realms validation dashboard pin (ported from the reference panel:royaumes)
-    from .validation import build_validation_panel
-
-    async def _resolve_realms_channel(guild_id: str) -> str:
-        return await stored_channel_id(guild_id, "mod/kingdom", "realms") or ""
-
-    register_static_pin(
-        StaticPinnedView(
-            key="panel:mod:kingdom:validation",
-            mark_suffix="panel:mod:kingdom:validation",
-            resolve_channel=_resolve_realms_channel,
-            build_layout=build_validation_panel,
-            registry=getattr(bot, "message_registry", None),
-            scope="mod/kingdom",
-        )
-    )
+    # (the realms validation pin lives at the top — pins-fusion-v1; the
+    # old candidates twin spec is gone, its message swept by legacy_pins)
 
     # marché entry pin (ported from the reference panel:marche)
     from .market import build_market_panel
