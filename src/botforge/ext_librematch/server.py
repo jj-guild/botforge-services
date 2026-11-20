@@ -206,8 +206,14 @@ async def _daily_sync_loop(syncer: MatchHistorySyncer) -> None:
     """
     period_s = float(os.environ.get("LIBREMATCH_SYNC_PERIOD_S", "86400"))
     while True:
-        await asyncio.sleep(period_s)
+        # Sync FIRST, then sleep: a boot pass must run immediately. The
+        # core only pushes UpdateEnrollments when the roster CHANGES, so
+        # a store purge (or a silent boot) would otherwise leave the
+        # accounts unsynced for a full period with nothing to wake us
+        # up. The pass is cheap when the store is already warm (quick
+        # window, appends only — a finished match is immutable).
         await _sync_quietly(syncer, [])
+        await asyncio.sleep(period_s)
 
 
 async def _elo_refresh_loop(syncer: MatchHistorySyncer) -> None:
@@ -219,14 +225,16 @@ async def _elo_refresh_loop(syncer: MatchHistorySyncer) -> None:
     """
     period_s = float(os.environ.get("LIBREMATCH_ELO_PERIOD_S", "3600"))
     while True:
+        # Refresh FIRST, then sleep: same lesson as the history loop —
+        # the first pass belongs at boot, not one period later, so a
+        # purged or fresh store fills without waiting on a roster push.
+        if syncer is not None:
+            try:
+                refreshed = await syncer.refresh_statuses([])
+                logger.info("elo refresh done: %s account(s)", refreshed)
+            except Exception:
+                logger.warning("elo refresh loop failed — retrying next tick", exc_info=True)
         await asyncio.sleep(period_s)
-        if syncer is None:
-            continue
-        try:
-            refreshed = await syncer.refresh_statuses([])
-            logger.info("elo refresh done: %s account(s)", refreshed)
-        except Exception:
-            logger.warning("elo refresh loop failed — retrying next tick", exc_info=True)
 
 
 if __name__ == "__main__":
