@@ -84,6 +84,11 @@ class RealmShellModel(BaseModel):
     join_request: dict[str, Any] | None = None
     """The pending « s'inscrire à la saison » request from the Roi:
     ``{"season_id", "requested_at"}`` — an admin accepts or refuses."""
+    engagement: dict[str, Any] | None = None
+    """The LIVE season link shell ↔ engine (t2a, Drasah 20/11):
+    ``{"season_id", "kingdom_id", "engaged_at"}`` set by the admin's
+    acceptance (the draft starter IS the act of entry), cleared at
+    season end — a realm out of season carries None."""
 
     def to_mongo(self) -> dict[str, Any]:
         """The stored document (Mongo lives on ``_id``)."""
@@ -209,6 +214,31 @@ class RealmService:
     async def clear_join_request(self, realm_id: str) -> RealmShellModel:
         """Drop a stale/carried-out join request (admin decision made)."""
         realm = await self._get(realm_id)
+        realm.join_request = None
+        await self._store.upsert_realm(realm.to_mongo())
+        return realm
+
+    async def realm_by_id(self, realm_id: str) -> RealmShellModel | None:
+        """One realm by id (None when gone — the admin flow reports)."""
+        for realm in await self._all():
+            if realm.id == realm_id:
+                return realm
+        return None
+
+    async def engage(self, realm_id: str, season_id: str, kingdom_id: str) -> RealmShellModel:
+        """Bind the shell to the season's engine kingdom (t2a).
+
+        The admin accepted the Roi's entry request: the engine kingdom
+        exists (its starter draft was the act of entry), the link lands
+        on the shell and the request is consumed — ONE gesture, idempotent
+        on re-engage (the new kingdom id wins).
+        """
+        realm = await self._get(realm_id)
+        realm.engagement = {
+            "season_id": str(season_id),
+            "kingdom_id": str(kingdom_id),
+            "engaged_at": int(time.time()),
+        }
         realm.join_request = None
         await self._store.upsert_realm(realm.to_mongo())
         return realm
