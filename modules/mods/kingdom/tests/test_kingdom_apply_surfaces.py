@@ -419,3 +419,21 @@ def test_the_gate_boot_heal_survives_a_missing_role() -> None:
     _Bot.guilds = [NS(id=123)]
 
     asyncio.run(reconcile_guild_access(_Bot()))  # must not raise
+
+
+def test_the_postuler_wire_dispatches_fullmatch() -> None:
+    """postuler-dead-click-v1 (Drasah 20/11, live regression).
+
+    discord.py dispatches a DynamicItem on ``pattern.fullmatch`` of the
+    WIRE custom_id; the Postuler template once lacked its ``:mod`` tail
+    so every click silently died. The built id must fullmatch the class
+    template — exactly the engine's own dispatch semantics.
+    """
+    from botforge.mods.kingdom.cogs.apply_flow import KingdomPostulerButton
+
+    button = KingdomPostulerButton("kingdom", "📜 Postuler", active=True)
+    match = KingdomPostulerButton.__discord_ui_compiled_template__.fullmatch(
+        button.item.custom_id or ""
+    )
+    assert match is not None, "the wire id must fullmatch the class template"
+    assert match["mod"] == "kingdom"

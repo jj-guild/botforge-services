@@ -217,10 +217,15 @@ def _state_button_row(strings: dict[str, str], *, account_ready: bool, postuler_
 
 class KingdomPostulerButton(
     discord.ui.DynamicItem[discord.ui.Button[Any]],
-    template=rf"{_NS}:postuler",
+    template=rf"{_NS}:postuler:(?P<mod>[a-z0-9_-]+)",
 ):
     """The Postuler shape (green when ready) — the MECHANIC is the platform's.
 
+    postuler-dead-click-v1 (Drasah 20/11, live regression): the template
+    lacked the ``:(?P<mod>...)`` tail while the built custom_id carries
+    ``:{mod}`` — discord.py dispatches on ``pattern.fullmatch``, so the
+    wire button rendered fine but NO click ever reached the callback
+    (« le bouton ne répond pas »). The template now mirrors the built id.
     The callback delegates verbatim to the platform's SeasonApplyButton
     (self-guarding: no account, already-in, unwired — every case is the
     engine's own answer): zero local enrollment logic, the button only
