@@ -82,6 +82,9 @@ class ChannelCategoryDef:
     # the channel is admin-only (the declaration's flag): @everyone is
     # gated, the mod's admin role carries the grant
     admin_only: bool = False
+    # the channel's declared POSITION inside its band (the sidebar's
+    # order is data, #216): ties break on it, then on the key
+    position: int | None = None
 
 
 @dataclass(frozen=True, slots=True)

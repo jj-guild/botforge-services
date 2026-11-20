@@ -159,3 +159,24 @@ def test_the_home_gate_stays_public_by_default(tmp_path: Path) -> None:
     mods = load_mod_definitions(tmp_path)
     assert mods["plain"].home_admin_only is False
     assert mods["plain"].home_view_roles == ()
+
+
+def test_the_kingdom_conscription_declares_the_journey_positions() -> None:
+    """conscription-4-salons (Drasah 20/11): the sidebar is the journey —
+    the Conscription channels declare their positions (the order is
+    data, never the creation order chance left behind)."""
+    from pathlib import Path
+
+    from botforge.core.services.mod_registry import load_mod_definitions
+
+    defs = load_mod_definitions(Path("config"), repo_root=Path("."))
+    kingdom = defs.get("kingdom")
+    assert kingdom is not None
+    journey = {
+        c.key: c.position
+        for c in kingdom.channel_categories
+        if c.group and not c.position is None
+    }
+    assert journey.get("register", 0) < journey.get("apply", 99)
+    assert journey.get("apply", 0) < journey.get("seigneurerie", 99)
+    assert journey.get("seigneurerie", 0) < journey.get("realms", 99)

@@ -102,6 +102,39 @@ class _Platform:
         )
         return str(created.id)
 
+    async def reorder_channels(self, category_id: str, ordered_ids: list[str]) -> None:
+        """Apply a category's declared channel order to the Discord sidebar.
+
+        Discord lists a category's channels by their STORED position —
+        a channel adopted by name or a legacy rename keeps the position
+        history gave it, so the sidebar can contradict the declared
+        tree. The provisioning's canonical order is the contract: each
+        pass re-pins the resolved ids to their declared index (a move
+        only when the position already differs — idempotent).
+        """
+        if self._category(category_id) is None:
+            return
+        for index, channel_id in enumerate(ordered_ids):
+            if not channel_id.isdigit():
+                continue
+            channel = self._guild.get_channel(int(channel_id))
+            if channel is None:
+                continue
+            if getattr(channel, "position", None) == index:
+                continue
+            try:
+                await channel.edit(
+                    position=index,
+                    reason="botforge: panels provisioning (the declared order)",
+                )
+            except discord.HTTPException:
+                logger.warning(
+                    "panels provisioning: reordering %s at index %s failed — best-effort",
+                    channel_id,
+                    index,
+                    exc_info=True,
+                )
+
     async def ensure_forum(self, name: str, category_id: str) -> str:
         """Return the forum id, creating it when missing."""
         category = self._category(category_id)
@@ -540,6 +573,10 @@ async def provision_scope(
     # each group's view roles = the union of its channels' resolved view
     # role ids (the gate on the group's category grants them all)
     group_view_roles = _group_view_role_map(spec)
+    # each category's resolved channel ids in the DECLARED order — the
+    # canonical order applied to the sidebar at the end of the pass
+    # (adopted channels otherwise keep the position history gave them)
+    category_order: dict[str, list[str]] = {}
     # an empty category_key is the guild root: its channels live uncategorised
     for decl in _sorted_channels(spec):
         name = translate(decl.label_key, locale)
@@ -569,6 +606,8 @@ async def provision_scope(
                         )
                     await _apply_access(guild, stored, decl)
                     resolved[decl.key] = stored
+                    if channel_category:
+                        category_order.setdefault(channel_category, []).append(stored)
                     continue
                 # a stored channel of the WRONG kind (a corrupted
                 # provisioning, a manual conversion): it is treated as
@@ -597,6 +636,12 @@ async def provision_scope(
             continue
         await _apply_access(guild, channel_id, decl)
         resolved[decl.key] = channel_id
+        if channel_category:
+            category_order.setdefault(channel_category, []).append(channel_id)
+    # the sidebar mirrors the declared order (creation order is NOT a
+    # contract — the adoptions and renames prove it)
+    for ordered_category, ordered_ids in category_order.items():
+        await platform.reorder_channels(ordered_category, ordered_ids)
     return resolved
 
 

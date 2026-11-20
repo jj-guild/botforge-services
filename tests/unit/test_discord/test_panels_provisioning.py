@@ -362,3 +362,62 @@ async def test_the_boot_pass_gates_platform_categories_when_a_mod_is_installed(m
     calls.clear()
     await factory._boot_gate_platform_categories(bot)
     assert calls == []
+
+
+class TestSidebarOrder:
+    """conscription-4-salons (Drasah 20/11): the sidebar IS the journey —
+    the declared order is applied to Discord's stored positions, so an
+    adopted channel (renamed in place, history's order) ends up where
+    the tree rules say, not where chance left it."""
+
+    @pytest.mark.asyncio
+    async def test_provisioning_reorders_adopted_channels(self) -> None:
+        guild = MockGuild()
+        expected = [_translate(d.label_key, "fr") for d in _sorted_channels(BOT_SCOPE)]
+        assert len(expected) >= 2
+        # history's order: the channels exist, REVERSED (an adopted
+        # channel keeps the position it was born with)
+        for index, name in enumerate(reversed(expected)):
+            stray = MockTextChannel(name=name, guild=guild, position=index)
+            guild._channels[stray.id] = stray
+        resolved = await provision_scope(guild, BOT_SCOPE, "fr", _translate)
+        in_folder = sorted(
+            (c for c in guild.text_channels if c.category is not None),
+            key=lambda c: getattr(c, "position", 0),
+        )
+        assert [c.name for c in in_folder] == expected
+        assert all(int(resolved[d.key]) for d in _sorted_channels(BOT_SCOPE))
+
+    @pytest.mark.asyncio
+    async def test_the_order_pass_is_idempotent_repin(self) -> None:
+        guild = MockGuild()
+        first = await provision_scope(guild, BOT_SCOPE, "fr", _translate)
+        positions = {
+            key: getattr(guild.get_channel(int(cid)), "position", None)
+            for key, cid in first.items()
+            if key != "category"
+        }
+        await provision_scope(guild, BOT_SCOPE, "fr", _translate)
+        positions_again = {
+            key: getattr(guild.get_channel(int(cid)), "position", None)
+            for key, cid in first.items()
+            if key != "category"
+        }
+        assert positions == positions_again
+
+    @pytest.mark.asyncio
+    async def test_reorder_channels_moves_only_the_drifted(self) -> None:
+        guild = MockGuild()
+        platform: Any = _Platform(guild)
+        category_id = await platform.ensure_category("parcours")
+        stay = MockTextChannel(name="stay", guild=guild, category=None)
+        move = MockTextChannel(name="move", guild=guild, category=None)
+        guild._channels[stay.id] = stay
+        guild._channels[move.id] = move
+        stay.position = 0
+        move.position = 1
+        # already in order: no edit at all
+        await platform.reorder_channels(category_id, [str(stay.id), str(move.id)])
+        await platform.reorder_channels(category_id, [str(move.id), str(stay.id)])
+        assert move.position == 0
+        assert stay.position == 1

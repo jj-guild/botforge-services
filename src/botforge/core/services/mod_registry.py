@@ -72,11 +72,14 @@ def _parse_channel_categories(
                     group_admin_only = bool(group.get("admin_only", False))
                     break
         admin_only = bool(entry.get("admin_only", False))
+        raw_position = entry.get("position")
+        position = int(raw_position) if isinstance(raw_position, (int, float)) else None
         categories.append(
             ChannelCategoryDef(
                 group=group_display,
                 group_admin_only=group_admin_only,
                 admin_only=admin_only,
+                position=position,
                 key=key,
                 display_name=display,
                 description=str(entry.get("description", "")),

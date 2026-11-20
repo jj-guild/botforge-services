@@ -54,6 +54,7 @@ channels:
     display_name: 🪙 enregistrement
     description: The account door — create the project account and link AoE2
     group: conscription
+    position: 1
     access:
       everyone_view: true
       everyone_post: false
@@ -62,6 +63,7 @@ channels:
     display_name: ⚔️ postuler
     description: Roi ou Seigneur ? — fonder ou rejoindre un royaume
     group: conscription
+    position: 2
     access:
       everyone_view: false
       view: [Kingdom Enregistré, Kingdom Admin]
@@ -69,6 +71,7 @@ channels:
     display_name: 🛡️ seigneurerie
     description: The lords' desk — queue, candidates, assignments (admin only)
     group: conscription
+    position: 3
     admin_only: true
     access:
       everyone_view: false
@@ -77,6 +80,7 @@ channels:
     display_name: 👑 royaumes
     description: Kingdom validation panel (admin only)
     group: conscription
+    position: 4
     admin_only: true
     access:
       everyone_view: false
