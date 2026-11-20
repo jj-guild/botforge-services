@@ -96,11 +96,38 @@ async def build_validation_panel(guild_id: str) -> discord.ui.LayoutView:
     else:
         blocks.append(discord.ui.TextDisplay(str(strings["empty"])))
     blocks.append(discord.ui.Separator())
-    blocks.append(
-        discord.ui.TextDisplay(
-            _table(strings["accepted_header"], strings["table_kingdom"], accepted)
+    if accepted:
+        blocks.append(
+            discord.ui.TextDisplay(f"## {strings['accepted_header']} ({len(accepted)})")
         )
-    )
+        for kingdom in accepted:
+            king_name = await _king_display_name(stack, kingdom)
+            blocks.append(
+                discord.ui.TextDisplay(
+                    str(strings["row"]).format(name=kingdom.name, king=king_name)
+                )
+            )
+            row: discord.ui.ActionRow[discord.ui.LayoutView] = discord.ui.ActionRow()
+            row.add_item(
+                ValidationDeleteButton(
+                    kingdom.id,
+                    str(strings["delete_button"])[:80],
+                    discord.ButtonStyle.danger,
+                )
+            )
+            row.add_item(
+                ValidationCrownButton(
+                    kingdom.id,
+                    str(strings["crown_button"])[:80],
+                    discord.ButtonStyle.secondary,
+                )
+            )
+            blocks.append(row)
+    else:
+        blocks.append(
+            discord.ui.TextDisplay(f"## {strings['accepted_header']} (0)")
+        )
+        blocks.append(discord.ui.TextDisplay(str(strings["accepted_empty"])))
     blocks.append(
         discord.ui.TextDisplay(
             _table(strings["refused_header"], strings["table_kingdom"], refused)
@@ -122,15 +149,54 @@ def _table(header: str, kingdom_column: str, kingdoms: list[Any]) -> str:
 
 
 async def _king_display_name(stack: Any, kingdom: Any) -> str:
-    """The pending kingdom's King's display name (— when unresolvable)."""
+    """The kingdom's King's display name (— when unresolvable).
+
+    validation-cards-v1: the king is the lord holding the KING role; the
+    old fallback (any active lord) stays for legacy documents.
+    """
     from .common import lord_name
 
     if stack is None:
         return "—"
+    king: Any = None
+    fallback: Any = None
     for lord in await _lords_safe(stack):
-        if lord.kingdom_id == kingdom.id and not lord.left:
-            return str(await lord_name(stack.kingdoms, lord.id)) or "—"
-    return "—"
+        if lord.kingdom_id != kingdom.id or lord.left:
+            continue
+        if _is_king(lord):
+            king = lord
+            break
+        fallback = fallback or lord
+    return (str(await lord_name(stack.kingdoms, king.id)) or "—") if king is not None else (
+        (str(await lord_name(stack.kingdoms, fallback.id)) or "—") if fallback is not None else "—"
+    )
+
+
+def _is_king(lord: Any) -> bool:
+    """True when the lord document holds the KING role (name or value)."""
+    role = getattr(lord, "role", None)
+    return str(getattr(role, "name", role or "")).upper().find("KING") >= 0
+
+
+async def _active_members(stack: Any, kingdom_id: str) -> list[Any]:
+    """The kingdom's active lords, King first (the crown designation menu)."""
+    if stack is None:
+        return []
+    members: list[Any] = []
+    for lord in await _lords_safe(stack):
+        if lord.kingdom_id == kingdom_id and not lord.left:
+            members.append(lord)
+    members.sort(key=lambda lord: 0 if _is_king(lord) else 1)
+    return members
+
+
+async def _refresh_pins(bot: Any, guild_id: str) -> None:
+    """Re-render the validation pins in place (best-effort, never raises)."""
+    from botforge.discord.static_pins import ensure_static_pin, registered_static_pins
+
+    for spec in registered_static_pins():
+        if spec.key in (VALIDATION_VIEW_KEY, "panel:mod:kingdom:validation"):
+            await ensure_static_pin(bot, spec, guild_id)
 
 
 async def _lords_safe(stack: Any) -> list[Any]:
@@ -216,8 +282,272 @@ class ValidationDecisionButton(
             pass
 
 
+async def _guard(interaction: discord.Interaction, strings: dict[str, str]) -> bool:
+    """The click-time admin guard (the pin's visibility is only convenience)."""
+    from botforge.discord.guards import require_admin
+
+    return await require_admin(
+        interaction,
+        _bot_admins(interaction),
+        getattr(interaction.client, "roles_service", None),
+        denied_message=str(strings["denied"]),
+    )
+
+
+async def _find_kingdom(stack: Any, kingdom_id: str) -> Any | None:
+    """One kingdom by id through the service seam (None when gone)."""
+    try:
+        for kingdom in await stack.kingdoms.kingdoms():
+            if str(kingdom.id) == str(kingdom_id):
+                return kingdom
+    except Exception:
+        logger.warning("kingdom: validation kingdom read failed", exc_info=True)
+    return None
+
+
+class ValidationDeleteButton(
+    discord.ui.DynamicItem[discord.ui.Button[Any]],
+    template=rf"{_NS}:del:(?P<kingdom_id>[a-zA-Z0-9_-]+)",
+):
+    """🗑️ Supprimer — open the drop-out confirm card of one validated kingdom."""
+
+    def __init__(self, kingdom_id: str, label: str, style: int) -> None:
+        super().__init__(
+            discord.ui.Button(
+                custom_id=f"{_NS}:del:{kingdom_id}"[:100],
+                label=label,
+                style=style,  # type: ignore[arg-type]
+            )
+        )
+        self.kingdom_id = kingdom_id
+
+    @classmethod
+    async def from_custom_id(
+        cls,
+        interaction: discord.Interaction,
+        item: discord.ui.Item[Any],
+        match: Any,
+        /,
+    ) -> "ValidationDeleteButton":
+        button = item if isinstance(item, discord.ui.Button) else None
+        label = (button.label or "?") if button is not None else "?"
+        style = button.style if button is not None else discord.ButtonStyle.danger
+        return cls(match["kingdom_id"], label, style)
+
+    async def callback(self, interaction: discord.Interaction) -> None:
+        """Guard, resolve, then open the one-click-drop confirm card."""
+        locale = await _guild_locale(str(interaction.guild_id or ""))
+        strings = mod_catalog().section("kingdom.validation", locale)
+        if not await _guard(interaction, strings):
+            return
+        stack = wiring()
+        kingdom = await _find_kingdom(stack, self.kingdom_id) if stack is not None else None
+        if kingdom is None:
+            from .common import open_unique_ephemeral
+
+            await open_unique_ephemeral(interaction, str(strings["gone_note"]))
+            return
+        from .common import open_unique_ephemeral
+
+        await open_unique_ephemeral(
+            interaction, view=_delete_confirm_card(strings, locale, kingdom)
+        )
+
+
+def _delete_confirm_card(
+    strings: dict[str, str], locale: str, kingdom: Any
+) -> discord.ui.LayoutView:
+    """The red confirm card of a kingdom deletion (anti-clic-raté, settings' pattern)."""
+    name = str(kingdom.name)[:80]
+    yes: discord.ui.Button[Any] = discord.ui.Button(
+        label=str(strings["delete_confirm_button"])[:80],
+        custom_id=f"kingdom:valid:del-yes:{kingdom.id}"[:100],
+        style=discord.ButtonStyle.danger,
+    )
+    no: discord.ui.Button[Any] = discord.ui.Button(
+        label=str(strings["delete_cancel_button"])[:80],
+        custom_id=f"kingdom:valid:del-no:{kingdom.id}"[:100],
+        style=discord.ButtonStyle.secondary,
+    )
+
+    async def on_yes(target: discord.Interaction) -> None:
+        if not target.response.is_done():
+            await target.response.defer(ephemeral=True)
+        shared = strings_by_locale(locale)
+        note: str
+        stack = wiring()
+        if stack is None:
+            await target.followup.send(str(shared["plan_no_service"]), ephemeral=True)
+            return
+        try:
+            deleted = await stack.kingdoms.delete_kingdom(str(kingdom.id))
+            note = str(strings["deleted_note"]).format(name=deleted.name)
+        except Exception as exc:  # noqa: BLE001 — the card reports, never raises
+            logger.warning("kingdom: delete failed (%s)", kingdom.id, exc_info=True)
+            note = str(shared["console_error"]).format(str(exc)[:150])
+        try:
+            await _refresh_pins(target.client, str(target.guild_id or ""))
+        except Exception:
+            logger.warning("kingdom: validation pin refresh failed", exc_info=True)
+        try:
+            await target.followup.send(note, ephemeral=True)
+        except Exception:  # noqa: S110 — a vanished window is fine
+            pass
+
+    async def on_no(target: discord.Interaction) -> None:
+        if not target.response.is_done():
+            await target.response.defer(ephemeral=True)
+
+    yes.callback = on_yes
+    no.callback = on_no
+    container: discord.ui.Container[discord.ui.LayoutView] = discord.ui.Container(
+        discord.ui.TextDisplay(
+            f"**{str(strings['delete_confirm_title']).format(name=name)}**\n"
+            f"{strings['delete_confirm_hint']}"
+        ),
+        accent_colour=discord.Colour(0xED4245),
+    )
+    row: discord.ui.ActionRow[discord.ui.LayoutView] = discord.ui.ActionRow()
+    row.add_item(yes)
+    row.add_item(no)
+    container.add_item(row)
+    return surface("panel:mod:kingdom:validation:confirm", container)
+
+
+class ValidationCrownButton(
+    discord.ui.DynamicItem[discord.ui.Button[Any]],
+    template=rf"{_NS}:crown:(?P<kingdom_id>[a-zA-Z0-9_-]+)",
+):
+    """👑 Changer le roi — open the sovereign designation menu (D81)."""
+
+    def __init__(self, kingdom_id: str, label: str, style: int) -> None:
+        super().__init__(
+            discord.ui.Button(
+                custom_id=f"{_NS}:crown:{kingdom_id}"[:100],
+                label=label,
+                style=style,  # type: ignore[arg-type]
+            )
+        )
+        self.kingdom_id = kingdom_id
+
+    @classmethod
+    async def from_custom_id(
+        cls,
+        interaction: discord.Interaction,
+        item: discord.ui.Item[Any],
+        match: Any,
+        /,
+    ) -> "ValidationCrownButton":
+        button = item if isinstance(item, discord.ui.Button) else None
+        label = (button.label or "?") if button is not None else "?"
+        style = button.style if button is not None else discord.ButtonStyle.secondary
+        return cls(match["kingdom_id"], label, style)
+
+    async def callback(self, interaction: discord.Interaction) -> None:
+        """Guard, resolve, then open the designation window."""
+        from .common import open_unique_ephemeral
+
+        locale = await _guild_locale(str(interaction.guild_id or ""))
+        strings = mod_catalog().section("kingdom.validation", locale)
+        if not await _guard(interaction, strings):
+            return
+        stack = wiring()
+        kingdom = await _find_kingdom(stack, self.kingdom_id) if stack is not None else None
+        if kingdom is None:
+            await open_unique_ephemeral(interaction, str(strings["gone_note"]))
+            return
+        members = await _active_members(stack, str(kingdom.id))
+        if not members:
+            await open_unique_ephemeral(interaction, str(strings["crown_no_lords"]))
+            return
+        view = await _crown_window(strings, locale, kingdom, members)
+        await open_unique_ephemeral(interaction, view=view)
+
+
+async def _crown_window(
+    strings: dict[str, str], locale: str, kingdom: Any, members: list[Any]
+) -> discord.ui.LayoutView:
+    """The designation window: pick a member, the throne changes at once."""
+    from .common import lord_name
+
+    stack = wiring()
+    options: list[discord.SelectOption] = []
+    for lord in members[:25]:
+        display = str(await lord_name(stack.kingdoms if stack else None, lord.id))[:100]
+        description = str(strings["crown_king_option"]) if _is_king(lord) else None
+        options.append(
+            discord.SelectOption(
+                label=display or str(lord.id)[:100],
+                value=str(lord.id),
+                default=_is_king(lord),
+                description=description,
+            )
+        )
+    select: discord.ui.Select[discord.ui.LayoutView] = discord.ui.Select(
+        placeholder=str(strings["crown_select_placeholder"])[:100],
+        options=options,
+        custom_id=f"kingdom:valid:crown-pick:{kingdom.id}"[:100],
+    )
+    cancel: discord.ui.Button[Any] = discord.ui.Button(
+        label=str(strings["delete_cancel_button"])[:80],
+        custom_id=f"kingdom:valid:crown-cancel:{kingdom.id}"[:100],
+        style=discord.ButtonStyle.secondary,
+    )
+
+    async def on_pick(target: discord.Interaction) -> None:
+        if not target.response.is_done():
+            await target.response.defer(ephemeral=True)
+        shared = strings_by_locale(locale)
+        note: str
+        stack = wiring()
+        if stack is None:
+            await target.followup.send(str(shared["plan_no_service"]), ephemeral=True)
+            return
+        lord_id = (select.values or [""])[0]
+        try:
+            realm, _former, new_king = await stack.kingdoms.reassign_king(
+                str(kingdom.id), str(lord_id)
+            )
+            king_display = str(await lord_name(stack.kingdoms, new_king.id))
+            note = str(strings["crown_note"]).format(king=king_display, name=realm.name)
+        except Exception as exc:  # noqa: BLE001 — the window reports, never raises
+            logger.warning("kingdom: crown change failed (%s)", kingdom.id, exc_info=True)
+            note = str(shared["console_error"]).format(str(exc)[:150])
+        try:
+            await _refresh_pins(target.client, str(target.guild_id or ""))
+        except Exception:
+            logger.warning("kingdom: validation pin refresh failed", exc_info=True)
+        try:
+            await target.followup.send(note, ephemeral=True)
+        except Exception:  # noqa: S110 — a vanished window is fine
+            pass
+
+    async def on_cancel(target: discord.Interaction) -> None:
+        if not target.response.is_done():
+            await target.response.defer(ephemeral=True)
+
+    select.callback = on_pick
+    cancel.callback = on_cancel
+    container: discord.ui.Container[discord.ui.LayoutView] = discord.ui.Container(
+        discord.ui.TextDisplay(
+            f"**{str(strings['crown_title']).format(name=str(kingdom.name)[:80])}**\n"
+            f"{strings['crown_hint']}"
+        ),
+        accent_colour=discord.Colour(0xF0B232),
+    )
+    row: discord.ui.ActionRow[discord.ui.LayoutView] = discord.ui.ActionRow()
+    row.add_item(select)
+    container.add_item(row)
+    buttons: discord.ui.ActionRow[discord.ui.LayoutView] = discord.ui.ActionRow()
+    buttons.add_item(cancel)
+    container.add_item(buttons)
+    return surface("panel:mod:kingdom:validation:crown", container)
+
+
 __all__ = [
     "VALIDATION_VIEW_KEY",
+    "ValidationCrownButton",
     "ValidationDecisionButton",
+    "ValidationDeleteButton",
     "build_validation_panel",
 ]

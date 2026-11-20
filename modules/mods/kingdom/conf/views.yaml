@@ -40,6 +40,12 @@ views:
   # realms validation dashboard pin (ported from the reference panel:royaumes)
   panel:mod:kingdom:validation:
     kind: surface
+  # validation-cards-v1 (Drasah 20/11): the admin's sovereign confirm
+  # windows — the delete confirm card + the crown designation window
+  panel:mod:kingdom:validation:confirm:
+    kind: surface
+  panel:mod:kingdom:validation:crown:
+    kind: surface
   # marché entry pin (ported from the reference panel:marche)
   panel:mod:kingdom:market:
     kind: surface
