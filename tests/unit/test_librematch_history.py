@@ -141,15 +141,28 @@ def _match(
     started: int,
     finished: int,
     members: list[dict[str, Any]],
+    options: str = "",
+    slotinfo: str = "",
+    mapname: str = "arabia.rms",
+    description: str = "",
 ) -> dict[str, Any]:
-    return {
+    payload = {
         "id": match_id,
         "leaderboard": board,
         "startgametime": started,
         "completiontime": finished,
-        "mapname": "arabia.rms",
+        "mapname": mapname,
         "matchhistorymember": members,
     }
+    # The upstream history payload carries the encoded blobs verbatim
+    # (the LibreMatch wiki): the ingest decodes THIS, no second call.
+    if options:
+        payload["options"] = options
+    if slotinfo:
+        payload["slotinfo"] = slotinfo
+    if description:
+        payload["description"] = description
+    return payload
 
 
 def _member(
@@ -343,18 +356,21 @@ def _options(pairs: list[tuple[str, str]]) -> str:
 
 
 async def test_decode_exploits_stored_matches_without_refetch() -> None:
-    """T2: the encoded fields decode AFTER the storage, no history re-fetch."""
+    """T2: the blobs ride the history payload itself, no second endpoint."""
     db, adapter = FakeDb(), FakeAdapter()
     adapter.history["123"] = [
-        _match("m1", "0", 100, 200, [_member("123", 1, 1, 1000, 1024)])
+        _match(
+            "m1",
+            "0",
+            100,
+            200,
+            [_member("123", 1, 1, 1000, 1024)],
+            options=_options([("MAP_SIZE", "3"), ("SPEED", "2")]),
+            slotinfo=_slotinfo(
+                [{"profileInfo": {"id": 123}, "factionID": 1, "teamID": 1, "status": 3}]
+            ),
+        )
     ]
-    adapter.details["m1"] = {
-        "id": "m1",
-        "options": _options([("MAP_SIZE", "3"), ("SPEED", "2")]),
-        "slotinfo": _slotinfo(
-            [{"profileInfo": {"id": 123}, "factionID": 1, "teamID": 1, "status": 3}]
-        ),
-    }
     syncer = _syncer(db, adapter)
     await syncer.sync_account("123")
 
@@ -371,8 +387,8 @@ async def test_decode_exploits_stored_matches_without_refetch() -> None:
     entries = await syncer.match_history(["123"])
     assert entries[0].options_json == doc["options_json"]
     assert entries[0].slots_json == doc["slots_json"]
-    # no history re-fetch: only the details endpoint was called
-    assert ("details", "m1") in adapter.calls
+    # no match-details call at all: the blobs ride the history payload
+    assert ("details", "m1") not in adapter.calls
     assert ("history", "123") in adapter.calls
 
 
@@ -444,3 +460,83 @@ async def test_the_elo_refresh_never_fetches_history() -> None:
     refreshed = await syncer.refresh_statuses([])
     assert refreshed >= 1
     assert len([c for c in adapter.calls if c[0] == "history"]) == history_calls
+
+
+async def test_reference_tables_name_the_upstream_ids(tmp_path, monkeypatch) -> None:
+    """The provider's config tables reverse the ids, newest epoch first."""
+    import json as _json
+
+    table_dir = tmp_path / "reference"
+    table_dir.mkdir()
+    (table_dir / "maps_aoe2.json").write_text(
+        _json.dumps({"Arabia": {"1": 9, "8": 10875}, "Murkwood": {"8": 11016}})
+    )
+    (table_dir / "civs_aoe2.json").write_text(
+        _json.dumps({"Aztec": {"1": 0, "8": 0}, "Malians": {"8": 29}})
+    )
+    monkeypatch.setenv("LIBREMATCH_REFERENCE_DIR", str(table_dir))
+
+    from botforge.ext_librematch import reference
+
+    reference._indexed.cache_clear()
+    try:
+        assert reference.map_name_of("11016") == "Murkwood"
+        assert reference.map_name_of(10875) == "Arabia"
+        assert reference.civ_name_of("29") == "Malians"
+        assert reference.map_name_of("999999") == ""
+    finally:
+        reference._indexed.cache_clear()
+
+
+async def test_map_label_prefers_the_options_location(tmp_path, monkeypatch) -> None:
+    """The options blob's location is THE map source (verified live).
+
+    A custom lobby with a stale ``FrigidLake.rms`` file name answered
+    location 10960 = Enclosed — the file name lies, the blob does not.
+    """
+    import json as _json
+
+    table_dir = tmp_path / "reference"
+    table_dir.mkdir()
+    (table_dir / "maps_aoe2.json").write_text(
+        _json.dumps({"Enclosed": {"8": 10960}, "Arabia": {"1": 9}})
+    )
+    monkeypatch.setenv("LIBREMATCH_REFERENCE_DIR", str(table_dir))
+    from botforge.ext_librematch import reference
+
+    reference._indexed.cache_clear()
+    try:
+        db, adapter = FakeDb(), FakeAdapter()
+        adapter.history["123"] = [
+            _match(
+                "m1",
+                "0",
+                100,
+                200,
+                [_member("123", 1, 1, 1000, 1024)],
+                options=_options([("10", "10960")]),
+                mapname="FrigidLake.rms",
+                description="Test bot",
+            )
+        ]
+        syncer = _syncer(db, adapter)
+        await syncer.sync_account("123")
+
+        doc = db["librematch:matches"].docs["m1:0"]
+        assert doc["map_name"] == "Enclosed"
+        assert doc["lobby_title"] == "Test bot"
+        # a useless "my map" without a decodable location gives way to ""
+        adapter.history["123"] = [
+            _match(
+                "m2",
+                "0",
+                300,
+                400,
+                [_member("123", 1, 1, 1000, 1000)],
+                mapname="my map",
+            )
+        ]
+        await syncer.sync_account("123")
+        assert db["librematch:matches"].docs["m2:0"]["map_name"] == ""
+    finally:
+        reference._indexed.cache_clear()

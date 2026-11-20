@@ -190,10 +190,12 @@ def _entry_players(entry: Any) -> list[dict[str, Any]]:
 
 
 def _player_bit(player: dict[str, Any]) -> str:
-    """One player's readable bit: alias (elo after)."""
+    """One player's readable bit: alias, civ, (elo after)."""
     name = str(player.get("alias") or player.get("profile_id") or "?")
     elo = int(player.get("rating_after", 0) or 0)
-    return f"{name} ({elo})" if elo else name
+    civ = str(player.get("civ") or "").strip()
+    bits = f"{name} ({elo})" if elo else name
+    return f"{bits} · {civ}" if civ else bits
 
 
 def _match_kind(players: list[dict[str, Any]], my_team: int) -> str:
