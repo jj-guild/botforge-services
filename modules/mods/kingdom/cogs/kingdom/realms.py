@@ -693,18 +693,27 @@ class RealmHomeButton(
         return cls(strings["realm_enter_button"], discord.ButtonStyle.primary, match["slug"])
 
     async def callback(self, interaction: discord.Interaction) -> None:
-        slug = str(getattr(self, "custom_id", "")).rsplit(":", 1)[-1]
-        realm = await _realm_of(interaction, slug)
+        # hub-entry-fast-ack (Drasah 20/11): the 3-second interaction
+        # clock belongs to the ACK — the hub's door answers « reçu » in
+        # milliseconds (a cold Mongo connect never eats the window),
+        # the window renders after, through the followup seam
         strings = realm_strings(interaction)
-        if realm is None:
-            await open_unique_ephemeral(interaction, content=strings["realm_gone_note"])
-            return
-        if str(interaction.user.id) != str(realm.king_id) and str(interaction.user.id) not in [
-            str(m) for m in (getattr(realm, "member_ids", []) or [])
-        ]:
-            await open_unique_ephemeral(interaction, content=strings["home_not_member"])
-            return
-        await open_unique_ephemeral(interaction, view=await home_layout(interaction, realm, strings))
+        slug = str(getattr(self, "custom_id", "")).rsplit(":", 1)[-1]
+        await interaction.response.defer(ephemeral=True)
+        try:
+            realm = await _realm_of(interaction, slug)
+            if realm is None:
+                await open_unique_ephemeral(interaction, content=strings["realm_gone_note"])
+                return
+            if str(interaction.user.id) != str(realm.king_id) and str(interaction.user.id) not in [
+                str(m) for m in (getattr(realm, "member_ids", []) or [])
+            ]:
+                await open_unique_ephemeral(interaction, content=strings["home_not_member"])
+                return
+            await open_unique_ephemeral(interaction, view=await home_layout(interaction, realm, strings))
+        except Exception:  # noqa: BLE001 — the door NEVER leaves the player unacknowledged
+            logger.warning("kingdom realms: the entry door failed", exc_info=True)
+            await open_unique_ephemeral(interaction, content=strings["realm_error_note"])
 
 
 class RealmNavButton(
@@ -734,23 +743,30 @@ class RealmNavButton(
         return cls(label, match["view"], match["slug"])
 
     async def callback(self, interaction: discord.Interaction) -> None:
+        # hub-entry-fast-ack (Drasah 20/11): same pattern as the door —
+        # ack first, the sub-window renders through the followup seam
+        strings = realm_strings(interaction)
         parts = str(getattr(self, "custom_id", "")).split(":")
         view_key, slug = parts[-2], parts[-1]
-        realm = await _realm_of(interaction, slug)
-        strings = realm_strings(interaction)
-        if realm is None:
-            await open_unique_ephemeral(interaction, content=strings["realm_gone_note"])
-            return
-        king = str(interaction.user.id) == str(realm.king_id)
-        if view_key == "seigneurie":
-            view = await seigneurie_window(interaction, realm, strings)
-        elif view_key == "presentation":
-            view = presentation_layout(realm, strings, king=king)
-        elif view_key == "season":
-            view = await season_layout(realm, strings, king=king)
-        else:
-            view = palmares_layout(realm, strings)
-        await open_unique_ephemeral(interaction, view=view)
+        await interaction.response.defer(ephemeral=True)
+        try:
+            realm = await _realm_of(interaction, slug)
+            if realm is None:
+                await open_unique_ephemeral(interaction, content=strings["realm_gone_note"])
+                return
+            king = str(interaction.user.id) == str(realm.king_id)
+            if view_key == "seigneurie":
+                view = await seigneurie_window(interaction, realm, strings)
+            elif view_key == "presentation":
+                view = presentation_layout(realm, strings, king=king)
+            elif view_key == "season":
+                view = await season_layout(realm, strings, king=king)
+            else:
+                view = palmares_layout(realm, strings)
+            await open_unique_ephemeral(interaction, view=view)
+        except Exception:  # noqa: BLE001 — a nav miss never times out silently
+            logger.warning("kingdom realms: the nav window failed (%s)", view_key, exc_info=True)
+            await open_unique_ephemeral(interaction, content=strings["realm_error_note"])
 
 
 class RealmPresentationEditButton(

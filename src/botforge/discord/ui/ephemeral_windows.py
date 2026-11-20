@@ -82,16 +82,41 @@ async def open_ephemeral_window(
     ``SINGLE`` closes the player's previous window first (the mod's
     fenêtre unique); ``PLAIN`` just sends. Ephemeral is enforced —
     every window this seam opens is the player's own, never a channel
-    broadcast.
+    broadcast. A click ALREADY acknowledged (``response.defer`` — the
+    fast-ack pattern: the 3-second interaction clock belongs to the
+    ACK, the build then takes its time) rides the followup: the window
+    is the follow-up message, and the single-window close tracks it
+    through the same delete seam.
     """
     owner = str(interaction.user.id)
     mode = window_mode(scope)
     if mode is EphemeralWindowMode.SINGLE:
         await close_ephemeral_window(scope, owner)
     kwargs["ephemeral"] = True
-    await interaction.response.send_message(content, **kwargs)
-    if mode is EphemeralWindowMode.SINGLE:
-        _live[(str(scope), owner)] = (interaction, time.monotonic())
+    if interaction.response.is_done():
+        message = await interaction.followup.send(content, **kwargs)
+        if mode is EphemeralWindowMode.SINGLE:
+            _live[(str(scope), owner)] = (_FollowupWindow(message), time.monotonic())
+    else:
+        await interaction.response.send_message(content, **kwargs)
+        if mode is EphemeralWindowMode.SINGLE:
+            _live[(str(scope), owner)] = (interaction, time.monotonic())
+
+
+class _FollowupWindow:
+    """A follow-up window closable through the same delete seam.
+
+    ``close_ephemeral_window`` calls ``delete_original_response()`` on
+    whatever it tracked; a follow-up message answers ``delete()``
+    instead — this adapter speaks the interaction's protocol so the
+    close path stays ONE code path.
+    """
+
+    def __init__(self, message: Any) -> None:
+        self._message = message
+
+    async def delete_original_response(self) -> None:
+        await self._message.delete()
 
 
 __all__ = [
