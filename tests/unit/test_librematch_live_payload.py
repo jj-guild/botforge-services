@@ -162,25 +162,39 @@ def test_the_served_entry_carries_the_projection() -> None:
     assert json.loads(entry.options_json)["10"] == "10875"
 
 
-def test_the_view_lines_render_from_the_real_payload() -> None:
-    """The rendered discord lines, verbatim — the end-to-end contract."""
-    from botforge.discord.stats_views import _match_line
+def test_the_view_blocks_render_from_the_real_payload() -> None:
+    """The rendered discord blocks, verbatim — the end-to-end contract."""
+    from botforge.discord.stats_views import finished_match_block
 
-    # the ranked 1v1 win
-    assert _match_line(_entry("397662136"), [ME]) == (
-        "✅ <t:1749127503:R> — Arabia 1v1 vs Lastdrop (1156) · Persians +48 elo"
-    )
-    # the custom lobby, both seats' points of view
-    assert _match_line(_entry("473574107"), [ME]) == (
-        "✅ <t:1777283898:R> — Arabia 1v1 vs Merlin Pinpin (1238) · Saracens +18 elo"
-    )
-    assert _match_line(_entry("473574107"), ["848567"]) == (
-        "❌ <t:1777283898:R> — Arabia 1v1 vs JeanJack (1237) · Shu -18 elo"
-    )
-    # the 4v4 loss — the avec/vs lines carry civs, the elo follows
-    assert _match_line(_entry("433589647"), [ME]) == (
-        "❌ <t:1763320771:R> — CoastalForest 4v4 avec DippityDang (1535) · Malians"
-        " · Cyo Electryx (1396) · Saracens vs TheGooseTransporter (1512) · Vietnamese"
-        " · Saladin45 (1502) · Bulgarians · konstid (1564) · Gurjaras"
-        " · Richman (1495) · Dravidians -13 elo"
-    )
+    labels = {"team": "Équipe", "ongoing": "en cours", "untitled": "Match {id}"}
+
+    # the ranked 1v1 win — title by map, duration, both teams, civ, Elo, delta
+    assert finished_match_block(_entry("397662136"), {ME}, {"848567"}, labels) == [
+        "- ✅ **Arabia** — <t:1749127503:R> · 17 min · 1v1",
+        "  - Équipe 1 : **JeanJack** · Magyars · 1185 Elo · +48",
+        "  - Équipe 2 : Lastdrop · Persians · 1156 Elo · -18",
+    ]
+    # the custom lobby — title by its own name, both seats' points of view
+    assert finished_match_block(_entry("473574107"), {ME}, {"848567"}, labels) == [
+        "- ✅ **Test bot** — <t:1777283898:R> · 1v1",
+        "  - Équipe 1 : *Merlin Pinpin* · Saracens · 1238 Elo · -18",
+        "  - Équipe 2 : **JeanJack** · Shu · 1237 Elo · +18",
+    ]
+    assert finished_match_block(_entry("473574107"), {"848567"}, {ME}, labels) == [
+        "- ❌ **Test bot** — <t:1777283898:R> · 1v1",
+        "  - Équipe 1 : **Merlin Pinpin** · Saracens · 1238 Elo · -18",
+        "  - Équipe 2 : *JeanJack* · Shu · 1237 Elo · +18",
+    ]
+    # the 4v4 loss — every seat, the viewed profile bold among its team
+    assert finished_match_block(_entry("433589647"), {ME}, set(), labels) == [
+        "- ❌ **CoastalForest** — <t:1763320771:R> · 16 min · 4v4",
+        (
+            "  - Équipe 1 : TheGooseTransporter · Vietnamese · 1512 Elo · +16, "
+            "Saladin45 · Bulgarians · 1502 Elo · +16, konstid · Gurjaras · 1564 Elo · +13, "
+            "Richman · Dravidians · 1495 Elo · +17"
+        ),
+        (
+            "  - Équipe 2 : **JeanJack** · Vikings · 1432 Elo · -13, DippityDang · Malians · 1535 Elo · -18, "
+            "Cyo Electryx · Saracens · 1396 Elo · -12, SSS · Mongols · 1554 Elo · -19"
+        ),
+    ]

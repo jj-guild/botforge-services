@@ -64,12 +64,13 @@ en:
       add_success: ✅ Account linked — here is your updated profile.
       add_taken: This profile is already linked — remove it first or pick another one.
       add_game_unconfigured: 'Add failed: the game {game} is not configured for registration.'
-      add_unknown: 'Add failed: no profile found for {profile}. Paste your aoe2insights page URL (or the
-        id it holds), or your in-game name — the right id will be resolved automatically.'
+      add_unknown: 'Add failed: no profile found for {profile}. Try your EXACT in-game
+        name, or your Relic ID (on aoe2insights, under your avatar: click the displayed
+        id then the copy icon).'
       add_pick: 'Pick your account for **{name}** — every option shows what that profile last played:'
-      add_blocked: 'Add failed: aoe2insights blocks this server, so the insights id cannot be resolved
-        automatically. Paste your in-game name (e.g. {name}), the /user/relic/<id>/ form of your insights
-        URL, or your Relic ID (the Relic ID shown on your insights profile).'
+      add_insights_refused: 'Add failed: aoe2insights urls are not accepted anymore (the site blocks us).
+        Paste your in-game name, or your Relic ID — on aoe2insights, under your avatar,
+        click the displayed id then the copy icon.'
       add_provider_error: 'Add failed: the provider {provider} did not answer properly — the details go
         to the admins (see the bot logs).'
       add_not_configured: 'Add failed: the provider {provider} does not serve profile stats — see the
@@ -77,8 +78,8 @@ en:
       remove_title: Remove accounts
       remove_placeholder: Accounts to remove...
       remove_label: Accounts to remove
-      add_label: Your aoe2insights id or your relic id
-      add_placeholder: Ex. 17190369 or https://www.aoe2insights.com/user/12488557/
+      add_label: Your in-game name or your Relic ID
+      add_placeholder: e.g. JeanJack or 17190369 (on aoe2insights, click the id under your avatar then copy)
       game_label: Account game
       game_placeholder: Account game...
       rename_title: Your nickname
@@ -89,6 +90,10 @@ en:
       remove_button: Remove an account
       matches_button: "Last matches"
       matches_title: "Your 10 last matches"
+      matches_live_title: "🎯 In progress"
+      matches_team: "Team"
+      matches_ongoing: "in progress"
+      matches_untitled: "Match {id}"
       matches_empty: 'No stored match yet for your accounts \u2014 the history refreshes a few minutes after binding.'
       add_button: Add an account
       rename_button: Change nickname
