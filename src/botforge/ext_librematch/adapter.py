@@ -42,7 +42,12 @@ PERSONAL_STAT_PATH = "/community/leaderboard/GetPersonalStat"
 RECENT_MATCH_PATH = "/community/leaderboard/GetRecentMatchHistory"
 MATCH_DETAILS_HISTORY_PATH = "/community/leaderboard/GetMatchHistory"
 LOBBIES_QUERY_PARAMS = {"title": "age2"}
-LEADERBOARD_KEYS = {"0": "rm_1v1", "1": "rm_team", "2": "unranked", "3": "dm_1v1", "4": "dm_team"}
+# The REAL World's Edge leaderboard ids (verified live 2026-11-20:
+# the GetPersonalStat probe returned JeanJack's RM 1v1 rating under
+# leaderboard_id 3 and the team rating under 4 — the aoe2.net-style
+# 0..4 rotation this dict carried was WRONG for this backend, so the
+# RM boards were served under the DM names).
+LEADERBOARD_KEYS = {"0": "unranked", "1": "dm_1v1", "2": "dm_team", "3": "rm_1v1", "4": "rm_team"}
 
 _SLOT_KINDS = {True: "human", False: "open"}
 
