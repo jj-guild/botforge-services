@@ -112,7 +112,8 @@ en:
       settings_sync_confirm_hint: The mod's pinned panels rebuild to the current state.
       settings_sync_confirm_title: Resynchronize the panels?
       settings_sync_done: '✅ Resynchronized: {pins} pinned panels.'
-      settings_title: 🛠️ Kingdoms — console
+      settings_title: ⚙️ Kingdoms — paramètres
+      settings_section: Administration
     camp:
       button: "⚔️ Pick my side — King or Lord"
       window_title: "⚔️ King or Lord?"

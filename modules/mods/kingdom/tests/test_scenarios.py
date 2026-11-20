@@ -208,3 +208,21 @@ def test_SC_KING_012_machine_pin_refreshes_itself() -> None:
 
     # no machine spec registered → the pass is a no-op, never a raise
     assert asyncio.run(run_machine_refresh_pass(_Bot())) == 0
+
+
+def test_SC_KING_013_parametres_salon_restored() -> None:
+    """SC-KING-013 — the admin salon WEARS the designer's ⚙️ paramètres
+    name (capture 08/11).
+
+    parametres-restore-v1 (Drasah 20/11): the KEY stays `console`
+    (SC-KING-001) but the declared display name, the pinned panel's
+    title and its « Administration » section header match the
+    reference capture — the surface is recognisable at a glance.
+    """
+    mod = _conf_yaml("mod.yaml")
+    channel = next(c for c in mod["channels"] if c["key"] == "console")
+    assert channel["display_name"] == "⚙️ paramètres"
+    for locale in ("fr", "en"):
+        strings = _conf_yaml(f"locales/{locale}.yaml")[locale]["kingdom"]["settings"]
+        assert strings["settings_title"] == "⚙️ Kingdoms — paramètres", locale
+        assert strings["settings_section"] == "Administration", locale

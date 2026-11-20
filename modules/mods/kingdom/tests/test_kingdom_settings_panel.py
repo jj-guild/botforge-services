@@ -104,7 +104,7 @@ def test_settings_strings_parity() -> None:
         settings_strings,
     )
 
-    keys = ["settings_title", "settings_denied", "settings_cancelled"]
+    keys = ["settings_title", "settings_section", "settings_denied", "settings_cancelled"]
     keys += [key for _action, key, _style in _SETTINGS_ACTIONS]
     keys += [
         "settings_deploy_done",

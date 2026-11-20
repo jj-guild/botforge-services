@@ -112,7 +112,8 @@ fr:
       settings_sync_confirm_hint: Les panels épinglés du mod se reconstruisent à l'état courant.
       settings_sync_confirm_title: Resynchroniser les panels ?
       settings_sync_done: '✅ Resynchronisé : {pins} panels épinglés.'
-      settings_title: 🛠️ Kingdoms — console
+      settings_title: ⚙️ Kingdoms — paramètres
+      settings_section: Administration
     camp:
       button: "⚔️ Choisir mon camp — Roi ou Seigneur"
       window_title: "⚔️ Roi ou Seigneur ?"

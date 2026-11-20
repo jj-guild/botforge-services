@@ -1,4 +1,4 @@
-"""The 🛠️ admin console — the admin season cockpit (epic #412 T1).
+"""The ⚙️ Paramètres panel — the admin season cockpit (epic #412 T1).
 
 The reference's 12-button settings panel (``kingdom_panels.py`` /
 ``kingdom_persistent.py``, capture image-12), ported onto the platform
@@ -163,6 +163,9 @@ async def build_settings_panel(guild_id: str) -> discord.ui.LayoutView:
 
     container: discord.ui.Container[discord.ui.LayoutView] = discord.ui.Container(
         discord.ui.TextDisplay(f"# {strings['settings_title']}"),
+        # parametres-restore-v1 (Drasah 20/11, capture 08/11): the
+        # panel wears its original section header under the title.
+        discord.ui.TextDisplay(f"## {strings['settings_section']}"),
         discord.ui.Separator(),
         *rows,
         discord.ui.Separator(),

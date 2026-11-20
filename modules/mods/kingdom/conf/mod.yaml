@@ -150,14 +150,15 @@ channels:
     access:
       everyone_view: false
       view: [Kingdom Admin]
-  # console-salon (rework 20/11): the console panel pins in its OWN
-  # declared console salon (Admin > 🛠️ console), next to the ephemeral
-  # SDK window (panel:mod:kingdom:admin:console via the 🛠️ button) —
-  # no more « settings » salon: the old `settings` slug is swept as
+  # parametres-restore-v1 (Drasah 20/11): the console salon WEARS the
+  # designer's original name — Admin > ⚙️ paramètres (capture 08/11).
+  # The KEY stays `console` (the seam is stable: the settings-pin
+  # fallback already heals by flattened name — console, parametres,
+  # settings) and the legacy `settings` slug stays swept as
   # undeclared at the next provisioning.
   - key: console
-    display_name: 🛠️ console
-    description: The admin console panel (pinned, admin only)
+    display_name: ⚙️ paramètres
+    description: Kingdoms settings — the admin season cockpit (pinned, admin only)
     group: admin
     admin_only: true
     access:
