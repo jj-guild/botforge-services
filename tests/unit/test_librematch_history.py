@@ -233,7 +233,7 @@ async def test_account_stats_serves_known_and_unknown() -> None:
     assert [s.profile_id for s in statuses] == ["123", "999"]
     assert statuses[0].known is True
     board = statuses[0].leaderboards[0]
-    assert board.name == "rm_1v1"
+    assert board.name == "unranked"  # LEADERBOARD_KEYS: board 0 IS unranked (3 is rm_1v1)
     assert board.current == 1024
     assert statuses[1].known is False
 
