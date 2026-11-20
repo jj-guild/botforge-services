@@ -64,12 +64,13 @@ fr:
       add_success: ✅ Compte lié — voilà ton profil à jour.
       add_taken: Ce profil est déjà lié — retire-le d'abord ou choisis un autre profil.
       add_game_unconfigured: 'Ajout échoué : le jeu {game} n''est pas configuré pour l''inscription.'
-      add_unknown: 'Ajout échoué : aucun profil trouvé pour {profile}. Colle l''URL de ta page aoe2insights
-        (ou l''id qu''elle contient), ou ton pseudo en jeu — le bon id sera récupéré automatiquement.'
+      add_unknown: 'Ajout échoué : aucun profil trouvé pour {profile}. Essaie ton pseudo
+        en jeu EXACT, ou ton Relic ID (sur aoe2insights, sous ton avatar : clique l''id
+        affiché puis l''icône de copie).'
       add_pick: 'Choisis ton compte pour **{name}** — chaque option montre ce que ce profil a joué en dernier :'
-      add_blocked: 'Ajout échoué : aoe2insights bloque ce serveur, l''id insights ne peut pas être
-        récupéré automatiquement. Colle ton pseudo en jeu (ex. {name}), la forme /user/relic/<id>/ de ton
-        URL insights, ou ton Relic ID (le Relic ID affiché sur ton profil insights).'
+      add_insights_refused: 'Ajout échoué : les URL aoe2insights ne sont plus acceptées (le site nous bloque).
+        Colle ton pseudo en jeu, ou ton Relic ID — sur aoe2insights, sous ton avatar,
+        clique l''id affiché puis l''icône de copie.'
       add_provider_error: 'Ajout échoué : le provider {provider} ne répond pas correctement — le détail
         part aux admins (vois les logs du bot).'
       add_not_configured: 'Ajout échoué : le provider {provider} ne sert pas les stats de profil — vois
@@ -77,8 +78,8 @@ fr:
       remove_title: Retirer des comptes
       remove_placeholder: Comptes à retirer...
       remove_label: Comptes à retirer
-      add_label: Ton id aoe2insights ou ton relic id
-      add_placeholder: Ex. 17190369 ou https://www.aoe2insights.com/user/12488557/
+      add_label: Ton pseudo en jeu ou ton Relic ID
+      add_placeholder: Ex. JeanJack ou 17190369 (sur aoe2insights, clique l'id sous ton avatar puis copie)
       game_label: Jeu du compte
       game_placeholder: Jeu du compte...
       rename_title: Ton pseudo
@@ -89,6 +90,10 @@ fr:
       remove_button: Retirer un compte
       matches_button: "Derniers matchs"
       matches_title: "Tes 10 derniers matchs"
+      matches_live_title: "🎯 En cours"
+      matches_team: "Équipe"
+      matches_ongoing: "en cours"
+      matches_untitled: "Match {id}"
       matches_empty: 'Aucun match stock\u00e9 pour tes comptes \u2014 l\u2019historique se rafra\u00eechit quelques minutes apr\u00e8s la liaison.'
       add_button: Ajouter un compte
       rename_button: Changer de pseudo

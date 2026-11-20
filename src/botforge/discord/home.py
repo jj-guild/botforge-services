@@ -559,8 +559,8 @@ async def _bind_error_note(interaction: discord.Interaction, exc: Exception, gam
         return await reply(interaction, "profile.add_game_unconfigured", game=game)
     if "player_stats" in reason or "mal configur" in reason:
         return await reply(interaction, "profile.add_provider_error", provider=PROFILE_PROVIDER)
-    if "blocks this server" in reason:
-        return await reply(interaction, "profile.add_blocked", name=typed)
+    if "not accepted anymore" in reason:
+        return await reply(interaction, "profile.add_insights_refused")
     if "valid" in reason or "inconnu" in reason:
         return await reply(interaction, "profile.add_unknown", profile=typed)
     return (
@@ -622,13 +622,19 @@ class _AccountCandidateSelect(discord.ui.Select[Any]):
             await interaction.followup.send(note, ephemeral=True)
             return
         # the candidate list served its purpose: the picked account is
-        # bound — the selection message goes away (best-effort: an
-        # ephemeral delete may be refused by Discord's token window)
+        # bound — the selection message goes away; when the platform
+        # refuses the delete (ephemeral token window), at least its
+        # picker is cleared so no stale selection stays clickable
         try:
             if interaction.message is not None:
                 await interaction.message.delete()
         except Exception:
             logger.debug("the candidate list message could not be deleted", exc_info=True)
+            try:
+                if interaction.message is not None:
+                    await interaction.message.edit(view=None)
+            except Exception:
+                logger.debug("the candidate list message could not be cleared", exc_info=True)
         await _finish_bind(interaction, self.game, profile_id, self.origin)
 
 
@@ -656,8 +662,8 @@ class ProfileAddAccountModal(discord.ui.Modal):
             max_values=1,
         )
         self.profile_id: discord.ui.TextInput[Any] = discord.ui.TextInput(
-            label="Ton pseudo en jeu, relic id ou URL insights",
-            placeholder="Ex. JeanJack, 17190369 ou https://www.aoe2insights.com/user/12488557/",
+            label="Ton pseudo en jeu ou ton Relic ID",
+            placeholder="Ex. JeanJack ou 17190369 — Relic ID : sur aoe2insights, sous l'avatar, clique l'id puis copie",
             max_length=64,
             required=True,
         )
@@ -750,7 +756,7 @@ class ProfileMatchesButton(
         return cls()
 
     async def callback(self, interaction: discord.Interaction) -> None:
-        """List the user's 10 last known matches, newest first (ephemeral)."""
+        """List the matches: live first (when any), then the last finished ones."""
         registration = getattr(interaction.client, "registration_service", None)
         if registration is None:
             await interaction.response.send_message(await reply(interaction, "not_configured"), ephemeral=True)
@@ -759,24 +765,97 @@ class ProfileMatchesButton(
         # state first, never silent work
         await interaction.response.defer(ephemeral=True, thinking=True)
         bindings = await registration.list_bindings(str(interaction.user.id))
-        from botforge.discord.stats_views import recent_match_lines
+        me_ids = {str(b.get("profile_id", "")) for b in bindings if b.get("game_key") == "aoe2"}
+        # the highlight contract (owner direction 2026-11-20): the viewed
+        # profiles render bold, every other profile bound in this guild's
+        # game renders italic — the server, not the match, decides ties
+        known_ids: set[str] = set()
+        try:
+            for binding in await registration.list_bindings_for_game("aoe2"):
+                known_ids.add(str(binding.get("profile_id", "")))
+        except Exception:
+            logger.debug("the guild-wide bindings read failed", exc_info=True)
+        known_ids -= me_ids
+        from botforge.discord.stats_views import recent_match_blocks
 
-        lines = await recent_match_lines(
-            interaction.client, [str(b.get("profile_id", "")) for b in bindings], limit=10
+        labels = {
+            "team": await reply(interaction, "profile.matches_team"),
+            "ongoing": await reply(interaction, "profile.matches_ongoing"),
+            "untitled": await reply(interaction, "profile.matches_untitled"),
+        }
+        body: list[str] = []
+        # LIVE first: the aggregator snapshot (game-aoe2 already keeps
+        # the ongoing matches) — one block per match the viewed
+        # profiles play in RIGHT NOW; the section header only when some.
+        live_blocks = await self._live_blocks(interaction, me_ids, known_ids, labels)
+        if live_blocks:
+            body.append(f"### {await reply(interaction, 'profile.matches_live_title')}")
+            for block in live_blocks:
+                body.extend(block)
+        finished_blocks = await recent_match_blocks(
+            sorted(me_ids), me_ids, known_ids, labels, limit=10
         )
-        if not lines:
+        if not finished_blocks and not live_blocks:
             note = await reply(interaction, "profile.matches_empty")
             await interaction.followup.send(note, ephemeral=True)
             return
+        if finished_blocks:
+            body.append(f"### {await reply(interaction, 'profile.matches_title')}")
+            for block in finished_blocks:
+                body.extend(block)
         # LayoutView + TextDisplay: plain followup content does NOT
         # render the markdown (the raw <t:...> / ### finding of
         # 2026-11-20) — the component surfaces parse both.
-        title = await reply(interaction, "profile.matches_title")
         view = discord.ui.LayoutView(timeout=None)
-        view.add_item(
-            discord.ui.Container(discord.ui.TextDisplay(f"### {title}\n" + "\n".join(f"- {line}" for line in lines)))
-        )
+        view.add_item(discord.ui.Container(discord.ui.TextDisplay("\n".join(body))))
         await interaction.followup.send(view=view, ephemeral=True)
+
+    async def _live_blocks(
+        self,
+        interaction: discord.Interaction,
+        me_ids: set[str],
+        known_ids: set[str],
+        labels: dict[str, str],
+    ) -> list[list[str]]:
+        """Render one block per ONGOING match of the viewed profiles.
+
+        The game service already knows the live state (the aoe2lobby
+        aggregator, the live dashboard's own source): one snapshot,
+        filtered to the matches carrying a viewed profile — no new
+        provider call on this path.
+        """
+        if not me_ids:
+            return []
+        client = _live_client_for(interaction.client, "aoe2")
+        if client is None:
+            return []
+        try:
+            snapshot = await client.watch("aoe2")
+        except Exception:
+            logger.debug("the live snapshot read failed", exc_info=True)
+            return []
+        matches: dict[str, list[dict[str, Any]]] = {}
+        order: list[str] = []
+        for player in snapshot.get("players", []) or []:
+            if str(player.get("profile_id", "")) not in me_ids:
+                continue
+            state = str(player.get("state", ""))
+            if state == "offline":
+                continue
+            match_ref = str(player.get("match_ref", "") or "")
+            if not match_ref:
+                continue
+            if match_ref not in matches:
+                matches[match_ref] = []
+                order.append(match_ref)
+            if not matches[match_ref]:
+                matches[match_ref].append(player)
+        from botforge.discord.stats_views import live_match_block
+
+        return [
+            live_match_block(matches[ref][0].get("match") or {}, me_ids, known_ids, labels)
+            for ref in order
+        ]
 
 
 class ProfileRenameButton(

@@ -118,12 +118,11 @@ class RegistrationService:
         validated = await seam.validate_profile(profile_id)
         if validated is None:
             raise InvalidProfileError(
-                f"profile {profile_id!r} is not valid for game {game_key!r} — tried as a "
-                "relic id and as an aoe2insights id, neither resolved (#402)"
+                f"profile {profile_id!r} is not valid for game {game_key!r} — the provider "
+                "knows no such relic id (#402)"
             )
-        # The seam may have resolved the typed id (an aoe2insights user id)
-        # into the canonical relic id — the binding always stores the
-        # relic id the provider validated.
+        # The seam validates the relic id the provider itself accepted —
+        # the binding always stores the canonical relic id.
         canonical_id = str(validated.get("profile_id") or profile_id)
         owner = await self._db.find_binding_by_profile(game_key, canonical_id)
         if owner is not None and owner.get("user_id") != user_id:
@@ -180,6 +179,19 @@ class RegistrationService:
     async def list_bindings(self, user_id: str) -> list[dict[str, Any]]:
         """List all of a user's game-profile bindings."""
         return await self._db.find_user_bindings(user_id)
+
+    async def list_bindings_for_game(self, game_key: str) -> list[dict[str, Any]]:
+        """List every profile binding of a game (the whole server).
+
+        The matches popup's highlight contract (2026-11-20): the other
+        SERVER-KNOWN profiles render highlighted — this read is how the
+        view learns them.
+        """
+        getter = getattr(self._db, "list_bindings_for_game", None)
+        if getter is None:
+            return []
+        bindings = await getter(game_key)
+        return list(bindings)
 
     async def unlink_profile(self, user_id: str, game_key: str, profile_id: str) -> bool:
         """Remove one profile binding; True when one existed.

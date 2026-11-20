@@ -33,7 +33,7 @@ crashes&nbsp;the&nbsp;view&nbsp;(the&nbsp;panels&nbsp;degrade&nbsp;quietly).</sp
 <tr><td class="decor functions-decor"><span class="code">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span></td><td>&nbsp;</td>
 <td class="singlecolumn"><dl><dt>async <a name="-account_elo_by_profile"><strong>account_elo_by_profile</strong></a>(bot: 'Any', profile_ids: 'list[str]') -&gt; 'dict[str, str]'</dt><dd><span class="code">Render&nbsp;the&nbsp;per-account&nbsp;1v1&nbsp;elo&nbsp;lines,&nbsp;keyed&nbsp;by&nbsp;profile&nbsp;id.<br>
 &nbsp;<br>
-``"1185&nbsp;elo&nbsp;1v1&nbsp;(max&nbsp;1210)"``&nbsp;per&nbsp;account&nbsp;—&nbsp;the&nbsp;1v1&nbsp;RM&nbsp;rating&nbsp;the<br>
+``"1185&nbsp;Elo&nbsp;1v1&nbsp;(max&nbsp;1210)"``&nbsp;per&nbsp;account&nbsp;—&nbsp;the&nbsp;1v1&nbsp;RM&nbsp;rating&nbsp;the<br>
 player&nbsp;actually&nbsp;reads&nbsp;(the&nbsp;request&nbsp;of&nbsp;2026-11-20:&nbsp;the&nbsp;profile&nbsp;page<br>
 shows&nbsp;the&nbsp;1v1&nbsp;elo&nbsp;of&nbsp;every&nbsp;aoe2&nbsp;account,&nbsp;not&nbsp;the&nbsp;best&nbsp;board);&nbsp;the<br>
 accounts&nbsp;without&nbsp;stored&nbsp;1v1&nbsp;stats&nbsp;map&nbsp;to&nbsp;"".</span></dd></dl>
@@ -42,15 +42,25 @@ accounts&nbsp;without&nbsp;stored&nbsp;1v1&nbsp;stats&nbsp;map&nbsp;to&nbsp;"".<
 One&nbsp;line&nbsp;per&nbsp;evaluated&nbsp;criterion&nbsp;—&nbsp;passed&nbsp;✓,&nbsp;failed&nbsp;✗,&nbsp;unknown&nbsp;❔<br>
 (the&nbsp;manual-review&nbsp;marker&nbsp;of&nbsp;T5)&nbsp;—&nbsp;so&nbsp;the&nbsp;admin&nbsp;announce&nbsp;shows&nbsp;WHY<br>
 the&nbsp;queue&nbsp;holds&nbsp;the&nbsp;candidate.&nbsp;Empty&nbsp;when&nbsp;no&nbsp;criterion&nbsp;ran.</span></dd></dl>
- <dl><dt>async <a name="-recent_match_lines"><strong>recent_match_lines</strong></a>(bot: 'Any', profile_ids: 'list[str]', limit: 'int' = 10) -&gt; 'list[str]'</dt><dd><span class="code">Render&nbsp;the&nbsp;accounts'&nbsp;last&nbsp;matches,&nbsp;newest&nbsp;first&nbsp;(&lt;=&nbsp;limit&nbsp;lines).<br>
+ <dl><dt><a name="-finished_match_block"><strong>finished_match_block</strong></a>(entry: 'Any', me_ids: 'set[str]', known_ids: 'set[str]', labels: 'dict[str, str]') -&gt; 'list[str]'</dt><dd><span class="code">Render&nbsp;one&nbsp;finished&nbsp;match&nbsp;block:&nbsp;the&nbsp;header,&nbsp;then&nbsp;the&nbsp;teams.</span></dd></dl>
+ <dl><dt><a name="-live_match_block"><strong>live_match_block</strong></a>(match: 'dict[str, Any]', me_ids: 'set[str]', known_ids: 'set[str]', labels: 'dict[str, str]') -&gt; 'list[str]'</dt><dd><span class="code">Render&nbsp;one&nbsp;ongoing-match&nbsp;block:&nbsp;header&nbsp;with&nbsp;the&nbsp;live&nbsp;marker,&nbsp;teams.<br>
 &nbsp;<br>
-One&nbsp;line&nbsp;per&nbsp;match:&nbsp;the&nbsp;date,&nbsp;the&nbsp;map,&nbsp;the&nbsp;board,&nbsp;the&nbsp;outcome&nbsp;and<br>
-the&nbsp;elo&nbsp;delta&nbsp;of&nbsp;the&nbsp;player's&nbsp;account.&nbsp;Best-effort&nbsp;—&nbsp;an<br>
-unreachable&nbsp;game&nbsp;service&nbsp;or&nbsp;an&nbsp;empty&nbsp;history&nbsp;renders&nbsp;nothing.</span></dd></dl>
+``match``&nbsp;is&nbsp;the&nbsp;aggregator&nbsp;snapshot's&nbsp;per-player&nbsp;match&nbsp;context<br>
+(aoe2lobby:&nbsp;map,&nbsp;format,&nbsp;per-slot&nbsp;players).&nbsp;No&nbsp;outcome,&nbsp;no&nbsp;delta&nbsp;—<br>
+the&nbsp;seats&nbsp;carry&nbsp;the&nbsp;alias,&nbsp;the&nbsp;civ,&nbsp;the&nbsp;team;&nbsp;the&nbsp;same&nbsp;layout&nbsp;the<br>
+finished&nbsp;blocks&nbsp;render,&nbsp;so&nbsp;both&nbsp;sources&nbsp;read&nbsp;identically.</span></dd></dl>
+ <dl><dt>async <a name="-recent_match_blocks"><strong>recent_match_blocks</strong></a>(profile_ids: 'list[str]', me_ids: 'set[str]', known_ids: 'set[str]', labels: 'dict[str, str]', limit: 'int' = 10) -&gt; 'list[list[str]]'</dt><dd><span class="code">Render&nbsp;the&nbsp;accounts'&nbsp;last&nbsp;finished&nbsp;matches&nbsp;as&nbsp;bullet&nbsp;blocks.<br>
+&nbsp;<br>
+One&nbsp;BLOCK&nbsp;per&nbsp;match&nbsp;(newest&nbsp;first,&nbsp;&lt;=&nbsp;limit):&nbsp;the&nbsp;header&nbsp;line&nbsp;(the<br>
+match's&nbsp;own&nbsp;name,&nbsp;the&nbsp;time,&nbsp;the&nbsp;duration,&nbsp;the&nbsp;format)&nbsp;then&nbsp;one<br>
+sub-bullet&nbsp;per&nbsp;team&nbsp;carrying&nbsp;every&nbsp;seat&nbsp;(alias,&nbsp;civ,&nbsp;Elo,&nbsp;the<br>
+rating&nbsp;delta).&nbsp;``me_ids``&nbsp;renders&nbsp;bold,&nbsp;the&nbsp;other&nbsp;server-known<br>
+profiles&nbsp;render&nbsp;italic&nbsp;—&nbsp;the&nbsp;highlight&nbsp;contract&nbsp;of&nbsp;the&nbsp;matches<br>
+popup.&nbsp;Best-effort&nbsp;—&nbsp;an&nbsp;unreachable&nbsp;game&nbsp;service&nbsp;renders&nbsp;[].</span></dd></dl>
  <dl><dt><a name="-stats_client"><strong>stats_client</strong></a>() -&gt; 'Any | None'</dt><dd><span class="code">Return&nbsp;the&nbsp;game&nbsp;service's&nbsp;stats&nbsp;client;&nbsp;None&nbsp;when&nbsp;unconfigured.</span></dd></dl>
  <dl><dt>async <a name="-user_stats_line"><strong>user_stats_line</strong></a>(bot: 'Any', user_id: 'str') -&gt; 'str'</dt><dd><span class="code">Render&nbsp;the&nbsp;user's&nbsp;unified&nbsp;elo&nbsp;head&nbsp;line&nbsp;(best&nbsp;board).<br>
 &nbsp;<br>
-``"&nbsp;—&nbsp;1400&nbsp;elo&nbsp;(max&nbsp;1500)"``&nbsp;on&nbsp;the&nbsp;player's&nbsp;best&nbsp;leaderboard;<br>
+``"&nbsp;—&nbsp;1400&nbsp;Elo&nbsp;(max&nbsp;1500)"``&nbsp;on&nbsp;the&nbsp;player's&nbsp;best&nbsp;leaderboard;<br>
 empty&nbsp;when&nbsp;the&nbsp;stats&nbsp;are&nbsp;unknown&nbsp;—&nbsp;the&nbsp;roster&nbsp;line&nbsp;stays&nbsp;as&nbsp;it&nbsp;was.</span></dd></dl>
 </td></tr></table><p>
 <table class="section">

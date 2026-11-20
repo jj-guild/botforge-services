@@ -89,7 +89,7 @@ async def test_account_elo_by_profile_renders_per_account(monkeypatch: Any) -> N
         ),
     )
     lines = await account_elo_by_profile(None, ["123", "456"])
-    assert lines == {"123": "1100 elo 1v1 (max 1180)"}
+    assert lines == {"123": "1100 Elo 1v1 (max 1180)"}
 
 
 async def test_criteria_lines_render_the_verdicts() -> None:

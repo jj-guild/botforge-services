@@ -186,40 +186,46 @@ def _render_match_section(
     links = _match_links(match, str(first.get("state", "")))
     if links:
         header += f" · {' · '.join(links)}"
-    lines = [header]
+    by_team = _seats_by_team(players, accounts, stats or {})
+    team_label = _t(bot, locale, "team", "Team")
+    for index, team in enumerate(sorted(by_team)):
+        header += f"\n  - {team_label} {index + 1} : " + ", ".join(by_team[team])
+    return header
+
+
+def _seats_by_team(
+    players: list[dict[str, Any]],
+    accounts: dict[str, dict[str, Any]],
+    stats: dict[str, dict[str, Any]],
+) -> dict[int, list[str]]:
+    """Render the section's seats, grouped by team (mention + civ + Elo).
+
+    One sub-bullet per TEAM (owner direction 2026-11-20): the same block
+    layout the matches popup renders — both sources read identically,
+    the mention keeps the guild link.
+    """
+    by_team: dict[int, list[str]] = {}
     for player in players:
         account = accounts.get(str(player.get("user_id", "")))
         if account is None:
             continue
-        lines.append(_render_section_player(player, account, accounts_by_profile, stats))
-    return "\n".join(lines)
-
-
-def _render_section_player(
-    player: dict[str, Any],
-    account: dict[str, Any],
-    accounts_by_profile: dict[str, dict[str, Any]],
-    stats: dict[str, dict[str, Any]] | None,
-) -> str:
-    """One player line inside a match section: mention, name, elo, civ, co-players.
-
-    The match context (map, link) lives on the section header — the line
-    carries the player only.
-    """
-    match = player.get("match") or {}
-    profile_id = str(player.get("profile_id", ""))
-    display_name = str((stats or {}).get(profile_id, {}).get("display_name", "")) or profile_id
-    line = f"  <@{account['user_id']}> · **{display_name}**"
-    elo = _profile_elo(stats or {}, profile_id)
-    if elo:
-        line += f" · {elo}"
-    civ = _profile_civ(match, str(player.get("profile_id", "")))
-    if civ:
-        line += f" · {civ}"
-    others = _enrolled_others(match, str(player.get("profile_id", "")), accounts_by_profile)
-    if others:
-        line += " · " + " · ".join(others)
-    return line
+        match = player.get("match") or {}
+        seat = None
+        for entry in _match_players(match):
+            if str(entry.get("profile_id", "")) == str(player.get("profile_id", "")):
+                seat = entry
+                break
+        line = f"<@{account['user_id']}>"
+        if seat is not None:
+            civ = str(seat.get("civ") or "").strip()
+            if civ:
+                line += f" · {civ}"
+        elo = _profile_elo(stats, str(player.get("profile_id", "")))
+        if elo:
+            line += f" · {elo}"
+        team = int((seat or {}).get("team", 0) or 0)
+        by_team.setdefault(team, []).append(line)
+    return by_team
 
 
 def group_by_account(
@@ -337,7 +343,7 @@ def _profile_elo(stats: dict[str, dict[str, Any]], profile_id: str) -> str:
     boards = (stats.get(profile_id) or {}).get("boards") or []
     for board in boards:
         if str(board.get("key", "")) == "rm_1v1" or "1v1" in str(board.get("label", "")):
-            return f"{board.get('rating', '')} elo"
+            return f"{board.get('rating', '')} Elo"
     return ""
 
 

@@ -462,6 +462,12 @@ all&nbsp;use&nbsp;``list_bindings_for_game``/``list_bindings``.</span></dd></dl>
 
 <dl><dt>async <a name="RegistrationService-list_bindings"><strong>list_bindings</strong></a>(self, user_id: 'str') -&gt; 'list[dict[str, Any]]'</dt><dd><span class="code">List&nbsp;all&nbsp;of&nbsp;a&nbsp;user's&nbsp;game-profile&nbsp;bindings.</span></dd></dl>
 
+<dl><dt>async <a name="RegistrationService-list_bindings_for_game"><strong>list_bindings_for_game</strong></a>(self, game_key: 'str') -&gt; 'list[dict[str, Any]]'</dt><dd><span class="code">List&nbsp;every&nbsp;profile&nbsp;binding&nbsp;of&nbsp;a&nbsp;game&nbsp;(the&nbsp;whole&nbsp;server).<br>
+&nbsp;<br>
+The&nbsp;matches&nbsp;popup's&nbsp;highlight&nbsp;contract&nbsp;(2026-11-20):&nbsp;the&nbsp;other<br>
+SERVER-KNOWN&nbsp;profiles&nbsp;render&nbsp;highlighted&nbsp;—&nbsp;this&nbsp;read&nbsp;is&nbsp;how&nbsp;the<br>
+view&nbsp;learns&nbsp;them.</span></dd></dl>
+
 <dl><dt>async <a name="RegistrationService-request_enrollment"><strong>request_enrollment</strong></a>(self, user_id: 'str', guild_id: 'str') -&gt; 'dict[str, Any]'</dt><dd><span class="code">Record&nbsp;an&nbsp;enrollment&nbsp;request&nbsp;and&nbsp;notify&nbsp;admins&nbsp;(acceptance&nbsp;is&nbsp;admin-side).</span></dd></dl>
 
 <dl><dt>async <a name="RegistrationService-search_candidates"><strong>search_candidates</strong></a>(self, game_key: 'str', alias: 'str') -&gt; 'list[dict[str, Any]]'</dt><dd><span class="code">Search&nbsp;the&nbsp;game's&nbsp;profiles&nbsp;by&nbsp;in-game&nbsp;alias&nbsp;—&nbsp;no&nbsp;binding&nbsp;here.<br>
