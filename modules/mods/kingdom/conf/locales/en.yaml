@@ -37,6 +37,7 @@ en:
       w_no_season: "Your account is ready ✅ — but no season is open yet. Come back soon!"
       w_closed: "Your account is ready ✅ — but season **{season}** no longer takes sign-ups ({phase})."
       w_already: "Your application is already pending ⏳ — the admins decide."
+      w_postuler_failed: "❌ The sign-up did not go through — the service is not answering. Try again in a moment (the beta founding via '⚔️ Pick my side' does not go through here)."
       w_withdraw: "Withdraw"
     settings:
       settings_add_kingdom_button: + Add a kingdom manually

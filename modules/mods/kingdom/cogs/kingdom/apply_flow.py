@@ -256,10 +256,31 @@ class KingdomPostulerButton(
         return cls(str(match_dict.get("mod", MOD)), label, active=False)
 
     async def callback(self, interaction: discord.Interaction) -> None:
-        """Delegate the WHOLE click to the platform's own apply button."""
+        """Delegate the WHOLE click, degrading gracefully (never a dead click).
+
+        The engine (SeasonApplyButton) owns the flow; the mod rehearses
+        nothing. But its platform reads (the applications, the linked
+        profiles, the identity seams) can stall or fail: the click then
+        ends in an EXPLICIT note — never Discord's « le bot ne répond
+        pas » (the salon-parcours-v2 rule: no dead clicks).
+        """
         from botforge.discord.season_panels import SeasonApplyButton
 
-        await SeasonApplyButton(self.mod).callback(interaction)
+        from .common import locale_of
+
+        try:
+            await SeasonApplyButton(self.mod).callback(interaction)
+        except Exception:
+            logger.warning("kingdom: the Postuler delegation failed", exc_info=True)
+            strings = mod_catalog().section("kingdom.apply", locale_of(interaction))
+            note = str(strings.get("w_postuler_failed", "❌ L'inscription n'a pas abouti — réessaie dans un instant."))
+            try:
+                if interaction.response.is_done():
+                    await interaction.followup.send(note, ephemeral=True)
+                else:
+                    await interaction.response.send_message(note, ephemeral=True)
+            except Exception:
+                logger.info("kingdom: the Postuler failure note was lost", exc_info=True)
 
 
 def decide_apply_branch(

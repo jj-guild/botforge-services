@@ -37,6 +37,7 @@ fr:
       w_no_season: "Ton compte est prêt ✅ — mais aucune saison n'est ouverte pour l'instant. Reviens bientôt !"
       w_closed: "Ton compte est prêt ✅ — mais la saison **{season}** n'accepte plus d'inscriptions ({phase})."
       w_already: "Ta candidature est déjà en attente ⏳ — les admins décident."
+      w_postuler_failed: "❌ L'inscription n'a pas abouti — le service ne répond pas. Réessaie dans un instant (les fondations en beta via « ⚔️ Choisir mon camp » ne passent pas par ici)."
       w_withdraw: "Se désister"
     settings:
       settings_add_kingdom_button: + Ajouter un royaume manuellement
