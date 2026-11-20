@@ -60,6 +60,8 @@ The&nbsp;provider's&nbsp;own&nbsp;persistence&nbsp;seam&nbsp;over&nbsp;async&nbs
 <td class="singlecolumn">Methods defined here:<br>
 <dl><dt><a name="LibrematchStore-__init__"><strong>__init__</strong></a>(self, database: 'Any') -&gt; 'None'</dt><dd><span class="code">Wrap&nbsp;the&nbsp;provider's&nbsp;async&nbsp;Mongo&nbsp;database.</span></dd></dl>
 
+<dl><dt>async <a name="LibrematchStore-count_matches_of_profile"><strong>count_matches_of_profile</strong></a>(self, profile_id: 'str') -&gt; 'int'</dt><dd><span class="code">Count&nbsp;the&nbsp;stored&nbsp;matches&nbsp;of&nbsp;one&nbsp;profile&nbsp;(deep-vs-quick&nbsp;preset).</span></dd></dl>
+
 <dl><dt>async <a name="LibrematchStore-count_matches_since"><strong>count_matches_since</strong></a>(self, profile_ids: 'list[str]', since_s: 'int') -&gt; 'int'</dt><dd><span class="code">Count&nbsp;the&nbsp;matches&nbsp;of&nbsp;the&nbsp;profiles&nbsp;finished&nbsp;after&nbsp;``since_s``.</span></dd></dl>
 
 <dl><dt>async <a name="LibrematchStore-find_accounts"><strong>find_accounts</strong></a>(self, profile_ids: 'list[str]') -&gt; 'list[dict[str, Any]]'</dt><dd><span class="code">Return&nbsp;the&nbsp;status&nbsp;documents&nbsp;of&nbsp;the&nbsp;accounts&nbsp;(missing&nbsp;ones&nbsp;absent).</span></dd></dl>
@@ -77,7 +79,15 @@ ingestion&nbsp;—&nbsp;this&nbsp;is&nbsp;its&nbsp;work&nbsp;queue,&nbsp;newest&
 
 <dl><dt>async <a name="LibrematchStore-find_user_of_profile"><strong>find_user_of_profile</strong></a>(self, profile_id: 'str') -&gt; 'str'</dt><dd><span class="code">Return&nbsp;the&nbsp;account's&nbsp;platform&nbsp;owner;&nbsp;empty&nbsp;when&nbsp;unknown.</span></dd></dl>
 
+<dl><dt>async <a name="LibrematchStore-insert_matches_new_only"><strong>insert_matches_new_only</strong></a>(self, documents: 'list[dict[str, Any]]') -&gt; 'int'</dt><dd><span class="code">Insert&nbsp;the&nbsp;matches&nbsp;that&nbsp;do&nbsp;not&nbsp;exist&nbsp;yet;&nbsp;return&nbsp;the&nbsp;inserted&nbsp;count.<br>
+&nbsp;<br>
+A&nbsp;FINISHED&nbsp;match&nbsp;is&nbsp;immutable&nbsp;—&nbsp;an&nbsp;already&nbsp;stored&nbsp;document&nbsp;is<br>
+never&nbsp;rewritten&nbsp;(the&nbsp;smart-sync&nbsp;rule&nbsp;of&nbsp;#404&nbsp;T4:&nbsp;the&nbsp;incremental<br>
+sync&nbsp;only&nbsp;ever&nbsp;APPENDS&nbsp;the&nbsp;new&nbsp;games).</span></dd></dl>
+
 <dl><dt>async <a name="LibrematchStore-list_known_profiles"><strong>list_known_profiles</strong></a>(self) -&gt; 'list[str]'</dt><dd><span class="code">List&nbsp;every&nbsp;account&nbsp;the&nbsp;store&nbsp;has&nbsp;a&nbsp;status&nbsp;or&nbsp;binding&nbsp;for.</span></dd></dl>
+
+<dl><dt>async <a name="LibrematchStore-stored_match_ids"><strong>stored_match_ids</strong></a>(self, ids: 'list[str]') -&gt; 'set[str]'</dt><dd><span class="code">Return&nbsp;which&nbsp;of&nbsp;the&nbsp;given&nbsp;match&nbsp;ids&nbsp;are&nbsp;already&nbsp;stored.</span></dd></dl>
 
 <dl><dt>async <a name="LibrematchStore-update_match_fields"><strong>update_match_fields</strong></a>(self, doc_id: 'str', fields: 'dict[str, Any]') -&gt; 'None'</dt><dd><span class="code">Patch&nbsp;the&nbsp;projection&nbsp;fields&nbsp;of&nbsp;one&nbsp;stored&nbsp;match&nbsp;document.</span></dd></dl>
 

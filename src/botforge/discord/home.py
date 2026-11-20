@@ -278,6 +278,11 @@ async def _profile_followup(
         row.add_item(
             ProfileRemoveAccountButton(await tr(interaction, "profile.remove_button", "Retirer un compte"))
         )
+        # the stats layer serves aoe2 today: the matches button rides
+        # the profile view whenever the user owns at least one aoe2
+        # account (a new game's stats will widen the guard).
+        if any(str(b.get("game_key")) == "aoe2" for b in bindings):
+            row.add_item(ProfileMatchesButton(await tr(interaction, "profile.matches_button", "Derniers matchs")))
     header = await _profile_header(interaction, user_id)
     if banner:
         header = f"{header}\n\n{banner}"
@@ -706,6 +711,60 @@ async def _profile_header(interaction: discord.Interaction, user_id: str) -> str
     if user is None or not user.display_name:
         return "# 👤 Your profile\nName: *(not set)*"
     return f"# 👤 Your profile\nName: **{user.display_name}**"
+
+
+class ProfileMatchesButton(
+    discord.ui.DynamicItem[discord.ui.Button[Any]],
+    template=r"home:profile:matches",
+):
+    """Show the accounts' last matches (ephemeral, 10 lines)."""
+
+    def __init__(self, label: str = "Derniers matchs") -> None:
+        super().__init__(
+            discord.ui.Button(
+                label=label,
+                emoji="\U0001f3ae",
+                style=discord.ButtonStyle.secondary,
+                custom_id="home:profile:matches",
+            )
+        )
+
+    @classmethod
+    async def from_custom_id(
+        cls,
+        interaction: discord.Interaction,
+        item: discord.ui.Item[Any],
+        match: re.Match[str],
+        /,
+    ) -> ProfileMatchesButton:
+        """Rebuild the item from the wire."""
+        del interaction, item, match
+        return cls()
+
+    async def callback(self, interaction: discord.Interaction) -> None:
+        """List the user's 10 last known matches, newest first (ephemeral)."""
+        registration = getattr(interaction.client, "registration_service", None)
+        if registration is None:
+            await interaction.response.send_message(await reply(interaction, "not_configured"), ephemeral=True)
+            return
+        # the listing takes seconds (history fetch): the visible thinking
+        # state first, never silent work
+        await interaction.response.defer(ephemeral=True, thinking=True)
+        bindings = await registration.list_bindings(str(interaction.user.id))
+        from botforge.discord.stats_views import recent_match_lines
+
+        lines = await recent_match_lines(
+            interaction.client, [str(b.get("profile_id", "")) for b in bindings], limit=10
+        )
+        if not lines:
+            note = await reply(interaction, "profile.matches_empty")
+            await interaction.followup.send(note, ephemeral=True)
+            return
+        title = await reply(interaction, "profile.matches_title")
+        await interaction.followup.send(
+            f"### {title}\n" + "\n".join(f"- {line}" for line in lines),
+            ephemeral=True,
+        )
 
 
 class ProfileRenameButton(

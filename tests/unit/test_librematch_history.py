@@ -53,6 +53,9 @@ def _matches(query: dict[str, Any], docs: list[dict[str, Any]]) -> list[dict[str
                     ok = ok and value in condition["$in"]
             elif isinstance(condition, dict) and "$gte" in condition:
                 ok = ok and value is not None and value >= condition["$gte"]
+            elif isinstance(value, list):
+                # Mongo equality against an array matches containment
+                ok = ok and condition in value
             else:
                 ok = ok and value == condition
         if ok:
@@ -83,6 +86,10 @@ class FakeCollection:
     async def count_documents(self, query: dict[str, Any]) -> int:
         return len(_matches(query, list(self.docs.values())))
 
+    async def insert_one(self, doc: dict[str, Any]) -> None:
+        self.docs[str(doc["_id"])] = doc
+        self.inserted = int(getattr(self, "inserted", 0)) + 1
+
     async def update_one(self, query: dict[str, Any], update: dict[str, Any]) -> None:
         doc = self.docs.get(str(query.get("_id", "")))
         if doc is None:
@@ -108,6 +115,7 @@ class FakeAdapter:
         self.stats: dict[str, dict[str, Any]] = {}
         self.details: dict[str, dict[str, Any]] = {}
         self.calls: list[tuple[str, str]] = []
+        self.history_counts: list[int] = []
 
     async def fetch_match_details_raw(self, match_id: str) -> dict[str, Any]:
         self.calls.append(("details", match_id))
@@ -116,8 +124,8 @@ class FakeAdapter:
     async def fetch_match_history_raw(
         self, profile_id: str, leaderboard_id: str = "", count: int = 1000
     ) -> list[dict[str, Any]]:
-        del count
         self.calls.append(("history", profile_id))
+        self.history_counts.append(int(count))
         return self.history.get(f"{profile_id}:{leaderboard_id}", [])
 
     async def fetch_personal_stat_raw(
@@ -377,3 +385,57 @@ async def test_decode_failure_leaves_the_document_untouched() -> None:
     assert doc["options_json"] == ""
     assert doc["slots_json"] == ""
     assert doc["raw"]["id"] == "m1"  # the raw document is never dropped
+
+
+async def test_the_second_sync_reads_the_quick_window_and_only_appends() -> None:
+    """The smart sync: deep once, then incremental — immutability.
+
+    The FIRST sync of an account pulls the deep window; every later
+    one reads the quick window and inserts ONLY the unknown matches —
+    a finished match is never rewritten, never re-counted.
+    """
+    db, adapter = FakeDb(), FakeAdapter()
+    adapter.history["123:0"] = [
+        _match("m1", "0", 100, 200, [_member("123", 1, 1, 1000, 1024)]),
+        _match("m2", "0", 300, 400, [_member("123", 1, 1, 1024, 1030)]),
+    ]
+    syncer = _syncer(db, adapter)
+
+    await syncer.sync_account("123")  # the deep first pass
+    assert adapter.history_counts[-1] == 1000
+    stored_after_first = dict(db["librematch:matches"].docs)
+
+    await syncer.sync_account("123")  # the incremental second pass
+    assert adapter.history_counts[-1] == 25
+    stored = db["librematch:matches"].docs
+    # every match still there, the finished ones byte-identical (never rewritten)
+    assert stored_after_first == {k: v for k, v in stored.items() if k in stored_after_first}
+    assert 2 <= len(stored)  # both the deep pass's matches
+    # and a genuinely NEW match lands appended, without touching the old ones
+    n_before = len(stored)
+    adapter.history["123:0"] = [
+        *adapter.history["123:0"],
+        _match("m3", "0", 500, 600, [_member("123", 1, 1, 1030, 1041)]),
+    ]
+    await syncer.sync_account("123")
+    assert "m3:0" in db["librematch:matches"].docs
+    assert len(db["librematch:matches"].docs) == n_before + 1
+
+
+async def test_the_elo_refresh_never_fetches_history() -> None:
+    """The light loop reads the stats ONLY — no history fetch at all."""
+    db, adapter = FakeDb(), FakeAdapter()
+    adapter.history["123:0"] = [_match("m1", "0", 100, 200, [_member("123", 1, 1, 1000, 1024)])]
+    adapter.stats["123:0"] = _stat("123", 1024, 55, 10, 2)
+    syncer = _syncer(db, adapter)
+    await syncer.sync_account("123")
+    history_calls = len([c for c in adapter.calls if c[0] == "history"])
+
+    assert await syncer.refresh_status("123") is True
+    assert len([c for c in adapter.calls if c[0] == "history"]) == history_calls
+    account = db["librematch:accounts"].docs["123"]
+    assert account["leaderboards"]["0"]["current"] == 1024
+
+    refreshed = await syncer.refresh_statuses([])
+    assert refreshed >= 1
+    assert len([c for c in adapter.calls if c[0] == "history"]) == history_calls

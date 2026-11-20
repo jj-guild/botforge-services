@@ -357,9 +357,9 @@ class GameProviderClient:
 
     async def search_profiles_wire(self, alias: str) -> Any:
         """Fetch the alias search as the wire reply (#402 name path)."""
-        if not alias:
-            from botforge.rpc_generated.botforge.v1 import game_pb2
+        from botforge.rpc_generated.botforge.v1 import game_pb2
 
+        if not alias:
             return game_pb2.ProfileSearchReply()
         async with build_channel(self._provider_uri) as channel:
             stub = game_pb2_grpc.GameStub(channel)

@@ -87,6 +87,9 @@ fr:
       rename_failed: Renommage impossible pour le moment.
       rename_success: '✅ Pseudo mis à jour : {name}'
       remove_button: Retirer un compte
+      matches_button: "Derniers matchs"
+      matches_title: "Tes 10 derniers matchs"
+      matches_empty: 'Aucun match stock\u00e9 pour tes comptes \u2014 l\u2019historique se rafra\u00eechit quelques minutes apr\u00e8s la liaison.'
       add_button: Ajouter un compte
       rename_button: Changer de pseudo
       header_no_name: '# 👤 Ton profil

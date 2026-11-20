@@ -87,6 +87,9 @@ en:
       rename_failed: Renaming is not possible right now.
       rename_success: '✅ Nickname updated: {name}'
       remove_button: Remove an account
+      matches_button: "Last matches"
+      matches_title: "Your 10 last matches"
+      matches_empty: 'No stored match yet for your accounts \u2014 the history refreshes a few minutes after binding.'
       add_button: Add an account
       rename_button: Change nickname
       header_no_name: '# 👤 Your profile

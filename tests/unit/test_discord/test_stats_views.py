@@ -89,7 +89,7 @@ async def test_account_elo_by_profile_renders_per_account(monkeypatch: Any) -> N
         ),
     )
     lines = await account_elo_by_profile(None, ["123", "456"])
-    assert lines == {"123": "1100 elo (max 1180)"}
+    assert lines == {"123": "1100 elo 1v1 (max 1180)"}
 
 
 async def test_criteria_lines_render_the_verdicts() -> None:
@@ -111,3 +111,13 @@ async def test_criteria_lines_render_the_verdicts() -> None:
     assert lines[1].startswith("✗")
     assert lines[2].startswith("❔")  # the manual-review marker (T5)
     assert criteria_lines(type("Application", (), {"criteria_results": ()})()) == []
+
+
+class TestProfileMatchesButton:
+    """The matches button renders only when the user owns an aoe2 account."""
+
+    def test_the_button_custom_id_is_registered(self) -> None:
+        """The dynamic item template matches its custom id (persistence)."""
+        from botforge.discord.home import ProfileMatchesButton
+
+        assert ProfileMatchesButton().item.custom_id == "home:profile:matches"

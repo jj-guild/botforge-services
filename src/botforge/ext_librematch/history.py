@@ -35,6 +35,11 @@ logger = logging.getLogger("botforge.ext_librematch.history")
 
 STATS_LEADERBOARDS = ("0", "3", "4")
 DEFAULT_SYNC_COUNT = 1000
+# The INCREMENTAL fetch window: the periodic sync reads the last
+# matches only, and inserts just the unknown ones — a finished match is
+# immutable and never rewritten. The DEEP fetch (the full count) runs
+# once per account: on its first sync.
+DEFAULT_QUICK_COUNT = 25
 _DAY_S = 86_400
 
 
@@ -60,14 +65,22 @@ class MatchHistorySyncer:
         store: LibrematchStore,
         leaderboards: tuple[str, ...] = STATS_LEADERBOARDS,
         sync_count: int = DEFAULT_SYNC_COUNT,
+        quick_count: int = DEFAULT_QUICK_COUNT,
     ) -> None:
         self._adapter = adapter
         self._store = store
         self._leaderboards = leaderboards
         self._sync_count = sync_count
+        self._quick_count = quick_count
 
     async def sync_account(self, profile_id: str) -> bool:
         """Sync one account: raw history + status, then the elo max.
+
+        The SMART fetch (the #404 T4 rule): the account's FIRST sync
+        pulls the deep window (``sync_count``), every later one reads
+        the incremental window (``quick_count``) and inserts ONLY the
+        unknown matches — a finished match is immutable, never
+        rewritten, never re-counted.
 
         Returns True when anything was stored. Failures degrade to
         False — the provider keeps serving the previous store, the
@@ -76,16 +89,18 @@ class MatchHistorySyncer:
         profile_id = str(profile_id)
         stored_any = False
         previous = await self._find_status(profile_id)
+        deep = await self._store.count_matches_of_profile(profile_id) == 0
+        count = self._sync_count if deep else self._quick_count
         boards: dict[str, dict[str, int]] = {}
         for leaderboard_id in self._leaderboards:
             raw_matches = await self._adapter.fetch_match_history_raw(
-                profile_id, leaderboard_id, self._sync_count
+                profile_id, leaderboard_id, count
             )
             if raw_matches:
-                await self._store.upsert_matches(
+                inserted = await self._store.insert_matches_new_only(
                     [self._match_doc(m, leaderboard_id) for m in raw_matches]
                 )
-                stored_any = True
+                stored_any = stored_any or inserted > 0
             stat = await self._adapter.fetch_personal_stat_raw(profile_id, leaderboard_id)
             board = self._board_status(stat, profile_id, leaderboard_id)
             peak = self._history_peak(raw_matches, profile_id)
@@ -103,6 +118,38 @@ class MatchHistorySyncer:
         # the ingestion — no history re-fetch, only the details endpoint.
         await self.decode_stored([profile_id])
         return stored_any
+
+    async def refresh_status(self, profile_id: str) -> bool:
+        """Refresh ONE account's elo status — no history fetch at all.
+
+        The light path of the hourly loop: only the per-board stats
+        (current elo, rank, wins/losses); the MAX never drops (the
+        account document merges with the stored max).
+        """
+        profile_id = str(profile_id)
+        previous = await self._find_status(profile_id)
+        boards: dict[str, dict[str, int]] = {}
+        for leaderboard_id in self._leaderboards:
+            stat = await self._adapter.fetch_personal_stat_raw(profile_id, leaderboard_id)
+            board = self._board_status(stat, profile_id, leaderboard_id)
+            if board is not None:
+                boards[leaderboard_id] = board
+        if not boards:
+            return False
+        await self._store.upsert_account(self._account_doc(profile_id, boards, previous))
+        return True
+
+    async def refresh_statuses(self, profile_ids: list[str]) -> int:
+        """Run the light elo refresh (every known account when empty)."""
+        targets = [str(p) for p in profile_ids] or await self._store.list_known_profiles()
+        refreshed = 0
+        for profile_id in targets:
+            try:
+                if await self.refresh_status(profile_id):
+                    refreshed += 1
+            except Exception:
+                logger.warning("elo refresh failed (%s)", profile_id, exc_info=True)
+        return refreshed
 
     async def sync_accounts(self, profile_ids: list[str]) -> int:
         """Sync the given accounts (every known one when empty). T4 rides."""

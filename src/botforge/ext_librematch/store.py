@@ -62,6 +62,39 @@ class LibrematchStore:
             count += 1
         return count
 
+    async def stored_match_ids(self, ids: list[str]) -> set[str]:
+        """Return which of the given match ids are already stored."""
+        if not ids:
+            return set()
+        cursor = self._matches().find({"_id": {"$in": list(ids)}}, {"_id": 1})
+        return {str(doc["_id"]) async for doc in cursor}
+
+    async def insert_matches_new_only(self, documents: list[dict[str, Any]]) -> int:
+        """Insert the matches that do not exist yet; return the inserted count.
+
+        A FINISHED match is immutable — an already stored document is
+        never rewritten (the smart-sync rule of #404 T4: the incremental
+        sync only ever APPENDS the new games).
+        """
+        ids = [str(doc["_id"]) for doc in documents]
+        stored = await self.stored_match_ids(ids)
+        inserted = 0
+        for doc in documents:
+            if str(doc["_id"]) in stored:
+                continue
+            try:
+                await self._matches().insert_one(doc)
+                inserted += 1
+            except Exception:
+                # a concurrent insert of the same id: the match is
+                # already stored — immutability wins, not the error
+                logger.debug("match %s already stored concurrently", doc.get("_id"))
+        return inserted
+
+    async def count_matches_of_profile(self, profile_id: str) -> int:
+        """Count the stored matches of one profile (deep-vs-quick preset)."""
+        return int(await self._matches().count_documents({"profile_ids": str(profile_id)}))
+
     async def find_matches(
         self,
         profile_ids: list[str],

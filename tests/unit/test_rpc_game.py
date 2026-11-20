@@ -8,6 +8,7 @@ are acceptance criterion 9.1 of the ladder reference.
 from __future__ import annotations
 
 import asyncio
+from contextlib import asynccontextmanager
 
 import grpc
 import pytest
@@ -411,3 +412,47 @@ async def test_client_degrades_player_stats_to_none() -> None:
         assert await client.get_player_stats("p1") is None
     finally:
         await server.stop(grace=None)
+
+
+@pytest.mark.asyncio
+async def test_search_profiles_wire_reaches_the_stub(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Regression: the alias search reached the server with UNBOUND game_pb2.
+
+    The wire helper imported game_pb2 only on its EMPTY-alias early
+    return, so every real alias raised UnboundLocalError inside the
+    gRPC handler (StatusCode.UNKNOWN, the live merlin finding).
+    """
+    import botforge.core.rpc.game_client as game_client_module
+    from botforge.rpc_generated.botforge.v1 import game_pb2_grpc
+
+    class _Recorder:
+        def __init__(self, channel: object) -> None:
+            self.requests: list[object] = []
+
+        async def __call__(self, request: object, **kwargs: object) -> str:
+            self.requests.append(request)
+            return "reply"
+
+    class _StubRecorder:
+        last: _Recorder | None = None
+
+        def __init__(self, channel: object) -> None:
+            _StubRecorder.last = _Recorder(channel)
+
+        def __getattr__(self, item: str) -> _Recorder:
+            assert item == "SearchProfiles", f"unexpected RPC {item}"
+            assert _StubRecorder.last is not None
+            return _StubRecorder.last
+
+    @asynccontextmanager
+    async def _channel(uri: str):  # type: ignore[no-untyped-def]
+        yield object()
+
+    monkeypatch.setattr(game_client_module, "build_channel", _channel)
+    monkeypatch.setattr(game_pb2_grpc, "GameStub", _StubRecorder)
+    client = game_client_module.GameProviderClient("fake:1", provider_id="p", game_key="aoe2")
+
+    assert await client.search_profiles_wire("") is not None  # empty alias: no RPC
+    assert await client.search_profiles_wire("JeanJack") == "reply"
+    assert _StubRecorder.last is not None and len(_StubRecorder.last.requests) == 1
+    assert _StubRecorder.last.requests[0].alias == "JeanJack"
