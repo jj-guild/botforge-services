@@ -155,6 +155,15 @@ def _stats_handlers(syncer: MatchHistorySyncer | None) -> dict[str, Any]:
         entries: list[MatchHistoryEntry] = await syncer.match_history(
             profile_ids, limit, since_s, leaderboard_id
         )
+        # Observable BY DESIGN (the 2026-11-20 bare-lines hunt): every
+        # served reply samples its newest entries \u2014 the id, the map,
+        # the lobby title and the players count the VIEW will read.
+        if entries:
+            sample = ", ".join(
+                f"{e.match_id}:map={e.map_name!r},lobby={e.description!r},players={len(e.players_json or '')}"
+                for e in entries[:3]
+            )
+            logger.info("SERVE history: %s entry(ies) for %s \u2014 %s", len(entries), profile_ids, sample)
         return entries
 
     async def account_stats(profile_ids: list[str]) -> list[AccountEloStatus]:
