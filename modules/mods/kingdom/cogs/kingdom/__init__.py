@@ -111,11 +111,28 @@ def register(bot: Any, config: Any) -> None:
         )
     )
 
+    # conscription-4-salons (Drasah 20/11): the lords' desk pin — salon 3
+    # of the parcours (the PEOPLE, admin only). The refresher's pass
+    # re-ensures it like every mod pin (pins-heal-v1).
+    async def _resolve_seigneurerie_channel(guild_id: str) -> str:
+        return await stored_channel_id(guild_id, "mod/kingdom", "seigneurerie") or ""
+
+    register_static_pin(
+        StaticPinnedView(
+            key="panel:mod:kingdom:seigneurerie",
+            mark_suffix="panel:mod:kingdom:seigneurerie",
+            resolve_channel=_resolve_seigneurerie_channel,
+            build_layout=build_seigneurerie_panel,
+            registry=getattr(bot, "message_registry", None),
+            scope="mod/kingdom",
+        )
+    )
+
     # console-fr-v1 (Drasah 19/11): the admin console ALSO pins in its
     # OWN declared settings salon (Admin > Paramètres) — the same
     # restart-proof buttons, the ephemeral SDK window stays. The pin
     # carries its own view id so the registry keeps two surfaces.
-    from .settings_panel import build_settings_panel
+    from .settings_panel import build_seigneurerie_panel, build_settings_panel
 
     async def _resolve_settings_channel(guild_id: str) -> str:
         """The settings salon, by stored id FIRST, declared name last.

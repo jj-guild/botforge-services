@@ -23,6 +23,15 @@ class ChannelAccessPolicy:
 
     view: tuple[str, ...] = ()
     post: tuple[str, ...] = ()
+    deny_view: tuple[str, ...] = ()
+    """Roles that must LOSE sight of the channel (conscription-4-salons).
+
+    The inverse audience: a declaration may say « everyone sees this
+    channel EXCEPT the holders of role X » — a channel that DISAPPEARS
+    once its step is passed (the register salon of a parcours). The
+    declaration stays the source of truth; the audit expects the deny
+    overwrite to exist, exactly like a view one.
+    """
     everyone_view: bool = True
     everyone_post: bool = False
     bot_overwrite: bool = True
@@ -32,6 +41,7 @@ class ChannelAccessPolicy:
         return {
             "view": [str(v) for v in self.view],
             "post": [str(v) for v in self.post],
+            "deny_view": [str(v) for v in self.deny_view],
             "everyone_view": self.everyone_view,
             "everyone_post": self.everyone_post,
             "bot_overwrite": self.bot_overwrite,
@@ -43,6 +53,7 @@ class ChannelAccessPolicy:
         return cls(
             view=tuple(str(v) for v in (data.get("view") or ())),
             post=tuple(str(v) for v in (data.get("post") or ())),
+            deny_view=tuple(str(v) for v in (data.get("deny_view") or ())),
             everyone_view=bool(data.get("everyone_view", True)),
             everyone_post=bool(data.get("everyone_post", False)),
             bot_overwrite=bool(data.get("bot_overwrite", True)),

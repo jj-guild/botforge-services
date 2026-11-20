@@ -84,8 +84,10 @@ def test_apply_panel_renders_the_golden_poster(monkeypatch: Any) -> None:
     texts = _texts(view)
     assert any("INSCRIPTION" in text for text in texts)
     assert any("conquête" in text for text in texts)
-    buttons = _buttons(view)
-    assert len(buttons) == 1  # the single call-to-action, no clutter
+    # conscription-4-salons (Drasah 20/11): without a season the pin has
+    # ZERO buttons — the ⚔️ camp row only rides a live season, the
+    # adaptive-window opener is gone. No dead clickable, no clutter.
+    assert _buttons(view) == []
 
 
 def test_the_branch_decision_pins_the_three_tiers() -> None:
@@ -437,3 +439,62 @@ def test_the_postuler_wire_dispatches_fullmatch() -> None:
     )
     assert match is not None, "the wire id must fullmatch the class template"
     assert match["mod"] == "kingdom"
+
+
+def test_the_conscription_declaration_rides_the_parcours() -> None:
+    """conscription-4-salons (Drasah 20/11): the CONSCRIPTION sidebar IS
+    the parcours — the declared channel order = the player's steps, and
+    the register salon is DENIED to the registered (the step passed)."""
+    import yaml
+    from pathlib import Path
+
+    from botforge.core.services.mod_definition import ChannelAccessPolicy
+
+    conf = yaml.safe_load(open(Path(__file__).parents[1] / "conf" / "mod.yaml"))
+    conscription = [c["key"] for c in conf["channels"] if c.get("group") == "conscription"]
+    assert conscription == ["register", "apply", "seigneurerie", "realms"]
+    register = next(c for c in conf["channels"] if c["key"] == "register")
+    policy = ChannelAccessPolicy.from_dict(register["access"])
+    assert policy.deny_view == ("Kingdom Enregistré",), "registred players lose the salon"
+    assert policy.everyone_view is True, "the account door stays public"
+    seigneurerie = next(c for c in conf["channels"] if c["key"] == "seigneurerie")
+    assert seigneurerie["admin_only"] is True
+
+
+def test_the_seigneurerie_panel_builds_the_lords_desk(monkeypatch: Any) -> None:
+    """The pinned seigneurerie panel: the queue lines + the existing
+    assign/remove action seams — the PEOPLE surface, admin-gated salon."""
+    import asyncio
+
+    import botforge.mods.kingdom.cogs.panel as panel_module
+    from botforge.mods.kingdom.cogs.settings_panel import build_seigneurerie_panel
+
+    async def _fr(guild_id: str) -> str:
+        return "fr"
+
+    monkeypatch.setattr(panel_module, "_guild_locale", _fr)
+
+    class _Lord:
+        id = "42"
+        display_name = "Drasah"
+        in_queue = True
+        kingdom_id = None
+        left = False
+
+    class _Kingdoms:
+        async def lords(self) -> list:
+            return [_Lord()]
+
+    class _Stack:
+        kingdoms = _Kingdoms()
+
+    import botforge.mods.kingdom.cogs.settings_panel as sp
+
+    monkeypatch.setattr(sp, "wiring", lambda: _Stack())
+    view = asyncio.run(build_seigneurerie_panel("1"))
+    texts = _texts(view)
+    assert any("Seigneurerie" in text for text in texts), "the desk is titled"
+    assert any("Drasah" in text for text in texts), "the queued lord is listed"
+    labels = [str(b.get("label") or "") for b in _buttons(view)]
+    assert any("Affecter" in l for l in labels), "the assign seam rides"
+    assert any("Retirer" in l for l in labels), "the remove seam rides"

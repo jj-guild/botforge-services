@@ -48,6 +48,15 @@ en:
       tagline: "Set out to conquer the territories! Apply to join the adventure."
       kingdoms_line: "👑 **{count}** kingdom{s} in play — join the adventure!"
       kingdoms_none: "👑 No kingdom in play yet — the first to apply founds theirs!"
+      season_none_line: "🗡️ No season running — the conscription opens with the next one."
+      season_normal_line: "📜 **{phase}** — classical season, age: {age}."
+      season_beta_line: "⚡ **{phase}** — **beta** season (compressed time), age: {age}."
+      season_phase_setup: Preparation
+      season_phase_started: In game
+      season_phase_age: Age cycle
+      season_phase_cycling: Weekly cycle
+      season_phase_ended: Ended
+      season_phase_preparation: Preparation
       join_button: "📜 Join the adventure"
       register_title: "🪙 SIGN UP — KINGDOMS"
       register_text: "Welcome, future conqueror! Create your project account — it's **free** and takes a minute: you'll link your AoE profile to your Discord account."
@@ -141,6 +150,10 @@ en:
       settings_sync_confirm_title: Resynchronize the panels?
       settings_sync_done: '✅ Resynchronized: {pins} pinned panels.'
       settings_title: ⚙️ Kingdoms — paramètres
+      seigneurerie_title: 🛡️ Seigneurerie — the lords' desk
+      seigneurerie_help: "The people here: the queue and the throne assignments. The kingdoms (the entities) live in #👑-royaumes."
+      seigneurerie_queue_header: "⏳ Queue"
+      seigneurerie_queue_empty: "Empty queue — no lord awaiting assignment."
       settings_section: Administration
     camp:
       button: "⚔️ Pick my side — King or Lord"

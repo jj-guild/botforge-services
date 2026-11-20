@@ -48,6 +48,17 @@ fr:
       tagline: "Pars à la conquête des territoires ! Postule pour rejoindre l'aventure."
       kingdoms_line: "👑 **{count}** royaume{s} en jeu — rejoins l'aventure !"
       kingdoms_none: "👑 Aucun royaume en jeu pour l'instant — le premier à postuler fondera le sien !"
+      # conscription-4-salons (Drasah 20/11) : le pin porte la saison qui
+      # vit (état collectif) — l'état du joueur vit dans la fenêtre camp.
+      season_none_line: "🗡️ Aucune saison en cours — la conscription ouvrira avec la prochaine."
+      season_normal_line: "📜 **{phase}** — saison classique, âge : {age}."
+      season_beta_line: "⚡ **{phase}** — saison **beta** (temps compressé), âge : {age}."
+      season_phase_setup: Préparation
+      season_phase_started: En jeu
+      season_phase_age: Cycle des âges
+      season_phase_cycling: Cycle hebdomadaire
+      season_phase_ended: Terminée
+      season_phase_preparation: Préparation
       join_button: "📜 Rejoins l'aventure"
       register_title: "🪙 S'ENREGISTRER — KINGDOMS"
       register_text: "Bienvenue, futur conquérant ! Crée ton compte sur le projet — c'est **gratuit** et ça prend une minute : tu vas lier ton profil AoE2 à ton compte Discord."
@@ -141,6 +152,12 @@ fr:
       settings_sync_confirm_title: Resynchroniser les panels ?
       settings_sync_done: '✅ Resynchronisé : {pins} panels épinglés.'
       settings_title: ⚙️ Kingdoms — paramètres
+      # conscription-4-salons (Drasah 20/11) : le bureau des seigneurs —
+      # le pin du salon #seigneurerie (les PERSONNES, admin uniquement)
+      seigneurerie_title: 🛡️ Seigneurerie — bureau des seigneurs
+      seigneurerie_help: "Les gens d'ici : la file d'attente et les affectations de trônes. Les royaumes (les entités) se gèrent dans #👑-royaumes."
+      seigneurerie_queue_header: "⏳ File d'attente"
+      seigneurerie_queue_empty: "File vide — aucun seigneur en attente d'affectation."
       settings_section: Administration
     camp:
       button: "⚔️ Choisir mon camp — Roi ou Seigneur"

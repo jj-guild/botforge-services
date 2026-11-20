@@ -81,8 +81,42 @@ async def _kingdoms_in_play() -> int | None:
         return None
 
 
+async def _season_lines(strings: dict[str, str]) -> list[str]:
+    """The « la saison qui vit » block: type, phase, age (empty = no season).
+
+    conscription-4-salons (Drasah 20/11): the postuler pin REPORTS the
+    season (the collective state — the player's own state lives in the
+    camp window, never here).
+    """
+    stack = wiring()
+    if stack is None:
+        return []
+    try:
+        season = await stack.kingdoms.current_season()
+    except Exception:  # noqa: BLE001 — an unreadable season degrades quietly
+        logger.warning("kingdom: the apply season read failed", exc_info=True)
+        return []
+    if season is None or bool(getattr(season, "finished", False)):
+        return [str(strings["season_none_line"])]
+    kind = str(strings["season_beta_line"]) if getattr(season, "beta_name", None) else str(strings["season_normal_line"])
+    return [
+        kind.format(
+            phase=str(strings.get(f"season_phase_{getattr(season, 'phase', 'setup')}", getattr(season, "phase", "setup"))),
+            age=str(getattr(season, "current_age_key", "")),
+        )
+    ]
+
+
 async def build_apply_panel(guild_id: str) -> discord.ui.LayoutView:
-    """Build the pinned golden Postuler panel (guild-locale strings)."""
+    """Build the pinned postuler panel — the season + the ⚔️ camp door.
+
+    conscription-4-salons (Drasah 20/11): ONE question per salon. This
+    one asks « Roi ou Seigneur ? » — the pin carries the season that
+    lives (type, phase, age, kingdoms in play) and the SINGLE camp row.
+    The adaptive-window opener is GONE: the camp window owns every
+    player state as LINES (« déjà Roi de… », « en file »), never as
+    red buttons one tries to click.
+    """
     strings = await _strings_async(guild_id)
     blocks: list[discord.ui.Item[discord.ui.LayoutView]] = []
     artwork = str(strings.get("artwork", "") or "")
@@ -102,10 +136,7 @@ async def build_apply_panel(guild_id: str) -> discord.ui.LayoutView:
         blocks.append(discord.ui.TextDisplay(strings["kingdoms_line"].format(count=count, s="s" if count > 1 else "")))
     else:
         blocks.append(discord.ui.TextDisplay(str(strings["kingdoms_none"])))
-    join_row: Any = discord.ui.ActionRow()
-    join_row.add_item(KingdomApplyOpenButton(str(strings["join_button"])).item)
-    blocks.append(discord.ui.Separator())
-    blocks.append(join_row)
+    blocks.append(discord.ui.TextDisplay("\n".join(await _season_lines(strings))))
     # camp-beta-v1 (Drasah 19/11) + camp-door-any-season (Drasah 20/11):
     # the PROVISIONAL Roi/Seigneur door shows whenever a season is LIVE —
     # classical or beta. It is the only founding path until the

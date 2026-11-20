@@ -40,6 +40,10 @@ views:
   # realms validation dashboard pin (ported from the reference panel:royaumes)
   panel:mod:kingdom:validation:
     kind: surface
+  # conscription-4-salons (Drasah 20/11): the lords' desk — the pinned
+  # seigneurerie panel (salon 3, admin only)
+  panel:mod:kingdom:seigneurerie:
+    kind: surface
   # validation-cards-v1 (Drasah 20/11): the admin's sovereign confirm
   # windows — the delete confirm card + the crown designation window
   panel:mod:kingdom:validation:confirm:

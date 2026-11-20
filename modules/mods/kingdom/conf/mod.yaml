@@ -40,31 +40,39 @@ channel_groups:
     display_name: ⚙️ ᴀᴅᴍɪɴ
     admin_only: true
 channels:
-  # salon-parcours-v2 (Drasah 18/11): the enrollment door is TWO salons
-  # — « register » (public, the s'enregistrer poster, ONE CTA: the
-  # account) then « apply » (the Postuler panel, DENIED to @everyone:
-  # it opens only to the players whose account exists — the
-  # « Kingdom Enregistré » access role, granted by the platform's
-  # profile.bound event, revoked when the last binding goes). The
-  # 3-tier model rides the same: account free (salon 1), the season is
-  # the admin gate (salon 2), the kingdom comes later.
-  - key: apply
-    display_name: 📜 postuler
-    description: The season application door (opens once registered)
-    group: conscription
-    access:
-      everyone_view: false
-      view: [Kingdom Enregistré, Kingdom Admin]
+  # conscription-4-salons (Drasah 20/11): la CONSCRIPTION EST le
+  # parcours — l'ordre de la sidebar = les étapes du joueur, et ce que
+  # le joueur VOIT dit où il en est :
+  # 1. « register » : public pour les SANS-compte, MASQUÉ dès le compte
+  #    créé (deny_view sur le rôle d'accès « Kingdom Enregistré » — le
+  #    salon disparaît de sa vue, l'étape est passée) ;
+  # 2. « apply » : OUVERT par le compte — la récompense visible de
+  #    l'étape 1 ; le pin porte la saison qui vit + la porte ⚔️ ;
+  # 3. « seigneurerie » : caché admin — les PERSONNES (file, affectations) ;
+  # 4. « realms » : caché admin — les ENTITÉS (validation des royaumes).
   - key: register
-    display_name: 🪙 s'enregistrer
-    description: The account poster — create the project account and link AoE2
+    display_name: 🪙 enregistrement
+    description: The account door — create the project account and link AoE2
     group: conscription
     access:
       everyone_view: true
       everyone_post: false
-  # restructuration-serveur-v1 e (Drasah 19/10): the general group and
-  # its Taverne are RETIRED — the category disappears at the next
-  # provisioning (the legacy cleanup sweeps both).
+      deny_view: [Kingdom Enregistré]
+  - key: apply
+    display_name: ⚔️ postuler
+    description: Roi ou Seigneur ? — fonder ou rejoindre un royaume
+    group: conscription
+    access:
+      everyone_view: false
+      view: [Kingdom Enregistré, Kingdom Admin]
+  - key: seigneurerie
+    display_name: 🛡️ seigneurerie
+    description: The lords' desk — queue, candidates, assignments (admin only)
+    group: conscription
+    admin_only: true
+    access:
+      everyone_view: false
+      view: [Kingdom Admin]
   - key: realms
     display_name: 👑 royaumes
     description: Kingdom validation panel (admin only)
@@ -73,6 +81,9 @@ channels:
     access:
       everyone_view: false
       view: [Kingdom Admin]
+  # restructuration-serveur-v1 e (Drasah 19/10): the general group and
+  # its Taverne are RETIRED — the category disappears at the next
+  # provisioning (the legacy cleanup sweeps both).
   - key: scriptorium
     display_name: 📜 scriptorium
     description: Sommaire — Cadastre, Diplomatie, Seigneurie (ephemeral rubrics)

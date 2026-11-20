@@ -135,6 +135,59 @@ def console_buttons(strings: dict[str, str], disabled: bool = False) -> tuple[An
     )
 
 
+async def _queued_lords() -> list[str]:
+    """The season's QUEUED lords (display lines), best-effort.
+
+    conscription-4-salons (Drasah 20/11): the seigneurerie reports the
+    PEOPLE — the queue is the salon's heart, never an action surface.
+    """
+    stack = wiring()
+    if stack is None:
+        return []
+    try:
+        lords = await stack.kingdoms.lords()
+    except Exception:  # noqa: BLE001 — the desk reports, never raises
+        logger.warning("kingdom: the seigneurerie queue read failed", exc_info=True)
+        return []
+    return [
+        f"• **{str(lord.display_name)}** (<@{str(lord.id)}>)"
+        for lord in lords
+        if not getattr(lord, "left", False)
+        and (bool(getattr(lord, "in_queue", False)) or getattr(lord, "kingdom_id", None) is None)
+    ]
+
+
+async def build_seigneurerie_panel(guild_id: str) -> discord.ui.LayoutView:
+    """Build the pinned seigneurerie panel — the lords' desk (admin only).
+
+    conscription-4-salons (Drasah 20/11): salon 3 of the parcours —
+    the PEOPLE (queue, candidates, assignments). A LIST + the existing
+    assign/remove seams, no new mechanic: the actions are the SAME
+    SettingsActionButton registrations the admin cockpit owns (one
+    template, many surfaces — #395's direction).
+    """
+    from .apply_flow import _guild_locale
+
+    strings = settings_strings(await _guild_locale(guild_id))
+    lines = await _queued_lords()
+    queue_block = (
+        "\n".join(lines) if lines else str(strings["seigneurerie_queue_empty"])
+    )
+    row: Any = discord.ui.ActionRow()
+    row.add_item(SettingsActionButton("assign", str(strings["settings_assign_button"]), discord.ButtonStyle.primary).item)
+    row.add_item(SettingsActionButton("remove", str(strings["settings_remove_button"]), discord.ButtonStyle.danger).item)
+    container: discord.ui.Container[discord.ui.LayoutView] = discord.ui.Container(
+        discord.ui.TextDisplay(f"# {strings['seigneurerie_title']}"),
+        discord.ui.TextDisplay(str(strings["seigneurerie_help"])),
+        discord.ui.Separator(),
+        discord.ui.TextDisplay(f"## {strings['seigneurerie_queue_header']}"),
+        discord.ui.TextDisplay(queue_block),
+        discord.ui.Separator(),
+        row,
+    )
+    return surface("panel:mod:kingdom:seigneurerie", container)
+
+
 async def build_settings_panel(guild_id: str) -> discord.ui.LayoutView:
     """Build the mod admin console panel (the admin cockpit)."""
     from .apply_flow import _guild_locale
