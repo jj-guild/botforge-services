@@ -36,7 +36,17 @@ def main() -> None:
         keeps the profile -> user mapping (the unification's key) and
         an on-demand sync runs in the background (T4) — the history is
         fresh right after a profile binding or an application.
+
+        Observable BY DESIGN: a silent no-op of this handler once cost
+        a whole debugging session (merlin, 2026-11-20) — every call
+        logs what it did, store present or not.
         """
+        logger.info(
+            "SUBSCRIPTIONS push received: %s profile(s), %s user id(s) — store %s",
+            len(profile_ids),
+            len(user_ids),
+            "ONLINE" if store is not None else "OFFLINE (no MONGO_URI)",
+        )
         if store is not None:
             await store.upsert_bindings(profile_ids, user_ids)
             task = asyncio.get_running_loop().create_task(_sync_quietly(syncer, profile_ids))
@@ -170,11 +180,17 @@ def _stats_handlers(syncer: MatchHistorySyncer | None) -> dict[str, Any]:
 
 
 async def _sync_quietly(syncer: MatchHistorySyncer | None, profile_ids: list[str]) -> None:
-    """Run one sync in the background; failures log, never crash."""
+    """Run one sync in the background; failures log, never crash.
+
+    Observable BY DESIGN (same lesson): the outcome is logged — how
+    many accounts synced and how many matches landed in the store.
+    """
     if syncer is None:
+        logger.warning("SYNC skipped: no store wired in this process")
         return
     try:
-        await syncer.sync_accounts(profile_ids)
+        synced = await syncer.sync_accounts(profile_ids)
+        logger.info("SYNC done: %s account(s) synced", synced)
     except Exception:
         logging.getLogger("botforge.ext_librematch.sync").warning(
             "background stats sync failed", exc_info=True
