@@ -274,7 +274,12 @@ def setup_hook(bot: Any) -> None:
     from .tavern import MercenaryButton, TavernButton
     from .ffa import FFAJoinButton
     from .console import KingdomClockButton, KingdomRelaunchButton, KingdomResetButton
-    from .validation import ValidationCrownButton, ValidationDecisionButton, ValidationDeleteButton
+    from .validation import (
+        ValidationCrownButton,
+        ValidationDecisionButton,
+        ValidationDeleteButton,
+        ValidationRealmEntryButton,
+    )
     from .apply_flow import KingdomApplyOpenButton, KingdomPostulerButton
     from .settings_panel import SettingsActionButton
     from .time_machine import machine_dynamic_items
@@ -315,6 +320,7 @@ def setup_hook(bot: Any) -> None:
         ValidationDecisionButton,
         ValidationDeleteButton,
         ValidationCrownButton,
+        ValidationRealmEntryButton,
         KingdomApplyOpenButton,
         KingdomPostulerButton,
         SettingsActionButton,

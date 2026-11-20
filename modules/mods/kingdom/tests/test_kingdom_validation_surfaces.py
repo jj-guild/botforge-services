@@ -367,3 +367,208 @@ def test_the_delete_confirm_card_builds_and_carries_both_choices() -> None:
     flat = [str(i.get("custom_id", "")) for i in _flatten(view.to_components()) if i.get("type") == 2]
     assert any("del-yes:ka" in cid for cid in flat), flat
     assert any("del-no:ka" in cid for cid in flat), flat
+
+
+# ---------------------------------------------------------------------------
+# t2a (Drasah 20/11): the realms' season-entry requests ride the dashboard —
+# the admin enrolls the realm, refuses it, or finds no season to join.
+# ---------------------------------------------------------------------------
+
+
+def _fake_realm_stack(realms: list[Any]) -> Any:
+    async def _realms() -> list[Any]:
+        return realms
+
+    async def _realm_of_slug(slug: str) -> Any:
+        for realm in realms:
+            if realm.slug == slug:
+                return realm
+        return None
+
+    service = NS(realms=_realms, realm_of_slug=_realm_of_slug)
+    return NS(kingdoms=NS(kingdoms=_no_kingdoms, lords=_no_lords), realms=service)
+
+
+async def _no_kingdoms() -> list[Any]:
+    return []
+
+
+async def _no_lords() -> list[Any]:
+    return []
+
+
+def test_the_dashboard_shows_the_realm_entry_requests() -> None:
+    """One card + one ✅/❌ pair per realm with a pending join request."""
+    from botforge.mods.kingdom.cogs import validation as kv
+
+    realm = NS(
+        id="realm:x-77",
+        slug="x",
+        name="Château Noir",
+        king_id="77",
+        king_name="Drasah",
+        presentation="Le val oublié.",
+        join_request={"season_id": "s1", "requested_at": 1760000000},
+        member_ids=[],
+    )
+    quieter = NS(id="realm:y-88", slug="y", name="Quiet", king_id="88", king_name="Q", presentation="", join_request=None, member_ids=[])
+    original = kv.wiring
+    kv.wiring = lambda: _fake_realm_stack([realm, quieter])
+    try:
+        view = asyncio.run(kv.build_validation_panel("42"))
+        texts = _texts(view)
+        assert any("Château Noir" in t for t in texts), texts
+        assert any("Le val oublié" in t for t in texts), texts
+        assert not any("Quiet" in t for t in texts), texts
+        ids = [b.get("custom_id") for b in _buttons(view)]
+        assert "kingdom:valid:realmjoin:x:ok" in ids, ids
+        assert "kingdom:valid:realmjoin:x:no" in ids, ids
+    finally:
+        kv.wiring = original
+
+
+def test_the_realm_entry_button_rebuilds_from_the_wire() -> None:
+    """The dynamic template fullmatches the slug-keyed custom id."""
+    import re
+
+    from botforge.mods.kingdom.cogs import validation as kv
+
+    match = re.match(
+        kv.ValidationRealmEntryButton.__discord_ui_compiled_template__.pattern,
+        "kingdom:valid:realmjoin:chateau-noir:ok",
+    )
+    assert match and match["slug"] == "chateau-noir" and match["choice"] == "ok"
+    assert not re.match(
+        kv.ValidationRealmEntryButton.__discord_ui_compiled_template__.pattern,
+        "kingdom:valid:chateau-noir:ok",
+    )
+
+
+def test_the_admin_refusal_withdraws_the_request() -> None:
+    """❌ calls clear_join_request and reports the off-season note."""
+    from botforge.mods.kingdom.cogs import validation as kv
+
+    calls: list[str] = []
+    realm = NS(id="realm:x-77", slug="x", name="Château Noir", join_request={"season_id": "s1"})
+
+    async def _clear(realm_id: str) -> Any:
+        calls.append(realm_id)
+        realm.join_request = None
+        return realm
+
+    service = NS(clear_join_request=_clear)
+    note = asyncio.run(kv._refuse_season_entry(service, realm, {"realm_refused_note": "off {name}"} | {"realm_refused_note": "🚫 {name}"}))
+    assert calls == ["realm:x-77"], calls
+    assert "Château Noir" in note, note
+    assert realm.join_request is None
+
+
+def test_the_acceptance_needs_a_running_season() -> None:
+    """No season → the admin gets the no-season note, nothing touched."""
+    from botforge.mods.kingdom.cogs import validation as kv
+
+    realm = NS(id="realm:x-77", slug="x", name="Château Noir")
+    stack = NS(kingdoms=NS(current_season=_none_season), realms=NS())
+    note = asyncio.run(
+        kv._accept_season_entry(None, stack, NS(), realm, {"realm_entry_no_season": "NO"}, "fr")
+    )
+    assert note == "NO", note
+
+
+async def _none_season() -> Any:
+    return None
+
+
+def test_the_acceptance_orchestrates_the_full_entry() -> None:
+    """✅ → add_kingdom (the draft starter), queue+claim for the Roi,
+    one enroll per member, engage() binds the shell."""
+    from botforge.mods.kingdom import models
+    from botforge.mods.kingdom.cogs import validation as kv
+
+    engine: dict[str, list[Any]] = {"calls": [], "lords": []}
+    kingdom = NS(id="k42", name="Château Noir", civilizations=["heaps"])
+    realm = NS(
+        id="realm:x-77",
+        slug="x",
+        name="Château Noir",
+        king_id="77",
+        king_name="Drasah",
+        join_request={"season_id": "s1", "requested_at": 1},
+        member_ids=["78"],
+    )
+
+    async def _current_season() -> Any:
+        return NS(id="s1")
+
+    async def _require_season() -> Any:
+        return NS(id="s1")
+
+    async def _add_kingdom(name: str) -> Any:
+        engine["calls"].append(("add_kingdom", name))
+        return kingdom
+
+    async def _queue_king(pid: str, display: str) -> Any:
+        engine["calls"].append(("queue", pid))
+        engine["lords"].append(NS(id=pid, in_queue=True))
+
+    async def _claim(pid: str, kid: str) -> Any:
+        engine["calls"].append(("claim", pid, kid))
+
+    async def _enroll(pid: str, display: str, role: Any, kingdom_name: str | None = None) -> Any:
+        engine["calls"].append(("enroll", pid, str(role)))
+        engine["lords"].append(NS(id=pid, kingdom=kingdom_name))
+
+    async def _engage(realm_id: str, season_id: str, kingdom_id: str) -> Any:
+        engine["calls"].append(("engage", realm_id, kingdom_id))
+        realm.engagement = {"season_id": season_id, "kingdom_id": kingdom_id}
+        return realm
+
+    stack = NS(
+        kingdoms=NS(
+            current_season=_current_season,
+            _require_season=_require_season,
+            add_kingdom=_add_kingdom,
+            enroll_king_awaiting_kingdom=_queue_king,
+            claim_kingdom=_claim,
+            enroll=_enroll,
+        ),
+        realms=NS(engage=_engage),
+    )
+    inter = NS(guild=None)
+    note = asyncio.run(
+        kv._accept_season_entry(
+            inter, stack, stack.realms, realm,
+            {"realm_accepted_note": "✅ {name} → {kingdom}"}, "fr",
+        )
+    )
+    calls = engine["calls"]
+    assert ("add_kingdom", "Château Noir") in calls, calls
+    assert ("queue", "77") in calls and ("claim", "77", "k42") in calls, calls
+    assert any(c[0] == "enroll" and c[1] == "78" for c in calls), calls
+    assert ("engage", "realm:x-77", "k42") in calls, calls
+    assert "✅" in note, note
+
+
+def test_t2a_strings_parity() -> None:
+    """The nine new yaml keys exist in both locales with their arities."""
+    from botforge.mods.kingdom.cogs.common import mod_catalog
+
+    for locale in ("fr", "en"):
+        s = mod_catalog().section("kingdom.validation", locale)
+        for key in (
+            "realm_requests_header",
+            "realm_abort_button" if False else "realm_request_presentation",
+            "realm_accept_button",
+            "realm_refuse_button",
+            "realm_entry_no_season",
+        ):
+            assert s[key], (locale, key)
+        s["realm_request_row"].format(name="X", king="Y", when="Z")
+        s["realm_accepted_note"].format(name="X", kingdom="Y")
+        s["realm_refused_note"].format(name="X")
+        s["realm_entry_error"].format(error="X")
+        rs = None
+        from botforge.mods.kingdom.cogs.realm_strings import realm_strings
+        rs = realm_strings(locale)
+        assert rs["season_engaged_line"], locale
+        rs["season_engaged_line"].format(season="X", kingdom="Y")
