@@ -30,7 +30,7 @@ every button is a restart-proof DynamicItem under the
 from __future__ import annotations
 
 import logging
-from typing import Any
+from typing import Any, ClassVar
 
 import discord
 
@@ -413,7 +413,7 @@ async def _map_pick_window(
     if not free:
         blocks.append(discord.ui.TextDisplay(str(strings["terr_maps_none"])))
         back: discord.ui.ActionRow[discord.ui.LayoutView] = discord.ui.ActionRow()
-        back.add_item(DistributorTerritoryButton(strings["back_button"], kid, "none").item)
+        back.add_item(DistributorMenuButton(strings["back_button"], kid).item)
         blocks.append(back)
         return _window(blocks)
     picker = DistributorMapSelect(strings["select_placeholder"], kid)
@@ -859,12 +859,10 @@ class DistributorOpenButton(
     @classmethod
     async def from_custom_id(cls, interaction, item, match, /):  # type: ignore[no-untyped-def]
         """Rebuild the button from the wire (locale label, stable id)."""
-
         return cls(_strings(interaction)["open_button"], discord.ButtonStyle.primary)
 
     async def callback(self, interaction: discord.Interaction) -> None:
         """Guard the click, then run the action (ephemeral, never a raise)."""
-
         if not await _guard(interaction):
             return
         await _inject_window(interaction)
@@ -887,12 +885,10 @@ class DistributorTestKingdomButton(
     @classmethod
     async def from_custom_id(cls, interaction, item, match, /):  # type: ignore[no-untyped-def]
         """Rebuild the button from the wire (locale label, stable id)."""
-
         return cls(_strings(interaction)["test_kingdom_button"], discord.ButtonStyle.success)
 
     async def callback(self, interaction: discord.Interaction) -> None:
         """Guard the click, then run the action (ephemeral, never a raise)."""
-
         if not await _guard(interaction):
             return
         from .common import service_failure_note
@@ -907,7 +903,7 @@ class DistributorTestKingdomButton(
         try:
             kingdom = await stack.kingdoms.ensure_test_kingdom()
             note = str(strings["test_kingdom_done"]).format(str(getattr(kingdom, "name", "")))
-        except Exception as exc:  # noqa: BLE001 — the panel reports, never raises
+        except Exception as exc:
             logger.warning("kingdom: test-kingdom ensure failed", exc_info=True)
             note = service_failure_note(strings, "error", exc)
         await _safe_followup(interaction, note)
@@ -930,12 +926,10 @@ class DistributorDestructButton(
     @classmethod
     async def from_custom_id(cls, interaction, item, match, /):  # type: ignore[no-untyped-def]
         """Rebuild the button from the wire (locale label, stable id)."""
-
         return cls(_strings(interaction)["destruct_button"], discord.ButtonStyle.danger)
 
     async def callback(self, interaction: discord.Interaction) -> None:
         """Guard the click, then run the action (ephemeral, never a raise)."""
-
         if not await _guard(interaction):
             return
         strings = _strings(interaction)
@@ -969,7 +963,7 @@ class DistributorDestructButton(
 
                 kingdom = await stack.kingdoms.delete_kingdom(str(TEST_KINGDOM_ID))
                 note = str(target_strings["destruct_done"]).format(str(getattr(kingdom, "name", "")))
-            except Exception as exc:  # noqa: BLE001 — the panel reports, never raises
+            except Exception as exc:
                 logger.warning("kingdom: test-kingdom destruct failed", exc_info=True)
                 note = service_failure_note(target_strings, "error", exc)
             await _safe_followup(target, note)
@@ -1007,12 +1001,10 @@ class DistributorKingdomSelect(
     @classmethod
     async def from_custom_id(cls, interaction, item, match, /):  # type: ignore[no-untyped-def]
         """Rebuild the button from the wire (locale label, stable id)."""
-
         return cls(_strings(interaction)["select_placeholder"])
 
     async def callback(self, interaction: discord.Interaction) -> None:
         """Guard the click, then run the action (ephemeral, never a raise)."""
-
         if not await _guard(interaction):
             return
         values = [str(v) for v in (self.item.values or [])]
@@ -1063,7 +1055,6 @@ class DistributorGiveButton(
     @classmethod
     async def from_custom_id(cls, interaction, item, match, /):  # type: ignore[no-untyped-def]
         """Rebuild the button from the wire (locale label, stable id)."""
-
         strings = _strings(interaction)
         key = {"points": "points_button", "territory": "territory_button", "civ": "civ_button"}[
             match["what"]
@@ -1072,7 +1063,6 @@ class DistributorGiveButton(
 
     async def callback(self, interaction: discord.Interaction) -> None:
         """Guard the click, then run the action (ephemeral, never a raise)."""
-
         if not await _guard(interaction):
             return
         import random
@@ -1121,7 +1111,7 @@ class DistributorGiveButton(
                 note = str(strings["civ_done"]).format(civ)
             else:
                 note = str(strings["error"]).format(what)
-        except Exception as exc:  # noqa: BLE001 — the panel reports, never raises
+        except Exception as exc:
             logger.warning("kingdom: distributor give %s failed", what, exc_info=True)
             note = service_failure_note(strings, "error", exc)
         await _safe_followup(interaction, note)
@@ -1151,12 +1141,10 @@ class DistributorMenuButton(
     @classmethod
     async def from_custom_id(cls, interaction, item, match, /):  # type: ignore[no-untyped-def]
         """Rebuild the button from the wire (locale label, stable id)."""
-
         return cls(_strings(interaction)["back_button"], match["kid"])
 
     async def callback(self, interaction: discord.Interaction) -> None:
         """Guard the click, then run the action (ephemeral, never a raise)."""
-
         if not await _guard(interaction):
             return
         kid = str(getattr(self, "kid", ""))
@@ -1186,12 +1174,10 @@ class DistributorCatButton(
     @classmethod
     async def from_custom_id(cls, interaction, item, match, /):  # type: ignore[no-untyped-def]
         """Rebuild the button from the wire (locale label, stable id)."""
-
         return cls(_strings(interaction)[f"cat_{match['cat'].replace('-', '_')}"], match["kid"])
 
     async def callback(self, interaction: discord.Interaction) -> None:
         """Guard the click, then open the category's own window."""
-
         if not await _guard(interaction):
             return
         kid = str(getattr(self, "kid", ""))
@@ -1237,14 +1223,12 @@ class DistributorCivPageButton(
     @classmethod
     async def from_custom_id(cls, interaction, item, match, /):  # type: ignore[no-untyped-def]
         """Rebuild the button from the wire (locale label, stable id)."""
-
         key = "prev_page" if match["dir"] == "prev" else "next_page"
         label = _strings(interaction)[key]
         return cls(label, match["kid"], match["mode"], int(match["page"]), match["dir"])
 
     async def callback(self, interaction: discord.Interaction) -> None:
         """Guard the click, then turn to the neighbour page."""
-
         if not await _guard(interaction):
             return
         page = int(getattr(self, "page", 0))
@@ -1277,12 +1261,10 @@ class DistributorCivSelect(
     @classmethod
     async def from_custom_id(cls, interaction, item, match, /):  # type: ignore[no-untyped-def]
         """Rebuild the select from the wire (locale placeholder, stable id)."""
-
         return cls(_strings(interaction)["civ_placeholder"], match["kid"], match["mode"], int(match["page"]))
 
     async def callback(self, interaction: discord.Interaction) -> None:
         """Guard the click, then add or remove the chosen civilization."""
-
         if not await _guard(interaction):
             return
         from botforge.mods.kingdom.game_clock import game_now
@@ -1330,7 +1312,7 @@ class DistributorCivSelect(
             await open_unique_ephemeral(
                 interaction, view=await _civ_window(interaction, kid, mode, page, note)
             )
-        except Exception as exc:  # noqa: BLE001 — the panel reports, never raises
+        except Exception as exc:
             logger.warning("kingdom: distributor civ %s failed", mode, exc_info=True)
             if not attempted and not interaction.response.is_done():
                 await _safe_followup(interaction, service_failure_note(strings, "error", exc))
@@ -1356,7 +1338,6 @@ class DistributorTreasuryButton(
     @classmethod
     async def from_custom_id(cls, interaction, item, match, /):  # type: ignore[no-untyped-def]
         """Rebuild the button from the wire (locale label, stable id)."""
-
         strings = _strings(interaction)
         op = match["op"]
         key = {
@@ -1377,7 +1358,6 @@ class DistributorTreasuryButton(
 
     async def callback(self, interaction: discord.Interaction) -> None:
         """Guard the click, then run the treasury lever."""
-
         if not await _guard(interaction):
             return
         strings = _strings(interaction)
@@ -1406,7 +1386,7 @@ class DistributorTreasuryButton(
             await open_unique_ephemeral(
                 interaction, view=await _treasury_window(interaction, kid, note)
             )
-        except Exception:  # noqa: BLE001 — the panel reports, never raises
+        except Exception:
             logger.warning("kingdom: distributor treasury %s failed", op, exc_info=True)
             await interaction.response.defer(ephemeral=True)
 
@@ -1456,7 +1436,7 @@ class _TreasurySetModal(discord.ui.Modal):
             await open_unique_ephemeral(
                 interaction, view=await _treasury_window(interaction, self.kid, note)
             )
-        except Exception as exc:  # noqa: BLE001 — the panel reports, never raises
+        except Exception as exc:
             logger.warning("kingdom: distributor treasury set failed", exc_info=True)
             if not interaction.response.is_done():
                 await interaction.response.defer(ephemeral=True)
@@ -1483,13 +1463,10 @@ class DistributorParishButton(
     @classmethod
     async def from_custom_id(cls, interaction, item, match, /):  # type: ignore[no-untyped-def]
         """Rebuild the button from the wire (locale label, stable id)."""
-
-        strings = _strings(interaction)
         return cls(f"{match['tier']}", match["kid"], int(match["tier"]))
 
     async def callback(self, interaction: discord.Interaction) -> None:
         """Guard the click, then force the palier."""
-
         if not await _guard(interaction):
             return
         strings = _strings(interaction)
@@ -1507,7 +1484,7 @@ class DistributorParishButton(
             await open_unique_ephemeral(
                 interaction, view=await _parish_window(interaction, kid, note)
             )
-        except Exception:  # noqa: BLE001 — the panel reports, never raises
+        except Exception:
             logger.warning("kingdom: distributor parish %s failed", tier, exc_info=True)
             if not attempted and not interaction.response.is_done():
                 await interaction.response.defer(ephemeral=True)
@@ -1518,6 +1495,15 @@ class DistributorTerritoryButton(
     template=rf"{_NS}:terr:(?P<kid>[a-z0-9-]+):(?P<act>give|transfer|retire|replace|shield|unshield)$",
 ):
     """One territory lever door — opens the matching pick window."""
+
+    _LABEL_KEYS: ClassVar[dict[str, str]] = {
+        "give": "terr_give_button",
+        "transfer": "terr_transfer_button",
+        "retire": "terr_retire_button",
+        "replace": "terr_replace_button",
+        "shield": "terr_shield_button",
+        "unshield": "terr_unshield_button",
+    }
 
     def __init__(self, label: str, kingdom_id: str, act: str) -> None:
         super().__init__(
@@ -1533,5 +1519,6 @@ class DistributorTerritoryButton(
     @classmethod
     async def from_custom_id(cls, interaction, item, match, /):  # type: ignore[no-untyped-def]
         """Rebuild the button from the wire (locale label, stable id)."""
-
         strings = _strings(interaction)
+        return cls(strings[cls._LABEL_KEYS[match["act"]]], match["kid"], match["act"])
+

@@ -11,7 +11,6 @@ from __future__ import annotations
 import pytest
 
 from botforge.mods.kingdom.attacks import UnknownTechnologyError
-from botforge.mods.kingdom.models import LordRole
 from botforge.mods.kingdom.service import KingdomNotFoundError, ParishError
 
 from test_kingdom_attacks import Bundle
@@ -20,8 +19,7 @@ from test_kingdom_attacks import Bundle
 async def test_force_parish_tier_moves_the_palier_without_paying() -> None:
     """The Paroisse lever writes the palier, the treasury never moves."""
     bundle = Bundle()
-    await bundle.kingdoms.launch()
-    await bundle.kingdoms.enroll("king-a", "King A", LordRole.KING, proposed_name="Aquitaine")
+    _aquitaine, _bourgogne, _gaia = await bundle.launch_season()
     before = next(k for k in await bundle.kingdoms.kingdoms() if k.name == "Aquitaine")
 
     forced = await bundle.kingdoms.force_parish_tier(before.id, 3)

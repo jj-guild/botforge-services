@@ -716,6 +716,62 @@ class KingdomService:
         )
         return kingdom
 
+    # -----------------------------------------------------------------
+    # The Distributeur's admin levers (the reference's injector, 20/11)
+    # -----------------------------------------------------------------
+
+    async def force_parish_tier(self, kingdom_id: str, tier: int) -> KingdomModel:
+        """Force the Paroisse palier (1-3) without paying (admin lever).
+
+        distributeur-v2 (Drasah 20/11): the reference's injector could
+        push a kingdom to any palier for testing; the new engine pays
+        tech points for upgrades, so the admin lever FORCES the field
+        — no cost, no rule, the panel is the only caller.
+        """
+        kingdom = await self._require_kingdom(kingdom_id)
+        if kingdom.is_gaia:
+            raise ParishError("Gaïa owns no Paroisse")
+        if int(tier) not in (1, 2, 3):
+            raise ParishError(f"palier inconnu : {tier}")
+        kingdom.parish_tier = int(tier)
+        await self._store.upsert_kingdom(kingdom.to_mongo())
+        logger.info("kingdom: %s parish tier forced to %s (distributor)", kingdom.id, tier)
+        return kingdom
+
+    async def set_lord_budgets(self, player_id: str, attack_used: int, defense_used: int) -> LordModel:
+        """Force a lord's consumed weekly budgets (admin lever).
+
+        The reference's « ↻ Recharger les budgets » and its lock twin:
+        0/0 recharges (1 attack / 1 defense available again), the max
+        values lock the lord out of the weekly combat.
+        """
+        lord = await self._require_lord(player_id)
+        lord.attack_used = max(0, int(attack_used))
+        lord.defense_used = max(0, int(defense_used))
+        await self._store.upsert_lord(lord.to_mongo())
+        logger.info(
+            "kingdom: %s budgets forced to %s/%s (distributor)",
+            lord.id,
+            lord.attack_used,
+            lord.defense_used,
+        )
+        return lord
+
+    async def set_lord_marriage_lock(self, player_id: str, until: int | None) -> LordModel:
+        """Set or clear a lord's marriage combat lock (admin lever).
+
+        ``until`` is a unix timestamp; ``None`` lifts the lock (« 🔓
+        Lever le verrou mariage ») — the reference's 6h test lock
+        passes ``now + 6h``.
+        """
+        lord = await self._require_lord(player_id)
+        lord.marriage_locked_until = until if until is None else int(until)
+        await self._store.upsert_lord(lord.to_mongo())
+        logger.info(
+            "kingdom: %s marriage lock set to %s (distributor)", lord.id, lord.marriage_locked_until
+        )
+        return lord
+
     async def replace(self, outgoing_player_id: str, incoming_player_id: str) -> LordModel:
         """Replace a player who left with a queued player (D23/D25).
 
