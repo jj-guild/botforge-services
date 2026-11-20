@@ -118,7 +118,22 @@ def register(bot: Any, config: Any) -> None:
     from .settings_panel import build_settings_panel
 
     async def _resolve_settings_channel(guild_id: str) -> str:
-        return await stored_channel_id(guild_id, "mod/kingdom", "settings") or ""
+        """The settings salon, by stored id FIRST, declared name last.
+
+        settings-pin-fallback-v1 (Drasah 20/11): the migrated guild's
+        stored tree id may miss the salon (a pre-key provisioning, a
+        drifted id) — the pin then NEVER lands and Admin > Paramètres
+        stays EMPTY. The last-chance fallback scans the guild for the
+        declared salon's literal name (fr and en renders) so the
+        console panel always finds its home; the provisioning keeps
+        owning the canonical ids.
+        """
+        stored = await stored_channel_id(guild_id, "mod/kingdom", "settings")
+        if stored:
+            return stored
+        from .common import channel_id_by_flattened_name
+
+        return channel_id_by_flattened_name(bot, guild_id, ("parametres", "settings"))
 
     register_static_pin(
         StaticPinnedView(
