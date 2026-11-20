@@ -67,7 +67,14 @@ not&nbsp;only&nbsp;those&nbsp;whose&nbsp;transitions&nbsp;already&nbsp;fired.<br
 <td class="singlecolumn">Methods defined here:<br>
 <dl><dt><a name="GameAoe2Aggregator-__init__"><strong>__init__</strong></a>(self) -&gt; 'None'</dt><dd><span class="code">Start&nbsp;with&nbsp;an&nbsp;empty&nbsp;state;&nbsp;the&nbsp;first&nbsp;snapshot&nbsp;resolves&nbsp;it.</span></dd></dl>
 
-<dl><dt>async <a name="GameAoe2Aggregator-apply_event"><strong>apply_event</strong></a>(self, event: 'Any') -&gt; 'None'</dt><dd><span class="code">Fold&nbsp;one&nbsp;provider&nbsp;MatchEvent&nbsp;into&nbsp;the&nbsp;player&nbsp;states.</span></dd></dl>
+<dl><dt>async <a name="GameAoe2Aggregator-apply_event"><strong>apply_event</strong></a>(self, event: 'Any') -&gt; 'None'</dt><dd><span class="code">Fold&nbsp;one&nbsp;provider&nbsp;MatchEvent&nbsp;into&nbsp;the&nbsp;player&nbsp;states.<br>
+&nbsp;<br>
+botforge-services#423:&nbsp;an&nbsp;event&nbsp;is&nbsp;folded&nbsp;only&nbsp;when&nbsp;it&nbsp;concerns<br>
+known&nbsp;ids&nbsp;—&nbsp;an&nbsp;enrolled&nbsp;profile&nbsp;id,&nbsp;a&nbsp;profile&nbsp;already&nbsp;tracked,<br>
+or&nbsp;a&nbsp;match&nbsp;ref&nbsp;already&nbsp;referenced&nbsp;by&nbsp;a&nbsp;tracked&nbsp;player.&nbsp;Events<br>
+about&nbsp;strangers&nbsp;are&nbsp;dropped&nbsp;before&nbsp;any&nbsp;INFO&nbsp;log,&nbsp;state&nbsp;write,<br>
+transition&nbsp;fan-out&nbsp;or&nbsp;Mongo&nbsp;persist;&nbsp;receiving&nbsp;the&nbsp;event&nbsp;still<br>
+proves&nbsp;provider&nbsp;liveness,&nbsp;so&nbsp;the&nbsp;degraded&nbsp;flag&nbsp;clears&nbsp;first.</span></dd></dl>
 
 <dl><dt><a name="GameAoe2Aggregator-mark_degraded"><strong>mark_degraded</strong></a>(self) -&gt; 'None'</dt><dd><span class="code">Flag&nbsp;the&nbsp;state&nbsp;provider-less&nbsp;(all&nbsp;offline).</span></dd></dl>
 
@@ -77,11 +84,13 @@ not&nbsp;only&nbsp;those&nbsp;whose&nbsp;transitions&nbsp;already&nbsp;fired.<br
 
 <dl><dt><a name="GameAoe2Aggregator-pending_transitions"><strong>pending_transitions</strong></a>(self) -&gt; 'int'</dt><dd><span class="code">Report&nbsp;the&nbsp;number&nbsp;of&nbsp;queued&nbsp;transitions&nbsp;(diagnostics,&nbsp;tests).</span></dd></dl>
 
-<dl><dt><a name="GameAoe2Aggregator-set_roster"><strong>set_roster</strong></a>(self, entries: 'list[Any]') -&gt; 'None'</dt><dd><span class="code">Record&nbsp;the&nbsp;enrolled&nbsp;roster&nbsp;(the&nbsp;dashboard's&nbsp;baseline).<br>
+<dl><dt><a name="GameAoe2Aggregator-set_roster"><strong>set_roster</strong></a>(self, entries: 'list[Any]') -&gt; 'None'</dt><dd><span class="code">Record&nbsp;the&nbsp;enrolled&nbsp;roster&nbsp;(the&nbsp;dashboard's&nbsp;baseline&nbsp;+&nbsp;known&nbsp;ids).<br>
 &nbsp;<br>
 Entries&nbsp;are&nbsp;the&nbsp;enrollment&nbsp;records&nbsp;—&nbsp;dicts&nbsp;with&nbsp;profile_id&nbsp;and<br>
-user_id&nbsp;(the&nbsp;UpdateEnrollments&nbsp;push),&nbsp;or&nbsp;bare&nbsp;profile&nbsp;id<br>
-strings&nbsp;(tests,&nbsp;degraded&nbsp;paths).</span></dd></dl>
+user_id&nbsp;(the&nbsp;UpdateEnrollments&nbsp;push),&nbsp;an&nbsp;optional&nbsp;name&nbsp;(the<br>
+binding's&nbsp;display&nbsp;name),&nbsp;or&nbsp;bare&nbsp;profile&nbsp;id&nbsp;strings&nbsp;(tests,<br>
+degraded&nbsp;paths).&nbsp;Newly&nbsp;enrolled&nbsp;profiles&nbsp;become&nbsp;known&nbsp;from&nbsp;this<br>
+point&nbsp;on&nbsp;(botforge-services#423).</span></dd></dl>
 
 <dl><dt><a name="GameAoe2Aggregator-snapshot"><strong>snapshot</strong></a>(self) -&gt; 'dict[str, Any]'</dt><dd><span class="code">Build&nbsp;the&nbsp;current&nbsp;dashboard&nbsp;snapshot&nbsp;(every&nbsp;enrolled&nbsp;player).</span></dd></dl>
 
