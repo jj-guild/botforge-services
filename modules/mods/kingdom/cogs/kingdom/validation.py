@@ -22,7 +22,14 @@ from typing import Any
 
 import discord
 
-from .common import _bot_admins, mod_catalog, strings_by_locale, surface, wiring
+from .common import (
+    _bot_admins,
+    fmt_paris,
+    mod_catalog,
+    strings_by_locale,
+    surface,
+    wiring,
+)
 
 logger = logging.getLogger("kingdom.validation")
 
@@ -36,6 +43,24 @@ async def _guild_locale(guild_id: str) -> str:
     from .panel import _guild_locale as _panel_locale
 
     return await _panel_locale(guild_id)
+
+def _realms_service(stack: Any) -> Any:
+    """The REALM service of the same stack (None when absent)."""
+    return getattr(stack, "realms", None) if stack is not None else None
+
+
+async def _realms_with_join_request(stack: Any) -> list[Any]:
+    """The realms whose Roi asked for the season entry (t2a)."""
+    service = _realms_service(stack)
+    if service is None:
+        return []
+    try:
+        realms = await service.realms()
+    except Exception:
+        logger.warning("kingdom: realm join requests read failed", exc_info=True)
+        return []
+    return [realm for realm in realms if getattr(realm, "join_request", None)]
+
 
 async def build_validation_panel(guild_id: str) -> discord.ui.LayoutView:
     """Build the pinned validation dashboard's layout (guild-locale strings)."""
@@ -95,6 +120,53 @@ async def build_validation_panel(guild_id: str) -> discord.ui.LayoutView:
             blocks.append(row)
     else:
         blocks.append(discord.ui.TextDisplay(str(strings["empty"])))
+    # t2a — the SEASON ENTRY requests of the PERSISTENT realms: the
+    # Roi's « S'inscrire » lands here, the admin decides (cards, the
+    # presentation in sight — the accepted mockup's ⏳ section).
+    entry_requests = await _realms_with_join_request(stack)
+    if entry_requests:
+        blocks.append(discord.ui.Separator())
+        blocks.append(
+            discord.ui.TextDisplay(f"## {strings['realm_requests_header']} ({len(entry_requests)})")
+        )
+        for realm in entry_requests:
+            requested = int((getattr(realm, "join_request", {}) or {}).get("requested_at", 0) or 0)
+            blocks.append(
+                discord.ui.TextDisplay(
+                    str(strings["realm_request_row"]).format(
+                        name=getattr(realm, "name", "?"),
+                        king=getattr(realm, "king_name", "?"),
+                        when=fmt_paris(requested),
+                    )
+                )
+            )
+            excerpt = str(getattr(realm, "presentation", "") or "").strip()
+            if excerpt:
+                blocks.append(
+                    discord.ui.TextDisplay(
+                        str(strings["realm_request_presentation"]).format(
+                            excerpt=excerpt[:280] + ("…" if len(excerpt) > 280 else "")
+                        )
+                    )
+                )
+            entry_row: discord.ui.ActionRow[discord.ui.LayoutView] = discord.ui.ActionRow()
+            entry_row.add_item(
+                ValidationRealmEntryButton(
+                    str(realm.slug),
+                    "ok",
+                    str(strings["realm_accept_button"])[:80],
+                    discord.ButtonStyle.success,
+                )
+            )
+            entry_row.add_item(
+                ValidationRealmEntryButton(
+                    str(realm.slug),
+                    "no",
+                    str(strings["realm_refuse_button"])[:80],
+                    discord.ButtonStyle.danger,
+                )
+            )
+            blocks.append(entry_row)
     blocks.append(discord.ui.Separator())
     if accepted:
         blocks.append(
@@ -544,10 +616,158 @@ async def _crown_window(
     return surface("panel:mod:kingdom:validation:crown", container)
 
 
+class ValidationRealmEntryButton(
+    discord.ui.DynamicItem[discord.ui.Button[Any]],
+    template=rf"{_NS}:realmjoin:(?P<slug>[a-z0-9-]+):(?P<choice>ok|no)",
+):
+    """The t2a season-entry decision of a PERSISTENT realm."""
+
+    def __init__(self, slug: str, choice: str, label: str, style: int) -> None:
+        super().__init__(
+            discord.ui.Button(
+                custom_id=f"{_NS}:realmjoin:{slug}:{choice}"[:100],
+                label=label,
+                style=style,  # type: ignore[arg-type]
+            )
+        )
+        self.slug = slug
+        self.choice = choice
+
+    @classmethod
+    async def from_custom_id(
+        cls,
+        interaction: discord.Interaction,
+        item: discord.ui.Item[Any],
+        match: Any,
+        /,
+    ) -> "ValidationRealmEntryButton":
+        button = item if isinstance(item, discord.ui.Button) else None
+        label = (button.label or "?") if button is not None else "?"
+        style = button.style if button is not None else discord.ButtonStyle.secondary
+        return cls(match["slug"], match["choice"], label, style)
+
+    async def callback(self, interaction: discord.Interaction) -> None:
+        """Apply the admin's decision, then re-render the dashboard."""
+        locale = await _guild_locale(str(interaction.guild_id or ""))
+        strings = mod_catalog().section("kingdom.validation", locale)
+        if not await _guard(interaction, strings):
+            return
+        stack = wiring()
+        service = _realms_service(stack)
+        realm = await service.realm_of_slug(self.slug) if service is not None else None
+        if realm is None or stack is None:
+            await open_unique_ephemeral_safe(interaction, str(strings["gone_note"]))
+            return
+        if self.choice == "no":
+            note = await _refuse_season_entry(service, realm, strings)
+        else:
+            note = await _accept_season_entry(interaction, stack, service, realm, strings, locale)
+        try:
+            await interaction.response.edit_message(
+                view=await build_validation_panel(str(interaction.guild_id or ""))
+            )
+        except Exception:
+            logger.warning("kingdom: validation dashboard refresh failed", exc_info=True)
+            if not interaction.response.is_done():
+                await interaction.response.defer()
+        try:
+            await interaction.followup.send(note, ephemeral=True)
+        except Exception:  # noqa: S110 — a vanished window is fine
+            pass
+
+
+async def open_unique_ephemeral_safe(interaction: discord.Interaction, content: str) -> None:
+    """_safe_send twin: report without ever raising."""
+    from .common import open_unique_ephemeral
+
+    try:
+        await open_unique_ephemeral(interaction, content)
+    except Exception:  # noqa: BLE001
+        logger.warning("kingdom: ephemeral note failed", exc_info=True)
+
+
+async def _refuse_season_entry(service: Any, realm: Any, strings: dict[str, str]) -> str:
+    """The admin refuses: the request drops, the realm stays dormant."""
+    try:
+        realm = await service.clear_join_request(str(realm.id))
+        return str(strings["realm_refused_note"]).format(name=realm.name)
+    except Exception as exc:  # noqa: BLE001 — the dashboard reports, never raises
+        logger.warning("kingdom: season entry refused-flow failed (%s)", realm.id, exc_info=True)
+        return str(strings["realm_entry_error"]).format(error=str(exc)[:150])
+
+
+async def _accept_season_entry(
+    interaction: discord.Interaction,
+    stack: Any,
+    service: Any,
+    realm: Any,
+    strings: dict[str, str],
+    locale: str,
+) -> str:
+    """The admin accepts — the realm ENTERS the season (one gesture):
+
+    1. the engine kingdom is created APPROVED via ``add_kingdom`` and
+       its STARTER DRAFT is granted at once (the act of entry);
+    2. the realm's Roi claims the throne (queue + claim seams);
+    3. every other member is enrolled as a Lord of the kingdom;
+    4. the shell is bound to the engine kingdom (``engage``), the
+       join request is consumed and the habitat WAKES (the three
+       masked salons reopen, the hub flips to its vivid state).
+    """
+    try:
+        season = await stack.kingdoms.current_season()
+    except Exception:
+        season = None
+    if season is None:
+        return str(strings["realm_entry_no_season"])
+    try:
+        from botforge.mods.kingdom.models import LordRole
+
+        kingdom = await stack.kingdoms.add_kingdom(str(realm.name))
+        king_id = str(getattr(realm, "king_id", ""))
+        try:
+            await stack.kingdoms.enroll_king_awaiting_kingdom(
+                king_id, str(getattr(realm, "king_name", "") or king_id)
+            )
+            await stack.kingdoms.claim_kingdom(king_id, str(kingdom.id))
+        except Exception as exc:  # noqa: BLE001 — the Roi may already ride the season
+            logger.warning("kingdom: realm Roi throne claim degraded (%s)", exc)
+            raise
+        for member_id in getattr(realm, "member_ids", []) or []:
+            try:
+                await stack.kingdoms.enroll(
+                    str(member_id),
+                    str(member_id),
+                    LordRole.LORD,
+                    kingdom_name=str(realm.name),
+                )
+            except Exception as exc:  # noqa: BLE001 — one member never blocks the entry
+                logger.warning("kingdom: realm member enroll degraded (%s)", exc)
+        await service.engage(str(realm.id), str(getattr(season, "id", "")), str(kingdom.id))
+        note = str(strings["realm_accepted_note"]).format(name=realm.name, kingdom=kingdom.name)
+    except Exception as exc:  # noqa: BLE001 — the dashboard reports, never raises
+        logger.warning("kingdom: season entry failed (%s)", getattr(realm, "id", "?"), exc_info=True)
+        return str(strings["realm_entry_error"]).format(error=str(exc)[:150])
+    # the habitat wakes — masked salons reopen, hub flips vivid (best-effort)
+    guild = getattr(interaction, "guild", None)
+    if guild is not None:
+        try:
+            from .realms import deploy_realm_hub, ensure_realm_structure
+
+            ids = await ensure_realm_structure(guild, realm, dormant=False)
+            if ids:
+                realm = await service.save_habitat(str(realm.id), ids)
+            await deploy_realm_hub(guild, realm, locale=locale)
+        except Exception:  # noqa: BLE001
+            logger.warning("kingdom: realm habitat wake failed", exc_info=True)
+    return note
+
+
 __all__ = [
     "VALIDATION_VIEW_KEY",
     "ValidationCrownButton",
     "ValidationDecisionButton",
     "ValidationDeleteButton",
+    "ValidationRealmEntryButton",
     "build_validation_panel",
 ]

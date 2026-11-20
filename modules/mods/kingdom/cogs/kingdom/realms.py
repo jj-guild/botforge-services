@@ -217,18 +217,23 @@ async def _apply_dormancy(guild: Any, channel: Any, key: str, member_ids: list[i
 
     Dormant: every realm member is DENIED on the non-hub salons —
     masked, never destroyed. The hub stays the realm's front door.
+    Awake (t2a — the admin accepted the season entry): the member
+    denials are CLEARED (overwrite=None → the member inherits the
+    category's allow), the halls reopen without any crawl.
     """
-    hidden = key in DORMANT_HIDDEN_KEYS
-    if not (hidden and dormant):
+    if key not in DORMANT_HIDDEN_KEYS:
         return
     for member_id in member_ids:
         member = await _resolve_member(guild, member_id)
         if member is None:
             continue
         try:
-            await channel.set_permissions(member, view_channel=False, read_message_history=False)
+            if dormant:
+                await channel.set_permissions(member, view_channel=False, read_message_history=False)
+            else:
+                await channel.set_permissions(member, overwrite=None)
         except Exception:  # noqa: BLE001
-            logger.warning("kingdom realms: dormancy deny failed (%s)", getattr(channel, "id", "?"))
+            logger.warning("kingdom realms: dormancy edit failed (%s)", getattr(channel, "id", "?"))
 
 
 async def ensure_realm_structure(guild: Any, realm: Any, *, dormant: bool = True) -> dict[str, Any]:
@@ -345,7 +350,7 @@ async def deploy_realm_hub(guild: Any, realm: Any, locale: str = "fr") -> bool:
     from .realm_strings import realm_strings as catalog
 
     strings = catalog(locale)
-    dormant = not bool(getattr(realm, "discord", {}).get("engaged", False))
+    dormant = getattr(realm, "engagement", None) is None  # t2a — the season link decides
     marker = _hub_marker()
     history = getattr(channel, "history", None)
     existing = None
@@ -534,7 +539,19 @@ async def season_layout(realm: Any, strings: dict[str, str], *, king: bool) -> d
             )
         )
     request = getattr(realm, "join_request", None)
-    if request:
+    engagement = getattr(realm, "engagement", None)
+    if engagement:
+        blocks.append(discord.ui.Separator())
+        kingdom_name = str(engagement.get("kingdom_name", "") or realm.name)
+        blocks.append(
+            discord.ui.TextDisplay(
+                strings["season_engaged_line"].format(
+                    kingdom=kingdom_name,
+                    season=str(engagement.get("season_id", "?")),
+                )
+            )
+        )
+    elif request:
         blocks.append(discord.ui.Separator())
         blocks.append(discord.ui.TextDisplay(strings["season_join_pending"]))
     elif season is not None and king:
