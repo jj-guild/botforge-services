@@ -321,16 +321,28 @@ async def _run_provisioning(interaction: discord.Interaction, action: str) -> st
         # The pass is idempotent (fingerprint guard), so deploy and
         # sync simply heal early.
         pins += await run_mod_pin_refresh_pass(bot)
+        # pins-diag-wired (Drasah 20/11): the diagnostic names, in plain
+        # French, the failing step of every pinned surface — the admin
+        # reads a diagnosis, never a silent empty salon again.
+        from .pins_diag import admin_pin_lines
+
+        diag = await admin_pin_lines(bot, guild_id)
     except Exception as exc:  # the panel reports, never raises
         logger.warning("kingdom: settings %s failed", action, exc_info=True)
         return str(strings["settings_error"]).format(str(exc)[:150])
+    # the diagnostic rides every provisioning answer (pins-diag-wired)
+    diag_block = "\n".join(diag) if diag else ""
     if action == "deploy":
-        return str(strings["settings_deploy_done"]).format(
+        note = str(strings["settings_deploy_done"]).format(
             channels=channels, roles=roles, pins=pins
         )
-    if action == "sync":
-        return str(strings["settings_sync_done"]).format(pins=pins)
-    return str(strings["settings_reset_done"]).format(channels=deleted)
+    elif action == "sync":
+        note = str(strings["settings_sync_done"]).format(pins=pins)
+    else:
+        note = str(strings["settings_reset_done"]).format(channels=deleted)
+    if diag_block:
+        note = f"{note}\n{diag_block}"
+    return note
 
 
 class SettingsActionButton(

@@ -60,7 +60,7 @@ class _Client:
 
 
 def _diag():
-    from botforge.mods.kingdom.cogs.kingdom import pins_diag
+    from botforge.mods.kingdom.cogs import pins_diag
 
     return pins_diag
 

@@ -287,3 +287,25 @@ def test_the_reset_relands_the_mod_pins_immediately() -> None:
     assert "mod_pin_pass" in calls, "the reset re-lands the mod's pins, not only the SDK menus"
     assert "sdk_pins" in calls and calls.index("sdk_pins") < calls.index("mod_pin_pass")
     assert "3" in note  # settings_reset_done carries the deleted count
+
+    # pins-diag-wired: the ephemeral answer rides the per-pin diagnosis
+    async def _fake_diag(client: object, guild_id: str) -> list[str]:
+        return ["**Panneaux du mod — diagnostic**", "• `machine` — message 42 supprimé"]
+
+    with (
+        mock.patch("botforge.discord.mods_forum.delete_mod_scope", _fake_delete),
+        mock.patch("botforge.discord.mods_forum.provision_mod_roles", _fake_roles),
+        mock.patch("botforge.discord.mods_forum.provision_mod_channels", _fake_channels),
+        mock.patch("botforge.discord.scope_pins.ensure_mod_pins", _fake_pins),
+        mock.patch(
+            "botforge.mods.kingdom.cogs.pins_diag.admin_pin_lines",
+            _fake_diag,
+        ),
+        mock.patch(
+            "botforge.mods.kingdom.cogs.time_machine.run_mod_pin_refresh_pass",
+            _fake_pass,
+        ),
+    ):
+        note = asyncio.run(mod_settings._run_provisioning(interaction, "deploy"))
+
+    assert "diagnostic" in note and "message 42" in note
