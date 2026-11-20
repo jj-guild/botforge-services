@@ -302,6 +302,8 @@ async def _run_provisioning(interaction: discord.Interaction, action: str) -> st
         )
         from botforge.discord.scope_pins import ensure_mod_pins
 
+        from .time_machine import run_mod_pin_refresh_pass
+
         deleted = 0
         if action == "reset":
             deleted = await delete_mod_scope(bot, guild_id, _MOD)
@@ -312,6 +314,13 @@ async def _run_provisioning(interaction: discord.Interaction, action: str) -> st
             else 0
         )
         pins = await ensure_mod_pins(bot, guild_id, _MOD)
+        # reset-repins-v1 (Drasah 20/11): the reset re-lands the MOD's
+        # pins too, not only the SDK menus — before this, the salons
+        # came back EMPTY and the pins waited on the 5-min refresher
+        # (« la catégorie admin est vide, rien n'a été remis »).
+        # The pass is idempotent (fingerprint guard), so deploy and
+        # sync simply heal early.
+        pins += await run_mod_pin_refresh_pass(bot)
     except Exception as exc:  # the panel reports, never raises
         logger.warning("kingdom: settings %s failed", action, exc_info=True)
         return str(strings["settings_error"]).format(str(exc)[:150])

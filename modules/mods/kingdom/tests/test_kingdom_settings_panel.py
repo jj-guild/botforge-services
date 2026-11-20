@@ -233,3 +233,57 @@ def test_the_launch_modal_arms_the_beta_type_on_demand() -> None:
 
     asyncio.run(_arm_compressed_beta(_Stack()))
     assert len(calls) == 1 and calls[0][0] == "now", "the beta type arms the « now » preset"
+
+
+def test_the_reset_relands_the_mod_pins_immediately() -> None:
+    """reset-repins-v1 (Drasah 20/11): the reset/sync/deploy actions run
+    the MOD-wide pin pass too — the salons never wait on the 5-min
+    refresher (« la catégorie admin est vide, rien n'a été remis »:
+    only the SDK menus used to land, the mod's pins showed up late)."""
+    import asyncio
+    from types import SimpleNamespace
+
+    from botforge.mods.kingdom.cogs import settings_panel as mod_settings
+
+    calls: list[str] = []
+
+    async def _fake_delete(bot: object, guild_id: str, mod: str) -> int:
+        calls.append("delete")
+        return 3
+
+    async def _fake_roles(bot: object, guild_id: str, mod: str) -> int:
+        return 2
+
+    async def _fake_channels(bot: object, guild_id: str, mod: str) -> int:
+        return 4
+
+    async def _fake_pins(bot: object, guild_id: str, mod: str) -> int:
+        calls.append("sdk_pins")
+        return 1
+
+    async def _fake_pass(bot: object) -> int:
+        calls.append("mod_pin_pass")
+        return 9
+
+    interaction = SimpleNamespace(
+        client=object(),
+        guild_id="42",
+        locale=None,
+    )
+    import unittest.mock as mock
+
+    with (
+        mock.patch("botforge.discord.mods_forum.delete_mod_scope", _fake_delete),
+        mock.patch("botforge.discord.mods_forum.provision_mod_roles", _fake_roles),
+        mock.patch("botforge.discord.mods_forum.provision_mod_channels", _fake_channels),
+        mock.patch("botforge.discord.scope_pins.ensure_mod_pins", _fake_pins),
+        mock.patch(
+            "botforge.mods.kingdom.cogs.time_machine.run_mod_pin_refresh_pass",
+            _fake_pass,
+        ),
+    ):
+        note = asyncio.run(mod_settings._run_provisioning(interaction, "reset"))
+
+    assert "mod_pin_pass" in calls, "the reset re-lands the mod's pins, not only the SDK menus"
+    assert "sdk_pins" in calls and calls.index("sdk_pins") < calls.index("mod_pin_pass")
+    assert "3" in note  # settings_reset_done carries the deleted count
