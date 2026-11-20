@@ -60,17 +60,20 @@ def decompress_blob(blob: str) -> bytes:
 
 
 def decode_slotinfo(blob: str) -> list[dict[str, object]]:
-    """Decode a slotinfo blob into its list of slot objects.
+    r"""Decode a slotinfo blob into its list of slot objects.
 
-    The decompressed payload is ``"<N>,<json array>"``: a slot count,
-    a comma, then the JSON array of slot records (the format the
-    Worlds Edge API serializes for the in-game slots). Some slot
-    values (``metaData``) are themselves base64-encoded twice.
+    The decompressed payload is ``"<N>,<json array>\x00"``: a slot
+    count, a comma, then the JSON array of slot records, terminated
+    by a trailing NUL byte the game leaves behind (verified live
+    2026-11-20 — the strict ``json.loads`` choked on exactly that
+    NUL, "Extra data at char 2152"). ``raw_decode`` parses the first
+    JSON value and tolerates whatever follows. Some slot values
+    (``metaData``) are themselves base64-encoded twice.
     """
-    payload = decompress_blob(blob).decode("utf-8", errors="strict")
+    payload = decompress_blob(blob).decode("utf-8", errors="replace")
     _, _, json_part = payload.partition(",")
     try:
-        slots = json.loads(json_part)
+        slots, _ = json.JSONDecoder().raw_decode(json_part.lstrip())
     except json.JSONDecodeError as exc:
         raise BlobDecodeError(f"slotinfo payload is not JSON: {exc}") from exc
     if not isinstance(slots, list):

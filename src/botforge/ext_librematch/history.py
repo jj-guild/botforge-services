@@ -97,10 +97,16 @@ def _map_label(raw_map: Any, options_json: str) -> str:
 
 
 def _member_civ(match: dict[str, Any], profile_id: str) -> Any:
-    """Return the raw civilization id of one member (``race_id`` upstream)."""
+    """Return the raw civilization id of one member of the raw payload.
+
+    The history payload names it ``civilization_id`` (verified live
+    2026-11-20 — the older ``race_id`` key lives in other upstream
+    replies, both stay accepted).
+    """
     for member in match.get("matchhistorymember") or []:
-        if isinstance(member, dict) and str(member.get("profile_id", "")) == profile_id:
-            return member.get("race_id")
+        if not isinstance(member, dict) or str(member.get("profile_id", "")) != profile_id:
+            continue
+        return member.get("civilization_id", member.get("race_id"))
     return None
 
 
