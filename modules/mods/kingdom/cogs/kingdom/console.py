@@ -287,6 +287,118 @@ class KingdomClockButton(
         )
 
 
+def _debug_service(stack: Any) -> Any:
+    """The admin-debug-v1 toolkit (ported from the reference branch)."""
+    from botforge.mods.kingdom.admin_debug import build_debug_service
+
+    return build_debug_service(stack)
+
+
+class _DebugOpMixin:
+    """One admin-debug op ported onto the mod console (no slash subgroup).
+
+    A plain mixin: each concrete button subclasses it WITH its own
+    DynamicItem template (the base cannot carry one).
+    """
+
+    op_key = ""
+    label_key = ""
+
+    def __init__(self, label: str, disabled: bool = False) -> None:
+        super().__init__(
+            discord.ui.Button(
+                label=label[:80],
+                custom_id=f"kingdom:console:{self.op_key}",
+                style=discord.ButtonStyle.secondary,
+                disabled=disabled,
+            )
+        )
+
+    @classmethod
+    async def from_custom_id(
+        cls,
+        interaction: discord.Interaction,
+        item: discord.ui.Item[Any],
+        match: re.Match[str],
+        /,
+    ) -> "_DebugOpMixin":
+        return cls(strings_for(interaction)[cls.label_key])
+
+    async def callback(self, interaction: discord.Interaction) -> None:
+        if not await _console_guard(interaction):
+            return
+        strings = strings_for(interaction)
+        await interaction.response.defer(ephemeral=True)
+        from .common import service_failure_note, wiring
+
+        stack = wiring()
+        if stack is None:
+            note = str(strings["console_service_not_ready"])
+        else:
+            try:
+                note = await self._run(stack, strings)
+            except Exception as exc:  # the console reports, never raises
+                logger.warning("kingdom: debug %s failed", self.op_key, exc_info=True)
+                note = service_failure_note(strings, "console_error", exc)
+        await interaction.followup.send(note, ephemeral=True)
+
+    async def _run(self, stack: Any, strings: dict[str, str]) -> str:
+        raise NotImplementedError
+
+
+class DebugStatusButton(_DebugOpMixin, discord.ui.DynamicItem[discord.ui.Button[Any]], template=r"kingdom:console:debug-status$"):
+    """🐞 Statut debug — the live attacks + cooldowns summary."""
+
+    op_key = "debug-status"
+    label_key = "console_debug_status_label"
+
+    async def _run(self, stack: Any, strings: dict[str, str]) -> str:
+        debug = _debug_service(stack)
+        attacks = await debug.list_attacks()
+        cooldowns = await debug.view_cooldowns(None)
+        n_cooldowns = len(cooldowns) if isinstance(cooldowns, (list, dict)) else cooldowns
+        return str(strings["console_debug_done"]).format(
+            f"attacks={len(attacks)} cooldowns={n_cooldowns}"
+        )
+
+
+class BypassOnButton(_DebugOpMixin, discord.ui.DynamicItem[discord.ui.Button[Any]], template=r"kingdom:console:bypass-on$"):
+    """🐞 Bypass ON — the admin bypass flag (real buttons run past the gates)."""
+
+    op_key = "bypass-on"
+    label_key = "console_bypass_on_label"
+
+    async def _run(self, stack: Any, strings: dict[str, str]) -> str:
+        from botforge.mods.kingdom.admin_debug import set_admin_bypass
+
+        set_admin_bypass(True, source="console")
+        return str(strings["console_debug_done"]).format("bypass=on")
+
+
+class BypassOffButton(_DebugOpMixin, discord.ui.DynamicItem[discord.ui.Button[Any]], template=r"kingdom:console:bypass-off$"):
+    """🐞 Bypass OFF — restore the gate checks."""
+
+    op_key = "bypass-off"
+    label_key = "console_bypass_off_label"
+
+    async def _run(self, stack: Any, strings: dict[str, str]) -> str:
+        from botforge.mods.kingdom.admin_debug import set_admin_bypass
+
+        set_admin_bypass(False, source="console")
+        return str(strings["console_debug_done"]).format("bypass=off")
+
+
+class SkipEventButton(_DebugOpMixin, discord.ui.DynamicItem[discord.ui.Button[Any]], template=r"kingdom:console:skip-event$"):
+    """⏭️ Événement suivant — fast-forward the event loop to the next event."""
+
+    op_key = "skip-event"
+    label_key = "console_skip_event_label"
+
+    async def _run(self, stack: Any, strings: dict[str, str]) -> str:
+        result = await _debug_service(stack).skip_to_next_event()
+        return str(strings["console_debug_done"]).format(str(result)[:150])
+
+
 def kingdom_console_actions() -> tuple:
     """The mod's three console ops, scoped to the MOD's console (mod="kingdom").
 
@@ -328,6 +440,42 @@ def kingdom_console_actions() -> tuple:
                 en["console_clock_label"], disabled
             ),
             description=en["console_clock_label"],
+            mod="kingdom",
+        ),
+        ConsoleAction(
+            key="kingdom-debug-status",
+            item_cls=DebugStatusButton,
+            build=lambda disabled: DebugStatusButton(
+                en["console_debug_status_label"], disabled
+            ),
+            description=en["console_debug_status_label"],
+            mod="kingdom",
+        ),
+        ConsoleAction(
+            key="kingdom-bypass-on",
+            item_cls=BypassOnButton,
+            build=lambda disabled: BypassOnButton(
+                en["console_bypass_on_label"], disabled
+            ),
+            description=en["console_bypass_on_label"],
+            mod="kingdom",
+        ),
+        ConsoleAction(
+            key="kingdom-bypass-off",
+            item_cls=BypassOffButton,
+            build=lambda disabled: BypassOffButton(
+                en["console_bypass_off_label"], disabled
+            ),
+            description=en["console_bypass_off_label"],
+            mod="kingdom",
+        ),
+        ConsoleAction(
+            key="kingdom-skip-event",
+            item_cls=SkipEventButton,
+            build=lambda disabled: SkipEventButton(
+                en["console_skip_event_label"], disabled
+            ),
+            description=en["console_skip_event_label"],
             mod="kingdom",
         ),
     )

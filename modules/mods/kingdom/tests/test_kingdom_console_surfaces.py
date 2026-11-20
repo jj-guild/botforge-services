@@ -127,5 +127,13 @@ def test_console_ops_are_scoped_to_the_mod_console() -> None:
     from botforge.mods.kingdom.cogs.console import kingdom_console_actions
 
     actions = kingdom_console_actions()
-    assert {a.key for a in actions} == {"kingdom-relaunch", "kingdom-reset", "kingdom-clock"}
+    assert {a.key for a in actions} == {
+        "kingdom-relaunch",
+        "kingdom-reset",
+        "kingdom-clock",
+        "kingdom-debug-status",
+        "kingdom-bypass-on",
+        "kingdom-bypass-off",
+        "kingdom-skip-event",
+    }
     assert all(a.mod == "kingdom" for a in actions)

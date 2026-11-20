@@ -637,6 +637,12 @@ DEFAULTS: dict[str, dict[str, str]] = {
         "console_relaunch_label": "🔁 Relancer la saison",
         "console_reset_label": "🧹 Réinitialiser les données",
         "console_clock_label": "⏩ Horloge de jeu",
+        "console_debug_status_label": "🐞 Statut debug",
+        "console_bypass_on_label": "🐞 Bypass ON",
+        "console_bypass_off_label": "🐞 Bypass OFF",
+        "console_skip_event_label": "⏭️ Événement suivant",
+        "console_service_not_ready": "❌ Le service Kingdoms n'est pas prêt.",
+        "console_debug_done": "✅ {0}",
         "console_relaunch_confirm": (
             "🔁 **Relancer la saison ?**\n"
             "Les données actuelles sont archivées puis effacées, et une nouvelle"
@@ -1271,6 +1277,12 @@ DEFAULTS: dict[str, dict[str, str]] = {
         "console_relaunch_label": "🔁 Relaunch the season",
         "console_reset_label": "🧹 Reset the data",
         "console_clock_label": "⏩ Game clock",
+        "console_debug_status_label": "🐞 Debug status",
+        "console_bypass_on_label": "🐞 Bypass ON",
+        "console_bypass_off_label": "🐞 Bypass OFF",
+        "console_skip_event_label": "⏭️ Next event",
+        "console_service_not_ready": "❌ The Kingdoms service is not ready.",
+        "console_debug_done": "✅ {0}",
         "console_relaunch_confirm": (
             "🔁 **Relaunch the season?**\n"
             "The current data is archived then wiped, and a fresh season"

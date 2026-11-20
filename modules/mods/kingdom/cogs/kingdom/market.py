@@ -494,3 +494,28 @@ class ChamberButton(
             items.append(discord.ui.ActionRow(*row[:5]))
         view = surface("panel:mod:kingdom:chamber", *items)
         await open_unique_ephemeral(interaction, view=view)
+
+
+async def build_market_panel(guild_id: str) -> discord.ui.LayoutView:
+    """The pinned Marché panel (salon `market`) — ported from the reference
+    `panel:marche`: an entry point whose buttons open the clicker's own
+    ephemeral market / treasury windows."""
+    from .common import surface
+    from .panel import _guild_locale
+    from .strings import strings as _strings
+
+    locale = await _guild_locale(guild_id)
+    strings = _strings(locale[:2])
+    view = discord.ui.LayoutView()
+    view.add_item(discord.ui.TextDisplay(f"# {strings['market_button']}"))
+    view.add_item(
+        discord.ui.TextDisplay(
+            str(strings.get("market_help", strings["market_button"]))[:1000]
+        )
+    )
+    row = discord.ui.ActionRow()
+    row.add_item(MarketButton(strings["market_button"]))
+    row.add_item(ChamberButton(strings["chamber_button"]))
+    view.add_item(row)
+    view.add_item(discord.ui.TextDisplay(surface("panel:mod:kingdom:market", view)))
+    return view

@@ -186,6 +186,40 @@ def register(bot: Any, config: Any) -> None:
         )
     )
 
+    # realms validation dashboard pin (ported from the reference panel:royaumes)
+    from .validation import build_validation_panel
+
+    async def _resolve_realms_channel(guild_id: str) -> str:
+        return await stored_channel_id(guild_id, "mod/kingdom", "realms") or ""
+
+    register_static_pin(
+        StaticPinnedView(
+            key="panel:mod:kingdom:validation",
+            mark_suffix="panel:mod:kingdom:validation",
+            resolve_channel=_resolve_realms_channel,
+            build_layout=build_validation_panel,
+            registry=getattr(bot, "message_registry", None),
+            scope="mod/kingdom",
+        )
+    )
+
+    # marché entry pin (ported from the reference panel:marche)
+    from .market import build_market_panel
+
+    async def _resolve_market_channel(guild_id: str) -> str:
+        return await stored_channel_id(guild_id, "mod/kingdom", "market") or ""
+
+    register_static_pin(
+        StaticPinnedView(
+            key="panel:mod:kingdom:market",
+            mark_suffix="panel:mod:kingdom:market",
+            resolve_channel=_resolve_market_channel,
+            build_layout=build_market_panel,
+            registry=getattr(bot, "message_registry", None),
+            scope="mod/kingdom",
+        )
+    )
+
     # the salon gate's subscription (profile.bound → the access role):
     # idempotent (the sink keeps one handler reference per bot)
     subscribe_profile_gate(bot)

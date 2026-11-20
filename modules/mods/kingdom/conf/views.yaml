@@ -37,6 +37,12 @@ views:
   # (rework 20/11: renamed from panel:mod:kingdom:settings — no settings id)
   panel:mod:kingdom:console:
     kind: surface
+  # realms validation dashboard pin (ported from the reference panel:royaumes)
+  panel:mod:kingdom:validation:
+    kind: surface
+  # marché entry pin (ported from the reference panel:marche)
+  panel:mod:kingdom:market:
+    kind: surface
   panel:mod:kingdom:time-machine:
     kind: surface
   panel:mod:kingdom:time-machine:restore:
