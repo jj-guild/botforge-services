@@ -198,3 +198,29 @@ def test_the_view_blocks_render_from_the_real_payload() -> None:
             "Cyo Electryx · Saracens · 1396 Elo · -12, SSS · Mongols · 1554 Elo · -19"
         ),
     ]
+
+
+def test_the_wire_round_trip_keeps_the_title_and_the_players() -> None:
+    """to_wire must carry description and players_json (the bare-lines bug).
+
+    The ext's serve log carried rich entries while the bot rendered
+    bare lines (2026-11-20): the wire translator dropped the two
+    fields the whole rendering reads. The round trip pins them.
+    """
+    from botforge.core.models.game import MatchHistoryEntry
+    from botforge.core.rpc.game import match_history_from_wire, match_history_to_wire
+
+    entry = MatchHistoryEntry(
+        match_id="473574107",
+        started_at=1777283898,
+        finished_at=1777284200,
+        map_name="Arabia",
+        winners=("17190369",),
+        description="Test bot",
+        players_json=json.dumps(
+            [{"profile_id": "17190369", "alias": "JeanJack", "team": 0}]
+        ),
+    )
+    rebuilt = match_history_from_wire(match_history_to_wire(entry))
+    assert rebuilt.description == "Test bot"
+    assert rebuilt.players_json == entry.players_json
