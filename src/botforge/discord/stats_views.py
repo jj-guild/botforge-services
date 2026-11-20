@@ -115,23 +115,35 @@ async def recent_match_lines(bot: Any, profile_ids: list[str], limit: int = 10) 
     except Exception:
         logger.warning("STATS VIEWS: the match history fetch failed", exc_info=True)
         return []
+    # ONE line per match id: the legacy per-board store tripled every
+    # match (the board param never filtered), so the same game answered
+    # as three rows — dedupe, newest first.
     lines: list[str] = []
+    seen: set[str] = set()
     ordered = sorted(entries, key=lambda e: int(e.finished_at or e.started_at or 0), reverse=True)
     for entry in ordered:
+        match_id = str(getattr(entry, "match_id", ""))
+        if match_id and match_id in seen:
+            continue
         mine = [p for p in (getattr(entry, "profile_ids", ()) or []) if str(p) in wanted]
         if not mine:
             continue
-        won = any(str(p) in set(getattr(entry, "winners", ()) or ()) for p in mine)
+        if match_id:
+            seen.add(match_id)
+        # a custom lobby carries neither winners nor ratings: the
+        # outcome reads UNKNOWN (a gray dot, no delta) — never a fake ❌
+        winners = tuple(getattr(entry, "winners", ()) or ())
+        won = any(str(p) in set(winners) for p in mine)
         before = int(getattr(entry, "rating_before", {}).get(mine[0], 0) or 0)
         after = int(getattr(entry, "rating_after", {}).get(mine[0], 0) or 0)
         delta = f"{after - before:+d} elo" if before and after else ""
         board_key = str(getattr(entry, "leaderboard_id", ""))
-        board = BOARD_LABELS.get(board_key, board_key)
+        board = f" ({BOARD_LABELS.get(board_key, board_key)})" if board_key else ""
         played_at = int(entry.finished_at or entry.started_at or 0)
         stamp = f"<t:{played_at}:R>" if played_at else "?"
-        outcome = "\u2705" if won else "\u274c"
+        outcome = "✅" if won else ("❌" if winners else "⬜")
         map_name = str(getattr(entry, "map_name", "") or "?")
-        lines.append(f"{outcome} {stamp} \u2014 {map_name} ({board}) {delta}".strip())
+        lines.append(f"{outcome} {stamp} — {map_name}{board} {delta}".strip())
         if len(lines) >= limit:
             break
     return lines

@@ -91,28 +91,23 @@ class MatchHistorySyncer:
         previous = await self._find_status(profile_id)
         deep = await self._store.count_matches_of_profile(profile_id) == 0
         count = self._sync_count if deep else self._quick_count
-        boards: dict[str, dict[str, int]] = {}
-        for leaderboard_id in self._leaderboards:
-            raw_matches = await self._adapter.fetch_match_history_raw(
-                profile_id, leaderboard_id, count
+        # ONE history fetch: the upstream's ``leaderboard_id`` param does NOT
+        # filter (verified live 2026-11-20 — the same matches answer under
+        # every board), so the per-board loop only tripled the upstream
+        # calls and stored every match three times.
+        raw_matches = await self._adapter.fetch_match_history_raw(profile_id, "", count)
+        if raw_matches:
+            inserted = await self._store.insert_matches_new_only(
+                [self._match_doc(m) for m in raw_matches]
             )
-            if raw_matches:
-                inserted = await self._store.insert_matches_new_only(
-                    [self._match_doc(m, leaderboard_id) for m in raw_matches]
-                )
-                stored_any = stored_any or inserted > 0
-            stat = await self._adapter.fetch_personal_stat_raw(profile_id, leaderboard_id)
-            board = self._board_status(stat, profile_id, leaderboard_id)
-            peak = self._history_peak(raw_matches, profile_id)
-            if board is None and peak > 0:
-                # unranked today but the history carries a rating: the
-                # status still answers (max known, current 0)
-                board = {"current": 0, "max": peak, "rank": 0, "wins": 0, "losses": 0}
-            if board is not None:
-                if peak > _int(board.get("max")):
-                    board["max"] = peak
-                boards[leaderboard_id] = board
-                stored_any = True
+            stored_any = stored_any or inserted > 0
+        # ONE stats fetch answers EVERY board at once: the reply joins
+        # ``leaderboardStats[].statgroup_id`` with ``members[].
+        # personal_statgroup_id`` (the same join the alias search rides).
+        stat = await self._adapter.fetch_personal_stat_raw(profile_id, "")
+        boards = self._boards_from_stat(stat, profile_id)
+        if boards:
+            stored_any = True
         await self._store.upsert_account(self._account_doc(profile_id, boards, previous))
         # The decode step (T2): the stored documents are exploited AFTER
         # the ingestion — no history re-fetch, only the details endpoint.
@@ -128,12 +123,9 @@ class MatchHistorySyncer:
         """
         profile_id = str(profile_id)
         previous = await self._find_status(profile_id)
-        boards: dict[str, dict[str, int]] = {}
-        for leaderboard_id in self._leaderboards:
-            stat = await self._adapter.fetch_personal_stat_raw(profile_id, leaderboard_id)
-            board = self._board_status(stat, profile_id, leaderboard_id)
-            if board is not None:
-                boards[leaderboard_id] = board
+        # ONE stats fetch answers every board (the statgroup join).
+        stat = await self._adapter.fetch_personal_stat_raw(profile_id, "")
+        boards = self._boards_from_stat(stat, profile_id)
         if not boards:
             return False
         await self._store.upsert_account(self._account_doc(profile_id, boards, previous))
@@ -305,37 +297,50 @@ class MatchHistorySyncer:
             "last_synced_at": _now_ms(),
         }
 
-    def _board_status(
-        self, stat: dict[str, Any], profile_id: str, leaderboard_id: str
-    ) -> dict[str, int] | None:
-        """Extract the account's status from one raw personal-stat reply.
+    def _boards_from_stat(self, stat: dict[str, Any], profile_id: str) -> dict[str, dict[str, int]]:
+        """Extract the account's PER-BOARD statuses from one raw reply.
 
-        The identity lives in ``statGroups[].members[]``; the per-board
-        stats in ``leaderboardStats[]``. An absent stat entry means the
-        account is unranked on this board — None, not zero.
+        The REAL World's Edge shape (verified live 2026-11-20): the
+        identity lives in ``statGroups[].members[]`` (with
+        ``personal_statgroup_id``), the per-board stats in
+        ``leaderboardStats[]`` (joined by ``statgroup_id`` — there is NO
+        profile_id there; the shape this extractor used to expect never
+        existed, so no board ever populated). One reply, every board.
+
+        The MAX starts at the highest of the upstream-declared peak and
+        the current rating; the account doc's merge keeps the stored
+        all-time max (never drops).
         """
-        stats = stat.get("leaderboardStats") or []
-        entry = next(
-            (s for s in stats if isinstance(s, dict) and str(s.get("profile_id")) == profile_id),
-            None,
-        )
-        if entry is None:
-            member = _matching_member(stat, profile_id)
-            if member is None:
-                return None
-            return {"current": 0, "max": 0, "rank": 0, "wins": 0, "losses": 0}
-        current = _int(entry.get("rating", entry.get("elo")))
-        return {
-            "current": current,
-            "max": current,
-            "rank": _int(entry.get("rank")),
-            "wins": _int(entry.get("wins")),
-            "losses": _int(entry.get("losses")),
-        }
+        member = _matching_member(stat, profile_id)
+        if member is None:
+            return {}
+        statgroup = _int(member.get("personal_statgroup_id"))
+        boards: dict[str, dict[str, int]] = {}
+        for entry in stat.get("leaderboardStats") or []:
+            if not isinstance(entry, dict) or _int(entry.get("statgroup_id")) != statgroup:
+                continue
+            board_id = str(entry.get("leaderboard_id", ""))
+            if not board_id:
+                continue
+            current = _int(entry.get("rating", entry.get("elo")))
+            wins = _int(entry.get("wins"))
+            losses = _int(entry.get("losses"))
+            if not current and not wins and not losses:
+                continue  # an empty row reads as "unranked here", not a fake 0
+            boards[board_id] = {
+                "current": current,
+                "max": max(current, _int(entry.get("highestrating"))),
+                "rank": _int(entry.get("rank")),
+                "wins": wins,
+                "losses": losses,
+            }
+        return boards
 
-    def _match_doc(self, match: dict[str, Any], leaderboard_id: str) -> dict[str, Any]:
+    def _match_doc(self, match: dict[str, Any]) -> dict[str, Any]:
         """Build one stored match document from the RAW upstream payload.
 
+        The document id is the bare match id: the upstream carries NO
+        per-match leaderboard (the board suffix tripled every match).
         The raw payload rides verbatim (``raw``); the projection fields
         (participants, elo deltas, outcome) are extracted for the
         queries — the store never drops the source document.
@@ -361,9 +366,9 @@ class MatchHistorySyncer:
             if old or new:
                 rating_before[pid] = old
                 rating_after[pid] = new
-        board = str(match.get("leaderboard") or leaderboard_id)
+        board = str(match.get("leaderboard") or "")
         return {
-            "_id": f"{match.get('id', '')}:{board}",
+            "_id": f"{match.get('id', '')}:{board}" if board else f"{match.get('id', '')}",
             "match_id": str(match.get("id", "")),
             "leaderboard_id": board,
             "started_at": _int(match.get("startgametime")),
