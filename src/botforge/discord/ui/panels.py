@@ -61,6 +61,11 @@ class ChannelDecl:
     # the gate (bot allow + @everyone deny), resolved from the
     # declaration's channel_groups flag
     group_admin_only: bool = False
+    # the GROUP's category sinks to the sidebar's very end (the
+    # machine-room plumbing, category-bottom): parsed from the same
+    # channel_groups flag family — asserted at provisioning AND by the
+    # bottom heal pass
+    group_bottom: bool = False
     # the channel's declared ACCESS POLICY (the salons-as-data gating,
     # #216 tranche I): everyone_view/view-roles/admin-only are data;
     # None = the simple access band applies

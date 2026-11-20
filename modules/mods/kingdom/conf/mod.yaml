@@ -42,6 +42,9 @@ channel_groups:
   - key: admin
     display_name: ⚙️ ᴀᴅᴍɪɴ
     admin_only: true
+    # category-bottom (Drasah 20/11): the ADMIN machine room sinks to
+    # the sidebar's very end with the home folder (private plumbing)
+    bottom: true
 channels:
   # conscription-4-salons (Drasah 20/11): la CONSCRIPTION EST le
   # parcours — l'ordre de la sidebar = les étapes du joueur, et ce que

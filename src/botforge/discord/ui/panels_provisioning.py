@@ -289,30 +289,74 @@ async def move_category_bottom(guild: discord.Guild, category_id: str) -> bool:
     return True
 
 
+async def _bottom_category_ids(bot: discord.Client, guild: discord.Guild) -> list[str]:
+    """Every DECLARED bottom folder's stored category id, in declaration order.
+
+    The order is the DECLARATION's own: platform scopes (the views
+    config's order), then each enabled mod (the registry's order) with
+    its home folder first and its declared bottom groups after. The
+    order is stable across passes, so the assertion converges instead
+    of flip-flopping (two folders each sinking ``end=True`` in an
+    unordered pass would swap forever — the fix-reset-429 lesson).
+    """
+    gid = str(guild.id)
+    ids: list[str] = []
+    async def _push(scope: str, key: str) -> None:
+        stored = await stored_channel_id(gid, scope, key)
+        if stored and str(stored).isdigit():
+            ids.append(str(stored))
+    for spec in registered_scopes():
+        if getattr(spec, "category_bottom", False):
+            await _push(spec.scope, "category")
+    registry = getattr(bot, "registry", None)
+    enabled = registry.enabled() if hasattr(registry, "enabled") else {}
+    for mod_name, definition in (enabled or {}).items():
+        if getattr(definition, "home_bottom", False):
+            await _push(f"mod/{mod_name}", "category")
+        # the mod's declared bottom GROUPS (the channel_groups `bottom`
+        # flag), in the channels' own declaration order, deduplicated
+        for channel in getattr(definition, "channel_categories", ()) or ():
+            if not getattr(channel, "group_bottom", False):
+                continue
+            group = str(getattr(channel, "group", "") or "")
+            if group:
+                await _push(f"mod/{mod_name}", f"cat:{group}")
+    # dedup KEEPING the first occurrence (declaration order wins)
+    seen: set[str] = set()
+    ordered: list[str] = []
+    for cid in ids:
+        if cid not in seen:
+            seen.add(cid)
+            ordered.append(cid)
+    return ordered
+
+
 async def enforce_bottom_categories(bot: discord.Client) -> int:
     """Assert EVERY declared bottom folder sinks last (the 5-min idiom).
 
     A category founded later (a realm's habitat) lands below the plumbing
     folders until the next assertion — the mods' refresh cadence calls
     this pass so the sidebar contract (the declaration) heals by itself,
-    exactly like the pins.
+    exactly like the pins. Convergence is ORDER-AWARE: the declared
+    bottoms must close the sidebar in declaration order; when they
+    already do, the pass costs ZERO Discord API calls (a converged
+    guild is a cheap no-op).
     """
     moved = 0
     for guild in list(getattr(bot, "guilds", []) or []):
-        gid = str(guild.id)
-        for spec in registered_scopes():
-            if not getattr(spec, "category_bottom", False):
-                continue
-            try:
-                category_id = await stored_channel_id(gid, spec.scope, "category")
-                if not category_id:
-                    continue
-                if await move_category_bottom(guild, str(category_id)):
-                    moved += 1
-            except Exception:  # noqa: BLE001 — one folder never blocks the pass
-                logger.warning(
-                    "panels provisioning: the bottom pass failed (%s)", spec.scope, exc_info=True
-                )
+        try:
+            wanted = await _bottom_category_ids(bot, guild)
+        except Exception:  # noqa: BLE001 — one folder never blocks the pass
+            logger.warning("panels provisioning: the bottom pass read failed", exc_info=True)
+            continue
+        if not wanted:
+            continue
+        live = [str(c.id) for c in (guild.categories or [])]
+        if live[-len(wanted):] == wanted:
+            continue  # converged — the declared tails already close the sidebar
+        for cid in wanted:
+            if await move_category_bottom(guild, cid):
+                moved += 1
     return moved
 
 
@@ -355,7 +399,8 @@ async def _decl_category(
     The group categories are created lazily (once per group) and ride
     the resolved dict — ``persist_resolutions`` stores them under
     ``tree:<scope>:cat:<group>``. A group declared admin-only gates its
-    category (bot allow + @everyone deny + the group's view roles).
+    category (bot allow + @everyone deny + the group's view roles);
+    a group declared bottom sinks its category last (category-bottom).
     """
     group_name = str(getattr(decl, "group", "") or "")
     if not group_name:
@@ -368,6 +413,7 @@ async def _decl_category(
             spec.scope,
             group_name,
             admin_only=bool(getattr(decl, "group_admin_only", False)),
+            bottom=bool(getattr(decl, "group_bottom", False)),
             view_role_ids=tuple((group_view_roles or {}).get(group_name, ())),
         )
         group_categories[group_name] = channel_category
@@ -381,6 +427,7 @@ async def _ensure_group_category(
     scope: str,
     group_name: str,
     admin_only: bool = False,
+    bottom: bool = False,
     view_role_ids: tuple[str, ...] = (),
 ) -> str:
     """Resolve (or create) one GROUP category of a scope (the mods' structure).
@@ -389,7 +436,8 @@ async def _ensure_group_category(
     channels keep their own resolution keys; a label refresh renames
     in place, never a duplicate. A group declared admin-only carries
     the gate on its category (bot allow + @everyone deny + view roles),
-    exactly like a gated scope category.
+    exactly like a gated scope category; a group declared bottom sinks
+    its category last, exactly like a bottom scope folder.
     """
     storage_key = f"cat:{group_name}"
     category_id = ""
@@ -411,6 +459,8 @@ async def _ensure_group_category(
         category_id = await platform.ensure_category(group_name)
     if admin_only and category_id:
         await _apply_category_access(guild, category_id, view_role_ids)
+    if bottom and category_id:
+        await move_category_bottom(guild, category_id)
     return category_id
 
 

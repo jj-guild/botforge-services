@@ -79,6 +79,10 @@ class ChannelCategoryDef:
     # the GROUP is admin-only (the declaration's channel_groups flag):
     # the group's category carries the gate, not only the channels
     group_admin_only: bool = False
+    # the GROUP's category sinks to the sidebar's very end (the
+    # declaration's channel_groups `bottom` flag — the machine-room
+    # plumbing folders, category-bottom)
+    group_bottom: bool = False
     # the channel is admin-only (the declaration's flag): @everyone is
     # gated, the mod's admin role carries the grant
     admin_only: bool = False

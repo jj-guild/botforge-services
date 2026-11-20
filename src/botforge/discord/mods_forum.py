@@ -612,6 +612,7 @@ async def _build_mod_scope_spec(
                     access="admin" if getattr(channel, "admin_only", False) else "public",
                     group=str(getattr(channel, "group", "") or ""),
                     group_admin_only=bool(getattr(channel, "group_admin_only", False)),
+                    group_bottom=bool(getattr(channel, "group_bottom", False)),
                     policy=getattr(channel, "access", None),
                     position=getattr(channel, "position", None),
                     view_role_ids=await _resolve_role_ids(getattr(getattr(channel, "access", None), "view", ()) or ()),
