@@ -9,10 +9,16 @@ command that "doesn't exist", with no logs on his side.
 
 WHAT: once per boot, ~30 s after the gateway is ready, one pass per
 guild the bot is a member of rides the PUBLIC seams only:
-``ensure_mod_pins`` — the SDK's install/repair path, the SAME one a
-Repair click runs — then the command-tree API (fetch, copy, sync) so
-every served guild sees the mod's slash commands. Best-effort at
-every level: a broken seam becomes its own log line, never a raise.
+``provision_mod_roles`` + ``provision_mod_channels`` (the SDK's
+install/repair path, the SAME one a Repair click runs — the pass
+brings the DECLARED salons into existence on a guild that never
+received the provisioning, the priority-one admin-category case),
+then ``ensure_mod_pins`` — the pins then land in salons that exist —
+then the command-tree API (fetch, copy, sync) so every served guild
+sees the mod's slash commands. Best-effort at every level: a broken
+seam becomes its own log line, never a raise. Kill-switch:
+``BOTFORGE_KINGDOM_BOOT_PROVISION=off/0/false`` disables the
+channel/role provisioning (the pins/commands passes stay).
 
 #221 (the discipline): the CONTRACT (a served guild sees the mod's
 pinned surfaces and its slash) lives here, in the mod; the multi-guild
@@ -24,6 +30,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 from typing import Any
 
 import discord
@@ -35,11 +42,43 @@ logger = logging.getLogger("kingdom.selfheal")
 _DELAY_S = 30.0
 
 
+def _boot_provision_enabled() -> bool:
+    """Kill-switch: `BOTFORGE_KINGDOM_BOOT_PROVISION=off/0/false`."""
+    return os.getenv("BOTFORGE_KINGDOM_BOOT_PROVISION", "on").strip().lower() not in {
+        "off",
+        "0",
+        "false",
+        "no",
+    }
+
+
 async def ensure_kingdom_surfaces(bot: Any) -> list[tuple[str, str]]:
     """One (guild_id, summary) per guild — the report, never a raise."""
     report: list[tuple[str, str]] = []
     for guild in list(getattr(bot, "guilds", []) or []):
         guild_id = str(getattr(guild, "id", ""))
+        provisioning = "off"
+        # the DECLARED salons first (the Repair-click seams, idempotent
+        # by stored resolutions — a converged guild is a cheap no-op) :
+        # the pins below need salons that exist, the admin category
+        # (⚙️ paramètres & co) must be functional without a manual click
+        if _boot_provision_enabled():
+            try:
+                from botforge.discord.mods_forum import (
+                    provision_mod_channels,
+                    provision_mod_roles,
+                )
+
+                roles = await provision_mod_roles(bot, guild_id, "kingdom")
+                channels = await provision_mod_channels(bot, guild_id, "kingdom")
+                provisioning = f"{channels} channels, {roles} roles"
+            except Exception:  # noqa: BLE001 — the self-heal never breaks the boot
+                logger.warning(
+                    "kingdom: self-heal provisioning failed (guild %s)",
+                    guild_id,
+                    exc_info=True,
+                )
+                provisioning = "error"
         pins = "error"
         commands = "error"
         try:
@@ -53,8 +92,14 @@ async def ensure_kingdom_surfaces(bot: Any) -> list[tuple[str, str]]:
             commands = await _ensure_commands(bot, guild_id)
         except Exception:  # noqa: BLE001
             logger.warning("kingdom: self-heal commands failed (guild %s)", guild_id, exc_info=True)
-        report.append((guild_id, f"{pins} pins, commands: {commands}"))
-        logger.info("kingdom: self-heal pass (guild %s) — %s pins, commands: %s", guild_id, pins, commands)
+        report.append((guild_id, f"provisioning: {provisioning}; {pins} pins, commands: {commands}"))
+        logger.info(
+            "kingdom: self-heal pass (guild %s) — %s; %s pins, commands: %s",
+            guild_id,
+            provisioning,
+            pins,
+            commands,
+        )
     return report
 
 
