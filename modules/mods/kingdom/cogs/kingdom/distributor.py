@@ -1522,3 +1522,28 @@ class DistributorTerritoryButton(
         strings = _strings(interaction)
         return cls(strings[cls._LABEL_KEYS[match["act"]]], match["kid"], match["act"])
 
+
+
+def distributor_dynamic_items() -> tuple:
+    """Every restart-proof DynamicItem of the distributor surfaces.
+
+    setup-hook-dead-buttons (Drasah 20/11, live regression): this
+    aggregator was MISSING while ``cogs/__init__.py`` imported it —
+    setup_hook died on the ImportError BEFORE registering ANY dynamic
+    item, so EVERY mod button rendered but never answered (console
+    included). The aggregator mirrors ``machine_dynamic_items``.
+    """
+    return (
+        DistributorOpenButton,
+        DistributorTestKingdomButton,
+        DistributorDestructButton,
+        DistributorKingdomSelect,
+        DistributorGiveButton,
+        DistributorMenuButton,
+        DistributorCatButton,
+        DistributorCivPageButton,
+        DistributorCivSelect,
+        DistributorTreasuryButton,
+        DistributorParishButton,
+        DistributorTerritoryButton,
+    )
