@@ -310,12 +310,12 @@ async def test_registration_rejects_an_unknown_profile(monkeypatch: Any) -> None
         _game_server, _game_port = await _start_game_service(f"127.0.0.1:{port}")
         monkeypatch.setenv("GAME_AOE2_URI", f"127.0.0.1:{_game_port}")
 
-        async def _no_resolve(typed_id: str, transport: Any = None) -> str | None:
-            return None
+        async def _no_resolve(typed_id: str, transport: Any = None) -> tuple[str | None, str]:
+            return None, "unknown"
 
         import botforge.discord.registration_platform as platform
 
-        monkeypatch.setattr(platform, "resolve_relic_id", _no_resolve)
+        monkeypatch.setattr(platform, "resolve_relic_id_outcome", _no_resolve)
         seam = Aoe2ProfileValidationSeam()
         database = FakeMongo()
         service = RegistrationService(database, profile_seams={"aoe2": seam})
@@ -383,11 +383,14 @@ async def test_registration_resolves_the_insights_user_id_to_the_relic_id(monkey
         # resolve_relic_id with the default (real) transport — inject the
         # fake so the test never leaves localhost
         import botforge.discord.registration_platform as platform
+        from botforge.discord.registration_platform import resolve_relic_id_outcome
 
-        async def _fake_resolve(typed_id: str, transport: Any = None) -> str | None:
-            return await resolve_relic_id(typed_id, transport=insights_transport)
+        async def _fake_resolve(
+            typed_id: str, transport: Any = None
+        ) -> tuple[str | None, str]:
+            return await resolve_relic_id_outcome(typed_id, transport=insights_transport)
 
-        monkeypatch.setattr(platform, "resolve_relic_id", _fake_resolve)
+        monkeypatch.setattr(platform, "resolve_relic_id_outcome", _fake_resolve)
         seam = Aoe2ProfileValidationSeam()
         database = FakeMongo()
         service = RegistrationService(database, profile_seams={"aoe2": seam})

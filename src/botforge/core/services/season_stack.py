@@ -156,6 +156,11 @@ def season_stack_for(bot: Any, mod: str, guild_id: str) -> Any:
 
     game_data = build_games_service()
     game_key = (getattr(definition, "required_games", ()) or ("",))[0]
+    # The stats seam (#404 T5): the automatic criteria evaluate against
+    # the REAL data — the game service's stats proxies over the
+    # providers' own stores. No game service means no stats: the
+    # criteria degrade to manual review (the queue decides).
+    enrollment_stats = _enrollment_stats()
     from botforge.core.ids import mod_scope
 
     scope = mod_scope(mod, game_key, guild_id)
@@ -172,9 +177,38 @@ def season_stack_for(bot: Any, mod: str, guild_id: str) -> Any:
         # settings.enrollment)
         enrollment_criteria=(getattr(definition, "settings", None) or {}).get("enrollment") or {},
         enrollment_membership=_SeasonMembership(mod_roles, mod),
+        enrollment_stats=enrollment_stats,
     )
     cache[key] = stack
     return stack
+
+
+def _enrollment_stats() -> Any:
+    """Build the EnrollmentStats seam over the game service (#404 T5).
+
+    The GameData client serves the providers' stats answers (cached,
+    T4); the bindings seam answers ``has_profile`` from the
+    platform's own truth. None when no game service is configured —
+    the enrollment keeps its clean manual fallback.
+    """
+    import os
+
+    game_uri = os.environ.get("GAME_AOE2_URI", "")
+    if not game_uri:
+        return None
+    try:
+        from botforge.core.models.db import get_async_database
+        from botforge.core.services.provider_stats import GrpcEnrollmentStats
+        from botforge.discord.registration_platform import MongoRegistrationDatabase
+        from botforge.game_aoe2.client import GameDataClient
+
+        return GrpcEnrollmentStats(
+            GameDataClient(game_uri),
+            bindings=MongoRegistrationDatabase(get_async_database()),
+        )
+    except Exception:
+        logger.warning("ENROLLMENT STATS wiring failed — manual review stands", exc_info=True)
+        return None
 
 
 __all__ = ["ModStorageSeasonDatabase", "season_stack_for"]

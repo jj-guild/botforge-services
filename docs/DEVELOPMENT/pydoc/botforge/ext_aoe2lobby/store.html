@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Python: botforge.ext_aoe2lobby.store</title>
+</head><body>
+
+<table class="heading">
+<tr class="heading-text decor">
+<td class="title">&nbsp;<br><strong class="title"><a href="botforge.html" class="white">botforge</a>.<a href="botforge.ext_aoe2lobby.html" class="white">ext_aoe2lobby</a>.store</strong></td>
+<td class="extra"><a href=".">index</a><br><a href="file:SOURCE_ROOT/ext_aoe2lobby/store.py">SOURCE_ROOT/ext_aoe2lobby/store.py</a></td></tr></table>
+    <p><span class="code">aoe2lobby&nbsp;live&nbsp;store&nbsp;—&nbsp;the&nbsp;provider's&nbsp;OWN&nbsp;live-state&nbsp;database&nbsp;(#404&nbsp;T3).<br>
+&nbsp;<br>
+The&nbsp;lobby&nbsp;provider&nbsp;covers&nbsp;the&nbsp;PRESENT:&nbsp;every&nbsp;interesting&nbsp;match&nbsp;(with&nbsp;at<br>
+least&nbsp;one&nbsp;known&nbsp;player)&nbsp;is&nbsp;stored&nbsp;here,&nbsp;in&nbsp;the&nbsp;provider's&nbsp;namespaced<br>
+collections&nbsp;—&nbsp;the&nbsp;raw&nbsp;frames&nbsp;first,&nbsp;the&nbsp;exploited&nbsp;projection&nbsp;(status,<br>
+summary,&nbsp;elo&nbsp;changes&nbsp;riding&nbsp;the&nbsp;frames)&nbsp;after.&nbsp;libre:match&nbsp;covers&nbsp;the<br>
+past;&nbsp;the&nbsp;two&nbsp;stores&nbsp;never&nbsp;merge,&nbsp;the&nbsp;consumers&nbsp;compose.<br>
+&nbsp;<br>
+Collections:<br>
+&nbsp;<br>
+-&nbsp;``aoe2lobby:matches``&nbsp;—&nbsp;one&nbsp;document&nbsp;per&nbsp;match_ref:&nbsp;the&nbsp;last&nbsp;known<br>
+&nbsp;&nbsp;payload,&nbsp;the&nbsp;status&nbsp;(lobby&nbsp;|&nbsp;game&nbsp;|&nbsp;ended),&nbsp;the&nbsp;known&nbsp;participants,<br>
+&nbsp;&nbsp;the&nbsp;summary&nbsp;metadata&nbsp;and&nbsp;the&nbsp;elo&nbsp;deltas&nbsp;seen&nbsp;on&nbsp;the&nbsp;frames;<br>
+-&nbsp;``aoe2lobby:events``&nbsp;—&nbsp;the&nbsp;raw&nbsp;transition&nbsp;frames,&nbsp;append-only&nbsp;(the<br>
+&nbsp;&nbsp;audit&nbsp;trail&nbsp;of&nbsp;the&nbsp;live&nbsp;world).</span></p>
+<p>
+<table class="section">
+<tr class="decor pkg-content-decor heading-text">
+<td class="section-title" colspan=3>&nbsp;<br><strong class="bigsection">Modules</strong></td></tr>
+    
+<tr><td class="decor pkg-content-decor"><span class="code">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span></td><td>&nbsp;</td>
+<td class="singlecolumn"><table><tr><td class="multicolumn"><a href="logging.html">logging</a><br>
+</td><td class="multicolumn"><a href="time.html">time</a><br>
+</td><td class="multicolumn"></td><td class="multicolumn"></td></tr></table></td></tr></table><p>
+<table class="section">
+<tr class="decor index-decor heading-text">
+<td class="section-title" colspan=3>&nbsp;<br><strong class="bigsection">Classes</strong></td></tr>
+    
+<tr><td class="decor index-decor"><span class="code">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span></td><td>&nbsp;</td>
+<td class="singlecolumn"><dl>
+<dt class="heading-text"><a href="builtins.html#object">builtins.object</a>
+</dt><dd>
+<dl>
+<dt class="heading-text"><a href="botforge.ext_aoe2lobby.store.html#LobbyStore">LobbyStore</a>
+</dt></dl>
+</dd>
+</dl>
+ <p>
+<table class="section">
+<tr class="decor title-decor heading-text">
+<td class="section-title" colspan=3>&nbsp;<br><a name="LobbyStore">class <strong>LobbyStore</strong></a>(<a href="builtins.html#object">builtins.object</a>)</td></tr>
+    
+<tr><td class="decor title-decor" rowspan=2><span class="code">&nbsp;&nbsp;&nbsp;</span></td>
+<td class="decor title-decor" colspan=2><span class="code"><a href="#LobbyStore">LobbyStore</a>(database:&nbsp;'Any')&nbsp;-&amp;gt;&nbsp;'None'<br>
+&nbsp;<br>
+The&nbsp;provider's&nbsp;own&nbsp;persistence&nbsp;seam&nbsp;over&nbsp;async&nbsp;MongoDB.<br>&nbsp;</span></td></tr>
+<tr><td>&nbsp;</td>
+<td class="singlecolumn">Methods defined here:<br>
+<dl><dt><a name="LobbyStore-__init__"><strong>__init__</strong></a>(self, database: 'Any') -&gt; 'None'</dt><dd><span class="code">Wrap&nbsp;the&nbsp;provider's&nbsp;async&nbsp;Mongo&nbsp;database.</span></dd></dl>
+
+<dl><dt>async <a name="LobbyStore-apply_event"><strong>apply_event</strong></a>(self, event: 'dict[str, Any]') -&gt; 'None'</dt><dd><span class="code">Store&nbsp;one&nbsp;transition&nbsp;frame&nbsp;and&nbsp;fold&nbsp;it&nbsp;into&nbsp;the&nbsp;match&nbsp;doc.<br>
+&nbsp;<br>
+The&nbsp;raw&nbsp;frame&nbsp;lands&nbsp;in&nbsp;``aoe2lobby:events``&nbsp;verbatim<br>
+(append-only);&nbsp;the&nbsp;match&nbsp;document&nbsp;upserts&nbsp;with&nbsp;the&nbsp;event's<br>
+status,&nbsp;participants&nbsp;and&nbsp;summary&nbsp;metadata.&nbsp;Best-effort:&nbsp;a<br>
+store&nbsp;failure&nbsp;logs,&nbsp;never&nbsp;crashes&nbsp;the&nbsp;stream.</span></dd></dl>
+
+<dl><dt>async <a name="LobbyStore-find_match"><strong>find_match</strong></a>(self, match_ref: 'str') -&gt; 'dict[str, Any] | None'</dt><dd><span class="code">Return&nbsp;one&nbsp;stored&nbsp;match&nbsp;document;&nbsp;None&nbsp;when&nbsp;unknown.</span></dd></dl>
+
+<dl><dt>async <a name="LobbyStore-list_events"><strong>list_events</strong></a>(self, match_ref: 'str', limit: 'int' = 0) -&gt; 'list[dict[str, Any]]'</dt><dd><span class="code">List&nbsp;the&nbsp;raw&nbsp;frames&nbsp;of&nbsp;one&nbsp;match,&nbsp;oldest&nbsp;first&nbsp;(the&nbsp;audit&nbsp;trail).</span></dd></dl>
+
+<dl><dt>async <a name="LobbyStore-list_matches"><strong>list_matches</strong></a>(self, statuses: 'list[str] | None' = None, limit: 'int' = 0) -&gt; 'list[dict[str, Any]]'</dt><dd><span class="code">List&nbsp;the&nbsp;stored&nbsp;matches,&nbsp;newest&nbsp;first,&nbsp;optionally&nbsp;by&nbsp;status.</span></dd></dl>
+
+<hr>
+Data descriptors defined here:<br>
+<dl><dt><strong>__dict__</strong></dt>
+<dd><span class="code">dictionary&nbsp;for&nbsp;instance&nbsp;variables</span></dd>
+</dl>
+<dl><dt><strong>__weakref__</strong></dt>
+<dd><span class="code">list&nbsp;of&nbsp;weak&nbsp;references&nbsp;to&nbsp;the&nbsp;object</span></dd>
+</dl>
+</td></tr></table></td></tr></table><p>
+<table class="section">
+<tr class="decor data-decor heading-text">
+<td class="section-title" colspan=3>&nbsp;<br><strong class="bigsection">Data</strong></td></tr>
+    
+<tr><td class="decor data-decor"><span class="code">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span></td><td>&nbsp;</td>
+<td class="singlecolumn"><strong>DEFAULT_LIVE_LIMIT</strong> = 50<br>
+<strong>EVENTS_COLLECTION</strong> = 'aoe2lobby:events'<br>
+<strong>MATCHES_COLLECTION</strong> = 'aoe2lobby:matches'<br>
+<strong>STATUS_ENDED</strong> = 'ended'<br>
+<strong>STATUS_GAME</strong> = 'game'<br>
+<strong>STATUS_LOBBY</strong> = 'lobby'<br>
+<strong>logger</strong> = &lt;Logger botforge.ext_aoe2lobby.store (INFO)&gt;</td></tr></table>
+</body></html>

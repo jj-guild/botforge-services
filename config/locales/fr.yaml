@@ -65,7 +65,11 @@ fr:
       add_taken: Ce profil est déjà lié — retire-le d'abord ou choisis un autre profil.
       add_game_unconfigured: 'Ajout échoué : le jeu {game} n''est pas configuré pour l''inscription.'
       add_unknown: 'Ajout échoué : aucun profil trouvé pour {profile}. Colle l''URL de ta page aoe2insights
-        (ou l''id qu''elle contient) — le bon id sera récupéré automatiquement.'
+        (ou l''id qu''elle contient), ou ton pseudo en jeu — le bon id sera récupéré automatiquement.'
+      add_pick: 'Choisis ton compte pour **{name}** — chaque option montre ce que ce profil a joué en dernier :'
+      add_blocked: 'Ajout échoué : aoe2insights bloque ce serveur, l''id insights ne peut pas être
+        récupéré automatiquement. Colle ton pseudo en jeu (ex. {name}), la forme /user/relic/<id>/ de ton
+        URL insights, ou ton Relic ID (le Relic ID affiché sur ton profil insights).'
       add_provider_error: 'Ajout échoué : le provider {provider} ne répond pas correctement — le détail
         part aux admins (vois les logs du bot).'
       add_not_configured: 'Ajout échoué : le provider {provider} ne sert pas les stats de profil — vois
@@ -597,10 +601,10 @@ fr:
       game_menu_failed: Le menu du jeu a échoué à s'ouvrir (voir les logs).
       game_menu_not_sent: Le menu du jeu n'a pas pu être envoyé (voir les logs).
       global_maps_admins: Les maps globales sont réservées aux bot admins.
-      unexpected_state: État inattendu — recommence avec /register.
-      no_enrollment: Aucune inscription en cours — recommence avec /register.
+      unexpected_state: État inattendu — recommence depuis `/home` → Profil.
+      no_enrollment: Aucune inscription en cours — ouvre `/home` → Profil pour lier ton compte.
       enrolled: Inscription terminée ! Ton profil AoE2 `{profile}` est lié — tu peux rejoindre le ladder.
-      enrolled_cancelled: Inscription annulée — /register quand tu veux.
+      enrolled_cancelled: Inscription annulée — `/home` → Profil quand tu veux.
       enrolled_cancelled_short: Inscription annulée.
       unknown_panel: Panneau inconnu
       registered: Inscrit ({value}).

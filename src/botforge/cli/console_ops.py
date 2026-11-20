@@ -23,6 +23,7 @@ Usage (inside the env's botforge-core container, by env-console.yml):
     python -m botforge.cli.console_ops clean-managed --guild <id|all>
     python -m botforge.cli.console_ops nuke            --guild <id|all>
     python -m botforge.cli.console_ops reset-data      --guild <id|all>
+    python -m botforge.cli.console_ops ensure-tree    --guild <id|all>
     python -m botforge.cli.console_ops install --guild <id|all> \\
         --mods mod1,mod2 --games game1 [--no-propagate]
 """
@@ -34,9 +35,17 @@ import asyncio
 import logging
 import os
 import sys
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    import discord
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
 logger = logging.getLogger("botforge.cli.console_ops")
+
+# The gateway must come up within this window or the run fails loudly
+# (env-console.yml has no step timeout of its own).
+_READY_TIMEOUT_S = 60
 
 PROD_ENV_NAMES = ("prod", "production")
 
@@ -82,16 +91,34 @@ def _parse_list(raw: str | None) -> list[str]:
     return [item.strip() for item in (raw or "").split(",") if item.strip()]
 
 
-async def _run(action: str, guilds: list[str], mods: list[str], games: list[str], propagate: bool) -> int:
-    """Run one action against each target guild through a real Discord client."""
-    import discord
-
+async def _apply_action(guild: discord.Guild, action: str, mods: list[str], games: list[str], propagate: bool) -> None:
+    """Run one console action against one guild (the client is already ready)."""
     from botforge.discord.console import (
         _delete_managed_for_guild,
         _nuke_everything_for_guild,
         _reset_guild_data,
     )
-    from botforge.discord.console_ops_runner import apply_install_for_guild
+    from botforge.discord.console_ops_runner import apply_ensure_tree_for_guild, apply_install_for_guild
+
+    if action == "clean-managed":
+        channels, roles = await _delete_managed_for_guild(guild)
+        print(f"clean-managed done: {channels} channel(s), {roles} role(s) deleted")
+    elif action == "nuke":
+        channels, roles = await _nuke_everything_for_guild(guild)
+        print(f"nuke done: {channels} channel(s), {roles} role(s) deleted")
+    elif action == "reset-data":
+        deleted = await _reset_guild_data(str(guild.id))
+        for name, count in sorted(deleted.items()):
+            print(f"reset-data {name}: {count} document(s)")
+    elif action == "install":
+        print(await apply_install_for_guild(guild, mods, games, propagate))
+    elif action == "ensure-tree":
+        print(await apply_ensure_tree_for_guild(guild))
+
+
+async def _run(action: str, guilds: list[str], mods: list[str], games: list[str], propagate: bool) -> int:
+    """Run one action against each target guild through a real Discord client."""
+    import discord
 
     token = os.environ.get("DISCORD_TOKEN", "")
     if not token:
@@ -103,9 +130,25 @@ async def _run(action: str, guilds: list[str], mods: list[str], games: list[str]
     intents.members = True
     client = discord.Client(intents=intents)
 
+    ready: asyncio.Event = asyncio.Event()
+
+    @client.event
+    async def on_ready() -> None:
+        ready.set()
+
     async with client:
-        await client.login(token)
-        await client.wait_until_ready()
+        # login() only authenticates over HTTP; the gateway must run for
+        # wait_until_ready() to ever fire — start it as a task and wait for
+        # the ready event with a hard timeout (a hung gateway must fail the
+        # workflow instead of wedging the job forever).
+        gateway = asyncio.create_task(client.start(token))
+        try:
+            await asyncio.wait_for(ready.wait(), timeout=_READY_TIMEOUT_S)
+        except TimeoutError:
+            print(f"::error::the Discord gateway never became ready within {_READY_TIMEOUT_S}s")
+            await client.close()
+            await asyncio.gather(gateway, return_exceptions=True)
+            return 1
         exit_code = 0
         for guild_id in guilds:
             guild = client.get_guild(int(guild_id))
@@ -115,22 +158,12 @@ async def _run(action: str, guilds: list[str], mods: list[str], games: list[str]
                 continue
             print(f"=== console {action} on guild {guild_id} ({guild.name}) ===")
             try:
-                if action == "clean-managed":
-                    channels, roles = await _delete_managed_for_guild(guild)
-                    print(f"clean-managed done: {channels} channel(s), {roles} role(s) deleted")
-                elif action == "nuke":
-                    channels, roles = await _nuke_everything_for_guild(guild)
-                    print(f"nuke done: {channels} channel(s), {roles} role(s) deleted")
-                elif action == "reset-data":
-                    deleted = await _reset_guild_data(guild_id)
-                    for name, count in sorted(deleted.items()):
-                        print(f"reset-data {name}: {count} document(s)")
-                elif action == "install":
-                    summary = await apply_install_for_guild(guild, mods, games, propagate)
-                    print(summary)
+                await _apply_action(guild, action, mods, games, propagate)
             except Exception:
                 logger.exception("console %s failed on guild %s", action, guild_id)
                 exit_code = 1
+        await client.close()
+        await asyncio.gather(gateway, return_exceptions=True)
         return exit_code
 
 
@@ -146,19 +179,22 @@ def main(argv: list[str] | None = None) -> int:
         ("nuke", "delete every channel, category and role of the target guild(s)"),
         ("reset-data", "wipe the target guild(s) persisted data — isolated, nothing global"),
         ("install", "set the mods/games grants, clean uninstalled, provision installed"),
+        ("ensure-tree", "re-provision the guild's declared platform tree (the reset-data inverse)"),
     ]:
         action_parser = sub.add_parser(name, help=help_text)
         action_parser.add_argument(
             "--guild", required=True, help="target guild id, or 'all' for every allowlisted guild"
         )
-        if name == "install":
-            action_parser.add_argument("--mods", default="", help="comma-separated mod ids to install")
-            action_parser.add_argument("--games", default="", help="comma-separated game keys to install")
-            action_parser.add_argument(
-                "--no-propagate",
-                action="store_true",
-                help="skip the mod→game / game→mod propagation rules",
-            )
+        # Registered on EVERY action: env-console passes the flags
+        # unconditionally (they are empty for the actions that ignore
+        # them), so the argparse shape must accept them everywhere.
+        action_parser.add_argument("--mods", default="", help="comma-separated mod ids (install only)")
+        action_parser.add_argument("--games", default="", help="comma-separated game keys (install only)")
+        action_parser.add_argument(
+            "--no-propagate",
+            action="store_true",
+            help="skip the mod→game / game→mod propagation rules (install only)",
+        )
     args = parser.parse_args(argv if argv is not None else sys.argv[1:])
 
     guilds = _resolve_targets(args.guild)

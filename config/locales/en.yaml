@@ -65,7 +65,11 @@ en:
       add_taken: This profile is already linked — remove it first or pick another one.
       add_game_unconfigured: 'Add failed: the game {game} is not configured for registration.'
       add_unknown: 'Add failed: no profile found for {profile}. Paste your aoe2insights page URL (or the
-        id it holds) — the right id will be resolved automatically.'
+        id it holds), or your in-game name — the right id will be resolved automatically.'
+      add_pick: 'Pick your account for **{name}** — every option shows what that profile last played:'
+      add_blocked: 'Add failed: aoe2insights blocks this server, so the insights id cannot be resolved
+        automatically. Paste your in-game name (e.g. {name}), the /user/relic/<id>/ form of your insights
+        URL, or your Relic ID (the Relic ID shown on your insights profile).'
       add_provider_error: 'Add failed: the provider {provider} did not answer properly — the details go
         to the admins (see the bot logs).'
       add_not_configured: 'Add failed: the provider {provider} does not serve profile stats — see the
@@ -595,10 +599,10 @@ en:
       game_menu_failed: The game menu failed to open (see the logs).
       game_menu_not_sent: The game menu could not be sent (see the logs).
       global_maps_admins: Global maps are reserved for bot admins.
-      unexpected_state: Unexpected state — restart with /register.
-      no_enrollment: No enrollment in progress — restart with /register.
+      unexpected_state: Unexpected state — restart from `/home` → Profile.
+      no_enrollment: No enrollment in progress — open `/home` → Profile to link your account.
       enrolled: Enrolled! Your AoE2 profile `{profile}` is linked — you can join the ladder.
-      enrolled_cancelled: Enrollment cancelled — /register whenever you like.
+      enrolled_cancelled: Enrollment cancelled — `/home` → Profile whenever you like.
       enrolled_cancelled_short: Enrollment cancelled.
       unknown_panel: Unknown panel
       registered: Registered ({value}).

@@ -9,14 +9,17 @@
 <tr class="heading-text decor">
 <td class="title">&nbsp;<br><strong class="title"><a href="botforge.html" class="white">botforge</a>.<a href="botforge.discord.html" class="white">discord</a>.registration</strong></td>
 <td class="extra"><a href=".">index</a><br><a href="file:SOURCE_ROOT/discord/registration.py">SOURCE_ROOT/discord/registration.py</a></td></tr></table>
-    <p><span class="code">The&nbsp;/register&nbsp;command&nbsp;and&nbsp;the&nbsp;DM&nbsp;enrollment&nbsp;flow&nbsp;(botforge-services#133).<br>
+    <p><span class="code">The&nbsp;DM&nbsp;enrollment&nbsp;flow,&nbsp;legacy&nbsp;(botforge-services#133).<br>
 &nbsp;<br>
-Registration&nbsp;is&nbsp;a&nbsp;*permanent*&nbsp;mod:&nbsp;the&nbsp;flow&nbsp;binds&nbsp;the&nbsp;Discord&nbsp;user&nbsp;to&nbsp;a<br>
-validated&nbsp;AoE2&nbsp;profile.&nbsp;The&nbsp;command&nbsp;opens&nbsp;the&nbsp;DM&nbsp;workflow:&nbsp;confirm&nbsp;→<br>
-type&nbsp;the&nbsp;in-game&nbsp;profile&nbsp;id&nbsp;→&nbsp;the&nbsp;RegistrationService&nbsp;validates&nbsp;through<br>
-the&nbsp;game&nbsp;seam&nbsp;(ext-librematch&nbsp;via&nbsp;svc-core)&nbsp;and&nbsp;binds.&nbsp;Steps&nbsp;ride&nbsp;the<br>
-WorkflowEngine&nbsp;so&nbsp;the&nbsp;flow&nbsp;survives&nbsp;restarts;&nbsp;the&nbsp;views&nbsp;are&nbsp;dynamic<br>
-items&nbsp;(restart-proof,&nbsp;#122)&nbsp;and&nbsp;answers&nbsp;follow&nbsp;the&nbsp;3-second&nbsp;rule.</span></p>
+There&nbsp;is&nbsp;NO&nbsp;/register&nbsp;command:&nbsp;the&nbsp;profile&nbsp;binding&nbsp;lives&nbsp;in&nbsp;the&nbsp;home<br>
+profile&nbsp;menu&nbsp;since&nbsp;2026-10-16&nbsp;(``/home``&nbsp;→&nbsp;Profil&nbsp;→&nbsp;Ajouter&nbsp;un&nbsp;compte).<br>
+This&nbsp;module&nbsp;keeps&nbsp;the&nbsp;older&nbsp;DM&nbsp;workflow&nbsp;—&nbsp;confirm&nbsp;→&nbsp;type&nbsp;the&nbsp;in-game<br>
+profile&nbsp;id&nbsp;→&nbsp;the&nbsp;RegistrationService&nbsp;validates&nbsp;through&nbsp;the&nbsp;game&nbsp;seam<br>
+(ext-librematch&nbsp;via&nbsp;svc-core)&nbsp;and&nbsp;binds&nbsp;—&nbsp;for&nbsp;the&nbsp;sessions&nbsp;that&nbsp;still<br>
+ride&nbsp;it.&nbsp;Steps&nbsp;ride&nbsp;the&nbsp;WorkflowEngine&nbsp;so&nbsp;the&nbsp;flow&nbsp;survives&nbsp;restarts;<br>
+the&nbsp;views&nbsp;are&nbsp;dynamic&nbsp;items&nbsp;(restart-proof,&nbsp;#122)&nbsp;and&nbsp;answers&nbsp;follow<br>
+the&nbsp;3-second&nbsp;rule.&nbsp;The&nbsp;user-facing&nbsp;strings&nbsp;ride&nbsp;the&nbsp;i18n&nbsp;catalog<br>
+(``ui.flows.*``).</span></p>
 <p>
 <table class="section">
 <tr class="decor pkg-content-decor heading-text">

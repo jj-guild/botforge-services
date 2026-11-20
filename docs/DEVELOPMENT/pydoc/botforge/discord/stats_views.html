@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Python: botforge.discord.stats_views</title>
+</head><body>
+
+<table class="heading">
+<tr class="heading-text decor">
+<td class="title">&nbsp;<br><strong class="title"><a href="botforge.html" class="white">botforge</a>.<a href="botforge.discord.html" class="white">discord</a>.stats_views</strong></td>
+<td class="extra"><a href=".">index</a><br><a href="file:SOURCE_ROOT/discord/stats_views.py">SOURCE_ROOT/discord/stats_views.py</a></td></tr></table>
+    <p><span class="code">The&nbsp;stats&nbsp;enrichments&nbsp;of&nbsp;the&nbsp;existing&nbsp;views&nbsp;(#404&nbsp;T6).<br>
+&nbsp;<br>
+The&nbsp;surfaces&nbsp;stay&nbsp;as&nbsp;they&nbsp;are&nbsp;—&nbsp;these&nbsp;helpers&nbsp;only&nbsp;ENRICH&nbsp;their&nbsp;lines<br>
+with&nbsp;the&nbsp;stats&nbsp;the&nbsp;providers&nbsp;now&nbsp;serve&nbsp;(the&nbsp;per-account&nbsp;elo&nbsp;status,<br>
+the&nbsp;per-user&nbsp;unification,&nbsp;the&nbsp;criteria&nbsp;results).&nbsp;Every&nbsp;helper&nbsp;is<br>
+best-effort:&nbsp;an&nbsp;unreachable&nbsp;game&nbsp;service&nbsp;renders&nbsp;nothing,&nbsp;never<br>
+crashes&nbsp;the&nbsp;view&nbsp;(the&nbsp;panels&nbsp;degrade&nbsp;quietly).</span></p>
+<p>
+<table class="section">
+<tr class="decor pkg-content-decor heading-text">
+<td class="section-title" colspan=3>&nbsp;<br><strong class="bigsection">Modules</strong></td></tr>
+    
+<tr><td class="decor pkg-content-decor"><span class="code">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span></td><td>&nbsp;</td>
+<td class="singlecolumn"><table><tr><td class="multicolumn"><a href="logging.html">logging</a><br>
+</td><td class="multicolumn"><a href="os.html">os</a><br>
+</td><td class="multicolumn"></td><td class="multicolumn"></td></tr></table></td></tr></table><p>
+<table class="section">
+<tr class="decor functions-decor heading-text">
+<td class="section-title" colspan=3>&nbsp;<br><strong class="bigsection">Functions</strong></td></tr>
+    
+<tr><td class="decor functions-decor"><span class="code">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span></td><td>&nbsp;</td>
+<td class="singlecolumn"><dl><dt>async <a name="-account_elo_by_profile"><strong>account_elo_by_profile</strong></a>(bot: 'Any', profile_ids: 'list[str]') -&gt; 'dict[str, str]'</dt><dd><span class="code">Render&nbsp;the&nbsp;per-account&nbsp;elo&nbsp;lines,&nbsp;keyed&nbsp;by&nbsp;profile&nbsp;id.<br>
+&nbsp;<br>
+``"1250&nbsp;(max&nbsp;1300)"``&nbsp;per&nbsp;account&nbsp;(the&nbsp;best&nbsp;board's&nbsp;current,&nbsp;the<br>
+peak&nbsp;in&nbsp;parens);&nbsp;the&nbsp;accounts&nbsp;without&nbsp;stored&nbsp;stats&nbsp;map&nbsp;to&nbsp;"".</span></dd></dl>
+ <dl><dt><a name="-criteria_lines"><strong>criteria_lines</strong></a>(application: 'Any') -&gt; 'list[str]'</dt><dd><span class="code">Render&nbsp;the&nbsp;application's&nbsp;criteria&nbsp;results&nbsp;(stats&nbsp;vs&nbsp;criteria).<br>
+&nbsp;<br>
+One&nbsp;line&nbsp;per&nbsp;evaluated&nbsp;criterion&nbsp;—&nbsp;passed&nbsp;✓,&nbsp;failed&nbsp;✗,&nbsp;unknown&nbsp;❔<br>
+(the&nbsp;manual-review&nbsp;marker&nbsp;of&nbsp;T5)&nbsp;—&nbsp;so&nbsp;the&nbsp;admin&nbsp;announce&nbsp;shows&nbsp;WHY<br>
+the&nbsp;queue&nbsp;holds&nbsp;the&nbsp;candidate.&nbsp;Empty&nbsp;when&nbsp;no&nbsp;criterion&nbsp;ran.</span></dd></dl>
+ <dl><dt><a name="-stats_client"><strong>stats_client</strong></a>() -&gt; 'Any | None'</dt><dd><span class="code">Return&nbsp;the&nbsp;game&nbsp;service's&nbsp;stats&nbsp;client;&nbsp;None&nbsp;when&nbsp;unconfigured.</span></dd></dl>
+ <dl><dt>async <a name="-user_stats_line"><strong>user_stats_line</strong></a>(bot: 'Any', user_id: 'str') -&gt; 'str'</dt><dd><span class="code">Render&nbsp;the&nbsp;user's&nbsp;unified&nbsp;elo&nbsp;head&nbsp;line&nbsp;(best&nbsp;board).<br>
+&nbsp;<br>
+``"&nbsp;—&nbsp;1400&nbsp;elo&nbsp;(max&nbsp;1500)"``&nbsp;on&nbsp;the&nbsp;player's&nbsp;best&nbsp;leaderboard;<br>
+empty&nbsp;when&nbsp;the&nbsp;stats&nbsp;are&nbsp;unknown&nbsp;—&nbsp;the&nbsp;roster&nbsp;line&nbsp;stays&nbsp;as&nbsp;it&nbsp;was.</span></dd></dl>
+</td></tr></table><p>
+<table class="section">
+<tr class="decor data-decor heading-text">
+<td class="section-title" colspan=3>&nbsp;<br><strong class="bigsection">Data</strong></td></tr>
+    
+<tr><td class="decor data-decor"><span class="code">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span></td><td>&nbsp;</td>
+<td class="singlecolumn"><strong>logger</strong> = &lt;Logger botforge.discord.stats_views (INFO)&gt;</td></tr></table>
+</body></html>

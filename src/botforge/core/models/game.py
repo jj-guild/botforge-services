@@ -142,3 +142,70 @@ class PlayerStats:
 
     profile_id: str
     blocks: tuple[StatsBlock, ...] = ()
+
+
+@dataclass(frozen=True, slots=True)
+class LeaderboardElo:
+    """One leaderboard's elo status of an account (botforge-services#404).
+
+    ``current`` is the rating the provider last saw; ``max`` is the
+    highest rating the stored history carries — the provider computes
+    both, the core never re-derives them.
+    """
+
+    leaderboard_id: str
+    name: str = ""
+    current: int = 0
+    max: int = 0
+    rank: int = 0
+    wins: int = 0
+    losses: int = 0
+
+
+@dataclass(frozen=True, slots=True)
+class AccountEloStatus:
+    """One account's status: the elo per leaderboard plus sync freshness."""
+
+    profile_id: str
+    leaderboards: tuple[LeaderboardElo, ...] = ()
+    last_synced_at: int = 0
+    known: bool = False
+
+
+@dataclass(frozen=True, slots=True)
+class UserEloStats:
+    """The per-USER unified view over the user's accounts (#404).
+
+    Multiple accounts aggregate into one view: per leaderboard the BEST
+    current and max elo across the accounts, and the matches played in
+    the asked window (summed over the accounts).
+    """
+
+    user_id: str
+    profile_ids: tuple[str, ...] = ()
+    leaderboards: tuple[LeaderboardElo, ...] = ()
+    matches_in_window: int = 0
+    known: bool = False
+
+
+@dataclass(frozen=True, slots=True)
+class MatchHistoryEntry:
+    """One stored match of a known account's history (#404).
+
+    The raw document stays in the provider's database; this is the
+    exploited projection the provider serves: outcome, elo deltas and
+    (once decoded, T2) the game settings and slots.
+    """
+
+    match_id: str
+    leaderboard_id: str = ""
+    started_at: int = 0
+    finished_at: int = 0
+    map_name: str = ""
+    profile_ids: tuple[str, ...] = ()
+    rating_before: dict[str, int] = field(default_factory=dict)
+    rating_after: dict[str, int] = field(default_factory=dict)
+    teams: dict[str, int] = field(default_factory=dict)
+    winners: tuple[str, ...] = ()
+    options_json: str = ""
+    slots_json: str = ""

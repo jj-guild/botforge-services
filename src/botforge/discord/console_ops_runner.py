@@ -25,7 +25,13 @@ __all__ = [
     "build_console_wirings",
 ]
 
-CONFIG_DIR = Path(__file__).resolve().parents[2] / "config"
+# The repo layout (the image copies both at the workdir root): the runner
+# lives at src/botforge/discord/, so parents[3] is the root — same
+# resolution as the other config readers (profile_sites, ratelimits).
+# The mod registry ALSO needs the repo root: the §7 layout declares
+# mods under modules/mods/<mod>/, not config/mods/.
+_REPO_ROOT = Path(__file__).resolve().parents[3]
+CONFIG_DIR = _REPO_ROOT / "config"
 
 
 def build_console_wirings(client: discord.Client) -> dict[str, Any] | None:
@@ -46,7 +52,7 @@ def build_console_wirings(client: discord.Client) -> dict[str, Any] | None:
         from botforge.discord.logs_platform import MongoLogsDatabase
         from botforge.discord.roles_platform import DiscordRolesPlatform, MongoRolesDatabase
 
-        registry = ModRegistry(load_mod_definitions(CONFIG_DIR))
+        registry = ModRegistry(load_mod_definitions(CONFIG_DIR, _REPO_ROOT))
         database = get_async_database()
         state = StateService(redis_uri=os.environ["REDIS_URI"])
         channel_service = ChannelService(
@@ -107,21 +113,165 @@ async def apply_install_for_guild(
     if removed:
         lines.append(f"Uninstalled mods cleaned (channels + roles): {sorted(removed)}.")
 
+    # The provision rides the SAME machinery as the console modal and the
+    # repair button (provision_mod_roles then provision_mod_channels): the
+    # mod's own folder (category), its convention channels (général, admin,
+    # the seasonal panels) and its declared channels — never the legacy
+    # ChannelService path, which created the declared channels at the guild
+    # ROOT with no folder (the merlin hierarchy bug of 2026-11-19).
+    from botforge.discord.mods_forum import provision_mod_channels, provision_mod_roles
+
+    seam = _ProvisioningSeam(
+        _client_of(guild),
+        registry=registry,
+        mod_roles_service=mod_roles_service,
+        locale=await _guild_locale(guild),
+    )
     provisioned = 0
     for mod_name in mods:
         try:
-            await channel_service.setup_mod_channels(guild_id, mod_name)
-            await mod_roles_service.setup_mod_roles(guild_id, mod_name)
+            await provision_mod_roles(seam, guild_id, mod_name)
+            ensured = await provision_mod_channels(seam, guild_id, mod_name)
+            if ensured:
+                lines.append(f"{mod_name}: {ensured} channel(s) provisioned in its folder.")
             provisioned += 1
         except Exception:
             logger.warning("CONSOLE OPS provisioning failed (%s)", mod_name, exc_info=True)
-    lines.append(f"{provisioned} mod(s) provisioned.")
+    lines.append(f"{provisioned} mod(s) provisioned (roles + folder + channels).")
     return "\n".join(lines)
+
+
+async def apply_ensure_tree_for_guild(guild: discord.Guild) -> str:
+    """Re-provision the guild's declared platform tree, headless.
+
+    The inverse of reset-data (which wipes the stored channel
+    resolutions): a nuked guild has no admin channel left, so no
+    Synchroniser button is reachable — the boot deliberately never
+    creates (a member deleting a salon owns the decision), and
+    install provisions mod channels only. This action rebuilds the
+    PLATFORM scopes (bot, games, mods, and every granted game's scope)
+    through the same provision + persist seam the Synchroniser uses,
+    behind the console's own gates.
+    """
+    from botforge.core.models.db import get_async_database
+    from botforge.core.services.guild_access import GuildAccessService
+    from botforge.core.services.guild_access_mongo import MongoGuildAccessDatabase
+    from botforge.discord.ui.panels import registered_scopes
+    from botforge.discord.ui.panels_provisioning import persist_resolutions, provision_scope
+    from botforge.discord.ui.panels_scopes import register_platform_scopes
+
+    wirings = build_console_wirings(_client_of(guild))
+    if wirings is None:
+        return "Wiring unavailable (MONGO_URI/REDIS_URI) — the tree cannot be provisioned."
+    register_platform_scopes()
+
+    locale = await _guild_locale(guild)  # the stored choice first, Discord's signal as fallback
+
+    access = GuildAccessService(
+        MongoGuildAccessDatabase(get_async_database()),
+        games=_all_games(),
+        mods=_all_mods(wirings["registry"]),
+    )
+    granted_games = set(await access.enabled_games(str(guild.id)))
+
+    lines: list[str] = []
+    for spec in registered_scopes():
+        if spec.scope.startswith("games/"):
+            game_key = spec.scope.split("/", 1)[1]
+            if game_key not in granted_games:
+                lines.append(f"{spec.scope}: skipped (game not granted).")
+                continue
+        try:
+            resolved = await provision_scope(guild, spec, locale, _tree_translate)
+            await persist_resolutions(str(guild.id), spec.scope, resolved)
+            lines.append(f"{spec.scope}: {len(resolved)} channel(s) ensured.")
+        except Exception:
+            logger.warning("CONSOLE OPS tree ensure failed (%s)", spec.scope, exc_info=True)
+            lines.append(f"{spec.scope}: failed (see the logs).")
+    lines.append(
+        "Restart the bot (env-control) so the boot routing pins the "
+        "menus into the fresh channels."
+    )
+    return "\n".join(lines)
+
+
+def _tree_translate(key: str, locale: str) -> str:
+    """Render a tree label through the REAL catalog — the channel NAME.
+
+    provision_scope uses the translate seam for the created channels'
+    names: a stub here once named the channels after the i18n KEYS
+    ("uipanelschannelsgeneral" — the merlin incident of 2026-11-19).
+    The guild locale first, the English catalog as the fallback.
+    """
+    from botforge.core.services.i18n import MessageCatalog
+
+    catalog = MessageCatalog(CONFIG_DIR)
+    rendered = catalog.render(key, locale)
+    return rendered if rendered != key else catalog.render(key, "en")
+
+
+async def _guild_locale(guild: discord.Guild) -> str:
+    """Resolve the guild's language using the LogService order.
+
+    The STORED choice (the admin-set one) first, then Discord's own
+    ``preferred_locale`` \u2014 the same resolution the running bot reads.
+    """
+    from botforge.core.models.db import get_async_database
+    from botforge.discord.locales import guild_locale
+    from botforge.discord.logs_platform import MongoLogsDatabase
+
+    try:
+        settings = await MongoLogsDatabase(get_async_database()).get_guild_settings(str(guild.id))
+    except Exception:
+        settings = None
+    stored = str((settings or {}).get("locale", ""))
+    if stored in ("en", "fr"):
+        return stored
+    return guild_locale(guild)
 
 
 def _client_of(guild: discord.Guild) -> discord.Client:
     """Recover the client from a guild object (discord.py state seam)."""
     return guild._state._get_client()
+
+
+class _ProvisioningSeam:
+    """The headless stand-in for the wired bot object (the provision path).
+
+    ``provision_mod_roles``/``provision_mod_channels`` read their
+    dependencies off the BOT (registry, mod_roles_service, the message
+    catalog, the logs seam for the locale) and recover the guild via
+    ``bot.get_guild`` — a bare console client carries none of the four.
+    Every other attribute delegates to the real client.
+    """
+
+    def __init__(
+        self,
+        client: discord.Client,
+        registry: Any,
+        mod_roles_service: Any,
+        locale: str,
+    ) -> None:
+        from botforge.core.services.i18n import MessageCatalog
+
+        self._client = client
+        self.registry = registry
+        self.mod_roles_service = mod_roles_service
+        self.messages = MessageCatalog(CONFIG_DIR)
+        self.logs_service = self._LocaleOnly(locale)
+
+    class _LocaleOnly:
+        """A locale-only logs seam: the guild's language is already resolved."""
+
+        def __init__(self, locale: str) -> None:
+            self._locale = locale
+
+        async def get_locale(self, guild_id: str) -> str:
+            del guild_id  # resolved at the seam's construction — fail-safe
+            return self._locale
+
+    def __getattr__(self, item: str) -> Any:
+        return getattr(self._client, item)
 
 
 def _all_games() -> tuple[str, ...]:

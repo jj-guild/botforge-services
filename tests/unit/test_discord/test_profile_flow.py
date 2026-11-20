@@ -410,7 +410,7 @@ def test_add_modal_payload_shape_is_the_proven_one() -> None:
         if component.get("type") == 1:
             inner = component["components"][0]
             assert inner["type"] == 4, "the ActionRow wraps the TextInput"
-            assert inner.get("label") == "Ton id aoe2insights ou ton relic id"
+            assert inner.get("label") == "Ton pseudo en jeu, relic id ou URL insights"
 
 
 @pytest.mark.asyncio
