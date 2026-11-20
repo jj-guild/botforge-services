@@ -12,6 +12,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
+import discord
 import pytest
 
 from botforge.core.services.i18n import MessageCatalog
@@ -22,7 +23,9 @@ from botforge.discord.ui.panels_provisioning import (
 )
 from botforge.discord.ui.panels_scopes import register_platform_scopes, scopes_from_config
 from tests.mocks.discord_mock import (
+    MockCategoryChannel,
     MockGuild,
+    MockRole,
     MockTextChannel,
 )
 
@@ -152,3 +155,210 @@ class TestAdoptionSeams:
         assert channel_id == str(stray.id)
         assert stray.category is not None
         assert stray.category.name == "games"
+
+
+class TestCategoryGate:
+    """The machine-room rule (Drasah 18/11): a scope's category may
+    declare itself staff-only — the folder's front door hides from
+    @everyone, the rooms' access bands stay untouched."""
+
+    def test_the_games_scope_declares_the_gate(self) -> None:
+        assert GAMES_SCOPE.category_admin_only is True
+        assert ROOT_SCOPE.category_admin_only is False
+        assert BOT_SCOPE.category_admin_only is False
+
+    @pytest.mark.asyncio
+    async def test_a_gated_scope_denies_everyone_on_its_category(self) -> None:
+        guild = MockGuild()
+        await provision_scope(guild, GAMES_SCOPE, "fr", _translate)
+        assert guild.categories
+        category = guild.categories[0]
+        assert isinstance(category, MockCategoryChannel)
+        everyone = category.permission_overwrite_for(guild.default_role)
+        assert everyone is not None
+        assert everyone.view_channel is False
+        # the bot operates its own category — including creating and
+        # purging the rooms inside a private folder (#413)
+        me = category.permission_overwrite_for(guild.me)
+        assert me is not None
+        assert me.view_channel is True
+        assert me.manage_channels is True
+
+    @pytest.mark.asyncio
+    async def test_an_open_scope_keeps_its_category_public(self) -> None:
+        guild = MockGuild()
+        await provision_scope(guild, BOT_SCOPE, "fr", _translate)
+        assert guild.categories
+        assert guild.categories[0].permission_overwrite_for(guild.default_role) is None
+
+    @pytest.mark.asyncio
+    async def test_the_gate_grants_the_resolved_view_roles(self) -> None:
+        from botforge.discord.ui.panels import ScopeSpec
+
+        role = MockRole(name="Kingdom Admin")
+        guild = MockGuild()
+        guild._roles[role.id] = role
+        spec = ScopeSpec(
+            scope="mod/test",
+            category_key="Test Home",
+            category_admin_only=True,
+            category_view_role_ids=(str(role.id),),
+        )
+        await provision_scope(guild, spec, "fr", _translate)
+        assert guild.categories
+        grant = guild.categories[0].permission_overwrite_for(role)
+        assert grant is not None
+        assert grant.view_channel is True
+
+    @pytest.mark.asyncio
+    async def test_an_admin_only_group_gates_its_own_category(self) -> None:
+        """A channel group declared admin_only gates its category too —
+        not only its channels (the console's blocker, #413)."""
+        from botforge.discord.ui.panels import ChannelDecl, ScopeSpec
+
+        role = MockRole(name="Kingdom Admin")
+        guild = MockGuild()
+        guild._roles[role.id] = role
+        spec = ScopeSpec(
+            scope="mod/test",
+            category_key="Test Home",
+            channels=(
+                ChannelDecl(
+                    key="settings",
+                    label_key="settings",
+                    group="Admin",
+                    group_admin_only=True,
+                    access="admin",
+                    view_role_ids=(str(role.id),),
+                ),
+            ),
+        )
+        await provision_scope(guild, spec, "fr", _translate)
+        admin_cat = next(c for c in guild.categories if c.name == "Admin")
+        everyone = admin_cat.permission_overwrite_for(guild.default_role)
+        assert everyone is not None
+        assert everyone.view_channel is False
+        me = admin_cat.permission_overwrite_for(guild.me)
+        assert me is not None
+        assert me.view_channel is True
+        assert me.manage_channels is True
+        grant = admin_cat.permission_overwrite_for(role)
+        assert grant is not None
+        assert grant.view_channel is True
+
+    @pytest.mark.asyncio
+    async def test_an_open_group_keeps_its_category_public(self) -> None:
+        from botforge.discord.ui.panels import ChannelDecl, ScopeSpec
+
+        guild = MockGuild()
+        spec = ScopeSpec(
+            scope="mod/test",
+            category_key="Test Home",
+            channels=(ChannelDecl(key="general", label_key="general", group="Public"),),
+        )
+        await provision_scope(guild, spec, "fr", _translate)
+        public_cat = next(c for c in guild.categories if c.name == "Public")
+        assert public_cat.permission_overwrite_for(guild.default_role) is None
+
+    @pytest.mark.asyncio
+    async def test_install_gates_and_uninstall_restores_platform_categories(self) -> None:
+        """The install rule: installing a mod gates every platform scope's
+        category (bot allow with manage_channels + @everyone deny); the
+        uninstall of the last mod restores the normal (public) rights."""
+        from botforge.discord.ui.panels_provisioning import set_platform_categories_private
+        from botforge.discord.ui.panels_scopes import register_platform_scopes
+
+        register_platform_scopes(CONFIG_DIR)
+        guild = MockGuild()
+        await provision_scope(guild, BOT_SCOPE, "fr", _translate)
+        await provision_scope(guild, GAMES_SCOPE, "fr", _translate)
+        for scope, spec in (("bot", BOT_SCOPE), ("games", GAMES_SCOPE)):
+            cat = next(c for c in guild.categories if c.name == _translate(spec.category_key, "fr"))
+            _STORED[f"{scope}:category"] = str(cat.id)
+        n = await set_platform_categories_private(guild, True)
+        assert n >= 2
+        for cat in guild.categories:
+            everyone = cat.permission_overwrite_for(guild.default_role)
+            me = cat.permission_overwrite_for(guild.me)
+            assert everyone is not None and everyone.view_channel is False
+            assert me is not None and me.view_channel is True and me.manage_channels is True
+        await set_platform_categories_private(guild, False)
+        for cat in guild.categories:
+            everyone = cat.permission_overwrite_for(guild.default_role)
+            assert everyone is None or everyone.view_channel is not False
+
+    @pytest.mark.asyncio
+    async def test_install_gates_categories_without_stored_ids_by_name(self) -> None:
+        """The name fallback: a guild whose ids were never persisted still
+        gets gated — the platform categories resolve by their translated
+        name (the fr/en renders of the declared category key) when the
+        stored id is missing (the Kingdoms - Tests guild case)."""
+        from botforge.discord.ui.panels_provisioning import set_platform_categories_private
+        from botforge.discord.ui.panels_scopes import register_platform_scopes
+
+        register_platform_scopes(CONFIG_DIR)
+        guild = MockGuild()
+        await provision_scope(guild, BOT_SCOPE, "fr", _translate)
+        assert _STORED == {}, "no stored id: the resolution was never persisted"
+        n = await set_platform_categories_private(guild, True)
+        assert n >= 1
+        cat = next(
+            c for c in guild.categories if c.name == _translate(BOT_SCOPE.category_key, "fr")
+        )
+        everyone = cat.permission_overwrite_for(guild.default_role)
+        me = cat.permission_overwrite_for(guild.me)
+        assert everyone is not None and everyone.view_channel is False
+        assert me is not None and me.view_channel is True and me.manage_channels is True
+        await set_platform_categories_private(guild, False)
+        assert cat.permission_overwrite_for(guild.default_role) is None
+
+    @pytest.mark.asyncio
+    async def test_the_rooms_keep_their_own_bands_under_the_gate(self) -> None:
+        """The gate is the folder's front door, never the rooms'."""
+        guild = MockGuild()
+        await provision_scope(guild, GAMES_SCOPE, "fr", _translate)
+        general = discord.utils.get(guild.text_channels, category=guild.categories[0])
+        assert general is not None
+        # the readonly band (send denied for @everyone) still applies on
+        # the channel itself — the gate added no @everyone view deny there
+        overwrite = general.permission_overwrite_for(guild.default_role)
+        assert overwrite is None or overwrite.view_channel is not False
+
+
+@pytest.mark.asyncio
+async def test_the_boot_pass_gates_platform_categories_when_a_mod_is_installed(monkeypatch: Any) -> None:
+    """The install rule is state-driven, not only event-driven: at boot,
+    every guild with a mod installed gets the platform categories gated
+    (the install event may predate the stored ids — the name fallback
+    resolves them). A guild with no mod keeps the normal rights."""
+    from types import SimpleNamespace
+
+    import botforge.discord.wiring as wiring_mod
+    from botforge.discord.bot import factory
+    from botforge.discord.ui import panels_provisioning
+
+    guild = MockGuild()
+    bot = SimpleNamespace(guilds=[guild])
+
+    class _Access:
+        def __init__(self, mods: tuple[str, ...]) -> None:
+            self._mods = mods
+
+        async def enabled_mods(self, guild_id: str) -> tuple[str, ...]:
+            return self._mods
+
+    calls: list[tuple[str, bool]] = []
+
+    async def _fake_gate(g: Any, private: bool) -> int:
+        calls.append((str(g.id), private))
+        return 1
+
+    monkeypatch.setattr(panels_provisioning, "set_platform_categories_private", _fake_gate)
+    monkeypatch.setattr(wiring_mod, "build_guild_access_service", lambda: _Access(("kingdom",)))
+    await factory._boot_gate_platform_categories(bot)
+    assert calls == [(str(guild.id), True)]
+
+    monkeypatch.setattr(wiring_mod, "build_guild_access_service", lambda: _Access(()))
+    calls.clear()
+    await factory._boot_gate_platform_categories(bot)
+    assert calls == []

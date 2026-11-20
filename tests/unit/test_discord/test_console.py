@@ -248,10 +248,20 @@ def test_console_ops_cli_all_targets_are_allowlisted(monkeypatch: Any) -> None:
 
 
 async def test_console_action_registry_renders_extensions(monkeypatch: Any) -> None:
-    """An extension action renders its button and rides the boot wiring."""
+    """An extension action renders its button and rides the boot wiring.
+
+    The registry is process-global and the real boot wires the enabled
+    mods' own console actions (botforge-services#339: a mod's ops ride
+    the registry) — a simcord journey may therefore have registered
+    them long before this test runs. The test rides an ISOLATED copy of
+    the registry: it asserts the extension mechanism itself, never the
+    boot-time population.
+    """
     import discord
 
     import botforge.discord.console as console_mod
+
+    monkeypatch.setattr(console_mod, "_ACTIONS", dict(console_mod._ACTIONS))
 
     # a registered action reuses a concrete DynamicItem class — an
     # extension registers its own class the same way
@@ -264,7 +274,7 @@ async def test_console_action_registry_renders_extensions(monkeypatch: Any) -> N
     console_mod.register_console_action(action)
     try:
         keys = [a.key for a in console_mod.registered_console_actions()]
-        assert keys == ["ext-test"]
+        assert "ext-test" in keys
 
         # the home renders the extension's button (disabled off-allowlist)
         view = await console_mod._console_view(None)
@@ -292,6 +302,31 @@ async def test_console_action_registry_renders_extensions(monkeypatch: Any) -> N
     finally:
         console_mod._ACTIONS.pop("ext-test", None)
 
+
+
+async def test_mod_scoped_actions_stay_out_of_the_global_console(monkeypatch: Any) -> None:
+    """A mod-scoped action belongs to the MOD's console surface, never to
+    the global panel:admin:console (the #412 cleanup: relancer/reset/horloge
+    move from the global console to the kingdom console)."""
+    import botforge.discord.console as console_mod
+
+    monkeypatch.setattr(console_mod, "_ACTIONS", dict(console_mod._ACTIONS))
+    action = console_mod.ConsoleAction(
+        key="mod-test",
+        item_cls=console_mod.DevDangerButton,
+        build=lambda disabled: console_mod.DevDangerButton(disabled=disabled),
+        description="**Mod test** — a mod-scoped action.",
+        mod="kingdom",
+    )
+    console_mod.register_console_action(action)
+    try:
+        assert "mod-test" in [a.key for a in console_mod.registered_console_actions()]
+        assert "mod-test" in [a.key for a in console_mod.registered_console_actions(mod="kingdom")]
+        assert "mod-test" not in [a.key for a in console_mod.registered_console_actions(mod="")]
+        view = await console_mod._console_view(None)
+        assert "Mod test" not in str(view.to_components())
+    finally:
+        console_mod._ACTIONS.pop("mod-test", None)
 
 
 
@@ -334,3 +369,32 @@ def test_danger_modal_defaults_are_safe() -> None:
         DevDangerModal.DATA_MAPS,
         DevDangerModal.DATA_POOLS,
     }
+
+
+def test_console_view_id_helpers_and_shared_emoji() -> None:
+    """The SDK owns the console surfaces' ids and the shared 🛠️ emoji."""
+    from botforge.discord.console import (
+        CONSOLE_EMOJI,
+        GLOBAL_CONSOLE_VIEW_ID,
+        console_view_id,
+        mod_console_view_id,
+    )
+
+    assert GLOBAL_CONSOLE_VIEW_ID == "panel:admin:console"
+    assert console_view_id() == "panel:admin:console"
+    assert mod_console_view_id("kingdom") == "panel:mod:kingdom:admin:console"
+    assert CONSOLE_EMOJI == "\U0001F6E0\uFE0F"
+
+
+def test_admin_console_button_carries_the_console_emoji_once() -> None:
+    """The global console button: danger style, 🛠️ emoji, i18n label (no emoji in the label)."""
+    import discord
+
+    from botforge.discord.console import CONSOLE_EMOJI, AdminConsoleButton
+
+    button = AdminConsoleButton()
+    assert button.item.style == discord.ButtonStyle.danger
+    assert button.item.emoji is not None and button.item.emoji.name == CONSOLE_EMOJI
+    assert button.item.label == "Console", "the label carries no emoji — the button does"
+    custom = AdminConsoleButton(label="Console")
+    assert custom.item.label == "Console"

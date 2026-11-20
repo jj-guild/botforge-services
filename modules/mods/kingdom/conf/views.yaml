@@ -1,0 +1,52 @@
+# Kingdom mod — the declared view ids (#381 ruling 1, Merlin 17/11:
+# « les éphémères doivent-elles aussi être déclarées ? — oui »).
+#
+# Every player-facing surface the mod renders carries its id as its
+# footer line (build_view appends it): the pinned panel, the ephemeral
+# windows, the confirm cards. A surface anchors feedback — it never
+# navigates (no buttons): a menu opening a surface is a drift the
+# registry validation catches.
+#
+# The ids live HERE, next to the mod's declaration (#221: a mod's
+# files never scatter) — the platform loader merges them at boot.
+#
+# The mod's admin CONSOLE surface (panel:mod:kingdom:admin:console) is
+# NOT declared here: the SDK auto-declares it for every mod
+# (mod_views.declare_mod_views) and injects the 🛠️ Console button on
+# menu:mod:kingdom:admin. The mod only wires its content
+# (wire_view in cogs/kingdom/__init__.py).
+views:
+  # the console's inline confirm card (deploy/sync/reset)
+  panel:mod:kingdom:admin:console:confirm:
+    kind: surface
+  # the pinned / ephemeral gameplay surfaces (#381 ruling 1: every
+  # rendered surface is declared — an undeclared id logs an error at
+  # every pin refresh and answers "unknown view" if routed)
+  panel:mod:kingdom:attack:
+    kind: surface
+  panel:mod:kingdom:candidates:
+    kind: surface
+  panel:mod:kingdom:apply:
+    kind: surface
+  panel:mod:kingdom:register:
+    kind: surface
+  panel:mod:kingdom:status:
+    kind: surface
+  # machine-temps-v3 (Drasah 19/11): the ⏱️ machine à temps surfaces —
+  # the pinned cockpit + the snapshot-restore picker window
+  panel:mod:kingdom:settings:
+    kind: surface
+  panel:mod:kingdom:time-machine:
+    kind: surface
+  panel:mod:kingdom:time-machine:restore:
+    kind: surface
+  # distributeur-v1 (Drasah 19/11): the 🎁 distributeur surfaces —
+  # the pinned panel + the injection window
+  panel:mod:kingdom:distributor:
+    kind: surface
+  panel:mod:kingdom:distributor:window:
+    kind: surface
+  # camp-beta-v1 (Drasah 19/11): the ⚔️ Roi ou Seigneur provisional
+  # window (the beta seasons' founding/joining door)
+  panel:mod:kingdom:camp:
+    kind: surface

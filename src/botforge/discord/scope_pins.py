@@ -439,13 +439,21 @@ def register_mod_pins(bot: Any) -> list[Any]:
 
 
 def _mod_pin_specs(bot: Any, name: str) -> list[Any]:
-    """Return one mod's registered home/admin pin specs (empty when none)."""
-    from botforge.core.ids import scope_view_key
+    """Return every static pin registered under the mod's scope (empty when none).
+
+    The SDK home/admin menus AND the mod's own pinned surfaces (its
+    cogs register them at boot): install/repair/uninstall drive the
+    WHOLE mod's surface lifecycle, not just the menus — a repaired
+    channel must see its panel land in the same pass.
+    """
     from botforge.discord.static_pins import registered_static_pins
 
     scope = f"mod/{name}"
-    wanted = {scope_view_key(scope, "home"), scope_view_key(scope, "admin")}
-    return [spec for spec in registered_static_pins() if spec.key in wanted]
+    return [
+        spec
+        for spec in registered_static_pins()
+        if spec.scope and (spec.scope == scope or spec.scope.startswith(scope + "/"))
+    ]
 
 
 async def ensure_mod_pins(bot: Any, guild_id: str, name: str) -> int:

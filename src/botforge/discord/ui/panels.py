@@ -57,6 +57,10 @@ class ChannelDecl:
     # scope — the mods' salons-as-data structure, #216 tranche I): the
     # group's display name rides here, resolved from the declaration
     group: str = ""
+    # the GROUP declares itself admin-only: the group's category carries
+    # the gate (bot allow + @everyone deny), resolved from the
+    # declaration's channel_groups flag
+    group_admin_only: bool = False
     # the channel's declared ACCESS POLICY (the salons-as-data gating,
     # #216 tranche I): everyone_view/view-roles/admin-only are data;
     # None = the simple access band applies
@@ -102,6 +106,17 @@ class ScopeSpec:
     category_key: str
     channels: tuple[ChannelDecl, ...] = field(default_factory=tuple)
     panels: tuple[PanelSpec, ...] = field(default_factory=tuple)
+    # the scope CATEGORY's own gate (the machine-room rule, Drasah
+    # 18/11): when True the category denies @everyone view — only the
+    # bot, the server staff and the resolved view roles see it. The
+    # channels inside keep their own access bands (the gate is the
+    # folder's front door, never the rooms'). Data-declared: views.yaml
+    # (the platform scopes) or the mod's home_admin_only flag.
+    category_admin_only: bool = False
+    category_view_roles: tuple[str, ...] = ()
+    # the view roles RESOLVED TO IDS (the persisted mapping is the
+    # resolver — the display name is renamable)
+    category_view_role_ids: tuple[str, ...] = ()
 
 
 _REGISTRY: dict[str, ScopeSpec] = {}

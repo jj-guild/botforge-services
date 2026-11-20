@@ -118,3 +118,61 @@ def test_the_games_home_carries_no_door_buttons(rendered_menus: dict[str, Any]) 
     """The games home's doors live in the body's notice, not link buttons."""
     buttons = rendered_menus["menu:games:home"]["buttons"]
     assert all(b.get("url") is None for b in buttons), "the games home carries link buttons"
+
+
+def test_the_kingdom_admin_menu_carries_the_console_button(rendered_menus: dict[str, Any]) -> None:
+    """A mod declaring surface:mod:<name>:console gets the console button
+    on its admin menu, routed to that declared surface (epic #412)."""
+    buttons = rendered_menus["menu:mod:kingdom:admin"]["buttons"]
+    console = next(
+        (b for b in buttons if str(b.get("custom_id", "")) == "view:open:panel:mod:kingdom:admin:console"),
+        None,
+    )
+    assert console is not None, "the admin menu must route to the declared console surface"
+    # destructive admin action: danger style, single emoji (the label is
+    # the i18n key's text, the emoji rides the button — never both)
+    assert console.get("style") == 4, f"console button must be danger (red), got {console.get('style')}"
+    assert console.get("label") == "Console", f"label carries no emoji: {console.get('label')!r}"
+    assert (console.get("emoji") or {}).get("name") == "\U0001F6E0\uFE0F"
+
+
+def test_the_sdk_auto_declares_every_mod_console_surface() -> None:
+    """A console exists as soon as a mod is added: declare_mod_views
+    declares panel:mod:<name>:admin:console (kind surface) for every
+    enabled mod — the mod never declares it by hand."""
+    from pathlib import Path
+
+    from botforge.core.services.mod_registry import ModRegistry, load_mod_definitions
+    from botforge.discord.mod_views import declare_mod_views
+    from botforge.discord.views_registry import get_view
+
+    definitions = load_mod_definitions(Path("config"), repo_root=Path("."))
+    kingdom = definitions.get("kingdom")
+    if kingdom is not None and not kingdom.enabled:
+        object.__setattr__(kingdom, "enabled", True)
+    declared = declare_mod_views(ModRegistry(definitions))
+    assert declared >= 3
+    decl = get_view("panel:mod:kingdom:admin:console")
+    assert decl is not None, "the SDK must auto-declare the mod console surface"
+    assert decl.kind == "surface"
+
+
+def test_the_mod_admin_menu_header_carries_the_console_emoji(rendered_menus: dict[str, Any]) -> None:
+    """menu:mod:<name>:admin wears the console's 🛠️ in its header (the
+    declared title_emoji wins over the admin surfaces' padlock default)."""
+    header = rendered_menus["menu:mod:kingdom:admin"]["texts"][0]
+    assert "\U0001F6E0\uFE0F" in header, f"the mod admin header must carry 🛠️ — got {header!r}"
+
+
+def test_the_console_button_is_injected_on_every_mod_admin_menu(rendered_menus: dict[str, Any]) -> None:
+    """The 🛠️ danger Console button rides menu:mod:<name>:admin unconditionally
+    (no per-mod declaration needed — the SDK declares the surface)."""
+    buttons = rendered_menus["menu:mod:kingdom:admin"]["buttons"]
+    console = next(
+        (b for b in buttons if str(b.get("custom_id", "")) == "view:open:panel:mod:kingdom:admin:console"),
+        None,
+    )
+    assert console is not None
+    assert console.get("style") == 4
+    assert console.get("label") == "Console"
+    assert (console.get("emoji") or {}).get("name") == "\U0001F6E0\uFE0F"

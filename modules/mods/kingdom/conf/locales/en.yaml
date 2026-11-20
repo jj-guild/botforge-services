@@ -2,3 +2,322 @@ en:
   kingdom:
     title: "Kingdom"
     description: "The Season II territory-conquest mod (AoE2) — skeleton: the declared structure, no game mechanics."
+    validation:
+      title: "👑 Kingdom validation"
+      help: "Every founded kingdom awaits its name's validation (rule 35). A decision here applies at once: approving opens the game to the kingdom, refusing sends its members back to the queue."
+      pending_header: "⏳ Pending"
+      row: "**{name}** — King: {king}"
+      empty: "No kingdom awaits validation."
+      accept_button: "✅ Approve"
+      refuse_button: "❌ Refuse"
+      accepted_header: "✅ Approved"
+      refused_header: "🚫 Refused"
+      table_kingdom: "Kingdom"
+      denied: "Validation is reserved for the bot's admins."
+      approved_note: "✅ **{name}** approved — the kingdom joins the season."
+      refused_note: "🚫 **{name}** refused — its members return to the queue."
+    apply:
+      panel_title: "⚔️ SIGN-UP — KINGDOMS SEASON II"
+      # the panel's illustration (the mod's artwork, data — swap the URL;
+      # image: modules/mods/kingdom/assets/roi.webp)
+      artwork: "https://raw.githubusercontent.com/jj-guild/botforge-services/2fe4442/modules/mods/kingdom/assets/roi.webp"
+      tagline: "Set out to conquer the territories! Apply to join the adventure."
+      kingdoms_line: "👑 **{count}** kingdom{s} in play — join the adventure!"
+      kingdoms_none: "👑 No kingdom in play yet — the first to apply founds theirs!"
+      join_button: "📜 Join the adventure"
+      register_title: "🪙 SIGN UP — KINGDOMS"
+      register_text: "Welcome, future conqueror! Create your project account — it's **free** and takes a minute: you'll link your AoE profile to your Discord account."
+      register_hint: "Once your account exists, the **📜 apply** salon opens to you: that's where you apply for the season. See you there!"
+      w_title: "⚔️ Kingdoms — sign-up"
+      w_welcome_title: "⚔️ Welcome, future conqueror!"
+      w_no_account: "Set out to conquer the territories! Before joining the battle, create your project account — it's **free** and takes a minute: you'll link your AoE2 profile to your Discord account.\n\n**The path:** 🪙 Create your account → 📜 Apply for the season → 🏰 Found or join a kingdom."
+      account_button: "🪙 Create my account"
+      postuler_button: "📜 Apply"
+      w_account_ready: "Your account is ready ✅ — sign up for season **{season}**!"
+      w_no_season: "Your account is ready ✅ — but no season is open yet. Come back soon!"
+      w_closed: "Your account is ready ✅ — but season **{season}** no longer takes sign-ups ({phase})."
+      w_already: "Your application is already pending ⏳ — the admins decide."
+      w_postuler_failed: "❌ The sign-up did not go through — the service is not answering. Try again in a moment (the beta founding via '⚔️ Pick my side' does not go through here)."
+      w_withdraw: "Withdraw"
+    settings:
+      settings_add_kingdom_button: + Add a kingdom manually
+      settings_add_kingdom_done: ✅ Kingdom **{0}** added.
+      settings_add_kingdom_failed: ❌ The add failed — {0}
+      settings_add_kingdom_modal_name_label: Kingdom name
+      settings_add_kingdom_modal_title: Add a kingdom
+      settings_assign_bad_role: ❌ The role must be 'king' or 'lord'.
+      settings_assign_button: 📥 Assign a waiting player
+      settings_assign_done: ✅ Player assigned to the kingdom.
+      settings_assign_failed: ❌ The assignment failed — {0}
+      settings_assign_modal_kingdom_label: Kingdom name
+      settings_assign_modal_player_label: Player ID
+      settings_assign_modal_role_label: Role (king or lord)
+      settings_assign_modal_title: 📥 Assign a player
+      settings_beta_exited: ✅ Beta phase left — the rules straighten back.
+      settings_beta_started: ✅ Beta phase entered — the rules bend.
+      settings_cancelled: ❌ Cancelled — nothing was touched.
+      settings_denied: ❌ Reserved for the bot admins.
+      settings_err_kingdoms_already_enrolled: ❌ Already enrolled in the season.
+      settings_err_kingdoms_kingdom_full: ❌ That kingdom is full.
+      settings_err_kingdoms_kingdom_limit: ❌ The season already counts its maximum of kingdoms.
+      settings_err_kingdoms_kingdom_not_found: ❌ Kingdom not found.
+      settings_err_kingdoms_name_invalid: ❌ Invalid kingdom name.
+      settings_err_kingdoms_no_season: ❌ No season is running — launch one first.
+      settings_deploy_button: 🚀 Deploy salons + panels
+      settings_deploy_cancel_button: ❌ Cancel
+      settings_deploy_confirm_button: ✅ Yes, deploy
+      settings_deploy_confirm_hint: The mod's salons and roles (re)provision, the panels repin.
+      settings_deploy_confirm_title: Deploy the salons and the panels?
+      settings_deploy_done: '✅ Deployed: {channels} salons, {roles} roles, {pins} pinned panels.'
+      settings_error: ❌ The action failed — {0}
+      settings_failed: ❌ The action failed — {0}
+      settings_launch_button: ▶️ Launch the season
+      settings_launch_done: ✅ Season launched — the imposed kingdoms (if any) are created.
+      settings_launch_failed: ❌ The launch failed — {0}
+      settings_launch_modal_names_label: Imposed names (optional)
+      settings_launch_modal_names_placeholder: "Kingdom A, Kingdom B"
+      settings_launch_modal_title: ▶️ Launch the season
+      settings_mode_free: 'Season mode: **free** — the Kings found their kingdoms.'
+      settings_mode_imposed: 'Season mode: **imposed** — the Kings can no longer found a kingdom.'
+      settings_no_service: ❌ The Kingdoms service is not ready.
+      settings_phase_unknown: unknown
+      settings_remove_button: 🧹 Remove a player/candidate
+      settings_remove_done: ✅ Player {0} removed from the season.
+      settings_remove_failed: ❌ The removal failed — {0}
+      settings_remove_modal_player_label: Player ID
+      settings_remove_modal_reason_label: Reason
+      settings_remove_modal_title: 🧹 Remove a player
+      settings_reset_button: ♻️ Reset the salons
+      settings_reset_cancel_button: ❌ Cancel
+      settings_reset_confirm_button: ✅ Yes, reset
+      settings_reset_confirm_hint: ⚠️ Every mod salon is deleted then recreated — the game data is NOT touched.
+      settings_reset_confirm_title: Reset the salons?
+      settings_reset_done: ✅ Salons reset ({channels} deleted, everything recreated).
+      settings_season_mode_button: 🔄 Season mode
+      settings_start_beta_button: 🚀 Start the beta
+      settings_start_season_button: 🎯 Start the season
+      settings_start_season_done: ✅ Season started — let the adventure begin!
+      settings_start_season_failed: ❌ The start failed — {0}
+      settings_status_button: 📊 Season status
+      settings_status_empty: —
+      settings_status_kingdoms: Kingdoms
+      settings_status_lords: Enrolled lords
+      settings_status_mode: Mode
+      settings_status_phase: Phase
+      settings_status_queue: In queue
+      settings_status_title: 📊 Season status
+      settings_sync_button: 🔄 Resync the panels
+      settings_sync_cancel_button: ❌ Cancel
+      settings_sync_confirm_button: ✅ Yes, resync
+      settings_sync_confirm_hint: The mod's pinned panels rebuild to the current state.
+      settings_sync_confirm_title: Resynchronize the panels?
+      settings_sync_done: '✅ Resynchronized: {pins} pinned panels.'
+      settings_title: 🛠️ Kingdoms — console
+    camp:
+      button: "⚔️ Pick my side — King or Lord"
+      window_title: "⚔️ King or Lord?"
+      window_help: "🧪 **Provisional system of the beta season**: found your kingdom or join one, no paperwork. On a normal season, the official path (account → application → throne or vassalage) will apply."
+      found_button: "👑 Found my kingdom"
+      join_button: "🛡️ Join a kingdom"
+      join_window_title: "🛡️ Join a kingdom"
+      join_help: "Pick the kingdom you serve — or take a seat in the waiting queue, an admin will assign you."
+      pick_placeholder: "Pick a kingdom…"
+      seats_left: "{0} lord seat(s) left"
+      queue_button: "⏳ Join the waiting queue"
+      modal_title: "👑 Found your kingdom"
+      modal_label: "Your kingdom's name"
+      found_done: "👑 Your kingdom **{0}** is founded and approved at once (beta) — welcome to the throne!"
+      join_done: "🛡️ You now serve **{0}**."
+      queue_done: "⏳ You are in the waiting queue — an admin will assign you a kingdom."
+      no_kingdoms: "No kingdom to join yet."
+      already_king_line: "👑 You reign over **{0}**."
+      already_lord_line: "🛡️ You serve **{0}**."
+      already_queue_line: "⏳ You are in the waiting queue."
+      none_note: "❌ The Kingdoms service is not ready."
+      err_kingdoms_already_enrolled: "❌ You are already enrolled in this season."
+      err_kingdoms_no_season: "❌ No season is running."
+      err_kingdoms_name_invalid: "❌ That kingdom name is invalid (length or characters)."
+      err_kingdoms_kingdom_limit: "❌ The season already counts its maximum of kingdoms."
+      err_kingdoms_kingdom_full: "❌ That kingdom is full."
+      err_kingdoms_not_enrollable: "❌ That kingdom does not recruit."
+      err_kingdoms_imposed: "❌ The kingdoms are imposed for this season — founding is closed."
+      err_kingdoms_kingdom_not_found: "❌ That kingdom does not exist anymore."
+      error: "❌ {0}"
+    machine:
+      title: "⏱️ Kingdoms time machine — the game clock"
+      help: "Advance the clock, trigger the switches, snapshot the state — no calendar waiting. Every due slot replays onto a snapshot: « previous cycle / age » always lands exactly before the switch."
+      clock_line: "🕐 Game clock: **{0}** (Paris time)"
+      phase_line: "📍 Phase: **{0}**"
+      phase_setup: "🧭 Setup — the season is not started yet. Once started: cycle switch every Sunday 23:30 · age every Wednesday 00:00 · a 4-week season · verdict the last Sunday 23:59."
+      phase_started: "⚔️ Season in progress"
+      phase_ended: "🏁 Season ended"
+      running_line: "▶️ Clock running"
+      paused_line: "⏸️ Season PAUSED — no slot replays (manual jumps still work)"
+      paused_set_line: "⏸️ Season paused — no slot replays (manual jumps still work)."
+      resumed_line: "▶️ Season resumed — due slots replay on the next tick."
+      offset_line: "⏩ Current offset: **{0}**"
+      next_cycle_line: "🔁 Next cycle switch: **{0}**"
+      next_age_line: "🕰️ Next age switch: **{0}**"
+      verdict_line: "⚖️ Season verdict: **{0}**"
+      snapshots_line: "📸 Snapshots: **{0}** ({1})"
+      snapshots_empty: "📸 Snapshots: none yet"
+      refresh_button: "🔄 Refresh"
+      refresh_done: "✅ Panels refreshed ({0} pinned)."
+      pause_button: "⏸️ Pause"
+      resume_button: "▶️ Resume"
+      snapshot_button: "📸 Snapshot"
+      snapshot_done: "📸 Snapshot taken: **{0}**"
+      restore_button: "♻️ Restore…"
+      restore_title: "♻️ Restore a snapshot"
+      restore_help: "Pick the moment to go back to — the whole game rewinds there and the season arrives paused (a rewind is never instantly re-advanced by the real clock)."
+      restore_row: "📦 **{0}** — taken {1}"
+      restore_do_button: "♻️ Restore"
+      restore_done: "✅ Data restored: **{0}** — the season is paused."
+      setup_button: "⏮️ Back to setup"
+      setup_confirm_title: "Back to the setup phase?"
+      setup_confirm_hint: "The season moves back to preparation. The drawn data is NOT wiped by this button alone — use launch/reset for a full cleanup."
+      setup_confirm_button: "✅ Yes, back to setup"
+      setup_cancel_button: "❌ Cancel"
+      setup_done: "✅ Season moved back to the setup phase."
+      d1_button: "+1 day"
+      d3_button: "+3 days"
+      d7_button: "+7 days"
+      jump_done: "✅ Clock advanced by **{0} day(s)**."
+      freejump_button: "⏩ Free jump…"
+      freejump_modal_title: "⏩ Free jump"
+      freejump_label: "Duration (90m, 2h, 1d2h…)"
+      freejump_done: "✅ Clock advanced by about **{0} day(s)**."
+      bad_input: "❌ {0}"
+      clockzero_button: "🧹 Reset the clock"
+      clockzero_done: "✅ Clock reset — back to the real time."
+      next_cycle_button: "🔁 Next cycle"
+      next_age_button: "🕰️ Next age"
+      end_button: "🏁 Season end"
+      switch_cycle_done: "✅ Cycle switch applied (budgets, marriage points, Gaia maps)."
+      switch_age_done: "✅ Age switch applied (epoch bonuses granted)."
+      end_done: "✅ Season-end verdict applied — the season is over."
+      prev_cycle_button: "⏮️ Previous cycle"
+      prev_age_button: "⏮️ Previous age"
+      prev_age_done: "✅ Back to the previous age (the epoch bonuses are removed)."
+      prev_snapshot_none: "No snapshot to restore — take one first."
+      lords_open_button: "🌅 Open Lord's Day"
+      lords_close_button: "🌇 Close/end Lord's Day"
+      lords_open_done: "✅ Lord's Day FORCED open — the cycle switch ran."
+      lords_closed: "✅ Lord's Day closed."
+      cancelled: "❌ Cancelled — nothing was touched."
+      no_service: "❌ The Kingdoms service is not ready."
+      error: "❌ The action failed — {0}"
+    distributor:
+      title: "🎁 Kingdoms distributor"
+      help: "Inject test elements: pick a kingdom, then hand it civilizations, 🏰 points, territories. Zero cost, no limits — the Nilrem test kingdom is created and removed here too."
+      test_exists_line: "🌱 The **Nilrem** test kingdom already exists — the 🧨 self-destruct removes it."
+      open_button: "🔧 Open the distributor"
+      test_kingdom_button: "🌱 Create the test kingdom"
+      test_kingdom_done: "🌱 Test kingdom **{0}** ready (id k-nilrem, king nilrem-roi)."
+      destruct_button: "🧨 Test kingdom self-destruct"
+      destruct_confirm_title: "Destroy the test kingdom?"
+      destruct_confirm_hint: "The Nilrem kingdom and its data disappear."
+      destruct_confirm_button: "🧨 Yes, destroy"
+      destruct_cancel_button: "❌ Cancel"
+      destruct_done: "🧨 Test kingdom **{0}** destroyed."
+      window_title: "🎁 Distributor — test injection"
+      window_help: "Pick a kingdom, then hand it elements without a limit. The alliance rules apply: never a duplicate in the hand, never an already-married civilization."
+      no_kingdoms: "No kingdom to feed — launch the season first."
+      select_placeholder: "Pick a kingdom"
+      select_hint: "↳ The choice opens the kingdom's injection window."
+      kingdom_header: "🌱 Kingdom: **{0}**"
+      hand_line: "🃏 civilizations in hand: {0}"
+      points_button: "🏰 +10 tech points"
+      territory_button: "🗺️ +1 territory"
+      civ_button: "🃏 +1 civilization"
+      points_done: "✅ **{0}** receives **{1}** tech points."
+      territory_done: "✅ Territory granted: **{0}** (a free map drawn from the cadastre)."
+      civ_done: "✅ Civilization granted: **{0}**."
+      no_free_map: "No free map left in the cadastre — the pool is exhausted for the season."
+      no_free_civ: "No civilization available for this kingdom (hand or marriages)."
+      test_option: "The test kingdom (Nilrem)"
+      test_hint: "🌱 This is the test kingdom — the 🧨 self-destruct on the pinned panel removes it."
+      cancelled: "❌ Cancelled — nothing was touched."
+      no_service: "❌ The Kingdoms service is not ready."
+      error: "❌ The action failed — {0}"
+      menu_title: "**{0}** — pick a category:"
+      back_button: "🔙 Kingdom"
+      civ_placeholder: "Pick a civilization"
+      cat_alliance_add: "+ Alliance"
+      cat_alliance_remove: "- Alliance"
+      cat_treasury: "🔬 Treasury"
+      cat_parish: "💒 Parish"
+      cat_territories: "🗺️ Territories"
+      cat_lord: "👤 Lord"
+      cat_tech: "⚔️ Tech"
+      cat_status: "🧾 Status"
+      civ_add_title: "+ **{0}** — hand a civilization (page {1}/{2}):"
+      civ_remove_title: "- **{0}** — remove a civilization (page {1}/{2}):"
+      civ_status_free: "✅ available"
+      civ_status_hand: "⏹ already in the hand"
+      civ_status_married: "💍 married — {0}"
+      civ_secured: "💍 secured by a marriage of this kingdom"
+      civ_add_done: "✅ **{0}** now holds **{1}** in Alliances."
+      civ_remove_done: "✅ **{0}** removed from **{1}**'s hand."
+      prev_page: "◀"
+      next_page: "▶"
+      treasury_title: "🔬 **{0}** — treasury: **{1}**"
+      treasury_set: "📝 Set…"
+      treasury_field: "treasury"
+      tr_plus5_button: "➕ +5 🔬"
+      tr_plus1_button: "➕ +1 🔬"
+      tr_minus1_button: "➖ −1 🔬"
+      tr_minus5_button: "➖ −5 🔬"
+      treasury_set_done: "✅ {0} = **{1}**."
+      value_modal_title: "Set the value"
+      value_modal_label: "New value (integer ≥ 0)"
+      value_modal_bad: "That is not a valid integer ≥ 0."
+      parish_title: "💒 **{0}** — current palier: **{2}** ({1}/3)"
+      parish_tier_set: "✅ Parish forced to palier **{0}**."
+      terr_title: "🗺️ **{0}** — {1} territory(ies):"
+      terr_line: "· {0} {1}"
+      terr_shielded: "🛡"
+      terr_give_button: "+ Give a map"
+      terr_transfer_button: "🔁 Transfer"
+      terr_retire_button: "- Retire"
+      terr_replace_button: "♻ Replace"
+      terr_shield_button: "🛡 Shield 48h"
+      terr_unshield_button: "🔓 Clear shield"
+      terr_pick_line: "**{0}** — pick a territory:"
+      terr_give_pick_line: "Pick a map still available this season:"
+      terr_pick_kingdom_line: "Transfer **{0}** to which kingdom?"
+      terr_none: "No territory to show here."
+      terr_maps_none: "Every catalog map is already out this season."
+      terr_give_done: "✅ **{0}** attributed to **{1}**."
+      terr_transfer_done: "✅ **{0}** transferred to **{1}**."
+      terr_retire_done: "✅ **{0}** retired (out for the season)."
+      terr_replace_done: "♻ **{0}** ejected — replacement drawn."
+      terr_shield_done: "🛡 **{0}** shielded for 48h."
+      terr_unshield_done: "🔓 Shield cleared on **{0}**."
+      lord_title: "👤 **{0}** — pick a lord:"
+      lord_line: "{0} · budgets {1}/{2}"
+      lord_role_king: "👑 King"
+      lord_role_lord: "🎖️ Lord"
+      lord_none: "No active lord in this kingdom."
+      lord_action_title: "**{0}**:"
+      lord_budgets_button: "↻ Recharge budgets"
+      lord_unlock_button: "🔓 Clear marriage lock"
+      lord_lock_button: "🔒 Marriage lock 6h"
+      lord_budgets_done: "✅ Budgets of **{0}** recharged (1 attack / 1 defense)."
+      lord_unlock_done: "🔓 Marriage lock cleared on **{0}**."
+      lord_lock_done: "🔒 **{0}** locked out of combat for 6h."
+      tech_title: "⚔️ **{0}** — pick a combat technology:"
+      tech_line: "purchases: {0}"
+      tech_plus_button: "✅ +1 technology (force)"
+      tech_minus_button: "❌ −1 technology"
+      tech_done: "✅ **{0}** of **{1}** → **{2}** purchase(s)."
+      status_title: "🧾 **{0}** — {1}"
+      status_parish: "💒 {0} · 🔬 treasury: **{1}**"
+      status_hand: "🤝 Hand ({0}): {1}"
+      status_secured: "💍 Secured: {0}"
+      status_lord: "{0} **{1}** — 💍 {2} · 🗡 {3} ⚔️ {4} {5}"
+      status_married_none: "single"
+      status_lock_line: "· 🔒 until {0}"
+      status_territories: "🗺️ Territories ({0}): {1}"
+      status_purchases: "⚔️ Tech: {0}"
+      status_purchases_none: "⚔️ Tech: none"

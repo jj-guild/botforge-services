@@ -37,7 +37,7 @@ views:
     - label: ui.homes.btn_sync
       sync: true
     admin_surface: true
-  menu:console:
+  panel:admin:console:
     kind: menu
     scope: bot/admin
     buttons: []
@@ -62,19 +62,18 @@ views:
     kind: menu
     scope: games/aoe2/general
     buttons:
-    # the GENERIC Profile button (#333/#363): the panel is game-agnostic
-    # (the user's linked accounts; the game's details ride its enricher —
-    # data, never code); every game menu declares the same target — and it
-    # opens the game's home menu first (#409)
-    - target: panel:profile
-      label: ui.homes.btn_profile
-      emoji: 👤
     - target: panel:game:aoe2:live
       label: ui.homes.btn_live
       emoji: 📡
     - target: panel:game:aoe2:players
       label: ui.homes.btn_users
       emoji: 👥
+    # the GENERIC Profile button (#333/#363): the panel is game-agnostic
+    # (the user's linked accounts; the game's details ride its enricher —
+    # data, never code); every game menu declares the same target
+    - target: panel:profile
+      label: ui.homes.btn_profile
+      emoji: 👤
     - target: menu:game:aoe2:admin
       label: ui.homes.btn_admin
       admin: true
@@ -144,6 +143,9 @@ scopes:
       description: ui.panels.channels.decisions_description
   games:
     category: ui.panels.categories.games
+    # machine-room rule (Drasah 18/11): the games folder is plumbing —
+    # staff-only at the category level, the channels keep their bands
+    admin_only: true
     channels:
     - key: general
       label: ui.panels.channels.general
