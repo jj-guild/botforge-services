@@ -13,7 +13,11 @@ next cycle/age slots, verdict, snapshots) and the operator's buttons:
   Day force-open/close;
 - the camera: a manual snapshot + a restore picker (every due slot
   replays onto a fresh pre-slot snapshot — the phases loop wires
-  ``run_due``'s snapshotter hook).
+  ``run_due``'s snapshotter hook);
+- the clock's rhythm (v4, Drasah 20/11): the season length and the
+  cycle/age/verdict labels derive from the ACTIVE preset (official
+  ``weeks``, beta compressed plan) — never hardcoded — and the pin
+  re-renders itself on a light refresher loop.
 
 Announce-ready (#396): the whole surface is ONE declared template
 (``panel:mod:kingdom:time-machine``) + its data; the buttons are
@@ -48,6 +52,112 @@ def machine_strings(locale: str) -> dict[str, str]:
     return dict(mod_catalog().section("kingdom.machine", str(locale)[:2]))
 
 
+# machine-temps-v4 (Drasah 20/11): the rhythm and length labels are
+# DATA-DRIVEN — the season length reads the active preset (official
+# ``weeks``, beta compressed plan), never a hardcoded count. The 4-week
+# text of v3 was the stale reference value.
+
+
+_CRON_DAY_LABELS: tuple[str, ...] = (
+    "lundi",
+    "mardi",
+    "mercredi",
+    "jeudi",
+    "vendredi",
+    "samedi",
+    "dimanche",
+)
+_CRON_DAY_LABELS_EN: tuple[str, ...] = (
+    "Monday",
+    "Tuesday",
+    "Wednesday",
+    "Thursday",
+    "Friday",
+    "Saturday",
+    "Sunday",
+)
+
+
+def _hours_label(locale: str, day: int, hour: int, minute: int) -> str:
+    """One weekly slot as Drasah reads it: « dimanche 23h30 » / « Sunday 23:30 »."""
+    labels = _CRON_DAY_LABELS if str(locale).startswith("fr") else _CRON_DAY_LABELS_EN
+    if str(locale).startswith("fr"):
+        return f"{labels[day]} {hour:02d}h{minute:02d}"
+    return f"{labels[day]} {hour:02d}:{minute:02d}"
+
+
+def weekly_slot_label(cron: str, locale: str) -> str:
+    """The cron's weekly slot label (« dimanche 23h30 ») — derived, never hardcoded."""
+    from botforge.mods.kingdom.events import weekly_cron_parts
+
+    minute, hour, day = weekly_cron_parts(cron)
+    return _hours_label(locale, day, hour, minute)
+
+
+def verdict_slot_label(cycle_cron: str, locale: str) -> str:
+    """The verdict slot label — the cycle slot plus 29 minutes (verdict_slot)."""
+    from botforge.mods.kingdom.events import weekly_cron_parts
+
+    minute, hour, day = weekly_cron_parts(cycle_cron)
+    total = hour * 60 + minute + 29
+    return _hours_label(locale, day, total // 60 % 24, total % 60)
+
+
+def _preset_config(stack: Any) -> Any:
+    """The season config from the stack, the declared defaults otherwise."""
+    config = getattr(stack, "config", None) if stack is not None else None
+    if config is None:
+        from botforge.mods.kingdom.config import default_season_config
+
+        config = default_season_config()
+    return config
+
+
+def _beta_armed(season: Any) -> bool:
+    """Whether the season rides a compressed beta preset (machine display)."""
+    from botforge.mods.kingdom.beta_weekend import BETA_PRESETS
+
+    return bool(BETA_PRESETS.get(str(getattr(season, "beta_name", None) or "")))
+
+
+def season_length_label(locale: str, config: Any, season: Any) -> str:
+    """The ACTIVE preset's season length: « 3 semaines » / « 52h (beta) »."""
+    from botforge.mods.kingdom.beta_weekend import BETA_PLAN_OFFSETS
+
+    strings = machine_strings(locale)
+    if _beta_armed(season):
+        return str(strings["length_beta"]).format(int(BETA_PLAN_OFFSETS["end_hours"]))
+    weeks = int(getattr(config, "weeks", 3) or 3)
+    if weeks == 1:
+        return str(strings["length_one_week"])
+    return str(strings["length_weeks"]).format(weeks)
+
+
+def setup_rhythm_phrase(locale: str, config: Any, season: Any) -> str:
+    """The setup phase's rhythm sentence — every piece derived from data."""
+    strings = machine_strings(locale)
+    if _beta_armed(season):
+        from botforge.mods.kingdom.beta_weekend import BETA_PLAN_OFFSETS
+
+        cycles = " et ".join(f"T0+{int(h)}h" for h in BETA_PLAN_OFFSETS["cycle_hours"])
+        return str(strings["rhythm_beta"]).format(
+            f"T0+{int(BETA_PLAN_OFFSETS['age_hours'])}h",
+            cycles,
+            f"T0+{int(BETA_PLAN_OFFSETS['end_hours'])}h",
+        )
+    cycle = weekly_slot_label(config.events.cycle_cron, locale)
+    age = weekly_slot_label(config.events.age_cron, locale)
+    verdict = verdict_slot_label(config.events.cycle_cron, locale)
+    return " · ".join(
+        (
+            str(strings["rhythm_cycle"]).format(cycle),
+            str(strings["rhythm_age"]).format(age),
+            str(strings["rhythm_season"]).format(season_length_label(locale, config, season)),
+            str(strings["rhythm_verdict"]).format(verdict),
+        )
+    )
+
+
 async def build_time_machine_panel(guild_id: str) -> discord.ui.LayoutView:
     """Build the pinned time-machine layout (guild-locale strings)."""
     from botforge.mods.kingdom.events import next_cron_slot, verdict_slot
@@ -72,11 +182,11 @@ async def build_time_machine_panel(guild_id: str) -> discord.ui.LayoutView:
         except Exception:
             logger.warning("kingdom: machine snapshots read failed", exc_info=True)
         if season is not None:
-            config = getattr(stack, "config", None)
+            live_config = getattr(stack, "config", None)
             try:
-                next_cycle = next_cron_slot(config, config.events.cycle_cron, now)
-                next_age = next_cron_slot(config, config.events.age_cron, now)
-                verdict = verdict_slot(config, season, now)
+                next_cycle = next_cron_slot(live_config, live_config.events.cycle_cron, now)
+                next_age = next_cron_slot(live_config, live_config.events.age_cron, now)
+                verdict = verdict_slot(live_config, season, now)
             except Exception:
                 logger.warning("kingdom: machine slots read failed", exc_info=True)
 
@@ -84,9 +194,14 @@ async def build_time_machine_panel(guild_id: str) -> discord.ui.LayoutView:
 
     lines = [f"# {strings['title']}", str(strings["help"]), ""]
     lines.append(str(strings["clock_line"]).format(fmt_paris(now)))
+    config = _preset_config(stack)
     phase = str(getattr(season, "phase", "setup")) if season is not None else "setup"
     phase_label = str(strings.get(f"phase_{phase}", phase))
+    if phase == "setup":
+        phase_label = str(phase_label).format(setup_rhythm_phrase(locale, config, season))
     lines.append(str(strings["phase_line"]).format(phase_label))
+    # machine-temps-v4: the ACTIVE preset's length, always visible
+    lines.append(str(strings["length_line"]).format(season_length_label(locale, config, season)))
     if getattr(season, "frozen", False):
         lines.append(str(strings["paused_line"]))
     else:
@@ -732,6 +847,62 @@ class MachineLordsButton(
         await _run(interaction, f"lords:{str(self.item.custom_id).rsplit(':', 1)[-1]}")
 
 
+# ---------------------------------------------------------------------------
+# The auto-refresher (machine-temps-v4, Drasah 20/11): the pinned cockpit
+# re-renders ITSELF — « Panneau épinglé auto-mis à jour ». The clock line
+# is a live reading: a pin that only refreshes on boot goes stale within
+# minutes. The loop rides the platform's own ensure cycle (fingerprint
+# guard: an unchanged pin costs NO API call, so the cadence is free in
+# steady state and the clock line re-edits only when it actually moved).
+# ---------------------------------------------------------------------------
+
+REFRESH_MINUTES = 5
+
+
+async def run_machine_refresh_pass(bot: Any) -> int:
+    """One pass: re-ensure the machine pin on every served guild."""
+    from botforge.discord.static_pins import ensure_static_pin, registered_static_pins
+
+    spec = next((s for s in registered_static_pins() if s.key == MACHINE_VIEW_KEY), None)
+    if spec is None:
+        return 0
+    touched = 0
+    for guild in list(getattr(bot, "guilds", []) or []):
+        guild_id = str(getattr(guild, "id", ""))
+        try:
+            # the pin quietly skips when its salon is not resolvable
+            await ensure_static_pin(bot, spec, guild_id)
+            touched += 1
+        except Exception:  # noqa: BLE001 — the refresher never raises
+            logger.warning("kingdom: machine pin pass failed (guild %s)", guild_id, exc_info=True)
+    return touched
+
+
+def start_machine_refresher(bot: Any) -> None:
+    """Start the machine pin auto-refresher (every REFRESH_MINUTES).
+
+    Gated off in the test journeys
+    (``BOTFORGE_KINGDOM_MACHINE_REFRESHER=off``), same idiom as the
+    attack phases loop.
+    """
+    import os
+
+    if os.environ.get("BOTFORGE_KINGDOM_MACHINE_REFRESHER", "").lower() in {"off", "0", "false"}:
+        return
+
+    from discord.ext import tasks
+
+    @tasks.loop(minutes=REFRESH_MINUTES)
+    async def _loop() -> None:
+        try:
+            await run_machine_refresh_pass(bot)
+        except Exception:  # noqa: BLE001 — the loop never raises
+            logger.warning("kingdom: machine refresher pass failed — best-effort", exc_info=True)
+
+    _loop.setup()  # type: ignore[no-untyped-call]
+    _loop.start()  # type: ignore[no-untyped-call]
+
+
 def machine_dynamic_items() -> tuple:
     """Every restart-proof DynamicItem of the machine panel (boot pass)."""
     return (
@@ -753,7 +924,14 @@ def machine_dynamic_items() -> tuple:
 __all__ = [
     "MACHINE_VIEW_KEY",
     "RESTORE_VIEW_KEY",
+    "REFRESH_MINUTES",
     "build_time_machine_panel",
     "machine_dynamic_items",
     "machine_strings",
+    "run_machine_refresh_pass",
+    "season_length_label",
+    "setup_rhythm_phrase",
+    "start_machine_refresher",
+    "verdict_slot_label",
+    "weekly_slot_label",
 ]

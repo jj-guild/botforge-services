@@ -14,6 +14,16 @@ FR_MACHINE_KEYS = (
     "help",
     "clock_line",
     "phase_line",
+    "phase_setup",
+    "rhythm_cycle",
+    "rhythm_age",
+    "rhythm_season",
+    "rhythm_verdict",
+    "rhythm_beta",
+    "length_line",
+    "length_one_week",
+    "length_weeks",
+    "length_beta",
     "running_line",
     "paused_line",
     "paused_set_line",
@@ -220,6 +230,15 @@ def test_machine_and_distributor_strings_parity() -> None:
             assert distributor.get(key), f"missing kingdom.distributor.{key} in {locale}"
         machine["clock_line"].format("01/01 12:00")
         machine["phase_line"].format("setup")
+        machine["phase_setup"].format("cycle chaque dimanche 23h30")
+        machine["rhythm_cycle"].format("dimanche 23h30")
+        machine["rhythm_age"].format("mercredi 00h00")
+        machine["rhythm_season"].format("3 semaines")
+        machine["rhythm_verdict"].format("dimanche 23h59")
+        machine["rhythm_beta"].format("T0+4h", "T0+10h et T0+34h", "T0+52h")
+        machine["length_line"].format("3 semaines")
+        machine["length_weeks"].format(3)
+        machine["length_beta"].format(52)
         machine["offset_line"].format("+2h")
         machine["snapshots_line"].format(3, "a · b · c")
         machine["restore_row"].format("snapshot-manual-1", "01/01 12:00")
@@ -566,3 +585,89 @@ def test_settings_pin_falls_back_to_the_declared_salon_name() -> None:
     # an uncached guild or a miss resolves to nothing (the pin simply waits)
     assert channel_id_by_flattened_name(_Bot(None), "42", ("parametres",)) == ""
     assert channel_id_by_flattened_name(_Bot(guild), "7", ("parametres",)) == ""
+
+
+def test_official_season_is_three_weeks() -> None:
+    """machine-temps-v4: the official season lasts THREE weeks (calibrage)."""
+    from botforge.mods.kingdom.config import default_season_config
+
+    assert default_season_config().weeks == 3
+
+
+def test_machine_rhythm_labels_derive_from_the_active_preset() -> None:
+    """machine-temps-v4: cycle/age/verdict labels come from the crons, the
+    season length from the ACTIVE preset — never a hardcoded count."""
+    from types import SimpleNamespace
+
+    from botforge.mods.kingdom.beta_weekend import BETA_PLAN_OFFSETS
+    from botforge.mods.kingdom.cogs.time_machine import (
+        season_length_label,
+        setup_rhythm_phrase,
+        verdict_slot_label,
+        weekly_slot_label,
+    )
+    from botforge.mods.kingdom.config import default_season_config
+
+    config = default_season_config()
+    no_beta = SimpleNamespace(beta_name=None)
+
+    # the weekly slot labels mirror the declared crons
+    assert weekly_slot_label(config.events.cycle_cron, "fr") == "dimanche 23h30"
+    assert weekly_slot_label(config.events.age_cron, "fr") == "mercredi 00h00"
+    assert weekly_slot_label(config.events.cycle_cron, "en") == "Sunday 23:30"
+    # the verdict label = the cycle slot + 29 minutes (verdict_slot)
+    assert verdict_slot_label(config.events.cycle_cron, "fr") == "dimanche 23h59"
+
+    # the official length reads config.weeks
+    assert season_length_label("fr", config, no_beta) == "3 semaines"
+    assert season_length_label("en", config, no_beta) == "3 weeks"
+
+    # the setup rhythm sentence carries every derived piece
+    phrase = setup_rhythm_phrase("fr", config, no_beta)
+    assert "cycle chaque dimanche 23h30" in phrase
+    assert "âge chaque mercredi 00h00" in phrase
+    assert "saison de 3 semaines" in phrase
+    assert "verdict le dernier dimanche 23h59" in phrase
+
+    # a beta-armed season reads the compressed plan's real data
+    beta = SimpleNamespace(beta_name="now")
+    end = int(BETA_PLAN_OFFSETS["end_hours"])
+    assert season_length_label("fr", config, beta) == f"{end}h (beta compressée)"
+    beta_phrase = setup_rhythm_phrase("fr", config, beta)
+    assert "T0+4h" in beta_phrase
+    assert "T0+52h" in beta_phrase
+    assert "3 semaines" not in beta_phrase
+
+
+def test_machine_refresher_pass_ensures_only_the_machine_pin() -> None:
+    """machine-temps-v4: the auto-refresher pass is gated and machine-only."""
+    import asyncio
+
+    from botforge.discord.static_pins import reset_static_pins
+    from botforge.mods.kingdom.cogs.time_machine import (
+        MACHINE_VIEW_KEY,
+        REFRESH_MINUTES,
+        run_machine_refresh_pass,
+        start_machine_refresher,
+    )
+
+    assert REFRESH_MINUTES == 5
+
+    class _Bot:
+        guilds = []
+
+    # no registered machine spec: the pass is a cheap no-op, never a raise
+    reset_static_pins()
+    assert asyncio.run(run_machine_refresh_pass(_Bot())) == 0
+    # the env gate keeps the loop out of the test journeys
+    import os
+
+    saved = os.environ.pop("BOTFORGE_KINGDOM_MACHINE_REFRESHER", None)
+    os.environ["BOTFORGE_KINGDOM_MACHINE_REFRESHER"] = "off"
+    try:
+        start_machine_refresher(_Bot())  # must return without starting a loop
+        assert MACHINE_VIEW_KEY == "panel:mod:kingdom:time-machine"
+    finally:
+        os.environ.pop("BOTFORGE_KINGDOM_MACHINE_REFRESHER", None)
+        if saved is not None:
+            os.environ["BOTFORGE_KINGDOM_MACHINE_REFRESHER"] = saved

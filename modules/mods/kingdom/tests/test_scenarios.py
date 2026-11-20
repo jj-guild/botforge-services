@@ -158,3 +158,53 @@ def test_SC_KING_010_the_mods_pins_are_declared() -> None:
         assert f'key="{pin_key}"' in src, pin_key
     # apply/register pins ride their module constants
     assert "APPLY_VIEW_KEY" in src and "REGISTER_VIEW_KEY" in src
+
+
+def test_SC_KING_011_machine_panel_durations_read_from_the_active_preset() -> None:
+    """SC-KING-011 — the ⏱️ machine à temps reads its rhythm from data.
+
+    machine-temps-v4 (Drasah 20/11): the official season lasts THREE
+    weeks; the panel's length and rhythm labels derive from the active
+    preset (official ``weeks`` / beta compressed plan), never a
+    hardcoded count.
+    """
+    from types import SimpleNamespace
+
+    from botforge.mods.kingdom.cogs.time_machine import (
+        season_length_label,
+        setup_rhythm_phrase,
+    )
+    from botforge.mods.kingdom.config import default_season_config
+
+    config = default_season_config()
+    assert config.weeks == 3, "the official season is three weeks (calibrage)"
+    assert season_length_label("fr", config, SimpleNamespace(beta_name=None)) == "3 semaines"
+    phrase = setup_rhythm_phrase("fr", config, SimpleNamespace(beta_name=None))
+    assert "saison de 3 semaines" in phrase and "dimanche 23h30" in phrase
+    assert season_length_label("fr", config, SimpleNamespace(beta_name="now")) == "52h (beta compressée)"
+    assert "T0+52h" in setup_rhythm_phrase("fr", config, SimpleNamespace(beta_name="now"))
+
+
+def test_SC_KING_012_machine_pin_refreshes_itself() -> None:
+    """SC-KING-012 — the machine pin is auto-updated (the refresher loop).
+
+    machine-temps-v4 (Drasah 20/11): « Panneau épinglé auto-mis à
+    jour » — a light 5-minute pass re-ensures the cockpit pin; an
+    unchanged pin costs no API call (the platform's fingerprint guard).
+    """
+    import asyncio
+
+    from botforge.discord.static_pins import reset_static_pins
+    from botforge.mods.kingdom.cogs.time_machine import (
+        REFRESH_MINUTES,
+        run_machine_refresh_pass,
+    )
+
+    assert REFRESH_MINUTES == 5
+    reset_static_pins()
+
+    class _Bot:
+        guilds: list = []
+
+    # no machine spec registered → the pass is a no-op, never a raise
+    assert asyncio.run(run_machine_refresh_pass(_Bot())) == 0

@@ -148,7 +148,19 @@ fr:
       help: "Avancez l'horloge, déclenchez les bascules, photographiez l'état — le tout sans attendre le calendrier. Chaque bascule due s'exécute sur un snapshot : « Cycle / Âge précédent » revient toujours exactement avant le switch."
       clock_line: "🕐 Horloge du jeu : **{0}** (heure de Paris)"
       phase_line: "📍 Phase : **{0}**"
-      phase_setup: "🧭 Préparation (setup) — la saison n'est pas encore démarrée. Une fois démarrée : cycle chaque dimanche 23h30 · âge chaque mercredi 00h00 · saison de 4 semaines · verdict le dernier dimanche 23h59."
+      # machine-temps-v4 (Drasah 20/11): the phase text and the length
+      # line read the ACTIVE preset (official weeks / beta plan) — the
+      # rhythm sentence is built from data (rhythm_* keys below).
+      phase_setup: "🧭 Préparation (setup) — la saison n'est pas encore démarrée. Une fois démarrée : {0}."
+      rhythm_cycle: "cycle chaque {0}"
+      rhythm_age: "âge chaque {0}"
+      rhythm_season: "saison de {0}"
+      rhythm_verdict: "verdict le dernier {0}"
+      rhythm_beta: "beta compressée : âge à {0} · cycles à {1} · fin à {2}"
+      length_line: "📏 Durée de la saison : **{0}**"
+      length_one_week: "1 semaine"
+      length_weeks: "{0} semaines"
+      length_beta: "{0}h (beta compressée)"
       phase_started: "⚔️ Saison en cours"
       phase_ended: "🏁 Saison terminée"
       running_line: "▶️ Horloge en marche"

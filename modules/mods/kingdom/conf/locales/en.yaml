@@ -148,7 +148,19 @@ en:
       help: "Advance the clock, trigger the switches, snapshot the state — no calendar waiting. Every due slot replays onto a snapshot: « previous cycle / age » always lands exactly before the switch."
       clock_line: "🕐 Game clock: **{0}** (Paris time)"
       phase_line: "📍 Phase: **{0}**"
-      phase_setup: "🧭 Setup — the season is not started yet. Once started: cycle switch every Sunday 23:30 · age every Wednesday 00:00 · a 4-week season · verdict the last Sunday 23:59."
+      # machine-temps-v4 (Drasah 20/11): the phase text and the length
+      # line read the ACTIVE preset (official weeks / beta plan) — the
+      # rhythm sentence is built from data (rhythm_* keys below).
+      phase_setup: "🧭 Setup — the season is not started yet. Once started: {0}."
+      rhythm_cycle: "cycle switch every {0}"
+      rhythm_age: "age every {0}"
+      rhythm_season: "a {0} season"
+      rhythm_verdict: "verdict the last {0}"
+      rhythm_beta: "compressed beta: age at {0} · cycles at {1} · end at {2}"
+      length_line: "📏 Season length: **{0}**"
+      length_one_week: "1 week"
+      length_weeks: "{0} weeks"
+      length_beta: "{0}h (compressed beta)"
       phase_started: "⚔️ Season in progress"
       phase_ended: "🏁 Season ended"
       running_line: "▶️ Clock running"

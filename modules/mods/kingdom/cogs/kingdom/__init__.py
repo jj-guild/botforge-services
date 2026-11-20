@@ -333,6 +333,15 @@ def setup_hook(bot: Any) -> None:
     except Exception:  # noqa: S110 — a loop failure never blocks the boot
         pass
 
+    # machine-temps-v4 (Drasah 20/11): the ⏱️ machine à temps pin
+    # re-renders itself — « Panneau épinglé auto-mis à jour ».
+    try:
+        from .time_machine import start_machine_refresher
+
+        start_machine_refresher(bot)
+    except Exception:  # noqa: S110 — a loop failure never blocks the boot
+        pass
+
     # The boot passes (epic #412): one pass per guild shortly after the
     # gateway is ready — the pins land (the Repair seam) and the mod's
     # declared surfaces exist on every served guild.

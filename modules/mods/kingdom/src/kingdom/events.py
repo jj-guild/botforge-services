@@ -49,6 +49,18 @@ _CRON_DAYS: dict[str, int] = {
 }
 
 
+def weekly_cron_parts(cron: str) -> tuple[int, int, int]:
+    """Public read of a weekly cron as ``(minute, hour, weekday)``.
+
+    machine-temps-v4 (Drasah 20/11): the time machine's rhythm labels
+    (« cycle chaque dimanche 23h30 ») derive from the SAME parse as the
+    scheduler — a display that re-hardcodes the schedule would drift
+    the moment an admin moves a slot. ``weekday`` uses datetime's
+    Monday=0 convention (0=Monday … 6=Sunday).
+    """
+    return _parse_weekly_cron(cron)
+
+
 def _parse_weekly_cron(cron: str) -> tuple[int, int, int]:
     """Parse a weekly ``m h * * DAY`` cron into (minute, hour, weekday).
 
