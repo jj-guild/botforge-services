@@ -313,6 +313,8 @@ def match_history_from_wire(wire: game_pb2.MatchHistoryEntry) -> MatchHistoryEnt
         teams=dict(wire.teams),
         winners=tuple(wire.winners),
         options_json=wire.options_json,
+        description=wire.description,
+        players_json=wire.players_json,
         slots_json=wire.slots_json,
     )
 

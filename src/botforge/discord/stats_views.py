@@ -9,6 +9,7 @@ crashes the view (the panels degrade quietly).
 
 from __future__ import annotations
 
+import json
 import logging
 import os
 from typing import Any
@@ -132,21 +133,80 @@ async def recent_match_lines(bot: Any, profile_ids: list[str], limit: int = 10) 
             seen.add(match_id)
         # a custom lobby carries neither winners nor ratings: the
         # outcome reads UNKNOWN (a gray dot, no delta) — never a fake ❌
-        winners = tuple(getattr(entry, "winners", ()) or ())
-        won = any(str(p) in set(winners) for p in mine)
-        before = int(getattr(entry, "rating_before", {}).get(mine[0], 0) or 0)
-        after = int(getattr(entry, "rating_after", {}).get(mine[0], 0) or 0)
-        delta = f"{after - before:+d} elo" if before and after else ""
-        board_key = str(getattr(entry, "leaderboard_id", ""))
-        board = f" ({BOARD_LABELS.get(board_key, board_key)})" if board_key else ""
-        played_at = int(entry.finished_at or entry.started_at or 0)
-        stamp = f"<t:{played_at}:R>" if played_at else "?"
-        outcome = "✅" if won else ("❌" if winners else "⬜")
-        map_name = str(getattr(entry, "map_name", "") or "?")
-        lines.append(f"{outcome} {stamp} — {map_name}{board} {delta}".strip())
+        lines.append(_match_line(entry, mine))
         if len(lines) >= limit:
             break
     return lines
+
+
+def _match_line(entry: Any, mine: list[str]) -> str:
+    """Render one match line: outcome, date, map, kind, players, delta."""
+    players = _entry_players(entry)
+    by_id = {str(pl.get("profile_id")): pl for pl in players}
+    me = by_id.get(mine[0], {})
+    my_team = int(me.get("team", 0) or 0)
+    allies = [pl for pl in players if pl is not me and int(pl.get("team", 0) or 0) == my_team]
+    opponents = [pl for pl in players if int(pl.get("team", 0) or 0) != my_team]
+    winners = tuple(getattr(entry, "winners", ()) or ())
+    won = any(str(p) in set(winners) for p in mine)
+    before = int(me.get("rating_before", 0) or 0)
+    after = int(me.get("rating_after", 0) or 0)
+    delta = f"{after - before:+d} elo" if before and after else ""
+    played_at = int(entry.finished_at or entry.started_at or 0)
+    stamp = f"<t:{played_at}:R>" if played_at else "?"
+    outcome = "✅" if won else ("❌" if winners else "⬜")
+    map_name = str(getattr(entry, "map_name", "") or "")
+    description = str(getattr(entry, "description", "") or "")
+    # a custom lobby names itself ("Test bot"): the raw map_name is
+    # then the generic upstream "my map" — the lobby's own title is
+    # the readable label
+    label = (
+        description or map_name or "?"
+        if not map_name or map_name == "my map"
+        else map_name
+    )
+    bits = [outcome, stamp, "—", label, _match_kind(players, my_team)]
+    with_ = " · ".join(_player_bit(pl) for pl in allies[:2])
+    against = " · ".join(_player_bit(pl) for pl in opponents[:4])
+    if with_:
+        bits.append(f"avec {with_}")
+    if against:
+        bits.append(f"vs {against}")
+    if delta:
+        bits.append(delta)
+    return " ".join(bits).strip()
+
+
+def _entry_players(entry: Any) -> list[dict[str, Any]]:
+    """Return the decoded players of one stored match ("" when none)."""
+    raw = str(getattr(entry, "players_json", "") or "")
+    if not raw:
+        return []
+    try:
+        decoded = json.loads(raw)
+    except Exception:
+        return []
+    return [pl for pl in decoded if isinstance(pl, dict)]
+
+
+def _player_bit(player: dict[str, Any]) -> str:
+    """One player's readable bit: alias (elo after)."""
+    name = str(player.get("alias") or player.get("profile_id") or "?")
+    elo = int(player.get("rating_after", 0) or 0)
+    return f"{name} ({elo})" if elo else name
+
+
+def _match_kind(players: list[dict[str, Any]], my_team: int) -> str:
+    """Render the readable match type: 1v1, 2v2..., custom."""
+    if not players:
+        return ""
+    mine = sum(1 for pl in players if int(pl.get("team", 0) or 0) == my_team)
+    theirs = len(players) - mine
+    if mine == 1 and theirs == 1:
+        return "1v1"
+    if mine and theirs:
+        return f"{mine}v{theirs}"
+    return "custom"
 
 
 def criteria_lines(application: Any) -> list[str]:

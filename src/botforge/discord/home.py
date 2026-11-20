@@ -621,6 +621,14 @@ class _AccountCandidateSelect(discord.ui.Select[Any]):
             note = await _bind_error_note(interaction, exc, self.game, profile_id)
             await interaction.followup.send(note, ephemeral=True)
             return
+        # the candidate list served its purpose: the picked account is
+        # bound — the selection message goes away (best-effort: an
+        # ephemeral delete may be refused by Discord's token window)
+        try:
+            if interaction.message is not None:
+                await interaction.message.delete()
+        except Exception:
+            logger.debug("the candidate list message could not be deleted", exc_info=True)
         await _finish_bind(interaction, self.game, profile_id, self.origin)
 
 

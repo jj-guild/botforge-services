@@ -245,6 +245,8 @@ message MatchHistoryEntry {
   repeated string winners = 10;          // profile_ids of the winners
   string options_json = 11;           // decoded game options (T2), "" when undecoded
   string slots_json = 12;             // decoded slots/teams/civs (T2), "" when undecoded
+  string description = 13;            // the upstream's own title (the custom lobbies' name)
+  string players_json = 14;           // decoded players (T2): alias, team, elo before/after
 }
 
 message MatchHistoryReply {
