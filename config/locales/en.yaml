@@ -67,6 +67,7 @@ en:
       add_unknown: 'Add failed: no profile found for {profile}. Try your EXACT in-game
         name, or your Relic ID (on aoe2insights, under your avatar: click the displayed
         id then the copy icon).'
+      add_picked: "\u2705 Account selected \u2014 linking in progress\u2026"
       add_pick: 'Pick your account for **{name}** — every option shows what that profile last played:'
       add_insights_refused: 'Add failed: aoe2insights urls are not accepted anymore (the site blocks us).
         Paste your in-game name, or your Relic ID — on aoe2insights, under your avatar,

@@ -67,6 +67,7 @@ fr:
       add_unknown: 'Ajout échoué : aucun profil trouvé pour {profile}. Essaie ton pseudo
         en jeu EXACT, ou ton Relic ID (sur aoe2insights, sous ton avatar : clique l''id
         affiché puis l''icône de copie).'
+      add_picked: "✔️ Compte sélectionné — liaison en cours…"
       add_pick: 'Choisis ton compte pour **{name}** — chaque option montre ce que ce profil a joué en dernier :'
       add_insights_refused: 'Ajout échoué : les URL aoe2insights ne sont plus acceptées (le site nous bloque).
         Colle ton pseudo en jeu, ou ton Relic ID — sur aoe2insights, sous ton avatar,

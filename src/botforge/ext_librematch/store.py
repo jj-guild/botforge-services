@@ -95,6 +95,21 @@ class LibrematchStore:
         """Count the stored matches of one profile (deep-vs-quick preset)."""
         return int(await self._matches().count_documents({"profile_ids": str(profile_id)}))
 
+    async def count_incomplete_matches(self, profile_id: str) -> int:
+        """Count the profile's stored matches whose projection is empty.
+
+        A document stored by an older revision may carry a raw payload
+        WITHOUT the members/description fields (incomplete
+        captures) — the heal re-reads the raw, so it cannot invent
+        them: those documents need a fresh upstream fetch that REPLACES the
+        capture. An empty (or absent) ``players`` list is the marker.
+        """
+        return int(
+            await self._matches().count_documents(
+                {"profile_ids": str(profile_id), "players.0": {"$exists": False}}
+            )
+        )
+
     async def find_matches(
         self,
         profile_ids: list[str],

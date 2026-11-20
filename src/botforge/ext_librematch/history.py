@@ -151,7 +151,23 @@ class MatchHistorySyncer:
         profile_id = str(profile_id)
         stored_any = False
         previous = await self._find_status(profile_id)
-        deep = await self._store.count_matches_of_profile(profile_id) == 0
+        # AN INCOMPLETE CAPTURE heals like an empty store: the raw of
+        # an old-revision document may lack the members/description
+        # fields, so the decode heal cannot reconstruct what was never
+        # captured — the account re-pulls its DEEP window and REPLACES
+        # the incomplete captures with the full upstream payload (the
+        # match facts stay what they are; only the capture completes).
+        incomplete = await self._store.count_incomplete_matches(profile_id)
+        deep = (
+            await self._store.count_matches_of_profile(profile_id) == 0
+            or incomplete > 0
+        )
+        if incomplete:
+            logger.info(
+                "SYNC repair: %s incomplete stored capture(s) for %s \u2014 deep refetch",
+                incomplete,
+                profile_id,
+            )
         count = self._sync_count if deep else self._quick_count
         # ONE history fetch: the upstream's ``leaderboard_id`` param does NOT
         # filter (verified live 2026-11-20 — the same matches answer under
@@ -159,10 +175,17 @@ class MatchHistorySyncer:
         # calls and stored every match three times.
         raw_matches = await self._adapter.fetch_match_history_raw(profile_id, "", count)
         if raw_matches:
-            inserted = await self._store.insert_matches_new_only(
-                [self._match_doc(m) for m in raw_matches]
-            )
-            stored_any = stored_any or inserted > 0
+            documents = [self._match_doc(m) for m in raw_matches]
+            if incomplete:
+                # the repair pass REPLACES the incomplete captures of
+                # the SAME match ids \u2014 same facts, complete capture
+                await self._store.upsert_matches(documents)
+                stored_any = True
+            else:
+                # the steady state: a finished match is immutable, a
+                # known id is never rewritten \u2014 insert-only
+                inserted = await self._store.insert_matches_new_only(documents)
+                stored_any = stored_any or inserted > 0
             # The decode step (T2) rides the ingest now: the history
             # payload ITSELF carries the encoded ``options``/``slotinfo``
             # blobs (the LibreMatch wiki, community/leaderboard/
