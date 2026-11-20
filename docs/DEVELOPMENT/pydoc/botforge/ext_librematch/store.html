@@ -60,6 +60,14 @@ The&nbsp;provider's&nbsp;own&nbsp;persistence&nbsp;seam&nbsp;over&nbsp;async&nbs
 <td class="singlecolumn">Methods defined here:<br>
 <dl><dt><a name="LibrematchStore-__init__"><strong>__init__</strong></a>(self, database: 'Any') -&gt; 'None'</dt><dd><span class="code">Wrap&nbsp;the&nbsp;provider's&nbsp;async&nbsp;Mongo&nbsp;database.</span></dd></dl>
 
+<dl><dt>async <a name="LibrematchStore-count_incomplete_matches"><strong>count_incomplete_matches</strong></a>(self, profile_id: 'str') -&gt; 'int'</dt><dd><span class="code">Count&nbsp;the&nbsp;profile's&nbsp;stored&nbsp;matches&nbsp;whose&nbsp;projection&nbsp;is&nbsp;empty.<br>
+&nbsp;<br>
+A&nbsp;document&nbsp;stored&nbsp;by&nbsp;an&nbsp;older&nbsp;revision&nbsp;may&nbsp;carry&nbsp;a&nbsp;raw&nbsp;payload<br>
+WITHOUT&nbsp;the&nbsp;members/description&nbsp;fields&nbsp;(incomplete<br>
+captures)&nbsp;—&nbsp;the&nbsp;heal&nbsp;re-reads&nbsp;the&nbsp;raw,&nbsp;so&nbsp;it&nbsp;cannot&nbsp;invent<br>
+them:&nbsp;those&nbsp;documents&nbsp;need&nbsp;a&nbsp;fresh&nbsp;upstream&nbsp;fetch&nbsp;that&nbsp;REPLACES&nbsp;the<br>
+capture.&nbsp;An&nbsp;empty&nbsp;(or&nbsp;absent)&nbsp;``players``&nbsp;list&nbsp;is&nbsp;the&nbsp;marker.</span></dd></dl>
+
 <dl><dt>async <a name="LibrematchStore-count_matches_of_profile"><strong>count_matches_of_profile</strong></a>(self, profile_id: 'str') -&gt; 'int'</dt><dd><span class="code">Count&nbsp;the&nbsp;stored&nbsp;matches&nbsp;of&nbsp;one&nbsp;profile&nbsp;(deep-vs-quick&nbsp;preset).</span></dd></dl>
 
 <dl><dt>async <a name="LibrematchStore-count_matches_since"><strong>count_matches_since</strong></a>(self, profile_ids: 'list[str]', since_s: 'int') -&gt; 'int'</dt><dd><span class="code">Count&nbsp;the&nbsp;matches&nbsp;of&nbsp;the&nbsp;profiles&nbsp;finished&nbsp;after&nbsp;``since_s``.</span></dd></dl>

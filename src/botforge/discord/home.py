@@ -614,27 +614,20 @@ class _AccountCandidateSelect(discord.ui.Select[Any]):
             await interaction.response.send_message(await reply(interaction, "not_configured"), ephemeral=True)
             return
         profile_id = str((self.values or [""])[0])
-        await interaction.response.defer(ephemeral=True, thinking=True)
+        # The candidate list vanishes IMMEDIATELY (owner direction
+        # 2026-11-20, the delete-after-bind never fired on ephemerals):
+        # editing THIS message \u2014 the component's own primitive, never
+        # the flaky ephemeral delete \u2014 replaces it with the pickup note
+        # and pulls the picker away in the same ack. The bind then runs
+        # in the followup window; a failure reports as a new note.
+        note = await reply(interaction, "profile.add_picked")
+        await interaction.response.edit_message(content=note, view=None)
         try:
             await registration.bind_profile(str(interaction.user.id), self.game, profile_id)
         except Exception as exc:
-            note = await _bind_error_note(interaction, exc, self.game, profile_id)
-            await interaction.followup.send(note, ephemeral=True)
+            failure = await _bind_error_note(interaction, exc, self.game, profile_id)
+            await interaction.followup.send(failure, ephemeral=True)
             return
-        # the candidate list served its purpose: the picked account is
-        # bound — the selection message goes away; when the platform
-        # refuses the delete (ephemeral token window), at least its
-        # picker is cleared so no stale selection stays clickable
-        try:
-            if interaction.message is not None:
-                await interaction.message.delete()
-        except Exception:
-            logger.debug("the candidate list message could not be deleted", exc_info=True)
-            try:
-                if interaction.message is not None:
-                    await interaction.message.edit(view=None)
-            except Exception:
-                logger.debug("the candidate list message could not be cleared", exc_info=True)
         await _finish_bind(interaction, self.game, profile_id, self.origin)
 
 

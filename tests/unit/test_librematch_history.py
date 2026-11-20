@@ -40,11 +40,18 @@ class FakeCursor:
 
 
 def _matches(query: dict[str, Any], docs: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """The Mongo query subset the store uses ($in, $gte)."""
+    """The Mongo query subset the store uses ($in, $gte, $exists on paths)."""
     out = []
     for doc in docs:
         ok = True
         for key, condition in query.items():
+            if key == "players.0":
+                # the incomplete-capture marker: an empty (or absent)
+                # players list means the document's projection is bare
+                exists = bool(doc.get("players") or [])
+                wants_exists = bool((condition or {}).get("$exists", False))
+                ok = ok and (exists if wants_exists else not exists)
+                continue
             value = doc.get(key)
             if isinstance(condition, dict) and "$in" in condition:
                 if isinstance(value, list):
@@ -604,3 +611,51 @@ async def test_decode_stored_heals_an_old_format_document(tmp_path, monkeypatch)
         assert doc["decoded_at"] > 0
     finally:
         reference._indexed.cache_clear()
+
+
+async def test_an_incomplete_capture_refetches_deep_and_replaces() -> None:
+    """A stored capture without players triggers the deep repair replace.
+
+    The old-revision documents carry a raw payload lacking the
+    members/description fields — the decode heal cannot invent them,
+    so the sync re-pulls the deep window and REPLACES the incomplete
+    captures with the complete upstream payload (same facts).
+    """
+    db, adapter = FakeDb(), FakeAdapter()
+    # an INCOMPLETE capture: raw without members/description, no players
+    db["librematch:matches"].docs["m1:0"] = {
+        "_id": "m1:0",
+        "match_id": "m1",
+        "leaderboard_id": "0",
+        "profile_ids": ["123"],
+        "players": [],
+        "teams": {},
+        "winners": [],
+        "map_name": "",
+        "description": "",
+        "options_json": "",
+        "slots_json": "",
+        "raw": {"id": "m1"},  # the poisoned capture: nothing to re-derive
+    }
+    adapter.history["123"] = [
+        _match(
+            "m1",
+            "0",
+            100,
+            200,
+            [_member("123", 1, 1, 1000, 1024)],
+            description="Test bot",
+        ),
+        _match("m2", "0", 300, 400, [_member("123", 1, 1, 1024, 1030)]),
+    ]
+    syncer = _syncer(db, adapter)
+    await syncer.sync_account("123")
+
+    # the repair pulled the DEEP window, not the quick one
+    assert adapter.history_counts == [1000]
+    # the incomplete capture was REPLACED complete
+    doc = db["librematch:matches"].docs["m1:0"]
+    assert doc["players"], "the replaced capture carries the members"
+    assert doc["description"] == "Test bot"
+    assert doc["winners"] == ["123"]
+    assert db["librematch:matches"].docs["m2:0"]["players"]
