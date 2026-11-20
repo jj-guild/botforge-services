@@ -160,6 +160,40 @@ class _Platform:
         return str(created.id)
 
 
+def _category_denies_everyone(channel: Any) -> bool:
+    """True when the channel's LIVE category gates @everyone's view.
+
+    The room follows its front door (the machine-room rule, completed):
+    a channel-level ``@everyone`` overwrite NULLIFIES the category's
+    one in Discord's resolution — a readonly room inside a gated
+    folder otherwise pierces the gate and shows the whole category to
+    every passer-by. Reading the LIVE state (never a declaration)
+    keeps the band self-consistent in BOTH directions: gate the
+    category and the rooms' public bands gate with it; restore the
+    category and the next pass writes the plain band back.
+    """
+    category = getattr(channel, "category", None)
+    if category is None:
+        return False
+    default_role = getattr(getattr(category, "guild", None), "default_role", None)
+    if default_role is None:
+        return False
+    overwrite = None
+    lookup = getattr(category, "permission_overwrite_for", None)
+    if callable(lookup):
+        # the in-memory test stand-in (discord.py computes from its own
+        # gateway cache, absent in the mock)
+        overwrite = lookup(default_role)
+    else:
+        overwrites_for = getattr(category, "overwrites_for", None)
+        if callable(overwrites_for):
+            try:
+                overwrite = overwrites_for(default_role)
+            except Exception:  # pragma: no cover — defensive (gateway cache)
+                overwrite = None
+    return overwrite is not None and getattr(overwrite, "view_channel", None) is False
+
+
 async def _apply_access(guild: discord.Guild, channel_id: str, decl: ChannelDecl) -> None:
     """Apply the channel's access band (overwrites, best-effort).
 
@@ -221,7 +255,13 @@ async def _apply_access(guild: discord.Guild, channel_id: str, decl: ChannelDecl
                     reason="botforge: the declared policy grants the view role",
                 )
         elif decl.access == "readonly":
+            # the room follows its front door: an explicit readonly
+            # overwrite on the channel NULLIFIES the category's gate in
+            # Discord's resolution — when the live category denies
+            # @everyone's view, the readonly band carries that deny too
             overwrite = discord.PermissionOverwrite(send_messages=False, add_reactions=True)
+            if _category_denies_everyone(channel):
+                overwrite.view_channel = False
             await channel.set_permissions(
                 guild.default_role, overwrite=overwrite, reason="botforge: readonly menu channel"
             )
@@ -631,6 +671,7 @@ async def set_platform_categories_private(guild: discord.Guild, private: bool) -
             continue
         candidates = await _platform_category_candidates(guild, spec)
         view_role_ids = tuple(getattr(spec, "category_view_role_ids", ()) or ())
+        spec_touched = False
         for category_id in candidates:
             if category_id in seen:
                 continue
@@ -642,7 +683,23 @@ async def set_platform_categories_private(guild: discord.Guild, private: bool) -
                 await _apply_category_access(guild, category_id, view_role_ids)
             else:
                 await _restore_category_access(guild, category_id)
+            spec_touched = True
             touched += 1
+        if not spec_touched:
+            continue
+        # the rooms follow the front door (machine-room, completed): an
+        # already-provisioned guild keeps the pierced bands from the era
+        # before the rule (a readonly room shows the whole gated folder
+        # to @everyone) — re-applying each band reads the LIVE category
+        # state, so the rooms gate with the folder on install and
+        # return to their plain bands on the uninstall restore
+        for decl in getattr(spec, "channels", ()) or ():
+            try:
+                stored = await stored_channel_id(str(guild.id), spec.scope, decl.key)
+            except Exception:
+                stored = ""
+            if stored and str(stored).isdigit():
+                await _apply_access(guild, str(stored), decl)
     return touched
 
 

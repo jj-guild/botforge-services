@@ -160,7 +160,9 @@ class TestAdoptionSeams:
 class TestCategoryGate:
     """The machine-room rule (Drasah 18/11): a scope's category may
     declare itself staff-only — the folder's front door hides from
-    @everyone, the rooms' access bands stay untouched."""
+    @everyone, and the rooms' public bands follow the door (a plain
+    readonly band would pierce the gate — an explicit channel
+    overwrite nullifies the category's in Discord's resolution)."""
 
     def test_the_games_scope_declares_the_gate(self) -> None:
         assert GAMES_SCOPE.category_admin_only is True
@@ -313,16 +315,101 @@ class TestCategoryGate:
         assert cat.permission_overwrite_for(guild.default_role) is None
 
     @pytest.mark.asyncio
-    async def test_the_rooms_keep_their_own_bands_under_the_gate(self) -> None:
-        """The gate is the folder's front door, never the rooms'."""
+    async def test_the_rooms_follow_the_front_door_of_the_gate(self) -> None:
+        """The room follows its folder (machine-room, completed): a
+        readonly room inside a gated category carries the @everyone
+        view deny too — an explicit channel overwrite NULLIFIES the
+        category's in Discord's resolution, so a plain readonly band
+        would pierce the gate and show the whole folder to passers-by
+        (the games/aoe2 case: a brand-new member saw a staff-only
+        category with its public rooms)."""
         guild = MockGuild()
         await provision_scope(guild, GAMES_SCOPE, "fr", _translate)
         general = discord.utils.get(guild.text_channels, category=guild.categories[0])
         assert general is not None
-        # the readonly band (send denied for @everyone) still applies on
-        # the channel itself — the gate added no @everyone view deny there
         overwrite = general.permission_overwrite_for(guild.default_role)
-        assert overwrite is None or overwrite.view_channel is not False
+        assert overwrite is not None
+        assert overwrite.view_channel is False
+        assert overwrite.send_messages is False
+        assert overwrite.add_reactions is True
+
+    @pytest.mark.asyncio
+    async def test_an_open_folder_keeps_the_plain_readonly_band(self) -> None:
+        """The reverse direction: a PUBLIC category's readonly rooms keep
+        the plain band (send denied, view open) — the rule adds nothing
+        to an open folder."""
+        from botforge.discord.ui.panels_provisioning import _restore_category_access
+
+        guild = MockGuild()
+        await provision_scope(guild, GAMES_SCOPE, "fr", _translate)
+        general = discord.utils.get(guild.text_channels, category=guild.categories[0])
+        assert general is not None
+        # the uninstall restore lifts the front door…
+        await _restore_category_access(guild, str(guild.categories[0].id))
+        # …and the next band pass reads the live state: plain readonly again
+        decl = next(d for d in _sorted_channels(GAMES_SCOPE) if d.key == "general")
+        from botforge.discord.ui.panels_provisioning import _apply_access
+
+        await _apply_access(guild, str(general.id), decl)
+        overwrite = general.permission_overwrite_for(guild.default_role)
+        assert overwrite is not None
+        assert overwrite.view_channel is not False
+        assert overwrite.send_messages is False
+
+    @pytest.mark.asyncio
+    async def test_an_admin_only_group_gate_covers_its_readonly_rooms(self) -> None:
+        """A gated GROUP category gates its readonly rooms too — the door
+        of a staff room inside a staff folder stays shut on both levels."""
+        from botforge.discord.ui.panels import ChannelDecl, ScopeSpec
+
+        guild = MockGuild()
+        spec = ScopeSpec(
+            scope="mod/test",
+            category_key="Test Home",
+            channels=(
+                ChannelDecl(
+                    key="logs",
+                    label_key="logs",
+                    group="Machine",
+                    group_admin_only=True,
+                    access="readonly",
+                ),
+            ),
+        )
+        await provision_scope(guild, spec, "fr", _translate)
+        machine_cat = next(c for c in guild.categories if c.name == "Machine")
+        room = next(ch for ch in guild.text_channels if ch.category is machine_cat)
+        overwrite = room.permission_overwrite_for(guild.default_role)
+        assert overwrite is not None
+        assert overwrite.view_channel is False
+        assert overwrite.send_messages is False
+
+    @pytest.mark.asyncio
+    async def test_the_install_pass_heals_the_pierced_rooms(self) -> None:
+        """The install rule heals rooms provisioned BEFORE the rule (the
+        pierced-bands era): gating the categories re-reads the live
+        door and re-writes each room's band gated; the uninstall
+        restore writes the plain bands back."""
+        from botforge.discord.ui.panels_provisioning import set_platform_categories_private
+        from botforge.discord.ui.panels_scopes import register_platform_scopes
+
+        register_platform_scopes(CONFIG_DIR)
+        guild = MockGuild()
+        await provision_scope(guild, GAMES_SCOPE, "fr", _translate)
+        general = discord.utils.get(guild.text_channels, category=guild.categories[0])
+        assert general is not None
+        cat_id = str(guild.categories[0].id)
+        _STORED[f"games:category"] = cat_id
+        _STORED[f"games:general"] = str(general.id)
+        # the pre-rule pierced band: readonly WITHOUT the view deny
+        general._permissions[(guild.default_role.id, True)] = None
+        n = await set_platform_categories_private(guild, True)
+        assert n >= 1
+        overwrite = general.permission_overwrite_for(guild.default_role)
+        assert overwrite is not None and overwrite.view_channel is False
+        await set_platform_categories_private(guild, False)
+        overwrite = general.permission_overwrite_for(guild.default_role)
+        assert overwrite is not None and overwrite.view_channel is not False
 
 
 @pytest.mark.asyncio
