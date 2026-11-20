@@ -106,13 +106,13 @@ async def build_apply_panel(guild_id: str) -> discord.ui.LayoutView:
     join_row.add_item(KingdomApplyOpenButton(str(strings["join_button"])).item)
     blocks.append(discord.ui.Separator())
     blocks.append(join_row)
-    # camp-beta-v1 (Drasah 19/11): the PROVISIONAL Roi/Seigneur door —
-    # BETA seasons only. A NORMAL season shows nothing provisional:
-    # the official flow (account > dossier > throne or vasselage) will
-    # own the kingdom founding when it lands.
-    from .camp_beta import beta_armed, build_camp_button, camp_strings
+    # camp-beta-v1 (Drasah 19/11) + camp-door-any-season (Drasah 20/11):
+    # the PROVISIONAL Roi/Seigneur door shows whenever a season is LIVE —
+    # classical or beta. It is the only founding path until the
+    # official flow (account > dossier > throne/vasselage) lands.
+    from .camp_beta import build_camp_button, camp_strings, season_door_open
 
-    if await beta_armed():
+    if await season_door_open():
         camp_row: Any = discord.ui.ActionRow()
         camp_row.add_item(build_camp_button(camp_strings(await _guild_locale(guild_id))).item)
         blocks.append(camp_row)

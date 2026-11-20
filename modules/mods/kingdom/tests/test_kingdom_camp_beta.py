@@ -122,3 +122,67 @@ def test_apply_panel_builds_without_service() -> None:
     from botforge.mods.kingdom.cogs.apply_flow import build_apply_panel
 
     assert asyncio.run(build_apply_panel("123")) is not None
+
+
+def test_season_door_opens_for_any_live_season() -> None:
+    """camp-door-any-season (Drasah 20/11): the ⚔️ door shows when a
+    season RUNS — classical or beta alike; the door's gate is the
+    season's LIFE, no longer its weekend format."""
+    import asyncio
+
+    import botforge.mods.kingdom.cogs.camp_beta as cb
+
+    class _Season:
+        finished = False
+        beta_name = None  # a CLASSICAL season
+
+    class _Kingdoms:
+        async def current_season(self) -> object:
+            return _Season()
+
+    class _Stack:
+        kingdoms = _Kingdoms()
+
+    def fake_wiring() -> object:
+        return _Stack()
+
+    original = cb.wiring
+    cb.wiring = fake_wiring
+    try:
+        assert asyncio.run(cb.season_door_open()) is True
+    finally:
+        cb.wiring = original
+
+
+def test_season_door_stays_closed_without_a_season() -> None:
+    """No stack, no season or a FINISHED season: the door stays shut."""
+    import asyncio
+
+    import botforge.mods.kingdom.cogs.camp_beta as cb
+
+    class _Season:
+        finished = True
+        beta_name = "now"
+
+    class _Kingdoms:
+        async def current_season(self) -> object:
+            return _Season()
+
+    class _Stack:
+        kingdoms = _Kingdoms()
+
+    def finished_wiring() -> object:
+        return _Stack()
+
+    original = cb.wiring
+    cb.wiring = finished_wiring
+    try:
+        assert asyncio.run(cb.season_door_open()) is False
+    finally:
+        cb.wiring = original
+
+        def empty_wiring() -> None:
+            return None
+
+        cb.wiring = empty_wiring
+        assert asyncio.run(cb.season_door_open()) is False

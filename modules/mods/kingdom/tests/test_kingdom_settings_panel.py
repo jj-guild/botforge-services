@@ -211,3 +211,25 @@ def test_service_failures_map_to_user_facing_notes() -> None:
         service_failure_note(s, "settings_failed", RuntimeError("boom"))
         == s["settings_failed"].format("boom")
     )
+
+
+def test_the_launch_modal_arms_the_beta_type_on_demand() -> None:
+    """season-type-at-launch (Drasah 20/11): the « beta » type calls the
+    engine's activate_beta with the « now » preset right after the
+    fresh launch; every other value (empty, « normal ») never does."""
+    import asyncio
+
+    from botforge.mods.kingdom.cogs.settings_panel import _arm_compressed_beta
+
+    calls: list[tuple[object, ...]] = []
+
+    class _Events:
+        async def activate_beta(self, name: str, *args: object, **kwargs: object) -> dict[str, object]:
+            calls.append((name, kwargs.get("start_at")))
+            return {"name": name}
+
+    class _Stack:
+        events = _Events()
+
+    asyncio.run(_arm_compressed_beta(_Stack()))
+    assert len(calls) == 1 and calls[0][0] == "now", "the beta type arms the « now » preset"

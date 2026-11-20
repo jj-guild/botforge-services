@@ -98,6 +98,10 @@ fr:
       settings_launch_button: ▶️ Lancer la saison
       settings_launch_done: ✅ Saison lancée — les royaumes imposés (le cas échéant) sont créés.
       settings_launch_failed: ❌ Le lancement a échoué — {0}
+      settings_launch_beta_done: ✅ Saison **beta** lancée — temps compressé (preset « now »), porte ⚔️ ouverte.
+      settings_launch_beta_failed: "⚠️ Saison lancée, mais le format beta n'a pas pu s'armer — {0}"
+      settings_launch_modal_type_label: Type de saison
+      settings_launch_modal_type_placeholder: "beta (temps compressé) ou vide = normal"
       settings_launch_modal_names_label: Noms imposés (optionnel)
       settings_launch_modal_names_placeholder: "Royaume A, Royaume B"
       settings_launch_modal_title: ▶️ Lancer la saison

@@ -64,6 +64,26 @@ async def beta_armed() -> bool:
     return season is not None and getattr(season, "beta_name", None) is not None
 
 
+async def season_door_open() -> bool:
+    """Whether a season is LIVE — the ⚔️ door's gate (Drasah 20/11).
+
+    camp-door-any-season (Drasah 20/11): the provisional door shows
+    whenever a season RUNS — classical or beta alike. The compressed
+    WEEKEND format is the season.TYPE (chosen at launch, it bends the
+    clocks) while the door is the only founding path until the
+    official flow (account > dossier > throne/vasselage) lands.
+    """
+    stack = wiring()
+    if stack is None:
+        return False
+    try:
+        season = await stack.kingdoms.current_season()
+    except Exception:  # noqa: BLE001 — an unreadable season never opens the door
+        logger.warning("kingdom: camp door season read failed", exc_info=True)
+        return False
+    return season is not None and not bool(getattr(season, "finished", False))
+
+
 def build_camp_button(strings: dict[str, str]) -> KingdomCampButton:
     """The camp door button, painted with the given locale's label."""
     return KingdomCampButton(
@@ -475,4 +495,5 @@ __all__ = [
     "build_camp_button",
     "camp_dynamic_items",
     "camp_strings",
+    "season_door_open",
 ]

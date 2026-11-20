@@ -98,6 +98,10 @@ en:
       settings_launch_button: ▶️ Launch the season
       settings_launch_done: ✅ Season launched — the imposed kingdoms (if any) are created.
       settings_launch_failed: ❌ The launch failed — {0}
+      settings_launch_beta_done: ✅ **Beta** season launched — compressed clocks (« now » preset), ⚔️ door open.
+      settings_launch_beta_failed: "⚠️ Season launched, but the beta format could not arm — {0}"
+      settings_launch_modal_type_label: Season type
+      settings_launch_modal_type_placeholder: "beta (compressed time) or empty = normal"
       settings_launch_modal_names_label: Imposed names (optional)
       settings_launch_modal_names_placeholder: "Kingdom A, Kingdom B"
       settings_launch_modal_title: ▶️ Launch the season

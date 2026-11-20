@@ -461,6 +461,21 @@ class _LaunchModal(discord.ui.Modal):
                 component=self.names,
             )
         )
+        # season-type-at-launch (Drasah 20/11): the admin picks the type —
+        # « beta » arms the compressed weekend preset, anything else
+        # (empty or « normal ») keeps the classical clocks.
+        self.season_type = discord.ui.TextInput(
+            placeholder=str(strings["settings_launch_modal_type_placeholder"])[:100],
+            required=False,
+            max_length=16,
+            custom_id="kingdom:settings:launch:type",
+        )
+        self.add_item(
+            discord.ui.Label(
+                text=str(strings["settings_launch_modal_type_label"])[:45],
+                component=self.season_type,
+            )
+        )
 
     async def on_submit(self, interaction: discord.Interaction) -> None:
         await interaction.response.defer(ephemeral=True)
@@ -474,11 +489,35 @@ class _LaunchModal(discord.ui.Modal):
         ] or None
         try:
             await stack.kingdoms.launch(imposed)
-            note = str(strings["settings_launch_done"])
         except Exception as exc:  # the panel reports, never raises
             logger.warning("kingdom: launch failed", exc_info=True)
-            note = service_failure_note(strings, "settings_launch_failed", exc)
+            await interaction.followup.send(
+                service_failure_note(strings, "settings_launch_failed", exc), ephemeral=True
+            )
+            return
+        # The TYPE applies right after the fresh launch — activate_beta
+        # (the compressed weekend) rides a FRESH setup-phase season only.
+        chosen = str(self.season_type.value or "").strip().lower()
+        if chosen in ("beta", "bêta"):
+            try:
+                await _arm_compressed_beta(stack)
+                note = str(strings["settings_launch_beta_done"])
+            except Exception as exc:  # the launch stands; the type degrades loudly
+                logger.warning("kingdom: beta type arming failed", exc_info=True)
+                note = service_failure_note(strings, "settings_launch_beta_failed", exc)
+        else:
+            note = str(strings["settings_launch_done"])
         await interaction.followup.send(note, ephemeral=True)
+
+
+async def _arm_compressed_beta(stack: Any) -> None:
+    """Arm the compressed weekend onto a FRESH season (the « beta » type)."""
+    from datetime import UTC, datetime
+
+    from botforge.mods.kingdom.game_clock import game_now
+
+    start_at = game_now() if game_now().tzinfo else datetime.now(UTC)
+    await stack.events.activate_beta("now", start_at=start_at)
 
 
 class _AssignModal(discord.ui.Modal):
