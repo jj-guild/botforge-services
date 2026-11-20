@@ -7,6 +7,8 @@ import logging
 import os
 from typing import TYPE_CHECKING, Any
 
+logger = logging.getLogger("botforge.ext_librematch.server")
+
 if TYPE_CHECKING:
     from botforge.ext_librematch.adapter import LibrematchAdapter
     from botforge.ext_librematch.history import MatchHistorySyncer
@@ -45,6 +47,9 @@ def main() -> None:
     async def _boot() -> None:
         if syncer is not None:
             task = asyncio.get_running_loop().create_task(_daily_sync_loop(syncer))
+            _BACKGROUND_TASKS.add(task)
+            task.add_done_callback(_BACKGROUND_TASKS.discard)
+            task = asyncio.get_running_loop().create_task(_elo_refresh_loop(syncer))
             _BACKGROUND_TASKS.add(task)
             task.add_done_callback(_BACKGROUND_TASKS.discard)
         await serve_game_provider(
@@ -177,11 +182,35 @@ async def _sync_quietly(syncer: MatchHistorySyncer | None, profile_ids: list[str
 
 
 async def _daily_sync_loop(syncer: MatchHistorySyncer) -> None:
-    """Run the periodic sync (T4): every known account, once a day."""
+    """Run the periodic HISTORY sync (T4): every known account, once a day.
+
+    The fetch is INCREMENTAL (the quick window): the first sync of an
+    account pulls deep, every later one appends the new matches only —
+    a finished match is immutable.
+    """
     period_s = float(os.environ.get("LIBREMATCH_SYNC_PERIOD_S", "86400"))
     while True:
         await asyncio.sleep(period_s)
         await _sync_quietly(syncer, [])
+
+
+async def _elo_refresh_loop(syncer: MatchHistorySyncer) -> None:
+    """Refresh every known account's elo hourly — the light loop.
+
+    The elo the criteria and the views read must stay fresh without
+    re-pulling histories: only the per-board stats fetch here (the
+    account document merges — the max never drops).
+    """
+    period_s = float(os.environ.get("LIBREMATCH_ELO_PERIOD_S", "3600"))
+    while True:
+        await asyncio.sleep(period_s)
+        if syncer is None:
+            continue
+        try:
+            refreshed = await syncer.refresh_statuses([])
+            logger.info("elo refresh done: %s account(s)", refreshed)
+        except Exception:
+            logger.warning("elo refresh loop failed — retrying next tick", exc_info=True)
 
 
 if __name__ == "__main__":

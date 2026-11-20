@@ -52,12 +52,12 @@ sync&nbsp;(periodic&nbsp;+&nbsp;on-demand,&nbsp;T4)&nbsp;keeps&nbsp;the&nbsp;sto
 <td class="section-title" colspan=3>&nbsp;<br><a name="MatchHistorySyncer">class <strong>MatchHistorySyncer</strong></a>(<a href="builtins.html#object">builtins.object</a>)</td></tr>
     
 <tr><td class="decor title-decor" rowspan=2><span class="code">&nbsp;&nbsp;&nbsp;</span></td>
-<td class="decor title-decor" colspan=2><span class="code"><a href="#MatchHistorySyncer">MatchHistorySyncer</a>(adapter:&nbsp;'Any',&nbsp;store:&nbsp;'LibrematchStore',&nbsp;leaderboards:&nbsp;'tuple[str,&nbsp;...]'&nbsp;=&nbsp;('0',&nbsp;'3',&nbsp;'4'),&nbsp;sync_count:&nbsp;'int'&nbsp;=&nbsp;1000)&nbsp;-&amp;gt;&nbsp;'None'<br>
+<td class="decor title-decor" colspan=2><span class="code"><a href="#MatchHistorySyncer">MatchHistorySyncer</a>(adapter:&nbsp;'Any',&nbsp;store:&nbsp;'LibrematchStore',&nbsp;leaderboards:&nbsp;'tuple[str,&nbsp;...]'&nbsp;=&nbsp;('0',&nbsp;'3',&nbsp;'4'),&nbsp;sync_count:&nbsp;'int'&nbsp;=&nbsp;1000,&nbsp;quick_count:&nbsp;'int'&nbsp;=&nbsp;25)&nbsp;-&amp;gt;&nbsp;'None'<br>
 &nbsp;<br>
 Pull&nbsp;the&nbsp;known&nbsp;accounts'&nbsp;history&nbsp;into&nbsp;the&nbsp;store,&nbsp;exploit&nbsp;it&nbsp;after.<br>&nbsp;</span></td></tr>
 <tr><td>&nbsp;</td>
 <td class="singlecolumn">Methods defined here:<br>
-<dl><dt><a name="MatchHistorySyncer-__init__"><strong>__init__</strong></a>(self, adapter: 'Any', store: 'LibrematchStore', leaderboards: 'tuple[str, ...]' = ('0', '3', '4'), sync_count: 'int' = 1000) -&gt; 'None'</dt><dd><span class="code">Initialize&nbsp;self.&nbsp;&nbsp;See&nbsp;help(type(self))&nbsp;for&nbsp;accurate&nbsp;signature.</span></dd></dl>
+<dl><dt><a name="MatchHistorySyncer-__init__"><strong>__init__</strong></a>(self, adapter: 'Any', store: 'LibrematchStore', leaderboards: 'tuple[str, ...]' = ('0', '3', '4'), sync_count: 'int' = 1000, quick_count: 'int' = 25) -&gt; 'None'</dt><dd><span class="code">Initialize&nbsp;self.&nbsp;&nbsp;See&nbsp;help(type(self))&nbsp;for&nbsp;accurate&nbsp;signature.</span></dd></dl>
 
 <dl><dt>async <a name="MatchHistorySyncer-account_stats"><strong>account_stats</strong></a>(self, profile_ids: 'list[str]') -&gt; 'list[AccountEloStatus]'</dt><dd><span class="code">Serve&nbsp;the&nbsp;per-account&nbsp;status&nbsp;(current&nbsp;+&nbsp;max&nbsp;elo&nbsp;per&nbsp;board).</span></dd></dl>
 
@@ -70,7 +70,21 @@ retries.&nbsp;Returns&nbsp;the&nbsp;number&nbsp;of&nbsp;decoded&nbsp;matches.</s
 
 <dl><dt>async <a name="MatchHistorySyncer-match_history"><strong>match_history</strong></a>(self, profile_ids: 'list[str]', limit: 'int' = 0, since_s: 'int' = 0, leaderboard_id: 'str' = '') -&gt; 'list[MatchHistoryEntry]'</dt><dd><span class="code">Serve&nbsp;the&nbsp;stored&nbsp;history&nbsp;as&nbsp;the&nbsp;exploited&nbsp;projection.</span></dd></dl>
 
+<dl><dt>async <a name="MatchHistorySyncer-refresh_status"><strong>refresh_status</strong></a>(self, profile_id: 'str') -&gt; 'bool'</dt><dd><span class="code">Refresh&nbsp;ONE&nbsp;account's&nbsp;elo&nbsp;status&nbsp;—&nbsp;no&nbsp;history&nbsp;fetch&nbsp;at&nbsp;all.<br>
+&nbsp;<br>
+The&nbsp;light&nbsp;path&nbsp;of&nbsp;the&nbsp;hourly&nbsp;loop:&nbsp;only&nbsp;the&nbsp;per-board&nbsp;stats<br>
+(current&nbsp;elo,&nbsp;rank,&nbsp;wins/losses);&nbsp;the&nbsp;MAX&nbsp;never&nbsp;drops&nbsp;(the<br>
+account&nbsp;document&nbsp;merges&nbsp;with&nbsp;the&nbsp;stored&nbsp;max).</span></dd></dl>
+
+<dl><dt>async <a name="MatchHistorySyncer-refresh_statuses"><strong>refresh_statuses</strong></a>(self, profile_ids: 'list[str]') -&gt; 'int'</dt><dd><span class="code">Run&nbsp;the&nbsp;light&nbsp;elo&nbsp;refresh&nbsp;(every&nbsp;known&nbsp;account&nbsp;when&nbsp;empty).</span></dd></dl>
+
 <dl><dt>async <a name="MatchHistorySyncer-sync_account"><strong>sync_account</strong></a>(self, profile_id: 'str') -&gt; 'bool'</dt><dd><span class="code">Sync&nbsp;one&nbsp;account:&nbsp;raw&nbsp;history&nbsp;+&nbsp;status,&nbsp;then&nbsp;the&nbsp;elo&nbsp;max.<br>
+&nbsp;<br>
+The&nbsp;SMART&nbsp;fetch&nbsp;(the&nbsp;#404&nbsp;T4&nbsp;rule):&nbsp;the&nbsp;account's&nbsp;FIRST&nbsp;sync<br>
+pulls&nbsp;the&nbsp;deep&nbsp;window&nbsp;(``sync_count``),&nbsp;every&nbsp;later&nbsp;one&nbsp;reads<br>
+the&nbsp;incremental&nbsp;window&nbsp;(``quick_count``)&nbsp;and&nbsp;inserts&nbsp;ONLY&nbsp;the<br>
+unknown&nbsp;matches&nbsp;—&nbsp;a&nbsp;finished&nbsp;match&nbsp;is&nbsp;immutable,&nbsp;never<br>
+rewritten,&nbsp;never&nbsp;re-counted.<br>
 &nbsp;<br>
 Returns&nbsp;True&nbsp;when&nbsp;anything&nbsp;was&nbsp;stored.&nbsp;Failures&nbsp;degrade&nbsp;to<br>
 False&nbsp;—&nbsp;the&nbsp;provider&nbsp;keeps&nbsp;serving&nbsp;the&nbsp;previous&nbsp;store,&nbsp;the<br>
@@ -100,6 +114,7 @@ Data descriptors defined here:<br>
 <tr><td class="decor data-decor"><span class="code">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span></td><td>&nbsp;</td>
 <td class="singlecolumn"><strong>DECODE_BATCH</strong> = 25<br>
 <strong>DEFAULT_HISTORY_LIMIT</strong> = 50<br>
+<strong>DEFAULT_QUICK_COUNT</strong> = 25<br>
 <strong>DEFAULT_SYNC_COUNT</strong> = 1000<br>
 <strong>LEADERBOARD_KEYS</strong> = {'0': 'rm_1v1', '1': 'rm_team', '2': 'unranked', '3': 'dm_1v1', '4': 'dm_team'}<br>
 <strong>STATS_LEADERBOARDS</strong> = ('0', '3', '4')<br>

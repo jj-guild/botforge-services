@@ -30,15 +30,22 @@ crashes&nbsp;the&nbsp;view&nbsp;(the&nbsp;panels&nbsp;degrade&nbsp;quietly).</sp
 <td class="section-title" colspan=3>&nbsp;<br><strong class="bigsection">Functions</strong></td></tr>
     
 <tr><td class="decor functions-decor"><span class="code">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span></td><td>&nbsp;</td>
-<td class="singlecolumn"><dl><dt>async <a name="-account_elo_by_profile"><strong>account_elo_by_profile</strong></a>(bot: 'Any', profile_ids: 'list[str]') -&gt; 'dict[str, str]'</dt><dd><span class="code">Render&nbsp;the&nbsp;per-account&nbsp;elo&nbsp;lines,&nbsp;keyed&nbsp;by&nbsp;profile&nbsp;id.<br>
+<td class="singlecolumn"><dl><dt>async <a name="-account_elo_by_profile"><strong>account_elo_by_profile</strong></a>(bot: 'Any', profile_ids: 'list[str]') -&gt; 'dict[str, str]'</dt><dd><span class="code">Render&nbsp;the&nbsp;per-account&nbsp;1v1&nbsp;elo&nbsp;lines,&nbsp;keyed&nbsp;by&nbsp;profile&nbsp;id.<br>
 &nbsp;<br>
-``"1250&nbsp;(max&nbsp;1300)"``&nbsp;per&nbsp;account&nbsp;(the&nbsp;best&nbsp;board's&nbsp;current,&nbsp;the<br>
-peak&nbsp;in&nbsp;parens);&nbsp;the&nbsp;accounts&nbsp;without&nbsp;stored&nbsp;stats&nbsp;map&nbsp;to&nbsp;"".</span></dd></dl>
+``"1185&nbsp;elo&nbsp;1v1&nbsp;(max&nbsp;1210)"``&nbsp;per&nbsp;account&nbsp;—&nbsp;the&nbsp;1v1&nbsp;RM&nbsp;rating&nbsp;the<br>
+player&nbsp;actually&nbsp;reads&nbsp;(the&nbsp;request&nbsp;of&nbsp;2026-11-20:&nbsp;the&nbsp;profile&nbsp;page<br>
+shows&nbsp;the&nbsp;1v1&nbsp;elo&nbsp;of&nbsp;every&nbsp;aoe2&nbsp;account,&nbsp;not&nbsp;the&nbsp;best&nbsp;board);&nbsp;the<br>
+accounts&nbsp;without&nbsp;stored&nbsp;1v1&nbsp;stats&nbsp;map&nbsp;to&nbsp;"".</span></dd></dl>
  <dl><dt><a name="-criteria_lines"><strong>criteria_lines</strong></a>(application: 'Any') -&gt; 'list[str]'</dt><dd><span class="code">Render&nbsp;the&nbsp;application's&nbsp;criteria&nbsp;results&nbsp;(stats&nbsp;vs&nbsp;criteria).<br>
 &nbsp;<br>
 One&nbsp;line&nbsp;per&nbsp;evaluated&nbsp;criterion&nbsp;—&nbsp;passed&nbsp;✓,&nbsp;failed&nbsp;✗,&nbsp;unknown&nbsp;❔<br>
 (the&nbsp;manual-review&nbsp;marker&nbsp;of&nbsp;T5)&nbsp;—&nbsp;so&nbsp;the&nbsp;admin&nbsp;announce&nbsp;shows&nbsp;WHY<br>
 the&nbsp;queue&nbsp;holds&nbsp;the&nbsp;candidate.&nbsp;Empty&nbsp;when&nbsp;no&nbsp;criterion&nbsp;ran.</span></dd></dl>
+ <dl><dt>async <a name="-recent_match_lines"><strong>recent_match_lines</strong></a>(bot: 'Any', profile_ids: 'list[str]', limit: 'int' = 10) -&gt; 'list[str]'</dt><dd><span class="code">Render&nbsp;the&nbsp;accounts'&nbsp;last&nbsp;matches,&nbsp;newest&nbsp;first&nbsp;(&lt;=&nbsp;limit&nbsp;lines).<br>
+&nbsp;<br>
+One&nbsp;line&nbsp;per&nbsp;match:&nbsp;the&nbsp;date,&nbsp;the&nbsp;map,&nbsp;the&nbsp;board,&nbsp;the&nbsp;outcome&nbsp;and<br>
+the&nbsp;elo&nbsp;delta&nbsp;of&nbsp;the&nbsp;player's&nbsp;account.&nbsp;Best-effort&nbsp;—&nbsp;an<br>
+unreachable&nbsp;game&nbsp;service&nbsp;or&nbsp;an&nbsp;empty&nbsp;history&nbsp;renders&nbsp;nothing.</span></dd></dl>
  <dl><dt><a name="-stats_client"><strong>stats_client</strong></a>() -&gt; 'Any | None'</dt><dd><span class="code">Return&nbsp;the&nbsp;game&nbsp;service's&nbsp;stats&nbsp;client;&nbsp;None&nbsp;when&nbsp;unconfigured.</span></dd></dl>
  <dl><dt>async <a name="-user_stats_line"><strong>user_stats_line</strong></a>(bot: 'Any', user_id: 'str') -&gt; 'str'</dt><dd><span class="code">Render&nbsp;the&nbsp;user's&nbsp;unified&nbsp;elo&nbsp;head&nbsp;line&nbsp;(best&nbsp;board).<br>
 &nbsp;<br>
@@ -50,5 +57,6 @@ empty&nbsp;when&nbsp;the&nbsp;stats&nbsp;are&nbsp;unknown&nbsp;—&nbsp;the&nbsp
 <td class="section-title" colspan=3>&nbsp;<br><strong class="bigsection">Data</strong></td></tr>
     
 <tr><td class="decor data-decor"><span class="code">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span></td><td>&nbsp;</td>
-<td class="singlecolumn"><strong>logger</strong> = &lt;Logger botforge.discord.stats_views (INFO)&gt;</td></tr></table>
+<td class="singlecolumn"><strong>BOARD_LABELS</strong> = {'dm_1v1': '1v1 DM', 'dm_team': 'TG DM', 'rm_1v1': '1v1 RM', 'rm_team': 'TG RM', 'unranked': 'unranked'}<br>
+<strong>logger</strong> = &lt;Logger botforge.discord.stats_views (INFO)&gt;</td></tr></table>
 </body></html>
