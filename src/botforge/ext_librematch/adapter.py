@@ -331,7 +331,24 @@ class LibrematchAdapter:
                 logger.warning("history fetch failed (profile %s)", profile_id, exc_info=True)
                 return []
         matches = payload.get("matchHistoryStats") or []
-        return [dict(m) for m in matches if isinstance(m, dict)]
+        # A DERIVED index rides each raw match ("store then exploit"):
+        # the reply-level ``profiles[]`` carries the aliases of every
+        # participant of every match in the page — attaching it per
+        # match lets the stored documents name their players without
+        # a second fetch. The raw payload stays verbatim otherwise.
+        aliases = {
+            str(p.get("profile_id")): str(p.get("alias", ""))
+            for p in (payload.get("profiles") or [])
+            if isinstance(p, dict) and p.get("profile_id")
+        }
+        out = []
+        for m in matches:
+            if not isinstance(m, dict):
+                continue
+            enriched = dict(m)
+            enriched["profile_aliases"] = aliases
+            out.append(enriched)
+        return out
 
     async def fetch_personal_stat_raw(
         self, profile_id: str, leaderboard_id: str

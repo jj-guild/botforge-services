@@ -17,6 +17,7 @@ sync (periodic + on-demand, T4) keeps the store fresh.
 
 from __future__ import annotations
 
+import json
 import logging
 import time
 from typing import Any
@@ -366,6 +367,17 @@ class MatchHistorySyncer:
             if old or new:
                 rating_before[pid] = old
                 rating_after[pid] = new
+        aliases = match.get("profile_aliases") or {}
+        players = [
+            {
+                "profile_id": pid,
+                "alias": str(aliases.get(pid, "")),
+                "team": teams.get(pid, 0),
+                "rating_before": rating_before.get(pid, 0),
+                "rating_after": rating_after.get(pid, 0),
+            }
+            for pid in profile_ids
+        ]
         board = str(match.get("leaderboard") or "")
         return {
             "_id": f"{match.get('id', '')}:{board}" if board else f"{match.get('id', '')}",
@@ -379,6 +391,8 @@ class MatchHistorySyncer:
             "rating_after": rating_after,
             "teams": teams,
             "winners": winners,
+            "description": str(match.get("description", "")),
+            "players": players,
             "options_json": "",
             "slots_json": "",
             "raw": match,
@@ -400,6 +414,8 @@ class MatchHistorySyncer:
             winners=tuple(str(w) for w in doc.get("winners") or ()),
             options_json=str(doc.get("options_json", "")),
             slots_json=str(doc.get("slots_json", "")),
+            description=str(doc.get("description", "")),
+            players_json=json.dumps(doc.get("players") or [], ensure_ascii=False),
         )
 
     def _status_of(self, profile_id: str, doc: dict[str, Any] | None) -> AccountEloStatus:

@@ -209,3 +209,5 @@ class MatchHistoryEntry:
     winners: tuple[str, ...] = ()
     options_json: str = ""
     slots_json: str = ""
+    description: str = ""
+    players_json: str = ""
