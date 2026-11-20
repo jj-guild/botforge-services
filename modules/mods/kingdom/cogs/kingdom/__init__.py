@@ -114,6 +114,13 @@ def register(bot: Any, config: Any) -> None:
     # conscription-4-salons (Drasah 20/11): the lords' desk pin — salon 3
     # of the parcours (the PEOPLE, admin only). The refresher's pass
     # re-ensures it like every mod pin (pins-heal-v1).
+    # register-crash-v1 (Drasah 20/11): the import lives ABOVE its first
+    # use — an import placed below made the name function-local and
+    # register() died on UnboundLocalError, silently unregistering EVERY
+    # pin declared after it (console, time-machine, distributor, market,
+    # validation) → the admin salons stayed empty forever.
+    from .settings_panel import build_seigneurerie_panel, build_settings_panel
+
     async def _resolve_seigneurerie_channel(guild_id: str) -> str:
         return await stored_channel_id(guild_id, "mod/kingdom", "seigneurerie") or ""
 
@@ -132,8 +139,6 @@ def register(bot: Any, config: Any) -> None:
     # OWN declared settings salon (Admin > Paramètres) — the same
     # restart-proof buttons, the ephemeral SDK window stays. The pin
     # carries its own view id so the registry keeps two surfaces.
-    from .settings_panel import build_seigneurerie_panel, build_settings_panel
-
     async def _resolve_settings_channel(guild_id: str) -> str:
         """The settings salon, by stored id FIRST, declared name last.
 
