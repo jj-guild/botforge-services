@@ -640,7 +640,7 @@ def test_machine_rhythm_labels_derive_from_the_active_preset() -> None:
 
 
 def test_machine_refresher_pass_ensures_only_the_machine_pin() -> None:
-    """machine-temps-v4: the auto-refresher pass is gated and machine-only."""
+    """machine-temps-v4 alias: no spec, no guild — a cheap no-op."""
     import asyncio
 
     from botforge.discord.static_pins import reset_static_pins
@@ -648,7 +648,6 @@ def test_machine_refresher_pass_ensures_only_the_machine_pin() -> None:
         MACHINE_VIEW_KEY,
         REFRESH_MINUTES,
         run_machine_refresh_pass,
-        start_machine_refresher,
     )
 
     assert REFRESH_MINUTES == 5
@@ -656,18 +655,84 @@ def test_machine_refresher_pass_ensures_only_the_machine_pin() -> None:
     class _Bot:
         guilds = []
 
-    # no registered machine spec: the pass is a cheap no-op, never a raise
+    # no registered spec + no guild: the pass is a cheap no-op, never a raise
     reset_static_pins()
     assert asyncio.run(run_machine_refresh_pass(_Bot())) == 0
-    # the env gate keeps the loop out of the test journeys
+    assert MACHINE_VIEW_KEY == "panel:mod:kingdom:time-machine"
+
+
+def test_machine_refresher_loop_stays_out_of_the_test_journeys() -> None:
+    """The env gate keeps the loop out of the journeys (both vars)."""
     import os
 
-    saved = os.environ.pop("BOTFORGE_KINGDOM_MACHINE_REFRESHER", None)
-    os.environ["BOTFORGE_KINGDOM_MACHINE_REFRESHER"] = "off"
+    from botforge.discord.static_pins import reset_static_pins
+    from botforge.mods.kingdom.cogs.time_machine import start_machine_refresher
+
+    class _Bot:
+        guilds = []
+
+    for var in ("BOTFORGE_KINGDOM_MACHINE_REFRESHER", "BOTFORGE_KINGDOM_PIN_REFRESHER"):
+        saved = {k: os.environ.get(k) for k in ("BOTFORGE_KINGDOM_MACHINE_REFRESHER", "BOTFORGE_KINGDOM_PIN_REFRESHER")}
+        reset_static_pins()
+        os.environ[var] = "off"
+        try:
+            start_machine_refresher(_Bot())  # must return without starting a loop
+        finally:
+            for k, v in saved.items():
+                os.environ.pop(k, None)
+                if v is not None:
+                    os.environ[k] = v
+
+
+def test_the_refresher_pass_ensures_every_kingdom_pin() -> None:
+    """pins-heal-v1 (Drasah 20/11): « le salon existe mais rien à
+    l'intérieur » — a boot pin can be lost to the provisioning's API
+    storm; the 5-minute pass re-ensures EVERY pin of the mod's scope,
+    so a lost panel heals within one cycle."""
+    import asyncio
+    from types import SimpleNamespace
+
+    import botforge.discord.static_pins as static_pins
+    from botforge.discord.static_pins import reset_static_pins
+    from botforge.mods.kingdom.cogs.time_machine import run_mod_pin_refresh_pass
+
+    ensured: list[tuple[str, str]] = []
+
+    async def fake_ensure(bot, spec, guild_id):
+        ensured.append((spec.key, guild_id))
+
+    async def fake_resolve_channel(guild_id):
+        return "1"
+
+    def _spec(key, scope):
+        return SimpleNamespace(key=key, scope=scope, resolve_channel=fake_resolve_channel)
+
+    specs = [
+        _spec("panel:mod:kingdom:console", "mod/kingdom"),
+        _spec("panel:mod:kingdom:time-machine", "mod/kingdom"),
+        _spec("panel:mod:kingdom:distributor", "mod/kingdom"),
+        # OTHER scopes never ride the kingdom pass
+        _spec("panel:mod:other:thing", "mod/other"),
+        _spec("view:aoe2:whatever", "games/aoe2"),
+    ]
+
+    bot = SimpleNamespace(guilds=[SimpleNamespace(id=42)])
+
+    reset_static_pins()
+    orig = static_pins.registered_static_pins
+    static_pins.registered_static_pins = lambda: specs
+    orig_ensure = static_pins.ensure_static_pin
+    static_pins.ensure_static_pin = fake_ensure
     try:
-        start_machine_refresher(_Bot())  # must return without starting a loop
-        assert MACHINE_VIEW_KEY == "panel:mod:kingdom:time-machine"
+        touched = asyncio.run(run_mod_pin_refresh_pass(bot))
     finally:
-        os.environ.pop("BOTFORGE_KINGDOM_MACHINE_REFRESHER", None)
-        if saved is not None:
-            os.environ["BOTFORGE_KINGDOM_MACHINE_REFRESHER"] = saved
+        static_pins.registered_static_pins = orig
+        static_pins.ensure_static_pin = orig_ensure
+
+    # every mod/kingdom pin once per guild; the foreign scopes stay out
+    assert sorted(ensured) == [
+        ("panel:mod:kingdom:console", "42"),
+        ("panel:mod:kingdom:distributor", "42"),
+        ("panel:mod:kingdom:time-machine", "42"),
+    ]
+    assert touched == 3

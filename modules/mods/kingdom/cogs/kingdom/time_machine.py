@@ -857,37 +857,69 @@ class MachineLordsButton(
 # ---------------------------------------------------------------------------
 
 REFRESH_MINUTES = 5
+# pins-heal-v1 (Drasah 20/11): the loop re-ensures EVERY kingdom pin,
+# not only the machine — « le salon existe mais rien à l'intérieur » : a
+# boot pin can be lost to the provisioning's API storm (a 429, a slow
+# cache) and the console panel had NO retry. The ensure cycle is
+# idempotent (fingerprint guard: an unchanged pin costs one cheap
+# fetch), so the cadence is free and every lost pin heals ≤ 5 min.
+MOD_PIN_SCOPE = "mod/kingdom"
 
 
-async def run_machine_refresh_pass(bot: Any) -> int:
-    """One pass: re-ensure the machine pin on every served guild."""
+async def run_mod_pin_refresh_pass(bot: Any) -> int:
+    """One pass: re-ensure EVERY kingdom pin on every served guild.
+
+    Every static pin registered under the mod's scope rides the pass —
+    the machine cockpit, the ⚙️ paramètres console panel, the
+    distributeur, the validation dashboard… A pin lost at boot (the
+    provisioning storm) or deleted by hand heals within one cycle.
+    """
     from botforge.discord.static_pins import ensure_static_pin, registered_static_pins
 
-    spec = next((s for s in registered_static_pins() if s.key == MACHINE_VIEW_KEY), None)
-    if spec is None:
-        return 0
+    specs = [
+        s
+        for s in registered_static_pins()
+        if s.scope and (s.scope == MOD_PIN_SCOPE or s.scope.startswith(MOD_PIN_SCOPE + "/"))
+    ]
     touched = 0
     for guild in list(getattr(bot, "guilds", []) or []):
         guild_id = str(getattr(guild, "id", ""))
-        try:
-            # the pin quietly skips when its salon is not resolvable
-            await ensure_static_pin(bot, spec, guild_id)
-            touched += 1
-        except Exception:  # noqa: BLE001 — the refresher never raises
-            logger.warning("kingdom: machine pin pass failed (guild %s)", guild_id, exc_info=True)
+        for spec in specs:
+            try:
+                # the pin quietly skips when its salon is not resolvable
+                await ensure_static_pin(bot, spec, guild_id)
+                touched += 1
+            except Exception:  # noqa: BLE001 — the refresher never raises
+                logger.warning(
+                    "kingdom: pin pass failed (%s, guild %s)", spec.key, guild_id, exc_info=True
+                )
     return touched
 
 
-def start_machine_refresher(bot: Any) -> None:
-    """Start the machine pin auto-refresher (every REFRESH_MINUTES).
+async def run_machine_refresh_pass(bot: Any) -> int:
+    """machine-temps-v4 alias — the pass is MOD-WIDE since pins-heal-v1."""
+    return await run_mod_pin_refresh_pass(bot)
 
-    Gated off in the test journeys
-    (``BOTFORGE_KINGDOM_MACHINE_REFRESHER=off``), same idiom as the
+
+def start_machine_refresher(bot: Any) -> None:
+    """Start the mod pin auto-refresher (every REFRESH_MINUTES).
+
+    pins-heal-v1 (Drasah 20/11): the loop is MOD-WIDE — every kingdom
+    pin heals within one cycle (a boot lost to the provisioning storm
+    no longer leaves an empty salon). Gated off in the test journeys
+    (``BOTFORGE_KINGDOM_PIN_REFRESHER`` /
+    ``BOTFORGE_KINGDOM_MACHINE_REFRESHER`` = off), same idiom as the
     attack phases loop.
     """
     import os
 
-    if os.environ.get("BOTFORGE_KINGDOM_MACHINE_REFRESHER", "").lower() in {"off", "0", "false"}:
+    def _gated() -> bool:
+        for var in ("BOTFORGE_KINGDOM_PIN_REFRESHER", "BOTFORGE_KINGDOM_MACHINE_REFRESHER"):
+            if os.environ.get(var, "").lower() in {"off", "0", "false"}:
+                return True
+        return False
+
+    if _gated():
         return
 
     from discord.ext import tasks
@@ -895,9 +927,9 @@ def start_machine_refresher(bot: Any) -> None:
     @tasks.loop(minutes=REFRESH_MINUTES)
     async def _loop() -> None:
         try:
-            await run_machine_refresh_pass(bot)
+            await run_mod_pin_refresh_pass(bot)
         except Exception:  # noqa: BLE001 — the loop never raises
-            logger.warning("kingdom: machine refresher pass failed — best-effort", exc_info=True)
+            logger.warning("kingdom: pin refresher pass failed — best-effort", exc_info=True)
 
     _loop.setup()  # type: ignore[no-untyped-call]
     _loop.start()  # type: ignore[no-untyped-call]
@@ -929,6 +961,7 @@ __all__ = [
     "machine_dynamic_items",
     "machine_strings",
     "run_machine_refresh_pass",
+    "run_mod_pin_refresh_pass",
     "season_length_label",
     "setup_rhythm_phrase",
     "start_machine_refresher",
