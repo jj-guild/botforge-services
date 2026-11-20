@@ -126,13 +126,13 @@ class FakeAdapter:
     ) -> list[dict[str, Any]]:
         self.calls.append(("history", profile_id))
         self.history_counts.append(int(count))
-        return self.history.get(f"{profile_id}:{leaderboard_id}", [])
+        return self.history.get(profile_id, [])
 
     async def fetch_personal_stat_raw(
         self, profile_id: str, leaderboard_id: str
     ) -> dict[str, Any]:
         self.calls.append(("stat", profile_id))
-        return self.stats.get(f"{profile_id}:{leaderboard_id}", {})
+        return self.stats.get(profile_id, {})
 
 
 def _match(
@@ -164,16 +164,23 @@ def _member(
     }
 
 
-def _stat(profile_id: str, rating: int, rank: int, wins: int, losses: int) -> dict[str, Any]:
+def _stat(
+    profile_id: str, rating: int, rank: int, wins: int, losses: int, board: str = "0"
+) -> dict[str, Any]:
+    """The RAW World's Edge GetPersonalStat reply (the statgroup join)."""
     return {
-        "statGroups": [{"members": [{"profile_id": profile_id, "alias": "Someone"}]}],
+        "statGroups": [
+            {"members": [{"profile_id": profile_id, "alias": "Someone", "personal_statgroup_id": 100}]}
+        ],
         "leaderboardStats": [
             {
-                "profile_id": profile_id,
+                "statgroup_id": 100,
+                "leaderboard_id": board,
                 "rating": rating,
                 "rank": rank,
                 "wins": wins,
                 "losses": losses,
+                "highestrating": 0,
             }
         ],
     }
@@ -186,10 +193,10 @@ def _syncer(db: FakeDb, adapter: FakeAdapter) -> MatchHistorySyncer:
 async def test_sync_stores_raw_and_status() -> None:
     """The sync stores the RAW match docs and the account status."""
     db, adapter = FakeDb(), FakeAdapter()
-    adapter.history["123:0"] = [
+    adapter.history["123"] = [
         _match("m1", "0", 100, 200, [_member("123", 1, 1, 1000, 1024)])
     ]
-    adapter.stats["123:0"] = _stat("123", 1024, 55, 10, 2)
+    adapter.stats["123"] = _stat("123", 1024, 55, 10, 2)
     syncer = _syncer(db, adapter)
 
     assert await syncer.sync_account("123") is True
@@ -206,16 +213,16 @@ async def test_sync_stores_raw_and_status() -> None:
 async def test_max_elo_never_drops() -> None:
     """The stored MAX survives a lower fresh sync (the window slid)."""
     db, adapter = FakeDb(), FakeAdapter()
-    adapter.history["123:0"] = [
+    adapter.history["123"] = [
         _match("m1", "0", 100, 200, [_member("123", 1, 1, 1200, 1250)])
     ]
-    adapter.stats["123:0"] = _stat("123", 1250, 10, 30, 5)
+    adapter.stats["123"] = _stat("123", 1250, 10, 30, 5)
     syncer = _syncer(db, adapter)
     await syncer.sync_account("123")
 
     # a later sync: the peak match slid out of the history window
-    adapter.history["123:0"] = []
-    adapter.stats["123:0"] = _stat("123", 1100, 12, 31, 6)
+    adapter.history["123"] = []
+    adapter.stats["123"] = _stat("123", 1100, 12, 31, 6)
     await syncer.sync_account("123")
     account = db["librematch:accounts"].docs["123"]
     assert account["leaderboards"]["0"]["current"] == 1100
@@ -225,7 +232,7 @@ async def test_max_elo_never_drops() -> None:
 async def test_account_stats_serves_known_and_unknown() -> None:
     """The status answers per account; unknown accounts read known=False."""
     db, adapter = FakeDb(), FakeAdapter()
-    adapter.stats["123:0"] = _stat("123", 1024, 55, 10, 2)
+    adapter.stats["123"] = _stat("123", 1024, 55, 10, 2)
     syncer = _syncer(db, adapter)
     await syncer.sync_account("123")
 
@@ -243,14 +250,14 @@ async def test_user_unification_best_elo_and_matches_window() -> None:
     db, adapter = FakeDb(), FakeAdapter()
     store = LibrematchStore(db)
     await store.upsert_bindings(["123", "456"], ["alice", "alice"])
-    adapter.stats["123:0"] = _stat("123", 1000, 100, 10, 2)
-    adapter.stats["456:0"] = _stat("456", 1200, 40, 20, 4)
+    adapter.stats["123"] = _stat("123", 1000, 100, 10, 2)
+    adapter.stats["456"] = _stat("456", 1200, 40, 20, 4)
     now = 2_000_000_000
-    adapter.history["123:0"] = [
+    adapter.history["123"] = [
         _match("m1", "0", now - 100, now, [_member("123", 1, 1, 990, 1000)]),
         _match("m2", "0", now - 200, now - 150, [_member("123", 1, 1, 980, 990)]),
     ]
-    adapter.history["456:0"] = [
+    adapter.history["456"] = [
         _match("m3", "0", now - 50, now, [_member("456", 1, 1, 1190, 1200)])
     ]
     syncer = _syncer(db, adapter)
@@ -277,12 +284,10 @@ async def test_user_stats_unknown_user_is_none() -> None:
 async def test_match_history_query_filters() -> None:
     """The history answers from the store: leaderboard + window filters."""
     db, adapter = FakeDb(), FakeAdapter()
-    adapter.history["123:0"] = [
+    adapter.history["123"] = [
         _match("m1", "0", 100, 200, [_member("123", 1, 1, 1000, 1024)]),
         _match("m2", "0", 300, 400, [_member("123", 1, 1, 1024, 1030)]),
-    ]
-    adapter.history["123:3"] = [
-        _match("m3", "3", 500, 600, [_member("123", 1, 1, 900, 910)])
+        _match("m3", "3", 500, 600, [_member("123", 1, 1, 900, 910)]),
     ]
     syncer = _syncer(db, adapter)
     await syncer.sync_account("123")
@@ -307,8 +312,8 @@ async def test_sync_accounts_targets_given_or_all() -> None:
     syncer = _syncer(db, adapter)
 
     assert await syncer.sync_accounts(["123"]) == 0  # nothing stored, no stat
-    adapter.stats["123:0"] = _stat("123", 1000, 1, 1, 0)
-    adapter.stats["456:0"] = _stat("456", 1100, 1, 1, 0)
+    adapter.stats["123"] = _stat("123", 1000, 1, 1, 0)
+    adapter.stats["456"] = _stat("456", 1100, 1, 1, 0)
     assert await syncer.sync_accounts([]) == 2  # every known account
     assert set(db["librematch:accounts"].docs) == {"123", "456"}
 
@@ -340,7 +345,7 @@ def _options(pairs: list[tuple[str, str]]) -> str:
 async def test_decode_exploits_stored_matches_without_refetch() -> None:
     """T2: the encoded fields decode AFTER the storage, no history re-fetch."""
     db, adapter = FakeDb(), FakeAdapter()
-    adapter.history["123:0"] = [
+    adapter.history["123"] = [
         _match("m1", "0", 100, 200, [_member("123", 1, 1, 1000, 1024)])
     ]
     adapter.details["m1"] = {
@@ -374,7 +379,7 @@ async def test_decode_exploits_stored_matches_without_refetch() -> None:
 async def test_decode_failure_leaves_the_document_untouched() -> None:
     """T2: an undecodable blob degrades — the raw stays, fields stay empty."""
     db, adapter = FakeDb(), FakeAdapter()
-    adapter.history["123:0"] = [
+    adapter.history["123"] = [
         _match("m1", "0", 100, 200, [_member("123", 1, 1, 1000, 1024)])
     ]
     adapter.details["m1"] = {"id": "m1", "options": "not-a-blob", "slotinfo": "!!!"}
@@ -395,7 +400,7 @@ async def test_the_second_sync_reads_the_quick_window_and_only_appends() -> None
     a finished match is never rewritten, never re-counted.
     """
     db, adapter = FakeDb(), FakeAdapter()
-    adapter.history["123:0"] = [
+    adapter.history["123"] = [
         _match("m1", "0", 100, 200, [_member("123", 1, 1, 1000, 1024)]),
         _match("m2", "0", 300, 400, [_member("123", 1, 1, 1024, 1030)]),
     ]
@@ -413,8 +418,8 @@ async def test_the_second_sync_reads_the_quick_window_and_only_appends() -> None
     assert 2 <= len(stored)  # both the deep pass's matches
     # and a genuinely NEW match lands appended, without touching the old ones
     n_before = len(stored)
-    adapter.history["123:0"] = [
-        *adapter.history["123:0"],
+    adapter.history["123"] = [
+        *adapter.history["123"],
         _match("m3", "0", 500, 600, [_member("123", 1, 1, 1030, 1041)]),
     ]
     await syncer.sync_account("123")
@@ -425,8 +430,8 @@ async def test_the_second_sync_reads_the_quick_window_and_only_appends() -> None
 async def test_the_elo_refresh_never_fetches_history() -> None:
     """The light loop reads the stats ONLY — no history fetch at all."""
     db, adapter = FakeDb(), FakeAdapter()
-    adapter.history["123:0"] = [_match("m1", "0", 100, 200, [_member("123", 1, 1, 1000, 1024)])]
-    adapter.stats["123:0"] = _stat("123", 1024, 55, 10, 2)
+    adapter.history["123"] = [_match("m1", "0", 100, 200, [_member("123", 1, 1, 1000, 1024)])]
+    adapter.stats["123"] = _stat("123", 1024, 55, 10, 2)
     syncer = _syncer(db, adapter)
     await syncer.sync_account("123")
     history_calls = len([c for c in adapter.calls if c[0] == "history"])

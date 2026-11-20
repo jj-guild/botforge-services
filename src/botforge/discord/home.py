@@ -760,11 +760,15 @@ class ProfileMatchesButton(
             note = await reply(interaction, "profile.matches_empty")
             await interaction.followup.send(note, ephemeral=True)
             return
+        # LayoutView + TextDisplay: plain followup content does NOT
+        # render the markdown (the raw <t:...> / ### finding of
+        # 2026-11-20) — the component surfaces parse both.
         title = await reply(interaction, "profile.matches_title")
-        await interaction.followup.send(
-            f"### {title}\n" + "\n".join(f"- {line}" for line in lines),
-            ephemeral=True,
+        view = discord.ui.LayoutView(timeout=None)
+        view.add_item(
+            discord.ui.Container(discord.ui.TextDisplay(f"### {title}\n" + "\n".join(f"- {line}" for line in lines)))
         )
+        await interaction.followup.send(view=view, ephemeral=True)
 
 
 class ProfileRenameButton(
