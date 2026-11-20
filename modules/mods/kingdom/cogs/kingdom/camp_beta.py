@@ -407,7 +407,13 @@ class KingdomCampNameModal(discord.ui.Modal):
         self.strings = strings
 
     async def on_submit(self, interaction: discord.Interaction) -> None:
-        """Found the kingdom: enroll as King, auto-approved (beta rule)."""
+        """Found the PERSISTENT realm (royaume-persistant-v1, Drasah 20/11).
+
+        « Créer un royaume n'engage pas » : founding provisions the
+        realm's category in DORMANT mode (only 🏰 Le royaume shows) —
+        the season entry is a SEPARATE act (the chez-soi window's
+        « Voir la saison », an admin accepts).
+        """
         from .settings_panel import _safe_followup
 
         strings = self.strings
@@ -418,22 +424,20 @@ class KingdomCampNameModal(discord.ui.Modal):
             return
         proposed = str(self.name_input.value or "").strip()
         try:
-            lord = await stack.kingdoms.enroll(
-                str(interaction.user.id),
-                _display_name(interaction),
-                _lord_role("king"),
-                proposed_name=proposed,
+            realm = await stack.realms.found_realm(
+                str(interaction.user.id), _display_name(interaction), proposed
             )
-            # the beta rule (Drasah 19/11): a TEST season validates
-            # nobody — the founded kingdom is approved at once so the
-            # two test kingdoms can interact immediately.
-            kingdom_id = str(getattr(lord, "kingdom_id", "") or "")
-            kingdom = await stack.kingdoms.approve_kingdom(kingdom_id) if kingdom_id else None
-            if kingdom is None:
-                raise ValueError(str(strings["error"]).format(kingdom_id))
-            note = str(strings["found_done"]).format(str(kingdom.name))
+            guild = getattr(interaction, "guild", None)
+            if guild is not None:
+                from .realms import deploy_realm_hub, ensure_realm_structure
+
+                ids = await ensure_realm_structure(guild, realm, dormant=True)
+                if ids:
+                    await stack.realms.save_habitat(str(realm.id), ids)
+                await deploy_realm_hub(guild, realm)
+            note = str(strings["found_done"]).format(str(realm.name))
         except Exception as exc:  # noqa: BLE001 — the window reports, never raises
-            logger.warning("kingdom: camp founding failed", exc_info=True)
+            logger.warning("kingdom: realm founding failed", exc_info=True)
             note = _camp_failure(strings, exc)
         await _safe_followup(interaction, note)
 

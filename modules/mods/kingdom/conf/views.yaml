@@ -57,3 +57,18 @@ views:
   # window (the beta seasons' founding/joining door)
   panel:mod:kingdom:camp:
     kind: surface
+  # royaume-persistant-v1 (Drasah 20/11): the persistent realm's
+  # surfaces — the 🏰 hub panel (dormant/vivant) + the chez-soi
+  # window and its four sub-windows
+  panel:mod:kingdom:realm:
+    kind: surface
+  panel:mod:kingdom:realm:home:
+    kind: surface
+  panel:mod:kingdom:realm:home:seigneurie:
+    kind: surface
+  panel:mod:kingdom:realm:presentation:
+    kind: surface
+  panel:mod:kingdom:realm:season:
+    kind: surface
+  panel:mod:kingdom:realm:palmares:
+    kind: surface

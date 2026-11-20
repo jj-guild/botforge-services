@@ -21,6 +21,27 @@ PLANS_COLLECTION = "kingdoms_plans"
 SHOWMATCH_COLLECTION = "kingdoms_showmatch"
 FFA_COLLECTION = "kingdoms_ffa"
 SEASON_ARCHIVES_COLLECTION = "kingdoms_season_archives"
+# royaume-persistant-v1 (Drasah 20/11): the PERSISTENT realm shells —
+# NEVER listed in wipe_season_data (a realm outlives every season).
+REALMS_COLLECTION = "kingdoms_realms"
+
+# The season wipe's collection list — the PERSISTENT shells
+# (REALMS_COLLECTION, royaume-persistant-v1 Drasah 20/11) are
+# DELIBERATELY ABSENT: a realm survives every season wipe.
+SEASON_WIPE_COLLECTIONS: tuple[str, ...] = (
+    SEASONS_COLLECTION,
+    KINGDOMS_COLLECTION,
+    LORDS_COLLECTION,
+    TERRITORIES_COLLECTION,
+    TECHNOLOGIES_COLLECTION,
+    ATTACKS_COLLECTION,
+    SHOWMATCH_COLLECTION,
+    FFA_COLLECTION,
+    # plan-orphan-v1 (Drasah 31/10): a plan is season data — the prod
+    # wipe NEVER dropped this collection, so a resetup left stale plans
+    # whose lords no longer existed.
+    PLANS_COLLECTION,
+)
 
 
 class KingdomStore(Protocol):
@@ -132,6 +153,18 @@ class KingdomStore(Protocol):
 
     async def find_season_archives(self) -> list[dict[str, Any]]:
         """Return every archived season snapshot (ascending by date)."""
+        ...
+
+    async def upsert_realm(self, document: dict[str, Any]) -> None:
+        """Insert or replace one persistent realm shell by ``_id``."""
+        ...
+
+    async def find_realms(self) -> list[dict[str, Any]]:
+        """Return every persistent realm shell (never season-wiped)."""
+        ...
+
+    async def delete_realm(self, realm_id: str) -> None:
+        """Drop one persistent realm shell (dissolution, admin/Roi)."""
         ...
 
 
@@ -277,23 +310,10 @@ class MongoKingdomStore:
 
         Every season-scoped collection is dropped: a new season never
         inherits anything from the previous one (reference §3.3).
+        The PERSISTENT realm shells (REALMS_COLLECTION) are NEVER
+        dropped here (royaume-persistant-v1, Drasah 20/11).
         """
-        for collection in (
-            SEASONS_COLLECTION,
-            KINGDOMS_COLLECTION,
-            LORDS_COLLECTION,
-            TERRITORIES_COLLECTION,
-            TECHNOLOGIES_COLLECTION,
-            ATTACKS_COLLECTION,
-            SHOWMATCH_COLLECTION,
-            FFA_COLLECTION,
-            # plan-orphan-v1 (Drasah 31/10): a plan is season data —
-            # the prod wipe NEVER dropped this collection, so a resetup
-            # left stale plans whose lords no longer existed; the
-            # first due plan then raised NotEnrolledError at EVERY
-            # tick and killed the whole attack phase pass.
-            PLANS_COLLECTION,
-        ):
+        for collection in SEASON_WIPE_COLLECTIONS:
             await self._storage.collection(collection).delete_many({})
 
     async def upsert_season_archive(self, document: dict[str, Any]) -> None:
@@ -304,3 +324,18 @@ class MongoKingdomStore:
         """Return every archived season snapshot (ascending by archived_at)."""
         cursor = self._storage.collection(SEASON_ARCHIVES_COLLECTION).find({}).sort("archived_at", 1)
         return [dict(doc) async for doc in cursor]
+
+    async def upsert_realm(self, document: dict[str, Any]) -> None:
+        """Upsert one persistent realm shell (royaume-persistant-v1)."""
+        await self._storage.collection(REALMS_COLLECTION).replace_one(
+            {"_id": document["_id"]}, document, upsert=True
+        )
+
+    async def find_realms(self) -> list[dict[str, Any]]:
+        """Every persistent realm shell — the wipe NEVER touches these."""
+        cursor = self._storage.collection(REALMS_COLLECTION).find({})
+        return [dict(doc) async for doc in cursor]
+
+    async def delete_realm(self, realm_id: str) -> None:
+        """Drop one persistent realm shell (best-effort, one id)."""
+        await self._storage.collection(REALMS_COLLECTION).delete_one({"_id": realm_id})

@@ -34,6 +34,7 @@ class _KingdomStackImpl(KingdomStackContract):
         from botforge.mods.kingdom.ffa_exploration import FFAExplorationService
         from botforge.mods.kingdom.mercenary import MercenaryService
         from botforge.mods.kingdom.tavern import TavernService
+        from botforge.mods.kingdom.realms import RealmService
 
         self._store = store
         self._config = config
@@ -56,6 +57,13 @@ class _KingdomStackImpl(KingdomStackContract):
             store, config, self._kingdoms, self._events
         )
         self._tavern = TavernService(store, config, self._kingdoms)
+        # royaume-persistant-v1 (Drasah 20/11): the PERSISTENT shell —
+        # the realm outlives seasons; the engine stays season-scoped.
+        self._realms = RealmService(store)
+
+    @property
+    def realms(self) -> Any:
+        return self._realms
 
     @property
     def kingdoms(self) -> Any:
