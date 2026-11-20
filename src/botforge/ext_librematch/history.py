@@ -299,8 +299,11 @@ class MatchHistorySyncer:
         fetch already returned them (the upstream's own fields,
         base64+zlib per the LibreMatch wiki); the match-details
         endpoint played that role earlier but World's Edge 400s it,
-        so the decode re-fetches NOTHING. A decode failure leaves the
-        document untouched: the next pass retries. Returns the count.
+        so the decode re-fetches NOTHING. It also RE-DERIVES every
+        projection field from the raw payload — a document stored by
+        an older revision heals itself (the labels the reference
+        tables now name), without a purge and without touching the
+        immutable raw. Returns the number of documents patched.
         """
         decoded = 0
         pending = await self._store.find_undecoded_matches(profile_ids, batch)
@@ -309,14 +312,20 @@ class MatchHistorySyncer:
             if not isinstance(raw, dict):
                 continue
             options_json, slots_json = decode_match_payload(raw)
-            if not options_json and not slots_json:
-                continue
+            rebuilt = self._match_doc(raw)
             await self._store.update_match_fields(
                 str(doc["_id"]),
                 {
+                    "map_name": rebuilt["map_name"],
+                    "lobby_title": rebuilt["lobby_title"],
+                    "description": rebuilt["description"],
+                    "players": rebuilt["players"],
+                    "teams": rebuilt["teams"],
+                    "winners": rebuilt["winners"],
+                    "profile_ids": rebuilt["profile_ids"],
                     "options_json": options_json,
                     "slots_json": slots_json,
-                    "decoded_at": _now_ms(),
+                    "decoded_at": _now_ms() if (options_json or slots_json) else 0,
                 },
             )
             decoded += 1

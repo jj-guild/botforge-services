@@ -540,3 +540,67 @@ async def test_map_label_prefers_the_options_location(tmp_path, monkeypatch) -> 
         assert db["librematch:matches"].docs["m2:0"]["map_name"] == ""
     finally:
         reference._indexed.cache_clear()
+
+
+async def test_decode_stored_heals_an_old_format_document(tmp_path, monkeypatch) -> None:
+    """A document stored by an older revision re-derives from its raw.
+
+    No purge, no re-fetch: the immutable raw payload carries the
+    blobs and the members, so the labels the tables now name land on
+    the already-stored documents.
+    """
+    import json as _json
+
+    table_dir = tmp_path / "reference"
+    table_dir.mkdir()
+    (table_dir / "maps_aoe2.json").write_text(_json.dumps({"Murkwood": {"8": 11016}}))
+    monkeypatch.setenv("LIBREMATCH_REFERENCE_DIR", str(table_dir))
+    from botforge.ext_librematch import reference
+
+    reference._indexed.cache_clear()
+    try:
+        db, adapter = FakeDb(), FakeAdapter()
+        # an OLD-REVISION document: bare, bare labels, empty projections
+        raw = _match(
+            "m1",
+            "0",
+            100,
+            200,
+            [_member("123", 1, 1, 1000, 1024)],
+            options=_options([("10", "11016")]),
+            mapname="my map",
+            description="Test bot",
+        )
+        old_doc = dict(raw)
+        old_doc.update(
+            {
+                "_id": "m1:0",
+                "match_id": "m1",
+                "leaderboard_id": "0",
+                "started_at": 100,
+                "finished_at": 200,
+                "map_name": "my map",
+                "profile_ids": ["123"],
+                "players": [],
+                "teams": {},
+                "winners": [],
+                "options_json": "",
+                "slots_json": "",
+                "raw": raw,
+            }
+        )
+        db["librematch:matches"].docs["m1:0"] = old_doc
+
+        syncer = _syncer(db, adapter)
+        patched = await syncer.decode_stored(["123"])
+        assert patched == 1
+
+        doc = db["librematch:matches"].docs["m1:0"]
+        assert doc["map_name"] == "Murkwood"
+        assert doc["lobby_title"] == "Test bot"
+        assert doc["players"][0]["profile_id"] == "123"
+        assert doc["winners"] == ["123"]
+        assert _json.loads(doc["options_json"])["10"] == "11016"
+        assert doc["decoded_at"] > 0
+    finally:
+        reference._indexed.cache_clear()
