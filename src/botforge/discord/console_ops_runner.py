@@ -119,14 +119,13 @@ async def apply_install_for_guild(
     # the seasonal panels) and its declared channels — never the legacy
     # ChannelService path, which created the declared channels at the guild
     # ROOT with no folder (the merlin hierarchy bug of 2026-11-19).
-    from botforge.discord.locales import guild_locale
     from botforge.discord.mods_forum import provision_mod_channels, provision_mod_roles
 
     seam = _ProvisioningSeam(
         _client_of(guild),
         registry=registry,
         mod_roles_service=mod_roles_service,
-        locale=guild_locale(guild),
+        locale=await _guild_locale(guild),
     )
     provisioned = 0
     for mod_name in mods:
@@ -166,9 +165,7 @@ async def apply_ensure_tree_for_guild(guild: discord.Guild) -> str:
         return "Wiring unavailable (MONGO_URI/REDIS_URI) — the tree cannot be provisioned."
     register_platform_scopes()
 
-    from botforge.discord.locales import guild_locale
-
-    locale = guild_locale(guild)  # Discord's own signal: the server's language
+    locale = await _guild_locale(guild)  # the stored choice first, Discord's signal as fallback
 
     access = GuildAccessService(
         MongoGuildAccessDatabase(get_async_database()),
@@ -211,6 +208,26 @@ def _tree_translate(key: str, locale: str) -> str:
     catalog = MessageCatalog(CONFIG_DIR)
     rendered = catalog.render(key, locale)
     return rendered if rendered != key else catalog.render(key, "en")
+
+
+async def _guild_locale(guild: discord.Guild) -> str:
+    """Resolve the guild's language using the LogService order.
+
+    The STORED choice (the admin-set one) first, then Discord's own
+    ``preferred_locale`` \u2014 the same resolution the running bot reads.
+    """
+    from botforge.core.models.db import get_async_database
+    from botforge.discord.locales import guild_locale
+    from botforge.discord.logs_platform import MongoLogsDatabase
+
+    try:
+        settings = await MongoLogsDatabase(get_async_database()).get_guild_settings(str(guild.id))
+    except Exception:
+        settings = None
+    stored = str((settings or {}).get("locale", ""))
+    if stored in ("en", "fr"):
+        return stored
+    return guild_locale(guild)
 
 
 def _client_of(guild: discord.Guild) -> discord.Client:
