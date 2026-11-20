@@ -197,7 +197,7 @@ def test_machine_and_distributor_surfaces_are_declared() -> None:
         Path(__file__).resolve().parents[1] / "conf" / "views.yaml"
     ).read_text(encoding="utf-8")
     for view_id in (
-        "panel:mod:kingdom:settings",
+        "panel:mod:kingdom:console",
         "panel:mod:kingdom:time-machine",
         "panel:mod:kingdom:time-machine:restore",
         "panel:mod:kingdom:distributor",
@@ -414,7 +414,7 @@ def test_the_laboratoire_is_gone_from_the_declaration() -> None:
     assert "laboratoire" not in groups
     assert "lab" not in keys and "lab_original" not in keys and "lab_travaux" not in keys
     # the new settings salon pins the console panel
-    assert "settings" in keys
+    assert "console" in keys
 
 
 def test_snapshot_round_trip_on_a_fake_store() -> None:
@@ -562,7 +562,7 @@ def test_settings_pin_falls_back_to_the_declared_salon_name() -> None:
             _Channel("🛠️ ᴘᴀʀᴀᴍᴇᴛʀᴇs", 222),
         ]
     )
-    assert channel_id_by_flattened_name(_Bot(guild), "42", ("parametres", "settings")) == "222"
+    assert channel_id_by_flattened_name(_Bot(guild), "42", ("console", "parametres", "settings")) == "222"
     # an uncached guild or a miss resolves to nothing (the pin simply waits)
     assert channel_id_by_flattened_name(_Bot(None), "42", ("parametres",)) == ""
     assert channel_id_by_flattened_name(_Bot(guild), "7", ("parametres",)) == ""

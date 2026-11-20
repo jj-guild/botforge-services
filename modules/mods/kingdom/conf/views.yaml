@@ -34,7 +34,8 @@ views:
     kind: surface
   # machine-temps-v3 (Drasah 19/11): the ⏱️ machine à temps surfaces —
   # the pinned cockpit + the snapshot-restore picker window
-  panel:mod:kingdom:settings:
+  # (rework 20/11: renamed from panel:mod:kingdom:settings — no settings id)
+  panel:mod:kingdom:console:
     kind: surface
   panel:mod:kingdom:time-machine:
     kind: surface

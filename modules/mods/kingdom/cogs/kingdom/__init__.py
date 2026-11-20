@@ -128,17 +128,19 @@ def register(bot: Any, config: Any) -> None:
         console panel always finds its home; the provisioning keeps
         owning the canonical ids.
         """
-        stored = await stored_channel_id(guild_id, "mod/kingdom", "settings")
+        stored = await stored_channel_id(guild_id, "mod/kingdom", "console")
         if stored:
             return stored
         from .common import channel_id_by_flattened_name
 
-        return channel_id_by_flattened_name(bot, guild_id, ("parametres", "settings"))
+        # the new « console » render first, then the legacy « paramètres » /
+        # « settings » renders for guilds not yet re-provisioned
+        return channel_id_by_flattened_name(bot, guild_id, ("console", "parametres", "settings"))
 
     register_static_pin(
         StaticPinnedView(
-            key="panel:mod:kingdom:settings",
-            mark_suffix="panel:mod:kingdom:settings",
+            key="panel:mod:kingdom:console",
+            mark_suffix="panel:mod:kingdom:console",
             resolve_channel=_resolve_settings_channel,
             build_layout=build_settings_panel,
             registry=getattr(bot, "message_registry", None),

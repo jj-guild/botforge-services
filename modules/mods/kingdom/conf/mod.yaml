@@ -150,12 +150,13 @@ channels:
     access:
       everyone_view: false
       view: [Kingdom Admin]
-  # casquette-removal-v1 + console-fr-v1 (Drasah 19/11): the console
-  # panel pins in its OWN declared settings salon (Admin > Paramètres),
-  # next to the ephemeral SDK window — the ops don't hunt for a
-  # discoverable button anymore.
-  - key: settings
-    display_name: 🛠️ paramètres
+  # console-salon (rework 20/11): the console panel pins in its OWN
+  # declared console salon (Admin > 🛠️ console), next to the ephemeral
+  # SDK window (panel:mod:kingdom:admin:console via the 🛠️ button) —
+  # no more « settings » salon: the old `settings` slug is swept as
+  # undeclared at the next provisioning.
+  - key: console
+    display_name: 🛠️ console
     description: The admin console panel (pinned, admin only)
     group: admin
     admin_only: true
