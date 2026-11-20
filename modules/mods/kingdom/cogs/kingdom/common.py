@@ -611,6 +611,33 @@ def dm_view(*items: Any, timeout: float | None = None) -> Any:
     return ComposedView(*items, timeout=timeout, mod="kingdom")
 
 
+def channel_id_by_flattened_name(bot: Any, guild_id: str, tokens: tuple[str, ...]) -> str:
+    """Last-chance salon resolution by declared name (accent-insensitive).
+
+    settings-pin-fallback-v1 (Drasah 20/11): a migrated guild's stored
+    tree id may miss a declared salon (a pre-key provisioning, a drifted
+    id) — the pin then never lands and its salon stays empty. The
+    fallback scans the cached guild for a channel whose name carries
+    one of the tokens, accents flattened; the provisioning keeps owning
+    the canonical ids, this only heals the pin.
+    """
+    import unicodedata
+
+    guild = bot.get_guild(int(guild_id)) if str(guild_id).isdigit() else None
+    if guild is None:
+        return ""
+    for channel in getattr(guild, "channels", ()) or ():
+        name = str(getattr(channel, "name", "")).lower()
+        flat = "".join(
+            ch
+            for ch in unicodedata.normalize("NFKD", name)
+            if not unicodedata.combining(ch)
+        )
+        if any(str(token) in flat for token in tokens):
+            return str(channel.id)
+    return ""
+
+
 __all__ = [
     "PICKBAN_RANKS",
     "attack_by_id",
@@ -658,4 +685,5 @@ __all__ = [
     "strings_by_locale",
     "strings_for",
     "wiring",
+    "channel_id_by_flattened_name",
 ]

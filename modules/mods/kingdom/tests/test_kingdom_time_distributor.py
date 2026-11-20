@@ -105,6 +105,87 @@ FR_DISTRIBUTOR_KEYS = (
     "cancelled",
     "no_service",
     "error",
+    "menu_title",
+    "back_button",
+    "civ_placeholder",
+    "cat_alliance_add",
+    "cat_alliance_remove",
+    "cat_treasury",
+    "cat_parish",
+    "cat_territories",
+    "cat_lord",
+    "cat_tech",
+    "cat_status",
+    "civ_add_title",
+    "civ_remove_title",
+    "civ_status_free",
+    "civ_status_hand",
+    "civ_status_married",
+    "civ_secured",
+    "civ_add_done",
+    "civ_remove_done",
+    "prev_page",
+    "next_page",
+    "treasury_title",
+    "treasury_set",
+    "treasury_field",
+    "tr_plus5_button",
+    "tr_plus1_button",
+    "tr_minus1_button",
+    "tr_minus5_button",
+    "treasury_set_done",
+    "value_modal_title",
+    "value_modal_label",
+    "value_modal_bad",
+    "parish_title",
+    "parish_tier_set",
+    "terr_title",
+    "terr_line",
+    "terr_shielded",
+    "terr_give_button",
+    "terr_transfer_button",
+    "terr_retire_button",
+    "terr_replace_button",
+    "terr_shield_button",
+    "terr_unshield_button",
+    "terr_pick_line",
+    "terr_give_pick_line",
+    "terr_pick_kingdom_line",
+    "terr_none",
+    "terr_maps_none",
+    "terr_give_done",
+    "terr_transfer_done",
+    "terr_retire_done",
+    "terr_replace_done",
+    "terr_shield_done",
+    "terr_unshield_done",
+    "lord_title",
+    "lord_line",
+    "lord_role_king",
+    "lord_role_lord",
+    "lord_none",
+    "lord_action_title",
+    "lord_budgets_button",
+    "lord_unlock_button",
+    "lord_lock_button",
+    "lord_budgets_done",
+    "lord_unlock_done",
+    "lord_lock_done",
+    "tech_title",
+    "tech_line",
+    "tech_plus_button",
+    "tech_minus_button",
+    "tech_done",
+    "status_title",
+    "status_parish",
+    "status_hand",
+    "status_secured",
+    "status_lord",
+    "status_married_none",
+    "status_lock_line",
+    "status_territories",
+    "status_purchases",
+    "status_purchases_none",
 )
 
 
@@ -145,6 +226,31 @@ def test_machine_and_distributor_strings_parity() -> None:
         machine["jump_done"].format(1)
         distributor["kingdom_header"].format("Nilrem")
         distributor["points_done"].format("Nilrem", 10)
+        distributor["menu_title"].format("Nilrem")
+        distributor["civ_add_title"].format("Nilrem", 1, 2)
+        distributor["civ_remove_title"].format("Nilrem", 1, 2)
+        distributor["civ_status_married"].format("Lord A")
+        distributor["treasury_title"].format("Nilrem", 10)
+        distributor["treasury_set_done"].format(distributor["treasury_field"], 10)
+        distributor["parish_title"].format("Nilrem", 2, "Église")
+        distributor["terr_title"].format("Nilrem", 2)
+        distributor["terr_line"].format("megarandom", "")
+        distributor["terr_pick_line"].format("Nilrem")
+        distributor["terr_pick_kingdom_line"].format("megarandom")
+        distributor["terr_give_done"].format("megarandom", "Nilrem")
+        distributor["lord_title"].format("Nilrem")
+        distributor["lord_line"].format("👑 Roi", 1, 0)
+        distributor["lord_action_title"].format("Lord A")
+        distributor["tech_title"].format("Nilrem")
+        distributor["tech_line"].format(2)
+        distributor["tech_done"].format("embuscade", "Nilrem", 2)
+        distributor["status_title"].format("Nilrem", "approved")
+        distributor["status_parish"].format("Chapelle", 4)
+        distributor["status_hand"].format(2, "A, B")
+        distributor["status_lord"].format("👑", "King A", "Francs", 1, 0, "")
+        distributor["status_lock_line"].format("01/01 12:00")
+        distributor["status_territories"].format(2, "A, B")
+        distributor["status_purchases"].format("embuscade×2")
 
 
 def test_machine_custom_ids() -> None:
@@ -186,11 +292,24 @@ def test_distributor_custom_ids() -> None:
     """The distributor's doors + the injector's kingdom-carrying ids are stable."""
     from botforge.mods.kingdom.cogs.kingdom.distributor import (
         DISTRIBUTOR_VIEW_KEY,
+        DistributorCatButton,
+        DistributorCivPageButton,
+        DistributorCivSelect,
         DistributorDestructButton,
         DistributorGiveButton,
         DistributorKingdomSelect,
+        DistributorKingdomTargetSelect,
+        DistributorLordActionButton,
+        DistributorLordSelect,
+        DistributorMapSelect,
+        DistributorMenuButton,
         DistributorOpenButton,
+        DistributorParishButton,
+        DistributorTerritoryButton,
+        DistributorTerritorySelect,
         DistributorTestKingdomButton,
+        DistributorTechSelect,
+        DistributorTreasuryButton,
     )
 
     assert DISTRIBUTOR_VIEW_KEY == "panel:mod:kingdom:distributor"
@@ -207,6 +326,43 @@ def test_distributor_custom_ids() -> None:
         "kingdom:distributor:give:k-nilrem:points"
     )
     assert DistributorKingdomSelect("x").custom_id == "kingdom:distributor:pick"
+    assert DistributorMenuButton("x", "k-nilrem").custom_id == "kingdom:distributor:menu:k-nilrem"
+    assert DistributorCatButton("x", "k-nilrem", "treasury").custom_id == (
+        "kingdom:distributor:cat:k-nilrem:treasury"
+    )
+    assert DistributorCivPageButton("x", "k-nilrem", "add", 0, "next").custom_id == (
+        "kingdom:distributor:civpage:k-nilrem:add:0:next"
+    )
+    assert DistributorCivSelect("x", "k-nilrem", "add", 0).custom_id == (
+        "kingdom:distributor:civsel:k-nilrem:add:0"
+    )
+    assert DistributorTreasuryButton("x", "k-nilrem", "p5", None).custom_id == (  # type: ignore[arg-type]
+        "kingdom:distributor:tr:k-nilrem:p5"
+    )
+    assert DistributorParishButton("x", "k-nilrem", 3).custom_id == (
+        "kingdom:distributor:par:k-nilrem:3"
+    )
+    assert DistributorTerritoryButton("x", "k-nilrem", "shield").custom_id == (
+        "kingdom:distributor:terr:k-nilrem:shield"
+    )
+    assert DistributorMapSelect("x", "k-nilrem").custom_id == (
+        "kingdom:distributor:mapsel:k-nilrem"
+    )
+    assert DistributorTerritorySelect("x", "k-nilrem", "retire").custom_id == (
+        "kingdom:distributor:tsel:k-nilrem:retire"
+    )
+    assert DistributorKingdomTargetSelect("x", "k-nilrem", "megarandom").custom_id == (
+        "kingdom:distributor:ksel:k-nilrem:megarandom"
+    )
+    assert DistributorLordSelect("x", "k-nilrem").custom_id == (
+        "kingdom:distributor:lsel:k-nilrem"
+    )
+    assert DistributorLordActionButton("x", "k-nilrem", "123", "budgets").custom_id == (
+        "kingdom:distributor:lact:k-nilrem:123:budgets"
+    )
+    assert DistributorTechSelect("x", "k-nilrem", "plus").custom_id == (
+        "kingdom:distributor:techsel:k-nilrem:plus"
+    )
 
 
 def test_machine_and_distributor_panels_build_without_service() -> None:
@@ -377,3 +533,36 @@ def test_snapshot_round_trip_on_a_fake_store() -> None:
         assert any(str(doc.get("_id", "")).startswith("archive-") for doc in store.archives)
 
     asyncio.run(_scenario())
+
+
+def test_settings_pin_falls_back_to_the_declared_salon_name() -> None:
+    """settings-pin-fallback-v1: an empty Admin > Paramètres heals by name."""
+    from botforge.mods.kingdom.cogs.kingdom.common import channel_id_by_flattened_name
+
+    class _Channel:
+        def __init__(self, name: str, cid: int) -> None:
+            self.name = name
+            self.id = cid
+
+    class _Guild:
+        def __init__(self, channels: list[_Channel]) -> None:
+            self.channels = channels
+
+    class _Bot:
+        def __init__(self, guild: _Guild | None) -> None:
+            self._guild = guild
+
+        def get_guild(self, gid: int) -> _Guild | None:
+            return self._guild if int(gid) == 42 else None
+
+    # the accented declared name (the migrated salon) heals the pin
+    guild = _Guild(
+        [
+            _Channel("royaumes", 111),
+            _Channel("🛠️ ᴘᴀʀᴀᴍᴇᴛʀᴇs", 222),
+        ]
+    )
+    assert channel_id_by_flattened_name(_Bot(guild), "42", ("parametres", "settings")) == "222"
+    # an uncached guild or a miss resolves to nothing (the pin simply waits)
+    assert channel_id_by_flattened_name(_Bot(None), "42", ("parametres",)) == ""
+    assert channel_id_by_flattened_name(_Bot(guild), "7", ("parametres",)) == ""
