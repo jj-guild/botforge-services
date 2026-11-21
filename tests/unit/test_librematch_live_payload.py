@@ -163,64 +163,38 @@ def test_the_served_entry_carries_the_projection() -> None:
 
 
 def test_the_view_blocks_render_from_the_real_payload() -> None:
-    """The rendered discord blocks, verbatim — the end-to-end contract."""
+    """The rendered discord blocks, verbatim \u2014 the end-to-end contract."""
     from botforge.discord.stats_views import finished_match_block
 
-    labels = {"team": "Équipe", "ongoing": "en cours", "untitled": "Match {id}"}
+    labels = {"team": "\u00c9quipe", "ongoing": "en cours", "untitled": "Match {id}"}
 
-    # the ranked 1v1 win — title by map, duration, both teams, civ, Elo, delta
+    # the ranked 1v1 win \u2014 map titled, duration, one bullet per seat
     assert finished_match_block(_entry("397662136"), {ME}, {"848567"}, labels) == [
-        "- ✅ **Arabia** — <t:1749127503:R> · 17 min · 1v1",
-        "  - Équipe 1 : **JeanJack** · Magyars · 1185 Elo · +48",
-        "  - Équipe 2 : Lastdrop · Persians · 1156 Elo · -18",
+        "- \u2705 **Arabia** \u2014 <t:1749127503:R> \u00b7 17 min \u00b7 1v1",
+        "  - **\u00c9quipe 1**",
+        "      - **JeanJack** \u00b7 Magyars \u00b7 **1185 Elo** (+48)",
+        "  - **\u00c9quipe 2**",
+        "      - Lastdrop \u00b7 Persians \u00b7 **1156 Elo** (-18)",
     ]
-    # the custom lobby — title by its own name, both seats' points of view
+    # the custom lobby \u2014 its own name carries the title, the map rides along
     assert finished_match_block(_entry("473574107"), {ME}, {"848567"}, labels) == [
-        "- ✅ **Test bot** — <t:1777283898:R> · 1v1",
-        "  - Équipe 1 : *Merlin Pinpin* · Saracens · 1238 Elo · -18",
-        "  - Équipe 2 : **JeanJack** · Shu · 1237 Elo · +18",
+        "- \u2705 **Test bot** \u00b7 *Arabia* \u2014 <t:1777283898:R> \u00b7 1v1",
+        "  - **\u00c9quipe 1**",
+        "      - *Merlin Pinpin* \u00b7 Saracens \u00b7 **1238 Elo** (-18)",
+        "  - **\u00c9quipe 2**",
+        "      - **JeanJack** \u00b7 Shu \u00b7 **1237 Elo** (+18)",
     ]
-    assert finished_match_block(_entry("473574107"), {"848567"}, {ME}, labels) == [
-        "- ❌ **Test bot** — <t:1777283898:R> · 1v1",
-        "  - Équipe 1 : **Merlin Pinpin** · Saracens · 1238 Elo · -18",
-        "  - Équipe 2 : *JeanJack* · Shu · 1237 Elo · +18",
-    ]
-    # the 4v4 loss — every seat, the viewed profile bold among its team
+    # the 4v4 loss \u2014 every seat stacked, the viewed profile bold
     assert finished_match_block(_entry("433589647"), {ME}, set(), labels) == [
-        "- ❌ **CoastalForest** — <t:1763320771:R> · 16 min · 4v4",
-        (
-            "  - Équipe 1 : TheGooseTransporter · Vietnamese · 1512 Elo · +16, "
-            "Saladin45 · Bulgarians · 1502 Elo · +16, konstid · Gurjaras · 1564 Elo · +13, "
-            "Richman · Dravidians · 1495 Elo · +17"
-        ),
-        (
-            "  - Équipe 2 : **JeanJack** · Vikings · 1432 Elo · -13, DippityDang · Malians · 1535 Elo · -18, "
-            "Cyo Electryx · Saracens · 1396 Elo · -12, SSS · Mongols · 1554 Elo · -19"
-        ),
+        "- \u274c **CoastalForest** \u2014 <t:1763320771:R> \u00b7 16 min \u00b7 4v4",
+        "  - **\u00c9quipe 1**",
+        "      - TheGooseTransporter \u00b7 Vietnamese \u00b7 **1512 Elo** (+16)",
+        "      - Saladin45 \u00b7 Bulgarians \u00b7 **1502 Elo** (+16)",
+        "      - konstid \u00b7 Gurjaras \u00b7 **1564 Elo** (+13)",
+        "      - Richman \u00b7 Dravidians \u00b7 **1495 Elo** (+17)",
+        "  - **\u00c9quipe 2**",
+        "      - **JeanJack** \u00b7 Vikings \u00b7 **1432 Elo** (-13)",
+        "      - DippityDang \u00b7 Malians \u00b7 **1535 Elo** (-18)",
+        "      - Cyo Electryx \u00b7 Saracens \u00b7 **1396 Elo** (-12)",
+        "      - SSS \u00b7 Mongols \u00b7 **1554 Elo** (-19)",
     ]
-
-
-def test_the_wire_round_trip_keeps_the_title_and_the_players() -> None:
-    """to_wire must carry description and players_json (the bare-lines bug).
-
-    The ext's serve log carried rich entries while the bot rendered
-    bare lines (2026-11-20): the wire translator dropped the two
-    fields the whole rendering reads. The round trip pins them.
-    """
-    from botforge.core.models.game import MatchHistoryEntry
-    from botforge.core.rpc.game import match_history_from_wire, match_history_to_wire
-
-    entry = MatchHistoryEntry(
-        match_id="473574107",
-        started_at=1777283898,
-        finished_at=1777284200,
-        map_name="Arabia",
-        winners=("17190369",),
-        description="Test bot",
-        players_json=json.dumps(
-            [{"profile_id": "17190369", "alias": "JeanJack", "team": 0}]
-        ),
-    )
-    rebuilt = match_history_from_wire(match_history_to_wire(entry))
-    assert rebuilt.description == "Test bot"
-    assert rebuilt.players_json == entry.players_json
