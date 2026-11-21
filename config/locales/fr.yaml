@@ -90,6 +90,7 @@ fr:
       rename_success: '✅ Pseudo mis à jour : {name}'
       remove_button: Retirer un compte
       matches_button: "Derniers matchs"
+      matches_ladder: "Ladder {name} \u2014 Match n\u00b0{number}"
       matches_title: "Tes 10 derniers matchs"
       matches_live_title: "🎯 En cours"
       matches_team: "Équipe"
