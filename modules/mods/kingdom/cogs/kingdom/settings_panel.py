@@ -219,6 +219,9 @@ async def build_settings_panel(guild_id: str) -> discord.ui.LayoutView:
     from .panel import current_bot
 
     bot = current_bot()
+    # mutex-beta-saison (Drasah 21/11): a live beta and a classic season
+    # exclude each other — the cycle's start button goes RED and dead
+    beta_live = await _beta_active(bot, str(guild_id or ""))
     status_lines, phase = await _season_state(strings, bot=bot, guild_id=guild_id)
 
     # LE CYCLE — ONE contextual row, the phase decides (console-v2)
@@ -243,7 +246,8 @@ async def build_settings_panel(guild_id: str) -> discord.ui.LayoutView:
             SettingsActionButton(
                 "start-season",
                 str(strings["settings_start_season_button"]),
-                discord.ButtonStyle.success,
+                discord.ButtonStyle.danger if beta_live else discord.ButtonStyle.success,
+                disabled=beta_live,
             ).item
         )
     else:
@@ -298,6 +302,10 @@ async def build_settings_panel(guild_id: str) -> discord.ui.LayoutView:
             or ""
         )),
         cycle_row,
+        # mutex-beta-saison: the disabled start-season button carries its
+        # reason right under the cycle row (data — key present in both
+        # locales, missing = no line)
+        *([_zone_hint("settings_season_blocked_beta")] if beta_live else []),
         discord.ui.Separator(),
         discord.ui.TextDisplay(f"## {strings['settings_zone_regie_label']}"),
         _zone_hint("settings_zone_regie_hint"),
@@ -436,13 +444,15 @@ class SettingsActionButton(
     """One restart-proof admin action of the 🛠️ console."""
 
     def __init__(
-        self, action: str, label: str, style: discord.ButtonStyle | None = None
+        self, action: str, label: str, style: discord.ButtonStyle | None = None,
+        disabled: bool = False,
     ) -> None:
         super().__init__(
             discord.ui.Button(
                 label=label[:80],
                 custom_id=f"kingdom:settings:{action}"[:100],
                 style=style or discord.ButtonStyle.secondary,
+                disabled=disabled,
             )
         )
         self.action = action
@@ -473,6 +483,14 @@ class SettingsActionButton(
             return
         if not await _panel_guard(interaction):
             return
+        # mutex-beta-saison (Drasah 21/11): a live beta and a classic
+        # season exclude each other — the refused gesture never even
+        # gets its confirm card
+        if self.action == "start-season" and await _beta_active(
+            interaction.client, str(interaction.guild_id or "")
+        ):
+            await _safe_send(interaction, str(strings["settings_season_blocked_beta"]))
+            return
         if self.action in _CONFIRM_ACTIONS:
             await open_unique_ephemeral(
                 interaction, view=_confirm_card(strings, self.action)
@@ -502,6 +520,11 @@ def _needs_stack(strings: dict[str, str]) -> tuple[Any | None, str | None]:
 async def _start_season(interaction: discord.Interaction, strings: dict[str, str]) -> None:
     if not interaction.response.is_done():
         await interaction.response.defer(ephemeral=True)
+    # mutex-beta-saison (Drasah 21/11): a live beta and a classic
+    # season exclude each other — close the beta (le tiroir 🧪 Bêta) first
+    if await _beta_active(interaction.client, str(interaction.guild_id or "")):
+        await interaction.followup.send(str(strings["settings_season_blocked_beta"]), ephemeral=True)
+        return
     stack, busy = _needs_stack(strings)
     if busy:
         await interaction.followup.send(busy, ephemeral=True)
@@ -663,6 +686,11 @@ async def _start_beta(interaction: discord.Interaction, strings: dict[str, str])
     state_service = getattr(interaction.client, "state_service", None)
     cache = ModStateCache(state_service, _MOD) if state_service is not None else None
     guild_id = str(interaction.guild_id or "")
+    # mutex-beta-saison (Drasah 21/11): the engine refuses too — the UI
+    # disables the entry, this guard is the truth when the UI is stale
+    if not await is_beta(cache, guild_id, _MOD) and await _season_live(wiring()):
+        await interaction.followup.send(str(strings["settings_beta_blocked_season"]), ephemeral=True)
+        return
     try:
         if await is_beta(cache, guild_id, _MOD):
             await exit_beta(cache, guild_id, _MOD)
@@ -992,35 +1020,111 @@ def _atelier_drawer(strings: dict[str, str], ops_strings: dict[str, str]) -> dis
     return surface(_DRAWERS["atelier"], container)
 
 
-def _beta_drawer(strings: dict[str, str]) -> discord.ui.LayoutView:
-    """The beta & tools drawer — a toggle, never a launcher.
+async def _beta_active(bot: Any | None, guild_id: str) -> bool:
+    """The live beta phase flag (best-effort, never a crash).
 
-    Being in beta does NOT enter the season (#369 stays data): the
-    entry rides the admissions sas like any normal season.
+    mutex-beta-saison: the console reads the OPERATOR's own toggle —
+    the per-guild phase flag through the core beta seam (the same one
+    ``_start_beta`` flips), never the camp window's wiring read (an
+    untouched ``wiring()`` in a test or an unready service must NOT
+    summon the whole stack just to paint a badge).
+    """
+    if bot is None or not guild_id or not str(guild_id).strip().isdigit():
+        return False
+    state_service = getattr(bot, "state_service", None)
+    if state_service is None:
+        return False
+    try:
+        from botforge.core.services.beta import is_beta
+        from botforge.core.services.mod_storage import ModStateCache
+
+        return bool(await is_beta(ModStateCache(state_service, _MOD), str(guild_id), _MOD))
+    except Exception:  # noqa: BLE001 — the badge never breaks a render
+        logger.warning("kingdom: the beta flag read failed", exc_info=True)
+        return False
+
+
+async def _season_live(stack: Any | None) -> bool:
+    """Whether a classic season is LAUNCHED (mutex-beta-saison)."""
+    if stack is None or getattr(stack, "kingdoms", None) is None:
+        return False
+    try:
+        season = await stack.kingdoms.current_season()
+        return season is not None and str(getattr(season, "phase", "started")) == "started"
+    except Exception:  # noqa: BLE001 — a read, never a crash
+        logger.warning("kingdom: the season phase read failed", exc_info=True)
+        return False
+
+
+def _beta_drawer(
+    strings: dict[str, str],
+    beta_active: bool = False,
+    season_live: bool = False,
+) -> discord.ui.LayoutView:
+    """The beta drawer — a STATE-AWARE toggle, never a mystery button.
+
+    mutex-beta-saison (Drasah 21/11 « je ne sais même pas que je peux
+    fermer la bêta ») : ONE button, ONE meaning per state — OFF shows
+    « Démarrer la bêta » (red + disabled + reason while a classic season
+    runs), ON shows « Fermer la bêta ». The false start is dead until a
+    season is launched.
     """
     row: Any = discord.ui.ActionRow()
-    row.add_item(
-        SettingsActionButton(
-            "start-beta", str(strings["settings_start_beta_button"]), discord.ButtonStyle.success
-        ).item
-    )
-    # 🚫 Faux départ (console-etats-regie-v1) : le dernier recours de
-    # l'organisateur vit avec les outils (jamais dans LE CYCLE).
-    tools_row: Any = discord.ui.ActionRow()
-    tools_row.add_item(
-        SettingsActionButton(
-            "false-start", str(strings["settings_false_start_button"]), discord.ButtonStyle.danger
-        ).item
-    )
-    container: discord.ui.Container[discord.ui.LayoutView] = discord.ui.Container(
+    blocks: list[discord.ui.Item[discord.ui.LayoutView]] = [
         discord.ui.TextDisplay(f"# {strings['settings_beta_title']}"),
         discord.ui.TextDisplay(str(strings["settings_beta_hint"])),
         discord.ui.Separator(),
-        row,
-        tools_row,
-        discord.ui.Separator(),
-        discord.ui.TextDisplay(str(strings["settings_beta_sas_note"])),
-        accent_colour=_ADMIN_COLOUR,
+        discord.ui.TextDisplay(str(
+            strings["settings_beta_state_active" if beta_active else "settings_beta_state_off"]
+        )),
+    ]
+    if beta_active:
+        # the SAME toggle seam — the label says what it does: it CLOSES
+        row.add_item(
+            SettingsActionButton(
+                "start-beta", str(strings["settings_beta_close_button"]),
+                discord.ButtonStyle.danger,
+            ).item
+        )
+    elif season_live:
+        blocks.append(discord.ui.TextDisplay(str(strings["settings_beta_blocked_season"])))
+        row.add_item(
+            SettingsActionButton(
+                "start-beta", str(strings["settings_start_beta_button"]),
+                discord.ButtonStyle.danger, disabled=True,
+            ).item
+        )
+    else:
+        row.add_item(
+            SettingsActionButton(
+                "start-beta", str(strings["settings_start_beta_button"]),
+                discord.ButtonStyle.success,
+            ).item
+        )
+    blocks.append(row)
+    blocks.append(discord.ui.Separator())
+    # ⛔ Faux départ : the season's rewind — dead until a season runs
+    tools_row: Any = discord.ui.ActionRow()
+    if season_live:
+        tools_row.add_item(
+            SettingsActionButton(
+                "false-start", str(strings["settings_false_start_button"]),
+                discord.ButtonStyle.danger,
+            ).item
+        )
+    else:
+        blocks.append(discord.ui.TextDisplay(str(strings["settings_beta_false_start_hint"])))
+        tools_row.add_item(
+            SettingsActionButton(
+                "false-start", str(strings["settings_false_start_button"]),
+                discord.ButtonStyle.danger, disabled=True,
+            ).item
+        )
+    blocks.append(tools_row)
+    blocks.append(discord.ui.Separator())
+    blocks.append(discord.ui.TextDisplay(str(strings["settings_beta_sas_note"])))
+    container: discord.ui.Container[discord.ui.LayoutView] = discord.ui.Container(
+        *blocks, accent_colour=_ADMIN_COLOUR
     )
     return surface(_DRAWERS["beta"], container)
 
@@ -1052,7 +1156,11 @@ async def _build_drawer(
 
         view = _atelier_drawer(strings, strings_by_locale(locale))
     else:
-        view = _beta_drawer(strings)
+        # mutex-beta-saison: the drawer reads the LIVE state — the button
+        # says what it does (start when off, close when on)
+        beta_live = await _beta_active(bot, str(guild_id or ""))
+        season_live = await _season_live(wiring())
+        view = _beta_drawer(strings, beta_active=beta_live, season_live=season_live)
     return view
 
 

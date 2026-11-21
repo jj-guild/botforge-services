@@ -249,6 +249,49 @@ def test_the_fixed_drawers_reuse_only_existing_registrations() -> None:
     assert "kingdom:settings:false-start" in beta_ids
 
 
+def _buttons(view: object) -> dict[str, object]:
+    out: dict[str, object] = {}
+    for item in view.walk_children():  # type: ignore[attr-defined]
+        if getattr(item, "custom_id", None) and hasattr(item, "label"):
+            out[str(item.custom_id)] = item
+    return out
+
+
+def test_the_beta_drawer_is_a_state_aware_toggle() -> None:
+    """mutex-beta-saison (Drasah 21/11) : the 🧪 Bêta drawer says the
+    STATE and the button says what it DOES — off shows Start (green,
+    or red+disabled+reason while a classic season runs), on shows
+    Close; the false start stays dead until a season is launched."""
+    from botforge.mods.kingdom.cogs.settings_panel import (
+        _beta_drawer,
+        settings_strings,
+    )
+
+    fr = settings_strings("fr")
+    off = _buttons(_beta_drawer(fr))
+    assert off["kingdom:settings:start-beta"].label == "🚀 Démarrer la bêta"
+    assert off["kingdom:settings:start-beta"].disabled is False
+    assert off["kingdom:settings:false-start"].disabled is True
+    assert str(fr["settings_beta_false_start_hint"]) in "\n".join(
+        _texts(_beta_drawer(fr))
+    )
+
+    active = _buttons(_beta_drawer(fr, beta_active=True))
+    assert active["kingdom:settings:start-beta"].label == "🔴 Fermer la bêta"
+    assert active["kingdom:settings:start-beta"].disabled is False
+    assert str(fr["settings_beta_state_active"]) in "\n".join(
+        _texts(_beta_drawer(fr, beta_active=True))
+    )
+
+    blocked = _buttons(_beta_drawer(fr, season_live=True))
+    assert blocked["kingdom:settings:start-beta"].disabled is True
+    assert str(fr["settings_beta_blocked_season"]) in "\n".join(
+        _texts(_beta_drawer(fr, season_live=True))
+    )
+    # the season rewind only arms once a season runs
+    assert blocked["kingdom:settings:false-start"].disabled is False
+
+
 def test_the_running_cockpit_builds_in_every_engine_phase() -> None:
     """console-crash-v1's regression: the cockpit renders for EVERY
     season phase — a missing per-phase hint key once crashed the pin
@@ -354,6 +397,12 @@ def test_the_console_v2_strings_exist_in_both_locales() -> None:
         "settings_atelier_heal_note",
         "settings_beta_title",
         "settings_beta_hint",
+        "settings_beta_state_active",
+        "settings_beta_state_off",
+        "settings_beta_close_button",
+        "settings_beta_blocked_season",
+        "settings_beta_false_start_hint",
+        "settings_season_blocked_beta",
         "settings_beta_sas_note",
         "settings_phase_setup",
         "settings_phase_started",

@@ -139,7 +139,7 @@ fr:
       settings_reset_confirm_title: Réinitialiser les salons ?
       settings_reset_done: ✅ Salons réinitialisés ({channels} supprimés, tout est recréé).
       settings_season_mode_button: 🔄 Mode de saison
-      settings_start_beta_button: 🚀 Démarrer la beta
+      settings_start_beta_button: 🚀 Démarrer la bêta
       settings_start_season_button: 🎯 Démarrer la saison
       settings_start_season_done: ✅ Saison démarrée — que l'aventure commence !
       settings_start_season_failed: ❌ Le démarrage a échoué — {0}
@@ -175,7 +175,7 @@ fr:
       settings_nav_admissions_button: "🛂 Admissions"
       settings_nav_regie_button: "👥 Joueurs & royaumes"
       settings_nav_atelier_button: "🛠️ Serveur"
-      settings_nav_beta_button: "🧪 Beta & outils"
+      settings_nav_beta_button: 🧪 Bêta
       settings_admissions_title: "🛂 Les admissions — le sas"
       settings_admissions_hint: "Personne n'entre sans ton geste. Accepter = l'entrée en saison du royaume (beta et normal, même moteur)."
       settings_admissions_empty: "Aucun royaume en attente. Les Rois cliquent « ⚔️ Inscrire leur royaume » sur leur hub dormant, les demandes atterrissent ici."
@@ -187,8 +187,16 @@ fr:
       settings_atelier_hint: "La structure et le temps de jeu. Chaque geste destructif garde sa confirmation."
       settings_window_close_button: "✖️ Fermer"
       settings_atelier_heal_note: "La guérison automatique 5 min continue de tourner en silence — l'atelier n'est que la main d'urgence."
-      settings_beta_title: "🧪 Beta & outils"
-      settings_beta_hint: "Les outils moteur du cycle : saison, horloge, réinitialisations. Être en beta ne lance rien."
+      settings_beta_title: 🧪 Bêta
+      # mutex-beta-saison (Drasah 21/11) : le tiroir dit l'ÉTAT, le
+      # bouton dit ce qu'il FAIT — un interrupteur n'est pas un lanceur
+      settings_beta_hint: "Les règles du parcours bêta : sans compte requis, horloges compressées, saison courte."
+      settings_beta_state_active: "🟡 **Bêta ACTIVE** — le parcours suit les règles pliées."
+      settings_beta_state_off: "⚪ Aucune bêta en cours — le parcours suit les règles normales."
+      settings_beta_close_button: "🔴 Fermer la bêta"
+      settings_beta_blocked_season: "⛔ Une saison classique est lancée — la bêta s'arme hors saison (rembobine d'abord, ou attends la fin)."
+      settings_beta_false_start_hint: "⛔ Faux départ : sans saison lancée, il n'y a rien à rembobiner."
+      settings_season_blocked_beta: "⛔ La bêta est active — ferme-la (le tiroir 🧪 Bêta) avant de lancer la saison classique."
       settings_beta_sas_note: "Même en beta : l'entrée en saison passe PAR LE SAS 🛂 — « ⚔️ Inscrire leur royaume » côté Roi, puis ton ✅ ici."
       # console-etats-regie-v1 (Drasah 21/11) : le badge PARCOURS (bêta
       # ou normal) + le sas = les premiers repères du cockpit

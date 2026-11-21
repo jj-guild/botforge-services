@@ -168,7 +168,7 @@ en:
       settings_nav_admissions_button: "🛂 Admissions"
       settings_nav_regie_button: "👥 Players & kingdoms"
       settings_nav_atelier_button: "🛠️ Server"
-      settings_nav_beta_button: "🧪 Beta & tools"
+      settings_nav_beta_button: 🧪 Bêta
       settings_admissions_title: "🛂 Admissions — the airlock"
       settings_admissions_hint: "Nobody enters without your call. Accepting = the kingdom's season entry (beta and normal, one engine)."
       settings_admissions_empty: "No kingdom waiting. The Kings click '⚔️ Enlist their kingdom' on their dormant hub, the requests land here."
@@ -180,8 +180,14 @@ en:
       settings_atelier_hint: "The structure and the game time. Every destructive gesture keeps its confirmation."
       settings_window_close_button: "✖️ Close"
       settings_atelier_heal_note: "The 5-min automatic healing keeps running silently — the workshop is only the emergency hand."
-      settings_beta_title: "🧪 Beta & tools"
-      settings_beta_hint: "The cycle's engine tools: season, clock, resets. Being in beta launches nothing."
+      settings_beta_title: 🧪 Bêta
+      settings_beta_hint: "The beta path rules: no account required, compressed clocks, short season."
+      settings_beta_state_active: "🟡 **Beta ACTIVE** — the path follows the bent rules."
+      settings_beta_state_off: "⚪ No beta running — the path follows the normal rules."
+      settings_beta_close_button: "🔴 Close the beta"
+      settings_beta_blocked_season: "⛔ A classic season is running — beta arms off-season (rewind first, or wait it out)."
+      settings_beta_false_start_hint: "⛔ False start: with no season running there is nothing to rewind."
+      settings_season_blocked_beta: "⛔ The beta is active — close it (the 🧪 Bêta drawer) before launching the classic season."
       settings_beta_sas_note: "Even in beta: the season entry rides the 🛂 sas — '⚔️ Enlist their kingdom' on the King's side, then your ✅ here."
       # console-etats-regie-v1 (Drasah 21/11): the PARCOURS badge + the sas
       settings_status_parcours_beta: "🧭 **Path: Beta** · no account, compressed clocks"
