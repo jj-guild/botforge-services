@@ -115,3 +115,17 @@ views:
     kind: surface
   panel:mod:kingdom:realm:palmares:
     kind: surface
+  # lieux-portage-v1 (Drasah 21/11): the castle's five illustrated
+  # places — the Entrée chooser + the five consultation windows
+  panel:mod:kingdom:lieux:entree:
+    kind: surface
+  panel:mod:kingdom:lieux:conseil:
+    kind: surface
+  panel:mod:kingdom:lieux:remparts:
+    kind: surface
+  panel:mod:kingdom:lieux:comptes:
+    kind: surface
+  panel:mod:kingdom:lieux:paroisse:
+    kind: surface
+  panel:mod:kingdom:lieux:voliere:
+    kind: surface

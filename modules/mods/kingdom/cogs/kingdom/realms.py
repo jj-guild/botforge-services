@@ -465,6 +465,19 @@ async def heal_realm_hubs(bot: Any) -> int:
             disc = dict(getattr(realm, "discord", None) or {})
             if str(disc.get("category", "") or "") not in known_categories:
                 continue
+            # lieux-portage-v1 (Drasah 21/11) — la leçon du hub fantôme de
+            # Blanc : l'ouverture des salons ne se jouait QU'AU clic
+            # d'acceptation (best-effort, jamais rejouée). Un royaume
+            # ENGAGÉ voit sa structure re-ensurée VIVANTE à chaque passe
+            # (idempotent) — un deny survivant à l'acceptation ne peut
+            # plus rester masqué pour toujours.
+            if getattr(realm, "engagement", None):
+                try:
+                    ids = await ensure_realm_structure(guild, realm, dormant=False)
+                    if ids:
+                        disc.update({k: v for k, v in ids.items() if v})
+                except Exception:  # noqa: BLE001 — le hub guérit même si la structure échoue
+                    logger.warning("kingdom realms: dormancy heal failed", exc_info=True)
             message_id = await deploy_realm_hub(guild, realm, locale=locale)
             if message_id and message_id != str(disc.get("hub_message", "") or ""):
                 disc["hub_message"] = message_id
@@ -755,6 +768,15 @@ class RealmHomeButton(
                 str(m) for m in (getattr(realm, "member_ids", []) or [])
             ]:
                 await open_unique_ephemeral(interaction, content=strings["home_not_member"])
+                return
+            # lieux-portage-v1 (Drasah 21/11) : un royaume ENGAGÉ vit les
+            # lieux — l'Entrée mène au château « Où souhaitez-vous vous
+            # rendre ? » ; le royaume hors-sas garde son chez-soi (rien
+            # n'est écrasé, la vue sas est une réattribution).
+            if getattr(realm, "engagement", None):
+                from .lieux import open_entree
+
+                await open_entree(interaction)
                 return
             await open_unique_ephemeral(interaction, view=await home_layout(interaction, realm, strings))
         except Exception:  # noqa: BLE001 — the door NEVER leaves the player unacknowledged

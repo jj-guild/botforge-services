@@ -306,6 +306,7 @@ def setup_hook(bot: Any) -> None:
     from .time_machine import machine_dynamic_items
     from .distributor import distributor_dynamic_items
     from .camp_beta import camp_dynamic_items
+    from .lieux import lieux_dynamic_items
     from .realms import realm_dynamic_items
 
     for item in (
@@ -353,6 +354,7 @@ def setup_hook(bot: Any) -> None:
         *distributor_dynamic_items(),
         *camp_dynamic_items(),
         *realm_dynamic_items(),
+        *lieux_dynamic_items(),
     ):
         try:
             bot.add_dynamic_items(item)

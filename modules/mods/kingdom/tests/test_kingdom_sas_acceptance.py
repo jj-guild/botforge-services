@@ -67,6 +67,19 @@ def _clean() -> None:
     calls.clear()
 
 
+@pytest.fixture(autouse=True)
+def _restore_realms_seams():
+    """pollution-v1 (Drasah 21/11) : ``_accept_interaction`` monkeyseams
+    ``ensure_realm_structure``/``deploy_realm_hub`` by DIRECT assignment —
+    the fake ("msg-1") survived the file and every later file's hub test
+    deployed against the stub. The seams are restored after EACH test."""
+    from botforge.mods.kingdom.cogs import realms as realms_module
+
+    saved = (realms_module.ensure_realm_structure, realms_module.deploy_realm_hub)
+    yield
+    realms_module.ensure_realm_structure, realms_module.deploy_realm_hub = saved
+
+
 # ---------------------------------------------------------------------------
 # Leg 1 — the acceptance keeps the FRESH shell (the root-cause fix)
 # ---------------------------------------------------------------------------
