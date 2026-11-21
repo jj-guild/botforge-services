@@ -65,6 +65,10 @@ _REALM_STRINGS: dict[str, _Strings] = {
             "acceptera ou refusera (la draft starter est l'acte d'entrée)."
         ),
         "season_join_button": "S'inscrire à la saison",
+        "season_join_closed": (
+            "⛔ Le sas des inscriptions à la saison est fermé pour le "
+            "moment (la régie du serveur décide)."
+        ),
         "season_join_requested": "📬 Demande d'entrée en saison envoyée — un admin la validera.",
         "season_join_pending": "📬 Une demande d'entrée en saison est déjà en attente.",
         "season_join_error": "❌ La demande a échoué : seul le Roi peut l'envoyer.",
@@ -129,6 +133,10 @@ _REALM_STRINGS: dict[str, _Strings] = {
             "accept or refuse (the starter draft IS the act of entry)."
         ),
         "season_join_button": "Sign up for the season",
+        "season_join_closed": (
+            "⛔ The season-entry sas is closed right now (the server's "
+            "régie decides)."
+        ),
         "season_join_requested": "📬 Season entry request sent — an admin will validate it.",
         "season_join_pending": "📬 A season entry request is already pending.",
         "season_join_error": "❌ The request failed: only the King may send it.",

@@ -37,6 +37,9 @@ def test_settings_panel_is_one_template_of_eleven_actions() -> None:
         "add-kingdom",
         "season-mode",
         "remove",
+        # console-etats-regie-v1 (Drasah 21/11): the false start — the
+        # organiser's last resort, confirmation card included
+        "false-start",
     )
     # every action key answers a DynamicItem custom id + a FR label
     from botforge.mods.kingdom.cogs.settings_panel import SettingsActionButton

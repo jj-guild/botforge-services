@@ -160,6 +160,36 @@ class RealmService:
         await self._store.upsert_realm(realm.to_mongo())
         return realm
 
+    async def join_realm(self, realm_id: str, member_id: str) -> RealmShellModel:
+        """A player joins a persistent realm as a MEMBER (the picker's op).
+
+        console-etats-regie-v1 (Drasah 21/11): the players' life is
+        permanent — « rejoindre un royaume » without any season. A
+        player belongs to ONE realm ; the Roi cannot "join" his own
+        realm (he is already its crown).
+        """
+        realm = await self._get(realm_id)
+        if member_id == realm.king_id or member_id in realm.member_ids:
+            raise RealmError("already-in-realm", realm_id=realm_id)
+        if await self.realm_of_member(member_id) is not None:
+            raise RealmError("already-in-realm", realm_id=realm_id)
+        realm.member_ids = list(realm.member_ids) + [str(member_id)]
+        await self._store.upsert_realm(realm.to_mongo())
+        return realm
+
+    async def release_engagement(self, realm_id: str) -> RealmShellModel:
+        """Un-bind the shell from its season (🚫 Faux départ, Drasah 21/11).
+
+        A false start rebasculates to the season's origin state: the
+        realm goes back to DORMANT and must ASK AGAIN — the re-request
+        is the realm's own reconfirmation, never an admin's guess.
+        """
+        realm = await self._get(realm_id)
+        realm.engagement = None
+        realm.join_request = None
+        await self._store.upsert_realm(realm.to_mongo())
+        return realm
+
     async def set_presentation(self, realm_id: str, king_id: str, text: str) -> RealmShellModel:
         """The Roi writes the realm's presentation (Roi ONLY)."""
         realm = await self._get(realm_id)

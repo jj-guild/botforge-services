@@ -163,7 +163,7 @@ def test_the_admissions_drawer_carries_the_realm_entry_decisions() -> None:
 
 
 def test_the_fixed_drawers_reuse_only_existing_registrations() -> None:
-    """Régie / atelier / beta ride the existing buttons, nothing new."""
+    """Régie / atelier / beta ride the existing buttons + the régie switches."""
     from botforge.mods.kingdom.cogs.settings_panel import (
         _beta_drawer,
         _regie_drawer,
@@ -171,13 +171,22 @@ def test_the_fixed_drawers_reuse_only_existing_registrations() -> None:
     )
 
     ids = _ids(_regie_drawer(settings_strings("fr")))
-    assert sorted(ids) == [
+    # console-etats-regie-v1: the four ON/OFF switches first (data
+    # #369 — the labels come from the régie's label keys)
+    assert sorted(ids) == sorted([
+        "kingdom:console-regie:registration_open",
+        "kingdom:console-regie:realm_creation_open",
+        "kingdom:console-regie:realm_join_open",
+        "kingdom:console-regie:season_entry_open",
         "kingdom:settings:add-kingdom",
         "kingdom:settings:assign",
         "kingdom:settings:remove",
         "kingdom:settings:season-mode",
-    ]
-    assert "kingdom:settings:start-beta" in _ids(_beta_drawer(settings_strings("fr")))
+    ])
+    beta_ids = _ids(_beta_drawer(settings_strings("fr")))
+    assert "kingdom:settings:start-beta" in beta_ids
+    # the false start lives with the tools (never in LE CYCLE)
+    assert "kingdom:settings:false-start" in beta_ids
 
 
 def test_the_running_cockpit_builds_in_every_engine_phase() -> None:
@@ -219,10 +228,22 @@ def test_the_running_cockpit_builds_in_every_engine_phase() -> None:
     with mock.patch.object(sp, "wiring", lambda s=_stack("started"): s):
         view = asyncio.run(sp.build_settings_panel("123"))
     ids = _ids(view)
-    assert "kingdom:console:relaunch" in ids, "started: the running ops ride the cycle row"
+    # console-etats-regie-v1: the started cycle is SOBER — the running
+    # ops moved to the 🧪 Beta & outils drawer (the atelier's second
+    # row still answers them)
+    assert "kingdom:console:relaunch" not in ids, (
+        "started: the running ops live in the Beta & outils drawer"
+    )
     assert "kingdom:console-nav:admissions" in ids
     assert "kingdom:settings:launch" not in ids, "started: a fresh launch would wipe the season"
     assert "kingdom:settings:start-season" not in ids, "started: the season is already started"
+    # the running ops stay REACHABLE — the beta drawer carries them
+    from botforge.mods.kingdom.cogs.settings_panel import (
+        _beta_drawer,
+        settings_strings as _ss,
+    )
+
+    assert "kingdom:settings:false-start" in _ids(_beta_drawer(_ss("fr")))
 
 
 def test_the_drawers_are_declared_surfaces() -> None:

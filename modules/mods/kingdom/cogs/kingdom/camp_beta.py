@@ -217,27 +217,62 @@ async def _joinable_kingdoms(stack: Any) -> list[tuple[Any, int]]:
 
 
 async def _camp_window(interaction: discord.Interaction) -> discord.ui.LayoutView:
-    """Build the camp window: the state lines, the two doors (or nothing)."""
+    """Build the camp window: the state lines, the two doors (or nothing).
+
+    console-etats-regie-v1 (Drasah 21/11) : DEUX mondes. Une saison
+    VIT → les portes de la saison (fonder/rejoindre un ROYAUME moteur,
+    le flux d'avant). HORS saison → la VIE PERSISTANTE des joueurs :
+    « 👑 Prendre le Trône » (fonder son royaume persistant, dormant —
+    « ils peuvent le créer sans même jouer ») et « Joindre un royaume »
+    (le picker des royaumes persistants). Les interrupteurs de la
+    régie ferment chaque porte une par une (défaut : ouvert).
+    """
     strings = _strings(interaction)
     stack = wiring()
     rows: list[Any] = [discord.ui.TextDisplay(str(strings["window_help"]))]
     if stack is None:
         rows.append(discord.ui.TextDisplay(str(strings["none_note"])))
         return _window(strings, *rows)
+    from .regie import regie_open
+
+    guild_id = str(interaction.guild_id or "")
+    creation_open = await regie_open(interaction.client, guild_id, "realm_creation_open")
+    join_open = await regie_open(interaction.client, guild_id, "realm_join_open")
+    live = await season_door_open()
+    if not live:
+        # hors saison : les joueurs vivent — les portes persistantes
+        rows.append(discord.ui.TextDisplay(str(strings["window_help_off_season"])))
     lord = await _current_lord(stack, str(interaction.user.id))
     lines = await _state_lines(strings, stack, lord)
-    if lines:
+    if lines and live:
         rows.append(discord.ui.Separator())
         rows.extend(discord.ui.TextDisplay(line) for line in lines)
         return _window(strings, *rows)
     rows.append(discord.ui.Separator())
     door_row: discord.ui.ActionRow[discord.ui.LayoutView] = discord.ui.ActionRow()
-    door_row.add_item(
-        KingdomCampFoundButton(strings["found_button"], discord.ButtonStyle.success).item
-    )
-    door_row.add_item(
-        KingdomCampJoinButton(strings["join_button"], discord.ButtonStyle.primary).item
-    )
+    if live:
+        # les portes de la saison — le flux moteur d'avant
+        if creation_open:
+            door_row.add_item(
+                KingdomCampFoundButton(strings["found_button"], discord.ButtonStyle.success).item
+            )
+        if join_open:
+            door_row.add_item(
+                KingdomCampJoinButton(strings["join_button"], discord.ButtonStyle.primary).item
+            )
+    else:
+        # la vie persistante (royaume-persistant T2) — fondre reprend
+        # le MÊME modal (le royaume persistant naît dormant, sans moteur)
+        if creation_open:
+            door_row.add_item(
+                KingdomCampFoundButton(strings["throne_button"], discord.ButtonStyle.success).item
+            )
+        if join_open:
+            door_row.add_item(
+                KingdomCampJoinButton(strings["realms_join_button"], discord.ButtonStyle.primary).item
+            )
+    if not door_row.children:
+        rows.append(discord.ui.TextDisplay(str(strings["regie_closed_line"])))
     rows.append(door_row)
     return _window(strings, *rows)
 
@@ -350,8 +385,116 @@ class KingdomCampJoinButton(
         return cls(_strings(interaction)["join_button"], discord.ButtonStyle.primary)
 
     async def callback(self, interaction: discord.Interaction) -> None:
-        """Open the joining window (picker + queue fallback)."""
+        """Open the joining window (picker + queue fallback).
+
+        Hors saison (console-etats-regie-v1) : le ROYAUME persistant
+        remplace le royaume moteur — le picker des royaumes vivants.
+        """
+        if not await season_door_open():
+            await open_unique_ephemeral(
+                interaction, view=await _realms_join_window(interaction)
+            )
+            return
         await open_unique_ephemeral(interaction, view=await _join_window(interaction))
+
+
+async def _realms_join_window(interaction: discord.Interaction) -> discord.ui.LayoutView:
+    """« Joindre un royaume » HORS saison — the persistent realms' picker."""
+    strings = _strings(interaction)
+    stack = wiring()
+    rows: list[Any] = [
+        discord.ui.TextDisplay(f"## {strings['realms_join_title']}"),
+        discord.ui.TextDisplay(str(strings["realms_join_help"])),
+        discord.ui.Separator(),
+    ]
+    if stack is None or getattr(stack, "realms", None) is None:
+        rows.append(discord.ui.TextDisplay(str(strings["none_note"])))
+        return _window(strings, *rows)
+    try:
+        realms = list(await stack.realms.realms())
+    except Exception:  # noqa: BLE001 — the window reports, never raises
+        logger.warning("kingdom: the realms picker read failed", exc_info=True)
+        realms = []
+    my_id = str(interaction.user.id)
+    # a player belongs to ONE realm: the picker skips his own home
+    options = [
+        realm
+        for realm in realms
+        if str(getattr(realm, "king_id", "")) != my_id
+        and my_id not in [str(m) for m in (getattr(realm, "member_ids", []) or [])]
+    ]
+    if options:
+        picker = KingdomCampRealmSelect(str(strings["realms_pick_placeholder"]))
+        picker.item.options = [
+            discord.SelectOption(
+                label=str(getattr(realm, "name", "?"))[:100],
+                value=str(getattr(realm, "slug", ""))[:100],
+                description=str(strings["realms_pick_seats"]).format(
+                    members=len(getattr(realm, "member_ids", []) or []) + 1
+                )[:100],
+            )
+            for realm in options[:25]
+        ]
+        picker_row: discord.ui.ActionRow[discord.ui.LayoutView] = discord.ui.ActionRow()
+        picker_row.add_item(picker.item)
+        rows.append(picker_row)
+    else:
+        rows.append(discord.ui.TextDisplay(str(strings["realms_join_empty"])))
+    return _window(strings, *rows)
+
+
+class KingdomCampRealmSelect(
+    discord.ui.DynamicItem[discord.ui.Select[Any]], template=rf"{_NS}:realm-pick$"
+):
+    """The persistent realm picker (hors saison) — one realm, one click."""
+
+    def __init__(self, placeholder: str) -> None:
+        super().__init__(discord.ui.Select(
+            placeholder=placeholder[:100],
+            custom_id=f"{_NS}:realm-pick",
+            min_values=1,
+            max_values=1,
+        ))
+
+    @classmethod
+    async def from_custom_id(cls, interaction, item, match, /):  # type: ignore[no-untyped-def]
+        return cls(_strings(interaction)["realms_pick_placeholder"])
+
+    async def callback(self, interaction: discord.Interaction) -> None:
+        from .settings_panel import _safe_followup
+
+        strings = _strings(interaction)
+        guild_id = str(interaction.guild_id or "")
+        await interaction.response.defer(ephemeral=True)
+        stack = wiring()
+        from .regie import regie_open
+
+        if not await regie_open(interaction.client, guild_id, "realm_join_open"):
+            await interaction.followup.send(str(strings["regie_closed_line"]), ephemeral=True)
+            return
+        if stack is None or getattr(stack, "realms", None) is None:
+            await interaction.followup.send(str(strings["none_note"]), ephemeral=True)
+            return
+        values = [str(v) for v in (self.item.values or [])]
+        slug = values[0] if values else ""
+        realm = await stack.realms.realm_of_slug(slug)
+        if realm is None:
+            await interaction.followup.send(str(strings["realms_join_error"]), ephemeral=True)
+            return
+        try:
+            realm = await stack.realms.join_realm(str(realm.id), str(interaction.user.id))
+            # le membre voit son royaume tout de suite (best-effort :
+            # la passe de guérison rattrape un rate-limit perdu)
+            guild = getattr(interaction, "guild", None)
+            if guild is not None:
+                from .realms import ensure_realm_structure
+
+                await ensure_realm_structure(guild, realm, dormant=True)
+            note = str(strings["realms_join_done"]).format(str(realm.name))
+        except Exception as exc:  # noqa: BLE001 — the window reports, never raises
+            logger.warning("kingdom: realm join failed", exc_info=True)
+            note = str(strings["realms_join_error"])
+        await _safe_followup(interaction, note)
 
 
 class KingdomCampQueueButton(
@@ -494,6 +637,15 @@ class KingdomCampNameModal(discord.ui.Modal):
         if stack is None:
             await interaction.followup.send(str(strings["none_note"]), ephemeral=True)
             return
+        # la régie relit la porte AU CLIC (un interrupteur basculé depuis
+        # le rendu ne laisse jamais passer une fondation en retard)
+        from .regie import regie_open
+
+        if not await regie_open(
+            interaction.client, str(interaction.guild_id or ""), "realm_creation_open"
+        ):
+            await interaction.followup.send(str(strings["regie_closed_line"]), ephemeral=True)
+            return
         proposed = str(self.name_input.value or "").strip()
         try:
             realm = await stack.realms.found_realm(
@@ -540,6 +692,7 @@ def camp_dynamic_items() -> tuple:
         KingdomCampJoinButton,
         KingdomCampQueueButton,
         KingdomCampJoinSelect,
+        KingdomCampRealmSelect,
     )
 
 

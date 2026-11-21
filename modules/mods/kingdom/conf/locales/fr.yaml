@@ -156,9 +156,9 @@ fr:
       # ne se lit plus comme une liste mais comme un poste de pilotage
       settings_cockpit_subtitle: "Le cockpit : l'état en un coup d'œil, les actions du moment, et les tiroirs pour le reste."
       settings_cycle_off_hint: "Aucune saison — « Lancer la saison » prépare une saison, rien ne démarre : les admissions passeront par le sas 🛂, ton geste."
-      settings_cycle_setup_hint: "Saison préparée (sas d'admissions ouvert) — aucun royaume n'entre sans ton ✅ dans 🛂 Admissions."
-      settings_cycle_running_hint: "Saison en cours — les outils de running restent à portée de clic, le sas 🛂 reste ouvert pour les retardataires."
-      settings_cycle_started_hint: "Saison en cours — les outils de running restent à portée de clic, le sas 🛂 reste ouvert pour les retardataires."
+      settings_cycle_setup_hint: "Saison préparée — aucun royaume n'entre sans ton ✅ dans 🛂 Admissions. « Démarrer la saison » (ci-dessous) dessine les mains et ferme le sas."
+      settings_cycle_running_hint: "Saison en cours — le sas s'est fermé au départ (ré-ouvrable depuis la Régie) ; les outils moteur vivent dans 🧪 Beta & outils."
+      settings_cycle_started_hint: "Saison en cours — le sas s'est fermé au départ (ré-ouvrable depuis la Régie) ; les outils moteur vivent dans 🧪 Beta & outils."
       settings_zone_cycle_label: "LE CYCLE — ce qui a du sens maintenant"
       settings_zone_regie_label: LA RÉGIE
       settings_zone_atelier_label: L'ATELIER
@@ -177,6 +177,34 @@ fr:
       settings_beta_title: "🧪 Beta & outils"
       settings_beta_hint: "Un outillage, pas un lanceur : Être en beta NE LANCE rien — le parcours sans compte et les horloges compressées s'arment ici."
       settings_beta_sas_note: "Même en beta : l'entrée en saison passe PAR LE SAS 🛂 — « ⚔️ Inscrire leur royaume » côté Roi, puis ton ✅ ici."
+      # console-etats-regie-v1 (Drasah 21/11) : le badge PARCOURS (bêta
+      # ou normal) + le sas = les premiers repères du cockpit
+      settings_status_parcours_beta: "**Parcours** : 🧪 **Bêta** — sans compte, horloges compressées"
+      settings_status_parcours_normal: "**Parcours** : normal — compte requis"
+      settings_status_sas_open: "🛂 Sas : **ouvert** — les rois peuvent inscrire leur royaume."
+      settings_status_sas_closed: "🛂 Sas : **fermé** — ré-ouvrable depuis 🎚️ la Régie."
+      # l'assistant de lancement pose sa 2e question : le sas
+      settings_launch_modal_sas_label: "Ouvrir le sas ? (oui/non)"
+      settings_launch_modal_sas_placeholder: "oui (défaut) / non"
+      # la confirmation de l'envoi (3e geste du cycle)
+      settings_start_season_confirm_title: "🚀 Envoyer la saison ?"
+      settings_start_season_confirm_hint: "Le départ dessine les civilisations de départ et FERME LE SAS tout seul. Les retardataires passeront par la Régie (ré-ouverture) ou par « Ajouter un royaume »."
+      settings_start_season_confirm_button: "🚀 Oui, envoyer la saison"
+      settings_cycle_cancel_button: "❌ Annuler"
+      # le faux départ — le dernier recours de l'organisateur
+      settings_false_start_button: "🛑 Faux départ"
+      settings_false_start_confirm_title: "🛑 Faux départ — rebasculer en préparation ?"
+      settings_false_start_confirm_hint: "La saison revient en PRÉPARATION, le sas s'ouvre, et chaque royaume engagé est libéré (dormant) : ils devront REDEMANDER leur inscription. Les données moteur restent en place, rien n'est effacé."
+      settings_false_start_confirm_button: "🛑 Oui, faux départ"
+      settings_false_start_done: "✅ Faux départ — saison en préparation, sas ré-ouvert, {released} royaume(s) libéré(s) (à ré-inscrire)."
+      settings_false_start_failed: "❌ Le faux départ a échoué — {0}"
+      settings_false_start_no_season: "❌ Aucune saison en cours — le faux départ s'applique à une saison lancée."
+      settings_regie_switches_label: "🎚️ Les interrupteurs (défaut : ouvert)"
+      settings_regie_actions_label: "Gestes ponctuels"
+      settings_regie_registration: "📝 Inscriptions"
+      settings_regie_creation: "👑 Créer un royaume"
+      settings_regie_join: "🤝 Rejoindre un royaume"
+      settings_regie_sas: "🛂 Sas de la saison"
       settings_phase_setup: "préparation (sas d'admissions)"
       settings_phase_started: en cours
       settings_title: ⚙️ Kingdoms — paramètres
@@ -208,6 +236,19 @@ fr:
       already_lord_line: "🛡️ Tu sers **{0}**."
       already_queue_line: "⏳ Tu es dans la file d'attente."
       none_note: "❌ Le service Kingdoms n'est pas prêt."
+      # console-etats-regie-v1 (Drasah 21/11) : hors saison, la vie des
+      # joueurs continue — portes persistantes + régie
+      window_help_off_season: "Hors saison, la vie des joueurs continue : choisis ton camp pour la suite — fonde ton royaume ou rejoins-en un, il attendra la prochaine saison avec toi."
+      throne_button: "👑 Prendre le Trône"
+      realms_join_button: "🤝 Joindre un royaume"
+      realms_join_title: "🤝 Joindre un royaume"
+      realms_join_help: "Choisis le royaume qui t'accueillera — un joueur ne vit que dans UN royaume."
+      realms_pick_placeholder: "Choisis un royaume…"
+      realms_pick_seats: "{members} membre(s)"
+      realms_join_empty: "Aucun royaume à rejoindre pour l'instant."
+      realms_join_error: "❌ L'adhésion a échoué — réessaie."
+      realms_join_done: "🤝 Bienvenue dans le royaume **{0}** !"
+      regie_closed_line: "⛔ Cette porte est fermée par la régie du serveur."
       err_kingdoms_already_enrolled: "❌ Tu es déjà engagé dans cette saison."
       err_kingdoms_no_season: "❌ Aucune saison en cours."
       err_kingdoms_name_invalid: "❌ Ce nom de royaume est invalide (longueur ou caractères)."

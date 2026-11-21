@@ -615,7 +615,9 @@ def presentation_layout(realm: Any, strings: dict[str, str], *, king: bool) -> d
     return surface(PRESENTATION_SURFACE, discord.ui.Container(*blocks, accent_colour=_GOLD))
 
 
-async def season_layout(realm: Any, strings: dict[str, str], *, king: bool) -> discord.ui.LayoutView:
+async def season_layout(
+    realm: Any, strings: dict[str, str], *, king: bool, guild_id: str = ""
+) -> discord.ui.LayoutView:
     """📺 Voir la saison — the recap + the (Roi-only) entry request."""
     blocks = [discord.ui.TextDisplay(f"# {strings['season_title']}"), discord.ui.Separator()]
     stack = wiring()
@@ -655,10 +657,25 @@ async def season_layout(realm: Any, strings: dict[str, str], *, king: bool) -> d
         blocks.append(discord.ui.TextDisplay(strings["season_join_pending"]))
     elif season is not None and king:
         blocks.append(discord.ui.Separator())
-        blocks.append(discord.ui.TextDisplay(strings["season_join_hint"]))
-        row: Any = discord.ui.ActionRow()
-        row.add_item(RealmJoinButton(strings["season_join_button"], str(realm.slug)).item)
-        blocks.append(row)
+        # le SAS (console-etats-regie-v1) : fermé = la demande n'est
+        # même plus proposée (le tiroir 🎚️ La Régie le rouvre)
+        sas_open = False
+        try:
+            from .panel import current_bot
+            from .regie import regie_open
+
+            sas_open = await regie_open(
+                current_bot(), guild_id, "season_entry_open"
+            )
+        except Exception:  # noqa: BLE001 — unreadable régie never breaks the view
+            sas_open = False
+        if sas_open:
+            blocks.append(discord.ui.TextDisplay(strings["season_join_hint"]))
+            row: Any = discord.ui.ActionRow()
+            row.add_item(RealmJoinButton(strings["season_join_button"], str(realm.slug)).item)
+            blocks.append(row)
+        else:
+            blocks.append(discord.ui.TextDisplay(strings["season_join_closed"]))
     return surface(SEASON_SURFACE, discord.ui.Container(*blocks, accent_colour=_GOLD))
 
 
@@ -774,7 +791,9 @@ class RealmNavButton(
             elif view_key == "presentation":
                 view = presentation_layout(realm, strings, king=king)
             elif view_key == "season":
-                view = await season_layout(realm, strings, king=king)
+                view = await season_layout(
+                    realm, strings, king=king, guild_id=str(interaction.guild_id or "")
+                )
             else:
                 view = palmares_layout(realm, strings)
             await open_unique_ephemeral(interaction, view=view)
@@ -878,6 +897,15 @@ class RealmJoinButton(
             season = None
         if season is None:
             await interaction.followup.send(strings["season_none"], ephemeral=True)
+            return
+        # le SAS relit son interrupteur AU CLIC (double sécurité) —
+        # un rendu d'avant la fermeture ne laisse rien passer
+        from .regie import regie_open
+
+        if not await regie_open(
+            interaction.client, str(interaction.guild_id or ""), "season_entry_open"
+        ):
+            await interaction.followup.send(strings["season_join_closed"], ephemeral=True)
             return
         try:
             await service.request_season_entry(

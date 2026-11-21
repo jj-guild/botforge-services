@@ -141,19 +141,20 @@ async def build_apply_panel(guild_id: str) -> discord.ui.LayoutView:
     # the PROVISIONAL Roi/Seigneur door shows whenever a season is LIVE —
     # classical or beta. It is the only founding path until the
     # official flow (account > dossier > throne/vasselage) lands.
-    from .camp_beta import build_camp_button, camp_strings, mod_is_beta, season_door_open
+    from .camp_beta import build_camp_button, camp_strings, mod_is_beta
 
-    if await season_door_open():
-        camp_row: Any = discord.ui.ActionRow()
-        camp_row.add_item(build_camp_button(camp_strings(await _guild_locale(guild_id))).item)
-        blocks.append(camp_row)
-        # hors-saison-v1 (Drasah 20/11): in beta the account step does
-        # NOT exist — the poster says it, plain and once. ONE beta
-        # (21/11): the phase flag OR the season type, same door
-        if await mod_is_beta(guild_id) and strings.get("season_beta_apply_line"):
-            blocks.append(
-                discord.ui.TextDisplay(str(strings["season_beta_apply_line"]))
-            )
+    # camp-door-any-season (Drasah 20/11) + console-etats-regie-v1
+    # (21/11) : la porte vit AUSSI hors saison — les joueurs fondent et
+    # rejoignent leurs ROYAUMES PERSISTANTS en attendant (la fenêtre
+    # elle-même décide quelles portes offrir selon la saison et la
+    # régie, jamais ce panneau).
+    camp_row: Any = discord.ui.ActionRow()
+    camp_row.add_item(build_camp_button(camp_strings(await _guild_locale(guild_id))).item)
+    blocks.append(camp_row)
+    if await mod_is_beta(guild_id) and strings.get("season_beta_apply_line"):
+        blocks.append(
+            discord.ui.TextDisplay(str(strings["season_beta_apply_line"]))
+        )
     return surface(
         APPLY_VIEW_KEY,
         discord.ui.Container(*blocks, accent_colour=GOLD),
