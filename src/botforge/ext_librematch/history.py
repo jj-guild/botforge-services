@@ -34,6 +34,13 @@ from botforge.ext_librematch.decode import DECODE_BATCH, decode_match_payload
 from botforge.ext_librematch.reference import civ_name_of, map_name_of
 from botforge.ext_librematch.store import DEFAULT_HISTORY_LIMIT, LibrematchStore
 
+#: The capture era of the CURRENT revision (the repair gate).
+#: Every stored match carries its era; a capture of an older era \u2014
+#: or written by a revision before the era existed \u2014 repairs once,
+#: then never again: whatever the upstream genuinely failed to carry
+#: (RANDOM seats, unknown civ ids) stops the loop by construction.
+CAPTURE_ERA = 2
+
 logger = logging.getLogger("botforge.ext_librematch.history")
 
 STATS_LEADERBOARDS = ("0", "3", "4")
@@ -119,35 +126,15 @@ def _int(value: Any) -> int:
 
 
 def _needs_repair(candidate_docs: list[dict[str, Any]]) -> bool:
-    """Decide whether the incomplete-looking captures can be completed.
+    """Return True when older-era captures wait for their repair pass.
 
-    A bare projection repairs ONLY when the RAW proves the upstream
-    carried what the capture lacks: the mongo marker is coarse (an
-    empty players list, a civ-less first seat); the raw has the
-    verdict \u2014 a lobby whose members genuinely carry no
-    civilization_id never repairs (no repair loop).
+    The candidates come from the store's ERA GATE (see
+    ``find_incomplete_docs``): a capture of an older era repairs once
+    whatever its content \u2014 the rebuilt capture carries the current
+    era and never loops, even when the upstream honestly lacks a
+    field (RANDOM seats, civ ids the reference cannot name).
     """
-    for doc in candidate_docs:
-        raw = doc.get("raw")
-        if not isinstance(raw, dict):
-            return True
-        players = doc.get("players") or []
-        if not players:
-            return True
-        # the verdict reads the member OF THE MARKED SEAT (the first
-        # one): a RANDOM first seat (-1) is honestly civless upstream
-        # and never repairs, whatever its team mates carry
-        seat_profile = str((players[0] or {}).get("profile_id", ""))
-        for member in raw.get("matchhistorymember") or []:
-            if str((member or {}).get("profile_id", "")) != seat_profile:
-                continue
-            civ = (member or {}).get("civilization_id")
-            try:
-                return civ is not None and int(civ) >= 0
-            except (TypeError, ValueError):
-                return False
-        return False
-    return False
+    return bool(candidate_docs)
 
 
 class MatchHistorySyncer:
@@ -539,6 +526,7 @@ class MatchHistorySyncer:
             "options_json": options_json,
             "slots_json": slots_json,
             "raw": match,
+            "capture_era": CAPTURE_ERA,
             "decoded_at": _now_ms() if (options_json or slots_json) else 0,
             "fetched_at": _now_ms(),
         }

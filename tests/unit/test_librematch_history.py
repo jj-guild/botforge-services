@@ -68,6 +68,8 @@ def _condition_ok(doc: dict[str, Any], key: str, condition: Any) -> bool:
         return (value in condition["$in"]) or (value is None and None in condition["$in"])
     if isinstance(condition, dict) and "$gte" in condition:
         return value is not None and value >= condition["$gte"]
+    if isinstance(condition, dict) and "$lt" in condition:
+        return value is not None and value < condition["$lt"]
     if isinstance(condition, dict) and "$exists" in condition:
         return (value is not None) == bool(condition["$exists"])
     if isinstance(value, list):
@@ -720,8 +722,15 @@ async def test_a_civless_capture_repairs_when_the_raw_carries_the_civ() -> None:
     assert seats["123"].get("civ"), "the replaced capture re-reads the civilization"
 
 
-async def test_a_civless_lobby_never_repairs_when_the_raw_lacks_the_civ() -> None:
-    """A lobby whose members carry no civilization_id stays as captured."""
+async def test_a_civless_lobby_repairs_once_then_stays_quiet() -> None:
+    """An old-era capture of a genuinely civless lobby repairs ONCE.
+
+    The era gate beats any content judgment: the lobby's members
+    carry no civilization_id at all \u2014 the repair pass cannot give
+    the seats a civ \u2014 but it runs once (the deep refetch), stamps
+    the current era, and the next pass stays quiet: no loop on data
+    the upstream honestly lacks.
+    """
     db, adapter = FakeDb(), FakeAdapter()
     raw = {"id": "m9", "matchhistorymember": [{"profile_id": "123", "teamid": 0}]}
     db["librematch:matches"].docs["m9"] = {
@@ -731,10 +740,16 @@ async def test_a_civless_lobby_never_repairs_when_the_raw_lacks_the_civ() -> Non
         "players": [{"profile_id": "123", "alias": "solo", "civ": ""}],
         "raw": raw,
     }
-    adapter.history["123"] = []
+    adapter.history["123"] = [
+        _match("m9", "", 100, 200, [_member("123", 1, 0, 1100, 1112)])
+    ]
     syncer = _syncer(db, adapter)
     await syncer.sync_account("123")
-    assert adapter.history_counts == [25], "no repair loop on a genuinely civless lobby"
+    assert adapter.history_counts == [1000], "the old-era capture repairs once"
+    assert db["librematch:matches"].docs["m9"].get("capture_era", 0) >= 2
+    adapter.history_counts.clear()
+    await syncer.sync_account("123")
+    assert adapter.history_counts == [25], "the repaired capture never loops"
 
 
 async def test_the_repair_deletes_the_poisoned_suffixed_captures() -> None:
@@ -794,10 +809,17 @@ async def test_a_random_civ_lobby_never_loops_the_repair() -> None:
         "players": [{"profile_id": "123", "alias": "solo", "civ": ""}],
         "raw": raw,
     }
-    adapter.history["123"] = []
+    adapter.history["123"] = [
+        _match("m10", "", 100, 200, [_member("123", 1, 0, 1100, 1112)])
+    ]
     syncer = _syncer(db, adapter)
     await syncer.sync_account("123")
-    assert adapter.history_counts == [25], "the RANDOM marker is not repairable"
+    assert adapter.history_counts == [1000], "the old-era capture repairs once"
+    doc = db["librematch:matches"].docs["m10"]
+    assert doc["players"][0]["civ"] == "", "the RANDOM seat stays honestly civless"
+    adapter.history_counts.clear()
+    await syncer.sync_account("123")
+    assert adapter.history_counts == [25], "the repaired capture never loops"
 
     from botforge.ext_librematch.reference import civ_name_of
 
