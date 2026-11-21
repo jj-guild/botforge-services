@@ -157,7 +157,11 @@ def finished_match_block(
     won = any(str(p) in set(winners) for p in me_ids)
     outcome = "\u2705" if won else ("\u274c" if winners else "\u2b1c")
     team_of_me = _team_of(players, me_ids)
-    head = " ".join(bit for bit in [outcome, f"**{_match_title(entry, labels)}**"] if bit)
+    title = _match_title(entry, labels)
+    head = " ".join(bit for bit in [outcome, f"**{title}**"] if bit)
+    map_name = str(getattr(entry, "map_name", "") or "").strip()
+    if map_name and map_name.lower() != "my map" and map_name != title:
+        head += f" \u00b7 *{map_name}*"
     tail = " \u00b7 ".join(
         bit for bit in [_when(entry), _fmt_duration(_duration_of(entry)), _match_kind(players, team_of_me)] if bit
     )
@@ -204,8 +208,9 @@ def _team_bullets(
     team_label = labels.get("team", "Team")
     bullets = []
     for index, team in enumerate(sorted(by_team)):
-        seats = ", ".join(_player_token(pl, me_ids, known_ids) for pl in by_team[team])
-        bullets.append(f"  - {team_label} {index + 1} : {seats}")
+        bullets.append(f"  - **{team_label} {index + 1}**")
+        for player in by_team[team]:
+            bullets.append(f"      - {_player_token(player, me_ids, known_ids)}")
     return bullets
 
 
@@ -222,18 +227,19 @@ def _player_token(player: dict[str, Any], me_ids: set[str], known_ids: set[str])
         name = f"**{name}**"
     elif pid in known_ids and pid:
         name = f"*{name}*"
-    bits: list[str] = [name]
     civ = str(player.get("civ") or "").strip()
+    elo = int(player.get("rating_after") or player.get("elo") or 0)
+    bits: list[str] = [name]
     if civ:
         bits.append(civ)
-    elo = int(player.get("rating_after") or player.get("elo") or 0)
     if elo:
-        bits.append(f"{elo} Elo")
+        bits.append(f"**{elo} Elo**")
     before = int(player.get("rating_before") or 0)
     after = int(player.get("rating_after") or 0)
+    delta = ""
     if before and after and before != after:
-        bits.append(f"{after - before:+d}")
-    return " \u00b7 ".join(bits)
+        delta = f" ({after - before:+d})"
+    return " \u00b7 ".join(bits) + delta
 
 
 def _match_title(entry: Any, labels: dict[str, str]) -> str:

@@ -720,6 +720,83 @@ async def _profile_header(interaction: discord.Interaction, user_id: str) -> str
     return f"# 👤 Your profile\nName: **{user.display_name}**"
 
 
+async def _live_blocks_of(
+    interaction: discord.Interaction,
+    me_ids: set[str],
+    known_ids: set[str],
+    labels: dict[str, str],
+) -> list[list[str]]:
+    """Render one block per ONGOING match of the viewed profiles."""
+    from botforge.discord.stats_views import live_match_block
+
+    if not me_ids:
+        return []
+    client = _live_client_for(interaction.client, "aoe2")
+    if client is None:
+        return []
+    try:
+        snapshot = await client.watch("aoe2")
+    except Exception:
+        logger.debug("the live snapshot read failed", exc_info=True)
+        return []
+    return [
+        live_match_block(player.get("match") or {}, me_ids, known_ids, labels)
+        for player in _live_refs(snapshot, me_ids)
+    ]
+
+
+def _live_refs(snapshot: dict[str, Any], me_ids: set[str]) -> list[dict[str, Any]]:
+    """One player record per ONGOING match of the viewed profiles."""
+    by_ref: dict[str, dict[str, Any]] = {}
+    order: list[str] = []
+    for player in snapshot.get("players", []) or []:
+        pid = str(player.get("profile_id", ""))
+        if pid not in me_ids or str(player.get("state", "")) == "offline":
+            continue
+        match_ref = str(player.get("match_ref", "") or "")
+        if not match_ref or match_ref not in by_ref:
+            if match_ref:
+                by_ref[match_ref] = player
+                order.append(match_ref)
+    return [by_ref[ref] for ref in order]
+
+
+async def _matches_body(
+    interaction: discord.Interaction,
+    me_ids: set[str],
+    known_ids: set[str],
+    labels: dict[str, str],
+) -> list[str]:
+    """Render the matches popup's body: live first, then the finished ones.
+
+    One block per match, a horizontal separator between the matches
+    (the owner's 2026-11-20 reading layout \u2014 the blocks stand apart).
+    """
+    from botforge.discord.stats_views import recent_match_blocks
+
+    body: list[str] = []
+    live_blocks = await _live_blocks_of(interaction, me_ids, known_ids, labels)
+    if live_blocks:
+        body.append(f"### {await reply(interaction, 'profile.matches_live_title')}")
+        for index, block in enumerate(live_blocks):
+            if index:
+                body.append("\u2500" * 4)
+            body.extend(block)
+    finished_blocks = await recent_match_blocks(
+        sorted(me_ids), me_ids, known_ids, labels, limit=10
+    )
+    if not finished_blocks and not live_blocks:
+        body.append(await reply(interaction, "profile.matches_empty"))
+        return body
+    if finished_blocks:
+        body.append(f"### {await reply(interaction, 'profile.matches_title')}")
+        for index, block in enumerate(finished_blocks):
+            if index:
+                body.append("\u2500" * 4)
+            body.extend(block)
+    return body
+
+
 class ProfileMatchesButton(
     discord.ui.DynamicItem[discord.ui.Button[Any]],
     template=r"home:profile:matches",
@@ -769,87 +846,18 @@ class ProfileMatchesButton(
         except Exception:
             logger.debug("the guild-wide bindings read failed", exc_info=True)
         known_ids -= me_ids
-        from botforge.discord.stats_views import recent_match_blocks
-
         labels = {
             "team": await reply(interaction, "profile.matches_team"),
             "ongoing": await reply(interaction, "profile.matches_ongoing"),
             "untitled": await reply(interaction, "profile.matches_untitled"),
         }
-        body: list[str] = []
-        # LIVE first: the aggregator snapshot (game-aoe2 already keeps
-        # the ongoing matches) — one block per match the viewed
-        # profiles play in RIGHT NOW; the section header only when some.
-        live_blocks = await self._live_blocks(interaction, me_ids, known_ids, labels)
-        if live_blocks:
-            body.append(f"### {await reply(interaction, 'profile.matches_live_title')}")
-            for block in live_blocks:
-                body.extend(block)
-        finished_blocks = await recent_match_blocks(
-            sorted(me_ids), me_ids, known_ids, labels, limit=10
-        )
-        if not finished_blocks and not live_blocks:
-            note = await reply(interaction, "profile.matches_empty")
-            await interaction.followup.send(note, ephemeral=True)
-            return
-        if finished_blocks:
-            body.append(f"### {await reply(interaction, 'profile.matches_title')}")
-            for block in finished_blocks:
-                body.extend(block)
+        body = await _matches_body(interaction, me_ids, known_ids, labels)
         # LayoutView + TextDisplay: plain followup content does NOT
         # render the markdown (the raw <t:...> / ### finding of
         # 2026-11-20) — the component surfaces parse both.
         view = discord.ui.LayoutView(timeout=None)
         view.add_item(discord.ui.Container(discord.ui.TextDisplay("\n".join(body))))
         await interaction.followup.send(view=view, ephemeral=True)
-
-    async def _live_blocks(
-        self,
-        interaction: discord.Interaction,
-        me_ids: set[str],
-        known_ids: set[str],
-        labels: dict[str, str],
-    ) -> list[list[str]]:
-        """Render one block per ONGOING match of the viewed profiles.
-
-        The game service already knows the live state (the aoe2lobby
-        aggregator, the live dashboard's own source): one snapshot,
-        filtered to the matches carrying a viewed profile — no new
-        provider call on this path.
-        """
-        if not me_ids:
-            return []
-        client = _live_client_for(interaction.client, "aoe2")
-        if client is None:
-            return []
-        try:
-            snapshot = await client.watch("aoe2")
-        except Exception:
-            logger.debug("the live snapshot read failed", exc_info=True)
-            return []
-        matches: dict[str, list[dict[str, Any]]] = {}
-        order: list[str] = []
-        for player in snapshot.get("players", []) or []:
-            if str(player.get("profile_id", "")) not in me_ids:
-                continue
-            state = str(player.get("state", ""))
-            if state == "offline":
-                continue
-            match_ref = str(player.get("match_ref", "") or "")
-            if not match_ref:
-                continue
-            if match_ref not in matches:
-                matches[match_ref] = []
-                order.append(match_ref)
-            if not matches[match_ref]:
-                matches[match_ref].append(player)
-        from botforge.discord.stats_views import live_match_block
-
-        return [
-            live_match_block(matches[ref][0].get("match") or {}, me_ids, known_ids, labels)
-            for ref in order
-        ]
-
 
 class ProfileRenameButton(
     discord.ui.DynamicItem[discord.ui.Button[Any]],
