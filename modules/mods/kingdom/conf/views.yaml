@@ -79,6 +79,10 @@ views:
   # card — same one-window rule as the cycle's other cards
   panel:mod:kingdom:cycle:confirm-end-season:
     kind: surface
+  # lancement-fourche-v1 (Drasah 21/11): the « ▶️ Lancer la saison » fork
+  # card — classic vs compressed beta chosen AFTER the gesture, visibly
+  panel:mod:kingdom:launch:type:
+    kind: surface
   # marché entry pin (ported from the reference panel:marche)
   panel:mod:kingdom:market:
     kind: surface

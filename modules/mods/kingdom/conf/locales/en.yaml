@@ -124,8 +124,13 @@ en:
       settings_launch_failed: ❌ The launch failed — {0}
       settings_launch_beta_done: ✅ **Beta** season launched — compressed clocks (« now » preset), ⚔️ door open.
       settings_launch_beta_failed: "⚠️ Season launched, but the beta format could not arm — {0}"
-      settings_launch_modal_type_label: Season type
-      settings_launch_modal_type_placeholder: "beta (compressed time) or empty = normal"
+      # lancement-fourche-v1 (Drasah 21/11): the format choice lives in a
+      # VISIBLE card — the « type » text field is retired
+      settings_launch_type_title: "🎬 Launch a season — which format?"
+      settings_launch_type_hint: "🏁 The same player journey in both cases (entry sas, admin validation): the format changes the rules. Classic = account required, normal clocks. Beta = no account, 52-hour compressed weekend."
+      settings_launch_type_classic_button: "🎬 Classic season"
+      settings_launch_type_beta_button: "🧪 Compressed beta season"
+      settings_launch_beta_modal_title: "🧪 Launch the beta season"
       settings_launch_modal_names_label: Imposed names (optional)
       settings_launch_modal_names_placeholder: "Kingdom A, Kingdom B"
       settings_launch_modal_title: ▶️ Launch the season
@@ -189,6 +194,7 @@ en:
       settings_admissions_eject_closed_hint: "⛔ The sas is closed: the season is launched, no more ejection — this section is read-only."
       settings_regie_title: "👥 Players & kingdoms"
       settings_regie_hint: "The one-off engine-management gestures — out of the cockpit, a click away."
+      settings_regie_sas_idle_hint: "⚠️ No season running — this airlock only takes effect at the next launched season."
       settings_atelier_title: "🛠️ The server workshop"
       settings_atelier_hint: "The structure and the game time. Every destructive gesture keeps its confirmation."
       settings_window_close_button: "✖️ Close"

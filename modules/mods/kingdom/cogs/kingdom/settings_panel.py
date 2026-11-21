@@ -1056,7 +1056,9 @@ def _admissions_drawer(
 
 
 def _regie_drawer(
-    strings: dict[str, str], states: dict[str, bool] | None = None
+    strings: dict[str, str],
+    states: dict[str, bool] | None = None,
+    season_live: bool = True,
 ) -> discord.ui.LayoutView:
     """Les interrupteurs + les gestes ponctuels — un tiroir.
 
@@ -1078,6 +1080,13 @@ def _regie_drawer(
             ).item
         )
         switch_blocks.append(row)
+    # lancement-fourche-v1 (Drasah 21/11 « le sas dit ouvert mais Blanc ne
+    # voit rien ») : sans saison, le sas ne s'applique à RIEN — la ligne
+    # le dit, le flou disparaît (le switch garde sa valeur pour la suite)
+    if not season_live:
+        switch_blocks.append(
+            discord.ui.TextDisplay(str(strings["settings_regie_sas_idle_hint"]))
+        )
     row_button: Any = discord.ui.ActionRow()
     row_button.add_item(
         SettingsActionButton(
@@ -1286,6 +1295,7 @@ async def _build_drawer(
         view = _admissions_drawer(strings, vstrings, realms, admitted, ejectable=ejectable)
     elif drawer == "regie":
         states: dict[str, bool] = {}
+        season_live = False
         if bot is not None and guild_id:
             from .regie import read_regie
 
@@ -1293,7 +1303,15 @@ async def _build_drawer(
                 states = await read_regie(bot, guild_id)
             except Exception:  # noqa: BLE001 — the drawer reads defaults
                 logger.warning("kingdom: the régie drawer read failed", exc_info=True)
-        view = _regie_drawer(strings, states)
+        # le hint du sas ne vit QUE sans saison (réglé pour l'avenir)
+        try:
+            stack = wiring()
+            season_live = stack is not None and (
+                await stack.kingdoms.current_season() is not None
+            )
+        except Exception:  # noqa: BLE001 — a read, never a crash
+            season_live = False
+        view = _regie_drawer(strings, states, season_live=season_live)
     elif drawer == "atelier":
         from .common import strings_by_locale
 
@@ -1495,21 +1513,8 @@ class _LaunchModal(discord.ui.Modal):
                 component=self.names,
             )
         )
-        # season-type-at-launch (Drasah 20/11): the admin picks the type —
-        # « beta » arms the compressed weekend preset, anything else
-        # (empty or « normal ») keeps the classical clocks.
-        self.season_type = discord.ui.TextInput(
-            placeholder=str(strings["settings_launch_modal_type_placeholder"])[:100],
-            required=False,
-            max_length=16,
-            custom_id="kingdom:settings:launch:type",
-        )
-        self.add_item(
-            discord.ui.Label(
-                text=str(strings["settings_launch_modal_type_label"])[:45],
-                component=self.season_type,
-            )
-        )
+        # season-type-at-launch is RETIRED (lancement-fourche-v1): the
+        # fork card owns the format — this modal is the CLASSIC path.
         # console-etats-regie-v1 (Drasah 21/11): the wizard's 2nd
         # question — « ouvres-tu le sas ? » The season opens NOTHING by
         # itself: answering no arms a CLOSED sas the régie re-opens.
@@ -1546,41 +1551,16 @@ class _LaunchModal(discord.ui.Modal):
             return
         # The TYPE applies right after the fresh launch — activate_beta
         # (the compressed weekend) rides a FRESH setup-phase season only.
-        chosen = str(self.season_type.value or "").strip().lower()
-        if chosen in ("beta", "bêta"):
-            try:
-                await _arm_compressed_beta(stack)
-                note = str(strings["settings_launch_beta_done"])
-            except Exception as exc:  # the launch stands; the type degrades loudly
-                logger.warning("kingdom: beta type arming failed", exc_info=True)
-                note = service_failure_note(strings, "settings_launch_beta_failed", exc)
-        else:
-            note = str(strings["settings_launch_done"])
-        # the sas answer rides the régie (console-etats-regie-v1): an
-        # EMPTY answer (the old habit) keeps the sas OPEN — the
-        # pre-régie behaviour is the safest default, and a refusal is
-        # explicit.
-        sas_answer = str(self.sas.value or "").strip().lower() or "oui"
-        from .regie import set_switch
-
-        if not await set_switch(
-            interaction.client, str(interaction.guild_id or ""), "season_entry_open",
-            sas_answer in ("oui", "yes", "y", "o", "1", "true", "open"),
-        ):
-            logger.warning("kingdom: the launch's sas answer could not be stored")
-        # hors-saison-v1 (Drasah 20/11): the conscription bends to the
-        # season's TYPE the moment it launches — beta masks #enregistrement
-        # and opens #postuler NOW, not at the next 5-min pass.
+        # lancement-fourche-v1: the classic path owns the flag — a
+        # lingering beta flag lowers NOW (the mutex trap at « Démarrer »).
         try:
-            from .conscription_gate import run_conscription_gate_pass
-
-            await run_conscription_gate_pass(
-                interaction.client, str(interaction.guild_id or "")
-            )
-        except Exception:  # noqa: BLE001 — the gate heals on the next pass
-            logger.warning("kingdom: the launch gate pass failed", exc_info=True)
-        # live-pin-v1: the cockpit shows the fresh phase + sas line now
-        await refresh_live_pins_after(interaction)
+            if await _lower_beta_flag(interaction):
+                logger.info("kingdom: a lingering beta flag was lowered by the classic launch")
+        except Exception:  # noqa: BLE001 — the flag is best-effort, the launch stands
+            logger.warning("kingdom: the classic launch flag lowering failed", exc_info=True)
+        note = str(strings["settings_launch_done"])
+        sas_answer = str(self.sas.value or "").strip().lower() or "oui"
+        await _finish_launch(interaction, sas_answer)
         await interaction.followup.send(note, ephemeral=True)
 
 
@@ -1732,7 +1712,184 @@ class _RemoveModal(discord.ui.Modal):
 
 
 async def _open_launch(interaction: discord.Interaction, strings: dict[str, str]) -> None:
-    await interaction.response.send_modal(_LaunchModal(strings))
+    """Lancer la saison — d'abord LA FOURCHE (classic ou bêta compressée).
+
+    lancement-fourche-v1 (Drasah 21/11) : « je lance ma saison, et
+    APRÈS on me pose la question classique ou bêta » — le choix de
+    format vit dans une carte VISIBLE, jamais dans un champ texte à
+    deviner. Chaque bouton de la fourche pose ensuite SES questions.
+    """
+    await open_unique_ephemeral(interaction, view=_launch_type_card(strings))
+
+
+def _launch_type_card(strings: dict[str, str]) -> discord.ui.LayoutView:
+    """The launch fork — one season gesture, TWO visible formats.
+
+    Same _confirm-card template as the cycle cards (plain buttons on a
+    declared ephemeral surface — the window is SINGLE, the autoclose
+    template applies, the labels answer the designer's question).
+    """
+    classic: discord.ui.Button[Any] = discord.ui.Button(
+        label=str(strings["settings_launch_type_classic_button"])[:80],
+        custom_id="kingdom:launch:fork:classic",
+        style=discord.ButtonStyle.success,
+    )
+    beta: discord.ui.Button[Any] = discord.ui.Button(
+        label=str(strings["settings_launch_type_beta_button"])[:80],
+        custom_id="kingdom:launch:fork:beta",
+        style=discord.ButtonStyle.primary,
+    )
+    cancel: discord.ui.Button[Any] = discord.ui.Button(
+        label=str(strings["settings_cycle_cancel_button"])[:80],
+        custom_id="kingdom:launch:fork:cancel",
+        style=discord.ButtonStyle.secondary,
+    )
+
+    async def on_classic(target: discord.Interaction) -> None:
+        await target.response.send_modal(_LaunchModal(strings))
+
+    async def on_beta(target: discord.Interaction) -> None:
+        await target.response.send_modal(_BetaLaunchModal(strings))
+
+    async def on_cancel(target: discord.Interaction) -> None:
+        before = live_unique_window(target)
+        await _safe_send(target, strings["settings_cancelled"])
+        await close_window_if_unmoved(target, before)
+
+    classic.callback = on_classic
+    beta.callback = on_beta
+    cancel.callback = on_cancel
+    container: discord.ui.Container[discord.ui.LayoutView] = discord.ui.Container(
+        discord.ui.TextDisplay(
+            f"**{strings['settings_launch_type_title']}**\n"
+            f"{strings['settings_launch_type_hint']}"
+        ),
+        accent_colour=_ADMIN_COLOUR,
+    )
+    row: discord.ui.ActionRow[discord.ui.LayoutView] = discord.ui.ActionRow()
+    row.add_item(classic)
+    row.add_item(beta)
+    row.add_item(cancel)
+    container.add_item(row)
+    return surface("panel:mod:kingdom:launch:type", container)
+
+
+async def _finish_launch(interaction: discord.Interaction, sas_answer: str) -> None:
+    """The shared launch tail: the sas answer, the parcours gate, the pins.
+
+    Drasah's rule (21/11): the sas is OPEN unless he says no — an EMPTY
+    answer keeps the sas OPEN, a refusal is explicit.
+    """
+    from .regie import set_switch
+
+    if not await set_switch(
+        interaction.client, str(interaction.guild_id or ""), "season_entry_open",
+        sas_answer in ("oui", "yes", "y", "o", "1", "true", "open"),
+    ):
+        logger.warning("kingdom: the launch's sas answer could not be stored")
+    # the conscription bends the moment the season launches — not at the
+    # next 5-min pass
+    try:
+        from .conscription_gate import run_conscription_gate_pass
+
+        await run_conscription_gate_pass(interaction.client, str(interaction.guild_id or ""))
+    except Exception:  # noqa: BLE001 — the gate heals on the next pass
+        logger.warning("kingdom: the launch gate pass failed", exc_info=True)
+    await refresh_live_pins_after(interaction)
+
+
+async def _lower_beta_flag(interaction: discord.Interaction) -> bool:
+    """Best-effort: lower a lingering beta flag (classic launches own it).
+
+    lancement-fourche-v1: the CLASSIC format owns the parcours flag —
+    a stale beta flag could no longer bar « Démarrer la saison » at the
+    end of the run (the mutex trap Drasah hit).
+    """
+    from botforge.core.services.beta import exit_beta, is_beta
+    from botforge.core.services.mod_storage import ModStateCache
+
+    state_service = getattr(interaction.client, "state_service", None)
+    if state_service is None:
+        return False
+    cache = ModStateCache(state_service, _MOD)
+    guild_id = str(interaction.guild_id or "")
+    if not await is_beta(cache, guild_id, _MOD):
+        return False
+    await exit_beta(cache, guild_id, _MOD)
+    return True
+
+
+async def _raise_beta_flag(interaction: discord.Interaction) -> bool:
+    """Best-effort: raise the beta flag (the beta format owns it)."""
+    from botforge.core.services.beta import enter_beta, is_beta
+    from botforge.core.services.mod_storage import ModStateCache
+
+    state_service = getattr(interaction.client, "state_service", None)
+    if state_service is None:
+        return False
+    cache = ModStateCache(state_service, _MOD)
+    guild_id = str(interaction.guild_id or "")
+    if await is_beta(cache, guild_id, _MOD):
+        return False
+    await enter_beta(cache, guild_id, _MOD)
+    return True
+
+
+class _BetaLaunchModal(discord.ui.Modal):
+    """Lancer la saison BÊTA — the compressed weekend, the sas question.
+
+    The beta format has NO imposed names (the beta preset drives the
+    casting) and NEEDS no account — the fork already said so; the only
+    question left is Drasah's sas.
+    """
+
+    def __init__(self, strings: dict[str, str]) -> None:
+        super().__init__(title=str(strings["settings_launch_beta_modal_title"])[:45])
+        self._strings = strings
+        self.sas = discord.ui.TextInput(
+            placeholder=str(strings["settings_launch_modal_sas_placeholder"])[:100],
+            required=False,
+            max_length=8,
+            custom_id="kingdom:settings:launch:sas",
+        )
+        self.add_item(
+            discord.ui.Label(
+                text=str(strings["settings_launch_modal_sas_label"])[:45],
+                component=self.sas,
+            )
+        )
+
+    async def on_submit(self, interaction: discord.Interaction) -> None:
+        await interaction.response.defer(ephemeral=True)
+        strings = self._strings
+        stack, busy = _needs_stack(strings)
+        if busy:
+            await interaction.followup.send(busy, ephemeral=True)
+            return
+        try:
+            await stack.kingdoms.launch(None)
+        except Exception as exc:  # the panel reports, never raises
+            logger.warning("kingdom: launch failed", exc_info=True)
+            await interaction.followup.send(
+                service_failure_note(strings, "settings_launch_failed", exc), ephemeral=True
+            )
+            return
+        # the compressed weekend rides the FRESH setup-phase season
+        try:
+            await _arm_compressed_beta(stack)
+        except Exception as exc:  # the launch stands; the preset degrades loudly
+            logger.warning("kingdom: the beta preset arming failed", exc_info=True)
+            note = service_failure_note(strings, "settings_launch_beta_failed", exc)
+        else:
+            note = str(strings["settings_launch_beta_done"])
+        # the format owns the parcours flag: beta season ⇒ beta rules
+        try:
+            await _raise_beta_flag(interaction)
+        except Exception:  # noqa: BLE001 — the gate pass already bends rules
+            logger.warning("kingdom: the launch beta flag arming failed", exc_info=True)
+        sas_answer = str(self.sas.value or "").strip().lower() or "oui"
+        await _finish_launch(interaction, sas_answer)
+        await interaction.followup.send(note, ephemeral=True)
 
 
 async def _open_assign(interaction: discord.Interaction, strings: dict[str, str]) -> None:

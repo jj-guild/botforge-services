@@ -58,7 +58,10 @@ _REALM_STRINGS: dict[str, _Strings] = {
         "presentation_error": "❌ Seul le Roi peut écrire la présentation.",
         "season_button": "📺 Voir la saison",
         "season_title": "📺 Voir la saison",
-        "season_none": "Pas de saison en cours — le prochain cycle viendra.",
+        "season_none": (
+            "Pas de saison en cours — un admin doit lancer la saison depuis le cockpit ⚙️. "
+            "Dès qu'elle existe (et si le sas est ouvert), le bouton « S'inscrire à la saison » apparaîtra ici."
+        ),
         "season_running": "Une saison est en cours (démarrée le {when}).",
         "season_join_hint": (
             "Le royaume peut demander son entrée dans la saison — un admin "
@@ -126,7 +129,10 @@ _REALM_STRINGS: dict[str, _Strings] = {
         "presentation_error": "❌ Only the King may write the presentation.",
         "season_button": "📺 Watch the season",
         "season_title": "📺 Watch the season",
-        "season_none": "No season running — the next cycle will come.",
+        "season_none": (
+            "No season running — an admin must launch the season from the cockpit ⚙️. "
+            "As soon as it exists (and the sas is open), the « Join the season » button appears here."
+        ),
         "season_running": "A season is running (started {when}).",
         "season_join_hint": (
             "The realm may request its season entry — an admin will "

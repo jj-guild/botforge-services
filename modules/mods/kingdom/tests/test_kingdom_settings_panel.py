@@ -169,6 +169,7 @@ def test_modals_build_without_deprecation_warnings() -> None:
     from botforge.mods.kingdom.cogs.settings_panel import (
         _AddKingdomModal,
         _AssignModal,
+        _BetaLaunchModal,
         _LaunchModal,
         _RemoveModal,
         settings_strings,
@@ -176,7 +177,13 @@ def test_modals_build_without_deprecation_warnings() -> None:
 
     with warnings.catch_warnings():
         warnings.simplefilter("error", DeprecationWarning)
-        for cls in (_LaunchModal, _AssignModal, _AddKingdomModal, _RemoveModal):
+        for cls in (
+            _LaunchModal,
+            _BetaLaunchModal,
+            _AssignModal,
+            _AddKingdomModal,
+            _RemoveModal,
+        ):
             modal = cls(settings_strings("fr"))
             labels = [c for c in modal.walk_children() if type(c).__name__ == "Label"]
             assert labels, f"{cls.__name__}: every input must ride a discord.ui.Label"

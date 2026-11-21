@@ -131,8 +131,13 @@ fr:
       settings_launch_failed: ❌ Le lancement a échoué — {0}
       settings_launch_beta_done: ✅ Saison **beta** lancée — temps compressé (preset « now »), porte ⚔️ ouverte.
       settings_launch_beta_failed: "⚠️ Saison lancée, mais le format beta n'a pas pu s'armer — {0}"
-      settings_launch_modal_type_label: Type de saison
-      settings_launch_modal_type_placeholder: "beta (temps compressé) ou vide = normal"
+      # lancement-fourche-v1 (Drasah 21/11) : le choix de format vit dans
+      # une carte VISIBLE, le champ texte « type » est retiré
+      settings_launch_type_title: "🎬 Lancer une saison — quel format ?"
+      settings_launch_type_hint: "🏁 Même parcours des joueurs dans les deux cas (sas d'inscription, validation admin) : le format change les règles. Classique = compte requis, horloges normales. Bêta = sans compte, weekend compressé 52 h."
+      settings_launch_type_classic_button: "🎬 Saison classique"
+      settings_launch_type_beta_button: "🧪 Saison bêta compressée"
+      settings_launch_beta_modal_title: "🧪 Lancer la saison bêta"
       settings_launch_modal_names_label: Noms imposés (optionnel)
       settings_launch_modal_names_placeholder: "Royaume A, Royaume B"
       settings_launch_modal_title: ▶️ Lancer la saison
@@ -199,6 +204,7 @@ fr:
       settings_admissions_eject_closed_hint: "⛔ Le sas est fermé : la saison est lancée, plus d'éjection possible — la section est en lecture."
       settings_regie_title: "👥 Joueurs & royaumes"
       settings_regie_hint: "Les gestes ponctuels de gestion moteur — hors du cockpit, à portée de clic."
+      settings_regie_sas_idle_hint: "⚠️ Aucune saison en cours — ce sas prendra effet à la prochaine saison lancée."
       settings_atelier_title: "🛠️ L'atelier serveur"
       settings_atelier_hint: "La structure et le temps de jeu. Chaque geste destructif garde sa confirmation."
       settings_window_close_button: "✖️ Fermer"
