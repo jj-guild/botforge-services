@@ -108,6 +108,34 @@ async def season_is_beta() -> bool:
     )
 
 
+async def kingdom_is_beta(bot: Any, guild_id: str) -> bool:
+    """ONE beta (Drasah 21/11) : le drapeau de phase OU le type de saison.
+
+    The operator's door is Paramètres → « Démarrer la beta » (the
+    phase flag, per guild); the launch modal's « beta » type arms the
+    compressed weekend on the season. BOTH say the same thing — « on
+    postule directement, sans compte » — so the parcours bends on
+    EITHER. A None bot or an unreadable state degrades to the season
+    type alone (a missing service never bends the rules).
+    """
+    if await season_is_beta():
+        return True
+    state_service = getattr(bot, "state_service", None)
+    if state_service is None or not str(guild_id).strip().isdigit():
+        return False
+    from botforge.core.services.beta import is_beta
+    from botforge.core.services.mod_storage import ModStateCache
+
+    return bool(await is_beta(ModStateCache(state_service, "kingdom"), str(guild_id), "kingdom"))
+
+
+async def mod_is_beta(guild_id: str) -> bool:
+    """``kingdom_is_beta`` on the registered bot (the panels' entry)."""
+    from .panel import current_bot
+
+    return await kingdom_is_beta(current_bot(), guild_id)
+
+
 def build_camp_button(strings: dict[str, str]) -> KingdomCampButton:
     """The camp door button, painted with the given locale's label."""
     return KingdomCampButton(
@@ -523,5 +551,8 @@ __all__ = [
     "build_camp_button",
     "camp_dynamic_items",
     "camp_strings",
+    "kingdom_is_beta",
+    "mod_is_beta",
     "season_door_open",
+    "season_is_beta",
 ]

@@ -464,6 +464,15 @@ async def _start_beta(interaction: discord.Interaction, strings: dict[str, str])
     except Exception as exc:  # the panel reports, never raises
         logger.warning("kingdom: beta toggle failed", exc_info=True)
         note = service_failure_note(strings, "settings_failed", exc)
+    # ONE beta (Drasah 21/11): the toggle bends the parcours NOW — the
+    # conscription gate rides the phase flag, applied immediately (not
+    # at the next 5-min pass), best-effort like the launch's own pass
+    try:
+        from .conscription_gate import run_conscription_gate_pass
+
+        await run_conscription_gate_pass(interaction.client, guild_id)
+    except Exception:  # noqa: BLE001 — the gate heals on the next pass
+        logger.warning("kingdom: the beta toggle gate pass failed", exc_info=True)
     await interaction.followup.send(note, ephemeral=True)
 
 

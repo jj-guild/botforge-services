@@ -379,3 +379,86 @@ def test_the_localized_refusal_heads_dropped_the_banned_emoji() -> None:
     assert "🚫" not in fr_body, "fr.yaml still carries the retired emoji"
     assert "🚫" not in en_body, "en.yaml still carries the retired emoji"
     assert "season_beta_apply_line" in fr_body and "season_beta_apply_line" in en_body
+
+
+# ---------------------------------------------------------------------------
+# ONE beta (Drasah 21/11) — the phase flag bends the parcours too
+# ---------------------------------------------------------------------------
+
+
+class _FakeStateService:
+    """A StateService stand-in carrying the phase flag per key."""
+
+    def __init__(self, active: bool) -> None:
+        self._active = active
+
+    async def get_state(self, scope: str, key: str) -> dict[str, Any] | None:
+        assert scope == "mod:kingdom"
+        assert key.startswith("beta:g:")
+        return {"active": self._active}
+
+
+class _PhaseGateBot(_GateBot):
+    """The gate bot carrying a state service with the phase flag."""
+
+    def __init__(self, active: bool) -> None:
+        super().__init__()
+        self.state_service = _FakeStateService(active)
+
+
+async def _run_phase(active: bool) -> tuple[_FakeChannel, _FakeChannel]:
+    """Run the gate with NO season beta, only the phase flag (the toggle)."""
+    from botforge.mods.kingdom.cogs import camp_beta
+
+    original = camp_beta.season_is_beta
+
+    async def fake_is_beta() -> bool:
+        return False  # the season carries NO beta type (the toggle case)
+
+    camp_beta.season_is_beta = fake_is_beta
+    from botforge.mods.kingdom.cogs.conscription_gate import run_conscription_gate_pass
+
+    try:
+        await run_conscription_gate_pass(_PhaseGateBot(active))
+    finally:
+        camp_beta.season_is_beta = original
+    return guild._channels[100], guild._channels[200]
+
+
+@pytest.mark.asyncio
+async def test_the_phase_flag_bends_the_parcours_like_a_beta_season() -> None:
+    """Paramètres → Démarrer la beta masks #enregistrement and opens
+    #postuler — the toggle IS the beta, no season type needed."""
+    register, apply = await _run_phase(active=True)
+    assert register.edits, "the phase flag must re-gate #enregistrement"
+    assert register.overwrites[guild.default_role].view_channel is False
+    assert apply.edits, "the phase flag must open #postuler"
+    assert apply.overwrites[guild.default_role].view_channel is True
+
+
+@pytest.mark.asyncio
+async def test_the_phase_flag_off_keeps_the_classical_parcours() -> None:
+    """Leaving the beta phase straightens the parcours right back."""
+    register, apply = await _run_phase(active=False)
+    assert register.overwrites[guild.default_role].view_channel is True
+    assert apply.overwrites[guild.default_role].view_channel is False
+
+
+@pytest.mark.asyncio
+async def test_a_missing_state_service_degrades_to_the_season_type() -> None:
+    """A bot WITHOUT a state service never bends on the flag — the
+    season type alone decides (the None-cache contract of the seam)."""
+    from botforge.mods.kingdom.cogs import camp_beta
+
+    original = camp_beta.season_is_beta
+
+    async def fake_is_beta() -> bool:
+        return False
+
+    camp_beta.season_is_beta = fake_is_beta
+    try:
+        assert await camp_beta.kingdom_is_beta(bot, "1") is False
+        phase_bot = _PhaseGateBot(active=True)
+        assert await camp_beta.kingdom_is_beta(phase_bot, "1") is True
+    finally:
+        camp_beta.season_is_beta = original

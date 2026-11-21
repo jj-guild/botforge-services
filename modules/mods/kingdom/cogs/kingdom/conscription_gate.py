@@ -6,7 +6,9 @@ never mode flags:
 - **beta** (« on postule directement, sans compte ») : #enregistrement
   is masked ENTIRELY (the account step does not exist — the staff's
   own admin hat still sees it, no role gets a grant), #postuler opens
-  to @everyone;
+  to @everyone. ONE beta (Drasah 21/11): the phase flag (Paramètres →
+  « Démarrer la beta ») OR the season's « beta » type — either bends
+  the parcours;
 - **classical / no season** : the declared parcours stands (#enregistrement
   public + masked per account via the Kingdom Enregistré deny,
   #postuler gated by the registered players' allow).
@@ -126,12 +128,11 @@ def _converged(channel: Any, overwrites: dict[Any, Any]) -> bool:
 
 
 async def run_conscription_gate_pass(bot: Any, guild_id: str = "") -> int:
-    """Bend the register/apply salons to the LIVE season's type."""
+    """Bend the register/apply salons to the live beta (ONE beta, 21/11)."""
     from botforge.discord.ui.panels_provisioning import stored_channel_id
 
-    from .camp_beta import season_is_beta
+    from .camp_beta import kingdom_is_beta
 
-    beta = await season_is_beta()
     guilds = (
         [bot.get_guild(int(guild_id))]
         if str(guild_id).isdigit()
@@ -142,6 +143,10 @@ async def run_conscription_gate_pass(bot: Any, guild_id: str = "") -> int:
         if guild is None:
             continue
         gid = str(getattr(guild, "id", ""))
+        # ONE beta (Drasah 21/11): the phase flag (Paramètres → Démarrer
+        # la beta) OR the season's compressed type — either bends the
+        # parcours; the read is PER GUILD (the phase flag is guild state)
+        beta = await kingdom_is_beta(bot, gid)
         admin_id = await _role_id(bot, gid, ROLE_ADMIN)
         enregistre_id = await _role_id(bot, gid, ROLE_ENREGISTRE)
         admin_role = guild.get_role(admin_id) if admin_id else None
