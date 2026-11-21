@@ -138,7 +138,13 @@ async def test_cover_can_be_a_foreign_lord_but_never_of_the_attacked_kingdom() -
     refused cover."""
     from botforge.mods.kingdom.attacks import AttackError
 
-    bundle = Bundle()
+    # The cover needs a THIRD kingdom (Provence) — the default season
+    # caps the kingdoms at 2, so this test rides its own config
+    # (kingdoms_count = 3). The reference suite fails here for exactly
+    # this reason (stale against the kingdoms_count default).
+    config = default_season_config().model_copy(deep=True)
+    config.kingdoms_count = 3
+    bundle = Bundle(config)
     await bundle.launch_season()
     # A third, foreign kingdom: Provence (king-c) owns no territory —
     # it only supplies a COVER lord.
@@ -303,7 +309,14 @@ async def test_weekly_budgets_and_recharge_d1() -> None:
     await bundle.draw(5)
     bourgogne = await bundle.kingdom_id("Bourgogne")
     maps_b = await bundle.owner_maps(bourgogne)
-    await bundle.attacks.declare_attack("king-a", maps_b[0], "aoe2de://x")
+    attack = await bundle.attacks.declare_attack("king-a", maps_b[0], "aoe2de://x")
+    # planification-attaque-v1 (Drasah 23/10): an engaged lord cannot
+    # declare again — the reference version of this test overlooked the
+    # battle lock (it fails on the reference branch itself). The attack
+    # resolves for the DEFENDER first (budget stays consumed), then the
+    # exhausted budget is what the second declaration hits.
+    await bundle.attacks.respond_defense(attack.id, "king-b", now=attack.declared_at + timedelta(minutes=10))
+    await bundle.attacks.resolve(attack.id, bourgogne)
     with pytest.raises(NoBudgetError):
         await bundle.attacks.declare_attack("king-a", maps_b[1], "aoe2de://y")
     await bundle.attacks.recharge_weekly_budgets()
@@ -494,6 +507,16 @@ async def test_defense_ai_level_traquenard_and_reinforced_patrols_marche_v2() ->
         "king-a", target, "aoe2de://t", now=monday
     )
     assert attack.traquenard is True
+    # planification-attaque-v1 (Drasah 23/10): same battle-lock
+    # oversight as the reference version of this test — king-a stays
+    # engaged until the result comes in. Resolve it for the DEFENDER
+    # (the territory stays Bourgogne's, the budget stays consumed —
+    # the reset below shows the later declaration ride the budget).
+    # king-b defends, not lord-b — the Traquenard extended lord-b's
+    # marriage lock and a freshly married lord stays out of combat
+    # (D59/D60).
+    await bundle.attacks.respond_defense(attack.id, "king-b", now=monday + timedelta(minutes=10))
+    await bundle.attacks.resolve(attack.id, bourgogne)
     # No Traquenard window, no traquenard flag on a later declaration.
     other = (await bundle.owner_maps(bourgogne))[1]
     king_a = next(item for item in await bundle.kingdoms.lords() if item.id == "king-a")
