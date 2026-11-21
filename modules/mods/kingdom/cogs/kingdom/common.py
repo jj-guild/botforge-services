@@ -212,6 +212,49 @@ async def close_previous_ephemeral(user_id: str) -> None:
     await close_ephemeral_window(KINGDOM_WINDOW_SCOPE, user_id)
 
 
+def live_unique_window(interaction: discord.Interaction) -> Any | None:
+    """The player's tracked single window (None when nothing is open).
+
+    settings-window-autoclose (Drasah 21/11): a caller captures this
+    BEFORE an action, then asks ``close_window_if_unmoved`` — the
+    pair is the mod's retire-the-window template (announce-ready:
+    any action surface reuses it, no bespoke closing code).
+    """
+    from botforge.discord.ui.ephemeral_windows import get_live_window
+
+    return get_live_window(KINGDOM_WINDOW_SCOPE, str(interaction.user.id))
+
+
+async def close_window_if_unmoved(
+    interaction: discord.Interaction, before: Any | None
+) -> None:
+    """Retire the window an action RODE (best-effort, never raises).
+
+    Drasah 21/11: « quand j'appuie sur Démarrer/Fermer la bêta, Faux
+    départ... la fenêtre se ferme — sinon, ça me pollue trop » — an
+    action that produced its answer from inside a window closes it,
+    so the note stays ALONE on screen. The close runs ONLY when the
+    tracked window is still the one captured BEFORE the action: a
+    handler that OPENED a window moved the record (the SINGLE mode
+    already retired the old card in that path), and the close must
+    never kill the NEW surface. Pin-side clicks (nothing tracked)
+    are no-ops — a pinned cockpit button never deletes the pin.
+    """
+    if before is None:
+        return
+    try:
+        from botforge.discord.ui.ephemeral_windows import (
+            close_ephemeral_window,
+            get_live_window,
+        )
+
+        if get_live_window(KINGDOM_WINDOW_SCOPE, str(interaction.user.id)) is not before:
+            return
+        await close_ephemeral_window(KINGDOM_WINDOW_SCOPE, str(interaction.user.id))
+    except Exception:
+        logger.info("kingdom: window autoclose skipped", exc_info=True)
+
+
 def surface(view_id: str, *items: Any) -> "discord.ui.LayoutView":
     """Build one declared mod surface — the id footer appended, always.
 

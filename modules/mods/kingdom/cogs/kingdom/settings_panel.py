@@ -33,7 +33,15 @@ import discord
 
 from botforge.discord.console import mod_console_view_id
 
-from .common import locale_of, open_unique_ephemeral, service_failure_note, surface, wiring
+from .common import (
+    close_window_if_unmoved,
+    live_unique_window,
+    locale_of,
+    open_unique_ephemeral,
+    service_failure_note,
+    surface,
+    wiring,
+)
 
 logger = logging.getLogger("kingdom.settings")
 
@@ -369,11 +377,16 @@ def _confirm_card(strings: dict[str, str], action: str) -> discord.ui.LayoutView
     async def on_yes(target: discord.Interaction) -> None:
         if not target.response.is_done():
             await target.response.defer(ephemeral=True)
+        before = live_unique_window(target)
         note = await _run_provisioning(target, action)
         await _safe_followup(target, note)
+        # autoclose: the card retires, the note stays alone
+        await close_window_if_unmoved(target, before)
 
     async def on_no(target: discord.Interaction) -> None:
+        before = live_unique_window(target)
         await _safe_send(target, strings["settings_cancelled"])
+        await close_window_if_unmoved(target, before)
 
     yes.callback = on_yes
     no.callback = on_no
@@ -516,7 +529,12 @@ class SettingsActionButton(
                 interaction, view=_cycle_confirm_card(strings, self.action)
             )
             return
+        # settings-window-autoclose (Drasah 21/11): a direct action that
+        # produced its note from inside a window RETIRES the window —
+        # the note stays alone on screen (« sinon, ça me pollue trop »).
+        before = live_unique_window(interaction)
         await _SETTINGS_HANDLERS[self.action](interaction, strings)
+        await close_window_if_unmoved(interaction, before)
 
 
 # ---------------------------------------------------------------------------
@@ -713,10 +731,15 @@ def _cycle_confirm_card(strings: dict[str, str], action: str) -> discord.ui.Layo
     async def on_yes(target: discord.Interaction) -> None:
         if not target.response.is_done():
             await target.response.defer(ephemeral=True)
+        before = live_unique_window(target)
         await _CYCLE_CONFIRM_HANDLERS[action](target, strings_of(target))
+        # autoclose: the confirm card retires with its verdict
+        await close_window_if_unmoved(target, before)
 
     async def on_no(target: discord.Interaction) -> None:
+        before = live_unique_window(target)
         await _safe_send(target, strings["settings_cancelled"])
+        await close_window_if_unmoved(target, before)
 
     yes.callback = on_yes
     no.callback = on_no
