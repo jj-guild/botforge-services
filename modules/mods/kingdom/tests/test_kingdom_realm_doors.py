@@ -243,3 +243,38 @@ def test_the_localized_refusal_notes_carry_fr_en_parity() -> None:
     fr = catalog("fr")
     en = catalog("en")
     assert set(fr) == set(en), "fr/en key parity — every door speaks both languages"
+
+
+def test_the_season_window_survives_a_real_season_state(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """voir-saison-crash (Drasah 21/11, bêta-test) : un clic sur
+    « 📺 Voir la saison » tombait sur la note générique « panne » dès
+    qu'une saison existait — SeasonState.started_at est un vrai
+    DATETIME (pydantic strict) et l'ancien int(...) levait TypeError.
+    La vue doit rend, datetime comme epoch."""
+    import asyncio
+    from datetime import UTC, datetime
+    from types import SimpleNamespace as NS
+    from unittest.mock import AsyncMock
+
+    import botforge.mods.kingdom.cogs.realms as realms_module
+    from botforge.mods.kingdom.cogs.realm_strings import realm_strings as catalog
+
+    stack = NS(
+        kingdoms=NS(
+            current_season=AsyncMock(
+                return_value=NS(
+                    started_at=datetime(2026, 11, 21, 18, 0, tzinfo=UTC),
+                    phase="running",
+                )
+            )
+        )
+    )
+    monkeypatch.setattr(realms_module, "wiring", lambda: stack)
+
+    strings = dict(catalog("fr"))
+    view = asyncio.run(realms_module.season_layout(_realm(), strings, king=True, guild_id="42"))
+    texts = "\n".join(str(c.content) for c in view.walk_children() if hasattr(c, "content"))
+    assert strings["season_running"].split(" ")[0] in texts
+    assert "21/11 19:00" in texts, "the datetime renders in Paris time, not a crash"

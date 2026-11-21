@@ -633,8 +633,12 @@ async def season_layout(
     else:
         blocks.append(
             discord.ui.TextDisplay(
+                # voir-saison-crash (Drasah 21/11): SeasonState.started_at
+                # is a strict DATETIME — int(...) raised TypeError and the
+                # window fell back to the generic breakdown note. fmt_paris
+                # already speaks both datetimes and epoch ints.
                 strings["season_running"].format(
-                    when=fmt_paris(int(getattr(season, "started_at", 0) or 0))
+                    when=fmt_paris(getattr(season, "started_at", None) or 0)
                 )
             )
         )
