@@ -301,6 +301,7 @@ def setup_hook(bot: Any) -> None:
     )
     from .apply_flow import KingdomApplyOpenButton, KingdomPostulerButton
     from .settings_panel import KingdomRegieSwitchButton, KingdomSettingsNavButton, SettingsActionButton
+    from .common import KingdomWindowCloseButton
     from .time_machine import machine_dynamic_items
     from .distributor import distributor_dynamic_items
     from .camp_beta import camp_dynamic_items
@@ -345,6 +346,7 @@ def setup_hook(bot: Any) -> None:
         SettingsActionButton,
         KingdomSettingsNavButton,
         KingdomRegieSwitchButton,
+        KingdomWindowCloseButton,
         *machine_dynamic_items(),
         *distributor_dynamic_items(),
         *camp_dynamic_items(),

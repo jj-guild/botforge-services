@@ -33,12 +33,95 @@ KINGDOM_WINDOW_SCOPE = "mod/kingdom"
 
 def _declare_window_mode() -> None:
     """Idempotent mode registration (import time and register time)."""
-    from botforge.discord.ui.ephemeral_windows import EphemeralWindowMode, set_window_mode
+    from botforge.discord.ui.ephemeral_windows import EphemeralWindowMode, set_window_mode, set_window_ttl
 
     set_window_mode(KINGDOM_WINDOW_SCOPE, EphemeralWindowMode.SINGLE)
+    # Drasah 21/11: an ephemeral window is pollution if it lingers —
+    # data, not code: the TTL lives here per scope (14 minutes).
+    set_window_ttl(KINGDOM_WINDOW_SCOPE, 14 * 60.0)
 
 
 _declare_window_mode()
+
+
+# ---------------------------------------------------------------------------
+# The window close button (Drasah 21/11: « rejeter le message » n'est
+# pas découvrable — every mod window carries an explicit ✖️ close)
+# ---------------------------------------------------------------------------
+
+
+class KingdomWindowCloseButton(
+    discord.ui.DynamicItem[discord.ui.Button], template=r"kingdom:window:close"
+):
+    """The explicit close control on every mod ephemeral window.
+
+    It rides the LAST row of the window (appended by
+    ``open_unique_ephemeral``), deletes the message it was clicked on
+    (which also settles post-restart orphans the registry lost), and
+    pops the single-window record so the seam stays coherent.
+    """
+
+    def __init__(self, label: str) -> None:
+        super().__init__(
+            discord.ui.Button(
+                label=label,
+                style=discord.ButtonStyle.grey,
+                custom_id="kingdom:window:close",
+            )
+        )
+
+    @classmethod
+    async def from_custom_id(cls, interaction: discord.Interaction, item: discord.ui.Button, match: re.Match[str]) -> "KingdomWindowCloseButton":
+        # Check-108 lesson, both sides read the SAME catalog — the
+        # replay cannot crash on a missing key the callback owns.
+        catalog = mod_catalog()
+        strings = catalog.section("kingdom.settings", locale_of(interaction))
+        return cls(str(strings["settings_window_close_button"]))
+
+    async def callback(self, interaction: discord.Interaction) -> None:
+        from botforge.discord.ui.ephemeral_windows import close_ephemeral_window
+
+        # silent ack first — the click must NEVER show the timeout
+        try:
+            await interaction.response.defer(ephemeral=True)
+        except Exception:
+            logger.debug("kingdom: close ack failed", exc_info=True)
+        # the message the button rides IS the window — deleting it
+        # works even when the registry lost it (a restart)
+        message = getattr(interaction, "message", None)
+        if message is not None:
+            try:
+                await message.delete()
+            except Exception:
+                logger.debug("kingdom: close delete failed", exc_info=True)
+        await close_ephemeral_window(KINGDOM_WINDOW_SCOPE, str(interaction.user.id))
+
+
+def _window_string(interaction: discord.Interaction, key: str) -> str:
+    strings = mod_catalog().section("kingdom.settings", locale_of(interaction))
+    return str(strings[key])
+
+
+def _with_close_row(view: "discord.ui.LayoutView", interaction: discord.Interaction) -> "discord.ui.LayoutView":
+    """Append the explicit close control to a window view (#395: the
+    same parameterised row everywhere, never a bespoke per-view one)."""
+    row = discord.ui.ActionRow()
+    row.add_item(
+        discord.ui.Button(
+            label=_window_string(interaction, "settings_window_close_button"),
+            style=discord.ButtonStyle.grey,
+            custom_id="kingdom:window:close",
+        )
+    )
+    view.add_item(row)
+    return view
+
+
+def _note_window(text: str, interaction: discord.Interaction) -> "discord.ui.LayoutView":
+    """A content-only note turned into a declared closable surface."""
+    body = discord.ui.Container(discord.ui.TextDisplay(text))
+    view = surface("panel:mod:kingdom:note", body)
+    return _with_close_row(view, interaction)
 
 
 # ---------------------------------------------------------------------------
@@ -162,9 +245,21 @@ def surface_footer(view_id: str) -> str:
 async def open_unique_ephemeral(
     interaction: discord.Interaction, content: str | None = None, **kwargs: Any
 ) -> None:
-    """Open THE player's single ephemeral window (the declared mode)."""
+    """Open THE player's single ephemeral window (the declared mode).
+
+    Drasah 21/11: EVERY window the mod opens is explicitly closable —
+    a bare text note becomes a declared note surface (with the ✖️
+    row), a view gets the ✖️ row appended. One code path, no bespoke
+    surfaces.
+    """
     from botforge.discord.ui.ephemeral_windows import open_ephemeral_window
 
+    view = kwargs.get("view")
+    if view is not None:
+        _with_close_row(view, interaction)
+    elif content is not None:
+        kwargs["view"] = _note_window(content, interaction)
+        content = None
     await open_ephemeral_window(interaction, KINGDOM_WINDOW_SCOPE, content, **kwargs)
 
 
@@ -643,6 +738,7 @@ __all__ = [
     "attack_by_id",
     "attack_salon",
     "attack_salon_send_safe",
+    "KingdomWindowCloseButton",
     "KINGDOM_WINDOW_SCOPE",
     "close_previous_ephemeral",
     "combat_failure_note",

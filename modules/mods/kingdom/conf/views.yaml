@@ -54,6 +54,10 @@ views:
   # (rework 20/11: renamed from panel:mod:kingdom:settings — no settings id)
   panel:mod:kingdom:console:
     kind: surface
+  # windows-v2 (Drasah 21/11): the closable note surface — every
+  # content-only ephemeral message becomes this declared window
+  panel:mod:kingdom:note:
+    kind: surface
   # realms validation dashboard pin (ported from the reference panel:royaumes)
   panel:mod:kingdom:validation:
     kind: surface

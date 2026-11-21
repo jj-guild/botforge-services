@@ -327,6 +327,11 @@ class ValidationDecisionButton(
             denied_message=str(strings["denied"]),
         ):
             return
+        # windows-v2 fast-ack (Drasah 21/11 « Inscrire n'a pas marché »):
+        # the approve/refuse work spans seconds of Discord API calls —
+        # the 3-second clock belongs to the ACK, the work takes its
+        # time AFTER it. Same lesson as hub-entry-fast-ack.
+        await interaction.response.defer(ephemeral=True)
         stack = wiring()
         if stack is None:
             await interaction.followup.send(str(shared["plan_no_service"]), ephemeral=True)
@@ -342,16 +347,13 @@ class ValidationDecisionButton(
             logger.warning("kingdom: validation decision failed (%s)", self.kingdom_id, exc_info=True)
             note = str(shared["console_error"]).format(str(exc)[:150])
         try:
-            await interaction.response.edit_message(
-                view=await build_validation_panel(str(interaction.guild_id or ""))
+            await interaction.followup.edit_message(
+                interaction.message.id,
+                view=await build_validation_panel(str(interaction.guild_id or "")),
             )
         except Exception:
             logger.warning("kingdom: validation dashboard refresh failed", exc_info=True)
-            await interaction.response.defer()
-        try:
-            await interaction.followup.send(note, ephemeral=True)
-        except Exception:  # noqa: S110 — a vanished window is fine
-            pass
+        await open_unique_ephemeral_safe(interaction, note)
 
 
 async def _guard(interaction: discord.Interaction, strings: dict[str, str]) -> bool:
@@ -652,6 +654,10 @@ class ValidationRealmEntryButton(
         strings = mod_catalog().section("kingdom.validation", locale)
         if not await _guard(interaction, strings):
             return
+        # windows-v2 fast-ack — same lesson as the decision button:
+        # accepting a realm enrolls members and deploys a hub (seconds
+        # of API calls); the ACK goes first, the work after it.
+        await interaction.response.defer(ephemeral=True)
         stack = wiring()
         service = _realms_service(stack)
         realm = await service.realm_of_slug(self.slug) if service is not None else None
@@ -663,17 +669,13 @@ class ValidationRealmEntryButton(
         else:
             note = await _accept_season_entry(interaction, stack, service, realm, strings, locale)
         try:
-            await interaction.response.edit_message(
-                view=await build_validation_panel(str(interaction.guild_id or ""))
+            await interaction.followup.edit_message(
+                interaction.message.id,
+                view=await build_validation_panel(str(interaction.guild_id or "")),
             )
         except Exception:
             logger.warning("kingdom: validation dashboard refresh failed", exc_info=True)
-            if not interaction.response.is_done():
-                await interaction.response.defer()
-        try:
-            await interaction.followup.send(note, ephemeral=True)
-        except Exception:  # noqa: S110 — a vanished window is fine
-            pass
+        await open_unique_ephemeral_safe(interaction, note)
 
 
 async def open_unique_ephemeral_safe(interaction: discord.Interaction, content: str) -> None:

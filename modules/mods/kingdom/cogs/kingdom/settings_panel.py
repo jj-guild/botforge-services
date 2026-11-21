@@ -1005,8 +1005,8 @@ async def _build_drawer(
     if drawer == "admissions":
         realms = await _pending_admissions()
         vstrings = dict(mod_catalog().section("kingdom.validation", str(locale)[:2]))
-        return _admissions_drawer(strings, vstrings, realms)
-    if drawer == "regie":
+        view = _admissions_drawer(strings, vstrings, realms)
+    elif drawer == "regie":
         states: dict[str, bool] = {}
         if bot is not None and guild_id:
             from .regie import read_regie
@@ -1015,12 +1015,30 @@ async def _build_drawer(
                 states = await read_regie(bot, guild_id)
             except Exception:  # noqa: BLE001 — the drawer reads defaults
                 logger.warning("kingdom: the régie drawer read failed", exc_info=True)
-        return _regie_drawer(strings, states)
-    if drawer == "atelier":
+        view = _regie_drawer(strings, states)
+    elif drawer == "atelier":
         from .common import strings_by_locale
 
-        return _atelier_drawer(strings, strings_by_locale(locale))
-    return _beta_drawer(strings)
+        view = _atelier_drawer(strings, strings_by_locale(locale))
+    else:
+        view = _beta_drawer(strings)
+    # windows-v2 (Drasah 21/11): a drawer is a dead end without its
+    # way back — every drawer carries the ↩️ Console row.
+    view.add_item(_back_row(strings))
+    return view
+
+
+def _back_row(strings: dict[str, str]) -> discord.ui.ActionRow:
+    """The parametrised back-to-console row (#395: same row everywhere)."""
+    row = discord.ui.ActionRow()
+    row.add_item(
+        discord.ui.Button(
+            label=str(strings.get("settings_window_back_button", "↩️ Console")),
+            custom_id="kingdom:console-nav:console",
+            style=discord.ButtonStyle.secondary,
+        )
+    )
+    return row
 
 
 async def refresh_live_pins_after(interaction: discord.Interaction) -> None:
@@ -1077,6 +1095,14 @@ class KingdomSettingsNavButton(
 
     async def callback(self, interaction: discord.Interaction) -> None:
         """Open the drawer's ephemeral window (guarded like the panel)."""
+        if self.drawer == "console":
+            # windows-v2: the drawers' ↩️ back target — the cockpit
+            # itself, always reachable, always the single window.
+            if not await _panel_guard(interaction):
+                return
+            view = await build_settings_panel(str(interaction.guild_id or ""))
+            await open_unique_ephemeral(interaction, view=view)
+            return
         if self.drawer not in _DRAWERS:
             await _safe_send(interaction, strings_of(interaction)["settings_denied"])
             return

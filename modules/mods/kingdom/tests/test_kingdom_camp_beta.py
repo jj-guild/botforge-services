@@ -80,6 +80,7 @@ def test_camp_custom_ids() -> None:
         KingdomCampJoinButton,
         KingdomCampJoinSelect,
         KingdomCampQueueButton,
+        KingdomCampRealmSelect,
         camp_dynamic_items,
     )
 
@@ -103,6 +104,7 @@ def test_camp_custom_ids() -> None:
         KingdomCampJoinButton,
         KingdomCampQueueButton,
         KingdomCampJoinSelect,
+        KingdomCampRealmSelect,
     }
 
 

@@ -24,6 +24,7 @@ Discord side — the deleted window is a no-op, swallowed).
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import time
 from enum import StrEnum
@@ -35,6 +36,34 @@ if TYPE_CHECKING:  # the seam is duck-typed at runtime — no discord import
 logger = logging.getLogger("botforge.discord.ui.ephemeral_windows")
 
 PLATFORM_SCOPE = "platform"
+
+# ONE window per mode scope may declare a TTL: a live window closes
+# ITSELF after ``ttl`` seconds (the designer's anti-pollution rule —
+# Discord keeps an ephemeral message until its owner dismisses it, a
+# bot that never dismisses leaves a trail behind). The clock is
+# per-scope data (``set_window_ttl``), arithmetic on the stored
+# interaction token: the close rides the token's webhook and dies
+# quietly once the token expires (15 min) — a TTL beyond that is a
+# no-op, so the sane range is below.
+_ttls: dict[str, float] = {}
+_close_tasks: dict[tuple[str, str], asyncio.Task[None]] = {}
+
+
+def set_window_ttl(scope: str, seconds: float) -> None:
+    """Declare one scope's self-closing delay (0 or negative = never)."""
+    _ttls[str(scope)] = float(seconds)
+
+
+def window_ttl(scope: str) -> float:
+    """The scope's self-closing delay (0 = never)."""
+    return _ttls.get(str(scope), 0.0)
+
+
+def get_live_window(scope: str, owner: str) -> Any | None:
+    """The owner's tracked window (the interaction or adapter) — for an
+    owner-side close button that deletes the message it rides."""
+    record = _live.get((str(scope), str(owner)))
+    return record[0] if record is not None else None
 
 
 class EphemeralWindowMode(StrEnum):
@@ -60,6 +89,7 @@ def window_mode(scope: str) -> EphemeralWindowMode:
 
 async def close_ephemeral_window(scope: str, owner: str) -> None:
     """Close the owner's live window in this scope, best-effort."""
+    _cancel_auto_close(str(scope), str(owner))
     window = _live.pop((str(scope), str(owner)), None)
     if window is None:
         return
@@ -69,6 +99,34 @@ async def close_ephemeral_window(scope: str, owner: str) -> None:
         logger.info("ephemeral window closed (%s/%s)", scope, owner)
     except Exception:
         logger.info("ephemeral window close failed (ignored) (%s/%s)", scope, owner)
+
+
+def _cancel_auto_close(scope: str, owner: str) -> None:
+    task = _close_tasks.pop((str(scope), str(owner)), None)
+    if task is not None and not task.done():
+        task.cancel()
+
+
+def _arm_auto_close(scope: str, owner: str, ttl: float) -> None:
+    """Schedule the window's self-close — a replaced window cancels its
+    own timer first (``_cancel`` runs in the replace path)."""
+    key = (str(scope), str(owner))
+    if ttl <= 0:
+        return
+
+    async def _later() -> None:
+        try:
+            await asyncio.sleep(ttl)
+        except asyncio.CancelledError:
+            return
+        # only close what is still the live record (a replaced window
+        # re-arms; a manually closed one already popped the record)
+        await close_ephemeral_window(scope, owner)
+
+    try:
+        _close_tasks[key] = asyncio.create_task(_later())
+    except RuntimeError:  # no loop (a sync import-time call) — never armed
+        pass
 
 
 async def open_ephemeral_window(
@@ -92,15 +150,18 @@ async def open_ephemeral_window(
     mode = window_mode(scope)
     if mode is EphemeralWindowMode.SINGLE:
         await close_ephemeral_window(scope, owner)
+    ttl = window_ttl(scope)
     kwargs["ephemeral"] = True
     if interaction.response.is_done():
         message = await interaction.followup.send(content, **kwargs)
         if mode is EphemeralWindowMode.SINGLE:
             _live[(str(scope), owner)] = (_FollowupWindow(message), time.monotonic())
+            _arm_auto_close(str(scope), owner, ttl)
     else:
         await interaction.response.send_message(content, **kwargs)
         if mode is EphemeralWindowMode.SINGLE:
             _live[(str(scope), owner)] = (interaction, time.monotonic())
+            _arm_auto_close(str(scope), owner, ttl)
 
 
 class _FollowupWindow:
@@ -123,7 +184,10 @@ __all__ = [
     "PLATFORM_SCOPE",
     "EphemeralWindowMode",
     "close_ephemeral_window",
+    "get_live_window",
     "open_ephemeral_window",
     "set_window_mode",
+    "set_window_ttl",
     "window_mode",
+    "window_ttl",
 ]

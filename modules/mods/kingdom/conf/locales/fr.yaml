@@ -178,6 +178,8 @@ fr:
       settings_regie_hint: "Les gestes ponctuels de gestion moteur — hors du cockpit, à portée de clic."
       settings_atelier_title: "🛠️ L'atelier serveur"
       settings_atelier_hint: "La structure et le temps de jeu. Chaque geste destructif garde sa confirmation."
+      settings_window_close_button: "✖️ Fermer"
+      settings_window_back_button: "↩️ Console"
       settings_atelier_heal_note: "La guérison automatique 5 min continue de tourner en silence — l'atelier n'est que la main d'urgence."
       settings_beta_title: "🧪 Beta & outils"
       settings_beta_hint: "Un outillage, pas un lanceur : Être en beta NE LANCE rien — le parcours sans compte et les horloges compressées s'arment ici."

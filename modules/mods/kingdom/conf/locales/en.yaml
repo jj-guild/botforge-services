@@ -173,6 +173,8 @@ en:
       settings_regie_hint: "The one-off engine-management gestures — out of the cockpit, a click away."
       settings_atelier_title: "🛠️ The server workshop"
       settings_atelier_hint: "The structure and the game time. Every destructive gesture keeps its confirmation."
+      settings_window_close_button: "✖️ Close"
+      settings_window_back_button: "↩️ Console"
       settings_atelier_heal_note: "The 5-min automatic healing keeps running silently — the workshop is only the emergency hand."
       settings_beta_title: "🧪 Beta & tools"
       settings_beta_hint: "A tooling, never a launcher: being in beta LAUNCHES nothing — the account-free path and the compressed clocks arm here."

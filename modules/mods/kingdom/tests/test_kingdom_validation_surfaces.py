@@ -176,36 +176,45 @@ def test_the_decision_applies_through_the_service_and_rerenders() -> None:
         response = NS(
             edited=None,
             done=False,
-            is_done=lambda: False,
             sent=None,
+            deferred=False,
         )
+        response.is_done = lambda: response.done  # type: ignore[method-assign]
 
-        async def _edit(view: Any = None) -> None:
-            response.edited = view  # type: ignore[assignment]
+        async def _defer(ephemeral: bool = False) -> None:
+            # windows-v2 fast-ack: the ack goes FIRST, the work after
+            response.deferred = True  # type: ignore[assignment]
             response.done = True  # type: ignore[assignment]
 
         async def _send(msg: str, ephemeral: bool = False) -> None:
             response.sent = msg  # type: ignore[assignment]
 
-        response.edit_message = _edit  # type: ignore[method-assign]
+        response.defer = _defer  # type: ignore[method-assign]
         response.send_message = _send  # type: ignore[method-assign]
-        followup = NS(sent=[])
+        followup = NS(sent=[], edited=None)
 
-        async def _fsend(msg: str, ephemeral: bool = False) -> None:
+        async def _fsend(msg: str, ephemeral: bool = False, **kwargs: Any) -> None:
             followup.sent.append(msg)
 
+        async def _fedit(message_id: Any = None, **kwargs: Any) -> None:
+            followup.edited = kwargs.get("view")  # type: ignore[assignment]
+
         followup.send = _fsend  # type: ignore[method-assign]
+        followup.edit_message = _fedit  # type: ignore[method-assign]
         inter: Any = NS(
             guild_id="42",
             user=NS(id="77"),
+            locale="fr",
             client=NS(status_service=NS(bot_admins=("77",)), roles_service=None),
             response=response,
             followup=followup,
+            message=NS(id="m1"),
         )
         button = kv.ValidationDecisionButton("kb", "ok", "✅", _kv_module().discord.ButtonStyle.success)
         asyncio.run(button.callback(inter))
+        assert response.deferred, "the click is ACKED before the seconds of work"
         assert calls == [("ok", "kb")], calls
-        assert response.edited is not None, "the pin must re-render in place"
+        assert followup.edited is not None, "the pin must re-render in place"
         assert followup.sent, "the operator gets his confirmation"
     finally:
         kv.wiring = original

@@ -131,7 +131,15 @@ async def test_a_non_member_sees_the_note_not_a_timeout() -> None:
     interaction = _interaction(uid="999")  # neither king nor member
     await button.callback(interaction)
     body = interaction.followup.sent[0]
-    assert "chez eux" in str(body["content"]), "the refusal is a PAGE, never a dead click"
+    # windows-v2: a text note is the declared NOTE surface — the text
+    # rides inside the view, with its ✖️ close row
+    assert body["view"] is not None, "the refusal is a PAGE, never a dead click"
+    texts = [
+        c.content
+        for c in body["view"].walk_children()
+        if type(c).__name__ == "TextDisplay"
+    ]
+    assert "chez eux" in " ".join(str(t) for t in texts)
 
 
 async def test_a_build_failure_answers_never_times_out() -> None:
@@ -153,7 +161,13 @@ async def test_a_build_failure_answers_never_times_out() -> None:
     finally:
         monkeypatch_target.home_layout = original_home
     body = interaction.followup.sent[0]
-    assert "retente" in str(body["content"]), "an error page answers, never the silent timeout"
+    assert body["view"] is not None, "an error page answers, never the silent timeout"
+    texts = [
+        c.content
+        for c in body["view"].walk_children()
+        if type(c).__name__ == "TextDisplay"
+    ]
+    assert "retente" in " ".join(str(t) for t in texts)
 
 
 # ---------------------------------------------------------------------------
