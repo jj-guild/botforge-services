@@ -845,6 +845,308 @@ class AttackService:
         return attack
 
     # ------------------------------------------------------------------
+    # Traquenard (traquenard-fiche-v1, Drasah 03/11 — the Facile window)
+    # ------------------------------------------------------------------
+    async def activate_traquenard(
+        self,
+        player_id: str,
+        target_kingdom_id: str,
+        *,
+        now: datetime | None = None,
+    ) -> TraquenardResult:
+        """Activate a Traquenard against a kingdom (traquenard-fiche-v1).
+
+        INDEPENDENT of any declaration (recâblage v2): ANY lord of the
+        activator kingdom triggers it from the Salle du conseil. Two
+        effects — (1) one-shot +2h on every LIVING lock of the target's
+        lords (marriage, tavern drink, exploration for the sailing
+        crew), ONE single +2h per lock (``traquenard_lock_marks``): a
+        lock already extended by a previous Traquenard is never
+        re-extended while it lives, a NEW lock born later can be
+        extended again. The target's sailing expedition sails +2h
+        longer too. (2) the CUMULATIVE 2h Facile window
+        (``traquenard_until``): every attack declared against the
+        target while the window is open faces the Facile AI; each new
+        activation pushes the window's end 2h further. One bought
+        charge is consumed at the activation; the activator's
+        ``traquenard_uses`` records the live window (the Salle du
+        conseil status line). Returns ``TraquenardResult``.
+        """
+        await self._require_running_season()
+        lord = await self._require_lord(player_id)
+        if lord.kingdom_id is None or lord.left:
+            raise NotEnrolledError("le joueur n'appartient à aucun royaume de la saison en cours")
+        if str(target_kingdom_id) == str(lord.kingdom_id):
+            raise AttackError("le Traquenard vise un autre royaume, jamais le sien")
+        target = await self._kingdom_by_id(target_kingdom_id)
+        if getattr(target, "is_gaia", False):
+            raise TerritoryNotAttackableError("le Traquenard vise un royaume joueur")
+        timestamp = now or _now()
+        # Volière Lâcher de faucon (voliere-v1): the Traquenard is an
+        # adverse technology effect — a released target is immune.
+        if _faucon_released(target, timestamp):
+            raise TechnologyError("la cible a relâché le faucon — immunisée aux technologies")
+        state = await self.technology_state(str(lord.kingdom_id))
+        bought = int(state.purchases.get("traquenard", 0) or 0)
+        if bought <= 0:
+            raise TechnologyLimitReachedError("le royaume n'a pas acheté de Traquenard")
+        state.purchases["traquenard"] = bought - 1
+        await self._store.upsert_technology(state.to_mongo())
+        await self._record_action(str(lord.kingdom_id), "traquenard", f"royaume {target_kingdom_id}")
+        now_ts = int(timestamp.timestamp())
+        # traquenard-beta-v1: under an armed beta the +2h lock extension
+        # compresses to +1 minute (the beta windows are minutes); the
+        # 2h Facile window stays testable live, NOT scaled.
+        lock_delta = int(TRAQUENARD_LOCK_HOURS * 3600)
+        try:
+            from botforge.mods.kingdom.beta_weekend import beta_started
+
+            season = await self._kingdoms.current_season()
+            if season is not None and beta_started(season, timestamp):
+                lock_delta = 60
+        except Exception:  # noqa: BLE001 — the beta probe never blocks
+            logger.warning("kingdom: traquenard beta probe failed (ignored)", exc_info=True)
+        # (1) one-shot +2h on every LIVING lock of the target's lords
+        expedition = dict(getattr(target, "expedition", None) or {})
+        expedition_sailing = str(expedition.get("state", "") or "") == "sailing"
+        expedition_crew = set(expedition.get("locked") or []) if expedition_sailing else set()
+        affected: list[tuple[str, list[str]]] = []
+        for victim in await self._kingdoms.lords():
+            if str(victim.kingdom_id) != str(target_kingdom_id) or victim.left:
+                continue
+            marks = dict(getattr(victim, "traquenard_lock_marks", None) or {})
+            kinds: list[str] = []
+
+            def _extend(kind: str, current: int) -> int | None:
+                if current <= now_ts:
+                    return None  # not a living lock
+                if marks.get(kind) == current:
+                    return None  # already +2h'd once — never re-extended
+                extended = current + lock_delta
+                marks[kind] = extended
+                kinds.append(kind)
+                return extended
+
+            extended_marriage = _extend("marriage", int(victim.marriage_locked_until or 0))
+            if extended_marriage is not None:
+                victim.marriage_locked_until = extended_marriage
+            extended_tavern = _extend("tavern", int(victim.tavern_locked_until or 0))
+            if extended_tavern is not None:
+                victim.tavern_locked_until = extended_tavern
+            if str(victim.id) in expedition_crew:
+                extended_exploration = _extend("exploration", int(victim.exploration_locked_until or 0))
+                if extended_exploration is not None:
+                    victim.exploration_locked_until = extended_exploration
+            if kinds:
+                victim.traquenard_lock_marks = marks
+                await self._store.upsert_lord(victim.to_mongo())
+                affected.append((str(victim.id), kinds))
+        # The sailing expedition itself sails +2h longer (chef + crew).
+        if expedition_sailing:
+            expedition_ends = int(expedition.get("ends_at") or 0)
+            if expedition_ends > now_ts:
+                expedition["ends_at"] = expedition_ends + lock_delta
+                target.expedition = expedition
+        # (2) the CUMULATIVE 2h Facile window on the target kingdom
+        # (each activation pushes the end 2h further, never resets it).
+        window_until = max(now_ts, int(target.traquenard_until or 0)) + int(
+            TRAQUENARD_WINDOW_HOURS * 3600
+        )
+        target.traquenard_until = window_until
+        await self._store.upsert_kingdom(target.to_mongo())
+        # traquenard-fiche-v1: the activator kingdom's live status line
+        # (Salle du conseil) — {target_id: window_until}, cleaned on expiry.
+        activator = await self._kingdom_by_id(str(lord.kingdom_id))
+        uses = dict(getattr(activator, "traquenard_uses", None) or {})
+        uses[str(target_kingdom_id)] = window_until
+        activator.traquenard_uses = uses
+        await self._store.upsert_kingdom(activator.to_mongo())
+        logger.info(
+            "kingdom: %s activated a Traquenard against %s (Facile AI until %s, %d locks extended)",
+            lord.kingdom_id,
+            target_kingdom_id,
+            window_until,
+            sum(len(kinds) for _lord_id, kinds in affected),
+        )
+        return TraquenardResult(
+            target=target,
+            until=window_until,
+            affected=affected,
+            lock_seconds=lock_delta,
+        )
+
+    async def technology_state(self, kingdom_id: str) -> TechnologyState:
+        """Return (creating when absent) the kingdom's technology state.
+
+        techno-port-v1: ported from the reference — every combat path
+        (declare, Embuscade, Traquenard, economy buys) rides this ONE
+        seam; the state is never persisted until a real purchase/use.
+        """
+        kid = str(kingdom_id)
+        for doc in await self._store.find_technologies():
+            state = TechnologyState.from_mongo(doc)
+            if str(state.kingdom_id) == kid:
+                return state
+        season = await self._kingdoms.current_season()
+        return TechnologyState(_id=kid, season_id=str(getattr(season, "id", "") or "s"))
+
+    def _cost(self, technology: str) -> int:
+        """Return the configured cost of one technology (D9)."""
+        return int(getattr(self._config.technologies, technology))
+
+    async def buy_technology(self, kingdom_id: str, technology: str) -> TechnologyState:
+        """Buy one combat technology with tech points (D9/D36)."""
+        if technology not in COMBAT_TECHNOLOGIES:
+            raise UnknownTechnologyError(f"technologie de combat inconnue : {technology}")
+        cost = self._cost(technology)
+        limit = int(self._config.technologies.limits.get(technology, 0) or 0)
+        state = await self.technology_state(kingdom_id)
+        bypass = bypass_guard(
+            f"technology purchase {technology} of {kingdom_id} "
+            f"(bank {state.tech_points}, {state.purchases.get(technology, 0)}/{limit})"
+        )
+        if not state.can_afford(cost) and not bypass:
+            raise InsufficientTechPointsError("le royaume manque de points de technologie")
+        bought = state.purchases.get(technology, 0)
+        if limit > 0 and bought >= limit and not bypass:
+            raise TechnologyLimitReachedError("la limite d'achat par saison est atteinte")
+        if bypass:
+            state.tech_points = max(0, state.tech_points - cost)
+            state.purchases[technology] = bought + 1
+        elif not state.spend(technology, cost, limit):
+            raise TechnologyLimitReachedError("l'achat a été refusé")
+        await self._store.upsert_technology(state.to_mongo())
+        logger.info("kingdom: %s bought %s for %s tech points", kingdom_id, technology, cost)
+        return state
+
+    async def base_ai_level(self) -> int:
+        """Return the season epoch's base AI level (D18 scale, fallback 1)."""
+        season = await self._kingdoms.current_season()
+        if season is not None:
+            key = str(getattr(season, "current_age_key", "") or "")
+            epoch = next((e for e in self._config.ages if e.key == key), None)
+            if epoch is not None:
+                return int(epoch.gaia_ai_level)
+        return 1
+
+    async def defense_ai_level(self, kingdom_id: str) -> int:
+        """Return the kingdom defence bot's AI level (marche-v2 art. 5).
+
+        ia-base-zero-v1: the base is 0 — Drasah's scale (0 Très
+        facile … 5 Expert); each permanent Jeu d'armes purchase adds
+        one, ceiling 5. The season epoch's ``gaia_ai_level`` stays the
+        GAÏA free-battle scale, untouched.
+        """
+        state = await self.technology_state(kingdom_id)
+        return min(
+            AI_LEVEL_CAP,
+            DEFENSE_AI_BASE + int(state.purchases.get("jeu_d_armes", 0) or 0),
+        )
+
+    async def _territory_busy(self, territory_id: str) -> bool:
+        """Whether an ongoing attack targets the territory (D42)."""
+        return any(
+            str(attack.territory_id) == str(territory_id) and not attack.is_over
+            for attack in await self.attacks()
+        )
+
+    async def _territory_by_map(self, map_key: str) -> TerritoryModel:
+        """Resolve a territory by its map key (the declare seam)."""
+        territory = next(
+            (
+                item
+                for item in await self._territories.territories()
+                if str(item.map_key) == str(map_key)
+            ),
+            None,
+        )
+        if territory is None:
+            raise KingdomNotFoundError("aucun territoire tiré avec cette carte")
+        return territory
+
+    async def _find_attack(self, attack_id: str) -> AttackModel:
+        """Return the attack document or raise a not-found error."""
+        attack = next(
+            (item for item in await self.attacks() if str(item.id) == str(attack_id)),
+            None,
+        )
+        if attack is None:
+            raise AttackNotFoundError("aucune attaque avec cet id dans les données actuelles")
+        return attack
+
+    async def _active_lords_day_window(self, timestamp: datetime) -> tuple[datetime, datetime] | None:
+        """The live Lord's Day window at ``timestamp`` (the events seam)."""
+        try:
+            season = await self._kingdoms.current_season()
+        except Exception:  # noqa: BLE001 — a probe failure never blocks
+            return None
+        if season is None:
+            return None
+        return active_lords_day_window(self._config, season, timestamp)
+
+    async def _kingdom_by_id(self, kingdom_id: str) -> KingdomModel:
+        """Resolve a kingdom by id (the reference's canonical lookup)."""
+        kingdom = next(
+            (
+                item
+                for item in await self._kingdoms.kingdoms()
+                if str(item.id) == str(kingdom_id)
+            ),
+            None,
+        )
+        if kingdom is None:
+            raise KingdomNotFoundError(f"no kingdom with id {kingdom_id}")
+        return kingdom
+
+    async def _require_running_season(self) -> SeasonState:
+        """Return the running season, refusing a finished one.
+
+        Drasah's endcycle rule: after the 23:59 verdict the season
+        stays frozen — every combat action raises until the next
+        launch. (Ported from the reference; declare_attack/embuscade
+        and activate_traquenard all ride this guard.)
+        """
+        season = await self._kingdoms.current_season()
+        if season is None:
+            raise NoSeasonError("no season is running")
+        if bool(getattr(season, "finished", False)):
+            raise SeasonClosedError("la saison est terminée — aucune action de combat n'est possible")
+        return season
+
+    async def _require_lord(self, player_id: str) -> LordModel:
+        """Return the player's lord document or raise."""
+        lord = next(
+            (
+                item
+                for item in await self._kingdoms.lords()
+                if str(item.id) == str(player_id)
+            ),
+            None,
+        )
+        if lord is None:
+            raise NotEnrolledError("le joueur n'est pas inscrit dans la saison en cours")
+        return lord
+
+    async def _record_action(self, kingdom_id: str, item: str, detail: str) -> None:
+        """comptes-rows-v1 (best-effort): one dated USE ledger entry.
+
+        theology ledger duplicates economy's writer intentionally-free:
+        the ledger is consultative history — a write failure never
+        breaks a successful use (upsert guarded, warning logged).
+        """
+        try:
+            kingdom = await self._kingdom_by_id(kingdom_id)
+            actions = list(getattr(kingdom, "market_actions", None) or [])
+            actions.append(
+                {"item": str(item), "detail": str(detail)[:100], "at": int(_now().timestamp())}
+            )
+            kingdom.market_actions = actions[-50:]
+            await self._store.upsert_kingdom(kingdom.to_mongo())
+        except Exception:
+            logger.warning("kingdom: action ledger write failed for %s", kingdom_id, exc_info=True)
+
+
+    # ------------------------------------------------------------------
     # Plannification (planification-attaque-v1, Drasah 23/10/2026)
     # ------------------------------------------------------------------
     async def plans(self) -> list[PlannedAttackModel]:

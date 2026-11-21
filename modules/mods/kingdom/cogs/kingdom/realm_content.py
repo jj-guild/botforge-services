@@ -351,6 +351,7 @@ async def _upsert_marked(
     content: str,
     view: Any = None,
     pin: bool = False,
+    files: list[Any] | None = None,
 ) -> str:
     """Edit the marked message in place, or send it once. Returns its id."""
     marker = _marker(key)
@@ -365,13 +366,15 @@ async def _upsert_marked(
         kwargs: dict[str, Any] = {"content": content}
         if view is not None:
             kwargs["view"] = view
+        if files:
+            kwargs["files"] = files
         try:
             await existing.edit(**kwargs)
             return str(getattr(existing, "id", ""))
         except Exception:  # noqa: BLE001 — a dead edit falls back to a fresh send
             logger.warning("kingdom realm content: edit %s failed, resending", key)
     message = await channel.send(
-        content=content, view=view, allowed_mentions=NO_MENTIONS
+        content=content, view=view, files=files or None, allowed_mentions=NO_MENTIONS
     )
     if pin:
         try:
@@ -516,16 +519,22 @@ def _scriptorium_mention(guild: Any) -> str:
 
 
 async def _alliances_view(
-    strings: dict[str, str], stack: Any, kingdom: Any, guild: Any, locale: Any
+    strings: dict[str, str], stack: Any, kingdom: Any, guild: Any, locale: Any,
+    mosaic: bool = False,
 ) -> Any:
     body = await _alliances_body(strings, stack, kingdom, guild)
-    view = surface(
-        ALLIANCES_SURFACE,
+    items: list[Any] = [
         RealmAlliancesNextButton(strings["alliances_btn_next"]).item,
         RealmAlliancesLockedButton(strings["alliances_btn_locked"]).item,
         RealmAlliancesDurationsButton(strings["alliances_btn_durations"]).item,
         RealmAlliancesHistoryButton(strings["alliances_btn_history"]).item,
-    )
+    ]
+    if mosaic:
+        # mosaic-render-fix (porté T3b): a Components V2 attachment only
+        # renders when a gallery REFERENCES it — the mosaic rides above
+        # the panel, the crests never stack as bare attachments.
+        items.append(discord.ui.MediaGallery(discord.MediaGalleryItem("attachment://alliances.png")))
+    view = surface(ALLIANCES_SURFACE, *items)
     return f"## {strings['alliances_panel_title'].format(str(getattr(kingdom, 'name', '')))}\n\n{body}", view
 
 
@@ -755,10 +764,44 @@ async def deploy_realm_content(
 
     alliances = channels.get("alliances")
     if alliances is not None:
+        # mosaïque-blasons-v1 (Vague 2): the panel wears ONE composite
+        # mosaic of the hand's crests — every tile carries its origin
+        # badge, ONE attachment whatever the hand's size.
+        mosaic_file: Any = None
         try:
-            content, view = await _alliances_view(strings, stack, kingdom, guild, locale)
+            from .civ_crests import civ_crest_mosaic_file
+
+            ledger = dict(getattr(kingdom, "civilization_acquisitions", None) or {})
+            catalog = list(getattr(getattr(stack, "config", None), "civilizations", ()) or ())
+            names = {
+                str(getattr(entry, "key", "")): str(getattr(entry, "display_name", ""))
+                for entry in catalog
+            }
+            hand = [str(civ) for civ in getattr(kingdom, "civilizations", []) or []]
+            mosaic_file = await civ_crest_mosaic_file(
+                [
+                    (
+                        civ,
+                        (ledger.get(civ) or {}).get("origin") or "",
+                        names.get(civ, civ),
+                    )
+                    for civ in hand
+                ]
+            )
+        except Exception:  # noqa: BLE001 — the mosaic is cosmetic
+            logger.warning("kingdom realm content: alliances mosaic failed", exc_info=True)
+        try:
+            content, view = await _alliances_view(
+                strings, stack, kingdom, guild, locale, mosaic=mosaic_file is not None
+            )
             content = f"{content}\n\n{_marker('alliances')}"
-            ids["alliances_message"] = await _upsert_marked(alliances, "alliances", content, view=view)
+            ids["alliances_message"] = await _upsert_marked(
+                alliances,
+                "alliances",
+                content,
+                view=view,
+                files=[mosaic_file] if mosaic_file is not None else None,
+            )
         except Exception:  # noqa: BLE001
             logger.warning("kingdom realm content: alliances deploy failed", exc_info=True)
 

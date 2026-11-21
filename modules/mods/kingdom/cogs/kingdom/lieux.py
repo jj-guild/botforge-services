@@ -57,6 +57,55 @@ REMPARTS_SURFACE = "panel:mod:kingdom:lieux:remparts"
 COMPTES_SURFACE = "panel:mod:kingdom:lieux:comptes"
 PAROISSE_SURFACE = "panel:mod:kingdom:lieux:paroisse"
 VOLIERE_SURFACE = "panel:mod:kingdom:lieux:voliere"
+# vague2-actions-v1 (Drasah 21/11) : les nouvelles fenêtres d'action
+PAROISSE_UPGRADE_SURFACE = "panel:mod:kingdom:lieux:paroisse-upgrade"
+HIST_SURFACE = "panel:mod:kingdom:lieux:hist"
+TRAQUENARD_SURFACE = "panel:mod:kingdom:lieux:traquenard"
+
+# Les étiquettes du registre (portées de la référence, market_tech +
+# market_action fusionnés) — l'item inconnu garde sa clé brute.
+_HIST_LABELS: dict[str, dict[str, str]] = {
+    "fr": {
+        "embuscade": "🥷 Embuscade",
+        "traquenard": "🪤 Traquenard",
+        "contre_espionnage": "👀 Contre-espionnage",
+        "sabotage": "🗡️ Sabotage",
+        "jeu_d_armes": "⚔️ Jeu d'armes",
+        "explorateur": "🧭 Explorateur",
+        "corruption": "💰 Corruption",
+        "garde_royale": "💂 Garde Royale",
+        "patrouille": "👣 Patrouille",
+        "mariage_arrange": "💐 Mariage arrangé",
+    },
+    "en": {
+        "embuscade": "🥷 Ambush",
+        "traquenard": "🪤 Traquenard",
+        "contre_espionnage": "👀 Counter-espionage",
+        "sabotage": "🗡️ Sabotage",
+        "jeu_d_armes": "⚔️ Arms Mastery",
+        "explorateur": "🧭 Explorer",
+        "corruption": "💰 Corruption",
+        "garde_royale": "💂 Royal Guard",
+        "patrouille": "👣 Patrol",
+        "mariage_arrange": "💐 Arranged marriage",
+    },
+}
+_HIST_EMOJI: dict[str, str] = {
+    "embuscade": "🥷",
+    "traquenard": "🪤",
+    "contre_espionnage": "👀",
+    "sabotage": "🗡️",
+    "jeu_d_armes": "⚔️",
+    "explorateur": "🧭",
+    "corruption": "💰",
+    "garde_royale": "💂",
+    "patrouille": "👣",
+    "mariage_arrange": "💐",
+}
+
+
+def _hist_label(strings: dict[str, str], item: str) -> str:
+    return str(_HIST_LABELS.get(_locale_of_catalog(strings), _HIST_LABELS["fr"]).get(item, item))
 
 # The volière bird catalog (voliere-v2 : pigeon / corbeau / faucon).
 _BIRD_EMOJI = {"pigeon": "🕊️", "corbeau": "🐦‍⬛", "faucon": "🦅"}
@@ -160,6 +209,33 @@ LIEUX_STRINGS: dict[str, dict[str, str]] = {
         "remparts_garde_owned_none": "Vous ne disposez d'aucun Garde Royal",
         "remparts_guard_line": "✅ {0} — protégée jusqu'à {1}",
         "remparts_guard_stock": "En réserve : {0}",
+        # vague2-actions-v1 (Drasah 21/11) : rangée 2 des Remparts
+        "remparts_use_jeu": "⚔️ Jeu d'armes",
+        "remparts_use_patrouille": "🚨 Patrouille",
+        "remparts_use_garde": "💂 Garde royale",
+        "conseil_card_exploration": "🧭 Exploration",
+        "conseil_card_traquenard": "🪤 Traquenard",
+        "traquenard_select": "Choisissez le royaume à piéger :",
+        "traquenard_done": (
+            "✅ Traquenard armé contre **{0}** — l'IA affrontée devient "
+            "Facile <t:{1}:R>. {2} verrou(s) vivant(s) étendu(s) +2h."
+        ),
+        "action_error_note": "❌ {0}",
+        "paroisse_marry_button": "💍 Se marier",
+        "paroisse_upgrade_button": "⛪ Améliorer : {0}",
+        "paroisse_upgrade_max": "⛪ Palier maximum atteint",
+        "paroisse_upgrade_confirm": "Améliorer la Paroisse vers **{0}** pour **{1}** ⚙️ ?",
+        "paroisse_upgrade_ok": "✅ Améliorer",
+        "paroisse_upgrade_cancel": "❌ Annuler",
+        "paroisse_upgrade_done": "✅ La Paroisse est désormais **{0}**.",
+        "hist_achats_button": "📜 Historique achats",
+        "hist_actions_button": "⚔️ Historique actions",
+        "hist_achats_title": "📜 Historique des achats",
+        "hist_actions_title": "⚔️ Historique des actions",
+        "hist_achats_empty": "Aucun achat pour le moment.",
+        "hist_actions_empty": "Aucune carte utilisée pour le moment.",
+        "hist_purchase_line": "{0} {1} — {2} · {3} ⚙️ · {4}",
+        "hist_action_line": "{0} {1} — {2} · {3}",
         "comptes_title": "🏛️ Chambre des comptes — {0}",
         "paroisse_title": "⛪ Paroisse — {0}",
         "paroisse_tier_line": (
@@ -270,6 +346,33 @@ LIEUX_STRINGS: dict[str, dict[str, str]] = {
         "remparts_garde_owned_none": "You do not own any Royal Guard",
         "remparts_guard_line": "✅ {0} — shielded until {1}",
         "remparts_guard_stock": "In reserve: {0}",
+        # vague2-actions-v1 (Drasah 21/11): the Remparts action row 2
+        "remparts_use_jeu": "⚔️ Arms Mastery",
+        "remparts_use_patrouille": "🚨 Patrol",
+        "remparts_use_garde": "💂 Royal Guard",
+        "conseil_card_exploration": "🧭 Exploration",
+        "conseil_card_traquenard": "🪤 Traquenard",
+        "traquenard_select": "Pick the kingdom to trap:",
+        "traquenard_done": (
+            "✅ Traquenard armed against **{0}** — the AI faced turns "
+            "Easy <t:{1}:R>. {2} living lock(s) extended +2h."
+        ),
+        "action_error_note": "❌ {0}",
+        "paroisse_marry_button": "💍 Get married",
+        "paroisse_upgrade_button": "⛪ Upgrade: {0}",
+        "paroisse_upgrade_max": "⛪ Top tier reached",
+        "paroisse_upgrade_confirm": "Upgrade the Parish to **{0}** for **{1}** ⚙️?",
+        "paroisse_upgrade_ok": "✅ Upgrade",
+        "paroisse_upgrade_cancel": "❌ Cancel",
+        "paroisse_upgrade_done": "✅ The Parish now stands at **{0}**.",
+        "hist_achats_button": "📜 Purchase history",
+        "hist_actions_button": "⚔️ Action history",
+        "hist_achats_title": "📜 Purchase history",
+        "hist_actions_title": "⚔️ Action history",
+        "hist_achats_empty": "No purchase yet.",
+        "hist_actions_empty": "No card used yet.",
+        "hist_purchase_line": "{0} {1} — {2} · {3} ⚙️ · {4}",
+        "hist_action_line": "{0} {1} — {2} · {3}",
         "comptes_title": "🏛️ Chamber of accounts — {0}",
         "paroisse_title": "⛪ Parish — {0}",
         "paroisse_tier_line": (
@@ -559,6 +662,15 @@ def lieux_dynamic_items() -> tuple:
         LieuxObjectifSelect,
         LieuxObjectifFlip,
         LieuxObjectifValidateButton,
+        # vague2-actions-v1 (Drasah 21/11)
+        LieuxRempartsUseButton,
+        LieuxExplorationButton,
+        LieuxTraquenardButton,
+        LieuxTraquenardSelect,
+        LieuxParoisseUpgradeButton,
+        LieuxParoisseUpgradeOkButton,
+        LieuxParoisseUpgradeCancelButton,
+        LieuxHistButton,
     )
 
 
@@ -775,6 +887,10 @@ async def _conseil_window(
         objectif.item,
         _sortir_item(strings),
     ]]
+    # vague2-actions-v1 (Drasah 21/11) : rangée 2 — les cartes d'action
+    # 🧭 Exploration / 🪤 Traquenard (vertes si en réserve, grisées sinon,
+    # jamais cachées — pattern _remparts_rows de la référence)
+    rows.append(_conseil_cards_row(strings, state, kingdom))
     view = _lieu_window(
         strings,
         CONSEIL_SURFACE,
@@ -1186,7 +1302,9 @@ def _remparts_window(
     reserve = int(purchases.get("garde_royale_stock", 0) or 0)
     if reserve > 0:
         lines.append(strings["remparts_guard_stock"].format(reserve))
-    rows = [[_sortir_item(strings)]]
+    # vague2-actions-v1 (Drasah 21/11) : rangée 2 — Jeu d'armes,
+    # Patrouille, Garde royale (verts si détenus, gris sinon, jamais cachés)
+    rows = [[_sortir_item(strings)], _remparts_use_row(strings, state)]
     view = _lieu_window(
         strings,
         REMPARTS_SURFACE,
@@ -1213,7 +1331,13 @@ async def _comptes_window(
     stack = wiring()
     mod_catalog = mod_strings(_locale_of_catalog(strings))
     body = await chamber_text(stack, kingdom, mod_catalog)
-    rows = [[_sortir_item(strings)]]
+    # vague2-actions-v1 (Drasah 21/11) : 📜 Historique achats · ⚔️
+    # Historique actions (portés de la référence, comptes-rows-v1)
+    rows = [[
+        LieuxHistButton("achats", strings).item,
+        LieuxHistButton("actions", strings).item,
+        _sortir_item(strings),
+    ]]
     view = _lieu_window(
         strings,
         COMPTES_SURFACE,
@@ -1257,7 +1381,33 @@ async def _paroisse_window(
             int(state.get("wallet", 0) or 0),
         ),
     ])
-    rows = [[_sortir_item(strings)]]
+    # vague2-actions-v1 (Drasah 21/11) : 💍 Se marier (la DynamicItem de
+    # marry.py, harmonisation gratuite) + ⛪ Améliorer + Sortir
+    from .marry import MarryButton
+
+    next_name, next_cost, at_top = "", 0, True
+    if 0 <= tier - 1 < len(tiers):
+        at_top = tier >= len(tiers)
+        if not at_top:
+            next_name = str(getattr(tiers[tier], "display_name", ""))
+            next_cost = int(getattr(tiers[tier], "cost", 0) or 0)
+    upgrade = (
+        discord.ui.Button(
+            label=str(strings["paroisse_upgrade_max"])[:80],
+            custom_id=f"{_NS}:paroisse:upgrade",
+            style=discord.ButtonStyle.secondary,
+            disabled=True,
+        )
+        if at_top
+        else LieuxParoisseUpgradeButton(
+            strings["paroisse_upgrade_button"].format(next_name)
+        ).item
+    )
+    rows = [[
+        MarryButton(strings["paroisse_marry_button"]).item,
+        upgrade,
+        _sortir_item(strings),
+    ]]
     view = _lieu_window(
         strings,
         PAROISSE_SURFACE,
@@ -1307,3 +1457,450 @@ def _voliere_window(
         rows,
     )
     return view, _lieu_files("voliere.png", "voliere.png")
+
+
+# ---------------------------------------------------------------------------
+# vague2-actions-v1 (Drasah 21/11) — les rangées d'action + leurs
+# restart-proof DynamicItems. Règle des cartes : VERT si en réserve,
+# GRIS + disabled sinon, jamais caché (pattern _remparts_rows référence).
+# ---------------------------------------------------------------------------
+
+
+def _stock_button(
+    custom_id: str, label: str, held: bool, strings: dict[str, str]
+) -> discord.ui.Button:
+    """One wire button — green when held, gray+disabled otherwise."""
+    return discord.ui.Button(
+        label=str(label)[:80],
+        custom_id=custom_id[:100],
+        style=discord.ButtonStyle.success if held else discord.ButtonStyle.secondary,
+        disabled=not held,
+    )
+
+
+def _remparts_use_row(strings: dict[str, str], state: dict[str, Any]) -> list[Any]:
+    """Rangée 2 des Remparts : ⚔️ Jeu d'armes · 🚨 Patrouille · 💂 Garde."""
+    purchases = dict(state.get("purchases") or {})
+    patrouille_held = any(
+        f"patrouille_slot_{slot_no}" in purchases or f"patrouille_unlock_{slot_no}" in purchases
+        for slot_no in (1, 2)
+    )
+    return [
+        _stock_button(
+            f"{_NS}:remparts:use:jeu_d_armes",
+            strings["remparts_use_jeu"],
+            int(purchases.get("jeu_d_armes_stock", 0) or 0) > 0,
+            strings,
+        ),
+        _stock_button(
+            f"{_NS}:remparts:use:patrouille",
+            strings["remparts_use_patrouille"],
+            patrouille_held,
+            strings,
+        ),
+        _stock_button(
+            f"{_NS}:remparts:use:garde_royale",
+            strings["remparts_use_garde"],
+            int(purchases.get("garde_royale_stock", 0) or 0) > 0,
+            strings,
+        ),
+    ]
+
+
+def _conseil_cards_row(strings: dict[str, str], state: dict[str, Any], kingdom: Any) -> list[Any]:
+    """Rangée 2 du Conseil : 🧭 Exploration · 🪤 Traquenard."""
+    purchases = dict(state.get("purchases") or {})
+    return [
+        _stock_button(
+            f"{_NS}:exploration",
+            strings["conseil_card_exploration"],
+            int(purchases.get("explorateur_stock", 0) or 0) > 0,
+            strings,
+        ),
+        _stock_button(
+            f"{_NS}:traquenard",
+            strings["conseil_card_traquenard"],
+            int(purchases.get("traquenard", 0) or 0) > 0,
+            strings,
+        ),
+    ]
+
+
+class LieuxRempartsUseButton(
+    discord.ui.DynamicItem[discord.ui.Button[Any]],
+    template=rf"{_NS}:remparts:use:(?P<card>[a-z_]+)",
+):
+    """Une carte d'action des Remparts — délègue au wizard du Marché
+    (market._use_wizard gère EXACTEMENT jeu d'armes/patrouille/garde :
+    choix IA, créneau patrouille, territoire protégé — zéro doublon)."""
+
+    def __init__(self, card: str) -> None:
+        super().__init__(
+            discord.ui.Button(
+                label=card,
+                custom_id=f"{_NS}:remparts:use:{card}",
+                style=discord.ButtonStyle.success,
+            )
+        )
+        self.card = str(card)
+
+    @classmethod
+    async def from_custom_id(cls, interaction, item, match, /):  # type: ignore[no-untyped-def]
+        return cls(str(match["card"]))
+
+    async def callback(self, interaction: discord.Interaction) -> None:
+        from .common import strings_for
+        from .market import _use_wizard
+
+        strings = lieux_strings(_locale_of(interaction))
+        lord, kingdom, stack = await _lord_kingdom_of(interaction, strings)
+        if lord is None or kingdom is None or stack is None:
+            return
+        await _use_wizard(interaction, stack, strings_for(interaction), self.card, kingdom)
+
+
+class LieuxExplorationButton(
+    discord.ui.DynamicItem[discord.ui.Button[Any]], template=rf"{_NS}:exploration"
+):
+    """🧭 Exploration — le wizard Explorateur du Marché (choix du
+    seigneur, verrou 48h), jamais dupliqué ici."""
+
+    def __init__(self, label: str) -> None:
+        super().__init__(
+            discord.ui.Button(
+                label=str(label)[:80], custom_id=f"{_NS}:exploration", style=discord.ButtonStyle.success
+            )
+        )
+
+    @classmethod
+    async def from_custom_id(cls, interaction, item, match, /):  # type: ignore[no-untyped-def]
+        return cls(lieux_strings(_locale_of(interaction))["conseil_card_exploration"])
+
+    async def callback(self, interaction: discord.Interaction) -> None:
+        from .common import strings_for
+        from .market import _use_wizard
+
+        strings = lieux_strings(_locale_of(interaction))
+        lord, kingdom, stack = await _lord_kingdom_of(interaction, strings)
+        if lord is None or kingdom is None or stack is None:
+            return
+        await _use_wizard(interaction, stack, strings_for(interaction), "explorateur", kingdom)
+
+
+class LieuxTraquenardButton(
+    discord.ui.DynamicItem[discord.ui.Button[Any]], template=rf"{_NS}:traquenard"
+):
+    """🪤 Traquenard — ouvre la fenêtre éphémère de choix de cible."""
+
+    def __init__(self, label: str) -> None:
+        super().__init__(
+            discord.ui.Button(
+                label=str(label)[:80], custom_id=f"{_NS}:traquenard", style=discord.ButtonStyle.success
+            )
+        )
+
+    @classmethod
+    async def from_custom_id(cls, interaction, item, match, /):  # type: ignore[no-untyped-def]
+        return cls(lieux_strings(_locale_of(interaction))["conseil_card_traquenard"])
+
+    async def callback(self, interaction: discord.Interaction) -> None:
+        await interaction.response.defer(ephemeral=True)
+        strings = lieux_strings(_locale_of(interaction))
+        lord, kingdom, stack = await _lord_kingdom_of(interaction, strings)
+        if lord is None or kingdom is None or stack is None:
+            return
+        options = await _traquenard_options(stack, kingdom)
+        if not options:
+            await open_unique_ephemeral(interaction, content=strings["traquenard_select"])
+            return
+        view = surface(
+            TRAQUENARD_SURFACE,
+            discord.ui.Container(
+                discord.ui.TextDisplay(f"## 🪤 {strings['traquenard_select']}"),
+                discord.ui.Separator(),
+                discord.ui.ActionRow(LieuxTraquenardSelect(options).item),
+                accent_colour=GOLD,
+            ),
+        )
+        await open_unique_ephemeral(interaction, view=view)
+
+
+async def _traquenard_options(stack: Any, kingdom: Any) -> list[discord.SelectOption]:
+    """Les royaumes cibles — jamais soi-même, jamais Gaïa."""
+    try:
+        items = [
+            item
+            for item in await stack.kingdoms.kingdoms()
+            if str(getattr(item, "id", "")) != str(getattr(kingdom, "id", ""))
+            and not getattr(item, "is_gaia", False)
+        ]
+    except Exception:  # noqa: BLE001
+        return []
+    return [
+        discord.SelectOption(
+            label=str(getattr(item, "name", getattr(item, "id", "?")))[:100],
+            value=str(getattr(item, "id", "")),
+        )
+        for item in items
+    ][:25]
+
+
+class LieuxTraquenardSelect(
+    discord.ui.DynamicItem[discord.ui.Select[Any]], template=rf"{_NS}:traquenard:pick"
+):
+    """Le select du Traquenard — consomme la carte et arme la fenêtre."""
+
+    def __init__(self, options: list[discord.SelectOption]) -> None:
+        super().__init__(
+            discord.ui.Select(
+                custom_id=f"{_NS}:traquenard:pick",
+                options=options[:25],
+                placeholder="🎯",
+                min_values=1,
+                max_values=1,
+            )
+        )
+
+    @classmethod
+    async def from_custom_id(cls, interaction, item, match, /):  # type: ignore[no-untyped-def]
+        strings = lieux_strings(_locale_of(interaction))
+        lord, kingdom, stack = await _lord_kingdom_of(interaction, strings)
+        options = await _traquenard_options(stack, kingdom) if kingdom else []
+        return cls(options)
+
+    async def callback(self, interaction: discord.Interaction) -> None:
+        strings = lieux_strings(_locale_of(interaction))
+        lord, kingdom, stack = await _lord_kingdom_of(interaction, strings)
+        if lord is None or kingdom is None or stack is None:
+            return
+        chosen = str(self.item.values[0] if self.item.values else "")
+        if not chosen:
+            return
+        await interaction.response.defer(ephemeral=True)
+        try:
+            result = await stack.attacks.activate_traquenard(str(getattr(interaction.user, "id", "")), chosen)
+        except Exception as exc:  # noqa: BLE001 — every engine refusal is a note
+            logger.info("kingdom lieux: traquenard refused: %s", exc)
+            await open_unique_ephemeral(
+                interaction, content=strings["action_error_note"].format(str(exc)[:150])
+            )
+            return
+        # le nom de la cible, ressolu au moment de la note
+        target_name = chosen
+        try:
+            for item in await stack.kingdoms.kingdoms():
+                if str(getattr(item, "id", "")) == chosen:
+                    target_name = str(getattr(item, "name", "") or chosen)
+                    break
+        except Exception:  # noqa: BLE001
+            pass
+        until_ts = 0
+        try:
+            until_ts = int(getattr(result, "until", 0) or 0)
+        except Exception:  # noqa: BLE001
+            pass
+        affected = len(getattr(result, "affected", ()) or ())
+        await open_unique_ephemeral(
+            interaction, content=strings["traquenard_done"].format(target_name, until_ts, affected)
+        )
+
+
+class LieuxParoisseUpgradeButton(
+    discord.ui.DynamicItem[discord.ui.Button[Any]], template=rf"{_NS}:paroisse:upgrade"
+):
+    """⛪ Améliorer — ouvre la carte de confirmation (achat direct)."""
+
+    def __init__(self, label: str) -> None:
+        super().__init__(
+            discord.ui.Button(
+                label=str(label)[:80],
+                custom_id=f"{_NS}:paroisse:upgrade",
+                style=discord.ButtonStyle.success,
+            )
+        )
+
+    @classmethod
+    async def from_custom_id(cls, interaction, item, match, /):  # type: ignore[no-untyped-def]
+        return cls(lieux_strings(_locale_of(interaction))["paroisse_upgrade_button"].format(""))
+
+    async def callback(self, interaction: discord.Interaction) -> None:
+        await interaction.response.defer(ephemeral=True)
+        strings = lieux_strings(_locale_of(interaction))
+        lord, kingdom, stack = await _lord_kingdom_of(interaction, strings)
+        if lord is None or kingdom is None or stack is None:
+            return
+        next_name, next_cost, at_top = "", 0, True
+        try:
+            tiers = list(getattr(stack.config.parish, "tiers", ()) or ())
+            tier = int(getattr(kingdom, "parish_tier", 1) or 1)
+            at_top = tier >= len(tiers)
+            if not at_top:
+                next_name = str(getattr(tiers[tier], "display_name", ""))
+                next_cost = int(getattr(tiers[tier], "cost", 0) or 0)
+        except Exception:  # noqa: BLE001
+            pass
+        if at_top:
+            await open_unique_ephemeral(interaction, content=strings["paroisse_upgrade_max"])
+            return
+        view = surface(
+            PAROISSE_UPGRADE_SURFACE,
+            discord.ui.Container(
+                discord.ui.TextDisplay(
+                    f"## ⛪ {strings['paroisse_upgrade_confirm'].format(next_name, next_cost)}"
+                ),
+                discord.ui.Separator(),
+                discord.ui.ActionRow(
+                    LieuxParoisseUpgradeOkButton(strings["paroisse_upgrade_ok"]).item,
+                    LieuxParoisseUpgradeCancelButton(strings["paroisse_upgrade_cancel"]).item,
+                ),
+                accent_colour=discord.Colour.blurple(),
+            ),
+        )
+        await open_unique_ephemeral(interaction, view=view)
+
+
+class LieuxParoisseUpgradeOkButton(
+    discord.ui.DynamicItem[discord.ui.Button[Any]], template=rf"{_NS}:paroisse:upgrade:ok"
+):
+    """✅ Améliorer — le seam moteur upgrade_parish (service.py) paie et monte."""
+
+    def __init__(self, label: str) -> None:
+        super().__init__(
+            discord.ui.Button(
+                label=str(label)[:80],
+                custom_id=f"{_NS}:paroisse:upgrade:ok",
+                style=discord.ButtonStyle.success,
+            )
+        )
+
+    @classmethod
+    async def from_custom_id(cls, interaction, item, match, /):  # type: ignore[no-untyped-def]
+        return cls(lieux_strings(_locale_of(interaction))["paroisse_upgrade_ok"])
+
+    async def callback(self, interaction: discord.Interaction) -> None:
+        strings = lieux_strings(_locale_of(interaction))
+        lord, kingdom, stack = await _lord_kingdom_of(interaction, strings)
+        if lord is None or kingdom is None or stack is None:
+            await interaction.response.defer(ephemeral=True)
+            return
+        await interaction.response.defer(ephemeral=True)
+        try:
+            upgraded = await stack.kingdoms.upgrade_parish(str(getattr(kingdom, "id", "")))
+        except Exception as exc:  # noqa: BLE001
+            logger.info("kingdom lieux: parish upgrade refused: %s", exc)
+            await open_unique_ephemeral(
+                interaction, content=strings["action_error_note"].format(str(exc)[:150])
+            )
+            return
+        name = ""
+        try:
+            tiers = list(getattr(stack.config.parish, "tiers", ()) or [])
+            tier = int(getattr(upgraded, "parish_tier", 1) or 1)
+            if 0 < tier <= len(tiers):
+                name = str(getattr(tiers[tier - 1], "display_name", "") or "")
+        except Exception:  # noqa: BLE001
+            pass
+        await open_unique_ephemeral(
+            interaction, content=strings["paroisse_upgrade_done"].format(name or "?")
+        )
+
+
+class LieuxParoisseUpgradeCancelButton(
+    discord.ui.DynamicItem[discord.ui.Button[Any]], template=rf"{_NS}:paroisse:upgrade:cancel"
+):
+    """❌ Annuler — rouvre la fiche Paroisse (fenêtre unique)."""
+
+    def __init__(self, label: str) -> None:
+        super().__init__(
+            discord.ui.Button(
+                label=str(label)[:80],
+                custom_id=f"{_NS}:paroisse:upgrade:cancel",
+                style=discord.ButtonStyle.secondary,
+            )
+        )
+
+    @classmethod
+    async def from_custom_id(cls, interaction, item, match, /):  # type: ignore[no-untyped-def]
+        return cls(lieux_strings(_locale_of(interaction))["paroisse_upgrade_cancel"])
+
+    async def callback(self, interaction: discord.Interaction) -> None:
+        await _open_lieu(interaction, "paroisse")
+
+
+class LieuxHistButton(
+    discord.ui.DynamicItem[discord.ui.Button[Any]],
+    template=rf"{_NS}:hist:(?P<kind>achats|actions)",
+):
+    """📜/⚔️ Historique — les fenêtres de lecture du registre (les 50
+    dernières entrées, dates Paris), portées de la référence."""
+
+    def __init__(self, kind: str, strings: dict[str, str]) -> None:
+        key = "hist_achats_button" if kind == "achats" else "hist_actions_button"
+        super().__init__(
+            discord.ui.Button(
+                label=str(strings[key])[:80],
+                custom_id=f"{_NS}:hist:{kind}",
+                style=discord.ButtonStyle.success,
+            )
+        )
+        self.kind = str(kind)
+
+    @classmethod
+    async def from_custom_id(cls, interaction, item, match, /):  # type: ignore[no-untyped-def]
+        return cls(str(match["kind"]), lieux_strings(_locale_of(interaction)))
+
+    async def callback(self, interaction: discord.Interaction) -> None:
+        await interaction.response.defer(ephemeral=True)
+        strings = lieux_strings(_locale_of(interaction))
+        lord, kingdom, stack = await _lord_kingdom_of(interaction, strings)
+        if lord is None or kingdom is None:
+            return
+        lines: list[str] = []
+        if self.kind == "achats":
+            title = str(strings["hist_achats_title"])
+            registry = list(getattr(kingdom, "market_registry", None) or [])[-50:]
+            if not registry:
+                lines = [str(strings["hist_achats_empty"])]
+            else:
+                for entry in sorted(
+                    registry, key=lambda e: int(e.get("at", 0) or 0), reverse=True
+                ):
+                    item = str(entry.get("item", ""))
+                    lines.append(
+                        str(strings["hist_purchase_line"]).format(
+                            _HIST_EMOJI.get(item, "•"),
+                            _hist_label(strings, item),
+                            str(entry.get("detail", "")),
+                            int(entry.get("cost", 0) or 0),
+                            fmt_paris(int(entry.get("at", 0) or 0)),
+                        )
+                    )
+        else:
+            title = str(strings["hist_actions_title"])
+            actions = list(getattr(kingdom, "market_actions", None) or [])[-50:]
+            if not actions:
+                lines = [str(strings["hist_actions_empty"])]
+            else:
+                for entry in sorted(
+                    actions, key=lambda e: int(e.get("at", 0) or 0), reverse=True
+                ):
+                    item = str(entry.get("item", ""))
+                    lines.append(
+                        str(strings["hist_action_line"]).format(
+                            _HIST_EMOJI.get(item, "•"),
+                            _hist_label(strings, item),
+                            str(entry.get("detail", "")),
+                            fmt_paris(int(entry.get("at", 0) or 0)),
+                        )
+                    )
+        view = surface(
+            HIST_SURFACE,
+            discord.ui.Container(
+                discord.ui.TextDisplay(f"# {title}"),
+                discord.ui.Separator(),
+                discord.ui.TextDisplay("\n".join(lines)),
+                discord.ui.ActionRow(_sortir_item(strings)),
+                accent_colour=GOLD,
+            ),
+        )
+        await open_unique_ephemeral(interaction, view=view)

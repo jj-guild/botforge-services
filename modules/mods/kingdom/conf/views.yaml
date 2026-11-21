@@ -140,3 +140,11 @@ views:
     kind: surface
   panel:mod:kingdom:lieux:objectif:
     kind: surface
+  # vague2-actions-v1 (Drasah 21/11) : les nouvelles fenêtres d'action —
+  # confirmation Paroisse, historiques achats/actions, choix Traquenard
+  panel:mod:kingdom:lieux:paroisse-upgrade:
+    kind: surface
+  panel:mod:kingdom:lieux:hist:
+    kind: surface
+  panel:mod:kingdom:lieux:traquenard:
+    kind: surface
