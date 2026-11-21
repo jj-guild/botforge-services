@@ -20,8 +20,8 @@ def test_settings_panel_module_imports() -> None:
     assert callable(build_settings_panel)
 
 
-def test_settings_panel_is_one_template_of_eleven_actions() -> None:
-    """The designer's 11 actions, verbatim order (capture image-12)."""
+def test_settings_panel_is_one_template_of_twelve_actions() -> None:
+    """The designer's actions, verbatim order (capture image-12 + tranches)."""
     from botforge.mods.kingdom.cogs import settings_panel
 
     actions = tuple(action for action, _key, _style in settings_panel._SETTINGS_ACTIONS)
@@ -40,6 +40,9 @@ def test_settings_panel_is_one_template_of_eleven_actions() -> None:
         # console-etats-regie-v1 (Drasah 21/11): the false start — the
         # organiser's last resort, confirmation card included
         "false-start",
+        # fin-saison-v1 (Drasah 21/11): « Terminer la saison » — the test
+        # loop closes cleanly (engine archive + realms back dormant)
+        "end-season",
     )
     # every action key answers a DynamicItem custom id + a FR label
     from botforge.mods.kingdom.cogs.settings_panel import SettingsActionButton

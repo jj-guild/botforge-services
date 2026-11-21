@@ -71,6 +71,14 @@ views:
     kind: surface
   panel:mod:kingdom:validation:crown:
     kind: surface
+  # eject-sas-v1 (Drasah 21/11): the eject motif window — the reason
+  # the King receives, presets + the free field
+  panel:mod:kingdom:validation:eject:
+    kind: surface
+  # fin-saison-v1 (Drasah 21/11): the « Terminer la saison » confirm
+  # card — same one-window rule as the cycle's other cards
+  panel:mod:kingdom:cycle:confirm-end-season:
+    kind: surface
   # marché entry pin (ported from the reference panel:marche)
   panel:mod:kingdom:market:
     kind: surface

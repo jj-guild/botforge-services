@@ -297,6 +297,7 @@ def setup_hook(bot: Any) -> None:
         ValidationCrownButton,
         ValidationDecisionButton,
         ValidationDeleteButton,
+        ValidationEjectButton,
         ValidationRealmEntryButton,
     )
     from .apply_flow import KingdomApplyOpenButton, KingdomPostulerButton
@@ -340,6 +341,7 @@ def setup_hook(bot: Any) -> None:
         ValidationDecisionButton,
         ValidationDeleteButton,
         ValidationCrownButton,
+        ValidationEjectButton,
         ValidationRealmEntryButton,
         KingdomApplyOpenButton,
         KingdomPostulerButton,

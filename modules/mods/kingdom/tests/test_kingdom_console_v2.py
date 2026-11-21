@@ -210,13 +210,29 @@ def test_the_admissions_drawer_carries_the_realm_entry_decisions() -> None:
     # an empty sas says so in plain words
     empty = _admissions_drawer(settings_strings("fr"), vstrings, [])
     assert str(settings_strings("fr")["settings_admissions_empty"]) in "\n".join(_texts(empty))
-    # the ADMITTED block: what the admin already let in, by NAME
+    # the ADMITTED block: what the admin already let in, by NAME —
+    # eject-sas-v1: the admitted are the SHELLS (the name rides them)
+    admitted_shells = [
+        SimpleNamespace(name="AEGIS", slug="aegis"),
+        SimpleNamespace(name="Château noir", slug="chateau-noir"),
+    ]
     admitted = _admissions_drawer(
-        settings_strings("fr"), vstrings, [], ["AEGIS", "Château noir"]
+        settings_strings("fr"), vstrings, [], admitted_shells
     )
     texts = "\n".join(_texts(admitted))
     assert "✅ Admis en saison" in texts
     assert "- AEGIS" in texts and "- Château noir" in texts
+    # eject-sas-v1 : the sas window offers the ejection; a LAUNCHED
+    # season closes it (read-only + the reason line)
+    ejectable = _admissions_drawer(
+        settings_strings("fr"), vstrings, [], admitted_shells, ejectable=True
+    )
+    assert "kingdom:valid:eject:aegis" in _ids(ejectable)
+    assert "kingdom:valid:eject:chateau-noir" in _ids(ejectable)
+    assert "kingdom:valid:eject:" not in "\n".join(
+        i for i in _ids(admitted)
+    )
+    assert str(settings_strings("fr")["settings_admissions_eject_closed_hint"]) in texts
     # nothing admitted yet: the plain-words line, not a silent hole
     fresh = _admissions_drawer(settings_strings("fr"), vstrings, [], [])
     assert "Aucun royaume admis" in "\n".join(_texts(fresh))
@@ -404,6 +420,13 @@ def test_the_console_v2_strings_exist_in_both_locales() -> None:
         "settings_beta_false_start_hint",
         "settings_season_blocked_beta",
         "settings_beta_sas_note",
+        "settings_end_season_button",
+        "settings_end_season_confirm_title",
+        "settings_end_season_confirm_hint",
+        "settings_end_season_confirm_button",
+        "settings_end_season_not_running",
+        "settings_end_season_done",
+        "settings_admissions_eject_closed_hint",
         "settings_phase_setup",
         "settings_phase_started",
     ]

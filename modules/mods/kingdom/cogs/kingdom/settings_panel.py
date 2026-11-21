@@ -60,6 +60,9 @@ _SETTINGS_ACTIONS: tuple[tuple[str, str, discord.ButtonStyle], ...] = (
     # console-etats-regie-v1 (Drasah 21/11) : le faux départ — le
     # dernier recours de l'organisateur (demande sa confirmation).
     ("false-start", "settings_false_start_button", discord.ButtonStyle.danger),
+    # fin-saison-v1 (Drasah 21/11) : « Terminer la saison » — la boucle
+    # de test se referme proprement (archivage moteur + royaumes dormants).
+    ("end-season", "settings_end_season_button", discord.ButtonStyle.danger),
 )
 # casquette-removal-v1 (Drasah 19/11): the hat op RETIRES from the
 # console (11 actions) — the bypass lives in the code's own seams and
@@ -69,7 +72,7 @@ _CONFIRM_ACTIONS = frozenset({"deploy", "sync", "reset"})
 # console-etats-regie-v1 : les gestes du CYCLE qui demandent leur
 # confirmation (l'envoi de la saison, le faux départ) — jamais le même
 # namespace que la table : chaque carte porte ses propres ids.
-_CYCLE_CONFIRM_ACTIONS = frozenset({"start-season", "false-start"})
+_CYCLE_CONFIRM_ACTIONS = frozenset({"start-season", "false-start", "end-season"})
 
 _ALL_ACTIONS = tuple(action for action, _key, _style in _SETTINGS_ACTIONS)
 
@@ -252,11 +255,18 @@ async def build_settings_panel(guild_id: str) -> discord.ui.LayoutView:
         )
     else:
         # running season: a SOBER cycle (console-etats-regie-v1) — the
-        # running ops (relaunch / reset / clock) live in the 🧪 Beta &
-        # outils drawer, the sas decision lives in the régie
+        # running ops (relaunch / reset / clock) live in the 🧪 Bêta
+        # drawer, the sas decision lives in the régie. fin-saison-v1:
+        # « Terminer la saison » ferme la boucle de test sur place.
         cycle_row.add_item(
             KingdomSettingsNavButton(
                 "admissions", str(strings["settings_nav_admissions_button"])
+            ).item
+        )
+        cycle_row.add_item(
+            SettingsActionButton(
+                "end-season", str(strings["settings_end_season_button"]),
+                discord.ButtonStyle.danger,
             ).item
         )
 
@@ -491,6 +501,11 @@ class SettingsActionButton(
         ):
             await _safe_send(interaction, str(strings["settings_season_blocked_beta"]))
             return
+        # fin-saison-v1 : le geste ne vit que sur une saison LANCÉE —
+        # un id cliqué depuis un écran périmé est refusé avant la carte
+        if self.action == "end-season" and not await _season_live(wiring()):
+            await _safe_send(interaction, str(strings["settings_end_season_not_running"]))
+            return
         if self.action in _CONFIRM_ACTIONS:
             await open_unique_ephemeral(
                 interaction, view=_confirm_card(strings, self.action)
@@ -599,9 +614,74 @@ async def _false_start(interaction: discord.Interaction, strings: dict[str, str]
     await interaction.followup.send(note, ephemeral=True)
 
 
+async def _end_season(interaction: discord.Interaction, strings: dict[str, str]) -> None:
+    """🏁 Terminer la saison — fermer la boucle de test proprement.
+
+    fin-saison-v1 (Drasah 21/11) : « je ne peux plus rien refaire,
+    Blanc est en saison et je n'ai aucun bouton pour terminer ». Le
+    moteur sait déjà faire (l'archive + le rembobinage du §3.3) ; ce
+    geste les enchaîne : les royaumes repartent DORMANT (habitat
+    rendormi, hub basculé), la donnée moteur est archivée puis
+    essuyée, la console repasse à l'état vierge. Le Palmarès complet
+    reste couvert par la file (fin de saison « pour de vrai »).
+    """
+    if not interaction.response.is_done():
+        await interaction.response.defer(ephemeral=True)
+    stack, busy = _needs_stack(strings)
+    if busy:
+        await interaction.followup.send(busy, ephemeral=True)
+        return
+    try:
+        season = await stack.kingdoms.current_season()
+        if season is None or str(getattr(season, "phase", "")) != "started":
+            await interaction.followup.send(
+                str(strings["settings_end_season_not_running"]), ephemeral=True
+            )
+            return
+        from .apply_flow import _guild_locale
+
+        locale = await _guild_locale(str(interaction.guild_id or ""))
+        guild = getattr(interaction, "guild", None)
+        realms_service = getattr(stack, "realms", None)
+        released = 0
+        if guild is not None and realms_service is not None:
+            from .realms import deploy_realm_hub, ensure_realm_structure
+
+            for realm in await realms_service.realms():
+                if not getattr(realm, "engagement", None):
+                    continue
+                # l'habitat se rendort AVANT le rembobinage moteur (la
+                # coquille est pérenne, seule sa saison part) — best-effort
+                try:
+                    ids = await ensure_realm_structure(guild, realm, dormant=True)
+                    hub_message = await deploy_realm_hub(guild, realm, locale=locale)
+                    if hub_message:
+                        ids["hub_message"] = hub_message
+                    if ids:
+                        await realms_service.save_habitat(str(realm.id), ids)
+                except Exception:  # noqa: BLE001 — le sommeil d'un royaume n'arrête jamais la fin
+                    logger.warning(
+                        "kingdom: realm habitat sleep failed (%s)", realm.id, exc_info=True
+                    )
+                await realms_service.release_engagement(str(realm.id))
+                released += 1
+        # le rembobinage moteur EN DERNIER : archive puis essuie la
+        # saison (royaumes, seigneurs, attaques — le §3.3 du contrat)
+        await stack.kingdoms.reset()
+        note = str(strings["settings_end_season_done"]).format(released=released)
+    except Exception as exc:  # the panel reports, never raises
+        logger.warning("kingdom: end season failed", exc_info=True)
+        note = service_failure_note(strings, "settings_failed", exc)
+    else:
+        # live-pin-v1: le cockpit repasse à l'état vierge à l'instant
+        await refresh_live_pins_after(interaction)
+    await interaction.followup.send(note, ephemeral=True)
+
+
 _CYCLE_CONFIRM_HANDLERS: dict[str, Any] = {
     "start-season": _start_season,
     "false-start": _false_start,
+    "end-season": _end_season,
 }
 
 
@@ -616,6 +696,8 @@ def _cycle_confirm_card(strings: dict[str, str], action: str) -> discord.ui.Layo
         strings["settings_start_season_confirm_button"]
         if action == "start-season"
         else strings["settings_false_start_confirm_button"]
+        if action == "false-start"
+        else strings["settings_end_season_confirm_button"]
     )
     yes: discord.ui.Button[Any] = discord.ui.Button(
         label=str(yes_label)[:80],
@@ -638,7 +720,11 @@ def _cycle_confirm_card(strings: dict[str, str], action: str) -> discord.ui.Layo
 
     yes.callback = on_yes
     no.callback = on_no
-    key = "settings_start_season_confirm" if action == "start-season" else "settings_false_start_confirm"
+    key = (
+        "settings_start_season_confirm" if action == "start-season"
+        else "settings_false_start_confirm" if action == "false-start"
+        else "settings_end_season_confirm"
+    )
     container: discord.ui.Container[discord.ui.LayoutView] = discord.ui.Container(
         discord.ui.TextDisplay(
             f"**{strings[f'{key}_title']}**\n{strings[f'{key}_hint']}"
@@ -653,6 +739,8 @@ def _cycle_confirm_card(strings: dict[str, str], action: str) -> discord.ui.Layo
         "panel:mod:kingdom:cycle:confirm-start"
         if action == "start-season"
         else "panel:mod:kingdom:cycle:confirm-false-start"
+        if action == "false-start"
+        else "panel:mod:kingdom:cycle:confirm-end-season"
     )
     return surface(surface_key, container)
 
@@ -849,15 +937,23 @@ def _admissions_drawer(
     strings: dict[str, str],
     vstrings: dict[str, str],
     realms: list[Any],
-    admitted: list[str] | None = None,
+    admitted: list[Any] | None = None,
+    ejectable: bool = False,
 ) -> discord.ui.LayoutView:
     """The sas — every join request with its decision buttons (t2a).
 
     cockpit-lisible-v1 (Drasah 21/11): a request disappears from the
     pending on ✅, but the operator must SEE what he already let in —
     the « ✅ Admis en saison » block sits right under the requests.
+
+    eject-sas-v1 (Drasah 21/11) : un royaume admis à tort se corrige
+    AVANT le départ — chaque admis porte « 🗑️ Éjecter » PENDANT la
+    fenêtre du sas (préparation). La saison lancée, LE SAS EST FERMÉ :
+    la section passe en lecture et la ligne dit pourquoi.
+    ``admitted`` = les COQUILLES engagées (objets realm, le nom se lit
+    dessus).
     """
-    from .validation import ValidationRealmEntryButton, fmt_paris
+    from .validation import ValidationEjectButton, ValidationRealmEntryButton, fmt_paris
 
     blocks: list[discord.ui.Item[discord.ui.LayoutView]] = [
         discord.ui.TextDisplay(f"# {strings['settings_admissions_title']}"),
@@ -908,9 +1004,24 @@ def _admissions_drawer(
     blocks.append(discord.ui.Separator())
     blocks.append(discord.ui.TextDisplay(f"## {strings['settings_admissions_admitted_title']}"))
     if admitted:
-        blocks.append(
-            discord.ui.TextDisplay("\n".join(f"- {name}" for name in admitted))
-        )
+        for realm in admitted:
+            name = str(getattr(realm, "name", "?"))
+            if ejectable:
+                blocks.append(discord.ui.TextDisplay(f"- **{name}**"))
+                row: Any = discord.ui.ActionRow()
+                row.add_item(
+                    ValidationEjectButton(
+                        str(getattr(realm, "slug", "")), str(vstrings["realm_eject_button"])[:80]
+                    )
+                )
+                blocks.append(row)
+            else:
+                blocks.append(discord.ui.TextDisplay(f"- {name}"))
+        # la saison partie : le sas est FERMÉ, la section devient lecture
+        if not ejectable:
+            blocks.append(
+                discord.ui.TextDisplay(str(strings["settings_admissions_eject_closed_hint"]))
+            )
     else:
         blocks.append(
             discord.ui.TextDisplay(str(strings["settings_admissions_admitted_empty"]))
@@ -1140,7 +1251,16 @@ async def _build_drawer(
         realms = await _pending_admissions()
         admitted = await _admitted_realms()
         vstrings = dict(mod_catalog().section("kingdom.validation", str(locale)[:2]))
-        view = _admissions_drawer(strings, vstrings, realms, admitted)
+        # eject-sas-v1 : l'éjection ne vit QUE dans la fenêtre du sas
+        # (préparation) — la saison lancée, la section devient lecture
+        ejectable = False
+        try:
+            stack = wiring()
+            season = await stack.kingdoms.current_season() if stack is not None else None
+            ejectable = season is not None and str(getattr(season, "phase", "")) == "setup"
+        except Exception:  # noqa: BLE001 — a read, never a crash
+            logger.warning("kingdom: the admissions phase read failed", exc_info=True)
+        view = _admissions_drawer(strings, vstrings, realms, admitted, ejectable=ejectable)
     elif drawer == "regie":
         states: dict[str, bool] = {}
         if bot is not None and guild_id:
@@ -1164,12 +1284,14 @@ async def _build_drawer(
     return view
 
 
-async def _admitted_realms() -> list[str]:
-    """The realm NAMES already in the season (engaged shells).
+async def _admitted_realms() -> list[Any]:
+    """The realm SHELLS already in the season (engaged, the name rides).
 
     cockpit-lisible-v1: Drasah admitted AEGIS and NOTHING showed it —
     the drawer only lists the pending. The admin needs the confirms on
     record, one name per line, right under the requests.
+    eject-sas-v1: the drawer needs the SHELLS (slug + engagement), not
+    the bare names — the éjection rides the same objects.
     """
     stack = wiring()
     if stack is None:
@@ -1186,9 +1308,8 @@ async def _admitted_realms() -> list[str]:
         logger.warning("kingdom: the admitted realms read failed", exc_info=True)
         return []
     return sorted(
-        str(getattr(realm, "name", "?"))
-        for realm in realms
-        if getattr(realm, "engagement", None)
+        (realm for realm in realms if getattr(realm, "engagement", None)),
+        key=lambda realm: str(getattr(realm, "name", "?")),
     )
 
 

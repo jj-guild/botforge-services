@@ -26,6 +26,7 @@ from .common import (
     _bot_admins,
     fmt_paris,
     mod_catalog,
+    open_unique_ephemeral,
     strings_by_locale,
     surface,
     wiring,
@@ -767,11 +768,277 @@ async def _accept_season_entry(
     return note
 
 
+# ---------------------------------------------------------------------------
+# eject-sas-v1 (Drasah 21/11) : « ce royaume n'entre pas »
+#
+# Le sas est un sas : une ACCEPTATION se corrige dans SA fenêtre (la
+# préparation), pas après le départ. L'éjection DEFAIT le geste d'entrée
+# (le royaume moteur part avec ses seigneurs et son draft, la coquille
+# retourne dormant, l'habitat se rendort) et le Roi reçoit le MOTIF par
+# MP — il redemandera l'inscription quand les prérequis sont réunis.
+# ---------------------------------------------------------------------------
+
+
+async def _season_in_setup(stack: Any) -> bool:
+    """Whether the season still waits in ITS sas (phase setup)."""
+    if stack is None:
+        return False
+    try:
+        season = await stack.kingdoms.current_season()
+    except Exception:  # noqa: BLE001 — an unreadable season is a closed sas
+        logger.warning("kingdom: eject phase read failed", exc_info=True)
+        return False
+    return season is not None and str(getattr(season, "phase", "")) == "setup"
+
+
+async def _eject_season_entry(
+    target: discord.Interaction, realm: Any, reason: str, strings: dict[str, str], locale: str
+) -> str:
+    """Undo one season entry (the sas window only) — the note back.
+
+    L'ordre compte : le royaume moteur part d'abord (ses seigneurs et
+    son draft partent avec lui — le seam moteur ``delete_kingdom``),
+    puis la coquille est libérée, l'habitat se rendort, et le motif
+    part au Roi par MP (best-effort, jamais bloquant).
+    """
+    shared = strings_by_locale(locale)
+    stack = wiring()
+    service = _realms_service(stack)
+    if stack is None or service is None:
+        return str(shared["plan_no_service"])
+    if not await _season_in_setup(stack):
+        # la fenêtre éphémère peut survivre à un départ de saison — le
+        # moteur garde la main (le sas, c'est un sas)
+        return str(strings["eject_closed_note"])
+    try:
+        kingdom_id = str((getattr(realm, "engagement", {}) or {}).get("kingdom_id", ""))
+        if kingdom_id:
+            deleted = await stack.kingdoms.delete_kingdom(kingdom_id)
+            logger.info("kingdom: realm eject deleted kingdom %s", getattr(deleted, "name", "?"))
+        realm = await service.release_engagement(str(realm.id))
+        guild = getattr(target, "guild", None)
+        if guild is not None:
+            try:
+                from .realms import deploy_realm_hub, ensure_realm_structure
+
+                ids = await ensure_realm_structure(guild, realm, dormant=True)
+                hub_message = await deploy_realm_hub(guild, realm, locale=locale)
+                if hub_message:
+                    ids["hub_message"] = hub_message
+                if ids:
+                    await service.save_habitat(str(realm.id), ids)
+            except Exception:  # noqa: BLE001 — l'habitat ne bloque jamais
+                logger.warning("kingdom: realm habitat sleep failed (%s)", realm.id, exc_info=True)
+        note = str(strings["eject_done"]).format(name=getattr(realm, "name", "?"))
+    except Exception as exc:  # noqa: BLE001 — the report never breaks the flow
+        logger.warning("kingdom: realm eject failed (%s)", realm.id, exc_info=True)
+        return str(strings["realm_entry_error"]).format(error=str(exc)[:150])
+    # the king learns WHY — DM best-effort (a closed DM degrades to the log)
+    try:
+        from .common import dm_user_safe
+
+        await dm_user_safe(
+            target.client,
+            str(getattr(realm, "king_id", "")),
+            str(strings["eject_dm"]).format(
+                name=str(getattr(realm, "name", "?")), reason=reason or "—"
+            ),
+        )
+    except Exception:  # noqa: BLE001 — dm_user_safe already swallows
+        logger.warning("kingdom: eject DM failed", exc_info=True)
+    try:
+        await _refresh_pins(target.client, str(target.guild_id or ""))
+    except Exception:  # noqa: BLE001 — the pin heals on its own refresh
+        logger.warning("kingdom: validation pin refresh failed", exc_info=True)
+    return note
+
+
+class _EjectReasonModal(discord.ui.Modal):
+    """« ✏️ Autre » — le motif libre, envoyé au Roi tel quel."""
+
+    def __init__(self, realm: Any, strings: dict[str, str], locale: str) -> None:
+        super().__init__(title=str(strings["eject_other_modal_title"])[:45])
+        self._realm_id = str(getattr(realm, "id", ""))
+        self._strings = strings
+        self._locale = locale
+        self.reason = discord.ui.TextInput(
+            required=True,
+            max_length=400,
+            placeholder=str(strings["eject_other_reason_placeholder"]),
+            custom_id="kingdom:valid:eject:reason",
+        )
+        self.add_item(
+            discord.ui.Label(
+                text=str(strings["eject_other_reason_label"])[:45],
+                component=self.reason,
+            )
+        )
+
+    async def on_submit(self, interaction: discord.Interaction) -> None:
+        from .common import open_unique_ephemeral
+
+        await interaction.response.defer(ephemeral=True)
+        strings = self._strings
+        stack = wiring()
+        service = _realms_service(stack)
+        realm = None
+        try:
+            if service is not None:
+                for candidate in await service.realms():
+                    if str(getattr(candidate, "id", "")) == self._realm_id:
+                        realm = candidate
+                        break
+        except Exception:  # noqa: BLE001 — a read, never a crash
+            logger.warning("kingdom: eject modal realm read failed", exc_info=True)
+        if realm is None or stack is None:
+            await interaction.followup.send(
+                str(strings_by_locale(self._locale)["plan_no_service"]), ephemeral=True
+            )
+            return
+        note = await _eject_season_entry(
+            interaction, realm, str(self.reason.value or "").strip()[:400], strings, self._locale
+        )
+        await open_unique_ephemeral(interaction, note)
+
+
+def _eject_window(
+    strings: dict[str, str], locale: str, realm: Any
+) -> discord.ui.LayoutView:
+    """Le motif — the eject confirm: the reason the King will receive.
+
+    Three presets + a free field (« ✏️ Autre » opens the modal): one
+    window, the ids live in ``kingdom:valid:eject-*`` (their OWN
+    namespace, the cards' lesson). The surface is DECLARED
+    (panel:mod:kingdom:validation:eject) like every ephemeral window.
+    """
+    name = str(getattr(realm, "name", "?"))[:80]
+    slug = str(getattr(realm, "slug", ""))[:50]
+    realm_id = str(getattr(realm, "id", ""))[:50]
+    container: discord.ui.Container[discord.ui.LayoutView] = discord.ui.Container(
+        discord.ui.TextDisplay(
+            f"**{str(strings['eject_window_title']).format(name=name)}**\n"
+            f"{strings['eject_window_hint']}"
+        ),
+        accent_colour=discord.Colour(0xED4245),
+    )
+    row: discord.ui.ActionRow[discord.ui.LayoutView] = discord.ui.ActionRow()
+    choices: list[tuple[str, str]] = [
+        ("players", str(strings["eject_reason_players"])[:80]),
+        ("rules", str(strings["eject_reason_rules"])[:80]),
+    ]
+
+    async def _go(target: discord.Interaction, choice: str) -> None:
+        if not target.response.is_done():
+            await target.response.defer(ephemeral=True)
+        try:
+            stack = wiring()
+            service = _realms_service(stack)
+            realm_now = await service.realm_of_slug(slug) if service is not None else None
+        except Exception:  # noqa: BLE001
+            realm_now = None
+        if realm_now is None:
+            await open_unique_ephemeral_safe(target, str(strings["gone_note"]))
+            return
+        note = await _eject_season_entry(
+            target, realm_now, str(strings[f"eject_reason_{choice}"]), strings, locale
+        )
+        await open_unique_ephemeral_safe(target, note)
+
+    for choice, label in choices:
+        button: discord.ui.Button[Any] = discord.ui.Button(
+            label=label,
+            custom_id=f"{_NS}:eject-go:{slug}:{choice}"[:100],
+            style=discord.ButtonStyle.danger,
+        )
+
+        async def _on(target: discord.Interaction, _choice: str = choice) -> None:
+            await _go(target, _choice)
+
+        button.callback = _on
+        row.add_item(button)
+    # ✏️ Autre — le motif personnalisé
+    other: discord.ui.Button[Any] = discord.ui.Button(
+        label=str(strings["eject_reason_other"])[:80],
+        custom_id=f"{_NS}:eject-other:{slug}"[:100],
+        style=discord.ButtonStyle.secondary,
+    )
+
+    async def _on_other(target: discord.Interaction) -> None:
+        # re-resolve the realm at click time (the window is ephemeral,
+        # the slug survives, the shell may have changed state)
+        stack = wiring()
+        service = _realms_service(stack)
+        realm_now = await service.realm_of_slug(slug) if service is not None else None
+        if realm_now is None:
+            await open_unique_ephemeral(
+                target, str(strings["gone_note"])
+            )
+            return
+        await target.response.send_modal(_EjectReasonModal(realm_now, strings, locale))
+
+    other.callback = _on_other
+    row.add_item(other)
+    container.add_item(row)
+    return surface("panel:mod:kingdom:validation:eject", container)
+
+
+class ValidationEjectButton(
+    discord.ui.DynamicItem[discord.ui.Button[Any]],
+    template=rf"{_NS}:eject:(?P<slug>[a-z0-9-]+)",
+):
+    """🗑️ Éjecter du sas — undo one admission in the sas's own window."""
+
+    def __init__(self, slug: str, label: str) -> None:
+        super().__init__(
+            discord.ui.Button(
+                custom_id=f"{_NS}:eject:{slug}"[:100],
+                label=label,
+                style=discord.ButtonStyle.danger,
+            )
+        )
+        self.slug = slug
+
+    @classmethod
+    async def from_custom_id(
+        cls,
+        interaction: discord.Interaction,
+        item: discord.ui.Item[Any],
+        match: Any,
+        /,
+    ) -> "ValidationEjectButton":
+        button = item if isinstance(item, discord.ui.Button) else None
+        label = (button.label or "?") if button is not None else "?"
+        return cls(match["slug"], label)
+
+    async def callback(self, interaction: discord.Interaction) -> None:
+        """Guard, check the sas window, then open the motif window."""
+        locale = await _guild_locale(str(interaction.guild_id or ""))
+        strings = mod_catalog().section("kingdom.validation", locale)
+        if not await _guard(interaction, strings):
+            return
+        stack = wiring()
+        service = _realms_service(stack)
+        realm = await service.realm_of_slug(self.slug) if service is not None else None
+        if (
+            stack is None
+            or service is None
+            or realm is None
+            or not getattr(realm, "engagement", None)
+        ):
+            await open_unique_ephemeral(interaction, str(strings["gone_note"]))
+            return
+        if not await _season_in_setup(stack):
+            await open_unique_ephemeral(interaction, str(strings["eject_closed_note"]))
+            return
+        await open_unique_ephemeral(interaction, view=_eject_window(strings, locale, realm))
+
+
 __all__ = [
     "VALIDATION_VIEW_KEY",
     "ValidationCrownButton",
     "ValidationDecisionButton",
     "ValidationDeleteButton",
+    "ValidationEjectButton",
     "ValidationRealmEntryButton",
     "build_validation_panel",
 ]
