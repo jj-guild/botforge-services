@@ -1402,8 +1402,14 @@ __all__.extend(["register_season_items"])
 
 async def _refresh_all_season_pins(bot: Any) -> None:
     """Re-render every guild's seasonal posts (the refresher's body)."""
+    from botforge.discord.static_pins import refresh_live_pins
+
     for guild in getattr(bot, "guilds", ()) or ():
         guild_id = str(guild.id)
+        # the SEASONAL posts below need the mod registry; the LIVE pins
+        # (live-pin-v1) never do — a switch flipped by hand during a
+        # registry hiccup still heals on the next 5-minute pass.
+        await refresh_live_pins(bot, guild_id)
         registry = getattr(bot, "registry", None)
         if registry is None:
             continue

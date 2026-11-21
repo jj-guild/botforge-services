@@ -51,6 +51,13 @@ class StaticPinnedView:
     delete_when_superseded: bool = True
     legacy_key: str = ""
     scope: str = ""
+    # live-pin-v1 (Drasah 21/11): a pin whose layout derives from MUTABLE
+    # state (a switch, a phase) declares ``live`` — the surface refresher
+    # re-renders it every pass and ``refresh_live_pins`` re-renders it
+    # right after the gesture that changed the state (a pin is a mirror,
+    # never a stale snapshot). The boot pass refreshes live and static
+    # pins alike; this flag only opts INTO the running refreshes.
+    live: bool = False
 
     async def resolve_message_id(self, guild_id: str) -> str | None:
         """Resolve the registered pin id (registry first, memory fallback)."""
@@ -96,6 +103,10 @@ def _layout_fingerprint(layout: Any) -> str:
         """Reduce one component tree to its ids and labels."""
         if isinstance(component, (list, tuple)):
             return [walk(c) for c in component]
+        if hasattr(component, "content"):  # TextDisplay — the text IS the
+            # state (live-pin-v1): a sas line that flipped must flip the
+            # fingerprint, or the in-place edit never happens.
+            return str(component.content)
         if hasattr(component, "custom_id"):
             return {
                 "id": getattr(component, "custom_id", None),
@@ -273,4 +284,29 @@ async def _collect_superseded(channel: Any, current_id: str | None) -> list[Any]
     except Exception:
         return []
     return [m for m in pinned if str(m.id) != str(current_id or "")]
+
+
+async def refresh_live_pins(bot: discord.Client, guild_id: str) -> int:
+    """Re-render every LIVE registered pin right now (best-effort).
+
+    The instant half of live-pin-v1: the gesture that flips a switch
+    calls this so the mirrors update in the same breath as the state;
+    the surface refresher's 5-minute pass is the safety net, this is
+    the feedback loop. Returns the number of live pins ensured.
+    """
+    ensured = 0
+    for spec in registered_static_pins():
+        if not spec.live:
+            continue
+        try:
+            await ensure_static_pin(bot, spec, guild_id)
+            ensured += 1
+        except Exception:
+            logger.warning(
+                "LIVE pin refresh failed (%s, guild %s) — best-effort",
+                spec.key,
+                guild_id,
+                exc_info=True,
+            )
+    return ensured
 

@@ -173,6 +173,11 @@ def register(bot: Any, config: Any) -> None:
             build_layout=build_settings_panel,
             registry=getattr(bot, "message_registry", None),
             scope="mod/kingdom",
+            # live-pin-v1 (Drasah 21/11): the cockpit derives from MUTABLE
+            # state (phase, régie switches, pending counts) — the pin is
+            # re-rendered after every console gesture and by the 5-minute
+            # surface pass, never left a stale snapshot.
+            live=True,
         )
     )
 

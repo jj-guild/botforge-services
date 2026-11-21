@@ -516,6 +516,8 @@ async def _start_season(interaction: discord.Interaction, strings: dict[str, str
             interaction.client, str(interaction.guild_id or ""), "season_entry_open", False
         ):
             logger.warning("kingdom: the departure's sas close could not be stored")
+        # live-pin-v1: the cockpit's sas line flips with the departure
+        await refresh_live_pins_after(interaction)
     await interaction.followup.send(note, ephemeral=True)
 
 
@@ -561,6 +563,8 @@ async def _false_start(interaction: discord.Interaction, strings: dict[str, str]
             interaction.client, str(interaction.guild_id or ""), "season_entry_open", True
         ):
             logger.warning("kingdom: the false start's sas reopen could not be stored")
+        # live-pin-v1: the cockpit reflects the false start at once
+        await refresh_live_pins_after(interaction)
     await interaction.followup.send(note, ephemeral=True)
 
 
@@ -1019,6 +1023,22 @@ async def _build_drawer(
     return _beta_drawer(strings)
 
 
+async def refresh_live_pins_after(interaction: discord.Interaction) -> None:
+    """live-pin-v1 (Drasah 21/11) — re-render the live pins NOW.
+
+    The designer's rule: the gesture that flips a state refreshes the
+    surfaces that mirror it — the console pin must show the new sas in
+    the same breath as the flip, not at the next boot. The 5-minute
+    surface pass stays the safety net; this is the feedback loop.
+    """
+    from botforge.discord.static_pins import refresh_live_pins
+
+    try:
+        await refresh_live_pins(interaction.client, str(interaction.guild_id or ""))
+    except Exception:  # noqa: BLE001 — the mirrors heal on the next pass
+        logger.warning("kingdom: live pins refresh after the gesture failed", exc_info=True)
+
+
 class KingdomSettingsNavButton(
     discord.ui.DynamicItem[discord.ui.Button[Any]],
     template=r"kingdom:console-nav:(?P<drawer>[a-z-]+)",
@@ -1131,6 +1151,8 @@ class KingdomRegieSwitchButton(
             logger.warning("kingdom: a régie toggle failed", exc_info=True)
             await _safe_send(interaction, strings["settings_failed"])
             return
+        # live-pin-v1: the flip shows on the console pin immediately
+        await refresh_live_pins_after(interaction)
         view = await _build_drawer(
             "regie", locale_of(interaction), interaction.client, str(interaction.guild_id or "")
         )
@@ -1241,6 +1263,8 @@ class _LaunchModal(discord.ui.Modal):
             )
         except Exception:  # noqa: BLE001 — the gate heals on the next pass
             logger.warning("kingdom: the launch gate pass failed", exc_info=True)
+        # live-pin-v1: the cockpit shows the fresh phase + sas line now
+        await refresh_live_pins_after(interaction)
         await interaction.followup.send(note, ephemeral=True)
 
 
