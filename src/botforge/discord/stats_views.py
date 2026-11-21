@@ -145,6 +145,46 @@ async def recent_match_blocks(
     return blocks
 
 
+async def recent_match_entries(
+    profile_ids: list[str],
+    limit: int = 10,
+) -> list[Any]:
+    """Return the last distinctive finished-match entries, newest first.
+
+    The same dedupe as ``recent_match_blocks`` (one entry per match id,
+    only matches the viewed profiles played) but RAW \u2014 the panel
+    builder re-reads every field (description, players, ratings) to
+    compose its own layout.
+    """
+    wanted = {str(p) for p in profile_ids if str(p)}
+    if not wanted:
+        return []
+    client = stats_client()
+    if client is None:
+        return []
+    try:
+        entries = await client.get_match_history(sorted(wanted), limit=50)
+    except Exception:
+        logger.warning("STATS VIEWS: the match history fetch failed", exc_info=True)
+        return []
+    out: list[Any] = []
+    seen: set[str] = set()
+    ordered = sorted(entries, key=lambda e: int(e.finished_at or e.started_at or 0), reverse=True)
+    for entry in ordered:
+        match_id = str(getattr(entry, "match_id", ""))
+        mine = [p for p in (getattr(entry, "profile_ids", ()) or []) if str(p) in wanted]
+        if not mine:
+            continue
+        if match_id and match_id in seen:
+            continue
+        if match_id:
+            seen.add(match_id)
+        out.append(entry)
+        if len(out) >= limit:
+            break
+    return out
+
+
 def finished_match_block(
     entry: Any,
     me_ids: set[str],

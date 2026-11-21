@@ -57,6 +57,12 @@ sub-bullet&nbsp;per&nbsp;team&nbsp;carrying&nbsp;every&nbsp;seat&nbsp;(alias,&nb
 rating&nbsp;delta).&nbsp;``me_ids``&nbsp;renders&nbsp;bold,&nbsp;the&nbsp;other&nbsp;server-known<br>
 profiles&nbsp;render&nbsp;italic&nbsp;—&nbsp;the&nbsp;highlight&nbsp;contract&nbsp;of&nbsp;the&nbsp;matches<br>
 popup.&nbsp;Best-effort&nbsp;—&nbsp;an&nbsp;unreachable&nbsp;game&nbsp;service&nbsp;renders&nbsp;[].</span></dd></dl>
+ <dl><dt>async <a name="-recent_match_entries"><strong>recent_match_entries</strong></a>(profile_ids: 'list[str]', limit: 'int' = 10) -&gt; 'list[Any]'</dt><dd><span class="code">Return&nbsp;the&nbsp;last&nbsp;distinctive&nbsp;finished-match&nbsp;entries,&nbsp;newest&nbsp;first.<br>
+&nbsp;<br>
+The&nbsp;same&nbsp;dedupe&nbsp;as&nbsp;``recent_match_blocks``&nbsp;(one&nbsp;entry&nbsp;per&nbsp;match&nbsp;id,<br>
+only&nbsp;matches&nbsp;the&nbsp;viewed&nbsp;profiles&nbsp;played)&nbsp;but&nbsp;RAW&nbsp;—&nbsp;the&nbsp;panel<br>
+builder&nbsp;re-reads&nbsp;every&nbsp;field&nbsp;(description,&nbsp;players,&nbsp;ratings)&nbsp;to<br>
+compose&nbsp;its&nbsp;own&nbsp;layout.</span></dd></dl>
  <dl><dt><a name="-stats_client"><strong>stats_client</strong></a>() -&gt; 'Any | None'</dt><dd><span class="code">Return&nbsp;the&nbsp;game&nbsp;service's&nbsp;stats&nbsp;client;&nbsp;None&nbsp;when&nbsp;unconfigured.</span></dd></dl>
  <dl><dt>async <a name="-user_stats_line"><strong>user_stats_line</strong></a>(bot: 'Any', user_id: 'str') -&gt; 'str'</dt><dd><span class="code">Render&nbsp;the&nbsp;user's&nbsp;unified&nbsp;elo&nbsp;head&nbsp;line&nbsp;(best&nbsp;board).<br>
 &nbsp;<br>

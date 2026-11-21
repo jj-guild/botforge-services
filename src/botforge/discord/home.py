@@ -797,6 +797,159 @@ async def _matches_body(
     return body
 
 
+INSIGHTS_MATCH_URL = "https://www.aoe2insights.com/match/{match_id}"
+REPLAY_URL = (
+    "https://api.ageofempires.com/api/GameStats/AgeII/GetMatchReplay/"
+    "?matchId={match_id}&profileId={profile_id}"
+)
+
+_OUTCOME_COLOURS = {"win": 0x57F287, "loss": 0xED4245}
+
+
+def _panel_team_lines(
+    players: list[dict[str, Any]],
+    me_ids: set[str],
+    known_ids: set[str],
+    labels: dict[str, str],
+) -> list[str]:
+    """Render one quote line per seat, grouped under bold team headers."""
+    by_team: dict[int, list[dict[str, Any]]] = {}
+    for player in players:
+        by_team.setdefault(int(player.get("team", 0) or 0), []).append(player)
+    lines: list[str] = []
+    for index, team in enumerate(sorted(by_team)):
+        lines.append(f"**{labels.get('team', 'Team')} {index + 1}**")
+        for player in by_team[team]:
+            alias = str(player.get("alias") or player.get("profile_id") or "?")
+            pid = str(player.get("profile_id", ""))
+            mark = "**" if pid in me_ids else "*" if pid in known_ids else ""
+            civ = str(player.get("civ") or "").strip()
+            after = int(player.get("rating_after") or 0)
+            before = int(player.get("rating_before") or 0)
+            delta = f" ({after - before:+d})" if before and after and before != after else ""
+            seat = f"{mark}{alias}{mark}"
+            if civ:
+                seat += f" \u00b7 {civ}"
+            if after:
+                seat += f" \u00b7 **{after} Elo**{delta}"
+            lines.append(f"> {seat}")
+    return lines
+
+
+def _panel_link_rows(
+    match_id: str,
+    players: list[dict[str, Any]],
+) -> list[discord.ui.ActionRow[Any]]:
+    """Build the action rows: the insights page and one replay per seat."""
+    buttons: list[discord.ui.Button[Any]] = []
+    if match_id:
+        buttons.append(
+            discord.ui.Button(
+                label="aoe2insights",
+                emoji="\U0001f517",
+                style=discord.ButtonStyle.link,
+                url=INSIGHTS_MATCH_URL.format(match_id=match_id),
+            )
+        )
+        for player in players[:10]:
+            pid = str(player.get("profile_id", ""))
+            if not pid:
+                continue
+            alias = str(player.get("alias") or pid or "?")
+            buttons.append(
+                discord.ui.Button(
+                    label=f"Replay {alias}"[:80],
+                    emoji="\U0001f3ac",
+                    style=discord.ButtonStyle.link,
+                    url=REPLAY_URL.format(match_id=match_id, profile_id=pid),
+                )
+            )
+    return [discord.ui.ActionRow(*buttons[i : i + 5]) for i in range(0, len(buttons), 5)]
+
+
+async def _send_match_panels(
+    interaction: discord.Interaction,
+    entries: list[Any],
+    me_ids: set[str],
+    known_ids: set[str],
+    labels: dict[str, str],
+) -> None:
+    """Send ONE ephemeral panel per finished match (owner 2026-11-21).
+
+    Each panel is its own LayoutView container: the outcome-coloured
+    header (the match's own name, the map, the time, the duration, the
+    format), one bullet block per team with every seat, then an action
+    row of link buttons \u2014 the aoe2insights match page and one replay
+    per player (the official GetMatchReplay endpoint, per-seat profile
+    id) \u2014 and a footer carrying the panel id (stats:match:<id>) with
+    the guild's civs/maps guide channels.
+    """
+    from botforge.discord.stats_views import (
+        _entry_players,
+        _fmt_duration,
+        _match_kind,
+        _match_title,
+        _team_of,
+        _when,
+    )
+
+    guild_id = str(interaction.guild_id or "")
+    civs_link = await _tree_channel_link(guild_id, "games/aoe2", "civs")
+    maps_link = await _tree_channel_link(guild_id, "games/aoe2", "maps")
+    for entry in entries:
+        players = _entry_players(entry)
+        winners = {str(w) for w in (getattr(entry, "winners", ()) or ())}
+        outcome = (
+            "win"
+            if winners and winners & me_ids
+            else "loss"
+            if winners and not winners & me_ids
+            else ""
+        )
+        icon = {"win": "\u2705", "loss": "\u274c"}.get(outcome, "\u2b1c")
+        colour = _OUTCOME_COLOURS.get(outcome or "", 0x5865F2)
+        title = _match_title(entry, labels)
+        map_name = str(getattr(entry, "map_name", "") or "").strip()
+        teams_lines = _panel_team_lines(players, me_ids, known_ids, labels)
+        head_bits = [
+            " ".join([icon, f"**{title}**"]),
+            f"*{map_name}*" if map_name and map_name.lower() != "my map" and map_name != title else "",
+            _when(entry),
+            _fmt_duration(_duration_sec(entry)) if _duration_sec(entry) else "",
+            _match_kind(players, _team_of(players, me_ids)),
+        ]
+        head = " \u2014 ".join(bit for bit in head_bits if bit)
+        match_id = str(getattr(entry, "match_id", "") or "")
+        footer_bits = [f"-# Panneau `stats:match:{match_id or '?'}`"]
+        if civs_link:
+            footer_bits.append(f"Guides civs : {civs_link}")
+        if maps_link:
+            footer_bits.append(f"Maps : {maps_link}")
+        container_blocks: list[Any] = [
+            discord.ui.TextDisplay(head),
+            discord.ui.Separator(),
+            discord.ui.TextDisplay("\n".join(teams_lines) if teams_lines else "\u2014"),
+            discord.ui.Separator(),
+        ]
+        rows = _panel_link_rows(match_id, players)
+        container_blocks.extend(rows)
+        container_blocks.append(discord.ui.TextDisplay("\n".join(footer_bits)))
+        view = discord.ui.LayoutView(timeout=None)
+        view.add_item(discord.ui.Container(*container_blocks, accent_colour=discord.Colour(colour)))
+        try:
+            await interaction.followup.send(view=view, ephemeral=True)
+        except Exception:
+            logger.warning("the match panel send failed (%s)", match_id, exc_info=True)
+            return
+
+
+def _duration_sec(entry: Any) -> int:
+    """Return the match's duration in seconds (0 when unknown)."""
+    started = int(getattr(entry, "started_at", 0) or 0)
+    finished = int(getattr(entry, "finished_at", 0) or 0)
+    return max(0, finished - started) if started and finished else 0
+
+
 class ProfileMatchesButton(
     discord.ui.DynamicItem[discord.ui.Button[Any]],
     template=r"home:profile:matches",
@@ -851,13 +1004,41 @@ class ProfileMatchesButton(
             "ongoing": await reply(interaction, "profile.matches_ongoing"),
             "untitled": await reply(interaction, "profile.matches_untitled"),
         }
-        body = await _matches_body(interaction, me_ids, known_ids, labels)
-        # LayoutView + TextDisplay: plain followup content does NOT
-        # render the markdown (the raw <t:...> / ### finding of
-        # 2026-11-20) — the component surfaces parse both.
-        view = discord.ui.LayoutView(timeout=None)
-        view.add_item(discord.ui.Container(discord.ui.TextDisplay("\n".join(body))))
+        from botforge.discord.stats_views import recent_match_entries
+
+        # LIVE-first summary panel, then ONE panel per finished match
+        # (the owner's 2026-11-21 reading: ten messages, each a
+        # self-contained card with its links and its own panel id).
+        if not me_ids:
+            await interaction.followup.send(
+                await reply(interaction, "profile.matches_empty"), ephemeral=True
+            )
+            return
+        live_blocks = await _live_blocks_of(interaction, me_ids, known_ids, labels)
+        if live_blocks:
+            body = [f"### {await reply(interaction, 'profile.matches_live_title')}"]
+            separator = "\u2500" * 4
+            for index, block in enumerate(live_blocks):
+                if index:
+                    body.append(separator)
+                body.extend(block)
+            view = discord.ui.LayoutView(timeout=None)
+            view.add_item(discord.ui.Container(discord.ui.TextDisplay("\n".join(body))))
+        else:
+            view = discord.ui.LayoutView(timeout=None)
+            view.add_item(
+                discord.ui.Container(
+                    discord.ui.TextDisplay(f"### {await reply(interaction, 'profile.matches_title')}")
+                )
+            )
         await interaction.followup.send(view=view, ephemeral=True)
+        entries = await recent_match_entries(sorted(me_ids), limit=10)
+        if not entries:
+            await interaction.followup.send(
+                await reply(interaction, "profile.matches_empty"), ephemeral=True
+            )
+            return
+        await _send_match_panels(interaction, entries, me_ids, known_ids, labels)
 
 class ProfileRenameButton(
     discord.ui.DynamicItem[discord.ui.Button[Any]],
