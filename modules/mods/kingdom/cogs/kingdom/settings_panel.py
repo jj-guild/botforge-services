@@ -269,16 +269,22 @@ async def build_settings_panel(guild_id: str) -> discord.ui.LayoutView:
         KingdomSettingsNavButton("beta", str(strings["settings_nav_beta_button"])).item
     )
 
-    container: discord.ui.Container[discord.ui.LayoutView] = discord.ui.Container(
+    # cockpit-lisible-v1 (Drasah 21/11) : une zone = UN titre + UNE
+    # ligne qui dit à quoi ça sert (données, clé manquante = pas de
+    # ligne — la leçon console-crash-v1 reste : .get, jamais [])
+    def _zone_hint(key: str) -> discord.ui.Item[discord.ui.LayoutView]:
+        return discord.ui.TextDisplay(str(strings.get(key) or ""))
+
+    items: list[discord.ui.Item[discord.ui.LayoutView]] = [
         discord.ui.TextDisplay(f"# {strings['settings_title']}"),
         # parametres-restore-v1 (Drasah 20/11): the panel wears its
         # original section header under the title.
         discord.ui.TextDisplay(f"## {strings['settings_section']}"),
-        discord.ui.TextDisplay(str(strings["settings_cockpit_subtitle"])),
         discord.ui.Separator(),
         discord.ui.TextDisplay("\n".join(status_lines)),
         discord.ui.Separator(),
         discord.ui.TextDisplay(f"## {strings['settings_zone_cycle_label']}"),
+        _zone_hint("settings_zone_cycle_hint"),
         # console-crash-v1 (Drasah 21/11): a missing hint key ONCE
         # emptied the whole console salon — the render crashed, the
         # refresh marked the live pin "unreadable — recreating", and
@@ -294,12 +300,14 @@ async def build_settings_panel(guild_id: str) -> discord.ui.LayoutView:
         cycle_row,
         discord.ui.Separator(),
         discord.ui.TextDisplay(f"## {strings['settings_zone_regie_label']}"),
+        _zone_hint("settings_zone_regie_hint"),
         regie_row,
         discord.ui.Separator(),
         discord.ui.TextDisplay(f"## {strings['settings_zone_atelier_label']}"),
+        _zone_hint("settings_zone_atelier_hint"),
         atelier_row,
-        accent_colour=_ADMIN_COLOUR,
-    )
+    ]
+    container = discord.ui.Container(*items, accent_colour=_ADMIN_COLOUR)
     return surface(CONSOLE_VIEW_KEY, container)
 
 
@@ -744,8 +752,8 @@ async def _season_state(
             logger.warning("kingdom: the beta badge read failed", exc_info=True)
     lines = [
         str(strings["settings_status_parcours_beta" if beta else "settings_status_parcours_normal"]),
-        f"**{strings['settings_status_phase']}** : {phase}",
-        f"**{strings['settings_status_mode']}** : {mode}",
+        f"📍 **{strings['settings_status_phase']} : {phase}**",
+        mode,
     ]
     if bot is not None and guild_id:
         # the sas line — the latecomers' régie switch, live (best-effort)
@@ -758,14 +766,17 @@ async def _season_state(
             ))
         except Exception:  # noqa: BLE001
             logger.warning("kingdom: the sas line read failed", exc_info=True)
-    lines.extend([
-        f"**{strings['settings_status_kingdoms']}** : "
-        f"{', '.join(kingdoms) if kingdoms else strings['settings_status_empty']}",
-        f"**{strings['settings_status_lords']}** : "
-        f"{enrolled or strings['settings_status_empty']}",
-        f"**{strings['settings_status_queue']}** : "
-        f"{queued or strings['settings_status_empty']}",
-    ])
+    # cockpit-lisible-v1 (Drasah 21/11 « tout est compressé, ça donne pas
+    # envie d'être lu ») : la MATIÈRE a ses lignes dédiées — un titre
+    # qui compte, puis les noms, puis l'équipage sur UNE ligne.
+    lines.append(str(strings["settings_status_kingdoms_header"]).format(count=len(kingdoms)))
+    lines.append(str(strings["settings_status_kingdoms_names"]).format(
+        names=", ".join(kingdoms) if kingdoms else strings["settings_status_empty"]
+    ))
+    lines.append(str(strings["settings_status_crew_line"]).format(
+        enrolled=enrolled if enrolled else strings["settings_status_empty"],
+        queued=queued if queued else strings["settings_status_empty"],
+    ))
     return lines, state
 
 
@@ -807,9 +818,17 @@ _DRAWERS: dict[str, str] = {
 
 
 def _admissions_drawer(
-    strings: dict[str, str], vstrings: dict[str, str], realms: list[Any]
+    strings: dict[str, str],
+    vstrings: dict[str, str],
+    realms: list[Any],
+    admitted: list[str] | None = None,
 ) -> discord.ui.LayoutView:
-    """The sas — every join request with its decision buttons (t2a)."""
+    """The sas — every join request with its decision buttons (t2a).
+
+    cockpit-lisible-v1 (Drasah 21/11): a request disappears from the
+    pending on ✅, but the operator must SEE what he already let in —
+    the « ✅ Admis en saison » block sits right under the requests.
+    """
     from .validation import ValidationRealmEntryButton, fmt_paris
 
     blocks: list[discord.ui.Item[discord.ui.LayoutView]] = [
@@ -857,6 +876,17 @@ def _admissions_drawer(
             blocks.append(discord.ui.Separator())
     else:
         blocks.append(discord.ui.TextDisplay(str(strings["settings_admissions_empty"])))
+    # what is already IN (the names — one per line, no ceremony)
+    blocks.append(discord.ui.Separator())
+    blocks.append(discord.ui.TextDisplay(f"## {strings['settings_admissions_admitted_title']}"))
+    if admitted:
+        blocks.append(
+            discord.ui.TextDisplay("\n".join(f"- {name}" for name in admitted))
+        )
+    else:
+        blocks.append(
+            discord.ui.TextDisplay(str(strings["settings_admissions_admitted_empty"]))
+        )
     container: discord.ui.Container[discord.ui.LayoutView] = discord.ui.Container(
         *blocks, accent_colour=_ADMIN_COLOUR
     )
@@ -1004,8 +1034,9 @@ async def _build_drawer(
     strings = settings_strings(locale)
     if drawer == "admissions":
         realms = await _pending_admissions()
+        admitted = await _admitted_realms()
         vstrings = dict(mod_catalog().section("kingdom.validation", str(locale)[:2]))
-        view = _admissions_drawer(strings, vstrings, realms)
+        view = _admissions_drawer(strings, vstrings, realms, admitted)
     elif drawer == "regie":
         states: dict[str, bool] = {}
         if bot is not None and guild_id:
@@ -1022,23 +1053,35 @@ async def _build_drawer(
         view = _atelier_drawer(strings, strings_by_locale(locale))
     else:
         view = _beta_drawer(strings)
-    # windows-v2 (Drasah 21/11): a drawer is a dead end without its
-    # way back — every drawer carries the ↩️ Console row.
-    view.add_item(_back_row(strings))
     return view
 
 
-def _back_row(strings: dict[str, str]) -> discord.ui.ActionRow:
-    """The parametrised back-to-console row (#395: same row everywhere)."""
-    row = discord.ui.ActionRow()
-    row.add_item(
-        discord.ui.Button(
-            label=str(strings.get("settings_window_back_button", "↩️ Console")),
-            custom_id="kingdom:console-nav:console",
-            style=discord.ButtonStyle.secondary,
-        )
+async def _admitted_realms() -> list[str]:
+    """The realm NAMES already in the season (engaged shells).
+
+    cockpit-lisible-v1: Drasah admitted AEGIS and NOTHING showed it —
+    the drawer only lists the pending. The admin needs the confirms on
+    record, one name per line, right under the requests.
+    """
+    stack = wiring()
+    if stack is None:
+        return []
+    service = None
+    try:
+        from .validation import _realms_service
+
+        service = _realms_service(stack)
+        if service is None:
+            return []
+        realms = await service.realms()
+    except Exception:  # noqa: BLE001 — a read, never a crash
+        logger.warning("kingdom: the admitted realms read failed", exc_info=True)
+        return []
+    return sorted(
+        str(getattr(realm, "name", "?"))
+        for realm in realms
+        if getattr(realm, "engagement", None)
     )
-    return row
 
 
 async def refresh_live_pins_after(interaction: discord.Interaction) -> None:
@@ -1095,14 +1138,9 @@ class KingdomSettingsNavButton(
 
     async def callback(self, interaction: discord.Interaction) -> None:
         """Open the drawer's ephemeral window (guarded like the panel)."""
-        if self.drawer == "console":
-            # windows-v2: the drawers' ↩️ back target — the cockpit
-            # itself, always reachable, always the single window.
-            if not await _panel_guard(interaction):
-                return
-            view = await build_settings_panel(str(interaction.guild_id or ""))
-            await open_unique_ephemeral(interaction, view=view)
-            return
+        # windows-v2 review (Drasah 21/11): no ↩️ Console back button —
+        # the cockpit is a PIN, it never left the screen; the drawer
+        # is a parenthèse, ✖️ Fermer closes it.
         if self.drawer not in _DRAWERS:
             await _safe_send(interaction, strings_of(interaction)["settings_denied"])
             return
@@ -1473,8 +1511,3 @@ _SETTINGS_HANDLERS: dict[str, Any] = {
 
 __all__ = [
     "CONSOLE_VIEW_KEY",
-    "SettingsActionButton",
-    "console_buttons",
-    "build_settings_panel",
-    "settings_strings",
-]

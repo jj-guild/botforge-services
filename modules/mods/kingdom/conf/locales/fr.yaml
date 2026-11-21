@@ -122,8 +122,8 @@ fr:
       settings_launch_modal_names_label: Noms imposés (optionnel)
       settings_launch_modal_names_placeholder: "Royaume A, Royaume B"
       settings_launch_modal_title: ▶️ Lancer la saison
-      settings_mode_free: 'Mode de saison : **libre** — les Rois peuvent fonder leurs royaumes.'
-      settings_mode_imposed: 'Mode de saison : **imposé** — les Rois ne peuvent plus fonder de royaume.'
+      settings_mode_free: "👑 **Saison libre** — les Rois fondent leurs royaumes."
+      settings_mode_imposed: "👑 **Saison imposée** — les Rois ne fondent plus rien."
       settings_no_service: ❌ Le service Kingdoms n'est pas prêt.
       settings_phase_unknown: inconnue
       settings_remove_button: 🧹 Retirer un joueur/candidat
@@ -160,13 +160,18 @@ fr:
       # console-v2 (Drasah 21/11) : le cockpit à tiroirs — la console
       # ne se lit plus comme une liste mais comme un poste de pilotage
       settings_cockpit_subtitle: "Le cockpit : l'état en un coup d'œil, les actions du moment, et les tiroirs pour le reste."
-      settings_cycle_off_hint: "Aucune saison — « Lancer la saison » prépare une saison, rien ne démarre : les admissions passeront par le sas 🛂, ton geste."
-      settings_cycle_setup_hint: "Saison préparée — aucun royaume n'entre sans ton ✅ dans 🛂 Admissions. « Démarrer la saison » (ci-dessous) dessine les mains et ferme le sas."
-      settings_cycle_running_hint: "Saison en cours — le sas s'est fermé au départ (ré-ouvrable depuis la Régie) ; les outils moteur vivent dans 🧪 Beta & outils."
-      settings_cycle_started_hint: "Saison en cours — le sas s'est fermé au départ (ré-ouvrable depuis la Régie) ; les outils moteur vivent dans 🧪 Beta & outils."
-      settings_zone_cycle_label: "LE CYCLE — ce qui a du sens maintenant"
+      # cockpit-lisible-v1 (Drasah 21/11) : le cycle dit l'essentiel,
+      # la phrase se lit d'un trait
+      settings_cycle_off_hint: "Aucune saison : « Lancer » prépare, ne démarre rien."
+      settings_cycle_setup_hint: "Préparation : les Rois demandent, tu admets, « Démarrer » envoie."
+      settings_cycle_running_hint: "Saison en cours : le moteur tourne, le sas se règle en Régie."
+      settings_cycle_started_hint: "Saison en cours : le moteur tourne, le sas se règle en Régie."
+      settings_zone_cycle_label: LE CYCLE
+      settings_zone_cycle_hint: "Où en est la saison, et le geste qui fait avancer."
       settings_zone_regie_label: LA RÉGIE
+      settings_zone_regie_hint: "Les interrupteurs de la vie des joueurs : inscriptions, fondation, entrée, sas."
       settings_zone_atelier_label: L'ATELIER
+      settings_zone_atelier_hint: "La structure du serveur et l'horloge de jeu. Les gestes destructifs gardent leur confirmation."
       settings_nav_admissions_button: "🛂 Admissions"
       settings_nav_regie_button: "👥 Joueurs & royaumes"
       settings_nav_atelier_button: "🛠️ Serveur"
@@ -174,22 +179,28 @@ fr:
       settings_admissions_title: "🛂 Les admissions — le sas"
       settings_admissions_hint: "Personne n'entre sans ton geste. Accepter = l'entrée en saison du royaume (beta et normal, même moteur)."
       settings_admissions_empty: "Aucun royaume en attente. Les Rois cliquent « ⚔️ Inscrire leur royaume » sur leur hub dormant, les demandes atterrissent ici."
+      settings_admissions_admitted_title: "✅ Admis en saison"
+      settings_admissions_admitted_empty: "Aucun royaume admis pour l'instant."
       settings_regie_title: "👥 Joueurs & royaumes"
       settings_regie_hint: "Les gestes ponctuels de gestion moteur — hors du cockpit, à portée de clic."
       settings_atelier_title: "🛠️ L'atelier serveur"
       settings_atelier_hint: "La structure et le temps de jeu. Chaque geste destructif garde sa confirmation."
       settings_window_close_button: "✖️ Fermer"
-      settings_window_back_button: "↩️ Console"
       settings_atelier_heal_note: "La guérison automatique 5 min continue de tourner en silence — l'atelier n'est que la main d'urgence."
       settings_beta_title: "🧪 Beta & outils"
-      settings_beta_hint: "Un outillage, pas un lanceur : Être en beta NE LANCE rien — le parcours sans compte et les horloges compressées s'arment ici."
+      settings_beta_hint: "Les outils moteur du cycle : saison, horloge, réinitialisations. Être en beta ne lance rien."
       settings_beta_sas_note: "Même en beta : l'entrée en saison passe PAR LE SAS 🛂 — « ⚔️ Inscrire leur royaume » côté Roi, puis ton ✅ ici."
       # console-etats-regie-v1 (Drasah 21/11) : le badge PARCOURS (bêta
       # ou normal) + le sas = les premiers repères du cockpit
-      settings_status_parcours_beta: "**Parcours** : 🧪 **Bêta** — sans compte, horloges compressées"
-      settings_status_parcours_normal: "**Parcours** : normal — compte requis"
-      settings_status_sas_open: "🛂 Sas : **ouvert** — les rois peuvent inscrire leur royaume."
-      settings_status_sas_closed: "🛂 Sas : **fermé** — ré-ouvrable depuis 🎚️ la Régie."
+      settings_status_parcours_beta: "🧭 **Parcours : Bêta** · sans compte, horloge compressée"
+      settings_status_parcours_normal: "🧭 **Parcours : normal** · compte requis"
+      settings_status_sas_open: "🛂 **Sas ouvert** — les Rois peuvent inscrire leur royaume"
+      settings_status_sas_closed: "🛂 **Sas fermé** — ré-ouvrable en Régie"
+      # cockpit-lisible-v1 : la matière a SES lignes dédiées, séparées
+      # de l'état par un filet, lues d'un coup d'œil
+      settings_status_kingdoms_header: "🏰 **Royaumes en saison ({count})**"
+      settings_status_kingdoms_names: "{names}"
+      settings_status_crew_line: "👤 **Seigneurs engagés :** {enrolled} · ⏳ **En file :** {queued}"
       # l'assistant de lancement pose sa 2e question : le sas
       settings_launch_modal_sas_label: "Ouvrir le sas ? (oui/non)"
       settings_launch_modal_sas_placeholder: "oui (défaut) / non"

@@ -191,21 +191,8 @@ async def test_the_close_click_deletes_the_window_and_pops_the_record() -> None:
 
 
 # ---------------------------------------------------------------------------
-# The drawers' ↩️ back row and the single-window contract
+# The single-window contract
 # ---------------------------------------------------------------------------
-
-
-@pytest.mark.asyncio
-@pytest.mark.parametrize("drawer", ["admissions", "regie", "atelier", "beta"])
-async def test_every_drawer_carries_back_to_console(drawer: str) -> None:
-    import unittest.mock as mock
-
-    from botforge.mods.kingdom.cogs import common
-    from botforge.mods.kingdom.cogs.settings_panel import _build_drawer
-
-    with mock.patch.object(common, "wiring", lambda: _wired_stack()):
-        view = await _build_drawer(drawer, "fr", _interaction().client, "42")
-    assert "kingdom:console-nav:console" in _ids(view), f"the {drawer} drawer has its way back"
 
 
 async def _nav_click(inter: Any, drawer: str) -> None:
@@ -255,13 +242,19 @@ async def test_two_consecutive_windows_keep_a_single_window() -> None:
 
 
 @pytest.mark.asyncio
-async def test_the_console_back_target_opens_the_cockpit_as_the_window() -> None:
+async def test_a_drawer_has_no_back_button_and_no_console_target() -> None:
+    """windows-v2 review (Drasah 21/11): the ↩️ Console row is GONE.
+
+    The cockpit is a PIN — it never left the screen, so a back button
+    duplicated a view the operator already has. Only ✖️ Fermer stays.
+    """
     with _wired():
-        inter = _interaction(user="17")
-        await _nav_click(inter, "console")
+        inter = _interaction(user="15")
+        await _nav_click(inter, "atelier")
     _content, kwargs = inter.response.sent
     ids = _ids(kwargs["view"])
-    assert "kingdom:window:close" in ids, "the cockpit is closable too"
+    assert not any("console-nav:console" in i for i in ids), "no back-to-console ids ship"
+    assert "kingdom:window:close" in ids, "the ✖️ stays — the ONLY way out"
 
 
 # ---------------------------------------------------------------------------

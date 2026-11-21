@@ -27,6 +27,56 @@ def _texts(view: object) -> list[str]:
     ]
 
 
+def test_the_header_reads_one_state_per_line() -> None:
+    """cockpit-lisible-v1 (Drasah 21/11 « tout est compressé »).
+
+    The header lines: the parcours badge, then phase/sas/mode one
+    line each, then the MATTER (kingdoms header counting + names, the
+    crew on ONE line). Each marker rides FIRST so the eye can scan.
+    """
+    import asyncio
+    import unittest.mock as mock
+    from types import SimpleNamespace as NS
+
+    from botforge.mods.kingdom.cogs import settings_panel as sp
+    from botforge.mods.kingdom.cogs.settings_panel import settings_strings
+
+    season = NS(phase="setup", imposed_kingdoms=False)
+
+    class _Kingdoms:
+        async def kingdoms(self):
+            return [NS(name="AEGIS", is_gaia=False)]
+
+        async def lords(self):
+            return []
+
+        async def current_season(self):
+            return season
+
+    stack = NS(
+        kingdoms=_Kingdoms(),
+        realms=NS(realms=lambda: _async_none()),
+    )
+
+    async def _async_none():
+        return []
+
+    stack.realms.realms = _async_none
+    with mock.patch.object(sp, "wiring", lambda: stack):
+        lines, state = asyncio.run(sp._season_state(
+            settings_strings("fr"), bot=NS(state_service=None), guild_id="42"
+        ))
+    assert state == "setup"
+    assert lines[0].startswith("🧭"), "the parcours badge rides FIRST"
+    joined = "\n".join(lines)
+    assert "**Phase : " in joined, "the phase is a bold line of its own"
+    assert "**Sas ouvert**" in joined or "**Sas fermé**" in joined
+    assert "**Saison libre**" in joined, "the mode reads as a line, not a label: value"
+    assert "🏰 **Royaumes en saison (1)**" in joined, "the kingdoms get a COUNTED header"
+    assert "AEGIS" in joined, "the admitted names stay visible"
+    assert "**Seigneurs engagés :**" in joined and "En file :" in joined, "the crew is ONE line"
+
+
 def test_the_cockpit_is_zoned_and_contextual() -> None:
     """The panel carries the cockpit's zones + the drawer nav ids."""
     import asyncio
@@ -160,6 +210,16 @@ def test_the_admissions_drawer_carries_the_realm_entry_decisions() -> None:
     # an empty sas says so in plain words
     empty = _admissions_drawer(settings_strings("fr"), vstrings, [])
     assert str(settings_strings("fr")["settings_admissions_empty"]) in "\n".join(_texts(empty))
+    # the ADMITTED block: what the admin already let in, by NAME
+    admitted = _admissions_drawer(
+        settings_strings("fr"), vstrings, [], ["AEGIS", "Château noir"]
+    )
+    texts = "\n".join(_texts(admitted))
+    assert "✅ Admis en saison" in texts
+    assert "- AEGIS" in texts and "- Château noir" in texts
+    # nothing admitted yet: the plain-words line, not a silent hole
+    fresh = _admissions_drawer(settings_strings("fr"), vstrings, [], [])
+    assert "Aucun royaume admis" in "\n".join(_texts(fresh))
 
 
 def test_the_fixed_drawers_reuse_only_existing_registrations() -> None:
@@ -270,15 +330,23 @@ def test_the_console_v2_strings_exist_in_both_locales() -> None:
         "settings_cycle_started_hint",
         "settings_cycle_running_hint",
         "settings_zone_cycle_label",
+        "settings_zone_cycle_hint",
         "settings_zone_regie_label",
+        "settings_zone_regie_hint",
         "settings_zone_atelier_label",
+        "settings_zone_atelier_hint",
         "settings_nav_admissions_button",
         "settings_nav_regie_button",
         "settings_nav_atelier_button",
         "settings_nav_beta_button",
+        "settings_status_kingdoms_header",
+        "settings_status_kingdoms_names",
+        "settings_status_crew_line",
         "settings_admissions_title",
         "settings_admissions_hint",
         "settings_admissions_empty",
+        "settings_admissions_admitted_title",
+        "settings_admissions_admitted_empty",
         "settings_regie_title",
         "settings_regie_hint",
         "settings_atelier_title",

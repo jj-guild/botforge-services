@@ -117,8 +117,8 @@ en:
       settings_launch_modal_names_label: Imposed names (optional)
       settings_launch_modal_names_placeholder: "Kingdom A, Kingdom B"
       settings_launch_modal_title: ▶️ Launch the season
-      settings_mode_free: 'Season mode: **free** — the Kings found their kingdoms.'
-      settings_mode_imposed: 'Season mode: **imposed** — the Kings can no longer found a kingdom.'
+      settings_mode_free: "👑 **Free season** — the Kings found their kingdoms."
+      settings_mode_imposed: "👑 **Imposed season** — the Kings found nothing."
       settings_no_service: ❌ The Kingdoms service is not ready.
       settings_phase_unknown: unknown
       settings_remove_button: 🧹 Remove a player/candidate
@@ -155,13 +155,16 @@ en:
       # console-v2 (Drasah 21/11): the drawered cockpit — the console
       # reads as a pilot's post, no longer a flat list
       settings_cockpit_subtitle: "The cockpit: the state at a glance, the actions of the moment, and the drawers for the rest."
-      settings_cycle_off_hint: "No season — 'Launch the season' prepares a season, nothing starts: every entry rides the 🛂 sas, your call."
-      settings_cycle_setup_hint: "Season prepared — no kingdom enters without your ✅ in 🛂 Admissions. 'Start the season' (below) draws the hands and shuts the sas."
-      settings_cycle_running_hint: "Season running — the sas shut at the departure (re-openable from the Régie); the engine tools live in 🧪 Beta & tools."
-      settings_cycle_started_hint: "Season running — the sas shut at the departure (re-openable from the Régie); the engine tools live in 🧪 Beta & tools."
-      settings_zone_cycle_label: "THE CYCLE — what makes sense now"
+      settings_cycle_off_hint: "No season: 'Launch' prepares, starts nothing."
+      settings_cycle_setup_hint: "Preparation: the Kings ask, you admit, 'Start' sends."
+      settings_cycle_running_hint: "Season running: the engine runs, the sas adjusts in the Régie."
+      settings_cycle_started_hint: "Season running: the engine runs, the sas adjusts in the Régie."
+      settings_zone_cycle_label: THE CYCLE
+      settings_zone_cycle_hint: "Where the season stands, and the gesture that moves it."
       settings_zone_regie_label: LA RÉGIE
+      settings_zone_regie_hint: "The players' life switches: signups, founding, entry, sas."
       settings_zone_atelier_label: L'ATELIER
+      settings_zone_atelier_hint: "The server structure and the game clock. Destructive gestures keep their confirmation."
       settings_nav_admissions_button: "🛂 Admissions"
       settings_nav_regie_button: "👥 Players & kingdoms"
       settings_nav_atelier_button: "🛠️ Server"
@@ -169,21 +172,27 @@ en:
       settings_admissions_title: "🛂 Admissions — the airlock"
       settings_admissions_hint: "Nobody enters without your call. Accepting = the kingdom's season entry (beta and normal, one engine)."
       settings_admissions_empty: "No kingdom waiting. The Kings click '⚔️ Enlist their kingdom' on their dormant hub, the requests land here."
+      settings_admissions_admitted_title: "✅ Admitted to the season"
+      settings_admissions_admitted_empty: "No kingdom admitted yet."
       settings_regie_title: "👥 Players & kingdoms"
       settings_regie_hint: "The one-off engine-management gestures — out of the cockpit, a click away."
       settings_atelier_title: "🛠️ The server workshop"
       settings_atelier_hint: "The structure and the game time. Every destructive gesture keeps its confirmation."
       settings_window_close_button: "✖️ Close"
-      settings_window_back_button: "↩️ Console"
       settings_atelier_heal_note: "The 5-min automatic healing keeps running silently — the workshop is only the emergency hand."
       settings_beta_title: "🧪 Beta & tools"
-      settings_beta_hint: "A tooling, never a launcher: being in beta LAUNCHES nothing — the account-free path and the compressed clocks arm here."
+      settings_beta_hint: "The cycle's engine tools: season, clock, resets. Being in beta launches nothing."
       settings_beta_sas_note: "Even in beta: the season entry rides the 🛂 sas — '⚔️ Enlist their kingdom' on the King's side, then your ✅ here."
       # console-etats-regie-v1 (Drasah 21/11): the PARCOURS badge + the sas
-      settings_status_parcours_beta: "**Path**: 🧪 **Beta** — no account, compressed clocks"
-      settings_status_parcours_normal: "**Path**: normal — account required"
-      settings_status_sas_open: "🛂 Sas: **open** — kings may enlist their kingdom."
-      settings_status_sas_closed: "🛂 Sas: **closed** — re-openable from the 🎚️ Régie."
+      settings_status_parcours_beta: "🧭 **Path: Beta** · no account, compressed clocks"
+      settings_status_parcours_normal: "🧭 **Path: normal** · account required"
+      settings_status_sas_open: "🛂 **Sas open** — kings may enlist their kingdom"
+      settings_status_sas_closed: "🛂 **Sas closed** — re-openable in the Régie"
+      # cockpit-lisible-v1: the MATTER gets its own lines, a filet from
+      # the state, read at a glance
+      settings_status_kingdoms_header: "🏰 **Kingdoms in the season ({count})**"
+      settings_status_kingdoms_names: "{names}"
+      settings_status_crew_line: "👥 **Lords enrolled:** {enrolled} · ⏳ **Queued:** {queued}"
       settings_launch_modal_sas_label: "Open the sas? (yes/no)"
       settings_launch_modal_sas_placeholder: "yes (default) / no"
       settings_start_season_confirm_title: "🚀 Send the season?"
