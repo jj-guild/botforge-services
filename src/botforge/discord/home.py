@@ -856,17 +856,26 @@ async def _entity_image(entity_id: str, fallback_name: str, guild_id: str) -> st
 
 
 def _civ_entity_id(civ_name: str) -> str:
-    """Return the stored civ content id, derived from its display name."""
+    """Return the stored civ content id \u2014 the core's faction convention.
+
+    The catalog's faction ids follow ``faction:<game>:<slug>`` (the
+    game service's own builder, game_data.py) \u2014 the panel reuses
+    the SAME convention, never its own.
+    """
     from botforge.core.ids import slug_id
 
     return f"faction:aoe2:{slug_id(civ_name)}"
 
 
 def _map_entity_id(map_name: str) -> str:
-    """Return the stored map content id, derived from its display name."""
-    from botforge.core.ids import slug_id
+    """Return the stored map content id \u2014 the core's own builder.
 
-    return f"map:aoe2:public:{slug_id(map_name)}"
+    ``map_entry_id`` is the platform's single map-id convention \u2014
+    the panel never re-implements it.
+    """
+    from botforge.core.ids import map_entry_id
+
+    return map_entry_id("aoe2", map_name, None)
 
 
 def _fmt_clock(seconds: int) -> str:
