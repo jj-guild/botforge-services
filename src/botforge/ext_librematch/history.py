@@ -134,14 +134,19 @@ def _needs_repair(candidate_docs: list[dict[str, Any]]) -> bool:
         players = doc.get("players") or []
         if not players:
             return True
-        members = raw.get("matchhistorymember") or []
-        for member in members:
+        # the verdict reads the member OF THE MARKED SEAT (the first
+        # one): a RANDOM first seat (-1) is honestly civless upstream
+        # and never repairs, whatever its team mates carry
+        seat_profile = str((players[0] or {}).get("profile_id", ""))
+        for member in raw.get("matchhistorymember") or []:
+            if str((member or {}).get("profile_id", "")) != seat_profile:
+                continue
             civ = (member or {}).get("civilization_id")
             try:
-                if civ is not None and int(civ) >= 0:
-                    return True  # a REAL civ was capturable upstream
+                return civ is not None and int(civ) >= 0
             except (TypeError, ValueError):
-                continue
+                return False
+        return False
     return False
 
 
