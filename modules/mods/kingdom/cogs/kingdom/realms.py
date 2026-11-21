@@ -321,6 +321,20 @@ def hub_layout(realm: Any, strings: dict[str, str], *, dormant: bool) -> discord
             str(realm.slug),
         ).item
     )
+    if dormant:
+        # hub-dormant-actions (Drasah 21/11) : « l'Entrée n'a jamais été
+        # un bouton rouage » — la porte s'ouvre (chez soi) même sans
+        # engagement, et à sa droite le royaume endormi porte sa
+        # saison : la vue 📺, puis l'acte du Roi ⚔️. Le bouton d'acte
+        # se cache quand une demande est déjà en attente (la fenêtre
+        # chez-soi porte l'état).
+        row.add_item(
+            RealmNavButton(str(strings["season_button"]), "season", str(realm.slug)).item
+        )
+        if getattr(realm, "join_request", None) is None:
+            row.add_item(
+                RealmJoinButton(str(strings["realm_hub_join_button"]), str(realm.slug)).item
+            )
     blocks.append(discord.ui.Separator())
     blocks.append(row)
     # the permanent hors-jeu zone — both states (the designer's capture)

@@ -303,3 +303,61 @@ def test_the_wipe_never_lists_the_shell_collection() -> None:
     from botforge.mods.kingdom.storage import REALMS_COLLECTION, SEASON_WIPE_COLLECTIONS
 
     assert REALMS_COLLECTION not in SEASON_WIPE_COLLECTIONS
+
+
+def test_the_dormant_door_carries_the_season_actions() -> None:
+    """hub-dormant-actions (Drasah 21/11) : l'Entrée n'est pas un
+    rouage — la porte s'ouvre même sans engagement, et à sa droite le
+    royaume endormi porte sa saison : « Voir la saison » puis l'acte
+    « ⚔️ Inscrire son royaume ». Une demande en attente cache l'acte
+    (l'état vit dans la fenêtre chez-soi) ; le hub vivant garde la
+    porte seule."""
+    from botforge.mods.kingdom.cogs.realms import hub_layout
+    from botforge.mods.kingdom.cogs.realm_strings import realm_strings
+    from botforge.mods.kingdom.realms import RealmShellModel
+
+    def _custom_ids(layout: Any) -> list[str]:
+        import json
+
+        payload = json.dumps(layout.to_components())
+        return [
+            cid
+            for cid in (
+                "kingdom:realm:home:roc",
+                "kingdom:realm:nav:season:roc",
+                "kingdom:realm:join:roc",
+            )
+            if cid in payload
+        ]
+
+    strings = realm_strings("fr")
+    realm = RealmShellModel(
+        _id="realm:roc-1", name="Roc", slug="roc", king_id="1", king_name="Roi"
+    )
+    # the dormant door opens WITHOUT engagement, beside the season actions
+    dormant = _custom_ids(hub_layout(realm, strings, dormant=True))
+    assert dormant == [
+        "kingdom:realm:home:roc",
+        "kingdom:realm:nav:season:roc",
+        "kingdom:realm:join:roc",
+    ], "the door opens even unengaged, with the season actions to its RIGHT, in order"
+    # a pending request hides the act (the state lives in chez-soi)
+    pending = RealmShellModel(
+        _id="realm:roc-1",
+        name="Roc",
+        slug="roc",
+        king_id="1",
+        king_name="Roi",
+        join_request={"season_id": "s1", "requested_at": 1},
+    )
+    pending_ids = _custom_ids(hub_layout(pending, strings, dormant=True))
+    assert "kingdom:realm:nav:season:roc" in pending_ids
+    assert "kingdom:realm:join:roc" not in pending_ids, "a manifested request hides the act"
+    # the awake hub carries the door alone (its halls are the season's)
+    awake = _custom_ids(hub_layout(realm, strings, dormant=False))
+    assert "kingdom:realm:home:roc" in awake
+    assert "kingdom:realm:nav:season:roc" not in awake
+    assert "kingdom:realm:join:roc" not in awake
+    # the act's label lives in BOTH locales (the fr/en parity rule)
+    assert "Inscrire son royaume" in realm_strings("fr")["realm_hub_join_button"]
+    assert "Enroll" in realm_strings("en")["realm_hub_join_button"]

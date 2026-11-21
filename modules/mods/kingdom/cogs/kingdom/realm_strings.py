@@ -28,6 +28,9 @@ _REALM_STRINGS: dict[str, _Strings] = {
             "l'entrée en saison."
         ),
         "realm_enter_button": "🏰 Entrée",
+        # hub-dormant-actions (Drasah 21/11): à droite de l'Entrée, le
+        # royaume endormi porte sa saison — la vue + l'acte du Roi
+        "realm_hub_join_button": "⚔️ Inscrire son royaume",
         "realm_hors_jeu_zone": "⚙️ Réglages hors-jeu — ceci ne fait pas partie du jeu",
         "realm_user_settings_button": "⚙️ Paramètres utilisateur",
         "realm_gone_note": "Ce royaume n'existe plus.",
@@ -89,6 +92,9 @@ _REALM_STRINGS: dict[str, _Strings] = {
             "-# The realm is off-season — its halls reopen on season entry."
         ),
         "realm_enter_button": "🏰 Enter",
+        # hub-dormant-actions (Drasah 21/11): beside the door, the
+        # dormant realm carries its season — the view + the King's act
+        "realm_hub_join_button": "⚔️ Enroll the realm",
         "realm_hors_jeu_zone": "⚙️ Out-of-game settings — this is not part of the game",
         "realm_user_settings_button": "⚙️ User settings",
         "realm_gone_note": "This realm no longer exists.",

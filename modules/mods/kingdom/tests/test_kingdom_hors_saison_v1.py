@@ -462,3 +462,128 @@ async def test_a_missing_state_service_degrades_to_the_season_type() -> None:
         assert await camp_beta.kingdom_is_beta(phase_bot, "1") is True
     finally:
         camp_beta.season_is_beta = original
+
+
+# ---------------------------------------------------------------------------
+# conscription-mask (Drasah 21/11) — a camp holder leaves the parcours
+# ---------------------------------------------------------------------------
+
+
+class _MaskMember:
+    def __init__(self, mid: int) -> None:
+        self.id = mid
+
+
+class _MaskGuild:
+    def __init__(self) -> None:
+        self.id = 7
+        self.me = _FakeRole(99)
+        self.default_role = _FakeRole(0)
+        self._roles = {10: _FakeRole(10), 20: _FakeRole(20)}
+        self._channels = {100: _FakeChannel(100), 200: _FakeChannel(200)}
+        self._members = {31: _MaskMember(31), 32: _MaskMember(32), 40: _MaskMember(40)}
+
+    def get_role(self, rid: int) -> _FakeRole | None:
+        return self._roles.get(rid)
+
+    def get_channel(self, cid: int) -> _FakeChannel | None:
+        return self._channels.get(cid)
+
+    def get_member(self, mid: int) -> _MaskMember | None:
+        return self._members.get(mid)
+
+
+class _MaskBot:
+    def __init__(self, g: _MaskGuild) -> None:
+        self.mask_guild = g
+        self.guilds = [g]
+        self.mod_roles_service = _RolesService()
+        self.get_guild = lambda gid: g  # noqa: E731
+
+
+class _MaskRealmService:
+    """The realm service's shape: realms() -> shells (king + members)."""
+
+    def __init__(self, shells: list[Any]) -> None:
+        self._shells = shells
+
+    async def realms(self) -> list[Any]:
+        return self._shells
+
+
+class _MaskStack:
+    def __init__(self, shells: list[Any]) -> None:
+        self.realms = _MaskRealmService(shells)
+
+
+def _shell(king: str, members: list[str]) -> Any:
+    return type("Shell", (), {"king_id": king, "member_ids": members})()
+
+
+async def _mask_pass(
+    monkeypatch: pytest.MonkeyPatch, mask_bot: _MaskBot, shells: list[Any]
+) -> None:
+    from botforge.mods.kingdom.cogs import camp_beta, common
+    from botforge.mods.kingdom.cogs.conscription_gate import run_conscription_gate_pass
+
+    async def fake_is_beta() -> bool:
+        return False
+
+    def fake_wiring() -> Any:
+        return _MaskStack(shells)
+
+    monkeypatch.setattr(camp_beta, "season_is_beta", fake_is_beta)
+    monkeypatch.setattr(common, "wiring", fake_wiring)
+    await run_conscription_gate_pass(mask_bot)
+
+
+@pytest.mark.asyncio
+async def test_camp_holders_leave_the_parcours(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A realm's Roi AND members lose #enregistrement/#postuler (the
+    immersion ask, Drasah 21/11) — a camp-less player keeps them."""
+    g = _MaskGuild()
+    mask_bot = _MaskBot(g)
+    await _mask_pass(monkeypatch, mask_bot, [_shell("31", ["32"])])
+    register, apply = g._channels[100], g._channels[200]
+    for channel in (register, apply):
+        assert channel.edits, "the pass must gate the salons"
+        assert channel.overwrites[g._members[31]].view_channel is False, "the Roi finished the parcours"
+        assert channel.overwrites[g._members[32]].view_channel is False, "a realm member finished the parcours"
+        assert g._members[40] not in channel.overwrites, "a camp-less player keeps the salons"
+
+
+@pytest.mark.asyncio
+async def test_a_left_member_regains_the_parcours(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The roster is recomputed every pass: a player who left the realm
+    regains the salons within one cycle (no stale deny can linger —
+    the carry-over drops the gate's own member turf, the wanted set
+    re-adds only the live camp roster)."""
+    g = _MaskGuild()
+    mask_bot = _MaskBot(g)
+    await _mask_pass(monkeypatch, mask_bot, [_shell("31", ["32"])])
+    register, apply = g._channels[100], g._channels[200]
+    assert g._members[32] in register.overwrites
+    edits_before = len(register.edits)
+    # the member leaves the realm between two passes (overwrites stand)
+    await _mask_pass(monkeypatch, mask_bot, [_shell("31", [])])
+    for channel in (register, apply):
+        assert len(channel.edits) == edits_before + 1, "the pass must push the heal"
+        assert g._members[32] not in channel.overwrites, "the ex-member regains the salons"
+
+
+@pytest.mark.asyncio
+async def test_the_mask_converges_without_a_second_edit(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """An unchanged roster costs ZERO API call (the converge-skip rule)."""
+    g = _MaskGuild()
+    mask_bot = _MaskBot(g)
+    await _mask_pass(monkeypatch, mask_bot, [_shell("31", ["32"])])
+    register, apply = g._channels[100], g._channels[200]
+    assert len(register.edits) == 1 and len(apply.edits) == 1
+    await _mask_pass(monkeypatch, mask_bot, [_shell("31", ["32"])])
+    assert len(register.edits) == 1 and len(apply.edits) == 1, "converged = no edit"

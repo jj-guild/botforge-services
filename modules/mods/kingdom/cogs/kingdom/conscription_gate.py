@@ -77,7 +77,7 @@ def _bot_allow(guild: Any) -> tuple[Any, Any] | None:
 
 
 def _register_overwrites(
-    guild: Any, *, beta: bool, enregistre_role: Any
+    guild: Any, *, beta: bool, enregistre_role: Any, camp_denies: dict[Any, Any] | None = None
 ) -> dict[Any, Any]:
     """#enregistrement : hidden entirely in beta, declared parcours otherwise."""
     overwrites: dict[Any, Any] = {}
@@ -95,11 +95,13 @@ def _register_overwrites(
         # the inverse audience (conscription-4-salons): the salon
         # disappears once the account step is passed
         overwrites[enregistre_role] = _ow(view_channel=False)
+    # camp holders never needed the account step (conscription-mask 21/11)
+    overwrites.update(camp_denies or {})
     return overwrites
 
 
 def _apply_overwrites(
-    guild: Any, *, beta: bool, admin_role: Any, enregistre_role: Any
+    guild: Any, *, beta: bool, admin_role: Any, enregistre_role: Any, camp_denies: dict[Any, Any] | None = None
 ) -> dict[Any, Any]:
     """#postuler : open to everyone in beta, registered-only otherwise."""
     overwrites: dict[Any, Any] = {}
@@ -115,6 +117,10 @@ def _apply_overwrites(
         # classical: the registered players' allow (mod.yaml's `view`);
         # beta: harmless (everyone already sees the salon)
         overwrites[enregistre_role] = _ow(view_channel=True, read_message_history=True)
+    # conscription-mask (Drasah 21/11, immersion) : a player who created
+    # OR joined a realm has finished the parcours — the salons leave
+    # his sidebar (the roster is recomputed every pass, both ways heal)
+    overwrites.update(camp_denies or {})
     return overwrites
 
 
@@ -125,6 +131,52 @@ def _converged(channel: Any, overwrites: dict[Any, Any]) -> bool:
     if set(current) != set(wanted):
         return False
     return all(current[key] == overwrite for key, overwrite in wanted.items())
+
+
+async def _camp_holder_denies(guild: Any) -> dict[Any, Any]:
+    """Member-level view denies for every CAMP HOLDER of this guild.
+
+    conscription-mask (Drasah 21/11) : dès qu'un joueur crée OU rejoint
+    un royaume, il a fini le parcours — la sidebar ne doit plus le noyer
+    d'étapes révolues (#enregistrement, #postuler). The roster is read
+    from the persistent realm shells (Roi + members) and recomputed on
+    EVERY pass: a player who leaves a realm regains the parcours within
+    one cycle (no stale deny can survive the pass).
+    """
+    from .common import wiring
+
+    ids: set[str] = set()
+    stack = wiring()
+    realms_service = getattr(stack, "realms", None) if stack is not None else None
+    if realms_service is not None:
+        try:
+            realms = await realms_service.realms() or []
+        except Exception:  # noqa: BLE001 — a read miss masks nobody, never a raise
+            realms = []
+        for realm in realms:
+            ids.add(str(getattr(realm, "king_id", "") or ""))
+            ids.update(str(m) for m in (getattr(realm, "member_ids", []) or []))
+    denies: dict[Any, Any] = {}
+    for mid in sorted(ids):
+        if not str(mid).isdigit() or not mid:
+            continue
+        member = getattr(guild, "get_member", lambda _id: None)(int(mid))
+        if member is None:
+            continue  # a foreign realm's member (or a shadow) — not this guild's turf
+        denies[member] = _ow(view_channel=False)
+    return denies
+
+
+def _is_bare_view_deny(overwrite: Any) -> bool:
+    """True for a lone ``view_channel=False`` — the gate's deny signature.
+
+    The conscription salons' member turf belongs to the gate (the
+    20/11 carry-over rule keeps unknown grants; a BARE view deny is
+    ours by construction): each pass recomputes the roster, so the
+    carry-over drops the signature first and the wanted set re-adds
+    the members who still hold a camp. No ex-member deny can linger.
+    """
+    return overwrite == _ow(view_channel=False)
 
 
 async def run_conscription_gate_pass(bot: Any, guild_id: str = "") -> int:
@@ -151,15 +203,22 @@ async def run_conscription_gate_pass(bot: Any, guild_id: str = "") -> int:
         enregistre_id = await _role_id(bot, gid, ROLE_ENREGISTRE)
         admin_role = guild.get_role(admin_id) if admin_id else None
         enregistre_role = guild.get_role(enregistre_id) if enregistre_id else None
+        camp_denies = await _camp_holder_denies(guild)
         for key, overwrites in (
             (
                 "register",
-                _register_overwrites(guild, beta=beta, enregistre_role=enregistre_role),
+                _register_overwrites(
+                    guild, beta=beta, enregistre_role=enregistre_role, camp_denies=camp_denies
+                ),
             ),
             (
                 "apply",
                 _apply_overwrites(
-                    guild, beta=beta, admin_role=admin_role, enregistre_role=enregistre_role
+                    guild,
+                    beta=beta,
+                    admin_role=admin_role,
+                    enregistre_role=enregistre_role,
+                    camp_denies=camp_denies,
                 ),
             ),
         ):
@@ -170,11 +229,17 @@ async def run_conscription_gate_pass(bot: Any, guild_id: str = "") -> int:
             if channel is None or not hasattr(channel, "edit"):
                 continue
             # carry over every target the gate does not manage (a manual
-            # grant, a future seam — untouched, never dropped)
+            # grant, a future seam — untouched, never dropped); a BARE
+            # view deny is the gate's own member turf (_is_bare_view_deny
+            # says why) — dropped first, re-added only for the live camp
+            # roster, so no ex-member deny can linger on the salons
             wanted_keys = {_key_of(k) for k in overwrites}
             for target, overwrite in dict(getattr(channel, "overwrites", {}) or {}).items():
-                if _key_of(target) not in wanted_keys:
-                    overwrites[target] = overwrite
+                if _key_of(target) in wanted_keys:
+                    continue
+                if _is_bare_view_deny(overwrite) and target is not getattr(guild, "me", None):
+                    continue  # the gate recomputes the member denies from the roster
+                overwrites[target] = overwrite
             if _converged(channel, overwrites):
                 continue
             try:
