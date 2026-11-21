@@ -90,6 +90,7 @@ en:
       rename_success: '✅ Nickname updated: {name}'
       remove_button: Remove an account
       matches_button: "Last matches"
+      matches_ladder: "Ladder {name} \u2014 Match #{number}"
       matches_title: "Your 10 last matches"
       matches_live_title: "🎯 In progress"
       matches_team: "Team"

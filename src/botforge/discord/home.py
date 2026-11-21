@@ -802,69 +802,185 @@ REPLAY_URL = (
     "https://api.ageofempires.com/api/GameStats/AgeII/GetMatchReplay/"
     "?matchId={match_id}&profileId={profile_id}"
 )
-
 _OUTCOME_COLOURS = {"win": 0x57F287, "loss": 0xED4245}
 
 
-def _panel_team_lines(
+async def _entity_post_url(
+    bot: Any,
+    guild_id: str,
+    channel_id: str,
+    name: str,
+) -> str:
+    """Resolve one entity's forum POST into its jump URL (best-effort).
+
+    The civs/maps forums keep one thread per entity, named by its
+    localized display name \u2014 the lookup matches the name against
+    the channel's threads (active first, then the public archive).
+    """
+    if not channel_id or not name:
+        return ""
+    channel = bot.get_channel(int(channel_id)) if guild_id else None
+    if channel is None:
+        return ""
+    threads: list[Any] = list(getattr(channel, "threads", []) or [])
+    try:
+        async for thread in channel.archived_threads(limit=100):
+            threads.append(thread)
+    except Exception:
+        logger.debug("the archived thread walk failed", exc_info=True)
+    wanted = name.strip().lower()
+    for thread in threads:
+        if str(getattr(thread, "name", "")).strip().lower() == wanted:
+            return f"https://discord.com/channels/{guild_id}/{channel_id}/{thread.id}"
+    return ""
+
+
+async def _entity_image(entity_id: str, fallback_name: str, guild_id: str) -> str:
+    """Read one entity's stored image url (the content service)."""
+    from botforge.discord.content_posts import content_service, guild_locale
+
+    service = content_service()
+    if service is None:
+        return ""
+    locale = await guild_locale(guild_id, None)
+    try:
+        doc = await service.content_get(entity_id, locale)
+        if doc is None and locale != "en":
+            doc = await service.content_get(entity_id, "en")
+    except Exception:
+        logger.debug("the content read failed (%s)", entity_id, exc_info=True)
+        return ""
+    if not doc:
+        return ""
+    return str(doc.get("image_url") or "") if fallback_name else ""
+
+
+def _civ_entity_id(civ_name: str) -> str:
+    """Return the stored civ content id, derived from its display name."""
+    from botforge.core.ids import slug_id
+
+    return f"faction:aoe2:{slug_id(civ_name)}"
+
+
+def _map_entity_id(map_name: str) -> str:
+    """Return the stored map content id, derived from its display name."""
+    from botforge.core.ids import slug_id
+
+    return f"map:aoe2:public:{slug_id(map_name)}"
+
+
+def _fmt_clock(seconds: int) -> str:
+    """Render a duration as mm:ss (the old bot's 00:37)."""
+    minutes, secs = divmod(max(0, seconds), 60)
+    return f"{minutes:02d}:{secs:02d}"
+
+
+def _outcome_of(entry: Any, me_ids: set[str]) -> tuple[str, str, int]:
+    """Return the match's (outcome-key, icon, accent) for the viewer."""
+    winners = {str(w) for w in (getattr(entry, "winners", ()) or ())}
+    if winners and winners & me_ids:
+        return "win", "\U0001f3c6", _OUTCOME_COLOURS["win"]
+    if winners and not winners & me_ids:
+        return "loss", "\U0001f480", _OUTCOME_COLOURS["loss"]
+    return "", "\u2b1c", 0x5865F2
+
+
+def _viewer_alias(players: list[dict[str, Any]], me_ids: set[str]) -> str:
+    """Return the viewed account's alias in this match (fallback: '?')."""
+    for player in players:
+        if str(player.get("profile_id", "")) in me_ids:
+            return str(player.get("alias") or player.get("profile_id") or "?")
+    return "?"
+
+
+def _panel_player_lines(
     players: list[dict[str, Any]],
     me_ids: set[str],
-    known_ids: set[str],
-    labels: dict[str, str],
-) -> list[str]:
-    """Render one quote line per seat, grouped under bold team headers."""
-    by_team: dict[int, list[dict[str, Any]]] = {}
-    for player in players:
-        by_team.setdefault(int(player.get("team", 0) or 0), []).append(player)
-    lines: list[str] = []
-    for index, team in enumerate(sorted(by_team)):
-        lines.append(f"**{labels.get('team', 'Team')} {index + 1}**")
-        for player in by_team[team]:
-            alias = str(player.get("alias") or player.get("profile_id") or "?")
-            pid = str(player.get("profile_id", ""))
-            mark = "**" if pid in me_ids else "*" if pid in known_ids else ""
-            civ = str(player.get("civ") or "").strip()
-            after = int(player.get("rating_after") or 0)
-            before = int(player.get("rating_before") or 0)
-            delta = f" ({after - before:+d})" if before and after and before != after else ""
-            seat = f"{mark}{alias}{mark}"
-            if civ:
-                seat += f" \u00b7 {civ}"
-            if after:
-                seat += f" \u00b7 **{after} Elo**{delta}"
-            lines.append(f"> {seat}")
-    return lines
-
-
-def _panel_link_rows(
+    winners: set[str],
     match_id: str,
-    players: list[dict[str, Any]],
-) -> list[discord.ui.ActionRow[Any]]:
-    """Build the action rows: the insights page and one replay per seat."""
-    buttons: list[discord.ui.Button[Any]] = []
-    if match_id:
-        buttons.append(
-            discord.ui.Button(
-                label="aoe2insights",
-                emoji="\U0001f517",
-                style=discord.ButtonStyle.link,
-                url=INSIGHTS_MATCH_URL.format(match_id=match_id),
-            )
+    civ_urls: dict[str, str],
+    civ_images: dict[str, str],
+) -> list[tuple[str, str]]:
+    """Render every SEAT as (text, civ-image) \u2014 winners first.
+
+    The old ladder's own grammar (owner 2026-11-21): the medal line
+    carries the replay jump, the bold Elo AFTER the match, the alias
+    hyperlinked to its civ's post; a -# subline carries the rating delta
+    and the civ name. One section per seat, the civ icon as accessory.
+    """
+    ordered = sorted(
+        players,
+        key=lambda p: (str(p.get("profile_id", "")) not in winners),
+    )
+    seats: list[tuple[str, str]] = []
+    for player in ordered:
+        pid = str(player.get("profile_id", ""))
+        alias = str(player.get("alias") or pid or "?")
+        won = pid in winners
+        icon = "\U0001f3c6" if won else "\U0001f480" if winners else "\u2b1c"
+        replay = REPLAY_URL.format(match_id=match_id, profile_id=pid) if match_id else ""
+        jump = f"[\u25b8]({replay})" if replay else ""
+        after = int(player.get("rating_after") or 0)
+        before = int(player.get("rating_before") or 0)
+        delta = after - before if before and after else 0
+        civ = str(player.get("civ") or "").strip()
+        civ_link = f"[{civ}]({civ_urls[civ]})" if civ and civ_urls.get(civ) else civ
+        elo_bits = f"**{after} Elo**" if after else ""
+        name_marker = "**" if pid in me_ids else ""
+        head = " ".join(
+            bit
+            for bit in [
+                icon,
+                jump,
+                elo_bits,
+                f"{name_marker}{alias}{name_marker}",
+            ]
+            if bit
         )
-        for player in players[:10]:
-            pid = str(player.get("profile_id", ""))
-            if not pid:
-                continue
-            alias = str(player.get("alias") or pid or "?")
-            buttons.append(
-                discord.ui.Button(
-                    label=f"Replay {alias}"[:80],
-                    emoji="\U0001f3ac",
-                    style=discord.ButtonStyle.link,
-                    url=REPLAY_URL.format(match_id=match_id, profile_id=pid),
-                )
-            )
-    return [discord.ui.ActionRow(*buttons[i : i + 5]) for i in range(0, len(buttons), 5)]
+        sub = f"-# {delta:+d} \u00b7 {civ_link}" if delta else f"-# {civ_link}"
+        text = head + "\n" + sub
+        seats.append((text, civ_images.get(civ, "")))
+    return seats
+
+
+async def _panel_enrichment(
+    interaction: discord.Interaction,
+    entries: list[Any],
+) -> tuple[dict[str, str], dict[str, str], dict[str, str], dict[str, str]]:
+    """Resolve every civ/map POST url and stored image for the whole batch.
+
+    One pass for the ten cards \u2014 the civs' forum posts and images,
+    the maps' likewise \u2014 so a popup costs one resolution per
+    distinct entity, not one per card.
+    """
+    from botforge.discord.stats_views import _entry_players
+
+    guild_id = str(interaction.guild_id or "")
+    civ_urls: dict[str, str] = {}
+    civ_images: dict[str, str] = {}
+    map_urls: dict[str, str] = {}
+    map_images: dict[str, str] = {}
+    if not guild_id:
+        return civ_urls, civ_images, map_urls, map_images
+    civs_channel = await _stored_channel(guild_id, "games/aoe2", "civs")
+    maps_channel = await _stored_channel(guild_id, "games/aoe2", "maps")
+    civs_needed: set[str] = set()
+    maps_needed: set[str] = set()
+    for entry in entries:
+        for player in _entry_players(entry):
+            civ = str(player.get("civ") or "").strip()
+            if civ:
+                civs_needed.add(civ)
+        map_name = str(getattr(entry, "map_name", "") or "").strip()
+        if map_name and map_name.lower() != "my map":
+            maps_needed.add(map_name)
+    for civ in civs_needed:
+        civ_urls[civ] = await _entity_post_url(interaction.client, guild_id, civs_channel, civ)
+        civ_images[civ] = await _entity_image(_civ_entity_id(civ), civ, guild_id)
+    for map_name in maps_needed:
+        map_urls[map_name] = await _entity_post_url(interaction.client, guild_id, maps_channel, map_name)
+        map_images[map_name] = await _entity_image(_map_entity_id(map_name), map_name, guild_id)
+    return civ_urls, civ_images, map_urls, map_images
 
 
 async def _send_match_panels(
@@ -872,70 +988,100 @@ async def _send_match_panels(
     entries: list[Any],
     me_ids: set[str],
     known_ids: set[str],
-    labels: dict[str, str],
 ) -> None:
-    """Send ONE ephemeral panel per finished match (owner 2026-11-21).
+    """Send ONE ephemeral panel per finished match \u2014 the old ladder.
 
-    Each panel is its own LayoutView container: the outcome-coloured
-    header (the match's own name, the map, the time, the duration, the
-    format), one bullet block per team with every seat, then an action
-    row of link buttons \u2014 the aoe2insights match page and one replay
-    per player (the official GetMatchReplay endpoint, per-seat profile
-    id) \u2014 and a footer carrying the panel id (stats:match:<id>) with
-    the guild's civs/maps guide channels.
+    The owner's previous bot's grammar (2026-11-21): a titled card per
+    match \u2014 the ladder header, the MAP section (its post link, the
+    stored map image as the section accessory, the finish and duration
+    footnotes), one SECTION per seat (the civ image as accessory, the
+    replay jump on the medal line, the bold post-match Elo, the -#
+    delta-and-civ subline), and the base-of-card -# history (match
+    start, finish, the Libre:Match report). A link row closes the card:
+    the aoe2insights match page.
     """
-    from botforge.discord.stats_views import (
-        _entry_players,
-        _fmt_duration,
-        _match_kind,
-        _match_title,
-        _team_of,
-        _when,
-    )
+    from botforge.discord.stats_views import _entry_players, _match_title, _when
 
-    guild_id = str(interaction.guild_id or "")
-    civs_link = await _tree_channel_link(guild_id, "games/aoe2", "civs")
-    maps_link = await _tree_channel_link(guild_id, "games/aoe2", "maps")
-    for entry in entries:
+    civ_urls, civ_images, map_urls, map_images = await _panel_enrichment(
+        interaction, entries
+    )
+    total = len(entries)
+    for index, entry in enumerate(entries):
         players = _entry_players(entry)
-        winners = {str(w) for w in (getattr(entry, "winners", ()) or ())}
-        outcome = (
-            "win"
-            if winners and winners & me_ids
-            else "loss"
-            if winners and not winners & me_ids
-            else ""
-        )
-        icon = {"win": "\u2705", "loss": "\u274c"}.get(outcome, "\u2b1c")
-        colour = _OUTCOME_COLOURS.get(outcome or "", 0x5865F2)
-        title = _match_title(entry, labels)
-        map_name = str(getattr(entry, "map_name", "") or "").strip()
-        teams_lines = _panel_team_lines(players, me_ids, known_ids, labels)
-        head_bits = [
-            " ".join([icon, f"**{title}**"]),
-            f"*{map_name}*" if map_name and map_name.lower() != "my map" and map_name != title else "",
-            _when(entry),
-            _fmt_duration(_duration_sec(entry)) if _duration_sec(entry) else "",
-            _match_kind(players, _team_of(players, me_ids)),
-        ]
-        head = " \u2014 ".join(bit for bit in head_bits if bit)
         match_id = str(getattr(entry, "match_id", "") or "")
-        footer_bits = [f"-# Panneau `stats:match:{match_id or '?'}`"]
-        if civs_link:
-            footer_bits.append(f"Guides civs : {civs_link}")
-        if maps_link:
-            footer_bits.append(f"Maps : {maps_link}")
-        container_blocks: list[Any] = [
-            discord.ui.TextDisplay(head),
-            discord.ui.Separator(),
-            discord.ui.TextDisplay("\n".join(teams_lines) if teams_lines else "\u2014"),
-            discord.ui.Separator(),
-        ]
-        rows = _panel_link_rows(match_id, players)
-        container_blocks.extend(rows)
-        container_blocks.append(discord.ui.TextDisplay("\n".join(footer_bits)))
+        winners = {str(w) for w in (getattr(entry, "winners", ()) or ())}
+        _, _, accent = _outcome_of(entry, me_ids)
+        number = total - index
+        alias = _viewer_alias(players, me_ids)
+        blocks: list[Any] = []
+        header = await reply(
+            interaction, "profile.matches_ladder", name=alias, number=number
+        )
+        blocks.append(discord.ui.TextDisplay(header))
+        # the MAP section: post link + stored image as the accessory
+        map_name = str(getattr(entry, "map_name", "") or "").strip()
+        map_label = map_name if map_name and map_name.lower() != "my map" else _match_title(
+            entry, {"untitled": "Match {id}"}
+        )
+        map_link = (
+            f"[{map_label}]({map_urls[map_name]})" if map_urls.get(map_name) else map_label
+        )
+        sub_lines = [f"-# Termin\u00e9 {_when(entry)}"]
+        duration = max(
+            0,
+            int(getattr(entry, "finished_at", 0) or 0) - int(getattr(entry, "started_at", 0) or 0),
+        )
+        if duration:
+            sub_lines.append(
+                "-# Dur\u00e9e de la partie : " + _fmt_clock(duration)
+            )
+        map_text = f"### {map_link}\n" + "\n".join(sub_lines)
+        image = map_images.get(map_name, "") if map_name else ""
+        if image:
+            blocks.append(
+                discord.ui.Section(
+                    discord.ui.TextDisplay(map_text),
+                    accessory=discord.ui.Thumbnail(image),
+                )
+            )
+        else:
+            blocks.append(discord.ui.TextDisplay(map_text))
+        blocks.append(discord.ui.Separator())
+        # one SECTION per seat: the civ icon as the accessory
+        seats = _panel_player_lines(players, me_ids, winners, match_id, civ_urls, civ_images)
+        for text, civ_image in seats:
+            if civ_image:
+                blocks.append(
+                    discord.ui.Section(
+                        discord.ui.TextDisplay(text),
+                        accessory=discord.ui.Thumbnail(civ_image),
+                    )
+                )
+            else:
+                blocks.append(discord.ui.TextDisplay(text))
+        # the base-of-card history
+        started = int(getattr(entry, "started_at", 0) or 0)
+        finished = int(getattr(entry, "finished_at", 0) or 0)
+        foot: list[str] = []
+        if started:
+            foot.append(f"-# partie commenc\u00e9e <t:{started}:R>")
+        if finished:
+            foot.append(f"-# termin\u00e9e <t:{finished}:R> \u00b7 rapport\u00e9 par Libre:Match")
+        foot.append(f"-# Panneau `stats:match:{match_id or '?'}`")
+        blocks.append(discord.ui.Separator())
+        blocks.append(discord.ui.TextDisplay("\n".join(foot)))
+        blocks.append(
+            discord.ui.ActionRow(
+                discord.ui.Button(
+                    label="aoe2insights",
+                    emoji="\U0001f517",
+                    style=discord.ButtonStyle.link,
+                    url=INSIGHTS_MATCH_URL.format(match_id=match_id),
+                )
+            )
+        )
         view = discord.ui.LayoutView(timeout=None)
-        view.add_item(discord.ui.Container(*container_blocks, accent_colour=discord.Colour(colour)))
+        view.add_item(discord.ui.Container(*blocks, accent_colour=discord.Colour(accent)))
         try:
             await interaction.followup.send(view=view, ephemeral=True)
         except Exception:
@@ -943,11 +1089,12 @@ async def _send_match_panels(
             return
 
 
-def _duration_sec(entry: Any) -> int:
-    """Return the match's duration in seconds (0 when unknown)."""
-    started = int(getattr(entry, "started_at", 0) or 0)
-    finished = int(getattr(entry, "finished_at", 0) or 0)
-    return max(0, finished - started) if started and finished else 0
+async def _stored_channel(guild_id: str, scope: str, key: str) -> str:
+    """Return the stored channel id (empty when unwired)."""
+    from botforge.discord.ui.panels_provisioning import stored_channel_id
+
+    channel_id = await stored_channel_id(guild_id, scope, key) if guild_id else None
+    return str(channel_id) if channel_id else ""
 
 
 class ProfileMatchesButton(
@@ -1038,7 +1185,8 @@ class ProfileMatchesButton(
                 await reply(interaction, "profile.matches_empty"), ephemeral=True
             )
             return
-        await _send_match_panels(interaction, entries, me_ids, known_ids, labels)
+        await _send_match_panels(interaction, entries, me_ids, known_ids)
+
 
 class ProfileRenameButton(
     discord.ui.DynamicItem[discord.ui.Button[Any]],
