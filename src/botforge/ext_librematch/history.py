@@ -118,6 +118,28 @@ def _int(value: Any) -> int:
         return 0
 
 
+def _needs_repair(candidate_docs: list[dict[str, Any]]) -> bool:
+    """Decide whether the incomplete-looking captures can be completed.
+
+    A bare projection repairs ONLY when the RAW proves the upstream
+    carried what the capture lacks: the mongo marker is coarse (an
+    empty players list, a civ-less first seat); the raw has the
+    verdict \u2014 a lobby whose members genuinely carry no
+    civilization_id never repairs (no repair loop).
+    """
+    for doc in candidate_docs:
+        raw = doc.get("raw")
+        if not isinstance(raw, dict):
+            return True
+        players = doc.get("players") or []
+        if not players:
+            return True
+        members = raw.get("matchhistorymember") or []
+        if any((m or {}).get("civilization_id") is not None for m in members):
+            return True
+    return False
+
+
 class MatchHistorySyncer:
     """Pull the known accounts' history into the store, exploit it after."""
 
@@ -157,10 +179,10 @@ class MatchHistorySyncer:
         # captured — the account re-pulls its DEEP window and REPLACES
         # the incomplete captures with the full upstream payload (the
         # match facts stay what they are; only the capture completes).
-        incomplete = await self._store.count_incomplete_matches(profile_id)
+        incomplete = _needs_repair(await self._store.find_incomplete_docs(profile_id))
         deep = (
             await self._store.count_matches_of_profile(profile_id) == 0
-            or incomplete > 0
+            or incomplete
         )
         if incomplete:
             logger.info(

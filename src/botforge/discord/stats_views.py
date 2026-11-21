@@ -268,7 +268,9 @@ def _player_token(player: dict[str, Any], me_ids: set[str], known_ids: set[str])
     elif pid in known_ids and pid:
         name = f"*{name}*"
     civ = str(player.get("civ") or "").strip()
-    elo = int(player.get("rating_after") or player.get("elo") or 0)
+    # the ladder convention: the PRE-match Elo on the seat line, the
+    # delta in parentheses (the old bot, insights)
+    elo = int(player.get("rating_before") or player.get("rating_after") or 0)
     bits: list[str] = [name]
     if civ:
         bits.append(civ)

@@ -60,7 +60,7 @@ The&nbsp;provider's&nbsp;own&nbsp;persistence&nbsp;seam&nbsp;over&nbsp;async&nbs
 <td class="singlecolumn">Methods defined here:<br>
 <dl><dt><a name="LibrematchStore-__init__"><strong>__init__</strong></a>(self, database: 'Any') -&gt; 'None'</dt><dd><span class="code">Wrap&nbsp;the&nbsp;provider's&nbsp;async&nbsp;Mongo&nbsp;database.</span></dd></dl>
 
-<dl><dt>async <a name="LibrematchStore-count_incomplete_matches"><strong>count_incomplete_matches</strong></a>(self, profile_id: 'str') -&gt; 'int'</dt><dd><span class="code">Count&nbsp;the&nbsp;profile's&nbsp;stored&nbsp;matches&nbsp;whose&nbsp;projection&nbsp;is&nbsp;empty.<br>
+<dl><dt>async <a name="LibrematchStore-count_incomplete_matches"><strong>count_incomplete_matches</strong></a>(self, profile_id: 'str') -&gt; 'int'</dt><dd><span class="code">Count&nbsp;the&nbsp;profile's&nbsp;stored&nbsp;matches&nbsp;whose&nbsp;capture&nbsp;is&nbsp;incomplete.<br>
 &nbsp;<br>
 A&nbsp;document&nbsp;stored&nbsp;by&nbsp;an&nbsp;older&nbsp;revision&nbsp;may&nbsp;carry&nbsp;a&nbsp;raw&nbsp;payload<br>
 WITHOUT&nbsp;the&nbsp;members/description&nbsp;fields&nbsp;(incomplete<br>
@@ -73,6 +73,12 @@ capture.&nbsp;An&nbsp;empty&nbsp;(or&nbsp;absent)&nbsp;``players``&nbsp;list&nbs
 <dl><dt>async <a name="LibrematchStore-count_matches_since"><strong>count_matches_since</strong></a>(self, profile_ids: 'list[str]', since_s: 'int') -&gt; 'int'</dt><dd><span class="code">Count&nbsp;the&nbsp;matches&nbsp;of&nbsp;the&nbsp;profiles&nbsp;finished&nbsp;after&nbsp;``since_s``.</span></dd></dl>
 
 <dl><dt>async <a name="LibrematchStore-find_accounts"><strong>find_accounts</strong></a>(self, profile_ids: 'list[str]') -&gt; 'list[dict[str, Any]]'</dt><dd><span class="code">Return&nbsp;the&nbsp;status&nbsp;documents&nbsp;of&nbsp;the&nbsp;accounts&nbsp;(missing&nbsp;ones&nbsp;absent).</span></dd></dl>
+
+<dl><dt>async <a name="LibrematchStore-find_incomplete_docs"><strong>find_incomplete_docs</strong></a>(self, profile_id: 'str', limit: 'int' = 100) -&gt; 'list[dict[str, Any]]'</dt><dd><span class="code">Return&nbsp;the&nbsp;profile's&nbsp;stored&nbsp;matches&nbsp;whose&nbsp;capture&nbsp;looks&nbsp;incomplete.<br>
+&nbsp;<br>
+The&nbsp;Mongo&nbsp;marker&nbsp;is&nbsp;COARSE&nbsp;(an&nbsp;empty&nbsp;players&nbsp;list,&nbsp;or&nbsp;a&nbsp;first<br>
+seat&nbsp;with&nbsp;no&nbsp;civ);&nbsp;the&nbsp;SYNC&nbsp;decides&nbsp;on&nbsp;the&nbsp;RAW&nbsp;—&nbsp;the&nbsp;marker<br>
+only&nbsp;narrows&nbsp;the&nbsp;scan,&nbsp;the&nbsp;upstream&nbsp;payload&nbsp;has&nbsp;the&nbsp;verdict.</span></dd></dl>
 
 <dl><dt>async <a name="LibrematchStore-find_matches"><strong>find_matches</strong></a>(self, profile_ids: 'list[str]', limit: 'int' = 0, since_s: 'int' = 0, leaderboard_id: 'str' = '') -&gt; 'list[dict[str, Any]]'</dt><dd><span class="code">Query&nbsp;the&nbsp;stored&nbsp;history:&nbsp;matches&nbsp;of&nbsp;the&nbsp;profiles,&nbsp;newest&nbsp;first.<br>
 &nbsp;<br>

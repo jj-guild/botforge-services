@@ -95,8 +95,25 @@ class LibrematchStore:
         """Count the stored matches of one profile (deep-vs-quick preset)."""
         return int(await self._matches().count_documents({"profile_ids": str(profile_id)}))
 
+    async def find_incomplete_docs(self, profile_id: str, limit: int = 100) -> list[dict[str, Any]]:
+        """Return the profile's stored matches whose capture looks incomplete.
+
+        The Mongo marker is COARSE (an empty players list, or a first
+        seat with no civ); the SYNC decides on the RAW — the marker
+        only narrows the scan, the upstream payload has the verdict.
+        """
+        marker = {
+            "$or": [
+                {"players.0": {"$exists": False}},
+                {"players.0.civ": {"$exists": False}},
+                {"players.0.civ": {"$in": ["", None]}},
+            ]
+        }
+        cursor = self._matches().find({"profile_ids": str(profile_id), **marker})
+        return [dict(doc) async for doc in cursor][:limit]
+
     async def count_incomplete_matches(self, profile_id: str) -> int:
-        """Count the profile's stored matches whose projection is empty.
+        """Count the profile's stored matches whose capture is incomplete.
 
         A document stored by an older revision may carry a raw payload
         WITHOUT the members/description fields (incomplete
@@ -104,11 +121,7 @@ class LibrematchStore:
         them: those documents need a fresh upstream fetch that REPLACES the
         capture. An empty (or absent) ``players`` list is the marker.
         """
-        return int(
-            await self._matches().count_documents(
-                {"profile_ids": str(profile_id), "players.0": {"$exists": False}}
-            )
-        )
+        return len(await self.find_incomplete_docs(profile_id))
 
     async def find_matches(
         self,

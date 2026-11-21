@@ -172,29 +172,29 @@ def test_the_view_blocks_render_from_the_real_payload() -> None:
     assert finished_match_block(_entry("397662136"), {ME}, {"848567"}, labels) == [
         "- \u2705 **Arabia** \u2014 <t:1749127503:R> \u00b7 17 min \u00b7 1v1",
         "  - **\u00c9quipe 1**",
-        "      - **JeanJack** \u00b7 Magyars \u00b7 **1185 Elo** (+48)",
+        "      - **JeanJack** \u00b7 Magyars \u00b7 **1137 Elo** (+48)",
         "  - **\u00c9quipe 2**",
-        "      - Lastdrop \u00b7 Persians \u00b7 **1156 Elo** (-18)",
+        "      - Lastdrop \u00b7 Persians \u00b7 **1174 Elo** (-18)",
     ]
     # the custom lobby \u2014 its own name carries the title, the map rides along
     assert finished_match_block(_entry("473574107"), {ME}, {"848567"}, labels) == [
         "- \u2705 **Test bot** \u00b7 *Arabia* \u2014 <t:1777283898:R> \u00b7 1v1",
         "  - **\u00c9quipe 1**",
-        "      - *Merlin Pinpin* \u00b7 Saracens \u00b7 **1238 Elo** (-18)",
+        "      - *Merlin Pinpin* \u00b7 Saracens \u00b7 **1256 Elo** (-18)",
         "  - **\u00c9quipe 2**",
-        "      - **JeanJack** \u00b7 Shu \u00b7 **1237 Elo** (+18)",
+        "      - **JeanJack** \u00b7 Shu \u00b7 **1219 Elo** (+18)",
     ]
     # the 4v4 loss \u2014 every seat stacked, the viewed profile bold
     assert finished_match_block(_entry("433589647"), {ME}, set(), labels) == [
         "- \u274c **CoastalForest** \u2014 <t:1763320771:R> \u00b7 16 min \u00b7 4v4",
         "  - **\u00c9quipe 1**",
-        "      - TheGooseTransporter \u00b7 Vietnamese \u00b7 **1512 Elo** (+16)",
-        "      - Saladin45 \u00b7 Bulgarians \u00b7 **1502 Elo** (+16)",
-        "      - konstid \u00b7 Gurjaras \u00b7 **1564 Elo** (+13)",
-        "      - Richman \u00b7 Dravidians \u00b7 **1495 Elo** (+17)",
+        "      - TheGooseTransporter \u00b7 Vietnamese \u00b7 **1496 Elo** (+16)",
+        "      - Saladin45 \u00b7 Bulgarians \u00b7 **1486 Elo** (+16)",
+        "      - konstid \u00b7 Gurjaras \u00b7 **1551 Elo** (+13)",
+        "      - Richman \u00b7 Dravidians \u00b7 **1478 Elo** (+17)",
         "  - **\u00c9quipe 2**",
-        "      - **JeanJack** \u00b7 Vikings \u00b7 **1432 Elo** (-13)",
-        "      - DippityDang \u00b7 Malians \u00b7 **1535 Elo** (-18)",
-        "      - Cyo Electryx \u00b7 Saracens \u00b7 **1396 Elo** (-12)",
-        "      - SSS \u00b7 Mongols \u00b7 **1554 Elo** (-19)",
+        "      - **JeanJack** \u00b7 Vikings \u00b7 **1445 Elo** (-13)",
+        "      - DippityDang \u00b7 Malians \u00b7 **1553 Elo** (-18)",
+        "      - Cyo Electryx \u00b7 Saracens \u00b7 **1408 Elo** (-12)",
+        "      - SSS \u00b7 Mongols \u00b7 **1573 Elo** (-19)",
     ]
