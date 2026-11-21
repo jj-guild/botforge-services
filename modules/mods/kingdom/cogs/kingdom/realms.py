@@ -219,20 +219,63 @@ async def _apply_dormancy(guild: Any, channel: Any, key: str, member_ids: list[i
     Awake (t2a — the admin accepted the season entry): the member
     denials are CLEARED (overwrite=None → the member inherits the
     category's allow), the halls reopen without any crawl.
+
+    dormancy-recompute-v1 (Drasah 21/11) — l'incident AEGIS : retirer
+    les denies UN PAR UN répare mal tout état déjà cassé (coquille
+    périmée à l'acceptation, membre non résolvable — le saut est muet,
+    cf. la leçon taverne Check 107, overwrites d'ids passés). On
+    RECALCULE donc l'ensembre COMPLET des overwrites du salon à chaque
+    passe (le edit remplace TOUT : un deny survivant ne peut plus
+    exister par construction) : everyone-deny + allow (éveillé) ou
+    deny (dormant) pour les membres ACTUELS, résolus en objets réels,
+    chaque membre non résolu loggé fort (jamais muet).
     """
     if key not in DORMANT_HIDDEN_KEYS:
         return
+    overwrites: dict[Any, discord.PermissionOverwrite] = {}
+    everyone = getattr(guild, "default_role", None)
+    if everyone is not None:
+        overwrites[everyone] = discord.PermissionOverwrite(view_channel=False)
     for member_id in member_ids:
         member = await _resolve_member(guild, member_id)
         if member is None:
+            logger.warning(
+                "kingdom realms: member %s skipped at %s dormancy recompute (unresolvable in guild %s)",
+                member_id,
+                key,
+                getattr(guild, "id", "?"),
+            )
             continue
+        if dormant:
+            overwrites[member] = discord.PermissionOverwrite(
+                view_channel=False, read_message_history=False
+            )
+        else:
+            overwrites[member] = discord.PermissionOverwrite(
+                view_channel=True, read_message_history=True
+            )
+    edit = getattr(channel, "edit", None)
+    if edit is not None:
         try:
-            if dormant:
-                await channel.set_permissions(member, view_channel=False, read_message_history=False)
-            else:
-                await channel.set_permissions(member, overwrite=None)
+            await edit(overwrites=overwrites)
+            return
+        except TypeError:  # a thin edit seam (tests) — degrade, never a mask stuck
+            pass
         except Exception:  # noqa: BLE001
-            logger.warning("kingdom realms: dormancy edit failed (%s)", getattr(channel, "id", "?"))
+            logger.warning(
+                "kingdom realms: dormancy recompute failed (%s)", getattr(channel, "id", "?")
+            )
+            return
+    set_permissions = getattr(channel, "set_permissions", None)
+    if set_permissions is not None:
+        for target, overwrite in overwrites.items():
+            try:
+                await set_permissions(target, overwrite=overwrite)
+            except Exception:  # noqa: BLE001
+                logger.warning(
+                    "kingdom realms: dormancy recompute failed (%s)", getattr(channel, "id", "?")
+                )
+                return
 
 
 async def ensure_realm_structure(guild: Any, realm: Any, *, dormant: bool = True) -> dict[str, Any]:

@@ -62,8 +62,8 @@ _BIRD_EMOJI = {"pigeon": "🕊️", "corbeau": "🐦‍⬛", "faucon": "🦅"}
 # ---------------------------------------------------------------------------
 # The strings — VERBATIM from the reference branch (kingdom_lieux.py +
 # kingdom_realm_content.py + kingdom_voliere_panel.py, fr THEN en mirror).
-# The ONE new pair is `home_button` (the chez-soi door riding the Entrée
-# chooser — the integration Drasah arbitrated 21/11).
+# retrait-chez-soi (Drasah 21/11) : « on n'en a pas besoin » — la
+# 6ᵉ porte qui vivait ici a disparu avec les strings qui la portaient.
 # ---------------------------------------------------------------------------
 
 LIEUX_STRINGS: dict[str, dict[str, str]] = {
@@ -76,7 +76,6 @@ LIEUX_STRINGS: dict[str, dict[str, str]] = {
         "paroisse_button": "⛪ Paroisse",
         "voliere_button": "🏗️ Volière",
         "sortir_button": "🚪 Sortir",
-        "home_button": "🏠 Chez soi",
         "not_lord": (
             "Seuls les seigneurs du royaume peuvent entrer dans ses lieux."
         ),
@@ -143,7 +142,6 @@ LIEUX_STRINGS: dict[str, dict[str, str]] = {
         "paroisse_button": "⛪ Parish",
         "voliere_button": "🏗️ Aviary",
         "sortir_button": "🚪 Leave",
-        "home_button": "🏠 Home",
         "not_lord": (
             "Only the lords of this kingdom may enter its places."
         ),
@@ -412,7 +410,6 @@ LieuxRempartsButton = _lieu_button_class("remparts", discord.ButtonStyle.seconda
 LieuxComptesButton = _lieu_button_class("comptes", discord.ButtonStyle.secondary)
 LieuxParoisseButton = _lieu_button_class("paroisse", discord.ButtonStyle.secondary)
 LieuxVoliereButton = _lieu_button_class("voliere", discord.ButtonStyle.secondary)
-LieuxHomeButton = _lieu_button_class("home", discord.ButtonStyle.primary)
 
 
 class LieuxEntreeButton(
@@ -464,7 +461,6 @@ def lieux_dynamic_items() -> tuple:
         LieuxComptesButton,
         LieuxParoisseButton,
         LieuxVoliereButton,
-        LieuxHomeButton,
         LieuxSortirButton,
         LieuxSeigneurieButton,
     )
@@ -477,8 +473,8 @@ def lieux_dynamic_items() -> tuple:
 
 def entree_view(strings: dict[str, str]) -> discord.ui.LayoutView:
     """The ephemeral chooser behind 🏰 Entrée — the five doors in one
-    ActionRow (the reference branch's entree_view, + the chez-soi door
-    Drasah arbitrated on 21/11)."""
+    ActionRow (the reference branch's entree_view). retrait-chez-soi
+    (Drasah 21/11) : « on n'en a pas besoin » — la 6ᵉ porte disparaît."""
     row: Any = discord.ui.ActionRow(
         LieuxConseilButton(strings["conseil_button"]).item,
         LieuxRempartsButton(strings["remparts_button"]).item,
@@ -486,14 +482,12 @@ def entree_view(strings: dict[str, str]) -> discord.ui.LayoutView:
         LieuxParoisseButton(strings["paroisse_button"]).item,
         LieuxVoliereButton(strings["voliere_button"]).item,
     )
-    home_row: Any = discord.ui.ActionRow(LieuxHomeButton(strings["home_button"]).item)
     return surface(
         ENTREE_SURFACE,
         discord.ui.Container(
             discord.ui.TextDisplay(f"## {strings['entree_title']}"),
             discord.ui.Separator(),
             row,
-            home_row,
             accent_colour=GOLD,
         ),
     )
@@ -525,20 +519,6 @@ async def _open_lieu(interaction: discord.Interaction, kind: str) -> None:
     strings = lieux_strings(_locale_of(interaction))
     lord, kingdom, stack = await _lord_kingdom_of(interaction, strings)
     if lord is None or kingdom is None:
-        return
-    if kind == "home":
-        from .realms import home_layout, realm_strings
-
-        realm_strings_catalog = realm_strings(_locale_of(interaction))
-        realm = await _shell_of(stack, str(getattr(interaction.user, "id", "")))
-        if realm is None:
-            await open_unique_ephemeral(
-                interaction, content=realm_strings_catalog["realm_gone_note"]
-            )
-            return
-        await open_unique_ephemeral(
-            interaction, view=await home_layout(interaction, realm, realm_strings_catalog)
-        )
         return
     try:
         state = await _gather_state(stack, kingdom)

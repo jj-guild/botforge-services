@@ -95,7 +95,7 @@ def _clean(monkeypatch: pytest.MonkeyPatch) -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_the_entree_chooser_carries_the_five_doors_and_the_home_door() -> None:
+def test_the_entree_chooser_carries_the_five_doors_and_no_chez_soi() -> None:
     from botforge.mods.kingdom.cogs.lieux import entree_view, lieux_strings
 
     view = entree_view(lieux_strings("fr"))
@@ -104,7 +104,10 @@ def test_the_entree_chooser_carries_the_five_doors_and_the_home_door() -> None:
     assert "Où souhaitez-vous vous rendre ?" in body
     for kind in ("conseil", "remparts", "comptes", "paroisse", "voliere"):
         assert f"kingdoms:lieux:{kind}" in ids, f"the {kind} door must ride the chooser"
-    assert "kingdoms:lieux:home" in ids, "the chez-soi door rides the second row"
+    assert "kingdoms:lieux:home" not in ids, (
+        "retrait-chez-soi (Drasah 21/11) : « on n'en a pas besoin »"
+    )
+    assert not hasattr(lieux_strings("fr"), "get") or "home_button" not in lieux_strings("fr")
 
 
 def test_the_lieux_strings_carry_fr_en_parity() -> None:
@@ -371,3 +374,86 @@ def _love_strings() -> dict[str, str]:
 
 async def _record_open(interaction: Any, content: str | None = None, **kwargs: Any) -> None:
     calls.append("not_lord" if "seigneurs" in str(content or "") else str(content or "view"))
+
+
+# ---------------------------------------------------------------------------
+# dormancy-recompute-v1 — l'incident AEGIS : un deny survivant ne peut
+# plus exister PAR CONSTRUCTION. L'éveil RECALCULE l'overwrite-set
+# COMPLET du salon (le edit remplace tout — un stale deny part avec).
+# ---------------------------------------------------------------------------
+
+
+class _RecomputeRole:
+    def __init__(self, rid: int) -> None:
+        self.id = rid
+
+
+class _RecomputeMember:
+    def __init__(self, mid: int) -> None:
+        self.id = mid
+
+
+class _RecomputeChannel:
+    def __init__(self) -> None:
+        self.edits: list[dict[str, Any]] = []
+
+    async def edit(self, **kw: Any) -> None:
+        self.edits.append(kw)
+
+
+class _RecomputeGuild:
+    def __init__(self, known_ids: tuple[int, ...] = (1,)) -> None:
+        self.default_role = _RecomputeRole(0)
+        self._known = set(known_ids)
+        self.id = "g-1"
+
+    def get_member(self, mid: int) -> Any:
+        return _RecomputeMember(mid) if mid in self._known else None
+
+    async def fetch_member(self, mid: int) -> Any:
+        raise RuntimeError("unknown member")  # the resolution dead-ends
+
+
+@pytest.mark.asyncio
+async def test_the_awake_recompute_replaces_the_whole_overwrite_set() -> None:
+    from discord import PermissionOverwrite
+
+    from botforge.mods.kingdom.cogs.realms import _apply_dormancy
+
+    guild = _RecomputeGuild()
+    channel = _RecomputeChannel()
+    await _apply_dormancy(guild, channel, "discussions", [1], dormant=False)
+
+    assert channel.edits, "the awake pass MUST recompute (the AEGIS incident)"
+    overwrites = channel.edits[0]["overwrites"]
+    keys = {type(k).__name__ for k in overwrites}
+    assert "_RecomputeRole" in keys, "everyone deny rides the recompute"
+    member = next(k for k in overwrites if type(k).__name__ == "_RecomputeMember")
+    assert overwrites[member].view_channel is True, "the member is granted the salon"
+    assert isinstance(overwrites[member], PermissionOverwrite)
+
+
+@pytest.mark.asyncio
+async def test_the_recompute_logs_an_unresolvable_member(caplog) -> None:
+    import logging as _logging
+
+    from botforge.mods.kingdom.cogs.realms import _apply_dormancy
+
+    with caplog.at_level(_logging.WARNING, logger="kingdom.realms"):
+        guild = _RecomputeGuild(known_ids=())  # nobody resolvable
+        channel = _RecomputeChannel()
+        await _apply_dormancy(guild, channel, "territory", [4242], dormant=False)
+    assert "4242" in caplog.text, "a skipped member is NEVER silent (the Check 107 lesson)"
+
+
+def test_the_dormant_recompute_denies_members() -> None:
+    import asyncio
+
+    from botforge.mods.kingdom.cogs.realms import _apply_dormancy
+
+    guild = _RecomputeGuild()
+    channel = _RecomputeChannel()
+    asyncio.run(_apply_dormancy(guild, channel, "alliances", [1], dormant=True))
+    overwrites = channel.edits[0]["overwrites"]
+    member = next(k for k in overwrites if type(k).__name__ == "_RecomputeMember")
+    assert overwrites[member].view_channel is False, "dormant = masked, never destroyed"
