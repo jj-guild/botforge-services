@@ -96,17 +96,21 @@ class LibrematchStore:
         return int(await self._matches().count_documents({"profile_ids": str(profile_id)}))
 
     async def find_incomplete_docs(self, profile_id: str, limit: int = 100) -> list[dict[str, Any]]:
-        """Return the profile's stored matches whose capture looks incomplete.
+        """Return the profile's stored captures of an OLDER era.
 
-        The Mongo marker is COARSE (an empty players list, or a first
-        seat with no civ); the SYNC decides on the RAW — the marker
-        only narrows the scan, the upstream payload has the verdict.
+        The repair is era-gated (the merlin loops of 2026-11-21: any
+        content-based marker midjudged and the deep refetch looped):
+        a capture written before the current era \u2014 or by an older
+        revision (no era field at all) \u2014 repairs ONCE, the rebuilt
+        capture carries the current era and never candidates again,
+        whatever the upstream genuinely failed to carry.
         """
+        from botforge.ext_librematch.history import CAPTURE_ERA
+
         marker = {
             "$or": [
-                {"players.0": {"$exists": False}},
-                {"players.0.civ": {"$exists": False}},
-                {"players.0.civ": {"$in": ["", None]}},
+                {"capture_era": {"$exists": False}},
+                {"capture_era": {"$lt": CAPTURE_ERA}},
             ]
         }
         cursor = self._matches().find({"profile_ids": str(profile_id), **marker})
