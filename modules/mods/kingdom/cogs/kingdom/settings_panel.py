@@ -632,6 +632,49 @@ async def _false_start(interaction: discord.Interaction, strings: dict[str, str]
     await interaction.followup.send(note, ephemeral=True)
 
 
+async def _drain_sas(stack: Any, bot: Any, locale: str, dm_key: str) -> int:
+    """sas-cycle-v1 (Drasah 21/11) : fermer le SAS VIDE la salle d'attente.
+
+    « On vide le sas — les royaumes qui ont demandé sont prévenus en
+    MP automatiquement ; pas de motif, la fermeture EST l'information. »
+    Chaque demande d'entrée est retirée et le Roi reçoit la note neutre
+    (best-effort TOTAL via le seam DM : un Roi aux MP fermés ne câble
+    jamais la fermeture). Le même moteur sert la fermeture MANUELLE du
+    tiroir 🎚️ et « 🏁 Terminer la saison » (le texte change, pas la
+    mécanique) — le SAS est la volonté de l'admin, jamais un état qui
+    traîne (annonce-ready : une note paramétrable, zéro send ad hoc).
+    """
+    service = getattr(stack, "realms", None)
+    if service is None:
+        return 0
+    from .common import dm_user_safe, mod_catalog
+
+    try:
+        strings = dict(mod_catalog().section("kingdom.settings", locale))
+    except Exception:  # noqa: BLE001 — unreadable catalog = the fr default
+        strings = {}
+    dm_text = str(strings.get(dm_key, str(dm_key)))
+    try:
+        realms = await service.realms()
+    except Exception:  # noqa: BLE001 — an unreadable room stays, loudly
+        logger.warning("kingdom: the sas drain read failed", exc_info=True)
+        return 0
+    drained = 0
+    for realm in realms:
+        if not getattr(realm, "join_request", None):
+            continue
+        try:
+            await service.clear_join_request(str(realm.id))
+        except Exception:  # noqa: BLE001 — one realm never stops the sweep
+            logger.warning("kingdom: sas drain failed (%s)", realm.id, exc_info=True)
+            continue
+        drained += 1
+        await dm_user_safe(bot, str(realm.king_id), dm_text)
+    if drained:
+        logger.info("kingdom: the sas drained %d waiting realm(s)", drained)
+    return drained
+
+
 async def _end_season(interaction: discord.Interaction, strings: dict[str, str]) -> None:
     """🏁 Terminer la saison — fermer la boucle de test proprement.
 
@@ -687,6 +730,24 @@ async def _end_season(interaction: discord.Interaction, strings: dict[str, str])
         # saison (royaumes, seigneurs, attaques — le §3.3 du contrat)
         await stack.kingdoms.reset()
         note = str(strings["settings_end_season_done"]).format(released=released)
+        # sas-cycle-v1 (Drasah 21/11) : la fin de saison FERME le sas —
+        # le seul geste AUTOMATIQUE du cycle (la réouverture restera
+        # manuelle) — et vidange la salle d'attente avec le MP de
+        # prévention aux Rois (best-effort, jamais bloquant).
+        try:
+            from .regie import set_switch
+
+            await set_switch(
+                interaction.client,
+                str(interaction.guild_id or ""),
+                "season_entry_open",
+                False,
+            )
+            await _drain_sas(
+                stack, interaction.client, locale, "settings_sas_drain_season_dm"
+            )
+        except Exception:  # noqa: BLE001 — la fin ne rate jamais pour un MP
+            logger.warning("kingdom: the end-of-season sas close failed", exc_info=True)
     except Exception as exc:  # the panel reports, never raises
         logger.warning("kingdom: end season failed", exc_info=True)
         note = service_failure_note(strings, "settings_failed", exc)
@@ -1475,16 +1536,32 @@ class KingdomRegieSwitchButton(
         strings = strings_of(interaction)
         if not await _panel_guard(interaction):
             return
+        new_value = False
         try:
             from .regie import toggle_switch
 
-            await toggle_switch(
+            new_value = await toggle_switch(
                 interaction.client, str(interaction.guild_id or ""), self.switch
             )
         except Exception:  # noqa: BLE001 — the drawer reports, never raises
             logger.warning("kingdom: a régie toggle failed", exc_info=True)
             await _safe_send(interaction, strings["settings_failed"])
             return
+        # sas-cycle-v1 (Drasah 21/11) : fermer le SAS VIDE la salle
+        # d'attente — chaque Roi candidat apprend par MP que sa demande
+        # est retirée (best-effort total, jamais bloquant).
+        if self.switch == "season_entry_open" and not new_value:
+            try:
+                from .apply_flow import _guild_locale
+
+                await _drain_sas(
+                    wiring(),
+                    interaction.client,
+                    await _guild_locale(str(interaction.guild_id or "")),
+                    "settings_sas_drain_closed_dm",
+                )
+            except Exception:  # noqa: BLE001 — la fermeture ne rate jamais
+                logger.warning("kingdom: the manual sas close drain failed", exc_info=True)
         # live-pin-v1: the flip shows on the console pin immediately
         await refresh_live_pins_after(interaction)
         view = await _build_drawer(
@@ -1718,7 +1795,21 @@ async def _open_launch(interaction: discord.Interaction, strings: dict[str, str]
     APRÈS on me pose la question classique ou bêta » — le choix de
     format vit dans une carte VISIBLE, jamais dans un champ texte à
     deviner. Chaque bouton de la fourche pose ensuite SES questions.
+
+    sas-cycle-v1 (Drasah 21/11) : le SAS ouvert est un PRÉREQUIS du
+    lancement — « le SAS n'a de sens que si l'admin l'a ouvert pour
+    préparer sa saison ». Fermé : le geste refuse poliment, la régie
+    🎚️ l'ouvre (la réouverture n'est jamais automatique).
     """
+    from .regie import regie_open
+
+    if not await regie_open(
+        interaction.client, str(interaction.guild_id or ""), "season_entry_open"
+    ):
+        await open_unique_ephemeral(
+            interaction, content=strings["settings_launch_sas_closed"]
+        )
+        return
     await open_unique_ephemeral(interaction, view=_launch_type_card(strings))
 
 

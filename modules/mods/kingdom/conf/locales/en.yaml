@@ -130,6 +130,9 @@ en:
       settings_launch_type_hint: "🏁 The same player journey in both cases (entry sas, admin validation): the format changes the rules. Classic = account required, normal clocks. Beta = no account, 52-hour compressed weekend."
       settings_launch_type_classic_button: "🎬 Classic season"
       settings_launch_type_beta_button: "🧪 Compressed beta season"
+      settings_launch_sas_closed: "⛔ The season airlock is closed — open the airlock in the 🎚️ regie drawer before launching the season."
+      settings_sas_drain_closed_dm: "🛂 The season airlock has just been closed — your entry request was withdrawn. No season is running: as soon as a season is prepared and the airlock reopens, you may request entry again."
+      settings_sas_drain_season_dm: "🏁 The season is over — the airlock is closed and your entry request was withdrawn. As soon as a season is prepared and the airlock reopens, you may request entry again."
       settings_launch_beta_modal_title: "🧪 Launch the beta season"
       settings_launch_modal_names_label: Imposed names (optional)
       settings_launch_modal_names_placeholder: "Kingdom A, Kingdom B"

@@ -21,6 +21,12 @@ behaviour EXACTLY (Drasah's running season must never wake up closed):
   « de base, par défaut, oui, le sas se ferme »), re-openable by hand
   for the latecomers (the régie drawer), and the admin can always
   inject a realm by the existing « Ajouter un royaume » gesture.
+  sas-cycle-v1 (Drasah 21/11) : the sas is the ADMIN's will — open
+  = préparation ; it is a LAUNCH PREREQUISITE (⇒ « ▶️ Lancer la
+  saison » refuses while closed) ; « 🏁 Terminer la saison » closes
+  it AUTOMATICALLY (the only automatic gesture of the cycle) and the
+  manual close EMPTIES the waiting room ( MPs best-effort) — the
+  re-open is NEVER automatic.
 """
 
 from __future__ import annotations

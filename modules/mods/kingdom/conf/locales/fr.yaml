@@ -137,6 +137,9 @@ fr:
       settings_launch_type_hint: "🏁 Même parcours des joueurs dans les deux cas (sas d'inscription, validation admin) : le format change les règles. Classique = compte requis, horloges normales. Bêta = sans compte, weekend compressé 52 h."
       settings_launch_type_classic_button: "🎬 Saison classique"
       settings_launch_type_beta_button: "🧪 Saison bêta compressée"
+      settings_launch_sas_closed: "⛔ Le SAS des saisons est fermé — ouvre le SAS dans la régie 🎚️ avant de lancer la saison."
+      settings_sas_drain_closed_dm: "🛂 Le SAS des saisons vient d'être fermé — ta demande d'inscription a été retirée. Pas de saison en cours : dès qu'une saison est préparée et le SAS rouvert, tu pourras redemander ton entrée."
+      settings_sas_drain_season_dm: "🏁 La saison est terminée — le SAS est fermé et ta demande d'inscription a été retirée. Dès qu'une saison est préparée et le SAS rouvert, tu pourras redemander ton entrée."
       settings_launch_beta_modal_title: "🧪 Lancer la saison bêta"
       settings_launch_modal_names_label: Noms imposés (optionnel)
       settings_launch_modal_names_placeholder: "Royaume A, Royaume B"
