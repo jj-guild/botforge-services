@@ -27,6 +27,10 @@ _REALM_STRINGS: dict[str, _Strings] = {
             "-# Le royaume est hors saison — ses salles se rouvriront à "
             "l'entrée en saison."
         ),
+        "realm_hub_awaiting_draft": (
+            "-# Le royaume est accepté pour la saison — la draft starter "
+            "partira au lancement de la saison par l'admin."
+        ),
         "realm_enter_button": "🏰 Entrée",
         # hub-dormant-actions (Drasah 21/11): à droite de l'Entrée, le
         # royaume endormi porte sa saison — la vue + l'acte du Roi
@@ -97,6 +101,10 @@ _REALM_STRINGS: dict[str, _Strings] = {
         ),
         "realm_hub_dormant_note": (
             "-# The realm is off-season — its halls reopen on season entry."
+        ),
+        "realm_hub_awaiting_draft": (
+            "-# The realm is accepted for the season — the starter draft "
+            "will fire when the admin launches the season."
         ),
         "realm_enter_button": "🏰 Enter",
         # hub-dormant-actions (Drasah 21/11): beside the door, the

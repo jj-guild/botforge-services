@@ -746,7 +746,12 @@ async def _accept_season_entry(
                 )
             except Exception as exc:  # noqa: BLE001 — one member never blocks the entry
                 logger.warning("kingdom: realm member enroll degraded (%s)", exc)
-        await service.engage(str(realm.id), str(getattr(season, "id", "")), str(kingdom.id))
+        # sas-acceptance-v1 (Drasah 21/11) : engage() renvoie la coquille
+        # FRAÎCHE (engagement posé, join_request consommée) — la garder :
+        # réveiller l'habitat avec l'objet périmé rendait un hub dormant.
+        realm = await service.engage(
+            str(realm.id), str(getattr(season, "id", "")), str(kingdom.id)
+        )
         note = str(strings["realm_accepted_note"]).format(name=realm.name, kingdom=kingdom.name)
     except Exception as exc:  # noqa: BLE001 — the dashboard reports, never raises
         logger.warning("kingdom: season entry failed (%s)", getattr(realm, "id", "?"), exc_info=True)

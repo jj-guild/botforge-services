@@ -312,6 +312,10 @@ def hub_layout(realm: Any, strings: dict[str, str], *, dormant: bool) -> discord
     )
     if dormant:
         blocks.append(discord.ui.TextDisplay(str(strings["realm_hub_dormant_note"])))
+    else:
+        # sas-acceptance-v1 (Drasah 21/11) : un royaume ACCEPTÉ est prêt —
+        # le hub affiche l'attente draft, PAS les béquilles hors-saison.
+        blocks.append(discord.ui.TextDisplay(str(strings["realm_hub_awaiting_draft"])))
     row: Any = discord.ui.ActionRow()
     row.add_item(
         RealmHomeButton(
@@ -503,12 +507,20 @@ async def home_layout(interaction: discord.Interaction, realm: Any, strings: dic
     for line in _home_lines(realm, strings):
         blocks.append(discord.ui.TextDisplay(line))
     row: Any = discord.ui.ActionRow()
-    for label, view_key in (
+    # sas-acceptance-v1 (Drasah 21/11) : la vue 📺 saison et le 🏆 Palmarès
+    # sont les béquilles des royaumes HORS saison — un royaume ACCEPTÉ vit
+    # déjà la vraie saison, ses raccourcis disparaissent.
+    engaged = bool(getattr(realm, "engagement", None))
+    shortcuts = (
         (strings["seigneurie_button"], "seigneurie"),
         (strings["presentation_button"], "presentation"),
-        (strings["season_button"], "season"),
-        (strings["palmares_button"], "palmares"),
-    ):
+    )
+    if not engaged:
+        shortcuts = shortcuts + (
+            (strings["season_button"], "season"),
+            (strings["palmares_button"], "palmares"),
+        )
+    for label, view_key in shortcuts:
         row.add_item(RealmNavButton(label, view_key, str(realm.slug)).item)
     blocks.append(discord.ui.Separator())
     blocks.append(row)
