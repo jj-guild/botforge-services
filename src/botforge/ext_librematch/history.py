@@ -179,15 +179,16 @@ class MatchHistorySyncer:
         # captured — the account re-pulls its DEEP window and REPLACES
         # the incomplete captures with the full upstream payload (the
         # match facts stay what they are; only the capture completes).
-        incomplete = _needs_repair(await self._store.find_incomplete_docs(profile_id))
+        repair_docs = await self._store.find_incomplete_docs(profile_id)
+        incomplete = _needs_repair(repair_docs)
         deep = (
             await self._store.count_matches_of_profile(profile_id) == 0
             or incomplete
         )
         if incomplete:
             logger.info(
-                "SYNC repair: %s incomplete stored capture(s) for %s \u2014 deep refetch",
-                incomplete,
+                "SYNC repair: %d incomplete stored capture(s) for %s \u2014 deep refetch",
+                len(repair_docs),
                 profile_id,
             )
         count = self._sync_count if deep else self._quick_count
@@ -199,9 +200,14 @@ class MatchHistorySyncer:
         if raw_matches:
             documents = [self._match_doc(m) for m in raw_matches]
             if incomplete:
-                # the repair pass REPLACES the incomplete captures of
-                # the SAME match ids \u2014 same facts, complete capture
-                await self._store.upsert_matches(documents)
+                # the repair DELETES the poisoned captures first (the
+                # old era suffixed every id with a board \u2014 the bare-id
+                # inserts never overwrote them, and the marker looped),
+                # then re-inserts complete captures of the SAME facts
+                await self._store.delete_matches(
+                    [str(doc.get("_id", "")) for doc in repair_docs]
+                )
+                await self._store.insert_matches_new_only(documents)
                 stored_any = True
             else:
                 # the steady state: a finished match is immutable, a

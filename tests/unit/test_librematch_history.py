@@ -45,6 +45,8 @@ def _doc_value(doc: dict[str, Any], dotted: str) -> Any:
     for part in dotted.split("."):
         if isinstance(value, dict):
             value = value.get(part)
+        elif isinstance(value, list) and part.isdigit() and int(part) < len(value):
+            value = value[int(part)]
         else:
             return None
     return value
@@ -110,6 +112,13 @@ class FakeCollection:
     async def insert_one(self, doc: dict[str, Any]) -> None:
         self.docs[str(doc["_id"])] = doc
         self.inserted = int(getattr(self, "inserted", 0)) + 1
+
+    async def delete_one(self, query: dict[str, Any]) -> int:
+        doc_id = str(query.get("_id", ""))
+        if doc_id in self.docs:
+            del self.docs[doc_id]
+            return 1
+        return 0
 
     async def update_one(self, query: dict[str, Any], update: dict[str, Any]) -> None:
         doc = self.docs.get(str(query.get("_id", "")))
@@ -726,3 +735,42 @@ async def test_a_civless_lobby_never_repairs_when_the_raw_lacks_the_civ() -> Non
     syncer = _syncer(db, adapter)
     await syncer.sync_account("123")
     assert adapter.history_counts == [25], "no repair loop on a genuinely civless lobby"
+
+
+async def test_the_repair_deletes_the_poisoned_suffixed_captures() -> None:
+    """The repair erases the old board-suffixed captures, not only inserts.
+
+    The merlin loop (2026-11-21): the old era suffixed every document
+    id with a board (``517022737:0``); the bare-id inserts never
+    overwrote them and the marker looped forever. The repair DELETES
+    the poisoned candidates before re-inserting complete captures.
+    """
+    db, adapter = FakeDb(), FakeAdapter()
+    raw = {
+        "id": "517022737",
+        "matchhistorymember": [
+            {"profile_id": "123", "civilization_id": 19, "teamid": 0, "outcome": 1},
+        ],
+    }
+    db["librematch:matches"].docs["517022737:0"] = {
+        "_id": "517022737:0",  # the old era's suffixed id
+        "match_id": "517022737",
+        "profile_ids": ["123"],
+        "players": [{"profile_id": "123", "civ": ""}],
+        "raw": raw,
+    }
+    adapter.history["123"] = [
+        _match("517022737", "", 100, 200, [
+            _member("123", 1, 0, 1292, 1300) | {"civilization_id": 19},
+        ]),
+    ]
+    syncer = _syncer(db, adapter)
+    await syncer.sync_account("123")
+    # the suffixed capture is GONE (no loop: the next pass finds nothing)
+    assert "517022737:0" not in db["librematch:matches"].docs
+    doc = db["librematch:matches"].docs["517022737"]
+    assert doc["players"][0]["civ"] == "Huns"
+    # the second pass is QUIET: no repair, quick window
+    adapter.history_counts.clear()
+    await syncer.sync_account("123")
+    assert adapter.history_counts == [25], "the repaired store stops looping"

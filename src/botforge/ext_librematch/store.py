@@ -112,6 +112,14 @@ class LibrematchStore:
         cursor = self._matches().find({"profile_ids": str(profile_id), **marker})
         return [dict(doc) async for doc in cursor][:limit]
 
+    async def delete_matches(self, doc_ids: list[str]) -> int:
+        """Delete stored captures by their document ids (the repair)."""
+        removed = 0
+        for doc_id in doc_ids:
+            if await self._matches().delete_one({"_id": doc_id}) and True:
+                removed += 1
+        return removed
+
     async def count_incomplete_matches(self, profile_id: str) -> int:
         """Count the profile's stored matches whose capture is incomplete.
 
