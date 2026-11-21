@@ -287,6 +287,17 @@ def test_the_hub_template_carries_both_states() -> None:  # deliberately mis-nam
     assert dormant is not None and awake is not None
 
 
+def test_the_hub_carries_its_illustration_in_both_locales() -> None:
+    """The hub's artwork is DATA present in fr AND en (the designer's 21/11
+    ask — an empty realm_artwork renders a text-only hub silently)."""
+    from botforge.mods.kingdom.cogs.realm_strings import realm_strings
+
+    for locale in ("fr", "en"):
+        artwork = str(realm_strings(locale).get("realm_artwork", "") or "")
+        assert artwork.startswith("https://"), f"the {locale} hub must carry its artwork"
+        assert "Royaume" in artwork or "royaume" in artwork
+
+
 def test_the_wipe_never_lists_the_shell_collection() -> None:
     """REALMS_COLLECTION stays OUTSIDE the season wipe (persistence rule)."""
     from botforge.mods.kingdom.storage import REALMS_COLLECTION, SEASON_WIPE_COLLECTIONS

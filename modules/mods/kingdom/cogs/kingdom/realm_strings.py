@@ -11,7 +11,13 @@ _Strings = dict[str, str]
 
 _REALM_STRINGS: dict[str, _Strings] = {
     "fr": {
-        "realm_artwork": "",
+        # the hub's illustration (the mod's Lieux artwork, data — the
+        # designer's 21/11 ask; swap the URL, never the code)
+        "realm_artwork": (
+            "https://raw.githubusercontent.com/jj-guild/botforge-services/"
+            "c76f4aa07a82c8d75292a628315fb60d21fa9265/modules/mods/kingdom/"
+            "assets/lieux/Royaume.png"
+        ),
         "realm_hub_title": "🏰 {0}",
         "realm_hub_flavor": (
             "Les portes du château s'ouvrent — chaque lieu du royaume vit "
@@ -69,7 +75,11 @@ _REALM_STRINGS: dict[str, _Strings] = {
         "quit_error": "❌ Le Roi ne peut pas quitter son royaume (transfert ou dissolution).",
     },
     "en": {
-        "realm_artwork": "",
+        "realm_artwork": (
+            "https://raw.githubusercontent.com/jj-guild/botforge-services/"
+            "c76f4aa07a82c8d75292a628315fb60d21fa9265/modules/mods/kingdom/"
+            "assets/lieux/Royaume.png"
+        ),
         "realm_hub_title": "🏰 {0}",
         "realm_hub_flavor": (
             "The castle gates open — every place of the realm lives behind "
