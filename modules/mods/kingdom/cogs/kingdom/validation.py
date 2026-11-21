@@ -766,6 +766,15 @@ async def _accept_season_entry(
             hub_message = await deploy_realm_hub(guild, realm, locale=locale)
             if hub_message:
                 ids["hub_message"] = hub_message
+            # realm-content-v1 (Drasah 21/11) : MP au Roi + bienvenue RP
+            # dans Discussions + états d'attente Territoire/Alliances —
+            # la passation de la saison remplacera par les fiches réelles.
+            try:
+                from .realm_content import announce_acceptance
+
+                ids.update(await announce_acceptance(guild, realm, kingdom, locale))
+            except Exception:  # noqa: BLE001 — le contenu ne réveille jamais le geste
+                logger.warning("kingdom: realm acceptance content failed", exc_info=True)
             if ids:
                 realm = await service.save_habitat(str(realm.id), ids)
         except Exception:  # noqa: BLE001
@@ -832,6 +841,14 @@ async def _eject_season_entry(
                     ids["hub_message"] = hub_message
                 if ids:
                     await service.save_habitat(str(realm.id), ids)
+                # realm-content-v1 : hygiène d'éjection — les messages
+                # d'entrée partent avec le royaume (best-effort).
+                try:
+                    from .realm_content import wipe_realm_content
+
+                    await wipe_realm_content(guild, realm)
+                except Exception:  # noqa: BLE001
+                    logger.warning("kingdom: realm eject wipe failed", exc_info=True)
             except Exception:  # noqa: BLE001 — l'habitat ne bloque jamais
                 logger.warning("kingdom: realm habitat sleep failed (%s)", realm.id, exc_info=True)
         note = str(strings["eject_done"]).format(name=getattr(realm, "name", "?"))

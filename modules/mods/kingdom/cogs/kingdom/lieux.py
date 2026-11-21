@@ -43,6 +43,9 @@ logger = logging.getLogger("kingdom.lieux")
 _LIEUX_ASSETS = Path(__file__).resolve().parents[2] / "assets" / "lieux"
 
 _NS = "kingdoms:lieux"
+# realm-content-v1 : la vue de cueilleur d'objectifs (Roi-only)
+OBJECTIF_SURFACE = "panel:mod:kingdom:lieux:objectif"
+CONSEIL_SURFACE = "panel:mod:kingdom:lieux:conseil"
 
 GOLD = discord.Colour(0xE6B800)
 TEAL = discord.Colour.dark_teal()
@@ -85,6 +88,51 @@ LIEUX_STRINGS: dict[str, dict[str, str]] = {
             "Jetez un coup d'œil aux attaques et défenses de vos seigneurs —"
             " leurs mariages comme leurs verrouillages."
         ),
+        "conseil_intro_l2": (
+            "Vous pouvez définir vos objectifs pour mieux vous coordonner :"
+            " attaque de royaume, map recherchée ou alliance recherchée."
+        ),
+        "conseil_intro_l3": (
+            "Vous pouvez aussi organiser vos explorations ou vos traquenards"
+            " depuis cette interface."
+        ),
+        "conseil_classement": "**Classement** : {0}",
+        "conseil_classement_hint": (
+            "-# Classement par nombre de territoires — en cas d'égalité :"
+            " alliances, puis points technologiques."
+        ),
+        "conseil_objectifs_title": "🎯 Objectifs",
+        "conseil_objectif_kingdom": "⚔️ Royaume à focus : **{0}**",
+        "conseil_objectif_map": "🗺️ Territoire recherché : **{0}**",
+        "conseil_objectif_alliance": "🤝 Alliance recherchée : **{0}**",
+        "conseil_objectifs_none": (
+            "Aucun objectif fixé pour le moment — le Roi peut les définir"
+            " avec le bouton 🎯 Objectif."
+        ),
+        "conseil_traquenard_title": "**🪤 Traquenard**",
+        "conseil_traquenard_line": (
+            "Vous avez affaibli le niveau de l'IA du royaume **{0}** —"
+            " actif pendant {1}"
+        ),
+        "objectif_button": "🎯 Objectif",
+        "objectif_king_only": "🎯 Réservé au Roi du royaume.",
+        "objectif_picker_title": "🎯 Objectifs du royaume — {0}",
+        "objectif_select_kingdom": "⚔️ Royaume à attaquer en priorité",
+        "objectif_select_map": "🗺️ Territoire recherché",
+        "objectif_select_alliance": "🤝 Alliance souhaitée",
+        "objectif_none_label": "🚫 Aucun — ne pas définir",
+        "objectif_validate_button": "✅ Valider",
+        "objectif_flip_prev": "◀️ Précédent",
+        "objectif_flip_next": "▶️ Suivant",
+        "objectif_flip_pages": "Page {0}/{1} · {2}",
+        "objectif_edit_hint": (
+            "-# Chaque menu choisi devient un objectif, affiché à tes"
+            " membres — ◀️ Précédent / ▶️ Suivant feuillettent les pages de"
+            " la liste, ✅ Valider pour sauvegarder, 🚪 Quitter pour fermer"
+            " sans sauvegarder."
+        ),
+        "objectif_save_failed": "⚠️ Sauvegarde échouée — réessaie dans un instant.",
+        "objectif_done_note": "🎯 Objectifs sauvegardés — l'épinglé de Discussions est à jour.",
         "conseil_seigneurie_button": "🛡️ Seigneurie",
         "conseil_stats": (
             "**Trésorerie** : {0} ⚙️ · **Territoires** : {1} 🗺️ ·"
@@ -151,6 +199,50 @@ LIEUX_STRINGS: dict[str, dict[str, str]] = {
             "Keep an eye on your lords' attacks and defenses — their"
             " marriages as well as their locks."
         ),
+        "conseil_intro_l2": (
+            "You may set your objectives to coordinate better: a kingdom"
+            " to strike, a map you seek or an alliance you covet."
+        ),
+        "conseil_intro_l3": (
+            "You can also organise your explorations or your traps from"
+            " this interface."
+        ),
+        "conseil_classement": "**Rank** : {0}",
+        "conseil_classement_hint": (
+            "-# Ranked by territories — ties broken by alliances, then"
+            " technology points."
+        ),
+        "conseil_objectifs_title": "🎯 Objectives",
+        "conseil_objectif_kingdom": "⚔️ Kingdom to focus : **{0}**",
+        "conseil_objectif_map": "🗺️ Territory sought : **{0}**",
+        "conseil_objectif_alliance": "🤝 Alliance wanted : **{0}**",
+        "conseil_objectifs_none": (
+            "No objective set yet — the King may define them with the"
+            " 🎯 Objective button."
+        ),
+        "conseil_traquenard_title": "**🪤 Trap**",
+        "conseil_traquenard_line": (
+            "You weakened the AI level of the kingdom **{0}** — active"
+            " for {1}"
+        ),
+        "objectif_button": "🎯 Objectives",
+        "objectif_king_only": "🎯 Reserved to the King of the realm.",
+        "objectif_picker_title": "🎯 Kingdom objectives — {0}",
+        "objectif_select_kingdom": "⚔️ Kingdom to strike first",
+        "objectif_select_map": "🗺️ Territory you seek",
+        "objectif_select_alliance": "🤝 Alliance you covet",
+        "objectif_none_label": "🚫 None — leave undefined",
+        "objectif_validate_button": "✅ Apply",
+        "objectif_flip_prev": "◀️ Previous",
+        "objectif_flip_next": "▶️ Next",
+        "objectif_flip_pages": "Page {0}/{1} · {2}",
+        "objectif_edit_hint": (
+            "-# Every menu picked becomes an objective, shown to your"
+            " members — ◀️ Previous / ▶️ Next flip the list pages,"
+            " ✅ Apply to save, 🚪 Leave to close without saving."
+        ),
+        "objectif_save_failed": "⚠️ Save failed — try again in a moment.",
+        "objectif_done_note": "🎯 Objectives saved — the Discussions recap is fresh.",
         "conseil_seigneurie_button": "🛡️ Lordship",
         "conseil_stats": (
             "**Treasury** : {0} ⚙️ · **Territories** : {1} 🗺️ ·"
@@ -463,6 +555,10 @@ def lieux_dynamic_items() -> tuple:
         LieuxVoliereButton,
         LieuxSortirButton,
         LieuxSeigneurieButton,
+        LieuxObjectifButton,
+        LieuxObjectifSelect,
+        LieuxObjectifFlip,
+        LieuxObjectifValidateButton,
     )
 
 
@@ -523,7 +619,7 @@ async def _open_lieu(interaction: discord.Interaction, kind: str) -> None:
     try:
         state = await _gather_state(stack, kingdom)
         if kind == "conseil":
-            view, files = await _conseil_window(interaction, strings, kingdom, state)
+            view, files = await _conseil_window(interaction, strings, lord, kingdom, state)
         elif kind == "remparts":
             view, files = _remparts_window(strings, kingdom, state)
         elif kind == "comptes":
@@ -542,24 +638,141 @@ async def _open_lieu(interaction: discord.Interaction, kind: str) -> None:
 
 
 # ---------------------------------------------------------------------------
-# ⚔️ Salle du conseil — the orientation sheet (tranche 1 : the intro, the
-# stats line, the Seigneurie door ; objectifs/classement/cartes = tranche 2)
+# ⚔️ Salle du conseil — the FULL sheet (realm-content-v1, Drasah 21/11) :
+# intro 3 lignes + Classement (médaille + rang) + stats + 🎯 Objectifs
+# (les lignes du Roi) + le statut Traquenard live. Bouton 🎯 Objectif
+# ROUGE pour tout le monde hors le Roi (vert pour lui, jamais caché) ;
+# cartes Exploration/Traquenard + actions Remparts/Paroisse/Comptes =
+# Vague 2 (actions de jeu), PAS cette vague.
 # ---------------------------------------------------------------------------
+
+_RANK_MEDALS = {1: "🥇", 2: "🥈", 3: "🥉"}
+
+
+def _rank_medal(rank: int) -> str:
+    rank = int(rank or 0)
+    return _RANK_MEDALS.get(rank, "🏰" if rank >= 4 else "")
+
+
+async def _classement_rows(stack: Any) -> list[tuple[Any, int, int]]:
+    """The ranking rows — territories desc, ties by alliances then tech."""
+    kingdoms = getattr(stack, "kingdoms", None)
+    if kingdoms is None:
+        return []
+    try:
+        items = [k for k in await kingdoms.kingdoms() if not getattr(k, "is_gaia", False)]
+        counts = {str(k.id): 0 for k in items}
+        territories = getattr(stack, "territories", None)
+        if territories is not None:
+            for territory in await territories.territories():
+                owner = str(getattr(territory, "owner_kingdom_id", ""))
+                if owner in counts:
+                    counts[owner] += 1
+        rows = [(k, counts[str(k.id)], len(getattr(k, "civilizations", []) or [])) for k in items]
+        rows.sort(key=lambda row: (-row[1], -row[2], -int(getattr(row[0], "tech_points_bank", 0) or 0)))
+        return rows
+    except Exception:  # noqa: BLE001
+        logger.warning("kingdom lieux: classement rows failed", exc_info=True)
+        return []
+
+
+async def _conseil_rank(stack: Any, kingdom: Any) -> tuple[int, int]:
+    rows = await _classement_rows(stack)
+    if not rows:
+        return (0, 0)
+    ids = [str(getattr(row[0], "id", "")) for row in rows]
+    kid = str(getattr(kingdom, "id", ""))
+    if kid not in ids:
+        return (0, len(ids))
+    return (ids.index(kid) + 1, len(ids))
+
+
+async def _traquenard_status_lines(
+    strings: dict[str, str], stack: Any, kingdom: Any
+) -> list[str]:
+    """traquenard-echelle-v1 (porté) : le statut LIVE — une ligne par
+    fenêtre Facile encore OUVERTE (``traquenard_uses``), délai « 2h05 »."""
+    import time as _time
+
+    uses = dict(getattr(kingdom, "traquenard_uses", None) or {})
+    now_ts = int(_time.time())
+    live = {str(t): int(u or 0) for t, u in uses.items() if int(u or 0) > now_ts}
+    if not live:
+        return []
+    names: dict[str, str] = {}
+    try:
+        for item in await stack.kingdoms.kingdoms():
+            kid = str(getattr(item, "id", "") or "")
+            if kid in live:
+                names[kid] = str(getattr(item, "name", "") or kid)
+    except Exception:  # noqa: BLE001
+        names = {}
+    lines = ["", str(strings["conseil_traquenard_title"])]
+    for target_id, until in sorted(live.items()):
+        remaining = max(0, until - now_ts)
+        lines.append(
+            str(strings["conseil_traquenard_line"]).format(
+                names.get(str(target_id), str(target_id)),
+                f"{remaining // 3600}h{(remaining % 3600) // 60:02d}",
+            )
+        )
+    return lines
+
+
+def _objectifs_lines(strings: dict[str, str], kingdom: Any) -> str:
+    """The 🎯 block — one line per defined goal, the none-note otherwise."""
+    goals = dict(getattr(kingdom, "council_objectives", None) or {})
+    rows = {
+        "target_kingdom": strings["conseil_objectif_kingdom"],
+        "target_territory": strings["conseil_objectif_map"],
+        "target_alliance": strings["conseil_objectif_alliance"],
+    }
+    parts = []
+    for kind, line in rows.items():
+        label = str(goals.get(f"{kind}_label", "") or "").strip()
+        if label:
+            parts.append(line.format(label))
+    return "\n".join(parts) if parts else str(strings["conseil_objectifs_none"])
 
 
 async def _conseil_window(
     interaction: discord.Interaction,
     strings: dict[str, str],
+    lord: Any,
     kingdom: Any,
     state: dict[str, Any],
 ) -> tuple[discord.ui.LayoutView, list[discord.File]]:
-    body = "\n".join([strings["conseil_intro_l1"], "", strings["conseil_stats"].format(
-        int(state.get("wallet", 0) or 0),
-        len(state.get("territories") or []),
-        len(getattr(kingdom, "civilizations", []) or []),
-    )])
+    stack = wiring()
+    rank = await _conseil_rank(stack, kingdom)
+    rank_display = (
+        f"{_rank_medal(int(rank[0]))} {int(rank[0])}/{int(rank[1])}".strip()
+        if int(rank[0] or 0) > 0 and int(rank[1] or 0) > 0
+        else "—"
+    )
+    body = "\n".join(
+        [
+            strings["conseil_intro_l1"],
+            strings["conseil_intro_l2"],
+            strings["conseil_intro_l3"],
+            "",
+            strings["conseil_classement"].format(rank_display),
+            strings["conseil_stats"].format(
+                int(state.get("wallet", 0) or 0),
+                len(state.get("territories") or []),
+                len(getattr(kingdom, "civilizations", []) or []),
+            ),
+            strings["conseil_classement_hint"],
+            "",
+            f"## {strings['conseil_objectifs_title']}",
+            _objectifs_lines(strings, kingdom),
+            *await _traquenard_status_lines(strings, stack, kingdom),
+        ]
+    )
+    viewer_is_king = str(getattr(lord, "role", "")) == "king"
+    objectif = LieuxObjectifButton(strings["objectif_button"], king=viewer_is_king)
     rows = [[
-        LieuxSeigneurieButton(strings['conseil_seigneurie_button']).item,
+        LieuxSeigneurieButton(strings["conseil_seigneurie_button"]).item,
+        objectif.item,
         _sortir_item(strings),
     ]]
     view = _lieu_window(
@@ -603,6 +816,327 @@ class LieuxSeigneurieButton(
         await open_unique_ephemeral(
             interaction, view=await seigneurie_window(interaction, realm, strings)
         )
+
+
+# ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# 🎯 Objectif — the King's goal picker (realm-content-v1, porté synfoni-v1)
+#
+# Trois objectifs INDÉPENDANTS : ⚔️ royaume à focus, 🗺️ territoire
+# recherché, 🤝 alliance souhaitée. Les pages (maps/civs > 25) se
+# feuillettent ◀️ ▶️, chaque menu devient un objectif stagé, ✅ Valider
+# sauvegarde (moteur) et rafraîchit l'épinglé 🎯 de Discussions.
+# Le staging vit en mémoire (user id → choix) — éphémère par nature.
+# ---------------------------------------------------------------------------
+
+_OBJECTIF_KINDS = ("target_kingdom", "target_territory", "target_alliance")
+_OBJECTIF_STAGING: dict[str, dict[str, str]] = {}
+_OBJECTIF_PAGES: dict[str, int] = {"target_territory": 0, "target_alliance": 0}
+
+
+def _staged(user_id: str) -> dict[str, str]:
+    return _OBJECTIF_STAGING.setdefault(str(user_id), {})
+
+
+class LieuxObjectifButton(
+    discord.ui.DynamicItem[discord.ui.Button[Any]], template=rf"{_NS}:objectif"
+):
+    """🎯 Objectif — ROUGE pour tous hors le Roi, VERT pour lui (jamais caché)."""
+
+    def __init__(self, label: str, king: bool = False) -> None:
+        super().__init__(
+            discord.ui.Button(
+                label=str(label)[:80],
+                custom_id=f"{_NS}:objectif",
+                style=discord.ButtonStyle.success if king else discord.ButtonStyle.danger,
+                disabled=not king,
+            )
+        )
+
+    @classmethod
+    async def from_custom_id(cls, interaction, item, match, /):  # type: ignore[no-untyped-def]
+        # after a restart the role is re-read — the button renders
+        # harmless until the callback re-checks the King's crown
+        return cls(lieux_strings(_locale_of(interaction))["objectif_button"], king=True)
+
+    async def callback(self, interaction: discord.Interaction) -> None:
+        from botforge.mods.kingdom.models import LordRole
+
+        await interaction.response.defer(ephemeral=True)
+        strings = lieux_strings(_locale_of(interaction))
+        lord, kingdom, stack = await _lord_kingdom_of(interaction, strings)
+        if lord is None or kingdom is None:
+            return
+        if str(getattr(lord, "role", "")) != str(LordRole.KING):
+            await open_unique_ephemeral(interaction, content=strings["objectif_king_only"])
+            return
+        # le staging démarre depuis les objectifs LIVE (éditer ≠ repartir de zéro)
+        goals = dict(getattr(kingdom, "council_objectives", None) or {})
+        staged = _staged(str(getattr(interaction.user, "id", "")))
+        for kind in _OBJECTIF_KINDS:
+            if not staged.get(kind) and not staged.get(f"{kind}_label"):
+                staged[kind] = str(goals.get(kind, "") or "")
+                staged[f"{kind}_label"] = str(goals.get(f"{kind}_label", "") or "")
+        await open_unique_ephemeral(
+            interaction, view=await _objectif_picker_view(interaction, strings, kingdom)
+        )
+
+
+async def _objectif_options(
+    strings: dict[str, str], stack: Any, kingdom: Any, kind: str, page: int
+) -> list[discord.SelectOption]:
+    """One page of options (max 25) + the none option on page one."""
+    out: list[discord.SelectOption] = []
+    if kind == "target_kingdom":
+        try:
+            items = [
+                item
+                for item in await stack.kingdoms.kingdoms()
+                if str(getattr(item, "id", "")) != str(getattr(kingdom, "id", ""))
+                and not getattr(item, "is_gaia", False)
+            ]
+        except Exception:  # noqa: BLE001
+            items = []
+        out = [
+            discord.SelectOption(
+                label=str(getattr(item, "name", "?"))[:100], value=str(getattr(item, "id", ""))
+            )
+            for item in items
+        ]
+    elif kind == "target_territory":
+        entries = list(getattr(getattr(stack, "config", None), "maps", ()) or [])
+        out = [
+            discord.SelectOption(
+                label=str(getattr(entry, "display_name", "") or getattr(entry, "key", "?"))[:100],
+                value=str(getattr(entry, "key", "")),
+            )
+            for entry in entries[page * 25 : page * 25 + 25]
+        ]
+    else:  # target_alliance
+        entries = list(getattr(getattr(stack, "config", None), "civilizations", ()) or ())
+        out = [
+            discord.SelectOption(
+                label=str(getattr(entry, "display_name", "") or getattr(entry, "key", "?"))[:100],
+                value=str(getattr(entry, "key", "")),
+            )
+            for entry in entries[page * 25 : page * 25 + 25]
+        ]
+    if page == 0:
+        out.append(discord.SelectOption(label=strings["objectif_none_label"], value=""))
+    return out[:25]
+
+
+class LieuxObjectifSelect(
+    discord.ui.DynamicItem[discord.ui.Select[Any]],
+    template=rf"{_NS}:objectif:pick:(?P<kind>[a-z_]+):(?P<page>[0-9]+)",
+):
+    """One staged select of the picker — a choice becomes a goal."""
+
+    def __init__(
+        self, kind: str, page: int, placeholder: str, options: list[discord.SelectOption]
+    ) -> None:
+        super().__init__(
+            discord.ui.Select(
+                custom_id=f"{_NS}:objectif:pick:{kind}:{page}",
+                options=options[:25],
+                placeholder=placeholder[:100],
+                min_values=1,
+                max_values=1,
+            )
+        )
+        self.kind = kind
+        self.page = page
+
+    @classmethod
+    async def from_custom_id(cls, interaction, item, match, /):  # type: ignore[no-untyped-def]
+        strings = lieux_strings(_locale_of(interaction))
+        stack = wiring()
+        lord, kingdom, _s = await _lord_kingdom_of(interaction, strings)
+        kind = str(match["kind"])
+        page = int(match["page"])
+        options = await _objectif_options(strings, stack, kingdom, kind, page) if kingdom else []
+        keys = {
+            "target_kingdom": "objectif_select_kingdom",
+            "target_territory": "objectif_select_map",
+            "target_alliance": "objectif_select_alliance",
+        }
+        return cls(kind, page, strings[keys.get(kind, "objectif_select_kingdom")], options)
+
+    async def callback(self, interaction: discord.Interaction) -> None:
+        strings = lieux_strings(_locale_of(interaction))
+        lord, kingdom, stack = await _lord_kingdom_of(interaction, strings)
+        if kingdom is None:
+            return
+        value = str(self.item.values[0] if self.item.values else "")
+        label = ""
+        if value:
+            if self.kind == "target_kingdom":
+                try:
+                    match = next(
+                        item
+                        for item in await stack.kingdoms.kingdoms()
+                        if str(getattr(item, "id", "")) == value
+                    )
+                    label = str(getattr(match, "name", value))
+                except Exception:  # noqa: BLE001
+                    label = value
+            else:
+                catalog = (
+                    getattr(getattr(stack, "config", None), "maps", ())
+                    if self.kind == "target_territory"
+                    else getattr(getattr(stack, "config", None), "civilizations", ())
+                )
+                for entry in catalog or ():
+                    if str(getattr(entry, "key", "")) == value:
+                        label = str(getattr(entry, "display_name", "") or value)
+                        break
+                label = label or value
+        staged = _staged(str(getattr(interaction.user, "id", "")))
+        staged[self.kind] = value
+        staged[f"{self.kind}_label"] = label
+        await open_unique_ephemeral(
+            interaction, view=await _objectif_picker_view(interaction, strings, kingdom)
+        )
+
+
+class LieuxObjectifFlip(
+    discord.ui.DynamicItem[discord.ui.Button[Any]],
+    template=rf"{_NS}:objectif:flip:(?P<kind>[a-z_]+):(?P<page>[0-9]+):(?P<dir>back|next)",
+):
+    """◀️ ▶️ — flip one catalog's pages (maps/civilizations > 25)."""
+
+    def __init__(self, label: str, kind: str, page: int, direction: str) -> None:
+        super().__init__(
+            discord.ui.Button(
+                label=str(label)[:80],
+                custom_id=f"{_NS}:objectif:flip:{kind}:{page}:{direction}",
+                style=discord.ButtonStyle.secondary,
+            )
+        )
+        self.kind = kind
+        self.page = page
+        self.direction = direction
+
+    @classmethod
+    async def from_custom_id(cls, interaction, item, match, /):  # type: ignore[no-untyped-def]
+        strings = lieux_strings(_locale_of(interaction))
+        direction = str(match["dir"])
+        label = strings["objectif_flip_prev"] if direction == "back" else strings["objectif_flip_next"]
+        return cls(label, str(match["kind"]), int(match["page"]), direction)
+
+    async def callback(self, interaction: discord.Interaction) -> None:
+        strings = lieux_strings(_locale_of(interaction))
+        lord, kingdom, stack = await _lord_kingdom_of(interaction, strings)
+        if kingdom is None:
+            return
+        _OBJECTIF_PAGES[self.kind] = max(0, self.page)
+        await open_unique_ephemeral(
+            interaction, view=await _objectif_picker_view(interaction, strings, kingdom)
+        )
+
+
+class LieuxObjectifValidateButton(
+    discord.ui.DynamicItem[discord.ui.Button[Any]], template=rf"{_NS}:objectif:validate"
+):
+    """✅ Valider — save the staged goals to the engine, refresh the pin."""
+
+    def __init__(self, label: str) -> None:
+        super().__init__(
+            discord.ui.Button(
+                label=str(label)[:80],
+                custom_id=f"{_NS}:objectif:validate",
+                style=discord.ButtonStyle.success,
+            )
+        )
+
+    @classmethod
+    async def from_custom_id(cls, interaction, item, match, /):  # type: ignore[no-untyped-def]
+        return cls(lieux_strings(_locale_of(interaction))["objectif_validate_button"])
+
+    async def callback(self, interaction: discord.Interaction) -> None:
+        import time as _time
+
+        from .realm_content import refresh_objectifs_pin_safe
+
+        await interaction.response.defer(ephemeral=True)
+        strings = lieux_strings(_locale_of(interaction))
+        lord, kingdom, stack = await _lord_kingdom_of(interaction, strings)
+        if kingdom is None or stack is None:
+            return
+        staged = _staged(str(getattr(interaction.user, "id", "")))
+        objectives = dict(getattr(kingdom, "council_objectives", None) or {})
+        for kind in _OBJECTIF_KINDS:
+            objectives[kind] = str(staged.get(kind, "") or "")
+            objectives[f"{kind}_label"] = str(staged.get(f"{kind}_label", "") or "")
+        objectives["updated_at"] = int(_time.time())
+        try:
+            kingdom.council_objectives = objectives
+            await stack.kingdoms.save_kingdom(kingdom)
+        except Exception:  # noqa: BLE001
+            logger.warning("kingdom lieux: objectives save failed", exc_info=True)
+            await open_unique_ephemeral(interaction, content=strings["objectif_save_failed"])
+            return
+        guild = getattr(interaction, "guild", None)
+        if guild is not None:
+            realm = await _shell_of(stack, str(getattr(interaction.user, "id", "")))
+            if realm is not None:
+                await refresh_objectifs_pin_safe(guild, kingdom, _locale_of(interaction), realm)
+        await open_unique_ephemeral(interaction, content=strings["objectif_done_note"])
+
+
+def _catalog_len(stack: Any, kind: str) -> int:
+    catalog = (
+        getattr(getattr(stack, "config", None), "maps", ())
+        if kind == "target_territory"
+        else getattr(getattr(stack, "config", None), "civilizations", ())
+    )
+    try:
+        return len(list(catalog or ()))
+    except Exception:  # noqa: BLE001
+        return 0
+
+
+async def _objectif_picker_view(
+    interaction: discord.Interaction, strings: dict[str, str], kingdom: Any
+) -> discord.ui.LayoutView:
+    """The picker sheet — 3 selects, flip rows for the paginated ones."""
+    stack = wiring()
+    staged = _staged(str(getattr(interaction.user, "id", "")))
+    rows: list[discord.ui.Item[discord.ui.LayoutView]] = []
+    kinds = [
+        ("target_kingdom", "objectif_select_kingdom", 0),
+        ("target_territory", "objectif_select_map", _OBJECTIF_PAGES["target_territory"]),
+        ("target_alliance", "objectif_select_alliance", _OBJECTIF_PAGES["target_alliance"]),
+    ]
+    for kind, key, page in kinds:
+        options = await _objectif_options(strings, stack, kingdom, kind, page)
+        select = LieuxObjectifSelect(kind, page, strings[key], options)
+        rows.append(discord.ui.ActionRow(select.item))
+        if kind != "target_kingdom":
+            total = max(1, (_catalog_len(stack, kind) + 24) // 25)
+            row: Any = discord.ui.ActionRow()
+            if page > 0:
+                row.add_item(
+                    LieuxObjectifFlip(strings["objectif_flip_prev"], kind, page - 1, "back").item
+                )
+            if page + 1 < total:
+                row.add_item(
+                    LieuxObjectifFlip(strings["objectif_flip_next"], kind, page + 1, "next").item
+                )
+            rows.append(row)
+    rows.append(discord.ui.ActionRow(LieuxObjectifValidateButton(strings["objectif_validate_button"]).item))
+    return surface(
+        OBJECTIF_SURFACE,
+        discord.ui.Container(
+            discord.ui.TextDisplay(
+                f"## {strings['objectif_picker_title'].format(str(getattr(kingdom, 'name', '')))}"
+            ),
+            discord.ui.Separator(),
+            *rows,
+            discord.ui.TextDisplay(strings["objectif_edit_hint"]),
+            accent_colour=GOLD,
+        ),
+    )
 
 
 # ---------------------------------------------------------------------------

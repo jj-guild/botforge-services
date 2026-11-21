@@ -129,3 +129,14 @@ views:
     kind: surface
   panel:mod:kingdom:lieux:voliere:
     kind: surface
+  # realm-content-v1 (Drasah 21/11): the realm salons' content sheets —
+  # Territoire, Alliances (+ her four ephemeral windows ride the same
+  # surface), the Discussions welcome; the 🎯 objectifs picker window
+  panel:mod:kingdom:realm:territory:
+    kind: surface
+  panel:mod:kingdom:realm:alliances:
+    kind: surface
+  panel:mod:kingdom:realm:welcome:
+    kind: surface
+  panel:mod:kingdom:lieux:objectif:
+    kind: surface

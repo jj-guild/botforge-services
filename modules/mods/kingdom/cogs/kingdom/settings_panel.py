@@ -582,6 +582,16 @@ async def _start_season(interaction: discord.Interaction, strings: dict[str, str
             logger.warning("kingdom: the departure's sas close could not be stored")
         # live-pin-v1: the cockpit's sas line flips with the departure
         await refresh_live_pins_after(interaction)
+        # realm-content-v1 (Drasah 21/11) : au DÉPART, les fiches
+        # réelles remplacent les états d'attente — chaque royaume
+        # engagé reçoit la passe (best-effort, jamais bloquante).
+        try:
+            from .realm_content import deploy_all_realms_content
+
+            touched = await deploy_all_realms_content(interaction.client)
+            logger.info("kingdom: season departure fed %d realm salons", touched)
+        except Exception:  # noqa: BLE001
+            logger.warning("kingdom: season departure content pass failed", exc_info=True)
     await interaction.followup.send(note, ephemeral=True)
 
 

@@ -377,6 +377,25 @@ async def ensure_realm_structure(guild: Any, realm: Any, *, dormant: bool = True
             display,
         )
         await _shield_leftover(guild, channel, member_ids)
+    # salon-order-v1 (Drasah 21/11) : l'ordre FAIT PARTIE de la charte —
+    # Discussions → Le royaume → Territoire → Alliances (REALM_SALONS).
+    # Zéro appel API quand la séquence est déjà convergente ; les
+    # leftovers restent APRÈS les salons déclarés.
+    declared_order = [(key, _slug(name)) for key, name in REALM_SALONS]
+    live = [_slug(getattr(c, "name", "")) for c in (getattr(category, "channels", []) or [])]
+    wanted = [slug for _, slug in declared_order if slug in live]
+    if [s for s in live if s in wanted] != wanted:
+        for offset, (key, slug) in enumerate(declared_order):
+            channel = next(
+                (c for c in (getattr(category, "channels", []) or []) if _slug(getattr(c, "name", "")) == slug),
+                None,
+            )
+            if channel is None:
+                continue
+            try:
+                await channel.edit(position=offset)
+            except Exception:  # noqa: BLE001 — l'ordre est cosmétique, jamais bloquant
+                logger.warning("kingdom realms: salon reorder failed (%s)", slug)
     return ids
 
 

@@ -308,6 +308,7 @@ def setup_hook(bot: Any) -> None:
     from .camp_beta import camp_dynamic_items
     from .lieux import lieux_dynamic_items
     from .realms import realm_dynamic_items
+    from .realm_content import realm_content_dynamic_items
 
     for item in (
         DeclareButton,
@@ -355,6 +356,7 @@ def setup_hook(bot: Any) -> None:
         *camp_dynamic_items(),
         *realm_dynamic_items(),
         *lieux_dynamic_items(),
+        *realm_content_dynamic_items(),
     ):
         try:
             bot.add_dynamic_items(item)
