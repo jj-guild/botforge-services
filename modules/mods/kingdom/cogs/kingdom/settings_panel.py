@@ -1511,3 +1511,8 @@ _SETTINGS_HANDLERS: dict[str, Any] = {
 
 __all__ = [
     "CONSOLE_VIEW_KEY",
+    "SettingsActionButton",
+    "console_buttons",
+    "build_settings_panel",
+    "settings_strings",
+]
