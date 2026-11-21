@@ -35,6 +35,126 @@ class GameDataClient:
         """Keep the service address; channels are per-call (ADR-0020)."""
         self._uri = uri
 
+    async def get_user_stats(self, user_id: str, window_days: int = 0) -> Any | None:
+        """Fetch the per-user unified stats through the game service (#404).
+
+        Degrades to None when the user owns no known account or the
+        service is unreachable — the caller reads "unknown stats" and
+        falls back to manual review, never a crash.
+        """
+        from botforge.core.rpc.client import build_channel
+        from botforge.core.rpc.game import user_stats_from_wire
+        from botforge.rpc_generated.botforge.v1 import game_pb2, gamedata_pb2_grpc
+
+        async with build_channel(self._uri) as channel:
+            stub = gamedata_pb2_grpc.GameDataStub(channel)
+            try:
+                reply = await stub.GetUserStats(
+                    game_pb2.UserStatsRequest(user_id=user_id, window_days=window_days),
+                    timeout=15.0,
+                )
+            except Exception as exc:
+                if _is_not_found(exc):
+                    return None
+                raise
+        stats = user_stats_from_wire(reply.stats)
+        return stats if stats.known else None
+
+    async def get_account_stats(self, profile_ids: list[str]) -> Any:
+        """Fetch the per-account elo status (current + max, #404)."""
+        from botforge.core.rpc.client import build_channel
+        from botforge.core.rpc.game import account_stats_from_wire
+        from botforge.rpc_generated.botforge.v1 import game_pb2, gamedata_pb2_grpc
+
+        async with build_channel(self._uri) as channel:
+            stub = gamedata_pb2_grpc.GameDataStub(channel)
+            reply = await stub.GetAccountStats(
+                game_pb2.AccountStatsRequest(profile_ids=list(profile_ids)),
+                timeout=15.0,
+            )
+        return [account_stats_from_wire(a) for a in reply.accounts]
+
+    async def get_match_history(
+        self,
+        profile_ids: list[str],
+        limit: int = 0,
+        since_s: int = 0,
+        leaderboard_id: str = "",
+    ) -> Any:
+        """Fetch the stored match history of the accounts (#404)."""
+        from botforge.core.rpc.client import build_channel
+        from botforge.core.rpc.game import match_history_from_wire
+        from botforge.rpc_generated.botforge.v1 import game_pb2, gamedata_pb2_grpc
+
+        async with build_channel(self._uri) as channel:
+            stub = gamedata_pb2_grpc.GameDataStub(channel)
+            reply = await stub.GetMatchHistory(
+                game_pb2.MatchHistoryRequest(
+                    profile_ids=list(profile_ids),
+                    limit=limit,
+                    since_s=since_s,
+                    leaderboard_id=leaderboard_id,
+                ),
+                timeout=15.0,
+            )
+        return [match_history_from_wire(e) for e in reply.matches]
+
+    async def search_profiles(self, alias: str) -> list[dict[str, Any]]:
+        """Search profiles by exact in-game alias (the #402 name path).
+
+        Degrades to an empty list when the service is unreachable —
+        the caller shows "no candidate" and keeps guiding the player.
+        """
+        from botforge.core.rpc.client import build_channel
+        from botforge.rpc_generated.botforge.v1 import game_pb2, gamedata_pb2_grpc
+
+        if not alias:
+            return []
+        async with build_channel(self._uri) as channel:
+            stub = gamedata_pb2_grpc.GameDataStub(channel)
+            try:
+                reply = await stub.SearchProfiles(
+                    game_pb2.SearchProfilesRequest(alias=alias), timeout=15.0
+                )
+            except Exception as exc:
+                if _is_not_found(exc):
+                    return []
+                raise
+        return [
+            {
+                "profile_id": c.profile_id,
+                "alias": c.alias,
+                "steam_name": c.steam_name,
+                "country": c.country,
+                "clan": c.clan,
+                "elo_1v1": c.elo_1v1,
+                "elo_tg": c.elo_tg,
+                "matches": [
+                    {
+                        "map_name": m.map_name,
+                        "description": m.description,
+                        "completed_at": m.completed_at,
+                        "opponents": list(m.opponents),
+                    }
+                    for m in c.matches
+                ],
+            }
+            for c in reply.candidates
+        ]
+
+    async def sync_stats(self, profile_ids: list[str], wait: bool = False) -> dict[str, Any]:
+        """Trigger the on-demand history sync through the game service (T4)."""
+        from botforge.core.rpc.client import build_channel
+        from botforge.rpc_generated.botforge.v1 import game_pb2, gamedata_pb2_grpc
+
+        async with build_channel(self._uri) as channel:
+            stub = gamedata_pb2_grpc.GameDataStub(channel)
+            reply = await stub.SyncStats(
+                game_pb2.SyncStatsRequest(profile_ids=list(profile_ids), wait=wait),
+                timeout=120.0 if wait else 15.0,
+            )
+        return {"ok": reply.ok, "synced": reply.synced, "error": reply.error}
+
     async def sync_content(
         self, game_key: str, what: str, timeout_s: float = 900.0
     ) -> dict[str, Any]:

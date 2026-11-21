@@ -8,21 +8,29 @@ capability surfaces as ``UnsupportedCapabilityError`` for the caller to catch.
 
 from __future__ import annotations
 
+from typing import Any
+
 import grpc
 
 from botforge.core.models.game import (
+    AccountEloStatus,
     GameMap,
     MatchDetails,
+    MatchHistoryEntry,
     MatchResult,
     PlayerStats,
     ProviderCapabilities,
+    UserEloStats,
 )
 from botforge.core.rpc.client import build_channel, call_with_retry
 from botforge.core.rpc.game import (
+    account_stats_from_wire,
     game_map_from_wire,
     match_details_from_wire,
     match_event_from_wire,
+    match_history_from_wire,
     player_stats_from_wire,
+    user_stats_from_wire,
 )
 from botforge.rpc_generated.botforge.v1 import game_pb2, game_pb2_grpc
 
@@ -173,20 +181,28 @@ class GameProviderClient:
             teams={pid: int(reply.teams.get(pid, 0)) for pid in reply.teams},
         )
 
-    async def update_subscriptions(self, profile_ids: list[str]) -> bool:
-        """Push the subscribed profile ids, degrading to False.
+    async def update_subscriptions(
+        self, profile_ids: list[str], user_ids: list[str] | None = None
+    ) -> bool:
+        """Push the subscribed profile ids (+ owners), degrading to False.
 
         The provider reconciles its upstream subscriptions in place;
-        False means the push was not applied (provider offline or
-        without the capability) and the caller should retry later —
-        the provider re-syncs the full list on its next reconnect.
+        ``user_ids`` (parallel to profile_ids) carry the platform owner
+        of each profile so the stats store keeps the profile -> user
+        mapping (#404). False means the push was not applied (provider
+        offline or without the capability) and the caller should retry
+        later — the provider re-syncs the full list on its next
+        reconnect.
         """
         async with build_channel(self._provider_uri) as channel:
             stub = game_pb2_grpc.GameStub(channel)
             try:
                 reply = await call_with_retry(
                     stub.UpdateSubscriptions,
-                    game_pb2.UpdateSubscriptionsRequest(profile_ids=profile_ids),
+                    game_pb2.UpdateSubscriptionsRequest(
+                        profile_ids=profile_ids,
+                        user_ids=user_ids or [],
+                    ),
                 )
             except grpc.aio.AioRpcError as exc:
                 if exc.code() in (
@@ -222,3 +238,211 @@ class GameProviderClient:
                 ):
                     return
                 raise
+
+    async def sync_stats(self, profile_ids: list[str], wait: bool = False) -> tuple[bool, int, str]:
+        """Trigger the provider's history sync (on-demand, #404 T4).
+
+        Degrades to (False, 0, error) — an unreachable provider never
+        fails the caller; the periodic sync catches up later.
+        """
+        async with build_channel(self._provider_uri) as channel:
+            stub = game_pb2_grpc.GameStub(channel)
+            try:
+                reply = await call_with_retry(
+                    stub.SyncStats,
+                    game_pb2.SyncStatsRequest(profile_ids=profile_ids, wait=wait),
+                )
+            except grpc.aio.AioRpcError as exc:
+                if exc.code() in (
+                    grpc.StatusCode.UNIMPLEMENTED,
+                    grpc.StatusCode.UNAVAILABLE,
+                ):
+                    return False, 0, f"provider unreachable: {exc.code()}"
+                raise
+        return bool(reply.ok), int(reply.synced), reply.error
+
+    async def get_match_history(
+        self,
+        profile_ids: list[str],
+        limit: int = 0,
+        since_s: int = 0,
+        leaderboard_id: str = "",
+    ) -> list[MatchHistoryEntry]:
+        """Fetch the stored match history of the accounts (#404 T1)."""
+        async with build_channel(self._provider_uri) as channel:
+            stub = game_pb2_grpc.GameStub(channel)
+            try:
+                reply = await call_with_retry(
+                    stub.GetMatchHistory,
+                    game_pb2.MatchHistoryRequest(
+                        profile_ids=profile_ids,
+                        limit=limit,
+                        since_s=since_s,
+                        leaderboard_id=leaderboard_id,
+                    ),
+                )
+            except grpc.aio.AioRpcError as exc:
+                if exc.code() in (
+                    grpc.StatusCode.UNIMPLEMENTED,
+                    grpc.StatusCode.UNAVAILABLE,
+                ):
+                    return []
+                raise
+        return [match_history_from_wire(e) for e in reply.matches]
+
+    async def get_account_stats(self, profile_ids: list[str]) -> list[AccountEloStatus]:
+        """Fetch the per-account elo status (current + max, #404 T1)."""
+        async with build_channel(self._provider_uri) as channel:
+            stub = game_pb2_grpc.GameStub(channel)
+            try:
+                reply = await call_with_retry(
+                    stub.GetAccountStats,
+                    game_pb2.AccountStatsRequest(profile_ids=profile_ids),
+                )
+            except grpc.aio.AioRpcError as exc:
+                if exc.code() in (
+                    grpc.StatusCode.UNIMPLEMENTED,
+                    grpc.StatusCode.UNAVAILABLE,
+                ):
+                    return []
+                raise
+        return [account_stats_from_wire(a) for a in reply.accounts]
+
+    async def get_user_stats(self, user_id: str, window_days: int = 0) -> UserEloStats | None:
+        """Fetch the per-user unified stats view (#404 T1).
+
+        Degrades to None — an unreachable provider reads as "unknown
+        stats", never as a failure of the caller (the enrollment's
+        manual-review fallback).
+        """
+        async with build_channel(self._provider_uri) as channel:
+            stub = game_pb2_grpc.GameStub(channel)
+            try:
+                reply = await call_with_retry(
+                    stub.GetUserStats,
+                    game_pb2.UserStatsRequest(user_id=user_id, window_days=window_days),
+                )
+            except grpc.aio.AioRpcError as exc:
+                if exc.code() in (
+                    grpc.StatusCode.UNIMPLEMENTED,
+                    grpc.StatusCode.UNAVAILABLE,
+                ):
+                    return None
+                raise
+        stats = user_stats_from_wire(reply.stats)
+        return stats if stats.known else None
+
+    # ---- The stats layer, wire-shaped helpers (#404) ---------------------
+    # The GameData proxy caches and forwards the provider's own wire
+    # messages (rule 4: one shape, no copy) — these helpers return the
+    # wire replies directly.
+
+    async def get_match_history_wire(self, request: Any) -> Any:
+        """Fetch the stored match history as the wire reply."""
+        async with build_channel(self._provider_uri) as channel:
+            stub = game_pb2_grpc.GameStub(channel)
+            return await call_with_retry(stub.GetMatchHistory, request)
+
+    async def get_account_stats_wire(self, request: Any) -> Any:
+        """Fetch the per-account status as the wire reply."""
+        async with build_channel(self._provider_uri) as channel:
+            stub = game_pb2_grpc.GameStub(channel)
+            return await call_with_retry(stub.GetAccountStats, request)
+
+    async def get_user_stats_wire(self, request: Any) -> Any:
+        """Fetch the per-user unified stats as the wire reply."""
+        async with build_channel(self._provider_uri) as channel:
+            stub = game_pb2_grpc.GameStub(channel)
+            return await call_with_retry(stub.GetUserStats, request)
+
+    async def search_profiles_wire(self, alias: str) -> Any:
+        """Fetch the alias search as the wire reply (#402 name path)."""
+        from botforge.rpc_generated.botforge.v1 import game_pb2
+
+        if not alias:
+            return game_pb2.ProfileSearchReply()
+        async with build_channel(self._provider_uri) as channel:
+            stub = game_pb2_grpc.GameStub(channel)
+            return await call_with_retry(
+                stub.SearchProfiles, game_pb2.SearchProfilesRequest(alias=alias)
+            )
+
+    async def get_live_matches(self, limit: int = 0) -> list[dict[str, Any]]:
+        """Fetch the live matches the provider sees (#404 T3).
+
+        Degrades to an empty list — an unreachable provider reads as
+        "nothing live right now".
+        """
+        async with build_channel(self._provider_uri) as channel:
+            stub = game_pb2_grpc.GameStub(channel)
+            try:
+                reply = await call_with_retry(
+                    stub.GetLiveMatches,
+                    game_pb2.LiveMatchesRequest(limit=limit),
+                )
+            except grpc.aio.AioRpcError as exc:
+                if exc.code() in (
+                    grpc.StatusCode.UNIMPLEMENTED,
+                    grpc.StatusCode.UNAVAILABLE,
+                ):
+                    return []
+                raise
+        return [
+            {
+                "match_ref": m.match_ref,
+                "status": m.status,
+                "map_name": m.map_name,
+                "format": m.format,
+                "profile_ids": list(m.profile_ids),
+                "players_json": m.players_json,
+                "lobby_url": m.lobby_url,
+                "spectate_url": m.spectate_url,
+                "updated_at": m.updated_at,
+                "metadata": dict(m.metadata),
+            }
+            for m in reply.matches
+        ]
+
+    async def search_profiles(self, alias: str) -> list[dict[str, Any]]:
+        """Search profiles by exact in-game alias (the #402 name path).
+
+        Degrades to an empty list — an unreachable provider reads as
+        "no candidate" and the caller keeps guiding the player.
+        """
+        if not alias:
+            return []
+        async with build_channel(self._provider_uri) as channel:
+            stub = game_pb2_grpc.GameStub(channel)
+            try:
+                reply = await call_with_retry(
+                    stub.SearchProfiles,
+                    game_pb2.SearchProfilesRequest(alias=alias),
+                )
+            except grpc.aio.AioRpcError as exc:
+                if exc.code() in (
+                    grpc.StatusCode.UNIMPLEMENTED,
+                    grpc.StatusCode.UNAVAILABLE,
+                ):
+                    return []
+                raise
+        return [
+            {
+                "profile_id": c.profile_id,
+                "alias": c.alias,
+                "steam_name": c.steam_name,
+                "country": c.country,
+                "clan": c.clan,
+                "elo_1v1": c.elo_1v1,
+                "elo_tg": c.elo_tg,
+                "matches": [
+                    {
+                        "map_name": m.map_name,
+                        "description": m.description,
+                        "completed_at": m.completed_at,
+                        "opponents": list(m.opponents),
+                    }
+                    for m in c.matches
+                ],
+            }
+            for c in reply.candidates
+        ]

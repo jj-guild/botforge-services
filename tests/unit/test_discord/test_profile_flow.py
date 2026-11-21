@@ -9,11 +9,9 @@ the whole flow against fakes (no Mongo, no provider).
 
 from __future__ import annotations
 
-import re
 from typing import Any
 
 import discord
-import httpx
 import pytest
 
 from botforge.discord import home as home_module
@@ -410,7 +408,7 @@ def test_add_modal_payload_shape_is_the_proven_one() -> None:
         if component.get("type") == 1:
             inner = component["components"][0]
             assert inner["type"] == 4, "the ActionRow wraps the TextInput"
-            assert inner.get("label") == "Ton id aoe2insights ou ton relic id"
+            assert inner.get("label") == "Ton pseudo en jeu ou ton Relic ID"
 
 
 @pytest.mark.asyncio
@@ -449,105 +447,3 @@ async def test_remove_failure_names_the_entry() -> None:
     assert any("Removal failed for" in t and "aoe2" in t for t in texts), (
         "the failure rides the refreshed view's banner and names the entry"
     )
-
-
-class _FakeInsightsTransport(httpx.AsyncBaseTransport):
-    """httpx stand-in serving the aoe2insights relic-id pages."""
-
-    def __init__(self, relic_ids: dict[str, str]) -> None:
-        self.relic_ids = relic_ids
-
-    async def handle_async_request(self, request: httpx.Request) -> httpx.Response:
-        match = re.search(r"/user/(\d+)/relic-id/", str(request.url))
-        if match and match.group(1) in self.relic_ids:
-            return httpx.Response(200, text=self.relic_ids[match.group(1)])
-        return httpx.Response(404, text="not found")
-
-
-@pytest.mark.asyncio
-async def test_resolve_relic_id_maps_the_insights_user_id() -> None:
-    """The insights user id (or URL) resolves to the relic id."""
-    from botforge.discord.registration_platform import resolve_relic_id
-
-    transport = _FakeInsightsTransport({"12488557": "17190369"})
-
-    assert await resolve_relic_id("12488557", transport=transport) == "17190369"
-    assert await resolve_relic_id("https://www.aoe2insights.com/user/12488557/", transport=transport) == "17190369"
-    relic_url = "https://www.aoe2insights.com/user/12488557/relic-id/"
-    assert await resolve_relic_id(relic_url, transport=transport) == "17190369"
-    assert await resolve_relic_id("999999999", transport=transport) is None
-    assert await resolve_relic_id("abc", transport=transport) is None
-
-
-def test_extract_insights_user_id_rejects_injections() -> None:
-    """The strict URL gate: only genuine aoe2insights user URLs pass."""
-    from botforge.discord.registration_platform import extract_insights_user_id
-
-    ok = extract_insights_user_id("https://www.aoe2insights.com/user/12488557/")
-    assert ok == "12488557"
-    assert extract_insights_user_id("https://aoe2insights.com/user/12488557") == "12488557"
-    assert extract_insights_user_id("https://www.aoe2insights.com/user/12488557/relic-id/") == "12488557"
-    # injections and foreign shapes are all rejected
-    for hostile in (
-        "https://evil.com/user/12488557",
-        "https://aoe2insights.com.evil.com/user/1",
-        "https://evil.com/?u=https://www.aoe2insights.com/user/1",
-        "12488557",
-        "aoe2insights.com/user/1",
-        "https://www.aoe2insights.com/users/12488557",
-        "https://www.aoe2insights.com/user/abc",
-        "https://www.aoe2insights.com/user/" + "1" * 16,
-        "",
-        "javascript:alert(1)",
-    ):
-        assert extract_insights_user_id(hostile) is None, f"must reject: {hostile!r}"
-    # any path after the id is accepted — the capture only ever yields the
-    # validated digit segment, the URL itself is never used downstream
-    for flexible in (
-        "https://www.aoe2insights.com/user/12488557/whatever/else",
-        "https://www.aoe2insights.com/user/12488557?tab=stats",
-        "https://www.aoe2insights.com/user/12488557/../admin",
-    ):
-        assert extract_insights_user_id(flexible) == "12488557", f"must accept: {flexible!r}"
-
-
-@pytest.mark.asyncio
-async def test_resolve_relic_id_rejects_dirty_replies() -> None:
-    """A non-numeric insights reply (HTML, injection) never resolves."""
-    from botforge.discord.registration_platform import resolve_relic_id
-
-    class _DirtyTransport(httpx.AsyncBaseTransport):
-        def __init__(self, text: str, status: int = 200) -> None:
-            self.text = text
-            self.status = status
-
-        async def handle_async_request(self, request: httpx.Request) -> httpx.Response:
-            return httpx.Response(self.status, text=self.text)
-
-    dirty_replies = [
-        "<html><body>17190369</body></html>",
-        "17190369\nGARBAGE",
-        "17190369; DROP TABLE",
-        " ../../etc/passwd",
-        "171903691719036917190369",
-    ]
-    for reply in dirty_replies:
-        result = await resolve_relic_id("12488557", transport=_DirtyTransport(reply))
-        assert result is None, f"must reject the dirty reply: {reply!r}"
-    assert await resolve_relic_id("12488557", transport=_DirtyTransport("17190369")) == "17190369"
-    # an insights error page is a refusal, never a resolution
-    assert await resolve_relic_id("12488557", transport=_DirtyTransport("not found", status=404)) is None
-
-
-@pytest.mark.asyncio
-async def test_resolve_relic_id_caps_the_input() -> None:
-    """An oversized input never reaches the network."""
-    from botforge.discord.registration_platform import resolve_relic_id
-
-    class _NoNetworkTransport(httpx.AsyncBaseTransport):
-        async def handle_async_request(self, request: httpx.Request) -> httpx.Response:
-            raise AssertionError("the oversized input must never hit the network")
-
-    assert await resolve_relic_id("", transport=_NoNetworkTransport()) is None
-    assert await resolve_relic_id("9" * 101, transport=_NoNetworkTransport()) is None
-    assert await resolve_relic_id("abc", transport=_NoNetworkTransport()) is None

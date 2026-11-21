@@ -42,12 +42,49 @@ service Game {
   // adds subscribe, removes unsubscribe. Game-agnostic: the ids are the
   // game-side profile ids of the users registered on the platform.
   rpc UpdateSubscriptions(UpdateSubscriptionsRequest) returns (UpdateSubscriptionsResponse);
+
+  // ---- The stats layer (botforge-services#404) --------------------------
+  // The provider is the source of truth of its perimeter: it STORES the
+  // raw history of the known (subscribed) accounts, EXPLOITS it (per
+  // account status, per-user unification) and EXPOSES it here. The
+  // consumers never call the external API, never read the provider DB.
+
+  // Trigger a history sync now (on-demand: profile binding, application).
+  // An empty profile_ids list syncs every known account.
+  rpc SyncStats(SyncStatsRequest) returns (SyncStatsReply);
+
+  // The stored match history of the given profiles (all leaderboards the
+  // provider keeps, optionally narrowed), newest first, decoded fields
+  // included once the provider exploits them (T2).
+  rpc GetMatchHistory(MatchHistoryRequest) returns (MatchHistoryReply);
+
+  // The per-account status: current elo + MAX elo per leaderboard.
+  rpc GetAccountStats(AccountStatsRequest) returns (AccountStatsReply);
+
+  // The per-USER unified view: the accounts of one platform user
+  // aggregated (best current/max elo per leaderboard, matches window).
+  rpc GetUserStats(UserStatsRequest) returns (UserStatsReply);
+
+  // The live matches the provider currently sees (the ones with at
+  // least one known player) — the lobby covers the present, the
+  // history store covers the past (#404 T3).
+  rpc GetLiveMatches(LiveMatchesRequest) returns (LiveMatchesReply);
+
+  // Search profiles by in-game alias (exact, case-sensitive). The name
+  // resolution path for profile binding (botforge-services#402): the
+  // relic-id relay of aoe2insights is Cloudflare-blocked from servers,
+  // but the provider's own upstream answers alias lookups.
+  rpc SearchProfiles(SearchProfilesRequest) returns (ProfileSearchReply);
 }
 
 message UpdateSubscriptionsRequest {
   // Full current list of subscribed profile ids (idempotent reconciliation:
   // the provider diffs against its previous list and applies the delta).
   repeated string profile_ids = 1;
+  // Parallel to profile_ids: the platform user owning each profile (""
+  // when unknown). The stats store keeps the profile -> user mapping so
+  // the per-USER unification answers by user_id (botforge-services#404).
+  repeated string user_ids = 2;
 }
 
 message UpdateSubscriptionsResponse {
@@ -173,4 +210,139 @@ message GameMap {
   string name = 2;
   string map_type = 3;    // e.g. "random_map", "real_world", "custom"
   string resource_url = 4; // presentation link, may be empty
+}
+
+// ---- The stats layer messages (botforge-services#404) ----------------
+
+message SyncStatsRequest {
+  repeated string profile_ids = 1;  // empty: every known account
+  bool wait = 2;                    // true: reply after the sync ran
+}
+
+message SyncStatsReply {
+  bool ok = 1;
+  int32 synced = 2;      // accounts the sync covered
+  string error = 3;      // functional error, empty when ok
+}
+
+message MatchHistoryRequest {
+  repeated string profile_ids = 1;  // empty: every known account
+  int32 limit = 2;                   // 0: the provider's default
+  int64 since_s = 3;                 // only matches finished after (epoch s)
+  string leaderboard_id = 4;         // "" : every leaderboard
+}
+
+message MatchHistoryEntry {
+  string match_id = 1;               // provider-side, opaque
+  string leaderboard_id = 2;
+  int64 started_at = 3;              // epoch s
+  int64 finished_at = 4;             // epoch s
+  string map_name = 5;
+  repeated string profile_ids = 6;   // the known participants
+  map<string, int64> rating_before = 7;  // profile_id -> elo before
+  map<string, int64> rating_after = 8;   // profile_id -> elo after
+  map<string, int32> teams = 9;          // profile_id -> team id
+  repeated string winners = 10;          // profile_ids of the winners
+  string options_json = 11;           // decoded game options (T2), "" when undecoded
+  string slots_json = 12;             // decoded slots/teams/civs (T2), "" when undecoded
+  string description = 13;            // the upstream's own title (the custom lobbies' name)
+  string players_json = 14;           // decoded players (T2): alias, team, elo before/after
+}
+
+message MatchHistoryReply {
+  repeated MatchHistoryEntry matches = 1;  // newest first
+}
+
+message AccountStatsRequest {
+  repeated string profile_ids = 1;
+}
+
+message LeaderboardElo {
+  string leaderboard_id = 1;   // provider-side id ("0", "3", "4", ...)
+  string name = 2;             // logical name (rm_1v1, dm_1v1, ...)
+  int32 current = 3;           // current rating, 0 when unrated
+  int32 max = 4;               // highest rating ever seen (stored history)
+  int32 rank = 5;              // 0 when unknown
+  int32 wins = 6;
+  int32 losses = 7;
+}
+
+message AccountStats {
+  string profile_id = 1;
+  repeated LeaderboardElo leaderboards = 2;
+  int64 last_synced_at = 3;    // epoch ms, 0 when never synced
+  bool known = 4;              // false: no stored status yet
+}
+
+message AccountStatsReply {
+  repeated AccountStats accounts = 1;
+}
+
+message UserStatsRequest {
+  string user_id = 1;      // the platform user id
+  int32 window_days = 2;   // >0: count the matches of the last N days
+}
+
+message UserStats {
+  string user_id = 1;
+  repeated string profile_ids = 2;  // the user's known accounts
+  repeated LeaderboardElo leaderboards = 3;  // unified: best current/max per board
+  int32 matches_in_window = 4;     // matches of the window (0 when not asked)
+  bool known = 5;                  // false: no known account for this user
+}
+
+message UserStatsReply {
+  UserStats stats = 1;
+}
+
+message LiveMatchesRequest {
+  int32 limit = 1;   // 0: the provider's default
+}
+
+message LiveMatch {
+  string match_ref = 1;      // provider-side, opaque
+  string status = 2;         // lobby | game | ended
+  string map_name = 3;
+  string format = 4;         // e.g. "1v1", "2v2", "FFA"
+  repeated string profile_ids = 5;  // the known participants
+  string players_json = 6;   // per-slot summary (name, civ, team, avatar)
+  string lobby_url = 7;
+  string spectate_url = 8;
+  int64 updated_at = 9;       // epoch ms of the last frame seen
+  map<string, string> metadata = 10;  // summary extras (host, match_type...)
+}
+
+message LiveMatchesReply {
+  repeated LiveMatch matches = 1;
+}
+
+message SearchProfilesRequest {
+  string alias = 1;  // the exact in-game alias (case-sensitive upstream)
+}
+
+message MatchPreview {
+  string map_name = 1;        // the raw upstream map label, e.g. "arabiablitz"
+  string description = 2;    // e.g. "AUTOMATCH"
+  int64 completed_at = 3;    // epoch seconds; 0 when the match is live
+  repeated string opponents = 4;  // the other players' aliases
+}
+
+message ProfileCandidate {
+  string profile_id = 1;  // the relic profile id
+  string alias = 2;        // the in-game display name
+  string steam_name = 3;   // "/steam/<id64>" when known
+  string country = 4;      // ISO country code when known
+  repeated MatchPreview matches = 5;  // the last matches (preview)
+  string clan = 6;          // the clan tag when known
+  int32 elo_1v1 = 7;       // the 1v1 RM rating (leaderboard 3), 0 unknown
+  int32 elo_tg = 8;         // the team RM rating (leaderboard 4), 0 unknown
+  // The three discriminators the player actually reads: clan, country
+  // and the two elos \u2014 what an ACCOUNT carries. The maps ride the
+  // matches, never the account (#402).
+}
+
+message ProfileSearchReply {
+  repeated ProfileCandidate candidates = 1;  // homonyms included: the
+  // player picks theirs; an exact-alias search can match several
+  // steam accounts
 }

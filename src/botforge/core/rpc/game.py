@@ -9,19 +9,24 @@ between the wire contract and plain core models.
 from __future__ import annotations
 
 from collections.abc import AsyncIterator, Awaitable, Callable
+from typing import Any
 
 import grpc
 
 from botforge.core.models.game import (
+    AccountEloStatus,
     GameMap,
+    LeaderboardElo,
     MatchDetails,
     MatchEvent,
+    MatchHistoryEntry,
     MatchResult,
     PlayerStats,
     ProviderCapabilities,
     Slot,
     StatsBlock,
     StatsEntry,
+    UserEloStats,
 )
 from botforge.rpc_generated.botforge.v1 import game_pb2, game_pb2_grpc
 
@@ -208,6 +213,114 @@ def player_stats_from_wire(wire: game_pb2.PlayerStats) -> PlayerStats:
     )
 
 
+def leaderboard_elo_to_wire(elo: LeaderboardElo) -> game_pb2.LeaderboardElo:
+    """Translate a core leaderboard-elo model into the wire message."""
+    return game_pb2.LeaderboardElo(
+        leaderboard_id=elo.leaderboard_id,
+        name=elo.name,
+        current=elo.current,
+        max=elo.max,
+        rank=elo.rank,
+        wins=elo.wins,
+        losses=elo.losses,
+    )
+
+
+def leaderboard_elo_from_wire(wire: game_pb2.LeaderboardElo) -> LeaderboardElo:
+    """Translate a wire leaderboard-elo message into the core model."""
+    return LeaderboardElo(
+        leaderboard_id=wire.leaderboard_id,
+        name=wire.name,
+        current=wire.current,
+        max=wire.max,
+        rank=wire.rank,
+        wins=wire.wins,
+        losses=wire.losses,
+    )
+
+
+def account_stats_to_wire(status: AccountEloStatus) -> game_pb2.AccountStats:
+    """Translate a core account-status model into the wire message."""
+    return game_pb2.AccountStats(
+        profile_id=status.profile_id,
+        leaderboards=[leaderboard_elo_to_wire(e) for e in status.leaderboards],
+        last_synced_at=status.last_synced_at,
+        known=status.known,
+    )
+
+
+def account_stats_from_wire(wire: game_pb2.AccountStats) -> AccountEloStatus:
+    """Translate a wire account-status message into the core model."""
+    return AccountEloStatus(
+        profile_id=wire.profile_id,
+        leaderboards=tuple(leaderboard_elo_from_wire(e) for e in wire.leaderboards),
+        last_synced_at=wire.last_synced_at,
+        known=wire.known,
+    )
+
+
+def user_stats_to_wire(stats: UserEloStats) -> game_pb2.UserStats:
+    """Translate a core user-stats model into the wire message."""
+    return game_pb2.UserStats(
+        user_id=stats.user_id,
+        profile_ids=list(stats.profile_ids),
+        leaderboards=[leaderboard_elo_to_wire(e) for e in stats.leaderboards],
+        matches_in_window=stats.matches_in_window,
+        known=stats.known,
+    )
+
+
+def user_stats_from_wire(wire: game_pb2.UserStats) -> UserEloStats:
+    """Translate a wire user-stats message into the core model."""
+    return UserEloStats(
+        user_id=wire.user_id,
+        profile_ids=tuple(wire.profile_ids),
+        leaderboards=tuple(leaderboard_elo_from_wire(e) for e in wire.leaderboards),
+        matches_in_window=wire.matches_in_window,
+        known=wire.known,
+    )
+
+
+def match_history_to_wire(entry: MatchHistoryEntry) -> game_pb2.MatchHistoryEntry:
+    """Translate a core match-history model into the wire message."""
+    return game_pb2.MatchHistoryEntry(
+        match_id=entry.match_id,
+        leaderboard_id=entry.leaderboard_id,
+        started_at=entry.started_at,
+        finished_at=entry.finished_at,
+        map_name=entry.map_name,
+        profile_ids=list(entry.profile_ids),
+        rating_before=entry.rating_before,
+        rating_after=entry.rating_after,
+        teams=entry.teams,
+        winners=list(entry.winners),
+        description=entry.description,
+        players_json=entry.players_json,
+        options_json=entry.options_json,
+        slots_json=entry.slots_json,
+    )
+
+
+def match_history_from_wire(wire: game_pb2.MatchHistoryEntry) -> MatchHistoryEntry:
+    """Translate a wire match-history message into the core model."""
+    return MatchHistoryEntry(
+        match_id=wire.match_id,
+        leaderboard_id=wire.leaderboard_id,
+        started_at=wire.started_at,
+        finished_at=wire.finished_at,
+        map_name=wire.map_name,
+        profile_ids=tuple(wire.profile_ids),
+        rating_before=dict(wire.rating_before),
+        rating_after=dict(wire.rating_after),
+        teams=dict(wire.teams),
+        winners=tuple(wire.winners),
+        options_json=wire.options_json,
+        description=wire.description,
+        players_json=wire.players_json,
+        slots_json=wire.slots_json,
+    )
+
+
 class GameServicer(game_pb2_grpc.GameServicer):
     """Serve the botforge.v1.Game contract from provider-backed callables.
 
@@ -224,8 +337,14 @@ class GameServicer(game_pb2_grpc.GameServicer):
         list_maps: Callable[[], Awaitable[list[GameMap]]] | None = None,
         match_events: Callable[[], AsyncIterator[MatchEvent]] | None = None,
         player_stats: Callable[[str], Awaitable[PlayerStats | None]] | None = None,
-        update_subscriptions: Callable[[list[str]], Awaitable[bool]] | None = None,
+        update_subscriptions: Callable[[list[str], list[str]], Awaitable[bool]] | None = None,
         match_result: Callable[[list[str], int], Awaitable[MatchResult | None]] | None = None,
+        sync_stats: Callable[[list[str], bool], Awaitable[tuple[bool, int, str]]] | None = None,
+        match_history: Callable[[list[str], int, int, str], Awaitable[list[MatchHistoryEntry]]] | None = None,
+        account_stats: Callable[[list[str]], Awaitable[list[AccountEloStatus]]] | None = None,
+        user_stats: Callable[[str, int], Awaitable[UserEloStats | None]] | None = None,
+        live_matches: Callable[[int], Awaitable[list[dict[str, Any]]]] | None = None,
+        search_profiles: Callable[[str], Awaitable[list[dict[str, str]]]] | None = None,
     ) -> None:
         self._capabilities = capabilities
         self._match_details = match_details
@@ -234,7 +353,12 @@ class GameServicer(game_pb2_grpc.GameServicer):
         self._player_stats = player_stats
         self._update_subscriptions = update_subscriptions
         self._match_result = match_result
-
+        self._sync_stats = sync_stats
+        self._match_history = match_history
+        self._account_stats = account_stats
+        self._user_stats = user_stats
+        self._live_matches = live_matches
+        self._search_profiles = search_profiles
     async def GetCapabilities(
         self,
         request: game_pb2.CapabilitiesRequest,
@@ -308,7 +432,8 @@ class GameServicer(game_pb2_grpc.GameServicer):
         """Push the subscribed profile ids; the provider reconciles in place."""
         if self._update_subscriptions is None:
             await context.abort(grpc.StatusCode.UNIMPLEMENTED, "subscriptions not available")
-        applied = await self._update_subscriptions(list(request.profile_ids))
+        user_ids = list(request.user_ids) if request.user_ids else [""] * len(request.profile_ids)
+        applied = await self._update_subscriptions(list(request.profile_ids), user_ids)
         return game_pb2.UpdateSubscriptionsResponse(
             subscribed=len(request.profile_ids),
             applied=applied,
@@ -326,3 +451,111 @@ class GameServicer(game_pb2_grpc.GameServicer):
             if event.occurred_at < request.since:
                 continue
             yield match_event_to_wire(event)
+
+    async def SyncStats(
+        self,
+        request: game_pb2.SyncStatsRequest,
+        context: grpc.aio.ServicerContext,
+    ) -> game_pb2.SyncStatsReply:
+        """Trigger the provider's history sync (on-demand, #404 T4)."""
+        if self._sync_stats is None:
+            await context.abort(grpc.StatusCode.UNIMPLEMENTED, "stats sync not available")
+        ok, synced, error = await self._sync_stats(list(request.profile_ids), bool(request.wait))
+        return game_pb2.SyncStatsReply(ok=ok, synced=synced, error=error)
+
+    async def GetMatchHistory(
+        self,
+        request: game_pb2.MatchHistoryRequest,
+        context: grpc.aio.ServicerContext,
+    ) -> game_pb2.MatchHistoryReply:
+        """Serve the stored match history of the known accounts (#404 T1)."""
+        if self._match_history is None:
+            await context.abort(grpc.StatusCode.UNIMPLEMENTED, "match history not available")
+        entries = await self._match_history(
+            list(request.profile_ids), int(request.limit), int(request.since_s), request.leaderboard_id
+        )
+        return game_pb2.MatchHistoryReply(matches=[match_history_to_wire(e) for e in entries])
+
+    async def GetAccountStats(
+        self,
+        request: game_pb2.AccountStatsRequest,
+        context: grpc.aio.ServicerContext,
+    ) -> game_pb2.AccountStatsReply:
+        """Serve the per-account elo status (current + max, #404 T1)."""
+        if self._account_stats is None:
+            await context.abort(grpc.StatusCode.UNIMPLEMENTED, "account stats not available")
+        accounts = await self._account_stats(list(request.profile_ids))
+        return game_pb2.AccountStatsReply(accounts=[account_stats_to_wire(a) for a in accounts])
+
+    async def GetUserStats(
+        self,
+        request: game_pb2.UserStatsRequest,
+        context: grpc.aio.ServicerContext,
+    ) -> game_pb2.UserStatsReply:
+        """Serve the per-user unified stats view (#404 T1)."""
+        if self._user_stats is None:
+            await context.abort(grpc.StatusCode.UNIMPLEMENTED, "user stats not available")
+        stats = await self._user_stats(request.user_id, int(request.window_days))
+        if stats is None:
+            return game_pb2.UserStatsReply(stats=game_pb2.UserStats(user_id=request.user_id))
+        return game_pb2.UserStatsReply(stats=user_stats_to_wire(stats))
+
+    async def GetLiveMatches(
+        self,
+        request: game_pb2.LiveMatchesRequest,
+        context: grpc.aio.ServicerContext,
+    ) -> game_pb2.LiveMatchesReply:
+        """Serve the live matches the provider currently sees (#404 T3)."""
+        if self._live_matches is None:
+            await context.abort(grpc.StatusCode.UNIMPLEMENTED, "live matches not available")
+        matches = await self._live_matches(int(request.limit))
+        return game_pb2.LiveMatchesReply(
+            matches=[
+                game_pb2.LiveMatch(
+                    match_ref=str(m.get("match_ref", "")),
+                    status=str(m.get("status", "")),
+                    map_name=str(m.get("map_name", "")),
+                    format=str(m.get("format", "")),
+                    profile_ids=[str(p) for p in m.get("profile_ids") or ()],
+                    players_json=str(m.get("players_json", "")),
+                    lobby_url=str(m.get("lobby_url", "")),
+                    spectate_url=str(m.get("spectate_url", "")),
+                    updated_at=int(m.get("updated_at", 0)),
+                    metadata={str(k): str(v) for k, v in (m.get("metadata") or {}).items()},
+                )
+                for m in matches
+            ]
+        )
+
+    async def SearchProfiles(
+        self,
+        request: game_pb2.SearchProfilesRequest,
+        context: grpc.aio.ServicerContext,
+    ) -> game_pb2.ProfileSearchReply:
+        """Serve the alias search (the #402 name resolution path)."""
+        if self._search_profiles is None:
+            await context.abort(grpc.StatusCode.UNIMPLEMENTED, "profile search not available")
+        candidates = await self._search_profiles(request.alias)
+        return game_pb2.ProfileSearchReply(
+            candidates=[
+                game_pb2.ProfileCandidate(
+                    profile_id=str(c.get("profile_id", "")),
+                    alias=str(c.get("alias", "")),
+                    steam_name=str(c.get("steam_name", "")),
+                    country=str(c.get("country", "")),
+                    clan=str(c.get("clan", "")),
+                    elo_1v1=int(c.get("elo_1v1", 0)),
+                    elo_tg=int(c.get("elo_tg", 0)),
+                    matches=[
+                        game_pb2.MatchPreview(
+                            map_name=str(m.get("map_name", "")),
+                            description=str(m.get("description", "")),
+                            completed_at=int(m.get("completed_at", 0)),
+                            opponents=[str(o) for o in m.get("opponents") or ()],
+                        )
+                        for m in c.get("matches") or ()
+                    ],
+                )
+                for c in candidates
+            ]
+        )

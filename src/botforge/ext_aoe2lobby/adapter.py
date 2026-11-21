@@ -41,6 +41,7 @@ from typing import Any
 
 import websockets
 
+from botforge.aoe2.known_ids import KnownIds, log_match_event
 from botforge.aoe2.timing import GRACE_PERIOD_S, LobbyClosedGrace
 from botforge.core_process.provider_endpoints import provider_url as _provider_url
 
@@ -104,6 +105,9 @@ class Aoe2LobbyAdapter:
         self._grace = LobbyClosedGrace(grace_s=int(grace_s))
         self._last_snapshot_at = 0
         self._subscribed_ids: set[str] = set()
+        # the known ids + display names for the #423 log taxonomy
+        # (INFO names the player, strangers stay DEBUG)
+        self._known = KnownIds()
         self._ws: Any = None
         self._schema: dict[str, Any] = {}
         self._last_frame: dict[str, Any] | None = None
@@ -122,20 +126,29 @@ class Aoe2LobbyAdapter:
         removes = sorted(self._subscribed_ids - requested)
         self._subscribed_ids = requested
         if not adds and not removes:
+            self._known.set_ids(requested)
             return True
+        # the subscription delta concerns known profiles: INFO, and it
+        # NAMES them (botforge-services#423 — a nameless id falls back
+        # to the profile id)
+        delta = f"+{self._delta_label(adds)}/-{self._delta_label(removes)}"
         if self._ws is None:
-            logger.info(
-                "aoe2lobby players subscription queued (no session): +%d/-%d",
-                len(adds),
-                len(removes),
-            )
+            logger.info("aoe2lobby players subscription queued (no session): %s", delta)
+            self._known.set_ids(requested)
             return False
         # nothing to reconcile on the wire anymore (the owner's
         # direction): the matches feed is global and the players
         # channel is gone — the subscribed ids stay the REDUCER's
         # filter (which profiles surface), not a wire subscription.
-        logger.info("aoe2lobby subscription updated (reducer filter): +%d/-%d", len(adds), len(removes))
+        logger.info("aoe2lobby subscription updated (reducer filter): %s", delta)
+        self._known.set_ids(requested)
         return True
+
+    def _delta_label(self, ids: list[str]) -> str:
+        """Human-readable delta naming the profiles (fallback: the id)."""
+        if not ids:
+            return "none"
+        return f"{len(ids)} [{self._known.display_names(ids)}]"
 
     async def fetch_schema(self, timeout_s: float = 15.0) -> dict[str, Any]:
         """Capture the ws schema frame (civ labels, reference §7).
@@ -164,7 +177,7 @@ class Aoe2LobbyAdapter:
                     frame = json.loads(raw)
                 if isinstance(frame.get("schema"), dict):
                     self._schema = frame["schema"]
-                    logger.info("aoe2lobby schema captured: %d key(s)", len(self._schema))
+                    logger.debug("aoe2lobby schema captured: %d key(s)", len(self._schema))
         except Exception:
             logger.warning("aoe2lobby schema capture failed — civs stay as raw ids")
         return self._schema
@@ -272,7 +285,7 @@ class Aoe2LobbyAdapter:
                     self._ws = ws
                     if not self._schema:
                         await self.fetch_schema()
-                    logger.info("aoe2lobby ws OPEN: %s", self._ws_url)
+                    logger.debug("aoe2lobby ws OPEN: %s", self._ws_url)
                     await self._subscribe_all(ws)
                     async for event in self._run_session(ws):
                         yield event
@@ -302,10 +315,11 @@ class Aoe2LobbyAdapter:
         the server actually honors.
         """
         ids = sorted(self._subscribed_ids)
+        # the subscribed ids are the known profiles: INFO, named (#423)
         logger.info(
             "aoe2lobby SUBSCRIBE: %d profile(s): %s",
             len(ids),
-            ",".join(ids) if ids else "(EMPTY)",
+            self._known.display_names(ids) if ids else "(EMPTY)",
         )
         # THE DOCUMENTED SHAPE + the owner's direction: the MATCHES
         # subscribe carries NO ids (the FULL feed); the PLAYERS channel
@@ -314,9 +328,9 @@ class Aoe2LobbyAdapter:
         # status from the lobby/spectate payloads).
         for context in _CONTEXTS:
             payload = {"action": "subscribe", "type": "matches", "context": context}
-            logger.info("aoe2lobby SUBSCRIBE payload: %s", json.dumps(payload))
+            logger.debug("aoe2lobby SUBSCRIBE payload: %s", json.dumps(payload))
             await ws.send(json.dumps(payload))
-        logger.info(
+        logger.debug(
             "aoe2lobby session ready: matches (global feed), %d profile(s) in the reducer filter",
             len(ids),
         )
@@ -337,7 +351,7 @@ class Aoe2LobbyAdapter:
         schema = frame.get(SCHEMA_FIELD)
         if isinstance(schema, dict):
             self._schema = schema
-            logger.info("aoe2lobby schema captured: %d key(s)", len(schema))
+            logger.debug("aoe2lobby schema captured: %d key(s)", len(schema))
             return []
         # every match-carrying frame logs (the owner's tick visibility):
         # what the websocket actually sends, when
@@ -345,7 +359,8 @@ class Aoe2LobbyAdapter:
         if keys:
             sizes = {k: len(frame.get(k) or {}) for k in keys if isinstance(frame.get(k), (dict, list))}
             if sizes:
-                logger.info("aoe2lobby FRAME: %s", " ".join(f"{k}={v}" for k, v in sizes.items()))
+                # the lobby counts: DEBUG — they concern nobody we follow (#423)
+                logger.debug("aoe2lobby FRAME: %s", " ".join(f"{k}={v}" for k, v in sizes.items()))
         events = self._reduce_player_status(frame.get(PLAYER_STATUS_FIELD))
         if events:
             self._log_events("player_status push", events)
@@ -381,7 +396,7 @@ class Aoe2LobbyAdapter:
                 hits = profiles and enrolled.intersection(profiles)
                 if hits:
                     found.update(hits)
-                    per_match.append(f"{match_id}[ENROLLED:{','.join(sorted(hits))}]")
+                    per_match.append(f"{match_id}[ENROLLED:{self._known.display_names(sorted(hits))}]")
                 elif logger.isEnabledFor(logging.DEBUG):
                     per_match.append(str(match_id))
             logger.debug(
@@ -403,7 +418,7 @@ class Aoe2LobbyAdapter:
             if status:
                 logger.debug(
                     "aoe2lobby DEBUG %s => %s in %s",
-                    profile_id,
+                    self._known.display_name(profile_id),
                     status,
                     match_ref,
                 )
@@ -446,19 +461,35 @@ class Aoe2LobbyAdapter:
     def _log_events(self, source: str, events: list[dict[str, Any]]) -> None:
         """Log every emitted transition — the pod's observable trail.
 
-        One INFO line per event: the profile ids, the transition and
-        the match — 'AOE2LOBBY EVENT player=848567 match=123 lobby_opened'
-        reads straight in `docker logs`.
+        One INFO line per event, NAMING the known player (the reducer
+        only emits for subscribed profiles): 'aoe2lobby EVENT match
+        delta: Alice — lobby_opened on match 123 map=Arabia' reads
+        straight in `docker logs` (botforge-services#423).
         """
         for event in events:
-            logger.info(
-                "aoe2lobby EVENT %s: profiles=%s match=%s type=%s%s",
-                source,
-                ",".join(str(p) for p in event.get("profile_ids", [])),
-                event.get("match_ref", ""),
-                event.get("type", "?"),
-                f" map={event['metadata'].get('map', '')}" if event.get("metadata", {}).get("map") else "",
+            metadata = event.get("metadata") or {}
+            log_match_event(
+                logger,
+                f"aoe2lobby EVENT {source}",
+                str(event.get("type", "?")),
+                str(event.get("match_ref", "")),
+                event.get("profile_ids", []),
+                self._known,
+                dict(metadata) if not isinstance(metadata, dict) else metadata,
             )
+
+    def _learn_names(self, matches: dict[str, dict[str, Any]]) -> None:
+        """Remember the display names of known profiles seen in match slots."""
+        for match in matches.values():
+            slots = match.get("slots") if isinstance(match, dict) else None
+            if not isinstance(slots, dict):
+                continue
+            for slot in slots.values():
+                if isinstance(slot, dict) and slot.get("status") == 3:
+                    profile_id = slot.get("profileid")
+                    name = str(slot.get("name") or "")
+                    if profile_id not in (None, "") and name:
+                        self._known.learn_name(str(profile_id), name)
 
     def _reduce_player_status(self, statuses: object) -> list[dict[str, Any]]:
         """Fold one ``player_status`` push for the subscribed profiles.
@@ -533,6 +564,7 @@ class Aoe2LobbyAdapter:
         replay the whole world, the spammer's lesson).
         """
         snapshot = _as_match_dict(payload)
+        self._learn_names(snapshot)
         for stale_id in self._matches[context]:
             if stale_id not in snapshot:
                 # gone from the feed: the close path handles it (the
@@ -551,6 +583,7 @@ class Aoe2LobbyAdapter:
     def _apply_match_updates(self, context: str, payload: object, touched: dict[str, dict[str, Any]]) -> None:
         """Fold one delta batch: touch only the payloads that changed."""
         updates = _as_match_dict(payload)
+        self._learn_names(updates)
         self._matches[context].update(updates)
         for mid, match in updates.items():
             fp = _payload_fingerprint(match)

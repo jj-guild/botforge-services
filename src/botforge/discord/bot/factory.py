@@ -1190,7 +1190,7 @@ def _build_registration(
     """Wire the DM enrollment stack (#133): engine + AoE2-validated service.
 
     Returns (None, None) when Mongo/Redis are not configured (unit tests,
-    local runs) — the /register command then answers with a note.
+    local runs) — the registration surfaces then answer with a note.
     """
     if not config.mongo_uri or not config.redis_uri:
         return None, None
@@ -1210,12 +1210,30 @@ def _build_registration(
         MongoWorkflowStore(database),
         state or StateService(redis_uri=config.redis_uri or os.environ.get("REDIS_URI")),
     )
+    registration_db = MongoRegistrationDatabase(database)
     service = RegistrationService(
-        MongoRegistrationDatabase(database),
+        registration_db,
         profile_seams={"aoe2": Aoe2ProfileValidationSeam()},
     )
+    # One boot sweep (best-effort): the #402 insights ids the old
+    # resolution stored are gone with it — the legacy field leaves
+    # the bindings (the owner's 2026-11-20 purge).
+    _boot_tasks.append(_scrub_legacy_insights_ids(registration_db))
     engine.register_workflow(RegistrationWorkflow(service))
     return engine, service
+
+
+_boot_tasks: list[Any] = []
+
+
+async def _scrub_legacy_insights_ids(db: Any) -> None:
+    """Scrub the legacy insights id field (best-effort, logged never raised)."""
+    try:
+        scrub = getattr(db, "scrub_legacy_insights_ids", None)
+        if scrub is not None:
+            await scrub()
+    except Exception:
+        logger.debug("the legacy insights id scrub failed", exc_info=True)
 
 
 def _build_identity_service(config: BotConfig, state: StateService | None = None) -> IdentityService | None:

@@ -40,8 +40,14 @@ LOBBIES_PATH = "/community/advertisement/findAdvertisements"
 LEADERBOARDS_PATH = "/api/leaderboard"
 PERSONAL_STAT_PATH = "/community/leaderboard/GetPersonalStat"
 RECENT_MATCH_PATH = "/community/leaderboard/GetRecentMatchHistory"
+MATCH_DETAILS_HISTORY_PATH = "/community/leaderboard/GetMatchHistory"
 LOBBIES_QUERY_PARAMS = {"title": "age2"}
-LEADERBOARD_KEYS = {"0": "rm_1v1", "1": "rm_team", "2": "unranked", "3": "dm_1v1", "4": "dm_team"}
+# The REAL World's Edge leaderboard ids (verified live 2026-11-20:
+# the GetPersonalStat probe returned JeanJack's RM 1v1 rating under
+# leaderboard_id 3 and the team rating under 4 — the aoe2.net-style
+# 0..4 rotation this dict carried was WRONG for this backend, so the
+# RM boards were served under the DM names).
+LEADERBOARD_KEYS = {"0": "unranked", "1": "dm_1v1", "2": "dm_team", "3": "rm_1v1", "4": "rm_team"}
 
 _SLOT_KINDS = {True: "human", False: "open"}
 
@@ -185,6 +191,226 @@ class LibrematchAdapter:
         if not blocks:
             return None
         return PlayerStats(profile_id=profile_id, blocks=tuple(blocks))
+
+    async def search_profiles(self, alias: str, match_count: int = 3) -> list[dict[str, Any]]:
+        """Search profiles by exact in-game alias (the #402 name path).
+
+        ``GetPersonalStat`` accepts ``aliases`` instead of
+        ``profile_ids`` (ONE identifier type per call — the upstream
+        contract): the reply's ``statGroups[].members[]`` carries the
+        relic profile_id, the alias, the steam name and the country of
+        every exact-alias match. Homonyms ride along: each candidate
+        \u2014 capped at 5 \u2014 is enriched with the profile's last matches so
+        the player recognizes THEIR account by what they played, not
+        by an id. Transport failures degrade to an empty list.
+        """
+        if not alias:
+            return []
+        if not await self._allowed():
+            logger.warning("librematch call over rate budget; degrading search to empty")
+            return []
+        async with self._client() as client:
+            try:
+                reply = await client.get(
+                    urljoin(self._base_url + "/", PERSONAL_STAT_PATH.lstrip("/")),
+                    params={"title": "age2", "aliases": f'["{alias}"]'},
+                )
+                reply.raise_for_status()
+                payload = reply.json()
+            except Exception:
+                logger.warning("alias search failed (alias %s)", alias, exc_info=True)
+                return []
+        # ONE call answers the identity AND every leaderboard's stats:
+        # leaderboardStats[].statgroup_id joins members[].personal_statgroup_id
+        boards: dict[int, dict[int, int]] = {}
+        for stat in payload.get("leaderboardStats") or []:
+            if isinstance(stat, dict) and stat.get("statgroup_id") is not None:
+                per_group = boards.setdefault(int(stat["statgroup_id"]), {})
+                per_group[int(stat.get("leaderboard_id", 0))] = int(stat.get("rating", 0))
+        candidates: list[dict[str, Any]] = []
+        for group in payload.get("statGroups") or []:
+            member = next(iter(group.get("members") or []), None)
+            if not isinstance(member, dict) or not member.get("profile_id"):
+                continue
+            stats = boards.get(int(member.get("personal_statgroup_id", 0)), {})
+            candidates.append(
+                {
+                    "profile_id": str(member["profile_id"]),
+                    "alias": str(member.get("alias", alias)),
+                    "steam_name": str(member.get("name", "")),
+                    "country": str(member.get("country", "")),
+                    "clan": str(member.get("clanlist_name", "")),
+                    "elo_1v1": stats.get(3, 0),
+                    "elo_tg": stats.get(4, 0),
+                }
+            )
+            if len(candidates) >= 5:  # the upstream can answer dozens of homonyms
+                break
+        for candidate in candidates:
+            candidate["matches"] = await self._match_previews(
+                str(candidate["profile_id"]), match_count
+            )
+        return candidates
+
+    async def _match_previews(self, profile_id: str, count: int) -> list[dict[str, Any]]:
+        """Summarize a profile's last matches for the candidate list.
+
+        The alias map of the WHOLE reply (``profiles[]``) turns the
+        opponents' profile ids into aliases \u2014 a preview the player
+        reads, not ids.
+        """
+        if not await self._allowed():
+            return []
+        async with self._client() as client:
+            try:
+                reply = await client.get(
+                    urljoin(self._base_url + "/", RECENT_MATCH_PATH.lstrip("/")),
+                    params={"title": "age2", "profile_ids": f'["{profile_id}"]', "count": str(count)},
+                )
+                reply.raise_for_status()
+                payload = reply.json()
+            except Exception:
+                logger.warning("preview fetch failed (profile %s)", profile_id, exc_info=True)
+                return []
+        aliases = {
+            str(p.get("profile_id")): str(p.get("alias", ""))
+            for p in payload.get("profiles") or []
+            if isinstance(p, dict)
+        }
+        previews: list[dict[str, Any]] = []
+        for raw in payload.get("matchHistoryStats") or []:
+            if not isinstance(raw, dict):
+                continue
+            opponents = sorted(
+                {
+                    aliases.get(str(r.get("profile_id")), str(r.get("profile_id")))
+                    for r in raw.get("matchhistoryreportresults") or []
+                    if isinstance(r, dict) and str(r.get("profile_id")) != profile_id
+                }
+            )
+            previews.append(
+                {
+                    "map_name": str(raw.get("mapname", "")),
+                    "description": str(raw.get("description", "")),
+                    "completed_at": int(raw.get("completiontime", 0)),
+                    "opponents": opponents[:4],
+                }
+            )
+            if len(previews) >= count:
+                break
+        return previews
+
+    async def fetch_match_history_raw(
+        self, profile_id: str, leaderboard_id: str = "", count: int = 1000
+    ) -> list[dict[str, Any]]:
+        """Fetch a profile's recent finished matches as RAW payloads (#404).
+
+        ``GetRecentMatchHistory`` with a real ``count`` — the history
+        store ingests the raw documents first (store now, exploit
+        later), never a filtered projection. The leaderboard narrows
+        the upstream query when given; transport failures degrade to
+        an empty list, never an error.
+        """
+        if not profile_id:
+            return []
+        if not await self._allowed():
+            logger.warning("librematch call over rate budget; degrading history to empty")
+            return []
+        params: dict[str, str] = {"title": "age2", "profile_ids": f'["{profile_id}"]', "count": str(count)}
+        if leaderboard_id:
+            params["leaderboard_id"] = leaderboard_id
+        async with self._client() as client:
+            try:
+                reply = await client.get(
+                    urljoin(self._base_url + "/", RECENT_MATCH_PATH.lstrip("/")),
+                    params=params,
+                )
+                reply.raise_for_status()
+                payload = reply.json()
+            except Exception:
+                logger.warning("history fetch failed (profile %s)", profile_id, exc_info=True)
+                return []
+        matches = payload.get("matchHistoryStats") or []
+        # A DERIVED index rides each raw match ("store then exploit"):
+        # the reply-level ``profiles[]`` carries the aliases of every
+        # participant of every match in the page — attaching it per
+        # match lets the stored documents name their players without
+        # a second fetch. The raw payload stays verbatim otherwise.
+        aliases = {
+            str(p.get("profile_id")): str(p.get("alias", ""))
+            for p in (payload.get("profiles") or [])
+            if isinstance(p, dict) and p.get("profile_id")
+        }
+        out = []
+        for m in matches:
+            if not isinstance(m, dict):
+                continue
+            enriched = dict(m)
+            enriched["profile_aliases"] = aliases
+            out.append(enriched)
+        return out
+
+    async def fetch_personal_stat_raw(
+        self, profile_id: str, leaderboard_id: str
+    ) -> dict[str, Any]:
+        """Fetch one leaderboard's personal-stat payload, RAW (#404).
+
+        The account status (current elo, rank, wins/losses) reads from
+        the raw reply — the store keeps it verbatim; a transport
+        failure degrades to an empty payload.
+        """
+        if not profile_id:
+            return {}
+        if not await self._allowed():
+            logger.warning("librematch call over rate budget; degrading stat to empty")
+            return {}
+        async with self._client() as client:
+            try:
+                reply = await client.get(
+                    urljoin(self._base_url + "/", PERSONAL_STAT_PATH.lstrip("/")),
+                    params={
+                        "title": "age2",
+                        "profile_ids": f'["{profile_id}"]',
+                        "leaderboard_id": leaderboard_id,
+                    },
+                )
+                reply.raise_for_status()
+                payload = reply.json()
+            except Exception:
+                logger.warning("personal stat fetch failed (profile %s)", profile_id, exc_info=True)
+                return {}
+        return payload if isinstance(payload, dict) else {}
+
+    async def fetch_match_details_raw(self, match_id: str) -> dict[str, Any]:
+        """Fetch one stored match's detailed payload, RAW (#288, T2).
+
+        ``GetMatchHistory`` answers a match's full record once its id
+        is known — including the ``options`` and ``slotinfo`` blobs the
+        decode step (T2) exploits. The raw payload is returned
+        verbatim; transport failures degrade to an empty payload, never
+        an error.
+        """
+        if not match_id:
+            return {}
+        if not await self._allowed():
+            logger.warning("librematch call over rate budget; degrading details to empty")
+            return {}
+        async with self._client() as client:
+            try:
+                reply = await client.get(
+                    urljoin(self._base_url + "/", MATCH_DETAILS_HISTORY_PATH.lstrip("/")),
+                    params={"title": "age2", "match_ids": f'["{match_id}"]'},
+                )
+                reply.raise_for_status()
+                payload = reply.json()
+            except Exception:
+                logger.warning("match details fetch failed (match %s)", match_id, exc_info=True)
+                return {}
+        entries = payload if isinstance(payload, list) else payload.get("matches") or [payload]
+        for entry in entries:
+            if isinstance(entry, dict) and str(entry.get("id", "")) == str(match_id):
+                return entry
+        return entries[0] if entries and isinstance(entries[0], dict) else {}
 
     async def recent_match_result(self, profile_ids: list[str], since_epoch_s: int) -> MatchResult | None:
         """Fetch the latest finished match of the profiles (WorldsEdge).

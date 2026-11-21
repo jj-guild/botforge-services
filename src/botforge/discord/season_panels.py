@@ -623,8 +623,24 @@ async def _roster_style_lines(
             url = _game_account_url(game_key, pid) if game_key else ""
             profiles.append(f"[{label}]({url})" if url else label)
         links = f": {', '.join(profiles)}" if profiles else ""
-        lines.append(f"\u2022 **{pseudo}** — **<@{user_id}>**{links}")
+        stats = await _user_stats_line(bot, user_id)
+        lines.append(f"\u2022 **{pseudo}** — **<@{user_id}>**{links}{stats}")
     return lines
+
+
+async def _user_stats_line(bot: Any, user_id: str) -> str:
+    """Render the candidate's unified elo head line (#404 T6).
+
+    Best-effort: an unreachable game service renders nothing — the
+    roster line stays exactly as it was.
+    """
+    from botforge.discord.stats_views import user_stats_line
+
+    try:
+        return await user_stats_line(bot, user_id)
+    except Exception:
+        logger.warning("SEASON PANEL: the stats line failed", exc_info=True)
+        return ""
 
 
 def _game_account_url(game_key: str, profile_id: str) -> str:
@@ -787,9 +803,20 @@ async def _current_season_config(bot: Any, mod: str, guild_id: str) -> dict[str,
 
 
 async def _announce_application(
-    bot: Any, guild_id: str, mod: str, user_id: str, display_name: str, profiles: list[str]
+    bot: Any,
+    guild_id: str,
+    mod: str,
+    user_id: str,
+    display_name: str,
+    profiles: list[str],
+    application: Any = None,
 ) -> None:
-    """Post the new application in the mod's admin channel (roster format)."""
+    """Post the new application in the mod's admin channel (roster format).
+
+    The candidate sheet carries the stats vs the criteria (#404 T6):
+    every evaluated criterion renders its verdict (✓/✗, ❔ the
+    manual-review marker) so the admins decide with the facts in hand.
+    """
     from botforge.discord.ui.panels_provisioning import stored_channel_id
 
     try:
@@ -811,14 +838,19 @@ async def _announce_application(
             url = _game_account_url(game_key, pid) if game_key else ""
             links.append(f"[{label}]({url})" if url else label)
         suffix = f": {', '.join(links)}" if links else ""
+        from botforge.discord.stats_views import criteria_lines, user_stats_line
+
+        stats = ""
+        try:
+            stats = await user_stats_line(bot, user_id)
+        except Exception:
+            logger.warning("SEASON: the announce stats line failed", exc_info=True)
+        criteria = criteria_lines(application) if application is not None else []
+        body = f"\U0001f9e1 Nouvelle candidature : **{display_name}** — **<@{user_id}>**{suffix}{stats}"
+        if criteria:
+            body += "\n" + "\n".join(f"\u2022 {line}" for line in criteria)
         view = discord.ui.LayoutView(timeout=None)
-        view.add_item(
-            discord.ui.Container(
-                discord.ui.TextDisplay(
-                    f"\U0001f9e1 Nouvelle candidature : **{display_name}** — **<@{user_id}>**{suffix}"
-                )
-            )
-        )
+        view.add_item(discord.ui.Container(discord.ui.TextDisplay(body)))
         for row in split_action_rows(
             [
                 CandidateDecideButton(mod, str(user_id), True).item,
@@ -1095,13 +1127,11 @@ class SeasonApplyButton(
         profiles = await _linked_profile_ids(bot, user_id, _mod_game_key(bot, self.mod))
         if not core_name or not profiles:
             # a missing pseudo OR a missing bound game profile: the player
-            # registers first — the /register flow lives in #general
-            from botforge.discord.ui.panels_provisioning import stored_channel_id
-
-            general = await stored_channel_id(guild_id, "root", "general")
-            mention = f"<#{general}>" if general else "#général"
+            # links the account (and picks the pseudo) first — the profile
+            # menu of /home is THE door (there is no /register command)
             await interaction.followup.send(
-                f"Pseudo ou profil de jeu manquant — inscris-toi d'abord dans {mention} avec `/register`.",
+                "Pseudo ou profil de jeu manquant — lie ton compte de jeu (et ton "
+                "pseudo) via `/home` → **Profil** → *Ajouter un compte*.",
                 ephemeral=True,
             )
             return
@@ -1122,7 +1152,9 @@ class SeasonApplyButton(
                 ephemeral=True,
             )
         else:
-            await _announce_application(bot, guild_id, self.mod, user_id, display_name, profiles)
+            await _announce_application(
+                bot, guild_id, self.mod, user_id, display_name, profiles, application
+            )
             await _sync_season_roles(bot, self.mod, guild_id, user_id, "pending")
             await interaction.followup.send(
                 f"Candidature **en attente** — les admins décident.{linked}", ephemeral=True

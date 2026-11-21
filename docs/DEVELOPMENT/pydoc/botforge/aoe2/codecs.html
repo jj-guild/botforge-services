@@ -142,10 +142,13 @@ a&nbsp;binary&nbsp;stream&nbsp;of&nbsp;records:&nbsp;``uint32&nbsp;LE&nbsp;lengt
 ``options_map``).</span></dd></dl>
  <dl><dt><a name="-decode_slotinfo"><strong>decode_slotinfo</strong></a>(blob: 'str') -&gt; 'list[dict[str, object]]'</dt><dd><span class="code">Decode&nbsp;a&nbsp;slotinfo&nbsp;blob&nbsp;into&nbsp;its&nbsp;list&nbsp;of&nbsp;slot&nbsp;objects.<br>
 &nbsp;<br>
-The&nbsp;decompressed&nbsp;payload&nbsp;is&nbsp;``"&lt;N&gt;,&lt;json&nbsp;array&gt;"``:&nbsp;a&nbsp;slot&nbsp;count,<br>
-a&nbsp;comma,&nbsp;then&nbsp;the&nbsp;JSON&nbsp;array&nbsp;of&nbsp;slot&nbsp;records&nbsp;(the&nbsp;format&nbsp;the<br>
-Worlds&nbsp;Edge&nbsp;API&nbsp;serializes&nbsp;for&nbsp;the&nbsp;in-game&nbsp;slots).&nbsp;Some&nbsp;slot<br>
-values&nbsp;(``metaData``)&nbsp;are&nbsp;themselves&nbsp;base64-encoded&nbsp;twice.</span></dd></dl>
+The&nbsp;decompressed&nbsp;payload&nbsp;is&nbsp;``"&lt;N&gt;,&lt;json&nbsp;array&gt;\x00"``:&nbsp;a&nbsp;slot<br>
+count,&nbsp;a&nbsp;comma,&nbsp;then&nbsp;the&nbsp;JSON&nbsp;array&nbsp;of&nbsp;slot&nbsp;records,&nbsp;terminated<br>
+by&nbsp;a&nbsp;trailing&nbsp;NUL&nbsp;byte&nbsp;the&nbsp;game&nbsp;leaves&nbsp;behind&nbsp;(verified&nbsp;live<br>
+2026-11-20&nbsp;—&nbsp;the&nbsp;strict&nbsp;``json.loads``&nbsp;choked&nbsp;on&nbsp;exactly&nbsp;that<br>
+NUL,&nbsp;"Extra&nbsp;data&nbsp;at&nbsp;char&nbsp;2152").&nbsp;``raw_decode``&nbsp;parses&nbsp;the&nbsp;first<br>
+JSON&nbsp;value&nbsp;and&nbsp;tolerates&nbsp;whatever&nbsp;follows.&nbsp;Some&nbsp;slot&nbsp;values<br>
+(``metaData``)&nbsp;are&nbsp;themselves&nbsp;base64-encoded&nbsp;twice.</span></dd></dl>
  <dl><dt><a name="-decompress_blob"><strong>decompress_blob</strong></a>(blob: 'str') -&gt; 'bytes'</dt><dd><span class="code">Decompress&nbsp;a&nbsp;base64+zlib&nbsp;blob&nbsp;into&nbsp;its&nbsp;raw&nbsp;bytes.<br>
 &nbsp;<br>
 Raises&nbsp;``<a href="#BlobDecodeError">BlobDecodeError</a>``&nbsp;when&nbsp;the&nbsp;payload&nbsp;is&nbsp;absent,&nbsp;not&nbsp;valid<br>

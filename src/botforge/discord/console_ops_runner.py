@@ -25,7 +25,13 @@ __all__ = [
     "build_console_wirings",
 ]
 
-CONFIG_DIR = Path(__file__).resolve().parents[2] / "config"
+# The repo layout (the image copies both at the workdir root): the runner
+# lives at src/botforge/discord/, so parents[3] is the root — same
+# resolution as the other config readers (profile_sites, ratelimits).
+# The mod registry ALSO needs the repo root: the §7 layout declares
+# mods under modules/mods/<mod>/, not config/mods/.
+_REPO_ROOT = Path(__file__).resolve().parents[3]
+CONFIG_DIR = _REPO_ROOT / "config"
 
 
 def build_console_wirings(client: discord.Client) -> dict[str, Any] | None:
@@ -46,7 +52,7 @@ def build_console_wirings(client: discord.Client) -> dict[str, Any] | None:
         from botforge.discord.logs_platform import MongoLogsDatabase
         from botforge.discord.roles_platform import DiscordRolesPlatform, MongoRolesDatabase
 
-        registry = ModRegistry(load_mod_definitions(CONFIG_DIR))
+        registry = ModRegistry(load_mod_definitions(CONFIG_DIR, _REPO_ROOT))
         database = get_async_database()
         state = StateService(redis_uri=os.environ["REDIS_URI"])
         channel_service = ChannelService(
