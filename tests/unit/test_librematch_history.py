@@ -774,3 +774,31 @@ async def test_the_repair_deletes_the_poisoned_suffixed_captures() -> None:
     adapter.history_counts.clear()
     await syncer.sync_account("123")
     assert adapter.history_counts == [25], "the repaired store stops looping"
+
+
+async def test_a_random_civ_lobby_never_loops_the_repair() -> None:
+    """Upstream marks RANDOM seats with civilization_id -1.
+
+    The 2026-11-21 merlin loop: the old verdict read ANY non-null
+    civilization_id as "capturable" — the -1 RANDOM marker kept the
+    repair firing pass after pass, and (worse) the reference's
+    reversed table indexed -1, rendering random seats as
+    "Varangians". Both guards are pinned here.
+    """
+    db, adapter = FakeDb(), FakeAdapter()
+    raw = {"id": "m10", "matchhistorymember": [{"profile_id": "123", "civilization_id": -1}]}
+    db["librematch:matches"].docs["m10"] = {
+        "_id": "m10",
+        "match_id": "m10",
+        "profile_ids": ["123"],
+        "players": [{"profile_id": "123", "alias": "solo", "civ": ""}],
+        "raw": raw,
+    }
+    adapter.history["123"] = []
+    syncer = _syncer(db, adapter)
+    await syncer.sync_account("123")
+    assert adapter.history_counts == [25], "the RANDOM marker is not repairable"
+
+    from botforge.ext_librematch.reference import civ_name_of
+
+    assert civ_name_of(-1) == "", "the RANDOM marker never names a civ"

@@ -58,6 +58,16 @@ def _reverse(table: dict[str, Any]) -> dict[tuple[str, str], str]:
         for version, raw_id in versions.items():
             if raw_id is None or isinstance(raw_id, bool):
                 continue
+            try:
+                # -1 is the table's "not this epoch" filler (and the
+                # upstream's RANDOM-CIV marker) \u2014 indexing it made
+                # every -1 answer with the last-added civ name (the
+                # 2026-11-21 merlin finding: random seats rendered as
+                # "Varangians")
+                if int(raw_id) < 0:
+                    continue
+            except (TypeError, ValueError):
+                continue
             index[(str(version), str(raw_id))] = str(name)
     return index
 
@@ -77,6 +87,11 @@ def _lookup(name: str, raw_id: Any) -> str:
     reachable for historical documents.
     """
     if raw_id is None or isinstance(raw_id, bool):
+        return ""
+    try:
+        if int(raw_id) < 0:
+            return ""  # the upstream's RANDOM marker, never a civ/map
+    except (TypeError, ValueError):
         return ""
     index = _indexed(name)
     if not index:
