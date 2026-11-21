@@ -9,6 +9,62 @@ from __future__ import annotations
 
 from typing import Any, Protocol, runtime_checkable
 
+__all__ = ["KingdomStack", "KingdomService"]
+
+
+class KingdomStack(Protocol):
+    """The wired engine stack (P4.1a): kingdoms, territories, attacks."""
+
+    @property
+    def kingdoms(self) -> Any:
+        """The enrollment/season service (KingdomService)."""
+        ...
+
+    @property
+    def territories(self) -> Any:
+        """The territory/cadastre service (TerritoryService)."""
+        ...
+
+    @property
+    def attacks(self) -> Any:
+        """The attack/defense state machine (AttackService)."""
+        ...
+
+    @property
+    def diplomacy(self) -> Any:
+        """The civilization-conditions & marriage service (DiplomacyService)."""
+        ...
+
+    @property
+    def events(self) -> Any:
+        """The weekly event orchestrator (EventService)."""
+        ...
+
+    @property
+    def economy(self) -> Any:
+        """The tech-point wallet & special actions (EconomyService)."""
+        ...
+
+    @property
+    def tavern(self) -> Any:
+        """The purse-and-drinks economy (TavernService)."""
+        ...
+
+    @property
+    def mercenary(self) -> Any:
+        """The daily mercenary auction (MercenaryService)."""
+        ...
+
+    @property
+    def ffa(self) -> Any:
+        """The Saturday FFA Exploration (FFAExplorationService)."""
+        ...
+
+    @property
+    def config(self) -> Any:
+        """The validated season configuration (KingdomSeasonConfig)."""
+        ...
+
 
 @runtime_checkable
 class KingdomService(Protocol):
@@ -16,4 +72,10 @@ class KingdomService(Protocol):
 
     async def status(self, guild_id: str) -> dict[str, Any]:
         """Return the mod's status for the guild (the cog renders it)."""
+        ...
+
+    def stack(self) -> KingdomStack | None:
+        """Return the wired engine stack, or None when the data layer
+        is unavailable (Mongo down, CI smoke) — the cog degrades
+        quietly, never crashes."""
         ...

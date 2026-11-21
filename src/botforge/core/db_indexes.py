@@ -29,6 +29,11 @@ async def ensure_live_indexes(database: Any) -> None:
         await database["profile_bindings"].create_index(
             [("game_key", 1), ("user_id", 1)]
         )
+        # profile_bindings: the salon gate's boot heal (salon-parcours-v2,
+        # Drasah 18/11) — list_guild_registrant_ids filters by guild_id.
+        await database["profile_bindings"].create_index(
+            [("guild_id", 1)]
+        )
         # The GAME collections' indexes moved to the game service
         # (rule 5: every collection has ONE owner — matches and
         # player_state belong to game:aoe2, ensured at ITS boot).

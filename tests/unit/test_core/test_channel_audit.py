@@ -272,3 +272,32 @@ channels:
     assert policy.post == ("Admins",)
     assert policy.everyone_view is False
     assert policy.everyone_post is False
+
+
+async def test_deny_view_rides_the_parsing_and_the_dict(tmp_path: Any) -> None:
+    """conscription-4-salons: the INVERSE audience — a role that LOSES
+    sight of a channel parses, serializes and rebuilds intact."""
+    from botforge.core.services.mod_registry import ModRegistry, load_mod_definitions
+
+    mods_dir = tmp_path / "mods"
+    mods_dir.mkdir()
+    (mods_dir / "policymod.yaml").write_text(
+        """
+id: policymod
+seasonal: false
+channels:
+  - key: passe
+    display_name: Étape passée
+    access:
+      everyone_view: true
+      deny_view: [Enregistré]
+""",
+        encoding="utf-8",
+    )
+    definitions = load_mod_definitions(tmp_path)
+    registry = ModRegistry(definitions)
+    policy = registry.require("policymod").channel_category("passe").access
+    assert policy.deny_view == ("Enregistré",)
+    rebuilt = ChannelAccessPolicy.from_dict(policy.to_dict())
+    assert rebuilt.deny_view == ("Enregistré",)
+    assert rebuilt.everyone_view is True

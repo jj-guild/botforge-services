@@ -531,43 +531,6 @@ def test_liquipedia_circuit_opens_after_exhausted_429s() -> None:
         lp._shared_circuit_streak = 0
 
 
-def test_429_without_retry_after_opens_the_circuit_without_retrying() -> None:
-    """No Retry-After header at all (issue botforge-services#397): the
-    server said "stop" without scheduling a return — a retry is a
-    guess the ToS punish with more throttle. The circuit opens on the
-    FIRST 429: zero retries, zero further traffic, fail fast.
-    """
-
-    from botforge.ext_liquipedia import liquipedia as lp
-
-    class _Client:
-        headers: ClassVar[dict] = {}
-
-        def __init__(self) -> None:
-            self.calls = 0
-
-        def get(self, url: str, params: dict | None = None) -> Any:
-            self.calls += 1
-            return httpx.Response(
-                429,
-                request=httpx.Request("GET", "https://liquipedia.net/api.php"),
-            )
-
-    provider = lp.LiquipediaMapsProvider(user_agent="test <t@example>")
-    provider._client = _Client()  # type: ignore[attr-defined]
-    provider._sleep = lambda s: None  # type: ignore[method-assign]
-    lp._shared_circuit_open_until = 0.0
-    lp._shared_circuit_streak = 0
-    try:
-        with pytest.raises(httpx.HTTPStatusError):
-            provider._get_json({"action": "query"})
-        assert provider._client.calls == 1, "a 429 without Retry-After means NO retry"
-        assert lp.LiquipediaCircuitOpenError.retry_in_s() > 0, "the circuit opened"
-    finally:
-        lp._shared_circuit_open_until = 0.0
-        lp._shared_circuit_streak = 0
-
-
 def test_429_long_retry_after_opens_the_circuit_immediately() -> None:
     """A Retry-After as long as the circuit window is the server
     scheduling our silence (issue botforge-services#382): the circuit

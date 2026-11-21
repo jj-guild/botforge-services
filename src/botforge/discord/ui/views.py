@@ -23,6 +23,7 @@ from botforge.discord.ui.delivery import (
 )
 
 __all__ = [
+    "ComposedView",
     "ConfirmationView",
     "GameSelectionView",
     "PaginationView",
@@ -95,6 +96,40 @@ class PermissionedView(discord.ui.View):
             catalog=self._catalog,
             logs_service=self._logs_service,
         )
+
+
+class ComposedView(PermissionedView):
+    """A view composed from the caller's ready-made items (#407).
+
+    The gameplay pattern — a DM or message whose buttons/selects are
+    built elsewhere and attached one by one — gets the same base as
+    every interactive view: click-time permission checks when a
+    permission service is wired (fail-open without one), the delivery
+    policies, and the ``mod`` anchor. Callers never construct a raw
+    ``discord.ui.View`` (rule #367: always the UI SDK); items may be
+    passed here or added later with ``add_item``.
+    """
+
+    def __init__(
+        self,
+        *items: Any,
+        mod: str = "core",
+        permission_service: Any = None,
+        catalog: Any = None,
+        logs_service: Any = None,
+        **kwargs: Any,
+    ) -> None:
+        super().__init__(
+            permission_service=permission_service, catalog=catalog, logs_service=logs_service, **kwargs
+        )
+        self._composed_mod = mod
+        for item in items:
+            self.add_item(item)
+
+    @property
+    def mod(self) -> str:
+        """The mod this view's components belong to."""
+        return self._composed_mod
 
 
 class ConfirmationView(PermissionedView):

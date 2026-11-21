@@ -15,6 +15,7 @@ disabled, never dead.
 from __future__ import annotations
 
 import logging
+import re
 from pathlib import Path
 from typing import Any
 
@@ -23,6 +24,7 @@ import yaml
 from botforge.discord.views_registry import (
     KIND_MENU,
     KIND_PANEL,
+    KIND_SURFACE,
     ButtonDecl,
     ViewDecl,
     register_view,
@@ -74,9 +76,14 @@ def declare_views_from_config(config_dir: Path | str | None = None) -> None:
         if not isinstance(raw, dict):
             raise ValueError(f"views config: {view_id}: a view must be a mapping")
         kind = str(raw.get("kind", ""))
-        if kind not in (KIND_MENU, KIND_PANEL):
-            raise ValueError(f"views config: {view_id}: kind must be menu or panel, got {kind!r}")
+        if kind not in (KIND_MENU, KIND_PANEL, KIND_SURFACE):
+            raise ValueError(f"views config: {view_id}: kind must be menu, panel or surface, got {kind!r}")
         buttons = tuple(_parse_button(view_id, b) for b in raw.get("buttons", []) or ())
+        if kind == KIND_SURFACE and buttons:
+            raise ValueError(
+                f"views config: {view_id}: a surface never carries buttons — "
+                "it anchors, it does not navigate"
+            )
         register_view(
             ViewDecl(
                 id=str(view_id),
@@ -105,22 +112,34 @@ def _load_mod_views(config_dir: Path | str | None = None) -> dict[str, Any]:
     navigation), a broken one fails loudly (the registry is the
     single navigation source — a half-loaded menu tree is a bug).
     """
+    from botforge.core.services.mod_layout import ModLayout, default_repo_root
     from botforge.core.services.mod_registry import load_mod_definitions
 
     base = Path(config_dir) if config_dir else VIEWS_CONFIG.parent
+    repo_root = default_repo_root()
     try:
-        definitions = load_mod_definitions(base)
+        definitions = load_mod_definitions(base, repo_root=repo_root)
     except Exception:
         logger.warning("VIEWS: mod declarations unreadable — mod views skipped", exc_info=True)
         return {}
+    layouts: dict[str, ModLayout] = {}
+    if repo_root is not None:
+        from botforge.core.services.mod_layout import discover_mods
+
+        layouts = discover_mods(Path(repo_root))
     merged: dict[str, Any] = {}
     for name in definitions:
-        # today the declarations live flat (config/mods/<mod>.yaml), so
-        # a mod's views ride <mod>.views.yaml next to it; when botforge#179
-        # moves each mod into its own directory, the path becomes
-        # config/mods/<mod>/views.yaml — this helper is the only seam.
-        mod_views = base / "mods" / f"{name}.views.yaml"
-        if not mod_views.is_file():
+        # the legacy declarations live flat (config/mods/<mod>.yaml) and a
+        # legacy mod's views ride <mod>.views.yaml next to it; the
+        # modular §7 mods ship their views in their OWN conf directory
+        # (botforge#179/#221: a mod's files never scatter) —
+        # conf/views.yaml next to the declaration.
+        candidates = [base / "mods" / f"{name}.views.yaml"]
+        layout = layouts.get(name)
+        if layout is not None:
+            candidates.insert(0, layout.declaration.parent / "views.yaml")
+        mod_views = next((path for path in candidates if path.is_file()), None)
+        if mod_views is None:
             continue
         with open(mod_views, encoding="utf-8") as fh:
             data = yaml.safe_load(fh)
@@ -128,8 +147,23 @@ def _load_mod_views(config_dir: Path | str | None = None) -> dict[str, Any]:
             continue
         if not isinstance(data, dict) or not isinstance(data.get("views"), dict):
             raise ValueError(f"{mod_views}: a mod views config must carry a 'views' mapping")
-        merged.update(data["views"])
-        logger.info("VIEWS declared by mod %s: %d views", name, len(data["views"]))
+        # R9: a mod's view ids follow the naming contract —
+        # panel:mod:<name>:… / menu:mod:<name>:… of its OWN mod. A legacy
+        # view:/surface: id is drift: it is skipped (loudly), never
+        # registered — the architecture test pins the rule.
+        contract = re.compile(rf"^(?:panel|menu):mod:{re.escape(str(name))}(?::|$)")
+        accepted = 0
+        for view_id, spec in data["views"].items():
+            if not contract.match(str(view_id)):
+                logger.error(
+                    "VIEWS: mod %s declares a non-contract id %r — skipped "
+                    "(a mod's view ids are panel:mod:%s:… or menu:mod:%s:…)",
+                    name, view_id, name, name,
+                )
+                continue
+            merged[str(view_id)] = spec
+            accepted += 1
+        logger.info("VIEWS declared by mod %s: %d views", name, accepted)
     return merged
 
 

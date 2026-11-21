@@ -311,6 +311,62 @@ class TerritoryService:
         )
         return replacement
 
+    # -----------------------------------------------------------------
+    # The Distributeur's admin levers (the reference's injector, 20/11)
+    # -----------------------------------------------------------------
+
+    async def shield_territory(self, map_key: str, hours: float) -> TerritoryModel:
+        """Shield a drawn territory for ``hours`` (admin lever, no cost).
+
+        The reference's « 🛡 Bouclier 48h »: the Garde Royale shield is
+        forced without buying anything — ``protected_until`` moves to
+        the game now plus the window.
+        """
+        from datetime import timedelta
+
+        territory = await self._find_by_map_key(map_key)
+        territory.protected_until = game_now() + timedelta(hours=float(hours))
+        await self._store.upsert_territory(territory.to_mongo())
+        logger.info(
+            "kingdom: map %s shielded for %sh (distributor)", map_key, hours
+        )
+        return territory
+
+    async def unshield_territory(self, map_key: str) -> TerritoryModel:
+        """Clear a territory's shield (admin lever)."""
+        territory = await self._find_by_map_key(map_key)
+        territory.protected_until = None
+        await self._store.upsert_territory(territory.to_mongo())
+        logger.info("kingdom: map %s shield cleared (distributor)", map_key)
+        return territory
+
+    async def retire_territory(self, map_key: str) -> TerritoryModel:
+        """Retire a territory: the map goes out, no replacement drawn.
+
+        The reference's « - Retirer » (hors saison): the kingdom loses
+        the territory AND the map leaves the season's pool — unlike the
+        ejection, NOTHING replaces it.
+        """
+        await self._require_season()
+        territory = await self._find_by_map_key(map_key)
+        season = await self._require_season()
+        if map_key not in season.out_maps:
+            season.out_maps = [*season.out_maps, map_key]
+            await self._store.upsert_season(season.to_mongo())
+        await self._store.delete_territory(territory.id)
+        logger.info("kingdom: map %s retired, out for the season (distributor)", map_key)
+        return territory
+
+    async def _find_by_map_key(self, map_key: str) -> TerritoryModel:
+        """Return the drawn territory of a map key, or raise."""
+        territory = next(
+            (item for item in await self.territories() if item.map_key == map_key),
+            None,
+        )
+        if territory is None:
+            raise TerritoryNotFoundError("this map is not a drawn territory of the current season")
+        return territory
+
     async def territory_count_by_kingdom(self) -> dict[str, int]:
         """Return owned-territory counts per kingdom id (Conquest basis, T8)."""
         counts: dict[str, int] = {}

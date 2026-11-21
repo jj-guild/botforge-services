@@ -1,0 +1,113 @@
+# Kingdom mod — the declared view ids (#381 ruling 1, Merlin 17/11:
+# « les éphémères doivent-elles aussi être déclarées ? — oui »).
+#
+# Every player-facing surface the mod renders carries its id as its
+# footer line (build_view appends it): the pinned panel, the ephemeral
+# windows, the confirm cards. A surface anchors feedback — it never
+# navigates (no buttons): a menu opening a surface is a drift the
+# registry validation catches.
+#
+# The ids live HERE, next to the mod's declaration (#221: a mod's
+# files never scatter) — the platform loader merges them at boot.
+#
+# The mod's admin CONSOLE surface (panel:mod:kingdom:admin:console) is
+# NOT declared here: the SDK auto-declares it for every mod
+# (mod_views.declare_mod_views) and injects the 🛠️ Console button on
+# menu:mod:kingdom:admin. The mod only wires its content
+# (wire_view in cogs/kingdom/__init__.py).
+views:
+  # the console's inline confirm card (deploy/sync/reset)
+  panel:mod:kingdom:admin:console:confirm:
+    kind: surface
+  # console-v2 (Drasah 21/11): the cockpit's four ephemeral drawers —
+  # every drawer is a DECLARED surface (the id rides the footer, the
+  # admin's feedback always names the window he sees)
+  panel:mod:kingdom:admin:admissions:
+    kind: surface
+  panel:mod:kingdom:admin:regie:
+    kind: surface
+  panel:mod:kingdom:admin:atelier:
+    kind: surface
+  panel:mod:kingdom:admin:beta:
+    kind: surface
+  # console-etats-regie-v1 (Drasah 21/11): the CYCLE's confirm cards
+  # (l'envoi de la saison, le faux départ) — same one-window rule
+  panel:mod:kingdom:cycle:confirm-start:
+    kind: surface
+  panel:mod:kingdom:cycle:confirm-false-start:
+    kind: surface
+  # the pinned / ephemeral gameplay surfaces (#381 ruling 1: every
+  # rendered surface is declared — an undeclared id logs an error at
+  # every pin refresh and answers "unknown view" if routed)
+  panel:mod:kingdom:attack:
+    kind: surface
+  panel:mod:kingdom:candidates:
+    kind: surface
+  panel:mod:kingdom:apply:
+    kind: surface
+  panel:mod:kingdom:register:
+    kind: surface
+  panel:mod:kingdom:status:
+    kind: surface
+  # machine-temps-v3 (Drasah 19/11): the ⏱️ machine à temps surfaces —
+  # the pinned cockpit + the snapshot-restore picker window
+  # (rework 20/11: renamed from panel:mod:kingdom:settings — no settings id)
+  panel:mod:kingdom:console:
+    kind: surface
+  # windows-v2 (Drasah 21/11): the closable note surface — every
+  # content-only ephemeral message becomes this declared window
+  panel:mod:kingdom:note:
+    kind: surface
+  # realms validation dashboard pin (ported from the reference panel:royaumes)
+  panel:mod:kingdom:validation:
+    kind: surface
+  # conscription-4-salons (Drasah 20/11): the lords' desk — the pinned
+  # seigneurerie panel (salon 3, admin only)
+  panel:mod:kingdom:seigneurerie:
+    kind: surface
+  # validation-cards-v1 (Drasah 20/11): the admin's sovereign confirm
+  # windows — the delete confirm card + the crown designation window
+  panel:mod:kingdom:validation:confirm:
+    kind: surface
+  panel:mod:kingdom:validation:crown:
+    kind: surface
+  # eject-sas-v1 (Drasah 21/11): the eject motif window — the reason
+  # the King receives, presets + the free field
+  panel:mod:kingdom:validation:eject:
+    kind: surface
+  # fin-saison-v1 (Drasah 21/11): the « Terminer la saison » confirm
+  # card — same one-window rule as the cycle's other cards
+  panel:mod:kingdom:cycle:confirm-end-season:
+    kind: surface
+  # marché entry pin (ported from the reference panel:marche)
+  panel:mod:kingdom:market:
+    kind: surface
+  panel:mod:kingdom:time-machine:
+    kind: surface
+  panel:mod:kingdom:time-machine:restore:
+    kind: surface
+  # distributeur-v1 (Drasah 19/11): the 🎁 distributeur surfaces —
+  # the pinned panel + the injection window
+  panel:mod:kingdom:distributor:
+    kind: surface
+  panel:mod:kingdom:distributor:window:
+    kind: surface
+  # camp-beta-v1 (Drasah 19/11): the ⚔️ Roi ou Seigneur provisional
+  # window (the beta seasons' founding/joining door)
+  panel:mod:kingdom:camp:
+    kind: surface
+  # royaume-persistant-v1 (Drasah 20/11): the persistent realm's
+  # surfaces — the 🏰 hub panel (dormant/vivant) + the chez-soi
+  # window and its four sub-windows
+  panel:mod:kingdom:realm:
+    kind: surface
+  panel:mod:kingdom:realm:home:
+    kind: surface
+  panel:mod:kingdom:realm:home:seigneurie:
+    kind: surface
+  panel:mod:kingdom:realm:presentation:
+    kind: surface
+  panel:mod:kingdom:realm:season:
+    kind: surface
+  panel:mod:kingdom:realm:palmares:
+    kind: surface

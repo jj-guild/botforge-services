@@ -5,7 +5,12 @@ Two kinds of views, one vocabulary:
 - a **menu** navigates: buttons only, each opening another view
   (``menu:home`` → ``menu:games:home``). No data, no actions;
 - a **panel** informs or acts: data sections, action buttons,
-  live content (``panel:profile``, ``panel:game:aoe2:live``).
+  live content (``panel:profile``, ``panel:game:aoe2:live``);
+- a **surface** anchors without navigating: an id that renders its
+  footer and nothing else — the ephemeral windows, confirm cards and
+  one-shot surfaces a mod declares so every feedback names a real
+  anchor (never a button target: a menu that opens a surface is a
+  drift).
 
 Every view carries a **view id** (``menu:games:aoe2``,
 ``panel:game:aoe2:players``) rendered as its footer — the anchor
@@ -39,6 +44,7 @@ MAX_MODS = 20
 
 KIND_MENU = "menu"
 KIND_PANEL = "panel"
+KIND_SURFACE = "surface"
 
 
 @dataclass(frozen=True, slots=True)

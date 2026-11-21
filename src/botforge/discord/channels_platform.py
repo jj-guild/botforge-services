@@ -92,7 +92,13 @@ class DiscordChannelsPlatform:
             await channel.set_permissions(
                 guild.me,
                 overwrite=discord.PermissionOverwrite(
-                    view_channel=True, send_messages=True, read_message_history=True, manage_messages=True
+                    view_channel=True,
+                    send_messages=True,
+                    read_message_history=True,
+                    manage_messages=True,
+                    # a private channel must stay manageable by the bot
+                    # (purge, rename) — not only readable (#413)
+                    manage_channels=True,
                 ),
                 reason="botforge: access policy bot overwrite",
             )
@@ -120,6 +126,19 @@ class DiscordChannelsPlatform:
                     read_message_history=True,
                 ),
                 reason="botforge: access policy role overwrite",
+            )
+        # the INVERSE audience (conscription-4-salons): a declared role
+        # LOSES sight of the channel — a salon that disappears once its
+        # step is passed. The deny rides the same declaration; the
+        # provisioning reapplies it on every pass (nothing drifts).
+        for role_key in policy.get("deny_view") or ():
+            role = discord.utils.get(guild.roles, name=role_key)
+            if role is None:
+                continue
+            await channel.set_permissions(
+                role,
+                overwrite=discord.PermissionOverwrite(view_channel=False),
+                reason="botforge: access policy deny overwrite",
             )
 
     async def ensure_channel(self, guild_id: str, name: str, category_id: str | None = None) -> str:

@@ -271,6 +271,139 @@ class KingdomService:
         logger.info("kingdom: season %s phase set to %s", season.id, phase)
         return season
 
+    async def set_clock_offset(self, seconds: int) -> SeasonState:
+        """Move the game clock forward (machine-temps-v2, console-only).
+
+        The ops console's clock button lands here: the offset is the
+        SECONDS the game clock runs ahead of the real clock — a strictly
+        positive test jump (« 90m », « 2h », « 3d »). The offset persists
+        on the season doc (a restart converges back via
+        ``sync_game_offset``) and the process cache moves at once. A
+        rewind NEVER goes through the clock: negative values are
+        refused loudly (the snapshots own the rewinds).
+        """
+        from .game_clock import set_game_offset
+
+        value = int(seconds)
+        if value < 0:
+            raise ValueError("the game-clock offset can never be negative")
+        season = await self._require_season()
+        season.clock_offset = value
+        await self._store.upsert_season(season.to_mongo())
+        set_game_offset(value)
+        logger.info("kingdom: season %s clock offset set to %ss", season.id, value)
+        return season
+
+    async def set_frozen(self, frozen: bool) -> SeasonState:
+        """Pause or resume the game clock (machine-temps-v3, 19/11).
+
+        The time machine's Pause/Reprendre lands here: a frozen season
+        replays NO weekly slot (the scheduler skips it), while the
+        manual jumps keep working — Drasah keeps testing while paused.
+        A snapshot RESTORE sets it automatically (a rewind must not be
+        instantly re-advanced by the real clock).
+        """
+        season = await self._require_season()
+        season.frozen = bool(frozen)
+        await self._store.upsert_season(season.to_mongo())
+        logger.info("kingdom: season %s frozen=%s", season.id, bool(frozen))
+        return season
+
+    async def snapshot(self, label: str = "manual") -> str:
+        """Photograph the whole current season data (machine-temps-v3).
+
+        The snapshot lives in the SAME ``kingdoms_season_archives``
+        collection as the pre-wipe archives, under a ``snapshot-``
+        prefixed id (the rewind targets); restore_snapshot replays it
+        verbatim. The camera accepts an empty data set (a setup-phase
+        season is a photographable state).
+        """
+        timestamp = game_now()
+        seasons = await self._find_all("find_seasons")
+        current = await self.current_season()
+        archive: dict[str, Any] = {
+            "_id": f"snapshot-{label}-{timestamp:%Y%m%d-%H%M%S}",
+            "archived_at": timestamp,
+            "season_id": current.id if current is not None else "none",
+            "seasons": seasons,
+            "kingdoms": await self._find_all("find_kingdoms"),
+            "lords": await self._find_all("find_lords"),
+            "territories": await self._find_all("find_territories"),
+            "technologies": await self._find_all("find_technologies"),
+            "attacks": await self._find_all("find_attacks"),
+            "showmatches": await self._find_all("find_showmatches"),
+            "ffas": await self._find_all("find_ffas"),
+            "plans": await self._find_all("find_plans"),
+        }
+        await self._store.upsert_season_archive(archive)
+        logger.info("kingdom: snapshot %s taken", archive["_id"])
+        return str(archive["_id"])
+
+    async def snapshots(self) -> list[dict[str, Any]]:
+        """Return the rewind targets (snapshot-prefixed archives, latest first)."""
+        return sorted(
+            (
+                doc
+                for doc in await self.season_archives()
+                if str(doc.get("_id", "")).startswith("snapshot-")
+            ),
+            key=lambda doc: str(doc.get("archived_at", "")),
+            reverse=True,
+        )
+
+    async def restore_snapshot(self, snapshot_id: str) -> None:
+        """Rewind the whole data set to one snapshot (machine-temps-v3).
+
+        The current data is archived first (the rewind is itself
+        photographed — the operator can undo his undo), then wiped and
+        rewritten from the snapshot verbatim. The season comes back
+        FROZEN (a rewind must not be instantly re-advanced) and the
+        process game-clock offset re-syncs from the restored season.
+        """
+        target = next(
+            (
+                doc
+                for doc in await self.season_archives()
+                if str(doc.get("_id", "")) == str(snapshot_id)
+            ),
+            None,
+        )
+        if target is None:
+            raise NoSeasonError(f"the snapshot {snapshot_id!r} does not exist")
+        await self._archive_current_data()
+        await self._store.wipe_season_data()
+        upserters = {
+            "seasons": "upsert_season",
+            "kingdoms": "upsert_kingdom",
+            "lords": "upsert_lord",
+            "territories": "upsert_territory",
+            "technologies": "upsert_technology",
+            "attacks": "upsert_attack",
+            "showmatches": "upsert_showmatch",
+            "ffas": "upsert_ffa",
+            "plans": "upsert_plan",
+        }
+        restored = 0
+        for section, upserter in upserters.items():
+            method = getattr(self._store, upserter, None)
+            if method is None:
+                continue
+            for document in target.get(section) or ():
+                await method(dict(document))
+                restored += 1
+        restored_season = await self.current_season()
+        if restored_season is not None:
+            restored_season.frozen = True
+            await self._store.upsert_season(restored_season.to_mongo())
+            from .game_clock import set_game_offset
+
+            set_game_offset(int(getattr(restored_season, "clock_offset", 0) or 0))
+        logger.info(
+            "kingdom: snapshot %s restored (%s documents) — the season is frozen",
+            snapshot_id,
+            restored,
+        )
+
     async def save_kingdom(self, kingdom: KingdomModel) -> KingdomModel:
         """Persist one kingdom document (conseil-objectif-v1 surface seam).
 
@@ -582,6 +715,62 @@ class KingdomService:
             next_tier.cost,
         )
         return kingdom
+
+    # -----------------------------------------------------------------
+    # The Distributeur's admin levers (the reference's injector, 20/11)
+    # -----------------------------------------------------------------
+
+    async def force_parish_tier(self, kingdom_id: str, tier: int) -> KingdomModel:
+        """Force the Paroisse palier (1-3) without paying (admin lever).
+
+        distributeur-v2 (Drasah 20/11): the reference's injector could
+        push a kingdom to any palier for testing; the new engine pays
+        tech points for upgrades, so the admin lever FORCES the field
+        — no cost, no rule, the panel is the only caller.
+        """
+        kingdom = await self._require_kingdom(kingdom_id)
+        if kingdom.is_gaia:
+            raise ParishError("Gaïa owns no Paroisse")
+        if int(tier) not in (1, 2, 3):
+            raise ParishError(f"palier inconnu : {tier}")
+        kingdom.parish_tier = int(tier)
+        await self._store.upsert_kingdom(kingdom.to_mongo())
+        logger.info("kingdom: %s parish tier forced to %s (distributor)", kingdom.id, tier)
+        return kingdom
+
+    async def set_lord_budgets(self, player_id: str, attack_used: int, defense_used: int) -> LordModel:
+        """Force a lord's consumed weekly budgets (admin lever).
+
+        The reference's « ↻ Recharger les budgets » and its lock twin:
+        0/0 recharges (1 attack / 1 defense available again), the max
+        values lock the lord out of the weekly combat.
+        """
+        lord = await self._require_lord(player_id)
+        lord.attack_used = max(0, int(attack_used))
+        lord.defense_used = max(0, int(defense_used))
+        await self._store.upsert_lord(lord.to_mongo())
+        logger.info(
+            "kingdom: %s budgets forced to %s/%s (distributor)",
+            lord.id,
+            lord.attack_used,
+            lord.defense_used,
+        )
+        return lord
+
+    async def set_lord_marriage_lock(self, player_id: str, until: int | None) -> LordModel:
+        """Set or clear a lord's marriage combat lock (admin lever).
+
+        ``until`` is a unix timestamp; ``None`` lifts the lock (« 🔓
+        Lever le verrou mariage ») — the reference's 6h test lock
+        passes ``now + 6h``.
+        """
+        lord = await self._require_lord(player_id)
+        lord.marriage_locked_until = until if until is None else int(until)
+        await self._store.upsert_lord(lord.to_mongo())
+        logger.info(
+            "kingdom: %s marriage lock set to %s (distributor)", lord.id, lord.marriage_locked_until
+        )
+        return lord
 
     async def replace(self, outgoing_player_id: str, incoming_player_id: str) -> LordModel:
         """Replace a player who left with a queued player (D23/D25).

@@ -53,6 +53,22 @@ PROD_ENV_NAMES = ("prod", "production")
 
 _NS = "console"
 
+# The console surfaces' canonical ids and shared emoji (one visual anchor:
+# the 🛠️ rides every console — the buttons opening them and the headers of
+# the console panels themselves).
+GLOBAL_CONSOLE_VIEW_ID = "panel:admin:console"
+CONSOLE_EMOJI = "\U0001F6E0\uFE0F"
+
+
+def console_view_id() -> str:
+    """Return the global (bot-admin) console's declared view id."""
+    return GLOBAL_CONSOLE_VIEW_ID
+
+
+def mod_console_view_id(mod_name: str) -> str:
+    """Return a mod's own console surface id (auto-declared by the SDK)."""
+    return f"panel:mod:{mod_name}:admin:console"
+
 
 @dataclass(frozen=True)
 class ConsoleAction:
@@ -76,6 +92,10 @@ class ConsoleAction:
     item_cls: type[discord.ui.DynamicItem[Any]]
     build: Callable[[bool], discord.ui.DynamicItem[Any]]
     description: str
+    # empty = the GLOBAL console (panel:admin:console); a mod's name scopes the
+    # action to that mod's own console surface (e.g.
+    # panel:mod:kingdom:admin:console) — never rendered by the global one
+    mod: str = ""
 
 
 _ACTIONS: dict[str, ConsoleAction] = {}
@@ -91,9 +111,17 @@ def register_console_action(action: ConsoleAction) -> ConsoleAction:
     return action
 
 
-def registered_console_actions() -> tuple[ConsoleAction, ...]:
-    """Return the registered actions in registration order."""
-    return tuple(_ACTIONS.values())
+def registered_console_actions(mod: str | None = None) -> tuple[ConsoleAction, ...]:
+    """Return the registered actions in registration order.
+
+    ``mod=None`` returns everything; ``mod=""`` only the global console's
+    actions; ``mod="kingdom"`` only that mod's (they belong to the mod's
+    own console surface, never to ``panel:admin:console``).
+    """
+    actions = tuple(_ACTIONS.values())
+    if mod is None:
+        return actions
+    return tuple(a for a in actions if a.mod == mod)
 
 
 def console_action(key: str) -> ConsoleAction | None:
@@ -438,7 +466,9 @@ async def _console_view(guild_id: str | int | None, client: Any = None) -> disco
         )
     )
     note = await _tr_guild(client, guild_id, note_key, note_fallback)
-    intro = note + "\n" + "\n".join(action.description for action in registered_console_actions())
+    intro = note + "\n" + "\n".join(
+        action.description for action in registered_console_actions(mod="")
+    )
     container: discord.ui.Container[discord.ui.LayoutView] = discord.ui.Container(
         discord.ui.TextDisplay(await _tr_guild(client, guild_id, "title", "# \u2699 Console")),
         discord.ui.TextDisplay(intro),
@@ -452,14 +482,14 @@ async def _console_view(guild_id: str | int | None, client: Any = None) -> disco
         )
     )
     container.add_item(row)
-    for action in registered_console_actions():
+    for action in registered_console_actions(mod=""):
         ext_row: discord.ui.ActionRow[discord.ui.LayoutView] = discord.ui.ActionRow()
         ext_row.add_item(action.build(not allowed))
         container.add_item(ext_row)
     view.add_item(container)
     from botforge.discord.ui.view_footer import add_view_footer, require_declared_view_id
 
-    return add_view_footer(view, require_declared_view_id("menu:console"))
+    return add_view_footer(view, require_declared_view_id(GLOBAL_CONSOLE_VIEW_ID))
 
 
 class DevDangerButton(
@@ -757,13 +787,16 @@ class AdminConsoleButton(
     Rendered on the env-declared test guilds (allowlist); the click
     re-runs the full console guard (bot admin, never prod, allowlist)
     before opening the console view \u2014 the mandate: seeing the
-    button never implies being allowed to click it.
+    button never implies being allowed to click it. The button wears
+    the console's 🛠️ emoji (danger style: a destructive admin surface);
+    the label is the i18n text, never an emoji (one emoji per button).
     """
 
-    def __init__(self) -> None:
+    def __init__(self, label: str = "Console", emoji: str = CONSOLE_EMOJI) -> None:
         super().__init__(
             discord.ui.Button(
-                label="\u2699 Console",
+                label=label[:80],
+                emoji=discord.PartialEmoji.from_str(emoji) if emoji else None,
                 style=discord.ButtonStyle.danger,
                 custom_id=PIN_CONSOLE_BUTTON_ID,
             )
@@ -777,9 +810,16 @@ class AdminConsoleButton(
         match: re.Match[str],
         /,
     ) -> AdminConsoleButton:
-        """Rebuild the item from the wire."""
-        del interaction, item, match
-        return cls()
+        """Rebuild the item from the wire (label/emoji kept from the item)."""
+        del interaction, match
+        button = item if isinstance(item, discord.ui.Button) else None
+        label = (button.label if button is not None else None) or "Console"
+        emoji = (
+            button.emoji.name
+            if button is not None and isinstance(button.emoji, discord.PartialEmoji)
+            else CONSOLE_EMOJI
+        )
+        return cls(label, emoji)
 
     async def callback(self, interaction: discord.Interaction) -> None:
         """Open the console as a NEW ephemeral message (the navigation norm).

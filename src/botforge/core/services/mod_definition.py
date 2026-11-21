@@ -23,6 +23,15 @@ class ChannelAccessPolicy:
 
     view: tuple[str, ...] = ()
     post: tuple[str, ...] = ()
+    deny_view: tuple[str, ...] = ()
+    """Roles that must LOSE sight of the channel (conscription-4-salons).
+
+    The inverse audience: a declaration may say « everyone sees this
+    channel EXCEPT the holders of role X » — a channel that DISAPPEARS
+    once its step is passed (the register salon of a parcours). The
+    declaration stays the source of truth; the audit expects the deny
+    overwrite to exist, exactly like a view one.
+    """
     everyone_view: bool = True
     everyone_post: bool = False
     bot_overwrite: bool = True
@@ -32,6 +41,7 @@ class ChannelAccessPolicy:
         return {
             "view": [str(v) for v in self.view],
             "post": [str(v) for v in self.post],
+            "deny_view": [str(v) for v in self.deny_view],
             "everyone_view": self.everyone_view,
             "everyone_post": self.everyone_post,
             "bot_overwrite": self.bot_overwrite,
@@ -43,6 +53,7 @@ class ChannelAccessPolicy:
         return cls(
             view=tuple(str(v) for v in (data.get("view") or ())),
             post=tuple(str(v) for v in (data.get("post") or ())),
+            deny_view=tuple(str(v) for v in (data.get("deny_view") or ())),
             everyone_view=bool(data.get("everyone_view", True)),
             everyone_post=bool(data.get("everyone_post", False)),
             bot_overwrite=bool(data.get("bot_overwrite", True)),
@@ -65,9 +76,19 @@ class ChannelCategoryDef:
     # from the declaration's channel_groups (the salons-as-data
     # structure, #216 tranche I); empty = the mod's root folder
     group: str = ""
+    # the GROUP is admin-only (the declaration's channel_groups flag):
+    # the group's category carries the gate, not only the channels
+    group_admin_only: bool = False
+    # the GROUP's category sinks to the sidebar's very end (the
+    # declaration's channel_groups `bottom` flag — the machine-room
+    # plumbing folders, category-bottom)
+    group_bottom: bool = False
     # the channel is admin-only (the declaration's flag): @everyone is
     # gated, the mod's admin role carries the grant
     admin_only: bool = False
+    # the channel's declared POSITION inside its band (the sidebar's
+    # order is data, #216): ties break on it, then on the key
+    position: int | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -99,6 +120,18 @@ class ModDefinition:
     owner_ids: tuple[str, ...] = field(default_factory=tuple)
     default_active: bool = False
     emoji: str = ""
+    # the mod's HOME folder (the auto-provisioned « mod/<name> » scope
+    # category) is STAFF-ONLY (the machine-room rule, Drasah 18/11): the
+    # home's plumbing surfaces stay functional (the bot keeps operating
+    # them) but @never visible to players — the players' surfaces are the
+    # declared channel groups, never the home folder. The view roles are
+    # the staff allowed through the gate (display names, resolved to ids
+    # by the persisted role mapping at provisioning time).
+    home_admin_only: bool = False
+    home_view_roles: tuple[str, ...] = field(default_factory=tuple)
+    # home_bottom (Drasah 20/11): the mod's home folder sinks to the
+    # sidebar's very end — the machine-room plumbing stays out of sight
+    home_bottom: bool = False
 
     def is_private(self) -> bool:
         """Whether the mod is reserved (bot admins + declared owners)."""
