@@ -19,6 +19,17 @@ views:
   # the console's inline confirm card (deploy/sync/reset)
   panel:mod:kingdom:admin:console:confirm:
     kind: surface
+  # console-v2 (Drasah 21/11): the cockpit's four ephemeral drawers —
+  # every drawer is a DECLARED surface (the id rides the footer, the
+  # admin's feedback always names the window he sees)
+  panel:mod:kingdom:admin:admissions:
+    kind: surface
+  panel:mod:kingdom:admin:regie:
+    kind: surface
+  panel:mod:kingdom:admin:atelier:
+    kind: surface
+  panel:mod:kingdom:admin:beta:
+    kind: surface
   # the pinned / ephemeral gameplay surfaces (#381 ruling 1: every
   # rendered surface is declared — an undeclared id logs an error at
   # every pin refresh and answers "unknown view" if routed)

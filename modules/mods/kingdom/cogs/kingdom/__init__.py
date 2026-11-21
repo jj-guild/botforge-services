@@ -295,7 +295,7 @@ def setup_hook(bot: Any) -> None:
         ValidationRealmEntryButton,
     )
     from .apply_flow import KingdomApplyOpenButton, KingdomPostulerButton
-    from .settings_panel import SettingsActionButton
+    from .settings_panel import KingdomSettingsNavButton, SettingsActionButton
     from .time_machine import machine_dynamic_items
     from .distributor import distributor_dynamic_items
     from .camp_beta import camp_dynamic_items
@@ -338,6 +338,7 @@ def setup_hook(bot: Any) -> None:
         KingdomApplyOpenButton,
         KingdomPostulerButton,
         SettingsActionButton,
+        KingdomSettingsNavButton,
         *machine_dynamic_items(),
         *distributor_dynamic_items(),
         *camp_dynamic_items(),

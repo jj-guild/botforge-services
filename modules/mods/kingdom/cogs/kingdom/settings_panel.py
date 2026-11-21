@@ -189,39 +189,90 @@ async def build_seigneurerie_panel(guild_id: str) -> discord.ui.LayoutView:
 
 
 async def build_settings_panel(guild_id: str) -> discord.ui.LayoutView:
-    """Build the mod admin console panel (the admin cockpit)."""
+    """Build the mod admin console — the v2 COCKPIT (Drasah 21/11).
+
+    console-v2 (the approved mockup): the flat 11-button list becomes
+    a contextual cockpit — the season state at a glance, ONE contextual
+    « Le cycle » row (what makes sense NOW), and the fixed drawer rows
+    (régie / atelier / beta) that open the ephemeral drawers. Every
+    existing action survives: the actions table is unchanged, the
+    buttons just moved into the cockpit or its drawers.
+    """
     from .apply_flow import _guild_locale
+    from .common import strings_by_locale
 
     locale = await _guild_locale(guild_id)
     strings = settings_strings(locale)
-    rows: list[discord.ui.ActionRow[discord.ui.LayoutView]] = []
-    for index, (action, key, style) in enumerate(_SETTINGS_ACTIONS):
-        if index % 5 == 0:
-            rows.append(discord.ui.ActionRow())
-        rows[index // 5].add_item(
-            SettingsActionButton(action, str(strings[key]), style).item
+    status_lines, phase = await _season_state(strings)
+    ops = strings_by_locale(locale)
+
+    # LE CYCLE — ONE contextual row, the phase decides (console-v2)
+    cycle_row: Any = discord.ui.ActionRow()
+    if phase == "off":
+        # no season: prepare one — the launch modal creates a SETUP
+        # season and starts NOTHING (Drasah 21/11: no more auto-start,
+        # the season opens an admissions sas instead)
+        cycle_row.add_item(
+            SettingsActionButton(
+                "launch", str(strings["settings_launch_button"]), discord.ButtonStyle.success
+            ).item
+        )
+    elif phase == "setup":
+        pending = await _pending_admissions()
+        cycle_row.add_item(
+            KingdomSettingsNavButton(
+                "admissions", str(strings["settings_nav_admissions_button"]), len(pending)
+            ).item
+        )
+        cycle_row.add_item(
+            SettingsActionButton(
+                "start-season",
+                str(strings["settings_start_season_button"]),
+                discord.ButtonStyle.success,
+            ).item
+        )
+    else:
+        # running season: the console ops stay a deliberate path (no
+        # hard lock — Drasah's ruling), the sas keeps healing too
+        for button in console_buttons(ops, False):
+            cycle_row.add_item(button.item)
+        cycle_row.add_item(
+            KingdomSettingsNavButton(
+                "admissions", str(strings["settings_nav_admissions_button"])
+            ).item
         )
 
-    # the mod-scoped console ops (relaunch / reset / clock): the SAME
-    # restart-proof DynamicItems the registry owns, re-rendered in the
-    # GUILD's locale (the registry's own builder is EN-only — recette
-    # 19/11: the panel's buttons read in French)
-    from .common import strings_by_locale
-
-    ops = strings_by_locale(locale)
-    for button in console_buttons(ops, False):
-        if not rows or len(rows[-1].children) >= 5:
-            rows.append(discord.ui.ActionRow())
-        rows[-1].add_item(button.item)
+    # LA RÉGIE / L'ATELIER — the fixed drawers, a click away
+    regie_row: Any = discord.ui.ActionRow()
+    regie_row.add_item(
+        KingdomSettingsNavButton("regie", str(strings["settings_nav_regie_button"])).item
+    )
+    atelier_row: Any = discord.ui.ActionRow()
+    atelier_row.add_item(
+        KingdomSettingsNavButton("atelier", str(strings["settings_nav_atelier_button"])).item
+    )
+    atelier_row.add_item(
+        KingdomSettingsNavButton("beta", str(strings["settings_nav_beta_button"])).item
+    )
 
     container: discord.ui.Container[discord.ui.LayoutView] = discord.ui.Container(
         discord.ui.TextDisplay(f"# {strings['settings_title']}"),
-        # parametres-restore-v1 (Drasah 20/11, capture 08/11): the
-        # panel wears its original section header under the title.
+        # parametres-restore-v1 (Drasah 20/11): the panel wears its
+        # original section header under the title.
         discord.ui.TextDisplay(f"## {strings['settings_section']}"),
+        discord.ui.TextDisplay(str(strings["settings_cockpit_subtitle"])),
         discord.ui.Separator(),
-        *rows,
+        discord.ui.TextDisplay("\n".join(status_lines)),
         discord.ui.Separator(),
+        discord.ui.TextDisplay(f"## {strings['settings_zone_cycle_label']}"),
+        discord.ui.TextDisplay(str(strings[f"settings_cycle_{phase}_hint"])),
+        cycle_row,
+        discord.ui.Separator(),
+        discord.ui.TextDisplay(f"## {strings['settings_zone_regie_label']}"),
+        regie_row,
+        discord.ui.Separator(),
+        discord.ui.TextDisplay(f"## {strings['settings_zone_atelier_label']}"),
+        atelier_row,
         accent_colour=_ADMIN_COLOUR,
     )
     return surface(CONSOLE_VIEW_KEY, container)
@@ -476,15 +527,21 @@ async def _start_beta(interaction: discord.Interaction, strings: dict[str, str])
     await interaction.followup.send(note, ephemeral=True)
 
 
-async def _status(interaction: discord.Interaction, strings: dict[str, str]) -> None:
-    """Answer with the season status card (kingdoms, queue, players)."""
-    lines = [f"# {strings['settings_status_title']}"]
+async def _season_state(strings: dict[str, str]) -> tuple[list[str], str]:
+    """The season header lines + the cycle state, one best-effort read.
+
+    console-v2 (Drasah 21/11): the cockpit and the old status card
+    share ONE read — the lines render in the panel's header, and the
+    state (``off`` / ``setup`` / ``started``) picks the cycle row.
+    ``setup`` = the admissions sas (launch preps, start_season starts).
+    """
     stack = wiring()
     kingdoms: list[str] = []
     queued = 0
     enrolled = 0
     phase = str(strings["settings_phase_unknown"])
     mode = str(strings["settings_mode_free"])
+    state = "off"
     if stack is not None and getattr(stack, "kingdoms", None) is not None:
         try:
             all_kingdoms = await stack.kingdoms.kingdoms()
@@ -498,8 +555,10 @@ async def _status(interaction: discord.Interaction, strings: dict[str, str]) -> 
         try:
             season = await stack.kingdoms.current_season()
             if season is not None:
+                raw = str(getattr(season, "phase", "started"))
+                state = "setup" if raw == "setup" else "started"
                 phase = str(strings.get(
-                    f"settings_phase_{getattr(season, 'phase', 'started')}",
+                    f"settings_phase_{raw}",
                     strings["settings_phase_unknown"],
                 ))
                 mode = str(
@@ -509,19 +568,274 @@ async def _status(interaction: discord.Interaction, strings: dict[str, str]) -> 
                 )
         except Exception:
             logger.warning("kingdom: season read failed", exc_info=True)
-    lines.extend(
-        [
-            f"**{strings['settings_status_phase']}** : {phase}",
-            f"**{strings['settings_status_mode']}** : {mode}",
-            f"**{strings['settings_status_kingdoms']}** : "
-            f"{', '.join(kingdoms) if kingdoms else strings['settings_status_empty']}",
-            f"**{strings['settings_status_lords']}** : "
-            f"{enrolled or strings['settings_status_empty']}",
-            f"**{strings['settings_status_queue']}** : "
-            f"{queued or strings['settings_status_empty']}",
-        ]
+    lines = [
+        f"**{strings['settings_status_phase']}** : {phase}",
+        f"**{strings['settings_status_mode']}** : {mode}",
+        f"**{strings['settings_status_kingdoms']}** : "
+        f"{', '.join(kingdoms) if kingdoms else strings['settings_status_empty']}",
+        f"**{strings['settings_status_lords']}** : "
+        f"{enrolled or strings['settings_status_empty']}",
+        f"**{strings['settings_status_queue']}** : "
+        f"{queued or strings['settings_status_empty']}",
+    ]
+    return lines, state
+
+
+async def _status(interaction: discord.Interaction, strings: dict[str, str]) -> None:
+    """Answer with the season status card (kingdoms, queue, players)."""
+    lines, _state = await _season_state(strings)
+    await open_unique_ephemeral(interaction, "\n".join([
+        f"# {strings['settings_status_title']}", *lines
+    ]))
+
+
+async def _pending_admissions() -> list[Any]:
+    """The realms waiting on the admin's season-entry gesture (t2a).
+
+    The admissions drawer and the cockpit's badge share ONE read — the
+    realm service owns the truth, the console only reports.
+    """
+    stack = wiring()
+    if stack is None:
+        return []
+    from .validation import _realms_with_join_request
+
+    return list(await _realms_with_join_request(stack))
+
+
+# ---------------------------------------------------------------------------
+# console-v2 (Drasah 21/11): the drawers — ONE nav button, four
+# ephemeral windows. Nothing new under the hood: every button inside is
+# an EXISTING registration (SettingsActionButton, the realm-entry
+# decisions), the drawer only lays them out where the mockup put them.
+# ---------------------------------------------------------------------------
+
+_DRAWERS: dict[str, str] = {
+    "admissions": "panel:mod:kingdom:admin:admissions",
+    "regie": "panel:mod:kingdom:admin:regie",
+    "atelier": "panel:mod:kingdom:admin:atelier",
+    "beta": "panel:mod:kingdom:admin:beta",
+}
+
+
+def _admissions_drawer(
+    strings: dict[str, str], vstrings: dict[str, str], realms: list[Any]
+) -> discord.ui.LayoutView:
+    """The sas — every join request with its decision buttons (t2a)."""
+    from .validation import ValidationRealmEntryButton, fmt_paris
+
+    blocks: list[discord.ui.Item[discord.ui.LayoutView]] = [
+        discord.ui.TextDisplay(f"# {strings['settings_admissions_title']}"),
+        discord.ui.TextDisplay(str(strings["settings_admissions_hint"])),
+        discord.ui.Separator(),
+    ]
+    if realms:
+        for realm in realms:
+            requested = int(
+                (getattr(realm, "join_request", {}) or {}).get("requested_at", 0) or 0
+            )
+            blocks.append(
+                discord.ui.TextDisplay(
+                    str(vstrings["realm_request_row"]).format(
+                        name=getattr(realm, "name", "?"),
+                        king=getattr(realm, "king_name", "?"),
+                        when=fmt_paris(requested),
+                    )
+                )
+            )
+            excerpt = str(getattr(realm, "presentation", "") or "").strip()
+            if excerpt:
+                blocks.append(
+                    discord.ui.TextDisplay(
+                        str(vstrings["realm_request_presentation"]).format(
+                            excerpt=excerpt[:280] + ("…" if len(excerpt) > 280 else "")
+                        )
+                    )
+                )
+            row: Any = discord.ui.ActionRow()
+            row.add_item(
+                ValidationRealmEntryButton(
+                    str(realm.slug), "ok", str(vstrings["realm_accept_button"])[:80],
+                    discord.ButtonStyle.success,
+                )
+            )
+            row.add_item(
+                ValidationRealmEntryButton(
+                    str(realm.slug), "no", str(vstrings["realm_refuse_button"])[:80],
+                    discord.ButtonStyle.danger,
+                )
+            )
+            blocks.append(row)
+            blocks.append(discord.ui.Separator())
+    else:
+        blocks.append(discord.ui.TextDisplay(str(strings["settings_admissions_empty"])))
+    container: discord.ui.Container[discord.ui.LayoutView] = discord.ui.Container(
+        *blocks, accent_colour=_ADMIN_COLOUR
     )
-    await open_unique_ephemeral(interaction, "\n".join(lines))
+    return surface(_DRAWERS["admissions"], container)
+
+
+def _regie_drawer(strings: dict[str, str]) -> discord.ui.LayoutView:
+    """The people's actions — the existing modals, one drawer."""
+    row: Any = discord.ui.ActionRow()
+    row.add_item(
+        SettingsActionButton(
+            "assign", str(strings["settings_assign_button"]), discord.ButtonStyle.primary
+        ).item
+    )
+    row.add_item(
+        SettingsActionButton(
+            "add-kingdom", str(strings["settings_add_kingdom_button"]), discord.ButtonStyle.primary
+        ).item
+    )
+    row.add_item(
+        SettingsActionButton(
+            "remove", str(strings["settings_remove_button"]), discord.ButtonStyle.danger
+        ).item
+    )
+    row.add_item(
+        SettingsActionButton(
+            "season-mode", str(strings["settings_season_mode_button"]), discord.ButtonStyle.secondary
+        ).item
+    )
+    container: discord.ui.Container[discord.ui.LayoutView] = discord.ui.Container(
+        discord.ui.TextDisplay(f"# {strings['settings_regie_title']}"),
+        discord.ui.TextDisplay(str(strings["settings_regie_hint"])),
+        discord.ui.Separator(),
+        row,
+        accent_colour=_ADMIN_COLOUR,
+    )
+    return surface(_DRAWERS["regie"], container)
+
+
+def _atelier_drawer(strings: dict[str, str], ops_strings: dict[str, str]) -> discord.ui.LayoutView:
+    """The server's emergency hand — provisioning + the game clock.
+
+    The 5-min healing pass keeps running whatever the drawer does: the
+    atelier is only the deliberate hand overruled on top.
+    """
+    row: Any = discord.ui.ActionRow()
+    row.add_item(
+        SettingsActionButton(
+            "deploy", str(strings["settings_deploy_button"]), discord.ButtonStyle.primary
+        ).item
+    )
+    row.add_item(
+        SettingsActionButton(
+            "sync", str(strings["settings_sync_button"]), discord.ButtonStyle.secondary
+        ).item
+    )
+    row.add_item(
+        SettingsActionButton(
+            "reset", str(strings["settings_reset_button"]), discord.ButtonStyle.danger
+        ).item
+    )
+    # the mod-scoped console ops (relaunch / reset / clock): the SAME
+    # restart-proof DynamicItems the registry owns, re-rendered with
+    # the GUILD locale's labels (stable custom ids, localized text)
+    second_row: Any = discord.ui.ActionRow()
+    for button in console_buttons(ops_strings, False):
+        second_row.add_item(button.item)
+    container: discord.ui.Container[discord.ui.LayoutView] = discord.ui.Container(
+        discord.ui.TextDisplay(f"# {strings['settings_atelier_title']}"),
+        discord.ui.TextDisplay(str(strings["settings_atelier_hint"])),
+        discord.ui.Separator(),
+        row,
+        second_row,
+        discord.ui.Separator(),
+        discord.ui.TextDisplay(str(strings["settings_atelier_heal_note"])),
+        accent_colour=_ADMIN_COLOUR,
+    )
+    return surface(_DRAWERS["atelier"], container)
+
+
+def _beta_drawer(strings: dict[str, str]) -> discord.ui.LayoutView:
+    """The beta & tools drawer — a toggle, never a launcher.
+
+    Being in beta does NOT enter the season (#369 stays data): the
+    entry rides the admissions sas like any normal season.
+    """
+    row: Any = discord.ui.ActionRow()
+    row.add_item(
+        SettingsActionButton(
+            "start-beta", str(strings["settings_start_beta_button"]), discord.ButtonStyle.success
+        ).item
+    )
+    container: discord.ui.Container[discord.ui.LayoutView] = discord.ui.Container(
+        discord.ui.TextDisplay(f"# {strings['settings_beta_title']}"),
+        discord.ui.TextDisplay(str(strings["settings_beta_hint"])),
+        discord.ui.Separator(),
+        row,
+        discord.ui.Separator(),
+        discord.ui.TextDisplay(str(strings["settings_beta_sas_note"])),
+        accent_colour=_ADMIN_COLOUR,
+    )
+    return surface(_DRAWERS["beta"], container)
+
+
+async def _build_drawer(drawer: str, locale: str) -> discord.ui.LayoutView:
+    """Assemble the asked drawer in the guild's locale."""
+    from .common import mod_catalog
+
+    strings = settings_strings(locale)
+    if drawer == "admissions":
+        realms = await _pending_admissions()
+        vstrings = dict(mod_catalog().section("kingdom.validation", str(locale)[:2]))
+        return _admissions_drawer(strings, vstrings, realms)
+    if drawer == "regie":
+        return _regie_drawer(strings)
+    if drawer == "atelier":
+        from .common import strings_by_locale
+
+        return _atelier_drawer(strings, strings_by_locale(locale))
+    return _beta_drawer(strings)
+
+
+class KingdomSettingsNavButton(
+    discord.ui.DynamicItem[discord.ui.Button[Any]],
+    template=r"kingdom:console-nav:(?P<drawer>[a-z-]+)",
+):
+    """One restart-proof drawer-opener of the console-v2 cockpit.
+
+    The template lives in its OWN namespace (``kingdom:console-nav:``)
+    — never ``kingdom:settings:``: discord.py 2.7 dispatches a click to
+    EVERY registered dynamic template that fullmatches the id, so a
+    colliding id would fire two handlers (the second dies with 40060).
+    """
+
+    def __init__(self, drawer: str, label: str, badge: int = 0) -> None:
+        text = f"{label[:74]} ({badge})" if badge else label[:80]
+        super().__init__(
+            discord.ui.Button(
+                label=text,
+                custom_id=f"kingdom:console-nav:{drawer}"[:100],
+                style=discord.ButtonStyle.secondary,
+            )
+        )
+        self.drawer = drawer
+
+    @classmethod
+    async def from_custom_id(
+        cls,
+        interaction: discord.Interaction,
+        item: discord.ui.Item[Any],
+        match: re.Match[str],
+        /,
+    ) -> KingdomSettingsNavButton:
+        strings = strings_of(interaction)
+        drawer = match["drawer"]
+        label = str(strings.get(f"settings_nav_{drawer}_button", "⚙️"))
+        return cls(drawer, label)
+
+    async def callback(self, interaction: discord.Interaction) -> None:
+        """Open the drawer's ephemeral window (guarded like the panel)."""
+        if self.drawer not in _DRAWERS:
+            await _safe_send(interaction, strings_of(interaction)["settings_denied"])
+            return
+        if not await _panel_guard(interaction):
+            return
+        view = await _build_drawer(self.drawer, locale_of(interaction))
+        await open_unique_ephemeral(interaction, view=view)
 
 
 class _LaunchModal(discord.ui.Modal):
