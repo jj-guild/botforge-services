@@ -98,7 +98,9 @@ def _member_ids(realm: Any) -> list[int]:
     return out
 
 
-def _realm_overwrites(guild: Any, member_ids: list[int]) -> dict[Any, discord.PermissionOverwrite]:
+def _realm_overwrites(
+    guild: Any, member_ids: list[int], *, member_view: bool = True
+) -> dict[Any, discord.PermissionOverwrite]:
     """The realm category's overwrite set — ONE pass, no API crawl.
 
     The 2026-10-10 live incident: separate set_permissions PATCHes left
@@ -130,7 +132,7 @@ def _realm_overwrites(guild: Any, member_ids: list[int]) -> dict[Any, discord.Pe
             break
     for member_id in member_ids:
         overwrites[member_id] = discord.PermissionOverwrite(
-            view_channel=True, read_message_history=True
+            view_channel=member_view, read_message_history=member_view
         )
     return overwrites
 
@@ -147,14 +149,16 @@ async def _resolve_member(guild: Any, member_id: int) -> Any | None:
     return member
 
 
-async def realm_overwrites(guild: Any, member_ids: list[int]) -> dict[Any, discord.PermissionOverwrite]:
+async def realm_overwrites(
+    guild: Any, member_ids: list[int], *, member_view: bool = True
+) -> dict[Any, discord.PermissionOverwrite]:
     """_realm_overwrites, with REAL member objects resolved.
 
     The overwrite keys must be Discord objects (Member/Role), never raw
     ids — an unresolved member is logged loudly (the 2026-10-18 silent
     King incident) and skipped, never a blocker.
     """
-    raw = _realm_overwrites(guild, member_ids)
+    raw = _realm_overwrites(guild, member_ids, member_view=member_view)
     resolved: dict[Any, discord.PermissionOverwrite] = {}
     for key, overwrite in raw.items():
         if isinstance(key, int):
@@ -278,6 +282,43 @@ async def _apply_dormancy(guild: Any, channel: Any, key: str, member_ids: list[i
                 return
 
 
+async def _shield_leftover(guild: Any, channel: Any, member_ids: list[int]) -> None:
+    """Mask a stale-charter salon the engine does not declare.
+
+    leftover-shield (Drasah 21/11) — l'incident Blanc : l'ancienne
+    charte avait 5 salons, la nouvelle en déclare 4 (Check 83) ; le
+    rattachement par nom a ADOPTÉ une ancienne catégorie, et le allow
+    catégorie des membres rendait le salon résiduel (« ⚔️ admin »)
+    VISIBLE verrouillé pour le Roi. Tout salon de la catégorie qui
+    n'est PAS dans REALM_SALONS est recalculé MUET pour les membres
+    (deny complet, l'idempotence du recompute), le staff garde la
+    main ; masqué, jamais détruit.
+    """
+    overwrites = await realm_overwrites(guild, member_ids, member_view=False)
+    edit = getattr(channel, "edit", None)
+    if edit is not None:
+        try:
+            await edit(overwrites=overwrites)
+            return
+        except TypeError:  # a thin edit seam (tests) — degrade, never a stuck remnant
+            pass
+        except Exception:  # noqa: BLE001
+            logger.warning(
+                "kingdom realms: leftover shield failed (%s)", getattr(channel, "id", "?")
+            )
+            return
+    set_permissions = getattr(channel, "set_permissions", None)
+    if set_permissions is not None:
+        for target, overwrite in overwrites.items():
+            try:
+                await set_permissions(target, overwrite=overwrite)
+            except Exception:  # noqa: BLE001
+                logger.warning(
+                    "kingdom realms: leftover shield failed (%s)", getattr(channel, "id", "?")
+                )
+                return
+
+
 async def ensure_realm_structure(guild: Any, realm: Any, *, dormant: bool = True) -> dict[str, Any]:
     """Provision (idempotently) the realm's category + salons.
 
@@ -323,6 +364,19 @@ async def ensure_realm_structure(guild: Any, realm: Any, *, dormant: bool = True
                 continue
         ids[key] = str(getattr(channel, "id", "") or "")
         await _apply_dormancy(guild, channel, key, member_ids, dormant)
+    # leftover-shield — l'ancienne charte laissait des salons que la
+    # nouvelle structure ne déclare pas : adoptés avec la catégorie,
+    # ils héritaient du allow catégorie des membres. Recalculés muets.
+    declared_slugs = {_slug(name) for _, name in REALM_SALONS}
+    for channel in list(getattr(category, "channels", []) or []):
+        if _slug(getattr(channel, "name", "")) in declared_slugs:
+            continue
+        logger.warning(
+            "kingdom realms: stale-charter salon shielded from members (%s, %s)",
+            getattr(channel, "name", "?"),
+            display,
+        )
+        await _shield_leftover(guild, channel, member_ids)
     return ids
 
 

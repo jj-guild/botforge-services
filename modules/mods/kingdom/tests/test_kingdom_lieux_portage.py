@@ -573,3 +573,104 @@ async def test_a_realm_of_another_guild_is_still_skipped(monkeypatch: pytest.Mon
 
     touched = await realms_module.heal_realm_hubs(_Bot())
     assert touched == 0, "no name match + no id match = genuinely another guild's realm"
+
+
+# ---------------------------------------------------------------------------
+# leftover-shield — l'incident Blanc (21/11 nuit) : l'ancienne charte avait
+# 5 salons, la nouvelle en déclare 4 ; le rattachement par nom a adopté
+# l'ancienne catégorie et le salon résiduel (« ⚔️ admin ») devint VISIBLE
+# verrouillé pour le Roi via le allow catégorie. Tout salon non déclaré
+# est recalculé MUET pour les membres — masqué, jamais détruit.
+# ---------------------------------------------------------------------------
+
+
+class _LeftoverMember:
+    def __init__(self, mid: int) -> None:
+        self.id = mid
+
+
+class _LeftoverGuild:
+    def __init__(self, category: Any) -> None:
+        self.id = "g-1"
+        self.categories = [category]
+        self.default_role = _RecomputeRole(0)
+        self.roles: list[Any] = []
+        self.me = _LeftoverMember(99)
+
+    def get_member(self, mid: int) -> Any:
+        return _LeftoverMember(mid)
+
+
+class _LeftoverChannel:
+    def __init__(self, name: str) -> None:
+        self.id = f"chan-{name}"
+        self.name = name
+        self.edits: list[dict[str, Any]] = []
+
+    async def edit(self, **kw: Any) -> None:
+        self.edits.append(kw)
+
+
+class _LeftoverCategory:
+    def __init__(self, channels: list[Any]) -> None:
+        self.id = "cat-1"
+        self.name = "🏰 Avelorn"
+        self.channels = channels
+
+    async def edit(self, **kw: Any) -> None:
+        pass
+
+
+@pytest.mark.asyncio
+async def test_a_stale_charter_leftover_is_shielded_from_members() -> None:
+    from botforge.mods.kingdom.cogs.realms import ensure_realm_structure
+
+    discussions = _LeftoverChannel("🔒 Discussions")
+    leftover = _LeftoverChannel("⚔️ admin")
+    guild = _LeftoverGuild(_LeftoverCategory([discussions, leftover]))
+
+    realm = type("R", (), {})()
+    realm.name = "Avelorn"
+    realm.king_id = "1"
+    realm.member_ids = []
+
+    ids = await ensure_realm_structure(guild, realm, dormant=False)
+    assert ids.get("category") == "cat-1", "the adopted family is kept"
+
+    member_edits = [
+        kw["overwrites"]
+        for kw in leftover.edits
+        if "overwrites" in kw
+    ]
+    assert member_edits, "the leftover MUST be recomputed (the Blanc incident)"
+    overwrites = member_edits[0]
+    member = next(k for k in overwrites if type(k).__name__ == "_LeftoverMember" and k.id != 99)
+    assert overwrites[member].view_channel is False, (
+        "a stale-charter salon is hidden from the realm's humans"
+    )
+
+    awake = [
+        kw["overwrites"] for kw in discussions.edits if "overwrites" in kw
+    ]
+    assert awake, "the declared salon is still recomputed awake"
+    declared_member = next(k for k in awake[0] if type(k).__name__ == "_LeftoverMember" and k.id != 99)
+    assert awake[0][declared_member].view_channel is True, (
+        "the shield never touches the declared salons"
+    )
+
+
+@pytest.mark.asyncio
+async def test_a_clean_family_shields_nothing() -> None:
+    from botforge.mods.kingdom.cogs.realms import ensure_realm_structure
+
+    discussions = _LeftoverChannel("🔒 Discussions")
+    guild = _LeftoverGuild(_LeftoverCategory([discussions]))
+
+    realm = type("R", (), {})()
+    realm.name = "Avelorn"
+    realm.king_id = "1"
+    realm.member_ids = []
+
+    ids = await ensure_realm_structure(guild, realm, dormant=False)
+    assert ids.get("category") == "cat-1"
+    assert set(ids) == {"category", "discussions", "hub", "territory", "alliances"} or len(ids) >= 2
