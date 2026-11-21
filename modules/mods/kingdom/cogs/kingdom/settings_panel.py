@@ -265,7 +265,18 @@ async def build_settings_panel(guild_id: str) -> discord.ui.LayoutView:
         discord.ui.TextDisplay("\n".join(status_lines)),
         discord.ui.Separator(),
         discord.ui.TextDisplay(f"## {strings['settings_zone_cycle_label']}"),
-        discord.ui.TextDisplay(str(strings[f"settings_cycle_{phase}_hint"])),
+        # console-crash-v1 (Drasah 21/11): a missing hint key ONCE
+        # emptied the whole console salon — the render crashed, the
+        # refresh marked the live pin "unreadable — recreating", and
+        # the superseded cleanup DELETED it before the recreate died
+        # on the same crash. The cycle hint is DATA (#369): a missing
+        # key degrades to a known-good line, never to an empty salon.
+        discord.ui.TextDisplay(str(
+            strings.get(f"settings_cycle_{phase}_hint")
+            or strings.get("settings_cycle_running_hint")
+            or strings.get("settings_cycle_off_hint")
+            or ""
+        )),
         cycle_row,
         discord.ui.Separator(),
         discord.ui.TextDisplay(f"## {strings['settings_zone_regie_label']}"),

@@ -180,6 +180,51 @@ def test_the_fixed_drawers_reuse_only_existing_registrations() -> None:
     assert "kingdom:settings:start-beta" in _ids(_beta_drawer(settings_strings("fr")))
 
 
+def test_the_running_cockpit_builds_in_every_engine_phase() -> None:
+    """console-crash-v1's regression: the cockpit renders for EVERY
+    season phase — a missing per-phase hint key once crashed the pin
+    refresh, and the refresh's superseded cleanup then EMPTIED the
+    console salon (delete-before-recreate, recreate dying on the same
+    crash). The phase-to-key mapping must stay total, FOREVER.
+    """
+    import asyncio
+    import unittest.mock as mock
+
+    from botforge.mods.kingdom.cogs import settings_panel as sp
+
+    def _stack(phase: str | None) -> object:
+        season = SimpleNamespace(phase=phase, imposed_kingdoms=False) if phase else None
+
+        class _Kingdoms:
+            async def kingdoms(self):
+                return []
+
+            async def lords(self):
+                return []
+
+            async def current_season(self):
+                return season
+
+        class _Realms:
+            async def realms(self):
+                return []
+
+        return SimpleNamespace(kingdoms=_Kingdoms(), realms=_Realms())
+
+    for phase in (None, "setup", "started"):
+        with mock.patch.object(sp, "wiring", lambda s=_stack(phase): s):
+            view = asyncio.run(sp.build_settings_panel("123"))
+        assert view is not None, f"phase={phase!r}: the cockpit must NEVER crash at render"
+    # and the started rendering answers the running gesture set
+    with mock.patch.object(sp, "wiring", lambda s=_stack("started"): s):
+        view = asyncio.run(sp.build_settings_panel("123"))
+    ids = _ids(view)
+    assert "kingdom:console:relaunch" in ids, "started: the running ops ride the cycle row"
+    assert "kingdom:console-nav:admissions" in ids
+    assert "kingdom:settings:launch" not in ids, "started: a fresh launch would wipe the season"
+    assert "kingdom:settings:start-season" not in ids, "started: the season is already started"
+
+
 def test_the_drawers_are_declared_surfaces() -> None:
     """#381 ruling 1: every rendered surface rides conf/views.yaml."""
     from pathlib import Path
@@ -201,6 +246,7 @@ def test_the_console_v2_strings_exist_in_both_locales() -> None:
         "settings_cockpit_subtitle",
         "settings_cycle_off_hint",
         "settings_cycle_setup_hint",
+        "settings_cycle_started_hint",
         "settings_cycle_running_hint",
         "settings_zone_cycle_label",
         "settings_zone_regie_label",

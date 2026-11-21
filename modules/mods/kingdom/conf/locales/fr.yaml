@@ -158,6 +158,7 @@ fr:
       settings_cycle_off_hint: "Aucune saison — « Lancer la saison » prépare une saison, rien ne démarre : les admissions passeront par le sas 🛂, ton geste."
       settings_cycle_setup_hint: "Saison préparée (sas d'admissions ouvert) — aucun royaume n'entre sans ton ✅ dans 🛂 Admissions."
       settings_cycle_running_hint: "Saison en cours — les outils de running restent à portée de clic, le sas 🛂 reste ouvert pour les retardataires."
+      settings_cycle_started_hint: "Saison en cours — les outils de running restent à portée de clic, le sas 🛂 reste ouvert pour les retardataires."
       settings_zone_cycle_label: "LE CYCLE — ce qui a du sens maintenant"
       settings_zone_regie_label: LA RÉGIE
       settings_zone_atelier_label: L'ATELIER

@@ -156,6 +156,7 @@ en:
       settings_cycle_off_hint: "No season — 'Launch the season' prepares a season, nothing starts: every entry rides the 🛂 sas, your call."
       settings_cycle_setup_hint: "Season prepared (admissions sas open) — no kingdom enters without your ✅ in 🛂 Admissions."
       settings_cycle_running_hint: "Season running — the running tools stay a click away, the 🛂 sas stays open for latecomers."
+      settings_cycle_started_hint: "Season running — the running tools stay a click away, the 🛂 sas stays open for latecomers."
       settings_zone_cycle_label: "THE CYCLE — what makes sense now"
       settings_zone_regie_label: LA RÉGIE
       settings_zone_atelier_label: L'ATELIER
