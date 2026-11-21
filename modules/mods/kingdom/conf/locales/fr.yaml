@@ -2,6 +2,11 @@ fr:
   kingdom:
     title: "Kingdom"
     description: "Le mod de conquête territoriale Season II (AoE2) — squelette : la structure déclarée, aucune mécanique de jeu."
+    notices:
+      # demande-inscription-saison (Drasah 21/11) : le ping d'état-major
+      # dans 📬 demandes — un message court qui PRÉVIENT (le compteur
+      # dans Admission dit l'état, lui ne prévient jamais)
+      season_entry_request: "🏰 **{realm}** demande son entrée en saison — Roi : **{king}** ({when}). La demande attend un admin dans « 👑 Validation des royaumes »."
     validation:
       title: "👑 Validation des royaumes"
       help: "Chaque royaume fondé attend la validation de son nom (règle 35). Une décision ici s'applique à l'instant : valider ouvre le jeu au royaume, refuser renvoie ses membres dans la file d'attente."

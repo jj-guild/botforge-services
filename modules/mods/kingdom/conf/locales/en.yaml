@@ -2,6 +2,8 @@ en:
   kingdom:
     title: "Kingdom"
     description: "The Season II territory-conquest mod (AoE2) — skeleton: the declared structure, no game mechanics."
+    notices:
+      season_entry_request: "🏰 **{realm}** asks to enter the season — King: **{king}** ({when}). The request waits for an admin in the kingdoms validation panel."
     validation:
       title: "👑 Kingdom validation"
       help: "Every founded kingdom awaits its name's validation (rule 35). A decision here applies at once: approving opens the game to the kingdom, refusing sends its members back to the queue."

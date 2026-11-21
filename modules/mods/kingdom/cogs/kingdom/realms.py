@@ -915,6 +915,17 @@ class RealmJoinButton(
             await interaction.followup.send(strings["season_join_error"], ephemeral=True)
             return
         await interaction.followup.send(strings["season_join_requested"], ephemeral=True)
+        # demande-inscription-saison (Drasah 21/11) : le Roi demande, le
+        # staff apprend dans la seconde — un ping 📬 demandes porté par la
+        # notice paramétrable (annonce-ready, jamais un send ad hoc).
+        # Best-effort : la notice ne peut jamais casser la demande du Roi.
+        from .notices import announce_season_entry_request
+        from .panel import _guild_locale
+
+        guild_id = str(interaction.guild_id or "")
+        await announce_season_entry_request(
+            interaction.client, guild_id, realm, await _guild_locale(guild_id)
+        )
 
 
 class RealmQuitButton(
