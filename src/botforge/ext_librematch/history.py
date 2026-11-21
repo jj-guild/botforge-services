@@ -135,8 +135,13 @@ def _needs_repair(candidate_docs: list[dict[str, Any]]) -> bool:
         if not players:
             return True
         members = raw.get("matchhistorymember") or []
-        if any((m or {}).get("civilization_id") is not None for m in members):
-            return True
+        for member in members:
+            civ = (member or {}).get("civilization_id")
+            try:
+                if civ is not None and int(civ) >= 0:
+                    return True  # a REAL civ was capturable upstream
+            except (TypeError, ValueError):
+                continue
     return False
 
 
