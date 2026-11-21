@@ -26,7 +26,6 @@ from .common import (
     fmt_paris,
     locale_of,
     open_unique_ephemeral,
-    strings_for,
     surface,
     wiring,
 )
@@ -720,7 +719,7 @@ class RealmHomeButton(
 
     @classmethod
     async def from_custom_id(cls, interaction, item, match, /):  # type: ignore[no-untyped-def]
-        strings = strings_for(interaction)
+        strings = realm_strings(interaction)
         return cls(strings["realm_enter_button"], discord.ButtonStyle.primary, match["slug"])
 
     async def callback(self, interaction: discord.Interaction) -> None:
@@ -764,7 +763,7 @@ class RealmNavButton(
 
     @classmethod
     async def from_custom_id(cls, interaction, item, match, /):  # type: ignore[no-untyped-def]
-        strings = strings_for(interaction)
+        strings = realm_strings(interaction)
         label = {
             "seigneurie": strings["seigneurie_button"],
             "presentation": strings["presentation_button"],
@@ -818,7 +817,7 @@ class RealmPresentationEditButton(
 
     @classmethod
     async def from_custom_id(cls, interaction, item, match, /):  # type: ignore[no-untyped-def]
-        return cls(strings_for(interaction)["presentation_edit_button"], match["slug"])
+        return cls(realm_strings(interaction)["presentation_edit_button"], match["slug"])
 
     async def callback(self, interaction: discord.Interaction) -> None:
         slug = str(getattr(self, "custom_id", "")).rsplit(":", 1)[-1]
@@ -878,7 +877,7 @@ class RealmJoinButton(
 
     @classmethod
     async def from_custom_id(cls, interaction, item, match, /):  # type: ignore[no-untyped-def]
-        return cls(strings_for(interaction)["season_join_button"], match["slug"])
+        return cls(realm_strings(interaction)["season_join_button"], match["slug"])
 
     async def callback(self, interaction: discord.Interaction) -> None:
         strings = realm_strings(interaction)
@@ -935,7 +934,7 @@ class RealmQuitButton(
 
     @classmethod
     async def from_custom_id(cls, interaction, item, match, /):  # type: ignore[no-untyped-def]
-        return cls(strings_for(interaction)["quit_button"], match["slug"])
+        return cls(realm_strings(interaction)["quit_button"], match["slug"])
 
     async def callback(self, interaction: discord.Interaction) -> None:
         strings = realm_strings(interaction)
@@ -967,7 +966,7 @@ class RealmCrownSelect(
 
     @classmethod
     async def from_custom_id(cls, interaction, item, match, /):  # type: ignore[no-untyped-def]
-        return cls(strings_for(interaction)["seigneurie_crown_placeholder"], match["slug"])
+        return cls(realm_strings(interaction)["seigneurie_crown_placeholder"], match["slug"])
 
     async def callback(self, interaction: discord.Interaction) -> None:
         strings = realm_strings(interaction)
