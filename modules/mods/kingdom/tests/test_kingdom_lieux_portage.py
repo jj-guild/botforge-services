@@ -457,3 +457,119 @@ def test_the_dormant_recompute_denies_members() -> None:
     overwrites = channel.edits[0]["overwrites"]
     member = next(k for k in overwrites if type(k).__name__ == "_RecomputeMember")
     assert overwrites[member].view_channel is False, "dormant = masked, never destroyed"
+
+
+# ---------------------------------------------------------------------------
+# stale-anchor-heal — l'incident AEGIS : la coquille portait un id de
+# catégorie PÉRIMÉ et la passe sautait le royaume EN SILENCE, pour
+# toujours. Le ratachement se fait maintenant par NOM, et la coquille
+# repart avec une carte d'identité FRAÎCHE (sauvée même si le hub n'a
+# pas changé).
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_a_stale_category_anchor_no_longer_skips_the_realm(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import botforge.mods.kingdom.cogs.realms as realms_module
+
+    realm = type("R", (), {})()
+    realm.id = "realm-av"
+    realm.slug = "avelorn"
+    realm.name = "Avelorn"
+    realm.engagement = {"kingdom_id": "k-1"}
+    realm.discord = {"category": "cat-OLD", "hub_message": "m-1"}  # the stale anchor
+
+    class _Categ:
+        id = "cat-NEW"  # the recreated category — the name IS the anchor now
+        name = "🏰 Avelorn"
+        channels = []
+
+    guild = type("G", (), {})()
+    guild.id = "g-1"
+    guild.categories = [_Categ()]
+    guild.me = type("Me", (), {"id": 99})
+
+    async def fake_realms() -> list[Any]:
+        return [realm]
+
+    async def fake_structure(guild: Any, r: Any, *, dormant: bool = True) -> dict:
+        calls.append(f"structure:{dormant}")
+        return {"category": "cat-NEW", "hub": "chan-9"}
+
+    async def fake_hub(guild: Any, r: Any, locale: str = "fr") -> str:
+        calls.append("hub")
+        return "m-1"  # SAME hub id — the habitat saves on the fresh anchor alone
+
+    saved: dict[str, dict] = {}
+
+    async def fake_save(realm_id: str, disc: dict) -> Any:
+        saved[realm_id] = dict(disc)
+        calls.append("save")
+
+    service = type("S", (), {})()
+    service.realms = fake_realms
+    service.save_habitat = fake_save
+
+    monkeypatch.setattr(realms_module, "wiring", lambda: object())
+    monkeypatch.setattr(realms_module, "_realm_service", lambda stack: service)
+    monkeypatch.setattr(realms_module, "ensure_realm_structure", fake_structure)
+    monkeypatch.setattr(realms_module, "deploy_realm_hub", fake_hub)
+
+    class _Bot:
+        guilds = [guild]
+
+    touched = await realms_module.heal_realm_hubs(_Bot())
+    assert "structure:False" in calls, "a stale anchor must NOT skip the realm (AEGIS)"
+    assert saved.get("realm-av", {}).get("category") == "cat-NEW", (
+        "the shell leaves the pass with a FRESH identity card"
+    )
+    assert "save" in calls, "the habitat persists even when the hub id did not change"
+    assert touched == 1
+
+
+@pytest.mark.asyncio
+async def test_a_realm_of_another_guild_is_still_skipped(monkeypatch: pytest.MonkeyPatch) -> None:
+    import botforge.mods.kingdom.cogs.realms as realms_module
+
+    realm = type("R", (), {})()
+    realm.id = "realm-x"
+    realm.slug = "elsewhere"
+    realm.name = "Elsewhere"
+    realm.engagement = {"kingdom_id": "k-1"}
+    realm.discord = {"category": "cat-OLD"}
+
+    class _Categ:
+        id = "cat-1"
+        name = "🏰 Avelorn"  # NOT the realm's family
+        channels = []
+
+    guild = type("G", (), {})()
+    guild.id = "g-1"
+    guild.categories = [_Categ()]
+    guild.me = type("Me", (), {"id": 99})
+
+    async def fake_realms() -> list[Any]:
+        return [realm]
+
+    async def boom_structure(guild: Any, r: Any, *, dormant: bool = True) -> dict:
+        raise AssertionError("a foreign realm must never be touched")
+
+    async def boom_hub(guild: Any, r: Any, locale: str = "fr") -> str:
+        raise AssertionError("a foreign realm must never be deployed")
+
+    service = type("S", (), {})()
+    service.realms = fake_realms
+    service.save_habitat = None
+
+    monkeypatch.setattr(realms_module, "wiring", lambda: object())
+    monkeypatch.setattr(realms_module, "_realm_service", lambda stack: service)
+    monkeypatch.setattr(realms_module, "ensure_realm_structure", boom_structure)
+    monkeypatch.setattr(realms_module, "deploy_realm_hub", boom_hub)
+
+    class _Bot:
+        guilds = [guild]
+
+    touched = await realms_module.heal_realm_hubs(_Bot())
+    assert touched == 0, "no name match + no id match = genuinely another guild's realm"

@@ -506,24 +506,46 @@ async def heal_realm_hubs(bot: Any) -> int:
         locale = await _guild_locale_of(bot, str(getattr(guild, "id", "")))
         for realm in realms:
             disc = dict(getattr(realm, "discord", None) or {})
+            stale_anchor = False
             if str(disc.get("category", "") or "") not in known_categories:
-                continue
+                # stale-anchor-heal (Drasah 21/11) — l'incident AEGIS : la
+                # coquille portait un id de catégorie PÉRIMÉ (catégorie
+                # recréée, ids jamais resauvés) et la passe sautait le
+                # royaume EN SILENCE, pour toujours — preuve : les salons
+                # gardaient l'ancienne charte « 🏰│le-royaume », jamais
+                # renommés. Le ratachement se fait maintenant par NOM
+                # (l'ancre du reste du code) : la passe RETROUVE la
+                # famille de salons, la répare, et la coquille repart
+                # avec une carte d'identité FRAÎCHE.
+                if _find_realm_category(guild, str(realm.name)) is None:
+                    continue  # genuinely NOT this guild's realm
+                stale_anchor = True
+                logger.warning(
+                    "kingdom realms: stale category anchor healed by name (%s, guild %s)",
+                    getattr(realm, "name", "?"),
+                    getattr(guild, "id", "?"),
+                )
             # lieux-portage-v1 (Drasah 21/11) — la leçon du hub fantôme de
             # Blanc : l'ouverture des salons ne se jouait QU'AU clic
             # d'acceptation (best-effort, jamais rejouée). Un royaume
             # ENGAGÉ voit sa structure re-ensurée VIVANTE à chaque passe
             # (idempotent) — un deny survivant à l'acceptation ne peut
             # plus rester masqué pour toujours.
+            habitat_changed = stale_anchor
             if getattr(realm, "engagement", None):
                 try:
                     ids = await ensure_realm_structure(guild, realm, dormant=False)
-                    if ids:
-                        disc.update({k: v for k, v in ids.items() if v})
+                    for k, v in (ids or {}).items():
+                        if v and str(disc.get(k, "") or "") != str(v):
+                            disc[k] = str(v)
+                            habitat_changed = True
                 except Exception:  # noqa: BLE001 — le hub guérit même si la structure échoue
                     logger.warning("kingdom realms: dormancy heal failed", exc_info=True)
             message_id = await deploy_realm_hub(guild, realm, locale=locale)
             if message_id and message_id != str(disc.get("hub_message", "") or ""):
                 disc["hub_message"] = message_id
+                habitat_changed = True
+            if habitat_changed:
                 try:
                     await service.save_habitat(str(realm.id), disc)
                 except Exception:  # noqa: BLE001
