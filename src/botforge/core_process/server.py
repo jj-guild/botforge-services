@@ -93,7 +93,22 @@ async def _sync_game_enrollments() -> None:
                 profile_ids.append(str(binding.get("profile_id", "")))
                 user_ids.append(str(binding.get("user_id", "")))
             profile_ids_sorted = sorted(profile_ids)
-            logger.info("GAME ENROLLMENTS cycle: %d bound profiles", len(profile_ids_sorted))
+            # INFO only when the roster MOVED (owner direction 2026-11-21):
+            # a silent cycle \u2014 same count, same ids \u2014 is the steady
+            # heartbeat, DEBUG; a size change is the news, INFO.
+            if last_ids is None:
+                logger.info(
+                    "GAME ENROLLMENTS cycle: %d bound profiles (first pass)",
+                    len(profile_ids_sorted),
+                )
+            elif len(profile_ids_sorted) != len(last_ids):
+                logger.info(
+                    "GAME ENROLLMENTS cycle: %d bound profiles (was %d)",
+                    len(profile_ids_sorted),
+                    len(last_ids),
+                )
+            else:
+                logger.debug("GAME ENROLLMENTS cycle: %d bound profiles", len(profile_ids_sorted))
             if profile_ids_sorted != last_ids and uri:
                 if client is None:
                     client = _GameDataClient(uri)
