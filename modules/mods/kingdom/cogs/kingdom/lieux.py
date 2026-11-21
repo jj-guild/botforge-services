@@ -301,34 +301,31 @@ def _lieu_item(
 async def _lord_kingdom_of(
     interaction: discord.Interaction, strings: dict[str, str]
 ) -> tuple[Any, Any, Any] | tuple[None, None, Any]:
-    """Resolve the clicker's lord + kingdom + stack (None,None,stack on miss)."""
+    """Resolve the clicker's lord + kingdom + stack (None,None,stack on miss).
+
+    lieux-portage-v1-hotfix (Drasah 21/11) : le resolveur lit le SEAM
+    CANONIQUE du mod — ``lord_of`` (l'admin sans fiche pilote le Roi du
+    royaume de test, la règle kingdom-test-v1 portée de la référence).
+    Le portage initial lisait ``lord.player_id``, un champ que le moteur
+    n'a JAMAIS eu (un seigneur EST son id) → le Roi d'un royaume accepté
+    était lu « pas seigneur » (le cas Blanc). ailleurs-vision : le lieu
+    montre TOUJOURS le royaume DU CLIQUEUR (l'ancienne branche, jamais
+    le hub cliqué) — strict en saison normale, arbitré 21/11.
+    """
+    from .common import kingdom_by_id, lord_of
+
     stack = wiring()
     kingdoms = getattr(stack, "kingdoms", None)
     if kingdoms is None:
         await open_unique_ephemeral(interaction, content=strings["no_service"])
         return (None, None, stack)
     user_id = str(getattr(interaction.user, "id", ""))
-    lord = None
-    try:
-        for candidate in await kingdoms.lords():
-            if str(candidate.player_id) == user_id and not bool(getattr(candidate, "left", False)):
-                lord = candidate
-                break
-    except Exception:
-        logger.warning("kingdom lieux: lords read failed", exc_info=True)
-        lord = None
+    lord = await lord_of(kingdoms, user_id, interaction)
+    lord = None if lord is None or bool(getattr(lord, "left", False)) else lord
     if lord is None:
         await open_unique_ephemeral(interaction, content=strings["not_lord"])
         return (None, None, stack)
-    kingdom = None
-    try:
-        for candidate in await kingdoms.kingdoms():
-            if str(candidate.id) == str(getattr(lord, "kingdom_id", "")):
-                kingdom = candidate
-                break
-    except Exception:
-        logger.warning("kingdom lieux: kingdoms read failed", exc_info=True)
-        kingdom = None
+    kingdom = await kingdom_by_id(kingdoms, getattr(lord, "kingdom_id", None))
     if kingdom is None:
         await open_unique_ephemeral(interaction, content=strings["not_lord"])
         return (None, None, stack)

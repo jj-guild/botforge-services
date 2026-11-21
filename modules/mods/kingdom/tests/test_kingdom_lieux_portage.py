@@ -287,3 +287,87 @@ async def test_the_heal_pass_reensures_the_engaged_structure(monkeypatch: pytest
     assert "structure:False" in calls, "the ENGAGED realm's salons re-open at each pass"
     assert "hub" in calls
     assert touched == 1
+
+
+# ---------------------------------------------------------------------------
+# lieux-portage-v1-hotfix — the lord seam reads id (the player IS the id)
+#
+# The incident: the portal read ``lord.player_id``, a field the engine
+# never had — the Roi of an ACCEPTED kingdom was read « not a lord »
+# (Blanc's capture). The resolver must ride the canonical seam
+# ``lord_of``/``kingdom_by_id`` — and the CB engine lord has ``id``.
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_the_resolver_reads_the_engine_lord_by_id(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import botforge.mods.kingdom.cogs.lieux as lieux_module
+
+    class _EngineLord:  # the engine's shape: id IS the player, NO player_id
+        id = "1"
+        kingdom_id = "k-orc"
+        left = False
+        display_name = "Blanc"
+
+    class _Kingdom:
+        id = "k-orc"
+        name = "Orc"
+
+    class _Kingdoms:
+        async def lords(self) -> list[Any]:
+            return [_EngineLord()]
+
+        async def kingdoms(self) -> list[Any]:
+            return [_Kingdom()]
+
+    stack = type("S", (), {})()
+    stack.kingdoms = _Kingdoms()
+    monkeypatch.setattr(lieux_module, "wiring", lambda: stack)
+    monkeypatch.setattr(lieux_module, "open_unique_ephemeral", _record_open)
+
+    lord, kingdom, _ = await lieux_module._lord_kingdom_of(_interaction("1"), _love_strings())
+    assert lord is not None and kingdom is not None, (
+        "the Roi of an accepted kingdom MUST resolve (the Blanc incident)"
+    )
+    assert str(kingdom.id) == "k-orc"
+    assert calls == [], "no refusal note when the lord resolves"
+
+
+@pytest.mark.asyncio
+async def test_the_resolver_refuses_a_lord_who_left(monkeypatch: pytest.MonkeyPatch) -> None:
+    import botforge.mods.kingdom.cogs.lieux as lieux_module
+
+    class _EngineLord:
+        id = "1"
+        kingdom_id = "k-orc"
+        left = True  # the record exists but the player LEFT the season
+
+        display_name = "Blanc"
+
+    class _Kingdoms:
+        async def lords(self) -> list[Any]:
+            return [_EngineLord()]
+
+        async def kingdoms(self) -> list[Any]:
+            return []
+
+    stack = type("S", (), {})()
+    stack.kingdoms = _Kingdoms()
+    monkeypatch.setattr(lieux_module, "wiring", lambda: stack)
+    monkeypatch.setattr(lieux_module, "open_unique_ephemeral", _record_open)
+
+    lord, kingdom, _ = await lieux_module._lord_kingdom_of(_interaction("1"), _love_strings())
+    assert lord is None and kingdom is None
+    assert calls == ["not_lord"], "a left record is not an active lord"
+
+
+def _love_strings() -> dict[str, str]:
+    import botforge.mods.kingdom.cogs.lieux as lieux_module
+
+    return lieux_module.lieux_strings("fr")
+
+
+async def _record_open(interaction: Any, content: str | None = None, **kwargs: Any) -> None:
+    calls.append("not_lord" if "seigneurs" in str(content or "") else str(content or "view"))
