@@ -922,10 +922,12 @@ def _panel_player_lines(
         jump = f"[\u25b8]({replay})" if replay else ""
         after = int(player.get("rating_after") or 0)
         before = int(player.get("rating_before") or 0)
+        # the ladder convention (the old bot, insights): the PRE-match
+        # Elo carries the medal line, the delta rides the -# subline
         delta = after - before if before and after else 0
         civ = str(player.get("civ") or "").strip()
         civ_link = f"[{civ}]({civ_urls[civ]})" if civ and civ_urls.get(civ) else civ
-        elo_bits = f"**{after} Elo**" if after else ""
+        elo_bits = f"**{before} Elo**" if before else (f"**{after} Elo**" if after else "")
         name_marker = "**" if pid in me_ids else ""
         head = " ".join(
             bit

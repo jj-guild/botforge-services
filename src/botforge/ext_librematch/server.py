@@ -159,11 +159,24 @@ def _stats_handlers(syncer: MatchHistorySyncer | None) -> dict[str, Any]:
         # served reply samples its newest entries \u2014 the id, the map,
         # the lobby title and the players count the VIEW will read.
         if entries:
+            import json as _json
+
+            def _seat_count(entry: Any) -> int:
+                try:
+                    return len(_json.loads(entry.players_json or "[]"))
+                except Exception:
+                    return 0
+
             sample = ", ".join(
-                f"{e.match_id}:map={e.map_name!r},lobby={e.description!r},players={len(e.players_json or '')}"
+                "{} : {} joueur(s) · carte {} · lobby {}".format(
+                    e.match_id,
+                    _seat_count(e),
+                    e.map_name or "?",
+                    (e.description or "").strip() or "\u2014",
+                )
                 for e in entries[:3]
             )
-            logger.info("SERVE history: %s entry(ies) for %s \u2014 %s", len(entries), profile_ids, sample)
+            logger.info("SERVE history: %s entr\u00e9e(s) pour %s \u2014 %s", len(entries), profile_ids, sample)
         return entries
 
     async def account_stats(profile_ids: list[str]) -> list[AccountEloStatus]:

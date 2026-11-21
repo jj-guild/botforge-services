@@ -39,32 +39,46 @@ class FakeCursor:
             raise StopAsyncIteration from exc
 
 
+def _doc_value(doc: dict[str, Any], dotted: str) -> Any:
+    """Read a dotted path (players.0.civ) from a document."""
+    value: Any = doc
+    for part in dotted.split("."):
+        if isinstance(value, dict):
+            value = value.get(part)
+        else:
+            return None
+    return value
+
+
+def _condition_ok(doc: dict[str, Any], key: str, condition: Any) -> bool:
+    if key == "$or":
+        return any(_condition_ok(doc, k, c) for pair in condition for k, c in pair.items())
+    if key == "players.0":
+        # the incomplete-capture marker: an empty (or absent)
+        # players list means the document's projection is bare
+        exists = bool(doc.get("players") or [])
+        wants_exists = bool((condition or {}).get("$exists", False))
+        return exists if wants_exists else not exists
+    value = _doc_value(doc, key)
+    if isinstance(condition, dict) and "$in" in condition:
+        if isinstance(value, list):
+            return any(v in condition["$in"] for v in value)
+        return (value in condition["$in"]) or (value is None and None in condition["$in"])
+    if isinstance(condition, dict) and "$gte" in condition:
+        return value is not None and value >= condition["$gte"]
+    if isinstance(condition, dict) and "$exists" in condition:
+        return (value is not None) == bool(condition["$exists"])
+    if isinstance(value, list):
+        # Mongo equality against an array matches containment
+        return condition in value
+    return value == condition
+
+
 def _matches(query: dict[str, Any], docs: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """The Mongo query subset the store uses ($in, $gte, $exists on paths)."""
+    """The Mongo query subset the store uses ($in, $gte, $exists, $or)."""
     out = []
     for doc in docs:
-        ok = True
-        for key, condition in query.items():
-            if key == "players.0":
-                # the incomplete-capture marker: an empty (or absent)
-                # players list means the document's projection is bare
-                exists = bool(doc.get("players") or [])
-                wants_exists = bool((condition or {}).get("$exists", False))
-                ok = ok and (exists if wants_exists else not exists)
-                continue
-            value = doc.get(key)
-            if isinstance(condition, dict) and "$in" in condition:
-                if isinstance(value, list):
-                    ok = ok and any(v in condition["$in"] for v in value)
-                else:
-                    ok = ok and value in condition["$in"]
-            elif isinstance(condition, dict) and "$gte" in condition:
-                ok = ok and value is not None and value >= condition["$gte"]
-            elif isinstance(value, list):
-                # Mongo equality against an array matches containment
-                ok = ok and condition in value
-            else:
-                ok = ok and value == condition
+        ok = all(_condition_ok(doc, key, condition) for key, condition in query.items())
         if ok:
             out.append(doc)
     return out
@@ -659,3 +673,56 @@ async def test_an_incomplete_capture_refetches_deep_and_replaces() -> None:
     assert doc["description"] == "Test bot"
     assert doc["winners"] == ["123"]
     assert db["librematch:matches"].docs["m2:0"]["players"]
+
+
+async def test_a_civless_capture_repairs_when_the_raw_carries_the_civ() -> None:
+    """A capture with players but no civ repairs when upstream has it.
+
+    The merlin case (2026-11-21): match 517022737 rendered without
+    civs while the live upstream carries civilization_id on every
+    member — an intermediate revision's capture. The repair replaces
+    it; a lobby whose raw genuinely lacks a civ never loops.
+    """
+    db, adapter = FakeDb(), FakeAdapter()
+    members = [
+        {"profile_id": "123", "civilization_id": 19, "teamid": 0, "outcome": 1, "oldrating": 1292, "newrating": 1300},
+        {"profile_id": "456", "civilization_id": 22, "teamid": 1, "outcome": 0, "oldrating": 1100, "newrating": 1089},
+    ]
+    raw = {"id": "517022737", "matchhistorymember": members}
+    db["librematch:matches"].docs["517022737"] = {
+        "_id": "517022737",
+        "match_id": "517022737",
+        "profile_ids": ["123"],
+        "players": [{"profile_id": "123", "alias": "Merlin Pinpin", "civ": ""}],
+        "raw": raw,
+    }
+    adapter.history["123"] = [
+        _match("517022737", "0", 100, 200, [
+            _member("123", 1, 0, 1292, 1300) | {"civilization_id": 19},
+            _member("456", 0, 1, 1100, 1089) | {"civilization_id": 22},
+        ]),
+    ]
+    syncer = _syncer(db, adapter)
+    await syncer.sync_account("123")
+
+    assert adapter.history_counts == [1000], "the civless capture forces the deep repair"
+    doc = db["librematch:matches"].docs["517022737:0"]  # the REPAIRED capture
+    seats = {p["profile_id"]: p for p in doc["players"]}
+    assert seats["123"].get("civ"), "the replaced capture re-reads the civilization"
+
+
+async def test_a_civless_lobby_never_repairs_when_the_raw_lacks_the_civ() -> None:
+    """A lobby whose members carry no civilization_id stays as captured."""
+    db, adapter = FakeDb(), FakeAdapter()
+    raw = {"id": "m9", "matchhistorymember": [{"profile_id": "123", "teamid": 0}]}
+    db["librematch:matches"].docs["m9"] = {
+        "_id": "m9",
+        "match_id": "m9",
+        "profile_ids": ["123"],
+        "players": [{"profile_id": "123", "alias": "solo", "civ": ""}],
+        "raw": raw,
+    }
+    adapter.history["123"] = []
+    syncer = _syncer(db, adapter)
+    await syncer.sync_account("123")
+    assert adapter.history_counts == [25], "no repair loop on a genuinely civless lobby"
