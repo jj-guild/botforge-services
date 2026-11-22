@@ -720,81 +720,8 @@ async def _profile_header(interaction: discord.Interaction, user_id: str) -> str
     return f"# 👤 Your profile\nName: **{user.display_name}**"
 
 
-async def _live_blocks_of(
-    interaction: discord.Interaction,
-    me_ids: set[str],
-    known_ids: set[str],
-    labels: dict[str, str],
-) -> list[list[str]]:
-    """Render one block per ONGOING match of the viewed profiles."""
-    from botforge.discord.stats_views import live_match_block
-
-    if not me_ids:
-        return []
-    client = _live_client_for(interaction.client, "aoe2")
-    if client is None:
-        return []
-    try:
-        snapshot = await client.watch("aoe2")
-    except Exception:
-        logger.debug("the live snapshot read failed", exc_info=True)
-        return []
-    return [
-        live_match_block(player.get("match") or {}, me_ids, known_ids, labels)
-        for player in _live_refs(snapshot, me_ids)
-    ]
 
 
-def _live_refs(snapshot: dict[str, Any], me_ids: set[str]) -> list[dict[str, Any]]:
-    """One player record per ONGOING match of the viewed profiles."""
-    by_ref: dict[str, dict[str, Any]] = {}
-    order: list[str] = []
-    for player in snapshot.get("players", []) or []:
-        pid = str(player.get("profile_id", ""))
-        if pid not in me_ids or str(player.get("state", "")) == "offline":
-            continue
-        match_ref = str(player.get("match_ref", "") or "")
-        if not match_ref or match_ref not in by_ref:
-            if match_ref:
-                by_ref[match_ref] = player
-                order.append(match_ref)
-    return [by_ref[ref] for ref in order]
-
-
-async def _matches_body(
-    interaction: discord.Interaction,
-    me_ids: set[str],
-    known_ids: set[str],
-    labels: dict[str, str],
-) -> list[str]:
-    """Render the matches popup's body: live first, then the finished ones.
-
-    One block per match, a horizontal separator between the matches
-    (the owner's 2026-11-20 reading layout \u2014 the blocks stand apart).
-    """
-    from botforge.discord.stats_views import recent_match_blocks
-
-    body: list[str] = []
-    live_blocks = await _live_blocks_of(interaction, me_ids, known_ids, labels)
-    if live_blocks:
-        body.append(f"### {await reply(interaction, 'profile.matches_live_title')}")
-        for index, block in enumerate(live_blocks):
-            if index:
-                body.append("\u2500" * 4)
-            body.extend(block)
-    finished_blocks = await recent_match_blocks(
-        sorted(me_ids), me_ids, known_ids, labels, limit=10
-    )
-    if not finished_blocks and not live_blocks:
-        body.append(await reply(interaction, "profile.matches_empty"))
-        return body
-    if finished_blocks:
-        body.append(f"### {await reply(interaction, 'profile.matches_title')}")
-        for index, block in enumerate(finished_blocks):
-            if index:
-                body.append("\u2500" * 4)
-            body.extend(block)
-    return body
 
 
 INSIGHTS_MATCH_URL = "https://www.aoe2insights.com/match/{match_id}"
@@ -802,7 +729,8 @@ REPLAY_URL = (
     "https://api.ageofempires.com/api/GameStats/AgeII/GetMatchReplay/"
     "?matchId={match_id}&profileId={profile_id}"
 )
-_OUTCOME_COLOURS = {"win": 0x57F287, "loss": 0xED4245}
+LIBREMATCH_SOURCE_URL = "https://aoe-api.worldsedgelink.com/community/leaderboard"
+_OUTCOME_COLOURS = {"win": 0x57F287, "loss": 0xED4245, "ongoing": 0xFEE75C, "lobby": 0x5865F2}
 
 
 async def _entity_post_url(
@@ -814,8 +742,9 @@ async def _entity_post_url(
     """Resolve one entity's forum POST into its jump URL (best-effort).
 
     The civs/maps forums keep one thread per entity, named by its
-    localized display name \u2014 the lookup matches the name against
-    the channel's threads (active first, then the public archive).
+    localized display name; the exact name wins, then the
+    ``Name - whatever`` prefix form, walking the public AND the
+    private archives. A miss renders plain text, never a wrong link.
     """
     if not channel_id or not name:
         return ""
@@ -838,7 +767,7 @@ async def _entity_post_url(
     return ""
 
 
-async def _entity_image(entity_id: str, fallback_name: str, guild_id: str) -> str:
+async def _entity_image(entity_id: str, guild_id: str) -> str:
     """Read one entity's stored image url (the content service)."""
     from botforge.discord.content_posts import content_service, guild_locale
 
@@ -855,15 +784,15 @@ async def _entity_image(entity_id: str, fallback_name: str, guild_id: str) -> st
         return ""
     if not doc:
         return ""
-    return str(doc.get("image_url") or "") if fallback_name else ""
+    return str(doc.get("image_url") or "")
 
 
 def _civ_entity_id(civ_name: str) -> str:
-    """Return the stored civ content id \u2014 the core's faction convention.
+    """Return the stored civ content id - the core's faction convention.
 
     The catalog's faction ids follow ``faction:<game>:<slug>`` (the
-    game service's own builder, game_data.py) \u2014 the panel reuses
-    the SAME convention, never its own.
+    game service's own builder, game_data.py) - the panel reuses the
+    SAME convention, never its own.
     """
     from botforge.core.ids import slug_id
 
@@ -871,10 +800,10 @@ def _civ_entity_id(civ_name: str) -> str:
 
 
 def _map_entity_id(map_name: str) -> str:
-    """Return the stored map content id \u2014 the core's own builder.
+    """Return the stored map content id - the core's own builder.
 
-    ``map_entry_id`` is the platform's single map-id convention \u2014
-    the panel never re-implements it.
+    ``map_entry_id`` is the platform's single map-id convention - the
+    panel never re-implements it.
     """
     from botforge.core.ids import map_entry_id
 
@@ -887,108 +816,49 @@ def _fmt_clock(seconds: int) -> str:
     return f"{minutes:02d}:{secs:02d}"
 
 
-def _outcome_of(entry: Any, me_ids: set[str]) -> tuple[str, str, int]:
-    """Return the match's (outcome-key, icon, accent) for the viewer."""
-    winners = {str(w) for w in (getattr(entry, "winners", ()) or ())}
-    if winners and winners & me_ids:
-        return "win", "\U0001f3c6", _OUTCOME_COLOURS["win"]
-    if winners and not winners & me_ids:
-        return "loss", "\U0001f480", _OUTCOME_COLOURS["loss"]
-    return "", "\u2b1c", 0x5865F2
+async def _stored_channel(guild_id: str, scope: str, key: str) -> str:
+    """Return the stored channel id (empty when unwired)."""
+    from botforge.discord.ui.panels_provisioning import stored_channel_id
+
+    channel_id = await stored_channel_id(guild_id, scope, key) if guild_id else None
+    return str(channel_id) if channel_id else ""
 
 
-def _viewer_alias(players: list[dict[str, Any]], me_ids: set[str]) -> str:
-    """Return the viewed account's alias in this match (fallback: '?')."""
-    for player in players:
-        if str(player.get("profile_id", "")) in me_ids:
-            return str(player.get("alias") or player.get("profile_id") or "?")
-    return "?"
-
-
-def _panel_ladder(
-    players: list[dict[str, Any]],
-    ladder: dict[str, dict[str, tuple[int, int]]],
-) -> list[str]:
-    """Render the seat's ladder lines: 1v1 and TG, current - max."""
-    pid = str(players[0].get("profile_id", "")) if players else ""
-    boards = ladder.get(pid) or {}
-    lines = []
-    for key, label in (("rm_1v1", "1v1"), ("rm_team", "TG")):
-        current, peak = boards.get(key, (0, 0))
-        if not current:
+def _seat_teams(card: dict[str, Any]) -> list[tuple[int, list[dict[str, Any]]]]:
+    """Group the card's seats per team, in team order."""
+    by_team: dict[int, list[dict[str, Any]]] = {}
+    for player in card.get("players") or []:
+        if not isinstance(player, dict):
             continue
-        span = f"{current} - {peak}" if peak and peak > current else f"{current}"
-        lines.append(f"-# {label} : {span}")
-    return lines
+        by_team.setdefault(int(player.get("team", 0) or 0), []).append(player)
+    return [(team, by_team[team]) for team in sorted(by_team)]
 
 
-def _panel_player_lines(
-    players: list[dict[str, Any]],
-    me_ids: set[str],
-    winners: set[str],
-    match_id: str,
-    civ_urls: dict[str, str],
-    civ_images: dict[str, str],
-    ladder: dict[str, dict[str, tuple[int, int]]] | None = None,
-) -> list[tuple[str, str]]:
-    """Render every SEAT as (text, civ-image) \u2014 winners first.
-
-    The old ladder's own grammar (owner 2026-11-21): the medal line
-    carries the replay jump, the bold Elo AFTER the match, the alias
-    hyperlinked to its civ's post; a -# subline carries the rating delta
-    and the civ name. One section per seat, the civ icon as accessory.
-    """
-    ordered = sorted(
-        players,
-        key=lambda p: (str(p.get("profile_id", "")) not in winners),
-    )
-    seats: list[tuple[str, str]] = []
-    for player in ordered:
-        pid = str(player.get("profile_id", ""))
-        alias = str(player.get("alias") or pid or "?")
-        won = pid in winners
-        icon = "\U0001f3c6" if won else "\U0001f480" if winners else "\u2b1c"
-        replay = REPLAY_URL.format(match_id=match_id, profile_id=pid) if match_id else ""
-        jump = f"[ \u25b8 ]({replay})" if replay else ""
-        after = int(player.get("rating_after") or 0)
-        before = int(player.get("rating_before") or 0)
-        # the ladder convention (the old bot, insights): the PRE-match
-        # Elo carries the medal line, the delta rides the -# subline
-        delta = after - before if before and after else 0
-        civ = str(player.get("civ") or "").strip()
-        civ_link = f"[{civ}]({civ_urls[civ]})" if civ and civ_urls.get(civ) else civ
-        elo_bits = f"**{before} Elo**" if before else (f"**{after} Elo**" if after else "")
-        name_marker = "**" if pid in me_ids else ""
-        head = " ".join(
-            bit
-            for bit in [
-                icon,
-                jump,
-                elo_bits,
-                f"{name_marker}{alias}{name_marker}",
-            ]
-            if bit
-        )
-        sub = f"-# {delta:+d} \u00b7 {civ_link}" if delta else f"-# {civ_link}"
-        text = head + "\n" + sub
-        text += "".join("\n" + line for line in _panel_ladder([player], ladder or {}))
-        seats.append((text, civ_images.get(civ, "")))
-    return seats
+def _card_format(card: dict[str, Any]) -> str:
+    """Return the match's format tag (1v1 / 2v2 / 4v4 / custom...)."""
+    teams = _seat_teams(card)
+    if not teams:
+        return ""
+    sizes = [len(seats) for _, seats in teams]
+    if len(teams) == 1:
+        return "custom" if sizes[0] > 2 else ("1v1" if sizes[0] == 1 else "custom")
+    if len(teams) == 2 and sizes[0] == sizes[1]:
+        return f"{sizes[0]}v{sizes[1]}" if sizes[0] > 1 else "1v1"
+    return "FFA" if len(teams) > 2 else "custom"
 
 
-async def _panel_enrichment(
+def _card_kind(card: dict[str, Any]) -> str:
+    """Return Ranked / Custom: a NON-automatch lobby title says custom."""
+    lobby = str(card.get("description") or "").strip().upper()
+    return "ranked" if lobby == "AUTOMATCH" or not lobby else "custom"
+
+
+async def _posts_enrichment(
     interaction: discord.Interaction,
-    entries: list[Any],
+    cards: list[dict[str, Any]],
+    guild_id: str,
 ) -> tuple[dict[str, str], dict[str, str], dict[str, str], dict[str, str]]:
-    """Resolve every civ/map POST url and stored image for the whole batch.
-
-    One pass for the ten cards \u2014 the civs' forum posts and images,
-    the maps' likewise \u2014 so a popup costs one resolution per
-    distinct entity, not one per card.
-    """
-    from botforge.discord.stats_views import _entry_players
-
-    guild_id = str(interaction.guild_id or "")
+    """Resolve per-batch: (civ posts, civ images, map posts, map images)."""
     civ_urls: dict[str, str] = {}
     civ_images: dict[str, str] = {}
     map_urls: dict[str, str] = {}
@@ -999,172 +869,374 @@ async def _panel_enrichment(
     maps_channel = await _stored_channel(guild_id, "games/aoe2", "maps")
     civs_needed: set[str] = set()
     maps_needed: set[str] = set()
-    for entry in entries:
-        for player in _entry_players(entry):
-            civ = str(player.get("civ") or "").strip()
+    for card in cards:
+        for player in card.get("players") or []:
+            civ = str((player or {}).get("civ") or "").strip()
             if civ:
                 civs_needed.add(civ)
-        map_name = str(getattr(entry, "map_name", "") or "").strip()
-        if map_name and map_name.lower() != "my map":
+        map_name = str(card.get("map_name") or "").strip()
+        if map_name:
             maps_needed.add(map_name)
     for civ in civs_needed:
         civ_urls[civ] = await _entity_post_url(interaction.client, guild_id, civs_channel, civ)
-        civ_images[civ] = await _entity_image(_civ_entity_id(civ), civ, guild_id)
+        civ_images[civ] = await _entity_image(_civ_entity_id(civ), guild_id)
     for map_name in maps_needed:
         map_urls[map_name] = await _entity_post_url(interaction.client, guild_id, maps_channel, map_name)
-        map_images[map_name] = await _entity_image(_map_entity_id(map_name), map_name, guild_id)
+        map_images[map_name] = await _entity_image(_map_entity_id(map_name), guild_id)
     return civ_urls, civ_images, map_urls, map_images
 
 
-async def _panel_ladder_boards(
-    entries: list[Any],
-) -> dict[str, dict[str, tuple[int, int]]]:
-    """Fetch the ladder boards (1v1 / TG, current + max) per seat.
+async def _match_panels_ctx(
+    interaction: discord.Interaction,
+    cards: list[dict[str, Any]],
+) -> dict[str, Any]:
+    """Resolve the shared context of the whole card batch.
 
-    One batched account-stats call covers every seat of the ten
-    cards; a silent failure renders the cards without the ladder
-    lines \u2014 the medal line never breaks on a stats outage.
+    The civ/map post urls and stored images plus the ladder boards
+    (1v1 / TG, current - max) resolve ONCE for every card - a popup
+    costs one enrichment per distinct entity, not per card.
     """
-    from botforge.discord.stats_views import _entry_players, stats_client
+    from botforge.discord.stats_views import stats_client
 
-    seat_ids = sorted(
-        {str(p.get("profile_id", "")) for e in entries for p in _entry_players(e)}
+    guild_id = str(interaction.guild_id or "")
+    civ_urls, civ_images, map_urls, map_images = await _posts_enrichment(
+        interaction, cards, guild_id
     )
     ladder: dict[str, dict[str, tuple[int, int]]] = {}
-    if not seat_ids:
-        return ladder
+    seat_ids = sorted({str((p or {}).get("profile_id", "")) for c in cards for p in c.get("players") or []})
     client = stats_client()
-    if client is None:
-        return ladder
+    if seat_ids and client is not None:
+        try:
+            accounts = await client.get_account_stats(seat_ids)
+        except Exception:
+            logger.debug("the account stats fetch failed", exc_info=True)
+            accounts = []
+        for account in accounts:
+            boards: dict[str, tuple[int, int]] = {}
+            for board in account.leaderboards:
+                boards[str(board.name)] = (int(board.current), int(board.max))
+            if boards:
+                ladder[str(account.profile_id)] = boards
+    return {
+        "civ_urls": civ_urls,
+        "civ_images": civ_images,
+        "map_urls": map_urls,
+        "map_images": map_images,
+        "ladder": ladder,
+    }
+
+
+def _seat_text(
+    player: dict[str, Any],
+    card: dict[str, Any],
+    ctx: dict[str, Any],
+    labels: dict[str, str],
+) -> tuple[str, str]:
+    """Render ONE seat: (text, civ image url).
+
+    The owner's 2026-11-22 grammar:
+    ``💀 [ ▸ ] **Merlin Pinpin** avec [Magyars](post)``
+    ``1v1 : 1039 - 1120``
+    ``TG : **1300** - 1421 (-11)``
+    The MATCH's own board renders pre-match Elo in bold with the diff
+    (finished only); the other board renders plain current - max. The
+    post-match Elo never renders - it is pre-match + diff.
+    """
+    civ_urls = ctx["civ_urls"]
+    ladder = ctx["ladder"]
+    pid = str(player.get("profile_id", ""))
+    alias = str(player.get("alias") or player.get("name") or pid or "?")
+    civ = str(player.get("civ") or "").strip()
+    winners = {str(w) for w in card.get("winners") or []}
+    match_id = str(card.get("match_id") or card.get("match_ref") or "")
+    finished = card.get("status") == "finished"
+    icon = "\U0001f3c6" if pid in winners else "\U0001f480" if winners else "\u2b1c"
+    replay = REPLAY_URL.format(match_id=match_id, profile_id=pid) if match_id else ""
+    jump = f"[ \u25b8 ]({replay})" if replay else ""
+    civ_link = f"[{civ}]({civ_urls[civ]})" if civ and civ_urls.get(civ) else civ
+    line = " ".join(bit for bit in [icon, jump, f"**{alias}**"] if bit)
+    if civ_link:
+        line += f" {labels.get('with', 'avec')} {civ_link}"
+    # the ladder lines
+    boards = ladder.get(pid) or {}
+    boards = dict(boards)
+    before = int(player.get("rating_before") or 0)
+    after = int(player.get("rating_after") or 0)
+    is_team_game = len(_seat_teams(card)) and any(len(seats) > 1 for _, seats in _seat_teams(card))
+    match_board = "rm_team" if is_team_game else "rm_1v1"
+    other_board = "rm_1v1" if match_board == "rm_team" else "rm_team"
+    lines = [line]
+    for key, label in ((other_board, "1v1"), (match_board, "TG" if match_board == "rm_team" else "1v1")):
+        if key == match_board and before and after:
+            peak = max(before, after, boards.get(key, (0, 0))[1], 0)
+            body = f"-# {label} : **{before}** - {peak}"
+            if finished and after != before:
+                body += f" ({after - before:+d})"
+            lines.append(body)
+        else:
+            current, peak = boards.get(key, (0, 0))
+            if not current:
+                continue
+            span = f"{current} - {peak}" if peak and peak > current else f"{current}"
+            lines.append(f"-# {label} : {span}")
+    return "\n".join(lines), ctx["civ_images"].get(civ, "")
+
+
+def _seat_component(text: str, civ_image: str) -> Any:
+    """One seat becomes a Section with the civ icon in accessory."""
+    if civ_image:
+        return discord.ui.Section(
+            discord.ui.TextDisplay(text),
+            accessory=discord.ui.Thumbnail(civ_image),
+        )
+    return discord.ui.TextDisplay(text)
+
+
+def _card_map_section(card: dict[str, Any], ctx: dict[str, Any]) -> Any:
+    """Build the card's map section.
+
+    The post link carries the title, the stored image rides as the
+    section accessory, the when reads the end (finished) or the
+    start, the duration renders when finished.
+    """
+    map_name = str(card.get("map_name") or "").strip()
+    titled = bool(map_name) and map_name.lower() != "my map"
+    map_label = map_name if titled else (str(card.get("lobby_title") or "").strip() or "Match")
+    map_url = ctx["map_urls"].get(map_name, "") if titled else ""
+    map_link = f"[{map_label}]({map_url})" if map_url else f"**{map_label}**"
+    when_at = int(card.get("finished_at") or card.get("started_at") or 0)
+    sub_lines = [f"Il y a <t:{when_at}:R>" if when_at else ""]
+    if card.get("status") == "finished":
+        duration = max(0, int(card.get("finished_at") or 0) - int(card.get("started_at") or 0))
+        if duration:
+            sub_lines.append(f"-# Durée : {_fmt_clock(duration)}")
+    map_text = f"### {map_link}\n" + "\n".join(line for line in sub_lines if line)
+    image = ctx["map_images"].get(map_name, "") if titled else ""
+    if image:
+        return discord.ui.Section(discord.ui.TextDisplay(map_text), accessory=discord.ui.Thumbnail(image))
+    return discord.ui.TextDisplay(map_text)
+
+
+def _match_card_view(
+    card: dict[str, Any],
+    ctx: dict[str, Any],
+    me_ids: set[str],
+    labels: dict[str, str],
+) -> discord.ui.LayoutView:
+    """Build ONE match card's view - the SAME panel everywhere.
+
+    Lobbies, ongoing games and finished matches share the panel; the
+    status only drives the badge, the duration, the action row and
+    the links.
+
+    The owner's 2026-11-22 grammar:
+    - header: ``[ Ranked 4v4 ] Match - #508712854`` (Lobby when not started);
+    - the map section: its post link, the stored image in accessory,
+      the when (end when finished, start when not), the duration when finished;
+    - the seats: one section per seat (civ icon in accessory), a
+      separator BETWEEN the teams;
+    - the footer: Source : libre:match, then the status-led buttons -
+      join while the lobby stands, spectate while the game runs,
+      insights once the match lives on.
+    """
+    from botforge.discord.ui.view_footer import add_view_footer
+
+    status = card["status"]  # lobby | ongoing | finished
+    fmt = _card_format(card)
+    kind = _card_kind(card)
+    match_id = str(card.get("match_id") or card.get("match_ref") or "?")
+    badge = " ".join(part for part in [kind.upper(), fmt] if part)
+    noun = labels.get("lobby" if status == "lobby" else "match", "Lobby" if status == "lobby" else "Match")
+    winners = {str(w) for w in card.get("winners") or []}
+    accent = (
+        _OUTCOME_COLOURS["win"]
+        if winners and winners & me_ids
+        else _OUTCOME_COLOURS["loss"]
+        if winners
+        else _OUTCOME_COLOURS.get(status, 0x5865F2)
+    )
+    blocks: list[Any] = [
+        discord.ui.TextDisplay(f"**[ {badge} ]** {noun} \u2014 #{match_id}"),
+    ]
+    blocks.append(_card_map_section(card, ctx))
+    blocks.append(discord.ui.Separator())
+    # the seats, team by team, a separator BETWEEN the teams
+    teams = _seat_teams(card)
+    for index, (_team, seats) in enumerate(teams):
+        if index:
+            blocks.append(discord.ui.Separator())
+        if len(teams) > 1:
+            blocks.append(discord.ui.TextDisplay(f"**{labels.get('team', 'Team')} {index + 1}**"))
+        for player in seats:
+            text, civ_image = _seat_text(player, card, ctx, labels)
+            blocks.append(_seat_component(text, civ_image))
+    # the footer: the source, then the status-led action row
+    blocks.append(discord.ui.Separator())
+    source = f"-# Source : [libre:match]({LIBREMATCH_SOURCE_URL})"
+    blocks.append(discord.ui.TextDisplay(source))
+    buttons: list[discord.ui.Button[Any]] = []
+    if status == "lobby" and card.get("lobby_url"):
+        buttons.append(
+            discord.ui.Button(
+                label=labels.get("join", "Rejoindre"),
+                emoji="\U0001f3ae",
+                style=discord.ButtonStyle.link,
+                url=str(card["lobby_url"]),
+            )
+        )
+    if status == "ongoing" and card.get("spectate_url"):
+        buttons.append(
+            discord.ui.Button(
+                label=labels.get("spectate", "Regarder"),
+                emoji="\U0001f441\ufe0f",
+                style=discord.ButtonStyle.link,
+                url=str(card["spectate_url"]),
+            )
+        )
+    if status != "lobby":
+        buttons.append(
+            discord.ui.Button(
+                label="aoe2insights",
+                emoji="\U0001f517",
+                style=discord.ButtonStyle.link,
+                url=INSIGHTS_MATCH_URL.format(match_id=match_id),
+            )
+        )
+    if buttons:
+        blocks.append(discord.ui.ActionRow(*buttons))
+    view = discord.ui.LayoutView(timeout=None)
+    view.add_item(discord.ui.Container(*blocks, accent_colour=discord.Colour(accent)))
+    return add_view_footer(view, f"panel:match:aoe2:{match_id}")
+
+
+async def _live_cards(interaction: discord.Interaction, me_ids: set[str]) -> list[dict[str, Any]]:
+    """Build the ONGOING/lobby cards from the aggregator snapshot.
+
+    One card per distinct match the viewed profiles play in;
+    ``in_lobby`` renders a lobby card (join), ``in_game`` an ongoing
+    one (spectate).
+    """
+    client = _live_client_for(interaction.client, "aoe2")
+    if client is None or not me_ids:
+        return []
     try:
-        accounts = await client.get_account_stats(seat_ids)
+        snapshot = await client.watch("aoe2")
     except Exception:
-        logger.debug("the account stats fetch failed", exc_info=True)
-        return ladder
-    for account in accounts:
-        boards: dict[str, tuple[int, int]] = {}
-        for board in account.leaderboards:
-            boards[str(board.name)] = (int(board.current), int(board.max))
-        if boards:
-            ladder[str(account.profile_id)] = boards
-    return ladder
+        logger.debug("the live snapshot read failed", exc_info=True)
+        return []
+    by_ref: dict[str, dict[str, Any]] = {}
+    for player in snapshot.get("players") or []:
+        record = player if isinstance(player, dict) else {}
+        if str(record.get("profile_id", "")) not in me_ids:
+            continue
+        state = str(record.get("state", ""))
+        if state not in ("in_lobby", "in_game"):
+            continue
+        summary = record.get("match") or {}
+        if not isinstance(summary, dict) or not summary.get("match_ref"):
+            continue
+        ref = str(summary["match_ref"])
+        if ref in by_ref:
+            continue
+        by_ref[ref] = {
+            "status": "lobby" if state == "in_lobby" else "ongoing",
+            "match_ref": ref,
+            "match_id": ref,
+            "map_name": str(summary.get("map") or ""),
+            "description": str(summary.get("match_type") or ""),
+            "started_at": 0,
+            "finished_at": 0,
+            "winners": [],
+            "players": [
+                dict(p)
+                for p in summary.get("players") or []
+                if isinstance(p, dict)
+            ],
+            "lobby_url": str(summary.get("lobby_url") or ""),
+            "spectate_url": str(summary.get("spectate_url") or ""),
+        }
+    return list(by_ref.values())
+
+
+async def _finished_cards(
+    interaction: discord.Interaction,
+    me_ids: set[str],
+    limit: int = 10,
+) -> list[dict[str, Any]]:
+    """Build the FINISHED cards - only the INTERESTING matches.
+
+    A match displays only when it truly ended AND its winner came
+    back (owner 2026-11-22): a capture without a completion time is a
+    game that started and never ended on record, a finished capture
+    without winners is a result we never read - both stay invisible
+    rather than lie.
+    """
+    from botforge.discord.stats_views import recent_match_entries
+
+    entries = await recent_match_entries(sorted(me_ids), limit=limit)
+    cards: list[dict[str, Any]] = []
+    for entry in entries:
+        finished_at = int(getattr(entry, "finished_at", 0) or 0)
+        winners = tuple(getattr(entry, "winners", ()) or ())
+        if not finished_at or not winners:
+            continue
+        cards.append(
+            {
+                "status": "finished",
+                "match_id": str(getattr(entry, "match_id", "") or ""),
+                "map_name": str(getattr(entry, "map_name", "") or ""),
+                "lobby_title": str(getattr(entry, "description", "") or "").strip(),
+                "description": str(getattr(entry, "description", "") or ""),
+                "started_at": int(getattr(entry, "started_at", 0) or 0),
+                "finished_at": finished_at,
+                "winners": winners,
+                "players": _entry_players_of(entry),
+            }
+        )
+    return cards
+
+
+def _entry_players_of(entry: Any) -> list[dict[str, Any]]:
+    """Parse the entry's players_json into seat dicts.
+
+    Each seat carries the alias, the civ, the team and the
+    pre/post ratings of the match.
+    """
+    import json as _json
+
+    try:
+        seats = _json.loads(getattr(entry, "players_json", "") or "[]")
+    except Exception:
+        return []
+    return [dict(seat) for seat in seats if isinstance(seat, dict)]
 
 
 async def _send_match_panels(
     interaction: discord.Interaction,
-    entries: list[Any],
     me_ids: set[str],
     known_ids: set[str],
+    labels: dict[str, str],
 ) -> None:
-    """Send ONE ephemeral panel per finished match \u2014 the old ladder.
+    """Send the match cards: live/lobbies first, then the finished ones.
 
-    The owner's previous bot's grammar (2026-11-21): a titled card per
-    match \u2014 the ladder header, the MAP section (its post link, the
-    stored map image as the section accessory, the finish and duration
-    footnotes), one SECTION per seat (the civ image as accessory, the
-    replay jump on the medal line, the bold post-match Elo, the -#
-    delta-and-civ subline), and the base-of-card -# history (match
-    start, finish, the Libre:Match report). A link row closes the card:
-    the aoe2insights match page.
+    ONE panel implementation for every status (owner 2026-11-22):
+    lobbies, ongoing games and finished matches render the same card,
+    the status only drives the badge, the duration, the buttons and
+    the links.
     """
-    from botforge.discord.stats_views import _entry_players, _match_title, _when
-
-    civ_urls, civ_images, map_urls, map_images = await _panel_enrichment(
-        interaction, entries
-    )
-    ladder = await _panel_ladder_boards(entries)
-    total = len(entries)
-    for index, entry in enumerate(entries):
-        players = _entry_players(entry)
-        match_id = str(getattr(entry, "match_id", "") or "")
-        winners = {str(w) for w in (getattr(entry, "winners", ()) or ())}
-        _, _, accent = _outcome_of(entry, me_ids)
-        number = total - index
-        alias = _viewer_alias(players, me_ids)
-        blocks: list[Any] = []
-        header = await reply(
-            interaction, "profile.matches_ladder", name=alias, number=number
-        )
-        blocks.append(discord.ui.TextDisplay(header))
-        # the MAP section: post link + stored image as the accessory
-        map_name = str(getattr(entry, "map_name", "") or "").strip()
-        map_label = map_name if map_name and map_name.lower() != "my map" else _match_title(
-            entry, {"untitled": "Match {id}"}
-        )
-        map_link = (
-            f"[{map_label}]({map_urls[map_name]})" if map_urls.get(map_name) else map_label
-        )
-        sub_lines = [f"-# Termin\u00e9 {_when(entry)}"]
-        duration = max(
-            0,
-            int(getattr(entry, "finished_at", 0) or 0) - int(getattr(entry, "started_at", 0) or 0),
-        )
-        if duration:
-            sub_lines.append(
-                "-# Dur\u00e9e de la partie : " + _fmt_clock(duration)
-            )
-        map_text = f"### {map_link}\n" + "\n".join(sub_lines)
-        image = map_images.get(map_name, "") if map_name else ""
-        if image:
-            blocks.append(
-                discord.ui.Section(
-                    discord.ui.TextDisplay(map_text),
-                    accessory=discord.ui.Thumbnail(image),
-                )
-            )
-        else:
-            blocks.append(discord.ui.TextDisplay(map_text))
-        blocks.append(discord.ui.Separator())
-        # one SECTION per seat: the civ icon as the accessory
-        seats = _panel_player_lines(
-            players, me_ids, winners, match_id, civ_urls, civ_images, ladder
-        )
-        for text, civ_image in seats:
-            if civ_image:
-                blocks.append(
-                    discord.ui.Section(
-                        discord.ui.TextDisplay(text),
-                        accessory=discord.ui.Thumbnail(civ_image),
-                    )
-                )
-            else:
-                blocks.append(discord.ui.TextDisplay(text))
-        # the base-of-card history
-        started = int(getattr(entry, "started_at", 0) or 0)
-        finished = int(getattr(entry, "finished_at", 0) or 0)
-        foot: list[str] = []
-        if started:
-            foot.append(f"-# partie commenc\u00e9e <t:{started}:R>")
-        if finished:
-            foot.append(f"-# termin\u00e9e <t:{finished}:R> \u00b7 rapport\u00e9 par Libre:Match")
-        foot.append(f"-# Panneau `stats:match:{match_id or '?'}`")
-        blocks.append(discord.ui.Separator())
-        blocks.append(discord.ui.TextDisplay("\n".join(foot)))
-        blocks.append(
-            discord.ui.ActionRow(
-                discord.ui.Button(
-                    label="aoe2insights",
-                    emoji="\U0001f517",
-                    style=discord.ButtonStyle.link,
-                    url=INSIGHTS_MATCH_URL.format(match_id=match_id),
-                )
-            )
-        )
-        view = discord.ui.LayoutView(timeout=None)
-        view.add_item(discord.ui.Container(*blocks, accent_colour=discord.Colour(accent)))
+    cards = await _live_cards(interaction, me_ids)
+    cards += await _finished_cards(interaction, me_ids)
+    if not cards:
+        await interaction.followup.send(await reply(interaction, "profile.matches_empty"), ephemeral=True)
+        return
+    ctx = await _match_panels_ctx(interaction, cards)
+    for card in cards:
+        view = _match_card_view(card, ctx, me_ids, labels)
         try:
             await interaction.followup.send(view=view, ephemeral=True)
         except Exception:
-            logger.warning("the match panel send failed (%s)", match_id, exc_info=True)
+            logger.warning("the match panel send failed (%s)", card.get("match_id"), exc_info=True)
             return
-
-
-async def _stored_channel(guild_id: str, scope: str, key: str) -> str:
-    """Return the stored channel id (empty when unwired)."""
-    from botforge.discord.ui.panels_provisioning import stored_channel_id
-
-    channel_id = await stored_channel_id(guild_id, scope, key) if guild_id else None
-    return str(channel_id) if channel_id else ""
 
 
 class ProfileMatchesButton(
@@ -1218,44 +1290,16 @@ class ProfileMatchesButton(
         known_ids -= me_ids
         labels = {
             "team": await reply(interaction, "profile.matches_team"),
-            "ongoing": await reply(interaction, "profile.matches_ongoing"),
-            "untitled": await reply(interaction, "profile.matches_untitled"),
+            "with": await reply(interaction, "profile.matches_with"),
+            "join": await reply(interaction, "profile.matches_join"),
+            "spectate": await reply(interaction, "profile.matches_spectate"),
         }
-        from botforge.discord.stats_views import recent_match_entries
-
-        # LIVE-first summary panel, then ONE panel per finished match
-        # (the owner's 2026-11-21 reading: ten messages, each a
-        # self-contained card with its links and its own panel id).
         if not me_ids:
             await interaction.followup.send(
                 await reply(interaction, "profile.matches_empty"), ephemeral=True
             )
             return
-        live_blocks = await _live_blocks_of(interaction, me_ids, known_ids, labels)
-        if live_blocks:
-            body = [f"### {await reply(interaction, 'profile.matches_live_title')}"]
-            separator = "\u2500" * 4
-            for index, block in enumerate(live_blocks):
-                if index:
-                    body.append(separator)
-                body.extend(block)
-            view = discord.ui.LayoutView(timeout=None)
-            view.add_item(discord.ui.Container(discord.ui.TextDisplay("\n".join(body))))
-        else:
-            view = discord.ui.LayoutView(timeout=None)
-            view.add_item(
-                discord.ui.Container(
-                    discord.ui.TextDisplay(f"### {await reply(interaction, 'profile.matches_title')}")
-                )
-            )
-        await interaction.followup.send(view=view, ephemeral=True)
-        entries = await recent_match_entries(sorted(me_ids), limit=10)
-        if not entries:
-            await interaction.followup.send(
-                await reply(interaction, "profile.matches_empty"), ephemeral=True
-            )
-            return
-        await _send_match_panels(interaction, entries, me_ids, known_ids)
+        await _send_match_panels(interaction, me_ids, known_ids, labels)
 
 
 class ProfileRenameButton(

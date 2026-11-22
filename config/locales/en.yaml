@@ -93,6 +93,9 @@ en:
       matches_ladder: "Ladder {name} \u2014 Match #{number}"
       matches_title: "Your 10 last matches"
       matches_live_title: "🎯 In progress"
+      matches_with: with
+      matches_join: Join
+      matches_spectate: Spectate
       matches_team: "Team"
       matches_ongoing: "in progress"
       matches_untitled: "Match {id}"

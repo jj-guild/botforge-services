@@ -93,6 +93,9 @@ fr:
       matches_ladder: "Ladder {name} \u2014 Match n\u00b0{number}"
       matches_title: "Tes 10 derniers matchs"
       matches_live_title: "🎯 En cours"
+      matches_with: avec
+      matches_join: Rejoindre
+      matches_spectate: Regarder
       matches_team: "Équipe"
       matches_ongoing: "en cours"
       matches_untitled: "Match {id}"
