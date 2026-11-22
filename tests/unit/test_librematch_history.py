@@ -862,3 +862,37 @@ async def test_the_encountered_seats_become_known_players() -> None:
     assert statuses[0].known
     rm = next(b for b in statuses[0].leaderboards if str(b.name) == "rm_team")
     assert rm.current == 1089 and rm.max == 1100
+
+
+async def test_the_missing_1v1_gets_probed_once_not_forever() -> None:
+    """The met player's 1v1 board is fetched once; a true absence stays."""
+    db, adapter = FakeDb(), FakeAdapter()
+    adapter.history["123"] = [
+        _match(
+            "m12",
+            "",
+            100,
+            200,
+            [
+                _member("123", 1, 0, 1150, 1162),
+                _member("789", 1, 0, 1100, 1108),
+                _member("456", 0, 1, 980, 988),
+                _member("321", 0, 1, 1010, 1018),
+            ],
+        ),
+    ]
+    probed: list[str] = []
+
+    async def _stat(*args: Any) -> dict[str, Any]:
+        profile_id = str(args[-1])
+        probed.append(profile_id)
+        # an honest profile WITHOUT any 1v1 board (rm team only)
+        return {}
+
+    adapter.fetch_personal_stat_raw = _stat  # type: ignore[method-assign]
+    syncer = _syncer(db, adapter)
+    await syncer.sync_account("123")
+    assert "456" in probed, "the met player without a 1v1 board gets probed"
+    await syncer.sync_account("123")  # the second pass stays quiet
+    assert probed.count("456") == 1, "the honestly-absent 1v1 never re-probes"
+    assert db["librematch:accounts"].docs["456"]["leaderboards"]["rm_1v1"]["none"] is True

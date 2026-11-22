@@ -106,6 +106,8 @@ sync&nbsp;only&nbsp;ever&nbsp;APPENDS&nbsp;the&nbsp;new&nbsp;games).</span></dd>
 
 <dl><dt>async <a name="LibrematchStore-list_known_profiles"><strong>list_known_profiles</strong></a>(self) -&gt; 'list[str]'</dt><dd><span class="code">List&nbsp;every&nbsp;account&nbsp;the&nbsp;store&nbsp;has&nbsp;a&nbsp;status&nbsp;or&nbsp;binding&nbsp;for.</span></dd></dl>
 
+<dl><dt>async <a name="LibrematchStore-mark_missing_1v1"><strong>mark_missing_1v1</strong></a>(self, profile_ids: 'list[str]') -&gt; 'None'</dt><dd><span class="code">Mark&nbsp;the&nbsp;honestly-absent&nbsp;1v1&nbsp;boards&nbsp;(the&nbsp;probe&nbsp;never&nbsp;repeats).</span></dd></dl>
+
 <dl><dt>async <a name="LibrematchStore-stored_match_ids"><strong>stored_match_ids</strong></a>(self, ids: 'list[str]') -&gt; 'set[str]'</dt><dd><span class="code">Return&nbsp;which&nbsp;of&nbsp;the&nbsp;given&nbsp;match&nbsp;ids&nbsp;are&nbsp;already&nbsp;stored.</span></dd></dl>
 
 <dl><dt>async <a name="LibrematchStore-update_match_fields"><strong>update_match_fields</strong></a>(self, doc_id: 'str', fields: 'dict[str, Any]') -&gt; 'None'</dt><dd><span class="code">Patch&nbsp;the&nbsp;projection&nbsp;fields&nbsp;of&nbsp;one&nbsp;stored&nbsp;match&nbsp;document.</span></dd></dl>

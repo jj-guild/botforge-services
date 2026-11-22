@@ -755,6 +755,14 @@ async def _entity_post_url(
     if channel is None:
         return ""
     wanted = name.strip().casefold()
+    # Incas/Inca, Mayans/Maya: the catalog and the reference table
+    # don't always agree on the plural - both forms match (owner
+    # 2026-11-22: the Incas post never linked)
+    forms = [wanted]
+    if wanted.endswith("s"):
+        forms.append(wanted[:-1])
+    else:
+        forms.append(wanted + "s")
     for private in (False, True):
         threads: list[Any] = list(getattr(channel, "threads", []) or [])
         try:
@@ -764,14 +772,13 @@ async def _entity_post_url(
             logger.debug("the archived thread walk failed", exc_info=True)
         for thread in threads:
             thread_name = str(getattr(thread, "name", "")).strip().casefold()
-            if thread_name == wanted or thread_name.startswith(
-                f"{wanted} "
-            ) or thread_name.startswith(f"{wanted} \u2014"):
-                # thread.jump_url is Discord's OWN canonical link \u2014
-                # a hand-built /channels/... url can silently land on
-                # the parent forum (the owner's 2026-11-22 report)
-                return str(getattr(thread, "jump_url", "") or "")
-    logger.debug("the entity post was not found: %s", name)
+            for form in forms:
+                if thread_name == form or thread_name.startswith(
+                    f"{form} "
+                ) or thread_name.startswith(f"{form} \u2014"):
+                    # thread.jump_url is Discord's OWN canonical link
+                    return str(getattr(thread, "jump_url", "") or "")
+    logger.debug("the entity post was not found: %s (forms: %s)", name, forms)
 
     logger.debug("the entity post was not found: %s", name)
     return ""
@@ -834,14 +841,50 @@ async def _stored_channel(guild_id: str, scope: str, key: str) -> str:
     return str(channel_id) if channel_id else ""
 
 
+SLOT_COLOURS = {
+    1: "Bleue",
+    2: "Rouge",
+    3: "Verte",
+    4: "Jaune",
+    5: "Cyan",
+    6: "Violette",
+    7: "Grise",
+    8: "Orange",
+}
+
+
 def _seat_teams(card: dict[str, Any]) -> list[tuple[int, list[dict[str, Any]]]]:
-    """Group the card's seats per team, in team order."""
+    """Group the card's seats per team, SLOT-ordered within each.
+
+    The seats follow the slotinfo positions (the game's slots 1-8);
+    a missing slot falls back to the alias order.
+    """
     by_team: dict[int, list[dict[str, Any]]] = {}
     for player in card.get("players") or []:
         if not isinstance(player, dict):
             continue
         by_team.setdefault(int(player.get("team", 0) or 0), []).append(player)
+    for seats in by_team.values():
+        seats.sort(
+            key=lambda p: (int((p or {}).get("slot", 0) or 0), str((p or {}).get("alias", "")))
+        )
     return [(team, by_team[team]) for team in sorted(by_team)]
+
+
+def _ordered_teams(card: dict[str, Any], me_ids: set[str]) -> list[tuple[int, list[dict[str, Any]]]]:
+    """Order the teams: MY team first (owner 2026-11-22), even team 2."""
+    teams = _seat_teams(card)
+    my_team = next(
+        (
+            i
+            for i, (_, seats) in enumerate(teams)
+            if any(str((p or {}).get("profile_id", "")) in me_ids for p in seats)
+        ),
+        None,
+    )
+    if my_team is None or my_team == 0:
+        return teams
+    return [*teams[my_team : my_team + 1], *teams[:my_team], *teams[my_team + 1 :]]
 
 
 def _card_format(card: dict[str, Any]) -> str:
@@ -941,7 +984,9 @@ def _seat_text(
     card: dict[str, Any],
     ctx: dict[str, Any],
     labels: dict[str, str],
+    me_ids: set[str] | None = None,
 ) -> tuple[str, str]:
+    me_ids = me_ids or set()
     """Render ONE seat: (text, civ image url).
 
     The owner's 2026-11-22 grammar:
@@ -964,7 +1009,14 @@ def _seat_text(
     replay = REPLAY_URL.format(match_id=match_id, profile_id=pid) if match_id else ""
     jump = f"[ \u25b8 ]({replay})" if replay else ""
     civ_link = f"[{civ}]({civ_urls[civ]})" if civ and civ_urls.get(civ) else civ
-    line = " ".join(bit for bit in [icon, jump, f"**{alias}**"] if bit)
+    # the alias links to its insights profile (relic id); ONLY the
+    # viewed player's alias carries the bold (owner 2026-11-22)
+    insights_profile = f"https://www.aoe2insights.com/user/relic/{pid}/" if pid else ""
+    alias_link = f"[{alias}]({insights_profile})" if insights_profile else alias
+    name = f"**{alias_link}**" if pid in me_ids else alias_link
+    slot = int(player.get("slot", 0) or 0)
+    slot_badge = f"P{slot} {SLOT_COLOURS[slot]}" if slot in SLOT_COLOURS else ""
+    line = " ".join(bit for bit in [icon, jump, name, slot_badge] if bit)
     if civ_link:
         line += f" {labels.get('with', 'avec')} {civ_link}"
     # the ladder lines
@@ -1070,15 +1122,15 @@ def _match_card_view(
     ]
     blocks.append(_card_map_section(card, ctx))
     blocks.append(discord.ui.Separator())
-    # the seats, team by team, a separator BETWEEN the teams
-    teams = _seat_teams(card)
+    # the seats, MY team first, a separator BETWEEN the teams
+    teams = _ordered_teams(card, me_ids)
     for index, (_team, seats) in enumerate(teams):
         if index:
             blocks.append(discord.ui.Separator())
         if len(teams) > 1:
             blocks.append(discord.ui.TextDisplay(f"**{labels.get('team', 'Team')} {index + 1}**"))
         for player in seats:
-            text, civ_image = _seat_text(player, card, ctx, labels)
+            text, civ_image = _seat_text(player, card, ctx, labels, me_ids)
             blocks.append(_seat_component(text, civ_image))
     # the footer: the source, then the status-led action row
     blocks.append(discord.ui.Separator())

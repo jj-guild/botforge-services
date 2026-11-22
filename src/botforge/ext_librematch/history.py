@@ -39,7 +39,7 @@ from botforge.ext_librematch.store import DEFAULT_HISTORY_LIMIT, LibrematchStore
 #: or written by a revision before the era existed \u2014 repairs once,
 #: then never again: whatever the upstream genuinely failed to carry
 #: (RANDOM seats, unknown civ ids) stops the loop by construction.
-CAPTURE_ERA = 2
+CAPTURE_ERA = 3
 
 logger = logging.getLogger("botforge.ext_librematch.history")
 
@@ -247,8 +247,11 @@ class MatchHistorySyncer:
                 inserted = await self._store.insert_matches_new_only(documents)
                 stored_any = stored_any or inserted > 0
             # every seat met becomes a known player: his boards ride
-            # the encounter itself (no extra upstream call)
+            # the encounter itself (no extra upstream call), and the
+            # seats lacking a 1v1 elo get probed once (owner 2026-11-22)
             await self._store.upsert_seen_accounts(_seen_board_updates(documents))
+            met = sorted({str(pid) for doc in documents for pid in doc.get("profile_ids") or []})
+            await self.refresh_missing_1v1(met, cap=10)
             # The decode step (T2) rides the ingest now: the history
             # payload ITSELF carries the encoded ``options``/``slotinfo``
             # blobs (the LibreMatch wiki, community/leaderboard/
@@ -320,10 +323,73 @@ class MatchHistorySyncer:
         docs = await self._store.find_matches(profile_ids, limit or DEFAULT_HISTORY_LIMIT, since_s, leaderboard_id)
         return [self._entry_of(doc) for doc in docs]
 
-    async def account_stats(self, profile_ids: list[str]) -> list[AccountEloStatus]:
-        """Serve the per-account status (current + max elo per board)."""
+    async def refresh_missing_1v1(self, profile_ids: list[str], cap: int = 30) -> list[str]:
+        """Probe the missing 1v1 boards of the MET players - once each.
+
+        The TG elo rides the match payload; the 1v1 elo does not. A
+        player seen without a stored rm_1v1 board (and without the
+        absence mark) is fetched ONCE: a board found is stored, an
+        honest absence (the player simply has no 1v1 elo) marks the
+        doc so the probe never repeats (owner 2026-11-22).
+        """
         if not profile_ids:
             return []
+        docs = await self._store.find_accounts([str(p) for p in profile_ids])
+        by_id = {str(doc.get("_id", "")): doc for doc in docs}
+        probed: list[str] = []
+        for profile_id in profile_ids:
+            str_pid = str(profile_id)
+            doc = by_id.get(str_pid)
+            boards = (doc or {}).get("leaderboards") or {}
+            board = boards.get("rm_1v1") or {}
+            if board and (
+                int(board.get("current") or 0)
+                or int(board.get("max") or 0)
+                or board.get("none")
+            ):
+                continue
+            if len(probed) >= max(0, cap):
+                break
+            probed.append(str_pid)
+        if not probed:
+            return []
+        fresh, absent = await self._probe_1v1(probed)
+        if fresh:
+            await self._store.upsert_seen_accounts(fresh)
+        if absent:
+            await self._store.mark_missing_1v1(absent)
+        return probed
+
+    async def _probe_1v1(
+        self, profile_ids: list[str]
+    ) -> tuple[dict[str, dict[str, dict[str, int]]], list[str]]:
+        """Fetch the 1v1 board of each profile once, classify found/absent."""
+        fresh: dict[str, dict[str, dict[str, int]]] = {}
+        absent: list[str] = []
+        for profile_id in profile_ids:
+            try:
+                stat = await self._adapter.fetch_personal_stat_raw(profile_id)
+            except Exception:
+                logger.debug("the 1v1 probe failed (%s)", profile_id, exc_info=True)
+                continue
+            boards = self._boards_from_stat(stat, profile_id) if isinstance(stat, dict) else {}
+            board = boards.get("rm_1v1")
+            if board and (int(board.get("current") or 0) or int(board.get("max") or 0)):
+                fresh[profile_id] = {"rm_1v1": board}
+            else:
+                absent.append(profile_id)
+        return fresh, absent
+
+    async def account_stats(self, profile_ids: list[str]) -> list[AccountEloStatus]:
+        """Serve the per-account status (current + max elo per board).
+
+        A met player asked while his 1v1 board is still unfetched gets
+        probed on the spot (owner 2026-11-22) \u2014 the panel reads full
+        boards the moment it names the seats.
+        """
+        if not profile_ids:
+            return []
+        await self.refresh_missing_1v1([str(p) for p in profile_ids])
         docs = await self._store.find_accounts([str(p) for p in profile_ids])
         by_id = {str(doc["_id"]): doc for doc in docs}
         statuses: list[AccountEloStatus] = []
@@ -528,6 +594,16 @@ class MatchHistorySyncer:
             if old or new:
                 rating_before[pid] = old
                 rating_after[pid] = new
+        options_json, slots_json = decode_match_payload(match)
+        seat_slots: dict[str, int] = {}
+        if slots_json:
+            try:
+                for slot in json.loads(slots_json) or []:
+                    pid = str((slot or {}).get("profile_id", ""))
+                    if pid:
+                        seat_slots[pid] = int((slot or {}).get("slot_index", 0) or 0)
+            except Exception:
+                seat_slots = {}
         aliases = match.get("profile_aliases") or {}
         civs = {
             pid: civ_name_of(_member_civ(match, pid)) for pid in profile_ids
@@ -538,6 +614,7 @@ class MatchHistorySyncer:
                 "alias": str(aliases.get(pid, "")),
                 "civ": civs.get(pid, ""),
                 "team": teams.get(pid, 0),
+                "slot": seat_slots.get(pid, 0),
                 "rating_before": rating_before.get(pid, 0),
                 "rating_after": rating_after.get(pid, 0),
             }
@@ -545,7 +622,6 @@ class MatchHistorySyncer:
         ]
         board = str(match.get("leaderboard") or "")
         lobby = str(match.get("description") or "").strip()
-        options_json, slots_json = decode_match_payload(match)
         return {
             "_id": f"{match.get('id', '')}:{board}" if board else f"{match.get('id', '')}",
             "match_id": str(match.get("id", "")),

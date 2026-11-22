@@ -61,7 +61,11 @@ Pull&nbsp;the&nbsp;known&nbsp;accounts'&nbsp;history&nbsp;into&nbsp;the&nbsp;sto
 <td class="singlecolumn">Methods defined here:<br>
 <dl><dt><a name="MatchHistorySyncer-__init__"><strong>__init__</strong></a>(self, adapter: 'Any', store: 'LibrematchStore', leaderboards: 'tuple[str, ...]' = ('0', '3', '4'), sync_count: 'int' = 1000, quick_count: 'int' = 25) -&gt; 'None'</dt><dd><span class="code">Initialize&nbsp;self.&nbsp;&nbsp;See&nbsp;help(type(self))&nbsp;for&nbsp;accurate&nbsp;signature.</span></dd></dl>
 
-<dl><dt>async <a name="MatchHistorySyncer-account_stats"><strong>account_stats</strong></a>(self, profile_ids: 'list[str]') -&gt; 'list[AccountEloStatus]'</dt><dd><span class="code">Serve&nbsp;the&nbsp;per-account&nbsp;status&nbsp;(current&nbsp;+&nbsp;max&nbsp;elo&nbsp;per&nbsp;board).</span></dd></dl>
+<dl><dt>async <a name="MatchHistorySyncer-account_stats"><strong>account_stats</strong></a>(self, profile_ids: 'list[str]') -&gt; 'list[AccountEloStatus]'</dt><dd><span class="code">Serve&nbsp;the&nbsp;per-account&nbsp;status&nbsp;(current&nbsp;+&nbsp;max&nbsp;elo&nbsp;per&nbsp;board).<br>
+&nbsp;<br>
+A&nbsp;met&nbsp;player&nbsp;asked&nbsp;while&nbsp;his&nbsp;1v1&nbsp;board&nbsp;is&nbsp;still&nbsp;unfetched&nbsp;gets<br>
+probed&nbsp;on&nbsp;the&nbsp;spot&nbsp;(owner&nbsp;2026-11-22)&nbsp;—&nbsp;the&nbsp;panel&nbsp;reads&nbsp;full<br>
+boards&nbsp;the&nbsp;moment&nbsp;it&nbsp;names&nbsp;the&nbsp;seats.</span></dd></dl>
 
 <dl><dt>async <a name="MatchHistorySyncer-decode_stored"><strong>decode_stored</strong></a>(self, profile_ids: 'list[str]', batch: 'int' = 25) -&gt; 'int'</dt><dd><span class="code">Decode&nbsp;the&nbsp;stored&nbsp;matches'&nbsp;encoded&nbsp;fields&nbsp;(#288,&nbsp;T2).<br>
 &nbsp;<br>
@@ -76,6 +80,14 @@ tables&nbsp;now&nbsp;name),&nbsp;without&nbsp;a&nbsp;purge&nbsp;and&nbsp;without
 immutable&nbsp;raw.&nbsp;Returns&nbsp;the&nbsp;number&nbsp;of&nbsp;documents&nbsp;patched.</span></dd></dl>
 
 <dl><dt>async <a name="MatchHistorySyncer-match_history"><strong>match_history</strong></a>(self, profile_ids: 'list[str]', limit: 'int' = 0, since_s: 'int' = 0, leaderboard_id: 'str' = '') -&gt; 'list[MatchHistoryEntry]'</dt><dd><span class="code">Serve&nbsp;the&nbsp;stored&nbsp;history&nbsp;as&nbsp;the&nbsp;exploited&nbsp;projection.</span></dd></dl>
+
+<dl><dt>async <a name="MatchHistorySyncer-refresh_missing_1v1"><strong>refresh_missing_1v1</strong></a>(self, profile_ids: 'list[str]', cap: 'int' = 30) -&gt; 'list[str]'</dt><dd><span class="code">Probe&nbsp;the&nbsp;missing&nbsp;1v1&nbsp;boards&nbsp;of&nbsp;the&nbsp;MET&nbsp;players&nbsp;-&nbsp;once&nbsp;each.<br>
+&nbsp;<br>
+The&nbsp;TG&nbsp;elo&nbsp;rides&nbsp;the&nbsp;match&nbsp;payload;&nbsp;the&nbsp;1v1&nbsp;elo&nbsp;does&nbsp;not.&nbsp;A<br>
+player&nbsp;seen&nbsp;without&nbsp;a&nbsp;stored&nbsp;rm_1v1&nbsp;board&nbsp;(and&nbsp;without&nbsp;the<br>
+absence&nbsp;mark)&nbsp;is&nbsp;fetched&nbsp;ONCE:&nbsp;a&nbsp;board&nbsp;found&nbsp;is&nbsp;stored,&nbsp;an<br>
+honest&nbsp;absence&nbsp;(the&nbsp;player&nbsp;simply&nbsp;has&nbsp;no&nbsp;1v1&nbsp;elo)&nbsp;marks&nbsp;the<br>
+doc&nbsp;so&nbsp;the&nbsp;probe&nbsp;never&nbsp;repeats&nbsp;(owner&nbsp;2026-11-22).</span></dd></dl>
 
 <dl><dt>async <a name="MatchHistorySyncer-refresh_status"><strong>refresh_status</strong></a>(self, profile_id: 'str') -&gt; 'bool'</dt><dd><span class="code">Refresh&nbsp;ONE&nbsp;account's&nbsp;elo&nbsp;status&nbsp;—&nbsp;no&nbsp;history&nbsp;fetch&nbsp;at&nbsp;all.<br>
 &nbsp;<br>
@@ -119,7 +131,7 @@ Data descriptors defined here:<br>
 <td class="section-title" colspan=3>&nbsp;<br><strong class="bigsection">Data</strong></td></tr>
     
 <tr><td class="decor data-decor"><span class="code">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span></td><td>&nbsp;</td>
-<td class="singlecolumn"><strong>CAPTURE_ERA</strong> = 2<br>
+<td class="singlecolumn"><strong>CAPTURE_ERA</strong> = 3<br>
 <strong>DECODE_BATCH</strong> = 25<br>
 <strong>DEFAULT_HISTORY_LIMIT</strong> = 50<br>
 <strong>DEFAULT_QUICK_COUNT</strong> = 25<br>
