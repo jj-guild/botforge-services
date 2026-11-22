@@ -847,21 +847,49 @@ async def test_the_encountered_seats_become_known_players() -> None:
                 _member("789", 0, 1, 1050, 1051),
                 _member("321", 1, 0, 990, 1030),
             ],
+            description="AUTOMATCH",
         ),
     ]
     syncer = _syncer(db, adapter)
     await syncer.sync_account("123")
     accounts = db["librematch:accounts"].docs
-    # the TG board carries every seat's current (post-match) and max
-    board = accounts["456"]["leaderboards"]["rm_team"]
+    # the TG board (the WE id 4) carries every seat's current (post-match) and max
+    board = accounts["456"]["leaderboards"]["4"]
     assert board["current"] == 1089 and board["max"] == 1100
-    board = accounts["321"]["leaderboards"]["rm_team"]
+    board = accounts["321"]["leaderboards"]["4"]
     assert board["current"] == 1030 and board["max"] == 1030
     # the account-stats read answers the ENCOUNTERED player too
     statuses = await syncer.account_stats(["456"])
     assert statuses[0].known
     rm = next(b for b in statuses[0].leaderboards if str(b.name) == "rm_team")
     assert rm.current == 1089 and rm.max == 1100
+
+
+async def test_a_custom_lobby_never_harvests_boards() -> None:
+    """The "test" bot lobbies reported TG elo with one seat per team.
+
+    The team-size heuristic folded them into rm_1v1 and poisoned the
+    panels' 1v1 lines (owner 2026-11-22 \u2014 "t'as pris l'elo tg"):
+    a custom lobby's ratings stay OUT of the seen harvest; only the
+    ranked AUTOMATCH matches fold.
+    """
+    db, adapter = FakeDb(), FakeAdapter()
+    adapter.history["123"] = [
+        _match(
+            "m13",
+            "",
+            100,
+            200,
+            [
+                _member("123", 1, 0, 1292, 1300),
+                _member("456", 0, 1, 1100, 1089),
+            ],
+            description="test",
+        ),
+    ]
+    syncer = _syncer(db, adapter)
+    await syncer.sync_account("123")
+    assert "456" not in db["librematch:accounts"].docs
 
 
 async def test_the_missing_1v1_gets_probed_once_not_forever() -> None:
@@ -879,6 +907,7 @@ async def test_the_missing_1v1_gets_probed_once_not_forever() -> None:
                 _member("456", 0, 1, 980, 988),
                 _member("321", 0, 1, 1010, 1018),
             ],
+            description="AUTOMATCH",
         ),
     ]
     probed: list[str] = []
@@ -895,4 +924,4 @@ async def test_the_missing_1v1_gets_probed_once_not_forever() -> None:
     assert "456" in probed, "the met player without a 1v1 board gets probed"
     await syncer.sync_account("123")  # the second pass stays quiet
     assert probed.count("456") == 1, "the honestly-absent 1v1 never re-probes"
-    assert db["librematch:accounts"].docs["456"]["leaderboards"]["rm_1v1"]["none"] is True
+    assert db["librematch:accounts"].docs["456"]["leaderboards"]["3"]["none"] is True

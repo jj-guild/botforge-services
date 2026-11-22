@@ -125,6 +125,7 @@ def _int(value: Any) -> int:
         return 0
 
 
+
 def _seen_board_updates(documents: list[dict[str, Any]]) -> dict[str, dict[str, dict[str, int]]]:
     """Fold the freshly fetched matches into per-SEEN-PLAYER boards.
 
@@ -133,14 +134,27 @@ def _seen_board_updates(documents: list[dict[str, Any]]) -> dict[str, dict[str, 
     (oldrating/newrating), so the encounter itself is the stat: no
     extra upstream call (owner 2026-11-22). The newest encounter on
     a board carries the current; the max never drops.
+
+    RANKED matches only (owner 2026-11-22): a custom lobby's rating
+    semantics are the lobby's own \u2014 the "test"/"Murkwood 1200"
+    bot lobbies reported TG elo with one player per team, which the
+    team-size heuristic folded into rm_1v1 and poisoned the panels'
+    1v1 lines. AUTOMATCH (the ranked label) bounds the harvest.
     """
     updates: dict[str, dict[str, dict[str, int]]] = {}
     for doc in documents:
+        if str(doc.get("lobby_title") or "").strip().upper() != "AUTOMATCH":
+            continue
         teams: dict[int, int] = {}
         for player in doc.get("players") or []:
             team = int((player or {}).get("team", 0) or 0)
             teams[team] = teams.get(team, 0) + 1
-        board = "rm_team" if any(count > 1 for count in teams.values()) else "rm_1v1"
+        # the SAME keys as the authority (GetPersonalStat boards are
+        # the WE leaderboard ids: 3 = RM 1v1, 4 = RM team) — a
+        # differently-keyed copy of the same board would carry the
+        # same display name and the panels would read whichever the
+        # dict order kept.
+        board = "4" if any(count > 1 for count in teams.values()) else "3"
         ts = int(doc.get("finished_at") or doc.get("started_at") or 0)
         for player in doc.get("players") or []:
             pid = str((player or {}).get("profile_id", ""))
@@ -176,11 +190,26 @@ _MAP_SIZE_LABELS = {
     240: "Immense",
     480: "Colossale",
 }
+_GAME_MODE_LABELS = {
+    0: "Random Map",
+    1: "R\u00e9gicide",
+    2: "Death Match",
+    3: "Sc\u00e9nario",
+    5: "King of the Hill",
+    6: "Course \u00e0 la Merveille",
+    7: "D\u00e9fendre la Merveille",
+    8: "Turbo Random Map",
+    10: "Capture du Relique",
+    11: "Sudden Death",
+    12: "Battle Royale",
+    13: "Empire Wars",
+}
 _SETTINGS_KEYS = {
+    "5": ("Mode", _GAME_MODE_LABELS),
     "8": ("Taille", None),
     "28": ("Pop", None),
     "21": ("Vitesse", {50: "Lente", 60: "Normale", 80: "Rapide", 120: "Turbo"}),
-    "4": ("Victoire", {1: "Standard", 5: "Conqu\u00eate", 3: "Temps", 7: "R\u00e9gicide"}),
+    "81": ("Victoire", {1: "Conqu\u00eate", 9: "Standard", 7: "Temps", 8: "Score", 11: "Dernier debout"}),
     "1": ("Cheats", {"n": "non", "y": "oui",
                    "0": "non", "1": "oui"}),
 }
@@ -403,7 +432,7 @@ class MatchHistorySyncer:
             str_pid = str(profile_id)
             doc = by_id.get(str_pid)
             boards = (doc or {}).get("leaderboards") or {}
-            board = boards.get("rm_1v1") or {}
+            board = boards.get("3") or {}  # the WE 1v1 board id
             if board and (
                 int(board.get("current") or 0)
                 or int(board.get("max") or 0)
@@ -435,9 +464,9 @@ class MatchHistorySyncer:
                 logger.debug("the 1v1 probe failed (%s)", profile_id, exc_info=True)
                 continue
             boards = self._boards_from_stat(stat, profile_id) if isinstance(stat, dict) else {}
-            board = boards.get("rm_1v1")
+            board = boards.get("3")
             if board and (int(board.get("current") or 0) or int(board.get("max") or 0)):
-                fresh[profile_id] = {"rm_1v1": board}
+                fresh[profile_id] = {"3": board}
             else:
                 absent.append(profile_id)
         return fresh, absent

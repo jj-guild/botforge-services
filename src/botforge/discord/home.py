@@ -967,7 +967,10 @@ async def _match_panels_ctx(
         for account in accounts:
             boards: dict[str, tuple[int, int]] = {}
             for board in account.leaderboards:
-                boards[str(board.name)] = (int(board.current), int(board.max))
+                # only the shown boards: unranked/custom (leaderboard 0)
+                # never renders on a seat (owner 2026-11-22)
+                if str(board.name) in ("rm_1v1", "rm_team"):
+                    boards[str(board.name)] = (int(board.current), int(board.max))
             if boards:
                 ladder[str(account.profile_id)] = boards
     return {
@@ -1017,26 +1020,28 @@ def _seat_text(
     line = " ".join(bit for bit in [jump, name, slot_badge] if bit)
     if civ_link:
         line += f" {labels.get('with', 'avec')} {civ_link}"
-    # the ladder lines
+    # the ladder lines: 1v1 and TG only (never unranked), one under
+    # the other; the match's own board carries the bold elo — even
+    # in a custom game — and the elo DIFF renders for RANKED
+    # matches only (an unranked diff means nothing, owner 2026-11-22)
     boards = ladder.get(pid) or {}
     boards = dict(boards)
     before = int(player.get("rating_before") or 0)
     after = int(player.get("rating_after") or 0)
     is_team_game = len(_seat_teams(card)) and any(len(seats) > 1 for _, seats in _seat_teams(card))
     match_board = "rm_team" if is_team_game else "rm_1v1"
-    other_board = "rm_1v1" if match_board == "rm_team" else "rm_team"
+    ranked = str(card.get("lobby_title") or "").strip().upper() == "AUTOMATCH"
     lines = [line]
-    for key, label in ((other_board, "1v1"), (match_board, "TG" if match_board == "rm_team" else "1v1")):
-        if key == match_board and before and after:
-            peak = max(before, after, boards.get(key, (0, 0))[1], 0)
-            body = f"-# {label} : **{before}** - {peak}"
-            if finished and after != before:
+    for key, label in (("rm_1v1", "1v1"), ("rm_team", "TG")):
+        current, peak = boards.get(key, (0, 0))
+        if key == match_board and (before if ranked else current):
+            value = before if ranked else current
+            highlight = max(value, peak, after if ranked else 0, 0)
+            body = f"-# {label} : **{value}** - {highlight}"
+            if ranked and finished and after != before:
                 body += f" ({after - before:+d})"
             lines.append(body)
-        else:
-            current, peak = boards.get(key, (0, 0))
-            if not current:
-                continue
+        elif current:
             span = f"{current} - {peak}" if peak and peak > current else f"{current}"
             lines.append(f"-# {label} : {span}")
     return "\n".join(lines), ctx["civ_images"].get(civ, "")

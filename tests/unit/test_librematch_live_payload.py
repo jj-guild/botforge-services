@@ -160,7 +160,7 @@ def test_the_settings_footer_line_is_honest() -> None:
     word, unknown pairs never appear.
     """
     doc = _doc("433589647")
-    assert ["Taille", "220 × 220 (Grande)"] in doc["settings"]
+    assert ["Taille", "220 \u00d7 220 (Grande)"] in doc["settings"]
     assert ["Pop", "200"] in doc["settings"]
     assert ["Vitesse", "Normale"] in doc["settings"]
     assert ["Victoire", "Conquête"] in doc["settings"]
@@ -186,7 +186,7 @@ def test_the_slotinfo_teams_overrule_the_members() -> None:
     # the projection rides the wire without losing a column
     entry = _entry("433589647")
     wire = match_history_to_wire(entry)
-    assert json.loads(match_history_from_wire(wire).settings_json)[0] == ["Taille", "220 × 220 (Grande)"]
+    assert json.loads(match_history_from_wire(wire).settings_json)[0] == ["Mode", "Random Map"]
 
 
 def test_the_served_entry_carries_the_projection() -> None:

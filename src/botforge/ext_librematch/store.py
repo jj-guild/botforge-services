@@ -209,12 +209,23 @@ class LibrematchStore:
             boards = dict(existing.get("leaderboards") or {})
             for board, entry in fresh.items():
                 old = boards.get(board) or {}
+                # An AUTHORITY-written entry (rank/wins/losses set by
+                # the stats, or the honest ``none`` probe) is never
+                # downgraded by the encounter harvest \u2014 the seen
+                # fold only fills the gaps (owner 2026-11-22).
+                if old and (
+                    _int(old.get("rank"))
+                    or _int(old.get("wins"))
+                    or _int(old.get("losses"))
+                    or bool(old.get("none"))
+                ):
+                    continue
                 boards[board] = {
                     "current": entry.get("current", 0),
                     "max": max(_int(old.get("max")), _int(entry.get("max"))),
-                    "rank": 0,
-                    "wins": 0,
-                    "losses": 0,
+                    "rank": _int(entry.get("rank", 0)),
+                    "wins": _int(entry.get("wins", 0)),
+                    "losses": _int(entry.get("losses", 0)),
                 }
             await accounts.replace_one(
                 {"_id": profile_id},
@@ -228,10 +239,10 @@ class LibrematchStore:
         for profile_id in profile_ids:
             existing = await accounts.find_one({"_id": str(profile_id)}) or {}
             boards = dict(existing.get("leaderboards") or {})
-            old = boards.get("rm_1v1") or {}
+            old = boards.get("3") or {}  # the WE 1v1 board id
             if int(old.get("current") or 0) or int(old.get("max") or 0):
                 continue
-            boards["rm_1v1"] = {**old, "current": 0, "max": 0, "none": True}
+            boards["3"] = {**old, "current": 0, "max": 0, "none": True}
             await accounts.replace_one(
                 {"_id": str(profile_id)},
                 {**existing, "_id": str(profile_id), "leaderboards": boards},
