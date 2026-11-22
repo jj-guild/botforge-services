@@ -841,6 +841,8 @@ async def _stored_channel(guild_id: str, scope: str, key: str) -> str:
     return str(channel_id) if channel_id else ""
 
 
+#: the slot colours ride the locale (profile.matches_colour_N);
+#: these stay the fallback when a label never resolves
 SLOT_COLOURS = {
     1: "Bleue",
     2: "Rouge",
@@ -850,6 +852,17 @@ SLOT_COLOURS = {
     6: "Violette",
     7: "Grise",
     8: "Orange",
+}
+
+#: the settings footer labels ride the locale too (the provider's
+#: settings_json carries the canonical label, the panel translates)
+SETTING_LABEL_KEYS = {
+    "Mode": "profile.matches_setting_mode",
+    "Taille": "profile.matches_setting_size",
+    "Pop": "profile.matches_setting_pop",
+    "Vitesse": "profile.matches_setting_speed",
+    "Victoire": "profile.matches_setting_victory",
+    "Cheats": "profile.matches_setting_cheats",
 }
 
 
@@ -887,6 +900,29 @@ def _ordered_teams(card: dict[str, Any], me_ids: set[str]) -> list[tuple[int, li
     return [*teams[my_team : my_team + 1], *teams[:my_team], *teams[my_team + 1 :]]
 
 
+
+def _card_footer_text(card: dict[str, Any], labels: dict[str, Any]) -> str:
+    """Render the footer: the source line, then the CUSTOM-ONLY settings.
+
+    A ranked footer stays bare (owner 2026-11-22: the ranked settings
+    are all identical); a custom match carries its settings compact,
+    their labels translated by the panel's locale.
+    """
+    first_seat = str(((card.get("players") or [{}])[0] or {}).get("profile_id") or "")
+    source_url = LIBREMATCH_SOURCE_URL.format(profile_id=first_seat) if first_seat else ""
+    compact = ""
+    if not _is_ranked(card):
+        settings = card.get("settings") or []
+        setting_labels: dict[str, str] = dict(labels.get("settings") or {})
+        compact = " · ".join(
+            f"{setting_labels.get(label, label)} : {value}" for label, value in settings
+        )
+    source = str(labels.get("source", "Source : libre:match")).format(url=source_url or "libre:match")
+    source = f"-# {source}"
+    if compact:
+        source += f"\n-# {compact}"
+    return source
+
 def _card_format(card: dict[str, Any]) -> str:
     """Return the match's format tag (1v1 / 2v2 / 4v4 / custom...)."""
     teams = _seat_teams(card)
@@ -900,10 +936,15 @@ def _card_format(card: dict[str, Any]) -> str:
     return "FFA" if len(teams) > 2 else "custom"
 
 
+def _is_ranked(card: dict[str, Any]) -> bool:
+    """Return True when the match is an AUTOMATCH (the ranked label)."""
+    lobby = str(card.get("lobby_title") or card.get("description") or "").strip().upper()
+    return lobby == "AUTOMATCH" or (not lobby and card.get("status") == "finished")
+
+
 def _card_kind(card: dict[str, Any]) -> str:
     """Return Ranked / Custom: a NON-automatch lobby title says custom."""
-    lobby = str(card.get("description") or "").strip().upper()
-    return "ranked" if lobby == "AUTOMATCH" or not lobby else "custom"
+    return "ranked" if _is_ranked(card) else "custom"
 
 
 async def _posts_enrichment(
@@ -1103,7 +1144,7 @@ def _match_card_view(
     card: dict[str, Any],
     ctx: dict[str, Any],
     me_ids: set[str],
-    labels: dict[str, str],
+    labels: dict[str, Any],
 ) -> discord.ui.LayoutView:
     """Build ONE match card's view - the SAME panel everywhere.
 
@@ -1158,16 +1199,7 @@ def _match_card_view(
             blocks.append(_seat_component(text, civ_image))
     # the footer: the source, then the status-led action row
     blocks.append(discord.ui.Separator())
-    first_seat = str(((card.get("players") or [{}])[0] or {}).get("profile_id") or "")
-    source_url = LIBREMATCH_SOURCE_URL.format(profile_id=first_seat) if first_seat else ""
-    settings = card.get("settings") or []
-    compact = " \u00b7 ".join(f"{label} : {value}" for label, value in settings)
-    source = (
-        f"-# Source : [libre:match]({source_url})" if source_url else "-# Source : libre:match"
-    )
-    if compact:
-        source += f"\n-# {compact}"
-    blocks.append(discord.ui.TextDisplay(source))
+    blocks.append(discord.ui.TextDisplay(_card_footer_text(card, labels)))
     buttons: list[discord.ui.Button[Any]] = []
     if status == "lobby" and card.get("lobby_url"):
         buttons.append(
@@ -1313,7 +1345,7 @@ async def _send_match_panels(
     interaction: discord.Interaction,
     me_ids: set[str],
     known_ids: set[str],
-    labels: dict[str, str],
+    labels: dict[str, Any],
 ) -> None:
     """Send the match cards: live/lobbies first, then the finished ones.
 
@@ -1391,6 +1423,17 @@ class ProfileMatchesButton(
             "with": await reply(interaction, "profile.matches_with"),
             "join": await reply(interaction, "profile.matches_join"),
             "spectate": await reply(interaction, "profile.matches_spectate"),
+            # every hardcoded panel word rides the locale (owner
+            # 2026-11-22: the panels mixed untranslated fr and en)
+            "when": await reply(interaction, "profile.matches_when"),
+            "duration": await reply(interaction, "profile.matches_duration"),
+            "source": await reply(interaction, "profile.matches_source"),
+            "colours": {
+                slot: await reply(interaction, f"profile.matches_colour_{slot}") for slot in SLOT_COLOURS
+            },
+            "settings": {
+                plain: await reply(interaction, key) for plain, key in SETTING_LABEL_KEYS.items()
+            },
         }
         if not me_ids:
             await interaction.followup.send(

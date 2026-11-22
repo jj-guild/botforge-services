@@ -13,8 +13,10 @@ projection fields stay empty, the sync retries on its next pass.
 
 from __future__ import annotations
 
+import base64
 import json
 import logging
+import re
 from typing import Any
 
 from botforge.aoe2.codecs import BlobDecodeError, decode_blob
@@ -51,6 +53,47 @@ def decode_match_payload(raw: dict[str, Any]) -> tuple[str, str]:
     return options_json, slots_json
 
 
+
+def _slot_position(slot: dict[str, Any], index: int) -> int:
+    """Map one slot to its GAME position (1-8, the P-colors).
+
+    ``stationID`` is the LOBBY's station, NOT the player's position:
+    the 2026-11-22 4v4 had JeanJack on station 7 while playing the
+    FIRST position (blue). The true position rides the slot's
+    ``metaData`` \u2014 a double-base64 TLV whose
+    ``ScenarioPlayerIndex`` key (0-7) is the game's own player
+    index; verify-live trace: station 7 \u2192 index '0' \u2192 P1.
+    The station, then the array order, stay the honest fallbacks.
+    """
+    player_index = _meta_player_index(slot.get("metaData"))
+    if player_index is not None and player_index >= 0:
+        return player_index + 1
+    for key in ("slot_index", "player_index", "stationID"):
+        value = slot.get(key)
+        if isinstance(value, (int, float)) and int(value) > 0:
+            return int(value)
+    return index + 1
+
+
+def _meta_player_index(meta: Any) -> int | None:
+    """Extract ``ScenarioPlayerIndex`` (0-7) from a slot's metaData."""
+    if not isinstance(meta, str) or not meta:
+        return None
+    try:
+        inner = base64.b64decode(meta).decode("utf-8", "replace")
+        payload = inner[1:-1].encode() if inner.startswith('"') and inner.endswith('"') else inner.encode()
+        blob = base64.b64decode(payload)
+    except Exception:
+        return None
+    found = re.search(rb"ScenarioPlayerIndex(.{4})([0-9])", blob, re.S)
+    if not found:
+        return None
+    try:
+        return int(found.group(2))
+    except ValueError:
+        return None
+
+
 def _normalize_slot(slot: Any, index: int) -> dict[str, Any]:
     """Normalize one decoded slot record into the stored projection.
 
@@ -83,7 +126,7 @@ def _normalize_slot(slot: Any, index: int) -> dict[str, Any]:
         or slot.get("isReady") == 1
     )
     return {
-        "slot_index": int(slot.get("slot_index") or slot.get("stationID") or index),
+        "slot_index": _slot_position(slot, index),
         "profile_id": str(profile_id or ""),
         "civ": int(civ) if isinstance(civ, (int, float)) else str(civ or ""),
         "team": int(slot.get("team") or slot.get("teamID") or slot.get("teamid") or 0),

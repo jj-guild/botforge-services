@@ -99,6 +99,23 @@ en:
       matches_team: "Team"
       matches_ongoing: "in progress"
       matches_untitled: "Match {id}"
+      matches_when: "Played {when}"
+      matches_duration: "Duration: {clock}"
+      matches_source: "Source: [libre:match]({url})"
+      matches_setting_mode: Mode
+      matches_setting_size: Size
+      matches_setting_pop: Pop
+      matches_setting_speed: Speed
+      matches_setting_victory: Victory
+      matches_setting_cheats: Cheats
+      matches_colour_1: Blue
+      matches_colour_2: Red
+      matches_colour_3: Green
+      matches_colour_4: Yellow
+      matches_colour_5: Cyan
+      matches_colour_6: Purple
+      matches_colour_7: Grey
+      matches_colour_8: Orange
       matches_empty: 'No stored match yet for your accounts \u2014 the history refreshes a few minutes after binding.'
       add_button: Add an account
       rename_button: Change nickname

@@ -99,6 +99,23 @@ fr:
       matches_team: "Équipe"
       matches_ongoing: "en cours"
       matches_untitled: "Match {id}"
+      matches_when: "Il y a {when}"
+      matches_duration: "Durée : {clock}"
+      matches_source: "Source : [libre:match]({url})"
+      matches_setting_mode: Mode
+      matches_setting_size: Taille
+      matches_setting_pop: Pop
+      matches_setting_speed: Vitesse
+      matches_setting_victory: Victoire
+      matches_setting_cheats: Cheats
+      matches_colour_1: Bleue
+      matches_colour_2: Rouge
+      matches_colour_3: Verte
+      matches_colour_4: Jaune
+      matches_colour_5: Cyan
+      matches_colour_6: Violette
+      matches_colour_7: Grise
+      matches_colour_8: Orange
       matches_empty: 'Aucun match stock\u00e9 pour tes comptes \u2014 l\u2019historique se rafra\u00eechit quelques minutes apr\u00e8s la liaison.'
       add_button: Ajouter un compte
       rename_button: Changer de pseudo

@@ -103,8 +103,11 @@ def test_the_ranked_1v1_reconstructs_exactly() -> None:
             "profile_id": "4276665",
             "alias": "Lastdrop",
             "civ": "Persians",
+            # the game's own ScenarioPlayerIndex (owner 2026-11-22):
+            # 0-based - Lastdrop's automatch seat is the FIFTH player
+            # slot (the game assigns the colors around the table)
             "team": 1,
-            "slot": 1,
+            "slot": 5,
             "rating_before": 1174,
             "rating_after": 1156,
         },
