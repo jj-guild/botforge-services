@@ -39,7 +39,7 @@ from botforge.ext_librematch.store import DEFAULT_HISTORY_LIMIT, LibrematchStore
 #: or written by a revision before the era existed \u2014 repairs once,
 #: then never again: whatever the upstream genuinely failed to carry
 #: (RANDOM seats, unknown civ ids) stops the loop by construction.
-CAPTURE_ERA = 4
+CAPTURE_ERA = 5
 
 logger = logging.getLogger("botforge.ext_librematch.history")
 
