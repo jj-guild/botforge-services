@@ -501,6 +501,68 @@ class KingdomService:
         logger.info("kingdom: kingdom %s deleted by an admin", kingdom.name)
         return kingdom
 
+    async def redistribute_territories(self, kingdom_id: str) -> dict[str, int]:
+        """Scatter one kingdom's territories over the season (ejection).
+
+        ejection-archive-v1 (Drasah 22/11) : un royaume ENGAGÉ ne se
+        supprime pas, il s'ÉJECTE — et ses territoires acquis repartent
+        dans le pot commun. La règle est l'ÉQUILITÉ STRICTE : chaque
+        royaume joueur de la saison reçoit le même nombre de tuiles
+        (des tours complets, l'ordre aléatoire à chaque tour), et le
+        reste du dernier tour incomplet part à GAÏA (distribuer
+        l'impair déséquilibrerait le board). Les quantités sont
+        calculées, jamais codées en dur (#369). Appelée AVANT le
+        ``delete_kingdom`` (les tuiles sont ré-affectées pendant que
+        le royaume existe encore, le delete ne trouve plus rien à
+        détruire).
+        """
+        kingdom = await self._require_kingdom(kingdom_id)
+        if kingdom.is_gaia:
+            raise NotEnrollableError("Gaïa's territories are never redistributed")
+        kingdoms = await self.kingdoms()
+        # les joueurs de la saison (Gaïa et le royaume test exclus du pot)
+        others = [
+            k
+            for k in kingdoms
+            if not k.is_gaia and k.id != kingdom.id and k.id != TEST_KINGDOM_ID
+        ]
+        gaia = next((k for k in kingdoms if k.is_gaia), None)
+        pool = [
+            territory
+            for territory in await self._find_all("find_territories")
+            if str(territory.get("owner_kingdom_id", "")) == kingdom.id
+        ]
+        random.shuffle(pool)  # noqa: S311 — game draw, not crypto
+        # tours complets : chacun reçoit pool // autres, dans un ordre
+        # aléatoire ; le reste du dernier tour incomplet → Gaïa
+        per_kingdom = len(pool) // len(others) if others else 0
+        cursor = 0
+        for other in others:
+            for _ in range(per_kingdom):
+                territory = pool[cursor]
+                cursor += 1
+                territory["owner_kingdom_id"] = other.id
+                await self._store.upsert_territory(territory)
+        to_gaia = len(pool) - cursor
+        if to_gaia and gaia is not None:
+            for territory in pool[cursor:]:
+                territory["owner_kingdom_id"] = gaia.id
+                await self._store.upsert_territory(territory)
+        logger.info(
+            "kingdom: %s's territories redistributed (%d tiles — %d each to %d kingdoms, %d to Gaïa)",
+            kingdom.name,
+            len(pool),
+            per_kingdom,
+            len(others),
+            to_gaia,
+        )
+        return {
+            "territories": len(pool),
+            "per_kingdom": per_kingdom,
+            "kingdoms": len(others),
+            "to_gaia": to_gaia,
+        }
+
     async def current_season(self) -> SeasonState | None:
         """Return the latest launched season; None before the first launch."""
         seasons = await self._store.find_seasons()

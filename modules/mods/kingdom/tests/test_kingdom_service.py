@@ -513,3 +513,54 @@ async def test_delete_kingdom_refuses_gaia() -> None:
     await service.launch()
     with pytest.raises(NotEnrollableError):
         await service.delete_kingdom(GAIA_KINGDOM_KEY)
+
+
+class _TerritoryStore(MemoryStore):
+    """MemoryStore + the territories seam (the ejection's pot commun)."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.territories: dict[str, dict] = {}
+
+    async def upsert_territory(self, document: dict) -> None:
+        self.territories[str(document["_id"])] = dict(document)
+
+    async def find_territories(self) -> list[dict]:
+        return list(self.territories.values())
+
+
+async def test_redistribute_territories_shares_rounds_and_gives_the_rest_to_gaia() -> None:
+    """ejection-archive-v1 — l'éjection redistribue ÉQUITABLEMENT : des
+    tours complets par royaume joueur (ordre aléatoire), le reste du
+    tour incomplet à Gaïa, et Gaïa refuse la redistribution."""
+    from botforge.mods.kingdom.service import NotEnrollableError as _NE
+
+    store = _TerritoryStore()
+    config = default_season_config()
+    config.kingdoms_count = 5  # la limite par défaut (2) laisserait 4 joueurs hors saison
+    service = KingdomService(store, config)  # type: ignore[arg-type]
+    await service.launch(["Aquitaine", "Bourgogne", "Anjou", "Forez"])
+    kingdoms = await service.kingdoms()
+    by_name = {k.name: k for k in kingdoms}
+    aquitaine = by_name["Aquitaine"]
+    gaia = by_name[GAIA_KINGDOM_KEY]
+    # 7 tuiles à Aquitaine → 3 autres joueurs × 2 (tour complet), le
+    # reste du tour incomplet (1) à Gaïa
+    for index in range(7):
+        store.territories[f"t{index}"] = {
+            "_id": f"t{index}", "owner_kingdom_id": aquitaine.id,
+        }
+    counts = await service.redistribute_territories(aquitaine.id)
+    assert counts == {"territories": 7, "per_kingdom": 2, "kingdoms": 3, "to_gaia": 1}
+    owners = {doc["owner_kingdom_id"] for doc in store.territories.values()}
+    assert aquitaine.id not in owners
+    per = {}
+    for doc in store.territories.values():
+        per[doc["owner_kingdom_id"]] = per.get(doc["owner_kingdom_id"], 0) + 1
+    for player in ("Bourgogne", "Anjou", "Forez"):
+        assert per[by_name[player].id] == 2, player
+    assert per[gaia.id] == 1
+    # Gaïa ne redistribue jamais — la règle absolue
+    with pytest.raises(_NE):
+        await service.redistribute_territories(gaia.id)
+

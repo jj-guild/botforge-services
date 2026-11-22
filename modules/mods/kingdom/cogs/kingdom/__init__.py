@@ -294,6 +294,7 @@ def setup_hook(bot: Any) -> None:
     from .ffa import FFAJoinButton
     from .console import KingdomClockButton, KingdomRelaunchButton, KingdomResetButton
     from .validation import (
+        ValidationArchiveButton,
         ValidationCrownButton,
         ValidationDecisionButton,
         ValidationDeleteButton,
@@ -301,7 +302,12 @@ def setup_hook(bot: Any) -> None:
         ValidationRealmEntryButton,
     )
     from .apply_flow import KingdomApplyOpenButton, KingdomPostulerButton
-    from .settings_panel import KingdomRegieSwitchButton, KingdomSettingsNavButton, SettingsActionButton
+    from .settings_panel import (
+        KingdomRegieRealmButton,
+        KingdomRegieSwitchButton,
+        KingdomSettingsNavButton,
+        SettingsActionButton,
+    )
     from .common import KingdomWindowCloseButton
     from .time_machine import machine_dynamic_items
     from .distributor import distributor_dynamic_items
@@ -345,11 +351,13 @@ def setup_hook(bot: Any) -> None:
         ValidationCrownButton,
         ValidationEjectButton,
         ValidationRealmEntryButton,
+        ValidationArchiveButton,
         KingdomApplyOpenButton,
         KingdomPostulerButton,
         SettingsActionButton,
         KingdomSettingsNavButton,
         KingdomRegieSwitchButton,
+        KingdomRegieRealmButton,
         KingdomWindowCloseButton,
         *machine_dynamic_items(),
         *distributor_dynamic_items(),

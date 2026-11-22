@@ -89,6 +89,12 @@ class RealmShellModel(BaseModel):
     ``{"season_id", "kingdom_id", "engaged_at"}`` set by the admin's
     acceptance (the draft starter IS the act of entry), cleared at
     season end — a realm out of season carries None."""
+    archived_at: int = 0
+    """📦 The archive stamp (ejection-archive-v1, Drasah 22/11): 0 = the
+    realm lives (vivant ou dormant), anything else = ARCHIVED — out of
+    the game (SAS, lists, habitat Discord demolished), data KEPT for a
+    restore, the name still RESERVED. The restore zeroes it back; the
+    definitive deletion drops the shell (and frees the name)."""
 
     def to_mongo(self) -> dict[str, Any]:
         """The stored document (Mongo lives on ``_id``)."""
@@ -278,6 +284,59 @@ class RealmService:
             if realm.id == realm_id:
                 return realm
         raise RealmError("unknown-realm", realm_id=realm_id)
+
+    # ------------------------------------------------------------------
+    # ejection-archive-v1 (Drasah 22/11): the archive-restore-delete
+    # triplet. The ARCHIVE replaces the old « supprimer » of a dormant
+    # realm — the data stays (stats, roster) and only the Discord
+    # habitat goes; the restore brings the realm back (hors saison); the
+    # definitive deletion frees the NAME forever. An ENGAGED realm is
+    # never archivable (the engine refuses, the surface ejects first).
+    # ------------------------------------------------------------------
+
+    async def archive_realm(self, realm_id: str, reason: str = "") -> RealmShellModel:
+        """Take a DORMANT realm out of play — data kept, name reserved.
+
+        Sets ``archived_at``, drops any pending join request and any
+        engagement link. An ENGAGED realm refuses (an in-season realm
+        leaves through the EJECTION, never the archive).
+        """
+        realm = await self._get(realm_id)
+        if getattr(realm, "engagement", None):
+            raise RealmError("archive-engaged", realm_id=realm_id)
+        if getattr(realm, "archived_at", 0):
+            return realm  # idempotent — the second pass is a no-op
+        realm.archived_at = int(time.time())
+        realm.join_request = None
+        realm.engagement = None
+        await self._store.upsert_realm(realm.to_mongo())
+        return realm
+
+    async def restore_realm(self, realm_id: str) -> RealmShellModel:
+        """Bring an archived realm back — DORMANT (hors saison).
+
+        Zeroes the stamp: the realm re-enters the lists, may request the
+        next season's sas, and its Discord habitat rebuilds on the next
+        provisioning pass. Idempotent — restoring a living realm is a
+        no-op.
+        """
+        realm = await self._get(realm_id)
+        if not getattr(realm, "archived_at", 0):
+            return realm
+        realm.archived_at = 0
+        await self._store.upsert_realm(realm.to_mongo())
+        return realm
+
+    async def destroy_realm(self, realm_id: str) -> RealmShellModel:
+        """The definitive deletion — the shell goes, the NAME is freed.
+
+        Returns the shell for the surface's note; nothing else survives
+        (the season history goes with the shell — the season archive
+        keeps the played seasons' own records elsewhere).
+        """
+        realm = await self._get(realm_id)
+        await self._store.delete_realm(str(realm.id))
+        return realm
 
 
 __all__ = [

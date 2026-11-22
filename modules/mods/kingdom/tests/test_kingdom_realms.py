@@ -426,10 +426,11 @@ def test_sweep_realm_structures_converges_the_reset_scope() -> None:
     assert set(ids) == {"category", "discussions", "hub", "territory", "alliances"}
 
 
-def test_teardown_realm_habitat_dismounts_the_family() -> None:
-    """supprime-habitat-v2 — la 🗑️ du royaume emporte la famille
-    Discord : les salons PUIS la catégorie, la coquille repart
-    dormante les ids à vide, et le compte remonte pour la note."""
+def test_archive_realm_habitat_dismounts_and_forgets_the_family() -> None:
+    """ejection-archive-v1 — l'ARCHIVAGE démonte la maison Discord
+    (les salons PUIS la catégorie) et EFFACE les ancres stockées :
+    la coquille archivée ne porte plus aucun id, plus jamais de
+    stale-anchor ; le compte remonte pour la note (jamais muet)."""
 
     class FakeCategory:
         def __init__(self, name: str) -> None:
@@ -492,39 +493,30 @@ def test_teardown_realm_habitat_dismounts_the_family() -> None:
     bot = SimpleNamespace(guilds=[guild])
     service = FakeService()
     stack = SimpleNamespace(realms=service)
+    realm = SimpleNamespace(id="realm:aegis-1", name="AEGIS", engagement={})
     with mock.patch.object(realms_module, "wiring", lambda: stack):
-        deleted = asyncio.run(realms_module.teardown_realm_habitat(bot, "k1"))
-    # 4 salons + la catégorie ; le royaume non-engagé n'est pas touché
+        deleted = asyncio.run(realms_module.archive_realm_habitat(bot, realm))
+    # 4 salons + la catégorie ; les ancres stockées sont vidées
     assert deleted == 5, deleted
     assert guild.category.deleted
     assert guild.category.channels == []
-    assert service.released == ["realm:aegis-1"]
     assert service.saved == {"realm:aegis-1": {}}
 
 
-def test_teardown_realm_habitat_skips_foreign_kingdoms() -> None:
-    """Un royaume moteur sans coquille (Gaïa, un ajout admin) ne
-    démonte RIEN — et l'engagement d'AUTRE royaume ne déclenche pas."""
+def test_dismantle_realm_category_skips_untouched_families() -> None:
+    """dismantle_realm_category ne touche QUE la famille du royaume :
+    un guild sans la catégorie est un succès muet (jamais de création),
+    et un faux channel sans delete() ne casse jamais la passe."""
 
     import asyncio
-    import unittest.mock as mock
+    from types import SimpleNamespace as NS
 
     from botforge.mods.kingdom.cogs import realms as realms_module
 
-    class FakeService:
-        async def realms(self) -> list[Any]:
-            return [
-                SimpleNamespace(
-                    id="realm:hen", name="HeN",
-                    engagement={"kingdom_id": "k-autre"}, king_id="1",
-                    member_ids=[], discord={},
-                )
-            ]
-
-    stack = SimpleNamespace(realms=FakeService())
+    realm = NS(id="realm:hen", name="Neverland", engagement={})
     bot = SimpleNamespace(guilds=[])
-    with mock.patch.object(realms_module, "wiring", lambda: stack):
-        assert asyncio.run(realms_module.teardown_realm_habitat(bot, "k1")) == 0
+    # aucun guild ne porte la famille — zéro élément démonté
+    assert asyncio.run(realms_module.dismantle_realm_category(bot, realm)) == 0
 
 
 def test_the_hub_template_carries_both_states() -> None:  # deliberately mis-named? no — the hub layout
@@ -618,3 +610,41 @@ def test_the_dormant_door_carries_the_season_actions() -> None:
     # the act's label lives in BOTH locales (the fr/en parity rule)
     assert "Inscrire son royaume" in realm_strings("fr")["realm_hub_join_button"]
     assert "Enroll" in realm_strings("en")["realm_hub_join_button"]
+
+
+def test_archive_restore_destroy_lifecycle() -> None:
+    """ejection-archive-v1 — le cycle de vie de la coquille :
+    l'ARCHIVE (engagée = refus, sinon : hors jeu, nom réservé),
+    la RESTAURATION (dormante, le nom redevient dispo pour la saison),
+    la SUPPRESSION DÉFINITIVE (le nom est LIBÉRÉ)."""
+    import asyncio
+
+    from botforge.mods.kingdom.realms import RealmError
+
+    shared = FakeRealmStorage()
+    service = _service(shared)
+    realm = asyncio.run(service.found_realm("1", "A", "Roc"))
+    # un royaume ENGAGÉ refuse l'archive — il ne sort que par l'ÉJECTION
+    engaged = realm.model_copy(update={"engagement": {"kingdom_id": "k1"}})
+    asyncio.run(service._store.upsert_realm(engaged.to_mongo()))
+    with pytest.raises(RealmError) as err:
+        asyncio.run(service.archive_realm(realm.id))
+    assert err.value.message == "archive-engaged"
+    # dormant : l'archive passe, une 2e passe est un no-op
+    dormant = realm.model_copy(update={"engagement": None})
+    asyncio.run(service._store.upsert_realm(dormant.to_mongo()))
+    first = asyncio.run(service.archive_realm(realm.id, reason="test"))
+    assert first.archived_at > 0
+    second = asyncio.run(service.archive_realm(realm.id))
+    assert second.archived_at == first.archived_at
+    # le nom reste RÉSERVÉ tant que la coquille vit (archivée ou pas)
+    with pytest.raises(RealmError):
+        asyncio.run(_service(shared).found_realm("2", "B", "Roc"))
+    # la restauration repasse dormante, l'archive se vide
+    restored = asyncio.run(service.restore_realm(realm.id))
+    assert restored.archived_at == 0
+    # la suppression DÉFINITIVE libère le nom pour de bon
+    gone = asyncio.run(service.destroy_realm(realm.id))
+    assert gone.id == realm.id
+    reborn = asyncio.run(_service(shared).found_realm("2", "B", "Roc"))
+    assert reborn.id != realm.id and reborn.name == "Roc"

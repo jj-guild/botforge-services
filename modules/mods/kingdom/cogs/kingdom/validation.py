@@ -60,7 +60,11 @@ async def _realms_with_join_request(stack: Any) -> list[Any]:
     except Exception:
         logger.warning("kingdom: realm join requests read failed", exc_info=True)
         return []
-    return [realm for realm in realms if getattr(realm, "join_request", None)]
+    return [
+        realm
+        for realm in realms
+        if getattr(realm, "join_request", None) and not getattr(realm, "archived_at", 0)
+    ]
 
 
 async def build_validation_panel(guild_id: str) -> discord.ui.LayoutView:
@@ -454,35 +458,64 @@ def _delete_confirm_card(
         if stack is None:
             await target.followup.send(str(shared["plan_no_service"]), ephemeral=True)
             return
+        # ejection-archive-v1 (Drasah 22/11) — la règle d'or : un royaume
+        # ENGAGÉ ne se supprime JAMAIS, il s'ÉJECTE. L'ordre compte :
+        # (1) les territoires acquis partent dans le pot commun AVANT le
+        # delete (équité stricte : tours complets aux royaumes joueurs,
+        # le reste du tour incomplet à Gaïa), (2) le royaume moteur meurt
+        # (le delete ne trouve plus rien à détruire), (3) la COQUILLE est
+        # libérée et rendue DORMANTE (la maison Discord se MASQUE, elle
+        # ne se démolit pas — l'archive et la suppression définitive font
+        # ça, pas l'éjection). L'habitat ne bloque JAMAIS la sortie.
+        counts: dict[str, int] = {}
+        try:
+            counts = (
+                await stack.kingdoms.redistribute_territories(str(kingdom.id)) or {}
+            )
+        except Exception:  # noqa: BLE001 — l'éjection ne rate jamais pour la carte
+            logger.warning(
+                "kingdom: territory redistribution failed (%s)", kingdom.id, exc_info=True
+            )
         try:
             deleted = await stack.kingdoms.delete_kingdom(str(kingdom.id))
             note = str(strings["deleted_note"]).format(name=deleted.name)
         except Exception as exc:  # noqa: BLE001 — the card reports, never raises
-            logger.warning("kingdom: delete failed (%s)", kingdom.id, exc_info=True)
+            logger.warning("kingdom: eject failed (%s)", kingdom.id, exc_info=True)
             note = str(shared["console_error"]).format(str(exc)[:150])
             deleted = None
-        # supprime-habitat-v2 (Drasah 22/11) : le seam moteur documente
-        # « the Discord structure is deleted by the surface » — la
-        # surface le fait MAINTENANT : la coquille, la catégorie et les
-        # salons partent AVEC le royaume moteur, l'engagement est
-        # relâché (le sas se purge seul). L'incident live 22/11 : la 🗑️
-        # ne touchait qu'au moteur — famille orpheline + « Admis en
-        # saison » sur un royaume fantôme. Best-effort : le moteur
-        # reste la vérité, la famille ne bloque JAMAIS la suppression.
         if deleted is not None:
-            try:
-                from .realms import teardown_realm_habitat
-
-                structures = await teardown_realm_habitat(target.client, str(kingdom.id))
-            except Exception:  # noqa: BLE001 — jamais bloquant
-                logger.warning(
-                    "kingdom: realm habitat teardown failed (%s)", kingdom.id, exc_info=True
+            if counts.get("territories"):
+                note += (
+                    "\n"
+                    + str(strings["ejected_realms_note"]).format(
+                        territories=counts.get("territories", 0),
+                        kingdoms=counts.get("kingdoms", 0),
+                        per_kingdom=counts.get("per_kingdom", 0),
+                        to_gaia=counts.get("to_gaia", 0),
+                    )
                 )
-                structures = 0
-            if structures:
-                note = (
-                    f"{note}\n"
-                    + str(strings["deleted_habitat_note"]).format(structures=structures)
+            # la coquille : engagement relâché, habitat DORMANT re-ensuré,
+            # le SAS se purge tout seul
+            try:
+                from .realms import ensure_realm_structure
+                from .realms import _realm_service as _service_of
+
+                service = _service_of(stack)
+                shell = None
+                if service is not None:
+                    for candidate in await service.realms():
+                        engagement = getattr(candidate, "engagement", None) or {}
+                        if str(engagement.get("kingdom_id", "")) == str(kingdom.id):
+                            shell = await service.release_engagement(str(candidate.id))
+                            break
+                guild = getattr(target, "guild", None)
+                if shell is not None and guild is not None:
+                    ids = await ensure_realm_structure(guild, shell, dormant=True)
+                    if ids:
+                        await service.save_habitat(str(shell.id), ids)
+            except Exception:  # noqa: BLE001 — l'habitat ne bloque jamais
+                logger.warning(
+                    "kingdom: eject habitat sleep failed (%s)", kingdom.id, exc_info=True
                 )
         try:
             await _refresh_pins(target.client, str(target.guild_id or ""))
@@ -1079,8 +1112,141 @@ class ValidationEjectButton(
         await open_unique_ephemeral(interaction, view=_eject_window(strings, locale, realm))
 
 
+class ValidationArchiveButton(
+    discord.ui.DynamicItem[discord.ui.Button[Any]],
+    template=rf"{_NS}:arch:(?P<realm_id>[a-zA-Z0-9_-]+)",
+):
+    """📦 Archiver — take a DORMANT realm out of play (data kept)."""
+
+    def __init__(self, realm_id: str, label: str) -> None:
+        super().__init__(
+            discord.ui.Button(
+                custom_id=f"{_NS}:arch:{realm_id}"[:100],
+                label=label,
+                style=discord.ButtonStyle.secondary,
+            )
+        )
+        self.realm_id = realm_id
+
+    @classmethod
+    async def from_custom_id(
+        cls,
+        interaction: discord.Interaction,
+        item: discord.ui.Item[Any],
+        match: Any,
+        /,
+    ) -> "ValidationArchiveButton":
+        button = item if isinstance(item, discord.ui.Button) else None
+        label = (button.label or "?") if button is not None else "?"
+        return cls(match["realm_id"], label)
+
+    async def callback(self, interaction: discord.Interaction) -> None:
+        """Guard, resolve the DORMANT realm, open the confirm card."""
+        from .common import open_unique_ephemeral
+
+        locale = await _guild_locale(str(interaction.guild_id or ""))
+        strings = mod_catalog().section("kingdom.validation", locale)
+        if not await _guard(interaction, strings):
+            return
+        stack = wiring()
+        service = _realms_service(stack)
+        realm = None
+        if service is not None:
+            try:
+                realm = await service.realm_by_id(str(self.realm_id))
+            except Exception:  # noqa: BLE001 — surface reports, never raises
+                logger.warning(
+                    "kingdom: realm resolve failed (%s)", self.realm_id, exc_info=True
+                )
+        if (
+            realm is None
+            or getattr(realm, "engagement", None)
+            or getattr(realm, "join_request", None)
+        ):
+            await open_unique_ephemeral(interaction, str(strings["gone_note"]))
+            return
+        if getattr(realm, "archived_at", 0):
+            await open_unique_ephemeral(
+                interaction, str(strings["archive_already_note"])
+            )
+            return
+        await open_unique_ephemeral(
+            interaction, view=_archive_confirm_card(strings, locale, realm)
+        )
+
+
+def _archive_confirm_card(
+    strings: dict[str, str], locale: str, realm: Any
+) -> discord.ui.LayoutView:
+    """The confirm card of one dormant realm's archive (the delete pattern)."""
+    name = str(getattr(realm, "name", "?"))[:80]
+    yes: discord.ui.Button[Any] = discord.ui.Button(
+        label=str(strings["archive_confirm_button"])[:80],
+        custom_id=f"{_NS}:arch-yes:{realm.id}"[:100],
+        style=discord.ButtonStyle.danger,
+    )
+    no: discord.ui.Button[Any] = discord.ui.Button(
+        label=str(strings["delete_cancel_button"])[:80],
+        custom_id=f"{_NS}:arch-no:{realm.id}"[:100],
+        style=discord.ButtonStyle.secondary,
+    )
+
+    async def on_yes(target: discord.Interaction) -> None:
+        if not target.response.is_done():
+            await target.response.defer(ephemeral=True)
+        shared = strings_by_locale(locale)
+        stack = wiring()
+        service = _realms_service(stack)
+        if stack is None or service is None:
+            await target.followup.send(str(shared["plan_no_service"]), ephemeral=True)
+            return
+        note: str
+        deleted = 0
+        try:
+            archived = await service.archive_realm(
+                str(realm.id), reason="settings: admissions drawer"
+            )
+            # la jambe Discord : la maison part, les données restent
+            from .realms import archive_realm_habitat
+
+            deleted = await archive_realm_habitat(target.client, archived)
+            note = str(strings["archived_note"]).format(
+                name=str(getattr(archived, "name", name)), deleted=deleted
+            )
+        except Exception as exc:  # noqa: BLE001 — the card reports, never raises
+            logger.warning(
+                "kingdom: realm archive failed (%s)", realm.id, exc_info=True
+            )
+            note = str(shared["console_error"]).format(str(exc)[:150])
+        await target.followup.send(note, ephemeral=True)
+
+    async def on_no(target: discord.Interaction) -> None:
+        if not target.response.is_done():
+            await target.response.defer(ephemeral=True)
+
+    yes.callback = on_yes
+    no.callback = on_no
+    container = discord.ui.Container()
+    container.add_item(
+        discord.ui.TextDisplay(f"## {strings['archive_confirm_title']}")
+    )
+    container.add_item(
+        discord.ui.TextDisplay(
+            str(strings["archive_confirm_hint"]).format(
+                name=name, deleted=len(getattr(realm, "member_ids", []) or []) + 1
+            )
+        )
+    )
+    row: discord.ui.ActionRow[discord.ui.LayoutView] = discord.ui.ActionRow()
+    row.add_item(yes)
+    row.add_item(no)
+    container.add_item(row)
+    return surface("panel:mod:kingdom:validation:confirm", container)
+
+
 __all__ = [
     "VALIDATION_VIEW_KEY",
+    "ValidationArchiveButton",
     "ValidationCrownButton",
     "ValidationDecisionButton",
     "ValidationDeleteButton",

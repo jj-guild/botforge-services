@@ -294,9 +294,18 @@ def test_validation_cards_strings_parity() -> None:
             assert s[key], (locale, key)
         s["delete_confirm_title"].format(name="X")
         s["deleted_note"].format(name="X")
-        s["deleted_habitat_note"].format(structures=3)
         s["crown_title"].format(name="X")
         s["crown_note"].format(king="X", name="Y")
+        # ejection-archive-v1 : l'éjection (territoires redistribués),
+        # l'archive (la maison part, les données restent)
+        s["ejected_realms_note"].format(
+            territories=6, kingdoms=2, per_kingdom=2, to_gaia=1
+        )
+        for key in ("archive_button", "archive_already_note", "archive_confirm_button"):
+            assert s[key], (locale, key)
+        s["archive_confirm_title"].format(name="X")
+        s["archive_confirm_hint"].format(name="X", deleted=3)
+        s["archived_note"].format(name="X", deleted=3)
 
 
 def test_approved_kingdoms_carry_the_sovereign_actions() -> None:

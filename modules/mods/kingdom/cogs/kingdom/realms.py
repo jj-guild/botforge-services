@@ -451,6 +451,8 @@ async def sweep_realm_structures(bot: Any) -> int:
     touched = 0
     for guild in list(getattr(bot, "guilds", []) or []):
         for realm in realms:
+            if getattr(realm, "archived_at", 0):
+                continue  # archivé : plus de famille, plus jamais recréé
             if _find_realm_category(guild, str(getattr(realm, "name", ""))) is None:
                 continue  # pas la famille de ce guild — jamais de création
             engaged = bool(getattr(realm, "engagement", None))
@@ -479,44 +481,20 @@ async def sweep_realm_structures(bot: Any) -> int:
     return touched
 
 
-async def teardown_realm_habitat(bot: Any, kingdom_id: str) -> int:
-    """The realm's Discord family goes with its kingdom's deletion.
+async def dismantle_realm_category(bot: Any, realm: Any) -> int:
+    """Demolish the realm's Discord family (salons then the category).
 
-    supprime-habitat-v2 (Drasah 22/11) : le seam moteur ``delete_kingdom``
-    documente « the Discord structure is deleted by the surface », mais
-    AUCUNE surface ne le faisait — la 🗑️ de la conscription partait du
-    royaume moteur et laissait (1) la catégorie + les salons EN PLACE,
-    orphelins qu'aucune passe ne connaît plus, et (2) la coquille
-    ENGAGÉE sur un royaume mort (« Admis en saison », AJCHN, 22/11).
-    La passe démonte la famille du royaume porté par l'engagement : ses
-    salons PUIS la catégorie (les canaux d'une catégorie supprimée
-    remontent au niveau du serveur — il faut les ôter d'abord), la
-    coquille est libérée (dormante, le sas se purge seul), ses ids
-    d'habitat repartent à VIDE (plus d'ancre périmée). Best-effort par
-    étape : le moteur reste la vérité, la famille ne bloque JAMAIS la
-    suppression. Retourne le nombre d'éléments Discord démontés — la
-    note de la surface le dit, jamais une suppression muette.
+    ejection-archive-v1 (Drasah 22/11) : le geste existe pour DEUX
+    familles d'appels — l'ARCHIVAGE d'un royaume dormant (le royaume
+    sort du jeu, sa maison part, ses données restent) et la
+    suppression définitive (le filet de sécurité d'un démontage
+    raté). Les salons partent d'abord, la catégorie ensuite (les
+    canaux d'une catégorie supprimée remontent au niveau du serveur —
+    il faut les ôter d'abord). Best-effort par étape : une catégorie
+    déjà partie est un succès muet, jamais une erreur. Retourne le
+    nombre d'éléments démontés — la note de la surface le dit, jamais
+    un geste muet.
     """
-    stack = wiring()
-    service = _realm_service(stack)
-    if service is None or not kingdom_id:
-        return 0
-    try:
-        realms = await service.realms()
-    except Exception:  # noqa: BLE001 — un read, jamais un crash
-        logger.warning("kingdom realms: teardown read failed", exc_info=True)
-        return 0
-    realm = next(
-        (
-            r
-            for r in realms
-            if str((getattr(r, "engagement", None) or {}).get("kingdom_id", "") or "")
-            == str(kingdom_id)
-        ),
-        None,
-    )
-    if realm is None:
-        return 0  # un royaume moteur sans coquille (Gaïa, un ajout admin)
     deleted = 0
     display = category_name(str(getattr(realm, "name", "")))
     for guild in list(getattr(bot, "guilds", []) or []):
@@ -528,38 +506,43 @@ async def teardown_realm_habitat(bot: Any, kingdom_id: str) -> int:
                 delete = getattr(channel, "delete", None)
                 if delete is None:
                     continue
-                await delete(reason="kingdom: realm deleted, salon removed with it")
+                await delete(reason="kingdom: realm archived")
                 deleted += 1
             except Exception:  # noqa: BLE001 — jamais bloquant
                 logger.warning(
-                    "kingdom realms: teardown salon failed (%s)",
+                    "kingdom realms: dismantle salon failed (%s)",
                     getattr(channel, "name", "?"),
                     exc_info=True,
                 )
         try:
             delete_category = getattr(category, "delete", None)
             if delete_category is not None:
-                await delete_category(reason="kingdom: realm deleted")
+                await delete_category(reason="kingdom: realm archived")
                 deleted += 1
         except Exception:  # noqa: BLE001
-            logger.warning("kingdom realms: teardown category failed", exc_info=True)
-    # la coquille : engagement relâché (dormante — le sas se purge seul),
-    # ids d'habitat à VIDE, pour que la famille ne reste jamais recollée
-    # à une ancre périmée.
-    realm_id = str(getattr(realm, "id", "") or "")
-    if realm_id:
-        try:
-            await service.release_engagement(realm_id)
-        except Exception:  # noqa: BLE001
-            logger.warning("kingdom realms: teardown release failed", exc_info=True)
-        try:
-            await service.save_habitat(realm_id, {})
-        except Exception:  # noqa: BLE001
-            logger.warning("kingdom realms: teardown persist failed", exc_info=True)
+            logger.warning("kingdom realms: dismantle category failed", exc_info=True)
     if deleted:
         logger.info(
-            "kingdom realms: realm family torn down (%s, %d éléments)", display, deleted
+            "kingdom realms: realm family dismantled (%s, %d éléments)", display, deleted
         )
+    return deleted
+
+
+async def archive_realm_habitat(bot: Any, realm: Any) -> int:
+    """The archive's Discord leg — dismantle, then WIPE the stored ids.
+
+    La coquille archivée ne porte plus AUCUNE ancre Discord (les ids
+    à vide, plus de stale-anchor possible) ; la restauration
+    re-provisionnera une famille dormante à partir de zéro.
+    """
+    stack = wiring()
+    service = _realm_service(stack)
+    deleted = await dismantle_realm_category(bot, realm)
+    if service is not None:
+        try:
+            await service.save_habitat(str(getattr(realm, "id", "")), {})
+        except Exception:  # noqa: BLE001 — jamais bloquant
+            logger.warning("kingdom realms: archive persist failed", exc_info=True)
     return deleted
 
 
@@ -735,6 +718,38 @@ async def heal_realm_hubs(bot: Any) -> int:
     except Exception:  # noqa: BLE001
         logger.warning("kingdom realms: hub heal pass read failed", exc_info=True)
         return 0
+    realms = [r for r in realms if not getattr(r, "archived_at", 0)]
+    # ghost-heal (ejection-archive-v1, Drasah 22/11) — l'incident live :
+    # une coquille ENGAGÉE sur un royaume moteur qui n'existe plus (une
+    # suppression d'avant le patch, une extinction hors process) restait
+    # « Admis en saison » pour toujours sur un fantôme. La passe relit la
+    # vérité du moteur : un engagement vers un royaume mort est RELÂCHÉ,
+    # le royaume repart dormant — le ménage des HeN/AEGIS cassés se fait
+    # tout seul, jamais de migration manuelle.
+    engine = getattr(stack, "kingdoms", None)
+    live_ids: set[str] = set()
+    if engine is not None:
+        try:
+            live_ids = {str(k.id) for k in await engine.kingdoms()}
+        except Exception:  # noqa: BLE001
+            logger.warning("kingdom realms: ghost-heal engine read failed", exc_info=True)
+    if live_ids:
+        for realm in realms:
+            engagement = getattr(realm, "engagement", None) or {}
+            if engagement and str(engagement.get("kingdom_id", "")) not in live_ids:
+                try:
+                    await service.release_engagement(str(realm.id))
+                    realm.engagement = None
+                    logger.warning(
+                        "kingdom realms: ghost engagement healed (%s, kingdom missing)",
+                        getattr(realm, "name", "?"),
+                    )
+                except Exception:  # noqa: BLE001 — jamais bloquant
+                    logger.warning(
+                        "kingdom realms: ghost engagement release failed (%s)",
+                        getattr(realm, "id", "?"),
+                        exc_info=True,
+                    )
     touched = 0
     for guild in list(getattr(bot, "guilds", []) or []):
         known_categories = {

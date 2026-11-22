@@ -1130,6 +1130,7 @@ def _admissions_drawer(
     realms: list[Any],
     admitted: list[Any] | None = None,
     ejectable: bool = False,
+    dormant: list[Any] | None = None,
 ) -> discord.ui.LayoutView:
     """The sas — every join request with its decision buttons (t2a).
 
@@ -1217,6 +1218,29 @@ def _admissions_drawer(
         blocks.append(
             discord.ui.TextDisplay(str(strings["settings_admissions_admitted_empty"]))
         )
+    # ejection-archive-v1 (22/11) : les coquilles DORMANTES — libérées
+    # par une éjection, jamais encore demandées, ou refusées — avec le
+    # geste 📦 Archiver (sortir du jeu sans rien détruire)
+    dormant = list(dormant or [])
+    blocks.append(discord.ui.Separator())
+    blocks.append(discord.ui.TextDisplay(f"## {strings['settings_admissions_dormant_title']}"))
+    blocks.append(discord.ui.TextDisplay(str(strings["settings_admissions_dormant_hint"])))
+    if dormant:
+        from .validation import ValidationArchiveButton
+
+        for realm in dormant:
+            name = str(getattr(realm, "name", "?"))
+            blocks.append(discord.ui.TextDisplay(f"- **{name}**"))
+            row: Any = discord.ui.ActionRow()
+            row.add_item(
+                ValidationArchiveButton(
+                    str(getattr(realm, "id", "")),
+                    str(vstrings.get("archive_button", "📦 Archiver"))[:80],
+                )
+            )
+            blocks.append(row)
+    else:
+        blocks.append(discord.ui.TextDisplay(str(strings["settings_admissions_dormant_empty"])))
     container: discord.ui.Container[discord.ui.LayoutView] = discord.ui.Container(
         *blocks, accent_colour=_ADMIN_COLOUR
     )
@@ -1227,6 +1251,8 @@ def _regie_drawer(
     strings: dict[str, str],
     states: dict[str, bool] | None = None,
     season_live: bool = True,
+    archived: list[Any] | None = None,
+    guild_id: str = "",
 ) -> discord.ui.LayoutView:
     """Les interrupteurs + les gestes ponctuels — un tiroir.
 
@@ -1276,6 +1302,30 @@ def _regie_drawer(
             "season-mode", str(strings["settings_season_mode_button"]), discord.ButtonStyle.secondary
         ).item
     )
+    # ejection-archive-v1 (22/11) : le vestibule des royaumes ARCHIVÉS —
+    # ♻️ Restaurer (MP au Roi fondateur) ou 🗑️ Supprimer définitivement
+    archived = list(archived or [])
+    archive_blocks: list[discord.ui.Item[discord.ui.LayoutView]] = [
+        discord.ui.Separator(),
+        discord.ui.TextDisplay(f"## {strings['settings_regie_archived_title']}"),
+        discord.ui.TextDisplay(str(strings["settings_regie_archived_hint"])),
+    ]
+    if archived:
+        for realm in archived:
+            name = str(getattr(realm, "name", "?"))
+            archive_blocks.append(discord.ui.TextDisplay(f"- **{name}**"))
+            row = _realm_button_row(
+                "restore", strings["settings_regie_restore_button"],
+                discord.ButtonStyle.success,
+                "purge", strings["settings_regie_purge_button"],
+                discord.ButtonStyle.danger,
+                str(getattr(realm, "id", "")), guild_id,
+            )
+            archive_blocks.append(row)
+    else:
+        archive_blocks.append(
+            discord.ui.TextDisplay(str(strings["settings_regie_archived_empty"]))
+        )
     container: discord.ui.Container[discord.ui.LayoutView] = discord.ui.Container(
         discord.ui.TextDisplay(f"# {strings['settings_regie_title']}"),
         discord.ui.TextDisplay(str(strings["settings_regie_hint"])),
@@ -1285,6 +1335,7 @@ def _regie_drawer(
         discord.ui.Separator(),
         discord.ui.TextDisplay(f"## {strings['settings_regie_actions_label']}"),
         row_button,
+        *archive_blocks,
         accent_colour=_ADMIN_COLOUR,
     )
     return surface(_DRAWERS["regie"], container)
@@ -1363,7 +1414,10 @@ async def _build_drawer(
             ejectable = season is not None and str(getattr(season, "phase", "")) == "setup"
         except Exception:  # noqa: BLE001 — a read, never a crash
             logger.warning("kingdom: the admissions phase read failed", exc_info=True)
-        view = _admissions_drawer(strings, vstrings, realms, admitted, ejectable=ejectable)
+        view = _admissions_drawer(
+            strings, vstrings, realms, admitted, ejectable=ejectable,
+            dormant=await _dormant_realms(),
+        )
     elif drawer == "regie":
         states: dict[str, bool] = {}
         season_live = False
@@ -1382,7 +1436,10 @@ async def _build_drawer(
             )
         except Exception:  # noqa: BLE001 — a read, never a crash
             season_live = False
-        view = _regie_drawer(strings, states, season_live=season_live)
+        view = _regie_drawer(
+            strings, states, season_live=season_live,
+            archived=await _archived_realms(), guild_id=guild_id,
+        )
     elif drawer == "atelier":
         from .common import strings_by_locale
 
@@ -1417,6 +1474,60 @@ async def _admitted_realms() -> list[Any]:
         return []
     return sorted(
         (realm for realm in realms if getattr(realm, "engagement", None)),
+        key=lambda realm: str(getattr(realm, "name", "?")),
+    )
+
+
+async def _dormant_realms() -> list[Any]:
+    """The persistent realms OUT of the season — dormant shells.
+
+    ejection-archive-v1 (Drasah 22/11) : la 🗑️ du sas ne DETRUIT plus
+    une coquille, elle la libère DORMANTE — l'admin doit les VOIR
+    (onglet Admissions) avec le geste 📦 Archiver à la main. Hors
+    engagés, hors demandes en cours, hors archivés.
+    """
+    stack = wiring()
+    if stack is None:
+        return []
+    try:
+        from .validation import _realms_service
+
+        service = _realms_service(stack)
+        if service is None:
+            return []
+        realms = await service.realms()
+    except Exception:  # noqa: BLE001 — a read, never a crash
+        logger.warning("kingdom: the dormant realms read failed", exc_info=True)
+        return []
+    return sorted(
+        (
+            realm
+            for realm in realms
+            if not getattr(realm, "engagement", None)
+            and not getattr(realm, "join_request", None)
+            and not getattr(realm, "archived_at", 0)
+        ),
+        key=lambda realm: str(getattr(realm, "name", "?")),
+    )
+
+
+async def _archived_realms() -> list[Any]:
+    """The ARCHIVED shells — the régie's restoration drawer (22/11)."""
+    stack = wiring()
+    if stack is None:
+        return []
+    try:
+        from .validation import _realms_service
+
+        service = _realms_service(stack)
+        if service is None:
+            return []
+        realms = await service.realms()
+    except Exception:  # noqa: BLE001 — a read, never a crash
+        logger.warning("kingdom: the archived realms read failed", exc_info=True)
+        return []
+    return sorted(
+        (realm for realm in realms if getattr(realm, "archived_at", 0)),
         key=lambda realm: str(getattr(realm, "name", "?")),
     )
 
@@ -1574,6 +1685,242 @@ class KingdomRegieSwitchButton(
             "regie", locale_of(interaction), interaction.client, str(interaction.guild_id or "")
         )
         await open_unique_ephemeral(interaction, view=view)
+
+
+_REGIE_REALM = r"kingdom:console-regie:(?P<kind>restore|purge|restore-yes|restore-no|purge-yes|purge-no):(?P<realm_id>[a-zA-Z0-9_-]+):(?P<guild_id>\d+)"
+
+
+def _realm_service_of(bot: Any) -> Any:
+    stack = wiring()
+    return getattr(stack, "realms", None) if stack is not None else None
+
+
+async def _realm_by_id(realm_id: str) -> Any | None:
+    service = _realm_service_of(None)
+    if service is None:
+        return None
+    try:
+        return await service.realm_by_id(str(realm_id))
+    except Exception:  # noqa: BLE001 — a read, never a crash
+        logger.warning("kingdom: realm resolve failed (%s)", realm_id, exc_info=True)
+        return None
+
+
+class KingdomRegieRealmButton(
+    discord.ui.DynamicItem[discord.ui.Button[Any]],
+    template=_REGIE_REALM,
+):
+    """One restart-proof archivist button of the 📦 régie block.
+
+    ejection-archive-v1 (Drasah 22/11) : une SEULE classe, le ``kind``
+    du custom_id route le geste — ♻️ Restaurer (MP au Roi fondateur
+    avec la question Oui/Non), 🗑️ Supprimer définitivement (carte
+    rouge), puis les jambes DM/confirmation. Le custom_id porte le
+    realm_id ET le guild_id : après un redémarrage, le MP de
+    restauration doit retrouver le guild pour re-provisionner
+    l'habitat — l'interaction DM ne porte pas de guild.
+    """
+
+    def __init__(
+        self, kind: str, realm_id: str, guild_id: str, label: str, style: Any
+    ) -> None:
+        super().__init__(
+            discord.ui.Button(
+                label=str(label)[:80],
+                custom_id=f"kingdom:console-regie:{kind}:{realm_id}:{guild_id}"[:100],
+                style=style,  # type: ignore[arg-type]
+            )
+        )
+        if kind not in (
+            "restore", "purge", "restore-yes", "restore-no", "purge-yes", "purge-no",
+        ):
+            raise ValueError(kind)
+        self.kind = kind
+        self.realm_id = realm_id
+        self.guild_id = guild_id
+
+    @classmethod
+    async def from_custom_id(
+        cls,
+        interaction: discord.Interaction,
+        item: discord.ui.Item[Any],
+        match: re.Match[str],
+        /,
+    ) -> "KingdomRegieRealmButton":
+        button = item if isinstance(item, discord.ui.Button) else None
+        label = (button.label or "?") if button is not None else "?"
+        return cls(
+            match["kind"], match["realm_id"], match["guild_id"], label,
+            discord.ButtonStyle.primary,
+        )
+
+    # -- the drawer's legs ------------------------------------------------
+
+    async def _restore(self, interaction: discord.Interaction) -> None:
+        """Verify the shell, then MP the King with the Oui/Non question."""
+        strings = strings_of(interaction)
+        if not await _panel_guard(interaction):
+            return
+        realm = await _realm_by_id(self.realm_id)
+        if realm is None or not getattr(realm, "archived_at", 0):
+            await _safe_send(interaction, strings["settings_regie_archived_gone_note"])
+            return
+        from .common import dm_user_safe
+
+        question = discord.ui.LayoutView(discord.ui.Container(
+            discord.ui.TextDisplay(
+                str(strings["settings_restore_dm_question"]).format(
+                    name=str(getattr(realm, "name", "?"))
+                )
+            ),
+            _realm_button_row(
+                "restore-yes", strings["settings_restore_dm_yes"],
+                discord.ButtonStyle.success,
+                "restore-no", strings["settings_restore_dm_no"],
+                discord.ButtonStyle.secondary,
+                self.realm_id, self.guild_id,
+            ),
+            accent_colour=_ADMIN_COLOUR,
+        ))
+        sent = await dm_user_safe(
+            interaction.client, str(getattr(realm, "king_id", "")),
+            f"**{strings['settings_restore_dm_title']}**", question,
+        )
+        if sent is None:
+            await _safe_send(interaction, strings["settings_restore_dm_unreachable"])
+            return
+        await _safe_send(interaction, strings["settings_restore_sent_note"])
+
+    async def _purge_card(self, interaction: discord.Interaction) -> None:
+        """Open the red confirm card of the definitive deletion."""
+        strings = strings_of(interaction)
+        if not await _panel_guard(interaction):
+            return
+        realm = await _realm_by_id(self.realm_id)
+        if realm is None or not getattr(realm, "archived_at", 0):
+            await _safe_send(interaction, strings["settings_regie_archived_gone_note"])
+            return
+        name = str(getattr(realm, "name", "?"))[:80]
+        card = discord.ui.LayoutView(discord.ui.Container(
+            discord.ui.TextDisplay(
+                f"## {strings['settings_regie_purge_confirm_title']}\n"
+                + str(strings["settings_regie_purge_confirm_hint"]).format(name=name)
+            ),
+            _realm_button_row(
+                "purge-yes", strings["settings_regie_purge_confirm_button"],
+                discord.ButtonStyle.danger,
+                "purge-no", strings["settings_regie_purge_cancel_button"],
+                discord.ButtonStyle.secondary,
+                self.realm_id, self.guild_id,
+            ),
+            accent_colour=discord.Colour(0xED4245),
+        ))
+        await open_unique_ephemeral(interaction, view=card)
+
+    async def _purge_yes(self, interaction: discord.Interaction) -> None:
+        """The definitive deletion — shell destroyed, NAME FREED."""
+        if not interaction.response.is_done():
+            await interaction.response.defer(ephemeral=True)
+        strings = strings_of(interaction)
+        service = _realm_service_of(interaction.client)
+        if service is None:
+            await interaction.followup.send(
+                str(strings["settings_failed"]), ephemeral=True
+            )
+            return
+        try:
+            gone = await service.destroy_realm(str(self.realm_id))
+            # filet de sécurité : l'habitat Discord ne survit pas à la
+            # coquille (les archivés n'en portent plus d'ancres, mais une
+            # famille orpheline traînerait)
+            from .realms import dismantle_realm_category
+
+            await dismantle_realm_category(interaction.client, gone)
+            await interaction.followup.send(
+                str(strings["settings_regie_purged_note"]).format(
+                    name=str(getattr(gone, "name", "?"))
+                ),
+                ephemeral=True,
+            )
+            await refresh_live_pins_after(interaction)
+        except Exception as exc:  # noqa: BLE001 — the card reports
+            logger.warning("kingdom: realm purge failed", exc_info=True)
+            await interaction.followup.send(
+                str(strings["settings_regie_purge_failed"]).format(str(exc)[:150]),
+                ephemeral=True,
+            )
+
+    async def _restore_yes(self, interaction: discord.Interaction) -> None:
+        """The King said Oui — the hot re-check first, then a rebuild."""
+        strings = strings_of(interaction)
+        realm = await _realm_by_id(self.realm_id)
+        if realm is None:
+            await _safe_send(interaction, strings["settings_restore_gone_note"])
+            return
+        if not getattr(realm, "archived_at", 0):
+            await _safe_send(interaction, strings["settings_restore_already_note"])
+            return
+        service = _realm_service_of(interaction.client)
+        guild = None
+        try:
+            guild = interaction.client.get_guild(int(self.guild_id))
+        except Exception:  # noqa: BLE001 — a lookup, never a crash
+            guild = None
+        if service is None or guild is None:
+            await _safe_send(interaction, strings["settings_restore_failed_note"])
+            return
+        try:
+            restored = await service.restore_realm(str(self.realm_id))
+            from .realms import ensure_realm_structure
+
+            ids = await ensure_realm_structure(guild, restored, dormant=True)
+            if ids:
+                await service.save_habitat(str(restored.id), ids)
+            await _safe_send(interaction, strings["settings_restore_done_note"])
+        except Exception:  # noqa: BLE001 — the gesture reports, never raises
+            logger.warning("kingdom: realm restore failed", exc_info=True)
+            await _safe_send(interaction, strings["settings_restore_failed_note"])
+
+    async def _noop(self, interaction: discord.Interaction) -> None:
+        """Non / annuler — the realm stays exactly where it is."""
+        if not interaction.response.is_done():
+            await interaction.response.defer(ephemeral=True)
+
+    async def callback(self, interaction: discord.Interaction) -> None:
+        handler = {
+            "restore": self._restore,
+            "purge": self._purge_card,
+            "purge-yes": self._purge_yes,
+            "purge-no": self._noop,
+            "restore-yes": self._restore_yes,
+            "restore-no": self._noop,
+        }[self.kind]
+        await handler(interaction)
+
+
+def _realm_button_row(
+    yes_kind: str,
+    yes_label: str,
+    yes_style: Any,
+    no_kind: str,
+    no_label: str,
+    no_style: Any,
+    realm_id: str,
+    guild_id: str,
+) -> discord.ui.ActionRow[discord.ui.LayoutView]:
+    """The two-button row of one archivist card (DM or confirm)."""
+    row: Any = discord.ui.ActionRow()
+    row.add_item(
+        KingdomRegieRealmButton(
+            yes_kind, realm_id, guild_id, str(yes_label)[:80], yes_style
+        ).item
+    )
+    row.add_item(
+        KingdomRegieRealmButton(
+            no_kind, realm_id, guild_id, str(no_label)[:80], no_style
+        ).item
+    )
+    return row
 
 
 class _LaunchModal(discord.ui.Modal):
