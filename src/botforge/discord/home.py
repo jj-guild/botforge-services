@@ -822,16 +822,19 @@ async def _entity_post_url(
     channel = bot.get_channel(int(channel_id)) if guild_id else None
     if channel is None:
         return ""
-    threads: list[Any] = list(getattr(channel, "threads", []) or [])
-    try:
-        async for thread in channel.archived_threads(limit=100):
-            threads.append(thread)
-    except Exception:
-        logger.debug("the archived thread walk failed", exc_info=True)
-    wanted = name.strip().lower()
-    for thread in threads:
-        if str(getattr(thread, "name", "")).strip().lower() == wanted:
-            return f"https://discord.com/channels/{guild_id}/{channel_id}/{thread.id}"
+    wanted = name.strip().casefold()
+    for private in (False, True):
+        threads: list[Any] = list(getattr(channel, "threads", []) or [])
+        try:
+            async for thread in channel.archived_threads(limit=100, private=private):
+                threads.append(thread)
+        except Exception:
+            logger.debug("the archived thread walk failed", exc_info=True)
+        for thread in threads:
+            thread_name = str(getattr(thread, "name", "")).strip().casefold()
+            if thread_name == wanted or thread_name.startswith(f"{wanted} "):
+                return f"https://discord.com/channels/{guild_id}/{channel_id}/{thread.id}"
+    logger.debug("the entity post was not found: %s", name)
     return ""
 
 
@@ -902,6 +905,23 @@ def _viewer_alias(players: list[dict[str, Any]], me_ids: set[str]) -> str:
     return "?"
 
 
+def _panel_ladder(
+    players: list[dict[str, Any]],
+    ladder: dict[str, dict[str, tuple[int, int]]],
+) -> list[str]:
+    """Render the seat's ladder lines: 1v1 and TG, current - max."""
+    pid = str(players[0].get("profile_id", "")) if players else ""
+    boards = ladder.get(pid) or {}
+    lines = []
+    for key, label in (("rm_1v1", "1v1"), ("rm_team", "TG")):
+        current, peak = boards.get(key, (0, 0))
+        if not current:
+            continue
+        span = f"{current} - {peak}" if peak and peak > current else f"{current}"
+        lines.append(f"-# {label} : {span}")
+    return lines
+
+
 def _panel_player_lines(
     players: list[dict[str, Any]],
     me_ids: set[str],
@@ -909,6 +929,7 @@ def _panel_player_lines(
     match_id: str,
     civ_urls: dict[str, str],
     civ_images: dict[str, str],
+    ladder: dict[str, dict[str, tuple[int, int]]] | None = None,
 ) -> list[tuple[str, str]]:
     """Render every SEAT as (text, civ-image) \u2014 winners first.
 
@@ -928,7 +949,7 @@ def _panel_player_lines(
         won = pid in winners
         icon = "\U0001f3c6" if won else "\U0001f480" if winners else "\u2b1c"
         replay = REPLAY_URL.format(match_id=match_id, profile_id=pid) if match_id else ""
-        jump = f"[\u25b8]({replay})" if replay else ""
+        jump = f"[ \u25b8 ]({replay})" if replay else ""
         after = int(player.get("rating_after") or 0)
         before = int(player.get("rating_before") or 0)
         # the ladder convention (the old bot, insights): the PRE-match
@@ -950,6 +971,7 @@ def _panel_player_lines(
         )
         sub = f"-# {delta:+d} \u00b7 {civ_link}" if delta else f"-# {civ_link}"
         text = head + "\n" + sub
+        text += "".join("\n" + line for line in _panel_ladder([player], ladder or {}))
         seats.append((text, civ_images.get(civ, "")))
     return seats
 
@@ -994,6 +1016,40 @@ async def _panel_enrichment(
     return civ_urls, civ_images, map_urls, map_images
 
 
+async def _panel_ladder_boards(
+    entries: list[Any],
+) -> dict[str, dict[str, tuple[int, int]]]:
+    """Fetch the ladder boards (1v1 / TG, current + max) per seat.
+
+    One batched account-stats call covers every seat of the ten
+    cards; a silent failure renders the cards without the ladder
+    lines \u2014 the medal line never breaks on a stats outage.
+    """
+    from botforge.discord.stats_views import _entry_players, stats_client
+
+    seat_ids = sorted(
+        {str(p.get("profile_id", "")) for e in entries for p in _entry_players(e)}
+    )
+    ladder: dict[str, dict[str, tuple[int, int]]] = {}
+    if not seat_ids:
+        return ladder
+    client = stats_client()
+    if client is None:
+        return ladder
+    try:
+        accounts = await client.get_account_stats(seat_ids)
+    except Exception:
+        logger.debug("the account stats fetch failed", exc_info=True)
+        return ladder
+    for account in accounts:
+        boards: dict[str, tuple[int, int]] = {}
+        for board in account.leaderboards:
+            boards[str(board.name)] = (int(board.current), int(board.max))
+        if boards:
+            ladder[str(account.profile_id)] = boards
+    return ladder
+
+
 async def _send_match_panels(
     interaction: discord.Interaction,
     entries: list[Any],
@@ -1016,6 +1072,7 @@ async def _send_match_panels(
     civ_urls, civ_images, map_urls, map_images = await _panel_enrichment(
         interaction, entries
     )
+    ladder = await _panel_ladder_boards(entries)
     total = len(entries)
     for index, entry in enumerate(entries):
         players = _entry_players(entry)
@@ -1059,7 +1116,9 @@ async def _send_match_panels(
             blocks.append(discord.ui.TextDisplay(map_text))
         blocks.append(discord.ui.Separator())
         # one SECTION per seat: the civ icon as the accessory
-        seats = _panel_player_lines(players, me_ids, winners, match_id, civ_urls, civ_images)
+        seats = _panel_player_lines(
+            players, me_ids, winners, match_id, civ_urls, civ_images, ladder
+        )
         for text, civ_image in seats:
             if civ_image:
                 blocks.append(
