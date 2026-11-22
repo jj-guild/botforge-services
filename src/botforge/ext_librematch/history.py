@@ -39,7 +39,7 @@ from botforge.ext_librematch.store import DEFAULT_HISTORY_LIMIT, LibrematchStore
 #: or written by a revision before the era existed \u2014 repairs once,
 #: then never again: whatever the upstream genuinely failed to carry
 #: (RANDOM seats, unknown civ ids) stops the loop by construction.
-CAPTURE_ERA = 3
+CAPTURE_ERA = 4
 
 logger = logging.getLogger("botforge.ext_librematch.history")
 
@@ -158,6 +158,68 @@ def _seen_board_updates(documents: list[dict[str, Any]]) -> dict[str, dict[str, 
                 entry["current"] = after or before
                 entry["ts"] = ts
     return updates
+
+
+#: The option columns the footer displays (verified live 2026-11-22
+#: against aoe2insights' rendering of match 517022737): the population
+#: cap, the map size in TILES (the labels ride the game's own
+#: OptionsMapSize enum — tiles ARE the enum values, see
+#: https://aoe2control.github.io/game-options/#option-enums), the
+#: game speed, the victory condition and the cheats flag. Unknown
+#: values render raw, missing keys render nothing.
+_MAP_SIZE_LABELS = {
+    120: "Minuscule",
+    144: "Petite",
+    168: "Moyenne",
+    200: "Normale",
+    220: "Grande",
+    240: "Immense",
+    480: "Colossale",
+}
+_SETTINGS_KEYS = {
+    "8": ("Taille", None),
+    "28": ("Pop", None),
+    "21": ("Vitesse", {50: "Lente", 60: "Normale", 80: "Rapide", 120: "Turbo"}),
+    "4": ("Victoire", {1: "Standard", 5: "Conqu\u00eate", 3: "Temps", 7: "R\u00e9gicide"}),
+    "1": ("Cheats", {"n": "non", "y": "oui",
+                   "0": "non", "1": "oui"}),
+}
+
+
+def _setting_value(table: dict[Any, str] | None, raw: Any) -> str:
+    """Look up a settings label tolerantly (the blob keys are strings)."""
+    if table is None:
+        return str(raw)
+    for probe in (raw, str(raw), _int(raw)):
+        if probe in table:
+            return table[probe]
+    return str(raw)
+
+
+def _settings_of(options_json: str) -> list[list[str]]:
+    """Extract the compact, human settings line from the options blob."""
+    try:
+        options = json.loads(options_json) if options_json else {}
+    except Exception:
+        return []
+    if not isinstance(options, dict):
+        return []
+    out: list[list[str]] = []
+    for key, (label, table) in _SETTINGS_KEYS.items():
+        raw = options.get(key)
+        if raw is None or raw == "":
+            continue
+        value = _setting_value(table, raw)
+        if key == "8":
+            # the map size, in tiles — the OptionsMapSize enum's own
+            # numbers carry the label
+            size = _setting_value(table, raw)
+            value = f"{size} \u00d7 {size}"
+            size_label = _MAP_SIZE_LABELS.get(_int(raw))
+            if size_label:
+                value = f"{value} ({size_label})"
+        out.append([label, value])
+    return out
 
 
 def _needs_repair(candidate_docs: list[dict[str, Any]]) -> bool:
@@ -573,6 +635,25 @@ class MatchHistorySyncer:
         (participants, elo deltas, outcome) are extracted for the
         queries — the store never drops the source document.
         """
+        # SLOTINFO carries the truth (owner 2026-11-22): the slot index
+        # AND the team both come from it in ranked games (teams split
+        # by slot parity 1-3-5-7 vs 2-4-6-8) - the member's teamid
+        # has led cards wrong; slotinfo's word is final. It decodes
+        # FIRST so the members walk can already read it.
+        options_json, slots_json = decode_match_payload(match)
+        seat_slots: dict[str, int] = {}
+        seat_teams: dict[str, int] = {}
+        if slots_json:
+            try:
+                for slot in json.loads(slots_json) or []:
+                    pid = str((slot or {}).get("profile_id", ""))
+                    if not pid:
+                        continue
+                    seat_teams[pid] = int((slot or {}).get("team") or 0)
+                    seat_slots[pid] = int((slot or {}).get("slot_index", 0) or 0)
+            except Exception:
+                seat_slots = {}
+                seat_teams = {}
         members = match.get("matchhistorymember") or []
         profile_ids: list[str] = []
         rating_before: dict[str, int] = {}
@@ -586,7 +667,7 @@ class MatchHistorySyncer:
             if not pid:
                 continue
             profile_ids.append(pid)
-            teams[pid] = _int(member.get("teamid"))
+            teams[pid] = seat_teams.get(pid, _int(member.get("teamid")))
             if member.get("outcome") == 1:
                 winners.append(pid)
             old = _int(member.get("oldrating"))
@@ -594,16 +675,6 @@ class MatchHistorySyncer:
             if old or new:
                 rating_before[pid] = old
                 rating_after[pid] = new
-        options_json, slots_json = decode_match_payload(match)
-        seat_slots: dict[str, int] = {}
-        if slots_json:
-            try:
-                for slot in json.loads(slots_json) or []:
-                    pid = str((slot or {}).get("profile_id", ""))
-                    if pid:
-                        seat_slots[pid] = int((slot or {}).get("slot_index", 0) or 0)
-            except Exception:
-                seat_slots = {}
         aliases = match.get("profile_aliases") or {}
         civs = {
             pid: civ_name_of(_member_civ(match, pid)) for pid in profile_ids
@@ -637,6 +708,7 @@ class MatchHistorySyncer:
             "winners": winners,
             "description": lobby,
             "players": players,
+            "settings": _settings_of(options_json),
             "options_json": options_json,
             "slots_json": slots_json,
             "raw": match,
@@ -662,6 +734,7 @@ class MatchHistorySyncer:
             slots_json=str(doc.get("slots_json", "")),
             description=str(doc.get("description", "")),
             players_json=json.dumps(doc.get("players") or [], ensure_ascii=False),
+            settings_json=json.dumps(doc.get("settings") or [], ensure_ascii=False),
         )
 
     def _status_of(self, profile_id: str, doc: dict[str, Any] | None) -> AccountEloStatus:

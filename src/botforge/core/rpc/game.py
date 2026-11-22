@@ -296,6 +296,7 @@ def match_history_to_wire(entry: MatchHistoryEntry) -> game_pb2.MatchHistoryEntr
         winners=list(entry.winners),
         description=entry.description,
         players_json=entry.players_json,
+        settings_json=entry.settings_json,
         options_json=entry.options_json,
         slots_json=entry.slots_json,
     )
@@ -317,6 +318,7 @@ def match_history_from_wire(wire: game_pb2.MatchHistoryEntry) -> MatchHistoryEnt
         options_json=wire.options_json,
         description=wire.description,
         players_json=wire.players_json,
+        settings_json=wire.settings_json,
         slots_json=wire.slots_json,
     )
 

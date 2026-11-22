@@ -1002,10 +1002,8 @@ def _seat_text(
     pid = str(player.get("profile_id", ""))
     alias = str(player.get("alias") or player.get("name") or pid or "?")
     civ = str(player.get("civ") or "").strip()
-    winners = {str(w) for w in card.get("winners") or []}
     match_id = str(card.get("match_id") or card.get("match_ref") or "")
     finished = card.get("status") == "finished"
-    icon = "\U0001f3c6" if pid in winners else "\U0001f480" if winners else "\u2b1c"
     replay = REPLAY_URL.format(match_id=match_id, profile_id=pid) if match_id else ""
     jump = f"[ \u25b8 ]({replay})" if replay else ""
     civ_link = f"[{civ}]({civ_urls[civ]})" if civ and civ_urls.get(civ) else civ
@@ -1016,7 +1014,7 @@ def _seat_text(
     name = f"**{alias_link}**" if pid in me_ids else alias_link
     slot = int(player.get("slot", 0) or 0)
     slot_badge = f"P{slot} {SLOT_COLOURS[slot]}" if slot in SLOT_COLOURS else ""
-    line = " ".join(bit for bit in [icon, jump, name, slot_badge] if bit)
+    line = " ".join(bit for bit in [jump, name, slot_badge] if bit)
     if civ_link:
         line += f" {labels.get('with', 'avec')} {civ_link}"
     # the ladder lines
@@ -1072,7 +1070,11 @@ def _card_map_section(card: dict[str, Any], ctx: dict[str, Any]) -> Any:
         duration = max(0, int(card.get("finished_at") or 0) - int(card.get("started_at") or 0))
         if duration:
             sub_lines.append(f"-# Durée : {_fmt_clock(duration)}")
-    map_text = f"### {map_link}\n" + "\n".join(line for line in sub_lines if line)
+    title = str(card.get("lobby_title") or "").strip()
+    title_line = ""
+    if title and title.upper() != "AUTOMATCH":
+        title_line = f"**{title}**\n"
+    map_text = f"{title_line}### {map_link}\n" + "\n".join(line for line in sub_lines if line)
     image = ctx["map_images"].get(map_name, "") if titled else ""
     if image:
         return discord.ui.Section(discord.ui.TextDisplay(map_text), accessory=discord.ui.Thumbnail(image))
@@ -1141,7 +1143,11 @@ def _match_card_view(
         if index:
             blocks.append(discord.ui.Separator())
         if len(teams) > 1:
-            blocks.append(discord.ui.TextDisplay(f"**{labels.get('team', 'Team')} {index + 1}**"))
+            medal = ""
+            if winners:
+                won = any(str((p or {}).get("profile_id", "")) in winners for p in seats)
+                medal = ("\U0001f3c6 " if won else "\U0001f480 ") if card.get("status") == "finished" else ""
+            blocks.append(discord.ui.TextDisplay(f"{medal}**{labels.get('team', 'Team')} {index + 1}**"))
         for player in seats:
             text, civ_image = _seat_text(player, card, ctx, labels, me_ids)
             blocks.append(_seat_component(text, civ_image))
@@ -1149,9 +1155,13 @@ def _match_card_view(
     blocks.append(discord.ui.Separator())
     first_seat = str(((card.get("players") or [{}])[0] or {}).get("profile_id") or "")
     source_url = LIBREMATCH_SOURCE_URL.format(profile_id=first_seat) if first_seat else ""
+    settings = card.get("settings") or []
+    compact = " \u00b7 ".join(f"{label} : {value}" for label, value in settings)
     source = (
         f"-# Source : [libre:match]({source_url})" if source_url else "-# Source : libre:match"
     )
+    if compact:
+        source += f"\n-# {compact}"
     blocks.append(discord.ui.TextDisplay(source))
     buttons: list[discord.ui.Button[Any]] = []
     if status == "lobby" and card.get("lobby_url"):
@@ -1177,6 +1187,18 @@ def _match_card_view(
     view = discord.ui.LayoutView(timeout=None)
     view.add_item(discord.ui.Container(*blocks, accent_colour=discord.Colour(accent)))
     return add_view_footer(view, f"panel:match:aoe2:{match_id}")
+
+
+def _entry_settings_of(entry: Any) -> list[list[str]]:
+    """Read the stored settings snapshot of one history entry."""
+    raw = getattr(entry, "settings_json", "") or ""
+    try:
+        import json as _json
+
+        data = _json.loads(raw)
+        return [list(pair) for pair in data if isinstance(pair, list) and len(pair) == 2]
+    except Exception:
+        return []
 
 
 async def _live_cards(interaction: discord.Interaction, me_ids: set[str]) -> list[dict[str, Any]]:
@@ -1261,6 +1283,7 @@ async def _finished_cards(
                 "finished_at": finished_at,
                 "winners": winners,
                 "players": _entry_players_of(entry),
+                "settings": _entry_settings_of(entry),
             }
         )
     return cards

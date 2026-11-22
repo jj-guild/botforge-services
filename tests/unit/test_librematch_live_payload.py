@@ -152,6 +152,43 @@ def test_the_ranked_4v4_lists_every_seat() -> None:
     assert mine["rating_after"] == 1432
 
 
+def test_the_settings_footer_line_is_honest() -> None:
+    """Compact footer pairs straight from the options blob (era 4).
+
+    The size keeps its tiles AND gains its enum label (the
+    OptionsMapSize numbers ARE the tiles), the victory renders as a
+    word, unknown pairs never appear.
+    """
+    doc = _doc("433589647")
+    assert ["Taille", "220 × 220 (Grande)"] in doc["settings"]
+    assert ["Pop", "200"] in doc["settings"]
+    assert ["Vitesse", "Normale"] in doc["settings"]
+    assert ["Victoire", "Conquête"] in doc["settings"]
+    assert ["Cheats", "non"] in doc["settings"]
+
+
+def test_the_served_entry_carries_the_settings() -> None:
+    """The settings pairs cross the wire as their own json column."""
+    entry = _entry("433589647")
+    assert json.loads(entry.settings_json) == _doc("433589647")["settings"]
+
+
+def test_the_slotinfo_teams_overrule_the_members() -> None:
+    """Ranked teams come from slotinfo, not the members' teamid."""
+    from botforge.core.rpc.game import match_history_from_wire, match_history_to_wire
+
+    doc = _doc("433589647")
+    slots = json.loads(doc["slots_json"])
+    for slot in slots:
+        pid = str(slot.get("profile_id") or "")
+        if pid:
+            assert doc["teams"][pid] == slot["team"]
+    # the projection rides the wire without losing a column
+    entry = _entry("433589647")
+    wire = match_history_to_wire(entry)
+    assert json.loads(match_history_from_wire(wire).settings_json)[0] == ["Taille", "220 × 220 (Grande)"]
+
+
 def test_the_served_entry_carries_the_projection() -> None:
     """The wire entry keeps the named map, the civs and the outcome."""
     entry = _entry("397662136")

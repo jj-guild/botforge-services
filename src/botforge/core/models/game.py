@@ -211,3 +211,4 @@ class MatchHistoryEntry:
     slots_json: str = ""
     description: str = ""
     players_json: str = ""
+    settings_json: str = ""
