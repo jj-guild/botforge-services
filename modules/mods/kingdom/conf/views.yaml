@@ -26,6 +26,12 @@ views:
     kind: surface
   panel:mod:kingdom:admin:regie:
     kind: surface
+  # layoutview-v1 (Check 138): the regie realm cards — the purge confirm
+  # (ephemeral, admin) and the founder's restore DM question
+  panel:mod:kingdom:admin:regie:confirm:
+    kind: surface
+  panel:mod:kingdom:admin:regie:restore-dm:
+    kind: surface
   panel:mod:kingdom:admin:atelier:
     kind: surface
   # console-etats-regie-v1 (Drasah 21/11): the CYCLE's confirm cards

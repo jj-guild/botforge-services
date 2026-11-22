@@ -1842,7 +1842,11 @@ class KingdomRegieRealmButton(
             return
         from .common import dm_user_safe
 
-        question = discord.ui.LayoutView(discord.ui.Container(
+        # layoutview-v1 (Check 138) : discord.py 2.7.1 LayoutView ne
+        # prend AUCUN enfant positionnel — le rendu passait par le
+        # build_view des surfaces déclarées (le reste du mod), ces
+        # DEUX cartes régie arrivaient ici en crash silencieux.
+        question_container = discord.ui.Container(
             discord.ui.TextDisplay(
                 str(strings["settings_restore_dm_question"]).format(
                     name=str(getattr(realm, "name", "?"))
@@ -1856,7 +1860,10 @@ class KingdomRegieRealmButton(
                 self.realm_id, self.guild_id,
             ),
             accent_colour=_ADMIN_COLOUR,
-        ))
+        )
+        question = surface(
+            "panel:mod:kingdom:admin:regie:restore-dm", question_container
+        )
         sent = await dm_user_safe(
             interaction.client, str(getattr(realm, "king_id", "")),
             f"**{strings['settings_restore_dm_title']}**", question,
@@ -1885,7 +1892,10 @@ class KingdomRegieRealmButton(
             await _safe_send(interaction, strings["settings_regie_archived_gone_note"])
             return
         name = str(getattr(realm, "name", "?"))[:80]
-        card = discord.ui.LayoutView(discord.ui.Container(
+        # layoutview-v1 (Check 138) : idem restauration — la carte passe
+        # par la surface déclarée (LayoutView d2.py 2.7.1 = zéro enfant
+        # positionnel, l'ancienne écriture crashait le clic en silence).
+        card_container = discord.ui.Container(
             discord.ui.TextDisplay(
                 f"## {strings['settings_regie_purge_confirm_title']}\n"
                 + str(strings["settings_regie_purge_confirm_hint"]).format(name=name)
@@ -1898,7 +1908,8 @@ class KingdomRegieRealmButton(
                 self.realm_id, self.guild_id,
             ),
             accent_colour=discord.Colour(0xED4245),
-        ))
+        )
+        card = surface("panel:mod:kingdom:admin:regie:confirm", card_container)
         await open_unique_ephemeral(interaction, view=card)
 
     async def _purge_yes(self, interaction: discord.Interaction) -> None:

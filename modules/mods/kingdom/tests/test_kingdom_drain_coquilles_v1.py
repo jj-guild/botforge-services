@@ -14,6 +14,8 @@ from __future__ import annotations
 import re
 from types import SimpleNamespace as NS
 
+import pytest
+
 
 def _ids(view: object) -> list[str]:
     return [
@@ -77,3 +79,86 @@ def test_the_regie_drawer_shows_the_dormant_shells_and_their_purge() -> None:
     # without dormants the drawer stays EXACTLY the console-v2 one
     plain = _regie_drawer(settings_strings("fr"))
     assert not [i for i in _ids(plain) if "realm:" in i]
+
+
+# ---------------------------------------------------------------------------
+# layoutview-v1 (Check 138) — the SILENT purge click
+# ---------------------------------------------------------------------------
+
+
+class _Resp:
+    def __init__(self) -> None:
+        self.done = False
+        self.deferred = False
+
+    def is_done(self) -> bool:
+        return self.done
+
+    async def defer(self, ephemeral: bool = False) -> None:
+        self.done = True
+        self.deferred = True
+
+
+class _Follow:
+    def __init__(self) -> None:
+        self.sent: list[tuple[object, dict]] = []
+
+    async def send(self, content: object = None, **kwargs: object):
+        self.sent.append((content, kwargs))
+
+        async def _delete() -> None:
+            return None
+
+        return NS(id=f"f{len(self.sent)}", delete=_delete)
+
+
+@pytest.mark.asyncio
+async def test_the_purge_click_opens_its_confirm_card(monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    """Before the Check 138: the card's build crashed a SILENT death.
+
+    The corpse: `discord.ui.LayoutView(discord.ui.Container(...))` —
+    discord.py 2.7.1's LayoutView takes NO positional child, so the
+    purge card (and the restore DM question) raised TypeError right
+    after their fast-acks: the click was swallowed, nothing displayed
+    (Drasah's report: only 🗑️ Supprimer was dead, the switches worked).
+    """
+    import discord
+
+    from botforge.mods.kingdom.cogs import settings_panel as sp
+
+    realm = NS(
+        id="realm:aegis-123456789", name="AEGIS",
+        engagement=None, join_request=None,
+    )
+
+    class _Realms:
+        async def realm_by_id(self, realm_id: str) -> object:
+            return realm if realm_id == realm.id else None
+
+    monkeypatch.setattr(sp, "wiring", lambda: NS(realms=_Realms(), kingdoms=None))
+
+    async def _guard(interaction: object) -> bool:
+        return True
+
+    monkeypatch.setattr(sp, "_panel_guard", _guard)
+
+    resp = _Resp()
+    inter = NS(
+        locale="fr", guild_id="7", guild=None,
+        user=NS(id="7", guild_permissions=None),
+        client=NS(), response=resp, followup=_Follow(),
+    )
+
+    btn = sp.KingdomRegieRealmButton(
+        "purge", realm.id, "7", "Supprimer", discord.ButtonStyle.danger
+    )
+    await btn.callback(inter)  # type: ignore[arg-type]
+    assert resp.deferred, "fast-ack: the click never races the 3-second clock"
+    sent = inter.followup.sent  # type: ignore[attr-defined]
+    assert sent, "the confirm card ARRIVES (the corpse: total silence)"
+    kwargs = sent[-1][1]
+    assert kwargs.get("view") is not None, "the card rides a real view"
+    ids = _ids(kwargs["view"])
+    assert f"kingdom:console-regie:purge-yes:{realm.id}:7" in ids, (
+        "the red confirm leg rides the anchored template"
+    )
