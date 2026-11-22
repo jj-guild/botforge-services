@@ -22,11 +22,14 @@ hardcoded; the service owns the rules the cog consumes via ``wiring()``.
 
 from __future__ import annotations
 
+import logging
 import re
 import time
 from typing import Any, Protocol
 
 from pydantic import BaseModel, ConfigDict, Field
+
+logger = logging.getLogger("kingdom.realms")
 
 # The shell collection — namespaced by the mod's ModStorage. The
 # season wipe (storage.wipe_season_data) MUST NOT list it: a realm
@@ -175,6 +178,11 @@ class RealmService:
         realm (he is already its crown).
         """
         realm = await self._get(realm_id)
+        if getattr(realm, "archived_at", 0):
+            # ejection-archive follow-up : une coquille archivée est en
+            # boîte — seul le FONDATEUR la réveille (le picker propose la
+            # restauration), un join direct ne ressuscite jamais rien
+            raise RealmError("join-archived", realm_id=realm_id)
         if member_id == realm.king_id or member_id in realm.member_ids:
             raise RealmError("already-in-realm", realm_id=realm_id)
         if await self.realm_of_member(member_id) is not None:
@@ -336,6 +344,31 @@ class RealmService:
         """
         realm = await self._get(realm_id)
         await self._store.delete_realm(str(realm.id))
+        return realm
+
+    async def dissolve_realm(self, realm_id: str, reason: str = "") -> RealmShellModel:
+        """reset-joueurs-v1 (Drasah 22/11) — vider la maison, garder la boîte.
+
+        Le geste d'outillage de test : tous les MEMBRES sortent (ils
+        récupèrent leur parcours), la coquille part ARCHIVÉE (nom
+        réservé, données conservées, restaurable par le fondateur ou la
+        régie). Le Roi fondateur reste gravé (``king_id``) — c'est lui
+        qui réveille la maison. Un royaume ENGAGÉ refuse (on ne vide
+        jamais une saison vivante), un archivé est un no-op idempotent
+        (déjà en boîte, déjà vide côté parcours des joueurs).
+        """
+        realm = await self._get(realm_id)
+        if getattr(realm, "engagement", None):
+            raise RealmError("archive-engaged", realm_id=realm_id)
+        if getattr(realm, "archived_at", 0):
+            return realm
+        realm.member_ids = []
+        realm.join_request = None
+        realm.engagement = None
+        realm.archived_at = int(time.time())
+        await self._store.upsert_realm(realm.to_mongo())
+        if reason:
+            logger.info("kingdom: realm %s archived (%s)", realm_id, reason)
         return realm
 
 

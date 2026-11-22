@@ -13,6 +13,13 @@ unset key falls back to the DEFAULTS, which mirror the pre-régie
 behaviour EXACTLY (Drasah's running season must never wake up closed):
 
 - ``registration_open``   — the account/enrollment door (True)
+- ``registration_required`` — the parcours' ACCOUNT TIER (True: the
+  compte first, the declared classical parcours). Flipped OFF, the
+  players postulent directly without any account, whatever the season
+  (registration-switch-v1, Drasah 22/11 — the beta's own shortcut,
+  decoupled from the beta and handed to the régie). The beta season
+  still bends it the same way (ONE beta): OFF wins, the account step
+  never rides.
 - ``realm_creation_open`` — « Prendre le Trône » (True)
 - ``realm_join_open``     — joining a realm (True)
 - ``season_entry_open``   — the 🛂 sas : the one switch with a
@@ -43,6 +50,7 @@ REGIE_KEY = "regie"
 # switch is one key + one label string, never a new flow.
 REGIE_SWITCHES: tuple[str, ...] = (
     "registration_open",
+    "registration_required",
     "realm_creation_open",
     "realm_join_open",
     "season_entry_open",
@@ -51,6 +59,7 @@ REGIE_SWITCHES: tuple[str, ...] = (
 # The players' life is OPEN by default; the sas is PHASE-mapped (below).
 _REGIE_DEFAULTS: dict[str, bool] = {
     "registration_open": True,
+    "registration_required": True,
     "realm_creation_open": True,
     "realm_join_open": True,
     "season_entry_open": False,
@@ -58,6 +67,7 @@ _REGIE_DEFAULTS: dict[str, bool] = {
 
 SWITCH_LABEL_KEYS: dict[str, str] = {
     "registration_open": "settings_regie_registration",
+    "registration_required": "settings_regie_registration_required",
     "realm_creation_open": "settings_regie_creation",
     "realm_join_open": "settings_regie_join",
     "season_entry_open": "settings_regie_sas",
@@ -144,8 +154,25 @@ async def regie_open(bot: Any, guild_id: str, key: str) -> bool:
     return bool((await read_regie(bot, guild_id)).get(key, False))
 
 
+async def registration_required(bot: Any, guild_id: str) -> bool:
+    """Whether the parcours demands the ACCOUNT step — the one answer.
+
+    registration-switch-v1 (Drasah 22/11) : the régie's switch is the
+    designer's live word (OFF = on postule directement, whatever the
+    season); the beta season bends it the SAME way (ONE beta, 21/11 —
+    a beta never asks for a compte). The default mirrors the declared
+    classical parcours exactly: required.
+    """
+    if not await regie_open(bot, guild_id, "registration_required"):
+        return False
+    from .camp_beta import kingdom_is_beta
+
+    return not await kingdom_is_beta(bot, guild_id)
+
+
 __all__ = [
     "REGIE_SWITCHES",
+    "registration_required",
     "SWITCH_LABEL_KEYS",
     "read_regie",
     "regie_open",

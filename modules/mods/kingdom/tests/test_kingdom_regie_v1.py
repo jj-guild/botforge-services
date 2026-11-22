@@ -330,3 +330,60 @@ async def test_the_off_season_camp_offers_the_persistent_doors() -> None:
         view = await camp_beta._camp_window(interaction)
     texts = [c.content for c in view.walk_children() if type(c).__name__ == "TextDisplay"]
     assert any("régie" in str(t) for t in texts), "the window says why"
+
+
+# ---------------------------------------------------------------------------
+# registration-switch-v1 (Drasah 22/11) — « Compte requis » : OFF = on
+# postule directement sans compte, toute saison ; la bêta plie pareil.
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_registration_required_defaults_to_the_classical_parcours() -> None:
+    """No stored switch = compte REQUIRED, sauf en bêta (une bêta ne demande
+    jamais de compte — les fondations passent par ⚔️ Choisir mon camp)."""
+    import unittest.mock as mock
+
+    from botforge.mods.kingdom.cogs import camp_beta, common
+    from botforge.mods.kingdom.cogs.regie import registration_required
+
+    bot = _bot()
+    with mock.patch.object(common, "wiring", lambda: _stack("started")):
+        async def classical(_bot, _gid) -> bool:
+            return False
+
+        async def beta(_bot, _gid) -> bool:
+            return True
+
+        with mock.patch.object(camp_beta, "kingdom_is_beta", classical):
+            assert await registration_required(bot, "123") is True
+        with mock.patch.object(camp_beta, "kingdom_is_beta", beta):
+            assert await registration_required(bot, "123") is False, (
+                "a beta season never asks for a compte"
+            )
+
+
+@pytest.mark.asyncio
+async def test_the_regie_switch_off_skips_the_account_step() -> None:
+    """« 📝 Compte requis » OFF : on postule directement, PEU IMPORTE la
+    saison — le mot du game designer prime sur le parcours déclaré."""
+    import unittest.mock as mock
+
+    from botforge.mods.kingdom.cogs import camp_beta, common
+    from botforge.mods.kingdom.cogs.regie import read_regie, set_switch
+
+    bot = _bot()
+    with mock.patch.object(common, "wiring", lambda: _stack(None)):
+        await set_switch(bot, "123", "registration_required", False)
+        values = await read_regie(bot, "123")
+        assert values["registration_required"] is False
+
+        async def never(_bot, _gid) -> bool:
+            return False
+
+        with mock.patch.object(camp_beta, "kingdom_is_beta", never):
+            from botforge.mods.kingdom.cogs.regie import registration_required
+
+            assert await registration_required(bot, "123") is False, (
+                "OFF = the account tier never asks"
+            )

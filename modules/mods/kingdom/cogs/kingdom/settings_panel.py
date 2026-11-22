@@ -1302,6 +1302,16 @@ def _regie_drawer(
             "season-mode", str(strings["settings_season_mode_button"]), discord.ButtonStyle.secondary
         ).item
     )
+    # reset-joueurs-v1 (Drasah 22/11) : l'outillage de test — les joueurs
+    # sortent des royaumes hors saison, les coquilles partent archivées
+    row_button.add_item(
+        KingdomRegieResetPlayersButton(
+            "-players",
+            guild_id or "0",  # un tiroir sans guilde reste un id valide
+            str(strings["settings_regie_reset_button"])[:80],
+            discord.ButtonStyle.danger,
+        ).item
+    )
     # ejection-archive-v1 (22/11) : le vestibule des royaumes ARCHIVÉS —
     # ♻️ Restaurer (MP au Roi fondateur) ou 🗑️ Supprimer définitivement
     archived = list(archived or [])
@@ -1918,6 +1928,158 @@ def _realm_button_row(
     row.add_item(
         KingdomRegieRealmButton(
             no_kind, realm_id, guild_id, str(no_label)[:80], no_style
+        ).item
+    )
+    return row
+
+
+class KingdomRegieResetPlayersButton(
+    discord.ui.DynamicItem[discord.ui.Button[Any]],
+    template=r"kingdom:console-regie:reset(?P<kind>-players|-yes|-no)?:(?P<guild_id>\d+)",
+):
+    """🧹 Réinitialiser les joueurs — the test gauntlet's one big sweep.
+
+    reset-joueurs-v1 (Drasah 22/11) : les MEMBRES sortent de tous les
+    royaumes hors saison (ils récupèrent leur parcours), les coquilles
+    partent ARCHIVÉES automatiquement (jamais détruites : nom réservé,
+    données conservées, restaurables une par une). Les royaumes
+    ENGAGÉS ne se touchent jamais — une saison vivante ne se vide pas.
+    Une seule classe route ses trois jambes (le bouton, le Oui, le Non)
+    — la leçon dispatch du bouton royaume s'applique ici aussi.
+    """
+
+    def __init__(self, kind: str, guild_id: str, label: str, style: Any) -> None:
+        super().__init__(
+            discord.ui.Button(
+                label=str(label)[:80],
+                custom_id=f"kingdom:console-regie:reset{kind}:{guild_id}"[:100],
+                style=style,  # type: ignore[arg-type]
+            )
+        )
+        if kind not in ("-players", "-yes", "-no"):
+            raise ValueError(kind)
+        self.kind = kind
+        self.guild_id = guild_id
+
+    @classmethod
+    async def from_custom_id(
+        cls,
+        interaction: discord.Interaction,
+        item: discord.ui.Item[Any],
+        match: re.Match[str],
+        /,
+    ) -> "KingdomRegieResetPlayersButton":
+        button = item if isinstance(item, discord.ui.Button) else None
+        label = (button.label or "?") if button is not None else "?"
+        kind = match["kind"] or "-players"
+        style = (
+            discord.ButtonStyle.danger
+            if kind in ("-players", "-yes")
+            else discord.ButtonStyle.secondary
+        )
+        return cls(kind, match["guild_id"], label, style)
+
+    async def _card(self, interaction: discord.Interaction) -> None:
+        """Open the red confirm card of the great reset."""
+        strings = strings_of(interaction)
+        if not await _panel_guard(interaction):
+            return
+        container: discord.ui.Container[discord.ui.LayoutView] = discord.ui.Container(
+            discord.ui.TextDisplay(
+                f"## {strings['settings_regie_reset_confirm_title']}\n"
+                + str(strings["settings_regie_reset_confirm_hint"])
+            ),
+            accent_colour=discord.Colour(0xED4245),
+        )
+        container.add_item(_reset_button_row(self.guild_id, strings))
+        await open_unique_ephemeral(
+            interaction, view=surface("panel:mod:kingdom:admin:console:confirm", container)
+        )
+
+    async def _reset_yes(self, interaction: discord.Interaction) -> None:
+        """The sweep itself — members out, shells archived, nobody destroyed."""
+        if not interaction.response.is_done():
+            await interaction.response.defer(ephemeral=True)
+        strings = strings_of(interaction)
+        service = _realm_service_of(interaction.client)
+        if service is None:
+            await interaction.followup.send(
+                str(strings["settings_failed"]), ephemeral=True
+            )
+            return
+        realms: list[Any] = []
+        engaged = 0
+        try:
+            realms = list(await service.realms() or [])
+        except Exception:  # noqa: BLE001 — the sweep reports, never raises
+            logger.warning("kingdom: the reset read failed", exc_info=True)
+        freed = 0
+        archived: list[str] = []
+        from .realms import archive_realm_habitat
+
+        for realm in realms:
+            if getattr(realm, "engagement", None):
+                engaged += 1  # une saison vivante ne se vide jamais
+                continue
+            if getattr(realm, "archived_at", 0):
+                continue  # déjà en boîte — rien à vider
+            freed += len(getattr(realm, "member_ids", []) or [])
+            try:
+                gone = await service.dissolve_realm(
+                    str(realm.id), reason="régie: reset joueurs"
+                )
+                await archive_realm_habitat(interaction.client, gone)
+                archived.append(str(gone.name))
+            except Exception:  # noqa: BLE001 — one realm never blocks
+                logger.warning(
+                    "kingdom: realm reset failed (%s)", realm.id, exc_info=True
+                )
+        # les joueurs libérés récupèrent la conscription tout de suite
+        try:
+            from .conscription_gate import run_conscription_gate_pass
+
+            await run_conscription_gate_pass(interaction.client, self.guild_id)
+        except Exception:  # noqa: BLE001 — le masque se répare à la passe
+            logger.warning("kingdom: the conscription gate pass failed", exc_info=True)
+        if not archived:
+            note = str(strings["settings_regie_reset_empty"])
+        else:
+            note = str(strings["settings_regie_reset_done"]).format(
+                realms=len(archived), players=freed
+            )
+        await interaction.followup.send(note, ephemeral=True)
+        await refresh_live_pins_after(interaction)
+
+    async def _noop(self, interaction: discord.Interaction) -> None:
+        if not interaction.response.is_done():
+            await interaction.response.defer(ephemeral=True)
+
+    async def callback(self, interaction: discord.Interaction) -> None:
+        handler = {
+            "-players": self._card,
+            "-yes": self._reset_yes,
+            "-no": self._noop,
+        }[self.kind]
+        await handler(interaction)
+
+
+def _reset_button_row(
+    guild_id: str, strings: dict[str, str]
+) -> discord.ui.ActionRow[discord.ui.LayoutView]:
+    """The confirm row of the great reset's card."""
+    row: Any = discord.ui.ActionRow()
+    row.add_item(
+        KingdomRegieResetPlayersButton(
+            "-yes", guild_id,
+            str(strings["settings_regie_reset_confirm_button"])[:80],
+            discord.ButtonStyle.danger,
+        ).item
+    )
+    row.add_item(
+        KingdomRegieResetPlayersButton(
+            "-no", guild_id,
+            str(strings["settings_regie_reset_cancel_button"])[:80],
+            discord.ButtonStyle.secondary,
         ).item
     )
     return row

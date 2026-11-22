@@ -416,16 +416,44 @@ async def _realms_join_window(interaction: discord.Interaction) -> discord.ui.La
         logger.warning("kingdom: the realms picker read failed", exc_info=True)
         realms = []
     my_id = str(interaction.user.id)
+    # reset-joueurs-v1 (Drasah 22/11) : le FONDATEUR voit son royaume
+    # ARCHIVÉ en premier — c'est le sien, il peut le réveiller d'un clic ;
+    # les archivés des AUTRES rois restent invisibles (chacun réveille
+    # sa maison, pas celle du voisin).
+    mine_archived = [
+        realm
+        for realm in realms
+        if getattr(realm, "archived_at", 0)
+        and str(getattr(realm, "king_id", "")) == my_id
+    ]
     # a player belongs to ONE realm: the picker skips his own home
     options = [
         realm
         for realm in realms
-        if str(getattr(realm, "king_id", "")) != my_id
+        if not getattr(realm, "archived_at", 0)
+        and str(getattr(realm, "king_id", "")) != my_id
         and my_id not in [str(m) for m in (getattr(realm, "member_ids", []) or [])]
     ]
-    if options:
-        picker = KingdomCampRealmSelect(str(strings["realms_pick_placeholder"]))
-        picker.item.options = [
+    if options or mine_archived:
+        picker = KingdomCampRealmSelect(
+            str(
+                strings["realms_pick_restore_placeholder"]
+                if mine_archived and not options
+                else strings["realms_pick_placeholder"]
+            )
+        )
+        archived_options = [
+            discord.SelectOption(
+                label=str(strings["realms_pick_archived_label"]).format(
+                    name=str(getattr(realm, "name", "?"))[:80]
+                )[:100],
+                value=str(getattr(realm, "slug", ""))[:100],
+                description=str(strings["realms_pick_archived_hint"])[:100],
+                emoji="📦",
+            )
+            for realm in mine_archived[:25]
+        ]
+        joinable_options = [
             discord.SelectOption(
                 label=str(getattr(realm, "name", "?"))[:100],
                 value=str(getattr(realm, "slug", ""))[:100],
@@ -433,8 +461,9 @@ async def _realms_join_window(interaction: discord.Interaction) -> discord.ui.La
                     members=len(getattr(realm, "member_ids", []) or []) + 1
                 )[:100],
             )
-            for realm in options[:25]
+            for realm in options[: 25 - len(archived_options)]
         ]
+        picker.item.options = archived_options + joinable_options
         picker_row: discord.ui.ActionRow[discord.ui.LayoutView] = discord.ui.ActionRow()
         picker_row.add_item(picker.item)
         rows.append(picker_row)
@@ -481,6 +510,18 @@ class KingdomCampRealmSelect(
         if realm is None:
             await interaction.followup.send(str(strings["realms_join_error"]), ephemeral=True)
             return
+        # un pick ARCHIVÉ ne se rejoint pas : seul le Roi fondateur peut
+        # le réveiller, et seulement depuis sa propre confirmation.
+        if getattr(realm, "archived_at", 0):
+            if str(getattr(realm, "king_id", "")) != str(interaction.user.id):
+                await interaction.followup.send(
+                    str(strings["realms_restore_not_yours"]), ephemeral=True
+                )
+                return
+            await open_unique_ephemeral(
+                interaction, view=_realm_restore_card(interaction, realm, guild_id)
+            )
+            return
         try:
             realm = await stack.realms.join_realm(str(realm.id), str(interaction.user.id))
             # le membre voit son royaume tout de suite (best-effort :
@@ -494,6 +535,108 @@ class KingdomCampRealmSelect(
         except Exception as exc:  # noqa: BLE001 — the window reports, never raises
             logger.warning("kingdom: realm join failed", exc_info=True)
             note = str(strings["realms_join_error"])
+        await _safe_followup(interaction, note)
+
+
+def _realm_restore_card(
+    interaction: discord.Interaction, realm: Any, guild_id: str
+) -> discord.ui.LayoutView:
+    """The founder's confirmation card — one archived home, one wake-up call."""
+    strings = _strings(interaction)
+    container: discord.ui.Container[discord.ui.LayoutView] = discord.ui.Container(
+        discord.ui.TextDisplay(
+            f"## {strings['realms_restore_confirm_title']}\n"
+            + str(strings["realms_restore_confirm_hint"]).format(
+                name=str(getattr(realm, "name", "?"))
+            )
+        ),
+        accent_colour=discord.Colour(0xFEE75C),
+    )
+    row: discord.ui.ActionRow[discord.ui.LayoutView] = discord.ui.ActionRow()
+    row.add_item(
+        KingdomCampRestoreButton(
+            "-yes", str(getattr(realm, "slug", ""))[:60], guild_id,
+            str(strings["realms_restore_yes"])[:80], discord.ButtonStyle.success,
+        ).item
+    )
+    row.add_item(
+        KingdomCampRestoreButton(
+            "-no", str(getattr(realm, "slug", ""))[:60], guild_id,
+            str(strings["realms_restore_no"])[:80], discord.ButtonStyle.secondary,
+        ).item
+    )
+    container.add_item(row)
+    return surface("panel:mod:kingdom:note", container)
+
+
+class KingdomCampRestoreButton(
+    discord.ui.DynamicItem[discord.ui.Button[Any]],
+    template=r"kingdom:camp:restore(?P<kind>-yes|-no):(?P<slug>[a-z0-9-]+):(?P<guild_id>\d+)",
+):
+    """♻️ The founder's wake-up call — restart-proof DM-independent restore."""
+
+    def __init__(
+        self, kind: str, slug: str, guild_id: str,
+        label: str, style: discord.ButtonStyle,
+    ) -> None:
+        super().__init__(
+            discord.ui.Button(
+                label=str(label)[:80],
+                custom_id=f"kingdom:camp:restore{kind}:{slug}:{guild_id}"[:100],
+                style=style,
+            )
+        )
+        self.kind = kind
+        self.slug = slug
+        self.guild_id = guild_id
+
+    @classmethod
+    async def from_custom_id(cls, interaction, item, match, /):  # type: ignore[no-untyped-def]
+        button = item if isinstance(item, discord.ui.Button) else None
+        label = (button.label or "?") if button is not None else "?"
+        kind = match["kind"] or "-yes"
+        style = (
+            discord.ButtonStyle.success if kind == "-yes"
+            else discord.ButtonStyle.secondary
+        )
+        return cls(kind, match["slug"], match["guild_id"], label, style)
+
+    async def callback(self, interaction: discord.Interaction) -> None:
+        from .settings_panel import _safe_followup
+
+        if not interaction.response.is_done():
+            await interaction.response.defer(ephemeral=True)
+        strings = _strings(interaction)
+        if self.kind == "-no":
+            await _safe_followup(interaction, str(strings["settings_cancelled"]))
+            return
+        stack = wiring()
+        if stack is None or getattr(stack, "realms", None) is None:
+            await _safe_followup(interaction, str(strings["realms_restore_failed"]))
+            return
+        # re-vérification À CHAUD : la coquille a pu être réveillée
+        # (ou détruite) entre le pick et le clic — on ne restaure jamais
+        # deux fois, et le fondateur ne peut réveiller que sa maison.
+        realm = await stack.realms.realm_of_slug(self.slug)
+        if (
+            realm is None
+            or not getattr(realm, "archived_at", 0)
+            or str(getattr(realm, "king_id", "")) != str(interaction.user.id)
+        ):
+            await _safe_followup(interaction, str(strings["realms_restore_gone"]))
+            return
+        try:
+            realm = await stack.realms.restore_realm(str(realm.id))
+            guild = interaction.client.get_guild(int(self.guild_id))
+            if guild is not None:
+                from .realms import ensure_realm_structure, save_habitat
+
+                await ensure_realm_structure(guild, realm, dormant=True)
+                await save_habitat(str(realm.id), {})
+            note = str(strings["realms_restore_done"]).format(str(realm.name))
+        except Exception:  # noqa: BLE001 — the card reports, never raises
+            logger.warning("kingdom: realm restore failed", exc_info=True)
+            note = str(strings["realms_restore_failed"])
         await _safe_followup(interaction, note)
 
 
@@ -693,6 +836,7 @@ def camp_dynamic_items() -> tuple:
         KingdomCampQueueButton,
         KingdomCampJoinSelect,
         KingdomCampRealmSelect,
+        KingdomCampRestoreButton,
     )
 
 

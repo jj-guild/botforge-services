@@ -587,3 +587,20 @@ async def test_the_mask_converges_without_a_second_edit(
     assert len(register.edits) == 1 and len(apply.edits) == 1
     await _mask_pass(monkeypatch, mask_bot, [_shell("31", ["32"])])
     assert len(register.edits) == 1 and len(apply.edits) == 1, "converged = no edit"
+
+
+@pytest.mark.asyncio
+async def test_an_archived_realm_masks_nobody(monkeypatch: pytest.MonkeyPatch) -> None:
+    """reset-joueurs-v1 — un royaume ARCHIVÉ est hors du jeu : sa coquille
+    attend dans la régie, son Roi et ses membres récupèrent la Conscription
+    (Blanc revoit #enregistrement et #postuler, 22/11)."""
+    g = _MaskGuild()
+    mask_bot = _MaskBot(g)
+    ghost = type("Shell", (), {
+        "king_id": "31", "member_ids": ["32"], "archived_at": 123,
+    })()
+    await _mask_pass(monkeypatch, mask_bot, [ghost])
+    register, apply = g._channels[100], g._channels[200]
+    for channel in (register, apply):
+        assert g._members[31] not in channel.overwrites, "the archived King regains the parcours"
+        assert g._members[32] not in channel.overwrites, "an archived realm's member regains it too"

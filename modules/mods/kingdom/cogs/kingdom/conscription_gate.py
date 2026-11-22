@@ -154,6 +154,13 @@ async def _camp_holder_denies(guild: Any) -> dict[Any, Any]:
         except Exception:  # noqa: BLE001 — a read miss masks nobody, never a raise
             realms = []
         for realm in realms:
+            # ejection-archive-v1 follow-up (Drasah 22/11) : un royaume
+            # ARCHIVÉ est hors du jeu — sa coquille attend dans la
+            # régie, ses joueurs (Roi compris) récupèrent leur parcours.
+            # Tant que la coquille est vivante (dormante ou engagée),
+            # le parcours reste terminé pour ses membres.
+            if getattr(realm, "archived_at", 0):
+                continue
             ids.add(str(getattr(realm, "king_id", "") or ""))
             ids.update(str(m) for m in (getattr(realm, "member_ids", []) or []))
     denies: dict[Any, Any] = {}
@@ -183,8 +190,6 @@ async def run_conscription_gate_pass(bot: Any, guild_id: str = "") -> int:
     """Bend the register/apply salons to the live beta (ONE beta, 21/11)."""
     from botforge.discord.ui.panels_provisioning import stored_channel_id
 
-    from .camp_beta import kingdom_is_beta
-
     guilds = (
         [bot.get_guild(int(guild_id))]
         if str(guild_id).isdigit()
@@ -197,8 +202,12 @@ async def run_conscription_gate_pass(bot: Any, guild_id: str = "") -> int:
         gid = str(getattr(guild, "id", ""))
         # ONE beta (Drasah 21/11): the phase flag (Paramètres → Démarrer
         # la beta) OR the season's compressed type — either bends the
-        # parcours; the read is PER GUILD (the phase flag is guild state)
-        beta = await kingdom_is_beta(bot, gid)
+        # parcours; the read is PER GUILD (the phase flag is guild state).
+        # registration-switch-v1 (22/11): the régie's « Compte requis »
+        # OFF bends it the same way (on postule directement, tout saison)
+        from .regie import registration_required
+
+        beta = not await registration_required(bot, gid)
         admin_id = await _role_id(bot, gid, ROLE_ADMIN)
         enregistre_id = await _role_id(bot, gid, ROLE_ENREGISTRE)
         admin_role = guild.get_role(admin_id) if admin_id else None

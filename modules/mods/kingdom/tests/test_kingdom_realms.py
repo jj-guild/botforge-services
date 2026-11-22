@@ -648,3 +648,50 @@ def test_archive_restore_destroy_lifecycle() -> None:
     assert gone.id == realm.id
     reborn = asyncio.run(_service(shared).found_realm("2", "B", "Roc"))
     assert reborn.id != realm.id and reborn.name == "Roc"
+
+
+def test_dissolve_empties_members_and_archives_the_shell() -> None:
+    """reset-joueurs-v1 — le grand balayage d'outillage : les membres
+    sortent (parcours récupéré), la coquille part ARCHIVÉE avec son Roi
+    fondateur gravé, l'engagé refuse, l'archivé est un no-op, le nom
+    reste réservé, et la restauration rouvre la maison."""
+    import asyncio
+
+    from botforge.mods.kingdom.realms import RealmError
+
+    shared = FakeRealmStorage()
+    service = _service(shared)
+    realm = asyncio.run(service.found_realm("1", "Roi", "Roc"))
+    realm = realm.model_copy(update={"member_ids": ["2", "3"]})
+    asyncio.run(service._store.upsert_realm(realm.to_mongo()))
+    # un royaume ENGAGÉ refuse — une saison vivante ne se vide jamais
+    engaged = realm.model_copy(update={"engagement": {"kingdom_id": "k1"}})
+    asyncio.run(service._store.upsert_realm(engaged.to_mongo()))
+    with pytest.raises(RealmError) as err:
+        asyncio.run(service.dissolve_realm(realm.id))
+    assert err.value.message == "archive-engaged"
+    # dormant avec membres : le balayage vide la maison et archive
+    resting = realm.model_copy(update={"engagement": None})
+    asyncio.run(service._store.upsert_realm(resting.to_mongo()))
+    gone = asyncio.run(service.dissolve_realm(realm.id, reason="régie: reset"))
+    assert gone.member_ids == []
+    assert gone.join_request is None and gone.engagement is None
+    assert gone.archived_at > 0
+    assert gone.king_id == "1"  # le fondateur reste gravé — lui seul réveille
+    # une 2e passe est un no-op idempotent (même stamp)
+    again = asyncio.run(service.dissolve_realm(realm.id))
+    assert again.archived_at == gone.archived_at
+    # le nom est toujours RÉSERVÉ (la boîte vit) et un join est refusé
+    with pytest.raises(RealmError):
+        asyncio.run(_service(shared).found_realm("9", "Z", "Roc"))
+    with pytest.raises(RealmError) as join_err:
+        asyncio.run(_service(shared).join_realm(realm.id, "4"))
+    assert join_err.value.message == "join-archived"
+    # les anciens membres ne sont plus RATTACHÉS (parcours récupéré)
+    for freed in ("2", "3"):
+        assert asyncio.run(_service(shared).realm_of_member(freed)) is None
+    # la restauration du fondateur repasse la maison dormante et rejoignable
+    back = asyncio.run(_service(shared).restore_realm(realm.id))
+    assert back.archived_at == 0
+    joined = asyncio.run(_service(shared).join_realm(realm.id, "4"))
+    assert "4" in joined.member_ids

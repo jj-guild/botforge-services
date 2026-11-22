@@ -39,6 +39,17 @@ CAMP_KEYS = (
     "err_kingdoms_imposed",
     "err_kingdoms_kingdom_not_found",
     "error",
+    "realms_pick_restore_placeholder",
+    "realms_pick_archived_label",
+    "realms_pick_archived_hint",
+    "realms_restore_confirm_title",
+    "realms_restore_confirm_hint",
+    "realms_restore_yes",
+    "realms_restore_no",
+    "realms_restore_done",
+    "realms_restore_failed",
+    "realms_restore_not_yours",
+    "realms_restore_gone",
 )
 
 
@@ -66,6 +77,9 @@ def test_camp_strings_parity() -> None:
         strings["already_king_line"].format("Nilrem")
         strings["already_lord_line"].format("Nilrem")
         strings["error"].format("boom")
+        strings["realms_pick_archived_label"].format(name="Roc")
+        strings["realms_restore_confirm_hint"].format(name="Roc")
+        strings["realms_restore_done"].format("Roc")
         # the modal budget (rule: Label ≤45 chars)
         assert len(strings["modal_label"]) <= 45
         assert len(strings["modal_title"]) <= 45
@@ -81,6 +95,7 @@ def test_camp_custom_ids() -> None:
         KingdomCampJoinSelect,
         KingdomCampQueueButton,
         KingdomCampRealmSelect,
+        KingdomCampRestoreButton,
         camp_dynamic_items,
     )
 
@@ -105,7 +120,15 @@ def test_camp_custom_ids() -> None:
         KingdomCampQueueButton,
         KingdomCampJoinSelect,
         KingdomCampRealmSelect,
+        KingdomCampRestoreButton,
     }
+    # reset-joueurs-v1 : le réveil du fondateur est restart-proof aussi
+    assert (
+        KingdomCampRestoreButton(
+            "-yes", "roc", "7", "x", None  # type: ignore[arg-type]
+        ).custom_id
+        == "kingdom:camp:restore-yes:roc:7"
+    )
 
 
 def test_beta_gate_off_without_a_season() -> None:
@@ -188,3 +211,65 @@ def test_season_door_stays_closed_without_a_season() -> None:
 
         cb.wiring = empty_wiring
         assert asyncio.run(cb.season_door_open()) is False
+
+
+# ---------------------------------------------------------------------------
+# reset-joueurs-v1 (Drasah 22/11) — the founder wakes his archived home
+# ---------------------------------------------------------------------------
+
+
+def test_the_founders_archived_realm_leads_the_picker(monkeypatch) -> None:
+    """⚔️ Choisir mon camp → Rejoindre un royaume : le royaume ARCHIVÉ du
+    FONDATEUR apparaît EN PREMIER marqué « (archivé) » ; les archivés des
+    AUTRES rois restent invisibles ; les vivants restent rejoignables."""
+    import asyncio
+    from types import SimpleNamespace
+
+    import discord
+
+    from botforge.mods.kingdom.cogs import camp_beta, common
+    from botforge.mods.kingdom.cogs.camp_beta import _realms_join_window
+
+    shells = [
+        SimpleNamespace(
+            id="r1", name="Vivante", slug="vivante", king_id="9",
+            member_ids=[], archived_at=0,
+        ),
+        SimpleNamespace(
+            id="r2", name="Roc", slug="roc", king_id="42",
+            member_ids=[], archived_at=123,
+        ),
+        SimpleNamespace(
+            id="r3", name="AutreBoite", slug="autre-boite", king_id="7",
+            member_ids=[], archived_at=456,
+        ),
+    ]
+
+    class _Realms:
+        async def realms(self):
+            return shells
+
+    monkeypatch.setattr(camp_beta, "wiring", lambda: SimpleNamespace(realms=_Realms()))
+    monkeypatch.setattr(common, "locale_of", lambda _i: "fr")
+
+    def _options(node: object) -> list:
+        found: list = []
+        for child in getattr(node, "children", []) or []:
+            if isinstance(child, discord.SelectOption):
+                found.append(child)
+            elif isinstance(child, discord.ui.Select):
+                found.extend(child.options or [])
+            else:
+                found.extend(_options(child))
+        return found
+
+    me = SimpleNamespace(id=42)
+    view = asyncio.run(_realms_join_window(SimpleNamespace(user=me)))
+    labels = [str(o.label) for o in _options(view)]
+    assert labels and "Roc" in labels[0] and "archivé" in labels[0], (
+        "the founder's archived realm leads the picker"
+    )
+    assert any("Vivante" in l for l in labels[1:]), "living realms stay joinable"
+    assert not any("AutreBoite" in l for l in labels), (
+        "another king's archived realm stays invisible"
+    )

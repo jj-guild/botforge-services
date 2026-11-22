@@ -478,6 +478,13 @@ class KingdomApplyOpenButton(
         core_name = await _sp._core_display_name(bot, user_id)
         profiles = await _sp._linked_profile_ids(bot, user_id, _sp._mod_game_key(bot, MOD))
         account_ok = bool(core_name and profiles)
+        # registration-switch-v1 (Drasah 22/11) : « Compte requis » OFF =
+        # on postule directement, l'étape compte ne ride plus le
+        # parcours (la régie a le mot, la saison type bêta plie pareil)
+        from .regie import registration_required
+
+        if not await registration_required(bot, guild_id):
+            account_ok = True
 
         from botforge.core.services.season_stack import season_stack_for
 

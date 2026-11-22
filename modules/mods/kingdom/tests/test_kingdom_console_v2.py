@@ -258,6 +258,10 @@ def test_the_fixed_drawers_reuse_only_existing_registrations() -> None:
         "kingdom:console-regie:realm_creation_open",
         "kingdom:console-regie:realm_join_open",
         "kingdom:console-regie:season_entry_open",
+        # reset-joueurs-v1 (Drasah 22/11) : le 5e interrupteur
+        # « 📝 Compte requis » + le geste « 🧹 Réinitialiser les joueurs »
+        "kingdom:console-regie:registration_required",
+        "kingdom:console-regie:reset-players:0",
         "kingdom:settings:add-kingdom",
         "kingdom:settings:assign",
         "kingdom:settings:remove",
