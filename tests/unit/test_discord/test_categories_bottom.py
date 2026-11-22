@@ -121,7 +121,13 @@ async def test_the_mods_bottom_folders_sink_in_declaration_order(_stored: None) 
     assert moved == 2
 
 
-async def test_a_converged_guild_costs_zero_discord_calls(_stored: None) -> None:
+async def test_a_converged_guild_costs_zero_discord_calls(
+    _stored: None, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # isolate from any platform scopes left registered by an earlier
+    # suite (an integration journey registers them globally); this
+    # test asserts the MOD bottom folders' convergence only
+    monkeypatch.setattr(panels_provisioning, "registered_scopes", lambda: ())
     guild = _guild()
     guild.categories = [
         _fake_category(1, guild),

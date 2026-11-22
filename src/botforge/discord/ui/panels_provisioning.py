@@ -161,7 +161,7 @@ class _Platform:
 
 
 def _category_denies_everyone(channel: Any) -> bool:
-    """True when the channel's LIVE category gates @everyone's view.
+    """Return True when the channel's LIVE category gates @everyone's view.
 
     The room follows its front door (the machine-room rule, completed):
     a channel-level ``@everyone`` overwrite NULLIFIES the category's
@@ -194,74 +194,93 @@ def _category_denies_everyone(channel: Any) -> bool:
     return overwrite is not None and getattr(overwrite, "view_channel", None) is False
 
 
+async def _allow_bot_member(channel: discord.abc.GuildChannel) -> None:
+    """Grant the bot's own member its explicit operating allow.
+
+    Without it a ``view_channel=False`` for @everyone locks
+    the bot out of the very channel it provisioned, and every surface
+    (pins, syncs, dashboards) degrades with 403s.
+    """
+    me = channel.guild.me
+    if me is None:
+        return
+    await channel.set_permissions(
+        me,
+        overwrite=discord.PermissionOverwrite(
+            view_channel=True,
+            send_messages=True,
+            manage_messages=True,
+            manage_threads=True,
+            read_message_history=True,
+            embed_links=True,
+            attach_files=True,
+        ),
+        reason="botforge: the bot operates its own channel",
+    )
+
+
+async def _apply_policy_overwrites(
+    guild: discord.Guild, channel: discord.abc.GuildChannel, decl: ChannelDecl, policy: Any
+) -> None:
+    """Apply the DECLARED policy (the salons-as-data gating, #216 tranche I).
+
+    @everyone's view is data, the view roles are data — the roles
+    resolve by their provisioned display name (the mod's roles are
+    provisioned from the same declaration).
+    """
+    if not getattr(policy, "everyone_view", True):
+        await channel.set_permissions(
+            guild.default_role,
+            overwrite=discord.PermissionOverwrite(view_channel=False),
+            reason="botforge: the declared policy gates @everyone",
+        )
+    # the view roles ride as RESOLVED IDS (the persisted
+    # mapping is the resolver — a renamed role keeps its grant;
+    # never a name lookup at apply time)
+    for role_id in getattr(decl, "view_role_ids", ()) or ():
+        role = guild.get_role(int(role_id)) if str(role_id).isdigit() else None
+        if role is None:
+            logger.warning(
+                "panels provisioning: the view role id %r is not resolved — skipped",
+                role_id,
+            )
+            continue
+        await channel.set_permissions(
+            role,
+            overwrite=discord.PermissionOverwrite(
+                view_channel=True,
+                send_messages=not getattr(policy, "everyone_post", False),
+                read_message_history=True,
+            ),
+            reason="botforge: the declared policy grants the view role",
+        )
+
+
 async def _apply_access(guild: discord.Guild, channel_id: str, decl: ChannelDecl) -> None:
     """Apply the channel's access band (overwrites, best-effort).
 
-    The bot's own member always carries an explicit allow (view, send,
-    manage) — without it a ``view_channel=False`` for @everyone locks
-    the bot out of the very channel it provisioned, and every surface
-    (pins, syncs, dashboards) degrades with 403s.
+    The bot's own member always carries an explicit operating allow
+    first, then the declared policy (or the legacy access band) rides.
     """
     channel = guild.get_channel(int(channel_id)) if channel_id.isdigit() else None
     if channel is None:
         return
     try:
-        me = guild.me
-        if me is not None:
-            await channel.set_permissions(
-                me,
-                overwrite=discord.PermissionOverwrite(
-                    view_channel=True,
-                    send_messages=True,
-                    manage_messages=True,
-                    manage_threads=True,
-                    read_message_history=True,
-                    embed_links=True,
-                    attach_files=True,
-                ),
-                reason="botforge: the bot operates its own channel",
-            )
+        await _allow_bot_member(channel)
         policy = getattr(decl, "policy", None)
         if policy is not None:
-            # the DECLARED policy (the salons-as-data gating, #216
-            # tranche I): @everyone's view is data, the view roles are
-            # data — the roles resolve by their provisioned display
-            # name (the mod's roles are provisioned from the same
-            # declaration)
-            if not getattr(policy, "everyone_view", True):
-                await channel.set_permissions(
-                    guild.default_role,
-                    overwrite=discord.PermissionOverwrite(view_channel=False),
-                    reason="botforge: the declared policy gates @everyone",
-                )
-            # the view roles ride as RESOLVED IDS (the persisted
-            # mapping is the resolver — a renamed role keeps its grant;
-            # never a name lookup at apply time)
-            for role_id in getattr(decl, "view_role_ids", ()) or ():
-                role = guild.get_role(int(role_id)) if str(role_id).isdigit() else None
-                if role is None:
-                    logger.warning(
-                        "panels provisioning: the view role id %r is not resolved — skipped",
-                        role_id,
-                    )
-                    continue
-                await channel.set_permissions(
-                    role,
-                    overwrite=discord.PermissionOverwrite(
-                        view_channel=True,
-                        send_messages=not getattr(policy, "everyone_post", False),
-                        read_message_history=True,
-                    ),
-                    reason="botforge: the declared policy grants the view role",
-                )
+            await _apply_policy_overwrites(guild, channel, decl, policy)
         elif decl.access == "readonly":
             # the room follows its front door: an explicit readonly
             # overwrite on the channel NULLIFIES the category's gate in
             # Discord's resolution — when the live category denies
             # @everyone's view, the readonly band carries that deny too
-            overwrite = discord.PermissionOverwrite(send_messages=False, add_reactions=True)
-            if _category_denies_everyone(channel):
-                overwrite.view_channel = False
+            deny_view = _category_denies_everyone(channel)
+            overwrite = discord.PermissionOverwrite(
+                send_messages=False,
+                add_reactions=True,
+                **({"view_channel": False} if deny_view else {}),
+            )
             await channel.set_permissions(
                 guild.default_role, overwrite=overwrite, reason="botforge: readonly menu channel"
             )
@@ -329,6 +348,23 @@ async def move_category_bottom(guild: discord.Guild, category_id: str) -> bool:
     return True
 
 
+async def _push_mod_bottoms(mod_name: str, definition: Any, push: Any) -> None:
+    """Push one mod's declared bottom folders (home first, then groups).
+
+    Group order is the channels' own declaration order.
+    """
+    if getattr(definition, "home_bottom", False):
+        await push(f"mod/{mod_name}", "category")
+    # the mod's declared bottom GROUPS (the channel_groups `bottom`
+    # flag), in the channels' own declaration order, deduplicated
+    for channel in getattr(definition, "channel_categories", ()) or ():
+        if not getattr(channel, "group_bottom", False):
+            continue
+        group = str(getattr(channel, "group", "") or "")
+        if group:
+            await push(f"mod/{mod_name}", f"cat:{group}")
+
+
 async def _bottom_category_ids(bot: discord.Client, guild: discord.Guild) -> list[str]:
     """Every DECLARED bottom folder's stored category id, in declaration order.
 
@@ -349,18 +385,9 @@ async def _bottom_category_ids(bot: discord.Client, guild: discord.Guild) -> lis
         if getattr(spec, "category_bottom", False):
             await _push(spec.scope, "category")
     registry = getattr(bot, "registry", None)
-    enabled = registry.enabled() if hasattr(registry, "enabled") else {}
+    enabled = registry.enabled() if registry is not None and hasattr(registry, "enabled") else {}
     for mod_name, definition in (enabled or {}).items():
-        if getattr(definition, "home_bottom", False):
-            await _push(f"mod/{mod_name}", "category")
-        # the mod's declared bottom GROUPS (the channel_groups `bottom`
-        # flag), in the channels' own declaration order, deduplicated
-        for channel in getattr(definition, "channel_categories", ()) or ():
-            if not getattr(channel, "group_bottom", False):
-                continue
-            group = str(getattr(channel, "group", "") or "")
-            if group:
-                await _push(f"mod/{mod_name}", f"cat:{group}")
+        await _push_mod_bottoms(mod_name, definition, _push)
     # dedup KEEPING the first occurrence (declaration order wins)
     seen: set[str] = set()
     ordered: list[str] = []
@@ -386,7 +413,7 @@ async def enforce_bottom_categories(bot: discord.Client) -> int:
     for guild in list(getattr(bot, "guilds", []) or []):
         try:
             wanted = await _bottom_category_ids(bot, guild)
-        except Exception:  # noqa: BLE001 — one folder never blocks the pass
+        except Exception:
             logger.warning("panels provisioning: the bottom pass read failed", exc_info=True)
             continue
         if not wanted:
@@ -665,42 +692,102 @@ async def set_platform_categories_private(guild: discord.Guild, private: bool) -
     categories were touched.
     """
     touched = 0
-    seen: set[str] = set()
     for spec in registered_scopes():
         if spec.scope.startswith("mod/") or not spec.category_key:
             continue
-        candidates = await _platform_category_candidates(guild, spec)
-        view_role_ids = tuple(getattr(spec, "category_view_role_ids", ()) or ())
-        spec_touched = False
-        for category_id in candidates:
-            if category_id in seen:
-                continue
-            category = guild.get_channel(int(category_id)) if category_id.isdigit() else None
-            if not isinstance(category, discord.CategoryChannel):
-                continue
-            seen.add(category_id)
-            if private:
-                await _apply_category_access(guild, category_id, view_role_ids)
-            else:
-                await _restore_category_access(guild, category_id)
-            spec_touched = True
-            touched += 1
-        if not spec_touched:
-            continue
-        # the rooms follow the front door (machine-room, completed): an
-        # already-provisioned guild keeps the pierced bands from the era
-        # before the rule (a readonly room shows the whole gated folder
-        # to @everyone) — re-applying each band reads the LIVE category
-        # state, so the rooms gate with the folder on install and
-        # return to their plain bands on the uninstall restore
-        for decl in getattr(spec, "channels", ()) or ():
-            try:
-                stored = await stored_channel_id(str(guild.id), spec.scope, decl.key)
-            except Exception:
-                stored = ""
-            if stored and str(stored).isdigit():
-                await _apply_access(guild, str(stored), decl)
+        touched += await _gate_platform_spec(guild, spec, private)
     return touched
+
+
+async def _gate_platform_spec(guild: discord.Guild, spec: Any, private: bool) -> int:
+    """Gate (or restore) ONE platform scope's category; heal its rooms' bands."""
+    touched = 0
+    seen: set[str] = set()
+    candidates = await _platform_category_candidates(guild, spec)
+    view_role_ids = tuple(getattr(spec, "category_view_role_ids", ()) or ())
+    for category_id in candidates:
+        if category_id in seen:
+            continue
+        category = guild.get_channel(int(category_id)) if category_id.isdigit() else None
+        if not isinstance(category, discord.CategoryChannel):
+            continue
+        seen.add(category_id)
+        if private:
+            await _apply_category_access(guild, category_id, view_role_ids)
+        else:
+            await _restore_category_access(guild, category_id)
+        touched += 1
+    if not touched:
+        return 0
+    # the rooms follow the front door (machine-room, completed): an
+    # already-provisioned guild keeps the pierced bands from the era
+    # before the rule (a readonly room shows the whole gated folder
+    # to @everyone) — re-applying each band reads the LIVE category
+    # state, so the rooms gate with the folder on install and
+    # return to their plain bands on the uninstall restore
+    for decl in getattr(spec, "channels", ()) or ():
+        try:
+            stored = await stored_channel_id(str(guild.id), spec.scope, decl.key)
+        except Exception:
+            stored = ""
+        if stored and str(stored).isdigit():
+            await _apply_access(guild, str(stored), decl)
+    return touched
+
+
+async def _provision_one_channel(
+    guild: discord.Guild,
+    platform: _Platform,
+    spec: ScopeSpec,
+    decl: Any,
+    name: str,
+    channel_category: str,
+    resolved: dict[str, str],
+) -> str | None:
+    """Resolve (or create) ONE declared channel; return its id (None = skipped).
+
+    A stored channel of the WRONG kind (a corrupted provisioning, a
+    manual conversion) is treated as absent — a fresh channel of the
+    declared kind replaces it and its stored id is overwritten
+    (self-healing).
+    """
+    try:
+        stored = await stored_channel_id(str(guild.id), spec.scope, decl.key)
+        if stored and stored.isdigit():
+            channel = guild.get_channel(int(stored))
+            if (
+                channel is not None
+                and _kind_matches(channel, decl.kind)
+                and _category_matches(channel, channel_category)
+            ):
+                existing = getattr(channel, "name", "")
+                if existing != name:
+                    await channel.edit(
+                        name=name, reason="botforge: panels provisioning (label refresh)"
+                    )
+                await _apply_access(guild, stored, decl)
+                resolved[decl.key] = stored
+                return stored
+            if channel is not None:
+                logger.warning(
+                    "panels provisioning: stored channel %s/%s has the wrong kind "
+                    "(declared %s, found %s) — recreating",
+                    spec.scope,
+                    decl.key,
+                    decl.kind,
+                    type(channel).__name__,
+                )
+        if decl.kind == "forum":
+            return await platform.ensure_forum(name, channel_category)
+        return await platform.ensure_channel(name, channel_category)
+    except discord.HTTPException:
+        logger.warning(
+            "panels provisioning: channel %s/%s failed — best-effort, skipped",
+            spec.scope,
+            decl.key,
+            exc_info=True,
+        )
+        return None
 
 
 async def provision_scope(
@@ -756,49 +843,10 @@ async def provision_scope(
             resolved,
             group_view_roles=group_view_roles,
         )
-        try:
-            stored = await stored_channel_id(str(guild.id), spec.scope, decl.key)
-            if stored and stored.isdigit():
-                channel = guild.get_channel(int(stored))
-                if (
-                    channel is not None
-                    and _kind_matches(channel, decl.kind)
-                    and _category_matches(channel, channel_category)
-                ):
-                    existing = getattr(channel, "name", "")
-                    if existing != name:
-                        await channel.edit(
-                            name=name, reason="botforge: panels provisioning (label refresh)"
-                        )
-                    await _apply_access(guild, stored, decl)
-                    resolved[decl.key] = stored
-                    if channel_category:
-                        category_order.setdefault(channel_category, []).append(stored)
-                    continue
-                # a stored channel of the WRONG kind (a corrupted
-                # provisioning, a manual conversion): it is treated as
-                # absent — a fresh channel of the declared kind replaces
-                # it and its stored id is overwritten (self-healing)
-                if channel is not None:
-                    logger.warning(
-                        "panels provisioning: stored channel %s/%s has the wrong kind "
-                        "(declared %s, found %s) — recreating",
-                        spec.scope,
-                        decl.key,
-                        decl.kind,
-                        type(channel).__name__,
-                    )
-            if decl.kind == "forum":
-                channel_id = await platform.ensure_forum(name, channel_category)
-            else:
-                channel_id = await platform.ensure_channel(name, channel_category)
-        except discord.HTTPException:
-            logger.warning(
-                "panels provisioning: channel %s/%s failed — best-effort, skipped",
-                spec.scope,
-                decl.key,
-                exc_info=True,
-            )
+        channel_id = await _provision_one_channel(
+            guild, platform, spec, decl, name, channel_category, resolved
+        )
+        if channel_id is None:
             continue
         await _apply_access(guild, channel_id, decl)
         resolved[decl.key] = channel_id

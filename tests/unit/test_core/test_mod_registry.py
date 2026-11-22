@@ -175,7 +175,7 @@ def test_the_kingdom_conscription_declares_the_journey_positions() -> None:
     journey = {
         c.key: c.position
         for c in kingdom.channel_categories
-        if c.group and not c.position is None
+        if c.group and c.position is not None
     }
     assert journey.get("register", 0) < journey.get("apply", 99)
     assert journey.get("apply", 0) < journey.get("seigneurerie", 99)

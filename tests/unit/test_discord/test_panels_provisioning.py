@@ -399,8 +399,8 @@ class TestCategoryGate:
         general = discord.utils.get(guild.text_channels, category=guild.categories[0])
         assert general is not None
         cat_id = str(guild.categories[0].id)
-        _STORED[f"games:category"] = cat_id
-        _STORED[f"games:general"] = str(general.id)
+        _STORED["games:category"] = cat_id
+        _STORED["games:general"] = str(general.id)
         # the pre-rule pierced band: readonly WITHOUT the view deny
         general._permissions[(guild.default_role.id, True)] = None
         n = await set_platform_categories_private(guild, True)

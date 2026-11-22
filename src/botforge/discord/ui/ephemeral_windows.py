@@ -28,7 +28,7 @@ import asyncio
 import logging
 import time
 from enum import StrEnum
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 if TYPE_CHECKING:  # the seam is duck-typed at runtime — no discord import
     import discord
@@ -55,13 +55,15 @@ def set_window_ttl(scope: str, seconds: float) -> None:
 
 
 def window_ttl(scope: str) -> float:
-    """The scope's self-closing delay (0 = never)."""
+    """Return the scope's self-closing delay (0 = never)."""
     return _ttls.get(str(scope), 0.0)
 
 
 def get_live_window(scope: str, owner: str) -> Any | None:
-    """The owner's tracked window (the interaction or adapter) — for an
-    owner-side close button that deletes the message it rides."""
+    """Return the owner's tracked window (the interaction or adapter).
+
+    Feeds an owner-side close button that deletes the message it rides.
+    """
     record = _live.get((str(scope), str(owner)))
     return record[0] if record is not None else None
 
@@ -108,8 +110,10 @@ def _cancel_auto_close(scope: str, owner: str) -> None:
 
 
 def _arm_auto_close(scope: str, owner: str, ttl: float) -> None:
-    """Schedule the window's self-close — a replaced window cancels its
-    own timer first (``_cancel`` runs in the replace path)."""
+    """Schedule the window's self-close, cancelling any prior timer first.
+
+    A replaced window cancels its own timer (``_cancel`` runs in the replace path).
+    """
     key = (str(scope), str(owner))
     if ttl <= 0:
         return
@@ -153,7 +157,7 @@ async def open_ephemeral_window(
     ttl = window_ttl(scope)
     kwargs["ephemeral"] = True
     if interaction.response.is_done():
-        message = await interaction.followup.send(content, **kwargs)
+        message = await interaction.followup.send(cast("str", content), **kwargs)
         if mode is EphemeralWindowMode.SINGLE:
             _live[(str(scope), owner)] = (_FollowupWindow(message), time.monotonic())
             _arm_auto_close(str(scope), owner, ttl)
