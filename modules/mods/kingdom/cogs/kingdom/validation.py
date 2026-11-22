@@ -460,6 +460,30 @@ def _delete_confirm_card(
         except Exception as exc:  # noqa: BLE001 — the card reports, never raises
             logger.warning("kingdom: delete failed (%s)", kingdom.id, exc_info=True)
             note = str(shared["console_error"]).format(str(exc)[:150])
+            deleted = None
+        # supprime-habitat-v2 (Drasah 22/11) : le seam moteur documente
+        # « the Discord structure is deleted by the surface » — la
+        # surface le fait MAINTENANT : la coquille, la catégorie et les
+        # salons partent AVEC le royaume moteur, l'engagement est
+        # relâché (le sas se purge seul). L'incident live 22/11 : la 🗑️
+        # ne touchait qu'au moteur — famille orpheline + « Admis en
+        # saison » sur un royaume fantôme. Best-effort : le moteur
+        # reste la vérité, la famille ne bloque JAMAIS la suppression.
+        if deleted is not None:
+            try:
+                from .realms import teardown_realm_habitat
+
+                structures = await teardown_realm_habitat(target.client, str(kingdom.id))
+            except Exception:  # noqa: BLE001 — jamais bloquant
+                logger.warning(
+                    "kingdom: realm habitat teardown failed (%s)", kingdom.id, exc_info=True
+                )
+                structures = 0
+            if structures:
+                note = (
+                    f"{note}\n"
+                    + str(strings["deleted_habitat_note"]).format(structures=structures)
+                )
         try:
             await _refresh_pins(target.client, str(target.guild_id or ""))
         except Exception:

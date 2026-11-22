@@ -426,6 +426,107 @@ def test_sweep_realm_structures_converges_the_reset_scope() -> None:
     assert set(ids) == {"category", "discussions", "hub", "territory", "alliances"}
 
 
+def test_teardown_realm_habitat_dismounts_the_family() -> None:
+    """supprime-habitat-v2 — la 🗑️ du royaume emporte la famille
+    Discord : les salons PUIS la catégorie, la coquille repart
+    dormante les ids à vide, et le compte remonte pour la note."""
+
+    class FakeCategory:
+        def __init__(self, name: str) -> None:
+            self.name = name
+            self.id = 777
+            self.channels: list[Any] = []
+            self.deleted = False
+
+        async def delete(self, reason: str = "") -> None:
+            self.deleted = True
+
+    class FakeChannel:
+        def __init__(self, name: str, category: FakeCategory) -> None:
+            self.name = name
+            self.id = 700 + len(category.channels)
+            self.category = category
+            category.channels.append(self)
+
+        async def delete(self, reason: str = "") -> None:
+            self.category.channels.remove(self)
+
+    class FakeGuild:
+        def __init__(self) -> None:
+            self.category = FakeCategory("🏰 AEGIS")
+            self.categories: list[Any] = [self.category]
+
+    class FakeService:
+        def __init__(self) -> None:
+            self.saved: dict[str, Any] = {}
+            self.released: list[str] = []
+
+        async def realms(self) -> list[Any]:
+            return [
+                SimpleNamespace(
+                    id="realm:aegis-1", name="AEGIS",
+                    engagement={"kingdom_id": "k1"}, king_id="1", member_ids=[],
+                    discord={"category": "777", "hub": "9"},
+                ),
+                SimpleNamespace(
+                    id="realm:elsewhere", name="Elsewhere", engagement=None,
+                    king_id="2", member_ids=[], discord={},
+                ),
+            ]
+
+        async def release_engagement(self, realm_id: str) -> Any:
+            self.released.append(realm_id)
+            return None
+
+        async def save_habitat(self, realm_id: str, disc: Any) -> None:
+            self.saved[realm_id] = disc
+
+    import asyncio
+    import unittest.mock as mock
+
+    from botforge.mods.kingdom.cogs import realms as realms_module
+
+    guild = FakeGuild()
+    for name in ("🔒 Discussions", "🏰 Le royaume", "🌍 Territoire", "🏆 Alliances"):
+        FakeChannel(name, guild.category)
+    bot = SimpleNamespace(guilds=[guild])
+    service = FakeService()
+    stack = SimpleNamespace(realms=service)
+    with mock.patch.object(realms_module, "wiring", lambda: stack):
+        deleted = asyncio.run(realms_module.teardown_realm_habitat(bot, "k1"))
+    # 4 salons + la catégorie ; le royaume non-engagé n'est pas touché
+    assert deleted == 5, deleted
+    assert guild.category.deleted
+    assert guild.category.channels == []
+    assert service.released == ["realm:aegis-1"]
+    assert service.saved == {"realm:aegis-1": {}}
+
+
+def test_teardown_realm_habitat_skips_foreign_kingdoms() -> None:
+    """Un royaume moteur sans coquille (Gaïa, un ajout admin) ne
+    démonte RIEN — et l'engagement d'AUTRE royaume ne déclenche pas."""
+
+    import asyncio
+    import unittest.mock as mock
+
+    from botforge.mods.kingdom.cogs import realms as realms_module
+
+    class FakeService:
+        async def realms(self) -> list[Any]:
+            return [
+                SimpleNamespace(
+                    id="realm:hen", name="HeN",
+                    engagement={"kingdom_id": "k-autre"}, king_id="1",
+                    member_ids=[], discord={},
+                )
+            ]
+
+    stack = SimpleNamespace(realms=FakeService())
+    bot = SimpleNamespace(guilds=[])
+    with mock.patch.object(realms_module, "wiring", lambda: stack):
+        assert asyncio.run(realms_module.teardown_realm_habitat(bot, "k1")) == 0
+
+
 def test_the_hub_template_carries_both_states() -> None:  # deliberately mis-named? no — the hub layout
     """The hub template renders dormant (grey) and vivant (gold) alike."""
     from botforge.mods.kingdom.cogs.realms import hub_layout

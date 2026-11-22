@@ -294,6 +294,7 @@ def test_validation_cards_strings_parity() -> None:
             assert s[key], (locale, key)
         s["delete_confirm_title"].format(name="X")
         s["deleted_note"].format(name="X")
+        s["deleted_habitat_note"].format(structures=3)
         s["crown_title"].format(name="X")
         s["crown_note"].format(king="X", name="Y")
 

@@ -479,6 +479,90 @@ async def sweep_realm_structures(bot: Any) -> int:
     return touched
 
 
+async def teardown_realm_habitat(bot: Any, kingdom_id: str) -> int:
+    """The realm's Discord family goes with its kingdom's deletion.
+
+    supprime-habitat-v2 (Drasah 22/11) : le seam moteur ``delete_kingdom``
+    documente « the Discord structure is deleted by the surface », mais
+    AUCUNE surface ne le faisait — la 🗑️ de la conscription partait du
+    royaume moteur et laissait (1) la catégorie + les salons EN PLACE,
+    orphelins qu'aucune passe ne connaît plus, et (2) la coquille
+    ENGAGÉE sur un royaume mort (« Admis en saison », AJCHN, 22/11).
+    La passe démonte la famille du royaume porté par l'engagement : ses
+    salons PUIS la catégorie (les canaux d'une catégorie supprimée
+    remontent au niveau du serveur — il faut les ôter d'abord), la
+    coquille est libérée (dormante, le sas se purge seul), ses ids
+    d'habitat repartent à VIDE (plus d'ancre périmée). Best-effort par
+    étape : le moteur reste la vérité, la famille ne bloque JAMAIS la
+    suppression. Retourne le nombre d'éléments Discord démontés — la
+    note de la surface le dit, jamais une suppression muette.
+    """
+    stack = wiring()
+    service = _realm_service(stack)
+    if service is None or not kingdom_id:
+        return 0
+    try:
+        realms = await service.realms()
+    except Exception:  # noqa: BLE001 — un read, jamais un crash
+        logger.warning("kingdom realms: teardown read failed", exc_info=True)
+        return 0
+    realm = next(
+        (
+            r
+            for r in realms
+            if str((getattr(r, "engagement", None) or {}).get("kingdom_id", "") or "")
+            == str(kingdom_id)
+        ),
+        None,
+    )
+    if realm is None:
+        return 0  # un royaume moteur sans coquille (Gaïa, un ajout admin)
+    deleted = 0
+    display = category_name(str(getattr(realm, "name", "")))
+    for guild in list(getattr(bot, "guilds", []) or []):
+        category = _find_realm_category(guild, str(getattr(realm, "name", "")))
+        if category is None:
+            continue  # pas la famille de ce guild — jamais de création
+        for channel in list(getattr(category, "channels", []) or []):
+            try:
+                delete = getattr(channel, "delete", None)
+                if delete is None:
+                    continue
+                await delete(reason="kingdom: realm deleted, salon removed with it")
+                deleted += 1
+            except Exception:  # noqa: BLE001 — jamais bloquant
+                logger.warning(
+                    "kingdom realms: teardown salon failed (%s)",
+                    getattr(channel, "name", "?"),
+                    exc_info=True,
+                )
+        try:
+            delete_category = getattr(category, "delete", None)
+            if delete_category is not None:
+                await delete_category(reason="kingdom: realm deleted")
+                deleted += 1
+        except Exception:  # noqa: BLE001
+            logger.warning("kingdom realms: teardown category failed", exc_info=True)
+    # la coquille : engagement relâché (dormante — le sas se purge seul),
+    # ids d'habitat à VIDE, pour que la famille ne reste jamais recollée
+    # à une ancre périmée.
+    realm_id = str(getattr(realm, "id", "") or "")
+    if realm_id:
+        try:
+            await service.release_engagement(realm_id)
+        except Exception:  # noqa: BLE001
+            logger.warning("kingdom realms: teardown release failed", exc_info=True)
+        try:
+            await service.save_habitat(realm_id, {})
+        except Exception:  # noqa: BLE001
+            logger.warning("kingdom realms: teardown persist failed", exc_info=True)
+    if deleted:
+        logger.info(
+            "kingdom realms: realm family torn down (%s, %d éléments)", display, deleted
+        )
+    return deleted
+
+
 # ---------------------------------------------------------------------------
 # The hub salon's panel — the designer's capture (illustration +Entrée)
 # ---------------------------------------------------------------------------
