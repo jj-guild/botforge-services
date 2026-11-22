@@ -51,10 +51,21 @@ class _Resp:
 class _Follow:
     def __init__(self) -> None:
         self.sent: list[Any] = []
+        self.opened: list[Any] = []
 
     async def send(self, content: Any = None, **kwargs: Any) -> Any:
         self.sent.append((content, kwargs))
-        return NS(id="f1")
+        # drawer-build-v1 (Check 136) : la fenêtre d'un clic acké vit
+        # dans le followup ET se ferme par message.delete() — le faux
+        # porte les deux (la fenêtre unique du core suit ce chemin).
+        message = NS(id=f"f{len(self.sent)}", deleted=False)
+
+        async def _delete() -> None:
+            message.deleted = True
+
+        message.delete = _delete
+        self.opened.append(message)
+        return message
 
 
 def _interaction(user: str = "7") -> Any:
@@ -230,13 +241,17 @@ async def test_two_consecutive_windows_keep_a_single_window() -> None:
     with _wired():
         first = _interaction(user="13")
         await _nav_click(first, "admissions")
-        assert first.response.sent is not None, "window 1 (the drawer) opened"
+        # drawer-build-v1 (Check 136) : fast-ack — le clic est acquitté
+        # immédiatement, la fenêtre vit dans le followup
+        assert first.response.deferred, "the click is acked (deferred) at once"
+        assert first.followup.sent, "window 1 (the drawer) rides the followup"
 
         second = _interaction(user="13")
         await _nav_click(second, "atelier")
 
-    assert first.delete_original_response is not None
-    assert first.deleted_original, "window 1 is closed when window 2 opens"
+    assert first.followup.opened[0].deleted, (
+        "window 1 is closed (its followup message deleted) when window 2 opens"
+    )
     live = ew.get_live_window(KINGDOM_WINDOW_SCOPE, "13")
     assert live is not None, "the seam tracks the LAST window only"
 
@@ -251,7 +266,8 @@ async def test_a_drawer_has_no_back_button_and_no_console_target() -> None:
     with _wired():
         inter = _interaction(user="15")
         await _nav_click(inter, "atelier")
-    _content, kwargs = inter.response.sent
+    assert inter.response.deferred, "fast-ack: the click never races the 3-second clock"
+    _content, kwargs = inter.followup.sent[0]
     ids = _ids(kwargs["view"])
     assert not any("console-nav:console" in i for i in ids), "no back-to-console ids ship"
     assert "kingdom:window:close" in ids, "the ✖️ stays — the ONLY way out"

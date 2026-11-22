@@ -1475,10 +1475,31 @@ async def _build_drawer(
             )
         except Exception:  # noqa: BLE001 — a read, never a crash
             season_live = False
+        # drawer-build-v1 (22/11, incident « n'a pas répondu à temps ») :
+        # archivés et dormants puisent dans LA MÊME liste de coquilles —
+        # UNE lecture, deux filtres (avant : deux parcours complets de
+        # la base, et la pile de lectures regardait le chrono de 3 s).
+        shells = await _all_shells()
+
+        def _by_name(realm: Any) -> str:
+            return str(getattr(realm, "name", "?"))
+
         view = _regie_drawer(
             strings, states, season_live=season_live,
-            archived=await _archived_realms(), guild_id=guild_id,
-            dormant=await _dormant_realms(),
+            archived=sorted(
+                (r for r in shells if getattr(r, "archived_at", 0)), key=_by_name
+            ),
+            guild_id=guild_id,
+            dormant=sorted(
+                (
+                    r
+                    for r in shells
+                    if not getattr(r, "engagement", None)
+                    and not getattr(r, "join_request", None)
+                    and not getattr(r, "archived_at", 0)
+                ),
+                key=_by_name,
+            ),
         )
     elif drawer == "atelier":
         from .common import strings_by_locale
@@ -1518,13 +1539,11 @@ async def _admitted_realms() -> list[Any]:
     )
 
 
-async def _dormant_realms() -> list[Any]:
-    """The persistent realms OUT of the season — dormant shells.
+async def _all_shells() -> list[Any]:
+    """Every realm shell, ONE read of the base (the callers filter offline).
 
-    ejection-archive-v1 (Drasah 22/11) : la 🗑️ du sas ne DETRUIT plus
-    une coquille, elle la libère DORMANTE — l'admin doit les VOIR
-    (onglet Admissions) avec le geste 📦 Archiver à la main. Hors
-    engagés, hors demandes en cours, hors archivés.
+    drawer-build-v1 (Check 136) : archivés, dormants, admis — la même
+    liste, jamais deux fois le même parcours de la base dans un clic.
     """
     stack = wiring()
     if stack is None:
@@ -1535,41 +1554,38 @@ async def _dormant_realms() -> list[Any]:
         service = _realms_service(stack)
         if service is None:
             return []
-        realms = await service.realms()
+        return list(await service.realms() or [])
     except Exception:  # noqa: BLE001 — a read, never a crash
-        logger.warning("kingdom: the dormant realms read failed", exc_info=True)
+        logger.warning("kingdom: the realm shells read failed", exc_info=True)
         return []
+
+
+def _dormant_filter(realm: Any) -> bool:
+    """A dormant shell: free of season, free of pending request, not archived."""
+    return (
+        not getattr(realm, "engagement", None)
+        and not getattr(realm, "join_request", None)
+        and not getattr(realm, "archived_at", 0)
+    )
+
+
+async def _dormant_realms() -> list[Any]:
+    """The persistent realms OUT of the season — dormant shells.
+
+    ejection-archive-v1 (Drasah 22/11) : la 🗑️ du sas ne DETRUIT plus
+    une coquille, elle la libère DORMANTE — l'admin doit les VOIR
+    (onglet Admissions) avec le geste 📦 Archiver à la main. Hors
+    engagés, hors demandes en cours, hors archivés.
+    """
+    # drawer-build-v1 : le filtre vit dans _dormant_filter, la lecture
+    # partagée dans _all_shells (une seule passe de la base par clic)
     return sorted(
-        (
-            realm
-            for realm in realms
-            if not getattr(realm, "engagement", None)
-            and not getattr(realm, "join_request", None)
-            and not getattr(realm, "archived_at", 0)
-        ),
+        (realm for realm in await _all_shells() if _dormant_filter(realm)),
         key=lambda realm: str(getattr(realm, "name", "?")),
     )
 
 
-async def _archived_realms() -> list[Any]:
-    """The ARCHIVED shells — the régie's restoration drawer (22/11)."""
-    stack = wiring()
-    if stack is None:
-        return []
-    try:
-        from .validation import _realms_service
 
-        service = _realms_service(stack)
-        if service is None:
-            return []
-        realms = await service.realms()
-    except Exception:  # noqa: BLE001 — a read, never a crash
-        logger.warning("kingdom: the archived realms read failed", exc_info=True)
-        return []
-    return sorted(
-        (realm for realm in realms if getattr(realm, "archived_at", 0)),
-        key=lambda realm: str(getattr(realm, "name", "?")),
-    )
 
 
 async def refresh_live_pins_after(interaction: discord.Interaction) -> None:
@@ -1634,6 +1650,15 @@ class KingdomSettingsNavButton(
             return
         if not await _panel_guard(interaction):
             return
+        # drawer-build-v1 (Check 136, incident « n'a pas répondu à temps ») :
+        # le fast-ack du core — le clic est acquitté IMMÉDIATEMENT (le
+        # chrono de 3 s de Discord appartient à l'ack), la construction
+        # du tiroir prend son temps, et la fenêtre vit dans le followup
+        # (``open_ephemeral_window`` route déjà le cas « réponse faite »).
+        try:
+            await interaction.response.defer(ephemeral=True)
+        except Exception:  # noqa: BLE001 — an already-acked click
+            logger.debug("kingdom: the drawer defer skipped", exc_info=True)
         view = await _build_drawer(
             self.drawer, locale_of(interaction), interaction.client, str(interaction.guild_id or "")
         )
@@ -1693,6 +1718,13 @@ class KingdomRegieSwitchButton(
         strings = strings_of(interaction)
         if not await _panel_guard(interaction):
             return
+        # drawer-build-v1 (Check 136) : fast-ack — le flip puis la
+        # reconstruction du tiroir peuvent prendre leur temps, l'ack
+        # part immédiatement (les notes d'échec vivent en followup).
+        try:
+            await interaction.response.defer(ephemeral=True)
+        except Exception:  # noqa: BLE001 — an already-acked click
+            logger.debug("kingdom: the switch defer skipped", exc_info=True)
         new_value = False
         try:
             from .regie import toggle_switch
