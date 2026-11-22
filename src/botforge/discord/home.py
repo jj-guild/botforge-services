@@ -720,8 +720,11 @@ async def _profile_header(interaction: discord.Interaction, user_id: str) -> str
         except Exception:
             logger.warning("HOME: identity lookup failed", exc_info=True)
     if user is None or not user.display_name:
-        return await tr(interaction, "profile.header_no_name", "# 👤 Your profile\nName: *(not set)*")
-    header = await tr(interaction, "profile.header_with_name", "# 👤 Your profile\nName: **{name}**")
+        # reply() resolves the replies.* catalog (tr() only maps the
+        # ui.* component labels \u2014 a replies key through tr() always
+        # fell back to the English, owner 2026-11-22)
+        return await reply(interaction, "profile.header_no_name")
+    header = await reply(interaction, "profile.header_with_name")
     return header.format(name=user.display_name)
 
 

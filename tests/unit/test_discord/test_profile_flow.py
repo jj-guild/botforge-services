@@ -136,16 +136,36 @@ class _Client:
         self.registration_service: Any = None
         self.identity_service: Any = None
         self.mod_profile_enrichers: dict[str, Any] = {}
-        self.messages = None
+        # the REAL catalog: the profile view rides the locale now (the
+        # hardcoded header died 2026-11-22), so the flows need the
+        # resolved wordage, not the raw keys a bare client renders
+        from botforge.core.services.i18n import MessageCatalog
+
+        self.messages = MessageCatalog("config")
         self.logs_service = None
 
 
 class _Interaction:
-    """Interaction stand-in: user 42, one guild, defer+followup."""
+    """Interaction stand-in: user 42, one guild, defer+followup.
+
+    The client speaks FRENCH (the locale seam resolves the
+    interaction's locale first): the flows assert the rendered
+    wordage, so the catalog resolves the fr catalog.
+    """
 
     guild_id = 123
+    locale = "fr-FR"
     user = type("U", (), {"id": 42, "display_name": "TestUser"})()
-    guild = type("G", (), {"id": 123, "get_member": lambda self, i: None, "fetch_member": None})()
+    guild = type(
+        "G",
+        (),
+        {
+            "id": 123,
+            "preferred_locale": "fr-FR",
+            "get_member": lambda self, i: None,
+            "fetch_member": None,
+        },
+    )()
 
     def __init__(self) -> None:
         self.client = _Client()
