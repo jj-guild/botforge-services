@@ -364,6 +364,33 @@ async def ensure_realm_structure(guild: Any, realm: Any, *, dormant: bool = True
                 continue
         ids[key] = str(getattr(channel, "id", "") or "")
         await _apply_dormancy(guild, channel, key, member_ids, dormant)
+        # duplicate-sweep (Drasah 22/11) — l'incident live HeN/AEGIS :
+        # les provisions d'avant l'adoption (les incidents
+        # stale-anchor, check 83) ont laissé des COPIES de salons
+        # déclarés dans la catégorie. L'adoption n'en garde qu'une et
+        # les autres vivaient indéfiniment : le leftover-shield SAUTE
+        # les slugs déclarés par définition, donc un doublon déclaré
+        # était invisible pour lui. La convergence est EXPLICITE : le
+        # salon adopté reste, ses frères du même slug partent — un
+        # salon déclaré par clé, jamais deux.
+        siblings = [
+            c for c in (getattr(category, "channels", []) or [])
+            if _slug(getattr(c, "name", "")) == _slug(name)
+        ]
+        for extra in siblings[1:]:
+            try:
+                delete = getattr(extra, "delete", None)
+                if delete is None:
+                    continue
+                await delete(reason="kingdom: duplicate realm salon swept")
+                logger.warning(
+                    "kingdom realms: duplicate salon swept (%s, %s)",
+                    getattr(extra, "name", "?"), display,
+                )
+            except Exception:  # noqa: BLE001 — le sweep ne bloque jamais
+                logger.warning(
+                    "kingdom realms: duplicate sweep failed (%s)", name, exc_info=True
+                )
     # leftover-shield — l'ancienne charte laissait des salons que la
     # nouvelle structure ne déclare pas : adoptés avec la catégorie,
     # ils héritaient du allow catégorie des membres. Recalculés muets.
@@ -397,6 +424,59 @@ async def ensure_realm_structure(guild: Any, realm: Any, *, dormant: bool = True
             except Exception:  # noqa: BLE001 — l'ordre est cosmétique, jamais bloquant
                 logger.warning("kingdom realms: salon reorder failed (%s)", slug)
     return ids
+
+
+async def sweep_realm_structures(bot: Any) -> int:
+    """reset convergence — re-ensure every realm family THIS guild carries.
+
+    « Réinitialiser les salons » (Drasah 22/11) doit aussi NETTOYER les
+    royaumes : le reset SDK ne reconstruit que les salons déclarés du
+    mod (la conscription, la machine 👑 Kingdom), les catégories de
+    royaumes sont hors de son scope — et l'incident HeN/AEGIS a montré
+    les doublons accumulés que rien ne balayait jamais. La passe
+    converge chaque royaume QUI A une famille ici (trouvée par nom ;
+    jamais de création sur un guild qui ne porte pas le royaume) :
+    l'ensure adopte/dédupe/ordogne et la dormancy est ré-appliquée
+    (engagé ⇂ vivant, sinon dormant), les ids repartent sur la coquille.
+    """
+    stack = wiring()
+    service = _realm_service(stack)
+    if service is None:
+        return 0
+    try:
+        realms = await service.realms()
+    except Exception:  # noqa: BLE001 — un read, jamais un crash
+        logger.warning("kingdom realms: sweep read failed", exc_info=True)
+        return 0
+    touched = 0
+    for guild in list(getattr(bot, "guilds", []) or []):
+        for realm in realms:
+            if _find_realm_category(guild, str(getattr(realm, "name", ""))) is None:
+                continue  # pas la famille de ce guild — jamais de création
+            engaged = bool(getattr(realm, "engagement", None))
+            try:
+                ids = await ensure_realm_structure(guild, realm, dormant=not engaged)
+            except Exception:  # noqa: BLE001 — best-effort par royaume
+                logger.warning(
+                    "kingdom realms: sweep ensure failed (%s)", getattr(realm, "name", "?"),
+                    exc_info=True,
+                )
+                ids = {}
+            disc = dict(getattr(realm, "discord", None) or {})
+            changed = False
+            for k, v in (ids or {}).items():
+                if v and str(disc.get(k, "") or "") != str(v):
+                    disc[k] = str(v)
+                    changed = True
+            if changed:
+                try:
+                    await service.save_habitat(str(realm.id), disc)
+                except Exception:  # noqa: BLE001 — jamais bloquant
+                    logger.warning("kingdom realms: sweep persist failed", exc_info=True)
+            touched += 1
+    if touched:
+        logger.info("kingdom realms: sweep converged %d realm families", touched)
+    return touched
 
 
 # ---------------------------------------------------------------------------

@@ -443,8 +443,25 @@ async def _run_provisioning(interaction: discord.Interaction, action: str) -> st
         from .time_machine import run_mod_pin_refresh_pass
 
         deleted = 0
+        swept_realms = 0
         if action == "reset":
             deleted = await delete_mod_scope(bot, guild_id, _MOD)
+            # reset-convergence (Drasah 22/11) — le reset SDK ne touche
+            # QUE les salons déclarés du mod : les catégories de royaumes
+            # (hors scope, portées par l'habitat) vivaient leurs doublons
+            # sans que rien ne les balaye jamais. La passe sweep ci-dessous
+            # (realms.py) converge chaque famille : adoption + dédoublonnage
+            # des salons déclarés + ordre + dormancy — best-effort, jamais
+            # bloquant pour la reconstruction des salons du mod.
+            from .realms import sweep_realm_structures
+
+            try:
+                swept_realms = await sweep_realm_structures(bot)
+            except Exception:  # noqa: BLE001 — le reset ne rate jamais pour un sweep
+                logger.warning("kingdom: the reset's realm sweep failed", exc_info=True)
+                swept_realms = 0
+        if swept_realms:
+            logger.info("kingdom: the reset swept %d realm families", swept_realms)
         roles = await provision_mod_roles(bot, guild_id, _MOD)
         channels = (
             await provision_mod_channels(bot, guild_id, _MOD)

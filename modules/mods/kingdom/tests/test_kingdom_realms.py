@@ -9,6 +9,7 @@ Quitter).
 
 from __future__ import annotations
 
+from types import SimpleNamespace
 from typing import Any
 
 import pytest
@@ -268,6 +269,161 @@ def test_ensure_realm_structure_provisions_and_adopts() -> None:
     assert len(guild.categories) == 1
     assert len(guild.categories[0].channels) == 4
     assert ids2["hub"] == ids["hub"]
+
+
+def test_ensure_sweeps_duplicate_declared_salons() -> None:
+    """duplicate-sweep (Drasah 22/11) — l'incident live HeN/AEGIS : les
+    provisions d'avant l'adoption ont laissé des COPIES de salons
+    déclarés dans la catégorie ; l'adoption n'en gardait qu'une et le
+    leftover-shield SAUTE les slugs déclarés — plus rien ne balayait.
+    La convergence dure : le salon adopté reste, ses frères partent."""
+
+    class FakeCategory:
+        def __init__(self, name: str) -> None:
+            self.name = name
+            self.id = 777
+            self.channels: list[Any] = []
+
+    class FakeChannel:
+        def __init__(self, name: str, category: FakeCategory) -> None:
+            self.name = name
+            self.id = 700 + len(category.channels)
+            self.category = category
+            self.deleted = False
+            category.channels.append(self)
+
+        async def edit(self, name: str = "") -> None:
+            self.name = name
+
+        async def set_permissions(self, member: Any, **kw: Any) -> None:
+            pass
+
+        async def delete(self, reason: str = "") -> None:
+            self.deleted = True
+            self.category.channels.remove(self)
+
+    class FakeGuild:
+        def __init__(self) -> None:
+            self.categories: list[Any] = []
+
+        async def create_category(self, name: str, overwrites: Any = None) -> FakeCategory:
+            category = FakeCategory(name)
+            self.categories.append(category)
+            return category
+
+        async def create_text_channel(self, name: str, category: Any = None) -> FakeChannel:
+            return FakeChannel(name, category)
+
+    import asyncio
+
+    from botforge.mods.kingdom.cogs.realms import (
+        REALM_SALONS,
+        ensure_realm_structure,
+    )
+    from botforge.mods.kingdom.realms import RealmShellModel
+
+    realm = RealmShellModel(
+        _id="realm:hen-1", name="HeN", slug="hen", king_id="1", king_name="Roi"
+    )
+    guild = FakeGuild()
+    # L'ÉTAT DE L'INCIDENT : la catégorie porte des salons à l'ANCIENNE
+    # charte ET des copies multiples du même slug (les provisions
+    # d'avant l'adoption enchaînées sur les incidents stale-anchor).
+    category = FakeCategory("🏰 HeN")
+    guild.categories.append(category)
+    for name in ("🔒 discussions", "🔒-discussions", "🔒 Discussions"):
+        FakeChannel(name, category)  # 3 copies du slug discussions
+    FakeChannel("royaume", category)  # ancienne charte du hub
+    asyncio.run(ensure_realm_structure(guild, realm, dormant=True))
+    names = [c.name for c in category.channels]
+    # les 4 déclarés, dans l'ordre — l'ancienne charte « royautme » est
+    # SHIELDÉE (le leftover-shield ne détruit JAMAIS l'impairé)
+    declared = [name for _k, name in REALM_SALONS]
+    assert [n for n in names if n in declared] == declared, names
+    assert "royaume" in names  # shielded, jamais détruit par l'ensure
+    # UN salon déclaré par clé — les frères du même slug sont partis
+    assert names.count("🔒 Discussions") == 1
+    # l'idempotence tient : une 2e passe ne recrée ni ne détruit
+    asyncio.run(ensure_realm_structure(guild, realm, dormant=True))
+    assert [c.name for c in category.channels] == names
+
+
+def test_sweep_realm_structures_converges_the_reset_scope() -> None:
+    """reset-convergence — le sweep du reset converge les familles
+    PRÉSENTES (jamais de création sur un autre guild) et repousse
+    les ids frais sur la coquille."""
+
+    class FakeCategory:
+        def __init__(self, name: str) -> None:
+            self.name = name
+            self.id = 777
+            self.channels: list[Any] = []
+
+        async def edit(self, **kw: Any) -> None:
+            pass
+
+    class FakeChannel:
+        def __init__(self, name: str, category: FakeCategory) -> None:
+            self.name = name
+            self.id = 700 + len(category.channels)
+            self.category = category
+            category.channels.append(self)
+
+        async def edit(self, name: str = "") -> None:
+            self.name = name
+
+        async def set_permissions(self, member: Any, **kw: Any) -> None:
+            pass
+
+        async def delete(self, reason: str = "") -> None:
+            self.category.channels.remove(self)
+
+    class FakeGuild:
+        def __init__(self) -> None:
+            self.categories: list[Any] = [FakeCategory("🏰 AEGIS")]
+            self.guilds_self = self
+
+        async def create_text_channel(self, name: str, category: Any = None) -> FakeChannel:
+            return FakeChannel(name, category)
+
+        def get_member(self, member_id: int) -> None:
+            return None
+
+    class FakeService:
+        def __init__(self) -> None:
+            self.saved: dict[str, Any] = {}
+
+        async def realms(self) -> list[Any]:
+            return [
+                SimpleNamespace(
+                    id="realm:aegis-1", name="AEGIS",
+                    engagement={"kingdom_id": "k1"}, king_id="1", member_ids=[],
+                    discord={},
+                ),
+                SimpleNamespace(
+                    id="realm:elsewhere", name="Elsewhere", engagement=None,
+                    king_id="2", member_ids=[], discord={},
+                ),
+            ]
+
+        async def save_habitat(self, realm_id: str, disc: Any) -> None:
+            self.saved[realm_id] = disc
+
+    import asyncio
+    import unittest.mock as mock
+
+    from botforge.mods.kingdom.cogs import realms as realms_module
+
+    bot = SimpleNamespace(guilds=[FakeGuild()])
+    service = FakeService()
+    stack = SimpleNamespace(realms=service)
+    with mock.patch.object(realms_module, "wiring", lambda: stack):
+        touched = asyncio.run(realms_module.sweep_realm_structures(bot))
+    # la famille présente est convergée ; l'autre royaume n'est pas créé ici
+    assert touched == 1
+    ids = service.saved["realm:aegis-1"]
+    assert ids["category"] == "777"
+    assert set(ids) == {"category", "discussions", "hub", "territory", "alliances"}
 
 
 def test_the_hub_template_carries_both_states() -> None:  # deliberately mis-named? no — the hub layout
