@@ -1971,6 +1971,14 @@ class KingdomRegieRealmButton(
             await interaction.response.defer(ephemeral=True)
 
     async def callback(self, interaction: discord.Interaction) -> None:
+        # drawer-build-v1 (Check 137, « Supprimer n'a pas répondu à
+        # temps ») : le fast-ack du core sur TOUTES les jambes du
+        # bouton royaume — le chrono de 3 s de Discord appartient à
+        # l'ack, la lecture de coquille puis la carte (ou le MP du
+        # Roi) prennent leur temps en followup (toutes les jambes
+        # parlent déjà _safe_send / followup — zéro 40060 possible).
+        if not interaction.response.is_done():
+            await interaction.response.defer(ephemeral=True)
         handler = {
             "restore": self._restore,
             "purge": self._purge_card,
@@ -2129,6 +2137,11 @@ class KingdomRegieResetPlayersButton(
             await interaction.response.defer(ephemeral=True)
 
     async def callback(self, interaction: discord.Interaction) -> None:
+        # drawer-build-v1 (Check 137) : même fast-ack pour la 🧹 —
+        # l'ack part immédiatement, la carte aussi lente soit la
+        # passe de lecture derrière.
+        if not interaction.response.is_done():
+            await interaction.response.defer(ephemeral=True)
         handler = {
             "-players": self._card,
             "-yes": self._reset_yes,

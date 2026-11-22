@@ -415,6 +415,11 @@ class ValidationDeleteButton(
 
     async def callback(self, interaction: discord.Interaction) -> None:
         """Guard, resolve, then open the one-click-drop confirm card."""
+        # drawer-build-v1 (Check 137) : fast-ack — la lecture derrière
+        # ne court jamais contre le chrono de 3 s de Discord (gards
+        # et cartes parlent déjà followup — zéro 40060).
+        if not interaction.response.is_done():
+            await interaction.response.defer(ephemeral=True)
         locale = await _guild_locale(str(interaction.guild_id or ""))
         strings = mod_catalog().section("kingdom.validation", locale)
         if not await _guard(interaction, strings):
@@ -1145,6 +1150,11 @@ class ValidationArchiveButton(
 
     async def callback(self, interaction: discord.Interaction) -> None:
         """Guard, resolve the DORMANT realm, open the confirm card."""
+        # drawer-build-v1 (Check 137) : fast-ack — la lecture derrière
+        # ne court jamais contre le chrono de 3 s de Discord (gards
+        # et cartes parlent déjà followup — zéro 40060).
+        if not interaction.response.is_done():
+            await interaction.response.defer(ephemeral=True)
         from .common import open_unique_ephemeral
 
         locale = await _guild_locale(str(interaction.guild_id or ""))
