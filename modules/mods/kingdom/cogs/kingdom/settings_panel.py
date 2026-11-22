@@ -282,13 +282,20 @@ async def build_settings_panel(guild_id: str) -> discord.ui.LayoutView:
             ).item
         )
     else:
-        # running season: a SOBER cycle (console-etats-regie-v1) — the
-        # running ops (relaunch / reset / clock) live in the 🧪 Bêta
-        # drawer, the sas decision lives in the régie. fin-saison-v1:
-        # « Terminer la saison » ferme la boucle de test sur place.
+        # running season: a SOBER cycle (console-etats-regie-v1). Drawers
+        # deconsolidation (Drasah 22/11) : le faux départ (le rembobinage
+        # de secours, classique OU bêta) et « Terminer la saison » vivent
+        # ICI, dans Le cycle — le tiroir 🧪 Bêta est retiré (l'état du
+        # parcours se lit sur le badge du cockpit).
         cycle_row.add_item(
             KingdomSettingsNavButton(
                 "admissions", str(strings["settings_nav_admissions_button"])
+            ).item
+        )
+        cycle_row.add_item(
+            SettingsActionButton(
+                "false-start", str(strings["settings_false_start_button"]),
+                discord.ButtonStyle.secondary,
             ).item
         )
         cycle_row.add_item(
@@ -306,9 +313,6 @@ async def build_settings_panel(guild_id: str) -> discord.ui.LayoutView:
     atelier_row: Any = discord.ui.ActionRow()
     atelier_row.add_item(
         KingdomSettingsNavButton("atelier", str(strings["settings_nav_atelier_button"])).item
-    )
-    atelier_row.add_item(
-        KingdomSettingsNavButton("beta", str(strings["settings_nav_beta_button"])).item
     )
 
     # cockpit-lisible-v1 (Drasah 21/11) : une zone = UN titre + UNE
@@ -1100,7 +1104,6 @@ _DRAWERS: dict[str, str] = {
     "admissions": "panel:mod:kingdom:admin:admissions",
     "regie": "panel:mod:kingdom:admin:regie",
     "atelier": "panel:mod:kingdom:admin:atelier",
-    "beta": "panel:mod:kingdom:admin:beta",
 }
 
 
@@ -1311,30 +1314,6 @@ def _atelier_drawer(strings: dict[str, str], ops_strings: dict[str, str]) -> dis
     return surface(_DRAWERS["atelier"], container)
 
 
-async def _beta_active(bot: Any | None, guild_id: str) -> bool:
-    """The live beta phase flag (best-effort, never a crash).
-
-    mutex-beta-saison: the console reads the OPERATOR's own toggle —
-    the per-guild phase flag through the core beta seam (the same one
-    ``_start_beta`` flips), never the camp window's wiring read (an
-    untouched ``wiring()`` in a test or an unready service must NOT
-    summon the whole stack just to paint a badge).
-    """
-    if bot is None or not guild_id or not str(guild_id).strip().isdigit():
-        return False
-    state_service = getattr(bot, "state_service", None)
-    if state_service is None:
-        return False
-    try:
-        from botforge.core.services.beta import is_beta
-        from botforge.core.services.mod_storage import ModStateCache
-
-        return bool(await is_beta(ModStateCache(state_service, _MOD), str(guild_id), _MOD))
-    except Exception:  # noqa: BLE001 — the badge never breaks a render
-        logger.warning("kingdom: the beta flag read failed", exc_info=True)
-        return False
-
-
 async def _season_live(stack: Any | None) -> bool:
     """Whether a classic season is LAUNCHED (mutex-beta-saison)."""
     if stack is None or getattr(stack, "kingdoms", None) is None:
@@ -1345,67 +1324,6 @@ async def _season_live(stack: Any | None) -> bool:
     except Exception:  # noqa: BLE001 — a read, never a crash
         logger.warning("kingdom: the season phase read failed", exc_info=True)
         return False
-
-
-def _beta_drawer(
-    strings: dict[str, str],
-    beta_active: bool = False,
-    season_live: bool = False,
-) -> discord.ui.LayoutView:
-    """The beta drawer — the STATE and the rewind, never a departure.
-
-    depart-fourche-v1 (Drasah 22/11) : le DÉPART bêta vit dans la zone
-    Le cycle (« 🚀 Démarrer la bêta » distribue le sas) — ce tiroir ne
-    démarre PLUS rien. Il dit l'état du parcours et garde le faux
-    départ (le rembobinage de secours). Le bouton mystère qui basculait
-    des règles sans rien distribuer est RETIRÉ (« je ne sais même pas
-    que je peux fermer la bêta » — le piège du 21/11 est mort ; le
-    drapeau suit la saison : levé par le départ bêta, baissé par le
-    départ classique).
-    """
-    blocks: list[discord.ui.Item[discord.ui.LayoutView]] = [
-        discord.ui.TextDisplay(f"# {strings['settings_beta_title']}"),
-        discord.ui.TextDisplay(str(strings["settings_beta_hint"])),
-        discord.ui.Separator(),
-        discord.ui.TextDisplay(str(
-            strings["settings_beta_state_active" if beta_active else "settings_beta_state_off"]
-        )),
-    ]
-    # depart-fourche-v1 (Drasah 22/11) : le départ bêta vit dans la zone
-    # Le cycle — ce tiroir ne démarre PLUS rien. Il dit l'état du parcours
-    # et garde le faux départ (le rembobinage de secours). Le bouton
-    # mystère qui basculait des règles sans rien distribuer est RETIRÉ
-    # (« je ne sais même pas que je peux fermer la bêta » — le piège du
-    # 21/11 est mort ; le drapeau suit la saison, levé par le départ
-    # bêta, baissé par le départ classique).
-    blocks.append(
-        discord.ui.TextDisplay(str(strings["settings_beta_depart_hint"]))
-    )
-    blocks.append(discord.ui.Separator())
-    # ⛔ Faux départ : the season's rewind — dead until a season runs
-    tools_row: Any = discord.ui.ActionRow()
-    if season_live:
-        tools_row.add_item(
-            SettingsActionButton(
-                "false-start", str(strings["settings_false_start_button"]),
-                discord.ButtonStyle.danger,
-            ).item
-        )
-    else:
-        blocks.append(discord.ui.TextDisplay(str(strings["settings_beta_false_start_hint"])))
-        tools_row.add_item(
-            SettingsActionButton(
-                "false-start", str(strings["settings_false_start_button"]),
-                discord.ButtonStyle.danger, disabled=True,
-            ).item
-        )
-    blocks.append(tools_row)
-    blocks.append(discord.ui.Separator())
-    blocks.append(discord.ui.TextDisplay(str(strings["settings_beta_sas_note"])))
-    container: discord.ui.Container[discord.ui.LayoutView] = discord.ui.Container(
-        *blocks, accent_colour=_ADMIN_COLOUR
-    )
-    return surface(_DRAWERS["beta"], container)
 
 
 async def _build_drawer(
@@ -1452,12 +1370,8 @@ async def _build_drawer(
         from .common import strings_by_locale
 
         view = _atelier_drawer(strings, strings_by_locale(locale))
-    else:
-        # mutex-beta-saison: the drawer reads the LIVE state — the button
-        # says what it does (start when off, close when on)
-        beta_live = await _beta_active(bot, str(guild_id or ""))
-        season_live = await _season_live(wiring())
-        view = _beta_drawer(strings, beta_active=beta_live, season_live=season_live)
+    else:  # pragma: no cover — the registry and the nav share the keys
+        raise KeyError(f"kingdom: unknown drawer {drawer!r}")
     return view
 
 

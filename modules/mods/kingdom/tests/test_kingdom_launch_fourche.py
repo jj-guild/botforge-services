@@ -177,7 +177,6 @@ def test_the_new_keys_exist_in_both_locales() -> None:
         "settings_start_beta_confirm_button",
         "settings_start_blocked_running",
         "settings_beta_started_season",
-        "settings_beta_depart_hint",
         "settings_launch_beta_failed",  # reused by the beta departure
         "settings_regie_sas_idle_hint",
     )
@@ -198,6 +197,15 @@ def test_the_new_keys_exist_in_both_locales() -> None:
         "settings_beta_exited",
         "settings_beta_blocked_season",
         "settings_season_blocked_beta",
+        # tiroir-bêta retiré (Drasah 22/11) : plus de surface, plus de clés
+        "settings_beta_title",
+        "settings_beta_hint",
+        "settings_beta_state_active",
+        "settings_beta_state_off",
+        "settings_beta_depart_hint",
+        "settings_beta_false_start_hint",
+        "settings_beta_sas_note",
+        "settings_nav_beta_button",
     ):
         assert key not in fr, f"{key} must be GONE (depart-fourche-v1)"
 

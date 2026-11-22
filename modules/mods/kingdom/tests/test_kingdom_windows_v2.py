@@ -144,7 +144,7 @@ async def test_every_view_window_carries_the_close_button() -> None:
     from botforge.mods.kingdom.cogs.settings_panel import _build_drawer
 
     inter = _interaction()
-    view = await _build_drawer("beta", "fr", None, "42")
+    view = await _build_drawer("atelier", "fr", None, "42")
     await open_unique_ephemeral(inter, view=view)
     _content, kwargs = inter.response.sent
     assert "kingdom:window:close" in _ids(kwargs["view"]), "the ✖️ rides the view"
@@ -178,7 +178,7 @@ async def test_the_close_click_deletes_the_window_and_pops_the_record() -> None:
     from botforge.mods.kingdom.cogs.settings_panel import _build_drawer
 
     inter = _interaction(user="11")
-    view = await _build_drawer("beta", "fr", None, "42")
+    view = await _build_drawer("atelier", "fr", None, "42")
     await open_unique_ephemeral(inter, view=view)
     assert ew.get_live_window(KINGDOM_WINDOW_SCOPE, "11") is not None
 
@@ -272,7 +272,7 @@ async def test_a_window_closes_itself_after_the_ttl() -> None:
     from botforge.mods.kingdom.cogs.settings_panel import _build_drawer
 
     inter = _interaction(user="19")
-    view = await _build_drawer("beta", "fr", None, "42")
+    view = await _build_drawer("atelier", "fr", None, "42")
     set_window_ttl(KINGDOM_WINDOW_SCOPE, 0.05)
     try:
         await open_unique_ephemeral(inter, view=view)

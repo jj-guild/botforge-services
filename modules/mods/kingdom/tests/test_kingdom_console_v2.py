@@ -101,8 +101,11 @@ def test_the_cockpit_is_zoned_and_contextual() -> None:
     # the fixed rows open the three working drawers — the sas has
     # nothing to sort before a season exists (off, no admissions nav)
     assert "kingdom:settings:launch" in ids
-    for drawer in ("regie", "atelier", "beta"):
+    for drawer in ("regie", "atelier"):
         assert f"kingdom:console-nav:{drawer}" in ids, f"the {drawer} drawer must be a click away"
+    assert "kingdom:console-nav:beta" not in ids, (
+        "drarwer-bêta retiré (Drasah 22/11) : l'état vit sur le badge du cockpit"
+    )
     assert "kingdom:console-nav:admissions" not in ids, (
         "off-season, the admissions sas has nothing to sort yet"
     )
@@ -240,9 +243,9 @@ def test_the_admissions_drawer_carries_the_realm_entry_decisions() -> None:
 
 
 def test_the_fixed_drawers_reuse_only_existing_registrations() -> None:
-    """Régie / atelier / beta ride the existing buttons + the régie switches."""
+    """Régie / atelier ride the existing buttons + the régie switches."""
     from botforge.mods.kingdom.cogs.settings_panel import (
-        _beta_drawer,
+        _DRAWERS,
         _regie_drawer,
         settings_strings,
     )
@@ -260,10 +263,8 @@ def test_the_fixed_drawers_reuse_only_existing_registrations() -> None:
         "kingdom:settings:remove",
         "kingdom:settings:season-mode",
     ])
-    beta_ids = _ids(_beta_drawer(settings_strings("fr")))
-    # depart-fourche-v1: the drawer starts NOTHING — only the rewind
-    assert "kingdom:settings:start-beta" not in beta_ids, "the beta departure is a CYCLE gesture"
-    assert "kingdom:settings:false-start" in beta_ids
+    # tiroir-bêta retiré (Drasah 22/11) : il ne reste QUE ces tiroirs
+    assert sorted(_DRAWERS) == ["admissions", "atelier", "regie"]
 
 
 def _buttons(view: object) -> dict[str, object]:
@@ -274,37 +275,40 @@ def _buttons(view: object) -> dict[str, object]:
     return out
 
 
-def test_the_beta_drawer_is_a_state_readout_never_a_departure() -> None:
-    """depart-fourche-v1 (Drasah 22/11) : le tiroir 🧪 Bêta ne démarre
-    PLUS rien — il dit l'ÉTAT du parcours, pointe vers la zone Le
-    cycle pour le départ, et garde le faux départ (mort hors saison)"""
-    from botforge.mods.kingdom.cogs.settings_panel import (
-        _beta_drawer,
-        settings_strings,
-    )
+def test_the_running_cycle_row_carries_the_rescue_tools() -> None:
+    """tiroir-bêta retiré (Drasah 22/11) : le faux départ (classique OU
+    bêta) et « Terminer la saison » vivent dans la zone Le cycle dès
+    qu'une saison tourne — plus de tiroir 🧪, l'état du parcours se
+    lit sur le badge du cockpit."""
+    import asyncio
+    import unittest.mock as mock
+    from types import SimpleNamespace
 
-    fr = settings_strings("fr")
-    off = _buttons(_beta_drawer(fr))
-    assert "kingdom:settings:start-beta" not in off, (
-        "the departure moved to the Le cycle zone — the drawer starts nothing"
-    )
-    assert "kingdom:settings:false-start" in off
-    assert off["kingdom:settings:false-start"].disabled is True
-    texts = "\n".join(_texts(_beta_drawer(fr)))
-    assert str(fr["settings_beta_false_start_hint"]) in texts
-    assert str(fr["settings_beta_depart_hint"]) in texts, (
-        "the drawer must point at the Le cycle departures"
-    )
+    from botforge.mods.kingdom.cogs import settings_panel as sp
 
-    active_texts = "\n".join(_texts(_beta_drawer(fr, beta_active=True)))
-    assert str(fr["settings_beta_state_active"]) in active_texts
-    assert str(fr["settings_beta_state_off"]) in texts, "off state still readable offline"
+    season = SimpleNamespace(phase="started", imposed_kingdoms=False)
 
-    live = _buttons(_beta_drawer(fr, season_live=True))
-    assert live["kingdom:settings:false-start"].disabled is False, (
-        "the season rewind arms once a season runs"
-    )
-    assert "kingdom:settings:start-beta" not in live
+    class _Kingdoms:
+        async def kingdoms(self):
+            return []
+
+        async def lords(self):
+            return []
+
+        async def current_season(self):
+            return season
+
+    class _Realms:
+        async def realms(self):
+            return []
+
+    stack = SimpleNamespace(kingdoms=_Kingdoms(), realms=_Realms())
+    with mock.patch.object(sp, "wiring", lambda: stack):
+        view = asyncio.run(sp.build_settings_panel("123"))
+    ids = _ids(view)
+    assert "kingdom:settings:false-start" in ids, "the rewind rides the cycle row"
+    assert "kingdom:settings:end-season" in ids, "the season's end rides the cycle row"
+    assert "kingdom:console-nav:beta" not in ids, "no beta drawer anymore"
 
 
 def test_the_running_cockpit_builds_in_every_engine_phase() -> None:
@@ -346,22 +350,15 @@ def test_the_running_cockpit_builds_in_every_engine_phase() -> None:
     with mock.patch.object(sp, "wiring", lambda s=_stack("started"): s):
         view = asyncio.run(sp.build_settings_panel("123"))
     ids = _ids(view)
-    # console-etats-regie-v1: the started cycle is SOBER — the running
-    # ops moved to the 🧪 Beta & outils drawer (the atelier's second
-    # row still answers them)
-    assert "kingdom:console:relaunch" not in ids, (
-        "started: the running ops live in the Beta & outils drawer"
-    )
+    # console-etats-regie-v1: the started cycle is SOBER — the console
+    # ops stay in the atelier, the RESCUE tools ride the cycle row
+    assert "kingdom:console:relaunch" not in ids
     assert "kingdom:console-nav:admissions" in ids
     assert "kingdom:settings:launch" not in ids, "started: a fresh launch would wipe the season"
     assert "kingdom:settings:start-season" not in ids, "started: the season is already started"
-    # the running ops stay REACHABLE — the beta drawer carries them
-    from botforge.mods.kingdom.cogs.settings_panel import (
-        _beta_drawer,
-        settings_strings as _ss,
-    )
-
-    assert "kingdom:settings:false-start" in _ids(_beta_drawer(_ss("fr")))
+    # tiroir-bêta retiré : le faux départ répond DANS la zone Le cycle
+    assert "kingdom:settings:false-start" in ids, "the rewind rides the running cycle row"
+    assert "kingdom:console-nav:beta" not in ids, "the beta drawer is retired"
 
 
 def test_the_drawers_are_declared_surfaces() -> None:
@@ -396,7 +393,6 @@ def test_the_console_v2_strings_exist_in_both_locales() -> None:
         "settings_nav_admissions_button",
         "settings_nav_regie_button",
         "settings_nav_atelier_button",
-        "settings_nav_beta_button",
         "settings_status_kingdoms_header",
         "settings_status_kingdoms_names",
         "settings_status_crew_line",
@@ -410,13 +406,6 @@ def test_the_console_v2_strings_exist_in_both_locales() -> None:
         "settings_atelier_title",
         "settings_atelier_hint",
         "settings_atelier_heal_note",
-        "settings_beta_title",
-        "settings_beta_hint",
-        "settings_beta_state_active",
-        "settings_beta_state_off",
-        "settings_beta_false_start_hint",
-        "settings_beta_depart_hint",
-        "settings_beta_sas_note",
         "settings_end_season_button",
         "settings_end_season_confirm_title",
         "settings_end_season_confirm_hint",
