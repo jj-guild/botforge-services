@@ -95,7 +95,13 @@ The&nbsp;light&nbsp;path&nbsp;of&nbsp;the&nbsp;hourly&nbsp;loop:&nbsp;only&nbsp;
 (current&nbsp;elo,&nbsp;rank,&nbsp;wins/losses);&nbsp;the&nbsp;MAX&nbsp;never&nbsp;drops&nbsp;(the<br>
 account&nbsp;document&nbsp;merges&nbsp;with&nbsp;the&nbsp;stored&nbsp;max).</span></dd></dl>
 
-<dl><dt>async <a name="MatchHistorySyncer-refresh_statuses"><strong>refresh_statuses</strong></a>(self, profile_ids: 'list[str]') -&gt; 'int'</dt><dd><span class="code">Run&nbsp;the&nbsp;light&nbsp;elo&nbsp;refresh&nbsp;(every&nbsp;known&nbsp;account&nbsp;when&nbsp;empty).</span></dd></dl>
+<dl><dt>async <a name="MatchHistorySyncer-refresh_statuses"><strong>refresh_statuses</strong></a>(self, profile_ids: 'list[str]') -&gt; 'int'</dt><dd><span class="code">Run&nbsp;the&nbsp;light&nbsp;elo&nbsp;refresh&nbsp;(every&nbsp;BOUND&nbsp;account&nbsp;when&nbsp;empty).<br>
+&nbsp;<br>
+The&nbsp;MET&nbsp;players&nbsp;never&nbsp;join&nbsp;the&nbsp;loop:&nbsp;their&nbsp;boards&nbsp;ride&nbsp;the<br>
+encounter&nbsp;fold,&nbsp;a&nbsp;scheduled&nbsp;stat&nbsp;call&nbsp;for&nbsp;every&nbsp;stranger&nbsp;ever<br>
+met&nbsp;would&nbsp;hammer&nbsp;the&nbsp;upstream&nbsp;for&nbsp;data&nbsp;the&nbsp;store&nbsp;already&nbsp;has<br>
+(owner&nbsp;2026-11-22&nbsp;—&nbsp;the&nbsp;post-purge&nbsp;boot&nbsp;walked&nbsp;thousands&nbsp;of<br>
+unrelated&nbsp;profiles).</span></dd></dl>
 
 <dl><dt>async <a name="MatchHistorySyncer-sync_account"><strong>sync_account</strong></a>(self, profile_id: 'str') -&gt; 'bool'</dt><dd><span class="code">Sync&nbsp;one&nbsp;account:&nbsp;raw&nbsp;history&nbsp;+&nbsp;status,&nbsp;then&nbsp;the&nbsp;elo&nbsp;max.<br>
 &nbsp;<br>
@@ -109,7 +115,11 @@ Returns&nbsp;True&nbsp;when&nbsp;anything&nbsp;was&nbsp;stored.&nbsp;Failures&nb
 False&nbsp;—&nbsp;the&nbsp;provider&nbsp;keeps&nbsp;serving&nbsp;the&nbsp;previous&nbsp;store,&nbsp;the<br>
 periodic&nbsp;sync&nbsp;retries&nbsp;later.</span></dd></dl>
 
-<dl><dt>async <a name="MatchHistorySyncer-sync_accounts"><strong>sync_accounts</strong></a>(self, profile_ids: 'list[str]') -&gt; 'int'</dt><dd><span class="code">Sync&nbsp;the&nbsp;given&nbsp;accounts&nbsp;(every&nbsp;known&nbsp;one&nbsp;when&nbsp;empty).&nbsp;T4&nbsp;rides.</span></dd></dl>
+<dl><dt>async <a name="MatchHistorySyncer-sync_accounts"><strong>sync_accounts</strong></a>(self, profile_ids: 'list[str]') -&gt; 'int'</dt><dd><span class="code">Sync&nbsp;the&nbsp;given&nbsp;accounts&nbsp;(every&nbsp;BOUND&nbsp;one&nbsp;when&nbsp;empty).&nbsp;T4&nbsp;rides.<br>
+&nbsp;<br>
+The&nbsp;met&nbsp;players&nbsp;stay&nbsp;OUT&nbsp;of&nbsp;the&nbsp;walk&nbsp;(list_bound_profiles)<br>
+—&nbsp;the&nbsp;encounter&nbsp;fold&nbsp;already&nbsp;harvests&nbsp;their&nbsp;boards&nbsp;(see<br>
+refresh_statuses).</span></dd></dl>
 
 <dl><dt>async <a name="MatchHistorySyncer-user_stats"><strong>user_stats</strong></a>(self, user_id: 'str', window_days: 'int' = 0) -&gt; 'UserEloStats | None'</dt><dd><span class="code">Serve&nbsp;the&nbsp;per-USER&nbsp;unified&nbsp;view&nbsp;over&nbsp;the&nbsp;user's&nbsp;accounts.<br>
 &nbsp;<br>

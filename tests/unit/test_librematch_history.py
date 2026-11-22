@@ -480,6 +480,7 @@ async def test_the_elo_refresh_never_fetches_history() -> None:
     db, adapter = FakeDb(), FakeAdapter()
     adapter.history["123"] = [_match("m1", "0", 100, 200, [_member("123", 1, 1, 1000, 1024)])]
     adapter.stats["123"] = _stat("123", 1024, 55, 10, 2)
+    await LibrematchStore(db).upsert_bindings(["123"], ["alice"])  # the walk reads the bindings
     syncer = _syncer(db, adapter)
     await syncer.sync_account("123")
     history_calls = len([c for c in adapter.calls if c[0] == "history"])
@@ -490,8 +491,40 @@ async def test_the_elo_refresh_never_fetches_history() -> None:
     assert account["leaderboards"]["0"]["current"] == 1024
 
     refreshed = await syncer.refresh_statuses([])
-    assert refreshed >= 1
+    assert refreshed >= 1  # every BOUND account, never the met players
     assert len([c for c in adapter.calls if c[0] == "history"]) == history_calls
+
+
+async def test_the_met_players_never_join_the_periodic_sync() -> None:
+    """Only the BOUND accounts get walked (the met players stay out).
+
+    The post-purge boot walked THOUSANDS of strangers (every met
+    player re-created by the encounter fold): the periodic walks
+    read the bindings, not the harvested accounts.
+    """
+    db, adapter = FakeDb(), FakeAdapter()
+    adapter.history["123"] = [
+        _match(
+            "m14",
+            "",
+            100,
+            200,
+            [_member("123", 0, 0, 1292, 1300), _member("456", 1, 1, 1100, 1089)],
+            description="AUTOMATCH",
+        )
+    ]
+    adapter.stats["123"] = _stat("123", 1300, 1, 1, 0)
+    store = LibrematchStore(db)
+    await store.upsert_bindings(["123"], ["alice"])
+    syncer = _syncer(db, adapter)
+    await syncer.sync_account("123")
+    # the seen fold knows 456 as a met player (his boards are harvested)...
+    assert "456" in db["librematch:accounts"].docs
+    synced = await syncer.sync_accounts([])
+    probed_histories = [pid for call, pid in adapter.calls if call == "history"]
+    # ... but the periodic walk never fetches HIS history
+    assert "456" not in probed_histories
+    assert synced == 1
 
 
 async def test_reference_tables_name_the_upstream_ids(tmp_path, monkeypatch) -> None:

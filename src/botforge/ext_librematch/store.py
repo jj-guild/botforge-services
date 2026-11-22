@@ -264,6 +264,19 @@ class LibrematchStore:
         profiles |= {str(doc["_id"]) async for doc in cursor}
         return sorted(profiles)
 
+    async def list_bound_profiles(self) -> list[str]:
+        """List only the BOUND accounts \u2014 the bot's own users.
+
+        The periodic sync loops must never walk the MET players: the
+        encounter fold already harvests their boards (no extra call,
+        owner 2026-11-22), and a known-player sweep would deep-fetch
+        the history of every opponent ever met \u2014 each fetch folding
+        HIS opponents in, an exponential cascade (merlin 2026-11-22:
+        the post-purge boot walked thousands of unrelated profiles).
+        """
+        cursor = self._bindings().find({}, {"_id": 1})
+        return sorted({str(doc["_id"]) async for doc in cursor})
+
     async def upsert_bindings(self, profile_ids: list[str], user_ids: list[str]) -> int:
         """Record the profile -> user mapping pushed by the core.
 

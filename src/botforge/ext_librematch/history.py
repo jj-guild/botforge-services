@@ -380,8 +380,15 @@ class MatchHistorySyncer:
         return True
 
     async def refresh_statuses(self, profile_ids: list[str]) -> int:
-        """Run the light elo refresh (every known account when empty)."""
-        targets = [str(p) for p in profile_ids] or await self._store.list_known_profiles()
+        """Run the light elo refresh (every BOUND account when empty).
+
+        The MET players never join the loop: their boards ride the
+        encounter fold, a scheduled stat call for every stranger ever
+        met would hammer the upstream for data the store already has
+        (owner 2026-11-22 \u2014 the post-purge boot walked thousands of
+        unrelated profiles).
+        """
+        targets = [str(p) for p in profile_ids] or await self._store.list_bound_profiles()
         refreshed = 0
         for profile_id in targets:
             try:
@@ -392,8 +399,13 @@ class MatchHistorySyncer:
         return refreshed
 
     async def sync_accounts(self, profile_ids: list[str]) -> int:
-        """Sync the given accounts (every known one when empty). T4 rides."""
-        targets = [str(p) for p in profile_ids] or await self._store.list_known_profiles()
+        """Sync the given accounts (every BOUND one when empty). T4 rides.
+
+        The met players stay OUT of the walk (list_bound_profiles)
+        \u2014 the encounter fold already harvests their boards (see
+        refresh_statuses).
+        """
+        targets = [str(p) for p in profile_ids] or await self._store.list_bound_profiles()
         synced = 0
         for profile_id in targets:
             try:

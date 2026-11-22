@@ -104,6 +104,15 @@ A&nbsp;FINISHED&nbsp;match&nbsp;is&nbsp;immutable&nbsp;—&nbsp;an&nbsp;already&
 never&nbsp;rewritten&nbsp;(the&nbsp;smart-sync&nbsp;rule&nbsp;of&nbsp;#404&nbsp;T4:&nbsp;the&nbsp;incremental<br>
 sync&nbsp;only&nbsp;ever&nbsp;APPENDS&nbsp;the&nbsp;new&nbsp;games).</span></dd></dl>
 
+<dl><dt>async <a name="LibrematchStore-list_bound_profiles"><strong>list_bound_profiles</strong></a>(self) -&gt; 'list[str]'</dt><dd><span class="code">List&nbsp;only&nbsp;the&nbsp;BOUND&nbsp;accounts&nbsp;—&nbsp;the&nbsp;bot's&nbsp;own&nbsp;users.<br>
+&nbsp;<br>
+The&nbsp;periodic&nbsp;sync&nbsp;loops&nbsp;must&nbsp;never&nbsp;walk&nbsp;the&nbsp;MET&nbsp;players:&nbsp;the<br>
+encounter&nbsp;fold&nbsp;already&nbsp;harvests&nbsp;their&nbsp;boards&nbsp;(no&nbsp;extra&nbsp;call,<br>
+owner&nbsp;2026-11-22),&nbsp;and&nbsp;a&nbsp;known-player&nbsp;sweep&nbsp;would&nbsp;deep-fetch<br>
+the&nbsp;history&nbsp;of&nbsp;every&nbsp;opponent&nbsp;ever&nbsp;met&nbsp;—&nbsp;each&nbsp;fetch&nbsp;folding<br>
+HIS&nbsp;opponents&nbsp;in,&nbsp;an&nbsp;exponential&nbsp;cascade&nbsp;(merlin&nbsp;2026-11-22:<br>
+the&nbsp;post-purge&nbsp;boot&nbsp;walked&nbsp;thousands&nbsp;of&nbsp;unrelated&nbsp;profiles).</span></dd></dl>
+
 <dl><dt>async <a name="LibrematchStore-list_known_profiles"><strong>list_known_profiles</strong></a>(self) -&gt; 'list[str]'</dt><dd><span class="code">List&nbsp;every&nbsp;account&nbsp;the&nbsp;store&nbsp;has&nbsp;a&nbsp;status&nbsp;or&nbsp;binding&nbsp;for.</span></dd></dl>
 
 <dl><dt>async <a name="LibrematchStore-mark_missing_1v1"><strong>mark_missing_1v1</strong></a>(self, profile_ids: 'list[str]') -&gt; 'None'</dt><dd><span class="code">Mark&nbsp;the&nbsp;honestly-absent&nbsp;1v1&nbsp;boards&nbsp;(the&nbsp;probe&nbsp;never&nbsp;repeats).</span></dd></dl>
