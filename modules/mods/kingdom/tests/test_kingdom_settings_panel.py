@@ -169,7 +169,6 @@ def test_modals_build_without_deprecation_warnings() -> None:
     from botforge.mods.kingdom.cogs.settings_panel import (
         _AddKingdomModal,
         _AssignModal,
-        _BetaLaunchModal,
         _LaunchModal,
         _RemoveModal,
         settings_strings,
@@ -179,7 +178,6 @@ def test_modals_build_without_deprecation_warnings() -> None:
         warnings.simplefilter("error", DeprecationWarning)
         for cls in (
             _LaunchModal,
-            _BetaLaunchModal,
             _AssignModal,
             _AddKingdomModal,
             _RemoveModal,

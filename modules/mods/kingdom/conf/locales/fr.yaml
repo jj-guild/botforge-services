@@ -108,8 +108,6 @@ fr:
       settings_assign_modal_player_label: ID du joueur
       settings_assign_modal_role_label: Rôle (king ou lord)
       settings_assign_modal_title: 📥 Affecter un joueur
-      settings_beta_exited: ✅ Phase bêta quittée — les règles se redressent.
-      settings_beta_started: ✅ Phase bêta activée — les règles se plient.
       settings_cancelled: ❌ Annulé — rien n'a été touché.
       settings_denied: ❌ Réservé aux admins du bot.
       settings_err_kingdoms_already_enrolled: ❌ Déjà inscrit à la saison.
@@ -133,14 +131,9 @@ fr:
       settings_launch_beta_failed: "⚠️ Saison lancée, mais le format beta n'a pas pu s'armer — {0}"
       # lancement-fourche-v1 (Drasah 21/11) : le choix de format vit dans
       # une carte VISIBLE, le champ texte « type » est retiré
-      settings_launch_type_title: "🎬 Lancer une saison — quel format ?"
-      settings_launch_type_hint: "🏁 Même parcours des joueurs dans les deux cas (sas d'inscription, validation admin) : le format change les règles. Classique = compte requis, horloges normales. Bêta = sans compte, weekend compressé 52 h."
-      settings_launch_type_classic_button: "🎬 Saison classique"
-      settings_launch_type_beta_button: "🧪 Saison bêta compressée"
       settings_launch_sas_closed: "⛔ Le SAS des saisons est fermé — ouvre le SAS dans la régie 🎚️ avant de lancer la saison."
       settings_sas_drain_closed_dm: "🛂 Le SAS des saisons vient d'être fermé — ta demande d'inscription a été retirée. Pas de saison en cours : dès qu'une saison est préparée et le SAS rouvert, tu pourras redemander ton entrée."
       settings_sas_drain_season_dm: "🏁 La saison est terminée — le SAS est fermé et ta demande d'inscription a été retirée. Dès qu'une saison est préparée et le SAS rouvert, tu pourras redemander ton entrée."
-      settings_launch_beta_modal_title: "🧪 Lancer la saison bêta"
       settings_launch_modal_names_label: Noms imposés (optionnel)
       settings_launch_modal_names_placeholder: "Royaume A, Royaume B"
       settings_launch_modal_title: ▶️ Lancer la saison
@@ -162,9 +155,11 @@ fr:
       settings_reset_done: ✅ Salons réinitialisés ({channels} supprimés, tout est recréé).
       settings_season_mode_button: 🔄 Mode de saison
       settings_start_beta_button: 🚀 Démarrer la bêta
-      settings_start_season_button: 🎯 Démarrer la saison
+      settings_start_season_button: 🎯 Démarrer la saison classique
       settings_start_season_done: ✅ Saison démarrée — que l'aventure commence !
       settings_start_season_failed: ❌ Le démarrage a échoué — {0}
+      settings_start_blocked_running: ⛔ Une saison tourne déjà — termine-la avant de changer de format.
+      settings_beta_started_season: 🟢 La saison bêta est lancée — les royaumes admis partent en bêta.
       settings_status_button: 📊 Statut de la saison
       settings_status_empty: —
       settings_status_kingdoms: Royaumes
@@ -218,10 +213,9 @@ fr:
       settings_beta_hint: "Les règles du parcours bêta : sans compte requis, horloges compressées, saison courte."
       settings_beta_state_active: "🟡 **Bêta ACTIVE** — le parcours suit les règles pliées."
       settings_beta_state_off: "⚪ Aucune bêta en cours — le parcours suit les règles normales."
-      settings_beta_close_button: "🔴 Fermer la bêta"
-      settings_beta_blocked_season: "⛔ Une saison classique est lancée — la bêta s'arme hors saison (rembobine d'abord, ou attends la fin)."
+      # depart-fourche-v1 (Drasah 22/11) : le tiroir dit l'ÉTAT — le départ vit dans « Le cycle »
+      settings_beta_depart_hint: "Le départ (classique ou bêta) vit dans la zone Le cycle — ce tiroir dit l'état et garde le faux départ."
       settings_beta_false_start_hint: "⛔ Faux départ : sans saison lancée, il n'y a rien à rembobiner."
-      settings_season_blocked_beta: "⛔ La bêta est active — ferme-la (le tiroir 🧪 Bêta) avant de lancer la saison classique."
       settings_beta_sas_note: "Même en beta : l'entrée en saison passe PAR LE SAS 🛂 — « ⚔️ Inscrire leur royaume » côté Roi, puis ton ✅ ici."
       # console-etats-regie-v1 (Drasah 21/11) : le badge PARCOURS (bêta
       # ou normal) + le sas = les premiers repères du cockpit
@@ -241,6 +235,10 @@ fr:
       settings_start_season_confirm_title: "🚀 Envoyer la saison ?"
       settings_start_season_confirm_hint: "Le départ dessine les civilisations de départ et FERME LE SAS tout seul. Les retardataires passeront par la Régie (ré-ouverture) ou par « Ajouter un royaume »."
       settings_start_season_confirm_button: "🚀 Oui, envoyer la saison"
+      # depart-fourche-v1 (Drasah 22/11) : le 2e départ — même geste, autre format
+      settings_start_beta_confirm_title: "🚀 Envoyer la saison bêta ?"
+      settings_start_beta_confirm_hint: "Les royaumes admis partent en bêta : week-end compressé 52 h, sans compte requis. Le SAS se ferme tout seul."
+      settings_start_beta_confirm_button: "🚀 Oui, envoyer la bêta"
       settings_cycle_cancel_button: "❌ Annuler"
       # le faux départ — le dernier recours de l'organisateur
       settings_false_start_button: "🛑 Faux départ"

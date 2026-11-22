@@ -154,8 +154,9 @@ async def test_the_launch_refuses_a_closed_sas() -> None:
 
 
 @pytest.mark.asyncio
-async def test_the_launch_opens_the_fork_when_the_sas_is_open() -> None:
-    """SAS ouvert ⇒ la fourche visible (le flow de lancement-fourche-v1)."""
+async def test_the_launch_opens_the_prepare_modal_when_the_sas_is_open() -> None:
+    """depart-fourche-v1 : SAS ouvert ⇒ le modal de PRÉPARATION seul —
+    la fourche est morte, le format vit dans les départs du cycle."""
     from botforge.mods.kingdom.cogs import settings_panel as sp
 
     interaction = _interaction()
@@ -164,11 +165,12 @@ async def test_the_launch_opens_the_fork_when_the_sas_is_open() -> None:
             mock.patch.object(sp, "open_unique_ephemeral", new=mock.AsyncMock()) as open_win:
         await sp._open_launch(interaction, strings)
 
-    view = open_win.await_args.kwargs["view"]
-    ids = _ids(view)
-    assert "kingdom:launch:fork:classic" in ids
-    assert "kingdom:launch:fork:beta" in ids
-    assert "kingdom:launch:fork:cancel" in ids
+    open_win.assert_not_awaited(), "no fork card anymore — the departures own the format"
+    assert type(interaction.response.modal).__name__ == "_LaunchModal"
+    ids = _ids(interaction.response.modal)
+    assert "kingdom:settings:launch:names" in ids
+    assert "kingdom:settings:launch:sas" in ids
+    assert "kingdom:settings:launch:type" not in ids, "no format question at the launch"
 
 
 # ---------------------------------------------------------------------------

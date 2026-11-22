@@ -101,8 +101,6 @@ en:
       settings_assign_modal_player_label: Player ID
       settings_assign_modal_role_label: Role (king or lord)
       settings_assign_modal_title: 📥 Assign a player
-      settings_beta_exited: ✅ Beta phase left — the rules straighten back.
-      settings_beta_started: ✅ Beta phase entered — the rules bend.
       settings_cancelled: ❌ Cancelled — nothing was touched.
       settings_denied: ❌ Reserved for the bot admins.
       settings_err_kingdoms_already_enrolled: ❌ Already enrolled in the season.
@@ -126,14 +124,9 @@ en:
       settings_launch_beta_failed: "⚠️ Season launched, but the beta format could not arm — {0}"
       # lancement-fourche-v1 (Drasah 21/11): the format choice lives in a
       # VISIBLE card — the « type » text field is retired
-      settings_launch_type_title: "🎬 Launch a season — which format?"
-      settings_launch_type_hint: "🏁 The same player journey in both cases (entry sas, admin validation): the format changes the rules. Classic = account required, normal clocks. Beta = no account, 52-hour compressed weekend."
-      settings_launch_type_classic_button: "🎬 Classic season"
-      settings_launch_type_beta_button: "🧪 Compressed beta season"
       settings_launch_sas_closed: "⛔ The season airlock is closed — open the airlock in the 🎚️ regie drawer before launching the season."
       settings_sas_drain_closed_dm: "🛂 The season airlock has just been closed — your entry request was withdrawn. No season is running: as soon as a season is prepared and the airlock reopens, you may request entry again."
       settings_sas_drain_season_dm: "🏁 The season is over — the airlock is closed and your entry request was withdrawn. As soon as a season is prepared and the airlock reopens, you may request entry again."
-      settings_launch_beta_modal_title: "🧪 Launch the beta season"
       settings_launch_modal_names_label: Imposed names (optional)
       settings_launch_modal_names_placeholder: "Kingdom A, Kingdom B"
       settings_launch_modal_title: ▶️ Launch the season
@@ -155,9 +148,11 @@ en:
       settings_reset_done: ✅ Salons reset ({channels} deleted, everything recreated).
       settings_season_mode_button: 🔄 Season mode
       settings_start_beta_button: 🚀 Start the beta
-      settings_start_season_button: 🎯 Start the season
+      settings_start_season_button: 🎯 Start the classic season
       settings_start_season_done: ✅ Season started — let the adventure begin!
       settings_start_season_failed: ❌ The start failed — {0}
+      settings_start_blocked_running: ⛔ A season is already running — end it before changing formats.
+      settings_beta_started_season: 🟢 The beta season is launched — admitted kingdoms ride the beta.
       settings_status_button: 📊 Season status
       settings_status_empty: —
       settings_status_kingdoms: Kingdoms
@@ -206,10 +201,9 @@ en:
       settings_beta_hint: "The beta path rules: no account required, compressed clocks, short season."
       settings_beta_state_active: "🟡 **Beta ACTIVE** — the path follows the bent rules."
       settings_beta_state_off: "⚪ No beta running — the path follows the normal rules."
-      settings_beta_close_button: "🔴 Close the beta"
-      settings_beta_blocked_season: "⛔ A classic season is running — beta arms off-season (rewind first, or wait it out)."
+      # depart-fourche-v1 (Drasah 22/11): the drawer tells the STATE — the departure lives in 'Le cycle'
+      settings_beta_depart_hint: "The departure (classic or beta) lives in the Le cycle zone — this drawer tells the state and keeps the false start."
       settings_beta_false_start_hint: "⛔ False start: with no season running there is nothing to rewind."
-      settings_season_blocked_beta: "⛔ The beta is active — close it (the 🧪 Bêta drawer) before launching the classic season."
       settings_beta_sas_note: "Even in beta: the season entry rides the 🛂 sas — '⚔️ Enlist their kingdom' on the King's side, then your ✅ here."
       # console-etats-regie-v1 (Drasah 21/11): the PARCOURS badge + the sas
       settings_status_parcours_beta: "🧭 **Path: Beta** · no account, compressed clocks"
@@ -226,6 +220,10 @@ en:
       settings_start_season_confirm_title: "🚀 Send the season?"
       settings_start_season_confirm_hint: "The departure draws the starting hands and SHUTS THE SAS by itself. Latecomers ride the Régie (a re-open) or 'Add a kingdom'."
       settings_start_season_confirm_button: "🚀 Yes, send the season"
+      # depart-fourche-v1 (Drasah 22/11): the 2nd departure — same gesture, other format
+      settings_start_beta_confirm_title: "🚀 Send the beta season?"
+      settings_start_beta_confirm_hint: "Admitted kingdoms ride the beta: 52-hour compressed weekend, no account required. The SAS shuts by itself."
+      settings_start_beta_confirm_button: "🚀 Yes, send the beta"
       settings_cycle_cancel_button: "❌ Cancel"
       settings_false_start_button: "🛑 False start"
       settings_false_start_confirm_title: "🛑 False start — back to preparation?"

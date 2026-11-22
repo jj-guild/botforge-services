@@ -144,7 +144,8 @@ def test_the_setup_cockpit_opens_the_sas_not_the_launch() -> None:
         view = asyncio.run(sp.build_settings_panel("123"))
     ids = _ids(view)
     assert "kingdom:console-nav:admissions" in ids, "setup: the sas must be a click away"
-    assert "kingdom:settings:start-season" in ids, "setup: the start gesture stays reachable (no hard lock)"
+    assert "kingdom:settings:start-season" in ids, "setup: the CLASSIC departure distributes the sas"
+    assert "kingdom:settings:start-beta" in ids, "depart-fourche-v1: the BETA departure distributes too"
     assert "kingdom:settings:launch" not in ids, "setup: a fresh launch would wipe the sas"
     assert not any(i in ("kingdom:console:relaunch", "kingdom:console:reset", "kingdom:console:clock") for i in ids), (
         "setup: the running-season ops have nothing to run yet"
@@ -260,8 +261,8 @@ def test_the_fixed_drawers_reuse_only_existing_registrations() -> None:
         "kingdom:settings:season-mode",
     ])
     beta_ids = _ids(_beta_drawer(settings_strings("fr")))
-    assert "kingdom:settings:start-beta" in beta_ids
-    # the false start lives with the tools (never in LE CYCLE)
+    # depart-fourche-v1: the drawer starts NOTHING — only the rewind
+    assert "kingdom:settings:start-beta" not in beta_ids, "the beta departure is a CYCLE gesture"
     assert "kingdom:settings:false-start" in beta_ids
 
 
@@ -273,11 +274,10 @@ def _buttons(view: object) -> dict[str, object]:
     return out
 
 
-def test_the_beta_drawer_is_a_state_aware_toggle() -> None:
-    """mutex-beta-saison (Drasah 21/11) : the 🧪 Bêta drawer says the
-    STATE and the button says what it DOES — off shows Start (green,
-    or red+disabled+reason while a classic season runs), on shows
-    Close; the false start stays dead until a season is launched."""
+def test_the_beta_drawer_is_a_state_readout_never_a_departure() -> None:
+    """depart-fourche-v1 (Drasah 22/11) : le tiroir 🧪 Bêta ne démarre
+    PLUS rien — il dit l'ÉTAT du parcours, pointe vers la zone Le
+    cycle pour le départ, et garde le faux départ (mort hors saison)"""
     from botforge.mods.kingdom.cogs.settings_panel import (
         _beta_drawer,
         settings_strings,
@@ -285,27 +285,26 @@ def test_the_beta_drawer_is_a_state_aware_toggle() -> None:
 
     fr = settings_strings("fr")
     off = _buttons(_beta_drawer(fr))
-    assert off["kingdom:settings:start-beta"].label == "🚀 Démarrer la bêta"
-    assert off["kingdom:settings:start-beta"].disabled is False
+    assert "kingdom:settings:start-beta" not in off, (
+        "the departure moved to the Le cycle zone — the drawer starts nothing"
+    )
+    assert "kingdom:settings:false-start" in off
     assert off["kingdom:settings:false-start"].disabled is True
-    assert str(fr["settings_beta_false_start_hint"]) in "\n".join(
-        _texts(_beta_drawer(fr))
+    texts = "\n".join(_texts(_beta_drawer(fr)))
+    assert str(fr["settings_beta_false_start_hint"]) in texts
+    assert str(fr["settings_beta_depart_hint"]) in texts, (
+        "the drawer must point at the Le cycle departures"
     )
 
-    active = _buttons(_beta_drawer(fr, beta_active=True))
-    assert active["kingdom:settings:start-beta"].label == "🔴 Fermer la bêta"
-    assert active["kingdom:settings:start-beta"].disabled is False
-    assert str(fr["settings_beta_state_active"]) in "\n".join(
-        _texts(_beta_drawer(fr, beta_active=True))
-    )
+    active_texts = "\n".join(_texts(_beta_drawer(fr, beta_active=True)))
+    assert str(fr["settings_beta_state_active"]) in active_texts
+    assert str(fr["settings_beta_state_off"]) in texts, "off state still readable offline"
 
-    blocked = _buttons(_beta_drawer(fr, season_live=True))
-    assert blocked["kingdom:settings:start-beta"].disabled is True
-    assert str(fr["settings_beta_blocked_season"]) in "\n".join(
-        _texts(_beta_drawer(fr, season_live=True))
+    live = _buttons(_beta_drawer(fr, season_live=True))
+    assert live["kingdom:settings:false-start"].disabled is False, (
+        "the season rewind arms once a season runs"
     )
-    # the season rewind only arms once a season runs
-    assert blocked["kingdom:settings:false-start"].disabled is False
+    assert "kingdom:settings:start-beta" not in live
 
 
 def test_the_running_cockpit_builds_in_every_engine_phase() -> None:
@@ -415,10 +414,8 @@ def test_the_console_v2_strings_exist_in_both_locales() -> None:
         "settings_beta_hint",
         "settings_beta_state_active",
         "settings_beta_state_off",
-        "settings_beta_close_button",
-        "settings_beta_blocked_season",
         "settings_beta_false_start_hint",
-        "settings_season_blocked_beta",
+        "settings_beta_depart_hint",
         "settings_beta_sas_note",
         "settings_end_season_button",
         "settings_end_season_confirm_title",

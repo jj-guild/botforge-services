@@ -739,6 +739,35 @@ class EventService:
             "armed": plan["start_at"] > timestamp,
         }
 
+    async def deactivate_beta(self) -> None:
+        """Clear an armed/applied beta back to the classic format.
+
+        depart-fourche-v1 (Drasah 22/11): the classic DEPARTURE owns the
+        format — « 🎯 Démarrer la saison classique » wipes any beta a
+        past drawer-toggle or dry-run armed before the season starts.
+        Only legal while the season still sits in setup (mirrors the
+        activation lock); everything passes through the usual
+        upsert so a crash mid-way never leaves a half-armed doc.
+        """
+        from botforge.mods.kingdom.beta_weekend import restore_normal_config
+
+        season = await self._require_season()
+        if str(getattr(season, "phase", "setup")) != "setup":
+            raise BetaSeasonStartedError(
+                "la saison est déjà démarrée — son format est figé ; "
+                "pour changer de format il faut finir la saison puis repartir"
+            )
+        if not season.beta_name:
+            return  # nothing armed — the normal pace never left
+        season.beta_name = None
+        season.beta_start_at = None
+        season.beta_age_at = None
+        season.beta_cycle_slots = []
+        season.beta_end_at = None
+        await self._store.upsert_season(season.to_mongo())
+        restore_normal_config(self._config)
+        self._beta_applied = None
+
     async def _apply_season_end(self) -> dict[str, object]:
         """Apply the endcycle verdict at 23:59 (Drasah's end rule).
 
