@@ -226,6 +226,7 @@ async def _profile_game_blocks(
         elo_lines = await account_elo_by_profile(
             interaction.client,
             [str(e.get("profile_id", "")) for e in bindings],
+            translate=lambda key, **fmt: reply(interaction, key, **fmt),
         )
     except Exception:
         logger.warning("HOME: the account stats enrichment failed", exc_info=True)
@@ -706,18 +707,22 @@ class ProfileAddAccountModal(discord.ui.Modal):
 
 
 async def _profile_header(interaction: discord.Interaction, user_id: str) -> str:
-    """Build the profile header: the user's chosen name when known."""
+    """Build the profile header: the user's chosen name when known.
+
+    The wordage rides the locale (owner 2026-11-22: the hardcoded
+    header spoke English whatever the guild's language).
+    """
     identity = getattr(interaction.client, "identity_service", None)
-    if identity is None:
-        return "# 👤 Your profile\nName: *(not set)*"
-    try:
-        user = await identity.get_user(f"discord:{user_id}")
-    except Exception:
-        logger.warning("HOME: identity lookup failed", exc_info=True)
-        return "# 👤 Your profile\nName: *(not set)*"
+    user = None
+    if identity is not None:
+        try:
+            user = await identity.get_user(f"discord:{user_id}")
+        except Exception:
+            logger.warning("HOME: identity lookup failed", exc_info=True)
     if user is None or not user.display_name:
-        return "# 👤 Your profile\nName: *(not set)*"
-    return f"# 👤 Your profile\nName: **{user.display_name}**"
+        return await tr(interaction, "profile.header_no_name", "# 👤 Your profile\nName: *(not set)*")
+    header = await tr(interaction, "profile.header_with_name", "# 👤 Your profile\nName: **{name}**")
+    return header.format(name=user.display_name)
 
 
 

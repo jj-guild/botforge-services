@@ -99,6 +99,8 @@ fr:
       matches_team: "Équipe"
       matches_ongoing: "en cours"
       matches_untitled: "Match {id}"
+      stats_elo_1v1: "{current} Elo 1v1"
+      stats_elo_1v1_max: "{current} Elo 1v1 (max {peak})"
       matches_when: "Il y a {when}"
       matches_duration: "Durée : {clock}"
       matches_source: "Source : [libre:match]({url})"

@@ -9,6 +9,7 @@ crashes the view (the panels degrade quietly).
 
 from __future__ import annotations
 
+import inspect
 import json
 import logging
 import os
@@ -66,7 +67,9 @@ BOARD_LABELS = {
 """The human face of the provider's leaderboard keys (display only)."""
 
 
-async def account_elo_by_profile(bot: Any, profile_ids: list[str]) -> dict[str, str]:
+async def account_elo_by_profile(
+    bot: Any, profile_ids: list[str], translate: Any = None
+) -> dict[str, str]:
     """Render the per-account 1v1 elo lines, keyed by profile id.
 
     ``"1185 Elo 1v1 (max 1210)"`` per account \u2014 the 1v1 RM rating the
@@ -92,8 +95,20 @@ async def account_elo_by_profile(bot: Any, profile_ids: list[str]) -> dict[str, 
         board = next((b for b in account.leaderboards if str(b.name) == "rm_1v1"), None)
         if board is None or not int(board.current):
             continue
-        peak = f" (max {int(board.max)})" if int(board.max) > int(board.current) else ""
-        lines[str(account.profile_id)] = f"{int(board.current)} Elo 1v1{peak}"
+        current = int(board.current)
+        peak = int(board.max)
+        key = "profile.stats_elo_1v1" if peak <= current else "profile.stats_elo_1v1_max"
+        line = ""
+        if translate is not None:
+            # the wordage rides the locale (owner 2026-11-22: the
+            # elo line hardcoded its French whatever the guild spoke)
+            rendered = translate(key, current=current, peak=peak)
+            if inspect.isawaitable(rendered):
+                rendered = await rendered
+            line = str(rendered)
+        else:
+            line = f"{current} Elo 1v1" + (f" (max {peak})" if peak > current else "")
+        lines[str(account.profile_id)] = line
     return lines
 
 
