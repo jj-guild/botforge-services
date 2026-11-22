@@ -209,6 +209,12 @@ en:
       settings_regie_reset_done: "🧹 {realms} kingdom(ies) archived, {players} player(s) freed — the Conscription is back for them."
       settings_regie_reset_empty: "No off-season kingdom to reset."
       settings_regie_hint: "The one-off engine-management gestures — out of the cockpit, a click away."
+      settings_regie_parcours_label: "🧭 Player journey"
+      settings_regie_parcours_hint: "Classic: register first, then apply. Beta: apply directly, no account. The journey only changes between seasons."
+      settings_regie_parcours_classic: "Classic"
+      settings_regie_parcours_beta: "Beta"
+      settings_regie_parcours_locked_hint: "🔒 The journey is locked while a season lives (end it, or wait for a beta's own end, to change it)."
+      settings_regie_parcours_locked_note: "🔒 The journey cannot change while a season lives. End the season (or wait for a beta's automatic end) to switch it."
       settings_regie_dormant_title: "🛰️ Persistent realms (off-season)"
       settings_regie_dormant_hint: "Dormant shells: 🗑️ destroys the shell and frees its founder (a King can neither leave nor be ejected otherwise) and its name. Never an engaged realm or a pending request."
       settings_regie_archived_title: "📦 Archived realms"
@@ -287,6 +293,8 @@ en:
       seigneurerie_queue_header: "⏳ Queue"
       seigneurerie_queue_empty: "Empty queue — no lord awaiting assignment."
       settings_section: Administration
+    beta_loop:
+      beta_loop_restarted: "🔁 Beta season “{name}” has ended — a fresh test beta season starts on its own. {count} kingdom(s) take their seat(s) back."
     camp:
       button: "⚔️ Pick my side — King or Lord"
       window_title: "⚔️ King or Lord?"

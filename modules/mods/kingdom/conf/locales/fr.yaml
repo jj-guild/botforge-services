@@ -219,6 +219,12 @@ fr:
       settings_regie_reset_done: "🧹 {realms} royaume(s) archivé(s), {players} joueur(s) libéré(s) — la Conscription est de retour pour eux."
       settings_regie_reset_empty: "Aucun royaume hors saison à réinitialiser."
       settings_regie_hint: "Les gestes ponctuels de gestion moteur — hors du cockpit, à portée de clic."
+      settings_regie_parcours_label: "🧭 Parcours des joueurs"
+      settings_regie_parcours_hint: "Classique : s'enregistrer d'abord, puis postuler. Bêta : postuler directement, sans compte. Le parcours se change uniquement hors saison."
+      settings_regie_parcours_classic: "Classique"
+      settings_regie_parcours_beta: "Bêta"
+      settings_regie_parcours_locked_hint: "🔒 Le parcours est verrouillé tant qu'une saison vit (terminer ou attendre la fin d'une bêta pour le changer)."
+      settings_regie_parcours_locked_note: "🔒 Le parcours ne peut pas changer pendant qu'une saison vit. Termine la saison (ou attends la fin automatique d'une bêta) pour rebasculer."
       settings_regie_dormant_title: "🛰️ Royaumes persistants (hors saison)"
       settings_regie_dormant_hint: "Coquilles dormantes : 🗑️ détruit la coquille et libère son fondateur (le Roi ne peut ni quitter ni être éjecté autrement) et son nom. Jamais un royaume engagé ou une demande en cours."
       settings_regie_archived_title: "📦 Royaumes archivés"
@@ -305,6 +311,8 @@ fr:
       seigneurerie_queue_header: "⏳ File d'attente"
       seigneurerie_queue_empty: "File vide — aucun seigneur en attente d'affectation."
       settings_section: Administration
+    beta_loop:
+      beta_loop_restarted: "🔁 La saison bêta « {name} » est terminée — une nouvelle saison bêta de test démarre toute seule. {count} royaume(s) reprend(rennent) son (leur) siège."
     camp:
       button: "⚔️ Choisir mon camp — Roi ou Seigneur"
       window_title: "⚔️ Roi ou Seigneur ?"

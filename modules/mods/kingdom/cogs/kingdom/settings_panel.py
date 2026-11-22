@@ -749,7 +749,16 @@ async def _end_season(interaction: discord.Interaction, strings: dict[str, str])
         return
     try:
         season = await stack.kingdoms.current_season()
-        if season is None or str(getattr(season, "phase", "")) != "started":
+        # levier-bêta-v1 (Check 140, Drasah 22/11) : « le MÊME bouton
+        # finit une bêta et une classique » — une saison bêta qui
+        # s'est terminée TOUTE SEULE (le slot end → verdict, phase
+        # « ended ») reste TERMINABLE par la main (reset, boucle
+        # arrêtée) ; avant, l'admin n'avait plus AUCUN geste après le
+        # verdict automatique.
+        if season is None or str(getattr(season, "phase", "")) not in (
+            "started",
+            "ended",
+        ):
             await interaction.followup.send(
                 str(strings["settings_end_season_not_running"]), ephemeral=True
             )
@@ -1254,18 +1263,53 @@ def _regie_drawer(
     archived: list[Any] | None = None,
     guild_id: str = "",
     dormant: list[Any] | None = None,
+    parcours_beta: bool = False,
+    season_running: bool = True,
 ) -> discord.ui.LayoutView:
     """Les interrupteurs + les gestes ponctuels — un tiroir.
 
     console-etats-regie-v1 (Drasah 21/11) : la RÉGIE au sens propre —
     les ON/OFF de la vie des joueurs (données #369, défaut = OUVERT),
     puis les modals moteur existants (le tiroir de la console-v2).
+
+    levier-bêta-v1 (Check 140, Drasah 22/11) : UN SEUL LEVIER
+    « Parcours : Classique ↔ Bêta » ouvre le tiroir — il ABSORBE
+    l'ancien switch « 📝 Compte requis » (la clé `registration_required`
+    reste LA source effective du parcours dans regie.py, le levier la
+    pilote et synchronise le drapeau bêta). Bloqué pendant qu'une
+    saison vit (setup ou started) ; la position affichée =
+    effective (drapeau levé OU compte non requis ⇒ Bêta) — un drapeau
+    orphelin devient LISIBLE et l'admin l'abaisse d'un clic.
     """
     states = states or {}
+    parcours_blocks: list[discord.ui.Item[discord.ui.LayoutView]] = [
+        discord.ui.TextDisplay(f"## {strings['settings_regie_parcours_label']}"),
+        discord.ui.TextDisplay(str(strings["settings_regie_parcours_hint"])),
+    ]
+    parcours_row: Any = discord.ui.ActionRow()
+    for target, key, active in (
+        ("classic", "settings_regie_parcours_classic", not parcours_beta),
+        ("beta", "settings_regie_parcours_beta", parcours_beta),
+    ):
+        parcours_row.add_item(
+            KingdomRegieParcoursButton(
+                target, str(strings[key])[:80], active, season_running
+            ).item
+        )
+    parcours_blocks.append(parcours_row)
+    if season_running:
+        parcours_blocks.append(
+            discord.ui.TextDisplay(str(strings["settings_regie_parcours_locked_hint"]))
+        )
+    parcours_blocks.append(discord.ui.Separator())
     switch_blocks: list[discord.ui.Item[discord.ui.LayoutView]] = []
     from .regie import REGIE_SWITCHES, SWITCH_LABEL_KEYS
 
     for key in REGIE_SWITCHES:
+        # levier-bêta-v1 : le parcours n'est PLUS un switch posé dans
+        # la pile — le levier SEUL l'affiche (la clé survit en stock)
+        if key == "registration_required":
+            continue
         open_ = bool(states.get(key, True))
         style = discord.ButtonStyle.success if open_ else discord.ButtonStyle.danger
         row: Any = discord.ui.ActionRow()
@@ -1368,6 +1412,7 @@ def _regie_drawer(
         discord.ui.TextDisplay(f"# {strings['settings_regie_title']}"),
         discord.ui.TextDisplay(str(strings["settings_regie_hint"])),
         discord.ui.Separator(),
+        *parcours_blocks,
         discord.ui.TextDisplay(f"## {strings['settings_regie_switches_label']}"),
         *switch_blocks,
         discord.ui.Separator(),
@@ -1484,8 +1529,33 @@ async def _build_drawer(
         def _by_name(realm: Any) -> str:
             return str(getattr(realm, "name", "?"))
 
+        # levier-bêta-v1 : le levier se POSITIONNE — position affichée
+        # = effective (parcours bêta OU drapeau levé, l'orphelin reste
+        # lisible), et le verrou vit tant qu'une saison vit (setup ou
+        # started ; ended ne verrouille plus).
+        parcours_beta = not bool(states.get("registration_required", True))
+        season_rolling = False
+        if bot is not None and guild_id:
+            from .camp_beta import kingdom_is_beta
+
+            try:
+                parcours_beta = parcours_beta or (
+                    await kingdom_is_beta(bot, guild_id)
+                )
+            except Exception:  # noqa: BLE001 — the flag read is best-effort
+                logger.warning("kingdom: the parcours flag read failed", exc_info=True)
+        try:
+            from .beta_loop import season_running
+
+            season_rolling = stack is not None and (
+                await season_running(stack)
+            )
+        except Exception:  # noqa: BLE001 — a read, never a crash
+            season_rolling = False
         view = _regie_drawer(
             strings, states, season_live=season_live,
+            parcours_beta=parcours_beta,
+            season_running=season_rolling,
             archived=sorted(
                 (r for r in shells if getattr(r, "archived_at", 0)), key=_by_name
             ),
@@ -1763,6 +1833,140 @@ class KingdomRegieSwitchButton(
 # contiennent un ":" ("realm:aegis-123") — le moule les accepte
 # (segments séparés par ":", non-avides pour laisser le guild_id)
 _REGIE_REALM = r"kingdom:console-regie:(?P<kind>restore|purge|restore-yes|restore-no|purge-yes|purge-no):(?P<realm_id>[a-zA-Z0-9_:-]+?):(?P<guild_id>\d+)$"
+
+
+class KingdomRegieParcoursButton(
+    discord.ui.DynamicItem[discord.ui.Button[Any]],
+    template=r"kingdom:console-regie:parcours:(?P<target>classic|beta)$",
+):
+    """The parcours LEVER (levier-bêta-v1, Drasah 22/11, Check 140).
+
+    ONE binary lever — « Parcours : Classique ↔ Bêta » — that replaces
+    the old « 📝 Compte requis » switch on the drawer (the switches'
+    namespace ``kingdom:console-regie:`` fullmatches only
+    ``[a-z_]+``, and the realm template needs its own kind — THIS id
+    colon-escapes both, no double dispatch). The lever drives the
+    régie key ``registration_required`` (still the parcours' effective
+    source) AND synchronises the parcours flag (a beta lever clicks
+    raise it, a classic lever clicks lower it — the orphan flag Drasah
+    discovered 22/11 becomes readable and dismissible HERE).
+    FROZEN while a season lives (setup or started): the click refuses
+    with its own note — « Terminer » or the loop's pivot opens it.
+    """
+
+    def __init__(
+        self, target: str, label: str, active: bool, season_running: bool = True
+    ) -> None:
+        if target not in ("classic", "beta"):
+            raise ValueError(target)
+        mark = "●" if active else "○"
+        super().__init__(
+            discord.ui.Button(
+                label=f"{str(label)[:72]} {mark}"[:80],
+                custom_id=f"kingdom:console-regie:parcours:{target}",
+                style=(
+                    discord.ButtonStyle.success
+                    if active
+                    else discord.ButtonStyle.secondary
+                ),
+            )
+        )
+        self.target = target
+        self.season_running = bool(season_running)
+
+    @classmethod
+    async def from_custom_id(
+        cls,
+        interaction: discord.Interaction,
+        item: discord.ui.Item[Any],
+        match: re.Match[str],
+        /,
+    ) -> KingdomRegieParcoursButton:
+        from .camp_beta import kingdom_is_beta
+        from .regie import read_regie
+
+        strings = strings_of(interaction)
+        target = match["target"]
+        beta = False
+        season_running = True
+        try:
+            states = await read_regie(
+                interaction.client, str(interaction.guild_id or "")
+            )
+            beta = (not bool(states.get("registration_required", True))) or (
+                await kingdom_is_beta(interaction.client, str(interaction.guild_id or ""))
+            )
+            season_running = not await season_runs(interaction.client)
+        except Exception:  # noqa: BLE001 — a failed read renders classic
+            logger.warning("kingdom: the parcours lever re-read failed", exc_info=True)
+        key = (
+            "settings_regie_parcours_beta"
+            if target == "beta"
+            else "settings_regie_parcours_classic"
+        )
+        return cls(target, str(strings[key])[:80], (target == "beta") == beta, season_running)
+
+    async def callback(self, interaction: discord.Interaction) -> None:
+        """Refuse while a season lives, else flip + sync, then re-render."""
+        strings = strings_of(interaction)
+        if not await _panel_guard(interaction):
+            return
+        # fast-ack (Check 136) : le chrono de 3 s appartient à l'ack
+        try:
+            await interaction.response.defer(ephemeral=True)
+        except Exception:  # noqa: BLE001 — an already-acked click
+            logger.debug("kingdom: the parcours defer skipped", exc_info=True)
+        stack = wiring()
+        from .beta_loop import season_running as season_runs
+
+        if await season_runs(stack):
+            # Drasah 22/11 : le levier est VERROUILLÉ tant qu'une saison
+            # vit — la note le dit, rien ne bouge.
+            await open_unique_ephemeral(
+                interaction, content=str(strings["settings_regie_parcours_locked_note"])
+            )
+            return
+        from .regie import read_regie, set_switch
+
+        gid = str(interaction.guild_id or "")
+        classic = self.target == "classic"
+        try:
+            current = bool((await read_regie(interaction.client, gid)).get(
+                "registration_required", True
+            ))
+            await set_switch(interaction.client, gid, "registration_required", classic)
+        except Exception:  # noqa: BLE001 — the lever reports, never raises
+            logger.warning("kingdom: the parcours flip failed", exc_info=True)
+            await open_unique_ephemeral(
+                interaction, content=str(strings["settings_failed"])
+            )
+            return
+        # the flag follows the lever (the orphan flag dies HERE)
+        try:
+            changed = (
+                await _lower_beta_flag(interaction)
+                if classic
+                else await _raise_beta_flag(interaction)
+            )
+            logger.info(
+                "kingdom: parcours lever -> %s (flag %s)",
+                "classic" if classic else "beta",
+                "synced" if changed or classic == current else "already",
+            )
+        except Exception:  # noqa: BLE001 — the flag is best-effort
+            logger.warning("kingdom: the parcours flag sync failed", exc_info=True)
+        await refresh_live_pins_after(interaction)
+        view = await _build_drawer("regie", locale_of(interaction), interaction.client, gid)
+        await open_unique_ephemeral(interaction, view=view)
+
+
+async def season_runs(bot: Any) -> bool:
+    """The lever's lock read on the bot (the beta_loop helper wrapped)."""
+    from .beta_loop import season_running
+
+    stack = wiring()
+    return bool(stack is not None) and await season_running(stack)
+
 
 
 def _realm_service_of(bot: Any) -> Any:

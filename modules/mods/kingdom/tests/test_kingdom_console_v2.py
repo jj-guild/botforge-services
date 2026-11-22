@@ -258,9 +258,13 @@ def test_the_fixed_drawers_reuse_only_existing_registrations() -> None:
         "kingdom:console-regie:realm_creation_open",
         "kingdom:console-regie:realm_join_open",
         "kingdom:console-regie:season_entry_open",
-        # reset-joueurs-v1 (Drasah 22/11) : le 5e interrupteur
-        # « 📝 Compte requis » + le geste « 🧹 Réinitialiser les joueurs »
-        "kingdom:console-regie:registration_required",
+        # reset-joueurs-v1 (Drasah 22/11) : le geste
+        # « 🧹 Réinitialiser les joueurs »
+        # levier-bêta-v1 (Check 140) : le switch « 📝 Compte requis »
+        # devient LE LEVIER « 🧭 Parcours » (Classique ●/Bêta ●) —
+        # registration_required ne vit PLUS dans la pile de switches
+        "kingdom:console-regie:parcours:classic",
+        "kingdom:console-regie:parcours:beta",
         "kingdom:console-regie:reset-players:0",
         "kingdom:settings:add-kingdom",
         "kingdom:settings:assign",

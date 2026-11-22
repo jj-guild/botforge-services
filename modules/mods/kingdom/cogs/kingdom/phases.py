@@ -996,6 +996,16 @@ def start_attack_refresher(bot: Any) -> None:
             await run_ffa_tick_safe(bot)
         except Exception:
             logger.warning("kingdom: FFA tick failed — best-effort", exc_info=True)
+        # boucle bêta (levier-bêta-v1, Check 140, Drasah 22/11) : une
+        # saison bêta qui se termine TOUTE SEULE (slot end → verdict,
+        # phase « ended ») se RELANCHE toute seule ici — la boucle de
+        # test continue jusqu'au « 🏁 Terminer » de l'admin (LE stop).
+        try:
+            from .beta_loop import run_beta_loop_safe
+
+            await run_beta_loop_safe(bot)
+        except Exception:
+            logger.warning("kingdom: beta loop pass failed — best-effort", exc_info=True)
 
     _loop.start()
     logger.info("kingdom: attack phases loop started (every 5 minutes)")
