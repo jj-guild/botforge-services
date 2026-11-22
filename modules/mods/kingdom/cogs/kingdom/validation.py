@@ -526,8 +526,10 @@ def _delete_confirm_card(
             await _refresh_pins(target.client, str(target.guild_id or ""))
         except Exception:
             logger.warning("kingdom: validation pin refresh failed", exc_info=True)
+        # purge-card-close-v1 (Check 139) : la note REMPLACE la carte —
+        # l'unique fenêtre ferme la confirmation vivante.
         try:
-            await target.followup.send(note, ephemeral=True)
+            await open_unique_ephemeral(target, content=note)
         except Exception:  # noqa: S110 — a vanished window is fine
             pass
 
@@ -654,8 +656,10 @@ async def _crown_window(
             await _refresh_pins(target.client, str(target.guild_id or ""))
         except Exception:
             logger.warning("kingdom: validation pin refresh failed", exc_info=True)
+        # purge-card-close-v1 (Check 139) : la note REMPLACE la carte —
+        # l'unique fenêtre ferme la confirmation vivante.
         try:
-            await target.followup.send(note, ephemeral=True)
+            await open_unique_ephemeral(target, content=note)
         except Exception:  # noqa: S110 — a vanished window is fine
             pass
 
@@ -1231,7 +1235,9 @@ def _archive_confirm_card(
                 "kingdom: realm archive failed (%s)", realm.id, exc_info=True
             )
             note = str(shared["console_error"]).format(str(exc)[:150])
-        await target.followup.send(note, ephemeral=True)
+        # purge-card-close-v1 (Check 139) : idem carte Supprimer — la
+        # note d'archivage remplace la carte de confirmation.
+        await open_unique_ephemeral(target, content=note)
 
     async def on_no(target: discord.Interaction) -> None:
         if not target.response.is_done():

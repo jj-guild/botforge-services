@@ -162,3 +162,91 @@ async def test_the_purge_click_opens_its_confirm_card(monkeypatch) -> None:  # t
     assert f"kingdom:console-regie:purge-yes:{realm.id}:7" in ids, (
         "the red confirm leg rides the anchored template"
     )
+
+
+# ---------------------------------------------------------------------------
+# purge-card-close-v1 (Check 139) — the card DIES with its own gesture
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_the_purge_yes_closes_the_confirm_card_into_its_note(monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    """Drasah's live report: after the purge, the red card STAYED open —
+    he could click Supprimer on an already-deleted realm again. The fix:
+    ``_purge_yes`` routes the success (and failure) note through
+    ``open_unique_ephemeral`` (the single-window seam), which closes the
+    live confirm card instead of stacking a SECOND ephemeral view.
+    """
+    import discord
+
+    from botforge.mods.kingdom.cogs import settings_panel as sp
+
+    realm = NS(id="realm:aegis-123456789", name="AEGIS")
+    destroyed: list[str] = []
+    windows: list[dict] = []
+
+    class _Realms:
+        async def destroy_realm(self, realm_id: str) -> object:
+            destroyed.append(realm_id)
+            return realm
+
+    async def _open_unique(interaction: object, content: str | None = None, **kw: object):
+        windows.append({"content": content, **kw})
+
+    async def _pins(interaction: object) -> None:
+        return None
+
+    async def _dismantle(client: object, gone: object) -> None:  # noqa: RUF029
+        return None
+
+    monkeypatch.setattr(sp, "open_unique_ephemeral", _open_unique)
+    monkeypatch.setattr(sp, "refresh_live_pins_after", _pins)
+    from botforge.mods.kingdom.cogs import realms as cogs_realms
+
+    monkeypatch.setattr(sp, "wiring", lambda: NS(realms=_Realms(), kingdoms=None))
+    monkeypatch.setattr(cogs_realms, "dismantle_realm_category", _dismantle)
+
+    resp = _Resp()
+    inter = NS(
+        locale="fr", guild_id="7", guild=None,
+        user=NS(id="7", guild_permissions=None),
+        client=NS(), response=resp, followup=_Follow(),
+    )
+
+    btn = sp.KingdomRegieRealmButton(
+        "purge-yes", realm.id, "7", "Supprimer", discord.ButtonStyle.danger
+    )
+    await btn.callback(inter)  # type: ignore[arg-type]
+    assert resp.deferred, "fast-ack first: the 3-second clock is the defer's"
+    assert destroyed == [realm.id], "the shell is really destroyed"
+    assert len(windows) == 1, "ONE window call — the note replaces the card"
+    assert "AEGIS" in str(windows[0]["content"]), "the note carries the realm name"
+    assert inter.followup.sent == [], "no raw followup view: the card never reopens"
+
+
+@pytest.mark.asyncio
+async def test_the_purge_yes_without_service_still_answers_in_one_window(monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    """The no-service leg ALSO dies into a note — never a silent corpse."""
+    import discord
+
+    from botforge.mods.kingdom.cogs import settings_panel as sp
+
+    windows: list[dict] = []
+
+    async def _open_unique(interaction: object, content: str | None = None, **kw: object):
+        windows.append({"content": content, **kw})
+
+    monkeypatch.setattr(sp, "open_unique_ephemeral", _open_unique)
+    monkeypatch.setattr(sp, "wiring", lambda: NS(realms=None, kingdoms=None))
+
+    inter = NS(
+        locale="fr", guild_id="7", guild=None,
+        user=NS(id="7", guild_permissions=None),
+        client=NS(), response=_Resp(), followup=_Follow(),
+    )
+    btn = sp.KingdomRegieRealmButton(
+        "purge-yes", "realm:x-1", "7", "Supprimer", discord.ButtonStyle.danger
+    )
+    await btn.callback(inter)  # type: ignore[arg-type]
+    assert len(windows) == 1, "a note rides the single-window seam"
+    assert inter.followup.sent == [], "nothing stacked on top of the dead card"
