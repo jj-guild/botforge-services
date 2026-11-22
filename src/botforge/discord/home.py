@@ -1079,6 +1079,19 @@ def _card_map_section(card: dict[str, Any], ctx: dict[str, Any]) -> Any:
     return discord.ui.TextDisplay(map_text)
 
 
+def _card_header(badge: str, noun: str, match_id: str) -> str:
+    """Render the card's header: the badge line, the match id linked.
+
+    The insights match page wraps the id (owner 2026-11-22: a link
+    button left the row, the id itself carries it).
+    """
+    insights_match = (
+        INSIGHTS_MATCH_URL.format(match_id=match_id) if match_id and match_id != "?" else ""
+    )
+    id_part = f"[#{match_id}]({insights_match})" if insights_match else f"#{match_id}"
+    return f"**[ {badge} ]** {noun} \u2014 {id_part}"
+
+
 def _match_card_view(
     card: dict[str, Any],
     ctx: dict[str, Any],
@@ -1118,7 +1131,7 @@ def _match_card_view(
         else _OUTCOME_COLOURS.get(status, 0x5865F2)
     )
     blocks: list[Any] = [
-        discord.ui.TextDisplay(f"**[ {badge} ]** {noun} \u2014 #{match_id}"),
+        discord.ui.TextDisplay(_card_header(badge, noun, match_id)),
     ]
     blocks.append(_card_map_section(card, ctx))
     blocks.append(discord.ui.Separator())
@@ -1157,15 +1170,6 @@ def _match_card_view(
                 emoji="\U0001f441\ufe0f",
                 style=discord.ButtonStyle.link,
                 url=str(card["spectate_url"]),
-            )
-        )
-    if status != "lobby":
-        buttons.append(
-            discord.ui.Button(
-                label="aoe2insights",
-                emoji="\U0001f517",
-                style=discord.ButtonStyle.link,
-                url=INSIGHTS_MATCH_URL.format(match_id=match_id),
             )
         )
     if buttons:
