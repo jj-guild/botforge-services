@@ -31,6 +31,14 @@ BINDINGS_COLLECTION = "librematch:bindings"
 DEFAULT_HISTORY_LIMIT = 50
 
 
+def _int(value: Any) -> int:
+    """Coerce to int (0 when None/garbage)."""
+    try:
+        return int(value or 0)
+    except (TypeError, ValueError):
+        return 0
+
+
 class LibrematchStore:
     """The provider's own persistence seam over async MongoDB."""
 
@@ -188,6 +196,31 @@ class LibrematchStore:
     async def upsert_account(self, document: dict[str, Any]) -> None:
         """Insert or replace one account's status document."""
         await self._accounts().replace_one({"_id": document["_id"]}, document, upsert=True)
+
+    async def upsert_seen_accounts(
+        self, updates: dict[str, dict[str, dict[str, int]]]
+    ) -> None:
+        """Merge the ENCOUNTERED seats' boards into the accounts."""
+        if not updates:
+            return
+        accounts = self._db["librematch:accounts"]
+        for profile_id, fresh in updates.items():
+            existing = await accounts.find_one({"_id": profile_id}) or {}
+            boards = dict(existing.get("leaderboards") or {})
+            for board, entry in fresh.items():
+                old = boards.get(board) or {}
+                boards[board] = {
+                    "current": entry.get("current", 0),
+                    "max": max(_int(old.get("max")), _int(entry.get("max"))),
+                    "rank": 0,
+                    "wins": 0,
+                    "losses": 0,
+                }
+            await accounts.replace_one(
+                {"_id": profile_id},
+                {**existing, "_id": profile_id, "leaderboards": boards},
+                upsert=True,
+            )
 
     async def find_accounts(self, profile_ids: list[str]) -> list[dict[str, Any]]:
         """Return the status documents of the accounts (missing ones absent)."""

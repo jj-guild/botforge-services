@@ -824,3 +824,41 @@ async def test_a_random_civ_lobby_never_loops_the_repair() -> None:
     from botforge.ext_librematch.reference import civ_name_of
 
     assert civ_name_of(-1) == "", "the RANDOM marker never names a civ"
+
+
+async def test_the_encountered_seats_become_known_players() -> None:
+    """The sync folds the payload's seats into the accounts: no extra call.
+
+    The owner's 2026-11-22 direction: every player the bot's users met
+    carries his elo through the match itself (old/new rating) - the
+    account stats must harvest it so the panels read every seat's
+    1v1/TG current+max without another upstream request.
+    """
+    db, adapter = FakeDb(), FakeAdapter()
+    adapter.history["123"] = [
+        _match(
+            "m11",
+            "",
+            100,
+            200,
+            [
+                _member("123", 1, 0, 1292, 1300),
+                _member("456", 0, 1, 1100, 1089),
+                _member("789", 0, 1, 1050, 1051),
+                _member("321", 1, 0, 990, 1030),
+            ],
+        ),
+    ]
+    syncer = _syncer(db, adapter)
+    await syncer.sync_account("123")
+    accounts = db["librematch:accounts"].docs
+    # the TG board carries every seat's current (post-match) and max
+    board = accounts["456"]["leaderboards"]["rm_team"]
+    assert board["current"] == 1089 and board["max"] == 1100
+    board = accounts["321"]["leaderboards"]["rm_team"]
+    assert board["current"] == 1030 and board["max"] == 1030
+    # the account-stats read answers the ENCOUNTERED player too
+    statuses = await syncer.account_stats(["456"])
+    assert statuses[0].known
+    rm = next(b for b in statuses[0].leaderboards if str(b.name) == "rm_team")
+    assert rm.current == 1089 and rm.max == 1100

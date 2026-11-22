@@ -729,7 +729,10 @@ REPLAY_URL = (
     "https://api.ageofempires.com/api/GameStats/AgeII/GetMatchReplay/"
     "?matchId={match_id}&profileId={profile_id}"
 )
-LIBREMATCH_SOURCE_URL = "https://aoe-api.worldsedgelink.com/community/leaderboard"
+LIBREMATCH_SOURCE_URL = (
+    "https://aoe-api.worldsedgelink.com/community/leaderboard/GetRecentMatchHistory"
+    "?title=age2&profile_ids=%5B%22{profile_id}%22%5D&count=26"
+)
 _OUTCOME_COLOURS = {"win": 0x57F287, "loss": 0xED4245, "ongoing": 0xFEE75C, "lobby": 0x5865F2}
 
 
@@ -761,8 +764,15 @@ async def _entity_post_url(
             logger.debug("the archived thread walk failed", exc_info=True)
         for thread in threads:
             thread_name = str(getattr(thread, "name", "")).strip().casefold()
-            if thread_name == wanted or thread_name.startswith(f"{wanted} "):
-                return f"https://discord.com/channels/{guild_id}/{channel_id}/{thread.id}"
+            if thread_name == wanted or thread_name.startswith(
+                f"{wanted} "
+            ) or thread_name.startswith(f"{wanted} \u2014"):
+                # thread.jump_url is Discord's OWN canonical link \u2014
+                # a hand-built /channels/... url can silently land on
+                # the parent forum (the owner's 2026-11-22 report)
+                return str(getattr(thread, "jump_url", "") or "")
+    logger.debug("the entity post was not found: %s", name)
+
     logger.debug("the entity post was not found: %s", name)
     return ""
 
@@ -1072,7 +1082,11 @@ def _match_card_view(
             blocks.append(_seat_component(text, civ_image))
     # the footer: the source, then the status-led action row
     blocks.append(discord.ui.Separator())
-    source = f"-# Source : [libre:match]({LIBREMATCH_SOURCE_URL})"
+    first_seat = str(((card.get("players") or [{}])[0] or {}).get("profile_id") or "")
+    source_url = LIBREMATCH_SOURCE_URL.format(profile_id=first_seat) if first_seat else ""
+    source = (
+        f"-# Source : [libre:match]({source_url})" if source_url else "-# Source : libre:match"
+    )
     blocks.append(discord.ui.TextDisplay(source))
     buttons: list[discord.ui.Button[Any]] = []
     if status == "lobby" and card.get("lobby_url"):

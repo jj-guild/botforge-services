@@ -125,6 +125,41 @@ def _int(value: Any) -> int:
         return 0
 
 
+def _seen_board_updates(documents: list[dict[str, Any]]) -> dict[str, dict[str, dict[str, int]]]:
+    """Fold the freshly fetched matches into per-SEEN-PLAYER boards.
+
+    Every member of every fetched match is a player the bot's users
+    MET \u2014 the payload already carries his elo through that match
+    (oldrating/newrating), so the encounter itself is the stat: no
+    extra upstream call (owner 2026-11-22). The newest encounter on
+    a board carries the current; the max never drops.
+    """
+    updates: dict[str, dict[str, dict[str, int]]] = {}
+    for doc in documents:
+        teams: dict[int, int] = {}
+        for player in doc.get("players") or []:
+            team = int((player or {}).get("team", 0) or 0)
+            teams[team] = teams.get(team, 0) + 1
+        board = "rm_team" if any(count > 1 for count in teams.values()) else "rm_1v1"
+        ts = int(doc.get("finished_at") or doc.get("started_at") or 0)
+        for player in doc.get("players") or []:
+            pid = str((player or {}).get("profile_id", ""))
+            if not pid:
+                continue
+            before = int((player or {}).get("rating_before") or 0)
+            after = int((player or {}).get("rating_after") or 0)
+            if not before and not after:
+                continue
+            entry = updates.setdefault(pid, {}).setdefault(
+                board, {"current": 0, "max": 0, "ts": 0}
+            )
+            entry["max"] = max(entry["max"], before, after)
+            if ts >= entry["ts"]:
+                entry["current"] = after or before
+                entry["ts"] = ts
+    return updates
+
+
 def _needs_repair(candidate_docs: list[dict[str, Any]]) -> bool:
     """Return True when older-era captures wait for their repair pass.
 
@@ -211,6 +246,9 @@ class MatchHistorySyncer:
                 # known id is never rewritten \u2014 insert-only
                 inserted = await self._store.insert_matches_new_only(documents)
                 stored_any = stored_any or inserted > 0
+            # every seat met becomes a known player: his boards ride
+            # the encounter itself (no extra upstream call)
+            await self._store.upsert_seen_accounts(_seen_board_updates(documents))
             # The decode step (T2) rides the ingest now: the history
             # payload ITSELF carries the encoded ``options``/``slotinfo``
             # blobs (the LibreMatch wiki, community/leaderboard/
