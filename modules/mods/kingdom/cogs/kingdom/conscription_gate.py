@@ -186,6 +186,29 @@ def _is_bare_view_deny(overwrite: Any) -> bool:
     return overwrite == _ow(view_channel=False)
 
 
+def _is_member_view_deny(guild: Any, target: Any, overwrite: Any) -> bool:
+    """A MEMBER's view deny — the gate's own turf, dirty or not.
+
+    drain-coquilles-v1 (Drasah 22/11, Check 135) : l'incident Blanc —
+    un deny membre avec d'autres réglages en plus (posé à la main ou
+    par une vielle version) survécu à la passe pour toujours, le
+    joueur restait masqué sans royaume. La passe droppe maintenant
+    TOUT deny membre qui bloque la vue (nu ou sale) : le masque est
+    SON territoire, un grant admin ne ressemble jamais à ça. Les
+    cibles de RÔLE et le bot ne se touchent jamais (l'invariant
+    «unknown overwrites untouched» tient pour le reste).
+    """
+    if target is getattr(guild, "me", None):
+        return False
+    if getattr(overwrite, "view_channel", None) is not False:
+        return False
+    target_id = getattr(target, "id", None)
+    if target_id is None or not str(target_id).isdigit():
+        return False
+    member = getattr(guild, "get_member", lambda _i: None)(int(target_id))
+    return member is not None
+
+
 async def run_conscription_gate_pass(bot: Any, guild_id: str = "") -> int:
     """Bend the register/apply salons to the live beta (ONE beta, 21/11)."""
     from botforge.discord.ui.panels_provisioning import stored_channel_id
@@ -246,7 +269,7 @@ async def run_conscription_gate_pass(bot: Any, guild_id: str = "") -> int:
             for target, overwrite in dict(getattr(channel, "overwrites", {}) or {}).items():
                 if _key_of(target) in wanted_keys:
                     continue
-                if _is_bare_view_deny(overwrite) and target is not getattr(guild, "me", None):
+                if _is_member_view_deny(guild, target, overwrite):
                     continue  # the gate recomputes the member denies from the roster
                 overwrites[target] = overwrite
             if _converged(channel, overwrites):

@@ -1253,6 +1253,7 @@ def _regie_drawer(
     season_live: bool = True,
     archived: list[Any] | None = None,
     guild_id: str = "",
+    dormant: list[Any] | None = None,
 ) -> discord.ui.LayoutView:
     """Les interrupteurs + les gestes ponctuels — un tiroir.
 
@@ -1336,6 +1337,33 @@ def _regie_drawer(
         archive_blocks.append(
             discord.ui.TextDisplay(str(strings["settings_regie_archived_empty"]))
         )
+    # drain-coquilles-v1 (Drasah 22/11, Check 135) : les coquilles
+    # DORMANTES (hors saison, hors sas) exposent la purge DIRECTE — le
+    # fondateur y est attaché à vie (king-cannot-leave), détruire la
+    # coquille est sa seule porte de sortie ; l'admin la tient ici,
+    # carte rouge de confirmation incluse (le même geste que les
+    # archivées, UN seul bloc réutilisé).
+    dormant_blocks: list[discord.ui.Item[discord.ui.LayoutView]] = []
+    dormant = list(dormant or [])
+    if dormant:
+        dormant_blocks.append(discord.ui.Separator())
+        dormant_blocks.append(
+            discord.ui.TextDisplay(f"## {strings['settings_regie_dormant_title']}")
+        )
+        dormant_blocks.append(
+            discord.ui.TextDisplay(str(strings["settings_regie_dormant_hint"]))
+        )
+        for realm in dormant:
+            name = str(getattr(realm, "name", "?"))
+            dormant_blocks.append(discord.ui.TextDisplay(f"- **{name}**"))
+            row = _realm_button_row(
+                "purge", strings["settings_regie_purge_button"],
+                discord.ButtonStyle.danger,
+                "purge-no", strings["settings_regie_purge_cancel_button"],
+                discord.ButtonStyle.secondary,
+                str(getattr(realm, "id", "")), guild_id,
+            )
+            dormant_blocks.append(row)
     container: discord.ui.Container[discord.ui.LayoutView] = discord.ui.Container(
         discord.ui.TextDisplay(f"# {strings['settings_regie_title']}"),
         discord.ui.TextDisplay(str(strings["settings_regie_hint"])),
@@ -1346,6 +1374,7 @@ def _regie_drawer(
         discord.ui.TextDisplay(f"## {strings['settings_regie_actions_label']}"),
         row_button,
         *archive_blocks,
+        *dormant_blocks,
         accent_colour=_ADMIN_COLOUR,
     )
     return surface(_DRAWERS["regie"], container)
@@ -1449,6 +1478,7 @@ async def _build_drawer(
         view = _regie_drawer(
             strings, states, season_live=season_live,
             archived=await _archived_realms(), guild_id=guild_id,
+            dormant=await _dormant_realms(),
         )
     elif drawer == "atelier":
         from .common import strings_by_locale
@@ -1697,7 +1727,10 @@ class KingdomRegieSwitchButton(
         await open_unique_ephemeral(interaction, view=view)
 
 
-_REGIE_REALM = r"kingdom:console-regie:(?P<kind>restore|purge|restore-yes|restore-no|purge-yes|purge-no):(?P<realm_id>[a-zA-Z0-9_-]+):(?P<guild_id>\d+)"
+# drain-coquilles-v1 (Drasah 22/11, Check 135) : les ids de coquille
+# contiennent un ":" ("realm:aegis-123") — le moule les accepte
+# (segments séparés par ":", non-avides pour laisser le guild_id)
+_REGIE_REALM = r"kingdom:console-regie:(?P<kind>restore|purge|restore-yes|restore-no|purge-yes|purge-no):(?P<realm_id>[a-zA-Z0-9_:-]+?):(?P<guild_id>\d+)$"
 
 
 def _realm_service_of(bot: Any) -> Any:
@@ -1807,7 +1840,16 @@ class KingdomRegieRealmButton(
         if not await _panel_guard(interaction):
             return
         realm = await _realm_by_id(self.realm_id)
-        if realm is None or not getattr(realm, "archived_at", 0):
+        # drain-coquilles-v1 (Check 135) : la purge vit AUSSI pour une
+        # coquille DORMANTE (le fondateur y est coincé — Roi qui ne peut
+        # ni quitter ni être éjecté : détruire la coquille est la SEULE
+        # porte). Restent exclus : une saison vivante (engagement) ou
+        # une demande d'entrée en cours — jamais touchées.
+        if (
+            realm is None
+            or getattr(realm, "engagement", None)
+            or getattr(realm, "join_request", None)
+        ):
             await _safe_send(interaction, strings["settings_regie_archived_gone_note"])
             return
         name = str(getattr(realm, "name", "?"))[:80]

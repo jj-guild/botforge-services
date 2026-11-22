@@ -219,6 +219,8 @@ fr:
       settings_regie_reset_done: "🧹 {realms} royaume(s) archivé(s), {players} joueur(s) libéré(s) — la Conscription est de retour pour eux."
       settings_regie_reset_empty: "Aucun royaume hors saison à réinitialiser."
       settings_regie_hint: "Les gestes ponctuels de gestion moteur — hors du cockpit, à portée de clic."
+      settings_regie_dormant_title: "🛰️ Royaumes persistants (hors saison)"
+      settings_regie_dormant_hint: "Coquilles dormantes : 🗑️ détruit la coquille et libère son fondateur (le Roi ne peut ni quitter ni être éjecté autrement) et son nom. Jamais un royaume engagé ou une demande en cours."
       settings_regie_archived_title: "📦 Royaumes archivés"
       settings_regie_archived_hint: "Les royaumes archivés (données conservées). ♻️ Restaurer envoie la demande au Roi fondateur par MP ; 🗑️ Supprimer définitivement détruit la coquille et LIBÈRE le nom."
       settings_regie_archived_empty: "Aucun royaume archivé."

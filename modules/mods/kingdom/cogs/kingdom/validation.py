@@ -1114,7 +1114,10 @@ class ValidationEjectButton(
 
 class ValidationArchiveButton(
     discord.ui.DynamicItem[discord.ui.Button[Any]],
-    template=rf"{_NS}:arch:(?P<realm_id>[a-zA-Z0-9_-]+)",
+    # drain-coquilles-v1 (Check 135) : un id de coquille porte un ":"
+    # ("realm:aegis-123") — le moule l'accepte, ancré $ pour
+    # capturer l'id ENTIER (avant : "realm" tronqué, clic mort).
+    template=rf"{_NS}:arch:(?P<realm_id>[a-zA-Z0-9_:-]+)$",
 ):
     """📦 Archiver — take a DORMANT realm out of play (data kept)."""
 

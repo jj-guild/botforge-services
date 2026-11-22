@@ -209,6 +209,8 @@ en:
       settings_regie_reset_done: "🧹 {realms} kingdom(ies) archived, {players} player(s) freed — the Conscription is back for them."
       settings_regie_reset_empty: "No off-season kingdom to reset."
       settings_regie_hint: "The one-off engine-management gestures — out of the cockpit, a click away."
+      settings_regie_dormant_title: "🛰️ Persistent realms (off-season)"
+      settings_regie_dormant_hint: "Dormant shells: 🗑️ destroys the shell and frees its founder (a King can neither leave nor be ejected otherwise) and its name. Never an engaged realm or a pending request."
       settings_regie_archived_title: "📦 Archived realms"
       settings_regie_archived_hint: "The archived realms (data kept). ♻️ Restore DMs the founding King; 🗑️ Delete forever destroys the shell and FREES the name."
       settings_regie_archived_empty: "No archived realm."

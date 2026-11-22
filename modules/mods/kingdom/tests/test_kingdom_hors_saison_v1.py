@@ -14,6 +14,7 @@ Three legs, one cadence (the 5-min pass):
 
 from __future__ import annotations
 
+from types import SimpleNamespace as NS
 from typing import Any
 
 import discord
@@ -130,6 +131,38 @@ async def test_classical_season_restores_the_declared_parcours() -> None:
     assert register.overwrites[guild.default_role].send_messages is False
     assert apply.overwrites[guild.default_role].view_channel is False, "classical gates #postuler"
     assert apply.overwrites[guild._roles[20]].view_channel is True, "the registered players see it"
+
+
+@pytest.mark.asyncio
+async def test_a_dirty_member_deny_is_dropped_a_manual_role_grant_survives() -> None:
+    """drain-coquilles-v1 (Check 135) — the Blanc incident, codified.
+
+    A HAND-MADE member deny (view False + send False — not the gate's
+    bare signature) used to ride the carry-over forever: the player
+    stayed masked with no realm. The pass now drops ANY member view
+    deny (dirty or bare) — while an unknown ROLE grant rides UNTOUCHED.
+    """
+
+    class _MemberGuild(_FakeGuild):
+        def get_member(self, mid: int) -> object | None:
+            return NS(id=mid) if mid == 55 else None
+
+    g = _MemberGuild()
+    member = _FakeRole(55)
+    dirty = NS(view_channel=False, send_messages=False)
+    manual_role = _FakeRole(1234)
+    grant = NS(view_channel=True)
+    register = g._channels[100]
+    register.overwrites = {member: dirty, manual_role: grant}
+    local_bot = NS(guilds=[g], get_guild=lambda gid: g, mod_roles_service=_RolesService())
+
+    from botforge.mods.kingdom.cogs.conscription_gate import run_conscription_gate_pass
+
+    await run_conscription_gate_pass(local_bot)
+    keys = {getattr(t, "id", t) for t in register.overwrites}
+    assert 55 not in keys, "the dirty member deny is DROPPED (the mask is the gate's turf)"
+    assert 1234 in keys, "an unknown ROLE grant rides the carry-over untouched"
+    assert getattr(register.overwrites[manual_role], "view_channel", None) is True
 
 
 @pytest.mark.asyncio
