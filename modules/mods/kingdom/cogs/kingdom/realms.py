@@ -236,28 +236,17 @@ async def _apply_dormancy(guild: Any, channel: Any, key: str, member_ids: list[i
     """
     if key not in DORMANT_HIDDEN_KEYS:
         return
-    overwrites: dict[Any, discord.PermissionOverwrite] = {}
-    everyone = getattr(guild, "default_role", None)
-    if everyone is not None:
-        overwrites[everyone] = discord.PermissionOverwrite(view_channel=False)
-    for member_id in member_ids:
-        member = await _resolve_member(guild, member_id)
-        if member is None:
-            logger.warning(
-                "kingdom realms: member %s skipped at %s dormancy recompute (unresolvable in guild %s)",
-                member_id,
-                key,
-                getattr(guild, "id", "?"),
-            )
-            continue
-        if dormant:
-            overwrites[member] = discord.PermissionOverwrite(
-                view_channel=False, read_message_history=False
-            )
-        else:
-            overwrites[member] = discord.PermissionOverwrite(
-                view_channel=True, read_message_history=True
-            )
+    # missing-access-v1 (Drasah 23/11) — l'incident live AEGIS/HeN, PROUVÉ
+    # par la fenêtre État (« 403 Missing Access » sur les fiches) : un
+    # salon avec SES PROPRES overwrites n'hérite PLUS ceux de la
+    # catégorie — or le recompute n'y mettait que everyone-deny + les
+    # membres : le BOT sortait de l'équation et perdait l'accès à SON
+    # propre salon (Discord 50001). Le recompute s'aligne donc sur la
+    # MÊME passe que la catégorie (realm_overwrites : everyone-deny +
+    # le bot allow + le rôle admin + les membres selon l'état) — le
+    # bot garde la main sur les salons qu'il nourrit, quel que soit
+    # l'état, et les membres non résolus restent loggés fort.
+    overwrites = await realm_overwrites(guild, member_ids, member_view=not dormant)
     edit = getattr(channel, "edit", None)
     if edit is not None:
         try:

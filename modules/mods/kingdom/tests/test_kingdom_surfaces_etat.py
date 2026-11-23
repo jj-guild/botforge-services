@@ -11,6 +11,7 @@ pass in memory: the miss becomes a line the admin reads in one click.
 from __future__ import annotations
 
 from typing import Any
+from unittest.mock import Mock
 
 import pytest
 
@@ -314,3 +315,67 @@ async def test_deploy_gaia_content_adopts_the_blind_category(monkeypatch: pytest
     assert any(
         content._marker("territory-gaia") in m.content for m in gaia_salon.history_msgs
     ), "the Gaïa sheet rides the adopted small-caps category"
+
+
+@pytest.mark.asyncio
+async def test_a_forbidden_forbidden_sheet_heals_and_retries(monkeypatch: pytest.MonkeyPatch) -> None:
+    """missing-access-v1 : sur un 403, la fiche RE-scell la structure puis réessaie UNE fois."""
+    import discord
+
+    import botforge.mods.kingdom.cogs.realm_content as content
+    from botforge.mods.kingdom.cogs import realms as realms_mod
+
+    realm = _Realm("Aegis", {"kingdom_id": "k-1"})
+    channel = _Channel("🌍 Territoire")
+    guild = _guild()
+    content._SURFACE_ERRORS.clear()
+
+    upsert_calls: list[str] = []
+    healed: list[Any] = []
+
+    async def _upsert_marked(chan: Any, key: str, body: str, **kwargs: Any) -> str:
+        upsert_calls.append(key)
+        if len(upsert_calls) == 1:
+            raise discord.Forbidden(Mock(status=403), {"code": 50001, "message": "Missing Access"})
+        return "mid-42"
+
+    async def _ensure(guild: Any, realm_in: Any, *, dormant: bool = True) -> dict[str, Any]:
+        healed.append(realm_in)
+        return {}
+
+    monkeypatch.setattr(content, "_upsert_marked", _upsert_marked)
+    monkeypatch.setattr(realms_mod, "ensure_realm_structure", _ensure)
+
+    mid = await content._upsert_sheet(guild, realm, channel, "territory", "fiche")
+    assert upsert_calls == ["territory", "territory"], "the sheet retried ONCE after the heal"
+    assert healed == [realm], "the structure was re-ensured before the retry"
+    assert mid == "mid-42"
+    assert "Aegis·territory" not in content.surface_errors(), "the success clears the error"
+
+
+@pytest.mark.asyncio
+async def test_a_forbidden_sheet_that_keeps_failing_stays_readable(monkeypatch: pytest.MonkeyPatch) -> None:
+    """missing-access-v1 : un heal qui ne suffit pas reste consigné, jamais levé."""
+    import discord
+
+    import botforge.mods.kingdom.cogs.realm_content as content
+    from botforge.mods.kingdom.cogs import realms as realms_mod
+
+    realm = _Realm("Aegis", {"kingdom_id": "k-1"})
+    channel = _Channel("🌍 Territoire")
+    guild = _guild()
+    content._SURFACE_ERRORS.clear()
+
+    async def _always_forbidden(chan: Any, key: str, body: str, **kwargs: Any) -> str:
+        raise discord.Forbidden(Mock(status=403), {"code": 50001, "message": "Missing Access"})
+
+    async def _ensure(guild: Any, realm_in: Any, *, dormant: bool = True) -> dict[str, Any]:
+        return {}
+
+    monkeypatch.setattr(content, "_upsert_marked", _always_forbidden)
+    monkeypatch.setattr(realms_mod, "ensure_realm_structure", _ensure)
+
+    mid = await content._upsert_sheet(guild, realm, channel, "territory", "fiche")
+    assert mid is None
+    errors = content.surface_errors()
+    assert "Aegis·territory" in errors, "the failed retry stays readable in the window"

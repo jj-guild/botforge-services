@@ -446,6 +446,39 @@ async def test_the_recompute_logs_an_unresolvable_member(caplog) -> None:
     assert "4242" in caplog.text, "a skipped member is NEVER silent (the Check 107 lesson)"
 
 
+@pytest.mark.asyncio
+async def test_the_recompute_keeps_the_bot_in_its_own_salons() -> None:
+    """missing-access-v1 (Drasah 23/11) — l'incident live AEGIS/HeN.
+
+    Un salon avec ses propres overwrites n'hérite PLUS ceux de la
+    catégorie : si le recompute n'y met pas le BOT, il perd l'accès à
+    SON propre salon (Discord 403 Missing Access, les fiches ne se
+    posent jamais). Le recompute doit porter l'allow du bot ET du
+    rôle admin, éveillé comme dormant.
+    """
+    from botforge.mods.kingdom.cogs.realms import _apply_dormancy
+
+    guild = _RecomputeGuild()
+    guild.me = _RecomputeMember(7)  # the bot's own member
+    channel = _RecomputeChannel()
+    await _apply_dormancy(guild, channel, "territory", [1], dormant=False)
+    overwrites = channel.edits[0]["overwrites"]
+    bot = next(k for k in overwrites if getattr(k, "id", None) == 7)
+    assert overwrites[bot].view_channel is True, "the bot keeps its salon awake"
+    assert overwrites[bot].send_messages is True, "the bot can still feed the fiche"
+    everyone = next(k for k in overwrites if getattr(k, "id", None) == 0)
+    assert overwrites[everyone].view_channel is False
+
+    channel2 = _RecomputeChannel()
+    await _apply_dormancy(guild, channel2, "alliances", [1], dormant=True)
+    overwrites2 = channel2.edits[0]["overwrites"]
+    bot2 = next(k for k in overwrites2 if getattr(k, "id", None) == 7)
+    assert overwrites2[bot2].send_messages is True, "dormant keeps the BOT able (masked members, live bot)"
+    assert overwrites2[bot2].view_channel is True
+    member = next(k for k in overwrites2 if getattr(k, "id", None) == 1)
+    assert overwrites2[member].view_channel is False, "dormant still masks the humans"
+
+
 def test_the_dormant_recompute_denies_members() -> None:
     import asyncio
 

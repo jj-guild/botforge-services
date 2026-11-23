@@ -780,6 +780,66 @@ def wiring() -> Any:
 # ---------------------------------------------------------------------------
 
 
+async def _upsert_sheet(
+    guild: Any,
+    realm: Any,
+    channel: Any,
+    key: str,
+    content: str,
+    *,
+    view: Any = None,
+    files: list[Any] | None = None,
+    pin: bool = False,
+) -> str | None:
+    """Send ONE sheet, sealing the salon's own structure on a 403.
+
+    missing-access-v1 (Drasah 23/11) — l'incident live AEGIS/HeN, PROUVÉ
+    par la fenêtre État (« 403 Missing Access » sur les fiches) : un
+    salon avec SES PROPRES overwrites n'hérite plus l'allow de la
+    catégorie, et le bot pouvait se retrouver scellé HORS de SON
+    propre royaume. La passe ne masque plus jamais un refus : sur un
+    Forbidden, elle re-ensure la structure (le seam adoption + dormancy,
+    qui porte maintenant l'allow du bot) PUIS réessaie UNE fois. Les
+    salons déjà cassés guérissent tous seuls au passage suivant,
+    sans clic admin, sans reset. Tout autre échec reste best-effort,
+    consigné dans la fenêtre État (le dernier mètre n'est plus muet).
+    """
+    rname = str(getattr(realm, "name", "?"))
+    kwargs: dict[str, Any] = {"view": view, "files": files, "pin": pin}
+    mid: str | None = None
+    try:
+        mid = await _upsert_marked(channel, key, content, **kwargs)
+        _record_surface_error(f"{rname}·{key}", None)
+        return mid
+    except discord.Forbidden as exc:
+        _record_surface_error(f"{rname}·{key}", exc)
+        logger.warning(
+            "kingdom realm content: %s deploy FORBIDDEN (realm %s) — healing the structure and retrying once",
+            key, rname,
+        )
+    except Exception as exc:  # noqa: BLE001
+        _record_surface_error(f"{rname}·{key}", exc)
+        logger.warning("kingdom realm content: %s deploy failed", key, exc_info=True)
+        return None
+    # le heal : le salon se scellait seul, le seam le rouvre au bot
+    try:
+        from .realms import ensure_realm_structure
+
+        await ensure_realm_structure(guild, realm, dormant=False)
+        mid = await _upsert_marked(channel, key, content, **kwargs)
+    except Exception as exc:  # noqa: BLE001 — le retry reste best-effort
+        _record_surface_error(f"{rname}·{key}", exc)
+        logger.warning(
+            "kingdom realm content: %s heal retry failed (realm %s)", key, rname, exc_info=True
+        )
+        return None
+    _record_surface_error(f"{rname}·{key}", None)
+    logger.info(
+        "kingdom realm content: %s of %s self-healed after a Forbidden", key, rname
+    )
+    return mid
+
+
 async def deploy_realm_content(
     guild: Any,
     realm: Any,
@@ -813,21 +873,21 @@ async def deploy_realm_content(
 
     territory = channels.get("territory")
     if territory is not None:
-        try:
-            if started:
-                owned = await _owned_territories(stack, kingdom)
-                body = _territory_body(strings, stack, kingdom, owned)
-            else:
-                body = strings["territory_pending_body"]
-            content = (
-                f"## {strings['territory_title'].format(str(getattr(kingdom, 'name', '')))}"
-                f"\n\n{body}\n\n{surface_footer(TERRITORY_SURFACE)}\n\n{_marker('territory')}"
-            )
-            ids["territory_message"] = await _upsert_marked(territory, "territory", content)
-            _record_surface_error(f"{rname}·territoire", None)
-        except Exception as exc:  # noqa: BLE001
-            _record_surface_error(f"{rname}·territoire", exc)
-            logger.warning("kingdom realm content: territory deploy failed", exc_info=True)
+        if started:
+            owned = await _owned_territories(stack, kingdom)
+            body = _territory_body(strings, stack, kingdom, owned)
+        else:
+            body = strings["territory_pending_body"]
+        content = (
+            f"## {strings['territory_title'].format(str(getattr(kingdom, 'name', '')))}"
+            f"\n\n{body}\n\n{surface_footer(TERRITORY_SURFACE)}\n\n{_marker('territory')}"
+        )
+        # missing-access-v1 (Drasah 23/11) : la fiche passe par le
+        # seam _upsert_sheet — un 403 sur SON salon déclenche le
+        # heal (re-ensure structure) et UN retry, sans clic admin.
+        mid = await _upsert_sheet(guild, realm, territory, "territory", content)
+        if mid is not None:
+            ids["territory_message"] = mid
 
     alliances = channels.get("alliances")
     if alliances is not None:
@@ -862,14 +922,19 @@ async def deploy_realm_content(
                 strings, stack, kingdom, guild, locale, mosaic=mosaic_file is not None
             )
             content = f"{content}\n\n{_marker('alliances')}"
-            ids["alliances_message"] = await _upsert_marked(
+            # missing-access-v1 (Drasah 23/11) : même seam que la fiche
+            # territoire — heal + UN retry sur un 403, la mosaïque suit.
+            mid = await _upsert_sheet(
+                guild,
+                realm,
                 alliances,
                 "alliances",
                 content,
                 view=view,
                 files=[mosaic_file] if mosaic_file is not None else None,
             )
-            _record_surface_error(f"{rname}·alliances", None)
+            if mid is not None:
+                ids["alliances_message"] = mid
         except Exception as exc:  # noqa: BLE001
             _record_surface_error(f"{rname}·alliances", exc)
             logger.warning("kingdom realm content: alliances deploy failed", exc_info=True)
