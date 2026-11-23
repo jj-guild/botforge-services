@@ -72,6 +72,8 @@ def _condition_ok(doc: dict[str, Any], key: str, condition: Any) -> bool:
         return value is not None and value < condition["$lt"]
     if isinstance(condition, dict) and "$exists" in condition:
         return (value is not None) == bool(condition["$exists"])
+    if isinstance(condition, dict) and "$ne" in condition:
+        return value != condition["$ne"]
     if isinstance(value, list):
         # Mongo equality against an array matches containment
         return condition in value
@@ -127,6 +129,13 @@ class FakeCollection:
         if doc is None:
             return
         doc.update(update.get("$set", {}))
+
+    async def update_many(self, query: dict[str, Any], update: dict[str, Any]) -> dict[str, Any]:
+        touched = 0
+        for doc in _matches(query, list(self.docs.values())):
+            doc.update(update.get("$set", {}))
+            touched += 1
+        return {"modified_count": touched}
 
 
 class FakeDb:
@@ -969,3 +978,38 @@ async def test_the_missing_1v1_gets_probed_once_not_forever() -> None:
     await syncer.sync_account("123")  # the second pass stays quiet
     assert probed.count("456") == 1, "the honestly-absent 1v1 never re-probes"
     assert db["librematch:accounts"].docs["456"]["leaderboards"]["3"]["none"] is True
+
+
+async def test_stale_never_played_match_seals_and_never_serves() -> None:
+    """An abandoned lobby (no result for over a day) is invalid (owner 2026-11-23)."""
+    import time as _time
+
+    db = FakeDb()
+    adapter = FakeAdapter()
+    now = int(_time.time())
+    # a resultless capture two days old - the abandoned "test" lobby
+    adapter.history["123"] = [
+        _match("old-lobby", "", now - 200000, 0, [_member("123", 0, 0, 0, 0)], description="test"),
+    ]
+    syncer = _syncer(db, adapter)
+    await syncer.sync_account("123")
+    assert db["librematch:matches"].docs["old-lobby"]["invalid"] is True
+    entries = await syncer.match_history(["123"])
+    assert entries == [], "the abandoned lobby never serves"
+
+
+async def test_recent_ongoing_match_still_serves() -> None:
+    """A capture younger than the stale window is NOT sealed (yet)."""
+    import time as _time
+
+    db = FakeDb()
+    adapter = FakeAdapter()
+    now = int(_time.time())
+    adapter.history["123"] = [
+        _match("fresh-lobby", "", now - 600, 0, [_member("123", 0, 0, 0, 0)], description="test"),
+    ]
+    syncer = _syncer(db, adapter)
+    await syncer.sync_account("123")
+    assert "invalid" not in db["librematch:matches"].docs["fresh-lobby"]
+    entries = await syncer.match_history(["123"])
+    assert [e.match_id for e in entries] == ["fresh-lobby"]

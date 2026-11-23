@@ -374,6 +374,15 @@ class MatchHistorySyncer:
         # The catch-up decode for documents stored by an older revision
         # (their blobs sit verbatim in ``raw``): no network, no re-fetch.
         await self.decode_stored([profile_id])
+        # Seal the never-played captures: a match started long ago
+        # with no result is an abandoned lobby, not a game (owner
+        # 2026-11-23 - the served "test" lobbies never went away).
+        try:
+            stale = await self._store.invalidate_stale_matches()
+            if stale:
+                logger.info("stale matches invalidated: %d", stale)
+        except Exception:
+            logger.debug("the stale-match seal failed", exc_info=True)
         return stored_any
 
     async def refresh_status(self, profile_id: str) -> bool:

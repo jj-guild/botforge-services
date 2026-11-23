@@ -104,6 +104,15 @@ A&nbsp;FINISHED&nbsp;match&nbsp;is&nbsp;immutable&nbsp;—&nbsp;an&nbsp;already&
 never&nbsp;rewritten&nbsp;(the&nbsp;smart-sync&nbsp;rule&nbsp;of&nbsp;#404&nbsp;T4:&nbsp;the&nbsp;incremental<br>
 sync&nbsp;only&nbsp;ever&nbsp;APPENDS&nbsp;the&nbsp;new&nbsp;games).</span></dd></dl>
 
+<dl><dt>async <a name="LibrematchStore-invalidate_stale_matches"><strong>invalidate_stale_matches</strong></a>(self, stale_after_s: 'int' = 86400) -&gt; 'int'</dt><dd><span class="code">Flag&nbsp;the&nbsp;never-played&nbsp;captures:&nbsp;started&nbsp;long&nbsp;ago,&nbsp;never&nbsp;decided.<br>
+&nbsp;<br>
+A&nbsp;match&nbsp;older&nbsp;than&nbsp;``stale_after_s``&nbsp;with&nbsp;NO&nbsp;completion&nbsp;and<br>
+NO&nbsp;winner&nbsp;is&nbsp;a&nbsp;capture&nbsp;of&nbsp;a&nbsp;lobby&nbsp;that&nbsp;never&nbsp;ran&nbsp;(owner<br>
+2026-11-23:&nbsp;a&nbsp;result&nbsp;never&nbsp;heard&nbsp;from&nbsp;again&nbsp;for&nbsp;more&nbsp;than&nbsp;a<br>
+day&nbsp;means&nbsp;the&nbsp;game&nbsp;was&nbsp;never&nbsp;played).&nbsp;Marked&nbsp;``invalid``<br>
+once&nbsp;-&nbsp;the&nbsp;serving&nbsp;and&nbsp;the&nbsp;panels&nbsp;skip&nbsp;it,&nbsp;the&nbsp;raw&nbsp;document<br>
+stays&nbsp;for&nbsp;the&nbsp;archaeology.</span></dd></dl>
+
 <dl><dt>async <a name="LibrematchStore-list_bound_profiles"><strong>list_bound_profiles</strong></a>(self) -&gt; 'list[str]'</dt><dd><span class="code">List&nbsp;only&nbsp;the&nbsp;BOUND&nbsp;accounts&nbsp;—&nbsp;the&nbsp;bot's&nbsp;own&nbsp;users.<br>
 &nbsp;<br>
 The&nbsp;periodic&nbsp;sync&nbsp;loops&nbsp;must&nbsp;never&nbsp;walk&nbsp;the&nbsp;MET&nbsp;players:&nbsp;the<br>

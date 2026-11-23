@@ -155,6 +155,11 @@ class LibrematchStore:
         An empty ``profile_ids`` means every known account's matches.
         """
         query: dict[str, Any] = {}
+        # an INVALIDATED match never serves (owner 2026-11-23): a
+        # lobby abandoned long ago - no result, no completion - is a
+        # game that was never played; the invalidation sealer marks
+        # it and the serving stays honest without deleting the raw.
+        query["invalid"] = {"$ne": True}
         if profile_ids:
             query["profile_ids"] = {"$in": [str(p) for p in profile_ids]}
         if since_s > 0:
@@ -166,6 +171,27 @@ class LibrematchStore:
         if limit > 0:
             cursor = cursor.limit(limit)
         return [dict(doc) async for doc in cursor]
+
+    async def invalidate_stale_matches(self, stale_after_s: int = 86400) -> int:
+        """Flag the never-played captures: started long ago, never decided.
+
+        A match older than ``stale_after_s`` with NO completion and
+        NO winner is a capture of a lobby that never ran (owner
+        2026-11-23: a result never heard from again for more than a
+        day means the game was never played). Marked ``invalid``
+        once - the serving and the panels skip it, the raw document
+        stays for the archaeology.
+        """
+        import time as _time
+
+        deadline = int(_time.time()) - int(stale_after_s)
+        query = {
+            "invalid": {"$ne": True},
+            "started_at": {"$lt": deadline},
+            "$or": [{"finished_at": 0}, {"finished_at": {"$exists": False}}, {"winners": []}],
+        }
+        result = await self._matches().update_many(query, {"$set": {"invalid": True}})
+        return int(getattr(result, "modified_count", 0) or 0)
 
     async def find_undecoded_matches(
         self, profile_ids: list[str], limit: int = 25

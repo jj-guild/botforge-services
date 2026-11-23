@@ -738,9 +738,11 @@ REPLAY_URL = (
     "?matchId={match_id}&profileId={profile_id}"
 )
 LIBREMATCH_SOURCE_URL = (
-    "https://aoe-api.worldsedgelink.com/community/leaderboard/GetRecentMatchHistory"
-    "?title=age2&profile_ids=%5B%22{profile_id}%22%5D&count=25"
-)  # 25: the provider's REAL quick window (the panel keeps the 10 INTERESTING)
+    "https://aoe-api.worldsedgelink.com/community/leaderboard/getMatchHistory"
+    "?title=age2&matchIDs=%5B{match_id}%5D"
+)  # the provider's OWN single-match fetch (LibreMatch wiki,
+# community/leaderboard/getMatchHistory - a public GET without auth,
+# owner 2026-11-23: the source names THE MATCH, not a profile's page)
 
 #: the named settings the RAW options blob completes (the
 _OUTCOME_COLOURS = {"win": 0x57F287, "loss": 0xED4245, "ongoing": 0xFEE75C, "lobby": 0x5865F2}
@@ -982,13 +984,12 @@ def _card_footer_text(card: dict[str, Any], labels: dict[str, Any], me_ids: set[
 
     The settings LINE is gone (owner 2026-11-23: the footer carries
     the source, the settings live behind the settings button). The
-    source link mirrors the provider's fetch of the VIEWER's history
-    page: HIS profile among the match seats - not the first seat's
-    (owner 2026-11-23: a fantasy profile id rode the link).
+    source link mirrors the provider's OWN fetch of THE match
+    (getMatchHistory?matchIDs, the public GET - owner 2026-11-23):
+    the card's match id, no profile page, no count.
     """
-    seats = [str((p or {}).get("profile_id") or "") for p in (card.get("players") or [])]
-    mine = next((pid for pid in seats if pid in (me_ids or set())), seats[0] if seats else "")
-    source_url = LIBREMATCH_SOURCE_URL.format(profile_id=mine) if mine else ""
+    match_id = str(card.get("match_id") or "").strip()
+    source_url = LIBREMATCH_SOURCE_URL.format(match_id=match_id) if match_id else ""
     source = str(labels.get("source", "Source : libre:match")).format(url=source_url or "libre:match")
     return f"-# {source}"
 
@@ -1314,7 +1315,12 @@ def _seat_text(
     finished = card.get("status") == "finished"
     replay = REPLAY_URL.format(match_id=match_id, profile_id=pid) if match_id else ""
     jump = f"[[ \u25b8 ]]({replay})" if replay else ""
-    civ_link = f"[{civ}]({civ_urls[civ]})" if civ and civ_urls.get(civ) else civ
+    # the display name reads the GUILD's own locale (aoe2techtree's
+    # localized docs): the stored civ is the English reference key;
+    # the raw key never displays (owner 2026-11-23: the civs showed
+    # English on the match links while the guild speaks French)
+    civ_shown = str((ctx.get("civ_display") or {}).get(civ) or civ)
+    civ_link = f"[{civ_shown}]({civ_urls[civ]})" if civ and civ_urls.get(civ) else civ_shown
     # the alias links to its insights profile (relic id); ONLY the
     # viewed player's alias carries the bold (owner 2026-11-22)
     insights_profile = f"https://www.aoe2insights.com/user/relic/{pid}/" if pid else ""
@@ -1342,7 +1348,11 @@ def _seat_text(
     match_board = "rm_team" if is_team_game else "rm_1v1"
     ranked = str(card.get("lobby_title") or "").strip().upper() == "AUTOMATCH"
     lines = [line]
-    indent = "\u00a0\u00a0\u00a0\u00a0"  # 4 fixed spaces of column
+    # four nbsp INSIDE an inline code span: Discord's renderer eats
+    # bare leading whitespace on a -# subtext line (owner 2026-11-23:
+    # the first nbsp-only indent never showed) - an inline code span
+    # keeps its spaces verbatim AND renders them fixed-width
+    indent = "`\u00a0\u00a0\u00a0\u00a0`"
     for key, label in (("rm_1v1", "1v1"), ("rm_team", "TG")):
         current, peak = boards.get(key, (0, 0))
         if key == match_board and (before if ranked else current):
