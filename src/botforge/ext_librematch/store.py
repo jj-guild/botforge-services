@@ -233,21 +233,21 @@ class LibrematchStore:
                 upsert=True,
             )
 
-    async def mark_missing_1v1(self, profile_ids: list[str]) -> None:
-        """Mark the honestly-absent 1v1 boards (the probe never repeats)."""
+    async def mark_missing_board(self, profile_id: str, board_id: str) -> None:
+        """Mark one honestly-absent board (the probe never repeats)."""
         accounts = self._db["librematch:accounts"]
-        for profile_id in profile_ids:
-            existing = await accounts.find_one({"_id": str(profile_id)}) or {}
-            boards = dict(existing.get("leaderboards") or {})
-            old = boards.get("3") or {}  # the WE 1v1 board id
-            if int(old.get("current") or 0) or int(old.get("max") or 0):
-                continue
-            boards["3"] = {**old, "current": 0, "max": 0, "none": True}
-            await accounts.replace_one(
-                {"_id": str(profile_id)},
-                {**existing, "_id": str(profile_id), "leaderboards": boards},
-                upsert=True,
-            )
+        profile_id, board_id = str(profile_id), str(board_id)
+        existing = await accounts.find_one({"_id": profile_id}) or {}
+        boards = dict(existing.get("leaderboards") or {})
+        old = boards.get(board_id) or {}
+        if int(old.get("current") or 0) or int(old.get("max") or 0):
+            return
+        boards[board_id] = {**old, "current": 0, "max": 0, "none": True}
+        await accounts.replace_one(
+            {"_id": profile_id},
+            {**existing, "_id": profile_id, "leaderboards": boards},
+            upsert=True,
+        )
 
     async def find_accounts(self, profile_ids: list[str]) -> list[dict[str, Any]]:
         """Return the status documents of the accounts (missing ones absent)."""

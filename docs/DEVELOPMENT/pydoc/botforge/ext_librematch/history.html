@@ -81,13 +81,14 @@ immutable&nbsp;raw.&nbsp;Returns&nbsp;the&nbsp;number&nbsp;of&nbsp;documents&nbs
 
 <dl><dt>async <a name="MatchHistorySyncer-match_history"><strong>match_history</strong></a>(self, profile_ids: 'list[str]', limit: 'int' = 0, since_s: 'int' = 0, leaderboard_id: 'str' = '') -&gt; 'list[MatchHistoryEntry]'</dt><dd><span class="code">Serve&nbsp;the&nbsp;stored&nbsp;history&nbsp;as&nbsp;the&nbsp;exploited&nbsp;projection.</span></dd></dl>
 
-<dl><dt>async <a name="MatchHistorySyncer-refresh_missing_1v1"><strong>refresh_missing_1v1</strong></a>(self, profile_ids: 'list[str]', cap: 'int' = 30) -&gt; 'list[str]'</dt><dd><span class="code">Probe&nbsp;the&nbsp;missing&nbsp;1v1&nbsp;boards&nbsp;of&nbsp;the&nbsp;MET&nbsp;players&nbsp;-&nbsp;once&nbsp;each.<br>
+<dl><dt>async <a name="MatchHistorySyncer-refresh_missing_1v1"><strong>refresh_missing_1v1</strong></a>(self, profile_ids: 'list[str]', cap: 'int' = 30) -&gt; 'list[str]'</dt><dd><span class="code">Probe&nbsp;the&nbsp;missing&nbsp;1v1&nbsp;AND&nbsp;TG&nbsp;boards&nbsp;of&nbsp;the&nbsp;MET&nbsp;players&nbsp;-&nbsp;once&nbsp;each.<br>
 &nbsp;<br>
-The&nbsp;TG&nbsp;elo&nbsp;rides&nbsp;the&nbsp;match&nbsp;payload;&nbsp;the&nbsp;1v1&nbsp;elo&nbsp;does&nbsp;not.&nbsp;A<br>
-player&nbsp;seen&nbsp;without&nbsp;a&nbsp;stored&nbsp;rm_1v1&nbsp;board&nbsp;(and&nbsp;without&nbsp;the<br>
-absence&nbsp;mark)&nbsp;is&nbsp;fetched&nbsp;ONCE:&nbsp;a&nbsp;board&nbsp;found&nbsp;is&nbsp;stored,&nbsp;an<br>
-honest&nbsp;absence&nbsp;(the&nbsp;player&nbsp;simply&nbsp;has&nbsp;no&nbsp;1v1&nbsp;elo)&nbsp;marks&nbsp;the<br>
-doc&nbsp;so&nbsp;the&nbsp;probe&nbsp;never&nbsp;repeats&nbsp;(owner&nbsp;2026-11-22).</span></dd></dl>
+The&nbsp;seen&nbsp;harvest&nbsp;only&nbsp;folds&nbsp;the&nbsp;boards&nbsp;the&nbsp;matches&nbsp;carried<br>
+(a&nbsp;player&nbsp;met&nbsp;through&nbsp;NOTHING&nbsp;but&nbsp;custom&nbsp;lobbies&nbsp;never&nbsp;gets<br>
+his&nbsp;TG&nbsp;board&nbsp;either):&nbsp;every&nbsp;board&nbsp;the&nbsp;panels&nbsp;read,&nbsp;3&nbsp;(RM&nbsp;1v1)<br>
+and&nbsp;4&nbsp;(RM&nbsp;team),&nbsp;probes&nbsp;once&nbsp;when&nbsp;absent&nbsp;—&nbsp;found&nbsp;is<br>
+stored,&nbsp;an&nbsp;honest&nbsp;absence&nbsp;marks&nbsp;the&nbsp;board&nbsp;so&nbsp;the&nbsp;probe&nbsp;never<br>
+repeats&nbsp;(owners&nbsp;2026-11-22/23:&nbsp;the&nbsp;missing&nbsp;TG&nbsp;elo).</span></dd></dl>
 
 <dl><dt>async <a name="MatchHistorySyncer-refresh_status"><strong>refresh_status</strong></a>(self, profile_id: 'str') -&gt; 'bool'</dt><dd><span class="code">Refresh&nbsp;ONE&nbsp;account's&nbsp;elo&nbsp;status&nbsp;—&nbsp;no&nbsp;history&nbsp;fetch&nbsp;at&nbsp;all.<br>
 &nbsp;<br>

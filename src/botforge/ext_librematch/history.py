@@ -251,6 +251,20 @@ def _settings_of(options_json: str) -> list[list[str]]:
     return out
 
 
+def _board_complete(doc: dict[str, Any] | None, board_ids: tuple[str, ...]) -> bool:
+    """Return True when every wanted board is known (a value, a peak, or the absence)."""
+    boards = (doc or {}).get("leaderboards") or {}
+    for board_id in board_ids:
+        board = boards.get(board_id) or {}
+        if not (
+            int(board.get("current") or 0)
+            or int(board.get("max") or 0)
+            or board.get("none")
+        ):
+            return False
+    return True
+
+
 def _needs_repair(candidate_docs: list[dict[str, Any]]) -> bool:
     """Return True when older-era captures wait for their repair pass.
 
@@ -427,48 +441,48 @@ class MatchHistorySyncer:
         return [self._entry_of(doc) for doc in docs]
 
     async def refresh_missing_1v1(self, profile_ids: list[str], cap: int = 30) -> list[str]:
-        """Probe the missing 1v1 boards of the MET players - once each.
+        """Probe the missing 1v1 AND TG boards of the MET players - once each.
 
-        The TG elo rides the match payload; the 1v1 elo does not. A
-        player seen without a stored rm_1v1 board (and without the
-        absence mark) is fetched ONCE: a board found is stored, an
-        honest absence (the player simply has no 1v1 elo) marks the
-        doc so the probe never repeats (owner 2026-11-22).
+        The seen harvest only folds the boards the matches carried
+        (a player met through NOTHING but custom lobbies never gets
+        his TG board either): every board the panels read, 3 (RM 1v1)
+        and 4 (RM team), probes once when absent \u2014 found is
+        stored, an honest absence marks the board so the probe never
+        repeats (owners 2026-11-22/23: the missing TG elo).
         """
         if not profile_ids:
             return []
         docs = await self._store.find_accounts([str(p) for p in profile_ids])
         by_id = {str(doc.get("_id", "")): doc for doc in docs}
         probed: list[str] = []
+        missing_boards = ("3", "4")  # the WE ids: RM 1v1, RM team
         for profile_id in profile_ids:
             str_pid = str(profile_id)
-            doc = by_id.get(str_pid)
-            boards = (doc or {}).get("leaderboards") or {}
-            board = boards.get("3") or {}  # the WE 1v1 board id
-            if board and (
-                int(board.get("current") or 0)
-                or int(board.get("max") or 0)
-                or board.get("none")
-            ):
+            if _board_complete(by_id.get(str_pid), missing_boards):
                 continue
             if len(probed) >= max(0, cap):
                 break
             probed.append(str_pid)
         if not probed:
             return []
-        fresh, absent = await self._probe_1v1(probed)
+        fresh, absent = await self._probe_boards(probed, missing_boards)
         if fresh:
             await self._store.upsert_seen_accounts(fresh)
         if absent:
-            await self._store.mark_missing_1v1(absent)
+            for profile_id, board_id in absent:
+                await self._store.mark_missing_board(profile_id, board_id)
         return probed
 
-    async def _probe_1v1(
-        self, profile_ids: list[str]
-    ) -> tuple[dict[str, dict[str, dict[str, int]]], list[str]]:
-        """Fetch the 1v1 board of each profile once, classify found/absent."""
+    async def _probe_boards(
+        self, profile_ids: list[str], board_ids: tuple[str, ...] = ("3",)
+    ) -> tuple[dict[str, dict[str, dict[str, int]]], list[tuple[str, str]]]:
+        """Fetch the wanted boards of each profile once, found/absent.
+
+        ONE stat call answers EVERY board (the statgroup join), so
+        probing several boards costs nothing extra.
+        """
         fresh: dict[str, dict[str, dict[str, int]]] = {}
-        absent: list[str] = []
+        absent: list[tuple[str, str]] = []
         for profile_id in profile_ids:
             try:
                 # the adapter's signature takes (profile_id, leaderboard_id):
@@ -479,11 +493,15 @@ class MatchHistorySyncer:
                 logger.debug("the 1v1 probe failed (%s)", profile_id, exc_info=True)
                 continue
             boards = self._boards_from_stat(stat, profile_id) if isinstance(stat, dict) else {}
-            board = boards.get("3")
-            if board and (int(board.get("current") or 0) or int(board.get("max") or 0)):
-                fresh[profile_id] = {"3": board}
-            else:
-                absent.append(profile_id)
+            found: dict[str, dict[str, int]] = {}
+            for board_id in board_ids:
+                board = boards.get(board_id) or {}
+                if int(board.get("current") or 0) or int(board.get("max") or 0):
+                    found[board_id] = board
+                else:
+                    absent.append((profile_id, board_id))
+            if found:
+                fresh[profile_id] = found
         return fresh, absent
 
     async def account_stats(self, profile_ids: list[str]) -> list[AccountEloStatus]:

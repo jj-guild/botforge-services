@@ -1138,7 +1138,9 @@ def _card_kind(card: dict[str, Any]) -> str:
 
 
 
-async def _entity_local_names(entity_ids: str | list[str], guild_id: str, fallback: str) -> list[str]:
+async def _entity_local_names(
+    entity_ids: str | list[str], guild_id: str, fallback: str, bot: Any = None
+) -> list[str]:
     """Resolve an entity's LOCALIZED display names (guild locale, then en).
 
     The aoe2techtree content docs carry per-locale names (fr:
@@ -1154,8 +1156,12 @@ async def _entity_local_names(entity_ids: str | list[str], guild_id: str, fallba
         return [fallback] if fallback else []
     if isinstance(entity_ids, str):
         entity_ids = [entity_ids]
+    # the REAL guild locale needs the bot (the STORED choice rides the
+    # logs service on it): a null bot resolved "en" and the French
+    # posts never matched (owner 2026-11-23: Vietnamese/Italians)
+    locales_resolved = await guild_locale(guild_id, bot)
     names: list[str] = []
-    locales = list(dict.fromkeys([await guild_locale(guild_id, None), "en"]))
+    locales = list(dict.fromkeys([locales_resolved, "en"]))
     for locale in locales:
         for entity_id in entity_ids:
             try:
@@ -1203,7 +1209,7 @@ async def _posts_enrichment(
     map_display: dict[str, str] = {}
     for civ in civs_needed:
         candidates = _civ_entity_ids(civ)
-        names = await _entity_local_names(candidates, guild_id, civ)
+        names = await _entity_local_names(candidates, guild_id, civ, interaction.client)
         civ_urls[civ] = await _entity_post_url(interaction.client, guild_id, civs_channel, names)
         civ_display[civ] = names[0] if names else civ
         civ_images[civ] = ""
@@ -1212,7 +1218,7 @@ async def _posts_enrichment(
             if civ_images[civ]:
                 break
     for map_name in maps_needed:
-        names = await _entity_local_names(_map_entity_id(map_name), guild_id, map_name)
+        names = await _entity_local_names(_map_entity_id(map_name), guild_id, map_name, interaction.client)
         map_urls[map_name] = await _entity_post_url(interaction.client, guild_id, maps_channel, names)
         map_display[map_name] = names[0] if names else map_name
         map_images[map_name] = await _entity_image(_map_entity_id(map_name), guild_id)
@@ -1290,7 +1296,7 @@ def _seat_text(
     match_id = str(card.get("match_id") or card.get("match_ref") or "")
     finished = card.get("status") == "finished"
     replay = REPLAY_URL.format(match_id=match_id, profile_id=pid) if match_id else ""
-    jump = f"[ \u25b8 ]({replay})" if replay else ""
+    jump = f"[[ \u25b8 ]]({replay})" if replay else ""
     civ_link = f"[{civ}]({civ_urls[civ]})" if civ and civ_urls.get(civ) else civ
     # the alias links to its insights profile (relic id); ONLY the
     # viewed player's alias carries the bold (owner 2026-11-22)
@@ -1392,15 +1398,17 @@ def _card_header(
     insights_match = (
         INSIGHTS_MATCH_URL.format(match_id=match_id) if match_id and match_id != "?" else ""
     )
-    id_part = f"[#{match_id}]({insights_match})" if insights_match else f"#{match_id}"
+    # the owner's 2026-11-23 pattern: the insights link wraps the
+    # part-name badge, the id rides backticks for an easy copy
+    name_part = f"[[ {badge} ]]({insights_match})" if insights_match else f"[ {badge} ]"
+    id_part = f"`{match_id}`"
     scope_icon = ""
     me_ids = me_ids or set()
     card = card or {}
     winners = {str(w) for w in card.get("winners") or []}
     if me_ids and winners and card.get("status") == "finished":
         scope_icon = "\U0001f3c6 " if winners & me_ids else "\U0001f480 "
-    # the owner's 2026-11-23 pattern: ``💀 **[ CUSTOM 2v2 ] Match n° #id``
-    return f"{scope_icon}**[ {badge} ] {noun}{id_part}**"
+    return f"{scope_icon}**{name_part}** {noun}{id_part}"
 
 
 
@@ -1430,7 +1438,12 @@ def _card_team_blocks(
             medal = ""
             if not scoped and winners and finished:
                 medal = "\U0001f3c6 " if won else "\U0001f480 "
-            title = f"**{labels.get('team', 'Team')} {index + 1}**"
+            # the SCOPE carries no per-team medal: the scoped player's
+            # team reads BOLD, every other team reads italics, the
+            # losers strike through (owner 2026-11-23)
+            mine = any(str((p or {}).get("profile_id", "")) in me_ids for p in seats)
+            base = f"{labels.get('team', 'Team')} {index + 1}"
+            title = f"**{base}**" if mine else f"*{base}*"
             if scoped and winners and finished and not won:
                 title = f"~~{title}~~"
             blocks.append(discord.ui.TextDisplay(f"{medal}{title}"))
@@ -1510,12 +1523,13 @@ def _match_card_view(
             )
         )
     # the full settings live behind their own button (owner 2026-11-23:
-    # the footer stays the source line only)
+    # the footer stays the source line only); the row rides OUTSIDE the
+    # container, the view id beneath
     buttons.append(_MatchSettingsButton(card, labels))
-    if buttons:
-        blocks.append(discord.ui.ActionRow(*buttons))
     view = discord.ui.LayoutView(timeout=None)
     view.add_item(discord.ui.Container(*blocks, accent_colour=discord.Colour(accent)))
+    if buttons:
+        view.add_item(discord.ui.ActionRow(*buttons))
     return add_view_footer(view, f"panel:match:aoe2:{match_id}")
 
 

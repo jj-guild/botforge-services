@@ -115,7 +115,7 @@ the&nbsp;post-purge&nbsp;boot&nbsp;walked&nbsp;thousands&nbsp;of&nbsp;unrelated&
 
 <dl><dt>async <a name="LibrematchStore-list_known_profiles"><strong>list_known_profiles</strong></a>(self) -&gt; 'list[str]'</dt><dd><span class="code">List&nbsp;every&nbsp;account&nbsp;the&nbsp;store&nbsp;has&nbsp;a&nbsp;status&nbsp;or&nbsp;binding&nbsp;for.</span></dd></dl>
 
-<dl><dt>async <a name="LibrematchStore-mark_missing_1v1"><strong>mark_missing_1v1</strong></a>(self, profile_ids: 'list[str]') -&gt; 'None'</dt><dd><span class="code">Mark&nbsp;the&nbsp;honestly-absent&nbsp;1v1&nbsp;boards&nbsp;(the&nbsp;probe&nbsp;never&nbsp;repeats).</span></dd></dl>
+<dl><dt>async <a name="LibrematchStore-mark_missing_board"><strong>mark_missing_board</strong></a>(self, profile_id: 'str', board_id: 'str') -&gt; 'None'</dt><dd><span class="code">Mark&nbsp;one&nbsp;honestly-absent&nbsp;board&nbsp;(the&nbsp;probe&nbsp;never&nbsp;repeats).</span></dd></dl>
 
 <dl><dt>async <a name="LibrematchStore-stored_match_ids"><strong>stored_match_ids</strong></a>(self, ids: 'list[str]') -&gt; 'set[str]'</dt><dd><span class="code">Return&nbsp;which&nbsp;of&nbsp;the&nbsp;given&nbsp;match&nbsp;ids&nbsp;are&nbsp;already&nbsp;stored.</span></dd></dl>
 

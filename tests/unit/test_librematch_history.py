@@ -930,8 +930,10 @@ async def test_a_custom_lobby_never_harvests_boards() -> None:
     # the custom RATINGS never fold - but the met player's honest 1v1
     # ABSENCE still gets probed once; his TG board stays empty
     boards = db["librematch:accounts"].docs["456"]["leaderboards"]
+    # the 1v1 AND the TG absence both probe once (one call answers every
+    # board); the custom RATINGS never fold into a board value
     assert boards["3"]["none"] is True and not boards["3"]["current"]
-    assert "4" not in boards, "a custom (unranked) match never folds a board"
+    assert boards["4"]["none"] is True and not boards["4"]["current"]
 
 
 async def test_the_missing_1v1_gets_probed_once_not_forever() -> None:
