@@ -161,6 +161,26 @@ en:
       settings_start_blocked_running: ⛔ A season is already running — end it before changing formats.
       settings_beta_started_season: 🟢 The beta season is launched — admitted kingdoms ride the beta.
       settings_status_button: 📊 Season status
+      # état-surfaces-v1 (Drasah 23/11): the sheets' diagnostic —
+      # the button lives in the Atelier, the answer is ephemeral, admin only
+      settings_etat_button: 🧭 Surfaces state
+      settings_etat_title: 🧭 Surfaces state
+      settings_etat_no_stack: "❌ The mod service is unreachable — no diagnostic possible."
+      settings_etat_no_season: "No season running."
+      settings_etat_season: "Season **{0}** — phase {1}."
+      settings_etat_draw: "Territories drawn (engine): {0}."
+      settings_etat_pass: "Last 5-min pass: {0} UTC — {1} realm(s) fed · draw: {2}."
+      settings_etat_pass_none: "Last 5-min pass: no trace (the bot restarted or the loop has not run yet)."
+      settings_etat_realms: "Realms:"
+      settings_etat_no_realms: "No realm shell to report."
+      settings_etat_realm_line: "• **{0}**: engagement {1} · engine {2} · salons {3} · cards {4} · sheets {5}"
+      settings_etat_fiches: "Territory {0} · Alliances {1}"
+      settings_etat_salons: "{0}/3"
+      settings_etat_not_found: "not found"
+      settings_etat_yes: "✅"
+      settings_etat_no: "❌"
+      settings_etat_gaia_line: "Gaïa: salon {0} · AI kingdom {1} · cards {2} · sheet {3}"
+      settings_etat_gaia_scan: "Candidate categories: {0}"
       settings_status_empty: —
       settings_status_kingdoms: Kingdoms
       settings_status_lords: Enrolled lords

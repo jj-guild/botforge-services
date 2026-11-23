@@ -1065,11 +1065,180 @@ async def feed_season_surfaces(bot: Any, locale: Any = "fr") -> int:
     The loop's pass self-heals a failed launch (a skipped draw is
     retried five minutes later — nothing stays silent).
     """
-    await draw_initial_territories_safe(bot)
+    # état-surfaces-v1 (Drasah 23/11) : la passe se CONSIGNE — la
+    # fenêtre État de l'atelier rapporte le dernier passage vivant
+    # (l'enregistrement est en mémoire : un redémarrage le remet à
+    # zéro, et c'est dit à l'admin, jamais caché).
+    drawn = False
+    try:
+        drawn = await draw_initial_territories_safe(bot)
+    except Exception:  # noqa: BLE001 — the report never blocks the feed
+        logger.warning("kingdom realm content: the report's draw read failed", exc_info=True)
     touched = await deploy_all_realms_content(bot, locale)
     for guild in list(getattr(bot, "guilds", []) or []):
         try:
             await deploy_gaia_content(guild, locale)
         except Exception:  # noqa: BLE001 — Gaïa never blocks the realms
             logger.warning("kingdom realm content: gaia deploy failed", exc_info=True)
+    _record_feed_pass(touched=touched, drawn=drawn)
     return touched
+
+
+# ---------------------------------------------------------------------------
+# état-surfaces-v1 (Drasah 23/11) : la fenêtre « 🧭 État des surfaces » de
+# l'Atelier — LE DIAGNOSTIC VISIBLE DISCORD. Les fiches restaient vides
+# sans qu'aucune surface ne dise POURQUOI (les échecs du tuyau étaient
+# avalés en silence, Drasah ne lit pas de logs) : ce rapport lit les
+# MÊMES documents vivants que la passe nourrissante (engagement de la
+# coquille, royaume moteur pointé, salons résolus, tirage moteur, fiches
+# marquées posées) et le dernier passage en mémoire. Chaque maillon
+# cassé se lit noir sur blanc, en un clic, éphémère, admin seul.
+# ---------------------------------------------------------------------------
+
+_LAST_FEED_PASS: dict[str, Any] = {}
+
+
+def _record_feed_pass(*, touched: int, drawn: bool) -> None:
+    """Keep the last pass in memory (the window's `Dernière passe` line)."""
+    import time as _time
+
+    _LAST_FEED_PASS.clear()
+    _LAST_FEED_PASS.update(
+        {"at": int(_time.time()), "touched": int(touched), "drawn": bool(drawn)}
+    )
+
+
+def last_feed_pass() -> dict[str, Any]:
+    """A copy of the last pass record (empty dict when never run yet)."""
+    return dict(_LAST_FEED_PASS)
+
+
+async def _marker_present(channel: Any, key: str) -> bool:
+    """Whether the marked message of ``key`` lives in the salon (read-only)."""
+    try:
+        return any(
+            _marker(key) in _text_of(m) for m in await _history_channel_messages(channel)
+        )
+    except Exception:  # noqa: BLE001 — a read, never a crash
+        return False
+
+
+def _gaia_category_scan(guild: Any) -> str:
+    """The categories that READ like Kingdoms-Gaia, raw name + naive slug.
+
+    The line that PROVED the pidcase: the real charted name « 🏰
+    ᴋɪɴɢᴅᴏᴍs-ɢᴀɪᴀ » slugs to « s » under the naive regex — the
+    window shows it verbatim so the admin sees the mismatch himself.
+    """
+    try:
+        names = [
+            f"« {getattr(category, 'name', '?')} » → « {_slug(str(getattr(category, 'name', '')))} »"
+            for category in (getattr(guild, "categories", []) or [])
+            if any(
+                token in str(getattr(category, "name", "")).lower()
+                for token in ("ingdom", "ɪɴɢ", "gaïa", "gaia")
+            )
+        ]
+    except Exception:  # noqa: BLE001
+        return ""
+    return " ".join(names)
+
+
+async def surfaces_state(bot: Any) -> dict[str, Any]:
+    """The live truth of the feeding seams — the window's ONE read.
+
+    Pure reads, never a send: the season, the engine draw, every realm
+    shell (engagement, pointed kingdom, resolved salons, cards, posted
+    sheets) and Gaïa's own line. Best-effort per block: a broken read
+    shows up as its own line, never a crash of the window.
+    """
+    stack = wiring()
+    out: dict[str, Any] = {
+        "stack": stack is not None,
+        "season": None,
+        "started": False,
+        "territories": None,
+        "pass": last_feed_pass(),
+        "realms": [],
+        "gaia": None,
+    }
+    if stack is None:
+        return out
+    try:
+        season = await stack.kingdoms.current_season()
+        if season is not None:
+            out["season"] = {
+                "name": str(getattr(season, "name", "") or ""),
+                "phase": str(getattr(season, "phase", "") or ""),
+            }
+    except Exception:  # noqa: BLE001
+        logger.warning("kingdom realm content: the state season read failed", exc_info=True)
+    out["started"] = await season_started(stack)
+    try:
+        territories = getattr(stack, "territories", None)
+        out["territories"] = len(await territories.territories()) if territories else None
+    except Exception:  # noqa: BLE001
+        logger.warning("kingdom realm content: the state draw read failed", exc_info=True)
+    kingdoms: list[Any] = []
+    try:
+        kingdoms = list(await stack.kingdoms.kingdoms())
+    except Exception:  # noqa: BLE001
+        logger.warning("kingdom realm content: the state kingdoms read failed", exc_info=True)
+
+    guilds = list(getattr(bot, "guilds", []) or [])
+    from .realms import _realm_service
+
+    service = _realm_service(stack)
+    realms: list[Any] = []
+    if service is not None:
+        try:
+            realms = await service.realms()
+        except Exception:  # noqa: BLE001 — the window reports, never raises
+            logger.warning("kingdom realm content: the state realms read failed", exc_info=True)
+    for realm in realms or []:
+        if getattr(realm, "archived_at", None):
+            continue
+        engagement = getattr(realm, "engagement", None) or {}
+        kingdom = await kingdom_by_id(getattr(stack, "kingdoms", None), engagement.get("kingdom_id", ""))
+        channels: dict[str, Any] = {}
+        for guild in guilds:
+            channels = await _realm_channels(guild, realm)
+            if channels.get("territory") or channels.get("alliances") or channels.get("discussions"):
+                break
+        cards = len(await _owned_territories(stack, kingdom)) if kingdom is not None else 0
+        territory_channel = channels.get("territory")
+        alliances_channel = channels.get("alliances")
+        out["realms"].append(
+            {
+                "name": str(getattr(realm, "name", "?")),
+                "engaged": bool(engagement),
+                "kingdom": str(getattr(kingdom, "name", "") or "") if kingdom is not None else "",
+                "discussions": "discussions" in channels,
+                "territory": "territory" in channels,
+                "alliances": "alliances" in channels,
+                "cards": cards,
+                "fiche_territory": await _marker_present(territory_channel, "territory")
+                if territory_channel is not None
+                else False,
+                "fiche_alliances": await _marker_present(alliances_channel, "alliances")
+                if alliances_channel is not None
+                else False,
+            }
+        )
+    gaia_kingdom = next((k for k in kingdoms if bool(getattr(k, "is_gaia", False))), None)
+    for guild in guilds:
+        channel = _gaia_territory_channel(guild)
+        out["gaia"] = {
+            "kingdom": str(getattr(gaia_kingdom, "name", "") or "") if gaia_kingdom is not None else "",
+            "found": channel is not None,
+            "channel_name": str(getattr(channel, "name", "") or "") if channel is not None else "",
+            "scan": _gaia_category_scan(guild),
+            "cards": len(await _owned_territories(stack, gaia_kingdom))
+            if gaia_kingdom is not None
+            else 0,
+            "fiche": await _marker_present(channel, "territory-gaia")
+            if channel is not None
+            else False,
+        }
+        break
+    return out

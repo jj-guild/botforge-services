@@ -43,6 +43,9 @@ def test_settings_panel_is_one_template_of_twelve_actions() -> None:
         # fin-saison-v1 (Drasah 21/11): « Terminer la saison » — the test
         # loop closes cleanly (engine archive + realms back dormant)
         "end-season",
+        # état-surfaces-v1 (Drasah 23/11): « État des surfaces » — the
+        # atelier's diagnostic, ephemeral, admin only
+        "etat",
     )
     # every action key answers a DynamicItem custom id + a FR label
     from botforge.mods.kingdom.cogs.settings_panel import SettingsActionButton

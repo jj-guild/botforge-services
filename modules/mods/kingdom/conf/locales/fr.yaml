@@ -168,6 +168,26 @@ fr:
       settings_start_blocked_running: ⛔ Une saison tourne déjà — termine-la avant de changer de format.
       settings_beta_started_season: 🟢 La saison bêta est lancée — les royaumes admis partent en bêta.
       settings_status_button: 📊 Statut de la saison
+      # état-surfaces-v1 (Drasah 23/11) : le diagnostic des fiches —
+      # le bouton vit dans l'Atelier, la réponse est éphémère, admin seul
+      settings_etat_button: 🧭 État des surfaces
+      settings_etat_title: 🧭 État des surfaces
+      settings_etat_no_stack: "❌ Le service du mod est injoignable — aucun diagnostic possible."
+      settings_etat_no_season: "Aucune saison en cours."
+      settings_etat_season: "Saison **{0}** — phase {1}."
+      settings_etat_draw: "Territoires tirés (moteur) : {0}."
+      settings_etat_pass: "Dernière passe 5 min : {0} UTC — {1} royaume(s) nourri(s) · tirage : {2}."
+      settings_etat_pass_none: "Dernière passe 5 min : aucune trace (le bot a redémarré ou la boucle n'a pas encore tourné)."
+      settings_etat_realms: "Royaumes :"
+      settings_etat_no_realms: "Aucune coquille de royaume à rapporter."
+      settings_etat_realm_line: "• **{0}** : engagement {1} · moteur {2} · salons {3} · cartes {4} · fiches {5}"
+      settings_etat_fiches: "Territoire {0} · Alliances {1}"
+      settings_etat_salons: "{0}/3"
+      settings_etat_not_found: "introuvable"
+      settings_etat_yes: "✅"
+      settings_etat_no: "❌"
+      settings_etat_gaia_line: "Gaïa : salon {0} · royaume IA {1} · cartes {2} · fiche {3}"
+      settings_etat_gaia_scan: "Catégories candidates : {0}"
       settings_status_empty: —
       settings_status_kingdoms: Royaumes
       settings_status_lords: Seigneurs engagés

@@ -77,6 +77,11 @@ _SETTINGS_ACTIONS: tuple[tuple[str, str, discord.ButtonStyle], ...] = (
     # fin-saison-v1 (Drasah 21/11) : « Terminer la saison » — la boucle
     # de test se referme proprement (archivage moteur + royaumes dormants).
     ("end-season", "settings_end_season_button", discord.ButtonStyle.danger),
+    # état-surfaces-v1 (Drasah 23/11) : « 🧭 État des surfaces » — le
+    # diagnostic VISIBLE DISCORD des fiches (l'atelier porte le bouton,
+    # la réponse est éphémère, admin seul) ; les échecs du tuyau ne
+    # sont plus jamais muets pour l'organisateur.
+    ("etat", "settings_etat_button", discord.ButtonStyle.secondary),
 )
 # casquette-removal-v1 (Drasah 19/11): the hat op RETIRES from the
 # console (11 actions) — the bypass lives in the code's own seams and
@@ -1253,6 +1258,92 @@ async def _status(interaction: discord.Interaction, strings: dict[str, str]) -> 
     ]))
 
 
+async def _etat(interaction: discord.Interaction, strings: dict[str, str]) -> None:
+    """Answer with the 🧭 surfaces-state card (the feeding's live truth).
+
+    état-surfaces-v1 (Drasah 23/11) : le diagnostic des fiches vides —
+    chaque maillon du tuyau (engagement, moteur, salons, tirage,
+    fiches posées, dernière passe 5 min) se lit en un clic éphémère.
+    La réponse est la donnée VIVANTE, jamais une copie : same seams
+    que la passe nourrissante.
+    """
+    from .realm_content import surfaces_state
+
+    state = await surfaces_state(interaction.client)
+    yes, no = str(strings["settings_etat_yes"]), str(strings["settings_etat_no"])
+    lines = [f"# {strings['settings_etat_title']}"]
+    if not state.get("stack"):
+        lines.append(str(strings["settings_etat_no_stack"]))
+    season = state.get("season")
+    if season:
+        lines.append(
+            str(strings["settings_etat_season"]).format(season["name"], season["phase"])
+        )
+    else:
+        lines.append(str(strings["settings_etat_no_season"]))
+    drawn = state.get("territories")
+    if drawn is not None:
+        lines.append(str(strings["settings_etat_draw"]).format(drawn))
+    last_pass = state.get("pass") or {}
+    if last_pass:
+        import datetime as _dt
+
+        stamp = _dt.datetime.fromtimestamp(int(last_pass.get("at", 0)), _dt.timezone.utc)
+        lines.append(
+            str(strings["settings_etat_pass"]).format(
+                stamp.strftime("%H:%M:%S"),
+                int(last_pass.get("touched", 0)),
+                yes if last_pass.get("drawn") else no,
+            )
+        )
+    else:
+        lines.append(str(strings["settings_etat_pass_none"]))
+    realms = state.get("realms") or []
+    if realms:
+        lines.append(str(strings["settings_etat_realms"]))
+    for realm in realms:
+        salons = int(realm["discussions"]) + int(realm["territory"]) + int(realm["alliances"])
+        fiches = str(strings["settings_etat_fiches"]).format(
+            yes if realm["fiche_territory"] else no,
+            yes if realm["fiche_alliances"] else no,
+        )
+        lines.append(
+            str(strings["settings_etat_realm_line"]).format(
+                realm["name"],
+                yes if realm["engaged"] else no,
+                realm["kingdom"] or str(strings["settings_etat_not_found"]),
+                str(strings["settings_etat_salons"]).format(salons),
+                realm["cards"],
+                fiches,
+            )
+        )
+    if not realms:
+        lines.append(str(strings["settings_etat_no_realms"]))
+    gaia = state.get("gaia")
+    if gaia is not None:
+        if gaia["found"]:
+            lines.append(
+                str(strings["settings_etat_gaia_line"]).format(
+                    yes,
+                    gaia["kingdom"] or str(strings["settings_etat_not_found"]),
+                    gaia["cards"],
+                    yes if gaia["fiche"] else no,
+                )
+            )
+        else:
+            lines.append(
+                str(strings["settings_etat_gaia_line"]).format(
+                    no,
+                    gaia["kingdom"] or str(strings["settings_etat_not_found"]),
+                    gaia["cards"],
+                    no,
+                )
+            )
+        if gaia["scan"]:
+            lines.append(str(strings["settings_etat_gaia_scan"]).format(gaia["scan"]))
+    await open_unique_ephemeral(interaction, "\n".join(lines))
+
+
 async def _pending_admissions() -> list[Any]:
     """The realms waiting on the admin's season-entry gesture (t2a).
 
@@ -1717,6 +1808,13 @@ def _atelier_drawer(strings: dict[str, str], ops_strings: dict[str, str]) -> dis
     row.add_item(
         SettingsActionButton(
             "reset", str(strings["settings_reset_button"]), discord.ButtonStyle.danger
+        ).item
+    )
+    # état-surfaces-v1 (Drasah 23/11) : « l'atelier porte État » — le
+    # diagnostic éphémère des fiches vit AVEC la main d'urgence.
+    row.add_item(
+        SettingsActionButton(
+            "etat", str(strings["settings_etat_button"]), discord.ButtonStyle.secondary
         ).item
     )
     # the mod-scoped console ops (relaunch / reset / clock): the SAME
@@ -3011,6 +3109,8 @@ _SETTINGS_HANDLERS: dict[str, Any] = {
     "assign": _open_assign,
     "add-kingdom": _open_add_kingdom,
     "remove": _open_remove,
+    # état-surfaces-v1 (Drasah 23/11) : le bouton 🧭 de l'Atelier
+    "etat": _etat,
 }
 
 
