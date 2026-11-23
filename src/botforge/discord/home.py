@@ -1321,9 +1321,10 @@ def _seat_text(
     alias_link = f"[{alias}]({insights_profile})" if insights_profile else alias
     name = f"**{alias_link}**" if pid in me_ids else alias_link
     slot = int(player.get("slot", 0) or 0)
-    # the colour NAMING was speculative (the game's own colour table
-    # needs verifying): keep the honest position only (owner 2026-11-22)
-    slot_badge = f"P{slot}" if slot else ""
+    # the position reads P1-8, backticked for a FIXED width; the
+    # ladder lines underneath indent 4 spaces so the columns align
+    # (owner 2026-11-23)
+    slot_badge = f"`P{slot}`" if slot else ""
     line = " ".join(bit for bit in [slot_badge, name] if bit)
     if civ_link:
         line += f" {labels.get('with', 'avec')} {civ_link}"
@@ -1341,18 +1342,19 @@ def _seat_text(
     match_board = "rm_team" if is_team_game else "rm_1v1"
     ranked = str(card.get("lobby_title") or "").strip().upper() == "AUTOMATCH"
     lines = [line]
+    indent = "\u00a0\u00a0\u00a0\u00a0"  # 4 fixed spaces of column
     for key, label in (("rm_1v1", "1v1"), ("rm_team", "TG")):
         current, peak = boards.get(key, (0, 0))
         if key == match_board and (before if ranked else current):
             value = before if ranked else current
             highlight = max(value, peak, after if ranked else 0, 0)
-            body = f"-# {label} : **{value}** - {highlight}"
+            body = f"-# {indent}{label} : **{value}** - {highlight}"
             if ranked and finished and after != before:
                 body += f" ({after - before:+d})"
             lines.append(body)
         elif current:
             span = f"{current} - {peak}" if peak and peak > current else f"{current}"
-            lines.append(f"-# {label} : {span}")
+            lines.append(f"-# {indent}{label} : {span}")
     return "\n".join(lines), ctx["civ_images"].get(civ, "")
 
 
