@@ -22,8 +22,7 @@ collision, then the pre-§7 modular layout, then conf/):
 
 - legacy: ``config/mods/<mod>.yaml`` + ``src/botforge/mods/<mod>/``
 - pre-§7 modular: ``modules/mods/<mod>/mod.yaml`` + ``src/<mod>/`` +
-  ``locales/`` — so existing branches (ladder on ``vibe/merlin/main``,
-  kingdoms on ``vibe/drasah/main``) keep working until their mechanical
+  ``locales/`` — so pre-§7 branches keep working until their mechanical
   move (one PR per mod, CI green each time).
 """
 

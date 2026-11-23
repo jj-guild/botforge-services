@@ -17,7 +17,7 @@ Design (ported from the kingdoms mod apply flow, conventions of Drasah):
 - accepting a candidate delegates to ``MembershipService.register``
   (season roles sync included); refusing records the reason.
 
-Reference: botforge-services#267 (spec), Drasah's apply flow (vibe/drasah/main).
+Reference: botforge-services#267 (spec), Drasah's apply flow (PR #244).
 """
 
 from __future__ import annotations
