@@ -499,23 +499,30 @@ class ChamberButton(
 async def build_market_panel(guild_id: str) -> discord.ui.LayoutView:
     """The pinned Marché panel (salon `market`) — ported from the reference
     `panel:marche`: an entry point whose buttons open the clicker's own
-    ephemeral market / treasury windows."""
+    ephemeral market / treasury windows.
+
+    static-pin-market-fix (Merlin's logs 23/11, ~18:22-18:32): the old
+    tail crashed INSIDE ``surface()`` — ``surface(view_id, view)`` passes
+    a whole LayoutView where ``build_view`` expects Items, and wrapping
+    the returned LayoutView in a TextDisplay type-errors besides. THE
+    canonical pattern (the #381 seam, same as ``_open_market_view``
+    below): build the items, CLOSE with ``return surface(id, *items)``
+    — the declared id footer rides the view, never hand-rolled.
+    """
     from .common import surface
     from .panel import _guild_locale
     from .strings import strings as _strings
 
     locale = await _guild_locale(guild_id)
     strings = _strings(locale[:2])
-    view = discord.ui.LayoutView()
-    view.add_item(discord.ui.TextDisplay(f"# {strings['market_button']}"))
-    view.add_item(
-        discord.ui.TextDisplay(
-            str(strings.get("market_help", strings["market_button"]))[:1000]
-        )
-    )
     row = discord.ui.ActionRow()
     row.add_item(MarketButton(strings["market_button"]))
     row.add_item(ChamberButton(strings["chamber_button"]))
-    view.add_item(row)
-    view.add_item(discord.ui.TextDisplay(surface("panel:mod:kingdom:market", view)))
-    return view
+    return surface(
+        "panel:mod:kingdom:market",
+        discord.ui.TextDisplay(f"# {strings['market_button']}"),
+        discord.ui.TextDisplay(
+            str(strings.get("market_help", strings["market_button"]))[:1000]
+        ),
+        row,
+    )

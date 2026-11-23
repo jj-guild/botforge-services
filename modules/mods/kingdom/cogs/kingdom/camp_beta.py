@@ -629,10 +629,15 @@ class KingdomCampRestoreButton(
             realm = await stack.realms.restore_realm(str(realm.id))
             guild = interaction.client.get_guild(int(self.guild_id))
             if guild is not None:
-                from .realms import ensure_realm_structure, save_habitat
+                # import-restore-fix (Merlin's logs 23/11): ``save_habitat``
+                # is a SERVICE method, never a cog symbol — the old
+                # ``from .realms import … save_habitat`` ImportError'd and
+                # the restore button failed EVERY time. The seam already
+                # used 200 lines below: stack.realms.save_habitat.
+                from .realms import ensure_realm_structure
 
                 await ensure_realm_structure(guild, realm, dormant=True)
-                await save_habitat(str(realm.id), {})
+                await stack.realms.save_habitat(str(realm.id), {})
             note = str(strings["realms_restore_done"]).format(str(realm.name))
         except Exception:  # noqa: BLE001 — the card reports, never raises
             logger.warning("kingdom: realm restore failed", exc_info=True)
