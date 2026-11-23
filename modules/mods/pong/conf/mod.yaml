@@ -39,8 +39,10 @@ settings:
                                  # replacement: recaps only, no table movement
   table_naming: neutral_random   # D-PONG-014 — table salons carry neutral names,
                                  # chain_position is internal, never displayed
-  recap_delivery: dm_private     # D-PONG-014 — personal per-season recap, DM only,
-                                 # no global standings/leaderboard ever published
+  recap_delivery:                # D-PONG-014 — personal per-season recap; no global
+    on_request: ephemeral          # /recap answers ephemerally (only the asker sees it)
+    season_close: dm               # full recap DM'd at season close (and on departure)
+                                 # standings/leaderboard ever published
   draft_map_preset: https://aoe2cm.net/preset/pGWoJ     # the S5 map-pool preset
   civ_draft_base_preset: null    # D-PONG-009 — aoe2cm base_preset to derive per-table
                                  # civ drafts (Python generator to port — owner's
@@ -132,7 +134,8 @@ roles:
     color: 0x9B59B6
 workflows: []
 commands: []          # /register, /register_to_tournament, /add_result,
-                      # /validate_score, /contest_score — land with the cogs PR
+                      # /validate_score, /contest_score, /recap (ephemeral)
+                      # — land with the cogs PR
 dependencies: []      # register/player identity: soft dependency to declare
                       # when the cogs land (declaration kept minimal now)
 # pong is an AoE2-bound tournament mod
