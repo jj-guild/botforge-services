@@ -516,13 +516,16 @@ class MatchHistorySyncer:
     async def account_stats(self, profile_ids: list[str]) -> list[AccountEloStatus]:
         """Serve the per-account status (current + max elo per board).
 
-        A met player asked while his 1v1 board is still unfetched gets
-        probed on the spot (owner 2026-11-22) \u2014 the panel reads full
-        boards the moment it names the seats.
+        Store-only, NEVER a probe on the serve path (owner
+        2026-11-23): a batch of 8 seats probing the missing 1v1/TG
+        boards walked the upstream and the gRPC reply ran past its
+        deadline - the panels then rendered NO elo lines at all
+        (DEADLINE_EXCEEDED, merlin 14:27). The probes ride the SYNC
+        flow (sync_account probes the met players, capped); the
+        serve answers what the store already knows.
         """
         if not profile_ids:
             return []
-        await self.refresh_missing_1v1([str(p) for p in profile_ids])
         docs = await self._store.find_accounts([str(p) for p in profile_ids])
         by_id = {str(doc["_id"]): doc for doc in docs}
         statuses: list[AccountEloStatus] = []

@@ -309,12 +309,10 @@ async def test_account_stats_serves_known_and_unknown() -> None:
     board = statuses[0].leaderboards[0]
     assert board.name == "unranked"  # LEADERBOARD_KEYS: board 0 IS unranked (3 is rm_1v1)
     assert board.current == 1024
-    # the probes work again (signature bug died 2026-11-22): an
-    # honestly-absent 1v1 still answers KNOWLEDGE - a none-marked
-    # rm_1v1, zeroed - the absence differs from "never fetched"
-    assert statuses[1].known is True
-    absent1v1 = next((b for b in statuses[1].leaderboards if str(b.name) == "rm_1v1"), None)
-    assert absent1v1 is not None and not absent1v1.current
+    # the serve NEVER probes (owner 2026-11-23: the serve-path probes
+    # walked the upstream past the gRPC deadline): an account the store
+    # never met reads unknown=False, the SYNC flow probes it later
+    assert statuses[1].known is False
 
 
 async def test_user_unification_best_elo_and_matches_window() -> None:

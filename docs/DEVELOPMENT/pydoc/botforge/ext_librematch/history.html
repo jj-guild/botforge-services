@@ -63,9 +63,13 @@ Pull&nbsp;the&nbsp;known&nbsp;accounts'&nbsp;history&nbsp;into&nbsp;the&nbsp;sto
 
 <dl><dt>async <a name="MatchHistorySyncer-account_stats"><strong>account_stats</strong></a>(self, profile_ids: 'list[str]') -&gt; 'list[AccountEloStatus]'</dt><dd><span class="code">Serve&nbsp;the&nbsp;per-account&nbsp;status&nbsp;(current&nbsp;+&nbsp;max&nbsp;elo&nbsp;per&nbsp;board).<br>
 &nbsp;<br>
-A&nbsp;met&nbsp;player&nbsp;asked&nbsp;while&nbsp;his&nbsp;1v1&nbsp;board&nbsp;is&nbsp;still&nbsp;unfetched&nbsp;gets<br>
-probed&nbsp;on&nbsp;the&nbsp;spot&nbsp;(owner&nbsp;2026-11-22)&nbsp;—&nbsp;the&nbsp;panel&nbsp;reads&nbsp;full<br>
-boards&nbsp;the&nbsp;moment&nbsp;it&nbsp;names&nbsp;the&nbsp;seats.</span></dd></dl>
+Store-only,&nbsp;NEVER&nbsp;a&nbsp;probe&nbsp;on&nbsp;the&nbsp;serve&nbsp;path&nbsp;(owner<br>
+2026-11-23):&nbsp;a&nbsp;batch&nbsp;of&nbsp;8&nbsp;seats&nbsp;probing&nbsp;the&nbsp;missing&nbsp;1v1/TG<br>
+boards&nbsp;walked&nbsp;the&nbsp;upstream&nbsp;and&nbsp;the&nbsp;gRPC&nbsp;reply&nbsp;ran&nbsp;past&nbsp;its<br>
+deadline&nbsp;-&nbsp;the&nbsp;panels&nbsp;then&nbsp;rendered&nbsp;NO&nbsp;elo&nbsp;lines&nbsp;at&nbsp;all<br>
+(DEADLINE_EXCEEDED,&nbsp;merlin&nbsp;14:27).&nbsp;The&nbsp;probes&nbsp;ride&nbsp;the&nbsp;SYNC<br>
+flow&nbsp;(sync_account&nbsp;probes&nbsp;the&nbsp;met&nbsp;players,&nbsp;capped);&nbsp;the<br>
+serve&nbsp;answers&nbsp;what&nbsp;the&nbsp;store&nbsp;already&nbsp;knows.</span></dd></dl>
 
 <dl><dt>async <a name="MatchHistorySyncer-decode_stored"><strong>decode_stored</strong></a>(self, profile_ids: 'list[str]', batch: 'int' = 25) -&gt; 'int'</dt><dd><span class="code">Decode&nbsp;the&nbsp;stored&nbsp;matches'&nbsp;encoded&nbsp;fields&nbsp;(#288,&nbsp;T2).<br>
 &nbsp;<br>

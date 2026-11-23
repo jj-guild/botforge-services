@@ -1348,11 +1348,12 @@ def _seat_text(
     match_board = "rm_team" if is_team_game else "rm_1v1"
     ranked = str(card.get("lobby_title") or "").strip().upper() == "AUTOMATCH"
     lines = [line]
-    # four nbsp INSIDE an inline code span: Discord's renderer eats
-    # bare leading whitespace on a -# subtext line (owner 2026-11-23:
-    # the first nbsp-only indent never showed) - an inline code span
-    # keeps its spaces verbatim AND renders them fixed-width
-    indent = "`\u00a0\u00a0\u00a0\u00a0`"
+    # an INVISIBLE fixed-width decal, no backticks (owner 2026-11-23:
+    # the backtick span read as a visible token): Discord's renderer
+    # eats whitespace after a -# prefix - regular spaces AND nbsp -
+    # but the braille blank (U+2800) is a glyph, not whitespace: it
+    # never trims and renders as an invisible blank of fixed width.
+    indent = "\u2800\u2800\u2800\u2800"
     for key, label in (("rm_1v1", "1v1"), ("rm_team", "TG")):
         current, peak = boards.get(key, (0, 0))
         if key == match_board and (before if ranked else current):
