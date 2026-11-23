@@ -272,29 +272,10 @@ def _slug(name: str) -> str:
     return re.sub(r"[^a-z0-9]+", "-", str(name).lower()).strip("-")
 
 
-# name-kingdom-v1 (Drasah 23/11) : la charte vit en PETITES CAPITALES
-# décoratives — le naive regex les réduit en bouillie (« s »), c'est le
-# pidcase Gaïa PROUVÉ par la fenêtre État. Le décodage de la référence
-# (kingdom_setup.py, table des petites capitales + NFKD) devient le
-# _slug_blind : aveugle aux décorations, il lit « ᴋɪɴɢᴅᴏᴍs-ɢᴀɪᴀ »
-# comme « kingdoms-gaia » et « ᴋɪɴɢᴅᴏᴍ-ɢᴀɪᴀ » comme « kingdom-gaia ».
-_SMALL_CAPS = str.maketrans(
-    {
-        "ᴀ": "a", "ʙ": "b", "ᴄ": "c", "ᴅ": "d", "ᴇ": "e", "ꜰ": "f",
-        "ɢ": "g", "ʜ": "h", "ɪ": "i", "ᴊ": "j", "ᴋ": "k", "ʟ": "l",
-        "ᴍ": "m", "ɴ": "n", "ᴏ": "o", "ᴘ": "p", "ǫ": "q", "ʀ": "r",
-        "ᴛ": "t", "ᴜ": "u", "ᴠ": "v", "ᴡ": "w", "ʏ": "y", "ᴢ": "z",
-    }
-)
-
-
-def _slug_blind(name: str) -> str:
-    """The decoration-blind slug (small caps table + NFKD, no diacritics)."""
-    import unicodedata
-
-    text = unicodedata.normalize("NFKD", str(name).translate(_SMALL_CAPS))
-    text = "".join(ch for ch in text if not unicodedata.combining(ch))
-    return _slug(text)
+# locked-salon-v1 (Drasah 23/11) : le décodage décor-aveugle vit dans
+# realms (l'ancre d'adoption des salons) ; ce module le RE-EXPORTE car
+# le scan Gaïa de la fenêtre État l'utilise aussi (mêmes décorations).
+from .realms import _bot_can_view, _slug_blind  # noqa: E402
 
 
 def _civ_name(stack: Any, civ_key: str) -> str:
@@ -322,33 +303,52 @@ def _map_name(stack: Any, map_key: str) -> str:
 
 
 async def _realm_channels(guild: Any, realm: Any) -> dict[str, Any]:
-    """Resolve the realm's salons (discussions/territory/alliances)."""
+    """Resolve the realm's salons (discussions/territory/alliances).
+
+    locked-salon-v1 (Drasah 23/11) : l'id stocké d'abord — MAIS un salon
+    que le bot NE PEUT PAS LIRE (l'ancienne dormancy l'avait verrouillé)
+    n'est PAS une résolution : la fiche y mourrait en 403 pour toujours.
+    Le fallback est décor-aveugle (une charte renommée reste la même) et
+    PRÉFÈRE un salon accessible — un salon verrouillé n'est choisi qu'en
+    dernier recours, l'ensure le remplacera.
+    """
+    from .realms import REALM_SALONS, _find_realm_category
+
     disc = dict(getattr(realm, "discord", None) or {})
     out: dict[str, Any] = {}
+    names = {k: display for k, display in REALM_SALONS}
+    category = _find_realm_category(guild, str(realm.name))
     for key in ("discussions", "territory", "alliances"):
         channel = None
+        skipped_locked = False
         stored = str(disc.get(key, "") or "")
         if stored.isdigit():
-            try:
-                channel = guild.get_channel(int(stored))
-            except Exception:  # noqa: BLE001
-                channel = None
+            getter = getattr(guild, "get_channel", None)
+            candidate = None
+            if getter is not None:
+                try:
+                    candidate = getter(int(stored))
+                except Exception:  # noqa: BLE001
+                    candidate = None
+            if candidate is not None and _bot_can_view(guild, candidate):
+                channel = candidate
+            elif candidate is not None:
+                skipped_locked = True
+        if channel is None and category is not None and key in names:
+            wanted = _slug_blind(names[key])
+            siblings = [
+                c
+                for c in (getattr(category, "channels", []) or [])
+                if _slug_blind(getattr(c, "name", "")) == wanted
+            ]
+            accessible = [c for c in siblings if _bot_can_view(guild, c)]
+            channel = (accessible or siblings or [None])[0]
         if channel is None:
-            from .realms import REALM_SALONS, _find_realm_category
-
-            names = {k: display for k, display in REALM_SALONS}
-            category = _find_realm_category(guild, str(realm.name))
-            if category is not None and key in names:
-                wanted = _slug(names[key])
-                channel = next(
-                    (
-                        c
-                        for c in getattr(category, "channels", []) or []
-                        if _slug(getattr(c, "name", "")) == wanted
-                    ),
-                    None,
+            if skipped_locked:
+                logger.warning(
+                    "kingdom realm content: le salon %s stocké est verrouillé (realm %s) — heal en amont",
+                    key, str(getattr(realm, "name", "?")),
                 )
-        if channel is None:
             continue
         out[key] = channel
     return out
@@ -799,10 +799,11 @@ async def _upsert_sheet(
     catégorie, et le bot pouvait se retrouver scellé HORS de SON
     propre royaume. La passe ne masque plus jamais un refus : sur un
     Forbidden, elle re-ensure la structure (le seam adoption + dormancy,
-    qui porte maintenant l'allow du bot) PUIS réessaie UNE fois. Les
-    salons déjà cassés guérissent tous seuls au passage suivant,
-    sans clic admin, sans reset. Tout autre échec reste best-effort,
-    consigné dans la fenêtre État (le dernier mètre n'est plus muet).
+    qui porte l'allow du bot ET remplace un salon verrouillé — ce que
+    la simulation a prouvé irréparable par édition), PUIS réessaie UNE
+    fois SUR LE SALON RÉSOLU APRÈS LE HEAL (l'ancien salon verrouillé
+    restait l'objet du retry : la fiche mourait en 403 sur un cadavre).
+    Tout autre échec reste best-effort, consigné dans la fenêtre État.
     """
     rname = str(getattr(realm, "name", "?"))
     kwargs: dict[str, Any] = {"view": view, "files": files, "pin": pin}
@@ -821,12 +822,37 @@ async def _upsert_sheet(
         _record_surface_error(f"{rname}·{key}", exc)
         logger.warning("kingdom realm content: %s deploy failed", key, exc_info=True)
         return None
-    # le heal : le salon se scellait seul, le seam le rouvre au bot
+    # le heal : le salon se scellait seul, le seam le rouvre au bot —
+    # et un salon VERROUILLÉ (que le bot ne peut plus lire : Discord
+    # refuse l'édition) est REMPLACÉ par l'ensure, la résolution
+    # repart donc de l'habitat GUÉRI, jamais du cadavre d'origine.
     try:
         from .realms import ensure_realm_structure
 
-        await ensure_realm_structure(guild, realm, dormant=False)
-        mid = await _upsert_marked(channel, key, content, **kwargs)
+        ensured = await ensure_realm_structure(guild, realm, dormant=False)
+    except Exception as exc:  # noqa: BLE001 — le heal reste best-effort
+        _record_surface_error(f"{rname}·{key}", exc)
+        logger.warning(
+            "kingdom realm content: %s heal failed (realm %s)", key, rname, exc_info=True
+        )
+        return None
+    healed: Any = None
+    ensured_id = str(ensured.get(key, "") or "")
+    getter = getattr(guild, "get_channel", None)
+    if ensured_id.isdigit() and getter is not None:
+        try:
+            healed = getter(int(ensured_id))
+        except Exception:  # noqa: BLE001
+            healed = None
+    if healed is None:
+        healed = (await _realm_channels(guild, realm)).get(key)
+    if healed is None or healed is channel:
+        logger.warning(
+            "kingdom realm content: %s heal resolved no fresh salon (realm %s)", key, rname
+        )
+        return None
+    try:
+        mid = await _upsert_marked(healed, key, content, **kwargs)
     except Exception as exc:  # noqa: BLE001 — le retry reste best-effort
         _record_surface_error(f"{rname}·{key}", exc)
         logger.warning(

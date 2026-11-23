@@ -143,7 +143,7 @@ async def test_the_realm_salons_are_reordered_to_the_charter(
     monkeypatch.setattr(realms_module, "_apply_category_overwrites", noop)
     monkeypatch.setattr(realms_module, "_apply_dormancy", noop)
     monkeypatch.setattr(realms_module, "_shield_leftover", noop)
-    async def _adopt(g: Any, c: Any, n: str) -> Any:
+    async def _adopt(g: Any, c: Any, n: str, *, stored: str = "") -> Any:
         return next((ch for ch in c.channels if ch.name == n), None)
 
     monkeypatch.setattr(realms_module, "_adopt_realm_salon", _adopt)
@@ -206,7 +206,7 @@ async def test_a_converged_order_costs_zero_api_calls(
     monkeypatch.setattr(realms_module, "_apply_category_overwrites", noop)
     monkeypatch.setattr(realms_module, "_apply_dormancy", noop)
     monkeypatch.setattr(realms_module, "_shield_leftover", noop)
-    async def _adopt(g: Any, c: Any, n: str) -> Any:
+    async def _adopt(g: Any, c: Any, n: str, *, stored: str = "") -> Any:
         return next((ch for ch in c.channels if ch.name == n), None)
 
     monkeypatch.setattr(realms_module, "_adopt_realm_salon", _adopt)
@@ -471,3 +471,132 @@ def test_the_views_yaml_declares_the_content_surfaces() -> None:
         "panel:mod:kingdom:lieux:objectif",
     ):
         assert surface_id in yaml_text, f"{surface_id} must be declared (#381)"
+
+
+# ---------------------------------------------------------------------------
+# locked-salon-v1 (Drasah 23/11) — l'incident live AEGIS/HeN, PROUVÉ PAR
+# SIMULATION : un salon que le bot ne PEUT PLUS LIRE ne se répare par
+# AUCUNE édition (Discord exige de le voir), et l'ancre naïve ratait les
+# salons décorés → l'ensure DUP audit au lieu d'adopter. Deux contrats :
+# le salon verrouillé est REMPLACÉ, le salon décoré est ADOPTÉ.
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_a_locked_declared_salon_is_replaced_not_duplicated(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import botforge.mods.kingdom.cogs.realms as realms_module
+
+    class _C:
+        def __init__(self, name: str, locked: bool = False) -> None:
+            self.name = name
+            self.id = f"id-{name}"
+            self.locked = locked
+            self.deleted = False
+
+        async def edit(self, **kwargs: Any) -> None:
+            return None
+
+        async def delete(self, **kwargs: Any) -> None:
+            self.deleted = True
+
+    class _Cat:
+        def __init__(self, channels: list[Any]) -> None:
+            self.id = "cat-1"
+            self.name = "🏰 Avelorn"
+            self.channels = channels
+
+        async def edit(self, **kwargs: Any) -> None:
+            return None
+
+    locked = _C("🌍 Territoire", locked=True)
+    category = _Cat([_C("🔒 Discussions"), _C("🏰 Le royaume"), locked, _C("🏆 Alliances")])
+    created: list[Any] = []
+
+    async def _create(name: str, **kwargs: Any) -> Any:
+        fresh = _C(name)
+        created.append(fresh)
+        return fresh
+
+    async def noop(*args: Any, **kwargs: Any) -> None:
+        return None
+
+    guild = type("G", (), {})()
+    guild.categories = [category]
+    guild.get_channel = lambda cid: locked if str(cid) == locked.id else None
+    guild.create_text_channel = staticmethod(_create)
+
+    monkeypatch.setattr(realms_module, "_apply_category_overwrites", noop)
+    monkeypatch.setattr(realms_module, "_apply_dormancy", noop)
+    monkeypatch.setattr(realms_module, "_shield_leftover", noop)
+    monkeypatch.setattr(
+        realms_module, "_bot_can_view", lambda g, c: not getattr(c, "locked", False)
+    )
+
+    realm = type("R2", (), {})()
+    realm.id = "r-2"
+    realm.name = "Avelorn"
+    realm.king_id = 11
+    realm.member_ids = [11]
+    realm.archived_at = None
+    realm.discord = {"category": "cat-1", "territory": locked.id}
+
+    ids = await realms_module.ensure_realm_structure(guild, realm, dormant=False)
+    assert len(created) == 1, "the locked salon is replaced by ONE fresh salon"
+    assert created[0].name == "🌍 Territoire"
+    assert ids["territory"] == created[0].id, "the habitat ids point at the FRESH salon"
+    assert locked.deleted is True, "the locked corpse is swept, not left as a duplicate"
+
+
+@pytest.mark.asyncio
+async def test_a_decorated_salon_is_adopted_blind_not_duplicated(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """L'ancre d'adoption décode les petites capitales : « ᴛᴇʀʀɪᴛᴏɪʀᴇ » = « Territoire »."""
+    import botforge.mods.kingdom.cogs.realms as realms_module
+
+    class _C:
+        def __init__(self, name: str) -> None:
+            self.name = name
+            self.id = f"id-{name}"
+
+        async def edit(self, **kwargs: Any) -> None:
+            if "name" in kwargs:
+                self.name = str(kwargs["name"])
+
+        async def delete(self, **kwargs: Any) -> None:
+            raise AssertionError("an adopted salon is never swept")
+
+    decorated = _C("🌍 ᴛᴇʀʀɪᴛᴏɪʀᴇ")
+    category = type("Cat", (), {})()
+    category.id = "cat-1"
+    category.name = "🏰 Avelorn"
+    category.channels = [_C("🔒 ᴅɪsᴄᴜssɪᴏɴs"), _C("🏰 ʟᴇ ʀᴏʏᴀᴜᴍᴇ"), decorated, _C("🏆 ᴀʟʟɪᴀɴᴄᴇs")]
+
+    async def noop(*args: Any, **kwargs: Any) -> None:
+        return None
+
+    async def _no_create(name: str, **kwargs: Any) -> Any:
+        raise AssertionError("adoption must find the decorated salon, not create one")
+
+    guild = type("G", (), {})()
+    guild.categories = [category]
+    guild.get_channel = lambda cid: None
+    guild.create_text_channel = staticmethod(_no_create)
+
+    monkeypatch.setattr(realms_module, "_apply_category_overwrites", noop)
+    monkeypatch.setattr(realms_module, "_apply_dormancy", noop)
+    monkeypatch.setattr(realms_module, "_shield_leftover", noop)
+
+    realm = type("R3", (), {})()
+    realm.id = "r-3"
+    realm.name = "Avelorn"
+    realm.king_id = 11
+    realm.member_ids = [11]
+    realm.archived_at = None
+    realm.discord = {"category": "cat-1"}
+
+    ids = await realms_module.ensure_realm_structure(guild, realm, dormant=False)
+    assert ids["territory"] == decorated.id, "the decorated salon IS the charter salon"
+    assert decorated.name == "🌍 Territoire", "renamed to the charter, id-mapped inplace"

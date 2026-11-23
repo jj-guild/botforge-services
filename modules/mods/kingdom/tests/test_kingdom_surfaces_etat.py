@@ -318,64 +318,85 @@ async def test_deploy_gaia_content_adopts_the_blind_category(monkeypatch: pytest
 
 
 @pytest.mark.asyncio
-async def test_a_forbidden_forbidden_sheet_heals_and_retries(monkeypatch: pytest.MonkeyPatch) -> None:
-    """missing-access-v1 : sur un 403, la fiche RE-scell la structure puis réessaie UNE fois."""
+async def test_a_forbidden_sheet_retries_on_the_healed_salon(monkeypatch: pytest.MonkeyPatch) -> None:
+    """locked-salon-v1 : le retry tape sur le salon RÉSOLU APRÈS le heal.
+
+    La simulation (Drasah 23/11) a prouvé le vice du premier heal : le
+    retry renvoyait dans le salon VERROUILLÉ d'origine (il mourait en
+    403 sur un cadavre). Le contrat : l'ensure remplace le salon, la
+    fiche vit dans le salon GUÉRI.
+    """
     import discord
 
     import botforge.mods.kingdom.cogs.realm_content as content
     from botforge.mods.kingdom.cogs import realms as realms_mod
 
     realm = _Realm("Aegis", {"kingdom_id": "k-1"})
-    channel = _Channel("🌍 Territoire")
+    locked = _Channel("🌍 Territoire")          # le cadavre d'origine
+    healed = _Channel("🌍 Territoire")          # le salon que l'ensure a résolu
+    healed.id = "chan-42"
     guild = _guild()
+    calls: list[Any] = []
     content._SURFACE_ERRORS.clear()
 
-    upsert_calls: list[str] = []
-    healed: list[Any] = []
+    class _fake_get_channel:  # noqa: N801
+        def __call__(self, cid: int) -> Any:
+            return healed if int(cid) == 42 else None
+
+    guild.get_channel = _fake_get_channel()
 
     async def _upsert_marked(chan: Any, key: str, body: str, **kwargs: Any) -> str:
-        upsert_calls.append(key)
-        if len(upsert_calls) == 1:
+        calls.append(chan)
+        if len(calls) == 1:
             raise discord.Forbidden(Mock(status=403), {"code": 50001, "message": "Missing Access"})
         return "mid-42"
 
-    async def _ensure(guild: Any, realm_in: Any, *, dormant: bool = True) -> dict[str, Any]:
-        healed.append(realm_in)
-        return {}
+    async def _ensure(guild_in: Any, realm_in: Any, *, dormant: bool = True) -> dict[str, Any]:
+        return {"territory": "42"}
 
     monkeypatch.setattr(content, "_upsert_marked", _upsert_marked)
     monkeypatch.setattr(realms_mod, "ensure_realm_structure", _ensure)
 
-    mid = await content._upsert_sheet(guild, realm, channel, "territory", "fiche")
-    assert upsert_calls == ["territory", "territory"], "the sheet retried ONCE after the heal"
-    assert healed == [realm], "the structure was re-ensured before the retry"
+    mid = await content._upsert_sheet(guild, realm, locked, "territory", "fiche")
+    assert calls == [locked, healed], "the retry MUST target the healed salon, not the corpse"
     assert mid == "mid-42"
     assert "Aegis·territory" not in content.surface_errors(), "the success clears the error"
 
 
 @pytest.mark.asyncio
-async def test_a_forbidden_sheet_that_keeps_failing_stays_readable(monkeypatch: pytest.MonkeyPatch) -> None:
-    """missing-access-v1 : un heal qui ne suffit pas reste consigné, jamais levé."""
+async def test_a_heal_that_resolves_no_fresh_salon_never_retries_blindly(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """locked-salon-v1 : un heal sans salon frais reste consigné, jamais levé."""
     import discord
 
     import botforge.mods.kingdom.cogs.realm_content as content
     from botforge.mods.kingdom.cogs import realms as realms_mod
 
     realm = _Realm("Aegis", {"kingdom_id": "k-1"})
-    channel = _Channel("🌍 Territoire")
+    locked = _Channel("🌍 Territoire")
     guild = _guild()
+    calls: list[Any] = []
     content._SURFACE_ERRORS.clear()
 
-    async def _always_forbidden(chan: Any, key: str, body: str, **kwargs: Any) -> str:
+    async def _upsert_marked(chan: Any, key: str, body: str, **kwargs: Any) -> str:
+        calls.append(chan)
         raise discord.Forbidden(Mock(status=403), {"code": 50001, "message": "Missing Access"})
 
-    async def _ensure(guild: Any, realm_in: Any, *, dormant: bool = True) -> dict[str, Any]:
-        return {}
+    async def _ensure(guild_in: Any, realm_in: Any, *, dormant: bool = True) -> dict[str, Any]:
+        return {}  # nothing resolvable : the heal could not replace the salon
 
-    monkeypatch.setattr(content, "_upsert_marked", _always_forbidden)
+    async def _no_channels(guild_in: Any, realm_in: Any) -> dict[str, Any]:
+        return {}  # no slug sibling either : the salon stays the locked corpse
+
+    monkeypatch.setattr(content, "_upsert_marked", _upsert_marked)
+    monkeypatch.setattr(content, "_realm_channels", _no_channels)
     monkeypatch.setattr(realms_mod, "ensure_realm_structure", _ensure)
 
-    mid = await content._upsert_sheet(guild, realm, channel, "territory", "fiche")
+    mid = await content._upsert_sheet(guild, realm, locked, "territory", "fiche")
     assert mid is None
+    assert len(calls) == 1, "no blind retry on the same locked salon"
     errors = content.surface_errors()
-    assert "Aegis·territory" in errors, "the failed retry stays readable in the window"
+    assert "Aegis·territory" in errors, "the unresolved heal stays readable in the window"
+
+

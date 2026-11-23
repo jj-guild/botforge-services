@@ -63,6 +63,47 @@ def _slug(name: str) -> str:
     return re.sub(r"[^a-z0-9]+", "-", str(name).lower()).strip("-")
 
 
+# name-kingdom-v1 (Drasah 23/11) : la charte vit en PETITES CAPITALES
+# décoratives — le regex naïf les réduit en bouillie (le pidcase Gaïa
+# PROUVÉ par la fenêtre État). Le décodage de la référence (table des
+# petites capitales + NFKD) devient le _slug_blind : aveugle aux
+# décorations, il lit « ᴋɪɴɢᴅᴏᴍs-ɢᴀɪᴀ » comme « kingdoms-gaia ».
+# locked-salon-v1 (Drasah 23/11) : il vit ICI car l'adoption des salons
+# d'un royaume DOIT être aveugle aux décorations aussi — l'incident live
+# AEGIS/HeN a montré des salons renommés décoratifs que l'ancre naïve
+# ne reconnaissait plus, donc l'ensure les DUPLIQUAIT au lieu de les
+# adopter.
+_SMALL_CAPS = str.maketrans(
+    {
+        "ᴀ": "a", "ʙ": "b", "ᴄ": "c", "ᴅ": "d", "ᴇ": "e", "ꜰ": "f",
+        "ɢ": "g", "ʜ": "h", "ɪ": "i", "ᴊ": "j", "ᴋ": "k", "ʟ": "l",
+        "ᴍ": "m", "ɴ": "n", "ᴏ": "o", "ᴘ": "p", "ǫ": "q", "ʀ": "r",
+        "ᴛ": "t", "ᴜ": "u", "ᴠ": "v", "ᴡ": "w", "ʏ": "y", "ᴢ": "z",
+    }
+)
+
+
+def _slug_blind(name: str) -> str:
+    """The decoration-blind slug (small caps table + NFKD, no diacritics)."""
+    import unicodedata
+
+    text = unicodedata.normalize("NFKD", str(name).translate(_SMALL_CAPS))
+    text = "".join(ch for ch in text if not unicodedata.combining(ch))
+    return _slug(text)
+
+
+def _bot_can_view(guild: Any, channel: Any) -> bool:
+    """Can the bot READ this salon? (a locked salon can never be healed)."""
+    me = getattr(guild, "me", getattr(guild, "self", None))
+    permissions_for = getattr(channel, "permissions_for", None)
+    if me is None or permissions_for is None:
+        return True  # a fake without the seam is never treated as locked
+    try:
+        return bool(getattr(permissions_for(me), "view_channel", False))
+    except Exception:  # noqa: BLE001 — the check is a guard, never a blocker
+        return True
+
+
 def realm_strings(interaction: discord.Interaction) -> dict[str, str]:
     """The realm strings for one interaction (the mod's catalog)."""
     from .realm_strings import realm_strings as catalog
@@ -194,25 +235,56 @@ async def _apply_category_overwrites(guild: Any, category: Any, member_ids: list
 
 
 def _find_realm_category(guild: Any, realm_name: str) -> Any | None:
-    wanted = _slug(category_name(realm_name))
+    # locked-salon-v1 (Drasah 23/11) : l'ancre est DÉCORATION-AVEUGLE —
+    # une catégorie renommée en petites capitales reste la MÊME famille,
+    # jamais la source d'une catégorie dupliquée.
+    wanted = _slug_blind(category_name(realm_name))
     for category in getattr(guild, "categories", []) or []:
-        if _slug(getattr(category, "name", "")) == wanted:
+        if _slug_blind(getattr(category, "name", "")) == wanted:
             return category
     return None
 
 
-async def _adopt_realm_salon(guild: Any, category: Any, name: str) -> Any | None:
-    """Find the salon by slug (adoption never duplicates), rename to charte."""
-    existing = next(
-        (c for c in getattr(category, "channels", []) or [] if _slug(getattr(c, "name", "")) == _slug(name)),
-        None,
-    )
-    if existing is not None and str(getattr(existing, "name", "")) != name:
-        try:
-            await existing.edit(name=name)
-        except Exception:  # noqa: BLE001
-            logger.warning("kingdom realms: charte rename failed (%s)", name, exc_info=True)
-    return existing
+async def _adopt_realm_salon(
+    guild: Any, category: Any, name: str, *, stored: str = ""
+) -> Any | None:
+    """Adopt the salon — the STORED ID first, then the blind slug.
+
+    locked-salon-v1 (Drasah 23/11) — l'incident live AEGIS/HeN : l'adoption
+    par le slug naïf ratait les salons décorés, l'ensure en recréait donc
+    des COPIES vides (les doublons que Drasah voit) ; et la fiche mourait
+    en 403 sur l'ancien salon. L'ancre d'adoption devient : l'id habitat
+    stocké sur la coquille (id-mappé, insensible aux noms), puis le
+    premier frère ACCESSIBLE au bot (un salon verrouillé ne se guérit
+    JAMAIS par édition : Discord exige de le voir), puis n'importe quel
+    frère — le remplacement se joue en aval.
+    """
+    blind = _slug_blind(name)
+    siblings = [
+        c
+        for c in (getattr(category, "channels", []) or [])
+        if _slug_blind(getattr(c, "name", "")) == blind
+    ]
+    stored_ch = None
+    if str(stored or "").isdigit():
+        getter = getattr(guild, "get_channel", None)
+        if getter is not None:
+            try:
+                stored_ch = getter(int(stored))
+            except Exception:  # noqa: BLE001 — a stale id is a miss, never a raise
+                stored_ch = None
+    candidates = ([stored_ch] if stored_ch is not None else []) + list(siblings)
+    for candidate in candidates:
+        if _bot_can_view(guild, candidate):
+            if str(getattr(candidate, "name", "")) != name:
+                try:
+                    await candidate.edit(name=name)
+                except Exception:  # noqa: BLE001
+                    logger.warning("kingdom realms: charte rename failed (%s)", name)
+            return candidate
+    if stored_ch is not None:
+        return stored_ch  # locked but id-mapped — the caller replaces it
+    return siblings[0] if siblings else None
 
 
 async def _apply_dormancy(guild: Any, channel: Any, key: str, member_ids: list[int], dormant: bool) -> None:
@@ -341,7 +413,26 @@ async def ensure_realm_structure(guild: Any, realm: Any, *, dormant: bool = True
 
     ids: dict[str, Any] = {"category": str(getattr(category, "id", "") or "")}
     for key, name in REALM_SALONS:
-        channel = await _adopt_realm_salon(guild, category, name)
+        # locked-salon-v1 (Drasah 23/11) : l'adoption part de l'id HABITAT
+        # stocké sur la coquille (id-mappé, insensible aux décorations),
+        # l'ancre aveugle rattrape le reste — jamais de doublon par nom.
+        stored = str((getattr(realm, "discord", None) or {}).get(key, "") or "")
+        channel = await _adopt_realm_salon(guild, category, name, stored=stored)
+        if channel is not None:
+            await _apply_dormancy(guild, channel, key, member_ids, dormant)
+        # missing-access-v1, la suite (Drasah 23/11) : sur l'incident live,
+        # le salon restait VERROUILLÉ après la dormancy (le bot n'y VOIT
+        # plus : Discord refuse l'édition, aucun heal par API n'existe).
+        # La convergence ne passe donc pas par l'endurance mais par le
+        # REMPLACEMENT : suppression best-effort du verrouillé, salon
+        # neuf sain, la fiche vit dedans dès la prochaine passe.
+        if channel is not None and not _bot_can_view(guild, channel):
+            logger.warning(
+                "kingdom realms: salon verrouillé pour le bot, remplacement (%s, clé %s)",
+                getattr(channel, "name", "?"),
+                key,
+            )
+            channel = None
         if channel is None:
             create_channel = getattr(guild, "create_text_channel", None)
             if create_channel is None:
@@ -351,22 +442,21 @@ async def ensure_realm_structure(guild: Any, realm: Any, *, dormant: bool = True
             except Exception:  # noqa: BLE001
                 logger.warning("kingdom realms: salon creation failed (%s)", name, exc_info=True)
                 continue
+            await _apply_dormancy(guild, channel, key, member_ids, dormant)
         ids[key] = str(getattr(channel, "id", "") or "")
-        await _apply_dormancy(guild, channel, key, member_ids, dormant)
         # duplicate-sweep (Drasah 22/11) — l'incident live HeN/AEGIS :
-        # les provisions d'avant l'adoption (les incidents
-        # stale-anchor, check 83) ont laissé des COPIES de salons
-        # déclarés dans la catégorie. L'adoption n'en garde qu'une et
-        # les autres vivaient indéfiniment : le leftover-shield SAUTE
-        # les slugs déclarés par définition, donc un doublon déclaré
-        # était invisible pour lui. La convergence est EXPLICITE : le
-        # salon adopté reste, ses frères du même slug partent — un
-        # salon déclaré par clé, jamais deux.
+        # les provisions d'avant l'adoption ont laissé des COPIES de
+        # salons déclarés dans la catégorie. L'ancre est DÉCORATION-AVEUGLE
+        # (un salon renommé en petites capitales reste le MÊME salon, pas
+        # un doublon légitime) et le sweep garde UNIQUEMENT le salon
+        # adopté : les frères du même slug partent, verrouillés compris.
         siblings = [
-            c for c in (getattr(category, "channels", []) or [])
-            if _slug(getattr(c, "name", "")) == _slug(name)
+            c
+            for c in (getattr(category, "channels", []) or [])
+            if _slug_blind(getattr(c, "name", "")) == _slug_blind(name)
+            and c is not channel
         ]
-        for extra in siblings[1:]:
+        for extra in siblings:
             try:
                 delete = getattr(extra, "delete", None)
                 if delete is None:
@@ -378,14 +468,16 @@ async def ensure_realm_structure(guild: Any, realm: Any, *, dormant: bool = True
                 )
             except Exception:  # noqa: BLE001 — le sweep ne bloque jamais
                 logger.warning(
-                    "kingdom realms: duplicate sweep failed (%s)", name, exc_info=True
+                    "kingdom realms: duplicate sweep failed (%s) — à supprimer à la main",
+                    getattr(extra, "name", "?"),
+                    exc_info=True,
                 )
     # leftover-shield — l'ancienne charte laissait des salons que la
     # nouvelle structure ne déclare pas : adoptés avec la catégorie,
     # ils héritaient du allow catégorie des membres. Recalculés muets.
-    declared_slugs = {_slug(name) for _, name in REALM_SALONS}
+    declared_slugs = {_slug_blind(name) for _, name in REALM_SALONS}
     for channel in list(getattr(category, "channels", []) or []):
-        if _slug(getattr(channel, "name", "")) in declared_slugs:
+        if _slug_blind(getattr(channel, "name", "")) in declared_slugs:
             continue
         logger.warning(
             "kingdom realms: stale-charter salon shielded from members (%s, %s)",
@@ -397,13 +489,13 @@ async def ensure_realm_structure(guild: Any, realm: Any, *, dormant: bool = True
     # Discussions → Le royaume → Territoire → Alliances (REALM_SALONS).
     # Zéro appel API quand la séquence est déjà convergente ; les
     # leftovers restent APRÈS les salons déclarés.
-    declared_order = [(key, _slug(name)) for key, name in REALM_SALONS]
-    live = [_slug(getattr(c, "name", "")) for c in (getattr(category, "channels", []) or [])]
+    declared_order = [(key, _slug_blind(name)) for key, name in REALM_SALONS]
+    live = [_slug_blind(getattr(c, "name", "")) for c in (getattr(category, "channels", []) or [])]
     wanted = [slug for _, slug in declared_order if slug in live]
     if [s for s in live if s in wanted] != wanted:
         for offset, (key, slug) in enumerate(declared_order):
             channel = next(
-                (c for c in (getattr(category, "channels", []) or []) if _slug(getattr(c, "name", "")) == slug),
+                (c for c in (getattr(category, "channels", []) or []) if _slug_blind(getattr(c, "name", "")) == slug),
                 None,
             )
             if channel is None:
