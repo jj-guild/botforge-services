@@ -1858,13 +1858,13 @@ async def _send_match_panels(
     the links.
 
     The LIVE matches EAT the budget (owner 2026-11-23: one live
-    match in progress means 1 live card + 9 finished ones - the
-    panel reads "10 derniers matchs", ten cards, never more).
+    match in progress means 1 live card + 4 finished ones - the
+    panel reads "5 derniers matchs", five cards, never more).
     """
     live = await _live_cards(interaction, me_ids)
     cards = list(live)
-    finished = await _finished_cards(interaction, me_ids)
-    cards += finished[: max(0, 10 - len(live))]
+    finished = await _finished_cards(interaction, me_ids, limit=5)
+    cards += finished[: max(0, 5 - len(live))]
     if not cards:
         await interaction.followup.send(await reply(interaction, "profile.matches_empty"), ephemeral=True)
         return
