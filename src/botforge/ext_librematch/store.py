@@ -175,20 +175,28 @@ class LibrematchStore:
     async def invalidate_stale_matches(self, stale_after_s: int = 86400) -> int:
         """Flag the never-played captures: started long ago, never decided.
 
-        A match older than ``stale_after_s`` with NO completion and
-        NO winner is a capture of a lobby that never ran (owner
+        A match older than ``stale_after_s`` that never saw a VALID
+        DECISION is a capture of a lobby that never ran (owner
         2026-11-23: a result never heard from again for more than a
-        day means the game was never played). Marked ``invalid``
-        once - the serving and the panels skip it, the raw document
-        stays for the archaeology.
+        day means the game was never played). A valid decision is a
+        finished timestamp WITH a winner AND at least two players -
+        the abandoned captures often carry a completion or a lone
+        self-reported outcome, so the OLD narrow $or (no completion,
+        no winner) matched nothing on the live store (merlin log,
+        nModified 0). Marked ``invalid`` once - the serving and the
+        panels skip it, the raw document stays for the archaeology.
         """
         import time as _time
 
         deadline = int(_time.time()) - int(stale_after_s)
+        decided = {"finished_at": {"$gt": 0}, "winners.0": {"$exists": True}}
         query = {
             "invalid": {"$ne": True},
             "started_at": {"$lt": deadline},
-            "$or": [{"finished_at": 0}, {"finished_at": {"$exists": False}}, {"winners": []}],
+            "$or": [
+                {"$nor": [decided]},  # never finished, or no winner
+                {"profile_ids.1": {"$exists": False}},  # a solo "lobby"
+            ],
         }
         result = await self._matches().update_many(query, {"$set": {"invalid": True}})
         return int(getattr(result, "modified_count", 0) or 0)

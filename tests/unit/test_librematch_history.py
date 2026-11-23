@@ -55,29 +55,42 @@ def _doc_value(doc: dict[str, Any], dotted: str) -> Any:
 def _condition_ok(doc: dict[str, Any], key: str, condition: Any) -> bool:
     if key == "$or":
         return any(_condition_ok(doc, k, c) for pair in condition for k, c in pair.items())
+    if key == "$nor":
+        return not any(
+            all(_condition_ok(doc, k, c) for k, c in pair.items()) for pair in condition
+        )
     if key == "players.0":
         # the incomplete-capture marker: an empty (or absent)
         # players list means the document's projection is bare
         exists = bool(doc.get("players") or [])
         wants_exists = bool((condition or {}).get("$exists", False))
         return exists if wants_exists else not exists
-    value = _doc_value(doc, key)
-    if isinstance(condition, dict) and "$in" in condition:
+    return _operator_ok(_doc_value(doc, key), condition)
+
+
+def _operator_ok(value: Any, condition: Any) -> bool:
+    """The scalar half of the query subset: equality or one operator."""
+    operators: dict[str, Any] = condition if isinstance(condition, dict) else {}
+    if not operators:
         if isinstance(value, list):
-            return any(v in condition["$in"] for v in value)
-        return (value in condition["$in"]) or (value is None and None in condition["$in"])
-    if isinstance(condition, dict) and "$gte" in condition:
-        return value is not None and value >= condition["$gte"]
-    if isinstance(condition, dict) and "$lt" in condition:
-        return value is not None and value < condition["$lt"]
-    if isinstance(condition, dict) and "$exists" in condition:
-        return (value is not None) == bool(condition["$exists"])
-    if isinstance(condition, dict) and "$ne" in condition:
-        return value != condition["$ne"]
-    if isinstance(value, list):
-        # Mongo equality against an array matches containment
-        return condition in value
-    return value == condition
+            # Mongo equality against an array matches containment
+            return condition in value
+        return value == condition
+    if "$in" in operators:
+        if isinstance(value, list):
+            return any(v in operators["$in"] for v in value)
+        return (value in operators["$in"]) or (value is None and None in operators["$in"])
+    if "$ne" in operators:
+        return value != operators["$ne"]
+    if "$exists" in operators:
+        return (value is not None) == bool(operators["$exists"])
+    if "$gte" in operators:
+        return value is not None and value >= operators["$gte"]
+    if "$gt" in operators:
+        return value is not None and value > operators["$gt"]
+    if "$lt" in operators:
+        return value is not None and value < operators["$lt"]
+    return True
 
 
 def _matches(query: dict[str, Any], docs: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -342,11 +355,15 @@ async def test_user_stats_unknown_user_is_none() -> None:
 
 async def test_match_history_query_filters() -> None:
     """The history answers from the store: leaderboard + window filters."""
+    import time as _time
+
     db, adapter = FakeDb(), FakeAdapter()
+    now = int(_time.time())
+    # recent timestamps: an old resultless capture would seal invalid
     adapter.history["123"] = [
-        _match("m1", "0", 100, 200, [_member("123", 1, 1, 1000, 1024)]),
-        _match("m2", "0", 300, 400, [_member("123", 1, 1, 1024, 1030)]),
-        _match("m3", "3", 500, 600, [_member("123", 1, 1, 900, 910)]),
+        _match("m1", "0", now - 1100, now - 1000, [_member("123", 1, 1, 1000, 1024)]),
+        _match("m2", "0", now - 900, now - 800, [_member("123", 1, 1, 1024, 1030)]),
+        _match("m3", "3", now - 700, now - 600, [_member("123", 1, 1, 900, 910)]),
     ]
     syncer = _syncer(db, adapter)
     await syncer.sync_account("123")
@@ -356,7 +373,7 @@ async def test_match_history_query_filters() -> None:
     assert entries[0].rating_after["123"] == 1030
     assert entries[0].winners == ("123",)
 
-    only_recent = await syncer.match_history(["123"], since_s=350)
+    only_recent = await syncer.match_history(["123"], since_s=now - 850)
     assert [e.match_id for e in only_recent] == ["m3", "m2"]  # newest first
 
     limited = await syncer.match_history(["123"], limit=1)
@@ -404,12 +421,15 @@ def _options(pairs: list[tuple[str, str]]) -> str:
 async def test_decode_exploits_stored_matches_without_refetch() -> None:
     """T2: the blobs ride the history payload itself, no second endpoint."""
     db, adapter = FakeDb(), FakeAdapter()
+    import time as _time
+
+    now = int(_time.time())
     adapter.history["123"] = [
         _match(
             "m1",
             "0",
-            100,
-            200,
+            now,
+            now + 100,
             [_member("123", 1, 1, 1000, 1024)],
             options=_options([("MAP_SIZE", "3"), ("SPEED", "2")]),
             slotinfo=_slotinfo(
@@ -1013,3 +1033,27 @@ async def test_recent_ongoing_match_still_serves() -> None:
     assert "invalid" not in db["librematch:matches"].docs["fresh-lobby"]
     entries = await syncer.match_history(["123"])
     assert [e.match_id for e in entries] == ["fresh-lobby"]
+
+
+async def test_stale_solo_capture_with_completion_still_seals() -> None:
+    """The merlin case: an old capture WITH a completion and a self-reported
+    outcome but a SOLO profile is a lobby that never ran (owner 2026-11-23)."""
+    import time as _time
+
+    db = FakeDb()
+    adapter = FakeAdapter()
+    now = int(_time.time())
+    adapter.history["123"] = [
+        _match(
+            "solo-test",
+            "",
+            now - 300000,
+            now - 299000,
+            [_member("123", 1, 0, 1192, 1192)],
+            description="test",
+        ),
+    ]
+    syncer = _syncer(db, adapter)
+    await syncer.sync_account("123")
+    assert db["librematch:matches"].docs["solo-test"]["invalid"] is True
+    assert await syncer.match_history(["123"]) == []

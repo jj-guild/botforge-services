@@ -106,12 +106,16 @@ sync&nbsp;only&nbsp;ever&nbsp;APPENDS&nbsp;the&nbsp;new&nbsp;games).</span></dd>
 
 <dl><dt>async <a name="LibrematchStore-invalidate_stale_matches"><strong>invalidate_stale_matches</strong></a>(self, stale_after_s: 'int' = 86400) -&gt; 'int'</dt><dd><span class="code">Flag&nbsp;the&nbsp;never-played&nbsp;captures:&nbsp;started&nbsp;long&nbsp;ago,&nbsp;never&nbsp;decided.<br>
 &nbsp;<br>
-A&nbsp;match&nbsp;older&nbsp;than&nbsp;``stale_after_s``&nbsp;with&nbsp;NO&nbsp;completion&nbsp;and<br>
-NO&nbsp;winner&nbsp;is&nbsp;a&nbsp;capture&nbsp;of&nbsp;a&nbsp;lobby&nbsp;that&nbsp;never&nbsp;ran&nbsp;(owner<br>
+A&nbsp;match&nbsp;older&nbsp;than&nbsp;``stale_after_s``&nbsp;that&nbsp;never&nbsp;saw&nbsp;a&nbsp;VALID<br>
+DECISION&nbsp;is&nbsp;a&nbsp;capture&nbsp;of&nbsp;a&nbsp;lobby&nbsp;that&nbsp;never&nbsp;ran&nbsp;(owner<br>
 2026-11-23:&nbsp;a&nbsp;result&nbsp;never&nbsp;heard&nbsp;from&nbsp;again&nbsp;for&nbsp;more&nbsp;than&nbsp;a<br>
-day&nbsp;means&nbsp;the&nbsp;game&nbsp;was&nbsp;never&nbsp;played).&nbsp;Marked&nbsp;``invalid``<br>
-once&nbsp;-&nbsp;the&nbsp;serving&nbsp;and&nbsp;the&nbsp;panels&nbsp;skip&nbsp;it,&nbsp;the&nbsp;raw&nbsp;document<br>
-stays&nbsp;for&nbsp;the&nbsp;archaeology.</span></dd></dl>
+day&nbsp;means&nbsp;the&nbsp;game&nbsp;was&nbsp;never&nbsp;played).&nbsp;A&nbsp;valid&nbsp;decision&nbsp;is&nbsp;a<br>
+finished&nbsp;timestamp&nbsp;WITH&nbsp;a&nbsp;winner&nbsp;AND&nbsp;at&nbsp;least&nbsp;two&nbsp;players&nbsp;-<br>
+the&nbsp;abandoned&nbsp;captures&nbsp;often&nbsp;carry&nbsp;a&nbsp;completion&nbsp;or&nbsp;a&nbsp;lone<br>
+self-reported&nbsp;outcome,&nbsp;so&nbsp;the&nbsp;OLD&nbsp;narrow&nbsp;$or&nbsp;(no&nbsp;completion,<br>
+no&nbsp;winner)&nbsp;matched&nbsp;nothing&nbsp;on&nbsp;the&nbsp;live&nbsp;store&nbsp;(merlin&nbsp;log,<br>
+nModified&nbsp;0).&nbsp;Marked&nbsp;``invalid``&nbsp;once&nbsp;-&nbsp;the&nbsp;serving&nbsp;and&nbsp;the<br>
+panels&nbsp;skip&nbsp;it,&nbsp;the&nbsp;raw&nbsp;document&nbsp;stays&nbsp;for&nbsp;the&nbsp;archaeology.</span></dd></dl>
 
 <dl><dt>async <a name="LibrematchStore-list_bound_profiles"><strong>list_bound_profiles</strong></a>(self) -&gt; 'list[str]'</dt><dd><span class="code">List&nbsp;only&nbsp;the&nbsp;BOUND&nbsp;accounts&nbsp;—&nbsp;the&nbsp;bot's&nbsp;own&nbsp;users.<br>
 &nbsp;<br>
