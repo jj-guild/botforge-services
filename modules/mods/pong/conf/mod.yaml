@@ -5,8 +5,8 @@
 # Bootstrap declaration (vibe/mod-pong-config): enabled stays false until
 # the mod package (modules/mods/pong/{src,cogs,grpc}) lands — a disabled
 # mod is never loaded, so the envs can carry the declaration harmlessly.
-# Every À-DÉFINIR point lives in docs/MODS/pong/DECISIONS.md (Q-PONG-001..007):
-# nothing below invents an undecided value (defaults come from the S5 rules).
+# Mod owner answers integrated (D-PONG-005..011, session 2026-11-23).
+# Remaining open question: Q-PONG-002 (odd player count) — see DECISIONS.md.
 id: pong
 enabled: false
 # the visual identity is data
@@ -14,21 +14,25 @@ emoji: "🏓"
 # season-based tournament (root lifecycle panel + per-season admin salon)
 seasonal: true
 settings:
-  # defaults from the S5 règlement (docs/MODS/pong/REFERENCE.md);
-  # open questions in DECISIONS.md stay unresolved here on purpose
+  # mod owner answers recorded in botforge docs/MODS/pong/DECISIONS.md
+  # (D-PONG-005..011 — PR botforge#231)
   season_name_format: "AOE Pong S<N>"
   bo_format: 5
   civs_remaining: 15
-  rounds_per_season: null    # À DÉFINIR — Q-PONG-001 (source S5: 4 or 6)
+  rounds_per_season: 4        # D-PONG-005
   round_window: wed_tue      # Wednesday → Tuesday, 7 days
-  tables_count: null         # À DÉFINIR — Q-PONG-004
-  table_order_key: null      # À DÉFINIR — Q-PONG-003
-  edge_policy: null          # À DÉFINIR — Q-PONG-002
-  draft_map_preset: https://aoe2cm.net/preset/pGWoJ  # the S5 preset
+  move_policy: semi_blocked   # D-PONG-006 — classic | semi_blocked (per-season param)
+  elo_seed_formula: "(2 * current_elo + max_elo) / 3"  # D-PONG-007, computed at registration
+  # tables_count is DERIVED at runtime: registered_players / 2 (D-PONG-008).
+  # Odd player count blocks season opening until Q-PONG-002 (remplaçant vs tables of 3).
+  draft_map_preset: https://aoe2cm.net/preset/pGWoJ     # the S5 map-pool preset
+  civ_draft_base_preset: null # D-PONG-009 — aoe2cm base_preset to derive per-table civ drafts
+                              # (Python generator to port — owner's code lands with the cogs PR)
   open_stream: true          # open stream, "AOE Pong" in the title
   patch_policy: admin_decides
   close_tables: true
   planning_requirement: "two 3h consecutive slots in 17h-23h (FR tz)"
+  # records_provider (D-PONG-010, phase 2): auto rec-zip via replaypacker (no-spoiler BO5)
 channel_groups:
   - key: ladder
     display_name: 🏓 ᴀᴏᴇ ᴘᴏɴɢ
