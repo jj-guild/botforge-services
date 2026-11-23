@@ -336,6 +336,9 @@ class BotforgeBot(discord.Client):
         ensured = await sync_known_guilds(str(guild.id) for guild in self.guilds)
         if ensured:
             logger.info("GUILD ACCESS known-guilds ensured (%d)", ensured)
+        # the install rule re-applied from the live state: guilds with a
+        # mod installed keep the bot's own categories private
+        await _boot_gate_platform_categories(self)
         announce_enabled = self.config.announce_enabled.strip().lower() not in {"0", "false", "no"}
         await announce_startup(
             self,
@@ -1026,7 +1029,14 @@ def create_bot(config: BotConfig | None = None) -> BotforgeBot:  # noqa: C901
     sync_target = f"guild {guild_id}" if guild_id.isdigit() else "global"
     register_status_command(bot.tree, status, sync_target=sync_target, catalog=bot.messages)
     register_live_command(bot.tree, catalog=bot.messages, games=games)
-    registration_engine, registration_service = _build_registration(resolved, state=shared_state)
+    registration_engine, registration_service = _build_registration(resolved, state=shared_state, bot=bot)
+    if registration_service is not None:
+        # the Discord-side event sink (salon-gating subscriptions): the
+        # core emits transport-free intents, the bot fans them out
+        from botforge.discord.registration_events import RegistrationEventSink
+
+        bot.registration_event_sink = RegistrationEventSink(bot)  # type: ignore[attr-defined]
+        registration_service.attach_events(bot.registration_event_sink)  # type: ignore[attr-defined]
     bot.registration_engine = registration_engine
     bot.registration_service = registration_service
     bot.identity_service = _build_identity_service(resolved, state=shared_state)
@@ -1186,6 +1196,7 @@ def _build_permission_service(
 def _build_registration(
     config: BotConfig,
     state: StateService | None = None,
+    bot: Any = None,
 ) -> tuple[WorkflowEngine | None, RegistrationService | None]:
     """Wire the DM enrollment stack (#133): engine + AoE2-validated service.
 
@@ -1411,6 +1422,41 @@ def _log_guild_member_locales(guilds: Iterable[discord.Guild]) -> None:
                 guild.id,
                 member.id,
                 getattr(member, "locale", None),
+            )
+
+
+async def _boot_gate_platform_categories(bot: Any) -> None:
+    """Re-apply the install rule at boot (best-effort, per guild).
+
+    The rule is state-driven, not only event-driven: a guild with a mod
+    installed keeps the platform categories private across restarts,
+    even when the install event fired before the ids were persisted (the
+    name fallback resolves the categories). Without this pass a guild
+    installed before the rule existed stayed public forever.
+    """
+    from botforge.discord.ui.panels_provisioning import set_platform_categories_private
+    from botforge.discord.wiring import build_guild_access_service
+
+    access = build_guild_access_service()
+    if access is None:
+        return
+    for guild in getattr(bot, "guilds", ()) or ():
+        try:
+            mods = await access.enabled_mods(str(guild.id))
+        except Exception:
+            logger.warning(
+                "boot: the enabled-mods read failed (guild %s) — skipped", guild.id, exc_info=True
+            )
+            continue
+        if not mods:
+            continue
+        try:
+            await set_platform_categories_private(guild, True)
+        except Exception:
+            logger.warning(
+                "boot: the platform categories gate failed (guild %s) — best-effort",
+                guild.id,
+                exc_info=True,
             )
 
 

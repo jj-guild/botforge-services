@@ -92,7 +92,13 @@ class DiscordChannelsPlatform:
             await channel.set_permissions(
                 guild.me,
                 overwrite=discord.PermissionOverwrite(
-                    view_channel=True, send_messages=True, read_message_history=True, manage_messages=True
+                    view_channel=True,
+                    send_messages=True,
+                    read_message_history=True,
+                    manage_messages=True,
+                    # a private channel must stay manageable by the bot
+                    # (purge, rename) — not only readable (#413)
+                    manage_channels=True,
                 ),
                 reason="botforge: access policy bot overwrite",
             )

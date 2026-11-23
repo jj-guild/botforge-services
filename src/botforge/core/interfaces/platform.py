@@ -1,4 +1,4 @@
-"""Platform abstraction contracts (IPlatform, IMessage, IChannel, IUser, IWorkflow).
+"""Platform abstraction contracts (IPlatform, IMessage, IChannel, IUser, IView, IWorkflow).
 
 Structural typing via ``typing.Protocol`` (ADR-0011): implementations do not
 inherit from these classes, they just satisfy the shape, checked by mypy.
@@ -10,6 +10,7 @@ Reference: docs/ARCHITECTURE.md (botforge repo) and botforge-services#3.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
 
 if TYPE_CHECKING:
@@ -72,6 +73,20 @@ class IMessage(Protocol):
 
 
 @runtime_checkable
+class IView(Protocol):
+    """Opaque handle to an interactive component set (buttons, selects).
+
+    The contract carries a HANDLE, never a platform type (ADR-0011,
+    botforge-services#221): an implementation receives it and renders it
+    the way its platform knows — the Discord seam passes a
+    ``discord.ui.View`` through, a future platform maps the same
+    interactions to its own widgets. There is intentionally nothing to
+    read on this surface: interactivity is behavior, and behavior is the
+    implementation's business, not the contract's.
+    """
+
+
+@runtime_checkable
 class IPlatform(Protocol):
     """Platform abstraction: messaging, channel management, roles, DMs.
 
@@ -82,12 +97,54 @@ class IPlatform(Protocol):
         """Send a text message to a channel."""
         ...
 
-    async def send_dm(self, user: IUser, content: str) -> IMessage:
-        """Send a direct message to a user."""
+    async def send_dm(self, user: IUser, content: str, view: IView | None = None) -> IMessage:
+        """Send a direct message to a user, optionally with a view.
+
+        DMs are interactive when a view rides along (botforge-services#407):
+        the view handle is opaque to the contract (#221) and rendered by
+        the platform implementation.
+        """
         ...
 
-    async def create_channel(self, guild_id: str, category: str) -> IChannel:
-        """Create a channel in a guild under a channel category."""
+    async def edit_dm(
+        self, message: IMessage, content: str, view: IView | None = None
+    ) -> IMessage:
+        """Edit a previously sent direct message in place."""
+        ...
+
+    async def delete_dm(self, message: IMessage) -> None:
+        """Delete a previously sent direct message (best-effort).
+
+        A message already gone is not an error: the platform may skip
+        silently, exactly like every ephemeral cleanup.
+        """
+        ...
+
+    async def create_channel(
+        self,
+        guild_id: str,
+        name: str,
+        category_id: str | None = None,
+        kind: str = "text",
+        overwrites: Mapping[str, Mapping[str, bool]] | None = None,
+        position: int | None = None,
+        options: Mapping[str, Any] | None = None,
+    ) -> IChannel:
+        """Create a channel in a guild — the dynamic-channel seam (#408).
+
+        ``kind`` is "text" or "voice". ``overwrites`` is DATA (#221), never
+        platform objects: a mapping of target key to permission flags.
+        Target keys: ``@everyone``, ``@me`` (the bot itself — the
+        lesson of locking a bot out of its own channel), or a role NAME
+        resolved through the guild's roles. ``position`` is the channel's
+        position hint (below a declared channel, for a sidebar that reads).
+        ``options`` carries the kind-specific extras (``user_limit`` for a
+        voice room) — data, pass-through, never platform types.
+        """
+        ...
+
+    async def delete_channel(self, channel_id: str) -> None:
+        """Delete a channel — best-effort (already gone is not an error)."""
         ...
 
     async def assign_role(self, user: IUser, role_key: str) -> None:

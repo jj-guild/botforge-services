@@ -259,19 +259,28 @@ async def _decl_category(
     category_id: str,
     group_categories: dict[str, str],
     resolved: dict[str, str],
+    group_view_roles: dict[str, tuple[str, ...]] | None = None,
 ) -> str:
     """Resolve one channel's category: its declared group's, or the scope's.
 
     The group categories are created lazily (once per group) and ride
     the resolved dict — ``persist_resolutions`` stores them under
-    ``tree:<scope>:cat:<group>``.
+    ``tree:<scope>:cat:<group>``. A group declared admin-only gates its
+    category (bot allow + @everyone deny + the group's view roles).
     """
     group_name = str(getattr(decl, "group", "") or "")
     if not group_name:
         return category_id
     channel_category = group_categories.get(group_name, "")
     if not channel_category:
-        channel_category = await _ensure_group_category(guild, platform, spec.scope, group_name)
+        channel_category = await _ensure_group_category(
+            guild,
+            platform,
+            spec.scope,
+            group_name,
+            admin_only=bool(getattr(decl, "group_admin_only", False)),
+            view_role_ids=tuple((group_view_roles or {}).get(group_name, ())),
+        )
         group_categories[group_name] = channel_category
         resolved[f"cat:{group_name}"] = channel_category
     return channel_category
@@ -282,14 +291,19 @@ async def _ensure_group_category(
     platform: _Platform,
     scope: str,
     group_name: str,
+    admin_only: bool = False,
+    view_role_ids: tuple[str, ...] = (),
 ) -> str:
     """Resolve (or create) one GROUP category of a scope (the mods' structure).
 
     Stored under ``cat:<group>`` inside the scope — the group's
     channels keep their own resolution keys; a label refresh renames
-    in place, never a duplicate.
+    in place, never a duplicate. A group declared admin-only carries
+    the gate on its category (bot allow + @everyone deny + view roles),
+    exactly like a gated scope category.
     """
     storage_key = f"cat:{group_name}"
+    category_id = ""
     stored = await stored_channel_id(str(guild.id), scope, storage_key)
     if stored and stored.isdigit():
         category = guild.get_channel(int(stored))
@@ -298,11 +312,199 @@ async def _ensure_group_category(
                 await category.edit(
                     name=group_name, reason="botforge: panels provisioning (label refresh)"
                 )
-            return stored
-    for category in guild.categories:
-        if category.name == group_name:
-            return str(category.id)
-    return await platform.ensure_category(group_name)
+            category_id = stored
+    if not category_id:
+        for category in guild.categories:
+            if category.name == group_name:
+                category_id = str(category.id)
+                break
+    if not category_id:
+        category_id = await platform.ensure_category(group_name)
+    if admin_only and category_id:
+        await _apply_category_access(guild, category_id, view_role_ids)
+    return category_id
+
+
+async def _apply_category_access(
+    guild: discord.Guild, category_id: str, view_role_ids: tuple[str, ...] = ()
+) -> None:
+    """Apply the scope category's gate (the machine-room rule, best-effort).
+
+    The bot's own member always carries an explicit allow — without it
+    the category's ``view_channel=False`` for @everyone locks the bot
+    out of the folder it provisioned (the same lesson as the channels).
+    The view roles ride as RESOLVED IDS (the persisted mapping is the
+    resolver — a renamed role keeps its grant).
+    """
+    category = guild.get_channel(int(category_id)) if category_id.isdigit() else None
+    if category is None:
+        return
+    try:
+        me = guild.me
+        if me is not None:
+            await category.set_permissions(
+                me,
+                overwrite=discord.PermissionOverwrite(
+                    view_channel=True,
+                    send_messages=True,
+                    manage_messages=True,
+                    manage_threads=True,
+                    # without manage_channels on the category a private
+                    # folder locks the bot out of creating/purging the
+                    # rooms inside it (the console's blocker, #413)
+                    manage_channels=True,
+                    read_message_history=True,
+                ),
+                reason="botforge: the bot operates its own category",
+            )
+        await category.set_permissions(
+            guild.default_role,
+            overwrite=discord.PermissionOverwrite(view_channel=False),
+            reason="botforge: the declared category gate hides @everyone",
+        )
+        for role_id in view_role_ids or ():
+            role = guild.get_role(int(role_id)) if str(role_id).isdigit() else None
+            if role is None:
+                logger.warning(
+                    "panels provisioning: the category view role id %r is not resolved — skipped",
+                    role_id,
+                )
+                continue
+            await category.set_permissions(
+                role,
+                overwrite=discord.PermissionOverwrite(
+                    view_channel=True, read_message_history=True
+                ),
+                reason="botforge: the declared category gate grants the view role",
+            )
+    except Exception:
+        logger.warning(
+            "panels provisioning: the category gate apply failed — best-effort",
+            exc_info=True,
+        )
+
+
+def _group_view_role_map(spec: ScopeSpec) -> dict[str, tuple[str, ...]]:
+    """Map each declared group to the union of its channels' view role ids."""
+    out: dict[str, tuple[str, ...]] = {}
+    for decl in spec.channels:
+        gname = str(getattr(decl, "group", "") or "")
+        if gname:
+            out[gname] = tuple(
+                dict.fromkeys(
+                    out.get(gname, ()) + tuple(getattr(decl, "view_role_ids", ()) or ())
+                )
+            )
+    return out
+
+
+async def _restore_category_access(guild: discord.Guild, category_id: str) -> None:
+    """Remove a category's gate overwrites (back to normal rights).
+
+    The uninstall counterpart of the gate: @everyone's deny and the
+    bot's explicit allow are both dropped — the folder returns to the
+    guild's default permissions.
+    """
+    category = guild.get_channel(int(category_id)) if category_id.isdigit() else None
+    if category is None:
+        return
+    try:
+        await category.set_permissions(
+            guild.default_role,
+            overwrite=None,
+            reason="botforge: restore normal rights (mod uninstalled)",
+        )
+        me = guild.me
+        if me is not None:
+            await category.set_permissions(
+                me, overwrite=None, reason="botforge: restore normal rights (mod uninstalled)"
+            )
+    except Exception:
+        logger.warning(
+            "panels provisioning: the category gate restore failed — best-effort",
+            exc_info=True,
+        )
+
+
+def _category_label_names(spec: ScopeSpec) -> set[str]:
+    """Render a scope's category label in every locale — the name fallback.
+
+    The stored id is the primary resolution, but a guild provisioned
+    before its ids were persisted (or with an unwired Mongo at the
+    time) has live categories with NO stored id — the translated name
+    (fr and en renders of the declared category key) finds them.
+    """
+    names: set[str] = set()
+    try:
+        from botforge.core.services.i18n import MessageCatalog
+        from botforge.core.services.mod_layout import default_repo_root
+
+        root = default_repo_root()
+        if root is None:
+            return names
+        catalog = MessageCatalog(str(root / "config"))
+        for locale in ("fr", "en"):
+            rendered = str(catalog.render(spec.category_key, locale))
+            if rendered and rendered != spec.category_key:
+                names.add(rendered)
+    except Exception:
+        logger.warning(
+            "panels provisioning: category label render failed (scope %s) — stored ids only",
+            spec.scope,
+            exc_info=True,
+        )
+    return names
+
+
+async def _platform_category_candidates(guild: discord.Guild, spec: ScopeSpec) -> list[str]:
+    """Resolve one platform scope's category ids: stored id first, then name.
+
+    The name fallback (the fr/en renders of the declared category key)
+    covers guilds whose ids were never persisted — the Kingdoms - Tests
+    case: the categories exist, the stored ids are missing.
+    """
+    candidates: list[str] = []
+    stored = await stored_channel_id(str(guild.id), spec.scope, "category")
+    if stored and str(stored).isdigit():
+        candidates.append(str(stored))
+    for name in _category_label_names(spec):
+        category = discord.utils.get(guild.categories, name=name)
+        if category is not None:
+            candidates.append(str(category.id))
+    return list(dict.fromkeys(candidates))
+
+
+async def set_platform_categories_private(guild: discord.Guild, private: bool) -> int:
+    """Gate (or restore) every PLATFORM scope's category — the install rule.
+
+    Installing a mod makes the bot's own folders staff-only (the
+    machine-room rule extended: while a mod is installed, the platform
+    plumbing hides from players — the mod's declared categories carry
+    their own permissions). Uninstalling the last mod restores the
+    normal (public) rights. Mod scopes (``mod/<name>``) are never
+    touched here — they keep their own declared gates. Returns how many
+    categories were touched.
+    """
+    touched = 0
+    seen: set[str] = set()
+    for spec in registered_scopes():
+        if spec.scope.startswith("mod/") or not spec.category_key:
+            continue
+        candidates = await _platform_category_candidates(guild, spec)
+        view_role_ids = tuple(getattr(spec, "category_view_role_ids", ()) or ())
+        for category_id in candidates:
+            if category_id in seen:
+                continue
+            category = guild.get_channel(int(category_id)) if category_id.isdigit() else None
+            if not isinstance(category, discord.CategoryChannel):
+                continue
+            seen.add(category_id)
+            if private:
+                await _apply_category_access(guild, category_id, view_role_ids)
+            else:
+                await _restore_category_access(guild, category_id)
+            touched += 1
+    return touched
 
 
 async def provision_scope(
@@ -323,11 +525,21 @@ async def provision_scope(
         category_name = translate(spec.category_key, locale)
         category_id = await _ensure_scope_category(guild, platform, spec.scope, category_name)
         resolved["category"] = category_id
+        # the scope category's own gate (the machine-room rule): the
+        # folder's front door hides from @everyone, the rooms' bands
+        # stay untouched
+        if getattr(spec, "category_admin_only", False) and category_id:
+            await _apply_category_access(
+                guild, category_id, tuple(getattr(spec, "category_view_role_ids", ()) or ())
+            )
     # the GROUP categories (the mods' salons-as-data structure, #216
     # tranche I): a channel declaring a group lives in the group's own
     # category — created lazily, stored under cat:<group>, the channel
     # resolution keys stay tree:<scope>:<key> (the doors keep working)
     group_categories: dict[str, str] = {}
+    # each group's view roles = the union of its channels' resolved view
+    # role ids (the gate on the group's category grants them all)
+    group_view_roles = _group_view_role_map(spec)
     # an empty category_key is the guild root: its channels live uncategorised
     for decl in _sorted_channels(spec):
         name = translate(decl.label_key, locale)
@@ -339,6 +551,7 @@ async def provision_scope(
             category_id,
             group_categories,
             resolved,
+            group_view_roles=group_view_roles,
         )
         try:
             stored = await stored_channel_id(str(guild.id), spec.scope, decl.key)

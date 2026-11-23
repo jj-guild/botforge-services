@@ -499,6 +499,7 @@ en:
       btn_ensure: Create missing channels
       bot_home_description: The bot's operation — logs, administration, decisions.
       btn_sync: Repair channels & roles
+      btn_console: "Console"
       btn_language: Language
     views:
       menu.home:
@@ -619,7 +620,7 @@ en:
       <@{user_id}> — **{verb}** by <@{decided_by}>.'
 
   console:
-    title: "# ⚙️ Console"
+    title: "# 🛠️ Console"
     note_allowed: "This guild is on the test allowlist — the actions below apply to **this guild only**."
     note_denied: "This guild is **not** on the test allowlist — the actions are disabled (BOTFORGE_TEST_GUILD_IDS decides, env-defined)."
     danger_btn: "⚠️ Danger Zone"

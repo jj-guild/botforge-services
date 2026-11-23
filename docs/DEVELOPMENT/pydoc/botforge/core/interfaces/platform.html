@@ -9,7 +9,7 @@
 <tr class="heading-text decor">
 <td class="title">&nbsp;<br><strong class="title"><a href="botforge.html" class="white">botforge</a>.<a href="botforge.core.html" class="white">core</a>.<a href="botforge.core.interfaces.html" class="white">interfaces</a>.platform</strong></td>
 <td class="extra"><a href=".">index</a><br><a href="file:SOURCE_ROOT/core/interfaces/platform.py">SOURCE_ROOT/core/interfaces/platform.py</a></td></tr></table>
-    <p><span class="code">Platform&nbsp;abstraction&nbsp;contracts&nbsp;(<a href="#IPlatform">IPlatform</a>,&nbsp;<a href="#IMessage">IMessage</a>,&nbsp;<a href="#IChannel">IChannel</a>,&nbsp;<a href="#IUser">IUser</a>,&nbsp;<a href="#IWorkflow">IWorkflow</a>).<br>
+    <p><span class="code">Platform&nbsp;abstraction&nbsp;contracts&nbsp;(<a href="#IPlatform">IPlatform</a>,&nbsp;<a href="#IMessage">IMessage</a>,&nbsp;<a href="#IChannel">IChannel</a>,&nbsp;<a href="#IUser">IUser</a>,&nbsp;<a href="#IView">IView</a>,&nbsp;<a href="#IWorkflow">IWorkflow</a>).<br>
 &nbsp;<br>
 Structural&nbsp;typing&nbsp;via&nbsp;``typing.<a href="typing.html#Protocol">Protocol</a>``&nbsp;(ADR-0011):&nbsp;implementations&nbsp;do&nbsp;not<br>
 inherit&nbsp;from&nbsp;these&nbsp;classes,&nbsp;they&nbsp;just&nbsp;satisfy&nbsp;the&nbsp;shape,&nbsp;checked&nbsp;by&nbsp;mypy.<br>
@@ -31,6 +31,7 @@ Reference:&nbsp;docs/ARCHITECTURE.md&nbsp;(botforge&nbsp;repo)&nbsp;and&nbsp;bot
 </dt><dt class="heading-text"><a href="botforge.core.interfaces.platform.html#IMessage">IMessage</a>
 </dt><dt class="heading-text"><a href="botforge.core.interfaces.platform.html#IPlatform">IPlatform</a>
 </dt><dt class="heading-text"><a href="botforge.core.interfaces.platform.html#IUser">IUser</a>
+</dt><dt class="heading-text"><a href="botforge.core.interfaces.platform.html#IView">IView</a>
 </dt><dt class="heading-text"><a href="botforge.core.interfaces.platform.html#IWorkflow">IWorkflow</a>
 </dt></dl>
 </dd>
@@ -199,9 +200,31 @@ Methods defined here:<br>
 
 <dl><dt>async <a name="IPlatform-assign_role"><strong>assign_role</strong></a>(self, user: 'IUser', role_key: 'str') -&gt; 'None'</dt><dd><span class="code">Assign&nbsp;a&nbsp;role&nbsp;(referenced&nbsp;by&nbsp;logical&nbsp;role&nbsp;key)&nbsp;to&nbsp;a&nbsp;user.</span></dd></dl>
 
-<dl><dt>async <a name="IPlatform-create_channel"><strong>create_channel</strong></a>(self, guild_id: 'str', category: 'str') -&gt; 'IChannel'</dt><dd><span class="code">Create&nbsp;a&nbsp;channel&nbsp;in&nbsp;a&nbsp;guild&nbsp;under&nbsp;a&nbsp;channel&nbsp;category.</span></dd></dl>
+<dl><dt>async <a name="IPlatform-create_channel"><strong>create_channel</strong></a>(self, guild_id: 'str', name: 'str', category_id: 'str | None' = None, kind: 'str' = 'text', overwrites: 'Mapping[str, Mapping[str, bool]] | None' = None, position: 'int | None' = None, options: 'Mapping[str, Any] | None' = None) -&gt; 'IChannel'</dt><dd><span class="code">Create&nbsp;a&nbsp;channel&nbsp;in&nbsp;a&nbsp;guild&nbsp;—&nbsp;the&nbsp;dynamic-channel&nbsp;seam&nbsp;(#408).<br>
+&nbsp;<br>
+``kind``&nbsp;is&nbsp;"text"&nbsp;or&nbsp;"voice".&nbsp;``overwrites``&nbsp;is&nbsp;DATA&nbsp;(#221),&nbsp;never<br>
+platform&nbsp;objects:&nbsp;a&nbsp;mapping&nbsp;of&nbsp;target&nbsp;key&nbsp;to&nbsp;permission&nbsp;flags.<br>
+Target&nbsp;keys:&nbsp;``@everyone``,&nbsp;``@me``&nbsp;(the&nbsp;bot&nbsp;itself&nbsp;—&nbsp;the<br>
+lesson&nbsp;of&nbsp;locking&nbsp;a&nbsp;bot&nbsp;out&nbsp;of&nbsp;its&nbsp;own&nbsp;channel),&nbsp;or&nbsp;a&nbsp;role&nbsp;NAME<br>
+resolved&nbsp;through&nbsp;the&nbsp;guild's&nbsp;roles.&nbsp;``position``&nbsp;is&nbsp;the&nbsp;channel's<br>
+position&nbsp;hint&nbsp;(below&nbsp;a&nbsp;declared&nbsp;channel,&nbsp;for&nbsp;a&nbsp;sidebar&nbsp;that&nbsp;reads).<br>
+``options``&nbsp;carries&nbsp;the&nbsp;kind-specific&nbsp;extras&nbsp;(``user_limit``&nbsp;for&nbsp;a<br>
+voice&nbsp;room)&nbsp;—&nbsp;data,&nbsp;pass-through,&nbsp;never&nbsp;platform&nbsp;types.</span></dd></dl>
 
-<dl><dt>async <a name="IPlatform-send_dm"><strong>send_dm</strong></a>(self, user: 'IUser', content: 'str') -&gt; 'IMessage'</dt><dd><span class="code">Send&nbsp;a&nbsp;direct&nbsp;message&nbsp;to&nbsp;a&nbsp;user.</span></dd></dl>
+<dl><dt>async <a name="IPlatform-delete_channel"><strong>delete_channel</strong></a>(self, channel_id: 'str') -&gt; 'None'</dt><dd><span class="code">Delete&nbsp;a&nbsp;channel&nbsp;—&nbsp;best-effort&nbsp;(already&nbsp;gone&nbsp;is&nbsp;not&nbsp;an&nbsp;error).</span></dd></dl>
+
+<dl><dt>async <a name="IPlatform-delete_dm"><strong>delete_dm</strong></a>(self, message: 'IMessage') -&gt; 'None'</dt><dd><span class="code">Delete&nbsp;a&nbsp;previously&nbsp;sent&nbsp;direct&nbsp;message&nbsp;(best-effort).<br>
+&nbsp;<br>
+A&nbsp;message&nbsp;already&nbsp;gone&nbsp;is&nbsp;not&nbsp;an&nbsp;error:&nbsp;the&nbsp;platform&nbsp;may&nbsp;skip<br>
+silently,&nbsp;exactly&nbsp;like&nbsp;every&nbsp;ephemeral&nbsp;cleanup.</span></dd></dl>
+
+<dl><dt>async <a name="IPlatform-edit_dm"><strong>edit_dm</strong></a>(self, message: 'IMessage', content: 'str', view: 'IView | None' = None) -&gt; 'IMessage'</dt><dd><span class="code">Edit&nbsp;a&nbsp;previously&nbsp;sent&nbsp;direct&nbsp;message&nbsp;in&nbsp;place.</span></dd></dl>
+
+<dl><dt>async <a name="IPlatform-send_dm"><strong>send_dm</strong></a>(self, user: 'IUser', content: 'str', view: 'IView | None' = None) -&gt; 'IMessage'</dt><dd><span class="code">Send&nbsp;a&nbsp;direct&nbsp;message&nbsp;to&nbsp;a&nbsp;user,&nbsp;optionally&nbsp;with&nbsp;a&nbsp;view.<br>
+&nbsp;<br>
+DMs&nbsp;are&nbsp;interactive&nbsp;when&nbsp;a&nbsp;view&nbsp;rides&nbsp;along&nbsp;(botforge-services#407):<br>
+the&nbsp;view&nbsp;handle&nbsp;is&nbsp;opaque&nbsp;to&nbsp;the&nbsp;contract&nbsp;(#221)&nbsp;and&nbsp;rendered&nbsp;by<br>
+the&nbsp;platform&nbsp;implementation.</span></dd></dl>
 
 <dl><dt>async <a name="IPlatform-send_message"><strong>send_message</strong></a>(self, channel: 'IChannel', content: 'str') -&gt; 'IMessage'</dt><dd><span class="code">Send&nbsp;a&nbsp;text&nbsp;message&nbsp;to&nbsp;a&nbsp;channel.</span></dd></dl>
 
@@ -227,7 +250,7 @@ Data and other attributes defined here:<br>
 
 <dl><dt><strong>__parameters__</strong> = ()</dl>
 
-<dl><dt><strong>__protocol_attrs__</strong> = {'assign_role', 'create_channel', 'send_dm', 'send_message'}</dl>
+<dl><dt><strong>__protocol_attrs__</strong> = {'assign_role', 'create_channel', 'delete_channel', 'delete_dm', 'edit_dm', 'send_dm', ...}</dl>
 
 <hr>
 Class methods inherited from <a href="typing.html#Protocol">typing.Protocol</a>:<br>
@@ -303,6 +326,73 @@ Class methods inherited from <a href="typing.html#Protocol">typing.Protocol</a>:
 <hr>
 Class methods inherited from <a href="typing.html#Generic">typing.Generic</a>:<br>
 <dl><dt><a name="IUser-__class_getitem__"><strong>__class_getitem__</strong></a>(...)</dt><dd><span class="code">Parameterizes&nbsp;a&nbsp;generic&nbsp;class.<br>
+&nbsp;<br>
+At&nbsp;least,&nbsp;parameterizing&nbsp;a&nbsp;generic&nbsp;class&nbsp;is&nbsp;the&nbsp;*main*&nbsp;thing&nbsp;this<br>
+method&nbsp;does.&nbsp;For&nbsp;example,&nbsp;for&nbsp;some&nbsp;generic&nbsp;class&nbsp;`Foo`,&nbsp;this&nbsp;is&nbsp;called<br>
+when&nbsp;we&nbsp;do&nbsp;`Foo[int]`&nbsp;-&nbsp;there,&nbsp;with&nbsp;`cls=Foo`&nbsp;and&nbsp;`params=int`.<br>
+&nbsp;<br>
+However,&nbsp;note&nbsp;that&nbsp;this&nbsp;method&nbsp;is&nbsp;also&nbsp;called&nbsp;when&nbsp;defining&nbsp;generic<br>
+classes&nbsp;in&nbsp;the&nbsp;first&nbsp;place&nbsp;with&nbsp;`class&nbsp;Foo[T]:&nbsp;...`.</span></dd></dl>
+
+</td></tr></table> <p>
+<table class="section">
+<tr class="decor title-decor heading-text">
+<td class="section-title" colspan=3>&nbsp;<br><a name="IView">class <strong>IView</strong></a>(<a href="typing.html#Protocol">typing.Protocol</a>)</td></tr>
+    
+<tr><td class="decor title-decor" rowspan=2><span class="code">&nbsp;&nbsp;&nbsp;</span></td>
+<td class="decor title-decor" colspan=2><span class="code"><a href="#IView">IView</a>(*args,&nbsp;**kwargs)<br>
+&nbsp;<br>
+Opaque&nbsp;handle&nbsp;to&nbsp;an&nbsp;interactive&nbsp;component&nbsp;set&nbsp;(buttons,&nbsp;selects).<br>
+&nbsp;<br>
+The&nbsp;contract&nbsp;carries&nbsp;a&nbsp;HANDLE,&nbsp;never&nbsp;a&nbsp;platform&nbsp;type&nbsp;(ADR-0011,<br>
+botforge-services#221):&nbsp;an&nbsp;implementation&nbsp;receives&nbsp;it&nbsp;and&nbsp;renders&nbsp;it<br>
+the&nbsp;way&nbsp;its&nbsp;platform&nbsp;knows&nbsp;—&nbsp;the&nbsp;Discord&nbsp;seam&nbsp;passes&nbsp;a<br>
+``discord.ui.View``&nbsp;through,&nbsp;a&nbsp;future&nbsp;platform&nbsp;maps&nbsp;the&nbsp;same<br>
+interactions&nbsp;to&nbsp;its&nbsp;own&nbsp;widgets.&nbsp;There&nbsp;is&nbsp;intentionally&nbsp;nothing&nbsp;to<br>
+read&nbsp;on&nbsp;this&nbsp;surface:&nbsp;interactivity&nbsp;is&nbsp;behavior,&nbsp;and&nbsp;behavior&nbsp;is&nbsp;the<br>
+implementation's&nbsp;business,&nbsp;not&nbsp;the&nbsp;contract's.<br>&nbsp;</span></td></tr>
+<tr><td>&nbsp;</td>
+<td class="singlecolumn"><dl><dt>Method resolution order:</dt>
+<dd><a href="botforge.core.interfaces.platform.html#IView">IView</a></dd>
+<dd><a href="typing.html#Protocol">typing.Protocol</a></dd>
+<dd><a href="typing.html#Generic">typing.Generic</a></dd>
+<dd><a href="builtins.html#object">builtins.object</a></dd>
+</dl>
+<hr>
+Methods defined here:<br>
+<dl><dt><a name="IView-__init__"><strong>__init__</strong></a> = _no_init_or_replace_init(self, *args, **kwargs)<span class="grey"><span class="heading-text"> from <a href="typing.html">typing</a></span></span></dt></dl>
+
+<hr>
+Class methods defined here:<br>
+<dl><dt><a name="IView-__subclasshook__"><strong>__subclasshook__</strong></a> = _proto_hook(other)<span class="grey"><span class="heading-text"> from typing</span></span></dt></dl>
+
+<hr>
+Data descriptors defined here:<br>
+<dl><dt><strong>__dict__</strong></dt>
+<dd><span class="code">dictionary&nbsp;for&nbsp;instance&nbsp;variables</span></dd>
+</dl>
+<dl><dt><strong>__weakref__</strong></dt>
+<dd><span class="code">list&nbsp;of&nbsp;weak&nbsp;references&nbsp;to&nbsp;the&nbsp;object</span></dd>
+</dl>
+<hr>
+Data and other attributes defined here:<br>
+<dl><dt><strong>__abstractmethods__</strong> = frozenset()</dl>
+
+<dl><dt><strong>__annotations__</strong> = {}</dl>
+
+<dl><dt><strong>__non_callable_proto_members__</strong> = set()</dl>
+
+<dl><dt><strong>__parameters__</strong> = ()</dl>
+
+<dl><dt><strong>__protocol_attrs__</strong> = set()</dl>
+
+<hr>
+Class methods inherited from <a href="typing.html#Protocol">typing.Protocol</a>:<br>
+<dl><dt><a name="IView-__init_subclass__"><strong>__init_subclass__</strong></a>(*args, **kwargs)</dt><dd><span class="code">Function&nbsp;to&nbsp;initialize&nbsp;subclasses.</span></dd></dl>
+
+<hr>
+Class methods inherited from <a href="typing.html#Generic">typing.Generic</a>:<br>
+<dl><dt><a name="IView-__class_getitem__"><strong>__class_getitem__</strong></a>(...)</dt><dd><span class="code">Parameterizes&nbsp;a&nbsp;generic&nbsp;class.<br>
 &nbsp;<br>
 At&nbsp;least,&nbsp;parameterizing&nbsp;a&nbsp;generic&nbsp;class&nbsp;is&nbsp;the&nbsp;*main*&nbsp;thing&nbsp;this<br>
 method&nbsp;does.&nbsp;For&nbsp;example,&nbsp;for&nbsp;some&nbsp;generic&nbsp;class&nbsp;`Foo`,&nbsp;this&nbsp;is&nbsp;called<br>

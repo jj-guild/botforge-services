@@ -34,6 +34,10 @@ class RegistrationDatabase(Protocol):
         """List the game-profile bindings of a user (all games)."""
         ...
 
+    async def find_bindings_by_guild(self, guild_id: str) -> list[dict[str, Any]]:
+        """List the bindings performed in one guild (the salon gate's heal)."""
+        ...
+
     async def find_binding_by_profile(self, game_key: str, profile_id: str) -> dict[str, Any] | None:
         """Return the binding owning a profile; None when unbound."""
         ...
@@ -97,7 +101,18 @@ class RegistrationService:
         self._events = events
         self._audit = audit
 
-    async def bind_profile(self, user_id: str, game_key: str, profile_id: str) -> dict[str, Any]:
+    def attach_events(self, events: RegistrationEvents) -> None:
+        """Attach (or replace) the notification seam after construction.
+
+        The live wiring attaches the Discord sink once the bot exists —
+        the core constructor stays bot-free (tests build the service
+        bare, the factory attaches the transport).
+        """
+        self._events = events
+
+    async def bind_profile(
+        self, user_id: str, game_key: str, profile_id: str, guild_id: str = ""
+    ) -> dict[str, Any]:
         """Validate then bind a game profile to a user (permanent, once per profile).
 
         Validation is delegated to the game seam; a profile already bound
@@ -123,9 +138,26 @@ class RegistrationService:
             "profile_id": canonical_id,
             "profile": validated,
             "bound_at": _now_ms(),
+            # the guild context of the bind (salon-parcours-v2, Drasah
+            # 18/11): the salon gate's boot heal reads it (an event is
+            # a moment, the binding is the durable truth). Empty for
+            # guild-less binds (CLI, imports).
+            "guild_id": guild_id,
         }
         await self._db.upsert_entry(PROFILE_BINDINGS_COLLECTION, binding)
         await self._audit_record("profile.bind", {"user_id": user_id, "game_key": game_key, "profile_id": canonical_id})
+        # the bound event rides the notification seam (salon-gating
+        # listeners grant access roles; the payload carries the guild
+        # context when the bind came from an interaction)
+        await self._emit(
+            "profile.bound",
+            {
+                "user_id": user_id,
+                "game_key": game_key,
+                "profile_id": canonical_id,
+                "guild_id": guild_id,
+            },
+        )
         return binding
 
     async def find_bindings_by_profiles(
@@ -139,6 +171,17 @@ class RegistrationService:
         if not profile_ids:
             return []
         return await self._db.find_bindings_by_profiles(game_key, profile_ids)
+
+    async def list_guild_registrant_ids(self, guild_id: str) -> list[str]:
+        """Return the unique user ids with a binding performed in this guild.
+
+        salon-parcours-v2 (Drasah 18/11): the gate's self-heal reads the
+        DECLARED truth (the bindings' guild_id), never the live Discord
+        role state — an account bound before a restart (or while the
+        access role didn't exist yet) is re-granted at the next boot.
+        """
+        bindings = await self._db.find_bindings_by_guild(guild_id)
+        return list({str(b["user_id"]) for b in bindings if b.get("user_id")})
 
     async def get_binding(self, user_id: str, game_key: str) -> dict[str, Any] | None:
         """Return the user's first binding for a game; None when unbound.
@@ -156,7 +199,9 @@ class RegistrationService:
         """List all of a user's game-profile bindings."""
         return await self._db.find_user_bindings(user_id)
 
-    async def unlink_profile(self, user_id: str, game_key: str, profile_id: str) -> bool:
+    async def unlink_profile(
+        self, user_id: str, game_key: str, profile_id: str, guild_id: str = ""
+    ) -> bool:
         """Remove one profile binding; True when one existed.
 
         Multi-profile by design: a user may hold several bindings per
@@ -166,6 +211,16 @@ class RegistrationService:
         if removed:
             await self._audit_record(
                 "profile.unbind", {"user_id": user_id, "game_key": game_key, "profile_id": profile_id}
+            )
+            await self._emit(
+                "profile.unbound",
+                {
+                    "user_id": user_id,
+                    "game_key": game_key,
+                    "profile_id": profile_id,
+                    "guild_id": guild_id,
+                    "remaining": bool(await self._db.find_user_bindings(user_id)),
+                },
             )
         return removed
 

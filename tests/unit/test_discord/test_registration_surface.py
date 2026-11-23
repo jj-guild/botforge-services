@@ -74,6 +74,25 @@ async def test_mongo_registration_database_bindings() -> None:
     assert len(game_bindings) == 1
 
 
+async def test_mongo_registration_database_guild_bindings() -> None:
+    """The salon gate's boot heal filters the bindings by guild context."""
+    from botforge.discord.registration_platform import MongoRegistrationDatabase
+
+    db = FakeDatabase()
+    adapter = MongoRegistrationDatabase(db)
+    await adapter.upsert_entry(
+        "profile_bindings",
+        {"_id": "binding:aoe2:10:A1", "user_id": "10", "game_key": "aoe2", "profile_id": "A1", "guild_id": "77"},
+    )
+    await adapter.upsert_entry(
+        "profile_bindings",
+        {"_id": "binding:aoe2:11:A2", "user_id": "11", "game_key": "aoe2", "profile_id": "A2", "guild_id": ""},
+    )
+    guild_bindings = await adapter.find_bindings_by_guild("77")
+    assert len(guild_bindings) == 1, "only the binding performed in guild 77 heals that guild"
+    assert await adapter.find_bindings_by_guild("88") == [], "another guild has nothing bound"
+
+
 
 
 

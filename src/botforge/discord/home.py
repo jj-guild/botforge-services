@@ -532,7 +532,10 @@ class ProfileAddAccountModal(discord.ui.Modal):
         await interaction.response.defer(ephemeral=True, thinking=True)
         try:
             await registration.bind_profile(
-                str(interaction.user.id), str(chosen), str(self.profile_id.value).strip()
+                str(interaction.user.id),
+                str(chosen),
+                str(self.profile_id.value).strip(),
+                guild_id=str(getattr(interaction.guild_id, "", "") or ""),
             )
         except Exception as exc:
             await _report_profile_error(interaction, "profile.add", chosen, exc)
@@ -571,18 +574,30 @@ class ProfileAddAccountModal(discord.ui.Modal):
 
 
 async def _profile_header(interaction: discord.Interaction, user_id: str) -> str:
-    """Build the profile header: the user's chosen name when known."""
+    """Render the profile header in the guild locale (name when known).
+
+    The header rides the ``profile.header_no_name`` /
+    ``profile.header_with_name`` catalog keys — it must read like the
+    rest of the profile panel, never a hardcoded English island.
+    """
+    fallback_none = "# 👤 Your profile\nNickname: *(unset)*"
     identity = getattr(interaction.client, "identity_service", None)
-    if identity is None:
-        return "# 👤 Your profile\nName: *(not set)*"
-    try:
-        user = await identity.get_user(f"discord:{user_id}")
-    except Exception:
-        logger.warning("HOME: identity lookup failed", exc_info=True)
-        return "# 👤 Your profile\nName: *(not set)*"
-    if user is None or not user.display_name:
-        return "# 👤 Your profile\nName: *(not set)*"
-    return f"# 👤 Your profile\nName: **{user.display_name}**"
+    display_name = ""
+    if identity is not None:
+        try:
+            user = await identity.get_user(f"discord:{user_id}")
+        except Exception:
+            logger.warning("HOME: identity lookup failed", exc_info=True)
+            user = None
+        if user is not None and user.display_name:
+            display_name = str(user.display_name)
+    if display_name:
+        rendered = await reply(interaction, "profile.header_with_name", name=display_name)
+        if rendered != "profile.header_with_name":
+            return rendered
+        return f"# 👤 Your profile\nNickname: **{display_name}**"
+    rendered = await reply(interaction, "profile.header_no_name")
+    return rendered if rendered != "profile.header_no_name" else fallback_none
 
 
 class ProfileRenameButton(
@@ -837,7 +852,12 @@ class ProfileRemoveAccountModal(discord.ui.Modal):
         for entry in chosen:
             game_key, _, profile_id = str(entry).partition("|")
             try:
-                if await registration.unlink_profile(str(interaction.user.id), game_key, profile_id):
+                if await registration.unlink_profile(
+                    str(interaction.user.id),
+                    game_key,
+                    profile_id,
+                    guild_id=str(getattr(interaction.guild_id, "", "") or ""),
+                ):
                     url = _game_account_url(game_key, str(profile_id))
                     removed.append(f"[{game_key} {profile_id}]({url})" if url else f"{game_key} (`{profile_id}`)")
                 else:
