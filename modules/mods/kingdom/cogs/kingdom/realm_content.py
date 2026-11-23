@@ -387,9 +387,36 @@ def surface_errors() -> dict[str, str]:
 
 async def _history_channel_messages(channel: Any) -> list[Any]:
     try:
-        return [message async for message in channel.history(limit=25)]
+        # alliances-evenementiel-v1 (Drasah 23/11) : la fenêtre de scan
+        # passe de 25 à 100 — l'incident du 17h57 a prouvé qu'un
+        # panneau descendait sous l'horizon du scan et redevenait
+        # « introuvable » (donc re-publié). 100 couvre un salon de
+        # jeu entier, et l'upsert privilégie d'abord l'id habitat.
+        return [message async for message in channel.history(limit=100)]
     except Exception:  # noqa: BLE001
         return []
+
+
+async def _marked_message_by_id(channel: Any, stored_id: str, marker: str) -> Any:
+    """The marked message by its stored id — one fetch instead of a scan.
+
+    alliances-evenementiel-v1 : l'id vit sur la coquille (habitat), la
+    lecture par ``fetch_message`` ne dépend NI d'une fenêtre de scan,
+    NI du volume du salon. Best-effort par conception : toute erreur
+    retombe sur le scan d'historique.
+    """
+    if not str(stored_id or "").isdigit():
+        return None
+    fetch = getattr(channel, "fetch_message", None)
+    if fetch is None:
+        return None
+    try:
+        message = await fetch(int(stored_id))
+    except Exception:  # noqa: BLE001 — the scan stays the fallback
+        return None
+    if message is not None and marker in _text_of(message):
+        return message
+    return None
 
 
 def _text_of(message: Any) -> str:
@@ -426,7 +453,8 @@ async def _upsert_marked(
     view: Any = None,
     pin: bool = False,
     files: list[Any] | None = None,
-) -> str:
+    stored_id: str = "",
+) -> str | None:
     """Edit the marked message in place, or send it once. Returns its id.
 
     alliances-panel-v2-fix (Drasah 23/11) : un panneau Composants V2
@@ -436,9 +464,23 @@ async def _upsert_marked(
     MessageFlags.IS_COMPONENTS_V2 » (l'incident live 15:38, salon 🏆
     vide à chaque passe). La recherche du marqueur lit l'arbre des
     composants (le marqueur vit dans la vue aussi).
+
+    alliances-evenementiel-v1 (Drasah 23/11) : JAMAIS DE RENVOI —
+    l'incident du 17h57/18:02 est né du repli « edit failed,
+    resending » : un edit refusé publiait un panneau NEUF à côté de
+    l'ancien. La règle de Drasah est absolue : le message existant
+    s'édite, il ne se remplace JAMAIS. Un edit échoué est CONSIGNÉ et
+    la fiche reste telle quelle (l'événement suivant la retentera) ;
+    seul un panneau réellement ABSENT (jamais trouvé, ni par l'id
+    habitat, ni par le scan) justifie une publication. Un NotFound
+    pendant l'edit (message supprimé sous le vent) relance le scan
+    une fois, puis publie seulement si le panneau a disparu.
     """
     marker = _marker(key)
     marked = [m for m in await _history_channel_messages(channel) if marker in _text_of(m)]
+    direct = await _marked_message_by_id(channel, stored_id, marker)
+    if direct is not None and all(getattr(direct, "id", None) != getattr(m, "id", None) for m in marked):
+        marked.insert(0, direct)
     for duplicate in marked[1:]:
         try:
             await duplicate.delete()
@@ -456,8 +498,27 @@ async def _upsert_marked(
         try:
             await existing.edit(**kwargs)
             return str(getattr(existing, "id", ""))
-        except Exception:  # noqa: BLE001 — a dead edit falls back to a fresh send
-            logger.warning("kingdom realm content: edit %s failed, resending", key)
+        except discord.NotFound:
+            # le message a disparu SOUS la passe — un seul re-scan,
+            # puis publication seulement s'il est réellement parti
+            marked = [
+                m for m in await _history_channel_messages(channel)
+                if marker in _text_of(m)
+            ]
+            if marked:
+                logger.warning(
+                    "kingdom realm content: edit %s hit NotFound but the sheet "
+                    "survives — keeping it, never resending",
+                    key,
+                )
+                return None
+        except Exception:  # noqa: BLE001 — a dead edit NEVER resends anymore
+            logger.warning(
+                "kingdom realm content: edit %s failed — the sheet stays as-is, "
+                "no resend (the next event will retry)",
+                key,
+            )
+            return None
     message = await channel.send(
         content=content, view=view, files=files or None, allowed_mentions=NO_MENTIONS
     )
@@ -865,10 +926,25 @@ async def _upsert_sheet(
     Tout autre échec reste best-effort, consigné dans la fenêtre État.
     """
     rname = str(getattr(realm, "name", "?"))
-    kwargs: dict[str, Any] = {"view": view, "files": files, "pin": pin}
+    kwargs: dict[str, Any] = {
+        "view": view,
+        "files": files,
+        "pin": pin,
+        # alliances-evenementiel-v1 : l'id habitat d'abord — le fetch
+        # direct ne dépend pas de la fenêtre de scan.
+        "stored_id": str(
+            dict(getattr(realm, "discord", None) or {}).get(f"{key}_message", "") or ""
+        ),
+    }
     mid: str | None = None
     try:
         mid = await _upsert_marked(channel, key, content, **kwargs)
+        if mid is None:
+            _record_surface_error(
+                f"{rname}·{key}",
+                RuntimeError("edit refusé — la fiche reste telle quelle (pas de renvoi)"),
+            )
+            return None
         _record_surface_error(f"{rname}·{key}", None)
         return mid
     except discord.Forbidden as exc:
@@ -918,6 +994,12 @@ async def _upsert_sheet(
             "kingdom realm content: %s heal retry failed (realm %s)", key, rname, exc_info=True
         )
         return None
+    if mid is None:
+        _record_surface_error(
+            f"{rname}·{key}",
+            RuntimeError("edit refusé après heal — la fiche reste telle quelle"),
+        )
+        return None
     _record_surface_error(f"{rname}·{key}", None)
     logger.info(
         "kingdom realm content: %s of %s self-healed after a Forbidden", key, rname
@@ -925,16 +1007,205 @@ async def _upsert_sheet(
     return mid
 
 
+async def _deploy_alliances_sheet(
+    guild: Any,
+    realm: Any,
+    kingdom: Any,
+    locale: Any,
+) -> str | None:
+    """Render + upsert ONLY the 🏆 Alliances panel (idempotent, one seam).
+
+    alliances-evenementiel-v1 (Drasah 23/11) : le bloc extrait de
+    ``deploy_realm_content`` pour que le RENDU ÉVÉNEMENTIEL et le
+    rendu de départ partagent EXACTEMENT le même code (moins de
+    développement, moins de bugs — la règle du template). Retourne
+    l'id du message (None quand la fiche n'a pas pu être posée).
+    """
+    stack = wiring()
+    strings = content_strings(locale)
+    rname = str(getattr(realm, "name", "?"))
+    channels = await _realm_channels(guild, realm)
+    alliances = channels.get("alliances")
+    if alliances is None:
+        return None
+    # mosaïque-blasons-v1 (Vague 2): the panel wears ONE composite
+    # mosaic of the hand's crests — every tile carries its origin
+    # badge, ONE attachment whatever the hand's size.
+    mosaic_file: Any = None
+    try:
+        from .civ_crests import civ_crest_mosaic_file
+
+        ledger = dict(getattr(kingdom, "civilization_acquisitions", None) or {})
+        catalog = list(getattr(getattr(stack, "config", None), "civilizations", ()) or ())
+        names = {
+            str(getattr(entry, "key", "")): str(getattr(entry, "display_name", ""))
+            for entry in catalog
+        }
+        hand = [str(civ) for civ in getattr(kingdom, "civilizations", []) or []]
+        mosaic_file = await civ_crest_mosaic_file(
+            [
+                (
+                    civ,
+                    (ledger.get(civ) or {}).get("origin") or "",
+                    names.get(civ, civ),
+                )
+                for civ in hand
+            ]
+        )
+    except Exception:  # noqa: BLE001 — the mosaic is cosmetic
+        logger.warning("kingdom realm content: alliances mosaic failed", exc_info=True)
+    try:
+        # alliances-panel-v2-fix : le texte ET le marqueur vivent dans
+        # la vue — le panneau part SANS content (le mélange était
+        # 400-rejeté, l'incident live 15:38).
+        _, view = await _alliances_view(
+            strings, stack, kingdom, guild, locale, mosaic=mosaic_file is not None
+        )
+        # missing-access-v1 (Drasah 23/11) : même seam que la fiche
+        # territoire — heal + UN retry sur un 403, la mosaïque suit.
+        return await _upsert_sheet(
+            guild,
+            realm,
+            alliances,
+            "alliances",
+            None,
+            view=view,
+            files=[mosaic_file] if mosaic_file is not None else None,
+        )
+    except Exception as exc:  # noqa: BLE001
+        _record_surface_error(f"{rname}·alliances", exc)
+        logger.warning("kingdom realm content: alliances deploy failed", exc_info=True)
+        return None
+
+
+def _alliance_signature(kingdom: Any, locale: Any) -> str:
+    """The panel's data signature — unchanged data, zero Discord API.
+
+    alliances-evenementiel-v1 (Drasah 23/11) : la garde d'identité de
+    la RÉFÉRENCE, rétablie en version données — le panneau ne se
+    re-rend QUE si sa matière change (main, origines, dates de la
+    main, nom du royaume, locale). Un événement qui ne change RIEN ne
+    coûte AUCUN appel Discord.
+    """
+    hand = sorted(str(civ) for civ in getattr(kingdom, "civilizations", None) or [])
+    ledger = dict(getattr(kingdom, "civilization_acquisitions", None) or {})
+    origins = sorted(
+        f"{key}:{(entry or {}).get('origin', '')}:{(entry or {}).get('at', '')}"
+        for key, entry in ledger.items()
+        if str(key) in hand
+    )
+    return "|".join(
+        [
+            str(getattr(kingdom, "name", "") or ""),
+            str(locale),
+            ",".join(hand),
+            ";".join(origins),
+        ]
+    )
+
+
+_ALLIANCE_REFRESH_LOCK: Any = None
+_ALLIANCE_HAND_SIG: dict[str, str] = {}
+
+
+def _alliance_refresh_lock() -> Any:
+    """The ONE in-flight lock (lazy — created on the bot's event loop)."""
+    global _ALLIANCE_REFRESH_LOCK
+    if _ALLIANCE_REFRESH_LOCK is None:
+        import asyncio
+
+        _ALLIANCE_REFRESH_LOCK = asyncio.Lock()
+    return _ALLIANCE_REFRESH_LOCK
+
+
+async def refresh_alliance_panels(
+    bot: Any,
+    kingdom_ids: Any = None,
+    locale: Any = "fr",
+) -> int:
+    """The EVENT seam — refresh the alliances panels whose hands changed.
+
+    alliances-evenementiel-v1 (Drasah 23/11) : la règle de Drasah est
+    ABSOLUE — le panneau 🏆 s'actualise UNIQUEMENT quand une main de
+    civilisations change réellement (cycle, expédition, mariage,
+    départ, création), et il ÉDITE le message existant, il ne publie
+    JAMAIS un neuf tant que l'ancien vit. Le scheduler de 5 min ne
+    le touche plus du tout. Trois fondations : la garde de signature
+    (zéro API quand la matière n'a pas changé), le verrou (jamais
+    deux rafraîchissements en même temps), et l'upsert sans renvoi
+    (un edit refusé laisse la fiche telle quelle). INTELLIGEMMENT
+    absent de cette liste : les événements d'HORLOGE (expiration des
+    protections de territoire) — ils relèvent de la fiche Territoire,
+    pas de la main. Retourne le nombre de panneaux re-rendus.
+    """
+    from .realms import _realm_service
+
+    stack = wiring()
+    service = _realm_service(stack)
+    if stack is None or service is None:
+        return 0
+    try:
+        realms = await service.realms()
+    except Exception:  # noqa: BLE001 — a read, never a crash
+        logger.warning("kingdom realm content: alliances event read failed", exc_info=True)
+        return 0
+    wanted = {str(k) for k in (kingdom_ids or [])} or None
+    touched = 0
+    async with _alliance_refresh_lock():
+        for guild in list(getattr(bot, "guilds", []) or []):
+            for realm in realms:
+                engagement = getattr(realm, "engagement", None)
+                if not engagement:
+                    continue
+                kid = str(engagement.get("kingdom_id", "") or "")
+                if wanted is not None and kid not in wanted:
+                    continue
+                kingdom = await kingdom_by_id(getattr(stack, "kingdoms", None), kid)
+                if kingdom is None:
+                    continue
+                sig = _alliance_signature(kingdom, locale)
+                if _ALLIANCE_HAND_SIG.get(str(getattr(realm, "id", ""))) == sig:
+                    continue  # la main n'a pas changé — zéro API
+                try:
+                    mid = await _deploy_alliances_sheet(guild, realm, kingdom, locale)
+                except Exception:  # noqa: BLE001 — one realm never blocks the rest
+                    logger.warning(
+                        "kingdom realm content: alliances event refresh failed (%s)",
+                        getattr(realm, "name", "?"),
+                        exc_info=True,
+                    )
+                    continue
+                if mid is None:
+                    continue
+                _ALLIANCE_HAND_SIG[str(getattr(realm, "id", ""))] = sig
+                touched += 1
+                try:
+                    await service.save_habitat(
+                        str(getattr(realm, "id", "")), {"alliances_message": str(mid)}
+                    )
+                except Exception:  # noqa: BLE001 — the habitat save is never a blocker
+                    logger.warning(
+                        "kingdom realm content: alliances event habitat save failed",
+                        exc_info=True,
+                    )
+    return touched
+
+
 async def deploy_realm_content(
     guild: Any,
     realm: Any,
     kingdom: Any,
     locale: Any = "fr",
+    *,
+    include_alliances: bool = True,
 ) -> dict[str, str]:
     """Deploy every realm-salon view of ONE engaged realm (idempotent).
 
     Returns the new habitat ids to persist on the shell. Best-effort
     per salon: a broken sheet never blocks the others.
+    alliances-evenementiel-v1 : ``include_alliances=False`` retire le
+    panneau 🏆 de la passe périodique (il vit désormais aux
+    événements, via ``refresh_alliance_panels``).
     """
     stack = wiring()
     strings = content_strings(locale)
@@ -954,7 +1225,6 @@ async def deploy_realm_content(
         )
     ids: dict[str, str] = {}
     started = await season_started(stack)
-    rname = str(getattr(realm, "name", "?"))
 
     territory = channels.get("territory")
     if territory is not None:
@@ -975,56 +1245,15 @@ async def deploy_realm_content(
             ids["territory_message"] = mid
 
     alliances = channels.get("alliances")
-    if alliances is not None:
-        # mosaïque-blasons-v1 (Vague 2): the panel wears ONE composite
-        # mosaic of the hand's crests — every tile carries its origin
-        # badge, ONE attachment whatever the hand's size.
-        mosaic_file: Any = None
-        try:
-            from .civ_crests import civ_crest_mosaic_file
-
-            ledger = dict(getattr(kingdom, "civilization_acquisitions", None) or {})
-            catalog = list(getattr(getattr(stack, "config", None), "civilizations", ()) or ())
-            names = {
-                str(getattr(entry, "key", "")): str(getattr(entry, "display_name", ""))
-                for entry in catalog
-            }
-            hand = [str(civ) for civ in getattr(kingdom, "civilizations", []) or []]
-            mosaic_file = await civ_crest_mosaic_file(
-                [
-                    (
-                        civ,
-                        (ledger.get(civ) or {}).get("origin") or "",
-                        names.get(civ, civ),
-                    )
-                    for civ in hand
-                ]
-            )
-        except Exception:  # noqa: BLE001 — the mosaic is cosmetic
-            logger.warning("kingdom realm content: alliances mosaic failed", exc_info=True)
-        try:
-            # alliances-panel-v2-fix : le texte ET le marqueur vivent dans
-            # la vue — le panneau part SANS content (le mélange était
-            # 400-rejeté, l'incident live 15:38).
-            _, view = await _alliances_view(
-                strings, stack, kingdom, guild, locale, mosaic=mosaic_file is not None
-            )
-            # missing-access-v1 (Drasah 23/11) : même seam que la fiche
-            # territoire — heal + UN retry sur un 403, la mosaïque suit.
-            mid = await _upsert_sheet(
-                guild,
-                realm,
-                alliances,
-                "alliances",
-                None,
-                view=view,
-                files=[mosaic_file] if mosaic_file is not None else None,
-            )
-            if mid is not None:
-                ids["alliances_message"] = mid
-        except Exception as exc:  # noqa: BLE001
-            _record_surface_error(f"{rname}·alliances", exc)
-            logger.warning("kingdom realm content: alliances deploy failed", exc_info=True)
+    if alliances is not None and include_alliances:
+        # alliances-evenementiel-v1 : le bloc vit dans le helper partagé
+        # avec le rendu événementiel (le MÊME code, jamais deux branches).
+        mid = await _deploy_alliances_sheet(guild, realm, kingdom, locale)
+        if mid is not None:
+            ids["alliances_message"] = mid
+        sig = _alliance_signature(kingdom, locale)
+        if mid is not None:
+            _ALLIANCE_HAND_SIG[str(getattr(realm, "id", ""))] = sig
 
     return ids
 
@@ -1042,11 +1271,12 @@ async def deploy_realm_welcome(
     if discussions is None:
         return {}
     try:
-        ids = {
-            "welcome_message": await _upsert_marked(
-                discussions, "welcome", _welcome_content(strings, realm, kingdom), pin=True
-            )
-        }
+        ids: dict[str, str] = {}
+        mid = await _upsert_marked(
+            discussions, "welcome", _welcome_content(strings, realm, kingdom), pin=True
+        )
+        if mid is not None:
+            ids["welcome_message"] = str(mid)
     except Exception:  # noqa: BLE001
         logger.warning("kingdom realm content: welcome deploy failed", exc_info=True)
         return {}
@@ -1131,12 +1361,13 @@ async def wipe_realm_content(guild: Any, realm: Any) -> None:
         logger.warning("kingdom realm content: eject wipe failed", exc_info=True)
 
 
-async def deploy_all_realms_content(bot: Any, locale: Any = "fr") -> int:
+async def deploy_all_realms_content(
+    bot: Any, locale: Any = "fr", *, include_alliances: bool = True
+) -> int:
     """The season-launch pass — feed every ENGAGED realm of every guild."""
     from .realms import _realm_service
-    from .common import wiring as _w
 
-    stack = _w()
+    stack = wiring()
     service = _realm_service(stack)
     if service is None:
         return 0
@@ -1155,9 +1386,21 @@ async def deploy_all_realms_content(bot: Any, locale: Any = "fr") -> int:
             )
             if kingdom is None:
                 continue
-            ids = await deploy_realm_content(guild, realm, kingdom, locale)
+            ids = await deploy_realm_content(
+                guild, realm, kingdom, locale, include_alliances=include_alliances
+            )
             if ids:
-                await service.save_habitat(str(realm.id), dict(ids))
+                # jamais bloquant (le sweep persiste aussi en best-effort) :
+                # une coquille momentanément non persistable ne doit pas
+                # casser la passe des AUTRES royaumes.
+                try:
+                    await service.save_habitat(str(realm.id), dict(ids))
+                except Exception:  # noqa: BLE001
+                    logger.warning(
+                        "kingdom realm content: feed habitat save failed (%s)",
+                        getattr(realm, "name", "?"),
+                        exc_info=True,
+                    )
             touched += 1
     return touched
 
@@ -1341,14 +1584,19 @@ async def deploy_gaia_content(guild: Any, locale: Any = "fr") -> bool:
         return False
 
 
-async def feed_season_surfaces(bot: Any, locale: Any = "fr") -> int:
+async def feed_season_surfaces(
+    bot: Any, locale: Any = "fr", *, include_alliances: bool = True
+) -> int:
     """The season-launch feeding — draw, every realm sheet, then Gaïa.
 
-    ONE seam for the three call sites (classic departure, beta departure,
+    ONE seam for the call sites (classic departure, beta departure,
     the beta loop's 5-minute pass): the reveal draw runs FIRST, then
     the realm sheets read the LIVE documents, then Gaïa's own sheet.
-    The loop's pass self-heals a failed launch (a skipped draw is
-    retried five minutes later — nothing stays silent).
+    alliances-evenementiel-v1 (Drasah 23/11) : la passe de 5 min
+    appelle avec ``include_alliances=False`` — le panneau 🏆 ne vit
+    PLUS dans le périodique, il vit aux événements
+    (``refresh_alliance_panels``) ; les départs le posent au départ,
+    comme avant.
     """
     # état-surfaces-v1 (Drasah 23/11) : la passe se CONSIGNE — la
     # fenêtre État de l'atelier rapporte le dernier passage vivant
@@ -1362,7 +1610,7 @@ async def feed_season_surfaces(bot: Any, locale: Any = "fr") -> int:
     # alliances-last-mile-v1 : la main de civilisations précède le rendu —
     # le panneau Alliances ne se nourrit QUE de la donnée moteur.
     await draw_starting_civilizations_safe(bot)
-    touched = await deploy_all_realms_content(bot, locale)
+    touched = await deploy_all_realms_content(bot, locale, include_alliances=include_alliances)
     for guild in list(getattr(bot, "guilds", []) or []):
         try:
             await deploy_gaia_content(guild, locale)

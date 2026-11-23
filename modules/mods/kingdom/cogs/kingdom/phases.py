@@ -643,6 +643,24 @@ async def run_economy_due_safe(bot: Any) -> None:
                 await channel.send(note)
         except Exception:
             logger.warning("kingdom: one expedition announcement failed", exc_info=True)
+    # alliances-evenementiel-v1 (Drasah 23/11) : une expédition qui
+    # RAPPORTE UNE CIVILISATION change la main du royaume — LE
+    # déclencheur du panneau 🏆. Seuls les retours « civ » comptent
+    # (une carte ou des points ne touchent pas la main), et la garde
+    # de signature filtre le reste.
+    civ_kingdoms = [
+        str(getattr(kingdom, "id", "")) for kingdom, kind, _v, _s in returns if kind == "civ"
+    ]
+    if civ_kingdoms:
+        try:
+            from .realm_content import refresh_alliance_panels
+
+            await refresh_alliance_panels(bot, civ_kingdoms)
+        except Exception:
+            logger.warning(
+                "kingdom: alliances event refresh (expedition) failed — best-effort",
+                exc_info=True,
+            )
 
 
 async def run_event_slots_safe(bot: Any) -> None:
@@ -701,6 +719,21 @@ async def run_event_slots_safe(bot: Any) -> None:
                     await channel.send(_event_report_text(strings, report))
             except Exception:
                 logger.warning("kingdom: one event report announcement failed", exc_info=True)
+    # alliances-evenementiel-v1 (Drasah 23/11) : un changement de
+    # CYCLE vient de recalculer toutes les mains du moteur — LE
+    # déclencheur naturel du panneau 🏆 (la main affichée a bougé).
+    # La garde de signature fait le tri : un royaume dont la main
+    # n'a pas bougé ne coûte AUCUN appel Discord.
+    if any(str(report.get("kind", "")) == "cycle" for report in reports):
+        try:
+            from .realm_content import refresh_alliance_panels
+
+            await refresh_alliance_panels(bot)
+        except Exception:
+            logger.warning(
+                "kingdom: alliances event refresh (cycle) failed — best-effort",
+                exc_info=True,
+            )
 
 
 async def run_mercenary_tick_safe(bot: Any) -> None:
@@ -1016,7 +1049,11 @@ def start_attack_refresher(bot: Any) -> None:
         try:
             from .realm_content import feed_season_surfaces
 
-            await feed_season_surfaces(bot)
+            # alliances-evenementiel-v1 (Drasah 23/11) : le panneau
+            # 🏆 ne vit PLUS dans la passe périodique — il s'actualise
+            # UNIQUEMENT quand une main change (cycle, expédition,
+            # mariage, départ), via le seam refresh_alliance_panels.
+            await feed_season_surfaces(bot, include_alliances=False)
         except Exception:
             logger.warning("kingdom: surface feeding pass failed — best-effort", exc_info=True)
         # gate-bêta-v1 (Check 141, Drasah 23/11) : la ceinture de

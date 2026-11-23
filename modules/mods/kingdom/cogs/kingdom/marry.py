@@ -225,6 +225,16 @@ def _confirm_view(
             await target.edit_original_response(content=sealed, view=None)
         except Exception:
             await target.followup.send(sealed, ephemeral=True)
+        # alliances-evenementiel-v1 (Drasah 23/11) : le mariage ajoute
+        # la civilisation à la main IMMÉDIATEMENT (diplomacy.marry) —
+        # LE déclencheur du panneau 🏆, rafraîchi sur l'événement (le
+        # moteur a déjà écrit la main : le rendu lit le document vivant).
+        try:
+            from .realm_content import refresh_alliance_panels
+
+            await refresh_alliance_panels(target.client, [str(getattr(kingdom, "id", ""))])
+        except Exception:  # noqa: BLE001 — the panel never blocks the wedding
+            logger.warning("kingdom: alliances event refresh (marriage) failed", exc_info=True)
 
     async def on_edit(target: discord.Interaction) -> None:
         fresh = await _wizard_view(stack, lord, kingdom, strings)

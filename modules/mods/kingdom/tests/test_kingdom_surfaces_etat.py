@@ -219,7 +219,7 @@ async def test_the_pass_draws_missing_hands_before_the_render(
 
     monkeypatch.setattr(content, "wiring", lambda: _Stack())
 
-    async def _deploy(bot: Any, locale: Any = "fr") -> int:
+    async def _deploy(bot: Any, locale: Any = "fr", **kwargs: Any) -> int:
         calls.append("deploy")
         return 0
 
@@ -254,7 +254,7 @@ async def test_a_failing_hand_catch_up_never_blocks_the_feed(
 
     monkeypatch.setattr(content, "wiring", lambda: _Stack())
 
-    async def _deploy(bot: Any, locale: Any = "fr") -> int:
+    async def _deploy(bot: Any, locale: Any = "fr", **kwargs: Any) -> int:
         return 3
 
     async def _gaia(guild: Any, locale: Any = "fr") -> None:
