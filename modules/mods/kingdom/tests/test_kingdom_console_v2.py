@@ -98,16 +98,16 @@ def test_the_cockpit_is_zoned_and_contextual() -> None:
             f"the cockpit must carry the {zone} zone"
         )
     # off-season cockpit: the cycle row offers the PREPARE gesture and
-    # the fixed rows open the three working drawers — the sas has
-    # nothing to sort before a season exists (off, no admissions nav)
+    # the sas door — sas-v2 (Drasah 23/11) : le sas vit SANS saison,
+    # la salle d'attente se voit (et se trie) AVANT la première saison
     assert "kingdom:settings:launch" in ids
+    assert "kingdom:console-nav:admissions" in ids, (
+        "sas-v2: the waitlist door shows even without a season (Drasah must read it)"
+    )
     for drawer in ("regie", "atelier"):
         assert f"kingdom:console-nav:{drawer}" in ids, f"the {drawer} drawer must be a click away"
     assert "kingdom:console-nav:beta" not in ids, (
         "drarwer-bêta retiré (Drasah 22/11) : l'état vit sur le badge du cockpit"
-    )
-    assert "kingdom:console-nav:admissions" not in ids, (
-        "off-season, the admissions sas has nothing to sort yet"
     )
     assert "kingdom:settings:start-season" not in ids, (
         "off-season, the DÉMARRAGE gesture must NOT be offered (the sas ruling)"

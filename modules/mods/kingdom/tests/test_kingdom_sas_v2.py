@@ -484,3 +484,49 @@ def _async_ns(value: object):  # type: ignore[no-untyped-def]
     fut = asyncio.get_event_loop().create_future()
     fut.set_result(value)
     return fut
+
+
+# ---------------------------------------------------------------------------
+# (6) sas accessible EN PHASE OFF — le correctif « où est le sas ? »
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_the_off_phase_cockpit_still_opens_the_admissions(monkeypatch) -> None:
+    """Phase off : Admissions (+badge) vit à côté de « Lancer la saison ».
+
+    sas-v2 (retour Drasah 23/11) : le sas vit SANS saison, donc la
+    salle d'attente doit se VOIR même sans saison — sinon un Roi dépose
+    sa demande et l'admin n'a AUCUNE surface pour la lire.
+    """
+    from botforge.mods.kingdom.cogs import apply_flow, panel
+    from botforge.mods.kingdom.cogs import settings_panel as sp
+
+    async def _locale(guild_id):  # type: ignore[no-untyped-def]
+        return "fr"
+
+    async def _state(strings, bot=None, guild_id=""):  # type: ignore[no-untyped-def]
+        return ["aucune saison"], "off"
+
+    async def _pending():  # type: ignore[no-untyped-def]
+        return [NS(), NS()]  # two waiting realms
+
+    monkeypatch.setattr(apply_flow, "_guild_locale", _locale)
+    monkeypatch.setattr(sp, "_season_state", _state)
+    monkeypatch.setattr(sp, "_pending_admissions", _pending)
+    monkeypatch.setattr(panel, "current_bot", lambda: NS())
+
+    view = await sp.build_settings_panel("7")
+    ids = _ids(view)
+    buttons = {
+        str(item.custom_id): item
+        for item in view.walk_children()  # type: ignore[attr-defined]
+        if getattr(item, "custom_id", None)
+    }
+    assert "kingdom:console-nav:admissions" in ids, (
+        "off phase: the sas door MUST show (Drasah cannot read the waitlist otherwise)"
+    )
+    assert "kingdom:settings:launch" in ids, "the launch button stays"
+    assert "(2)" in str(buttons["kingdom:console-nav:admissions"].label), (
+        "the badge carries the waitlist count"
+    )

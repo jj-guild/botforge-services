@@ -252,6 +252,18 @@ async def build_settings_panel(guild_id: str) -> discord.ui.LayoutView:
         # the season opens an admissions sas instead). The FORMAT is
         # no longer asked here (depart-fourche-v1): the departure
         # buttons own it — « Lancer » just prepares.
+        #
+        # sas-v2 (Drasah 23/11) : « où est-ce que je vois le sas ? » —
+        # le sas vit SANS saison, donc la salle d'attente se VOIT et
+        # se gère AUSSI en phase off : l'admin retrouve Admissions (et
+        # son badge de demandes) à côté du geste « Lancer la saison ».
+        # Un Roi ayant déposé sa demande n'attend jamais dans le vide.
+        pending = await _pending_admissions()
+        cycle_row.add_item(
+            KingdomSettingsNavButton(
+                "admissions", str(strings["settings_nav_admissions_button"]), len(pending)
+            ).item
+        )
         cycle_row.add_item(
             SettingsActionButton(
                 "launch", str(strings["settings_launch_button"]), discord.ButtonStyle.success
