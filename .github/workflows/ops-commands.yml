@@ -7,7 +7,7 @@
 # Gating (fail-closed, before any dispatch): the roster authority
 # matrix (CONTRIBUTORS.md, botforge repo) decides per command through
 # the reusable authorize.yml gate —
-#   /logs      capability env-logs    (ops anywhere; dev on test)
+#   /logs      capability env-logs    (ops anywhere; any rostered contributor (vibe+) on shared test, read-only)
 #   /restart   capability env-control (ops anywhere; dev on test)
 #   /rollback  capability rollback     (ops only)
 #   /dump-db   capability db-dump     (ops only)
@@ -268,15 +268,17 @@ jobs:
               gh workflow run env-logs.yml "${ARGS[@]}"
               ;;
             console)
-              # /console <env> <action> <guild|all> [--confirm NUKE]
+              # /console <env> <action> <guild|all> [--confirm NUKE] [--games ..] [--mods ..]
               # env-console.yml runs botforge.cli.console_ops in the env's
               # botforge-bot container. nuke requires the explicit --confirm
               # NUKE token (the Actions-side triple-click).
               CONSOLE_ACTION="$(echo "$COMMENT_BODY" | awk '{print $3}')"
               CONSOLE_GUILD="$(echo "$COMMENT_BODY" | awk '{print $4}')"
               [[ -n "$CONSOLE_ACTION" && -n "$CONSOLE_GUILD" ]] \
-                || { echo "::error::usage: /console <env> <clean-managed|nuke|reset-data|install> <guild_id|all> [--confirm NUKE]" >&2; exit 1; }
-              ARGS=(--repo jj-guild/botforge-infra --ref "deploy/$ENVIRONMENT" -f environment="$ENVIRONMENT" -f action="$CONSOLE_ACTION" -f guild="$CONSOLE_GUILD")
+                || { echo "::error::usage: /console <env> <clean-managed|nuke|reset-data|install|ensure-tree> <guild_id|all> [--confirm NUKE] [--games g1,g2] [--mods m1,m2]" >&2; exit 1; }
+              CONSOLE_GAMES="$(echo "$COMMENT_BODY" | grep -oE -- '--games [A-Za-z0-9_,-]+' | awk '{print $2}')"
+              CONSOLE_MODS="$(echo "$COMMENT_BODY" | grep -oE -- '--mods [A-Za-z0-9_,-]+' | awk '{print $2}')"
+              ARGS=(--repo jj-guild/botforge-infra --ref "deploy/$ENVIRONMENT" -f environment="$ENVIRONMENT" -f action="$CONSOLE_ACTION" -f guild="$CONSOLE_GUILD" -f mods="$CONSOLE_MODS" -f games="$CONSOLE_GAMES")
               if echo "$COMMENT_BODY" | grep -q -- '--confirm NUKE'; then
                 ARGS+=(-f confirm=NUKE)
               fi
@@ -487,7 +489,18 @@ jobs:
           [[ -n "$run_id" ]] || { echo "conclusion=not_found" >> "$GITHUB_OUTPUT"; exit 0; }
           rid="$(echo "$run_id" | python3 -c 'import json,sys; print(json.load(sys.stdin)["databaseId"])')"
           gh run watch "$rid" --repo jj-guild/botforge-infra --exit-status > /dev/null 2>&1 || true
-          conclusion="$(gh run view "$rid" --repo jj-guild/botforge-infra --json conclusion --jq .conclusion)"
+          # The conclusion is reread until GitHub reports it — a single
+          # view right after the watch can race the run record (the run
+          # still shows conclusion null: API propagation lag, or the
+          # watch exited early on an in-progress run). An empty read
+          # used to skip the payload step and post an empty ❌ result
+          # while the dump had succeeded (428, run 45247392911).
+          conclusion=""
+          for _ in $(seq 1 12); do
+            conclusion="$(gh run view "$rid" --repo jj-guild/botforge-infra --json conclusion --jq '.conclusion // ""' 2>/dev/null || true)"
+            [[ -n "$conclusion" ]] && break
+            sleep 5
+          done
           {
             echo "run_url=https://github.com/jj-guild/botforge-infra/actions/runs/$rid"
             echo "run_id=$rid"
