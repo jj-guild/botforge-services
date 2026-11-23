@@ -1006,6 +1006,19 @@ def start_attack_refresher(bot: Any) -> None:
             await run_beta_loop_safe(bot)
         except Exception:
             logger.warning("kingdom: beta loop pass failed — best-effort", exc_info=True)
+        # territory-reveal-v1-fix (Drasah 23/11) : l'alimentation vit DANS
+        # la passe de 5 min, PAS dans la seule relance de fin de bêta (le
+        # retour None d'une saison non finie court-circuitait le
+        # nourrissage — les salons restaient vides à jamais). Le tirage
+        # et les fiches sont idempotents : une saison saine ne coûte
+        # QUE l'edit en place des fiches déjà justes (la règle de la
+        # référence : aucune vue ne périme, le scheduler re-rend).
+        try:
+            from .realm_content import feed_season_surfaces
+
+            await feed_season_surfaces(bot)
+        except Exception:
+            logger.warning("kingdom: surface feeding pass failed — best-effort", exc_info=True)
         # gate-bêta-v1 (Check 141, Drasah 23/11) : la ceinture de
         # sécurité des salons d'admission — la gate ne vivait qu'aux
         # départs/boot, un levier basculé (ou un raté ponctuel) laissait
