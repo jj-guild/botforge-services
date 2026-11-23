@@ -432,6 +432,63 @@ async def test_the_alliances_panel_carries_her_four_buttons(
         )
 
 
+@pytest.mark.asyncio
+async def test_the_alliances_panel_is_v2_legal_no_naked_button_at_the_root(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """alliances-panel-v2-fix (live incident 23/11 10:12): a Components
+    V2 message only accepts types (1, 9, 10, 12, 13, 14, 17) at the
+    ROOT of ``components`` — a bare Button (type 2) there is rejected
+    with 400 Invalid Form Body and the 🏆 salon stayed empty forever
+    (the only sheet of the cycle carrying buttons). The panel's four
+    buttons must ride inside an ActionRow, the reference's rule."""
+    import botforge.mods.kingdom.cogs.realm_content as content
+
+    realm = _Realm(
+        {"discussions": "101", "territory": "102", "alliances": "103"}
+    )
+    alli = _Channel("🏆 Alliances")
+    guild = _guild({"101": _Channel("🔒 Discussions"),
+                    "102": _Channel("🌍 Territoire"),
+                    "103": alli})
+
+    class _Stack:
+        class config:  # noqa: N801
+            maps = ()  # type: ignore[var-annotated]
+            civilizations = ()  # type: ignore[var-annotated]
+
+        class kingdoms:  # noqa: N801
+            @staticmethod
+            async def current_season() -> Any:
+                return type("S", (), {"phase": "started", "name": "Bêta 1"})()
+
+            @staticmethod
+            async def lords() -> list[Any]:
+                return []
+
+            @staticmethod
+            async def kingdoms() -> list[Any]:
+                return []
+
+    monkeypatch.setattr(content, "wiring", lambda: _Stack())
+    await content.deploy_realm_content(guild, realm, _Kingdom(), "fr")
+    panel = alli.history_msgs[0]
+    view = panel.view
+    allowed = {1, 9, 10, 12, 13, 14, 17}
+    top = [c.get("type") for c in view.to_components()]  # type: ignore[union-attr]
+    assert all(t in allowed for t in top), (
+        f"a naked component at the root would be 400-rejected: {top}"
+    )
+    row = next(
+        channel for channel in view.to_components()  # type: ignore[union-attr]
+        if channel.get("type") == 1
+    )
+    kids = row.get("components", [])
+    assert len(kids) == 4 and all(k.get("type") == 2 for k in kids), (
+        "the four buttons stay clickable inside their ActionRow"
+    )
+
+
 # ---------------------------------------------------------------------------
 # L'épinglé 🎯 — le résumé suit les objectifs du moteur
 # ---------------------------------------------------------------------------

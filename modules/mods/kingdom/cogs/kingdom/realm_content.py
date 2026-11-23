@@ -574,12 +574,23 @@ async def _alliances_view(
     mosaic: bool = False,
 ) -> Any:
     body = await _alliances_body(strings, stack, kingdom, guild)
-    items: list[Any] = [
+    # alliances-panel-v2-fix (Drasah 23/11, incident live 10:12) : un
+    # message Composants V2 n'accepte en RACINE que les types (1, 9, 10,
+    # 12, 13, 14, 17) — un bouton NU (type 2) y est REJETÉ avec « 400
+    # Invalid Form Body: Value of field "type" must be one of (…) » et
+    # le salon 🏆 restait vide pour toujours (seule fiche du cycle à
+    # porter des boutons). La règle de la référence
+    # (_panel_view_with_buttons) : les composants interactifs voyagent
+    # DANS une ActionRow — cœur du panel comme mosaïque, jamais un
+    # bouton nu en racine. Simulé avant le code : rangée (1) + mosaïque
+    # (12) + pied (10) = tous légaux, les 4 boutons cliquables.
+    buttons = [
         RealmAlliancesNextButton(strings["alliances_btn_next"]).item,
         RealmAlliancesLockedButton(strings["alliances_btn_locked"]).item,
         RealmAlliancesDurationsButton(strings["alliances_btn_durations"]).item,
         RealmAlliancesHistoryButton(strings["alliances_btn_history"]).item,
     ]
+    items: list[Any] = [discord.ui.ActionRow(*buttons)]
     if mosaic:
         # mosaic-render-fix (porté T3b): a Components V2 attachment only
         # renders when a gallery REFERENCES it — the mosaic rides above
