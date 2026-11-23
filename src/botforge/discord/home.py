@@ -778,8 +778,22 @@ async def _entity_post_url(
 
 async def _thread_named(channel: Any, forms: list[str]) -> str:
     """Find the forum thread whose title matches one of the forms."""
+    # the client's channel.threads cache only carries the threads it
+    # happened to load (owner 2026-11-23: Magyars linked, Italiens did
+    # not - the cache had one and not the other); the guild's ACTIVE
+    # thread list is the complete scan
+    threads: list[Any] = list(getattr(channel, "threads", []) or [])
+    try:
+        parent_id = getattr(channel, "id", None)
+        active = await channel.guild.fetch_active_threads()
+        for thread in getattr(active, "threads", []) or []:
+            if getattr(thread, "parent_id", None) == parent_id and all(
+                str(getattr(t, "id", "")) != str(getattr(thread, "id", "")) for t in threads
+            ):
+                threads.append(thread)
+    except Exception:
+        logger.debug("the active thread walk failed", exc_info=True)
     for private in (False, True):
-        threads: list[Any] = list(getattr(channel, "threads", []) or [])
         try:
             async for thread in channel.archived_threads(limit=100, private=private):
                 threads.append(thread)
@@ -900,6 +914,28 @@ SETTING_LABEL_KEYS = {
     "Vitesse": "profile.matches_setting_speed",
     "Victoire": "profile.matches_setting_victory",
     "Cheats": "profile.matches_setting_cheats",
+    "Ressources": "profile.matches_setting_resources",
+    "Vision": "profile.matches_setting_reveal",
+    "Âge départ": "profile.matches_setting_start_age",
+    "Âge final": "profile.matches_setting_end_age",
+    "Difficulté": "profile.matches_setting_difficulty",
+    "Traité": "profile.matches_setting_treaty",
+}
+
+#: the BOOLEAN settings (the post-RoR option keys, the LibreMatch
+#: collector's map): option key \u2192 (locale label key, INVERTED).
+#: Every one renders as an emoji checkbox line (owner 2026-11-23);
+#: the inverted keys carry the game's own inverted flag semantics.
+SETTING_BOOLEANS = {
+    "1": ("profile.matches_setting_cheats", False),
+    "65": ("profile.matches_setting_lock_speed", False),
+    "66": ("profile.matches_setting_lock_teams", True),
+    "62": ("profile.matches_setting_full_tech", False),
+    "75": ("profile.matches_setting_record", False),
+    "76": ("profile.matches_setting_shared_expl", True),
+    "77": ("profile.matches_setting_team_positions", False),
+    "78": ("profile.matches_setting_team_together", False),
+    "79": ("profile.matches_setting_turbo", True),
 }
 
 
@@ -939,26 +975,143 @@ def _ordered_teams(card: dict[str, Any], me_ids: set[str]) -> list[tuple[int, li
 
 
 def _card_footer_text(card: dict[str, Any], labels: dict[str, Any]) -> str:
-    """Render the footer: the source line, then the CUSTOM-ONLY settings.
+    """Render the footer: the source line only.
 
-    A ranked footer stays bare (owner 2026-11-22: the ranked settings
-    are all identical); a custom match carries its settings compact,
-    their labels translated by the panel's locale.
+    The settings LINE is gone (owner 2026-11-23: the footer carries
+    the source, the settings live behind the settings button - every
+    match carries its own button, ranked or custom).
     """
     first_seat = str(((card.get("players") or [{}])[0] or {}).get("profile_id") or "")
     source_url = LIBREMATCH_SOURCE_URL.format(profile_id=first_seat) if first_seat else ""
-    compact = ""
-    if not _is_ranked(card):
-        settings = card.get("settings") or []
-        setting_labels: dict[str, str] = dict(labels.get("settings") or {})
-        compact = " · ".join(
-            f"{setting_labels.get(label, label)} : {value}" for label, value in settings
-        )
     source = str(labels.get("source", "Source : libre:match")).format(url=source_url or "libre:match")
-    source = f"-# {source}"
-    if compact:
-        source += f"\n-# {compact}"
-    return source
+    return f"-# {source}"
+
+
+#: the named settings the RAW options blob completes (the
+#: post-Return-of-Rome AoE2 keys); label key \u2192 value table
+_SETTINGS_RAW_KEYS: dict[str, tuple[str, dict[str, str] | None]] = {
+    "37": ("Ressources", {
+        "0": "Standard", "1": "Faible", "2": "Moyen", "3": "\u00c9lev\u00e9", "4": "Tr\u00e8s \u00e9lev\u00e9",
+        "5": "Infini", "6": "Al\u00e9atoire",
+    }),
+    "82": ("Vision", {"0": "Normale", "1": "Explor\u00e9e", "2": "Toute visible"}),
+    "0": ("\u00c2ge d\u00e9part", {
+        "0": "Standard", "2": "\u00c2ge sombre", "3": "\u00c2ge f\u00e9odal", "4": "\u00c2ge des ch\u00e2teaux",
+        "5": "\u00c2ge imp\u00e9rial", "6": "Post-imp\u00e9rial",
+    }),
+    "4": ("\u00c2ge final", {
+        "0": "Standard", "2": "\u00c2ge sombre", "3": "\u00c2ge f\u00e9odal", "4": "\u00c2ge des ch\u00e2teaux",
+        "5": "\u00c2ge imp\u00e9rial", "6": "Post-imp\u00e9rial",
+    }),
+    "61": ("Difficult\u00e9", {
+        "0": "Difficile", "1": "Moyenne", "2": "Mod\u00e9r\u00e9e", "3": "Facile", "4": "Tr\u00e8s facile",
+        "-1": "Extr\u00eame",
+    }),
+    "57": ("Trait\u00e9", None),  # the raw treaty minutes
+}
+
+
+def _settings_named_pairs(card: dict[str, Any]) -> list[tuple[str, str]]:
+    """Derive the named value lines of the settings view.
+
+    The provider's stored pairs (Mode, Taille, Pop, Vitesse,
+    Victoire) stay the canonical summary; the raw options blob
+    completes them (Ressources, Vision, ages, difficult\u00e9, trait\u00e9)
+    when it rides the card.
+    """
+    import json as _json
+
+    pairs: list[tuple[str, str]] = [
+        (str(label), str(value)) for label, value in (card.get("settings") or [])
+        if str(label) != "Cheats"
+    ]
+    raw = str(card.get("options_json") or "")
+    try:
+        options: dict[str, Any] = _json.loads(raw) if raw else {}
+    except Exception:
+        options = {}
+    if isinstance(options, dict):
+        for key, (label, table) in _SETTINGS_RAW_KEYS.items():
+            value = options.get(key)
+            if value in (None, ""):
+                continue
+            shown = str((table or {}).get(str(value), value)) if table is not None else f"{value} min"
+            pairs.append((label, shown))
+    return pairs
+
+
+def _settings_bool_lines(card: dict[str, Any], labels: dict[str, Any]) -> list[str]:
+    """Derive the game-rule checkbox lines (✅ enabled, ⬜ off)."""
+    import json as _json
+
+    raw = str(card.get("options_json") or "")
+    try:
+        options: dict[str, Any] = _json.loads(raw) if raw else {}
+    except Exception:
+        options = {}
+    lines: list[str] = []
+    if not isinstance(options, dict) or not options:
+        return lines
+    bool_labels: dict[str, str] = dict(labels.get("setting_bools") or {})
+    for key, (label_key_path, inverted) in SETTING_BOOLEANS.items():
+        raw_value = options.get(key)
+        if raw_value in (None, ""):
+            continue
+        enabled = (str(raw_value).lower() == "y") ^ bool(inverted)
+        label = bool_labels.get(key) or label_key_path.split(".")[-1]
+        mark = "\u2705" if enabled else "\u2b1c"
+        lines.append(f"{mark} {label}")
+    return lines
+
+
+class _MatchSettingsButton(discord.ui.Button[Any]):
+    """The settings button of ONE match card (owner 2026-11-23).
+
+    An INLINE, non-persistent item: the panels are ephemeral popups,
+    the button and its payload (the card) share the popup's own
+    lifetime. The click answers the FULL settings view - sober but
+    complete: disabled selects for the named values, emoji checkbox
+    lines for the game rules.
+    """
+
+    def __init__(self, card: dict[str, Any], labels: dict[str, Any]) -> None:
+        super().__init__(
+            label=str(labels.get("settings_button", "Param\u00e8tres")),
+            emoji="\u2699\ufe0f",
+            style=discord.ButtonStyle.secondary,
+        )
+        self._card = card
+        self._labels = labels
+
+    async def callback(self, interaction: discord.Interaction) -> None:
+        await interaction.response.send_message(
+            view=_settings_view(self._card, self._labels),
+            ephemeral=True,
+        )
+
+
+def _settings_view(card: dict[str, Any], labels: dict[str, Any]) -> discord.ui.LayoutView:
+    """Build the FULL settings view of one match (an ephemeral popup)."""
+    from botforge.discord.ui.view_footer import add_view_footer
+
+    match_id = str(card.get("match_id") or card.get("match_ref") or "?")
+    pairs = _settings_named_pairs(card)
+    bool_lines = _settings_bool_lines(card, labels)
+    named_labels: dict[str, str] = dict(labels.get("settings") or {})
+    title = str(labels.get("settings_title", "\u2699\ufe0f Param\u00e8tres \u2014 Match n\u00b0{id}"))
+    title = title.format(id=match_id)
+    view = discord.ui.LayoutView(timeout=None)
+    container_blocks: list[Any] = [discord.ui.TextDisplay(f"## {title}")]
+    for label, value in pairs:
+        container_blocks.append(
+            discord.ui.TextDisplay(f"-# {named_labels.get(label, label)} : {value}")
+        )
+    if bool_lines:
+        container_blocks.append(discord.ui.Separator())
+        container_blocks.append(discord.ui.TextDisplay("\n".join(bool_lines)))
+    view.add_item(discord.ui.Container(*container_blocks))
+    return add_view_footer(view, f"panel:match:settings:aoe2:{match_id}")
+
 
 def _card_format(card: dict[str, Any]) -> str:
     """Return the match's format tag (1v1 / 2v2 / 4v4 / custom...)."""
@@ -1148,9 +1301,11 @@ def _seat_text(
     # the colour NAMING was speculative (the game's own colour table
     # needs verifying): keep the honest position only (owner 2026-11-22)
     slot_badge = f"P{slot}" if slot else ""
-    line = " ".join(bit for bit in [jump, name, slot_badge] if bit)
+    line = " ".join(bit for bit in [slot_badge, name] if bit)
     if civ_link:
         line += f" {labels.get('with', 'avec')} {civ_link}"
+    if jump:
+        line += f" {jump}"
     # the ladder lines: 1v1 and TG only (never unranked), one under
     # the other; the match's own board carries the bold elo — even
     # in a custom game — and the elo DIFF renders for RANKED
@@ -1188,7 +1343,7 @@ def _seat_component(text: str, civ_image: str) -> Any:
     return discord.ui.TextDisplay(text)
 
 
-def _card_map_section(card: dict[str, Any], ctx: dict[str, Any]) -> Any:
+def _card_map_section(card: dict[str, Any], ctx: dict[str, Any], labels: dict[str, Any] | None = None) -> Any:
     """Build the card's map section.
 
     The post link carries the title, the stored image rides as the
@@ -1203,12 +1358,16 @@ def _card_map_section(card: dict[str, Any], ctx: dict[str, Any]) -> Any:
     map_label = map_shown if titled else (str(card.get("lobby_title") or "").strip() or "Match")
     map_url = ctx["map_urls"].get(map_name, "") if titled else ""
     map_link = f"[{map_label}]({map_url})" if map_url else f"**{map_label}**"
+    labels = labels or {}
     when_at = int(card.get("finished_at") or card.get("started_at") or 0)
-    sub_lines = [f"Il y a <t:{when_at}:R>" if when_at else ""]
+    when_line = str(labels.get("when", "Il y a {when}")).format(when=f"<t:{when_at}:R>") if when_at else ""
+    sub_lines = [when_line]
     if card.get("status") == "finished":
         duration = max(0, int(card.get("finished_at") or 0) - int(card.get("started_at") or 0))
         if duration:
-            sub_lines.append(f"-# Durée : {_fmt_clock(duration)}")
+            sub_lines.append(
+                "-# " + str(labels.get("duration", "Durée : {clock}")).format(clock=_fmt_clock(duration))
+            )
     title = str(card.get("lobby_title") or "").strip()
     title_line = ""
     if title and title.upper() != "AUTOMATCH":
@@ -1220,18 +1379,65 @@ def _card_map_section(card: dict[str, Any], ctx: dict[str, Any]) -> Any:
     return discord.ui.TextDisplay(map_text)
 
 
-def _card_header(badge: str, noun: str, match_id: str) -> str:
+def _card_header(
+    badge: str, noun: str, match_id: str, me_ids: set[str] | None = None, card: dict[str, Any] | None = None
+) -> str:
     """Render the card's header: the badge line, the match id linked.
 
     The insights match page wraps the id (owner 2026-11-22: a link
-    button left the row, the id itself carries it).
+    button left the row, the id itself carries it). A SCOPED view
+    (owner 2026-11-23) rides the scoped player's OWN outcome emoji
+    before the badge: one emoji per view, none per team.
     """
     insights_match = (
         INSIGHTS_MATCH_URL.format(match_id=match_id) if match_id and match_id != "?" else ""
     )
     id_part = f"[#{match_id}]({insights_match})" if insights_match else f"#{match_id}"
-    return f"**[ {badge} ]** {noun} \u2014 {id_part}"
+    scope_icon = ""
+    me_ids = me_ids or set()
+    card = card or {}
+    winners = {str(w) for w in card.get("winners") or []}
+    if me_ids and winners and card.get("status") == "finished":
+        scope_icon = "\U0001f3c6 " if winners & me_ids else "\U0001f480 "
+    # the owner's 2026-11-23 pattern: ``💀 **[ CUSTOM 2v2 ] Match n° #id``
+    return f"{scope_icon}**[ {badge} ] {noun}{id_part}**"
 
+
+
+def _card_team_blocks(
+    card: dict[str, Any],
+    teams: list[tuple[int, list[dict[str, Any]]]],
+    me_ids: set[str],
+    labels: dict[str, Any],
+    ctx: dict[str, Any],
+) -> list[Any]:
+    """Render the card's team sections: ONE block per seat.
+
+    The SCOPE (owner 2026-11-23): a view scoped onto one player
+    strikes the LOSING teams' titles and rides no per-team medal -
+    the header's emoji already tells the outcome; an unscoped view
+    keeps one \U0001f3c6/\U0001f480 medal per team.
+    """
+    scoped = bool(me_ids)
+    winners = {str(w) for w in card.get("winners") or []}
+    finished = card.get("status") == "finished"
+    blocks: list[Any] = []
+    for index, (_team, seats) in enumerate(teams):
+        if index:
+            blocks.append(discord.ui.Separator())
+        if len(teams) > 1:
+            won = any(str((p or {}).get("profile_id", "")) in winners for p in seats)
+            medal = ""
+            if not scoped and winners and finished:
+                medal = "\U0001f3c6 " if won else "\U0001f480 "
+            title = f"**{labels.get('team', 'Team')} {index + 1}**"
+            if scoped and winners and finished and not won:
+                title = f"~~{title}~~"
+            blocks.append(discord.ui.TextDisplay(f"{medal}{title}"))
+        for player in seats:
+            text, civ_image = _seat_text(player, card, ctx, labels, me_ids)
+            blocks.append(_seat_component(text, civ_image))
+    return blocks
 
 def _match_card_view(
     card: dict[str, Any],
@@ -1262,7 +1468,8 @@ def _match_card_view(
     kind = _card_kind(card)
     match_id = str(card.get("match_id") or card.get("match_ref") or "?")
     badge = " ".join(part for part in [kind.upper(), fmt] if part)
-    noun = labels.get("lobby" if status == "lobby" else "match", "Lobby" if status == "lobby" else "Match")
+    noun_key = "lobby_noun" if status == "lobby" else "match_noun"
+    noun = str(labels.get(noun_key, "Match n\u00b0" if status != "lobby" else "Lobby n\u00b0"))
     winners = {str(w) for w in card.get("winners") or []}
     accent = (
         _OUTCOME_COLOURS["win"]
@@ -1271,25 +1478,15 @@ def _match_card_view(
         if winners
         else _OUTCOME_COLOURS.get(status, 0x5865F2)
     )
+    # the SCOPE (owner 2026-11-23): the view scoped onto one player
+    # rides his OWN outcome emoji on the header and strikes the
+    # losers' titles - see _card_team_blocks
     blocks: list[Any] = [
-        discord.ui.TextDisplay(_card_header(badge, noun, match_id)),
+        discord.ui.TextDisplay(_card_header(badge, noun, match_id, me_ids=me_ids, card=card)),
     ]
-    blocks.append(_card_map_section(card, ctx))
+    blocks.append(_card_map_section(card, ctx, labels))
     blocks.append(discord.ui.Separator())
-    # the seats, MY team first, a separator BETWEEN the teams
-    teams = _ordered_teams(card, me_ids)
-    for index, (_team, seats) in enumerate(teams):
-        if index:
-            blocks.append(discord.ui.Separator())
-        if len(teams) > 1:
-            medal = ""
-            if winners:
-                won = any(str((p or {}).get("profile_id", "")) in winners for p in seats)
-                medal = ("\U0001f3c6 " if won else "\U0001f480 ") if card.get("status") == "finished" else ""
-            blocks.append(discord.ui.TextDisplay(f"{medal}**{labels.get('team', 'Team')} {index + 1}**"))
-        for player in seats:
-            text, civ_image = _seat_text(player, card, ctx, labels, me_ids)
-            blocks.append(_seat_component(text, civ_image))
+    blocks.extend(_card_team_blocks(card, _ordered_teams(card, me_ids), me_ids, labels, ctx))
     # the footer: the source, then the status-led action row
     blocks.append(discord.ui.Separator())
     blocks.append(discord.ui.TextDisplay(_card_footer_text(card, labels)))
@@ -1312,6 +1509,9 @@ def _match_card_view(
                 url=str(card["spectate_url"]),
             )
         )
+    # the full settings live behind their own button (owner 2026-11-23:
+    # the footer stays the source line only)
+    buttons.append(_MatchSettingsButton(card, labels))
     if buttons:
         blocks.append(discord.ui.ActionRow(*buttons))
     view = discord.ui.LayoutView(timeout=None)
@@ -1414,6 +1614,7 @@ async def _finished_cards(
                 "winners": winners,
                 "players": _entry_players_of(entry),
                 "settings": _entry_settings_of(entry),
+                "options_json": str(getattr(entry, "options_json", "") or ""),
             }
         )
     return cards
@@ -1527,6 +1728,13 @@ class ProfileMatchesButton(
             "settings": {
                 plain: await reply(interaction, key) for plain, key in SETTING_LABEL_KEYS.items()
             },
+            "setting_bools": {
+                key: await reply(interaction, label_key) for key, (label_key, _inv) in SETTING_BOOLEANS.items()
+            },
+            "match_noun": await reply(interaction, "profile.match_noun"),
+            "lobby_noun": await reply(interaction, "profile.lobby_noun"),
+            "settings_button": await reply(interaction, "profile.matches_settings_button"),
+            "settings_title": await reply(interaction, "profile.matches_settings_title"),
         }
         if not me_ids:
             await interaction.followup.send(
