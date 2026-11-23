@@ -120,16 +120,27 @@ class _GameDataClient:
     async def update_enrollments(
         self, game_key: str, profile_ids: list[str], user_ids: list[str]
     ) -> bool:
-        """Push one enrollment list (profiles + owners); True when applied."""
+        """Push one enrollment list (profiles + owners); True when applied.
+
+        ``wait_for_ready`` rides the connection failure instead of failing
+        the call instantly: a daemon-level container restart brings the
+        processes back in no dependency order (``depends_on`` never gates
+        it, merlin 2026-11-23), so the peer's port can bind a few seconds
+        after core's first cycle — the call WAITS for the peer up to the
+        timeout and only then reports the genuine outage.
+        """
         from botforge.core.rpc.client import build_channel
         from botforge.rpc_generated.botforge.v1 import gamedata_pb2, gamedata_pb2_grpc
 
+        timeout_s = float(os.environ.get("GAME_ENROLLMENTS_TIMEOUT_S", "20"))
         async with build_channel(self._uri) as channel:
             stub = gamedata_pb2_grpc.GameDataStub(channel)
             reply = await stub.UpdateEnrollments(
                 gamedata_pb2.UpdateEnrollmentsRequest(
                     game_key=game_key, profile_ids=profile_ids, user_ids=user_ids
-                )
+                ),
+                wait_for_ready=True,
+                timeout=timeout_s,
             )
             return bool(reply.applied)
 
