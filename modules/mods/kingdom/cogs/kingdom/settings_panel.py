@@ -673,10 +673,13 @@ async def _start_season(interaction: discord.Interaction, strings: dict[str, str
         # realm-content-v1 (Drasah 21/11) : au DÉPART, les fiches
         # réelles remplacent les états d'attente — chaque royaume
         # engagé reçoit la passe (best-effort, jamais bloquante).
+        # territory-reveal-v1 (Drasah 23/11) : la passe emmène le
+        # TIRAGE initial des territoires (avant le rendu) et la fiche
+        # Gaïa — le départ référence complet, un seul seam.
         try:
-            from .realm_content import deploy_all_realms_content
+            from .realm_content import feed_season_surfaces
 
-            touched = await deploy_all_realms_content(interaction.client)
+            touched = await feed_season_surfaces(interaction.client)
             logger.info("kingdom: season departure fed %d realm salons", touched)
         except Exception:  # noqa: BLE001
             logger.warning("kingdom: season departure content pass failed", exc_info=True)
@@ -1045,6 +1048,7 @@ async def _start_beta(
     else:
         # depart-fourche-v1: the beta departure closes the sas and
         # feeds the realm content — the SAME engine as the classic one
+        # (territory-reveal-v1: draw + realms + Gaïa, one seam)
         from .regie import set_switch
 
         if not await set_switch(
@@ -1053,9 +1057,9 @@ async def _start_beta(
             logger.warning("kingdom: the beta departure's sas close could not be stored")
         await refresh_live_pins_after(interaction)
         try:
-            from .realm_content import deploy_all_realms_content
+            from .realm_content import feed_season_surfaces
 
-            touched = await deploy_all_realms_content(interaction.client)
+            touched = await feed_season_surfaces(interaction.client)
             logger.info("kingdom: beta departure fed %d realm salons", touched)
         except Exception:  # noqa: BLE001
             logger.warning("kingdom: the beta departure content pass failed", exc_info=True)

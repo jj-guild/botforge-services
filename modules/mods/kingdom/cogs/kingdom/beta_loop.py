@@ -240,9 +240,12 @@ async def run_beta_loop_safe(bot: Any) -> str | None:
         except Exception:  # noqa: BLE001 — the 5-min surface pass heals
             logger.warning("kingdom: beta loop pins refresh failed", exc_info=True)
         try:
-            from .realm_content import deploy_all_realms_content
+            # territory-reveal-v1 (Drasah 23/11) : la passe de 5 min
+            # emmène le tirage + les fiches + Gaïa — elle RÉPARE un
+            # départ raté (rien ne reste silencieux en bêta).
+            from .realm_content import feed_season_surfaces
 
-            await deploy_all_realms_content(bot)
+            await feed_season_surfaces(bot)
         except Exception:  # noqa: BLE001
             logger.warning("kingdom: beta loop content pass failed", exc_info=True)
         try:

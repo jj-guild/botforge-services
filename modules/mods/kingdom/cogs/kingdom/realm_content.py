@@ -81,6 +81,9 @@ _CONTENT_STRINGS: dict[str, dict[str, str]] = {
         ),
         "territory_sacred": "⛪ SACRÉ — jusqu'à la fin de la saison",
         "territory_chantier": "⏳ Lieu Sacrée — chantier jusqu'au {0}",
+        # gaia-territory-v1 (Drasah 23/11) : la fiche Territoire de Gaïa,
+        # verbatim de la référence (restructuration-serveur-v1 c)
+        "gaia_ai_level": "🤖 Niveau de l'IA Gaïa : {0}/5",
         "alliances_panel_title": "🏆 Alliances — {0}",
         "alliances_panel_intro_hand": (
             "Ici se trouve ta main — les civilisations que tu as le droit"
@@ -175,6 +178,7 @@ _CONTENT_STRINGS: dict[str, dict[str, str]] = {
         ),
         "territory_sacred": "⛪ SACRED — until the season ends",
         "territory_chantier": "⏳ Sacred Site — build site until {0}",
+        "gaia_ai_level": "🤖 Gaïa AI level: {0}/5",
         "alliances_panel_title": "🏆 Alliances — {0}",
         "alliances_panel_intro_hand": (
             "Here is your hand — the civilizations you may currently"
@@ -743,6 +747,13 @@ async def deploy_realm_content(
     stack = wiring()
     strings = content_strings(locale)
     channels = await _realm_channels(guild, realm)
+    if not channels:
+        # territory-reveal-v1 (23/11) : un réveil raté ne se masque plus —
+        # adoption par slug déjà tentée, la panne est ici NOMMÉE.
+        logger.info(
+            "kingdom realm content: no salon resolved for realm %s — the wake or the structure failed",
+            getattr(realm, "name", "?"),
+        )
     ids: dict[str, str] = {}
     started = await season_started(stack)
 
@@ -938,4 +949,127 @@ async def deploy_all_realms_content(bot: Any, locale: Any = "fr") -> int:
             if ids:
                 await service.save_habitat(str(realm.id), dict(ids))
             touched += 1
+    return touched
+
+
+# ---------------------------------------------------------------------------
+# territory-reveal-v1 (Drasah 23/11) : le tirage référence, REBRANCHÉ.
+#
+# L'incident du 23/11 : les salons 🌍 Territoire restaient vides après le
+# départ — le portage n'avait jamais raccordé la DISTRIBUTION initiale
+# des cartes (le moteur sait la faire, plus personne ne l'appelait).
+# La règle de la référence (sa regression 2026-10-11, verbatim) : le
+# tirage précède le rendu, jamais l'inverse — les fiches se lisent
+# dans des documents vivants, jamais dans l'état pré-tirage.
+# ---------------------------------------------------------------------------
+
+
+async def draw_initial_territories_safe(bot: Any) -> bool:
+    """Best-effort season initial draw (guarded, never duplicates).
+
+    The reference's own guards, unchanged: nothing is drawn while the
+    season waits in ``setup`` (Drasah's phase rule — the reveal is the
+    admin's departure), and an existing territory means the season
+    already drew its slice.
+    """
+    stack = wiring()
+    territories_service = getattr(stack, "territories", None)
+    if territories_service is None:
+        return False
+    if not await season_started(stack):
+        logger.info("kingdom: territory draw deferred — the season is not started")
+        return False
+    try:
+        if await territories_service.territories():
+            logger.info("kingdom: initial territory draw skipped — territories exist")
+            return False
+        await territories_service.draw_initial()
+        logger.info("kingdom: initial territory draw ran at the season reveal")
+        return True
+    except Exception:  # noqa: BLE001 — the dashboard reports, never raises
+        logger.warning("kingdom: initial territory draw failed", exc_info=True)
+        return False
+
+
+# ---------------------------------------------------------------------------
+# gaia-territory-v1 (Drasah 23/11) : la fiche Territoire de Gaïa, REPRISE
+# de la référence (restructuration-serveur-v1 c) : le niveau de l'IA lu
+# LIVE dans l'epoch de la saison (D18, fallback 1), jamais codé en dur,
+# puis SES territoires avec les mêmes badges que les royaumes joueurs.
+# Gaïa n'a pas de main de civilisations — pas de panneau Alliances.
+# ---------------------------------------------------------------------------
+
+
+def _gaia_territory_channel(guild: Any) -> Any:
+    """Gaïa's 🌍 Territoire salon — the Kingdoms-Gaïa declared structure."""
+    for category in getattr(guild, "categories", []) or []:
+        slug = _slug(str(getattr(category, "name", "")))
+        if slug not in ("kingdoms-gaia", "kingdoms-ga-a", "kingdoms"):
+            continue
+        for channel in getattr(category, "channels", []) or []:
+            if _slug(str(getattr(channel, "name", ""))) == "territoire":
+                return channel
+    return None
+
+
+async def deploy_gaia_content(guild: Any, locale: Any = "fr") -> bool:
+    """Deploy the Gaïa 🌍 Territoire sheet (idempotent, best-effort).
+
+    Gaïa is an ENGINE kingdom with no shell — the realm feeding pass
+    can never see it, its sheet rides its own deployer (the reference's
+    own design, unchanged).
+    """
+    stack = wiring()
+    channel = _gaia_territory_channel(guild)
+    if channel is None:
+        return False
+    kingdoms_service = getattr(stack, "kingdoms", None)
+    if kingdoms_service is None:
+        return False
+    try:
+        kingdoms = await kingdoms_service.kingdoms()
+    except Exception:  # noqa: BLE001
+        logger.warning("kingdom realm content: gaia kingdom read failed", exc_info=True)
+        return False
+    kingdom = next((k for k in kingdoms if bool(getattr(k, "is_gaia", False))), None)
+    if kingdom is None:
+        return False
+    attacks = getattr(stack, "attacks", None)
+    ai_level = 1
+    if attacks is not None:
+        try:
+            ai_level = int(await attacks.base_ai_level())
+        except Exception:  # noqa: BLE001 — the fallback level stays honest
+            logger.warning("kingdom realm content: gaia ai level read failed", exc_info=True)
+    strings = content_strings(locale)
+    owned = await _owned_territories(stack, kingdom)
+    body = "\n".join([strings["gaia_ai_level"].format(int(ai_level)), _territory_body(strings, stack, kingdom, owned)])
+    content = (
+        f"## {strings['territory_title'].format('Gaïa')}"
+        f"\n\n{body}\n\n{surface_footer(TERRITORY_SURFACE)}\n\n{_marker('territory-gaia')}"
+    )
+    try:
+        await _upsert_marked(channel, "territory-gaia", content)
+        return True
+    except Exception:  # noqa: BLE001
+        logger.warning("kingdom realm content: gaia territory deploy failed", exc_info=True)
+        return False
+
+
+async def feed_season_surfaces(bot: Any, locale: Any = "fr") -> int:
+    """The season-launch feeding — draw, every realm sheet, then Gaïa.
+
+    ONE seam for the three call sites (classic departure, beta departure,
+    the beta loop's 5-minute pass): the reveal draw runs FIRST, then
+    the realm sheets read the LIVE documents, then Gaïa's own sheet.
+    The loop's pass self-heals a failed launch (a skipped draw is
+    retried five minutes later — nothing stays silent).
+    """
+    await draw_initial_territories_safe(bot)
+    touched = await deploy_all_realms_content(bot, locale)
+    for guild in list(getattr(bot, "guilds", []) or []):
+        try:
+            await deploy_gaia_content(guild, locale)
+        except Exception:  # noqa: BLE001 — Gaïa never blocks the realms
+            logger.warning("kingdom realm content: gaia deploy failed", exc_info=True)
     return touched
