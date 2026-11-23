@@ -5,8 +5,7 @@
 # Bootstrap declaration: enabled stays false until the mod package
 # (modules/mods/pong/{src,cogs,grpc}) lands — a disabled mod is never
 # loaded, so the envs can carry the declaration harmlessly.
-# Open design questions live in docs/MODS/pong/DECISIONS.md: nothing below
-# invents an undecided value (defaults come from the S5 rules).
+# Design answers integrated (D-PONG-005..019, sessions 2026-11-23).
 id: pong
 enabled: false
 # the visual identity is data
@@ -14,18 +13,38 @@ emoji: "🏓"
 # season-based tournament (root lifecycle panel + per-season admin salon)
 seasonal: true
 settings:
-  # defaults from the S5 règlement (docs/MODS/pong/REFERENCE.md)
+  # references: botforge docs/MODS/pong/DECISIONS.md (PR botforge#231)
   season_name_format: "AOE Pong S<N>"
   bo_format: 5
   civs_remaining: 15
   rounds_per_season: 4          # D-PONG-005
   round_window: wed_tue          # Wednesday → Tuesday, 7 days
-  move_policy: semi_blocked      # D-PONG-006 — classic | semi_blocked (per-season param)
-  elo_seed_formula: "(2 * current_elo + max_elo) / 3"  # D-PONG-007
-  # tables_count is DERIVED at runtime: registered_players / 2 (D-PONG-008).
-  # Odd player count blocks season opening until Q-PONG-002.
-  draft_map_preset: https://aoe2cm.net/preset/pGWoJ       # the S5 map-pool preset
-  civ_draft_base_preset: null    # D-PONG-009 — aoe2cm base_preset (lands with the cogs PR)
+  round_grace_days: 3            # D-PONG-012 — grace beyond the window; next pairing
+                                # uses results validated at the deadline, a match
+                                # played in grace counts now (recap) and its table
+                                # movement is deferred one round
+  move_policy: classic           # per-season D-PONG-006 — classic | semi_blocked
+  move_policy_schedule: alternate # D-PONG-012 — S1 classic, S2 semi_blocked, S3 classic…
+  elo_seed_formula: "(2 * current_elo + max_elo) / 3"  # D-PONG-007, computed at registration
+  human_seed:                    # D-PONG-013 — self-declared level at registration
+    admin_override: true          # admin may correct a seed before the draw and
+                                 # between rounds (console, confirm card, log)
+                                 # seeds are placement-only, never displayed
+  # tables_count is DERIVED at runtime: active_players / 2 (D-PONG-008);
+  # parity is never odd: waitlist pairing, exact-slot replacement,
+  # recap-only volunteer match, admin fuse last (D-PONG-019, RG-TAB-4).
+  waitlist_admin_pairing: true   # D-PONG-015 — the admin pairs waitlist candidates
+                                 # into insertion duos (no automatic tolerance)
+  orphan_match: recap_only       # D-PONG-018 — volunteer neighbor match when no
+                                 # replacement: recaps only, no table movement
+  table_naming: neutral_random   # D-PONG-014 — table salons carry neutral names,
+                                 # chain_position is internal, never displayed
+  recap_delivery: dm_private     # D-PONG-014 — personal per-season recap, DM only,
+                                 # no global standings/leaderboard ever published
+  draft_map_preset: https://aoe2cm.net/preset/pGWoJ     # the S5 map-pool preset
+  civ_draft_base_preset: null    # D-PONG-009 — aoe2cm base_preset to derive per-table
+                                 # civ drafts (Python generator to port — owner's
+                                 # code lands with the cogs PR)
   open_stream: true              # open stream, "AOE Pong" in the title
   patch_policy: admin_decides
   close_tables: true
@@ -42,7 +61,7 @@ channel_groups:
 channels:
   - key: announcements
     display_name: 📣 annonces-pong
-    description: Round openings/closures, tables list and per-table civ presets
+    description: Round openings/closures, tables list (no level order) and per-table civ presets
     group: ladder
     access:
       everyone_view: false
@@ -53,7 +72,7 @@ channels:
     group: ladder
     access:
       everyone_view: false
-      view: [Pong Candidate, Pong Player, Pong Admin]
+      view: [Pong Candidate, Pong Waitlist, Pong Player, Pong Admin]
   - key: planning
     display_name: 📅 planification
     description: One forum topic per match — date/time fixes and admin notices
@@ -76,8 +95,8 @@ channels:
     access:
       everyone_view: true
       view: [Pong Caster, Pong Admin]
-  # table salons (pong:table_<n>) are GENERATED per round (open_round op),
-  # provisioned from the runtime state — never declared statically here
+  # table salons (pong:table_<slug>) are GENERATED per round (open_round op) with
+  # neutral names — never statically declared here (D-PONG-014)
   - key: settings
     display_name: ⚙️ paramètres
     description: Mod settings/lifecycle panel channel (seasonal mod)
@@ -88,7 +107,7 @@ channels:
       view: [Pong Admin]
   - key: admin_log
     display_name: 📜 journal-admin
-    description: Timestamped admin actions (blocks, admin results, arbitrations)
+    description: Timestamped admin actions (blocks, admin results, seed corrections, roster moves)
     group: admin
     admin_only: true
     access:
@@ -105,6 +124,9 @@ roles:
   - key: pong_candidate
     display_name: 🧡 Pong Candidat
     color: 0xE67E22
+  - key: pong_waitlist
+    display_name: 🔖 Pong Waitlist
+    color: 0xF1C40F
   - key: pong_caster
     display_name: 🎙️ Pong Caster
     color: 0x9B59B6
