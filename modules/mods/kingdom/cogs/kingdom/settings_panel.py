@@ -1955,6 +1955,20 @@ class KingdomRegieParcoursButton(
             )
         except Exception:  # noqa: BLE001 — the flag is best-effort
             logger.warning("kingdom: the parcours flag sync failed", exc_info=True)
+        # gate-bêta-v1 (Check 141, Drasah 23/11) : le levier ne peut pas
+        # changer l'INTENTION sans pousser la CONSÉQUENCE — l'incident
+        # des nouveaux arrivants (bascule Classique, les salons restaient
+        # pliés en bêta : @everyone refusé partout, personne ne voyait
+        # rien). La gate des salons d'admission doit plier AU MÊME CLIC
+        # (le départ classique/bêta le fait déjà — le levier oubliait).
+        try:
+            from .conscription_gate import run_conscription_gate_pass
+
+            await run_conscription_gate_pass(
+                interaction.client, str(interaction.guild_id or "")
+            )
+        except Exception:  # noqa: BLE001 — the 5-min heal bends it back
+            logger.warning("kingdom: the lever gate pass failed", exc_info=True)
         await refresh_live_pins_after(interaction)
         view = await _build_drawer("regie", locale_of(interaction), interaction.client, gid)
         await open_unique_ephemeral(interaction, view=view)

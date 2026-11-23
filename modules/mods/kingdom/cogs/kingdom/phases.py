@@ -1006,6 +1006,19 @@ def start_attack_refresher(bot: Any) -> None:
             await run_beta_loop_safe(bot)
         except Exception:
             logger.warning("kingdom: beta loop pass failed — best-effort", exc_info=True)
+        # gate-bêta-v1 (Check 141, Drasah 23/11) : la ceinture de
+        # sécurité des salons d'admission — la gate ne vivait qu'aux
+        # départs/boot, un levier basculé (ou un raté ponctuel) laissait
+        # les permissions en retard jusqu'au prochain départ. Une passe
+        # par 5 min les plie sur le parcours EFFECTIF, les deux sens
+        # se réparent tout seuls (idempotente : _converged skips les
+        # salons déjà conformes, zéro ratelimit Discord inutile).
+        try:
+            from .conscription_gate import run_conscription_gate_pass
+
+            await run_conscription_gate_pass(bot)
+        except Exception:
+            logger.warning("kingdom: conscription gate pass failed — best-effort", exc_info=True)
 
     _loop.start()
     logger.info("kingdom: attack phases loop started (every 5 minutes)")

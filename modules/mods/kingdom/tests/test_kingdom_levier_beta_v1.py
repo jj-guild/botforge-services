@@ -210,14 +210,37 @@ async def test_the_lever_refuses_while_a_season_lives(monkeypatch) -> None:  # t
     assert windows[0]["content"], "the note is a real string"
 
 
+def test_the_five_minute_pass_heals_the_salons_gate() -> None:
+    """gate-bêta-v1 (Check 141): the overwrites bend on EVERY 5-min tick.
+
+    The gate used to live only at the departures/boot — a flipped lever
+    (or a one-off failure) left the salons stale until the NEXT
+    departure. The heal rides the same tasks.loop as the other passes.
+    """
+    from botforge.mods.kingdom.cogs import phases
+
+    src = inspect.getsource(phases)
+    loop_src = src.split("@tasks.loop(minutes=5)")[-1].split("_loop.start()")[0]
+    assert "run_conscription_gate_pass" in loop_src, (
+        "the conscription gate MUST ride the 5-minute pass"
+    )
+
+
 @pytest.mark.asyncio
 async def test_the_lever_flips_the_key_the_flag_and_rerenders(monkeypatch) -> None:  # type: ignore[no-untyped-def]
-    """Season-free: set_switch + the flag sync + the drawer opens again."""
+    """Season-free: set_switch + the flag sync + the SALONS GATE + re-render.
+
+    gate-bêta-v1 (Check 141, Drasah 23/11) : l'incident des nouveaux
+    arrivants — le levier changeait l'intention sans pousser la
+    conséquence sur les salons d'admission (bascule Classique, les
+    permissions restaient pliées en bêta). La gate doit plier au clic.
+    """
     from botforge.mods.kingdom.cogs import settings_panel as sp
 
     flipped: list[tuple[str, bool]] = []
     flags: list[bool] = []
     rendered: list[str] = []
+    gated: list[str] = []
 
     async def _set_switch(bot: object, gid: str, key: str, value: bool) -> None:
         flipped.append((key, value))
@@ -252,6 +275,10 @@ async def test_the_lever_flips_the_key_the_flag_and_rerenders(monkeypatch) -> No
     async def _pins_refresh(interaction: object) -> None:
         return None
 
+    async def _gate_pass(bot: object, gid: str = "") -> int:
+        gated.append(str(gid))
+        return 2
+
     from botforge.mods.kingdom.cogs import regie as _regie
     monkeypatch.setattr(_regie, "set_switch", _set_switch)
     monkeypatch.setattr(_regie, "read_regie", _read_regie)
@@ -264,6 +291,8 @@ async def test_the_lever_flips_the_key_the_flag_and_rerenders(monkeypatch) -> No
     monkeypatch.setattr(sp, "wiring", lambda: NS(kingdoms=NS()))
     from botforge.mods.kingdom.cogs import beta_loop as _bl
     monkeypatch.setattr(_bl, "season_running", _season_running)
+    from botforge.mods.kingdom.cogs import conscription_gate as _gate
+    monkeypatch.setattr(_gate, "run_conscription_gate_pass", _gate_pass)
 
     resp, follow = _Resp(), _Follow()
     btn = sp.KingdomRegieParcoursButton("beta", "Bêta", False, False)
@@ -274,6 +303,9 @@ async def test_the_lever_flips_the_key_the_flag_and_rerenders(monkeypatch) -> No
         "Bêta = postuler direct : the régie key lowers (the source stays)"
     )
     assert flags == [True], "the core beta flag rises with the lever"
+    assert gated == ["7"], (
+        "the salons' overwrites BEND at the click (the newcomers' incident)"
+    )
     assert "regie" in rendered, "the drawer re-renders after the flip"
 
 
