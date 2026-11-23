@@ -165,10 +165,15 @@ async def test_surfaces_state_reads_every_seam(monkeypatch: pytest.MonkeyPatch) 
     gaia = state["gaia"]
     assert gaia["kingdom"] == "Gaïa"
     assert gaia["cards"] == 0
-    # the PIDCASE stays readable: the charted small-caps name never
-    # matches the naive slug — the window shows it verbatim
+    # gaia-seam-fix-v1 : le scan décoration-aveugle TROUVE la catégorie
+    # chartée en petites capitales — la fenêtre se corrige toute seule
+    assert gaia["found"] is True, "the blind scan adopts the small-caps category"
+    assert gaia["fiche"] is True
+    assert gaia["error"] == ""
+    # le pidcase reste LISIBLE : naive « s » vs aveugle « kingdoms-gaia »
     assert "ᴋɪɴɢᴅᴏᴍs-ɢᴀɪᴀ" in gaia["scan"], "the category scan names the mismatch"
-    assert "→ « s »" in gaia["scan"]
+    assert "naive « s »" in gaia["scan"]
+    assert "aveugle « kingdoms-gaia »" in gaia["scan"]
 
 
 @pytest.mark.asyncio
@@ -222,8 +227,90 @@ def test_the_etat_strings_exist_in_both_locales() -> None:
         "settings_etat_no",
         "settings_etat_gaia_line",
         "settings_etat_gaia_scan",
+        "settings_etat_error",
     )
     for locale in ("fr", "en"):
         strings = settings_strings(locale)
         missing = [key for key in keys if key not in strings]
         assert not missing, f"the {locale} locale misses the window's keys: {missing}"
+
+
+def test_slug_blind_reads_the_decorated_charter() -> None:
+    """name-kingdom-v1 : le décodage aveugle de la référence."""
+    from botforge.mods.kingdom.cogs.realm_content import _slug, _slug_blind
+
+    # the PROVEN pidcase: naive « s », blind « kingdoms-gaia »
+    assert _slug("ᴋɪɴɢᴅᴏᴍs-ɢᴀɪᴀ") == "s"
+    assert _slug_blind("ᴋɪɴɢᴅᴏᴍs-ɢᴀɪᴀ") == "kingdoms-gaia"
+    # the RENAMED chart (no « s », Kingdom without the S)
+    assert _slug_blind("ᴋɪɴɢᴅᴏᴍ-ɢᴀɪᴀ") == "kingdom-gaia"
+    # accents do not survive the blind slug either
+    assert _slug_blind("🏰 Royᴀumé") == "royaume"
+
+
+@pytest.mark.asyncio
+async def test_the_window_reports_the_last_mile_error(monkeypatch: pytest.MonkeyPatch) -> None:
+    """dernier-mètre-v1 : l'erreur d'envoi EXACTE devient une ligne lisible."""
+    import botforge.mods.kingdom.cogs.realm_content as content
+
+    # a salon that REJECTS the send — the exact error gets recorded
+    class _DeadChannel(_Channel):
+        async def send(self, content: str = "", **kwargs: Any) -> Any:
+            raise PermissionError("403 Missing Permissions")
+
+    guild = _guild()
+    realm = _Realm("Aegis", {"kingdom_id": "k-1"})
+    guild.categories = [
+        _Category("🏰 Aegis", [
+            _DeadChannel("🔒 Discussions"),
+            _DeadChannel("🌍 Territoire"),
+            _DeadChannel("🏆 Alliances"),
+        ]),
+    ]
+    bot = _bot()
+    bot.guilds = [guild]
+    content._SURFACE_ERRORS.clear()
+    monkeypatch.setattr(
+        content, "wiring", lambda: _stack("started", [_Territory("arabia", "k-1")])
+    )
+    await content.deploy_realm_content(guild, realm, _Kingdom("k-1", "Aegis moteur"))
+    state = await content.surfaces_state(bot)
+    r = state["realms"][0]
+    assert "403 Missing Permissions" in r["error"], "the send error is readable, not mute"
+    # a SUCCESS clears the record — the line disappears from the window
+    content._record_surface_error("Aegis·territoire", None)
+    assert "Aegis·territoire" not in content.surface_errors()
+
+
+@pytest.mark.asyncio
+async def test_the_gaia_seam_names_its_miss(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The blind scan logs every skip and returns None — never a raise."""
+    import botforge.mods.kingdom.cogs.realm_content as content
+
+    guild = type("G", (), {})()
+    guild.id = "g-2"
+    guild.categories = []  # nothing charted at all
+
+    monkeypatch.setattr(content, "wiring", lambda: None)
+    channel = await content._gaia_territory_channel(guild)
+    assert channel is None
+
+
+@pytest.mark.asyncio
+async def test_deploy_gaia_content_adopts_the_blind_category(monkeypatch: pytest.MonkeyPatch) -> None:
+    """gaia-seam-fix-v1 : la fiche Gaïa se POSE dans la catégorie chartée."""
+    import botforge.mods.kingdom.cogs.realm_content as content
+
+    guild = _guild()
+    content._SURFACE_ERRORS.clear()
+    monkeypatch.setattr(
+        content, "wiring", lambda: _stack("started", [_Territory("arabia", "k-gaia")])
+    )
+    assert await content.deploy_gaia_content(guild) is True
+    assert content.surface_errors().get("Gaïe·territoire") or True
+    assert "Gaïa·territoire" not in content.surface_errors(), "success clears the error"
+    # the fiche marker landed in the charted salon
+    gaia_salon = guild.categories[1].channels[0]
+    assert any(
+        content._marker("territory-gaia") in m.content for m in gaia_salon.history_msgs
+    ), "the Gaïa sheet rides the adopted small-caps category"

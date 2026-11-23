@@ -160,11 +160,11 @@ async def test_a_successful_season_entry_request_fires_the_staff_notice(monkeypa
             _Realms.called = True
             return realm
 
-    class _Kingdoms:
+    class _Kingdom:
         async def current_season(self) -> Any:
             return SimpleNamespace(id="s1")
 
-    stack = SimpleNamespace(kingdoms=_Kingdoms(), realms=_Realms())
+    stack = SimpleNamespace(kingdoms=_Kingdom(), realms=_Realms())
 
     notices: list[tuple[Any, ...]] = []
 
@@ -208,11 +208,11 @@ async def test_a_refused_request_never_fires_the_notice() -> None:
         async def request_season_entry(self, rid: str, king: str, season: str) -> Any:
             raise AssertionError("a closed sas never registers the realm")
 
-    class _Kingdoms:
+    class _Kingdom:
         async def current_season(self) -> Any:
             return SimpleNamespace(id="s1")
 
-    stack = SimpleNamespace(kingdoms=_Kingdoms(), realms=_Realms())
+    stack = SimpleNamespace(kingdoms=_Kingdom(), realms=_Realms())
     assert stack is not None
 
     async def regie_open(*args: Any, **kwargs: Any) -> bool:

@@ -1,4 +1,4 @@
-"""Kingdoms mod diplomacy surfaces (P4.2) — wiring smoke tests (#368).
+"""Kingdom mod diplomacy surfaces (P4.2) — wiring smoke tests (#368).
 
 The marriage wizard and the alliances view degrade quietly when the
 stack is not wired; the pure helpers (cost, princess label, alliances

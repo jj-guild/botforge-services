@@ -1,4 +1,4 @@
-"""Kingdoms attack phase taxonomy + presence line (attaques-phases-v2) - unit tests.
+"""Kingdom attack phase taxonomy + presence line (attaques-phases-v2) - unit tests.
 
 The player-facing phases (Siège → Draft → RDV/Ready → Score) behind the
 engine's internal T-15/T-5/T/T+5 clock, the forfeit line riding the

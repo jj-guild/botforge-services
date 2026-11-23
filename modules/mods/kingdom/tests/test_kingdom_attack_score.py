@@ -1,4 +1,4 @@
-"""Kingdoms RDV score phase (attaques-score-v1) - unit tests.
+"""Kingdom RDV score phase (attaques-score-v1) - unit tests.
 
 The meeting state machine behind an in-memory store: the score phase
 opening at T (only for resolved pick & bans), the VOICE presence of

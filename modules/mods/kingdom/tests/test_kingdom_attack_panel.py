@@ -1,4 +1,4 @@
-"""Kingdoms mod attack panel (P4.1b tranche 1) — wiring smoke tests (#368).
+"""Kingdom mod attack panel (P4.1b tranche 1) — wiring smoke tests (#368).
 
 The Discord surfaces degrade quietly when their stack (Mongo) is not
 wired: these tests pin that contract — the cog modules import, the

@@ -91,7 +91,7 @@ def _realm(slug: str = "blanc", engaged: bool = True) -> Any:
     )
 
 
-class _Kingdoms:
+class _Kingdom:
     """The engine seam fake — every op RECORDS itself (contract order)."""
 
     def __init__(self, phase: str) -> None:
@@ -142,7 +142,7 @@ class _Realms:
 
 
 def _stack(phase: str, realms: _Realms | None = None) -> Any:
-    return NS(kingdoms=_Kingdoms(phase), realms=realms or _Realms())
+    return NS(kingdoms=_Kingdom(phase), realms=realms or _Realms())
 
 
 def _texts(view: Any) -> str:

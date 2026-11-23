@@ -43,7 +43,7 @@ def test_the_header_reads_one_state_per_line() -> None:
 
     season = NS(phase="setup", imposed_kingdoms=False)
 
-    class _Kingdoms:
+    class _Kingdom:
         async def kingdoms(self):
             return [NS(name="AEGIS", is_gaia=False)]
 
@@ -54,7 +54,7 @@ def test_the_header_reads_one_state_per_line() -> None:
             return season
 
     stack = NS(
-        kingdoms=_Kingdoms(),
+        kingdoms=_Kingdom(),
         realms=NS(realms=lambda: _async_none()),
     )
 
@@ -124,7 +124,7 @@ def test_the_setup_cockpit_opens_the_sas_not_the_launch() -> None:
 
     season = SimpleNamespace(phase="setup", imposed_kingdoms=False)
 
-    class _Kingdoms:
+    class _Kingdom:
         async def kingdoms(self):
             return []
 
@@ -135,7 +135,7 @@ def test_the_setup_cockpit_opens_the_sas_not_the_launch() -> None:
             return season
 
     stack = SimpleNamespace(
-        kingdoms=_Kingdoms(),
+        kingdoms=_Kingdom(),
         realms=SimpleNamespace(realms=lambda: _async_none()),
     )
 
@@ -292,7 +292,7 @@ def test_the_running_cycle_row_carries_the_rescue_tools() -> None:
 
     season = SimpleNamespace(phase="started", imposed_kingdoms=False)
 
-    class _Kingdoms:
+    class _Kingdom:
         async def kingdoms(self):
             return []
 
@@ -306,7 +306,7 @@ def test_the_running_cycle_row_carries_the_rescue_tools() -> None:
         async def realms(self):
             return []
 
-    stack = SimpleNamespace(kingdoms=_Kingdoms(), realms=_Realms())
+    stack = SimpleNamespace(kingdoms=_Kingdom(), realms=_Realms())
     with mock.patch.object(sp, "wiring", lambda: stack):
         view = asyncio.run(sp.build_settings_panel("123"))
     ids = _ids(view)
@@ -330,7 +330,7 @@ def test_the_running_cockpit_builds_in_every_engine_phase() -> None:
     def _stack(phase: str | None) -> object:
         season = SimpleNamespace(phase=phase, imposed_kingdoms=False) if phase else None
 
-        class _Kingdoms:
+        class _Kingdom:
             async def kingdoms(self):
                 return []
 
@@ -344,7 +344,7 @@ def test_the_running_cockpit_builds_in_every_engine_phase() -> None:
             async def realms(self):
                 return []
 
-        return SimpleNamespace(kingdoms=_Kingdoms(), realms=_Realms())
+        return SimpleNamespace(kingdoms=_Kingdom(), realms=_Realms())
 
     for phase in (None, "setup", "started"):
         with mock.patch.object(sp, "wiring", lambda s=_stack(phase): s):

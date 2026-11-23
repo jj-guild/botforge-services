@@ -90,7 +90,7 @@ def _guild() -> Any:
     guild.id = "g-1"
     guild.channels = []
     terr = _Channel("🌍 Territoire")
-    guild.categories = [_Category("Kingdoms-Gaïa", [terr])]
+    guild.categories = [_Category("Kingdom-Gaïa", [terr])]
     guild.territory_channel = terr
     return guild
 

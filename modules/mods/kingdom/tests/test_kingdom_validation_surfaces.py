@@ -1,4 +1,4 @@
-"""Kingdoms mod validation dashboard (#339, the detailed candidates view).
+"""Kingdom mod validation dashboard (#339, the detailed candidates view).
 
 The pinned `realms` surface: one row per PENDING kingdom with its King
 and the ✅/❌ decision buttons, the accepted/refused tables, Gaïa

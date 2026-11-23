@@ -1,4 +1,4 @@
-"""Kingdoms mod tavern surfaces (P4.4) — wiring smoke tests (#368).
+"""Kingdom mod tavern surfaces (P4.4) — wiring smoke tests (#368).
 
 The Taverne and the Chef Mercenaire degrade quietly without a stack;
 the pure helpers (civ names, error mapping, market lines, drinks

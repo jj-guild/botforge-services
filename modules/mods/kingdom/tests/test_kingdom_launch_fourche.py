@@ -79,7 +79,7 @@ def _interaction(user: str = "7", state: Any = None) -> Any:
     return outer
 
 
-class _Kingdoms:
+class _Kingdom:
     """Departure fake — the engine seams record the calls."""
 
     def __init__(self, phase: str = "setup", beta_name: str | None = None) -> None:
@@ -102,7 +102,7 @@ class _Kingdoms:
 
 
 class _Stack:
-    def __init__(self, kingdoms: _Kingdoms) -> None:
+    def __init__(self, kingdoms: _Kingdom) -> None:
         self.kingdoms = kingdoms
         self.events = kingdoms.events
 
@@ -149,7 +149,7 @@ def test_the_two_departures_live_in_the_setup_cycle_row() -> None:
 
     from botforge.mods.kingdom.cogs import settings_panel as sp
 
-    kingdoms = _Kingdoms(phase="setup")
+    kingdoms = _Kingdom(phase="setup")
     stack = _Stack(kingdoms)
 
     async def _empty() -> list[Any]:
@@ -242,7 +242,7 @@ async def test_the_beta_departure_distributes_the_sas() -> None:
     """Bêta ⇂ arme le week-end, lève le drapeau, DÉMARRE, ferme le SAS."""
     from botforge.mods.kingdom.cogs import settings_panel as sp
 
-    kingdoms = _Kingdoms(phase="setup")
+    kingdoms = _Kingdom(phase="setup")
     stack = _Stack(kingdoms)
     interaction = _interaction(state=NS())
     calls: list[str] = []
@@ -279,7 +279,7 @@ async def test_the_beta_departure_refuses_a_running_season() -> None:
     """Drasah : « il faut finir d'abord » — pas de format sous une saison."""
     from botforge.mods.kingdom.cogs import settings_panel as sp
 
-    kingdoms = _Kingdoms(phase="started")
+    kingdoms = _Kingdom(phase="started")
     stack = _Stack(kingdoms)
     interaction = _interaction(state=NS())
 
@@ -297,7 +297,7 @@ async def test_the_beta_departure_needs_a_season() -> None:
     """No season ⇂ the false-start note, nothing thrown."""
     from botforge.mods.kingdom.cogs import settings_panel as sp
 
-    stack = _Stack(_Kingdoms())
+    stack = _Stack(_Kingdom())
     stack.kingdoms.season = None
     interaction = _interaction(state=NS())
 
@@ -313,7 +313,7 @@ async def test_the_classic_departure_disarms_a_leftover_beta() -> None:
     """Classique ⇂ désarme la bêta armée + baisse le drapeau, PUIS démarre."""
     from botforge.mods.kingdom.cogs import settings_panel as sp
 
-    kingdoms = _Kingdoms(phase="setup", beta_name="now")
+    kingdoms = _Kingdom(phase="setup", beta_name="now")
     stack = _Stack(kingdoms)
     interaction = _interaction(state=NS())
     calls: list[str] = []
@@ -342,7 +342,7 @@ async def test_the_classic_departure_never_stops_on_a_dead_flag() -> None:
     """The flag lowering is BEST-EFFORT — a state service failure bars nothing."""
     from botforge.mods.kingdom.cogs import settings_panel as sp
 
-    kingdoms = _Kingdoms(phase="setup")
+    kingdoms = _Kingdom(phase="setup")
     stack = _Stack(kingdoms)
     interaction = _interaction(state=None)  # no state_service ⇂ _lower_beta_flag False
     calls: list[str] = []
@@ -362,7 +362,7 @@ async def test_the_end_of_season_lowers_the_beta_flag() -> None:
     """fin-saison-v1 + depart-fourche : une saison finie baisse le drapeau."""
     from botforge.mods.kingdom.cogs import settings_panel as sp
 
-    kingdoms = _Kingdoms(phase="started")
+    kingdoms = _Kingdom(phase="started")
     kingdoms.reset = mock.AsyncMock()
     stack_st = _Stack(kingdoms)
     stack_st.attacks = NS(cancel_ongoing=mock.AsyncMock(return_value=[]))

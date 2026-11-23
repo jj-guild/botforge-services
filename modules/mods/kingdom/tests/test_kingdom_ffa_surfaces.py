@@ -1,4 +1,4 @@
-"""Kingdoms mod FFA Exploration (P4.5) — wiring smoke tests (#368).
+"""Kingdom mod FFA Exploration (P4.5) — wiring smoke tests (#368).
 
 The Saturday Expedition engine and its join surface degrade quietly
 without a stack; the error mapping stays stable across locales, and

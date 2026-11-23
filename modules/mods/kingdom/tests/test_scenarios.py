@@ -1,4 +1,4 @@
-"""Kingdoms mod — documented test scenarios (docs/MODS/kingdoms/TESTS.md).
+"""Kingdom mod — documented test scenarios (docs/MODS/kingdoms/TESTS.md).
 
 Every scenario in the mod's TESTS.md has ONE test here, named after the
 scenario id (``SC-KING-NNN`` in the docstring). CI runs this file
@@ -224,5 +224,5 @@ def test_SC_KING_013_parametres_salon_restored() -> None:
     assert channel["display_name"] == "⚙️ paramètres"
     for locale in ("fr", "en"):
         strings = _conf_yaml(f"locales/{locale}.yaml")[locale]["kingdom"]["settings"]
-        assert strings["settings_title"] == "⚙️ Kingdoms — paramètres", locale
+        assert strings["settings_title"] == "⚙️ Kingdom — paramètres", locale
         assert strings["settings_section"] == "Administration", locale

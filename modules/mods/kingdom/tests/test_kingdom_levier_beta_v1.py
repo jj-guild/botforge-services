@@ -317,7 +317,7 @@ async def test_the_lever_flips_the_key_the_flag_and_rerenders(monkeypatch) -> No
 def _fake_stack(phase: str, beta_name: str | None, finished: bool = False) -> NS:
     launched: list[str] = []
 
-    class _Kingdoms:
+    class _Kingdom:
         async def current_season(self) -> NS:
             return NS(
                 id="season-1", phase=phase, beta_name=beta_name,
@@ -354,7 +354,7 @@ def _fake_stack(phase: str, beta_name: str | None, finished: bool = False) -> NS
         async def save_habitat(self, rid: str, ids: object) -> None:
             return None
 
-    return NS(kingdoms=_Kingdoms(), realms=_Realms(), launched=launched)
+    return NS(kingdoms=_Kingdom(), realms=_Realms(), launched=launched)
 
 
 @pytest.mark.asyncio
@@ -393,12 +393,12 @@ async def test_the_beta_loop_ignores_the_living_and_the_classic(monkeypatch) -> 
         NS(id="s", phase="started", beta_name="w", finished=False),
     ):
 
-        class _Kingdoms:
+        class _Kingdom:
             async def current_season(self) -> object:
                 return season
 
         from botforge.mods.kingdom.cogs import common as _common
-        monkeypatch.setattr(_common, "wiring", lambda: NS(kingdoms=_Kingdoms()))
+        monkeypatch.setattr(_common, "wiring", lambda: NS(kingdoms=_Kingdom()))
         assert await bl.run_beta_loop_safe(bot) is None, season.phase
     # and a dead wiring (no service) is a None too, never a raise
     from botforge.mods.kingdom.cogs import common as _common

@@ -1,4 +1,4 @@
-"""Kingdoms mod market surfaces (P4.3) — wiring smoke tests (#368).
+"""Kingdom mod market surfaces (P4.3) — wiring smoke tests (#368).
 
 The Marché and the Chambre des comptes degrade quietly without a
 stack; the pure helpers (cost lookup, error mapping, market options)

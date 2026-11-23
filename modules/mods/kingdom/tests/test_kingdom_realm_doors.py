@@ -1,7 +1,7 @@
 """hub-entry-fast-ack — the tests (Drasah 20/11).
 
 The tester's capture: the hub panel shows (fixed ✅) but the click on
-« 🏰 Entrée » ends in « Kingdoms (TEST) n'a pas répondu à temps » — the
+« 🏰 Entrée » ends in « Kingdom (TEST) n'a pas répondu à temps » — the
 door built its ENTIRE window (the cold service wiring, the Mongo
 reads, the layout) before the FIRST byte of response, and Discord
 closes an unacknowledged click after 3 seconds. The quit/join/crown

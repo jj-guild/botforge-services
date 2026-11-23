@@ -83,7 +83,7 @@ def _shell(name: str = "roc", *, join: bool = True) -> NS:
 
 
 def _stack(shells: list[NS], season: object = None) -> NS:
-    class _Kingdoms:
+    class _Kingdom:
         started: list[bool] = []
 
         async def current_season(self):  # type: ignore[no-untyped-def]
@@ -108,7 +108,7 @@ def _stack(shells: list[NS], season: object = None) -> NS:
         async def clear_join_request(self, realm_id: str) -> None:
             return None
 
-    kingdoms = _Kingdoms()
+    kingdoms = _Kingdom()
     return NS(kingdoms=kingdoms, realms=_Realms(), events=NS())
 
 

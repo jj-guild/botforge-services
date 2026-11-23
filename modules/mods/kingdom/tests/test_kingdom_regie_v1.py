@@ -50,7 +50,7 @@ def _bot(state: _RegieStateService | None = None) -> SimpleNamespace:
 def _stack(phase: str | None) -> SimpleNamespace:
     season = SimpleNamespace(phase=phase, imposed_kingdoms=False) if phase else None
 
-    class _Kingdoms:
+    class _Kingdom:
         async def kingdoms(self):
             return []
 
@@ -60,7 +60,7 @@ def _stack(phase: str | None) -> SimpleNamespace:
         async def current_season(self):
             return season
 
-    return SimpleNamespace(kingdoms=_Kingdoms())
+    return SimpleNamespace(kingdoms=_Kingdom())
 
 
 @pytest.mark.asyncio
@@ -115,11 +115,11 @@ async def test_the_departure_shuts_the_sas_by_itself() -> None:
     state = _RegieStateService()
     started: dict[str, Any] = {}
 
-    class _Kingdoms(_stack("setup").kingdoms.__class__):  # type: ignore[misc]
+    class _Kingdom(_stack("setup").kingdoms.__class__):  # type: ignore[misc]
         async def start_season(self):
             started["yes"] = True
 
-    stack = SimpleNamespace(kingdoms=_Kingdoms())
+    stack = SimpleNamespace(kingdoms=_Kingdom())
     notes: list[str] = []
 
     async def _send(content: str, ephemeral: bool = True) -> None:
@@ -156,7 +156,7 @@ async def test_the_false_start_rebasculates_to_the_origin_state() -> None:
     phases: list[str] = []
     released: list[str] = []
 
-    class _Kingdoms(_stack("started").kingdoms.__class__):  # type: ignore[misc]
+    class _Kingdom(_stack("started").kingdoms.__class__):  # type: ignore[misc]
         async def set_phase(self, phase: str):
             phases.append(phase)
 
@@ -173,7 +173,7 @@ async def test_the_false_start_rebasculates_to_the_origin_state() -> None:
         async def release_engagement(self, realm_id: str):
             released.append(realm_id)
 
-    stack = SimpleNamespace(kingdoms=_Kingdoms(), realms=_Realms())
+    stack = SimpleNamespace(kingdoms=_Kingdom(), realms=_Realms())
     notes: list[str] = []
 
     async def _send(content: str, ephemeral: bool = True) -> None:
@@ -295,11 +295,11 @@ async def test_the_off_season_camp_offers_the_persistent_doors() -> None:
 
     from botforge.mods.kingdom.cogs import camp_beta, common
 
-    class _Kingdoms(_stack(None).kingdoms.__class__):  # type: ignore[misc]
+    class _Kingdom(_stack(None).kingdoms.__class__):  # type: ignore[misc]
         async def realms(self):
             return []
 
-    stack = SimpleNamespace(kingdoms=_Kingdoms(), realms=SimpleNamespace(realms=_Kingdoms().realms))
+    stack = SimpleNamespace(kingdoms=_Kingdom(), realms=SimpleNamespace(realms=_Kingdom().realms))
 
     async def _send(*args, **kwargs):
         return None

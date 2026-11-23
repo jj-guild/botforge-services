@@ -161,12 +161,12 @@ def test_season_door_opens_for_any_live_season() -> None:
         finished = False
         beta_name = None  # a CLASSICAL season
 
-    class _Kingdoms:
+    class _Kingdom:
         async def current_season(self) -> object:
             return _Season()
 
     class _Stack:
-        kingdoms = _Kingdoms()
+        kingdoms = _Kingdom()
 
     def fake_wiring() -> object:
         return _Stack()
@@ -189,12 +189,12 @@ def test_season_door_stays_closed_without_a_season() -> None:
         finished = True
         beta_name = "now"
 
-    class _Kingdoms:
+    class _Kingdom:
         async def current_season(self) -> object:
             return _Season()
 
     class _Stack:
-        kingdoms = _Kingdoms()
+        kingdoms = _Kingdom()
 
     def finished_wiring() -> object:
         return _Stack()

@@ -251,7 +251,7 @@ async def test_the_engine_gestures_refresh_too() -> None:
             state[(scope, key)] = value
             return True
 
-    class _Kingdoms:
+    class _Kingdom:
         async def start_season(self):
             pass
 
@@ -271,7 +271,7 @@ async def test_the_engine_gestures_refresh_too() -> None:
         async def release_engagement(self, realm_id: str):
             pass
 
-    stack = SimpleNamespace(kingdoms=_Kingdoms(), realms=_Realms())
+    stack = SimpleNamespace(kingdoms=_Kingdom(), realms=_Realms())
     interaction = SimpleNamespace(
         client=SimpleNamespace(state_service=_StateService()),
         guild_id="123",

@@ -1,4 +1,4 @@
-"""Kingdoms mod apply flow (postuler-hybride-v1, Drasah 18/11).
+"""Kingdom mod apply flow (postuler-hybride-v1, Drasah 18/11).
 
 The golden Postuler panel pinned in the public « apply » salon, the
 3-tier model's pure branch decision (account free / season gated /
@@ -481,12 +481,12 @@ def test_the_seigneurerie_panel_builds_the_lords_desk(monkeypatch: Any) -> None:
         kingdom_id = None
         left = False
 
-    class _Kingdoms:
+    class _Kingdom:
         async def lords(self) -> list:
             return [_Lord()]
 
     class _Stack:
-        kingdoms = _Kingdoms()
+        kingdoms = _Kingdom()
 
     import botforge.mods.kingdom.cogs.settings_panel as sp
 

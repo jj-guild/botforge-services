@@ -1,4 +1,4 @@
-"""Kingdoms mod console ops (#339) — wiring smoke tests.
+"""Kingdom mod console ops (#339) — wiring smoke tests.
 
 The mod's console actions (relaunch/reset/clock) ride the platform
 console registry; the clock mutation persists on the season doc and
