@@ -1,4 +1,4 @@
-"""Kingdoms mod persistence: a narrow async store over the season data.
+"""Kingdom mod persistence: a narrow async store over the season data.
 
 The season collections are owned by the mod (ADR-0020 note on the
 models): seasons, kingdoms and lords live in MongoDB behind this seam.

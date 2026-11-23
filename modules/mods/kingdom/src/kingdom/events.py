@@ -1,4 +1,4 @@
-"""Kingdoms mod weekly events service (P4.2 port, #368 T5).
+"""Kingdom mod weekly events service (P4.2 port, #368 T5).
 
 The weekly cron machinery (the attack service's calendar seams) plus
 the EventService orchestrator: the cycle switch with the Lord's Day

@@ -1,4 +1,4 @@
-"""Kingdoms Taverne service (taverne-v1, Drasah 24/10/2026) — tranche 1.
+"""Kingdom Taverne service (taverne-v1, Drasah 24/10/2026) — tranche 1.
 
 The Taverne is the lords' purse-and-drinks economy: every lord owns a
 PERSONAL purse in écus (10 at enrollment, ``TavernSettings.purse_start``)

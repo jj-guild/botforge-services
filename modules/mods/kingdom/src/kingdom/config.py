@@ -1,4 +1,4 @@
-"""Kingdoms mod season configuration.
+"""Kingdom mod season configuration.
 
 Season configuration is **data**: every tunable of reference §27 lives in
 ``conf/season.yaml`` (the mod's conf dir) (or the settings section of the mod

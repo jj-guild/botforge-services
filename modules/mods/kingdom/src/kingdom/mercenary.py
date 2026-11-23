@@ -1,4 +1,4 @@
-"""Kingdoms Chef Mercenaire service (chef-mercenaire-v1, Drasah 24/10).
+"""Kingdom Chef Mercenaire service (chef-mercenaire-v1, Drasah 24/10).
 
 The Chef Mercenaire is the Taverne's evening auction: between 20h00
 and 21h00 REAL Paris time (never the offset game clock) the Chief

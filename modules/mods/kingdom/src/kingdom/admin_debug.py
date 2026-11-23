@@ -31,7 +31,7 @@ from .models import AttackState, LordModel
 from .service import KingdomModError
 
 if TYPE_CHECKING:  # pragma: no cover — import cycles never at runtime
-    from .config import KingdomsSeasonConfig
+    from .config import KingdomSeasonConfig
     from .models import KingdomModel
     from .service import KingdomService
     from .territories import TerritoryService
@@ -99,7 +99,7 @@ class DebugService:
     def __init__(
         self,
         store: Any,
-        config: KingdomsSeasonConfig,
+        config: KingdomSeasonConfig,
         kingdoms: KingdomService,
         territories: TerritoryService,
         attacks: Any,

@@ -1,4 +1,4 @@
-"""Kingdoms mod season & enrollment service (botforge-services#157, T2).
+"""Kingdom mod season & enrollment service (botforge-services#157, T2).
 
 The domain rules of reference §3-§5 and decisions D21-D26/D38: manual
 admin launch, wholesale reset, King/Lord enrollment, the waiting queue,
@@ -1064,7 +1064,7 @@ class KingdomService:
         return lord
 
     async def available_kingdoms(self) -> list[KingdomModel]:
-        """Kingdoms a queued King may claim: no Gaïa, not refused, kingless."""
+        """Kingdom a queued King may claim: no Gaïa, not refused, kingless."""
         kingdoms = await self.kingdoms()
         lords = await self.lords()
         taken = {

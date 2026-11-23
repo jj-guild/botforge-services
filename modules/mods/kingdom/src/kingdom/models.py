@@ -1,4 +1,4 @@
-"""Kingdoms mod season-state models.
+"""Kingdom mod season-state models.
 
 Season data is **reset wholesale on every new season launch** (reference
 §3.3/§28, decision D38/D52): these models are the per-season state the
