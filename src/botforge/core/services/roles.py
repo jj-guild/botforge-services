@@ -92,7 +92,7 @@ class RolesService:
         try:
             await self._cache.set_state(CACHE_SCOPE, guild_id, {"role_id": role_id}, ttl=ROLE_CACHE_TTL_SECONDS)
         except Exception:
-            logger.warning("ROLES CACHE SET FAILED — cache-aside continues uncached")
+            logger.warning("ROLES CACHE SET FAILED — cache-aside continues uncached", exc_info=True)
 
     async def resolve_admin_role(self, guild_id: str) -> str | None:
         """Resolve the guild's bot-admins role id (cache → platform → None)."""
@@ -215,7 +215,7 @@ class ModRolesService:
         try:
             await self._cache.set_state(MOD_ROLE_CACHE_SCOPE, key, {"role_id": role_id}, ttl=MOD_ROLE_CACHE_TTL_SECONDS)
         except Exception:
-            logger.warning("MOD-ROLE CACHE SET FAILED (key %s) — cache-aside continues uncached", key)
+            logger.warning("MOD-ROLE CACHE SET FAILED (key %s) — cache-aside continues uncached", key, exc_info=True)
 
     async def setup_mod_roles(self, guild_id: str, mod_name: str) -> dict[str, str]:
         """Provision every role declared by a mod; return key -> role id.

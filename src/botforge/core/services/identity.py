@@ -164,7 +164,7 @@ class IdentityService:
         try:
             cached = await self._cache.get_state(IDENTITY_COLLECTION, f"{platform}:{platform_user_id}")
         except Exception:
-            logger.warning("IDENTITY CACHE READ FAILED (%s:%s)", platform, platform_user_id)
+            logger.warning("IDENTITY CACHE READ FAILED (%s:%s)", platform, platform_user_id, exc_info=True)
             return None
         if cached is None or "user_id" not in cached:
             return None
@@ -180,4 +180,4 @@ class IdentityService:
                 IDENTITY_CACHE_TTL_SECONDS,
             )
         except Exception:
-            logger.warning("IDENTITY CACHE WRITE FAILED (%s:%s)", platform, platform_user_id)
+            logger.warning("IDENTITY CACHE WRITE FAILED (%s:%s)", platform, platform_user_id, exc_info=True)

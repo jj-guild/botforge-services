@@ -115,14 +115,14 @@ class MessageRegistryService:
         try:
             await self._cache.delete_state(MESSAGES_COLLECTION, f"{platform}:{message_key}:{entity_id}")
         except Exception:
-            logger.warning("MESSAGE CACHE DELETE FAILED (%s:%s)", message_key, entity_id)
+            logger.warning("MESSAGE CACHE DELETE FAILED (%s:%s)", message_key, entity_id, exc_info=True)
         return removed
 
     async def _read_cache(self, platform: str, message_key: str, entity_id: str) -> dict[str, str] | None:
         try:
             cached = await self._cache.get_state(MESSAGES_COLLECTION, f"{platform}:{message_key}:{entity_id}")
         except Exception:
-            logger.warning("MESSAGE CACHE READ FAILED (%s:%s)", message_key, entity_id)
+            logger.warning("MESSAGE CACHE READ FAILED (%s:%s)", message_key, entity_id, exc_info=True)
             return None
         if cached is None or "channel_id" not in cached or "message_id" not in cached:
             return None
@@ -140,4 +140,4 @@ class MessageRegistryService:
                 CACHE_TTL_SECONDS,
             )
         except Exception:
-            logger.warning("MESSAGE CACHE WRITE FAILED (%s:%s)", message_key, entity_id)
+            logger.warning("MESSAGE CACHE WRITE FAILED (%s:%s)", message_key, entity_id, exc_info=True)

@@ -180,7 +180,7 @@ class ChannelService:
                 CACHE_TTL_SECONDS,
             )
         except Exception:
-            logger.warning("CHANNEL CACHE WRITE FAILED (guild %s, category %s)", guild_id, category)
+            logger.warning("CHANNEL CACHE WRITE FAILED (guild %s, category %s)", guild_id, category, exc_info=True)
 
     async def setup_mod_channels(self, guild_id: str, mod_name: str) -> dict[str, IChannel]:
         """Provision every channel category declared by a mod.
