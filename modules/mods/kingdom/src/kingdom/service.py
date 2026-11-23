@@ -240,6 +240,31 @@ class KingdomService:
         logger.info("kingdom: season %s started by an admin", season.id)
         return season
 
+    async def draw_missing_starting_draft(self) -> dict[str, list[str]]:
+        """Catch up the starting draft for kingdoms whose hand is STILL empty.
+
+        alliances-last-mile-v1 (Drasah 23/11) — l'incident live : une
+        saison partie sans passer par ``start_season`` (la phase
+        déplacée à la main, la machine à temps) laissait les royaumes à
+        main VIDE pour toujours : le draft de départ n'existe QUE dans
+        ``start_season``, et ce seam est délibérément idempotent (sur
+        une saison « started » il ne fait rien). Ce rattrapage est le
+        pendant du tirage de territoires : les MÊMES règles que le
+        départ (aucun doublon entre royaumes, Gaïa et le royaume de
+        test exclus, l'acquisition « starter » consignée au registre
+        des alliances), les mains déjà servies jamais retouchées.
+        """
+        report: dict[str, list[str]] = {}
+        for kingdom in await self.kingdoms():
+            if kingdom.is_gaia or kingdom.civilizations or is_test_kingdom(kingdom):
+                continue
+            await self._grant_starting_civilizations(kingdom)
+            await self._store.upsert_kingdom(kingdom.to_mongo())
+            report[str(kingdom.id)] = list(kingdom.civilizations)
+        if report:
+            logger.info("kingdom: starting draft caught up for %s", list(report))
+        return report
+
     async def set_imposed_mode(self, imposed: bool) -> SeasonState:
         """Flip the imposed-kingdoms mode mid-season (Drasah's rule).
 

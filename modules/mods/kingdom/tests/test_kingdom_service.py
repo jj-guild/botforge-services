@@ -328,6 +328,58 @@ async def test_models_survive_the_mongo_wire_roundtrip() -> None:
     assert lords == []  # no lords yet, but the read must not crash either
 
 
+async def test_draw_missing_starting_draft_catches_up_a_hand_started_season() -> None:
+    """alliances-last-mile-v1 (live incident 2026-11-23): a season that
+    reached « started » WITHOUT passing through ``start_season`` (the
+    phase moved by hand / the time machine) left every kingdom's hand
+    EMPTY FOREVER — the starting draft only runs inside ``start_season``,
+    which is deliberately idempotent on a started season. The catch-up
+    seam fills the empty hands with the SAME rules as the start."""
+    from botforge.mods.kingdom.config import (
+        CivilizationCondition,
+        KingdomSeasonConfig,
+    )
+
+    config = KingdomSeasonConfig(
+        starting_civilizations=8,
+        civilizations=tuple(
+            CivilizationCondition(key=f"civ-{index}", display_name=f"Civ {index}")
+            for index in range(20)
+        ),
+    )
+    service = KingdomService(MongoWireStore(), config)  # type: ignore[arg-type]
+    await service.launch(imposed_names=["Aegis", "HeN"])
+    await service.ensure_test_kingdom()  # the Nilrem admin kingdom
+    await service.set_phase("started")  # the incident path: no start_season call
+    kingdoms = await service.kingdoms()
+    assert all(not k.civilizations for k in kingdoms if not k.is_gaia)
+    await service.start_season()  # the old escape hatch is a NO-OP now
+    assert all(not k.civilizations for k in await service.kingdoms() if not k.is_gaia)
+
+    report = await service.draw_missing_starting_draft()  # the catch-up
+    kingdoms = await service.kingdoms()  # read back through BSON
+    players = [k for k in kingdoms if not k.is_gaia and k.id != "k-nilrem"]
+    assert len(players) == 2
+    test_kingdom = next(k for k in kingdoms if k.id == "k-nilrem")
+    drawn: list[str] = []
+    for kingdom in players:
+        assert len(kingdom.civilizations) == 8
+        assert str(kingdom.id) in report
+        ledger = dict(kingdom.civilization_acquisitions or {})
+        assert set(ledger) == set(kingdom.civilizations)
+        assert all(e["origin"] == "starter" for e in ledger.values())
+        drawn.extend(kingdom.civilizations)
+    assert len(set(drawn)) == len(drawn)  # duplicate-free across kingdoms
+    assert not test_kingdom.civilizations  # the test kingdom is never drawn
+    gaia = next(k for k in kingdoms if k.is_gaia)
+    assert not gaia.civilizations
+
+    # a second pass never touches the served hands
+    assert await service.draw_missing_starting_draft() == {}
+    again = await service.kingdoms()
+    assert [list(k.civilizations) for k in again] == [list(k.civilizations) for k in kingdoms]
+
+
 async def test_founding_creates_a_pending_kingdom() -> None:
     service, _ = _service()
     await service.launch()

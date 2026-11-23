@@ -194,6 +194,77 @@ async def test_the_pass_record_survives_only_in_memory(monkeypatch: pytest.Monke
     assert isinstance(record["drawn"], bool)
 
 
+@pytest.mark.asyncio
+async def test_the_pass_draws_missing_hands_before_the_render(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """alliances-last-mile-v1 : la main se rattrape AVANT de rendre les fiches."""
+    import botforge.mods.kingdom.cogs.realm_content as content
+
+    calls: list[str] = []
+
+    class _Kingdoms:
+        @staticmethod
+        async def current_season() -> Any:
+            return type("S", (), {"phase": "started", "name": "Bêta 1"})()
+
+        @staticmethod
+        async def draw_missing_starting_draft() -> dict[str, list[str]]:
+            calls.append("draft")
+            return {"k-1": ["civ-1", "civ-2"]}
+
+    class _Stack:
+        kingdoms = _Kingdoms
+        territories = None  # no territory service → the territory defers
+
+    monkeypatch.setattr(content, "wiring", lambda: _Stack())
+
+    async def _deploy(bot: Any, locale: Any = "fr") -> int:
+        calls.append("deploy")
+        return 0
+
+    async def _gaia(guild: Any, locale: Any = "fr") -> None:
+        return None
+
+    monkeypatch.setattr(content, "deploy_all_realms_content", _deploy)
+    monkeypatch.setattr(content, "deploy_gaia_content", _gaia)
+    await content.feed_season_surfaces(_bot())
+    assert calls == ["draft", "deploy"], "le tirage précède le rendu, toujours"
+
+
+@pytest.mark.asyncio
+async def test_a_failing_hand_catch_up_never_blocks_the_feed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The seam is best-effort: a crash defers to the next pass, never raises."""
+    import botforge.mods.kingdom.cogs.realm_content as content
+
+    class _Kingdoms:
+        @staticmethod
+        async def current_season() -> Any:
+            return type("S", (), {"phase": "started", "name": "Bêta 1"})()
+
+        @staticmethod
+        async def draw_missing_starting_draft() -> dict[str, list[str]]:
+            raise RuntimeError("the engine store is down")
+
+    class _Stack:
+        kingdoms = _Kingdoms
+        territories = None
+
+    monkeypatch.setattr(content, "wiring", lambda: _Stack())
+
+    async def _deploy(bot: Any, locale: Any = "fr") -> int:
+        return 3
+
+    async def _gaia(guild: Any, locale: Any = "fr") -> None:
+        return None
+
+    monkeypatch.setattr(content, "deploy_all_realms_content", _deploy)
+    monkeypatch.setattr(content, "deploy_gaia_content", _gaia)
+    assert await content.feed_season_surfaces(_bot()) == 3  # the render still ran
+
+
 def test_the_atelier_wears_the_etat_button() -> None:
     """« l'atelier porte État » — the button rides the emergency row."""
     from botforge.mods.kingdom.cogs.common import strings_by_locale

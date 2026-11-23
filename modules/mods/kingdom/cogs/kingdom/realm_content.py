@@ -1140,6 +1140,37 @@ async def draw_initial_territories_safe(bot: Any) -> bool:
         return False
 
 
+async def draw_starting_civilizations_safe(bot: Any) -> dict[str, list[str]]:
+    """Best-effort starting-hand catch-up (guarded, the seam is optional).
+
+    alliances-last-mile-v1 (Drasah 23/11) — le MÊME principe que le
+    tirage de territoires : le panneau Alliances (la main, la mosaïque
+    de blasons, la fenêtre « Prochaine main ») lit UNE seule source de
+    vérité, la main du royaume côté moteur. Une saison partie sans son
+    draft de départ y montrait une main vide pour toujours ; la passe
+    de 5 min rattrape donc les mains MANQUANTES AVANT de rendre les
+    fiches (le tirage précède le rendu, la règle de la référence) via
+    le seam moteur ``draw_missing_starting_draft`` — jamais de
+    réimplémentation, jamais de rendu ad hoc.
+    """
+    stack = wiring()
+    kingdoms_service = getattr(stack, "kingdoms", None)
+    seam = getattr(kingdoms_service, "draw_missing_starting_draft", None)
+    if seam is None:
+        return {}
+    if not await season_started(stack):
+        logger.info("kingdom: starting-hand catch-up deferred — the season is not started")
+        return {}
+    try:
+        report = await seam()
+        if report:
+            logger.info("kingdom: starting hands caught up at the pass — %s", list(report))
+        return report
+    except Exception:  # noqa: BLE001 — the report reports, never raises
+        logger.warning("kingdom: starting-hand catch-up failed", exc_info=True)
+        return {}
+
+
 # ---------------------------------------------------------------------------
 # gaia-territory-v1 (Drasah 23/11) : la fiche Territoire de Gaïa, REPRISE
 # de la référence (restructuration-serveur-v1 c) : le niveau de l'IA lu
@@ -1267,6 +1298,9 @@ async def feed_season_surfaces(bot: Any, locale: Any = "fr") -> int:
         drawn = await draw_initial_territories_safe(bot)
     except Exception:  # noqa: BLE001 — the report never blocks the feed
         logger.warning("kingdom realm content: the report's draw read failed", exc_info=True)
+    # alliances-last-mile-v1 : la main de civilisations précède le rendu —
+    # le panneau Alliances ne se nourrit QUE de la donnée moteur.
+    await draw_starting_civilizations_safe(bot)
     touched = await deploy_all_realms_content(bot, locale)
     for guild in list(getattr(bot, "guilds", []) or []):
         try:
