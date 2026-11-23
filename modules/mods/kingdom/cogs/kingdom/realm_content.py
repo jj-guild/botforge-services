@@ -1514,3 +1514,30 @@ async def surfaces_state(bot: Any) -> dict[str, Any]:
                 "territory": "territory" in channels,
                 "alliances": "alliances" in channels,
                 "cards": cards,
+                "fiche_territory": await _marker_present(territory_channel, "territory")
+                if territory_channel is not None
+                else False,
+                "fiche_alliances": await _marker_present(alliances_channel, "alliances")
+                if alliances_channel is not None
+                else False,
+                "error": "; ".join(realm_errors),
+            }
+        )
+    gaia_kingdom = next((k for k in kingdoms if bool(getattr(k, "is_gaia", False))), None)
+    for guild in guilds:
+        channel = await _gaia_territory_channel(guild)
+        out["gaia"] = {
+            "kingdom": str(getattr(gaia_kingdom, "name", "") or "") if gaia_kingdom is not None else "",
+            "found": channel is not None,
+            "channel_name": str(getattr(channel, "name", "") or "") if channel is not None else "",
+            "scan": _gaia_category_scan(guild),
+            "error": surface_errors().get("Gaïa·territoire", ""),
+            "cards": len(await _owned_territories(stack, gaia_kingdom))
+            if gaia_kingdom is not None
+            else 0,
+            "fiche": await _marker_present(channel, "territory-gaia")
+            if channel is not None
+            else False,
+        }
+        break
+    return out
