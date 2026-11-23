@@ -305,6 +305,7 @@ def setup_hook(bot: Any) -> None:
     from .settings_panel import (
         KingdomRegieParcoursButton,
         KingdomRegieRealmButton,
+        KingdomRoyaumesPageButton,
         KingdomRegieResetPlayersButton,
         KingdomRegieSwitchButton,
         KingdomSettingsNavButton,
@@ -362,6 +363,7 @@ def setup_hook(bot: Any) -> None:
         KingdomRegieRealmButton,
         KingdomRegieParcoursButton,
         KingdomRegieResetPlayersButton,
+        KingdomRoyaumesPageButton,
         KingdomWindowCloseButton,
         *machine_dynamic_items(),
         *distributor_dynamic_items(),

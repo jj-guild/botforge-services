@@ -26,6 +26,10 @@ views:
     kind: surface
   panel:mod:kingdom:admin:regie:
     kind: surface
+  # tiroir-royaumes-v1 (Drasah 23/11, Check 142) : le tiroir ROYAUMES &
+  # JOUEURS (les listes paginées + les gestes) — même règle de déclaration
+  panel:mod:kingdom:admin:royaumes:
+    kind: surface
   # layoutview-v1 (Check 138): the regie realm cards — the purge confirm
   # (ephemeral, admin) and the founder's restore DM question
   panel:mod:kingdom:admin:regie:confirm:

@@ -251,28 +251,24 @@ def test_the_fixed_drawers_reuse_only_existing_registrations() -> None:
     )
 
     ids = _ids(_regie_drawer(settings_strings("fr")))
-    # console-etats-regie-v1: the four ON/OFF switches first (data
+    # console-etats-regie-v1: the four ON/OFF switches (data
     # #369 — the labels come from the régie's label keys)
+    # levier-bêta-v1 (Check 140) : le switch « 📝 Compte requis »
+    # devient LE LEVIER « 🧭 Parcours » (Classique ●/Bêta ●) —
+    # registration_required ne vit PLUS dans la pile de switches
+    # tiroir-royaumes-v1 (Check 142) : les gestes et les listes de
+    # royaumes partent dans le tiroir ROYAUMES — la régie est MINCE
+    # (l'incident « le bouton muet » venait du cap Discord de 40)
     assert sorted(ids) == sorted([
         "kingdom:console-regie:registration_open",
         "kingdom:console-regie:realm_creation_open",
         "kingdom:console-regie:realm_join_open",
         "kingdom:console-regie:season_entry_open",
-        # reset-joueurs-v1 (Drasah 22/11) : le geste
-        # « 🧹 Réinitialiser les joueurs »
-        # levier-bêta-v1 (Check 140) : le switch « 📝 Compte requis »
-        # devient LE LEVIER « 🧭 Parcours » (Classique ●/Bêta ●) —
-        # registration_required ne vit PLUS dans la pile de switches
         "kingdom:console-regie:parcours:classic",
         "kingdom:console-regie:parcours:beta",
-        "kingdom:console-regie:reset-players:0",
-        "kingdom:settings:add-kingdom",
-        "kingdom:settings:assign",
-        "kingdom:settings:remove",
-        "kingdom:settings:season-mode",
     ])
     # tiroir-bêta retiré (Drasah 22/11) : il ne reste QUE ces tiroirs
-    assert sorted(_DRAWERS) == ["admissions", "atelier", "regie"]
+    assert sorted(_DRAWERS) == ["admissions", "atelier", "regie", "royaumes"]
 
 
 def _buttons(view: object) -> dict[str, object]:

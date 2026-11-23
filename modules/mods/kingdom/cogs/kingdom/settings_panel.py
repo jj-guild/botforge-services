@@ -310,6 +310,13 @@ async def build_settings_panel(guild_id: str) -> discord.ui.LayoutView:
     regie_row.add_item(
         KingdomSettingsNavButton("regie", str(strings["settings_nav_regie_button"])).item
     )
+    # tiroir-royaumes-v1 (Drasah 23/11) : la RéGIE et les ROYAUMES sont
+    # DEUX tiroirs — les interrupteurs d'un côté, les listes de
+    # royaumes (paginées) et les gestes joueurs de l'autre. La limite
+    # Discord de 40 composants ne se partage plus un seul tiroir.
+    regie_row.add_item(
+        KingdomSettingsNavButton("royaumes", str(strings["settings_nav_royaumes_button"])).item
+    )
     atelier_row: Any = discord.ui.ActionRow()
     atelier_row.add_item(
         KingdomSettingsNavButton("atelier", str(strings["settings_nav_atelier_button"])).item
@@ -1129,6 +1136,7 @@ async def _pending_admissions() -> list[Any]:
 _DRAWERS: dict[str, str] = {
     "admissions": "panel:mod:kingdom:admin:admissions",
     "regie": "panel:mod:kingdom:admin:regie",
+    "royaumes": "panel:mod:kingdom:admin:royaumes",
     "atelier": "panel:mod:kingdom:admin:atelier",
 }
 
@@ -1260,17 +1268,13 @@ def _regie_drawer(
     strings: dict[str, str],
     states: dict[str, bool] | None = None,
     season_live: bool = True,
-    archived: list[Any] | None = None,
-    guild_id: str = "",
-    dormant: list[Any] | None = None,
     parcours_beta: bool = False,
     season_running: bool = True,
 ) -> discord.ui.LayoutView:
-    """Les interrupteurs + les gestes ponctuels — un tiroir.
+    """Les interrupteurs de la saison — UN tiroir (légéral, jamais 40).
 
     console-etats-regie-v1 (Drasah 21/11) : la RÉGIE au sens propre —
-    les ON/OFF de la vie des joueurs (données #369, défaut = OUVERT),
-    puis les modals moteur existants (le tiroir de la console-v2).
+    les ON/OFF de la vie des joueurs (données #369, défaut = OUVERT).
 
     levier-bêta-v1 (Check 140, Drasah 22/11) : UN SEUL LEVIER
     « Parcours : Classique ↔ Bêta » ouvre le tiroir — il ABSORBE
@@ -1280,11 +1284,20 @@ def _regie_drawer(
     saison vit (setup ou started) ; la position affichée =
     effective (drapeau levé OU compte non requis ⇒ Bêta) — un drapeau
     orphelin devient LISIBLE et l'admin l'abaisse d'un clic.
+
+    tiroir-royaumes-v1 (Drasah 23/11, Check 142) : le bloc parcours fusionne
+    label + hint en UN seul texte (pas de Separator décoratif) et les
+    listes de royaumes + les gestes vivent dans le tiroir ROYAUMES —
+    l'incident « le bouton Joueurs & royaumes muet » venait du cap Discord
+    de 40 composants, ce tiroir ne peut plus le dépasser.
     """
     states = states or {}
     parcours_blocks: list[discord.ui.Item[discord.ui.LayoutView]] = [
-        discord.ui.TextDisplay(f"## {strings['settings_regie_parcours_label']}"),
-        discord.ui.TextDisplay(str(strings["settings_regie_parcours_hint"])),
+        # label + hint FUSIONNÉS : un seul composant au lieu de deux
+        discord.ui.TextDisplay(
+            f"## {strings['settings_regie_parcours_label']}\n"
+            f"{strings['settings_regie_parcours_hint']}"
+        ),
     ]
     parcours_row: Any = discord.ui.ActionRow()
     for target, key, active in (
@@ -1301,7 +1314,6 @@ def _regie_drawer(
         parcours_blocks.append(
             discord.ui.TextDisplay(str(strings["settings_regie_parcours_locked_hint"]))
         )
-    parcours_blocks.append(discord.ui.Separator())
     switch_blocks: list[discord.ui.Item[discord.ui.LayoutView]] = []
     from .regie import REGIE_SWITCHES, SWITCH_LABEL_KEYS
 
@@ -1319,13 +1331,68 @@ def _regie_drawer(
             ).item
         )
         switch_blocks.append(row)
-    # lancement-fourche-v1 (Drasah 21/11 « le sas dit ouvert mais Blanc ne
-    # voit rien ») : sans saison, le sas ne s'applique à RIEN — la ligne
-    # le dit, le flou disparaît (le switch garde sa valeur pour la suite)
+    # lancement-fourche-v1 : sans saison, le sas ne s'applique à RIEN —
+    # la ligne le dit (le switch garde sa valeur pour la suite)
     if not season_live:
         switch_blocks.append(
             discord.ui.TextDisplay(str(strings["settings_regie_sas_idle_hint"]))
         )
+    container: discord.ui.Container[discord.ui.LayoutView] = discord.ui.Container(
+        discord.ui.TextDisplay(f"# {strings['settings_regie_title']}"),
+        discord.ui.TextDisplay(str(strings["settings_regie_hint"])),
+        *parcours_blocks,
+        discord.ui.TextDisplay(f"## {strings['settings_regie_switches_label']}"),
+        *switch_blocks,
+        accent_colour=_ADMIN_COLOUR,
+    )
+    return surface(_DRAWERS["regie"], container)
+
+
+# tiroir-royaumes-v1 (Drasah 23/11, Check 142) : le tiroir ROYAUMES tient
+# 4 royaumes par page et par liste — le cap Discord de 40 composants ne
+# se franchit plus, JAMAIS, quelle que soit la taille du royaume vitré
+_ROYAUMES_PAGE = 3
+
+
+def _royaume_line(strings: dict[str, str], realm: Any) -> str:
+    """UNE ligne compacte par royaume (plus de grosse carte par coquille)."""
+    members = len(list(getattr(realm, "member_ids", []) or [])) + 1  # le Roi compte
+    try:
+        return str(strings["settings_royaumes_line"]).format(
+            name=str(getattr(realm, "name", "?"))[:80],
+            king=str(getattr(realm, "king_name", "") or "?")[:32],
+            members=members,
+        )
+    except (KeyError, IndexError, ValueError):  # noqa: BLE001 — a line never crashes the drawer
+        return f"- **{str(getattr(realm, 'name', '?'))[:80]}**"
+
+
+def _royaumes_drawer(
+    strings: dict[str, str],
+    guild_id: str = "",
+    dormant: list[Any] | None = None,
+    archived: list[Any] | None = None,
+    page: int = 0,
+) -> discord.ui.LayoutView:
+    """Les royaumes (paginés) + les gestes joueurs — UN tiroir.
+
+    tiroir-royaumes-v1 (Drasah 23/11, Check 142) : la moitié "royaumes"
+    de l'ancienne régie vit ICI, en lignes compactes et PAGINÉES (4 par
+    page et par liste — l'incident « le bouton muet » venait du cap
+    Discord de 40 composants, jamais plus). La page voyage dans l'id du
+    bouton (restart-proof, le même patron que le reste du mod).
+    """
+    dormant = sorted(list(dormant or []), key=lambda r: str(getattr(r, "name", "?")))
+    archived = sorted(list(archived or []), key=lambda r: str(getattr(r, "name", "?")))
+    pages = max(
+        (len(dormant) + _ROYAUMES_PAGE - 1) // _ROYAUMES_PAGE,
+        (len(archived) + _ROYAUMES_PAGE - 1) // _ROYAUMES_PAGE,
+        1,
+    )
+    page = max(0, min(int(page), pages - 1))
+    gid = str(guild_id or "0")
+
+    # the players' gestures (moved from the old regie drawer, one row)
     row_button: Any = discord.ui.ActionRow()
     row_button.add_item(
         SettingsActionButton(
@@ -1347,82 +1414,146 @@ def _regie_drawer(
             "season-mode", str(strings["settings_season_mode_button"]), discord.ButtonStyle.secondary
         ).item
     )
-    # reset-joueurs-v1 (Drasah 22/11) : l'outillage de test — les joueurs
-    # sortent des royaumes hors saison, les coquilles partent archivées
     row_button.add_item(
         KingdomRegieResetPlayersButton(
-            "-players",
-            guild_id or "0",  # un tiroir sans guilde reste un id valide
+            "-players", gid,
             str(strings["settings_regie_reset_button"])[:80],
             discord.ButtonStyle.danger,
         ).item
     )
-    # ejection-archive-v1 (22/11) : le vestibule des royaumes ARCHIVÉS —
-    # ♻️ Restaurer (MP au Roi fondateur) ou 🗑️ Supprimer définitivement
-    archived = list(archived or [])
-    archive_blocks: list[discord.ui.Item[discord.ui.LayoutView]] = [
+
+    lists_blocks: list[discord.ui.Item[discord.ui.LayoutView]] = [
         discord.ui.Separator(),
+        discord.ui.TextDisplay(f"## {strings['settings_regie_dormant_title']}"),
+        discord.ui.TextDisplay(str(strings["settings_regie_dormant_hint"])),
+    ]
+    dormant_page = dormant[page * _ROYAUMES_PAGE:(page + 1) * _ROYAUMES_PAGE]
+    if dormant_page:
+        for realm in dormant_page:
+            lists_blocks.append(discord.ui.TextDisplay(_royaume_line(strings, realm)))
+            lists_blocks.append(_dormant_row(strings, realm, gid))
+    else:
+        lists_blocks.append(discord.ui.TextDisplay(str(strings["settings_royaumes_empty"])))
+    # pas de Separator décoratif ici — le cap 40 compte TOUT, footer
+    # du view-id compris (l'incident du bouton muet, la leçon reste)
+    archive_blocks: list[discord.ui.Item[discord.ui.LayoutView]] = [
         discord.ui.TextDisplay(f"## {strings['settings_regie_archived_title']}"),
         discord.ui.TextDisplay(str(strings["settings_regie_archived_hint"])),
     ]
-    if archived:
-        for realm in archived:
-            name = str(getattr(realm, "name", "?"))
-            archive_blocks.append(discord.ui.TextDisplay(f"- **{name}**"))
-            row = _realm_button_row(
-                "restore", strings["settings_regie_restore_button"],
-                discord.ButtonStyle.success,
-                "purge", strings["settings_regie_purge_button"],
-                discord.ButtonStyle.danger,
-                str(getattr(realm, "id", "")), guild_id,
+    archived_page = archived[page * _ROYAUMES_PAGE:(page + 1) * _ROYAUMES_PAGE]
+    if archived_page:
+        for realm in archived_page:
+            archive_blocks.append(discord.ui.TextDisplay(_royaume_line(strings, realm)))
+            archive_blocks.append(
+                _realm_button_row(
+                    "restore", strings["settings_regie_restore_button"],
+                    discord.ButtonStyle.success,
+                    "purge", strings["settings_regie_purge_button"],
+                    discord.ButtonStyle.danger,
+                    str(getattr(realm, "id", "")), gid,
+                )
             )
-            archive_blocks.append(row)
     else:
-        archive_blocks.append(
-            discord.ui.TextDisplay(str(strings["settings_regie_archived_empty"]))
-        )
-    # drain-coquilles-v1 (Drasah 22/11, Check 135) : les coquilles
-    # DORMANTES (hors saison, hors sas) exposent la purge DIRECTE — le
-    # fondateur y est attaché à vie (king-cannot-leave), détruire la
-    # coquille est sa seule porte de sortie ; l'admin la tient ici,
-    # carte rouge de confirmation incluse (le même geste que les
-    # archivées, UN seul bloc réutilisé).
-    dormant_blocks: list[discord.ui.Item[discord.ui.LayoutView]] = []
-    dormant = list(dormant or [])
-    if dormant:
-        dormant_blocks.append(discord.ui.Separator())
-        dormant_blocks.append(
-            discord.ui.TextDisplay(f"## {strings['settings_regie_dormant_title']}")
-        )
-        dormant_blocks.append(
-            discord.ui.TextDisplay(str(strings["settings_regie_dormant_hint"]))
-        )
-        for realm in dormant:
-            name = str(getattr(realm, "name", "?"))
-            dormant_blocks.append(discord.ui.TextDisplay(f"- **{name}**"))
-            row = _realm_button_row(
-                "purge", strings["settings_regie_purge_button"],
-                discord.ButtonStyle.danger,
-                "purge-no", strings["settings_regie_purge_cancel_button"],
-                discord.ButtonStyle.secondary,
-                str(getattr(realm, "id", "")), guild_id,
-            )
-            dormant_blocks.append(row)
+        archive_blocks.append(discord.ui.TextDisplay(str(strings["settings_regie_archived_empty"])))
+    # LA PAGINATION — the page rides INSIDE the custom id (restart-proof)
+    nav_row: Any = discord.ui.ActionRow()
+    nav_row.add_item(
+        KingdomRoyaumesPageButton(
+            # une page NÉGATIVE ne peut pas voyager dans l'id (le
+            # template ne la relirait jamais) — page 0 est le plancher
+            max(0, page - 1), gid, str(strings["settings_royaumes_prev_button"])[:80],
+            page > 0,
+        ).item
+    )
+    nav_row.add_item(
+        KingdomRoyaumesPageButton(
+            page + 1, gid, str(strings["settings_royaumes_next_button"])[:80], page < pages - 1
+        ).item
+    )
     container: discord.ui.Container[discord.ui.LayoutView] = discord.ui.Container(
-        discord.ui.TextDisplay(f"# {strings['settings_regie_title']}"),
-        discord.ui.TextDisplay(str(strings["settings_regie_hint"])),
-        discord.ui.Separator(),
-        *parcours_blocks,
-        discord.ui.TextDisplay(f"## {strings['settings_regie_switches_label']}"),
-        *switch_blocks,
-        discord.ui.Separator(),
-        discord.ui.TextDisplay(f"## {strings['settings_regie_actions_label']}"),
+        discord.ui.TextDisplay(f"# {strings['settings_royaumes_title']}"),
+        discord.ui.TextDisplay(str(strings["settings_royaumes_hint"])),
         row_button,
+        *lists_blocks,
         *archive_blocks,
-        *dormant_blocks,
+        discord.ui.TextDisplay(
+            str(strings["settings_royaumes_page"]).format(page=page + 1, total=pages)
+        ),
+        nav_row,
         accent_colour=_ADMIN_COLOUR,
     )
-    return surface(_DRAWERS["regie"], container)
+    return surface(_DRAWERS["royaumes"], container)
+
+
+def _dormant_row(
+    strings: dict[str, str], realm: Any, guild_id: str
+) -> discord.ui.ActionRow[discord.ui.LayoutView]:
+    """One dormante shell's row — la purge directe (king-cannot-leave)."""
+    return _realm_button_row(
+        "purge", strings["settings_regie_purge_button"],
+        discord.ButtonStyle.danger,
+        None, "", discord.ButtonStyle.secondary,
+        str(getattr(realm, "id", "")), guild_id,
+    )
+
+
+class KingdomRoyaumesPageButton(
+    discord.ui.DynamicItem[discord.ui.Button[Any]],
+    template=r"kingdom:console-royaumes:page:(?P<page>\d+):(?P<guild_id>\d+)$",
+):
+    """The royaumes drawer's ◀️/▶️ pagination (restart-proof, page in id)."""
+
+    def __init__(self, page: int, guild_id: str, label: str, enabled: bool) -> None:
+        super().__init__(
+            discord.ui.Button(
+                label=str(label)[:80],
+                custom_id=f"kingdom:console-royaumes:page:{int(page)}:{str(guild_id)[:20]}"[:100],
+                style=discord.ButtonStyle.secondary,
+                disabled=not enabled,
+            )
+        )
+        from .regie import REGIE_SWITCHES  # noqa: F401 — same import guard as the switches
+
+        self.page = max(0, int(page))
+        self.guild_id = str(guild_id)
+
+    @classmethod
+    async def from_custom_id(
+        cls,
+        interaction: discord.Interaction,
+        item: discord.ui.Item[Any],
+        match: re.Match[str],
+        /,
+    ) -> KingdomRoyaumesPageButton:
+        strings = strings_of(interaction)
+        page = max(0, int(match["page"] or 0))
+        return cls(
+            page,
+            str(interaction.guild_id or ""),
+            str(strings["settings_royaumes_page_button"])[:80],
+            True,
+        )
+
+    async def callback(self, interaction: discord.Interaction) -> None:
+        """Turn the page — same drawer, one window (the 136 fast-ack rule)."""
+        if not await _panel_guard(interaction):
+            return
+        try:
+            await interaction.response.defer(ephemeral=True)
+        except Exception:  # noqa: BLE001 — an already-acked click
+            logger.debug("kingdom: the royaumes page defer skipped", exc_info=True)
+        try:
+            view = await _build_drawer(
+                "royaumes", locale_of(interaction), interaction.client,
+                str(interaction.guild_id or ""), page=self.page,
+            )
+        except Exception:  # noqa: BLE001 — a broken build reports, never a raise
+            logger.warning("kingdom: the royaumes page build failed", exc_info=True)
+            view = await _build_drawer(
+                "royaumes", locale_of(interaction), interaction.client,
+                str(interaction.guild_id or ""), page=0,
+            )
+        await open_unique_ephemeral(interaction, view=view)
 
 
 def _atelier_drawer(strings: dict[str, str], ops_strings: dict[str, str]) -> discord.ui.LayoutView:
@@ -1479,7 +1610,11 @@ async def _season_live(stack: Any | None) -> bool:
 
 
 async def _build_drawer(
-    drawer: str, locale: str, bot: Any | None = None, guild_id: str = ""
+    drawer: str,
+    locale: str,
+    bot: Any | None = None,
+    guild_id: str = "",
+    page: int = 0,
 ) -> discord.ui.LayoutView:
     """Assemble the asked drawer in the guild's locale."""
     from .common import mod_catalog
@@ -1520,15 +1655,10 @@ async def _build_drawer(
             )
         except Exception:  # noqa: BLE001 — a read, never a crash
             season_live = False
-        # drawer-build-v1 (22/11, incident « n'a pas répondu à temps ») :
-        # archivés et dormants puisent dans LA MÊME liste de coquilles —
-        # UNE lecture, deux filtres (avant : deux parcours complets de
-        # la base, et la pile de lectures regardait le chrono de 3 s).
-        shells = await _all_shells()
-
-        def _by_name(realm: Any) -> str:
-            return str(getattr(realm, "name", "?"))
-
+        # tiroir-royaumes-v1 (23/11, Check 142) : la régie est MINCE —
+        # les royaumes, leurs pages et leurs gestes vivent dans le
+        # tiroir ROYAUMES. Le cap Discord de 40 composants ne se
+        # franchit plus, JAMAIS (c'était LE silence du bouton régie).
         # levier-bêta-v1 : le levier se POSITIONNE — position affichée
         # = effective (parcours bêta OU drapeau levé, l'orphelin reste
         # lisible), et le verrou vit tant qu'une saison vit (setup ou
@@ -1556,20 +1686,22 @@ async def _build_drawer(
             strings, states, season_live=season_live,
             parcours_beta=parcours_beta,
             season_running=season_rolling,
+        )
+    elif drawer == "royaumes":
+        # tiroir-royaumes-v1 : UNE lecture de coquilles, deux filtres
+        # (dormantes vs archivées) — la régie n'y touche plus
+        shells = await _all_shells()
+
+        def _by_name(realm: Any) -> str:
+            return str(getattr(realm, "name", "?"))
+
+        view = _royaumes_drawer(
+            strings, guild_id,
+            dormant=sorted((r for r in shells if _dormant_filter(r)), key=_by_name),
             archived=sorted(
                 (r for r in shells if getattr(r, "archived_at", 0)), key=_by_name
             ),
-            guild_id=guild_id,
-            dormant=sorted(
-                (
-                    r
-                    for r in shells
-                    if not getattr(r, "engagement", None)
-                    and not getattr(r, "join_request", None)
-                    and not getattr(r, "archived_at", 0)
-                ),
-                key=_by_name,
-            ),
+            page=page,
         )
     elif drawer == "atelier":
         from .common import strings_by_locale
@@ -2232,18 +2364,23 @@ def _realm_button_row(
     realm_id: str,
     guild_id: str,
 ) -> discord.ui.ActionRow[discord.ui.LayoutView]:
-    """The two-button row of one archivist card (DM or confirm)."""
+    """The two-button row of one archivist card (DM or confirm).
+
+    tiroir-royaumes-v1 (Check 142) : un ``no_kind`` None ne pose PAS
+    de second bouton — la coquille dormante n'offre QUE sa purge.
+    """
     row: Any = discord.ui.ActionRow()
     row.add_item(
         KingdomRegieRealmButton(
             yes_kind, realm_id, guild_id, str(yes_label)[:80], yes_style
         ).item
     )
-    row.add_item(
-        KingdomRegieRealmButton(
-            no_kind, realm_id, guild_id, str(no_label)[:80], no_style
-        ).item
-    )
+    if no_kind:
+        row.add_item(
+            KingdomRegieRealmButton(
+                no_kind, realm_id, guild_id, str(no_label)[:80], no_style
+            ).item
+        )
     return row
 
 

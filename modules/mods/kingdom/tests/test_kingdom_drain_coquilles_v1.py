@@ -64,11 +64,19 @@ def test_validation_archive_button_captures_the_whole_colon_id() -> None:
 
 
 def test_the_regie_drawer_shows_the_dormant_shells_and_their_purge() -> None:
-    """A dormant shell (a stuck founder) gets its 🗑️ purge in the drawer."""
-    from botforge.mods.kingdom.cogs.settings_panel import _regie_drawer, settings_strings
+    """A dormant shell (a stuck founder) gets its 🗑️ purge in the drawer.
+
+    tiroir-royaumes-v1 (Check 142) : les coquilles vivent dans le tiroir
+    ROYAUMES, la régie est MINCE — le purge est testé via _royaumes_drawer.
+    """
+    from botforge.mods.kingdom.cogs.settings_panel import (
+        _regie_drawer,
+        _royaumes_drawer,
+        settings_strings,
+    )
 
     shell = NS(id="realm:aegis-123", name="AEGIS")
-    view = _regie_drawer(settings_strings("fr"), guild_id="7", dormant=[shell])
+    view = _royaumes_drawer(settings_strings("fr"), guild_id="7", dormant=[shell])
     ids = _ids(view)
     # the purge card rides the fixed template — restart-proof again
     assert "kingdom:console-regie:purge:realm:aegis-123:7" in ids
@@ -76,9 +84,22 @@ def test_the_regie_drawer_shows_the_dormant_shells_and_their_purge() -> None:
     assert "kingdom:console-regie:restore:realm:aegis-123:7" not in ids
     assert "AEGIS" in "\n".join(_texts(view)), "the shell's name is listed"
 
-    # without dormants the drawer stays EXACTLY the console-v2 one
+    # the drawer carries the players' gestures (moved from the regie)
+    for geste in (
+        "kingdom:settings:assign",
+        "kingdom:settings:add-kingdom",
+        "kingdom:settings:remove",
+        "kingdom:settings:season-mode",
+        "kingdom:console-regie:reset-players:7",
+    ):
+        assert geste in ids, f"the gesture {geste} moved into the royaumes drawer"
+
+    # the slim regie stays EXACTLY the console-v2 one — no realm ids
     plain = _regie_drawer(settings_strings("fr"))
     assert not [i for i in _ids(plain) if "realm:" in i]
+    plain_ids = _ids(plain)
+    for geste in ("kingdom:settings:assign", "kingdom:console-regie:reset-players:0"):
+        assert geste not in plain_ids, "the gestures left the regie drawer"
 
 
 # ---------------------------------------------------------------------------
