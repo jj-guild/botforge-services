@@ -393,18 +393,50 @@ async def _history_channel_messages(channel: Any) -> list[Any]:
 
 
 def _text_of(message: Any) -> str:
-    return str(getattr(message, "content", "") or "")
+    """The readable text of a message — content PLUS the components tree.
+
+    alliances-panel-v2-fix (Drasah 23/11) : un message Composants V2
+    voyage avec un ``content`` VIDE — son texte (et le marqueur de la
+    fiche) vivent dans les TextDisplay de l'arbre des composants. Le
+    scan « marked » porté de la référence (message_text) marchait sur
+    le seul ``content`` : il retrouvait un panneau V2 à chaque passe…
+    et le DUPLIQUAIT au lieu de l'éditer. La lecture parcourt donc
+    l'arbre entier (components, layout, view — défensif), en collectant
+    chaque ``content`` de TextDisplay.
+    """
+    parts = [str(getattr(message, "content", "") or "")]
+    stack: list[Any] = list(getattr(message, "components", None) or [])
+    for extra in ("layout", "view"):
+        item = getattr(message, extra, None)
+        if item is not None:
+            stack.append(item)
+    while stack:
+        item = stack.pop()
+        text = getattr(item, "content", None)
+        if isinstance(text, str):
+            parts.append(text)
+        stack.extend(getattr(item, "children", None) or [])
+    return "\n".join(parts)
 
 
 async def _upsert_marked(
     channel: Any,
     key: str,
-    content: str,
+    content: str | None,
     view: Any = None,
     pin: bool = False,
     files: list[Any] | None = None,
 ) -> str:
-    """Edit the marked message in place, or send it once. Returns its id."""
+    """Edit the marked message in place, or send it once. Returns its id.
+
+    alliances-panel-v2-fix (Drasah 23/11) : un panneau Composants V2
+    voyage avec un content VIDE — le texte vit dans la vue. Quand le
+    ``content`` est None, il n'est PASSÉ NI à l'édition NI à l'envoi :
+    Discord extipe « The 'content' field cannot be used when using
+    MessageFlags.IS_COMPONENTS_V2 » (l'incident live 15:38, salon 🏆
+    vide à chaque passe). La recherche du marqueur lit l'arbre des
+    composants (le marqueur vit dans la vue aussi).
+    """
     marker = _marker(key)
     marked = [m for m in await _history_channel_messages(channel) if marker in _text_of(m)]
     for duplicate in marked[1:]:
@@ -414,7 +446,9 @@ async def _upsert_marked(
             pass
     if marked:
         existing = marked[0]
-        kwargs: dict[str, Any] = {"content": content}
+        kwargs: dict[str, Any] = {}
+        if content is not None:
+            kwargs["content"] = content
         if view is not None:
             kwargs["view"] = view
         if files:
@@ -572,32 +606,46 @@ def _scriptorium_mention(guild: Any) -> str:
 async def _alliances_view(
     strings: dict[str, str], stack: Any, kingdom: Any, guild: Any, locale: Any,
     mosaic: bool = False,
-) -> Any:
+) -> tuple[str | None, Any]:
+    """The 🏆 panel — ONE Components V2 message, text INSIDE the view.
+
+    alliances-panel-v2-fix (Drasah 23/11, incident live 15:38) : un
+    message Composants V2 supporte TROIS États, pas un mélange : le
+    texte dans ``content`` (interdit avec le drapeau V2 — « The 'content'
+    field cannot be used when using MessageFlags.IS_COMPONENTS_V2 »,
+    l'erreur 15:38 qui laissait le salon 🏆 vide), le texte en blocs
+    DANS la vue (la construction de la RÉFÉRENCE : titre, corps,
+    légende et marqueur vivaient dans ses TextDisplay, et le message
+    partait vue seule), ou les deux v0 (aucun drapeau V2). On suit la
+    référence : le titre, le corps ET le marqueur de la fiche vivent
+    en TextDisplay dans la vue, le message part SANS content.
+    """
     body = await _alliances_body(strings, stack, kingdom, guild)
-    # alliances-panel-v2-fix (Drasah 23/11, incident live 10:12) : un
-    # message Composants V2 n'accepte en RACINE que les types (1, 9, 10,
-    # 12, 13, 14, 17) — un bouton NU (type 2) y est REJETÉ avec « 400
-    # Invalid Form Body: Value of field "type" must be one of (…) » et
-    # le salon 🏆 restait vide pour toujours (seule fiche du cycle à
-    # porter des boutons). La règle de la référence
-    # (_panel_view_with_buttons) : les composants interactifs voyagent
-    # DANS une ActionRow — cœur du panel comme mosaïque, jamais un
-    # bouton nu en racine. Simulé avant le code : rangée (1) + mosaïque
-    # (12) + pied (10) = tous légaux, les 4 boutons cliquables.
+    head = (
+        f"## {strings['alliances_panel_title'].format(str(getattr(kingdom, 'name', '')))}"
+        f"\n\n{body}\n\n{_marker('alliances')}"
+    )
+    # les composants interactifs voyagent dans une ActionRow (règle de
+    # la référence) : en racine, un bouton NU serait rejeté (« Value of
+    # field "type" must be one of (1, 9, 10, 12, 13, 14, 17) », l'erreur
+    # 10:12). Racine = [TextDisplay, ActionRow, MediaGallery, pied].
     buttons = [
         RealmAlliancesNextButton(strings["alliances_btn_next"]).item,
         RealmAlliancesLockedButton(strings["alliances_btn_locked"]).item,
         RealmAlliancesDurationsButton(strings["alliances_btn_durations"]).item,
         RealmAlliancesHistoryButton(strings["alliances_btn_history"]).item,
     ]
-    items: list[Any] = [discord.ui.ActionRow(*buttons)]
+    items: list[Any] = [
+        discord.ui.TextDisplay(head),
+        discord.ui.ActionRow(*buttons),
+    ]
     if mosaic:
         # mosaic-render-fix (porté T3b): a Components V2 attachment only
         # renders when a gallery REFERENCES it — the mosaic rides above
         # the panel, the crests never stack as bare attachments.
         items.append(discord.ui.MediaGallery(discord.MediaGalleryItem("attachment://alliances.png")))
     view = surface(ALLIANCES_SURFACE, *items)
-    return f"## {strings['alliances_panel_title'].format(str(getattr(kingdom, 'name', '')))}\n\n{body}", view
+    return None, view
 
 
 def _welcome_content(
@@ -796,7 +844,7 @@ async def _upsert_sheet(
     realm: Any,
     channel: Any,
     key: str,
-    content: str,
+    content: str | None,
     *,
     view: Any = None,
     files: list[Any] | None = None,
@@ -955,10 +1003,12 @@ async def deploy_realm_content(
         except Exception:  # noqa: BLE001 — the mosaic is cosmetic
             logger.warning("kingdom realm content: alliances mosaic failed", exc_info=True)
         try:
-            content, view = await _alliances_view(
+            # alliances-panel-v2-fix : le texte ET le marqueur vivent dans
+            # la vue — le panneau part SANS content (le mélange était
+            # 400-rejeté, l'incident live 15:38).
+            _, view = await _alliances_view(
                 strings, stack, kingdom, guild, locale, mosaic=mosaic_file is not None
             )
-            content = f"{content}\n\n{_marker('alliances')}"
             # missing-access-v1 (Drasah 23/11) : même seam que la fiche
             # territoire — heal + UN retry sur un 403, la mosaïque suit.
             mid = await _upsert_sheet(
@@ -966,7 +1016,7 @@ async def deploy_realm_content(
                 realm,
                 alliances,
                 "alliances",
-                content,
+                None,
                 view=view,
                 files=[mosaic_file] if mosaic_file is not None else None,
             )
@@ -1464,30 +1514,3 @@ async def surfaces_state(bot: Any) -> dict[str, Any]:
                 "territory": "territory" in channels,
                 "alliances": "alliances" in channels,
                 "cards": cards,
-                "fiche_territory": await _marker_present(territory_channel, "territory")
-                if territory_channel is not None
-                else False,
-                "fiche_alliances": await _marker_present(alliances_channel, "alliances")
-                if alliances_channel is not None
-                else False,
-                "error": "; ".join(realm_errors),
-            }
-        )
-    gaia_kingdom = next((k for k in kingdoms if bool(getattr(k, "is_gaia", False))), None)
-    for guild in guilds:
-        channel = await _gaia_territory_channel(guild)
-        out["gaia"] = {
-            "kingdom": str(getattr(gaia_kingdom, "name", "") or "") if gaia_kingdom is not None else "",
-            "found": channel is not None,
-            "channel_name": str(getattr(channel, "name", "") or "") if channel is not None else "",
-            "scan": _gaia_category_scan(guild),
-            "error": surface_errors().get("Gaïa·territoire", ""),
-            "cards": len(await _owned_territories(stack, gaia_kingdom))
-            if gaia_kingdom is not None
-            else 0,
-            "fiche": await _marker_present(channel, "territory-gaia")
-            if channel is not None
-            else False,
-        }
-        break
-    return out

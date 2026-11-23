@@ -30,7 +30,9 @@ class _Message:
         self.pinned = False
 
     async def edit(self, **kwargs: Any) -> None:
-        self.content = str(kwargs.get("content", self.content))
+        self.content = str(kwargs.get("content", self.content) or "")
+        if "view" in kwargs:
+            self.view = kwargs["view"]  # a V2 panel edits its view, not a content
         self.edits += 1
 
     async def delete(self) -> None:
@@ -487,6 +489,63 @@ async def test_the_alliances_panel_is_v2_legal_no_naked_button_at_the_root(
     assert len(kids) == 4 and all(k.get("type") == 2 for k in kids), (
         "the four buttons stay clickable inside their ActionRow"
     )
+
+
+@pytest.mark.asyncio
+async def test_the_alliances_panel_rides_without_content_and_never_duplicates(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """alliances-panel-v2-fix (live incident 15:38): a V2 panel must
+    travel with an EMPTY content (text and marker ride inside the
+    view) — Discord 400-rejects « content » alongside the V2 flag.
+    And once deployed, the next 5-min pass EDITS the found panel in
+    place (the marker is readable inside the components tree), it
+    never stacks a duplicate."""
+    import botforge.mods.kingdom.cogs.realm_content as content
+
+    realm = _Realm(
+        {"discussions": "101", "territory": "102", "alliances": "103"}
+    )
+    alli = _Channel("🏆 Alliances")
+    guild = _guild({"101": _Channel("🔒 Discussions"),
+                    "102": _Channel("🌍 Territoire"),
+                    "103": alli})
+
+    class _Stack:
+        class config:  # noqa: N801
+            maps = ()  # type: ignore[var-annotated]
+            civilizations = ()  # type: ignore[var-annotated]
+
+        class kingdoms:  # noqa: N801
+            @staticmethod
+            async def current_season() -> Any:
+                return type("S", (), {"phase": "started", "name": "Bêta 1"})()
+
+            @staticmethod
+            async def lords() -> list[Any]:
+                return []
+
+            @staticmethod
+            async def kingdoms() -> list[Any]:
+                return []
+
+    monkeypatch.setattr(content, "wiring", lambda: _Stack())
+    await content.deploy_realm_content(guild, realm, _Kingdom(), "fr")
+    panel = alli.history_msgs[0]
+    # the panel rides VIEW-ONLY: the forbidden 'content' mixing is gone
+    assert not (panel.content or "").strip(), (
+        "a V2 panel travels with an empty content — text rides inside the view"
+    )
+    view_text = content._text_of(panel)
+    assert content._marker("alliances") in view_text, (
+        "the marker lives inside the view — the marked scan must find it"
+    )
+
+    # the next 5-min pass EDITS the same panel, it never duplicates
+    assert len(alli.history_msgs) == 1
+    await content.deploy_realm_content(guild, realm, _Kingdom(), "fr")
+    assert len(alli.history_msgs) == 1, "the second pass edited in place, no duplicate"
+    assert alli.history_msgs[0].edits >= 1
 
 
 # ---------------------------------------------------------------------------
