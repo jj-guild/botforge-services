@@ -121,3 +121,44 @@ class TestProfileMatchesButton:
         from botforge.discord.home import ProfileMatchesButton
 
         assert ProfileMatchesButton().item.custom_id == "home:profile:matches"
+
+def test_the_live_lobby_settings_render_through_the_popup_tables() -> None:
+    """A live card (no blob at all) renders pairs + booleans (owner 2026-11-23)."""
+    from botforge.discord.home import _settings_bool_lines, _settings_named_pairs
+
+    card = {
+        "match_id": "523203059",
+        # a real live lobby capture (aoe2lobby ws, 2026-11-23): raw named json
+        "live_settings_json": (
+            '{"mode": 0, "size": 5, "population": 200, "speed": 2, "victory": 5,'
+            ' "victory_threshold": 14000, "resources": 0, "reveal_map": 0,'
+            ' "starting_age": 0, "ending_age": 2, "ai_difficulty": 1, "treaty_length": 0,'
+            ' "cheats": false, "lock_speed": true, "lock_teams": false,'
+            ' "team_together": true, "team_positions": false,'
+            ' "shared_exploration": false, "full_tech_tree": false, "turbo_mode": false}'
+        ),
+    }
+    pairs = _settings_named_pairs(card)
+    by_label = dict(pairs)
+    assert by_label["Mode"] == "Random Map"
+    assert by_label["Taille"] == "Immense"
+    assert by_label["Pop"] == "200"
+    assert by_label["Vitesse"] == "Normale"
+    assert by_label["Victoire"] == "Personnalisée (14000)"
+    assert by_label["Ressources"] == "Standard"
+    assert "Traité" not in by_label  # a zero treaty reads better than "0 min"
+    lines = _settings_bool_lines(card, {
+        "setting_bools_live": {
+            "cheats": "Cheats", "lock_speed": "Vitesse verrouillée",
+            "lock_teams": "Équipes verrouillées", "full_tech_tree": "Arbre complet",
+            "record": "Partie enregistrée", "shared_exploration": "Exploration partagée",
+            "team_positions": "Positions d'équipe", "team_together": "Équipes ensemble",
+            "turbo_mode": "Mode Turbo",
+        }
+    })
+    assert "✅ Vitesse verrouillée" in lines
+    assert "✅ Équipes ensemble" in lines
+    assert "⬜ Équipes verrouillées" in lines
+    assert "⬜ Cheats" in lines
+    # the settings view of a live card answers the same shape as a finished one
+    assert pairs and lines

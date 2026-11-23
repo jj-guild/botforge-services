@@ -159,6 +159,7 @@ message GameMatchSummary {
   string spectate_url = 10;  // aoe2lobby.com/w/<id> (in game) — watch page
   string deep_link = 11;     // aoe2de:// join deep link when available
   string match_type = 12;    // the game mode label (RandomMap, FFA, ...)
+  string settings_json = 13; // live lobby settings, raw named json (aoe2lobby)
 }
 
 message GamePlayerSlot {

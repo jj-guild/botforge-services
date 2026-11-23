@@ -924,6 +924,9 @@ SETTING_LABEL_KEYS = {
     "Âge final": "profile.matches_setting_end_age",
     "Difficulté": "profile.matches_setting_difficulty",
     "Traité": "profile.matches_setting_treaty",
+    # the raw tables' own spelling (the live lobby rides it too):
+    # localize it as well - the EN view read it raw until now
+    "Difficulté IA": "profile.matches_setting_difficulty",
 }
 
 #: the BOOLEAN settings (the post-RoR option keys): option key
@@ -931,6 +934,64 @@ SETTING_LABEL_KEYS = {
 #: aoe2insights' own rendering of match 506901691 (owner 2026-11-23):
 #: every ticked rule reads 'y' in the blob, every unticked one 'n'
 #: (the collector's "!bool" notes sat the values the wrong way).
+#: the named settings the LIVE lobby payload carries (aoe2lobby
+#: rides them RAW and named - NOT the encoded World's Edge blob,
+#: verified live 2026-11-23): the SAME canonical French labels as the
+#: finished cards' blob, the VALUE tables follow the provider's OWN
+#: schema ws enums (wss://data.aoe2lobby.com/ws/lobby/ - captured
+#: live: speed 0-3, victory 0-5, size 0-12, resources 0-6, ages,
+#: difficulty 0-5); unknown values render raw, absent keys nothing.
+_LIVE_SETTINGS_KEYS: dict[str, tuple[str, dict[str, str] | None]] = {
+    "mode": ("Mode", {
+        "0": "Random Map", "1": "Empire Wars", "2": "Régicide", "3": "King of the Hill",
+        "4": "Death Match", "5": "Battle Royale", "6": "Sudden Death", "7": "Capture du Relique",
+        "8": "Défendre la Merveille", "9": "Course à la Merveille", "10": "Scénario",
+        "11": "Campagne co-op",
+    }),
+    "size": ("Taille", {
+        "0": "Minuscule (2)", "1": "Petite (3)", "2": "Moyenne (4)", "3": "Normale (6)",
+        "4": "Grande (8)", "5": "Immense", "6": "Colossale",
+    }),
+    "population": ("Pop", None),
+    "speed": ("Vitesse", {"0": "Lente", "1": "Décontractée", "2": "Normale", "3": "Rapide"}),
+    "victory": ("Victoire", {
+        "0": "Standard", "1": "Conquête", "2": "Temps", "3": "Score",
+        "4": "Dernier debout", "5": "Personnalisée",
+    }),
+    "resources": ("Ressources", {
+        "0": "Standard", "1": "Faible", "2": "Moyen", "3": "Élevé",
+        "4": "Très élevé", "5": "Infini", "6": "Aléatoire",
+    }),
+    "reveal_map": ("Vision", {"0": "Normale", "1": "Explorée", "2": "Toute visible"}),
+    "starting_age": ("Âge départ", {
+        "0": "Standard", "1": "Âge sombre", "2": "Âge féodal", "3": "Âge des châteaux",
+        "4": "Âge impérial", "5": "Post-impérial",
+    }),
+    "ending_age": ("Âge final", {
+        "0": "Âge sombre", "1": "Âge impérial", "2": "Standard", "3": "Âge des châteaux",
+        "4": "Âge féodal", "5": "Post-impérial",
+    }),
+    "ai_difficulty": ("Difficulté IA", {
+        "0": "Très facile", "1": "Modérée", "2": "Difficile", "3": "Extrême",
+        "4": "Normale", "5": "Très difficile",
+    }),
+    "treaty_length": ("Traité", None),  # the raw treaty minutes - shown only when > 0
+}
+
+#: the live lobby's named booleans -> the SAME locale keys as the
+#: finished cards' blob booleans (the panel renders one grammar)
+_LIVE_SETTING_BOOLEANS = {
+    "cheats": "profile.matches_setting_cheats",
+    "lock_speed": "profile.matches_setting_lock_speed",
+    "lock_teams": "profile.matches_setting_lock_teams",
+    "full_tech_tree": "profile.matches_setting_full_tech",
+    "record": "profile.matches_setting_record",
+    "shared_exploration": "profile.matches_setting_shared_expl",
+    "team_positions": "profile.matches_setting_team_positions",
+    "team_together": "profile.matches_setting_team_together",
+    "turbo_mode": "profile.matches_setting_turbo",
+}
+
 SETTING_BOOLEANS = {
     "1": "profile.matches_setting_cheats",
     "65": "profile.matches_setting_lock_speed",
@@ -1032,7 +1093,9 @@ def _settings_named_pairs(card: dict[str, Any]) -> list[tuple[str, str]]:
     The provider's stored pairs (Mode, Taille, Pop, Vitesse,
     Victoire) stay the canonical summary; the raw options blob
     completes them (Ressources, Vision, ages, difficult\u00e9, trait\u00e9)
-    when it rides the card.
+    when it rides the card. The LIVE lobby cards (no blob at all)
+    render through the aoe2lobby named tables instead - one popup,
+    two sources, one grammar.
     """
     import json as _json
 
@@ -1045,7 +1108,7 @@ def _settings_named_pairs(card: dict[str, Any]) -> list[tuple[str, str]]:
         options: dict[str, Any] = _json.loads(raw) if raw else {}
     except Exception:
         options = {}
-    if isinstance(options, dict):
+    if raw and isinstance(options, dict):
         for key, (label, table) in _SETTINGS_RAW_KEYS.items():
             value = options.get(key)
             if value in (None, ""):
@@ -1054,7 +1117,48 @@ def _settings_named_pairs(card: dict[str, Any]) -> list[tuple[str, str]]:
                 continue  # no treaty reads better than "0 min"
             shown = str((table or {}).get(str(value), value)) if table is not None else f"{value} min"
             pairs.append((label, shown))
+        return pairs
+    # the LIVE lobby carries its settings RAW and named (aoe2lobby,
+    # not the encoded blob): the same popup renders them through the
+    # live tables (owner 2026-11-23: the settings button of a live
+    # card answered empty)
+    pairs.extend(_live_named_pairs(card))
     return pairs
+
+
+def _live_named_pairs(card: dict[str, Any]) -> list[tuple[str, str]]:
+    """Render the live lobby's named settings through the aoe2lobby tables."""
+    live = _live_settings(card)
+    pairs: list[tuple[str, str]] = []
+    for key, (label, table) in _LIVE_SETTINGS_KEYS.items():
+        value = live.get(key)
+        if value in (None, ""):
+            continue
+        if key == "treaty_length" and _int_or(value, 0) <= 0:
+            continue
+        shown = str((table or {}).get(str(value), value)) if table is not None else str(value)
+        if key == "treaty_length":
+            shown = f"{shown} min"
+        if key == "victory" and str(live.get("victory")) in ("3", "5"):
+            threshold = _int_or(live.get("victory_threshold"), 0)
+            if threshold > 0:
+                shown = f"{shown} ({threshold})"
+        pairs.append((label, shown))
+    return pairs
+
+
+def _live_settings(card: dict[str, Any]) -> dict[str, Any]:
+    """Parse the card's raw named live settings (aoe2lobby)."""
+    import json as _json
+
+    raw = str(card.get("live_settings_json") or "")
+    if not raw:
+        return {}
+    try:
+        data = _json.loads(raw)
+    except Exception:
+        return {}
+    return data if isinstance(data, dict) else {}
 
 
 def _settings_bool_lines(card: dict[str, Any], labels: dict[str, Any]) -> list[str]:
@@ -1068,14 +1172,27 @@ def _settings_bool_lines(card: dict[str, Any], labels: dict[str, Any]) -> list[s
         options = {}
     lines: list[str] = []
     if not isinstance(options, dict) or not options:
+        # the live lobby's booleans are RAW true/false json (aoe2lobby)
+        live = _live_settings(card)
+        if not live:
+            return lines
+        bool_labels: dict[str, str] = dict(labels.get("setting_bools_live") or {})
+        for key, label_key_path in _LIVE_SETTING_BOOLEANS.items():
+            if key not in live:
+                continue
+            enabled = bool(live.get(key))
+            label = bool_labels.get(key) or str(label_key_path).split(".")[-1]
+            mark = "\u2705" if enabled else "\u2b1c"
+            lines.append(f"{mark} {label}")
         return lines
-    bool_labels: dict[str, str] = dict(labels.get("setting_bools") or {})
+    # the finished cards: the blob's 'y'/'n' flags
+    blob_labels: dict[str, str] = dict(labels.get("setting_bools") or {})
     for key, label_key_path in SETTING_BOOLEANS.items():
         raw_value = options.get(key)
         if raw_value in (None, ""):
             continue
         enabled = str(raw_value).lower() == "y"
-        label = bool_labels.get(key) or label_key_path.split(".")[-1]
+        label = blob_labels.get(key) or label_key_path.split(".")[-1]
         mark = "\u2705" if enabled else "\u2b1c"
         lines.append(f"{mark} {label}")
     return lines
@@ -1620,6 +1737,7 @@ async def _live_cards(interaction: discord.Interaction, me_ids: set[str]) -> lis
             ],
             "lobby_url": str(summary.get("lobby_url") or ""),
             "spectate_url": str(summary.get("spectate_url") or ""),
+            "live_settings_json": str(summary.get("settings_json") or ""),
         }
     return list(by_ref.values())
 
@@ -1774,6 +1892,12 @@ class ProfileMatchesButton(
             },
             "setting_bools": {
                 key: await reply(interaction, label_key) for key, label_key in SETTING_BOOLEANS.items()
+            },
+            # the live lobby's named booleans share the SAME locale
+            # lines (one grammar, one popup - owner 2026-11-23)
+            "setting_bools_live": {
+                key: await reply(interaction, label_key)
+                for key, label_key in _LIVE_SETTING_BOOLEANS.items()
             },
             "match_noun": await reply(interaction, "profile.match_noun"),
             "lobby_noun": await reply(interaction, "profile.lobby_noun"),

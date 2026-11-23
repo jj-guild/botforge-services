@@ -50,6 +50,8 @@ SNAPSHOT_KEYS = (
     "spectate_url",
     "deep_link",
     "match_url",
+    "match_type",
+    "settings_json",
 )
 
 

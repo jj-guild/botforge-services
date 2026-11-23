@@ -45,6 +45,7 @@ def summary_to_wire(summary: dict[str, Any]) -> gamedata_pb2.GameMatchSummary:
         spectate_url=str(summary.get("spectate_url", "")),
         deep_link=str(summary.get("deep_link", "")),
         match_type=str(summary.get("match_type", "")),
+        settings_json=str(summary.get("settings_json", "")),
     )
 
 
@@ -172,6 +173,7 @@ def summary_from_wire(wire: gamedata_pb2.GameMatchSummary) -> dict[str, Any]:
         "lobby_url": wire.lobby_url,
         "spectate_url": wire.spectate_url,
         "deep_link": wire.deep_link,
+        "settings_json": wire.settings_json,
     }
 
 

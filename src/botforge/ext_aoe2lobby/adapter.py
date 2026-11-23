@@ -779,7 +779,42 @@ class Aoe2LobbyAdapter:
             "lobby_url": f"https://www.aoe2lobby.com/j/{match_ref}",
             "spectate_url": f"https://www.aoe2lobby.com/w/{match_ref}",
             "deep_link": f"{DEEP_LINK_URL}{match_ref}" if status != STATUS_GAME else "",
+            "settings_json": self._settings_json(match),
         }
+
+    #: the live settings the lobby payload carries RAW and named
+    #: (captured live 2026-11-23 \u2014 the payload is NOT the encoded
+    #: World's Edge blob, every key rides verbatim): the consumer
+    #: (the panels' settings view) owns the labels and the enum
+    #: tables, as it already does for the finished cards' blob.
+    SETTINGS_KEYS = (
+        "mode",
+        "size",
+        "population",
+        "speed",
+        "victory",
+        "victory_threshold",
+        "resources",
+        "reveal_map",
+        "starting_age",
+        "ending_age",
+        "ai_difficulty",
+        "treaty_length",
+        "cheats",
+        "lock_speed",
+        "lock_teams",
+        "full_tech_tree",
+        "record",
+        "shared_exploration",
+        "team_positions",
+        "team_together",
+        "turbo_mode",
+    )
+
+    def _settings_json(self, match: dict[str, Any]) -> str:
+        """Dump the lobby's raw named settings as one json string."""
+        settings = {key: match[key] for key in self.SETTINGS_KEYS if key in match}
+        return json.dumps(settings) if settings else ""
 
     def _match_slots(self, match: dict[str, Any]) -> list[dict[str, Any]]:
         """Extract the occupied slot dicts of one match payload."""

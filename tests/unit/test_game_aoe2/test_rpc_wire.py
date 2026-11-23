@@ -69,3 +69,21 @@ def test_event_round_trip() -> None:
     back = event_from_wire(wire)
     assert back["new_status"] == "in_lobby"
     assert back["match"]["format"] == "1v1"
+
+def test_summary_settings_json_round_trip() -> None:
+    """The live lobby's named settings ride the wire verbatim (settings_json)."""
+    smoke = {
+        "match_ref": "523203059",
+        "map": "Coastal",
+        "format": "2v2",
+        "status": "lobby",
+        "settings_json": '{"speed": 2, "lock_teams": false, "victory": 5}',
+    }
+    wire = summary_to_wire(smoke)
+    assert wire.settings_json == smoke["settings_json"]
+    back = dashboard_from_wire(dashboard_to_wire({
+        "players": [{"profile_id": "123", "state": "in_lobby", "match_ref": "523203059",
+                     "since": 1, "user_id": "10", "match": smoke}],
+        "generated_at": 5, "degraded": False,
+    }))
+    assert back["players"][0]["match"]["settings_json"] == wire.settings_json
