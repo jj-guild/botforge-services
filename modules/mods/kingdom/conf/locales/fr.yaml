@@ -258,7 +258,7 @@ fr:
       settings_restore_already_note: "Ce royaume est déjà restauré."
       settings_restore_done_note: "✅ Royaume restauré hors saison — sa maison Discord est reconstruite."
       settings_restore_failed_note: "❌ La restauration a échoué — le royaume reste archivé."
-      settings_regie_sas_idle_hint: "⚠️ Aucune saison en cours — ce sas prendra effet à la prochaine saison lancée."
+      settings_regie_sas_idle_hint: "✅ Hors saison comme en saison : un sas ouvert accepte les inscriptions MAINTENANT, les royaumes y attendent, et le lancement les emmènera."
       settings_atelier_title: "🛠️ L'atelier serveur"
       settings_atelier_hint: "La structure et le temps de jeu. Chaque geste destructif garde sa confirmation."
       settings_window_close_button: "✖️ Fermer"
@@ -287,6 +287,12 @@ fr:
       settings_start_beta_confirm_title: "🚀 Envoyer la saison bêta ?"
       settings_start_beta_confirm_hint: "Les royaumes admis partent en bêta : week-end compressé 52 h, sans compte requis. Le SAS se ferme tout seul."
       settings_start_beta_confirm_button: "🚀 Oui, envoyer la bêta"
+      # sas-v2 (Drasah 5/12) : les seuils du lancement, en royaumes DANS le sas
+      settings_start_floor_classic: "⛔ {count} royaume(s) dans le sas — une saison classique en demande au moins {floor}. Ouvre le sas (🎚️ Régie) pour que des royaumes s'y inscrivent, ou injecte-en un via « Ajouter un royaume »."
+      settings_start_floor_beta: "⛔ Aucun royaume dans le sas — une bêta en demande au moins {floor} pour partir."
+      settings_start_beta_solo_confirm_title: "⚠️ Un seul royaume dans le sas"
+      settings_start_beta_solo_confirm_hint: "Une bêta avec un seul royaume sert à tester le moteur, pas à jouer. Lancer quand même la bêta ?"
+      settings_start_beta_solo_confirm_button: "🚀 Lancer quand même"
       settings_cycle_cancel_button: "❌ Annuler"
       # le faux départ — le dernier recours de l'organisateur
       settings_false_start_button: "🛑 Faux départ"

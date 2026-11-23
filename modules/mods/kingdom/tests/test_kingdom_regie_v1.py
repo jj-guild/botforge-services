@@ -72,13 +72,17 @@ async def test_the_defaults_never_close_a_midseason_guild() -> None:
     from botforge.mods.kingdom.cogs.regie import read_regie
 
     bot = _bot()
-    for phase, sas in ((None, False), ("setup", True), ("started", False)):
+    # sas-v2 (Drasah 5/12) : le sas est FERMÉ PAR DÉFAUT, TOUJOURS —
+    # la phase ne l'ouvre plus : le sas vit sans saison, l'admin l'ouvre
+    for phase in (None, "setup", "started"):
         with mock.patch.object(common, "wiring", lambda s=_stack(phase): s):
             values = await read_regie(bot, "123")
         assert values["registration_open"] is True, f"phase={phase}: life stays open"
         assert values["realm_creation_open"] is True
         assert values["realm_join_open"] is True
-        assert values["season_entry_open"] is sas, f"phase={phase}: the sas maps the phase"
+        assert values["season_entry_open"] is False, (
+            f"phase={phase}: the sas stays closed by default (sas-v2)"
+        )
 
 
 @pytest.mark.asyncio
@@ -127,8 +131,11 @@ async def test_the_departure_shuts_the_sas_by_itself() -> None:
         response=SimpleNamespace(is_done=lambda: True),
         followup=SimpleNamespace(send=_send),
     )
+    # sas-v2 : le départ consomme le sas — ici on lui en donne deux
     with mock.patch.object(common, "wiring", lambda: stack), \
-            mock.patch.object(sp, "wiring", lambda: stack):
+            mock.patch.object(sp, "wiring", lambda: stack), \
+            mock.patch.object(sp, "_sas_roster_counts", mock.AsyncMock(return_value=(2, 0))), \
+            mock.patch.object(sp, "_consume_sas", mock.AsyncMock(return_value=2)):
         await sp._start_season(interaction, sp.settings_strings("fr"))
     assert started.get("yes") is True
     from botforge.mods.kingdom.cogs.regie import read_regie

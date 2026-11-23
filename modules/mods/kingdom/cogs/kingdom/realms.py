@@ -1000,10 +1000,22 @@ async def season_layout(
     elif request:
         blocks.append(discord.ui.Separator())
         blocks.append(discord.ui.TextDisplay(strings["season_join_pending"]))
-    elif season is not None and king:
+        if king:
+            # sas-v2 (Drasah 5/12) : « Retirer ma demande » — le Roi
+            # sort de la salle d'attente LUI-MÊME, saison ou pas
+            withdraw_row: Any = discord.ui.ActionRow()
+            withdraw_row.add_item(
+                RealmJoinWithdrawButton(
+                    str(strings["season_join_withdraw_button"]), str(realm.slug)
+                ).item
+            )
+            blocks.append(withdraw_row)
+    elif king:
         blocks.append(discord.ui.Separator())
-        # le SAS (console-etats-regie-v1) : fermé = la demande n'est
-        # même plus proposée (le tiroir 🎚️ La Régie le rouvre)
+        # sas-v2 (Drasah 5/12) : le bloc vit AUSSI sans saison — le
+        # sas ouvert accepte les inscriptions dès maintenant. Fermé =
+        # la demande n'est même pas proposée (le tiroir 🎚️ Régie
+        # l'ouvre, un geste admin délibéré)
         sas_open = False
         try:
             from .panel import current_bot
@@ -1244,22 +1256,50 @@ class RealmJoinButton(
         if realm is None or stack is None:
             await interaction.followup.send(strings["realm_gone_note"], ephemeral=True)
             return
+        # sas-v2 (Drasah 5/12) : le SAS relit son interrupteur AU CLIC
+        # AVANT toute lecture de saison — le sas est la PRÉPARATION,
+        # pas le lancement : OUVERT, il accepte la demande MÊME SANS
+        # saison, la salle d'attente vit sur la coquille et le départ
+        # la consommera (double sécurité : un rendu d'avant la
+        # fermeture ne laisse rien passer).
+        from .regie import regie_open
+
+        sas_open = False
+        try:
+            sas_open = await regie_open(
+                interaction.client, str(interaction.guild_id or ""), "season_entry_open"
+            )
+        except Exception:  # noqa: BLE001 — une régie illisible reste fermée
+            sas_open = False
         season = None
         try:
             season = await stack.kingdoms.current_season()
         except Exception:  # noqa: BLE001
             season = None
-        if season is None:
-            await interaction.followup.send(strings["season_none"], ephemeral=True)
-            return
-        # le SAS relit son interrupteur AU CLIC (double sécurité) —
-        # un rendu d'avant la fermeture ne laisse rien passer
-        from .regie import regie_open
-
-        if not await regie_open(
-            interaction.client, str(interaction.guild_id or ""), "season_entry_open"
-        ):
+        if not sas_open:
             await interaction.followup.send(strings["season_join_closed"], ephemeral=True)
+            return
+        if season is None:
+            # LA SALLE D'ATTENTE SANS SAISON — le geste du Roi vit
+            # déjà : la demande part avec l'id VIDE, le lancement la
+            # consommera (sas-v2 : « ils attendent que l'admin lance
+            # la saison »)
+            try:
+                await service.request_season_entry(
+                    str(realm.id), str(interaction.user.id), ""
+                )
+            except Exception as exc:  # noqa: BLE001
+                logger.warning("kingdom realms: waitlist request refused (%s)", exc)
+                await interaction.followup.send(strings["season_join_error"], ephemeral=True)
+                return
+            await interaction.followup.send(strings["season_join_waitlist"], ephemeral=True)
+            from .notices import announce_season_entry_request
+            from .panel import _guild_locale
+
+            guild_id = str(interaction.guild_id or "")
+            await announce_season_entry_request(
+                interaction.client, guild_id, realm, await _guild_locale(guild_id)
+            )
             return
         try:
             await service.request_season_entry(
@@ -1281,6 +1321,61 @@ class RealmJoinButton(
         await announce_season_entry_request(
             interaction.client, guild_id, realm, await _guild_locale(guild_id)
         )
+
+
+class RealmJoinWithdrawButton(
+    discord.ui.DynamicItem[discord.ui.Button[Any]],
+    template=rf"{_NS}:join-withdraw:(?P<slug>[a-z0-9-]+)$",
+):
+    """« ↩️ Retirer ma demande » — the Roi leaves the sas HIMSELF.
+
+    sas-v2 (Drasah 5/12) : « un bouton Retirer ma demande » — la
+    salle d'attente n'est pas une prison : le Roi sort, sa coquille
+    redevient dormante, SANS saison comme avec (le retrait admin
+    reste l'autre porte, côté Admissions). Restart-proof : le slug
+    voyage dans l'id, le clic relit la coquille et vérifie le Roi
+    (un vieux rendu ne retire jamais la demande d'un autre).
+    """
+
+    def __init__(self, label: str, slug: str) -> None:
+        super().__init__(
+            discord.ui.Button(
+                label=label[:80],
+                custom_id=f"{_NS}:join-withdraw:{slug}"[:100],
+                style=discord.ButtonStyle.secondary,
+            )
+        )
+
+    @classmethod
+    async def from_custom_id(cls, interaction, item, match, /):  # type: ignore[no-untyped-def]
+        return cls(realm_strings(interaction)["season_join_withdraw_button"], match["slug"])
+
+    async def callback(self, interaction: discord.Interaction) -> None:
+        strings = realm_strings(interaction)
+        slug = str(getattr(self, "custom_id", "")).rsplit(":", 1)[-1]
+        await interaction.response.defer(ephemeral=True)
+        stack = wiring()
+        service = _realm_service(stack)
+        realm = await _realm_of(interaction, slug) if service else None
+        if realm is None or stack is None:
+            await interaction.followup.send(strings["realm_gone_note"], ephemeral=True)
+            return
+        if not getattr(realm, "join_request", None):
+            await interaction.followup.send(strings["realm_gone_note"], ephemeral=True)
+            return
+        if str(getattr(realm, "king_id", "")) != str(interaction.user.id):
+            # un rendu périmé ne retire JAMAIS la demande d'un autre
+            await interaction.followup.send(
+                strings["season_join_withdraw_denied"], ephemeral=True
+            )
+            return
+        try:
+            await service.clear_join_request(str(realm.id))
+        except Exception:  # noqa: BLE001 — reports, never raises
+            logger.warning("kingdom realms: withdraw failed", exc_info=True)
+            await interaction.followup.send(strings["season_join_error"], ephemeral=True)
+            return
+        await interaction.followup.send(strings["season_join_withdrawn"], ephemeral=True)
 
 
 class RealmQuitButton(
@@ -1363,6 +1458,7 @@ def realm_dynamic_items() -> tuple:
         RealmNavButton,
         RealmPresentationEditButton,
         RealmJoinButton,
+        RealmJoinWithdrawButton,
         RealmQuitButton,
         RealmCrownSelect,
     )

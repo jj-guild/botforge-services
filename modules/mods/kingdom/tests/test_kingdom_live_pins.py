@@ -280,6 +280,8 @@ async def test_the_engine_gestures_refresh_too() -> None:
     )
     with mock.patch.object(common, "wiring", lambda: stack), \
             mock.patch.object(sp, "wiring", lambda: stack), \
+            mock.patch.object(sp, "_sas_roster_counts", mock.AsyncMock(return_value=(2, 0))), \
+            mock.patch.object(sp, "_consume_sas", mock.AsyncMock(return_value=2)), \
             mock.patch.object(sp, "refresh_live_pins_after", new=mock.AsyncMock()) as refresh:
         await sp._start_season(interaction, sp.settings_strings("fr"))
         refresh.assert_awaited_once(), "the departure's sas close re-renders the pin"

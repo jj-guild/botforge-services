@@ -87,8 +87,11 @@ _CONFIRM_ACTIONS = frozenset({"deploy", "sync", "reset"})
 # demandent leur confirmation (l'envoi de la saison, le départ bêta, le
 # faux départ) — jamais le même namespace que la table : chaque carte
 # porte ses propres ids.
+# sas-v2 : « start-beta-solo » — la bêta qui part avec UN SEUL
+# royaume du sas a droit à son AVERTISSEMENT propre (l'admin
+# confirme « quand même », puis le départ consomme le sas)
 _CYCLE_CONFIRM_ACTIONS = frozenset(
-    {"start-season", "start-beta", "false-start", "end-season"}
+    {"start-season", "start-beta", "start-beta-solo", "false-start", "end-season"}
 )
 
 _ALL_ACTIONS = tuple(action for action, _key, _style in _SETTINGS_ACTIONS)
@@ -596,6 +599,27 @@ async def _start_season(interaction: discord.Interaction, strings: dict[str, str
     if busy:
         await interaction.followup.send(busy, ephemeral=True)
         return
+    # sas-v2 (Drasah 5/12) : la classique REFUSE SOUS 2 ROYAUMES dans
+    # le sas (admis + en attente) — « une classique, c'est de la
+    # géopolitique : personne à 1, aucun intérêt », pas de bouton
+    # « quand même » côté classique. LE REMÈDE est dans la note :
+    # ouvrir le sas pour que les royaumes s'y inscrivent, ou injecter.
+    from .regie import SAS_FLOORS
+
+    pending, admitted = await _sas_roster_counts(stack)
+    if pending + admitted < int(SAS_FLOORS["classic"]):
+        await open_unique_ephemeral(
+            interaction,
+            content=str(strings["settings_start_floor_classic"]).format(
+                count=pending + admitted, floor=SAS_FLOORS["classic"]
+            ),
+        )
+        return
+    # sas-v2 : le départ CONSOMME la salle d'attente — toute personne
+    # dans le sas part en saison, avec sa draft starter
+    consumed = await _consume_sas(interaction, stack, strings)
+    if consumed:
+        logger.info("kingdom: the classic departure took %d sas realm(s)", consumed)
     # depart-fourche-v1 (Drasah 22/11): the CLASSIC departure owns its
     # own format — a beta armed on the season (an older fork launch)
     # is disarmed NOW (the season rides at its normal pace), and the
@@ -844,7 +868,9 @@ def _cycle_confirm_card(strings: dict[str, str], action: str) -> discord.ui.Layo
     settings table's (the double-click lesson of the first card).
     """
     yes_label = (
-        strings["settings_start_beta_confirm_button"]
+        strings["settings_start_beta_solo_confirm_button"]
+        if action == "start-beta-solo"
+        else strings["settings_start_beta_confirm_button"]
         if action == "start-beta"
         else strings["settings_start_season_confirm_button"]
         if action == "start-season"
@@ -879,7 +905,8 @@ def _cycle_confirm_card(strings: dict[str, str], action: str) -> discord.ui.Layo
     yes.callback = on_yes
     no.callback = on_no
     key = (
-        "settings_start_beta_confirm" if action == "start-beta"
+        "settings_start_beta_solo_confirm" if action == "start-beta-solo"
+        else "settings_start_beta_confirm" if action == "start-beta"
         else "settings_start_season_confirm" if action == "start-season"
         else "settings_false_start_confirm" if action == "false-start"
         else "settings_end_season_confirm"
@@ -896,7 +923,7 @@ def _cycle_confirm_card(strings: dict[str, str], action: str) -> discord.ui.Layo
     container.add_item(row)
     surface_key = (
         "panel:mod:kingdom:cycle:confirm-start-beta"
-        if action == "start-beta"
+        if action in ("start-beta", "start-beta-solo")
         else "panel:mod:kingdom:cycle:confirm-start"
         if action == "start-season"
         else "panel:mod:kingdom:cycle:confirm-false-start"
@@ -926,7 +953,9 @@ async def _season_mode(interaction: discord.Interaction, strings: dict[str, str]
     await interaction.followup.send(note, ephemeral=True)
 
 
-async def _start_beta(interaction: discord.Interaction, strings: dict[str, str]) -> None:
+async def _start_beta(
+    interaction: discord.Interaction, strings: dict[str, str], *, solo_ok: bool = False
+) -> None:
     """🚀 Démarrer la bêta — the BETA departure (depart-fourche-v1).
 
     Drasah 22/11 : « quand j'appuie sur Démarrer la bêta, ça devrait
@@ -955,6 +984,32 @@ async def _start_beta(interaction: discord.Interaction, strings: dict[str, str])
     if str(getattr(season, "phase", "")) != "setup":
         await interaction.followup.send(str(strings["settings_start_blocked_running"]), ephemeral=True)
         return
+    # sas-v2 (Drasah 5/12) : les seuils du sas (admis + en attente) —
+    # « minimum 1 en bêta » : à ZÉRO on refuse, à UN on PRÉVIENT et
+    # l'admin peut quand même partir (la carte de confirmation
+    # « start-beta-solo »), la bêta est le format TEST.
+    from .regie import SAS_FLOORS
+
+    pending, admitted = await _sas_roster_counts(stack)
+    roster = pending + admitted
+    if roster <= 0:
+        await open_unique_ephemeral(
+            interaction, content=str(strings["settings_start_floor_beta"]).format(
+                floor=SAS_FLOORS["beta"]
+            )
+        )
+        return
+    if roster == 1 and not solo_ok:
+        await open_unique_ephemeral(
+            interaction, view=_cycle_confirm_card(
+                strings_of(interaction), "start-beta-solo"
+            )
+        )
+        return
+    # sas-v2 : le départ CONSOMME la salle d'attente — même moteur
+    consumed = await _consume_sas(interaction, stack, strings)
+    if consumed:
+        logger.info("kingdom: the beta departure took %d sas realm(s)", consumed)
     try:
         await _arm_compressed_beta(stack)
     except Exception as exc:  # the panel reports, never raises
@@ -1001,12 +1056,82 @@ async def _start_beta(interaction: discord.Interaction, strings: dict[str, str])
     await interaction.followup.send(note, ephemeral=True)
 
 
+async def _start_beta_solo(interaction: discord.Interaction, strings: dict[str, str]) -> None:
+    """The admin CONFIRMED the solo beta — the floor's exception rides."""
+    await _start_beta(interaction, strings, solo_ok=True)
+
+
 _CYCLE_CONFIRM_HANDLERS: dict[str, Any] = {
     "start-season": _start_season,
     "start-beta": _start_beta,
+    "start-beta-solo": _start_beta_solo,
     "false-start": _false_start,
     "end-season": _end_season,
 }
+
+
+async def _sas_roster_counts(stack: Any) -> tuple[int, int]:
+    """What the sas HOLDS right now: (pending requests, admitted realms)."""
+    service = getattr(stack, "realms", None)
+    pending = 0
+    admitted = 0
+    if service is None:
+        return pending, admitted
+    try:
+        realms = await service.realms() or []
+    except Exception:  # noqa: BLE001 — an unreadable sas counts zero
+        logger.warning("kingdom: the sas roster read failed", exc_info=True)
+        return pending, admitted
+    for realm in realms:
+        if getattr(realm, "archived_at", 0):
+            continue
+        if getattr(realm, "engagement", None):
+            admitted += 1
+        elif getattr(realm, "join_request", None):
+            pending += 1
+    return pending, admitted
+
+
+async def _consume_sas(
+    interaction: discord.Interaction, stack: Any, strings: dict[str, str]
+) -> int:
+    """sas-v2 (Drasah 5/12) : le DÉPART consomme la salle d'attente.
+
+    « Lancer la saison, ça engage les personnes dans le SAS, donc
+    toute personne dans le SAS part en saison — avec la draft
+    starter. » Chaque demande qui attend accepte le MÊME moteur que
+    le geste admin d'Admissions (add_kingdom + trône + seigneurs +
+    engage + habitat) — best-effort par royaume, un raté n'arrête
+    jamais le casting.
+    """
+    service = getattr(stack, "realms", None)
+    if service is None:
+        return 0
+    try:
+        realms = await service.realms() or []
+    except Exception:  # noqa: BLE001 — an unreadable room stays
+        logger.warning("kingdom: the sas consume read failed", exc_info=True)
+        return 0
+    from .validation import _accept_season_entry
+
+    consumed = 0
+    locale = str(locale_of(interaction))[:2]
+    for realm in realms:
+        if not getattr(realm, "join_request", None):
+            continue
+        if getattr(realm, "archived_at", 0):
+            continue
+        try:
+            note = await _accept_season_entry(
+                interaction, stack, service, realm, strings, locale
+            )
+            if note:
+                consumed += 1
+        except Exception:  # noqa: BLE001 — one realm never blocks the casting
+            logger.warning("kingdom: the sas consume failed (%s)", realm.id, exc_info=True)
+    if consumed:
+        logger.info("kingdom: the departure consumed %d waiting realm(s)", consumed)
+    return consumed
 
 
 async def _season_state(

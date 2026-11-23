@@ -22,10 +22,14 @@ behaviour EXACTLY (Drasah's running season must never wake up closed):
   never rides.
 - ``realm_creation_open`` — « Prendre le Trône » (True)
 - ``realm_join_open``     — joining a realm (True)
-- ``season_entry_open``   — the 🛂 sas : the one switch with a
-  phase-aware default — open while a season PREPARES, closed once it
-  runs (the sas shuts itself at the season's departure, Drasah 21/11
-  « de base, par défaut, oui, le sas se ferme »), re-openable by hand
+- ``season_entry_open``   — the 🛂 sas : CLOSED by default, in every
+  phase (sas-v2, Drasah 5/12 : « si le sas est ouvert, ça veut dire
+  que l'admin a fait exprès de l'ouvrir » — plus de phase-aware
+  default), openable by hand at ANY time — the sas is the
+  PREPARATION, not the launch: a kingdom deposits its request in the
+  open sas even WITHOUT a launched season, the room waits, and the
+  DEPARTURE consumes it. The departure shuts the sas itself (Drasah
+  21/11 « de base, par défaut, oui, le sas se ferme »), re-openable by hand
   for the latecomers (the régie drawer), and the admin can always
   inject a realm by the existing « Ajouter un royaume » gesture.
   sas-cycle-v1 (Drasah 21/11) : the sas is the ADMIN's will — open
@@ -65,6 +69,18 @@ _REGIE_DEFAULTS: dict[str, bool] = {
     "season_entry_open": False,
 }
 
+# sas-v2 (Drasah 5/12) — the LAUNCH FLOORS, in realms in the sas:
+# classic refuses under 2, beta refuses at 0 and only WARNS at 1 (the
+# test format), beta never departs empty. DATA shaped for #369: the
+# season 2 moves these numbers to the format's conf without a rewrite.
+SAS_FLOORS: dict[str, int] = {
+    "classic": 2,
+    "beta": 1,
+}
+# the FLOOR counts what the sas HOLDS when the admin reaches for the
+# departure: the ADMITTED realms (engaged) + the WAITING requests.
+SAS_FLOOR_MIN_BETA_HARD = 0  # a beta with ZERO departant always refuses
+
 SWITCH_LABEL_KEYS: dict[str, str] = {
     "registration_open": "settings_regie_registration",
     "registration_required": "settings_regie_registration_required",
@@ -82,32 +98,16 @@ def _cache(bot: Any) -> Any | None:
     return ModStateCache(state_service, _MOD) if state_service is not None else None
 
 
-async def _current_phase(bot: Any) -> str:
-    """The live season's phase, best-effort ('off' when none/unreadable)."""
-    from .common import wiring
-
-    stack = wiring()
-    if stack is None or getattr(stack, "kingdoms", None) is None:
-        return "off"
-    try:
-        season = await stack.kingdoms.current_season()
-    except Exception:  # noqa: BLE001 — an unreadable season never bends the doors
-        logger.warning("kingdom: the régie's season read failed", exc_info=True)
-        return "off"
-    if season is None or bool(getattr(season, "finished", False)):
-        return "off"
-    return str(getattr(season, "phase", "started")) or "started"
-
-
 async def read_regie(bot: Any, guild_id: str) -> dict[str, bool]:
     """Every switch's live value (defaults when unset — never a closed fallback).
 
-    ``season_entry_open`` alone maps the legacy behaviour when no data
-    exists: open while the season prepares, closed once it runs.
+    sas-v2 (Drasah 5/12) : « le sas est fermé PAR DÉFAULT, toujours » —
+    plus de default piloté par la phase : l'ouverture est UN GESTE
+    ADMIN délibéré, et le sas vit dans TOUS les états du serveur (une
+    saison en préparation ne l'ouvre plus toute seule, une saison morte
+    ne le garde pas ouvert).
     """
     defaults = dict(_REGIE_DEFAULTS)
-    phase = await _current_phase(bot)
-    defaults["season_entry_open"] = phase == "setup"
     cache = _cache(bot)
     if cache is None:
         return defaults
@@ -172,6 +172,7 @@ async def registration_required(bot: Any, guild_id: str) -> bool:
 
 __all__ = [
     "REGIE_SWITCHES",
+    "SAS_FLOORS",
     "registration_required",
     "SWITCH_LABEL_KEYS",
     "read_regie",

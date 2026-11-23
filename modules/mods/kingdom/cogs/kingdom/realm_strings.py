@@ -77,6 +77,14 @@ _REALM_STRINGS: dict[str, _Strings] = {
             "moment (la régie du serveur décide)."
         ),
         "season_join_requested": "📬 Demande d'entrée en saison envoyée — un admin la validera.",
+        # sas-v2 (Drasah 5/12) : la salle d'attente vit SANS saison
+        "season_join_waitlist": (
+            "📬 Demande déposée dans le sas — aucune saison n'est lancée : "
+            "ton royaume attend dans la salle, il partira avec le lancement."
+        ),
+        "season_join_withdraw_button": "↩️ Retirer ma demande",
+        "season_join_withdrawn": "↩️ Demande retirée — ton royaume a quitté le sas.",
+        "season_join_withdraw_denied": "👑 Seul le Roi du royaume peut retirer la demande.",
         "season_join_pending": "📬 Une demande d'entrée en saison est déjà en attente.",
         "season_join_error": "❌ La demande a échoué : seul le Roi peut l'envoyer.",
         "season_engaged_line": "🏆 Le royaume joue la saison **{season}** — royaume moteur : **{kingdom}**. Les salons sont ouverts.",
@@ -152,6 +160,14 @@ _REALM_STRINGS: dict[str, _Strings] = {
             "régie decides)."
         ),
         "season_join_requested": "📬 Season entry request sent — an admin will validate it.",
+        # sas-v2 (Drasah 5/12) : the waiting room lives WITHOUT a season
+        "season_join_waitlist": (
+            "📬 Request dropped in the sas — no season launched yet: your "
+            "realm waits in the room, it departs with the launch."
+        ),
+        "season_join_withdraw_button": "↩️ Withdraw my request",
+        "season_join_withdrawn": "↩️ Request withdrawn — your realm left the sas.",
+        "season_join_withdraw_denied": "👑 Only the realm's King can withdraw the request.",
         "season_join_pending": "📬 A season entry request is already pending.",
         "season_join_error": "❌ The request failed: only the King may send it.",
         "season_engaged_line": "🏆 The realm plays season **{season}** — engine kingdom: **{kingdom}**. The halls are open.",

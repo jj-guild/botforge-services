@@ -248,6 +248,8 @@ async def test_the_beta_departure_distributes_the_sas() -> None:
     calls: list[str] = []
 
     with mock.patch.object(sp, "_needs_stack", lambda s: (stack, None)), \
+            mock.patch.object(sp, "_sas_roster_counts", mock.AsyncMock(return_value=(2, 0))), \
+            mock.patch.object(sp, "_consume_sas", mock.AsyncMock(return_value=2)), \
             mock.patch.object(sp, "refresh_live_pins_after", mock.AsyncMock()), \
             mock.patch("botforge.mods.kingdom.cogs.regie.set_switch", _switch_recorder(calls)), \
             mock.patch(
@@ -317,6 +319,8 @@ async def test_the_classic_departure_disarms_a_leftover_beta() -> None:
     calls: list[str] = []
 
     with mock.patch.object(sp, "_needs_stack", lambda s: (stack, None)), \
+            mock.patch.object(sp, "_sas_roster_counts", mock.AsyncMock(return_value=(2, 0))), \
+            mock.patch.object(sp, "_consume_sas", mock.AsyncMock(return_value=2)), \
             mock.patch.object(sp, "refresh_live_pins_after", mock.AsyncMock()), \
             mock.patch("botforge.mods.kingdom.cogs.regie.set_switch", _switch_recorder(calls)), \
             mock.patch(
@@ -344,6 +348,8 @@ async def test_the_classic_departure_never_stops_on_a_dead_flag() -> None:
     calls: list[str] = []
 
     with mock.patch.object(sp, "_needs_stack", lambda s: (stack, None)), \
+            mock.patch.object(sp, "_sas_roster_counts", mock.AsyncMock(return_value=(2, 0))), \
+            mock.patch.object(sp, "_consume_sas", mock.AsyncMock(return_value=2)), \
             mock.patch.object(sp, "refresh_live_pins_after", mock.AsyncMock()), \
             mock.patch("botforge.mods.kingdom.cogs.regie.set_switch", _switch_recorder(calls)):
         await sp._start_season(interaction, sp.settings_strings("fr"))
