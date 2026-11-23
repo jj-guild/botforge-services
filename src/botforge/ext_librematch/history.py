@@ -471,7 +471,10 @@ class MatchHistorySyncer:
         absent: list[str] = []
         for profile_id in profile_ids:
             try:
-                stat = await self._adapter.fetch_personal_stat_raw(profile_id)
+                # the adapter's signature takes (profile_id, leaderboard_id):
+                # the probe passes an empty board - ONE call answers every
+                # board (the statgroup join)
+                stat = await self._adapter.fetch_personal_stat_raw(profile_id, "")
             except Exception:
                 logger.debug("the 1v1 probe failed (%s)", profile_id, exc_info=True)
                 continue

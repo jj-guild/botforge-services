@@ -748,29 +748,36 @@ async def _entity_post_url(
     bot: Any,
     guild_id: str,
     channel_id: str,
-    name: str,
+    names: str | list[str],
 ) -> str:
     """Resolve one entity's forum POST into its jump URL (best-effort).
 
-    The civs/maps forums keep one thread per entity, named by its
-    localized display name; the exact name wins, then the
-    ``Name - whatever`` prefix form, walking the public AND the
+    The civs/maps forums keep one thread per entity, titled by its
+    LOCALIZED display name (which language the guild speaks decides
+    the title, owner 2026-11-22: the Italian/Vietnamese posts never
+    linked under their English names). The caller hands EVERY known
+    name form, localized first; each also matches its plural/singular
+    and its ``Name - whatever`` prefix, walking the public AND the
     private archives. A miss renders plain text, never a wrong link.
     """
-    if not channel_id or not name:
+    if isinstance(names, str):
+        names = [names]
+    names = [str(n or "").strip() for n in names if str(n or "").strip()]
+    if not channel_id or not names:
         return ""
     channel = bot.get_channel(int(channel_id)) if guild_id else None
     if channel is None:
         return ""
-    wanted = name.strip().casefold()
-    # Incas/Inca, Mayans/Maya: the catalog and the reference table
-    # don't always agree on the plural - both forms match (owner
-    # 2026-11-22: the Incas post never linked)
-    forms = [wanted]
-    if wanted.endswith("s"):
-        forms.append(wanted[:-1])
-    else:
-        forms.append(wanted + "s")
+    forms: list[str] = []
+    for wanted in [n.casefold() for n in names]:
+        for form in (wanted, wanted[:-1] if wanted.endswith("s") else wanted + "s"):
+            if form and form not in forms:
+                forms.append(form)
+    return await _thread_named(channel, forms)
+
+
+async def _thread_named(channel: Any, forms: list[str]) -> str:
+    """Find the forum thread whose title matches one of the forms."""
     for private in (False, True):
         threads: list[Any] = list(getattr(channel, "threads", []) or [])
         try:
@@ -786,9 +793,7 @@ async def _entity_post_url(
                 ) or thread_name.startswith(f"{form} \u2014"):
                     # thread.jump_url is Discord's OWN canonical link
                     return str(getattr(thread, "jump_url", "") or "")
-    logger.debug("the entity post was not found: %s (forms: %s)", name, forms)
-
-    logger.debug("the entity post was not found: %s", name)
+    logger.debug("the entity post was not found (forms: %s)", forms)
     return ""
 
 
@@ -817,11 +822,35 @@ def _civ_entity_id(civ_name: str) -> str:
 
     The catalog's faction ids follow ``faction:<game>:<slug>`` (the
     game service's own builder, game_data.py) - the panel reuses the
-    SAME convention, never its own.
+    SAME convention, never its own. The KEY is CANONICAL (the
+    English reference name's slug): localized display names never
+    address the database (owner 2026-11-22).
     """
     from botforge.core.ids import slug_id
 
     return f"faction:aoe2:{slug_id(civ_name)}"
+
+
+def _civ_entity_ids(civ_name: str) -> list[str]:
+    """Return the civ's content id CANDIDATES, canonical first.
+
+    AoE2 renames its civilizations across patches (Maya/Mayas/Mayans,
+    Inca/Incas, Magyar/Magyars) and adds/removes some: when the
+    reference table hands a newer (or older) name than the catalog
+    stored, the plural/singular alias of the SAME civ stands the
+    best chance of addressing the stored doc.
+    """
+    from botforge.core.ids import slug_id
+
+    slug = slug_id(civ_name).strip().casefold()
+    forms: list[str] = [slug]
+    if slug.endswith("s"):
+        alt = slug[:-1]
+    else:
+        alt = slug + "s"
+    if alt and alt not in forms:
+        forms.append(alt)
+    return [f"faction:aoe2:{form}" for form in forms if form]
 
 
 def _map_entity_id(map_name: str) -> str:
@@ -955,18 +984,56 @@ def _card_kind(card: dict[str, Any]) -> str:
     return "ranked" if _is_ranked(card) else "custom"
 
 
+
+async def _entity_local_names(entity_ids: str | list[str], guild_id: str, fallback: str) -> list[str]:
+    """Resolve an entity's LOCALIZED display names (guild locale, then en).
+
+    The aoe2techtree content docs carry per-locale names (fr:
+    ``Italiens``, ``Vietnamiens``...) while the provider's reference
+    tables speak English \u2014 the panels must display and resolve
+    the names of the guild's own language (owner 2026-11-22: the
+    Italian/Vietnamese posts never linked).
+    """
+    from botforge.discord.content_posts import content_service, guild_locale
+
+    service = content_service()
+    if service is None:
+        return [fallback] if fallback else []
+    if isinstance(entity_ids, str):
+        entity_ids = [entity_ids]
+    names: list[str] = []
+    locales = list(dict.fromkeys([await guild_locale(guild_id, None), "en"]))
+    for locale in locales:
+        for entity_id in entity_ids:
+            try:
+                doc = await service.content_get(entity_id, locale)
+            except Exception:
+                logger.debug("the entity content read failed (%s)", entity_id, exc_info=True)
+                doc = None
+            name = str((doc or {}).get("name", "") or "").strip()
+            if name and name not in names:
+                names.append(name)
+            if doc:
+                break  # the first candidate that answers names the entity
+    if fallback and fallback not in names:
+        names.append(fallback)
+    return [n for n in names if n]
+
+
 async def _posts_enrichment(
     interaction: discord.Interaction,
     cards: list[dict[str, Any]],
     guild_id: str,
-) -> tuple[dict[str, str], dict[str, str], dict[str, str], dict[str, str]]:
-    """Resolve per-batch: (civ posts, civ images, map posts, map images)."""
+) -> tuple[
+    dict[str, str], dict[str, str], dict[str, str], dict[str, str], dict[str, str], dict[str, str]
+]:
+    """Resolve per-batch: (civ posts, civ images, map posts, map images, civ names, map names)."""
     civ_urls: dict[str, str] = {}
     civ_images: dict[str, str] = {}
     map_urls: dict[str, str] = {}
     map_images: dict[str, str] = {}
     if not guild_id:
-        return civ_urls, civ_images, map_urls, map_images
+        return civ_urls, civ_images, map_urls, map_images, civ_urls, map_urls
     civs_channel = await _stored_channel(guild_id, "games/aoe2", "civs")
     maps_channel = await _stored_channel(guild_id, "games/aoe2", "maps")
     civs_needed: set[str] = set()
@@ -979,13 +1046,24 @@ async def _posts_enrichment(
         map_name = str(card.get("map_name") or "").strip()
         if map_name:
             maps_needed.add(map_name)
+    civ_display: dict[str, str] = {}
+    map_display: dict[str, str] = {}
     for civ in civs_needed:
-        civ_urls[civ] = await _entity_post_url(interaction.client, guild_id, civs_channel, civ)
-        civ_images[civ] = await _entity_image(_civ_entity_id(civ), guild_id)
+        candidates = _civ_entity_ids(civ)
+        names = await _entity_local_names(candidates, guild_id, civ)
+        civ_urls[civ] = await _entity_post_url(interaction.client, guild_id, civs_channel, names)
+        civ_display[civ] = names[0] if names else civ
+        civ_images[civ] = ""
+        for candidate in candidates:
+            civ_images[civ] = await _entity_image(candidate, guild_id)
+            if civ_images[civ]:
+                break
     for map_name in maps_needed:
-        map_urls[map_name] = await _entity_post_url(interaction.client, guild_id, maps_channel, map_name)
+        names = await _entity_local_names(_map_entity_id(map_name), guild_id, map_name)
+        map_urls[map_name] = await _entity_post_url(interaction.client, guild_id, maps_channel, names)
+        map_display[map_name] = names[0] if names else map_name
         map_images[map_name] = await _entity_image(_map_entity_id(map_name), guild_id)
-    return civ_urls, civ_images, map_urls, map_images
+    return civ_urls, civ_images, map_urls, map_images, civ_display, map_display
 
 
 async def _match_panels_ctx(
@@ -1001,7 +1079,7 @@ async def _match_panels_ctx(
     from botforge.discord.stats_views import stats_client
 
     guild_id = str(interaction.guild_id or "")
-    civ_urls, civ_images, map_urls, map_images = await _posts_enrichment(
+    civ_urls, civ_images, map_urls, map_images, civ_display, map_display = await _posts_enrichment(
         interaction, cards, guild_id
     )
     ladder: dict[str, dict[str, tuple[int, int]]] = {}
@@ -1027,6 +1105,8 @@ async def _match_panels_ctx(
         "civ_images": civ_images,
         "map_urls": map_urls,
         "map_images": map_images,
+        "civ_display": civ_display,
+        "map_display": map_display,
         "ladder": ladder,
     }
 
@@ -1065,7 +1145,9 @@ def _seat_text(
     alias_link = f"[{alias}]({insights_profile})" if insights_profile else alias
     name = f"**{alias_link}**" if pid in me_ids else alias_link
     slot = int(player.get("slot", 0) or 0)
-    slot_badge = f"P{slot} {SLOT_COLOURS[slot]}" if slot in SLOT_COLOURS else ""
+    # the colour NAMING was speculative (the game's own colour table
+    # needs verifying): keep the honest position only (owner 2026-11-22)
+    slot_badge = f"P{slot}" if slot else ""
     line = " ".join(bit for bit in [jump, name, slot_badge] if bit)
     if civ_link:
         line += f" {labels.get('with', 'avec')} {civ_link}"
@@ -1115,7 +1197,10 @@ def _card_map_section(card: dict[str, Any], ctx: dict[str, Any]) -> Any:
     """
     map_name = str(card.get("map_name") or "").strip()
     titled = bool(map_name) and map_name.lower() != "my map"
-    map_label = map_name if titled else (str(card.get("lobby_title") or "").strip() or "Match")
+    # the DISPLAY name localizes (the reference tables stay English);
+    # the post url resolution already tried every handed name form
+    map_shown = str((ctx.get("map_display") or {}).get(map_name) or map_name)
+    map_label = map_shown if titled else (str(card.get("lobby_title") or "").strip() or "Match")
     map_url = ctx["map_urls"].get(map_name, "") if titled else ""
     map_link = f"[{map_label}]({map_url})" if map_url else f"**{map_label}**"
     when_at = int(card.get("finished_at") or card.get("started_at") or 0)

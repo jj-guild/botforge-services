@@ -287,7 +287,12 @@ async def test_account_stats_serves_known_and_unknown() -> None:
     board = statuses[0].leaderboards[0]
     assert board.name == "unranked"  # LEADERBOARD_KEYS: board 0 IS unranked (3 is rm_1v1)
     assert board.current == 1024
-    assert statuses[1].known is False
+    # the probes work again (signature bug died 2026-11-22): an
+    # honestly-absent 1v1 still answers KNOWLEDGE - a none-marked
+    # rm_1v1, zeroed - the absence differs from "never fetched"
+    assert statuses[1].known is True
+    absent1v1 = next((b for b in statuses[1].leaderboards if str(b.name) == "rm_1v1"), None)
+    assert absent1v1 is not None and not absent1v1.current
 
 
 async def test_user_unification_best_elo_and_matches_window() -> None:
@@ -922,7 +927,11 @@ async def test_a_custom_lobby_never_harvests_boards() -> None:
     ]
     syncer = _syncer(db, adapter)
     await syncer.sync_account("123")
-    assert "456" not in db["librematch:accounts"].docs
+    # the custom RATINGS never fold - but the met player's honest 1v1
+    # ABSENCE still gets probed once; his TG board stays empty
+    boards = db["librematch:accounts"].docs["456"]["leaderboards"]
+    assert boards["3"]["none"] is True and not boards["3"]["current"]
+    assert "4" not in boards, "a custom (unranked) match never folds a board"
 
 
 async def test_the_missing_1v1_gets_probed_once_not_forever() -> None:
@@ -946,7 +955,7 @@ async def test_the_missing_1v1_gets_probed_once_not_forever() -> None:
     probed: list[str] = []
 
     async def _stat(*args: Any) -> dict[str, Any]:
-        profile_id = str(args[-1])
+        profile_id = str(args[0])  # the probe calls (profile_id, leaderboard)
         probed.append(profile_id)
         # an honest profile WITHOUT any 1v1 board (rm team only)
         return {}
