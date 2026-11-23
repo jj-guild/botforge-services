@@ -70,12 +70,12 @@ frames&nbsp;can&nbsp;exceed&nbsp;1&nbsp;MB&nbsp;(max_size&nbsp;raised);&nbsp;``*
 <td class="section-title" colspan=3>&nbsp;<br><a name="Aoe2LobbyAdapter">class <strong>Aoe2LobbyAdapter</strong></a>(<a href="builtins.html#object">builtins.object</a>)</td></tr>
     
 <tr><td class="decor title-decor" rowspan=2><span class="code">&nbsp;&nbsp;&nbsp;</span></td>
-<td class="decor title-decor" colspan=2><span class="code"><a href="#Aoe2LobbyAdapter">Aoe2LobbyAdapter</a>(ws_url:&nbsp;'str'&nbsp;=&nbsp;'wss://data.aoe2lobby.com/ws/',&nbsp;reconnect_delay_s:&nbsp;'float'&nbsp;=&nbsp;5.0,&nbsp;grace_s:&nbsp;'float'&nbsp;=&nbsp;15,&nbsp;heartbeat_s:&nbsp;'float'&nbsp;=&nbsp;90.0,&nbsp;max_size:&nbsp;'int'&nbsp;=&nbsp;10485760,&nbsp;refresh_s:&nbsp;'float'&nbsp;=&nbsp;5.0,&nbsp;schema_ws_url:&nbsp;'str'&nbsp;=&nbsp;'wss://data.aoe2lobby.com/ws/lobby/')&nbsp;-&amp;gt;&nbsp;'None'<br>
+<td class="decor title-decor" colspan=2><span class="code"><a href="#Aoe2LobbyAdapter">Aoe2LobbyAdapter</a>(ws_url:&nbsp;'str'&nbsp;=&nbsp;'wss://data.aoe2lobby.com/ws/',&nbsp;reconnect_delay_s:&nbsp;'float'&nbsp;=&nbsp;5.0,&nbsp;grace_s:&nbsp;'float'&nbsp;=&nbsp;60.0,&nbsp;heartbeat_s:&nbsp;'float'&nbsp;=&nbsp;90.0,&nbsp;max_size:&nbsp;'int'&nbsp;=&nbsp;10485760,&nbsp;refresh_s:&nbsp;'float'&nbsp;=&nbsp;5.0,&nbsp;schema_ws_url:&nbsp;'str'&nbsp;=&nbsp;'wss://data.aoe2lobby.com/ws/lobby/')&nbsp;-&amp;gt;&nbsp;'None'<br>
 &nbsp;<br>
 One-session&nbsp;WebSocket&nbsp;client&nbsp;reducing&nbsp;aoe2lobby&nbsp;deltas&nbsp;to&nbsp;transitions.<br>&nbsp;</span></td></tr>
 <tr><td>&nbsp;</td>
 <td class="singlecolumn">Methods defined here:<br>
-<dl><dt><a name="Aoe2LobbyAdapter-__init__"><strong>__init__</strong></a>(self, ws_url: 'str' = 'wss://data.aoe2lobby.com/ws/', reconnect_delay_s: 'float' = 5.0, grace_s: 'float' = 15, heartbeat_s: 'float' = 90.0, max_size: 'int' = 10485760, refresh_s: 'float' = 5.0, schema_ws_url: 'str' = 'wss://data.aoe2lobby.com/ws/lobby/') -&gt; 'None'</dt><dd><span class="code">Initialize&nbsp;self.&nbsp;&nbsp;See&nbsp;help(type(self))&nbsp;for&nbsp;accurate&nbsp;signature.</span></dd></dl>
+<dl><dt><a name="Aoe2LobbyAdapter-__init__"><strong>__init__</strong></a>(self, ws_url: 'str' = 'wss://data.aoe2lobby.com/ws/', reconnect_delay_s: 'float' = 5.0, grace_s: 'float' = 60.0, heartbeat_s: 'float' = 90.0, max_size: 'int' = 10485760, refresh_s: 'float' = 5.0, schema_ws_url: 'str' = 'wss://data.aoe2lobby.com/ws/lobby/') -&gt; 'None'</dt><dd><span class="code">Initialize&nbsp;self.&nbsp;&nbsp;See&nbsp;help(type(self))&nbsp;for&nbsp;accurate&nbsp;signature.</span></dd></dl>
 
 <dl><dt><a name="Aoe2LobbyAdapter-apply_frame"><strong>apply_frame</strong></a>(self, raw: 'str | bytes') -&gt; 'list[dict[str, Any]]'</dt><dd><span class="code">Fold&nbsp;one&nbsp;raw&nbsp;WS&nbsp;frame;&nbsp;return&nbsp;the&nbsp;resulting&nbsp;transition&nbsp;events.<br>
 &nbsp;<br>
@@ -143,7 +143,8 @@ Data and other attributes defined here:<br>
 <td class="section-title" colspan=3>&nbsp;<br><strong class="bigsection">Data</strong></td></tr>
     
 <tr><td class="decor data-decor"><span class="code">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span></td><td>&nbsp;</td>
-<td class="singlecolumn"><strong>CONTEXT_LOBBY</strong> = 'lobby'<br>
+<td class="singlecolumn"><strong>AOE2LOBBY_CLOSE_GRACE_S</strong> = 60.0<br>
+<strong>CONTEXT_LOBBY</strong> = 'lobby'<br>
 <strong>CONTEXT_SPECTATE</strong> = 'spectate'<br>
 <strong>DEEP_LINK_URL</strong> = 'aoe2de://1/-'<br>
 <strong>DEFAULT_HEARTBEAT_S</strong> = 90.0<br>
@@ -156,7 +157,6 @@ Data and other attributes defined here:<br>
 <strong>EVENT_LOBBY_CLOSED</strong> = 'lobby_closed'<br>
 <strong>EVENT_LOBBY_OPENED</strong> = 'lobby_opened'<br>
 <strong>EVENT_MATCH_UPDATED</strong> = 'match_updated'<br>
-<strong>GRACE_PERIOD_S</strong> = 15<br>
 <strong>MATCHID_FIELD</strong> = 'matchid'<br>
 <strong>PLAYER_STATUS_FIELD</strong> = 'player_status'<br>
 <strong>SCHEMA_FIELD</strong> = 'schema'<br>

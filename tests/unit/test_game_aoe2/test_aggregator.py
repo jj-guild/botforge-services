@@ -238,3 +238,13 @@ async def test_nameless_known_profile_falls_back_to_id_in_info(caplog: Any) -> N
         await agg.apply_event(FakeEvent("game_started", ("123",), 1_000, "111"))
     info_lines = [r.getMessage() for r in caplog.records if r.levelno == logging.INFO and r.name == AGGREGATOR_LOGGER]
     assert any("123" in line and "game_started" in line for line in info_lines)
+
+async def test_the_summary_carries_its_match_ref() -> None:
+    """A summary without its ref names nothing (owner 2026-11-23: the
+    live cards skipped every match, the live feed logged `match=` empty)."""
+    agg = GameAoe2Aggregator()
+    agg.set_roster(["123"])
+    await agg.apply_event(_summary_event("lobby_opened"))
+    transition = agg._transitions.get_nowait()
+    assert transition["match"]["match_ref"] == "111"
+    assert transition["match"]["map"] == "Arabia"

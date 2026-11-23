@@ -297,9 +297,19 @@ class GameAoe2Aggregator:
 
 
 def _summary_of(event: Any) -> dict[str, Any]:
-    """Extract the match summary an event's metadata carries."""
+    """Extract the match summary an event's metadata carries.
+
+    ``match_ref`` rides the EVENT (never the metadata - the adapter's
+    metadata names the match_url, not the ref): a summary without its
+    ref names NOTHING downstream (owner 2026-11-23: the live cards
+    skipped every match, the live activity feed received `match=`
+    empty while the logs showed the event arriving - "mal traité").
+    """
     metadata = dict(getattr(event, "metadata", ()) or {})
-    return {key: str(metadata.get(key, "")) for key in SNAPSHOT_KEYS if metadata.get(key) not in (None, "")}
+    summary = {key: str(metadata.get(key, "")) for key in SNAPSHOT_KEYS if metadata.get(key) not in (None, "")}
+    if getattr(event, "match_ref", ""):
+        summary.setdefault("match_ref", str(event.match_ref))
+    return summary
 
 
 def _now_ms() -> int:

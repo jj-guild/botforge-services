@@ -1731,9 +1731,12 @@ def _cards_from_live_snapshot(
         if state not in ("in_lobby", "in_game"):
             continue
         summary = record.get("match") or {}
-        if not isinstance(summary, dict) or not summary.get("match_ref"):
+        if not isinstance(summary, dict):
             continue
-        ref = str(summary["match_ref"])
+        ref = str(summary.get("match_ref") or record.get("match_ref") or "")
+        if not ref:
+            continue
+        summary = {**summary, "match_ref": ref}
         if ref in by_ref:
             continue
         by_ref[ref] = {
@@ -1745,16 +1748,32 @@ def _cards_from_live_snapshot(
             "started_at": 0,
             "finished_at": 0,
             "winners": [],
-            "players": [
-                dict(p)
-                for p in summary.get("players") or []
-                if isinstance(p, dict)
-            ],
+            "players": _live_summary_players(summary),
             "lobby_url": str(summary.get("lobby_url") or ""),
             "spectate_url": str(summary.get("spectate_url") or ""),
             "live_settings_json": str(summary.get("settings_json") or ""),
         }
     return list(by_ref.values())
+
+
+def _live_summary_players(summary: dict[str, Any]) -> list[dict[str, Any]]:
+    """Read a live summary's seats - a list OR the compact json string.
+
+    The seats ride TWO shapes: the wire round-trip parses them into a
+    list, the event-metadata path keeps the adapter's compact json
+    string - the card builder accepts both (never iterates a str).
+    """
+    import json as _json
+
+    seats = summary.get("players")
+    if isinstance(seats, str):
+        try:
+            seats = _json.loads(seats) if seats else []
+        except Exception:
+            return []
+    if not isinstance(seats, list):
+        return []
+    return [dict(p) for p in seats if isinstance(p, dict)]
 
 
 async def _live_cards(interaction: discord.Interaction, me_ids: set[str]) -> list[dict[str, Any]]:

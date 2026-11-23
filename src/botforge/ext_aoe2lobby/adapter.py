@@ -42,7 +42,7 @@ from typing import Any
 import websockets
 
 from botforge.aoe2.known_ids import KnownIds, log_match_event
-from botforge.aoe2.timing import GRACE_PERIOD_S, LobbyClosedGrace
+from botforge.aoe2.timing import LobbyClosedGrace
 from botforge.core_process.provider_endpoints import provider_url as _provider_url
 
 logger = logging.getLogger(__name__)
@@ -54,6 +54,7 @@ DEFAULT_MAX_SIZE = 10 * 1024 * 1024
 DEFAULT_RECONNECT_DELAY_S = 5.0
 DEFAULT_HEARTBEAT_S = 90.0  # WS ping interval (transport keepalive)
 DEFAULT_REFRESH_S = 5.0
+AOE2LOBBY_CLOSE_GRACE_S = 60.0
 
 CONTEXT_LOBBY = "lobby"
 CONTEXT_SPECTATE = "spectate"
@@ -85,7 +86,11 @@ class Aoe2LobbyAdapter:
         self,
         ws_url: str = DEFAULT_WS_URL,
         reconnect_delay_s: float = DEFAULT_RECONNECT_DELAY_S,
-        grace_s: float = GRACE_PERIOD_S,
+        # the close grace doubles as the FEED-CHURN window (owner
+        # 2026-11-23): the ws feed drops an idle lobby and re-adds it
+        # under a NEW match id ~30s later - a 15s grace fired the false
+        # "died" mid-idle; 60s lets the churn re-assert cancel the close.
+        grace_s: float = AOE2LOBBY_CLOSE_GRACE_S,
         heartbeat_s: float = DEFAULT_HEARTBEAT_S,
         max_size: int = DEFAULT_MAX_SIZE,
         refresh_s: float = DEFAULT_REFRESH_S,
