@@ -56,7 +56,8 @@ A session writing a doc, a comment or a commit in French is a bug.
   [botforge/docs/CONVENTIONS.md](https://github.com/jj-guild/botforge/blob/main/docs/CONVENTIONS.md)
   — *Cowboy mode* (API-blocked merges, maintainer-only direct pushes
   with per-push confirmation, never force-push `main`) and
-  *Integration branches* (never delete `vibe/<alias>/main`).
+  *Branch lifecycle* (feature branches `vibe/<slug>` → PR to `main`;
+  never delete a branch whose code is not fully on `main`).
 - **No mod, no game, without a rostered owner (non-overridable):** a
   session never creates `src/botforge/mods/<mod>/`, `config/mods/<mod>.yaml`,
   `src/botforge/core/games/<game>/` or mod docs unless a `CONTRIBUTORS.md`
