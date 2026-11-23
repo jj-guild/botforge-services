@@ -7,7 +7,7 @@
 # Gating (fail-closed, before any dispatch): the roster authority
 # matrix (CONTRIBUTORS.md, botforge repo) decides per command through
 # the reusable authorize.yml gate —
-#   /logs      capability env-logs    (ops anywhere; dev on test)
+#   /logs      capability env-logs    (ops anywhere; any rostered contributor (vibe+) on shared test, read-only)
 #   /restart   capability env-control (ops anywhere; dev on test)
 #   /rollback  capability rollback     (ops only)
 #   /dump-db   capability db-dump     (ops only)
@@ -489,7 +489,18 @@ jobs:
           [[ -n "$run_id" ]] || { echo "conclusion=not_found" >> "$GITHUB_OUTPUT"; exit 0; }
           rid="$(echo "$run_id" | python3 -c 'import json,sys; print(json.load(sys.stdin)["databaseId"])')"
           gh run watch "$rid" --repo jj-guild/botforge-infra --exit-status > /dev/null 2>&1 || true
-          conclusion="$(gh run view "$rid" --repo jj-guild/botforge-infra --json conclusion --jq .conclusion)"
+          # The conclusion is reread until GitHub reports it — a single
+          # view right after the watch can race the run record (the run
+          # still shows conclusion null: API propagation lag, or the
+          # watch exited early on an in-progress run). An empty read
+          # used to skip the payload step and post an empty ❌ result
+          # while the dump had succeeded (428, run 45247392911).
+          conclusion=""
+          for _ in $(seq 1 12); do
+            conclusion="$(gh run view "$rid" --repo jj-guild/botforge-infra --json conclusion --jq '.conclusion // ""' 2>/dev/null || true)"
+            [[ -n "$conclusion" ]] && break
+            sleep 5
+          done
           {
             echo "run_url=https://github.com/jj-guild/botforge-infra/actions/runs/$rid"
             echo "run_id=$rid"
