@@ -51,6 +51,9 @@ def _live_label(key: str, locale: str = "fr") -> str:
 
 
 OFFLINE_GRACE_MS = 3600 * 1000
+NO_PLAYERS_FALLBACK = (
+    "Aucun joueur li\u00e9 \u2014 ajoutez votre profil AoE2 depuis le menu profil (/home \u2192 Profil)."
+)
 
 
 def _t(bot: Any, locale: str, key: str, fallback: str) -> str:
@@ -546,6 +549,52 @@ class LiveRefreshButton(
 
         view = await _build_live_view(interaction, self.game_key)
         await interaction.response.edit_message(view=view)
+
+
+def live_title_line(
+    bot: Any, game_key: str = DEFAULT_GAME_KEY, locale: str = "fr", generated_at_ms: int = 0
+) -> str:
+    """Render the /live view's ONE title line: title, game, freshness."""
+    title = _t(bot, locale, "title", "\U0001f3ae Dashboard en direct")
+    line = f"# {title} \u2014 {game_label(game_key)}"
+    stamp = (generated_at_ms or _now_ms()) // 1000
+    line += f"\n-# <t:{stamp}:R>"
+    return line
+
+
+async def build_live_tail(interaction: Any, snapshot: dict[str, Any]) -> str:
+    """Render the /live view's tail: the recently-offline members, nothing else.
+
+    The match cards cover every active match (owner 2026-11-23); the
+    tail keeps only the members who were in a match within the last
+    hour - one text display, mentions + the offline separator.
+    """
+    bot = getattr(interaction, "client", None)
+    from botforge.discord.content_posts import guild_locale
+
+    locale = "fr"
+    try:
+        locale = await guild_locale(str(interaction.guild_id or ""), bot)
+    except Exception:
+        logging.getLogger("botforge.live").debug("the guild locale failed", exc_info=True)
+    players = snapshot.get("players") or []
+    if not players:
+        return _t(bot, locale, "no_players", NO_PLAYERS_FALLBACK)
+    now = _now_ms()
+    bits: list[str] = []
+    for player in players:
+        if str(player.get("state", "")) != "offline":
+            continue
+        since = int(player.get("since") or 0)
+        if now - since > OFFLINE_GRACE_MS:
+            continue
+        user_id = str(player.get("user_id", "") or "")
+        name = f"<@{user_id}>" if user_id else str(player.get("profile_id", "?"))
+        bits.append(f"- {name}")
+    if not bits:
+        return ""
+    separator = _t(bot, locale, "offline_separator", "\u2014 hors ligne \u2014")
+    return f"-# {separator}\n" + "\n".join(bits)
 
 
 def build_dashboard_view(

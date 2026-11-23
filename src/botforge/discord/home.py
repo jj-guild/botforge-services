@@ -1623,6 +1623,28 @@ def _match_card_view(
     """
     from botforge.discord.ui.view_footer import add_view_footer
 
+    blocks, buttons, match_id, accent = _match_card_parts(card, ctx, me_ids, labels)
+    view = discord.ui.LayoutView(timeout=None)
+    view.add_item(discord.ui.Container(*blocks, accent_colour=discord.Colour(accent)))
+    if buttons:
+        view.add_item(discord.ui.ActionRow(*buttons))
+    return add_view_footer(view, f"panel:match:aoe2:{match_id}")
+
+
+def _match_card_parts(
+    card: dict[str, Any],
+    ctx: dict[str, Any],
+    me_ids: set[str],
+    labels: dict[str, Any],
+) -> tuple[list[Any], list[discord.ui.Button[Any]], str, int]:
+    """Build ONE match card's inner parts: (blocks, buttons, id, accent).
+
+    The SAME parts compose every surface (owner 2026-11-23: "tu
+    n'utilises pas la même classe" - the /live dashboard rendered its
+    own text layout): the match panel builds ONE view, the live
+    dashboard folds SEVERAL cards into one view. The grammar stays
+    the owner's 2026-11-22 card (header, map, seats, footer).
+    """
     status = card["status"]  # lobby | ongoing | finished
     fmt = _card_format(card)
     kind = _card_kind(card)
@@ -1673,11 +1695,7 @@ def _match_card_view(
     # the footer stays the source line only); the row rides OUTSIDE the
     # container, the view id beneath
     buttons.append(_MatchSettingsButton(card, labels))
-    view = discord.ui.LayoutView(timeout=None)
-    view.add_item(discord.ui.Container(*blocks, accent_colour=discord.Colour(accent)))
-    if buttons:
-        view.add_item(discord.ui.ActionRow(*buttons))
-    return add_view_footer(view, f"panel:match:aoe2:{match_id}")
+    return blocks, buttons, match_id, accent
 
 
 def _entry_settings_of(entry: Any) -> list[list[str]]:
@@ -1692,25 +1710,22 @@ def _entry_settings_of(entry: Any) -> list[list[str]]:
         return []
 
 
-async def _live_cards(interaction: discord.Interaction, me_ids: set[str]) -> list[dict[str, Any]]:
-    """Build the ONGOING/lobby cards from the aggregator snapshot.
+def _cards_from_live_snapshot(
+    snapshot: dict[str, Any], keep_ids: set[str] | None = None
+) -> list[dict[str, Any]]:
+    """Build the ONGOING/lobby cards from an aggregator snapshot.
 
-    One card per distinct match the viewed profiles play in;
-    ``in_lobby`` renders a lobby card (join), ``in_game`` an ongoing
-    one (spectate).
+    One card per distinct match; ``in_lobby`` renders a lobby card
+    (join), ``in_game`` an ongoing one (spectate). ``keep_ids``
+    filters the seats (the profile popup keeps ONLY the viewed
+    profiles' matches); None keeps every seat (the /live dashboard
+    shows the whole guild - owner 2026-11-23: the same card class,
+    no more private text layout).
     """
-    client = _live_client_for(interaction.client, "aoe2")
-    if client is None or not me_ids:
-        return []
-    try:
-        snapshot = await client.watch("aoe2")
-    except Exception:
-        logger.debug("the live snapshot read failed", exc_info=True)
-        return []
     by_ref: dict[str, dict[str, Any]] = {}
     for player in snapshot.get("players") or []:
         record = player if isinstance(player, dict) else {}
-        if str(record.get("profile_id", "")) not in me_ids:
+        if keep_ids is not None and str(record.get("profile_id", "")) not in keep_ids:
             continue
         state = str(record.get("state", ""))
         if state not in ("in_lobby", "in_game"):
@@ -1740,6 +1755,19 @@ async def _live_cards(interaction: discord.Interaction, me_ids: set[str]) -> lis
             "live_settings_json": str(summary.get("settings_json") or ""),
         }
     return list(by_ref.values())
+
+
+async def _live_cards(interaction: discord.Interaction, me_ids: set[str]) -> list[dict[str, Any]]:
+    """Build the ONGOING/lobby cards of the VIEWED profiles."""
+    client = _live_client_for(interaction.client, "aoe2")
+    if client is None or not me_ids:
+        return []
+    try:
+        snapshot = await client.watch("aoe2")
+    except Exception:
+        logger.debug("the live snapshot read failed", exc_info=True)
+        return []
+    return _cards_from_live_snapshot(snapshot, keep_ids=me_ids)
 
 
 async def _finished_cards(
@@ -1874,7 +1902,22 @@ class ProfileMatchesButton(
         except Exception:
             logger.debug("the guild-wide bindings read failed", exc_info=True)
         known_ids -= me_ids
-        labels = {
+        labels = await _match_panel_labels(interaction)
+        if not me_ids:
+            await interaction.followup.send(
+                await reply(interaction, "profile.matches_empty"), ephemeral=True
+            )
+            return
+        await _send_match_panels(interaction, me_ids, known_ids, labels)
+
+
+async def _match_panel_labels(interaction: discord.Interaction) -> dict[str, Any]:
+    """Resolve the match panel's label pack (one builder, every surface).
+
+    The /live dashboard renders the SAME cards (owner 2026-11-23) -
+    the labels resolve once here, never per surface.
+    """
+    return {
             "team": await reply(interaction, "profile.matches_team"),
             "with": await reply(interaction, "profile.matches_with"),
             "join": await reply(interaction, "profile.matches_join"),
@@ -1903,13 +1946,7 @@ class ProfileMatchesButton(
             "lobby_noun": await reply(interaction, "profile.lobby_noun"),
             "settings_button": await reply(interaction, "profile.matches_settings_button"),
             "settings_title": await reply(interaction, "profile.matches_settings_title"),
-        }
-        if not me_ids:
-            await interaction.followup.send(
-                await reply(interaction, "profile.matches_empty"), ephemeral=True
-            )
-            return
-        await _send_match_panels(interaction, me_ids, known_ids, labels)
+    }
 
 
 class ProfileRenameButton(
@@ -2293,7 +2330,7 @@ async def _build_live_view(
     Shared by /live, the menu button and the dashboard's refresh
     button (which already deferred): the caller owns the transport.
     """
-    from botforge.discord.live import collect_profile_stats, render_dashboard
+    from botforge.discord.live import scope_snapshot_to_guild
 
     snapshot: dict[str, Any] = {"players": [], "generated_at": 0, "degraded": True}
     client = _live_client_for(interaction.client, game_key)
@@ -2304,25 +2341,92 @@ async def _build_live_view(
             logger.warning("HOME: live snapshot failed (game %s)", game_key, exc_info=True)
     guild = interaction.client.get_guild(int(interaction.guild_id)) if interaction.guild_id else None
     if guild is not None:
-        from botforge.discord.live import scope_snapshot_to_guild
-
         snapshot = await scope_snapshot_to_guild(snapshot, guild)
-    active_ids = [
-        str(p.get("profile_id", ""))
-        for p in snapshot.get("players", [])
-        if p.get("state") != "offline"
-    ]
-    stats = await collect_profile_stats(active_ids, game_key)
+    # THE SAME CARD CLASS AS THE MATCH PANELS (owner 2026-11-23: "tu
+    # n'utilises pas la même classe" - the dashboard rendered its own
+    # text layout, nothing like a finished match). The viewer's own
+    # bindings scope the cards (his emoji, his bold team) - a match he
+    # does not play renders unscoped, per-team marks only.
+    me_ids: set[str] = set()
+    registration = getattr(interaction.client, "registration_service", None)
+    if registration is not None:
+        try:
+            for binding in await registration.list_bindings(str(interaction.user.id)):
+                if str(binding.get("game_key", "")) == game_key:
+                    me_ids.add(str(binding.get("profile_id", "")))
+        except Exception:
+            logger.debug("the live scope lookup failed", exc_info=True)
+    cards = _cards_from_live_snapshot(snapshot)[:4] if game_key == "aoe2" else []
+    if cards:
+        try:
+            ctx = await _match_panels_ctx(interaction, cards)
+            labels = await _match_panel_labels(interaction)
+        except Exception:
+            logger.warning("the live panel context failed", exc_info=True)
+            ctx, labels = {}, {}
+    else:
+        ctx, labels = {}, {}
+    return await _live_dashboard_view(interaction, snapshot, cards, me_ids, ctx, labels, game_key)
+
+
+async def _live_dashboard_view(
+    interaction: discord.Interaction,
+    snapshot: dict[str, Any],
+    cards: list[dict[str, Any]],
+    me_ids: set[str],
+    ctx: dict[str, Any],
+    labels: dict[str, Any],
+    game_key: str = "aoe2",
+) -> Any:
+    """Compose the /live view: the title, the MATCH CARDS, the tail.
+
+    One view, many cards (owner 2026-11-23): each active match renders
+    through the SAME ``_match_card_parts`` the profile panels render -
+    header, map section, seats, settings button - never a private
+    layout. The offline tail keeps one text display; the freshness
+    and the refresh button ride the top and bottom rows.
+    """
+    from botforge.discord.live import build_live_tail, live_title_line
+    from botforge.discord.ui.view_footer import add_view_footer
+
+    view = discord.ui.LayoutView(timeout=None)
     from botforge.discord.content_posts import guild_locale
 
-    locale = await guild_locale(str(interaction.guild_id), interaction.client)
-    body = render_dashboard(snapshot, locale=locale, stats=stats, bot=interaction.client)
-    from botforge.discord.live import build_dashboard_view
+    try:
+        locale = await guild_locale(str(interaction.guild_id or ""), interaction.client)
+    except Exception:
+        locale = "fr"
+    view.add_item(
+        discord.ui.TextDisplay(
+            live_title_line(
+                interaction.client,
+                game_key,
+                locale=locale,
+                generated_at_ms=int(snapshot.get("generated_at") or 0),
+            )
+        )
+    )
+    for card in cards:
+        blocks, buttons, _match_id, accent = _match_card_parts(card, ctx, me_ids, labels or {})
+        view.add_item(discord.ui.Container(*blocks, accent_colour=discord.Colour(accent)))
+        if buttons:
+            view.add_item(discord.ui.ActionRow(*buttons))
+    tail = await build_live_tail(interaction, snapshot)
+    if tail:
+        view.add_item(discord.ui.TextDisplay(tail))
+    from botforge.discord.live import LiveRefreshButton
 
-    # THE dashboard rendering (unified, owner direction): the same view
-    # the pinned channel shows — Container + the id under it, one code path.
-    view = build_dashboard_view(snapshot, body, interaction.client, locale=locale, game_key=game_key)
-    return view
+    view.add_item(
+        discord.ui.ActionRow(
+            LiveRefreshButton(
+                game_key,
+                str(labels.get("refresh", "Rafraîchir")),
+            ).item
+        )
+    )
+    if snapshot.get("degraded"):
+        pass  # the title line already carries the degraded warning
+    return add_view_footer(view, f"panel:live:{game_key}")
 
 
 async def _view_mods_for_guild(interaction: discord.Interaction, guild_id: str) -> None:

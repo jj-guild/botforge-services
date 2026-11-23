@@ -162,3 +162,58 @@ def test_the_live_lobby_settings_render_through_the_popup_tables() -> None:
     assert "⬜ Cheats" in lines
     # the settings view of a live card answers the same shape as a finished one
     assert pairs and lines
+
+def test_the_live_dashboard_cards_come_from_the_snapshot_with_settings() -> None:
+    """The /live cards share the panel card shape (owner 2026-11-23)."""
+    from botforge.discord.home import _cards_from_live_snapshot
+
+    snapshot = {
+        "players": [
+            {
+                "profile_id": "17190369",
+                "user_id": "10",
+                "state": "in_lobby",
+                "match_ref": "523203059",
+                "match": {
+                    "match_ref": "523203059",
+                    "map": "Coastal",
+                    "match_type": "Random Map",
+                    "status": "lobby",
+                    "players": (
+                        '[{"profile_id": "17190369", "name": "Merlin Pinpin",'
+                        ' "civ": "Franks", "team": 1}]'
+                    ),
+                    "lobby_url": "https://www.aoe2lobby.com/j/523203059",
+                    "spectate_url": "https://www.aoe2lobby.com/w/523203059",
+                    "settings_json": '{"speed": 2, "lock_teams": true}',
+                },
+            },
+            {
+                "profile_id": "848567",
+                "user_id": "10",
+                "state": "offline",
+                "match_ref": "",
+                "match": {},
+            },
+        ]
+    }
+    cards = _cards_from_live_snapshot(snapshot)
+    assert len(cards) == 1, "the offline profile renders no card"
+    card = cards[0]
+    assert card["status"] == "lobby"
+    assert card["map_name"] == "Coastal"
+    assert card["lobby_url"].endswith("/j/523203059")
+    assert card["live_settings_json"] == '{"speed": 2, "lock_teams": true}'
+    # the viewer-scoped cut keeps ONLY the scoped seats' matches
+    scoped = _cards_from_live_snapshot(snapshot, keep_ids={"848567"})
+    assert scoped == [], "a profile outside the scope renders no card"
+    # the card renders through the very same parts builder as the panels
+    from botforge.discord.home import _match_card_parts
+
+    blocks, buttons, match_id, accent = _match_card_parts(
+        card, {"civ_urls": {}, "civ_images": {}, "map_urls": {}, "map_images": {},
+         "map_display": {}, "civ_display": {}, "ladder": {}},
+        set(), {"team": "Team"},
+    )
+    assert match_id == "523203059"
+    assert blocks and buttons and accent, "the card renders the full panel shape"

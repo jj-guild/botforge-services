@@ -272,6 +272,11 @@ the&nbsp;body&nbsp;and&nbsp;a&nbsp;RELATIVE&nbsp;TIMESTAMP&nbsp;(Discord&nbsp;re
 snapshot&nbsp;is);&nbsp;the&nbsp;refresh&nbsp;button&nbsp;under&nbsp;it;&nbsp;the&nbsp;view&nbsp;id&nbsp;as&nbsp;the<br>
 last&nbsp;line.&nbsp;Ephemeral-only&nbsp;(owner&nbsp;direction):&nbsp;never&nbsp;pinned,&nbsp;never<br>
 a&nbsp;persistent&nbsp;message.</span></dd></dl>
+ <dl><dt>async <a name="-build_live_tail"><strong>build_live_tail</strong></a>(interaction: 'Any', snapshot: 'dict[str, Any]') -&gt; 'str'</dt><dd><span class="code">Render&nbsp;the&nbsp;/live&nbsp;view's&nbsp;tail:&nbsp;the&nbsp;recently-offline&nbsp;members,&nbsp;nothing&nbsp;else.<br>
+&nbsp;<br>
+The&nbsp;match&nbsp;cards&nbsp;cover&nbsp;every&nbsp;active&nbsp;match&nbsp;(owner&nbsp;2026-11-23);&nbsp;the<br>
+tail&nbsp;keeps&nbsp;only&nbsp;the&nbsp;members&nbsp;who&nbsp;were&nbsp;in&nbsp;a&nbsp;match&nbsp;within&nbsp;the&nbsp;last<br>
+hour&nbsp;-&nbsp;one&nbsp;text&nbsp;display,&nbsp;mentions&nbsp;+&nbsp;the&nbsp;offline&nbsp;separator.</span></dd></dl>
  <dl><dt>async <a name="-collect_profile_stats"><strong>collect_profile_stats</strong></a>(profile_ids: 'list[str]', game_key: 'str' = 'aoe2') -&gt; 'dict[str, dict[str, Any]]'</dt><dd><span class="code">Resolve&nbsp;per-profile&nbsp;enrichment:&nbsp;name,&nbsp;provider&nbsp;stats,&nbsp;last&nbsp;match.<br>
 &nbsp;<br>
 Names&nbsp;come&nbsp;from&nbsp;the&nbsp;profile&nbsp;bindings;&nbsp;ratings/W-L&nbsp;come&nbsp;from&nbsp;the<br>
@@ -281,6 +286,7 @@ All&nbsp;layers&nbsp;degrade&nbsp;—&nbsp;a&nbsp;missing&nbsp;value&nbsp;render
  <dl><dt><a name="-game_label"><strong>game_label</strong></a>(game_key: 'str') -&gt; 'str'</dt><dd><span class="code">Return&nbsp;one&nbsp;game&nbsp;key's&nbsp;display&nbsp;label&nbsp;(the&nbsp;game's&nbsp;own&nbsp;name).</span></dd></dl>
  <dl><dt><a name="-group_by_account"><strong>group_by_account</strong></a>(players: 'list[dict[str, Any]]', stats: 'dict[str, dict[str, Any]] | None' = None) -&gt; 'dict[str, dict[str, Any]]'</dt><dd><span class="code">Fold&nbsp;the&nbsp;flat&nbsp;per-profile&nbsp;list&nbsp;into&nbsp;per-Discord-account&nbsp;records.</span></dd></dl>
  <dl><dt><a name="-live_page_key"><strong>live_page_key</strong></a>(game_key: 'str', page: 'int') -&gt; 'str'</dt><dd><span class="code">Return&nbsp;the&nbsp;logical&nbsp;message&nbsp;key&nbsp;of&nbsp;one&nbsp;dashboard&nbsp;page&nbsp;(2..N).</span></dd></dl>
+ <dl><dt><a name="-live_title_line"><strong>live_title_line</strong></a>(bot: 'Any', game_key: 'str' = 'aoe2', locale: 'str' = 'fr', generated_at_ms: 'int' = 0) -&gt; 'str'</dt><dd><span class="code">Render&nbsp;the&nbsp;/live&nbsp;view's&nbsp;ONE&nbsp;title&nbsp;line:&nbsp;title,&nbsp;game,&nbsp;freshness.</span></dd></dl>
  <dl><dt><a name="-live_view_key"><strong>live_view_key</strong></a>(game_key: 'str') -&gt; 'str'</dt><dd><span class="code">Return&nbsp;the&nbsp;logical&nbsp;message&nbsp;key&nbsp;of&nbsp;a&nbsp;game's&nbsp;pinned&nbsp;dashboard&nbsp;message.</span></dd></dl>
  <dl><dt><a name="-render_dashboard"><strong>render_dashboard</strong></a>(snapshot: 'dict[str, Any]', locale: 'str' = 'en', stats: 'dict[str, dict[str, Any]] | None' = None, now_ms: 'int | None' = None, bot: 'Any' = None) -&gt; 'str'</dt><dd><span class="code">Render&nbsp;the&nbsp;dashboard&nbsp;snapshot&nbsp;as&nbsp;a&nbsp;plain-text&nbsp;message&nbsp;body.<br>
 &nbsp;<br>
@@ -302,6 +308,7 @@ simply&nbsp;out&nbsp;of&nbsp;this&nbsp;guild's&nbsp;dashboard.</span></dd></dl>
     
 <tr><td class="decor data-decor"><span class="code">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span></td><td>&nbsp;</td>
 <td class="singlecolumn"><strong>DEFAULT_GAME_KEY</strong> = 'aoe2'<br>
+<strong>NO_PLAYERS_FALLBACK</strong> = 'Aucun joueur lié — ajoutez votre profil AoE2 depuis le menu profil (/home → Profil).'<br>
 <strong>OFFLINE_GRACE_MS</strong> = 3600000<br>
 <strong>TYPE_CHECKING</strong> = False<br>
 <strong>logger</strong> = &lt;Logger botforge.live (INFO)&gt;</td></tr></table>
