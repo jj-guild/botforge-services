@@ -1,0 +1,118 @@
+# Pong mod (montante/descendante tournament on AoE2 — "come up/down like ping pong").
+# Design: botforge repo docs/MODS/pong/ (REFERENCE.md = the S5 règlement,
+# RULES/ENVIRONMENT/TESTS/DECISIONS — PR botforge#231).
+#
+# Bootstrap declaration: enabled stays false until the mod package
+# (modules/mods/pong/{src,cogs,grpc}) lands — a disabled mod is never
+# loaded, so the envs can carry the declaration harmlessly.
+# Open design questions live in docs/MODS/pong/DECISIONS.md: nothing below
+# invents an undecided value (defaults come from the S5 rules).
+id: pong
+enabled: false
+# the visual identity is data
+emoji: "🏓"
+# season-based tournament (root lifecycle panel + per-season admin salon)
+seasonal: true
+settings:
+  # defaults from the S5 règlement (docs/MODS/pong/REFERENCE.md)
+  season_name_format: "AOE Pong S<N>"
+  bo_format: 5
+  civs_remaining: 15
+  rounds_per_season: 4          # D-PONG-005
+  round_window: wed_tue          # Wednesday → Tuesday, 7 days
+  move_policy: semi_blocked      # D-PONG-006 — classic | semi_blocked (per-season param)
+  elo_seed_formula: "(2 * current_elo + max_elo) / 3"  # D-PONG-007
+  # tables_count is DERIVED at runtime: registered_players / 2 (D-PONG-008).
+  # Odd player count blocks season opening until Q-PONG-002.
+  draft_map_preset: https://aoe2cm.net/preset/pGWoJ       # the S5 map-pool preset
+  civ_draft_base_preset: null    # D-PONG-009 — aoe2cm base_preset (lands with the cogs PR)
+  open_stream: true              # open stream, "AOE Pong" in the title
+  patch_policy: admin_decides
+  close_tables: true
+  planning_requirement: "two 3h consecutive slots in 17h-23h (FR tz)"
+  # records_provider (D-PONG-010, phase 2): auto rec-zip via replaypacker (no-spoiler BO5)
+channel_groups:
+  - key: ladder
+    display_name: 🏓 ᴀᴏᴇ ᴘᴏɴɢ
+  - key: tables
+    display_name: 🏓 ᴛᴀʙʟᴇs
+  - key: admin
+    display_name: ⚙️ ᴘᴏɴɢ-ꜱᴛᴀꜰꜰ
+    admin_only: true
+channels:
+  - key: announcements
+    display_name: 📣 annonces-pong
+    description: Round openings/closures, tables list and per-table civ presets
+    group: ladder
+    access:
+      everyone_view: false
+      view: [Pong Player, Pong Admin]
+  - key: bot_commands
+    display_name: 🤖 bot-commands
+    description: The mod's slash commands (/register, /register_to_tournament…)
+    group: ladder
+    access:
+      everyone_view: false
+      view: [Pong Candidate, Pong Player, Pong Admin]
+  - key: planning
+    display_name: 📅 planification
+    description: One forum topic per match — date/time fixes and admin notices
+    group: ladder
+    kind: forum
+    access:
+      everyone_view: false
+      view: [Pong Player, Pong Admin]
+  - key: records
+    display_name: 🎞️ records
+    description: Normalized results + drafts/recs zips for casters and admins
+    group: ladder
+    access:
+      everyone_view: false
+      view: [Pong Player, Pong Caster, Pong Admin]
+  - key: casting
+    display_name: 🎙️ casting
+    description: Cast announcements (open stream — "AOE Pong" in the title)
+    group: ladder
+    access:
+      everyone_view: true
+      view: [Pong Caster, Pong Admin]
+  # table salons (pong:table_<n>) are GENERATED per round (open_round op),
+  # provisioned from the runtime state — never declared statically here
+  - key: settings
+    display_name: ⚙️ paramètres
+    description: Mod settings/lifecycle panel channel (seasonal mod)
+    group: admin
+    admin_only: true
+    access:
+      everyone_view: false
+      view: [Pong Admin]
+  - key: admin_log
+    display_name: 📜 journal-admin
+    description: Timestamped admin actions (blocks, admin results, arbitrations)
+    group: admin
+    admin_only: true
+    access:
+      everyone_view: false
+      view: [Pong Admin]
+roles:
+  - key: pong_admin
+    display_name: Pong Admin
+    color: 0xE74C3C
+    hoisted: true
+  - key: pong_player
+    display_name: Pong Player
+    color: 0x2ECC71
+  - key: pong_candidate
+    display_name: 🧡 Pong Candidat
+    color: 0xE67E22
+  - key: pong_caster
+    display_name: 🎙️ Pong Caster
+    color: 0x9B59B6
+workflows: []
+commands: []          # /register, /register_to_tournament, /add_result,
+                      # /validate_score, /contest_score — land with the cogs PR
+dependencies: []      # register/player identity: soft dependency to declare
+                      # when the cogs land (declaration kept minimal now)
+# pong is an AoE2-bound tournament mod
+required_games:
+  - aoe2
