@@ -298,7 +298,7 @@ DEFAULTS: dict[str, dict[str, str]] = {
         "room_dm_luck": "\n\nBonne chance ! 🍀",
         "room_event_name": "⚔️ {map} — {attacker} 🆚 {defender}",
         "room_event_description": (
-            "⚔️ Bataille Kingdoms en direct — {attacker} 🆚 {defender}.\n"
+            "⚔️ Bataille Kingdom en direct — {attacker} 🆚 {defender}.\n"
             "Civilisations et boutons de jeu : dans le salon vocal de la bataille."
         ),
         "draft_button": "📜 Voir la draft",
@@ -641,7 +641,7 @@ DEFAULTS: dict[str, dict[str, str]] = {
         "console_bypass_on_label": "🐞 Bypass ON",
         "console_bypass_off_label": "🐞 Bypass OFF",
         "console_skip_event_label": "⏭️ Événement suivant",
-        "console_service_not_ready": "❌ Le service Kingdoms n'est pas prêt.",
+        "console_service_not_ready": "❌ Le service Kingdom n'est pas prêt.",
         "console_debug_done": "✅ {0}",
         "console_relaunch_confirm": (
             "🔁 **Relancer la saison ?**\n"
@@ -945,7 +945,7 @@ DEFAULTS: dict[str, dict[str, str]] = {
         "room_dm_luck": "\n\nGood luck! 🍀",
         "room_event_name": "⚔️ {map} — {attacker} 🆚 {defender}",
         "room_event_description": (
-            "⚔️ Live Kingdoms battle — {attacker} 🆚 {defender}.\n"
+            "⚔️ Live Kingdom battle — {attacker} 🆚 {defender}.\n"
             "Civilizations and game buttons: in the battle's voice channel."
         ),
         "draft_button": "📜 View the draft",
@@ -1281,7 +1281,7 @@ DEFAULTS: dict[str, dict[str, str]] = {
         "console_bypass_on_label": "🐞 Bypass ON",
         "console_bypass_off_label": "🐞 Bypass OFF",
         "console_skip_event_label": "⏭️ Next event",
-        "console_service_not_ready": "❌ The Kingdoms service is not ready.",
+        "console_service_not_ready": "❌ The Kingdom service is not ready.",
         "console_debug_done": "✅ {0}",
         "console_relaunch_confirm": (
             "🔁 **Relaunch the season?**\n"

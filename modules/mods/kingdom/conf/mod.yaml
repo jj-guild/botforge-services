@@ -30,10 +30,10 @@ channel_groups:
   - key: conscription
     display_name: ✒️ ᴄᴏɴsᴄʀɪᴘᴛɪᴏɴ
   # restructuration-gaia-v1 (Drasah 24/10): the Gaïa group RETIRES —
-  # its Territoire salon moves into the Kingdoms category, which is
-  # renamed « Kingdoms-Gaia »; the Taverne (taverne-v1) is born here.
+  # its Territoire salon moves into the Kingdom category, which is
+  # renamed « Kingdom-Gaia »; the Taverne (taverne-v1) is born here.
   - key: kingdom
-    display_name: 🏰 ᴋɪɴɢᴅᴏᴍs-ɢᴀɪᴀ
+    display_name: 🏰 ᴋɪɴɢᴅᴏᴍ-ɢᴀɪᴀ
   - key: battlefield
     display_name: ⚔️ ᴄʜᴀᴍᴘs ᴅᴇ ʙᴀᴛᴀɪʟʟᴇ
   # laboratoire-v3 (Drasah 19/11): the Labo group RETIRES — the visual
@@ -128,7 +128,7 @@ channels:
     display_name: 🗺️ territoire
     description: Territories and their cadastre effects — plus the Gaïa AI level (restructuration-serveur-v1 c, Drasah 19/10)
     # restructuration-gaia-v1 (Drasah 24/10): moved from the retired
-    # gaia group into kingdoms (Kingdoms-Gaia).
+    # gaia group into kingdoms (Kingdom-Gaia).
     group: kingdom
     access:
       everyone_view: false
@@ -179,7 +179,7 @@ channels:
   # undeclared at the next provisioning.
   - key: console
     display_name: ⚙️ paramètres
-    description: Kingdoms settings — the admin season cockpit (pinned, admin only)
+    description: Kingdom settings — the admin season cockpit (pinned, admin only)
     group: admin
     admin_only: true
     access:

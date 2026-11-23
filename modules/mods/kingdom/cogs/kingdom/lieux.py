@@ -131,7 +131,7 @@ LIEUX_STRINGS: dict[str, dict[str, str]] = {
         "not_lord": (
             "Seuls les seigneurs du royaume peuvent entrer dans ses lieux."
         ),
-        "no_service": "Le service Kingdoms n'est pas câblé.",
+        "no_service": "Le service Kingdom n'est pas câblé.",
         "conseil_title": "⚔️ Salle du conseil — {0}",
         "conseil_intro_l1": (
             "Jetez un coup d'œil aux attaques et défenses de vos seigneurs —"
@@ -269,7 +269,7 @@ LIEUX_STRINGS: dict[str, dict[str, str]] = {
         "not_lord": (
             "Only the lords of this kingdom may enter its places."
         ),
-        "no_service": "The Kingdoms service is not wired.",
+        "no_service": "The Kingdom service is not wired.",
         "conseil_title": "⚔️ Council room — {0}",
         "conseil_intro_l1": (
             "Keep an eye on your lords' attacks and defenses — their"

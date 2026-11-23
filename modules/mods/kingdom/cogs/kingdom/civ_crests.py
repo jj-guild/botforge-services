@@ -1,4 +1,4 @@
-"""Kingdoms mod — civilization crest images (civ-crests-v1, Drasah 20/10).
+"""Kingdom mod — civilization crest images (civ-crests-v1, Drasah 20/10).
 
 The mod's player-facing civ lists (the 📜 Alliances pinned draft starter,
 the pick & ban REVEAL DM, the battle-room meeting message) read as bare

@@ -1,4 +1,4 @@
-"""Kingdoms mod — the realm salons' content engine (realm-content-v1).
+"""Kingdom mod — the realm salons' content engine (realm-content-v1).
 
 PORTAGE of the diverged branch's ``kingdom_realm_content.py`` (vibe/
 drasah/main, Drasah 21-11) into the new architecture — vague 1 :
@@ -272,6 +272,31 @@ def _slug(name: str) -> str:
     return re.sub(r"[^a-z0-9]+", "-", str(name).lower()).strip("-")
 
 
+# name-kingdom-v1 (Drasah 23/11) : la charte vit en PETITES CAPITALES
+# décoratives — le naive regex les réduit en bouillie (« s »), c'est le
+# pidcase Gaïa PROUVÉ par la fenêtre État. Le décodage de la référence
+# (kingdom_setup.py, table des petites capitales + NFKD) devient le
+# _slug_blind : aveugle aux décorations, il lit « ᴋɪɴɢᴅᴏᴍs-ɢᴀɪᴀ »
+# comme « kingdoms-gaia » et « ᴋɪɴɢᴅᴏᴍ-ɢᴀɪᴀ » comme « kingdom-gaia ».
+_SMALL_CAPS = str.maketrans(
+    {
+        "ᴀ": "a", "ʙ": "b", "ᴄ": "c", "ᴅ": "d", "ᴇ": "e", "ꜰ": "f",
+        "ɢ": "g", "ʜ": "h", "ɪ": "i", "ᴊ": "j", "ᴋ": "k", "ʟ": "l",
+        "ᴍ": "m", "ɴ": "n", "ᴏ": "o", "ᴘ": "p", "ǫ": "q", "ʀ": "r",
+        "ᴛ": "t", "ᴜ": "u", "ᴠ": "v", "ᴡ": "w", "ʏ": "y", "ᴢ": "z",
+    }
+)
+
+
+def _slug_blind(name: str) -> str:
+    """The decoration-blind slug (small caps table + NFKD, no diacritics)."""
+    import unicodedata
+
+    text = unicodedata.normalize("NFKD", str(name).translate(_SMALL_CAPS))
+    text = "".join(ch for ch in text if not unicodedata.combining(ch))
+    return _slug(text)
+
+
 def _civ_name(stack: Any, civ_key: str) -> str:
     """A civilization's display name (the config catalog, key fallback)."""
     try:
@@ -336,6 +361,28 @@ async def _realm_channels(guild: Any, realm: Any) -> dict[str, Any]:
 
 def _marker(key: str) -> str:
     return f"{MARKER_PREFIX}:{key}"
+
+
+# dernier-mètre-v1 (Drasah 23/11) : le « dernier mètre » avalait ses
+# échecs en silence (l'envoi de la fiche échouait, seul le log voyait
+# l'erreur). Le registre en mémoire capture L'ERREUR EXACTE par fiche
+# à chaque passe — la fenêtre État l'affiche, le succès l'efface. Un
+# redémarrage le vide : c'est dit à l'admin, jamais caché.
+_SURFACE_ERRORS: dict[str, str] = {}
+
+
+def _record_surface_error(scope: str, exc: BaseException | None) -> None:
+    """Record the last send error of one fiche (None clears it)."""
+    if exc is None:
+        _SURFACE_ERRORS.pop(scope, None)
+        return
+    text = f"{type(exc).__name__}: {exc}".strip()[:200]
+    _SURFACE_ERRORS[scope] = text
+
+
+def surface_errors() -> dict[str, str]:
+    """A copy of the live surface errors (the État window's lines)."""
+    return dict(_SURFACE_ERRORS)
 
 
 async def _history_channel_messages(channel: Any) -> list[Any]:
@@ -754,8 +801,15 @@ async def deploy_realm_content(
             "kingdom realm content: no salon resolved for realm %s — the wake or the structure failed",
             getattr(realm, "name", "?"),
         )
+        # dernier-mètre-v1 (Drasah 23/11) : le miss muet devient une
+        # ligne LISIBLE dans la fenêtre État — l'admin ne lit pas de logs.
+        _record_surface_error(
+            f"{getattr(realm, 'name', '?')}·territoire",
+            RuntimeError("aucun salon résolu (le réveil ou la structure)"),
+        )
     ids: dict[str, str] = {}
     started = await season_started(stack)
+    rname = str(getattr(realm, "name", "?"))
 
     territory = channels.get("territory")
     if territory is not None:
@@ -770,7 +824,9 @@ async def deploy_realm_content(
                 f"\n\n{body}\n\n{surface_footer(TERRITORY_SURFACE)}\n\n{_marker('territory')}"
             )
             ids["territory_message"] = await _upsert_marked(territory, "territory", content)
-        except Exception:  # noqa: BLE001
+            _record_surface_error(f"{rname}·territoire", None)
+        except Exception as exc:  # noqa: BLE001
+            _record_surface_error(f"{rname}·territoire", exc)
             logger.warning("kingdom realm content: territory deploy failed", exc_info=True)
 
     alliances = channels.get("alliances")
@@ -813,7 +869,9 @@ async def deploy_realm_content(
                 view=view,
                 files=[mosaic_file] if mosaic_file is not None else None,
             )
-        except Exception:  # noqa: BLE001
+            _record_surface_error(f"{rname}·alliances", None)
+        except Exception as exc:  # noqa: BLE001
+            _record_surface_error(f"{rname}·alliances", exc)
             logger.warning("kingdom realm content: alliances deploy failed", exc_info=True)
 
     return ids
@@ -1000,15 +1058,56 @@ async def draw_initial_territories_safe(bot: Any) -> bool:
 # ---------------------------------------------------------------------------
 
 
-def _gaia_territory_channel(guild: Any) -> Any:
-    """Gaïa's 🌍 Territoire salon — the Kingdoms-Gaïa declared structure."""
+async def _gaia_territory_channel(guild: Any) -> Any:
+    """Gaïa's 🌍 Territoire salon — the DECLARED seam first, scan second.
+
+    gaia-seam-fix-v1 (Drasah 23/11) : le pidcase est PROUVÉ — la
+    catégorie chartée « 🏰 ᴋɪɴɢᴅᴏᴍs-ɢᴀɪᴀ » ne matche JAMAIS le scan
+    naive (slug « s »). La source de vérité devient le seam core du
+    salon déclaré (mod/kingdom + territory, celui des 10 autres
+    salons du mod — provisioning l'enregistre à la création) ; le
+    scan devient le FALLBACK décoration-aveugle (adoption par nom,
+    pour une structure provisionnée hors seam). Chaque miss se
+    CONSIGNE : plus jamais une fiche Gaïa muette.
+    """
+    gid = str(getattr(guild, "id", "") or "")
+    if gid:
+        try:
+            from botforge.discord.ui.panels_provisioning import stored_channel_id
+
+            channel_id = await stored_channel_id(gid, "mod/kingdom", "territory")
+            if channel_id and str(channel_id).isdigit():
+                channel = guild.get_channel(int(channel_id))
+                if channel is not None:
+                    return channel
+                logger.warning(
+                    "kingdom realm content: stored gaia territory channel %s "
+                    "not found in guild %s — falling back to the blind scan",
+                    channel_id, gid,
+                )
+        except Exception:  # noqa: BLE001 — the seam read never blocks the scan
+            logger.warning(
+                "kingdom realm content: the stored gaia territory seam read failed",
+                exc_info=True,
+            )
+    wanted = ("kingdom-gaia", "kingdoms-gaia", "kingdoms-ga-a", "kingdoms", "kingdom")
     for category in getattr(guild, "categories", []) or []:
-        slug = _slug(str(getattr(category, "name", "")))
-        if slug not in ("kingdoms-gaia", "kingdoms-ga-a", "kingdoms"):
+        slug = _slug_blind(str(getattr(category, "name", "")))
+        if slug not in wanted:
             continue
         for channel in getattr(category, "channels", []) or []:
-            if _slug(str(getattr(channel, "name", ""))) == "territoire":
+            if _slug_blind(str(getattr(channel, "name", ""))) == "territoire":
                 return channel
+    logger.warning(
+        "kingdom realm content: no gaia territory salon in guild %s — "
+        "blind-candidates %s",
+        gid,
+        ", ".join(
+            f"« {getattr(c, 'name', '?')} » → « {_slug_blind(str(getattr(c, 'name', '')))} »"
+            for c in (getattr(guild, "categories", []) or [])
+        )
+        or "aucune catégorie",
+    )
     return None
 
 
@@ -1020,8 +1119,9 @@ async def deploy_gaia_content(guild: Any, locale: Any = "fr") -> bool:
     own design, unchanged).
     """
     stack = wiring()
-    channel = _gaia_territory_channel(guild)
+    channel = await _gaia_territory_channel(guild)
     if channel is None:
+        _record_surface_error("Gaïa·territoire", RuntimeError("salon introuvable"))
         return False
     kingdoms_service = getattr(stack, "kingdoms", None)
     if kingdoms_service is None:
@@ -1050,8 +1150,10 @@ async def deploy_gaia_content(guild: Any, locale: Any = "fr") -> bool:
     )
     try:
         await _upsert_marked(channel, "territory-gaia", content)
+        _record_surface_error("Gaïa·territoire", None)
         return True
-    except Exception:  # noqa: BLE001
+    except Exception as exc:  # noqa: BLE001
+        _record_surface_error("Gaïa·territoire", exc)
         logger.warning("kingdom realm content: gaia territory deploy failed", exc_info=True)
         return False
 
@@ -1124,15 +1226,17 @@ async def _marker_present(channel: Any, key: str) -> bool:
 
 
 def _gaia_category_scan(guild: Any) -> str:
-    """The categories that READ like Kingdoms-Gaia, raw name + naive slug.
+    """The categories that READ like Kingdom-Gaia, raw name + both slugs.
 
     The line that PROVED the pidcase: the real charted name « 🏰
     ᴋɪɴɢᴅᴏᴍs-ɢᴀɪᴀ » slugs to « s » under the naive regex — the
-    window shows it verbatim so the admin sees the mismatch himself.
+    window shows it verbatim, naive AND decoration-blind, so the
+    admin sees the mismatch heal (blind) or persist (naive) himself.
     """
     try:
         names = [
-            f"« {getattr(category, 'name', '?')} » → « {_slug(str(getattr(category, 'name', '')))} »"
+            f"« {getattr(category, 'name', '?')} » → naive « {_slug(str(getattr(category, 'name', '')))} » "
+            f"· aveugle « {_slug_blind(str(getattr(category, 'name', '')))} »"
             for category in (getattr(guild, "categories", []) or [])
             if any(
                 token in str(getattr(category, "name", "")).lower()
@@ -1198,6 +1302,7 @@ async def surfaces_state(bot: Any) -> dict[str, Any]:
     for realm in realms or []:
         if getattr(realm, "archived_at", None):
             continue
+        rname = str(getattr(realm, "name", "?"))
         engagement = getattr(realm, "engagement", None) or {}
         kingdom = await kingdom_by_id(getattr(stack, "kingdoms", None), engagement.get("kingdom_id", ""))
         channels: dict[str, Any] = {}
@@ -1208,9 +1313,15 @@ async def surfaces_state(bot: Any) -> dict[str, Any]:
         cards = len(await _owned_territories(stack, kingdom)) if kingdom is not None else 0
         territory_channel = channels.get("territory")
         alliances_channel = channels.get("alliances")
+        errors = surface_errors()
+        realm_errors = [
+            f"{key.rsplit('·', 1)[-1]}: {errors[key]}"
+            for key in (f"{rname}·territoire", f"{rname}·alliances")
+            if key in errors
+        ]
         out["realms"].append(
             {
-                "name": str(getattr(realm, "name", "?")),
+                "name": rname,
                 "engaged": bool(engagement),
                 "kingdom": str(getattr(kingdom, "name", "") or "") if kingdom is not None else "",
                 "discussions": "discussions" in channels,
@@ -1223,16 +1334,18 @@ async def surfaces_state(bot: Any) -> dict[str, Any]:
                 "fiche_alliances": await _marker_present(alliances_channel, "alliances")
                 if alliances_channel is not None
                 else False,
+                "error": "; ".join(realm_errors),
             }
         )
     gaia_kingdom = next((k for k in kingdoms if bool(getattr(k, "is_gaia", False))), None)
     for guild in guilds:
-        channel = _gaia_territory_channel(guild)
+        channel = await _gaia_territory_channel(guild)
         out["gaia"] = {
             "kingdom": str(getattr(gaia_kingdom, "name", "") or "") if gaia_kingdom is not None else "",
             "found": channel is not None,
             "channel_name": str(getattr(channel, "name", "") or "") if channel is not None else "",
             "scan": _gaia_category_scan(guild),
+            "error": surface_errors().get("Gaïa·territoire", ""),
             "cards": len(await _owned_territories(stack, gaia_kingdom))
             if gaia_kingdom is not None
             else 0,

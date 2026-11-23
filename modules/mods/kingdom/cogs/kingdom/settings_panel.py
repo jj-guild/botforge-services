@@ -1317,6 +1317,10 @@ async def _etat(interaction: discord.Interaction, strings: dict[str, str]) -> No
                 fiches,
             )
         )
+        # dernier-mètre-v1 (Drasah 23/11) : l'erreur EXACTE du dernier
+        # envoi se lit SOUS la ligne du royaume — plus de miss muet.
+        if realm.get("error"):
+            lines.append(str(strings["settings_etat_error"]).format(realm["error"]))
     if not realms:
         lines.append(str(strings["settings_etat_no_realms"]))
     gaia = state.get("gaia")
@@ -1341,6 +1345,8 @@ async def _etat(interaction: discord.Interaction, strings: dict[str, str]) -> No
             )
         if gaia["scan"]:
             lines.append(str(strings["settings_etat_gaia_scan"]).format(gaia["scan"]))
+        if gaia.get("error"):
+            lines.append(str(strings["settings_etat_error"]).format(gaia["error"]))
     await open_unique_ephemeral(interaction, "\n".join(lines))
 
 

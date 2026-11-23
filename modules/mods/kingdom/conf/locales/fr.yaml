@@ -90,7 +90,7 @@ fr:
       register_title: "🪙 S'ENREGISTRER — KINGDOMS"
       register_text: "Bienvenue, futur conquérant ! Crée ton compte sur le projet — c'est **gratuit** et ça prend une minute : tu vas lier ton profil AoE2 à ton compte Discord."
       register_hint: "Une fois ton compte créé, le salon **📜 postuler** s'ouvre à toi : c'est là que tu candidateras pour la saison. À tout de suite !"
-      w_title: "⚔️ Kingdoms — inscription"
+      w_title: "⚔️ Kingdom — inscription"
       w_welcome_title: "⚔️ Bienvenue, futur conquérant !"
       w_no_account: "Pars à la conquête des territoires ! Avant de rejoindre la bataille, crée ton compte sur le projet — c'est **gratuit** et ça prend une minute : tu vas lier ton profil AoE2 à ton compte Discord.\n\n**Le parcours :** 🪙 Crée ton compte → 📜 Postule pour la saison → 🏰 Fondes ou rejoins un royaume."
       account_button: "🪙 Créer mon compte"
@@ -146,7 +146,7 @@ fr:
       settings_launch_modal_title: ▶️ Lancer la saison
       settings_mode_free: "👑 **Saison libre** — les Rois fondent leurs royaumes."
       settings_mode_imposed: "👑 **Saison imposée** — les Rois ne fondent plus rien."
-      settings_no_service: ❌ Le service Kingdoms n'est pas prêt.
+      settings_no_service: ❌ Le service Kingdom n'est pas prêt.
       settings_phase_unknown: inconnue
       settings_remove_button: 🧹 Retirer un joueur/candidat
       settings_remove_done: ✅ Joueur {0} retiré de la saison.
@@ -188,6 +188,7 @@ fr:
       settings_etat_no: "❌"
       settings_etat_gaia_line: "Gaïa : salon {0} · royaume IA {1} · cartes {2} · fiche {3}"
       settings_etat_gaia_scan: "Catégories candidates : {0}"
+      settings_etat_error: "⚠️ {0}"
       settings_status_empty: —
       settings_status_kingdoms: Royaumes
       settings_status_lords: Seigneurs engagés
@@ -338,7 +339,7 @@ fr:
       settings_regie_sas: "🛂 Sas de la saison"
       settings_phase_setup: "préparation (sas d'admissions)"
       settings_phase_started: en cours
-      settings_title: ⚙️ Kingdoms — paramètres
+      settings_title: ⚙️ Kingdom — paramètres
       # conscription-4-salons (Drasah 20/11) : le bureau des seigneurs —
       # le pin du salon #seigneurerie (les PERSONNES, admin uniquement)
       seigneurerie_title: 🛡️ Seigneurerie — bureau des seigneurs
@@ -368,7 +369,7 @@ fr:
       already_king_line: "👑 Tu règnes sur **{0}**."
       already_lord_line: "🛡️ Tu sers **{0}**."
       already_queue_line: "⏳ Tu es dans la file d'attente."
-      none_note: "❌ Le service Kingdoms n'est pas prêt."
+      none_note: "❌ Le service Kingdom n'est pas prêt."
       # console-etats-regie-v1 (Drasah 21/11) : hors saison, la vie des
       # joueurs continue — portes persistantes + régie
       window_help_off_season: "Hors saison, la vie des joueurs continue : choisis ton camp pour la suite — fonde ton royaume ou rejoins-en un, il attendra la prochaine saison avec toi."
@@ -403,7 +404,7 @@ fr:
       err_kingdoms_kingdom_not_found: "❌ Ce royaume n'existe plus."
       error: "❌ {0}"
     machine:
-      title: "⏱️ Machine à temps Kingdoms — l'horloge du jeu"
+      title: "⏱️ Machine à temps Kingdom — l'horloge du jeu"
       help: "Avancez l'horloge, déclenchez les bascules, photographiez l'état — le tout sans attendre le calendrier. Chaque bascule due s'exécute sur un snapshot : « Cycle / Âge précédent » revient toujours exactement avant le switch."
       clock_line: "🕐 Horloge du jeu : **{0}** (heure de Paris)"
       phase_line: "📍 Phase : **{0}**"
@@ -476,10 +477,10 @@ fr:
       lords_open_done: "✅ Jour du seigneur FORCÉ ouvert — la bascule de cycle a été exécutée."
       lords_closed: "✅ Jour du seigneur fermé."
       cancelled: "❌ Annulé — rien n'a été touché."
-      no_service: "❌ Le service Kingdoms n'est pas prêt."
+      no_service: "❌ Le service Kingdom n'est pas prêt."
       error: "❌ L'action a échoué — {0}"
     distributor:
-      title: "🎁 Distributeur Kingdoms"
+      title: "🎁 Distributeur Kingdom"
       help: "Injectez des éléments de test : choisissez un royaume, puis attribuez-lui des civilisations, des points 🏰, des territoires. Zéro coût, aucune limite — le royaume test Nilrem se crée et s'efface ici aussi."
       test_exists_line: "🌱 Le royaume test **Nilrem** existe déjà — la 🧨 autodestruction le retire."
       open_button: "🔧 Ouvrir le distributeur"
@@ -509,7 +510,7 @@ fr:
       test_option: "Le royaume de test (Nilrem)"
       test_hint: "🌱 C'est le royaume de test — la 🧨 autodestruction sur le panel épinglé le retire."
       cancelled: "❌ Annulé — rien n'a été touché."
-      no_service: "❌ Le service Kingdoms n'est pas prêt."
+      no_service: "❌ Le service Kingdom n'est pas prêt."
       error: "❌ L'action a échoué — {0}"
       menu_title: "**{0}** — choisissez une catégorie :"
       back_button: "🔙 Royaume"

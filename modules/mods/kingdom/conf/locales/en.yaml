@@ -83,7 +83,7 @@ en:
       register_title: "🪙 SIGN UP — KINGDOMS"
       register_text: "Welcome, future conqueror! Create your project account — it's **free** and takes a minute: you'll link your AoE profile to your Discord account."
       register_hint: "Once your account exists, the **📜 apply** salon opens to you: that's where you apply for the season. See you there!"
-      w_title: "⚔️ Kingdoms — sign-up"
+      w_title: "⚔️ Kingdom — sign-up"
       w_welcome_title: "⚔️ Welcome, future conqueror!"
       w_no_account: "Set out to conquer the territories! Before joining the battle, create your project account — it's **free** and takes a minute: you'll link your AoE2 profile to your Discord account.\n\n**The path:** 🪙 Create your account → 📜 Apply for the season → 🏰 Found or join a kingdom."
       account_button: "🪙 Create my account"
@@ -139,7 +139,7 @@ en:
       settings_launch_modal_title: ▶️ Launch the season
       settings_mode_free: "👑 **Free season** — the Kings found their kingdoms."
       settings_mode_imposed: "👑 **Imposed season** — the Kings found nothing."
-      settings_no_service: ❌ The Kingdoms service is not ready.
+      settings_no_service: ❌ The Kingdom service is not ready.
       settings_phase_unknown: unknown
       settings_remove_button: 🧹 Remove a player/candidate
       settings_remove_done: ✅ Player {0} removed from the season.
@@ -181,8 +181,9 @@ en:
       settings_etat_no: "❌"
       settings_etat_gaia_line: "Gaïa: salon {0} · AI kingdom {1} · cards {2} · sheet {3}"
       settings_etat_gaia_scan: "Candidate categories: {0}"
+      settings_etat_error: "⚠️ {0}"
       settings_status_empty: —
-      settings_status_kingdoms: Kingdoms
+      settings_status_kingdoms: Kingdom
       settings_status_lords: Enrolled lords
       settings_status_mode: Mode
       settings_status_phase: Phase
@@ -282,7 +283,7 @@ en:
       settings_status_sas_closed: "🛂 **Sas closed** — re-openable in the Régie"
       # cockpit-lisible-v1: the MATTER gets its own lines, a filet from
       # the state, read at a glance
-      settings_status_kingdoms_header: "🏰 **Kingdoms in the season ({count})**"
+      settings_status_kingdoms_header: "🏰 **Kingdom in the season ({count})**"
       settings_status_kingdoms_names: "{names}"
       settings_status_crew_line: "👥 **Lords enrolled:** {enrolled} · ⏳ **Queued:** {queued}"
       settings_launch_modal_sas_label: "Open the sas? (yes/no)"
@@ -322,7 +323,7 @@ en:
       settings_regie_sas: "🛂 The season sas"
       settings_phase_setup: "preparation (admissions sas)"
       settings_phase_started: running
-      settings_title: ⚙️ Kingdoms — paramètres
+      settings_title: ⚙️ Kingdom — paramètres
       seigneurerie_title: 🛡️ Seigneurerie — the lords' desk
       seigneurerie_help: "The people here: the queue and the throne assignments. The kingdoms (the entities) live in #👑-royaumes."
       seigneurerie_queue_header: "⏳ Queue"
@@ -350,7 +351,7 @@ en:
       already_king_line: "👑 You reign over **{0}**."
       already_lord_line: "🛡️ You serve **{0}**."
       already_queue_line: "⏳ You are in the waiting queue."
-      none_note: "❌ The Kingdoms service is not ready."
+      none_note: "❌ The Kingdom service is not ready."
       # console-etats-regie-v1 (Drasah 21/11): off-season persistent life
       window_help_off_season: "Off-season, the players' life goes on: pick your side for the road ahead — found your kingdom or join one, it will wait for the next season with you."
       throne_button: "👑 Take the Throne"
@@ -384,7 +385,7 @@ en:
       err_kingdoms_kingdom_not_found: "❌ That kingdom does not exist anymore."
       error: "❌ {0}"
     machine:
-      title: "⏱️ Kingdoms time machine — the game clock"
+      title: "⏱️ Kingdom time machine — the game clock"
       help: "Advance the clock, trigger the switches, snapshot the state — no calendar waiting. Every due slot replays onto a snapshot: « previous cycle / age » always lands exactly before the switch."
       clock_line: "🕐 Game clock: **{0}** (Paris time)"
       phase_line: "📍 Phase: **{0}**"
@@ -457,10 +458,10 @@ en:
       lords_open_done: "✅ Lord's Day FORCED open — the cycle switch ran."
       lords_closed: "✅ Lord's Day closed."
       cancelled: "❌ Cancelled — nothing was touched."
-      no_service: "❌ The Kingdoms service is not ready."
+      no_service: "❌ The Kingdom service is not ready."
       error: "❌ The action failed — {0}"
     distributor:
-      title: "🎁 Kingdoms distributor"
+      title: "🎁 Kingdom distributor"
       help: "Inject test elements: pick a kingdom, then hand it civilizations, 🏰 points, territories. Zero cost, no limits — the Nilrem test kingdom is created and removed here too."
       test_exists_line: "🌱 The **Nilrem** test kingdom already exists — the 🧨 self-destruct removes it."
       open_button: "🔧 Open the distributor"
@@ -490,7 +491,7 @@ en:
       test_option: "The test kingdom (Nilrem)"
       test_hint: "🌱 This is the test kingdom — the 🧨 self-destruct on the pinned panel removes it."
       cancelled: "❌ Cancelled — nothing was touched."
-      no_service: "❌ The Kingdoms service is not ready."
+      no_service: "❌ The Kingdom service is not ready."
       error: "❌ The action failed — {0}"
       menu_title: "**{0}** — pick a category:"
       back_button: "🔙 Kingdom"
