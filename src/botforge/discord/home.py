@@ -739,8 +739,10 @@ REPLAY_URL = (
 )
 LIBREMATCH_SOURCE_URL = (
     "https://aoe-api.worldsedgelink.com/community/leaderboard/GetRecentMatchHistory"
-    "?title=age2&profile_ids=%5B%22{profile_id}%22%5D&count=26"
-)
+    "?title=age2&profile_ids=%5B%22{profile_id}%22%5D&count=25"
+)  # 25: the provider's REAL quick window (the panel keeps the 10 INTERESTING)
+
+#: the named settings the RAW options blob completes (the
 _OUTCOME_COLOURS = {"win": 0x57F287, "loss": 0xED4245, "ongoing": 0xFEE75C, "lobby": 0x5865F2}
 
 
@@ -922,20 +924,21 @@ SETTING_LABEL_KEYS = {
     "Traité": "profile.matches_setting_treaty",
 }
 
-#: the BOOLEAN settings (the post-RoR option keys, the LibreMatch
-#: collector's map): option key \u2192 (locale label key, INVERTED).
-#: Every one renders as an emoji checkbox line (owner 2026-11-23);
-#: the inverted keys carry the game's own inverted flag semantics.
+#: the BOOLEAN settings (the post-RoR option keys): option key
+#: \u2192 locale label key. DIRECT 'y'/'n' flags - verified against
+#: aoe2insights' own rendering of match 506901691 (owner 2026-11-23):
+#: every ticked rule reads 'y' in the blob, every unticked one 'n'
+#: (the collector's "!bool" notes sat the values the wrong way).
 SETTING_BOOLEANS = {
-    "1": ("profile.matches_setting_cheats", False),
-    "65": ("profile.matches_setting_lock_speed", False),
-    "66": ("profile.matches_setting_lock_teams", True),
-    "62": ("profile.matches_setting_full_tech", False),
-    "75": ("profile.matches_setting_record", False),
-    "76": ("profile.matches_setting_shared_expl", True),
-    "77": ("profile.matches_setting_team_positions", False),
-    "78": ("profile.matches_setting_team_together", False),
-    "79": ("profile.matches_setting_turbo", True),
+    "1": "profile.matches_setting_cheats",
+    "65": "profile.matches_setting_lock_speed",
+    "66": "profile.matches_setting_lock_teams",
+    "62": "profile.matches_setting_full_tech",
+    "75": "profile.matches_setting_record",
+    "76": "profile.matches_setting_shared_expl",
+    "77": "profile.matches_setting_team_positions",
+    "78": "profile.matches_setting_team_together",
+    "79": "profile.matches_setting_turbo",
 }
 
 
@@ -974,15 +977,18 @@ def _ordered_teams(card: dict[str, Any], me_ids: set[str]) -> list[tuple[int, li
 
 
 
-def _card_footer_text(card: dict[str, Any], labels: dict[str, Any]) -> str:
+def _card_footer_text(card: dict[str, Any], labels: dict[str, Any], me_ids: set[str] | None = None) -> str:
     """Render the footer: the source line only.
 
     The settings LINE is gone (owner 2026-11-23: the footer carries
-    the source, the settings live behind the settings button - every
-    match carries its own button, ranked or custom).
+    the source, the settings live behind the settings button). The
+    source link mirrors the provider's fetch of the VIEWER's history
+    page: HIS profile among the match seats - not the first seat's
+    (owner 2026-11-23: a fantasy profile id rode the link).
     """
-    first_seat = str(((card.get("players") or [{}])[0] or {}).get("profile_id") or "")
-    source_url = LIBREMATCH_SOURCE_URL.format(profile_id=first_seat) if first_seat else ""
+    seats = [str((p or {}).get("profile_id") or "") for p in (card.get("players") or [])]
+    mine = next((pid for pid in seats if pid in (me_ids or set())), seats[0] if seats else "")
+    source_url = LIBREMATCH_SOURCE_URL.format(profile_id=mine) if mine else ""
     source = str(labels.get("source", "Source : libre:match")).format(url=source_url or "libre:match")
     return f"-# {source}"
 
@@ -1003,12 +1009,20 @@ _SETTINGS_RAW_KEYS: dict[str, tuple[str, dict[str, str] | None]] = {
         "0": "Standard", "2": "\u00c2ge sombre", "3": "\u00c2ge f\u00e9odal", "4": "\u00c2ge des ch\u00e2teaux",
         "5": "\u00c2ge imp\u00e9rial", "6": "Post-imp\u00e9rial",
     }),
-    "61": ("Difficult\u00e9", {
-        "0": "Difficile", "1": "Moyenne", "2": "Mod\u00e9r\u00e9e", "3": "Facile", "4": "Tr\u00e8s facile",
-        "-1": "Extr\u00eame",
+    "61": ("Difficult\u00e9 IA", {
+        "-1": "Extr\u00eame", "0": "Tr\u00e8s difficile", "1": "Difficile", "2": "Mod\u00e9r\u00e9e",
+        "3": "Normale", "4": "Tr\u00e8s facile",
     }),
-    "57": ("Trait\u00e9", None),  # the raw treaty minutes
+    "57": ("Trait\u00e9", None),  # the raw treaty minutes - shown only when > 0
 }
+
+
+def _int_or(value: Any, default: int = 0) -> int:
+    """Coerce to int, the default on garbage."""
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return default
 
 
 def _settings_named_pairs(card: dict[str, Any]) -> list[tuple[str, str]]:
@@ -1035,6 +1049,8 @@ def _settings_named_pairs(card: dict[str, Any]) -> list[tuple[str, str]]:
             value = options.get(key)
             if value in (None, ""):
                 continue
+            if key == "57" and _int_or(value, 0) <= 0:
+                continue  # no treaty reads better than "0 min"
             shown = str((table or {}).get(str(value), value)) if table is not None else f"{value} min"
             pairs.append((label, shown))
     return pairs
@@ -1053,11 +1069,11 @@ def _settings_bool_lines(card: dict[str, Any], labels: dict[str, Any]) -> list[s
     if not isinstance(options, dict) or not options:
         return lines
     bool_labels: dict[str, str] = dict(labels.get("setting_bools") or {})
-    for key, (label_key_path, inverted) in SETTING_BOOLEANS.items():
+    for key, label_key_path in SETTING_BOOLEANS.items():
         raw_value = options.get(key)
         if raw_value in (None, ""):
             continue
-        enabled = (str(raw_value).lower() == "y") ^ bool(inverted)
+        enabled = str(raw_value).lower() == "y"
         label = bool_labels.get(key) or label_key_path.split(".")[-1]
         mark = "\u2705" if enabled else "\u2b1c"
         lines.append(f"{mark} {label}")
@@ -1079,6 +1095,7 @@ class _MatchSettingsButton(discord.ui.Button[Any]):
             label=str(labels.get("settings_button", "Param\u00e8tres")),
             emoji="\u2699\ufe0f",
             style=discord.ButtonStyle.secondary,
+            custom_id="home:match:settings",
         )
         self._card = card
         self._labels = labels
@@ -1502,7 +1519,7 @@ def _match_card_view(
     blocks.extend(_card_team_blocks(card, _ordered_teams(card, me_ids), me_ids, labels, ctx))
     # the footer: the source, then the status-led action row
     blocks.append(discord.ui.Separator())
-    blocks.append(discord.ui.TextDisplay(_card_footer_text(card, labels)))
+    blocks.append(discord.ui.TextDisplay(_card_footer_text(card, labels, me_ids)))
     buttons: list[discord.ui.Button[Any]] = []
     if status == "lobby" and card.get("lobby_url"):
         buttons.append(
@@ -1743,7 +1760,7 @@ class ProfileMatchesButton(
                 plain: await reply(interaction, key) for plain, key in SETTING_LABEL_KEYS.items()
             },
             "setting_bools": {
-                key: await reply(interaction, label_key) for key, (label_key, _inv) in SETTING_BOOLEANS.items()
+                key: await reply(interaction, label_key) for key, label_key in SETTING_BOOLEANS.items()
             },
             "match_noun": await reply(interaction, "profile.match_noun"),
             "lobby_noun": await reply(interaction, "profile.lobby_noun"),
