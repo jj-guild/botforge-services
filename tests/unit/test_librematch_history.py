@@ -1013,7 +1013,9 @@ async def test_stale_never_played_match_seals_and_never_serves() -> None:
     await syncer.sync_account("123")
     assert db["librematch:matches"].docs["old-lobby"]["invalid"] is True
     entries = await syncer.match_history(["123"])
-    assert entries == [], "the abandoned lobby never serves"
+    # the SEALED match serves too - with its invalid flag: the listing
+    # shows it WITH its status (owner 2026-11-24), never as a hole
+    assert len(entries) == 1 and entries[0].invalid is True
 
 
 async def test_recent_ongoing_match_still_serves() -> None:
@@ -1054,4 +1056,7 @@ async def test_stale_solo_capture_with_completion_still_seals() -> None:
     syncer = _syncer(db, adapter)
     await syncer.sync_account("123")
     assert db["librematch:matches"].docs["solo-test"]["invalid"] is True
-    assert await syncer.match_history(["123"]) == []
+    # serves WITH its invalid flag (owner 2026-11-24): the listing
+    # shows the sealed match, status line and all
+    sealed = await syncer.match_history(["123"])
+    assert len(sealed) == 1 and sealed[0].invalid is True

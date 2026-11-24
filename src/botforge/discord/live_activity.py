@@ -507,8 +507,7 @@ async def _week_cards(bot: discord.Client, guild_id: str) -> list[dict[str, Any]
         previous = by_ref.get(ref)
         if previous is None or _doc_weight(doc) > _doc_weight(previous):
             by_ref[ref] = doc
-    labels = await _label_pack(bot, guild_id)
-    cards = [_seed_card_of(doc, labels) for doc in by_ref.values()]
+    cards = [_seed_card_of(doc) for doc in by_ref.values()]
     cards.sort(key=lambda c: int(c.get("started_at") or 0))
     return cards
 
@@ -533,21 +532,21 @@ def _doc_weight(doc: dict[str, Any]) -> int:
     return weight
 
 
-def _seed_card_of(doc: dict[str, Any], labels: dict[str, Any]) -> dict[str, Any]:
+def _seed_card_of(doc: dict[str, Any]) -> dict[str, Any]:
     """Build one stored document's seed card - valid OR invalid.
 
     The stored document IS the served projection (the decode folded
     the seats back onto it): ``players_json`` parses like the entry's.
     """
-    started = int(doc.get("started_at") or 0)
-    finished = int(doc.get("finished_at") or 0)
+    started = _int_of(doc.get("started_at"))
+    finished = _int_of(doc.get("finished_at"))
     winners = [str(w) for w in doc.get("winners") or []]
     duration = max(0, finished - started) if finished >= started > 0 else 0
     invalid_reason = ""
     if not finished or not winners:
-        invalid_reason = str(labels.get("invalid_no_result", ""))
+        invalid_reason = "no_result"
     elif duration < _INVALID_DURATION_S:
-        invalid_reason = str(labels.get("invalid_short", ""))
+        invalid_reason = "short"
     card: dict[str, Any] = {
         "status": "finished",
         "match_id": str(doc.get("match_id") or ""),
@@ -596,7 +595,15 @@ async def _guild_profiles(bot: discord.Client, guild_id: str) -> list[str]:
 
 
 def _players_json(doc: dict[str, Any]) -> list[dict[str, Any]]:
-    """Parse a stored document's seats (``players_json``, the fold output)."""
+    """Parse a stored document's seats.
+
+    The RAW store rides ``players`` (a list, written by the ingest);
+    ``players_json`` is the SERVING entry's serialisation - the seed
+    reads the raw collection, so the list comes first.
+    """
+    seats = doc.get("players")
+    if isinstance(seats, list):
+        return [dict(seat) for seat in seats if isinstance(seat, dict)]
     try:
         seats = json.loads(str(doc.get("players_json") or "[]"))
     except (ValueError, TypeError):

@@ -85,9 +85,13 @@ revision&nbsp;(no&nbsp;era&nbsp;field&nbsp;at&nbsp;all)&nbsp;—&nbsp;repairs&nb
 capture&nbsp;carries&nbsp;the&nbsp;current&nbsp;era&nbsp;and&nbsp;never&nbsp;candidates&nbsp;again,<br>
 whatever&nbsp;the&nbsp;upstream&nbsp;genuinely&nbsp;failed&nbsp;to&nbsp;carry.</span></dd></dl>
 
-<dl><dt>async <a name="LibrematchStore-find_matches"><strong>find_matches</strong></a>(self, profile_ids: 'list[str]', limit: 'int' = 0, since_s: 'int' = 0, leaderboard_id: 'str' = '') -&gt; 'list[dict[str, Any]]'</dt><dd><span class="code">Query&nbsp;the&nbsp;stored&nbsp;history:&nbsp;matches&nbsp;of&nbsp;the&nbsp;profiles,&nbsp;newest&nbsp;first.<br>
+<dl><dt>async <a name="LibrematchStore-find_matches"><strong>find_matches</strong></a>(self, profile_ids: 'list[str]', limit: 'int' = 0, since_s: 'int' = 0, leaderboard_id: 'str' = '', include_invalid: 'bool' = False) -&gt; 'list[dict[str, Any]]'</dt><dd><span class="code">Query&nbsp;the&nbsp;stored&nbsp;history:&nbsp;matches&nbsp;of&nbsp;the&nbsp;profiles,&nbsp;newest&nbsp;first.<br>
 &nbsp;<br>
-An&nbsp;empty&nbsp;``profile_ids``&nbsp;means&nbsp;every&nbsp;known&nbsp;account's&nbsp;matches.</span></dd></dl>
+An&nbsp;empty&nbsp;``profile_ids``&nbsp;means&nbsp;every&nbsp;known&nbsp;account's&nbsp;matches.<br>
+An&nbsp;INVALIDATED&nbsp;match&nbsp;serves&nbsp;too&nbsp;when&nbsp;``include_invalid``&nbsp;rides<br>
+(owner&nbsp;2026-11-24):&nbsp;the&nbsp;listing&nbsp;shows&nbsp;it&nbsp;WITH&nbsp;its&nbsp;status&nbsp;-&nbsp;the<br>
+invalid&nbsp;flag&nbsp;travels&nbsp;on&nbsp;the&nbsp;entry,&nbsp;the&nbsp;PANEL&nbsp;decides.&nbsp;The<br>
+default&nbsp;stays&nbsp;honest:&nbsp;no&nbsp;result,&nbsp;no&nbsp;completion,&nbsp;never&nbsp;played.</span></dd></dl>
 
 <dl><dt>async <a name="LibrematchStore-find_profiles_of_user"><strong>find_profiles_of_user</strong></a>(self, user_id: 'str') -&gt; 'list[str]'</dt><dd><span class="code">Return&nbsp;the&nbsp;platform&nbsp;user's&nbsp;known&nbsp;accounts&nbsp;(the&nbsp;unification's&nbsp;key).</span></dd></dl>
 

@@ -479,7 +479,12 @@ class MatchHistorySyncer:
         leaderboard_id: str = "",
     ) -> list[MatchHistoryEntry]:
         """Serve the stored history as the exploited projection."""
-        docs = await self._store.find_matches(profile_ids, limit or DEFAULT_HISTORY_LIMIT, since_s, leaderboard_id)
+        # the listing shows the SEALED matches too - with their status
+        # (owner 2026-11-24: his never-decided test read as a hole in
+        # the five); the panel reads the entry's own invalid flag
+        docs = await self._store.find_matches(
+            profile_ids, limit or DEFAULT_HISTORY_LIMIT, since_s, leaderboard_id, include_invalid=True
+        )
         return [self._entry_of(doc) for doc in docs]
 
     async def refresh_missing_1v1(self, profile_ids: list[str], cap: int = 30) -> list[str]:
@@ -843,6 +848,7 @@ class MatchHistorySyncer:
             slots_json=str(doc.get("slots_json", "")),
             description=str(doc.get("description", "")),
             players_json=json.dumps(doc.get("players") or [], ensure_ascii=False),
+            invalid=bool(doc.get("invalid") or False),
             settings_json=json.dumps(doc.get("settings") or [], ensure_ascii=False),
         )
 

@@ -249,6 +249,7 @@ message MatchHistoryEntry {
   string description = 13;            // the upstream's own title (the custom lobbies' name)
   string players_json = 14;           // decoded players (T2): alias, team, elo before/after
   string settings_json = 15;          // decoded settings pairs (T2): [label, value]
+  bool invalid = 16;                    // sealed as never played (no result, too short) - shows with its status
 }
 
 message MatchHistoryReply {

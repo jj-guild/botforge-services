@@ -1630,9 +1630,15 @@ def _card_map_section(card: dict[str, Any], ctx: dict[str, Any], labels: dict[st
     # a match under five minutes or without a result seeds the
     # matches salon like any other - the status line says why)
     if card.get("invalid"):
+        reason = str(card.get("invalid_reason") or "")
+        if reason == "no_result":
+            reason = str(labels.get("invalid_no_result", ""))
+        elif reason == "short":
+            reason = str(labels.get("invalid_short", ""))
         sub_lines.append(
-            "-# " + str(labels.get("invalid", "Match non compté"))
-            + (" \u2014 " + str(card.get("invalid_reason") or "") if card.get("invalid_reason") else "")
+            "-# "
+            + str(labels.get("invalid", "Match non compté"))
+            + ((" \u2014 " + reason) if reason else "")
         )
     if card.get("status") == "finished":
         duration = max(0, int(card.get("finished_at") or 0) - int(card.get("started_at") or 0))
@@ -1920,10 +1926,9 @@ async def _finished_cards(
     """Build the FINISHED cards - only the INTERESTING matches.
 
     A match displays only when it truly ended AND its winner came
-    back (owner 2026-11-22): a capture without a completion time is a
-    game that started and never ended on record, a finished capture
-    without winners is a result we never read - both stay invisible
-    rather than lie.
+    back (owner 2026-11-22) - EXCEPT the SEALED ones (owner
+    2026-11-24): an invalidated match (never decided, or too short)
+    still shows, WITH its status line instead of a hole in the five.
     """
     from botforge.discord.stats_views import recent_match_entries
 
@@ -1932,7 +1937,8 @@ async def _finished_cards(
     for entry in entries:
         finished_at = int(getattr(entry, "finished_at", 0) or 0)
         winners = tuple(getattr(entry, "winners", ()) or ())
-        if not finished_at or not winners:
+        invalid = bool(getattr(entry, "invalid", False) or False)
+        if (not finished_at or not winners) and not invalid:
             continue
         cards.append(
             {
@@ -1954,7 +1960,19 @@ async def _finished_cards(
                 "options_json": str(getattr(entry, "options_json", "") or ""),
             }
         )
+        if invalid:
+            # the SEALED card rides its status (owner 2026-11-24)
+            cards[-1]["invalid"] = True
+            cards[-1]["invalid_reason"] = _invalid_reason_type_of(entry, finished_at, winners)
     return cards
+
+
+def _invalid_reason_type_of(entry: Any, finished_at: int, winners: tuple[str, ...]) -> str:
+    """Why the seal: a KEY, the label resolves at render time."""
+    del entry
+    if not finished_at or not winners:
+        return "no_result"
+    return "short"
 
 
 def _entry_players_of(entry: Any) -> list[dict[str, Any]]:

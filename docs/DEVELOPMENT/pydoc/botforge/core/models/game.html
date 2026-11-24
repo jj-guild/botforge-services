@@ -326,7 +326,7 @@ Data and other attributes defined here:<br>
 <td class="section-title" colspan=3>&nbsp;<br><a name="MatchHistoryEntry">class <strong>MatchHistoryEntry</strong></a>(<a href="builtins.html#object">builtins.object</a>)</td></tr>
     
 <tr><td class="decor title-decor" rowspan=2><span class="code">&nbsp;&nbsp;&nbsp;</span></td>
-<td class="decor title-decor" colspan=2><span class="code"><a href="#MatchHistoryEntry">MatchHistoryEntry</a>(match_id:&nbsp;'str',&nbsp;leaderboard_id:&nbsp;'str'&nbsp;=&nbsp;'',&nbsp;started_at:&nbsp;'int'&nbsp;=&nbsp;0,&nbsp;finished_at:&nbsp;'int'&nbsp;=&nbsp;0,&nbsp;map_name:&nbsp;'str'&nbsp;=&nbsp;'',&nbsp;profile_ids:&nbsp;'tuple[str,&nbsp;...]'&nbsp;=&nbsp;(),&nbsp;rating_before:&nbsp;'dict[str,&nbsp;int]'&nbsp;=&nbsp;&amp;lt;factory&amp;gt;,&nbsp;rating_after:&nbsp;'dict[str,&nbsp;int]'&nbsp;=&nbsp;&amp;lt;factory&amp;gt;,&nbsp;teams:&nbsp;'dict[str,&nbsp;int]'&nbsp;=&nbsp;&amp;lt;factory&amp;gt;,&nbsp;winners:&nbsp;'tuple[str,&nbsp;...]'&nbsp;=&nbsp;(),&nbsp;options_json:&nbsp;'str'&nbsp;=&nbsp;'',&nbsp;slots_json:&nbsp;'str'&nbsp;=&nbsp;'',&nbsp;description:&nbsp;'str'&nbsp;=&nbsp;'',&nbsp;players_json:&nbsp;'str'&nbsp;=&nbsp;'',&nbsp;settings_json:&nbsp;'str'&nbsp;=&nbsp;'')&nbsp;-&amp;gt;&nbsp;None<br>
+<td class="decor title-decor" colspan=2><span class="code"><a href="#MatchHistoryEntry">MatchHistoryEntry</a>(match_id:&nbsp;'str',&nbsp;leaderboard_id:&nbsp;'str'&nbsp;=&nbsp;'',&nbsp;started_at:&nbsp;'int'&nbsp;=&nbsp;0,&nbsp;finished_at:&nbsp;'int'&nbsp;=&nbsp;0,&nbsp;map_name:&nbsp;'str'&nbsp;=&nbsp;'',&nbsp;profile_ids:&nbsp;'tuple[str,&nbsp;...]'&nbsp;=&nbsp;(),&nbsp;rating_before:&nbsp;'dict[str,&nbsp;int]'&nbsp;=&nbsp;&amp;lt;factory&amp;gt;,&nbsp;rating_after:&nbsp;'dict[str,&nbsp;int]'&nbsp;=&nbsp;&amp;lt;factory&amp;gt;,&nbsp;teams:&nbsp;'dict[str,&nbsp;int]'&nbsp;=&nbsp;&amp;lt;factory&amp;gt;,&nbsp;winners:&nbsp;'tuple[str,&nbsp;...]'&nbsp;=&nbsp;(),&nbsp;options_json:&nbsp;'str'&nbsp;=&nbsp;'',&nbsp;slots_json:&nbsp;'str'&nbsp;=&nbsp;'',&nbsp;description:&nbsp;'str'&nbsp;=&nbsp;'',&nbsp;players_json:&nbsp;'str'&nbsp;=&nbsp;'',&nbsp;settings_json:&nbsp;'str'&nbsp;=&nbsp;'',&nbsp;invalid:&nbsp;'bool'&nbsp;=&nbsp;False)&nbsp;-&amp;gt;&nbsp;None<br>
 &nbsp;<br>
 One&nbsp;stored&nbsp;match&nbsp;of&nbsp;a&nbsp;known&nbsp;account's&nbsp;history&nbsp;(#404).<br>
 &nbsp;<br>
@@ -346,7 +346,7 @@ exploited&nbsp;projection&nbsp;the&nbsp;provider&nbsp;serves:&nbsp;outcome,&nbsp
 
 <dl><dt><a name="MatchHistoryEntry-__hash__"><strong>__hash__</strong></a>(self)</dt><dd><span class="code">Return&nbsp;hash(self).</span></dd></dl>
 
-<dl><dt><a name="MatchHistoryEntry-__init__"><strong>__init__</strong></a>(self, match_id: 'str', leaderboard_id: 'str' = '', started_at: 'int' = 0, finished_at: 'int' = 0, map_name: 'str' = '', profile_ids: 'tuple[str, ...]' = (), rating_before: 'dict[str, int]' = &lt;factory&gt;, rating_after: 'dict[str, int]' = &lt;factory&gt;, teams: 'dict[str, int]' = &lt;factory&gt;, winners: 'tuple[str, ...]' = (), options_json: 'str' = '', slots_json: 'str' = '', description: 'str' = '', players_json: 'str' = '', settings_json: 'str' = '') -&gt; None</dt><dd><span class="code">Initialize&nbsp;self.&nbsp;&nbsp;See&nbsp;help(type(self))&nbsp;for&nbsp;accurate&nbsp;signature.</span></dd></dl>
+<dl><dt><a name="MatchHistoryEntry-__init__"><strong>__init__</strong></a>(self, match_id: 'str', leaderboard_id: 'str' = '', started_at: 'int' = 0, finished_at: 'int' = 0, map_name: 'str' = '', profile_ids: 'tuple[str, ...]' = (), rating_before: 'dict[str, int]' = &lt;factory&gt;, rating_after: 'dict[str, int]' = &lt;factory&gt;, teams: 'dict[str, int]' = &lt;factory&gt;, winners: 'tuple[str, ...]' = (), options_json: 'str' = '', slots_json: 'str' = '', description: 'str' = '', players_json: 'str' = '', settings_json: 'str' = '', invalid: 'bool' = False) -&gt; None</dt><dd><span class="code">Initialize&nbsp;self.&nbsp;&nbsp;See&nbsp;help(type(self))&nbsp;for&nbsp;accurate&nbsp;signature.</span></dd></dl>
 
 <dl><dt><a name="MatchHistoryEntry-__repr__"><strong>__repr__</strong></a>(self)</dt><dd><span class="code">Return&nbsp;repr(self).</span></dd></dl>
 
@@ -359,6 +359,8 @@ Data descriptors defined here:<br>
 <dl><dt><strong>description</strong></dt>
 </dl>
 <dl><dt><strong>finished_at</strong></dt>
+</dl>
+<dl><dt><strong>invalid</strong></dt>
 </dl>
 <dl><dt><strong>leaderboard_id</strong></dt>
 </dl>
@@ -388,13 +390,13 @@ Data descriptors defined here:<br>
 </dl>
 <hr>
 Data and other attributes defined here:<br>
-<dl><dt><strong>__annotations__</strong> = {'description': 'str', 'finished_at': 'int', 'leaderboard_id': 'str', 'map_name': 'str', 'match_id': 'str', 'options_json': 'str', 'players_json': 'str', 'profile_ids': 'tuple[str, ...]', 'rating_after': 'dict[str, int]', 'rating_before': 'dict[str, int]', ...}</dl>
+<dl><dt><strong>__annotations__</strong> = {'description': 'str', 'finished_at': 'int', 'invalid': 'bool', 'leaderboard_id': 'str', 'map_name': 'str', 'match_id': 'str', 'options_json': 'str', 'players_json': 'str', 'profile_ids': 'tuple[str, ...]', 'rating_after': 'dict[str, int]', ...}</dl>
 
-<dl><dt><strong>__dataclass_fields__</strong> = {'description': Field(name='description',type='str',default='',d...appingproxy({}),kw_only=False,_field_type=_FIELD), 'finished_at': Field(name='finished_at',type='int',default=0,de...appingproxy({}),kw_only=False,_field_type=_FIELD), 'leaderboard_id': Field(name='leaderboard_id',type='str',default='...appingproxy({}),kw_only=False,_field_type=_FIELD), 'map_name': Field(name='map_name',type='str',default='',defa...appingproxy({}),kw_only=False,_field_type=_FIELD), 'match_id': Field(name='match_id',type='str',default=&lt;datacl...appingproxy({}),kw_only=False,_field_type=_FIELD), 'options_json': Field(name='options_json',type='str',default='',...appingproxy({}),kw_only=False,_field_type=_FIELD), 'players_json': Field(name='players_json',type='str',default='',...appingproxy({}),kw_only=False,_field_type=_FIELD), 'profile_ids': Field(name='profile_ids',type='tuple[str, ...]',...appingproxy({}),kw_only=False,_field_type=_FIELD), 'rating_after': Field(name='rating_after',type='dict[str, int]',...appingproxy({}),kw_only=False,_field_type=_FIELD), 'rating_before': Field(name='rating_before',type='dict[str, int]'...appingproxy({}),kw_only=False,_field_type=_FIELD), ...}</dl>
+<dl><dt><strong>__dataclass_fields__</strong> = {'description': Field(name='description',type='str',default='',d...appingproxy({}),kw_only=False,_field_type=_FIELD), 'finished_at': Field(name='finished_at',type='int',default=0,de...appingproxy({}),kw_only=False,_field_type=_FIELD), 'invalid': Field(name='invalid',type='bool',default=False,d...appingproxy({}),kw_only=False,_field_type=_FIELD), 'leaderboard_id': Field(name='leaderboard_id',type='str',default='...appingproxy({}),kw_only=False,_field_type=_FIELD), 'map_name': Field(name='map_name',type='str',default='',defa...appingproxy({}),kw_only=False,_field_type=_FIELD), 'match_id': Field(name='match_id',type='str',default=&lt;datacl...appingproxy({}),kw_only=False,_field_type=_FIELD), 'options_json': Field(name='options_json',type='str',default='',...appingproxy({}),kw_only=False,_field_type=_FIELD), 'players_json': Field(name='players_json',type='str',default='',...appingproxy({}),kw_only=False,_field_type=_FIELD), 'profile_ids': Field(name='profile_ids',type='tuple[str, ...]',...appingproxy({}),kw_only=False,_field_type=_FIELD), 'rating_after': Field(name='rating_after',type='dict[str, int]',...appingproxy({}),kw_only=False,_field_type=_FIELD), ...}</dl>
 
 <dl><dt><strong>__dataclass_params__</strong> = _DataclassParams(init=True,repr=True,eq=True,ord...True,kw_only=False,slots=True,weakref_slot=False)</dl>
 
-<dl><dt><strong>__match_args__</strong> = ('match_id', 'leaderboard_id', 'started_at', 'finished_at', 'map_name', 'profile_ids', 'rating_before', 'rating_after', 'teams', 'winners', 'options_json', 'slots_json', 'description', 'players_json', 'settings_json')</dl>
+<dl><dt><strong>__match_args__</strong> = ('match_id', 'leaderboard_id', 'started_at', 'finished_at', 'map_name', 'profile_ids', 'rating_before', 'rating_after', 'teams', 'winners', 'options_json', 'slots_json', 'description', 'players_json', 'settings_json', 'invalid')</dl>
 
 </td></tr></table> <p>
 <table class="section">

@@ -149,17 +149,22 @@ class LibrematchStore:
         limit: int = 0,
         since_s: int = 0,
         leaderboard_id: str = "",
+        include_invalid: bool = False,
     ) -> list[dict[str, Any]]:
         """Query the stored history: matches of the profiles, newest first.
 
         An empty ``profile_ids`` means every known account's matches.
+        An INVALIDATED match serves too when ``include_invalid`` rides
+        (owner 2026-11-24): the listing shows it WITH its status - the
+        invalid flag travels on the entry, the PANEL decides. The
+        default stays honest: no result, no completion, never played.
         """
         query: dict[str, Any] = {}
-        # an INVALIDATED match never serves (owner 2026-11-23): a
-        # lobby abandoned long ago - no result, no completion - is a
-        # game that was never played; the invalidation sealer marks
-        # it and the serving stays honest without deleting the raw.
-        query["invalid"] = {"$ne": True}
+        if not include_invalid:
+            # a lobby abandoned long ago - no result, no completion -
+            # is a game that was never played; the sealer marks it and
+            # the serving stays honest (owner 2026-11-23)
+            query["invalid"] = {"$ne": True}
         if profile_ids:
             query["profile_ids"] = {"$in": [str(p) for p in profile_ids]}
         if since_s > 0:

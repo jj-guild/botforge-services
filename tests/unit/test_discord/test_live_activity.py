@@ -42,54 +42,45 @@ async def test_the_feed_card_reads_the_same_parts_builder() -> None:
         set(), {"team": "Team"},
     )
     assert match_id == "523338329" and blocks and accent
-    header = str(getattr(blocks[0], "children", [blocks[0]])[0] if hasattr(blocks[0], "children") else blocks[0])
-    del header
     # the settings button rides the share (the popup works everywhere)
-    assert any("settings" in str(getattr(b, "custom_id", "")) or "⚙" in str(getattr(b, "label", "")) for b in buttons)
+    assert any(
+        "settings" in str(getattr(b, "custom_id", "") or "") or "⚙" in str(getattr(b, "label", "") or "")
+        for b in buttons
+    )
 
 
-async def test_the_logs_line_dedupes_per_match_event() -> None:
+def test_the_logs_verbs_and_the_one_line_per_event_dedupe() -> None:
     """Several players in one match log ONE line per event, not per player."""
     feed._LOGGED.clear()
     assert feed._verb_of(_event("offline", "in_lobby")) == "lobby_open"
     assert feed._verb_of(_event("in_lobby", "in_lobby")) == "lobby_update"
     assert feed._verb_of(_event("in_lobby", "in_game")) == "match_start"
     assert feed._verb_of(_event("in_game", "offline")) == "match_end"
+    # a lobby that folds without a game closes, it never calls it a match
     assert feed._verb_of(_event("in_lobby", "offline")) == "lobby_close"
     assert feed._verb_of({"new_status": "offline", "old_status": "offline"}) == ""
 
 
-async def test_the_lobby_close_never_logs_a_match_end() -> None:
-    """A lobby that folds without a game closes, it never calls it a match."""
-    event = _event("in_lobby", "offline")
-    assert feed._verb_of(event) == "lobby_close"
-
-
 def test_the_seed_card_labels_the_invalid_matches() -> None:
     """An invalid match (no result - under five minutes) seeds WITH its status."""
-    labels = {
-        "invalid": "Match non compté",
-        "invalid_no_result": "jamais décidé — pas de résultat",
-        "invalid_short": "forfait — moins de 5 minutes",
-    }
     undecided = feed._seed_card_of(
         {"match_id": "507", "started_at": 1732300000, "finished_at": 0, "winners": [],
-         "players_json": "[]", "options_json": "", "description": "lobby test"},
-        labels,
+         "players": [], "options_json": "", "description": "lobby test"},
     )
     assert undecided["invalid"] is True
-    assert undecided["invalid_reason"] == labels["invalid_no_result"]
+    assert undecided["invalid_reason"] == "no_result"
     short = feed._seed_card_of(
         {"match_id": "508", "started_at": 1732300000, "finished_at": 1732300180,
-         "winners": ["848567"], "players_json": "[]", "options_json": ""},
-        labels,
+         "winners": ["848567"], "players": [{"profile_id": "848567", "alias": "Merlin"}],
+         "options_json": ""},
     )
     assert short["invalid"] is True
-    assert short["invalid_reason"] == labels["invalid_short"]
+    assert short["invalid_reason"] == "short"
+    # the raw doc's seats ride "players" (a list), the panel reads them
+    assert short["players"] == [{"profile_id": "848567", "alias": "Merlin"}]
     valid = feed._seed_card_of(
         {"match_id": "509", "started_at": 1732300000, "finished_at": 1732303600,
          "winners": ["848567"], "players_json": "[]", "options_json": ""},
-        labels,
     )
     assert "invalid" not in valid, "a decided match never carries the status"
 
@@ -99,9 +90,9 @@ def test_the_invalid_status_renders_on_the_card() -> None:
     from botforge.discord.home import _card_map_section
 
     card = {"status": "finished", "map_name": "Budapest", "started_at": 1732300000,
-            "finished_at": 1732300100, "invalid": True, "invalid_reason": "forfait — moins de 5 minutes"}
+            "finished_at": 1732300100, "invalid": True, "invalid_reason": "short"}
     labels = {"when": "Il y a {when}", "duration": "Durée : {clock}",
-              "invalid": "Match non compté"}
+              "invalid": "Match non compté", "invalid_short": "forfait — moins de 5 minutes"}
     ctx = {"map_display": {}, "map_urls": {}, "map_images": {}}
     section = _card_map_section(card, ctx, labels)
     import discord as _discord
@@ -111,3 +102,13 @@ def test_the_invalid_status_renders_on_the_card() -> None:
     text = str(view.to_components())
     assert "Match non compté" in text
     assert "forfait" in text
+
+
+async def test_the_listing_shows_the_sealed_matches() -> None:
+    """An invalidated entry renders in the five - with its status key."""
+    from botforge.discord.home import _invalid_reason_type_of
+
+    # never decided: no completion, no winner
+    assert _invalid_reason_type_of(None, 0, ()) == "no_result"
+    # decided but under five minutes
+    assert _invalid_reason_type_of(None, 1732300180, ("848567",)) == "short"

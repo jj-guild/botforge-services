@@ -212,3 +212,6 @@ class MatchHistoryEntry:
     description: str = ""
     players_json: str = ""
     settings_json: str = ""
+    # sealed as never played (no result, or too short): the listing
+    # shows it WITH its status instead of hiding it (owner 2026-11-24)
+    invalid: bool = False
