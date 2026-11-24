@@ -47,6 +47,88 @@ DORMANT_HIDDEN_KEYS = ("discussions", "territory", "alliances")
 
 REALM_ADMIN_ROLE = "Kingdom Admin"  # conf/mod.yaml display_name
 
+# architecture-salons-v1 (Drasah 24/11) : les bornes du BANDEAU des
+# royaumes — les catégories 🏰 des royaumes vivent ENSEMBLE, sous
+# Kingdom-Gaïa et AU-DESSUS d'admin (« admin dernier, quoi qu'il
+# arrive » : règle sine qua non).
+KINGDOM_CATEGORY = "🏰 ᴋɪɴɢᴅᴏᴍ-ɢᴀɪᴀ"  # conf/mod.yaml channel_groups display_name
+ADMIN_CATEGORY = "⚙️ ᴀᴅᴍɪɴ"  # conf/mod.yaml channel_groups display_name
+
+
+def _is_realm_category(name: Any) -> bool:
+    """One realm's habitat category (« 🏰 Nom »), never a declared group."""
+    display = str(name or "")
+    return display.startswith("🏰 ") and display != KINGDOM_CATEGORY
+
+
+async def _find_admin_category(guild: Any) -> Any:
+    """Return the admin folder — stored resolution first, the name last."""
+    guild_id = str(getattr(guild, "id", "") or "")
+    try:
+        from botforge.discord.ui.panels_provisioning import stored_channel_id
+
+        stored = await stored_channel_id(guild_id, "mod/kingdom", f"cat:{ADMIN_CATEGORY}")
+        if stored and str(stored).isdigit():
+            channel = getattr(guild, "get_channel", None)
+            if channel is not None:
+                found = channel(int(stored))
+                if found is not None:
+                    return found
+    except Exception:
+        logger.warning("kingdom realms: the admin folder read failed", exc_info=True)
+    for category in list(getattr(guild, "categories", None) or []):
+        if str(getattr(category, "name", "")) == ADMIN_CATEGORY:
+            return category
+    return None
+
+
+async def place_realm_categories(guild: Any) -> int:
+    """ordres-royaumes : le bandeau 🏰 vit juste au-dessus d'admin.
+
+    architecture-salons-v1 (Drasah 24/11) : « les royaumes des joueurs
+    se situent après Kingdom-Gaïa et avant admin » — un royaume créé
+    ou restauré en pleine saison rejoint le bandeau, JAMAIS sous
+    admin. Idempotent : un bandeau déjà convergé ne coûte AUCUN appel
+    (la leçon fix-reset-429) ; l'ordre RELATIF des royaumes est
+    préservé (ils glissent ensemble). Best-effort total : une édition
+    morte log et repartira à la passe suivante.
+    """
+    categories = list(getattr(guild, "categories", None) or [])
+    if not categories:
+        return 0
+    admin = await _find_admin_category(guild)
+    if admin is None:
+        return 0
+    realm_categories = [c for c in categories if _is_realm_category(getattr(c, "name", ""))]
+    if not realm_categories:
+        return 0
+    # guild.categories est la sidebar triée de Discord — le dernier
+    # royaume du bandeau doit arriver juste avant admin
+    ordered_ids = [str(getattr(c, "id", "") or "") for c in categories]
+    admin_index = ordered_ids.index(str(getattr(admin, "id", "") or ""))
+    band_ids = ordered_ids[max(0, admin_index - len(realm_categories)) : admin_index]
+    realm_ids = {str(getattr(c, "id", "") or "") for c in realm_categories}
+    if set(band_ids) == realm_ids and len(band_ids) == len(realm_categories):
+        return 0  # converged — zero API call
+    moved = 0
+    for category in realm_categories:
+        try:
+            relocate = getattr(category, "move", None)
+            if relocate is None:
+                break
+            await relocate(before=admin, reason="kingdom: the realm band rides above admin")
+            moved += 1
+        except Exception:
+            logger.warning(
+                "kingdom realms: the band placement failed (%s) — best-effort",
+                getattr(category, "name", "?"),
+                exc_info=True,
+            )
+    if moved:
+        logger.info("kingdom realms: %d realm categorie(s) placed above admin", moved)
+    return moved
+
+
 HUB_SURFACE = "panel:mod:kingdom:realm"
 HOME_SURFACE = "panel:mod:kingdom:realm:home"
 SEIGNEURIE_SURFACE = "panel:mod:kingdom:realm:home:seigneurie"
@@ -504,6 +586,17 @@ async def ensure_realm_structure(guild: Any, realm: Any, *, dormant: bool = True
                 await channel.edit(position=offset)
             except Exception:  # noqa: BLE001 — l'ordre est cosmétique, jamais bloquant
                 logger.warning("kingdom realms: salon reorder failed (%s)", slug)
+    # ordres-royaumes (Drasah 24/11) : chaque ensure RESSERRE la règle —
+    # la catégorie (nouvelle, adoptée ou restaurée) rejoint le bandeau
+    # au-dessus d'admin ; convergé, la passe ne coûte rien.
+    try:
+        await place_realm_categories(guild)
+    except Exception:
+        logger.warning(
+            "kingdom realms: the realm band placement failed (%s) — best-effort",
+            display,
+            exc_info=True,
+        )
     return ids
 
 

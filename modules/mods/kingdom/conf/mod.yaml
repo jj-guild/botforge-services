@@ -22,11 +22,18 @@ home_view_roles: ["Kingdom Admin"]
 # the sidebar's very end (private to staff, invisible to the players)
 home_bottom: true
 settings: {}
+# architecture-salons-v1 (Drasah 24/11) : l'ordre de la sidebar est une
+# RÈGLE — ✒️ conscription, ⚔️ champs de bataille, 🏰 Kingdom-Gaïa, puis les
+# royaumes (le BANDEAU dynamique, toujours au-dessus d'admin), ⚙️ admin en
+# DERNIER (bottom), la réserve du bot en toute fin (home_bottom). L'ordre
+# des groupes = les `position` des salons (bandes de 10 par groupe),
+# jamais un accident alphabétique.
 channel_groups:
-  - key: profiles
-    display_name: 👤 ᴘʀᴏꜰɪʟs
   # restructuration-serveur-v1 e (Drasah 19/10): the general group is
   # GONE ENTIRELY (Taverne + the vocal) — nothing is kept or moved.
+  # architecture-salons-v1 (Drasah 24/11) : le groupe profiles est RETIRÉ
+  # (« le profil sera une commande, plus jamais un salon ni une
+  # catégorie ») — la catégorie vide legacy est balayée au boot.
   - key: conscription
     display_name: ✒️ ᴄᴏɴsᴄʀɪᴘᴛɪᴏɴ
   # restructuration-gaia-v1 (Drasah 24/10): the Gaïa group RETIRES —
@@ -98,6 +105,9 @@ channels:
     display_name: 📜 scriptorium
     description: Sommaire — Cadastre, Diplomatie, Seigneurie (ephemeral rubrics)
     group: kingdom
+    # architecture-salons-v1 (Drasah 24/11) : bande 20 — le groupe
+    # Kingdom-Gaïa vit EN 3e position, l'ordre interne est explicite.
+    position: 20
     # permissions-serveur-v1 (Drasah 19/10): a newcomer sees only
     # Conscription and Beta — every other salon denies @everyone and
     # unlocks through the player roles (granted at acceptance).
@@ -112,6 +122,7 @@ channels:
     display_name: 💰 marché
     description: The kingdom's market — techs and actions bought with écus
     group: kingdom
+    position: 21
     access:
       everyone_view: false
       view: [Kingdom Lord, Kingdom King, Kingdom Admin]
@@ -119,6 +130,7 @@ channels:
     display_name: 🌍 géopolitique
     description: Announcements, treaties and political rules
     group: kingdom
+    position: 22
     # permissions-serveur-v1: the pinned age message lives here (the
     # dedicated 🏺 Âge salon is gone — its name now carries the age emoji).
     access:
@@ -130,6 +142,7 @@ channels:
     # restructuration-gaia-v1 (Drasah 24/10): moved from the retired
     # gaia group into kingdoms (Kingdom-Gaia).
     group: kingdom
+    position: 23
     access:
       everyone_view: false
       view: [Kingdom Lord, Kingdom King, Kingdom Admin]
@@ -137,6 +150,7 @@ channels:
     display_name: 🍺 taverne
     description: The lords' tavern — drinks, rumors, bets and the Mercenary Chief (taverne-v1)
     group: kingdom
+    position: 24
     access:
       everyone_view: false
       view: [Kingdom Lord, Kingdom King, Kingdom Admin]
@@ -144,6 +158,9 @@ channels:
     display_name: ⚔️ déclarer une attaque
     description: The guided attack declaration panel
     group: battlefield
+    # architecture-salons-v1 : bande 10 — les champs de bataille vivent
+    # EN 2e position, juste après la conscription.
+    position: 10
     access:
       everyone_view: false
       view: [Kingdom Lord, Kingdom King, Kingdom Admin]
@@ -151,6 +168,7 @@ channels:
     display_name: 🕊️ pourparlers
     description: War negotiations
     group: battlefield
+    position: 11
     access:
       everyone_view: false
       view: [Kingdom Lord, Kingdom King, Kingdom Admin]
@@ -159,6 +177,9 @@ channels:
     display_name: ⏱️ machine à temps
     description: Game-clock test panel — fast-forward and snapshots (admin only)
     group: admin
+    # architecture-salons-v1 : bande 30 — l'ordre INTERNE d'admin est
+    # explicite (machine, distributeur, paramètres, demandes, journal).
+    position: 30
     admin_only: true
     access:
       everyone_view: false
@@ -167,6 +188,7 @@ channels:
     display_name: 🎁 distributeur
     description: Admin test injector — hand elements to a kingdom (admin only)
     group: admin
+    position: 31
     admin_only: true
     access:
       everyone_view: false
@@ -181,6 +203,7 @@ channels:
     display_name: ⚙️ paramètres
     description: Kingdom settings — the admin season cockpit (pinned, admin only)
     group: admin
+    position: 32
     admin_only: true
     access:
       everyone_view: false
@@ -192,6 +215,7 @@ channels:
     display_name: 📬 demandes
     description: Edit/leave requests (admin only)
     group: admin
+    position: 33
     access:
       everyone_view: false
       view: [Kingdom Admin]
@@ -201,6 +225,7 @@ channels:
     display_name: 📜 journal-admin
     description: Timestamped admin actions log (admin only)
     group: admin
+    position: 34
     admin_only: true
     access:
       everyone_view: false

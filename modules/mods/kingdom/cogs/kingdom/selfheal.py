@@ -37,6 +37,21 @@ import discord
 
 logger = logging.getLogger("kingdom.selfheal")
 
+# architecture-salons-v1 : la catégorie retirée (le profil = une commande).
+# Écrite en \N escapes : les petites capitales inline déclenchent
+# une pluie d'alertes RUF001 (leçon de la fournée).
+RETIRED_PROFILES_CATEGORY = (
+    "\N{BUST IN SILHOUETTE} "
+    "\N{LATIN LETTER SMALL CAPITAL P}"
+    "\N{LATIN LETTER SMALL CAPITAL R}"
+    "\N{LATIN LETTER SMALL CAPITAL O}"
+    "\N{LATIN LETTER SMALL CAPITAL F}"
+    "\N{LATIN LETTER SMALL CAPITAL I}"
+    "\N{LATIN LETTER SMALL CAPITAL L}"
+    "s"
+)
+
+
 # Let the platform's own boot provisioning (routing, first sync) finish
 # before this pass reads and writes — a boot 429 storm must not be fed.
 _DELAY_S = 30.0
@@ -72,7 +87,7 @@ async def ensure_kingdom_surfaces(bot: Any) -> list[tuple[str, str]]:
                 roles = await provision_mod_roles(bot, guild_id, "kingdom")
                 channels = await provision_mod_channels(bot, guild_id, "kingdom")
                 provisioning = f"{channels} channels, {roles} roles"
-            except Exception:  # noqa: BLE001 — the self-heal never breaks the boot
+            except Exception:  # the self-heal never breaks the boot
                 logger.warning(
                     "kingdom: self-heal provisioning failed (guild %s)",
                     guild_id,
@@ -86,8 +101,10 @@ async def ensure_kingdom_surfaces(bot: Any) -> list[tuple[str, str]]:
 
             landed = await ensure_mod_pins(bot, guild_id, "kingdom")
             pins = str(landed)
-        except Exception:  # noqa: BLE001 — the self-heal never breaks the boot
+        except Exception:  # the self-heal never breaks the boot
             logger.warning("kingdom: self-heal pins failed (guild %s)", guild_id, exc_info=True)
+        if _boot_provision_enabled():
+            await _rattrapage_sidebar(guild, guild_id)
         try:
             commands = await _ensure_commands(bot, guild_id)
         except Exception:  # noqa: BLE001
@@ -101,6 +118,66 @@ async def ensure_kingdom_surfaces(bot: Any) -> list[tuple[str, str]]:
             commands,
         )
     return report
+
+
+async def _rattrapage_sidebar(guild: object, guild_id: str) -> None:
+    """architecture-salons-v1 (Drasah 24/11) : le RATTRAPAGE de la sidebar.
+
+    Les catégories des royaumes déjà vivants rejoignent le bandeau
+    au-dessus d'admin (règle sine qua non : admin dernier, quoi qu'il
+    arrive), et la catégorie vide legacy des PROFILS (le profil devient
+    une commande) est balayée. Best-effort, jamais bloquant.
+    """
+    try:
+        from botforge.mods.kingdom.cogs.realms import place_realm_categories
+
+        band = await place_realm_categories(guild)
+        if band:
+            logger.info(
+                "kingdom: self-heal placed %d realm categorie(s) above admin", band
+            )
+    except Exception:  # the self-heal never breaks the boot
+        logger.warning(
+            "kingdom: the realm band placement failed (guild %s)",
+            guild_id,
+            exc_info=True,
+        )
+    try:
+        swept = await _sweep_retired_profiles_category(guild)
+        if swept:
+            logger.info(
+                "kingdom: self-heal swept the retired profiles category (guild %s)",
+                guild_id,
+            )
+    except Exception:
+        logger.warning(
+            "kingdom: the profiles sweep failed (guild %s)", guild_id, exc_info=True
+        )
+
+
+async def _sweep_retired_profiles_category(guild: Any) -> int:
+    """architecture-salons-v1 : PROFILS n'existe plus (le profil devient une commande).
+
+    La catégorie vide legacy (jamais recréée par le provisionnement,
+    le groupe a quitté la déclaration) est supprimée au boot —
+    UNIQUEMENT vide : une catégorie habitée reste sur place,
+    inchangée, et le coup suivant repassera.
+    """
+    retired = RETIRED_PROFILES_CATEGORY
+    for category in list(getattr(guild, "categories", None) or []):
+        if str(getattr(category, "name", "")) != retired:
+            continue
+        if list(getattr(category, "channels", None) or []):
+            continue
+        try:
+            await category.delete(reason="kingdom: the retired profiles category")
+            return 1
+        except Exception:
+            logger.warning(
+                "kingdom: deleting the retired profiles category failed — best-effort",
+                exc_info=True,
+            )
+    return 0
 
 
 async def _ensure_commands(bot: Any, guild_id: str) -> str:
