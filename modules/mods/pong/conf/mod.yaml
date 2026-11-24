@@ -61,20 +61,24 @@ channel_groups:
     display_name: ⚙️ ᴘᴏɴɢ-ꜱᴛᴀꜰꜰ
     admin_only: true
 channels:
+  # access.view entries reference the roles' LOGICAL KEYS (candidate,
+  # member, admin, pong_waitlist, pong_caster); the provisioning
+  # resolves key -> persisted mapping -> Discord role ID (never a
+  # display-name match): display names are renamable.
   - key: announcements
     display_name: 📣 annonces-pong
     description: Round openings/closures, tables list (no level order) and per-table civ presets
     group: ladder
     access:
       everyone_view: false
-      view: ["👥 Pong Joueur", "Pong Admin"]
+      view: [member, admin]
   - key: bot_commands
     display_name: 🤖 bot-commands
     description: The mod's slash commands (/register, /register_to_tournament…)
     group: ladder
     access:
       everyone_view: false
-      view: ["🧡 Pong Candidat", "🔖 Pong Waitlist", "👥 Pong Joueur", "Pong Admin"]
+      view: [candidate, pong_waitlist, member, admin]
   # planning is a forum-style match scheduling salon; the channel kind is
   # hardcoded to text by the current provisioning — the forum gap is
   # tracked for the core, the key stays out of the declaration
@@ -84,21 +88,21 @@ channels:
     group: ladder
     access:
       everyone_view: false
-      view: ["👥 Pong Joueur", "Pong Admin"]
+      view: [member, admin]
   - key: records
     display_name: 🎞️ records
     description: Normalized results + drafts/recs zips for casters and admins
     group: ladder
     access:
       everyone_view: false
-      view: ["👥 Pong Joueur", "🎙️ Pong Caster", "Pong Admin"]
+      view: [member, pong_caster, admin]
   - key: casting
     display_name: 🎙️ casting
     description: Cast announcements (open stream — "AOE Pong" in the title)
     group: ladder
     access:
       everyone_view: true
-      view: ["🎙️ Pong Caster", "Pong Admin"]
+      view: [pong_caster, admin]
   # table salons (pong:table_<slug>) are GENERATED per round (open_round op) with
   # neutral names — never statically declared here (D-PONG-014)
   - key: settings
@@ -108,7 +112,7 @@ channels:
     admin_only: true
     access:
       everyone_view: false
-      view: [Pong Admin]
+      view: [admin]
   - key: admin_log
     display_name: 📜 journal-admin
     description: Timestamped admin actions (blocks, admin results, seed corrections, roster moves)
@@ -116,7 +120,7 @@ channels:
     admin_only: true
     access:
       everyone_view: false
-      view: [Pong Admin]
+      view: [admin]
 roles:
   # the standard trio under its standard keys (kingdom-style) — the
   # parser auto-adds them anyway, declaring them under mod-specific keys
@@ -139,7 +143,7 @@ roles:
     display_name: "🎙️ Pong Caster"
     color: 0x9B59B6
 workflows: []
-commands: []          # /register, /register_to_tournament, /add_result,
+commands: []          # /register_to_tournament, /add_result,
                       # /validate_score, /contest_score, /recap (ephemeral)
                       # — land with the cogs PR
 dependencies: []      # register/player identity: soft dependency to declare
