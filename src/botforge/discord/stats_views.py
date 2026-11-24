@@ -163,6 +163,7 @@ async def recent_match_blocks(
 async def recent_match_entries(
     profile_ids: list[str],
     limit: int = 10,
+    refresh: bool = False,
 ) -> list[Any]:
     """Return the last distinctive finished-match entries, newest first.
 
@@ -178,7 +179,7 @@ async def recent_match_entries(
     if client is None:
         return []
     try:
-        entries = await client.get_match_history(sorted(wanted), limit=50)
+        entries = await client.get_match_history(sorted(wanted), limit=50, refresh=refresh)
     except Exception:
         logger.warning("STATS VIEWS: the match history fetch failed", exc_info=True)
         return []

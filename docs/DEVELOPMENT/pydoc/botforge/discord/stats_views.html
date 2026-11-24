@@ -58,7 +58,7 @@ sub-bullet&nbsp;per&nbsp;team&nbsp;carrying&nbsp;every&nbsp;seat&nbsp;(alias,&nb
 rating&nbsp;delta).&nbsp;``me_ids``&nbsp;renders&nbsp;bold,&nbsp;the&nbsp;other&nbsp;server-known<br>
 profiles&nbsp;render&nbsp;italic&nbsp;—&nbsp;the&nbsp;highlight&nbsp;contract&nbsp;of&nbsp;the&nbsp;matches<br>
 popup.&nbsp;Best-effort&nbsp;—&nbsp;an&nbsp;unreachable&nbsp;game&nbsp;service&nbsp;renders&nbsp;[].</span></dd></dl>
- <dl><dt>async <a name="-recent_match_entries"><strong>recent_match_entries</strong></a>(profile_ids: 'list[str]', limit: 'int' = 10) -&gt; 'list[Any]'</dt><dd><span class="code">Return&nbsp;the&nbsp;last&nbsp;distinctive&nbsp;finished-match&nbsp;entries,&nbsp;newest&nbsp;first.<br>
+ <dl><dt>async <a name="-recent_match_entries"><strong>recent_match_entries</strong></a>(profile_ids: 'list[str]', limit: 'int' = 10, refresh: 'bool' = False) -&gt; 'list[Any]'</dt><dd><span class="code">Return&nbsp;the&nbsp;last&nbsp;distinctive&nbsp;finished-match&nbsp;entries,&nbsp;newest&nbsp;first.<br>
 &nbsp;<br>
 The&nbsp;same&nbsp;dedupe&nbsp;as&nbsp;``recent_match_blocks``&nbsp;(one&nbsp;entry&nbsp;per&nbsp;match&nbsp;id,<br>
 only&nbsp;matches&nbsp;the&nbsp;viewed&nbsp;profiles&nbsp;played)&nbsp;but&nbsp;RAW&nbsp;—&nbsp;the&nbsp;panel<br>

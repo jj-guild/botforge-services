@@ -57,7 +57,7 @@ coalescing,&nbsp;pacing&nbsp;and&nbsp;circuit&nbsp;breaker&nbsp;apply.&nbsp;The&
 long&nbsp;BY&nbsp;DESIGN&nbsp;(the&nbsp;provider&nbsp;may&nbsp;back&nbsp;off&nbsp;on&nbsp;a&nbsp;rate-limited<br>
 upstream);&nbsp;a&nbsp;circuit-open&nbsp;provider&nbsp;raises&nbsp;the&nbsp;functional&nbsp;error.</span></dd></dl>
 
-<dl><dt>async <a name="GameDataClient-get_match_history"><strong>get_match_history</strong></a>(self, profile_ids: 'list[str]', limit: 'int' = 0, since_s: 'int' = 0, leaderboard_id: 'str' = '') -&gt; 'Any'</dt><dd><span class="code">Fetch&nbsp;the&nbsp;stored&nbsp;match&nbsp;history&nbsp;of&nbsp;the&nbsp;accounts&nbsp;(#404).</span></dd></dl>
+<dl><dt>async <a name="GameDataClient-get_match_history"><strong>get_match_history</strong></a>(self, profile_ids: 'list[str]', limit: 'int' = 0, since_s: 'int' = 0, leaderboard_id: 'str' = '', refresh: 'bool' = False) -&gt; 'Any'</dt><dd><span class="code">Fetch&nbsp;the&nbsp;stored&nbsp;match&nbsp;history&nbsp;of&nbsp;the&nbsp;accounts&nbsp;(#404).</span></dd></dl>
 
 <dl><dt>async <a name="GameDataClient-get_match_result"><strong>get_match_result</strong></a>(self, profile_ids: 'list[str]', started_after: 'int') -&gt; 'Any | None'</dt><dd><span class="code">Fetch&nbsp;a&nbsp;finished&nbsp;match's&nbsp;outcome&nbsp;through&nbsp;the&nbsp;game&nbsp;service.</span></dd></dl>
 
