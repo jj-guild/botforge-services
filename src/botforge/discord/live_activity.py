@@ -46,6 +46,10 @@ logger = logging.getLogger("botforge.live_activity")
 
 __all__ = ["start_live_activity_feed"]
 
+# the seed sweep: a salon created (or repaired) after the boot seeds
+# within this window - the seed never waits on the next match event
+_SEED_SWEEP_S = 300.0
+
 _MATCHES_SCOPE = "games/aoe2"
 _MATCHES_KEY = "matches"
 # the seed window: the salon's first use replays the last WEEK
@@ -152,13 +156,34 @@ def start_live_activity_feed(bot: discord.Client) -> asyncio.Task[None] | None:
                 await asyncio.sleep(5)
 
     task = asyncio.create_task(_run())
+    # the seed sweep watches for a freshly created (or repaired) matches
+    # salon: a channel provisioned AFTER the boot seeds within the
+    # sweep window - never waiting on the next match to fire an event
+    seed_task = asyncio.create_task(_seed_loop(bot))
 
     def _log_death(task: asyncio.Task[None]) -> None:
         if not task.cancelled() and task.exception() is not None:
             logger.error("live activity feed DIED: %r", task.exception())
 
     task.add_done_callback(_log_death)
+    seed_task.add_done_callback(_log_death)
     return task
+
+
+async def _seed_loop(bot: discord.Client) -> None:
+    """Sweep the guilds' matches salons for a seeding to run."""
+    while True:
+        for guild in list(bot.guilds):
+            try:
+                channel_id = await _matches_channel_id(bot, str(guild.id))
+                if channel_id is None:
+                    continue
+                await _maybe_seed_matches_salon(bot, str(guild.id), channel_id)
+            except Exception:
+                logger.debug(
+                    "the seed sweep skipped a guild (%s) - best-effort", guild.id, exc_info=True
+                )
+        await asyncio.sleep(_SEED_SWEEP_S)
 
 
 async def _deliver_event(bot: discord.Client, event: dict[str, Any]) -> None:
