@@ -555,12 +555,72 @@ async def run_attack_phases_safe(bot: Any) -> None:
         locale = await _guild_locale(bot, str(guild.id))
         strings = strings_by_locale(locale)
         await _run_phases_announce_safe(bot, stack, guild, strings, locale)
+        # meeting-heal-v1 (Drasah 24/11): a meeting opened WITHOUT its
+        # salon (the salon-attaque-v1 incident) gets BOTH back here —
+        # the next tick, idempotent, zero cost when all is well.
+        await _meeting_salon_heal_safe(bot, stack, guild, strings, locale)
         # The resolved meetings free their battle room (channel +
         # role) AND their per-attack salon.
         try:
             await cleanup_battle_rooms_safe(bot, stack, guild)
         except Exception:
             logger.warning("kingdom: battle rooms cleanup failed", exc_info=True)
+
+
+async def _meeting_salon_heal_safe(bot: Any, stack: Any, guild: Any, strings: dict[str, str], locale: str) -> None:
+    """Rebuild the missing half of an open meeting (salon + scoreboard).
+
+    meeting-heal-v1: an attack whose battle room opened while its
+    attack salon was the victim of the salon-attaque-v1 bug reaches
+    the 5-minute tick with a voice room and NO scoreboard — the
+    players cannot ready nor declare a result, the meeting hangs.
+    The pass walks the OPEN meetings missing their meeting message:
+    the salon is created late when absent, then the scoreboard + its
+    persistent buttons land exactly as at the open.
+    """
+    from .battle import post_meeting_message
+    from .common import attack_salon
+    from .panel import _open_attack_salon_safe
+
+    try:
+        meetings = [
+            attack
+            for attack in await stack.attacks.attacks()
+            if not bool(getattr(attack, "is_over", True))
+            and (dict(getattr(attack, "score", None) or {})).get("room_channel_id")
+            and not (dict(getattr(attack, "score", None) or {})).get("meeting_message_id")
+        ]
+    except Exception:
+        logger.warning("kingdom: meeting heal read failed — best-effort", exc_info=True)
+        return
+    for attack in meetings:
+        fresh = attack
+        if attack_salon(guild, attack) is None:
+            try:
+                await _open_attack_salon_safe(guild, stack, strings, attack, locale)
+            except Exception:
+                logger.warning("kingdom: late attack salon heal failed", exc_info=True)
+                continue
+            # the creation wrote attack_channel_id service-side — the
+            # fresh doc carries the ref the posting needs.
+            try:
+                fresh = next(
+                    (
+                        candidate
+                        for candidate in await stack.attacks.attacks()
+                        if str(candidate.id) == str(attack.id)
+                    ),
+                    attack,
+                )
+            except Exception:
+                fresh = attack
+            logger.info(
+                "kingdom: meeting heal opened the late attack salon (attack %s)",
+                attack.id,
+            )
+        salon = await post_meeting_message(guild, stack, fresh, strings)
+        if salon is not None:
+            logger.info("kingdom: meeting heal landed the scoreboard (attack %s)", attack.id)
 
 
 async def _event_report_text(strings: dict[str, str], report: dict[str, Any]) -> str:

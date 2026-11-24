@@ -323,6 +323,54 @@ async def _record_safe(stack: Any, method: str, attack_id: str, *values: int) ->
         logger.warning("kingdom: room ref not stored (%s)", method, exc_info=True)
 
 
+async def post_meeting_message(guild: Any, stack: Any, attack: Any, strings: dict[str, str]) -> Any:
+    """Post the ONE meeting message in the attack salon.
+
+    Extract of open_battle_room (meeting-heal-v1 — Drasah 24/11).
+    The scoreboard + the persistent URL/result buttons live here; the
+    salon PINGS the players when the message lands. Returns the salon
+    (None when the salon is missing — the meeting heal replaces the
+    old bare warning by CREATING the salon then retrying).
+    """
+    salon = attack_salon(guild, attack)
+    if salon is None:
+        logger.warning("kingdom: no attack salon for the meeting message")
+        return None
+    try:
+        message = await salon.send(
+            await room_body_text(stack, attack, strings),
+            view=await room_view(stack, attack, strings),
+        )
+        await _record_safe(stack, "record_meeting_message", attack.id, int(salon.id), int(message.id))
+        # The salon PINGS the players the moment the room
+        # opens — never the AI (no ping-able user).
+        if attack.defender_lord_id and not attack.ai_defender:
+            ping = await salon.send(
+                strings["room_ping_message"].format(
+                    attacker=f"<@{attack.attacker_lord_id}>",
+                    defender=f"<@{attack.defender_lord_id}>",
+                )
+            )
+        else:
+            ping = await salon.send(
+                strings["room_ping_attacker_only"].format(
+                    attacker=f"<@{attack.attacker_lord_id}>"
+                )
+            )
+        # The ping is the message the players watch — record
+        # its ref so every resolution can stamp the 🏆 winner.
+        await _record_safe(stack, "record_ping_message", attack.id, int(salon.id), int(ping.id))
+    except Exception:
+        logger.warning("kingdom: meeting message post failed", exc_info=True)
+        return None
+    # salon-nettoyage-v1: the scoreboard just replaced the
+    # pre-room messages — the declaration announce is swept
+    # so the salon reads in ONE glance (the reveal notes stay
+    # until the resolution).
+    await sweep_pre_room_announces_safe(guild, stack, attack)
+    return salon
+
+
 async def open_battle_room(bot: Any, stack: Any, guild: Any, attack: Any, locale: str) -> None:
     """Open the battle room of a meeting (idempotent, best effort).
 
@@ -375,48 +423,14 @@ async def open_battle_room(bot: Any, stack: Any, guild: Any, attack: Any, locale
         await _record_safe(stack, "record_battle_room", attack.id, channel.id, role.id)
         # The meeting lives on ONE message in the ATTACK SALON — the
         # voice channel keeps only the voice (restructuration-serveur-v1 b).
-        salon = attack_salon(guild, attack)
-        if salon is None:
-            logger.warning("kingdom: no attack salon for the meeting message")
-        else:
-            try:
-                message = await salon.send(
-                    await room_body_text(stack, attack, strings),
-                    view=await room_view(stack, attack, strings),
-                )
-                await _record_safe(stack, "record_meeting_message", attack.id, int(salon.id), int(message.id))
-                # The salon PINGS the players the moment the room
-                # opens — never the AI (no ping-able user).
-                if attack.defender_lord_id and not attack.ai_defender:
-                    ping = await salon.send(
-                        strings["room_ping_message"].format(
-                            attacker=f"<@{attack.attacker_lord_id}>",
-                            defender=f"<@{attack.defender_lord_id}>",
-                        )
-                    )
-                else:
-                    ping = await salon.send(
-                        strings["room_ping_attacker_only"].format(
-                            attacker=f"<@{attack.attacker_lord_id}>"
-                        )
-                    )
-                # The ping is the message the players watch — record
-                # its ref so every resolution can stamp the 🏆 winner.
-                await _record_safe(stack, "record_ping_message", attack.id, int(salon.id), int(ping.id))
-            except Exception:
-                logger.warning("kingdom: meeting message post failed", exc_info=True)
-            # salon-nettoyage-v1: the scoreboard just replaced the
-            # pre-room messages — the declaration announce is swept
-            # so the salon reads in ONE glance (the reveal notes stay
-            # until the resolution).
-            await sweep_pre_room_announces_safe(guild, stack, attack)
+        await post_meeting_message(guild, stack, attack, strings)
         for player_id in score_players(attack):
             await _grant_battle_room_role_safe(guild, role, player_id)
         # room-dm-v2: « Tiens-toi prêt » — the voice channel, the text
         # salon, the presence window (ready_deadline, Paris) and the
         # encouragements. A missing salon or deadline degrades the DM
         # by omitting the line — never in error.
-        salon_mention = f"<#{salon.id}>" if salon is not None else ""
+        salon_mention = f"<#{salon.id}>" if (salon := attack_salon(guild, attack)) is not None else ""
         deadline = int((attack.score or {}).get("ready_deadline") or 0)
         dm = strings["room_dm"].format(map=attack.map_key, room=f"<#{channel.id}>", salon=salon_mention)
         if deadline > 0:
