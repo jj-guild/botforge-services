@@ -147,6 +147,10 @@ en:
       matches_colour_6: Purple
       matches_colour_7: Grey
       matches_colour_8: Orange
+      matches_colour_8: Orange
+      matches_invalid: "Match not counted"
+      matches_invalid_no_result: "never decided — no result"
+      matches_invalid_short: "forfeit — under 5 minutes"
       matches_empty: 'No stored match yet for your accounts \u2014 the history refreshes a few minutes after binding.'
       add_button: Add an account
       rename_button: Change nickname

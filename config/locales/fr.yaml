@@ -142,6 +142,12 @@ fr:
       matches_colour_6: Violette
       matches_colour_7: Grise
       matches_colour_8: Orange
+      matches_colour_8: Orange
+      # the never-decided captures (owner 2026-11-24): the seed of the
+      # matches salon renders them with their own status
+      matches_invalid: "Match non compt\u00e9"
+      matches_invalid_no_result: "jamais d\u00e9cid\u00e9 — pas de r\u00e9sultat"
+      matches_invalid_short: "forfait — moins de 5 minutes"
       matches_empty: 'Aucun match stock\u00e9 pour tes comptes \u2014 l\u2019historique se rafra\u00eechit quelques minutes apr\u00e8s la liaison.'
       add_button: Ajouter un compte
       rename_button: Changer de pseudo

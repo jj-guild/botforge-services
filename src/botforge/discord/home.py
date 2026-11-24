@@ -1406,7 +1406,7 @@ async def _entity_local_names(
 
 
 async def _posts_enrichment(
-    interaction: discord.Interaction,
+    client: discord.Client,
     cards: list[dict[str, Any]],
     guild_id: str,
 ) -> tuple[
@@ -1435,8 +1435,8 @@ async def _posts_enrichment(
     map_display: dict[str, str] = {}
     for civ in civs_needed:
         candidates = _civ_entity_ids(civ)
-        names = await _entity_local_names(candidates, guild_id, civ, interaction.client)
-        civ_urls[civ] = await _entity_post_url(interaction.client, guild_id, civs_channel, names)
+        names = await _entity_local_names(candidates, guild_id, civ, client)
+        civ_urls[civ] = await _entity_post_url(client, guild_id, civs_channel, names)
         civ_display[civ] = names[0] if names else civ
         civ_images[civ] = ""
         for candidate in candidates:
@@ -1444,8 +1444,8 @@ async def _posts_enrichment(
             if civ_images[civ]:
                 break
     for map_name in maps_needed:
-        names = await _entity_local_names(_map_entity_id(map_name), guild_id, map_name, interaction.client)
-        map_urls[map_name] = await _entity_post_url(interaction.client, guild_id, maps_channel, names)
+        names = await _entity_local_names(_map_entity_id(map_name), guild_id, map_name, client)
+        map_urls[map_name] = await _entity_post_url(client, guild_id, maps_channel, names)
         map_display[map_name] = names[0] if names else map_name
         map_images[map_name] = await _entity_image(_map_entity_id(map_name), guild_id)
     return civ_urls, civ_images, map_urls, map_images, civ_display, map_display
@@ -1455,24 +1455,34 @@ async def _match_panels_ctx(
     interaction: discord.Interaction,
     cards: list[dict[str, Any]],
 ) -> dict[str, Any]:
+    """Interaction-bound wrapper: the ctx resolves for the guild."""
+    return await _match_panels_ctx_for(interaction.client, cards, str(interaction.guild_id or ""))
+
+
+async def _match_panels_ctx_for(
+    client: discord.Client,
+    cards: list[dict[str, Any]],
+    guild_id: str,
+) -> dict[str, Any]:
     """Resolve the shared context of the whole card batch.
 
     The civ/map post urls and stored images plus the ladder boards
     (1v1 / TG, current - max) resolve ONCE for every card - a popup
-    costs one enrichment per distinct entity, not per card.
+    costs one enrichment per distinct entity, not per card. The feed
+    surfaces (live activity) call the SAME builder with the bare
+    client - no interaction anywhere.
     """
     from botforge.discord.stats_views import stats_client
 
-    guild_id = str(interaction.guild_id or "")
     civ_urls, civ_images, map_urls, map_images, civ_display, map_display = await _posts_enrichment(
-        interaction, cards, guild_id
+        client, cards, guild_id
     )
     ladder: dict[str, dict[str, tuple[int, int]]] = {}
     seat_ids = sorted({str((p or {}).get("profile_id", "")) for c in cards for p in c.get("players") or []})
-    client = stats_client()
-    if seat_ids and client is not None:
+    stats = stats_client()
+    if seat_ids and stats is not None:
         try:
-            accounts = await client.get_account_stats(seat_ids)
+            accounts = await stats.get_account_stats(seat_ids)
         except Exception:
             logger.debug("the account stats fetch failed", exc_info=True)
             accounts = []
@@ -1989,10 +1999,18 @@ async def _send_match_panels(
     The LIVE matches EAT the budget (owner 2026-11-23: one live
     match in progress means 1 live card + 4 finished ones - the
     panel reads "5 derniers matchs", five cards, never more).
+
+    The listing owns its FRESHNESS (owner 2026-11-24: his finished
+    match never showed - the click read a COLD store under a TTL
+    cache while the daily loop is way too slow for a game that just
+    ended): the view SYNCED the viewed accounts on demand, then the
+    history read BYPASSES the cache (``refresh``) - a finished
+    match appears on the very click that follows its end.
     """
+    await _sync_for_listing(interaction, me_ids)
     live = await _live_cards(interaction, me_ids)
     cards = list(live)
-    finished = await _finished_cards(interaction, me_ids, limit=5)
+    finished = await _finished_cards(interaction, me_ids, limit=5, refresh=True)
     cards += finished[: max(0, 5 - len(live))]
     if not cards:
         await interaction.followup.send(await reply(interaction, "profile.matches_empty"), ephemeral=True)
@@ -2066,47 +2084,60 @@ class ProfileMatchesButton(
 
 
 async def _match_panel_labels(interaction: discord.Interaction) -> dict[str, Any]:
+    """Interaction wrapper: the pack resolves for the guild."""
+    return await _match_panel_labels_guild(str(interaction.guild_id or ""), interaction.client)
+
+
+async def _match_panel_labels_guild(guild_id: str, bot: Any) -> dict[str, Any]:
     """Resolve the match panel's label pack (one builder, every surface).
 
     The /live dashboard renders the SAME cards (owner 2026-11-23) -
     the labels resolve once here, never per surface.
     """
+    from botforge.discord.commands_i18n import reply_guild
+
+    async def _r(key: str) -> Any:
+        return await reply_guild(guild_id, bot, key)
+
     return {
-            "team": await reply(interaction, "profile.matches_team"),
-            "with": await reply(interaction, "profile.matches_with"),
-            "join": await reply(interaction, "profile.matches_join"),
-            "spectate": await reply(interaction, "profile.matches_spectate"),
+            "team": await _r("profile.matches_team"),
+            "with": await _r("profile.matches_with"),
+            "join": await _r("profile.matches_join"),
+            "spectate": await _r("profile.matches_spectate"),
             # every hardcoded panel word rides the locale (owner
             # 2026-11-22: the panels mixed untranslated fr and en)
-            "when": await reply(interaction, "profile.matches_when"),
-            "duration": await reply(interaction, "profile.matches_duration"),
-            "source": await reply(interaction, "profile.matches_source"),
-            "source_live": await reply(interaction, "profile.matches_source_live"),
+            "when": await _r("profile.matches_when"),
+            "duration": await _r("profile.matches_duration"),
+            "source": await _r("profile.matches_source"),
+            "source_live": await _r("profile.matches_source_live"),
+            "invalid": await _r("profile.matches_invalid"),
+            "invalid_no_result": await _r("profile.matches_invalid_no_result"),
+            "invalid_short": await _r("profile.matches_invalid_short"),
             "colours": {
-                slot: await reply(interaction, f"profile.matches_colour_{slot}") for slot in SLOT_COLOURS
+                slot: await _r(f"profile.matches_colour_{slot}") for slot in SLOT_COLOURS
             },
             "settings": {
-                plain: await reply(interaction, key) for plain, key in SETTING_LABEL_KEYS.items()
+                plain: await _r(key) for plain, key in SETTING_LABEL_KEYS.items()
             },
             "setting_bools": {
-                key: await reply(interaction, label_key) for key, label_key in SETTING_BOOLEANS.items()
+                key: await _r(label_key) for key, label_key in SETTING_BOOLEANS.items()
             },
             # the live lobby's named booleans share the SAME locale
             # lines (one grammar, one popup - owner 2026-11-23)
             "setting_bools_live": {
-                key: await reply(interaction, label_key)
+                key: await _r(label_key)
                 for key, label_key in _LIVE_SETTING_BOOLEANS.items()
             },
             # one name per checkbox, whatever the source (the "-" keys
             # render "?": the game's own order, owner 2026-11-24)
             "checkbox_names": {
-                locale_key: await reply(interaction, locale_key)
+                locale_key: await _r(locale_key)
                 for _blob_key, _live_key, locale_key in SETTING_CHECKBOX_ORDER
             },
-            "match_noun": await reply(interaction, "profile.match_noun"),
-            "lobby_noun": await reply(interaction, "profile.lobby_noun"),
-            "settings_button": await reply(interaction, "profile.matches_settings_button"),
-            "settings_title": await reply(interaction, "profile.matches_settings_title"),
+            "match_noun": await _r("profile.match_noun"),
+            "lobby_noun": await _r("profile.lobby_noun"),
+            "settings_button": await _r("profile.matches_settings_button"),
+            "settings_title": await _r("profile.matches_settings_title"),
     }
 
 

@@ -110,3 +110,21 @@ async def tr_guild(guild_id: str, bot: object, key: str, fallback: str = "") -> 
     locale = guild_locale_by_id(bot, str(guild_id))
     rendered = catalog.render(key, locale)
     return rendered if rendered != key else fallback
+
+
+async def reply_guild(guild_id: str, bot: object, key: str, **kwargs: object) -> str:
+    """Render a ``replies.*`` message in a GUILD's locale - no interaction.
+
+    The mirror of ``reply`` for the feed surfaces (live activity): the
+    render rides the stored guild locale with the English fallback.
+    """
+    from botforge.discord.locales import guild_locale_by_id
+
+    catalog = getattr(bot, "messages", None)
+    if catalog is None or not guild_id:
+        return key
+    locale = guild_locale_by_id(bot, str(guild_id))
+    rendered: str = catalog.render(f"replies.{key}", locale, **kwargs)
+    if rendered == f"replies.{key}":
+        rendered = catalog.render(key, locale, **kwargs)
+    return rendered

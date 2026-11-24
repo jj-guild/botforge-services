@@ -279,3 +279,45 @@ def test_the_seat_ladder_lines_name_lb3_and_lb4_only() -> None:
     # the RM TG board renders (plain, no board-14 bold masquerade)
     assert "TG : 1180 - 1300" in text
     assert "**1499**" not in text, "the EW board's own elo never dresses as TG"
+
+
+async def test_the_listing_syncs_then_reads_the_store_without_cache(monkeypatch: Any) -> None:
+    """The match listing owns its freshness (owner 2026-11-24).
+
+    His finished match never showed: the click read a COLD store
+    under a TTL cache while the periodic sync is way too slow for a
+    game that just ended. The listing must SYNC on demand, then read
+    the history with ``refresh`` - the order is the contract.
+    """
+    import botforge.discord.home as home
+
+    order: list[str] = []
+
+    async def _sync(interaction: Any, me_ids: Any) -> None:
+        del interaction, me_ids
+        order.append("sync")
+
+    async def _live(interaction: Any, me_ids: Any) -> list[Any]:
+        del interaction, me_ids
+        return []
+
+    async def _finished(interaction: Any, me_ids: Any, limit: int = 5, refresh: bool = False) -> list[Any]:
+        del interaction, me_ids, limit
+        order.append("finished" if not refresh else "finished+refresh")
+        return []
+
+    class _Followup:
+        async def send(self, *args: Any, **kwargs: Any) -> None:
+            del args, kwargs
+            order.append("empty-reply")
+
+    class _Interaction:
+        followup = _Followup()
+
+    monkeypatch.setattr(home, "_sync_for_listing", _sync)
+    monkeypatch.setattr(home, "_live_cards", _live)
+    monkeypatch.setattr(home, "_finished_cards", _finished)
+    await home._send_match_panels(_Interaction(), set(), set(), {})  # type: ignore[arg-type]
+    assert order == ["sync", "finished+refresh", "empty-reply"], (
+        "the listing syncs BEFORE reading, and the read bypasses the cache"
+    )
