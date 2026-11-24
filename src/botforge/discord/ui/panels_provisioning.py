@@ -349,12 +349,16 @@ async def move_category_bottom(guild: discord.Guild, category_id: str) -> bool:
 
 
 async def _push_mod_bottoms(mod_name: str, definition: Any, push: Any) -> None:
-    """Push one mod's declared bottom folders (home first, then groups).
+    """Push one mod's declared bottom folders (groups first, then home).
 
+    sidebar-contract-v2 (Drasah 24/11) : the mod's bottom GROUPS close
+    the playable structure (admin last), THEN the home — the player
+    seams (a realm band) ride just above the groups, so the group
+    folders must come FIRST in the declared tail or the two contracts
+    fight forever (the live 24/11 incident : every 5 minutes the pins
+    pass and the band pass swapped the sidebar back and forth).
     Group order is the channels' own declaration order.
     """
-    if getattr(definition, "home_bottom", False):
-        await push(f"mod/{mod_name}", "category")
     # the mod's declared bottom GROUPS (the channel_groups `bottom`
     # flag), in the channels' own declaration order, deduplicated
     for channel in getattr(definition, "channel_categories", ()) or ():
@@ -363,17 +367,23 @@ async def _push_mod_bottoms(mod_name: str, definition: Any, push: Any) -> None:
         group = str(getattr(channel, "group", "") or "")
         if group:
             await push(f"mod/{mod_name}", f"cat:{group}")
+    if getattr(definition, "home_bottom", False):
+        await push(f"mod/{mod_name}", "category")
 
 
 async def _bottom_category_ids(bot: discord.Client, guild: discord.Guild) -> list[str]:
     """Every DECLARED bottom folder's stored category id, in declaration order.
 
-    The order is the DECLARATION's own: platform scopes (the views
-    config's order), then each enabled mod (the registry's order) with
-    its home folder first and its declared bottom groups after. The
-    order is stable across passes, so the assertion converges instead
-    of flip-flopping (two folders each sinking ``end=True`` in an
-    unordered pass would swap forever — the fix-reset-429 lesson).
+    sidebar-contract-v2 (Drasah 24/11) : the tail closes the sidebar as
+    « the playable structure, then the reserves » — each enabled mod's
+    declared bottom GROUPS first (admin last of the playable structure),
+    then the mod home (the reserve), then the platform plumbing scopes
+    (config/views.yaml, e.g. the game data folders) at the VERY end.
+    The order is stable across passes, so the assertion converges
+    instead of flip-flopping (two folders each sinking ``end=True`` in
+    an unordered pass would swap forever — the fix-reset-429 lesson),
+    and it leaves the slots JUST ABOVE the groups free for the player
+    seams (a realm band) — the two contracts no longer overlap.
     """
     gid = str(guild.id)
     ids: list[str] = []
@@ -381,13 +391,13 @@ async def _bottom_category_ids(bot: discord.Client, guild: discord.Guild) -> lis
         stored = await stored_channel_id(gid, scope, key)
         if stored and str(stored).isdigit():
             ids.append(str(stored))
-    for spec in registered_scopes():
-        if getattr(spec, "category_bottom", False):
-            await _push(spec.scope, "category")
     registry = getattr(bot, "registry", None)
     enabled = registry.enabled() if registry is not None and hasattr(registry, "enabled") else {}
     for mod_name, definition in (enabled or {}).items():
         await _push_mod_bottoms(mod_name, definition, _push)
+    for spec in registered_scopes():
+        if getattr(spec, "category_bottom", False):
+            await _push(spec.scope, "category")
     # dedup KEEPING the first occurrence (declaration order wins)
     seen: set[str] = set()
     ordered: list[str] = []

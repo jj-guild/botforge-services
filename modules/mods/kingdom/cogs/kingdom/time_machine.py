@@ -928,6 +928,23 @@ async def run_mod_pin_refresh_pass(bot: Any) -> int:
             await enforce_bottom_categories(bot)
         except Exception:  # noqa: BLE001 — the pass never raises
             logger.warning("kingdom: bottom categories pass failed", exc_info=True)
+        # ordres-royaumes (Drasah 24/11) : le refreshing pass RESSERRE aussi
+        # le bandeau des royaumes — un royaume mal placé (ou une repair
+        # à moitié faite) guérit dans le cycle, pas seulement au boot.
+        from .realms import place_realm_categories
+
+        try:
+            band = await place_realm_categories(guild)
+            if band:
+                logger.info(
+                    "kingdom: refresh placed %d realm categorie(s) above admin", band
+                )
+        except Exception:  # the pass never raises
+            logger.warning(
+                "kingdom: the realm band placement failed (guild %s)",
+                guild_id,
+                exc_info=True,
+            )
     return touched
 
 

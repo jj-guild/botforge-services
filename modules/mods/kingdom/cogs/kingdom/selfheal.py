@@ -105,6 +105,7 @@ async def ensure_kingdom_surfaces(bot: Any) -> list[tuple[str, str]]:
             logger.warning("kingdom: self-heal pins failed (guild %s)", guild_id, exc_info=True)
         if _boot_provision_enabled():
             await _rattrapage_sidebar(guild, guild_id)
+            await _rattrapage_tail(bot)
         try:
             commands = await _ensure_commands(bot, guild_id)
         except Exception:  # noqa: BLE001
@@ -153,6 +154,24 @@ async def _rattrapage_sidebar(guild: object, guild_id: str) -> None:
         logger.warning(
             "kingdom: the profiles sweep failed (guild %s)", guild_id, exc_info=True
         )
+
+
+async def _rattrapage_tail(bot: Any) -> None:
+    """sidebar-contract-v2 (Drasah 24/11) : the boot re-asserts the tail.
+
+    The declared bottom folders (the admin group, the reserve home,
+    the platform plumbing like the game data folders) sink to their
+    DECLARED order at boot — a fresh deploy converges immediately
+    instead of waiting for the 5-min refresher. Best-effort.
+    """
+    try:
+        from botforge.discord.ui.panels_provisioning import enforce_bottom_categories
+
+        moved = await enforce_bottom_categories(bot)
+        if moved:
+            logger.info("kingdom: boot re-asserted %d bottom categorie(s)", moved)
+    except Exception:
+        logger.warning("kingdom: the boot bottom assert failed", exc_info=True)
 
 
 async def _sweep_retired_profiles_category(guild: Any) -> int:

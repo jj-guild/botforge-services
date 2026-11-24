@@ -104,10 +104,14 @@ def _stored(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(panels_provisioning, "stored_channel_id", fake_stored)
 
 
-async def test_the_mods_bottom_folders_sink_in_declaration_order(_stored: None) -> None:
+async def test_the_mods_bottom_folders_sink_in_declaration_order(
+    _stored: None, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # isolate from any platform scopes left registered by an earlier suite
+    monkeypatch.setattr(panels_provisioning, "registered_scopes", lambda: ())
     guild = _guild()
     guild.categories = [
-        _fake_category(100, guild),  # the 👑 Kingdom home (drifted up)
+        _fake_category(100, guild),  # the home (drifted up)
         _fake_category(200, guild),  # the ADMIN machine room (drifted up)
         _fake_category(1, guild),  # a realm habitat — the player surface
     ]
@@ -117,7 +121,7 @@ async def test_the_mods_bottom_folders_sink_in_declaration_order(_stored: None) 
 
     moved = await enforce_bottom_categories(bot)
     order = [c.id for c in guild.categories]
-    assert order == [1, 100, 200], "home then admin close the sidebar, realms stay above"
+    assert order == [1, 200, 100], "admin closes the playable structure, the home follows"
     assert moved == 2
 
 
@@ -131,8 +135,8 @@ async def test_a_converged_guild_costs_zero_discord_calls(
     guild = _guild()
     guild.categories = [
         _fake_category(1, guild),
-        _fake_category(100, guild),
         _fake_category(200, guild),
+        _fake_category(100, guild),
     ]
     bot = _bot([guild], {"kingdom": _definition(home_bottom=True, group_bottom=True)})
 
@@ -159,8 +163,8 @@ async def test_platform_and_mod_bottoms_share_the_convergence(_stored: None) -> 
     from botforge.discord.ui.panels_provisioning import enforce_bottom_categories
 
     await enforce_bottom_categories(bot)
-    assert [c.id for c in guild.categories] == [1, 300, 100, 200], (
-        "platform scopes first, then the mod's home and groups — always the same order"
+    assert [c.id for c in guild.categories] == [1, 200, 100, 300], (
+        "the mod tail (admin, home) then the platform plumbing — always the same order"
     )
 
 
@@ -189,3 +193,33 @@ def test_the_scope_spec_channel_carries_the_group_bottom() -> None:
     assert "group_bottom" in source, "the built spec must carry the flag to provision_scope"
     decl_fields = ChannelDecl.__dataclass_fields__  # type: ignore[attr-defined]
     assert "group_bottom" in decl_fields, "the platform's ChannelDecl declares the field"
+
+
+async def test_the_tail_leaves_the_slots_above_admin_free_for_the_realms(
+    _stored: None, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """sidebar-contract-v2 (live incident 24/11): the two rules coexist.
+
+    The bottom tail is the LAST slots only — a realm band riding just
+    above the admin group never touches the tail, so the pins pass and
+    the band pass stop fighting over the sidebar.
+    """
+    monkeypatch.setattr(panels_provisioning, "registered_scopes", lambda: ())
+    guild = _guild()
+    guild.categories = [
+        _fake_category(100, guild),  # the home (drifted up)
+        _fake_category(400, guild),  # realm 🏰 habitat
+        _fake_category(200, guild),  # the admin group
+        _fake_category(401, guild),  # realm 🏰 habitat
+    ]
+    bot = _bot([guild], {"kingdom": _definition(home_bottom=True, group_bottom=True)})
+
+    from botforge.discord.ui.panels_provisioning import enforce_bottom_categories
+
+    first = await enforce_bottom_categories(bot)
+    assert [c.id for c in guild.categories] == [400, 401, 200, 100], (
+        "the realms ride above admin, the admin closes the playable structure, home follows"
+    )
+    assert first == 2
+    second = await enforce_bottom_categories(bot)
+    assert second == 0, "a guild carrying realm habitats still converges"

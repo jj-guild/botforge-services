@@ -209,8 +209,17 @@ def test_the_boot_pass_places_the_band_and_sweeps_profiles(monkeypatch) -> None:
         placed.append(guild)
         return 2
 
+    tails: list[Any] = []
+
+    async def fake_enforce(bot: Any) -> int:
+        tails.append(bot)
+        return 0
+
     realms = _realms()
     monkeypatch.setattr(realms, "place_realm_categories", fake_place)
+    import botforge.discord.ui.panels_provisioning as pp
+
+    monkeypatch.setattr(pp, "enforce_bottom_categories", fake_enforce)
 
     empty_profiles = FakeCategory(selfheal.RETIRED_PROFILES_CATEGORY, "p1", 2)
     empty_profiles.channels = []
@@ -240,6 +249,7 @@ def test_the_boot_pass_places_the_band_and_sweeps_profiles(monkeypatch) -> None:
 
     asyncio.run(selfheal.ensure_kingdom_surfaces(bot))
     assert placed == [guild], "the boot pass re-asserts the realm band"
+    assert tails, "the boot pass re-asserts the declared tail (admin, home, plumbing)"
     assert empty_profiles.deleted, "the EMPTY retired PROFILS is swept"
     assert not lived_profiles.deleted, "an inhabited PROFILS stays untouched"
 
