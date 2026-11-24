@@ -67,14 +67,14 @@ channels:
     group: ladder
     access:
       everyone_view: false
-      view: [Pong Player, Pong Admin]
+      view: ["👥 Pong Joueur", "Pong Admin"]
   - key: bot_commands
     display_name: 🤖 bot-commands
     description: The mod's slash commands (/register, /register_to_tournament…)
     group: ladder
     access:
       everyone_view: false
-      view: [Pong Candidat, Pong Waitlist, Pong Player, Pong Admin]
+      view: ["🧡 Pong Candidat", "🔖 Pong Waitlist", "👥 Pong Joueur", "Pong Admin"]
   # planning is a forum-style match scheduling salon; the channel kind is
   # hardcoded to text by the current provisioning — the forum gap is
   # tracked for the core, the key stays out of the declaration
@@ -84,21 +84,21 @@ channels:
     group: ladder
     access:
       everyone_view: false
-      view: [Pong Player, Pong Admin]
+      view: ["👥 Pong Joueur", "Pong Admin"]
   - key: records
     display_name: 🎞️ records
     description: Normalized results + drafts/recs zips for casters and admins
     group: ladder
     access:
       everyone_view: false
-      view: [Pong Player, Pong Caster, Pong Admin]
+      view: ["👥 Pong Joueur", "🎙️ Pong Caster", "Pong Admin"]
   - key: casting
     display_name: 🎙️ casting
     description: Cast announcements (open stream — "AOE Pong" in the title)
     group: ladder
     access:
       everyone_view: true
-      view: [Pong Caster, Pong Admin]
+      view: ["🎙️ Pong Caster", "Pong Admin"]
   # table salons (pong:table_<slug>) are GENERATED per round (open_round op) with
   # neutral names — never statically declared here (D-PONG-014)
   - key: settings
