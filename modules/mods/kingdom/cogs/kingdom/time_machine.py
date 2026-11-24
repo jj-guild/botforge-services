@@ -866,6 +866,26 @@ REFRESH_MINUTES = 5
 MOD_PIN_SCOPE = "mod/kingdom"
 
 
+async def _season_roles_pass(bot: Any, guild: Any, guild_id: str) -> None:
+    """liaison-roless-saison-v1 (Drasah 24/11) : la convergence des rôles.
+
+    Un royaume éjecté perd ses rôles, un porteur orphelin les rend, un
+    rattrapage guérit tout seul — best-effort, jamais bloquant.
+    """
+    from .season_roles import sync_season_roles
+
+    try:
+        synced = await sync_season_roles(bot, guild)
+        if synced:
+            logger.info(
+                "kingdom: season roles re-synced (%d transition(s), guild %s)",
+                synced,
+                guild_id,
+            )
+    except Exception:  # the pass never raises
+        logger.warning("kingdom: the season roles pass failed (guild %s)", guild_id, exc_info=True)
+
+
 async def run_mod_pin_refresh_pass(bot: Any) -> int:
     """One pass: re-ensure EVERY kingdom pin on every served guild.
 
@@ -903,6 +923,9 @@ async def run_mod_pin_refresh_pass(bot: Any) -> int:
             await run_conscription_gate_pass(bot, guild_id)
         except Exception:  # noqa: BLE001 — the pass never raises
             logger.warning("kingdom: conscription gate pass failed", exc_info=True)
+        # liaison-roless-saison-v1 (Drasah 24/11) : les rôles de saison
+        # convergent au cycle (la passe là-dessous, idempotente).
+        await _season_roles_pass(bot, guild, guild_id)
         # hub-content-v2 (Drasah 20/11): the realm hubs are not declared
         # pins — this pass is their ONLY healing. A hub lost at founding
         # heals here (fingerprint guard: converged = one cheap fetch).
@@ -945,16 +968,6 @@ async def run_mod_pin_refresh_pass(bot: Any) -> int:
                 guild_id,
                 exc_info=True,
             )
-        # saisons-roles-v1 (Drasah 24/11) : la passe RESSERRE aussi les
-        # rangs de la saison — un rang perdu, un membre éjecté, une
-        # fin de saison : tout guérit dans le cycle, la même convergence
-        # qui ouvre Kingdom-Gaïa et les champs de bataille aux joueurs.
-        from .season_roles_sync import sync_season_roles
-
-        try:
-            await sync_season_roles(bot)
-        except Exception:  # the pass never raises
-            logger.warning("kingdom: the season roles pass failed", exc_info=True)
     return touched
 
 

@@ -106,7 +106,7 @@ async def ensure_kingdom_surfaces(bot: Any) -> list[tuple[str, str]]:
         if _boot_provision_enabled():
             await _rattrapage_sidebar(guild, guild_id)
             await _rattrapage_tail(bot)
-            await _rattrapage_ranks(bot)
+            await _rattrapage_season_roles(bot, guild)
         try:
             commands = await _ensure_commands(bot, guild_id)
         except Exception:  # noqa: BLE001
@@ -175,21 +175,22 @@ async def _rattrapage_tail(bot: Any) -> None:
         logger.warning("kingdom: the boot bottom assert failed", exc_info=True)
 
 
-async def _rattrapage_ranks(bot: Any) -> None:
-    """saisons-roles-v1 (Drasah 24/11) : le boot distribue les rangs.
+async def _rattrapage_season_roles(bot: Any, guild: Any) -> None:
+    """liaison-roless-saison-v1 (Drasah 24/11) : la liaison des rôles au boot.
 
-    Les saisons déjà engagées (l'incident Blanc) reçoivent leurs rôles
-    King/Lord dès le boot — la convergence relit la saison, les
-    manquants partent poser, les en trop retirer. Best-effort.
+    Le rattrapage pose les rôles King/Lord des royaumes déjà engagés
+    (l'incident live : Blanc en saison ne voyait ni les champs de
+    bataille ni Kingdom-Gaïa — la serrure existait, personne n'avait
+    la clé). Best-effort, jamais bloquant.
     """
     try:
-        from .season_roles_sync import sync_season_roles
+        from botforge.mods.kingdom.cogs.season_roles import sync_season_roles
 
-        moved = await sync_season_roles(bot)
-        if moved:
-            logger.info("kingdom: boot converged %d season role change(s)", moved)
+        synced = await sync_season_roles(bot, guild)
+        if synced:
+            logger.info("kingdom: boot handed %d season role transition(s)", synced)
     except Exception:
-        logger.warning("kingdom: the boot rank assert failed", exc_info=True)
+        logger.warning("kingdom: the boot season roles sync failed", exc_info=True)
 
 
 async def _sweep_retired_profiles_category(guild: Any) -> int:

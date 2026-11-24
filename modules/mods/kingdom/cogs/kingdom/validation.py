@@ -829,6 +829,20 @@ async def _accept_season_entry(
             from .realms import deploy_realm_hub, ensure_realm_structure
 
             ids = await ensure_realm_structure(guild, realm, dormant=False)
+            # liaison-roless-saison-v1 (Drasah 24/11) : le royaume ENTRE en
+            # saison — le Roi reçoit « Kingdom King », les membres « Kingdom
+            # Lord » : les champs de bataille et Kingdom-Gaïa s'ouvrent dès
+            # le ✅ (les salons attendent ces rôles, personne ne les posait).
+            try:
+                from .season_roles import sync_season_roles
+
+                await sync_season_roles(interaction.client, guild)
+            except Exception:
+                logger.warning(
+                    "kingdom: the season entry role sync failed (%s) — best-effort",
+                    getattr(realm, "id", "?"),
+                    exc_info=True,
+                )
             hub_message = await deploy_realm_hub(guild, realm, locale=locale)
             if hub_message:
                 ids["hub_message"] = hub_message
@@ -845,17 +859,6 @@ async def _accept_season_entry(
                 realm = await service.save_habitat(str(realm.id), ids)
         except Exception:  # noqa: BLE001
             logger.warning("kingdom: realm habitat wake failed", exc_info=True)
-    # saisons-roles-v1 (Drasah 24/11) : l'acceptation DISTRIBUE les
-    # rangs de la saison — le Roi reçoit Kingdom King, ses seigneurs
-    # Kingdom Lord, la passe de convergence décide (best-effort).
-    try:
-        from .season_roles_sync import sync_season_roles
-
-        synced = await sync_season_roles(getattr(interaction, "client", None))
-        if synced:
-            logger.info("kingdom: acceptance converged %d season role change(s)", synced)
-    except Exception:  # never blocks the note
-        logger.warning("kingdom: the acceptance rank pass failed", exc_info=True)
     return note
 
 
@@ -918,14 +921,6 @@ async def _eject_season_entry(
                     ids["hub_message"] = hub_message
                 if ids:
                     await service.save_habitat(str(realm.id), ids)
-                # saisons-roles-v1 (Drasah 24/11) : l'éjection REPRIE
-                # le rang — la convergence retire King/Lord aux partants.
-                try:
-                    from .season_roles_sync import sync_season_roles
-
-                    await sync_season_roles(getattr(target, "client", None))
-                except Exception:  # never blocks the eject
-                    logger.warning("kingdom: the eject rank pass failed", exc_info=True)
                 # realm-content-v1 : hygiène d'éjection — les messages
                 # d'entrée partent avec le royaume (best-effort).
                 try:
