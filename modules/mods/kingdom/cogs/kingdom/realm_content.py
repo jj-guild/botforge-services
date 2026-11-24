@@ -615,7 +615,12 @@ def _hand_line(strings: dict[str, str], stack: Any, kingdom: Any) -> str:
 
 
 async def _alliances_body(
-    strings: dict[str, str], stack: Any, kingdom: Any, guild: Any
+    strings: dict[str, str],
+    stack: Any,
+    kingdom: Any,
+    guild: Any,
+    *,
+    pending: bool = False,
 ) -> str:
     hand = _hand_line(strings, stack, kingdom)
     mercenary: list[str] = []
@@ -638,7 +643,11 @@ async def _alliances_body(
         strings["alliances_panel_intro_cycle"],
         "",
     ]
-    started = await season_started(stack)
+    # fin-saison-attente-v1 (Drasah 24/11) : le mode « retour à
+    # l'attente » force l'état d'attente MÊME si une phase « started »
+    # vit encore — la fin de saison re-rend les panneaux du royaume
+    # AVANT que le moteur n'essuie la saison.
+    started = (not pending) and await season_started(stack)
     if not started:
         lines.append(strings["alliances_panel_pending"])
     elif hand:
@@ -666,7 +675,7 @@ def _scriptorium_mention(guild: Any) -> str:
 
 async def _alliances_view(
     strings: dict[str, str], stack: Any, kingdom: Any, guild: Any, locale: Any,
-    mosaic: bool = False,
+    mosaic: bool = False, *, pending: bool = False,
 ) -> tuple[str | None, Any]:
     """The 🏆 panel — ONE Components V2 message, text INSIDE the view.
 
@@ -681,7 +690,7 @@ async def _alliances_view(
     référence : le titre, le corps ET le marqueur de la fiche vivent
     en TextDisplay dans la vue, le message part SANS content.
     """
-    body = await _alliances_body(strings, stack, kingdom, guild)
+    body = await _alliances_body(strings, stack, kingdom, guild, pending=pending)
     head = (
         f"## {strings['alliances_panel_title'].format(str(getattr(kingdom, 'name', '')))}"
         f"\n\n{body}\n\n{_marker('alliances')}"
@@ -1012,6 +1021,8 @@ async def _deploy_alliances_sheet(
     realm: Any,
     kingdom: Any,
     locale: Any,
+    *,
+    pending: bool = False,
 ) -> str | None:
     """Render + upsert ONLY the 🏆 Alliances panel (idempotent, one seam).
 
@@ -1059,7 +1070,8 @@ async def _deploy_alliances_sheet(
         # la vue — le panneau part SANS content (le mélange était
         # 400-rejeté, l'incident live 15:38).
         _, view = await _alliances_view(
-            strings, stack, kingdom, guild, locale, mosaic=mosaic_file is not None
+            strings, stack, kingdom, guild, locale,
+            mosaic=mosaic_file is not None, pending=pending,
         )
         # missing-access-v1 (Drasah 23/11) : même seam que la fiche
         # territoire — heal + UN retry sur un 403, la mosaïque suit.
@@ -1198,6 +1210,7 @@ async def deploy_realm_content(
     locale: Any = "fr",
     *,
     include_alliances: bool = True,
+    pending: bool = False,
 ) -> dict[str, str]:
     """Deploy every realm-salon view of ONE engaged realm (idempotent).
 
@@ -1206,6 +1219,12 @@ async def deploy_realm_content(
     alliances-evenementiel-v1 : ``include_alliances=False`` retire le
     panneau 🏆 de la passe périodique (il vit désormais aux
     événements, via ``refresh_alliance_panels``).
+    fin-saison-attente-v1 (Drasah 24/11) : ``pending=True`` force
+    l'ÉTAT D'ATTENTE (« la carte reste secrète » / « les alliances se
+    scellent au fil du jeu ») même si une phase « started » vit
+    encore — la fin de saison re-rend les fiches AVANT d'essuyer le
+    moteur, sinon la saison morte y resterait pour toujours (plus
+    aucun royaume engagé ne repasse jamais dessus).
     """
     stack = wiring()
     strings = content_strings(locale)
@@ -1224,7 +1243,7 @@ async def deploy_realm_content(
             RuntimeError("aucun salon résolu (le réveil ou la structure)"),
         )
     ids: dict[str, str] = {}
-    started = await season_started(stack)
+    started = (not pending) and await season_started(stack)
 
     territory = channels.get("territory")
     if territory is not None:
@@ -1248,7 +1267,9 @@ async def deploy_realm_content(
     if alliances is not None and include_alliances:
         # alliances-evenementiel-v1 : le bloc vit dans le helper partagé
         # avec le rendu événementiel (le MÊME code, jamais deux branches).
-        mid = await _deploy_alliances_sheet(guild, realm, kingdom, locale)
+        mid = await _deploy_alliances_sheet(
+            guild, realm, kingdom, locale, pending=pending
+        )
         if mid is not None:
             ids["alliances_message"] = mid
         sig = _alliance_signature(kingdom, locale)

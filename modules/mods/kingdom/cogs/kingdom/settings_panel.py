@@ -820,6 +820,7 @@ async def _end_season(interaction: discord.Interaction, strings: dict[str, str])
         guild = getattr(interaction, "guild", None)
         realms_service = getattr(stack, "realms", None)
         released = 0
+        fed = 0
         if guild is not None and realms_service is not None:
             from .realms import deploy_realm_hub, ensure_realm_structure
 
@@ -839,11 +840,43 @@ async def _end_season(interaction: discord.Interaction, strings: dict[str, str])
                     logger.warning(
                         "kingdom: realm habitat sleep failed (%s)", realm.id, exc_info=True
                     )
+                # fin-saison-attente-v1 (Drasah 24/11) : les fiches
+                # Territoire/Alliances RETOURNENT À L'ATTENTE — le
+                # miroir exact du départ (feed_season_surfaces au
+                # départ ; la passe d'attente à la fin). AVANT la
+                # libération et le reset : APRÈS, plus aucun royaume
+                # engagé, aucune passe existante ne repasserait JAMAIS
+                # sur ces salons — la saison morte y restait pour
+                # toujours. L'upsert marqué édite l'existant en place,
+                # jamais de double message. Best-effort par royaume.
+                try:
+                    from .common import kingdom_by_id
+                    from .realm_content import deploy_realm_content
+
+                    kingdom = await kingdom_by_id(
+                        getattr(stack, "kingdoms", None),
+                        (getattr(realm, "engagement", None) or {}).get("kingdom_id", ""),
+                    )
+                    if kingdom is not None:
+                        await deploy_realm_content(
+                            guild, realm, kingdom, locale, pending=True
+                        )
+                        fed += 1
+                except Exception:  # la fin ne rate jamais pour une fiche
+                    logger.warning(
+                        "kingdom: realm sheets pending reset failed (%s)",
+                        realm.id,
+                        exc_info=True,
+                    )
                 await realms_service.release_engagement(str(realm.id))
                 released += 1
         # le rembobinage moteur EN DERNIER : archive puis essuie la
         # saison (royaumes, seigneurs, attaques — le §3.3 du contrat)
         await stack.kingdoms.reset()
+        if fed:
+            logger.info(
+                "kingdom: the end of season reset %d realm sheet(s) to standby", fed
+            )
         note = str(strings["settings_end_season_done"]).format(released=released)
         # depart-fourche-v1 : une saison qui finit baisse le drapeau
         # parcours — la bêta est finie, le parcours redevient normal

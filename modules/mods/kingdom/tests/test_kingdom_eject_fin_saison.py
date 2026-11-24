@@ -17,7 +17,6 @@ from typing import Any
 
 import pytest
 
-
 # ---------------------------------------------------------------------------
 # The fakes (Check-107 lesson: locale + delete_original_response + message.delete)
 # ---------------------------------------------------------------------------
@@ -315,7 +314,8 @@ def test_the_running_cockpit_offers_the_end_of_season() -> None:
 @pytest.mark.asyncio
 async def test_the_end_season_rewinds_everything_and_archives() -> None:
     """The loop closes: habitats sleep, shells release, the engine wipes."""
-    from botforge.mods.kingdom.cogs import common, settings_panel as sp
+    from botforge.mods.kingdom.cogs import common
+    from botforge.mods.kingdom.cogs import settings_panel as sp
 
     realms = _Realms()
     realms.adopt(_realm("blanc"))
@@ -344,9 +344,52 @@ async def test_the_end_season_rewinds_everything_and_archives() -> None:
 
 
 @pytest.mark.asyncio
+async def test_the_end_of_season_resets_the_sheets_to_standby() -> None:
+    """fin-saison-attente-v1 : les fiches Territoire/Alliances retournent à l'attente.
+
+    La fin de saison est le MIROIR du départ : le départ nourrit les
+    fiches réelles (feed_season_surfaces), la fin les re-rend en état
+    d'attente — AVANT la libération (après, plus aucun royaume engagé
+    ne repasserait jamais sur ces salons : la saison morte y serait
+    restée pour toujours, l'incident Drasah 24/11).
+    """
+    from botforge.mods.kingdom.cogs import common
+    from botforge.mods.kingdom.cogs import settings_panel as sp
+
+    realms = _Realms()
+    realms.adopt(_realm("blanc"))
+    realms.adopt(_realm("noir"))
+    stack = _stack("started", realms)
+    stack.kingdoms.kingdoms_list = [NS(id="k1", name="Blanc")]
+    interaction = _interaction(guild=NS(spec_set=["channels"]))
+
+    async def _kingdoms() -> list[Any]:
+        return stack.kingdoms.kingdoms_list
+
+    async def _kingdom_by_id(kingdoms: Any, kingdom_id: Any) -> Any:
+        return stack.kingdoms.kingdoms_list[0] if str(kingdom_id) == "k1" else None
+
+    fed = mock.AsyncMock(return_value={})
+    with mock.patch.object(sp, "wiring", lambda: stack), \
+            mock.patch.object(common, "wiring", lambda: stack), \
+            mock.patch.object(sp, "_needs_stack", lambda s: (stack, None)), \
+            mock.patch.object(sp, "refresh_live_pins_after", mock.AsyncMock()), \
+            mock.patch.object(_Kingdom, "kingdoms", _kingdoms), \
+            mock.patch.object(common, "kingdom_by_id", _kingdom_by_id), \
+            mock.patch("botforge.mods.kingdom.cogs.realm_content.deploy_realm_content", fed), \
+            mock.patch("botforge.mods.kingdom.cogs.realms.ensure_realm_structure", mock.AsyncMock(return_value={})), \
+            mock.patch("botforge.mods.kingdom.cogs.realms.deploy_realm_hub", mock.AsyncMock(return_value=None)):
+        await sp._end_season(interaction, sp.settings_strings("fr"))
+    assert fed.await_count == 2, "each parting realm gets its standby pass"
+    for call in fed.await_args_list:
+        assert call.kwargs.get("pending") is True, "the pass forces the standby state"
+
+
+@pytest.mark.asyncio
 async def test_the_end_season_never_fires_on_a_sleeping_zone() -> None:
     """No launched season: the gesture refuses, nothing is touched."""
-    from botforge.mods.kingdom.cogs import common, settings_panel as sp
+    from botforge.mods.kingdom.cogs import common
+    from botforge.mods.kingdom.cogs import settings_panel as sp
 
     for phase in ("setup", ""):
         stack = _stack(phase)

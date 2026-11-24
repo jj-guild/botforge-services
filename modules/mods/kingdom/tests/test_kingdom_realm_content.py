@@ -383,6 +383,90 @@ async def test_the_territory_sheet_waits_in_setup_then_shows_the_lands(
 
 
 # ---------------------------------------------------------------------------
+# fin-saison-attente-v1 (Drasah 24/11) — la fin de saison REMET
+# l'état d'attente, même si la phase « started » vit encore
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_the_pending_reset_returns_to_standby_under_a_live_season(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """pending=True : la fiche revient à « la carte reste secrète ».
+
+    L'incident Drasah 24/11 : après « 🏁 Terminer la saison », les
+    salons Territoire/Alliances gardaient la saison MORTE — la fin ne
+    re-rendait jamais les fiches, et plus aucune passe ne repasse sur
+    un royaume libéré. La passe pendante force l'attente sous TOUTE
+    phase, AVANT que le moteur n'essuie la saison.
+    """
+    import botforge.mods.kingdom.cogs.realm_content as content
+
+    realm = _Realm(
+        {"discussions": "101", "territory": "102", "alliances": "103"}
+    )
+    terr = _Channel("🌍 Territoire")
+    alli = _Channel("🏆 Alliances")
+    disc = _Channel("🔒 Discussions")
+    guild = _guild({"101": disc, "102": terr, "103": alli})
+
+    season = type("Season", (), {})()
+    season.phase = "started"  # la saison SEMBLE vivante — la fin l'essuie APRÈS
+
+    class _Terr:
+        map_key = "arabia"
+        owner_kingdom_id = "k-1"
+        protected_until = None
+        cathedral_until = None
+
+    class _Territories:
+        @staticmethod
+        async def territories() -> list[Any]:
+            return [_Terr()]
+
+    class _Stack:
+        class config:  # noqa: N801
+            maps = ()
+            civilizations = ()
+
+        class territories:  # noqa: N801
+            territories = _Territories.territories
+
+        class kingdoms:  # noqa: N801
+            @staticmethod
+            async def current_season() -> Any:
+                return season
+
+            @staticmethod
+            async def lords() -> list[Any]:
+                return []
+
+            @staticmethod
+            async def kingdoms() -> list[Any]:
+                return []
+
+    monkeypatch.setattr(content, "wiring", lambda: _Stack())
+
+    kingdom = _Kingdom()
+    await content.deploy_realm_content(guild, realm, kingdom, "fr")
+    assert "La carte reste secrète" not in terr.history_msgs[0].content
+
+    calls.clear()
+    ids = await content.deploy_realm_content(guild, realm, kingdom, "fr", pending=True)
+    assert "La carte reste secrète" in terr.history_msgs[0].content, (
+        "the pending reset brings the standby body back — no dead season left"
+    )
+    _alli_text = "\n".join(
+        str(getattr(item, "content", "") or "")
+        for item in alli.history_msgs[0].view.walk_children()  # type: ignore[attr-defined]
+    )
+    assert "Les alliances se scellent au fil du jeu" in _alli_text, (
+        "the alliances panel returns to its standby line as well"
+    )
+    assert ids["territory_message"], "the habitat ids ride the same seam"
+
+
+# ---------------------------------------------------------------------------
 # Alliances — le panneau unifié + SES QUATRE boutons restart-proof
 # ---------------------------------------------------------------------------
 
