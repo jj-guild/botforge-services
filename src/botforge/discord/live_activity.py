@@ -50,6 +50,11 @@ __all__ = ["start_live_activity_feed"]
 # within this window - the seed never waits on the next match event
 _SEED_SWEEP_S = 300.0
 
+# the seed's BUILD: a seed producing broken cards gets versioned up -
+# every salon re-seeds once with the fixed build (the old cards stay,
+# the guild owns its channel)
+_SEED_VERSION = 3
+
 _MATCHES_SCOPE = "games/aoe2"
 _MATCHES_KEY = "matches"
 # the seed window: the salon's first use replays the last WEEK
@@ -436,7 +441,10 @@ async def _maybe_seed_matches_salon(
     still shows, with its status (owner 2026-11-24). The cards go in
     CHRONOLOGICAL order, the guild's history reads itself.
     """
-    if guild_id in _SEEDED or await _seed_marker(guild_id) is not None:
+    marker = await _seed_marker(guild_id)
+    if guild_id in _SEEDED or (
+        isinstance(marker, dict) and marker.get("v") == _SEED_VERSION
+    ):
         _SEEDED.add(guild_id)
         return
     _SEEDED.add(guild_id)
@@ -587,7 +595,7 @@ async def _guild_profiles(bot: discord.Client, guild_id: str) -> list[str]:
     return sorted(set(out))
 
 
-async def _players_json(doc: dict[str, Any]) -> list[dict[str, Any]]:
+def _players_json(doc: dict[str, Any]) -> list[dict[str, Any]]:
     """Parse a stored document's seats (``players_json``, the fold output)."""
     try:
         seats = json.loads(str(doc.get("players_json") or "[]"))
@@ -615,7 +623,7 @@ async def _write_seed_marker(guild_id: str) -> None:
 
         await get_async_database()["channels"].update_one(
             {"_id": f"{guild_id}:livefeed:matches:seeded"},
-            {"$set": {"seeded_at": int(time.time())}},
+            {"$set": {"seeded_at": int(time.time()), "v": _SEED_VERSION}},
             upsert=True,
         )
     except Exception:
