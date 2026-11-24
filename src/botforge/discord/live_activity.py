@@ -617,12 +617,46 @@ def _players_json(doc: dict[str, Any]) -> list[dict[str, Any]]:
     folded = [dict(seat) for seat in seats if isinstance(seat, dict)]
     # an old capture predates the AI rule (owner 2026-11-24: his
     # 1v1v1 against two computers served one seat): the slotinfo
-    # carries the computers anyway - re-fold at read time
-    from botforge.ext_librematch.history import _ai_seats
-
+    # carries the computers anyway - re-fold at read time. The fold
+    # lives HERE (rule 4): the discord side never imports a provider
     if not any(bool((s or {}).get("ai")) for s in folded):
-        folded.extend(_ai_seats(str(doc.get("slots_json") or ""), doc.get("teams") or {}))
+        folded.extend(_fold_ai_seats(str(doc.get("slots_json") or ""), doc.get("teams") or {}))
     return folded
+
+
+def _fold_ai_seats(slots_json: str, teams: dict[str, Any] | Any) -> list[dict[str, Any]]:
+    """Build the AI seats a stored slotinfo carries (the provider-agnostic fold).
+
+    The store's OWN fold lives ext-side; the feed's seed reads the raw
+    collection directly and rule 4 (discord never touches a provider)
+    keeps this mirror small: a filled slot without a profile is a
+    computer - no elo lines, the civ speaks (owner 2026-11-23/24).
+    """
+    try:
+        slots = json.loads(slots_json) if slots_json else []
+    except (ValueError, TypeError):
+        return []
+    if not isinstance(slots, list):
+        return []
+    seats: list[dict[str, Any]] = []
+    for slot in slots:
+        if not isinstance(slot, dict) or slot.get("slot_kind") != "ai":
+            continue
+        if str((slot or {}).get("profile_id", "")) in (teams or {}):
+            continue
+        seats.append(
+            {
+                "profile_id": "",
+                "alias": str(slot.get("ai_name") or "IA"),
+                "civ": str(slot.get("civ") or ""),
+                "team": int(slot.get("team") or 0),
+                "slot": int(slot.get("slot_index") or 0),
+                "ai": True,
+                "rating_before": 0,
+                "rating_after": 0,
+            }
+        )
+    return seats
 
 
 async def _seed_marker(guild_id: str) -> Any | None:
