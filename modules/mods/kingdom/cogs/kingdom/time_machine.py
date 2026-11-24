@@ -966,7 +966,11 @@ def start_machine_refresher(bot: Any) -> None:
         except Exception:  # noqa: BLE001 — the loop never raises
             logger.warning("kingdom: pin refresher pass failed — best-effort", exc_info=True)
 
-    _loop.setup()  # type: ignore[no-untyped-call]
+    # refresher-boot-v1 (Drasah 24/11): `.setup()` n'existe plus dans
+    # discord.py servie (2.7.1) — l'appel levait AttributeError à CHAQUE
+    # boot, gobé en silence : la boucle de guérison ne démarrait jamais
+    # (hub fantôme jusqu'au geste manuel « Resynchroniser »). Le Loop est
+    # désormais prêt dès sa construction — `start()` suffit.
     _loop.start()  # type: ignore[no-untyped-call]
 
 
