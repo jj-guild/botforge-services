@@ -87,10 +87,6 @@ views:
   # card — same one-window rule as the cycle's other cards
   panel:mod:kingdom:cycle:confirm-end-season:
     kind: surface
-  # depart-fourche-v1 (Drasah 22/11): the 2nd departure's confirm card
-  # (« 🚀 Démarrer la bêta ») — same one-window rule as the cycle's cards
-  panel:mod:kingdom:cycle:confirm-start-beta:
-    kind: surface
   # marché entry pin (ported from the reference panel:marche)
   panel:mod:kingdom:market:
     kind: surface

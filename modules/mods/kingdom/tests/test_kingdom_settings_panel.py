@@ -27,8 +27,10 @@ def test_settings_panel_is_one_template_of_twelve_actions() -> None:
     actions = tuple(action for action, _key, _style in settings_panel._SETTINGS_ACTIONS)
     assert actions == (
         "launch",
-        "start-season",
-        "start-beta",
+        # lancer-unique-v1 (Drasah 24/11): the fork is dead — ONE router
+        # button + the herald broadcast
+        "start",
+        "announce",
         "status",
         "deploy",
         "sync",
@@ -122,8 +124,6 @@ def test_settings_strings_parity() -> None:
         "settings_mode_imposed",
         "settings_mode_free",
         # the modals' TextInput labels (Discord caps them at 45 chars)
-        "settings_launch_modal_names_label",
-        "settings_launch_modal_names_placeholder",
         "settings_assign_modal_player_label",
         "settings_assign_modal_kingdom_label",
         "settings_assign_modal_role_label",
@@ -133,7 +133,6 @@ def test_settings_strings_parity() -> None:
     ]
     for locale in ("fr", "en"):
         for key in (
-            "settings_launch_modal_names_label",
             "settings_assign_modal_player_label",
             "settings_assign_modal_kingdom_label",
             "settings_assign_modal_role_label",
@@ -172,7 +171,6 @@ def test_modals_build_without_deprecation_warnings() -> None:
     from botforge.mods.kingdom.cogs.settings_panel import (
         _AddKingdomModal,
         _AssignModal,
-        _LaunchModal,
         _RemoveModal,
         settings_strings,
     )
@@ -180,7 +178,6 @@ def test_modals_build_without_deprecation_warnings() -> None:
     with warnings.catch_warnings():
         warnings.simplefilter("error", DeprecationWarning)
         for cls in (
-            _LaunchModal,
             _AssignModal,
             _AddKingdomModal,
             _RemoveModal,

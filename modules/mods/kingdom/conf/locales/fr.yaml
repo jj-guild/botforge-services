@@ -132,18 +132,26 @@ fr:
       settings_error: ❌ L'action a échoué — {0}
       settings_failed: ❌ L'action a échoué — {0}
       settings_launch_button: ▶️ Lancer la saison
-      settings_launch_done: ✅ Saison lancée — les royaumes imposés (le cas échéant) sont créés.
+      settings_launch_done: ✅ Saison préparée — le SAS est ouvert, place aux demandes des royaumes.
       settings_launch_failed: ❌ Le lancement a échoué — {0}
+      # lancer-unique-v1 (Drasah 24/11) : la fourche est morte — UN bouton
+      # « Démarrer » qui suit le levier de la régie, et le héraut qui prévient
+      settings_start_button: "🎯 Démarrer la saison — {parcours}"
+      settings_start_parcours_classic: Classique
+      settings_start_parcours_beta: Bêta
+      settings_start_confirm_title: "🎯 Démarrer la saison ?"
+      settings_start_confirm_hint: "Le départ distribue le SAS (chaque demande en attente part en saison) puis le FERME tout seul. Le format suit le levier de la régie : Classique ou Bêta."
+      settings_start_confirm_button: "🚀 Oui, démarrer"
+      settings_announce_button: "📣 Prévenir les royaumes"
+      settings_announce_dm: "⚔️ Une saison se prépare sur Kingdoms — le SAS d'entrée est OUVERT. Depuis le hub de ton royaume, « ⚔️ Inscrire leur royaume » te fait entrer dans la file."
+      settings_announce_done: "📣 {count} royaume(s) prévenu(s) par MP au Roi — le SAS attend leurs demandes."
+      settings_announce_empty: "Aucun royaume à prévenir."
+
       settings_launch_beta_done: ✅ Saison **beta** lancée — temps compressé (preset « now »), porte ⚔️ ouverte.
       settings_launch_beta_failed: "⚠️ Saison lancée, mais le format beta n'a pas pu s'armer — {0}"
-      # lancement-fourche-v1 (Drasah 21/11) : le choix de format vit dans
-      # une carte VISIBLE, le champ texte « type » est retiré
       settings_launch_sas_closed: "⛔ Le SAS des saisons est fermé — ouvre le SAS dans la régie 🎚️ avant de lancer la saison."
       settings_sas_drain_closed_dm: "🛂 Le SAS des saisons vient d'être fermé — ta demande d'inscription a été retirée. Pas de saison en cours : dès qu'une saison est préparée et le SAS rouvert, tu pourras redemander ton entrée."
       settings_sas_drain_season_dm: "🏁 La saison est terminée — le SAS est fermé et ta demande d'inscription a été retirée. Dès qu'une saison est préparée et le SAS rouvert, tu pourras redemander ton entrée."
-      settings_launch_modal_names_label: Noms imposés (optionnel)
-      settings_launch_modal_names_placeholder: "Royaume A, Royaume B"
-      settings_launch_modal_title: ▶️ Lancer la saison
       settings_mode_free: "👑 **Saison libre** — les Rois fondent leurs royaumes."
       settings_mode_imposed: "👑 **Saison imposée** — les Rois ne fondent plus rien."
       settings_no_service: ❌ Le service Kingdom n'est pas prêt.
@@ -161,8 +169,6 @@ fr:
       settings_reset_confirm_title: Réinitialiser les salons ?
       settings_reset_done: ✅ Salons réinitialisés ({channels} supprimés, tout est recréé).
       settings_season_mode_button: 🔄 Mode de saison
-      settings_start_beta_button: 🚀 Démarrer la bêta
-      settings_start_season_button: 🎯 Démarrer la saison classique
       settings_start_season_done: ✅ Saison démarrée — que l'aventure commence !
       settings_start_season_failed: ❌ Le démarrage a échoué — {0}
       settings_start_blocked_running: ⛔ Une saison tourne déjà — termine-la avant de changer de format.
@@ -297,23 +303,9 @@ fr:
       settings_status_kingdoms_header: "🏰 **Royaumes en saison ({count})**"
       settings_status_kingdoms_names: "{names}"
       settings_status_crew_line: "👤 **Seigneurs engagés :** {enrolled} · ⏳ **En file :** {queued}"
-      # l'assistant de lancement pose sa 2e question : le sas
-      settings_launch_modal_sas_label: "Ouvrir le sas ? (oui/non)"
-      settings_launch_modal_sas_placeholder: "oui (défaut) / non"
-      # la confirmation de l'envoi (3e geste du cycle)
-      settings_start_season_confirm_title: "🚀 Envoyer la saison ?"
-      settings_start_season_confirm_hint: "Le départ dessine les civilisations de départ et FERME LE SAS tout seul. Les retardataires passeront par la Régie (ré-ouverture) ou par « Ajouter un royaume »."
-      settings_start_season_confirm_button: "🚀 Oui, envoyer la saison"
-      # depart-fourche-v1 (Drasah 22/11) : le 2e départ — même geste, autre format
-      settings_start_beta_confirm_title: "🚀 Envoyer la saison bêta ?"
-      settings_start_beta_confirm_hint: "Les royaumes admis partent en bêta : week-end compressé 52 h, sans compte requis. Le SAS se ferme tout seul."
-      settings_start_beta_confirm_button: "🚀 Oui, envoyer la bêta"
       # sas-v2 (Drasah 5/12) : les seuils du lancement, en royaumes DANS le sas
       settings_start_floor_classic: "⛔ {count} royaume(s) dans le sas — une saison classique en demande au moins {floor}. Ouvre le sas (🎚️ Régie) pour que des royaumes s'y inscrivent, ou injecte-en un via « Ajouter un royaume »."
       settings_start_floor_beta: "⛔ Aucun royaume dans le sas — une bêta en demande au moins {floor} pour partir."
-      settings_start_beta_solo_confirm_title: "⚠️ Un seul royaume dans le sas"
-      settings_start_beta_solo_confirm_hint: "Une bêta avec un seul royaume sert à tester le moteur, pas à jouer. Lancer quand même la bêta ?"
-      settings_start_beta_solo_confirm_button: "🚀 Lancer quand même"
       settings_cycle_cancel_button: "❌ Annuler"
       # le faux départ — le dernier recours de l'organisateur
       settings_false_start_button: "🛑 Faux départ"

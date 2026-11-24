@@ -61,8 +61,11 @@ _ADMIN_COLOUR = discord.Colour(0x5865F2)
 # (action, string key, button style).
 _SETTINGS_ACTIONS: tuple[tuple[str, str, discord.ButtonStyle], ...] = (
     ("launch", "settings_launch_button", discord.ButtonStyle.success),
-    ("start-season", "settings_start_season_button", discord.ButtonStyle.success),
-    ("start-beta", "settings_start_beta_button", discord.ButtonStyle.success),
+    # lancer-unique-v1 (Drasah 24/11): the FOURCHE is dead — ONE
+    # « Démarrer » routes by the parcours lever at CLICK time, and
+    # the herald broadcast replaces the admin's targeting.
+    ("start", "settings_start_button", discord.ButtonStyle.success),
+    ("announce", "settings_announce_button", discord.ButtonStyle.primary),
     ("status", "settings_status_button", discord.ButtonStyle.secondary),
     ("deploy", "settings_deploy_button", discord.ButtonStyle.primary),
     ("sync", "settings_sync_button", discord.ButtonStyle.secondary),
@@ -92,12 +95,11 @@ _CONFIRM_ACTIONS = frozenset({"deploy", "sync", "reset"})
 # demandent leur confirmation (l'envoi de la saison, le départ bêta, le
 # faux départ) — jamais le même namespace que la table : chaque carte
 # porte ses propres ids.
-# sas-v2 : « start-beta-solo » — la bêta qui part avec UN SEUL
-# royaume du sas a droit à son AVERTISSEMENT propre (l'admin
-# confirme « quand même », puis le départ consomme le sas)
-_CYCLE_CONFIRM_ACTIONS = frozenset(
-    {"start-season", "start-beta", "start-beta-solo", "false-start", "end-season"}
-)
+# lancer-unique-v1 (Drasah 24/11) : la fourche est morte — UNE action
+# « start » (le confirme-puis-route du levier parcours), plus jamais
+# de départs dédiés ni de carte solo (la carte générique a déjà
+# demandé une fois : la bêta est le format TEST).
+_CYCLE_CONFIRM_ACTIONS = frozenset({"start", "false-start", "end-season"})
 
 _ALL_ACTIONS = tuple(action for action, _key, _style in _SETTINGS_ACTIONS)
 
@@ -274,13 +276,21 @@ async def build_settings_panel(guild_id: str) -> discord.ui.LayoutView:
                 "launch", str(strings["settings_launch_button"]), discord.ButtonStyle.success
             ).item
         )
+        # lancer-unique-v1 (Drasah 24/11) : le héraut prévient chaque
+        # royaume hors saison que le SAS est ouvert — l'admin ne cible
+        # plus personne, la demande d'inscription appartient au Roi.
+        cycle_row.add_item(
+            SettingsActionButton(
+                "announce", str(strings["settings_announce_button"]),
+                discord.ButtonStyle.primary,
+            ).item
+        )
     elif phase == "setup":
-        # depart-fourche-v1 (Drasah 22/11): the setup cycle row shows
-        # BOTH departures — classic and beta. Each distributes the
-        # sas's admitted realms; the beta one arms the compressed
-        # weekend and the parcours flag rides the season. The beta
-        # flag NEVER blocks a departure (the retired mutex could leave
-        # the panel with NO working departure — Drasah hit it live).
+        # lancer-unique-v1 (Drasah 24/11): the setup cycle row shows
+        # ONE « Démarrer la saison » — the SUFFIX rides the parcours
+        # lever (Classique/Bêta), and the CLICK routes by the lever's
+        # EFFECTIVE value (a lever flipped between render and click is
+        # obeyed at click). Le héraut complète la rangée.
         pending = await _pending_admissions()
         cycle_row.add_item(
             KingdomSettingsNavButton(
@@ -289,15 +299,14 @@ async def build_settings_panel(guild_id: str) -> discord.ui.LayoutView:
         )
         cycle_row.add_item(
             SettingsActionButton(
-                "start-season",
-                str(strings["settings_start_season_button"]),
+                "start",
+                await _start_button_label(bot, str(guild_id), strings),
                 discord.ButtonStyle.success,
             ).item
         )
         cycle_row.add_item(
             SettingsActionButton(
-                "start-beta",
-                str(strings["settings_start_beta_button"]),
+                "announce", str(strings["settings_announce_button"]),
                 discord.ButtonStyle.primary,
             ).item
         )
@@ -563,6 +572,10 @@ class SettingsActionButton(
         }
         style = styles.get(action, discord.ButtonStyle.secondary)
         label = strings.get(f"settings_{action}_button", "⚙️")
+        if action == "start":
+            label = await _start_button_label(
+                interaction.client, str(interaction.guild_id or ""), strings
+            )
         return cls(action, str(label), style)
 
     async def callback(self, interaction: discord.Interaction) -> None:
@@ -948,12 +961,8 @@ def _cycle_confirm_card(strings: dict[str, str], action: str) -> discord.ui.Layo
     settings table's (the double-click lesson of the first card).
     """
     yes_label = (
-        strings["settings_start_beta_solo_confirm_button"]
-        if action == "start-beta-solo"
-        else strings["settings_start_beta_confirm_button"]
-        if action == "start-beta"
-        else strings["settings_start_season_confirm_button"]
-        if action == "start-season"
+        strings["settings_start_confirm_button"]
+        if action == "start"
         else strings["settings_false_start_confirm_button"]
         if action == "false-start"
         else strings["settings_end_season_confirm_button"]
@@ -985,9 +994,7 @@ def _cycle_confirm_card(strings: dict[str, str], action: str) -> discord.ui.Layo
     yes.callback = on_yes
     no.callback = on_no
     key = (
-        "settings_start_beta_solo_confirm" if action == "start-beta-solo"
-        else "settings_start_beta_confirm" if action == "start-beta"
-        else "settings_start_season_confirm" if action == "start-season"
+        "settings_start_confirm" if action == "start"
         else "settings_false_start_confirm" if action == "false-start"
         else "settings_end_season_confirm"
     )
@@ -1002,10 +1009,8 @@ def _cycle_confirm_card(strings: dict[str, str], action: str) -> discord.ui.Layo
     row.add_item(no)
     container.add_item(row)
     surface_key = (
-        "panel:mod:kingdom:cycle:confirm-start-beta"
-        if action in ("start-beta", "start-beta-solo")
-        else "panel:mod:kingdom:cycle:confirm-start"
-        if action == "start-season"
+        "panel:mod:kingdom:cycle:confirm-start"
+        if action == "start"
         else "panel:mod:kingdom:cycle:confirm-false-start"
         if action == "false-start"
         else "panel:mod:kingdom:cycle:confirm-end-season"
@@ -1137,15 +1142,102 @@ async def _start_beta(
     await interaction.followup.send(note, ephemeral=True)
 
 
-async def _start_beta_solo(interaction: discord.Interaction, strings: dict[str, str]) -> None:
-    """The admin CONFIRMED the solo beta — the floor's exception rides."""
-    await _start_beta(interaction, strings, solo_ok=True)
+async def _parcours_is_beta(client: Any, guild_id: str) -> bool:
+    """Answer whether the EFFECTIVE parcours is beta (lancer-unique-v1).
+
+    Same definition as the parcours badge: the régie's registration
+    lever OFF (no season account required) IS the beta parcours, and
+    the compressed-weekend fallback rides the same seam the lever
+    uses (camp_beta.kingdom_is_beta). Best-effort: an unreadable
+    lever routes CLASSIC (the safe default).
+    """
+    from .camp_beta import kingdom_is_beta
+    from .regie import read_regie
+
+    try:
+        states = await read_regie(client, guild_id)
+        if not bool(states.get("registration_required", True)):
+            return True
+    except Exception:
+        logger.warning("kingdom: the parcours lever read failed", exc_info=True)
+    try:
+        return bool(await kingdom_is_beta(client, guild_id))
+    except Exception:
+        logger.warning("kingdom: the beta read failed", exc_info=True)
+        return False
+
+
+async def _start_button_label(
+    client: Any, guild_id: str, strings: dict[str, str]
+) -> str:
+    """« Démarrer la saison — Classique/Bêta » — the label rides the lever."""
+    beta = await _parcours_is_beta(client, guild_id)
+    key = "settings_start_parcours_beta" if beta else "settings_start_parcours_classic"
+    return str(strings["settings_start_button"]).format(parcours=str(strings[key]))
+
+
+async def _start_confirmed(interaction: discord.Interaction, strings: dict[str, str]) -> None:
+    """Route the generic « Démarrer » — the CONFIRMED card obeys the lever.
+
+    lancer-unique-v1 (Drasah 24/11): one button, one confirm card; the
+    CLICK routes on the parcours lever's EFFECTIVE value — a lever
+    flipped between render and click is obeyed at click. The beta
+    route rides solo_ok=True (the card already asked once — a second
+    confirmation for a one-realm beta would ask the same question
+    twice).
+    """
+    beta = await _parcours_is_beta(interaction.client, str(interaction.guild_id or ""))
+    if beta:
+        await _start_beta(interaction, strings, solo_ok=True)
+    else:
+        await _start_season(interaction, strings)
+
+
+async def _announce_season(interaction: discord.Interaction, strings: dict[str, str]) -> None:
+    """📣 Prévenir les royaumes — the season's herald (lancer-unique-v1).
+
+    Drasah 24/11 : l'admin ne cible plus personne — le héraut dit à
+    chaque royaume vivant HORS saison (non archivé, non engagé) que
+    le SAS d'entrée est ouvert ; la demande d'inscription appartient
+    au royaume (le bouton ⚔️ du Roi, même en bêta). Best-effort
+    total : un Roi aux MP fermés ne câble jamais le passage.
+    """
+    await interaction.response.defer(ephemeral=True)
+    stack, busy = _needs_stack(strings)
+    if busy:
+        await interaction.followup.send(busy, ephemeral=True)
+        return
+    from .common import dm_user_safe
+
+    try:
+        realms = await stack.realms.realms()
+    except Exception as exc:  # the panel reports, never raises
+        logger.warning("kingdom: the herald's realm read failed", exc_info=True)
+        await interaction.followup.send(
+            service_failure_note(strings, "settings_failed", exc), ephemeral=True
+        )
+        return
+    dm_text = str(strings["settings_announce_dm"])
+    count = 0
+    for realm in realms:
+        if getattr(realm, "archived_at", 0):
+            continue
+        if getattr(realm, "engagement", None):
+            continue
+        if await dm_user_safe(interaction.client, str(realm.king_id), dm_text) is None:
+            logger.info("kingdom: the herald skipped realm %s (DM unreachable)", realm.id)
+            continue
+        count += 1
+    logger.info("kingdom: the herald warned %d realm(s)", count)
+    note = (
+        str(strings["settings_announce_done"]).format(count=count) if count
+        else str(strings["settings_announce_empty"])
+    )
+    await interaction.followup.send(note, ephemeral=True)
 
 
 _CYCLE_CONFIRM_HANDLERS: dict[str, Any] = {
-    "start-season": _start_season,
-    "start-beta": _start_beta,
-    "start-beta-solo": _start_beta_solo,
+    "start": _start_confirmed,
     "false-start": _false_start,
     "end-season": _end_season,
 }
@@ -2861,77 +2953,6 @@ def _reset_button_row(
     return row
 
 
-class _LaunchModal(discord.ui.Modal):
-    """Lancer la saison — optional comma-separated imposed kingdom names."""
-
-    def __init__(self, strings: dict[str, str]) -> None:
-        super().__init__(title=str(strings["settings_launch_modal_title"])[:45])
-        self._strings = strings
-        # discord.py 2.7: a TextInput rides a discord.ui.Label (the label
-        # property is deprecated); the Label text caps at 45 chars (50035)
-        self.names = discord.ui.TextInput(
-            placeholder=str(strings["settings_launch_modal_names_placeholder"])[:100],
-            required=False,
-            max_length=200,
-            custom_id="kingdom:settings:launch:names",
-        )
-        self.add_item(
-            discord.ui.Label(
-                text=str(strings["settings_launch_modal_names_label"])[:45],
-                component=self.names,
-            )
-        )
-        # season-type-at-launch is RETIRED (lancement-fourche-v1): the
-        # fork card owns the format — this modal is the CLASSIC path.
-        # console-etats-regie-v1 (Drasah 21/11): the wizard's 2nd
-        # question — « ouvres-tu le sas ? » The season opens NOTHING by
-        # itself: answering no arms a CLOSED sas the régie re-opens.
-        self.sas = discord.ui.TextInput(
-            placeholder=str(strings["settings_launch_modal_sas_placeholder"])[:100],
-            required=False,
-            max_length=8,
-            custom_id="kingdom:settings:launch:sas",
-        )
-        self.add_item(
-            discord.ui.Label(
-                text=str(strings["settings_launch_modal_sas_label"])[:45],
-                component=self.sas,
-            )
-        )
-
-    async def on_submit(self, interaction: discord.Interaction) -> None:
-        await interaction.response.defer(ephemeral=True)
-        strings = self._strings
-        stack, busy = _needs_stack(strings)
-        if busy:
-            await interaction.followup.send(busy, ephemeral=True)
-            return
-        imposed = [
-            name.strip() for name in str(self.names.value or "").split(",") if name.strip()
-        ] or None
-        try:
-            await stack.kingdoms.launch(imposed)
-        except Exception as exc:  # the panel reports, never raises
-            logger.warning("kingdom: launch failed", exc_info=True)
-            await interaction.followup.send(
-                service_failure_note(strings, "settings_launch_failed", exc), ephemeral=True
-            )
-            return
-        # The TYPE applies right after the fresh launch — activate_beta
-        # (the compressed weekend) rides a FRESH setup-phase season only.
-        # lancement-fourche-v1: the classic path owns the flag — a
-        # lingering beta flag lowers NOW (the mutex trap at « Démarrer »).
-        try:
-            if await _lower_beta_flag(interaction):
-                logger.info("kingdom: a lingering beta flag was lowered by the classic launch")
-        except Exception:  # noqa: BLE001 — the flag is best-effort, the launch stands
-            logger.warning("kingdom: the classic launch flag lowering failed", exc_info=True)
-        note = str(strings["settings_launch_done"])
-        sas_answer = str(self.sas.value or "").strip().lower() or "oui"
-        await _finish_launch(interaction, sas_answer)
-        await interaction.followup.send(note, ephemeral=True)
-
-
 async def _arm_compressed_beta(stack: Any) -> None:
     """Arm the compressed weekend onto a FRESH season (the « beta » type)."""
     from datetime import UTC, datetime
@@ -3082,11 +3103,11 @@ class _RemoveModal(discord.ui.Modal):
 async def _open_launch(interaction: discord.Interaction, strings: dict[str, str]) -> None:
     """Lancer la saison — the PREPARATION only (depart-fourche-v1).
 
-    Drasah 22/11 : « Lancer » prépare (noms imposés éventuels + la
-    question du sas), il ne choisit PLUS le format — le départ lève
-    la fourche dans la zone Le cycle (« Démarrer la saison classique »
-    ou « Démarrer la bêta »), et chaque départ distribue les royaumes
-    admis du sas.
+    Drasah 24/11 : « le lancement ne devrait pas avoir ce
+    comportement » — le questionnaire (les noms imposés, « ouvres-tu
+    le sas ? ») est RETIRÉ : le levier de la régie renseigne le sas,
+    et les injections passent par « Ajouter un royaume ». Le geste
+    prépare la saison, SANS fork, SANS modal, SANS question.
 
     sas-cycle-v1 (Drasah 21/11) : le SAS ouvert est un PRÉREQUIS du
     lancement — « le SAS n'a de sens que si l'admin l'a ouvert pour
@@ -3102,7 +3123,26 @@ async def _open_launch(interaction: discord.Interaction, strings: dict[str, str]
             interaction, content=strings["settings_launch_sas_closed"]
         )
         return
-    await interaction.response.send_modal(_LaunchModal(strings))
+    await interaction.response.defer(ephemeral=True)
+    stack, busy = _needs_stack(strings)
+    if busy:
+        await interaction.followup.send(busy, ephemeral=True)
+        return
+    try:
+        await stack.kingdoms.launch(None)
+    except Exception as exc:  # the panel reports, never raises
+        logger.warning("kingdom: launch failed", exc_info=True)
+        await interaction.followup.send(
+            service_failure_note(strings, "settings_launch_failed", exc), ephemeral=True
+        )
+        return
+    try:
+        if await _lower_beta_flag(interaction):
+            logger.info("kingdom: a lingering beta flag was lowered by the launch")
+    except Exception:  # noqa: BLE001 — the flag is best-effort, the launch stands
+        logger.warning("kingdom: the launch flag lowering failed", exc_info=True)
+    await _finish_launch(interaction, sas_answer="open")
+    await interaction.followup.send(str(strings["settings_launch_done"]), ephemeral=True)
 
 
 async def _finish_launch(interaction: discord.Interaction, sas_answer: str) -> None:
@@ -3183,8 +3223,7 @@ async def _open_remove(interaction: discord.Interaction, strings: dict[str, str]
 
 _SETTINGS_HANDLERS: dict[str, Any] = {
     "launch": _open_launch,
-    "start-season": _start_season,
-    "start-beta": _start_beta,
+    "announce": _announce_season,
     "status": _status,
     "season-mode": _season_mode,
     "assign": _open_assign,

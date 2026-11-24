@@ -154,23 +154,39 @@ async def test_the_launch_refuses_a_closed_sas() -> None:
 
 
 @pytest.mark.asyncio
-async def test_the_launch_opens_the_prepare_modal_when_the_sas_is_open() -> None:
-    """depart-fourche-v1 : SAS ouvert ⇒ le modal de PRÉPARATION seul —
-    la fourche est morte, le format vit dans les départs du cycle."""
+async def test_the_launch_asks_nothing_when_the_sas_is_open() -> None:
+    """lancer-unique-v1 : SAS ouvert ⇒ la saison se prépare TOUT DE SUITE —
+    plus de modal, plus de noms imposés, plus de question du sas (le
+    levier de la régie possède le sas, « Ajouter un royaume » les injections)."""
     from botforge.mods.kingdom.cogs import settings_panel as sp
 
     interaction = _interaction()
     strings = sp.settings_strings("fr")
-    with mock.patch("botforge.mods.kingdom.cogs.regie.regie_open", new=mock.AsyncMock(return_value=True)), \
+    launched: list[object] = []
+
+    class _Kingdoms:
+        async def launch(self, imposed: object) -> None:
+            launched.append(imposed)
+
+    stack = NS(kingdoms=_Kingdoms())
+    tail: list[str] = []
+    async def _tail(i: Any, sas_answer: str) -> None:
+        tail.append(sas_answer)
+
+    with mock.patch(
+        "botforge.mods.kingdom.cogs.regie.regie_open", new=mock.AsyncMock(return_value=True)
+    ), mock.patch.object(sp, "_needs_stack", new=lambda s: (stack, None)), \
+            mock.patch.object(sp, "_lower_beta_flag", new=mock.AsyncMock(return_value=False)), \
+            mock.patch.object(sp, "_finish_launch", new=mock.AsyncMock(side_effect=_tail)), \
             mock.patch.object(sp, "open_unique_ephemeral", new=mock.AsyncMock()) as open_win:
         await sp._open_launch(interaction, strings)
 
-    open_win.assert_not_awaited(), "no fork card anymore — the departures own the format"
-    assert type(interaction.response.modal).__name__ == "_LaunchModal"
-    ids = _ids(interaction.response.modal)
-    assert "kingdom:settings:launch:names" in ids
-    assert "kingdom:settings:launch:sas" in ids
-    assert "kingdom:settings:launch:type" not in ids, "no format question at the launch"
+    open_win.assert_not_awaited(), "no question window anymore — the launch asks NOTHING"
+    assert interaction.response.modal is None, "the prepare modal is GONE"
+    assert launched == [None], "the season prepares, with NO imposed names"
+    assert tail == ["open"], "the sas stays open (the régie lever owns it)"
+    note = interaction.followup.sent[-1][0]
+    assert note == strings["settings_launch_done"]
 
 
 # ---------------------------------------------------------------------------

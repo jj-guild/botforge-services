@@ -319,12 +319,19 @@ async def test_the_solo_confirmation_depares_the_beta(monkeypatch) -> None:  # t
     assert not windows, "no confirmation card once solo_ok rides"
 
 
-def test_the_solo_confirmed_card_is_wired_to_the_handler() -> None:
-    """The confirm card's yes leads to _start_beta(solo_ok=True)."""
+def test_the_generic_start_confirm_card_is_wired_to_the_router() -> None:
+    """lancer-unique-v1 : la carte générique route — the confirm card's
+    yes leads to the LEVER router (never a dedicated departure, never
+    a solo card — the generic card already asked once)."""
     from botforge.mods.kingdom.cogs import settings_panel as sp
 
-    assert sp._CYCLE_CONFIRM_HANDLERS["start-beta-solo"] is sp._start_beta_solo
-    assert sp._start_beta_solo.__doc__ and "solo" in sp._start_beta_solo.__doc__.lower()
+    assert sp._CYCLE_CONFIRM_HANDLERS["start"] is sp._start_confirmed
+    assert "start-season" not in sp._CYCLE_CONFIRM_HANDLERS
+    assert "start-beta" not in sp._CYCLE_CONFIRM_HANDLERS
+    assert "start-beta-solo" not in sp._CYCLE_CONFIRM_HANDLERS
+    assert sp._start_confirmed.__doc__ and "lever" in sp._start_confirmed.__doc__.lower()
+    assert not hasattr(sp, "_start_beta_solo"), "the solo handler is retired"
+    assert not hasattr(sp, "_LaunchModal"), "the launch wizard is retired"
 
 
 def _async_int(value: int):  # type: ignore[no-untyped-def]

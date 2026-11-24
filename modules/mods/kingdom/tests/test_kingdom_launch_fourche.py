@@ -1,13 +1,14 @@
-"""depart-fourche-v1 (Drasah 22/11).
+"""lancer-unique-v1 (Drasah 24/11) — le levier est la source de vérité.
 
-« Lancer » = préparer (noms + sas), le DÉPART vit dans la zone Le
-cycle : 🎯 Démarrer la saison classique et 🚀 Démarrer la bêta sont
-deux boutons qui DISTRIBUENT le SAS admis (start_season + sas fermé).
-Le départ bêta arme le week-end compressé + lève le drapeau parcours;
-le départ classique désarme une bêta armée + baisse le drapeau. Le
-drapeau ne bloque PLUS JAMAIS un départ (l'ancien mutex — le piège du
-21/11 — est mort), une saison qui tourne refuse (« il faut finir
-d'abord »), et la fourche au lancement n'existe plus.
+« Lancer la saison ne devrait pas avoir ce comportement » : le
+questionnaire du lancement est RETIRÉ (noms imposés, question du sas —
+le levier de la régie les possède), la FOURCHE au départ est morte
+(UN bouton « Démarrer la saison — Classique/Bêta » dont le CLIC route
+selon la valeur EFFECTIVE du levier), et l'admin ne cible plus
+personne : le héraut « 📣 Prévenir les royaumes » dit à chaque royaume
+vivant hors saison que le SAS est ouvert. Le moteur des départs
+(classique/bêta : distribution du sas, week-end compressé, drapeau)
+reste celui de depart-fourche-v1, inchangé.
 """
 
 from __future__ import annotations
@@ -130,21 +131,42 @@ def _switch_recorder(calls: list[str]) -> Any:
 # ---------------------------------------------------------------------------
 
 
-def test_the_launch_gesture_lost_its_fork() -> None:
-    """One gesture opens the prepare modal — no fork card anymore."""
+def test_the_launch_gesture_asks_nothing() -> None:
+    """lancer-unique-v1: NO wizard — the launch prepares SANS questions."""
     from botforge.mods.kingdom.cogs import settings_panel as sp
 
     assert not hasattr(sp, "_launch_type_card"), "the fork card must be GONE (depart owns the format)"
     assert not hasattr(sp, "_BetaLaunchModal"), "the beta modal must be GONE (no fork)"
-    modal = sp._LaunchModal(sp.settings_strings("fr"))
-    ids = _ids(modal)
-    assert "kingdom:settings:launch:names" in ids
-    assert "kingdom:settings:launch:sas" in ids
-    assert "kingdom:settings:launch:type" not in ids, "the retired hole stays retired"
+    assert not hasattr(sp, "_LaunchModal"), "the prepare wizard must be GONE too"
 
 
-def test_the_two_departures_live_in_the_setup_cycle_row() -> None:
-    """Setup phase: BOTH departure buttons distribute the sas."""
+@pytest.mark.asyncio
+async def test_the_launch_prepares_with_a_sas_open_default() -> None:
+    """SAS ouvert ⇒ launch(None), sas left open, the note says PREPARED."""
+    from botforge.mods.kingdom.cogs import settings_panel as sp
+
+    kingdoms = _Kingdom()
+    stack = _Stack(kingdoms)
+    interaction = _interaction()
+    tail: list[str] = []
+    with mock.patch(
+        "botforge.mods.kingdom.cogs.regie.regie_open", new=mock.AsyncMock(return_value=True)
+    ), mock.patch.object(sp, "_needs_stack", new=lambda s: (stack, None)), \
+            mock.patch.object(sp, "_lower_beta_flag", new=mock.AsyncMock(return_value=False)), \
+            mock.patch.object(
+                sp, "_finish_launch",
+                new=mock.AsyncMock(side_effect=lambda i, sas_answer: tail.append(sas_answer)),
+            ), \
+            mock.patch.object(sp, "open_unique_ephemeral", new=mock.AsyncMock()):
+        await sp._open_launch(interaction, sp.settings_strings("fr"))
+
+    assert kingdoms.launched == [None], "no imposed names ride the launch"
+    assert tail == ["open"], "the sas stays open (the régie lever owns it)"
+    assert interaction.followup.sent[-1] == str(sp.settings_strings("fr")["settings_launch_done"])
+
+
+def test_the_one_start_button_and_the_herald_live_in_the_setup_cycle_row() -> None:
+    """Setup phase: ONE Démarrer (routed by the lever) + the herald."""
     import asyncio
 
     from botforge.mods.kingdom.cogs import settings_panel as sp
@@ -157,24 +179,38 @@ def test_the_two_departures_live_in_the_setup_cycle_row() -> None:
 
     stack.realms = NS(realms=_empty)
     with mock.patch.object(sp, "wiring", lambda: stack), \
-            mock.patch.object(sp, "_pending_admissions", new=mock.AsyncMock(return_value=[])):
+            mock.patch.object(sp, "_pending_admissions", new=mock.AsyncMock(return_value=[])), \
+            mock.patch.object(
+                sp, "_start_button_label",
+                new=mock.AsyncMock(return_value="🎯 Démarrer la saison — Classique"),
+            ):
         view = asyncio.run(sp.build_settings_panel("123"))
     ids = _ids(view)
-    assert "kingdom:settings:start-season" in ids, "the classic departure must be a click away"
-    assert "kingdom:settings:start-beta" in ids, "the beta departure must be a click away"
+    assert "kingdom:settings:start" in ids, "the ONE Démarrer must be a click away"
+    assert "kingdom:settings:announce" in ids, "the herald must warn the realms"
+    assert "kingdom:settings:start-season" not in ids, "the dedicated classic departure is GONE"
+    assert "kingdom:settings:start-beta" not in ids, "the dedicated beta departure is GONE"
     assert "kingdom:settings:launch" not in ids, "setup: a fresh launch would wipe the sas"
 
 
 def test_the_new_keys_exist_in_both_locales() -> None:
-    """Frozen contract: the departure keys ship fr AND en, fork keys gone."""
+    """Frozen contract: the router + herald keys ship fr AND en."""
     from botforge.mods.kingdom.cogs import settings_panel as sp
 
     keys = (
-        "settings_start_season_button",
-        "settings_start_beta_button",
-        "settings_start_beta_confirm_title",
-        "settings_start_beta_confirm_hint",
-        "settings_start_beta_confirm_button",
+        "settings_start_button",
+        "settings_start_parcours_classic",
+        "settings_start_parcours_beta",
+        "settings_start_confirm_title",
+        "settings_start_confirm_hint",
+        "settings_start_confirm_button",
+        "settings_announce_button",
+        "settings_announce_dm",
+        "settings_announce_done",
+        "settings_announce_empty",
+        "settings_launch_button",
+        "settings_launch_done",
+        "settings_start_season_done",
         "settings_start_blocked_running",
         "settings_beta_started_season",
         "settings_launch_beta_failed",  # reused by the beta departure
@@ -184,6 +220,8 @@ def test_the_new_keys_exist_in_both_locales() -> None:
         strings = sp.settings_strings(loc)
         for key in keys:
             assert strings.get(key), f"{loc} missing {key}"
+        for fmt in ("settings_start_button", "settings_announce_done"):
+            strings[fmt].format(parcours="X", count=3)
     # the RETIRED keys must be GONE (a stale fork misleads no one)
     fr = sp.settings_strings("fr")
     for key in (
@@ -192,6 +230,23 @@ def test_the_new_keys_exist_in_both_locales() -> None:
         "settings_launch_type_classic_button",
         "settings_launch_type_beta_button",
         "settings_launch_beta_modal_title",
+        # lancer-unique-v1 (Drasah 24/11) : wizard et fourche retirés
+        "settings_launch_modal_title",
+        "settings_launch_modal_names_label",
+        "settings_launch_modal_names_placeholder",
+        "settings_launch_modal_sas_label",
+        "settings_launch_modal_sas_placeholder",
+        "settings_start_season_button",
+        "settings_start_beta_button",
+        "settings_start_season_confirm_title",
+        "settings_start_season_confirm_hint",
+        "settings_start_season_confirm_button",
+        "settings_start_beta_confirm_title",
+        "settings_start_beta_confirm_hint",
+        "settings_start_beta_confirm_button",
+        "settings_start_beta_solo_confirm_title",
+        "settings_start_beta_solo_confirm_hint",
+        "settings_start_beta_solo_confirm_button",
         "settings_beta_close_button",
         "settings_beta_started",
         "settings_beta_exited",
@@ -207,29 +262,126 @@ def test_the_new_keys_exist_in_both_locales() -> None:
         "settings_beta_sas_note",
         "settings_nav_beta_button",
     ):
-        assert key not in fr, f"{key} must be GONE (depart-fourche-v1)"
+        assert key not in fr, f"{key} must be GONE (lancer-unique-v1)"
 
 
-def test_the_beta_confirm_card_is_a_declared_cycle_card() -> None:
-    """The beta departure rides the SAME confirm card template + a surface."""
+def test_the_generic_start_confirm_card_is_a_declared_cycle_card() -> None:
+    """The ONE departure rides the confirm card template + a surface."""
     from pathlib import Path
 
     from botforge.mods.kingdom.cogs import settings_panel as sp
 
     strings = sp.settings_strings("fr")
-    view = sp._cycle_confirm_card(strings, "start-beta")
+    view = sp._cycle_confirm_card(strings, "start")
     ids = _ids(view)
-    assert "kingdom:cycle-confirm:start-beta:yes" in ids
-    assert "kingdom:cycle-confirm:start-beta:no" in ids
+    assert "kingdom:cycle-confirm:start:yes" in ids
+    assert "kingdom:cycle-confirm:start:no" in ids
     texts = _texts(view)
-    assert strings["settings_start_beta_confirm_title"] in texts
-    assert strings["settings_start_beta_confirm_hint"] in texts
+    assert strings["settings_start_confirm_title"] in texts
+    assert strings["settings_start_confirm_hint"] in texts
     views = (
         Path(sp.__file__).resolve().parents[2] / "conf" / "views.yaml"
     ).read_text(encoding="utf-8")
-    assert "panel:mod:kingdom:cycle:confirm-start-beta:" in views, (
-        "the beta confirm card must be a declared surface"
+    assert "panel:mod:kingdom:cycle:confirm-start:" in views, (
+        "the generic confirm card must be a declared surface"
     )
+    assert "panel:mod:kingdom:cycle:confirm-start-beta:" not in views, (
+        "the retired fork surface is gone"
+    )
+
+
+@pytest.mark.asyncio
+async def test_the_router_obeyes_the_lever_effective_value() -> None:
+    """lancer-unique-v1 : the CLICK routes on the lever's EFFECTIVE value —
+    a lever flipped between render and click is obeyed at click."""
+    from botforge.mods.kingdom.cogs import settings_panel as sp
+
+    interaction = _interaction()
+    strings = sp.settings_strings("fr")
+    routes: list[str] = []
+    async def _beta_route(i: Any, s: Any, solo_ok: bool = False) -> None:
+        routes.append(f"beta:{solo_ok}")
+
+    async def _classic_route(i: Any, s: Any) -> None:
+        routes.append("classic")
+
+    with mock.patch.object(sp, "_parcours_is_beta", new=mock.AsyncMock(return_value=True)), \
+            mock.patch.object(sp, "_start_beta", new=mock.AsyncMock(side_effect=_beta_route)), \
+            mock.patch.object(sp, "_start_season", new=mock.AsyncMock(side_effect=_classic_route)):
+        await sp._start_confirmed(interaction, strings)
+    assert routes == ["beta:True"], "the beta lever routes beta, solo already confirmed"
+
+    with mock.patch.object(sp, "_parcours_is_beta", new=mock.AsyncMock(return_value=False)), \
+            mock.patch.object(sp, "_start_beta", new=mock.AsyncMock(side_effect=_beta_route)), \
+            mock.patch.object(sp, "_start_season", new=mock.AsyncMock(side_effect=_classic_route)):
+        await sp._start_confirmed(interaction, strings)
+    assert routes[-1] == "classic", "the classic lever routes classic"
+
+
+@pytest.mark.asyncio
+async def test_the_lever_owns_the_start_label_suffix() -> None:
+    """The label suffix rides the lever: Classique vs Bêta."""
+    from botforge.mods.kingdom.cogs import settings_panel as sp
+
+    strings = sp.settings_strings("fr")
+    with mock.patch.object(sp, "_parcours_is_beta", new=mock.AsyncMock(return_value=False)):
+        label = await sp._start_button_label(NS(), "42", strings)
+    assert label == "🎯 Démarrer la saison — Classique"
+    with mock.patch.object(sp, "_parcours_is_beta", new=mock.AsyncMock(return_value=True)):
+        label = await sp._start_button_label(NS(), "42", strings)
+    assert label == "🎯 Démarrer la saison — Bêta"
+
+
+@pytest.mark.asyncio
+async def test_the_herald_warns_only_free_living_realms() -> None:
+    """📣 Prévenir les royaumes: the admin targets NO ONE — the herald DMs
+    every non-archived, non-engaged realm's King and reports the count."""
+    from botforge.mods.kingdom.cogs import settings_panel as sp
+
+    realms = [
+        NS(id="libre", king_id="1", archived_at=0, engagement=None),
+        NS(id="autre", king_id="2", archived_at=0, engagement=None),
+        NS(id="engage", king_id="3", archived_at=0, engagement={"season_id": "s"}),
+        NS(id="mort", king_id="4", archived_at=99, engagement=None),
+    ]
+
+    class _Realms:
+        async def realms(self) -> list[Any]:
+            return realms
+
+    stack = NS(realms=_Realms())
+    interaction = _interaction()
+    strings = sp.settings_strings("fr")
+    dms: list[str] = []
+
+    async def _dm(client: Any, user_id: str, content: str) -> Any:
+        dms.append(user_id)
+        return NS(id="dm")
+
+    with mock.patch.object(sp, "_needs_stack", new=lambda s: (stack, None)), \
+            mock.patch("botforge.mods.kingdom.cogs.common.dm_user_safe", new=_dm):
+        await sp._announce_season(interaction, strings)
+
+    assert sorted(dms) == ["1", "2"], "only the free living realms hear the herald"
+    note = interaction.followup.sent[-1]
+    assert note == strings["settings_announce_done"].format(count=2)
+
+
+@pytest.mark.asyncio
+async def test_the_herald_says_it_when_nobody_can_hear() -> None:
+    """No eligible realm: the empty note, nothing thrown."""
+    from botforge.mods.kingdom.cogs import settings_panel as sp
+
+    class _Realms:
+        async def realms(self) -> list[Any]:
+            return []
+
+    stack = NS(realms=_Realms())
+    interaction = _interaction()
+    strings = sp.settings_strings("fr")
+    with mock.patch.object(sp, "_needs_stack", new=lambda s: (stack, None)):
+        await sp._announce_season(interaction, strings)
+    assert interaction.followup.sent[-1] == strings["settings_announce_empty"]
 
 
 # ---------------------------------------------------------------------------

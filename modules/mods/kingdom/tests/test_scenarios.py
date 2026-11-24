@@ -91,7 +91,6 @@ def test_SC_KING_006_modals_build_without_deprecation_warnings() -> None:
     with warnings.catch_warnings():
         warnings.simplefilter("error", DeprecationWarning)
         for cls in (
-            settings_panel._LaunchModal,
             settings_panel._AssignModal,
             settings_panel._AddKingdomModal,
             settings_panel._RemoveModal,

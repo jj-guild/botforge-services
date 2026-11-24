@@ -109,7 +109,7 @@ def test_the_cockpit_is_zoned_and_contextual() -> None:
     assert "kingdom:console-nav:beta" not in ids, (
         "drarwer-bêta retiré (Drasah 22/11) : l'état vit sur le badge du cockpit"
     )
-    assert "kingdom:settings:start-season" not in ids, (
+    assert "kingdom:settings:start" not in ids, (
         "off-season, the DÉMARRAGE gesture must NOT be offered (the sas ruling)"
 )
 
@@ -147,8 +147,12 @@ def test_the_setup_cockpit_opens_the_sas_not_the_launch() -> None:
         view = asyncio.run(sp.build_settings_panel("123"))
     ids = _ids(view)
     assert "kingdom:console-nav:admissions" in ids, "setup: the sas must be a click away"
-    assert "kingdom:settings:start-season" in ids, "setup: the CLASSIC departure distributes the sas"
-    assert "kingdom:settings:start-beta" in ids, "depart-fourche-v1: the BETA departure distributes too"
+    assert "kingdom:settings:start" in ids, (
+        "lancer-unique-v1: The ONE Démarrer distributes the sas"
+    )
+    assert "kingdom:settings:announce" in ids, (
+        "lancer-unique-v1: the herald warns the realms the sas is open"
+    )
     assert "kingdom:settings:launch" not in ids, "setup: a fresh launch would wipe the sas"
     assert not any(i in ("kingdom:console:relaunch", "kingdom:console:reset", "kingdom:console:clock") for i in ids), (
         "setup: the running-season ops have nothing to run yet"
@@ -181,7 +185,7 @@ def test_the_nav_template_never_collides_with_the_actions() -> None:
         assert not settings_template.fullmatch(candidate)
     for candidate in (
         "kingdom:settings:launch",
-        "kingdom:settings:start-season",
+        "kingdom:settings:start",
         "kingdom:settings:reset",
     ):
         assert settings_template.fullmatch(candidate)
@@ -359,7 +363,7 @@ def test_the_running_cockpit_builds_in_every_engine_phase() -> None:
     assert "kingdom:console:relaunch" not in ids
     assert "kingdom:console-nav:admissions" in ids
     assert "kingdom:settings:launch" not in ids, "started: a fresh launch would wipe the season"
-    assert "kingdom:settings:start-season" not in ids, "started: the season is already started"
+    assert "kingdom:settings:start" not in ids, "started: the season is already started"
     # tiroir-bêta retiré : le faux départ répond DANS la zone Le cycle
     assert "kingdom:settings:false-start" in ids, "the rewind rides the running cycle row"
     assert "kingdom:console-nav:beta" not in ids, "the beta drawer is retired"
