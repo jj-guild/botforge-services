@@ -53,7 +53,7 @@ _SEED_SWEEP_S = 300.0
 # the seed's BUILD: a seed producing broken cards gets versioned up -
 # every salon re-seeds once with the fixed build (the old cards stay,
 # the guild owns its channel)
-_SEED_VERSION = 3
+_SEED_VERSION = 4  # 4: the seeds read the raw doc's players list (the v3 cards rode seatless)
 
 _MATCHES_SCOPE = "games/aoe2"
 _MATCHES_KEY = "matches"
