@@ -50,6 +50,8 @@ CAMP_KEYS = (
     "realms_restore_failed",
     "realms_restore_not_yours",
     "realms_restore_gone",
+    # wake-cancel-v1 (Drasah 24/11) : l'Annuler du réveil a SES strings
+    "realms_restore_cancelled",
     # fonder-purge-v1 (Drasah 24/11) : fonder contre SA coquille archivée
     "found_once_note",
     "found_refound_title",

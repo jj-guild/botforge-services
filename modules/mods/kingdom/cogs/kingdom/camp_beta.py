@@ -608,7 +608,10 @@ class KingdomCampRestoreButton(
             await interaction.response.defer(ephemeral=True)
         strings = _strings(interaction)
         if self.kind == "-no":
-            await _safe_followup(interaction, str(strings["settings_cancelled"]))
+            # wake-cancel-v1 (Drasah 24/11) : la clé « settings_cancelled »
+            # ne vit PAS dans la section camp — le clic Annuler KeyErrait
+            # (carte morte). La note dédiée du réveil, dans SES strings.
+            await _safe_followup(interaction, str(strings["realms_restore_cancelled"]))
             return
         stack = wiring()
         if stack is None or getattr(stack, "realms", None) is None:
@@ -629,15 +632,24 @@ class KingdomCampRestoreButton(
             realm = await stack.realms.restore_realm(str(realm.id))
             guild = interaction.client.get_guild(int(self.guild_id))
             if guild is not None:
-                # import-restore-fix (Merlin's logs 23/11): ``save_habitat``
-                # is a SERVICE method, never a cog symbol — the old
-                # ``from .realms import … save_habitat`` ImportError'd and
-                # the restore button failed EVERY time. The seam already
-                # used 200 lines below: stack.realms.save_habitat.
-                from .realms import ensure_realm_structure
+                # wake-hub-v1 (Drasah 24/11) : le réveil reprend LA MÊME
+                # queue que la fondation — structure dormante PUIS
+                # panneau du hub DÉPOSÉ IMMÉDIATEMENT (l'incident « le
+                # salon royaume est vide » : le réveil reconstruisait la
+                # maison mais le panneau attendait la passe de
+                # guérison, qui ne joue pas toujours — le joueur
+                # réveille, il voit SON hub).
+                # import-restore-fix (Merlin's logs 23/11):
+                # ``save_habitat`` is a SERVICE method, never a cog
+                # symbol — the seam: stack.realms.save_habitat (merge).
+                from .realms import deploy_realm_hub, ensure_realm_structure
 
-                await ensure_realm_structure(guild, realm, dormant=True)
-                await stack.realms.save_habitat(str(realm.id), {})
+                ids = await ensure_realm_structure(guild, realm, dormant=True)
+                hub_message = await deploy_realm_hub(guild, realm)
+                if hub_message:
+                    ids["hub_message"] = hub_message
+                if ids:
+                    realm = await stack.realms.save_habitat(str(realm.id), ids)
             note = str(strings["realms_restore_done"]).format(str(realm.name))
         except Exception:  # noqa: BLE001 — the card reports, never raises
             logger.warning("kingdom: realm restore failed", exc_info=True)

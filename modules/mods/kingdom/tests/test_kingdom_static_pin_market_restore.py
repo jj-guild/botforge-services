@@ -108,7 +108,13 @@ class _Realm:
 async def test_the_restore_button_saves_the_habitat_through_the_service(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """The ImportError'd cog import is gone — the seam is the service method."""
+    """The ImportError'd cog import is gone — the seam is the service method.
+
+    wake-hub-v1 (Drasah 24/11): the wake re-runs the founder's queue —
+    dormant structure, then the hub panel deployed at once, and the
+    merged ids saved through the SERVICE seam. The old empty-dict
+    save merged nothing: the hub stayed empty until a manual heal.
+    """
     import botforge.mods.kingdom.cogs.camp_beta as camp
     import botforge.mods.kingdom.cogs.realms as realms_cog
     import botforge.mods.kingdom.cogs.common as common
@@ -136,12 +142,18 @@ async def test_the_restore_button_saves_the_habitat_through_the_service(
     monkeypatch.setattr(camp, "wiring", lambda: _Stack())
 
     ensured: list[tuple[Any, Any, bool]] = []
+    deployed: list[Any] = []
 
     async def _fake_ensure(guild: Any, realm: Any, dormant: bool = False) -> dict[str, str]:
         ensured.append((guild, realm, dormant))
-        return {}
+        return {"category": "cat-1", "cat_forum": "forum-1"}
+
+    async def _fake_deploy_hub(guild: Any, realm: Any, locale: str = "fr") -> str:
+        deployed.append(guild)
+        return "hub-msg-1"
 
     monkeypatch.setattr(realms_cog, "ensure_realm_structure", _fake_ensure)
+    monkeypatch.setattr(realms_cog, "deploy_realm_hub", _fake_deploy_hub)
 
     button = camp.KingdomCampRestoreButton(
         "-yes", "aegis", "99", "Confirmer", discord.ButtonStyle.success
@@ -152,5 +164,8 @@ async def test_the_restore_button_saves_the_habitat_through_the_service(
     assert interaction.followup.notes == [
         "♻️ « Aegis » est réveillé — te voilà de nouveau son Roi fondateur."
     ], "the restore reaches success — never the ImportError note"
-    assert saved == [("r-1", {})], "the habitat wipe rides the SERVICE seam"
+    assert saved == [
+        ("r-1", {"category": "cat-1", "cat_forum": "forum-1", "hub_message": "hub-msg-1"})
+    ], "the wake saves the rebuilt ids through the SERVICE seam"
     assert ensured and ensured[0][2] is True, "the structure is ensured dormant"
+    assert deployed, "wake-hub-v1: the hub panel is deployed immediately"

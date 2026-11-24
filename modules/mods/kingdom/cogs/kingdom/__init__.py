@@ -14,7 +14,6 @@ from typing import Any
 import discord
 
 
-
 def register(bot: Any, config: Any) -> None:
     """Wire the cog onto the bot: commands, pins, dynamic items."""
     from botforge.discord.static_pins import StaticPinnedView, register_static_pin
@@ -263,6 +262,24 @@ def register(bot: Any, config: Any) -> None:
 
 def setup_hook(bot: Any) -> None:
     """Re-register persistent UI after a restart (dynamic items)."""
+    from .alliances import AlliancesButton
+    from .apply_flow import KingdomApplyOpenButton, KingdomPostulerButton
+    from .battle import (
+        DisputeChoiceSelect,
+        DisputeConfirmButton,
+        DraftViewButton,
+        RoomReadyButton,
+        RoomResultButton,
+        RoomUrlButton,
+    )
+    from .camp_beta import camp_dynamic_items
+    from .common import KingdomWindowCloseButton
+    from .console import KingdomClockButton, KingdomRelaunchButton, KingdomResetButton
+    from .distributor import distributor_dynamic_items
+    from .ffa import FFAJoinButton
+    from .lieux import lieux_dynamic_items
+    from .market import ChamberButton, MarketButton
+    from .marry import MarryButton
     from .panel import (
         CancelButton,
         DeclareButton,
@@ -278,21 +295,20 @@ def setup_hook(bot: Any) -> None:
         SabotageOpenButton,
         SabotagePassButton,
     )
-    from .battle import (
-        DisputeChoiceSelect,
-        DisputeConfirmButton,
-        DraftViewButton,
-        RoomReadyButton,
-        RoomResultButton,
-        RoomUrlButton,
-    )
     from .plan import PlanButton, PlanCancelButton
-    from .marry import MarryButton
-    from .alliances import AlliancesButton
-    from .market import ChamberButton, MarketButton
+    from .realm_content import realm_content_dynamic_items
+    from .realms import realm_dynamic_items
+    from .settings_panel import (
+        KingdomRegieParcoursButton,
+        KingdomRegieRealmButton,
+        KingdomRegieResetPlayersButton,
+        KingdomRegieSwitchButton,
+        KingdomRoyaumesPageButton,
+        KingdomSettingsNavButton,
+        SettingsActionButton,
+    )
     from .tavern import MercenaryButton, TavernButton
-    from .ffa import FFAJoinButton
-    from .console import KingdomClockButton, KingdomRelaunchButton, KingdomResetButton
+    from .time_machine import machine_dynamic_items
     from .validation import (
         ValidationArchiveButton,
         ValidationCrownButton,
@@ -301,23 +317,6 @@ def setup_hook(bot: Any) -> None:
         ValidationEjectButton,
         ValidationRealmEntryButton,
     )
-    from .apply_flow import KingdomApplyOpenButton, KingdomPostulerButton
-    from .settings_panel import (
-        KingdomRegieParcoursButton,
-        KingdomRegieRealmButton,
-        KingdomRoyaumesPageButton,
-        KingdomRegieResetPlayersButton,
-        KingdomRegieSwitchButton,
-        KingdomSettingsNavButton,
-        SettingsActionButton,
-    )
-    from .common import KingdomWindowCloseButton
-    from .time_machine import machine_dynamic_items
-    from .distributor import distributor_dynamic_items
-    from .camp_beta import camp_dynamic_items
-    from .lieux import lieux_dynamic_items
-    from .realms import realm_dynamic_items
-    from .realm_content import realm_content_dynamic_items
 
     for item in (
         DeclareButton,
@@ -379,12 +378,23 @@ def setup_hook(bot: Any) -> None:
 
     # P4.1b tranche 2e: the attack phases loop (plans, reveals, DMs,
     # rooms, forfeits, scores) — the test journeys gate it off.
+    import logging
+
     from .phases import start_attack_refresher
 
+    _boot_logger = logging.getLogger("kingdom.boot")
     try:
         start_attack_refresher(bot)
-    except Exception:  # noqa: S110 — a loop failure never blocks the boot
-        pass
+    except Exception:  # a loop failure never blocks the boot
+        # boot-verbeux-v1 (Drasah 24/11) : une boucle qui ne démarre pas
+        # se VOIT — l'incident du hub fantôme venait d'un démarrage
+        # gobé en silence : aucune boucle, aucun log, « comme si tout
+        # allait bien ». Le boot ne cache plus jamais ce raté.
+        _boot_logger.error(
+            "kingdom: the attack refresher FAILED TO START — "
+            "its guarantees are OFF until the next boot",
+            exc_info=True,
+        )
 
     # machine-temps-v4 (Drasah 20/11): the ⏱️ machine à temps pin
     # re-renders itself — « Panneau épinglé auto-mis à jour ».
@@ -392,8 +402,15 @@ def setup_hook(bot: Any) -> None:
         from .time_machine import start_machine_refresher
 
         start_machine_refresher(bot)
-    except Exception:  # noqa: S110 — a loop failure never blocks the boot
-        pass
+    except Exception:  # a loop failure never blocks the boot
+        # boot-verbeux-v1 : idem — le refresher des pins guarantit la
+        # guérison des hubs de royaumes ; s'il ne démarre pas, les
+        # panneaux restent vides JUSQU'À un geste manuel. Jamais muet.
+        _boot_logger.error(
+            "kingdom: the pin/machine refresher FAILED TO START — "
+            "hub and pin healing is OFF until the next boot",
+            exc_info=True,
+        )
 
     # The boot passes (epic #412): one pass per guild shortly after the
     # gateway is ready — the pins land (the Repair seam) and the mod's

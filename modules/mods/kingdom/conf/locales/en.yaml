@@ -366,6 +366,7 @@ en:
       realms_restore_confirm_hint: "\"{name}\" becomes your kingdom again (off-season, habitat rebuilt) and you regain your founding King crown."
       realms_restore_yes: "♻️ Wake my kingdom"
       realms_restore_no: "Cancel"
+      realms_restore_cancelled: "❌ Cancelled — your kingdom stays archived, nothing was touched."
       realms_restore_done: "♻️ \"{0}\" is awake — you are its founding King again."
       realms_restore_failed: "⚠️ The restore failed — try again later."
       realms_restore_not_yours: "📦 This kingdom is archived: only its founding King can wake it."

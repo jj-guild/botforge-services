@@ -385,6 +385,7 @@ fr:
       realms_restore_confirm_hint: "« {name} » redevient ton royaume (hors saison, habitat reconstruit) et tu récupères ta couronne de Roi fondateur."
       realms_restore_yes: "♻️ Réveiller mon royaume"
       realms_restore_no: "Annuler"
+      realms_restore_cancelled: "❌ Annulé — ton royaume reste archivé, rien n'a été touché."
       realms_restore_done: "♻️ « {0} » est réveillé — te voilà de nouveau son Roi fondateur."
       realms_restore_failed: "⚠️ La restauration a échoué — réessaie plus tard."
       realms_restore_not_yours: "📦 Ce royaume est archivé : seul son Roi fondateur peut le réveiller."
