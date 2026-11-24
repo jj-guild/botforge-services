@@ -96,6 +96,10 @@ def test_cog_registers_no_slash_commands() -> None:
 
     cogs.register(_Bot(), None)  # type: ignore[arg-type]
     assert not added
+    # The one declared action (config/mods/pong.views.yaml) is wired instead.
+    from botforge.discord.views_routing import wired_actions
+
+    assert "menu:mod:pong:register" in wired_actions()
 
 
 def _flatten(mapping: dict[str, Any], prefix: str = "") -> set[tuple[str, str]]:
