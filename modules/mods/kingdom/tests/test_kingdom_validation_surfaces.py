@@ -591,3 +591,26 @@ def test_t2a_strings_parity() -> None:
         rs = realm_strings(locale)
         assert rs["season_engaged_line"], locale
         rs["season_engaged_line"].format(season="X", kingdom="Y")
+
+
+def test_archive_confirm_card_names_its_target() -> None:
+    """confirm-nom-v1 (Drasah 24/11) : la carte d'archive NOMME le royaume.
+
+    L'incident live : le titre affichait littéralement « Archiver
+    « {name} » ? » (le param jamais passé au rendu) — l'admin archivait
+    À L'AVEUGLE entre Aegis et HeN. La carte doit dire le nom VRAI, et
+    le pluriel ne ment plus (« 1 élément(s) », plus « 1 éléments »).
+    """
+    from botforge.mods.kingdom.cogs import validation as kv
+    from botforge.mods.kingdom.cogs.common import mod_catalog
+
+    strings = mod_catalog().section("kingdom.validation", "fr")
+    realm = NS(
+        id="realm:aegis-1", name="Aegis", member_ids=[],
+        engagement=None, join_request=None,
+    )
+    view = kv._archive_confirm_card(strings, "fr", realm)
+    texts = _texts(view)
+    assert any("Aegis" in t for t in texts), texts
+    assert not any("{name}" in t for t in texts), texts
+    assert any("1 élément(s)" in t for t in texts), texts

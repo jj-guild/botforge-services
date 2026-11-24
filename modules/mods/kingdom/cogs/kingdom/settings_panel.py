@@ -853,6 +853,33 @@ async def _end_season(interaction: discord.Interaction, strings: dict[str, str])
                 logger.info("kingdom: the end of season lowered the beta flag")
         except Exception:  # noqa: BLE001 — la fin ne rate jamais pour un drapeau
             logger.warning("kingdom: the end-of-season flag lowering failed", exc_info=True)
+        # parcours-etat-v1 (Drasah 24/11) : LA réinitialisation du
+        # parcours — une saison finie en bêta EFFECTIVE (drapeau ci-
+        # dessus, ou compte-requis encore OUVERT par le levier) repart
+        # NORMAL : registration_required RÉARMÉ. Le pin lit la même
+        # définition que le levier depuis ce patch.
+        try:
+            from .regie import read_regie, set_switch
+
+            _gid = str(interaction.guild_id or "")
+            _account_off = not bool(
+                (await read_regie(interaction.client, _gid)).get(
+                    "registration_required", True
+                )
+            )
+            if _account_off:
+                # le levier disait bêta (compte ouvert) : la fin le
+                # réarme — l'orphelin du levier ne survit plus
+                await set_switch(
+                    interaction.client, _gid, "registration_required", True
+                )
+                logger.info(
+                    "kingdom: the end of season re-armed the account requirement"
+                )
+        except Exception:  # noqa: BLE001 — la fin ne rate jamais pour la régie
+            logger.warning(
+                "kingdom: the end-of-season parcours reset failed", exc_info=True
+            )
         # sas-cycle-v1 (Drasah 21/11) : la fin de saison FERME le sas —
         # le seul geste AUTOMATIQUE du cycle (la réouverture restera
         # manuelle) — et vidange la salle d'attente avec le MP de
@@ -1220,6 +1247,18 @@ async def _season_state(
             beta = beta or await kingdom_is_beta(bot, guild_id)
         except Exception:  # noqa: BLE001 — the badge never breaks the cockpit
             logger.warning("kingdom: the beta badge read failed", exc_info=True)
+    if bot is not None and guild_id:
+        # parcours-etat-v1 (Drasah 24/11) : le badge lit la MÊME définition
+        # efficace que le levier — registration_required FERMÉ dit bêta
+        # aussi (le levier est la vérité ; le pin ne contredit plus la
+        # régie d'aucune construction).
+        try:
+            from .regie import read_regie
+
+            regie_states = await read_regie(bot, guild_id)
+            beta = beta or not bool(regie_states.get("registration_required", True))
+        except Exception:  # noqa: BLE001 — the badge never breaks the cockpit
+            logger.warning("kingdom: the parcours account read failed", exc_info=True)
     lines = [
         str(strings["settings_status_parcours_beta" if beta else "settings_status_parcours_normal"]),
         f"📍 **{strings['settings_status_phase']} : {phase}**",
@@ -2492,7 +2531,10 @@ class KingdomRegieRealmButton(
         # positionnel, l'ancienne écriture crashait le clic en silence).
         card_container = discord.ui.Container(
             discord.ui.TextDisplay(
-                f"## {strings['settings_regie_purge_confirm_title']}\n"
+                # confirm-nom-v1 (Drasah 24/11) : même raté que la carte
+                # d'archive — le titre « {name} » jamais formaté ; le
+                # geste IRRÉVERSIBLE doit nommer SA cible, toujours.
+                f"## {str(strings['settings_regie_purge_confirm_title']).format(name=name)}\n"
                 + str(strings["settings_regie_purge_confirm_hint"]).format(name=name)
             ),
             _realm_button_row(

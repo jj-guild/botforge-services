@@ -795,25 +795,216 @@ class KingdomCampNameModal(discord.ui.Modal):
             await interaction.followup.send(str(strings["regie_closed_line"]), ephemeral=True)
             return
         proposed = str(self.name_input.value or "").strip()
+        # fonder-purge-v1 (Drasah 24/11) : « chaque membre ne fonde QU'UN
+        # royaume » — mais le blocage par SA coquille ARCHIVÉE n'est plus
+        # un mur muet (« Already in Realm » brut) : la carte dédiée
+        # propose de PURGER l'ancien pour fonder le nouveau (le réveil
+        # ♻️ reste l'autre porte, jamais enlevée).
+        blocker = await stack.realms.realm_of_member(str(interaction.user.id))
+        if blocker is not None:
+            blocker_key = (
+                "already_king_line"
+                if str(getattr(blocker, "king_id", "")) == str(interaction.user.id)
+                else "already_lord_line"
+            )
+            if not getattr(blocker, "archived_at", 0) or (
+                str(getattr(blocker, "king_id", "")) != str(interaction.user.id)
+            ):
+                # VIVANT (Roi ou membre) : la règle une-fondation tient —
+                # rejoindre est l'autre porte, elle reste ouverte
+                await _safe_followup(
+                    interaction,
+                    f"{str(strings[blocker_key]).format(str(getattr(blocker, 'name', '?'))[:80])} "
+                    f"{strings['found_once_note']}",
+                )
+                return
+            refound_pending[str(f"{interaction.guild_id}:{interaction.user.id}")] = (
+                str(blocker.id),
+                proposed,
+            )
+            await open_unique_ephemeral(
+                interaction, view=_refound_card(interaction, strings, blocker, proposed)
+            )
+            return
+        note = await _complete_founding(interaction, stack, strings, proposed)
+        await _safe_followup(interaction, note)
+
+
+# fonder-purge-v1 : le OUI purge-pour-fonder porte le nom PROPOSÉ — en
+# mémoire de process SEULEMENT (la carte éphémère meurt au restart, le
+# pendage aussi : le joueur relance la fondation, jamais de donnée perdue).
+refound_pending: dict[str, tuple[str, str]] = {}
+
+
+async def _complete_founding(
+    interaction: discord.Interaction,
+    stack: Any,
+    strings: dict[str, str],
+    proposed: str,
+) -> str:
+    """Run the founding's shared tail : service + habitat + the done note."""
+    try:
+        realm = await stack.realms.found_realm(
+            str(interaction.user.id), _display_name(interaction), proposed
+        )
+        guild = getattr(interaction, "guild", None)
+        if guild is not None:
+            realm = await _provision_founded(guild, stack.realms, realm)
+        return str(strings["found_done"]).format(str(realm.name))
+    except Exception as exc:  # noqa: BLE001 — the window reports, never raises
+        logger.warning("kingdom: realm founding failed", exc_info=True)
+        return _camp_failure(strings, exc)
+
+
+async def _provision_founded(guild: Any, service: Any, realm: Any) -> Any:
+    """Provision the founding's habitat tail (dormant structure + hub), ids saved."""
+    from .realms import deploy_realm_hub, ensure_realm_structure
+
+    ids = await ensure_realm_structure(guild, realm, dormant=True)
+    # hub-content-v2: the hub message id rides the shell's
+    # discord ids (fetch → edit; a stale id recreates)
+    hub_message = await deploy_realm_hub(guild, realm)
+    if hub_message:
+        ids["hub_message"] = hub_message
+    if ids:
+        realm = await service.save_habitat(str(realm.id), ids)
+    return realm
+
+
+def _refound_card(
+    interaction: discord.Interaction,
+    strings: dict[str, str],
+    realm: Any,
+    proposed: str,
+) -> discord.ui.LayoutView:
+    """fonder-purge-v1 : the purge-and-refound card (the restore pattern)."""
+    container: discord.ui.Container[discord.ui.LayoutView] = discord.ui.Container(
+        discord.ui.TextDisplay(
+            f"## {str(strings['found_refound_title']).format(new=proposed[:45])}\n"
+            + str(strings["found_refound_hint"]).format(
+                name=str(getattr(realm, "name", "?"))[:80], new=proposed[:45]
+            )
+        ),
+        accent_colour=discord.Colour(0xED4245),
+    )
+    row: discord.ui.ActionRow[discord.ui.LayoutView] = discord.ui.ActionRow()
+    gid = str(interaction.guild_id or "")
+    row.add_item(
+        KingdomCampRefoundButton(
+            "-yes", str(getattr(realm, "id", ""))[:60], gid,
+            str(strings["found_refound_yes"]).format(new=proposed[:45])[:80],
+            discord.ButtonStyle.danger,
+        ).item
+    )
+    row.add_item(
+        KingdomCampRefoundButton(
+            "-no", str(getattr(realm, "id", ""))[:60], gid,
+            str(strings["found_refound_no"])[:80],
+            discord.ButtonStyle.secondary,
+        ).item
+    )
+    container.add_item(row)
+    return surface("panel:mod:kingdom:note", container)
+
+
+class KingdomCampRefoundButton(
+    discord.ui.DynamicItem[discord.ui.Button[Any]],
+    # drain-coquilles-v1 (Check 135) : un id de coquille porte un ":"
+    # ("realm:aegis-123") — ancré $ pour capturer l'id ENTIER.
+    template=rf"{_NS}:refound(?P<kind>-yes|-no):(?P<realm_id>[a-zA-Z0-9_:-]+):(?P<guild_id>\d+)$",
+):
+    """🗑️ Purge the archived shell to found the new realm (restart-proof)."""
+
+    def __init__(
+        self, kind: str, realm_id: str, guild_id: str,
+        label: str, style: discord.ButtonStyle,
+    ) -> None:
+        super().__init__(
+            discord.ui.Button(
+                custom_id=f"{_NS}:refound{kind}:{realm_id}:{guild_id}"[:100],
+                label=str(label)[:80],
+                style=style,
+            )
+        )
+        self.kind = kind
+        self.realm_id = realm_id
+        self.guild_id = guild_id
+
+    @classmethod
+    async def from_custom_id(cls, interaction, item, match, /):  # type: ignore[no-untyped-def]
+        button = item if isinstance(item, discord.ui.Button) else None
+        label = (button.label or "?") if button is not None else "?"
+        kind = match["kind"] or "-yes"
+        style = (
+            discord.ButtonStyle.danger if kind == "-yes"
+            else discord.ButtonStyle.secondary
+        )
+        return cls(kind, match["realm_id"], match["guild_id"], label, style)
+
+    async def callback(self, interaction: discord.Interaction) -> None:
+        """Apply the purge-refound verdict : cancel keeps, yes purges then founds."""
+        from .settings_panel import _safe_followup
+
+        strings = _strings(interaction)
+        if not interaction.response.is_done():
+            await interaction.response.defer(ephemeral=True)
+        key = str(f"{interaction.guild_id}:{interaction.user.id}")
+        if self.kind == "-no":
+            refound_pending.pop(key, None)
+            await _safe_followup(interaction, str(strings["found_refound_cancelled"]))
+            return
+        stack = wiring()
+        service = getattr(stack, "realms", None) if stack is not None else None
+        pending = refound_pending.get(key)
+        if pending is None or service is None:
+            # restart ou tentative périmée : la carte ne purge JAMAIS à
+            # l'aveugle — le nom proposé est perdu, la fondation repart
+            await _safe_followup(interaction, str(strings["found_refound_missing"]))
+            return
+        old_id, proposed = pending
+        realm = None
         try:
-            realm = await stack.realms.found_realm(
+            realm = await service.realm_by_id(str(self.realm_id))
+        except Exception:  # the card reports, never raises
+            logger.warning("kingdom: refound resolve failed", exc_info=True)
+        if (
+            realm is None
+            or str(getattr(realm, "id", "")) != str(old_id)
+            or not getattr(realm, "archived_at", 0)
+            or str(getattr(realm, "king_id", "")) != str(interaction.user.id)
+        ):
+            # ré-chaud : réveillé, purgé ou détruit entre-temps — on ne
+            # purge jamais deux fois, jamais la maison d'un autre
+            refound_pending.pop(key, None)
+            await _safe_followup(interaction, str(strings["found_refound_gone"]))
+            return
+        old_name = str(getattr(realm, "name", "?"))[:80]
+        # le doublon se vérifie AVANT la purge (le nouveau nom doit être
+        # LIBÉRABLE — sinon l'ancien royaume survit intact)
+        from botforge.mods.kingdom.realms import realm_slug
+
+        if await service.realm_of_slug(realm_slug(proposed)) is not None:
+            refound_pending.pop(key, None)
+            await _safe_followup(
+                interaction,
+                str(strings["found_refound_taken"]).format(name=proposed[:45]),
+            )
+            return
+        try:
+            await service.destroy_realm(str(realm.id))
+            realm_new = await service.found_realm(
                 str(interaction.user.id), _display_name(interaction), proposed
             )
             guild = getattr(interaction, "guild", None)
             if guild is not None:
-                from .realms import deploy_realm_hub, ensure_realm_structure
-
-                ids = await ensure_realm_structure(guild, realm, dormant=True)
-                # hub-content-v2: the hub message id rides the shell's
-                # discord ids (fetch → edit; a stale id recreates)
-                hub_message = await deploy_realm_hub(guild, realm)
-                if hub_message:
-                    ids["hub_message"] = hub_message
-                if ids:
-                    realm = await stack.realms.save_habitat(str(realm.id), ids)
-            note = str(strings["found_done"]).format(str(realm.name))
-        except Exception as exc:  # noqa: BLE001 — the window reports, never raises
-            logger.warning("kingdom: realm founding failed", exc_info=True)
+                realm_new = await _provision_founded(guild, service, realm_new)
+            refound_pending.pop(key, None)
+            note = str(strings["found_refound_done"]).format(
+                name=old_name, new=str(realm_new.name)
+            )
+        except Exception as exc:  # the card reports, never raises
+            refound_pending.pop(key, None)
+            logger.warning("kingdom: refound failed", exc_info=True)
             note = _camp_failure(strings, exc)
         await _safe_followup(interaction, note)
 
@@ -842,6 +1033,7 @@ def camp_dynamic_items() -> tuple:
         KingdomCampJoinSelect,
         KingdomCampRealmSelect,
         KingdomCampRestoreButton,
+        KingdomCampRefoundButton,
     )
 
 
@@ -849,6 +1041,7 @@ __all__ = [
     "CAMP_WINDOW_KEY",
     "KingdomCampButton",
     "KingdomCampNameModal",
+    "KingdomCampRefoundButton",
     "beta_armed",
     "build_camp_button",
     "camp_dynamic_items",

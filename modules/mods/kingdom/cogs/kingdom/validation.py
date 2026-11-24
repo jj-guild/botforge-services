@@ -1247,7 +1247,14 @@ def _archive_confirm_card(
     no.callback = on_no
     container = discord.ui.Container()
     container.add_item(
-        discord.ui.TextDisplay(f"## {strings['archive_confirm_title']}")
+        # confirm-nom-v1 (Drasah 24/11) : le titre porte « {name} » —
+        # jamais formaté, la carte disait « Archiver « {name} » ? » en
+        # plein écran (l'admin ne savait PAS quel royaume partait) ;
+        # la carte de réveil, elle, formatait déjà (l'asymétrie prouvait
+        # le raté de params, pas le moule).
+        discord.ui.TextDisplay(
+            f"## {str(strings['archive_confirm_title']).format(name=name)}"
+        )
     )
     container.add_item(
         discord.ui.TextDisplay(

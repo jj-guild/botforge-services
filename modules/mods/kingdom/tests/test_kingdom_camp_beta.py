@@ -50,6 +50,17 @@ CAMP_KEYS = (
     "realms_restore_failed",
     "realms_restore_not_yours",
     "realms_restore_gone",
+    # fonder-purge-v1 (Drasah 24/11) : fonder contre SA coquille archivée
+    "found_once_note",
+    "found_refound_title",
+    "found_refound_hint",
+    "found_refound_yes",
+    "found_refound_no",
+    "found_refound_cancelled",
+    "found_refound_missing",
+    "found_refound_gone",
+    "found_refound_taken",
+    "found_refound_done",
 )
 
 
@@ -80,6 +91,12 @@ def test_camp_strings_parity() -> None:
         strings["realms_pick_archived_label"].format(name="Roc")
         strings["realms_restore_confirm_hint"].format(name="Roc")
         strings["realms_restore_done"].format("Roc")
+        # fonder-purge-v1 : chaque placeholder se formate SANS KeyError
+        strings["found_refound_title"].format(new="Fois")
+        strings["found_refound_hint"].format(name="Aegis", new="Fois")
+        strings["found_refound_yes"].format(new="Fois")
+        strings["found_refound_taken"].format(name="Fois")
+        strings["found_refound_done"].format(name="Aegis", new="Fois")
         # the modal budget (rule: Label ≤45 chars)
         assert len(strings["modal_label"]) <= 45
         assert len(strings["modal_title"]) <= 45
@@ -113,6 +130,8 @@ def test_camp_custom_ids() -> None:
         "kingdom:camp:queue"
     )
     assert KingdomCampJoinSelect("x").custom_id == "kingdom:camp:pick"
+    from botforge.mods.kingdom.cogs.camp_beta import KingdomCampRefoundButton
+
     assert set(camp_dynamic_items()) == {
         KingdomCampButton,
         KingdomCampFoundButton,
@@ -121,6 +140,7 @@ def test_camp_custom_ids() -> None:
         KingdomCampJoinSelect,
         KingdomCampRealmSelect,
         KingdomCampRestoreButton,
+        KingdomCampRefoundButton,
     }
     # reset-joueurs-v1 : le réveil du fondateur est restart-proof aussi
     assert (
@@ -128,6 +148,15 @@ def test_camp_custom_ids() -> None:
             "-yes", "roc", "7", "x", None  # type: ignore[arg-type]
         ).custom_id
         == "kingdom:camp:restore-yes:roc:7"
+    )
+    # fonder-purge-v1 : le purge-pour-fonder est restart-proof AUSSI —
+    # l'id de coquille porte un ":" (drain-coquilles-v1, Check 135) et
+    # le template l'attrape ENTIÈR (ancré $, jamais tronqué)
+    assert (
+        KingdomCampRefoundButton(
+            "-yes", "realm:aegis-123", "155", "x", None  # type: ignore[arg-type]
+        ).custom_id
+        == "kingdom:camp:refound-yes:realm:aegis-123:155"
     )
 
 
