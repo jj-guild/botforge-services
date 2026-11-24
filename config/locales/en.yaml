@@ -533,6 +533,13 @@ en:
       menu.mod.kingdom.admin:
         title: 👑 Kingdom
         description: "The Kingdom mod's admin — the season panel and the candidates land with the portage"
+      menu.mod.pong:
+        title: 🏓 Pong
+        description: "The AOE Pong home — register for the season (consent required)"
+        register: "Register for the tournament"
+      menu.mod.pong.admin:
+        title: 🏓 Pong
+        description: "The AOE Pong admin surface — the season panel lands with the engine"
     mods:
       homes:
         ladder: Ladder

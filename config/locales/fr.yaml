@@ -535,6 +535,13 @@ fr:
       menu.mod.kingdom.admin:
         title: 👑 Kingdom
         description: "L'admin du mod Kingdom — le panneau des saisons et les candidats arrivent avec le portage"
+      menu.mod.pong:
+        title: 🏓 Pong
+        description: "L'accueil AOE Pong — inscription à la saison (consentement requis)"
+        register: "S'inscrire au tournoi"
+      menu.mod.pong.admin:
+        title: 🏓 Pong
+        description: "La surface admin AOE Pong — le panneau de saison arrive avec le moteur"
     mods:
       homes:
         ladder: Ladder

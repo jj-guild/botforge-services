@@ -60,3 +60,21 @@ def test_discover_finds_both_layouts(tmp_path: Path) -> None:
     assert set(layouts) == {"legacyone", "modularone"}
     assert layouts["legacyone"].modular is False
     assert layouts["modularone"].modular
+
+
+def test_views_declarations_are_not_mods(tmp_path: Path) -> None:
+    """A mod's views declaration (config/mods/<mod>.views.yaml — views_declared
+    merges it into the views registry) is NOT a mod: the legacy glob skips it
+    or the boot dies on 'missing id' (the pong slice, 2026-11-24)."""
+    legacy = tmp_path / "config" / "mods"
+    legacy.mkdir(parents=True)
+    (legacy / "keep.views.yaml").write_text(
+        "views:\n  menu:mod:keep:\n    kind: menu\n    scope: mods/general\n"
+    )
+    (legacy / "real.yaml").write_text("id: real\nseasonal: false\n")
+    layouts = discover_mods(tmp_path)
+    assert set(layouts) == {"real"}
+    from botforge.core.services.mod_registry import load_mod_definitions
+
+    definitions = load_mod_definitions(tmp_path / "config", repo_root=tmp_path)
+    assert set(definitions) == {"real"}

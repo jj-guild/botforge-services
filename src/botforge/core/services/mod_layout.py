@@ -130,6 +130,8 @@ def discover_mods(repo_root: Path) -> dict[str, ModLayout]:
     legacy_dir = root / "config" / "mods"
     if legacy_dir.is_dir():
         for path in sorted(legacy_dir.glob("*.yaml")):
+            if path.name.endswith(".views.yaml"):
+                continue  # a mod's views declaration, not a mod declaration
             layouts[path.stem] = ModLayout(
                 name=path.stem, declaration=path, package=None, locale_files=()
             )

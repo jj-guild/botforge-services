@@ -1,0 +1,21 @@
+# en strings for the pong mod (i18n-first: no raw UI strings, ever).
+# Slice v1 (D-PONG-037) ships no mod surface: these keys document the
+# registration front door (SC-PONG-001/002, consent gate RG-REG-1)
+# that lands at step 3 as declared action buttons on the auto-generated
+# menus. The fr/en parity test keeps both catalogs honest meanwhile.
+pong:
+  home:
+    title: "AOE Pong"
+    state: "Season state: {state}"
+    players: "Registered players: {players}"
+  register:
+    consent: "Registering stores your Discord ID in this guild's tournament data (privacy gate, RG-REG-1). Do you consent?"
+    accept: "I consent"
+    refuse: "No, cancel"
+    done: "You are registered as a candidate."
+    already: "You were already registered; nothing changed."
+    refused: "No data has been stored."
+    no_season: "No active season yet: you will be enrolled when the next one starts."
+  errors:
+    unexpected: "Something went wrong on the pong side. Please contact an admin."
+    registration: "Registration failed on our side. Please contact an admin."

@@ -1,0 +1,156 @@
+# Pong mod (montante/descendante tournament on AoE2 — "come up/down like ping pong").
+# Design: botforge repo docs/MODS/pong/ (REFERENCE.md = the S5 règlement,
+# RULES/ENVIRONMENT/TESTS/DECISIONS — PR botforge#231).
+#
+# Enabled with the slice package (modules/mods/pong/{src,cogs,grpc}):
+# a disabled mod is never loaded; flipping this in the SAME PR as the
+# package keeps main bootable at all times.
+# Design answers integrated (D-PONG-005..019, sessions 2026-11-23).
+id: pong
+enabled: true
+# the visual identity is data
+emoji: "🏓"
+# season-based tournament (root lifecycle panel + per-season admin salon)
+seasonal: true
+settings:
+  # references: botforge docs/MODS/pong/DECISIONS.md (PR botforge#231)
+  season_name_format: "AOE Pong S<N>"
+  bo_format: 5
+  civs_remaining: 15
+  rounds_per_season: 4          # D-PONG-005
+  round_window: wed_tue          # Wednesday → Tuesday, 7 days
+  round_grace_days: 3            # D-PONG-012 — grace beyond the window; next pairing
+                                # uses results validated at the deadline, a match
+                                # played in grace counts now (recap) and its table
+                                # movement is deferred one round
+  move_policy: classic           # per-season D-PONG-006 — classic | semi_blocked
+  move_policy_schedule: alternate # D-PONG-012 — S1 classic, S2 semi_blocked, S3 classic…
+  elo_seed_formula: "(2 * current_elo + max_elo) / 3"  # D-PONG-007, computed at registration
+  human_seed:                    # D-PONG-013 — self-declared level at registration
+    admin_override: true          # admin may correct a seed before the draw and
+                                 # between rounds (console, confirm card, log)
+                                 # seeds are placement-only, never displayed
+  # tables_count is DERIVED at runtime: active_players / 2 (D-PONG-008);
+  # parity is never odd: waitlist pairing, exact-slot replacement,
+  # recap-only volunteer match, admin fuse last (D-PONG-019, RG-TAB-4).
+  waitlist_admin_pairing: true   # D-PONG-015 — the admin pairs waitlist candidates
+                                 # into insertion duos (no automatic tolerance)
+  orphan_match: recap_only       # D-PONG-018 — volunteer neighbor match when no
+                                 # replacement: recaps only, no table movement
+  table_naming: neutral_random   # D-PONG-014 — table salons carry neutral names,
+                                 # chain_position is internal, never displayed
+  recap_delivery:                # D-PONG-014 — personal per-season recap; no global
+    on_request: ephemeral          # /recap answers ephemerally (only the asker sees it)
+    season_close: dm               # full recap DM'd at season close (and on departure)
+                                 # standings/leaderboard ever published
+  draft_map_preset: https://aoe2cm.net/preset/pGWoJ     # the S5 map-pool preset
+  civ_draft_base_preset: null    # D-PONG-009 — aoe2cm base_preset to derive per-table
+                                 # civ drafts (Python generator to port — owner's
+                                 # code lands with the cogs PR)
+  open_stream: true              # open stream, "AOE Pong" in the title
+  patch_policy: admin_decides
+  close_tables: true
+  planning_requirement: "two 3h consecutive slots in 17h-23h (FR tz)"
+  # records_provider (D-PONG-010, phase 2): auto rec-zip via replaypacker (no-spoiler BO5)
+channel_groups:
+  - key: ladder
+    display_name: 🏓 ᴀᴏᴇ ᴘᴏɴɢ
+  - key: tables
+    display_name: 🏓 ᴛᴀʙʟᴇs
+  - key: admin
+    display_name: ⚙️ ᴘᴏɴɢ-ꜱᴛᴀꜰꜰ
+    admin_only: true
+channels:
+  # access.view entries reference the roles' LOGICAL KEYS (candidate,
+  # member, admin, pong_waitlist, pong_caster); the provisioning
+  # resolves key -> persisted mapping -> Discord role ID (never a
+  # display-name match): display names are renamable.
+  - key: announcements
+    display_name: 📣 annonces-pong
+    description: Round openings/closures, tables list (no level order) and per-table civ presets
+    group: ladder
+    access:
+      everyone_view: false
+      view: [member, admin]
+  - key: bot_commands
+    display_name: 🤖 bot-commands
+    description: The mod's front door — /home > Mods > Pong (the registration flows from the home)
+    group: ladder
+    access:
+      everyone_view: false
+      view: [candidate, pong_waitlist, member, admin]
+  # planning is a forum-style match scheduling salon; the channel kind is
+  # hardcoded to text by the current provisioning — the forum gap is
+  # tracked for the core, the key stays out of the declaration
+  - key: planning
+    display_name: 📅 planification
+    description: One topic per match — date/time fixes and admin notices
+    group: ladder
+    access:
+      everyone_view: false
+      view: [member, admin]
+  - key: records
+    display_name: 🎞️ records
+    description: Normalized results + drafts/recs zips for casters and admins
+    group: ladder
+    access:
+      everyone_view: false
+      view: [member, pong_caster, admin]
+  - key: casting
+    display_name: 🎙️ casting
+    description: Cast announcements (open stream — "AOE Pong" in the title)
+    group: ladder
+    access:
+      everyone_view: true
+      view: [pong_caster, admin]
+  # table salons (pong:table_<slug>) are GENERATED per round (open_round op) with
+  # neutral names — never statically declared here (D-PONG-014)
+  - key: settings
+    display_name: ⚙️ paramètres
+    description: Mod settings/lifecycle panel channel (seasonal mod)
+    group: admin
+    admin_only: true
+    access:
+      everyone_view: false
+      view: [admin]
+  - key: admin_log
+    display_name: 📜 journal-admin
+    description: Timestamped admin actions (blocks, admin results, seed corrections, roster moves)
+    group: admin
+    admin_only: true
+    access:
+      everyone_view: false
+      view: [admin]
+roles:
+  # the standard trio under its standard keys (kingdom-style) — the
+  # parser auto-adds them anyway, declaring them under mod-specific keys
+  # would create duplicate roles
+  - key: candidate
+    display_name: "🧡 Pong Candidat"
+    color: 0xE67E22
+  - key: member
+    display_name: "👥 Pong Joueur"
+    color: 0x2ECC71
+  - key: admin
+    display_name: Pong Admin
+    color: 0xE74C3C
+    hoisted: true
+  # mod-specific extras beyond the trio
+  - key: pong_waitlist
+    display_name: "🔖 Pong Waitlist"
+    color: 0xF1C40F
+  - key: pong_caster
+    display_name: "🎙️ Pong Caster"
+    color: 0x9B59B6
+workflows: []
+commands: []          # NO mod slash commands (owner direction 2026-11-24): the
+                      # surface rides the generated menus (menu:mod:pong) and
+                      # DECLARED ACTIONS (register: config/mods/pong.views.yaml
+                      # + wire_action in the cog); future flows (add_result,
+                      # validate_score, recap) ride the same views, never
+                      # top-level commands
+dependencies: []      # register/player identity: soft dependency to declare
+                      # when the cogs land (declaration kept minimal now)
+# pong is an AoE2-bound tournament mod
+required_games:
+  - aoe2
