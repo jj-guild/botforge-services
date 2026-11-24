@@ -19,6 +19,8 @@ import importlib
 from types import SimpleNamespace
 from typing import Any
 
+import pytest
+
 
 def _realms():
     return importlib.import_module("botforge.mods.kingdom.cogs.realms")
@@ -270,3 +272,34 @@ def test_the_reporting_stays_stable_when_the_provisioning_is_off(monkeypatch) ->
     ))
     out = asyncio.run(selfheal.ensure_kingdom_surfaces(bot))
     assert out[0][1] == "provisioning: off; 4 pins, commands: error"
+
+
+@pytest.mark.asyncio
+async def test_dynamic_channel_resolves_the_client_the_library_exposes(monkeypatch) -> None:
+    """salon-dynamique-client-v1 (Drasah 24/11, incident « j'ai pas eu
+    le salon qui s'écrit ») : the vendored discord.py has NO
+    ``Guild.client`` — the seam must reach the client through the
+    connection state's ``_get_client()`` or EVERY dynamic channel
+    (attack salon, battle room, FFA salon) is silently skipped."""
+    from botforge.mods.kingdom.cogs.common import open_dynamic_channel_safe
+
+    import botforge.discord.dynamic_channels as dyn
+
+    seized: dict[str, Any] = {}
+
+    class _FakePlatform:
+        def __init__(self, client: Any) -> None:
+            seized["client"] = client
+
+        async def create_channel(self, guild_id: str, name: str, **kwargs: Any) -> Any:
+            seized.update(guild_id=guild_id, name=name)
+            return SimpleNamespace(id=42)
+
+    monkeypatch.setattr(dyn, "DiscordDynamicChannelsPlatform", _FakePlatform)
+
+    state = SimpleNamespace(_get_client=lambda: "the-client")
+    guild = SimpleNamespace(id="77", _state=state)  # NO `client` attr — the vendor's guild
+    channel = await open_dynamic_channel_safe(guild, "🗡️-blank-vs-hen")
+    assert channel is not None and channel.id == 42
+    assert seized["client"] == "the-client", "the client rides the state's _get_client"
+    assert seized["name"] == "🗡️-blank-vs-hen"

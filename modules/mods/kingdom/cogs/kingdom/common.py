@@ -602,6 +602,17 @@ async def open_dynamic_channel_safe(
 
     client = getattr(guild, "client", None)
     if client is None:
+        # salon-dynamique-client-v1 (Drasah 24/11, incident live
+        # « j'ai pas eu le salon qui s'écrit ») : the vendored
+        # discord.py has NO ``Guild.client`` — the old lookup silently
+        # skipped EVERY dynamic channel (attack salon, battle room,
+        # FFA salon) with « no client on the guild ». The canonical
+        # reach on this discord.py is the connection state's
+        # ``_get_client()``; the property stays for future versions.
+        state = getattr(guild, "_state", None)
+        get_client = getattr(state, "_get_client", None)
+        client = get_client() if callable(get_client) else None
+    if client is None:
         logger.warning("kingdom: no client on the guild — dynamic channel skipped (%s)", name)
         return None
     category_id = str(getattr(category, "id", "") or "") if category is not None else None
