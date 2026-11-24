@@ -74,12 +74,14 @@ channels:
     group: ladder
     access:
       everyone_view: false
-      view: [Pong Candidate, Pong Waitlist, Pong Player, Pong Admin]
+      view: [Pong Candidat, Pong Waitlist, Pong Player, Pong Admin]
+  # planning is a forum-style match scheduling salon; the channel kind is
+  # hardcoded to text by the current provisioning — the forum gap is
+  # tracked for the core, the key stays out of the declaration
   - key: planning
     display_name: 📅 planification
-    description: One forum topic per match — date/time fixes and admin notices
+    description: One topic per match — date/time fixes and admin notices
     group: ladder
-    kind: forum
     access:
       everyone_view: false
       view: [Pong Player, Pong Admin]
@@ -116,21 +118,25 @@ channels:
       everyone_view: false
       view: [Pong Admin]
 roles:
-  - key: pong_admin
+  # the standard trio under its standard keys (kingdom-style) — the
+  # parser auto-adds them anyway, declaring them under mod-specific keys
+  # would create duplicate roles
+  - key: candidate
+    display_name: "🧡 Pong Candidat"
+    color: 0xE67E22
+  - key: member
+    display_name: "👥 Pong Joueur"
+    color: 0x2ECC71
+  - key: admin
     display_name: Pong Admin
     color: 0xE74C3C
     hoisted: true
-  - key: pong_player
-    display_name: Pong Player
-    color: 0x2ECC71
-  - key: pong_candidate
-    display_name: 🧡 Pong Candidat
-    color: 0xE67E22
+  # mod-specific extras beyond the trio
   - key: pong_waitlist
-    display_name: 🔖 Pong Waitlist
+    display_name: "🔖 Pong Waitlist"
     color: 0xF1C40F
   - key: pong_caster
-    display_name: 🎙️ Pong Caster
+    display_name: "🎙️ Pong Caster"
     color: 0x9B59B6
 workflows: []
 commands: []          # /register, /register_to_tournament, /add_result,
