@@ -80,6 +80,7 @@ class GameDataClient:
         limit: int = 0,
         since_s: int = 0,
         leaderboard_id: str = "",
+        refresh: bool = False,
     ) -> Any:
         """Fetch the stored match history of the accounts (#404)."""
         from botforge.core.rpc.client import build_channel
@@ -94,6 +95,7 @@ class GameDataClient:
                     limit=limit,
                     since_s=since_s,
                     leaderboard_id=leaderboard_id,
+                    refresh=refresh,
                 ),
                 timeout=15.0,
             )

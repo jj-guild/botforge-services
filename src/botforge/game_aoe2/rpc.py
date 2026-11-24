@@ -76,6 +76,7 @@ def _parse_players(compact: str) -> list[gamedata_pb2.GamePlayerSlot]:
                 filled=True,
                 avatar_url=str(entry.get("avatar", "")),
                 country=str(entry.get("country", "")),
+                slot=int(entry.get("slot", 0) or 0),
             )
         )
     return slots
@@ -166,6 +167,7 @@ def summary_from_wire(wire: gamedata_pb2.GameMatchSummary) -> dict[str, Any]:
                 "avatar": p.avatar_url,
                 "country": p.country,
                 "team": p.team,
+                "slot": int(p.slot),
             }
             for p in wire.players
         ],
@@ -532,6 +534,11 @@ class GameDataServicer(gamedata_pb2_grpc.GameDataServicer):
         async def fetch() -> Any:
             return await self._stats_provider.get_match_history_wire(request)
 
+        if request.refresh:
+            # the owner's rule (2026-11-23): a click that just synced
+            # reads the store directly - no cache between a finished
+            # game and its card
+            return await fetch()
         return await self._cached(
             "history",
             TTL_MATCH_HISTORY_S,

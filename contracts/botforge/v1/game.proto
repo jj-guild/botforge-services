@@ -230,6 +230,7 @@ message MatchHistoryRequest {
   int32 limit = 2;                   // 0: the provider's default
   int64 since_s = 3;                 // only matches finished after (epoch s)
   string leaderboard_id = 4;         // "" : every leaderboard
+  bool refresh = 5;                  // true: bypass the TTL cache (fresh store read)
 }
 
 message MatchHistoryEntry {

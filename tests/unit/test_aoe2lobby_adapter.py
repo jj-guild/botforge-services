@@ -322,6 +322,8 @@ def test_match_summary_enriched_with_format_civs_links() -> None:
         "avatar": "",
         "country": "",
         "team": 1,
+        "slot": 1,
+        "ai": False,
     }
     assert players[1]["name"] == "Bob"
     assert summary["lobby_url"] == "https://www.aoe2lobby.com/j/111"
@@ -423,3 +425,28 @@ async def test_subscription_delta_logs_info_naming_profiles(caplog: Any) -> None
     info_lines = [r.getMessage() for r in caplog.records if r.name == ADAPTER_LOGGER and r.levelno == logging.INFO]
     # no name known yet: the profile ids name the players (fallback rule)
     assert any("123" in line and "456" in line for line in info_lines)
+
+async def test_the_summary_names_slots_and_ai_players() -> None:
+    """P-positions and AI seats ride the summary (owner 2026-11-23)."""
+    adapter = Aoe2LobbyAdapter()
+    await adapter.set_subscribed_profiles(["123"])
+    frame = {
+        "lobby_match_all": {
+            "523": {
+                "matchid": 523,
+                "map_name": "Budapest",
+                "slots": {
+                    "s1": {"profileid": 123, "status": 3, "name": "Alice", "team": 0, "civilization": 12},
+                    "s3": {"profileid": None, "status": 3, "name": "", "team": 1, "civilization": 20},
+                },
+            }
+        }
+    }
+    _frame(adapter, frame)
+    summary = adapter.match_summary("523", "lobby")
+    players = json.loads(summary["players"])
+    by_slot = {p["slot"]: p for p in players}
+    assert by_slot[1]["profile_id"] == "123" and by_slot[1]["ai"] is False
+    # a filled seat without a profile is a COMPUTER (owner: the AI seats render)
+    assert by_slot[3]["ai"] is True and by_slot[3]["name"] == "Computer"
+    assert int(by_slot[3]["civ"]) == 20

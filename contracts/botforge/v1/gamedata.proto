@@ -170,6 +170,7 @@ message GamePlayerSlot {
   bool filled = 5;
   string avatar_url = 6;      // the player's steam avatar, may be empty
   string country = 7;        // country code, may be empty
+  int32 slot = 8;            // the seat position P1-8, 0 when unknown
 }
 
 message GamePlayerEvent {

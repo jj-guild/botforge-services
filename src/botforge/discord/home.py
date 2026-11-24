@@ -990,6 +990,12 @@ _LIVE_SETTING_BOOLEANS = {
     "team_positions": "profile.matches_setting_team_positions",
     "team_together": "profile.matches_setting_team_together",
     "turbo_mode": "profile.matches_setting_turbo",
+    # the mode flags (owner 2026-11-23): the aoe2lobby payload names
+    # them, the schema labels them Yes/No - the checkboxes render them
+    "ew_mode": "profile.matches_setting_ew",
+    "sudden_death_mode": "profile.matches_setting_sudden_death",
+    "regicide_mode": "profile.matches_setting_regicide",
+    "antiquity_mode": "profile.matches_setting_antiquity",
 }
 
 SETTING_BOOLEANS = {
@@ -1049,6 +1055,16 @@ def _card_footer_text(card: dict[str, Any], labels: dict[str, Any], me_ids: set[
     (getMatchHistory?matchIDs, the public GET - owner 2026-11-23):
     the card's match id, no profile page, no count.
     """
+    status = str(card.get("status") or "")
+    if status in ("lobby", "ongoing"):
+        # a LIVE match names its source: aoe2lobby (owner 2026-11-23) -
+        # the join page while the lobby stands, the watch page during
+        # the game; libre:match serves the FINISHED history only
+        url = str(card.get("lobby_url") or card.get("spectate_url") or "")
+        source = str(labels.get("source_live", "Source : [aoe2lobby]({url})")).format(
+            url=url or "https://aoe2lobby.com/"
+        )
+        return f"-# {source}"
     match_id = str(card.get("match_id") or "").strip()
     source_url = LIBREMATCH_SOURCE_URL.format(match_id=match_id) if match_id else ""
     source = str(labels.get("source", "Source : libre:match")).format(url=source_url or "libre:match")
@@ -1219,10 +1235,41 @@ class _MatchSettingsButton(discord.ui.Button[Any]):
         self._labels = labels
 
     async def callback(self, interaction: discord.Interaction) -> None:
+        """Answer the settings view - REFRESHED for a live match.
+
+        A live match moves (owner 2026-11-23: the settings read stale
+        unless the whole view re-rendered): the click re-reads the
+        CURRENT snapshot and rebuilds the card before rendering - no
+        cache on a running match's settings, full freshness.
+        """
+        card = self._card
+        if card.get("status") in ("lobby", "ongoing"):
+            fresh = await _refresh_live_card(interaction, card)
+            if fresh is not None:
+                card = fresh
         await interaction.response.send_message(
-            view=_settings_view(self._card, self._labels),
+            view=_settings_view(card, self._labels),
             ephemeral=True,
         )
+
+
+async def _refresh_live_card(
+    interaction: discord.Interaction, card: dict[str, Any]
+) -> dict[str, Any] | None:
+    """Re-read ONE live card from the current dashboard snapshot."""
+    client = _live_client_for(interaction.client, "aoe2")
+    if client is None:
+        return None
+    try:
+        snapshot = await client.watch("aoe2")
+    except Exception:
+        logger.debug("the live settings refresh failed", exc_info=True)
+        return None
+    ref = str(card.get("match_ref") or card.get("match_id") or "")
+    for fresh in _cards_from_live_snapshot(snapshot):
+        if str(fresh.get("match_ref") or fresh.get("match_id")) == ref:
+            return fresh
+    return None
 
 
 def _settings_view(card: dict[str, Any], labels: dict[str, Any]) -> discord.ui.LayoutView:
@@ -1430,7 +1477,13 @@ def _seat_text(
     civ = str(player.get("civ") or "").strip()
     match_id = str(card.get("match_id") or card.get("match_ref") or "")
     finished = card.get("status") == "finished"
-    replay = REPLAY_URL.format(match_id=match_id, profile_id=pid) if match_id else ""
+    # the replay link ONLY when finished (owner 2026-11-23): a lobby
+    # or a running game has no replay - the link was nonsense there
+    replay = (
+        REPLAY_URL.format(match_id=match_id, profile_id=pid)
+        if match_id and finished
+        else ""
+    )
     jump = f"[[ \u25b8 ]]({replay})" if replay else ""
     # the display name reads the GUILD's own locale (aoe2techtree's
     # localized docs): the stored civ is the English reference key;
@@ -1743,9 +1796,12 @@ def _cards_from_live_snapshot(
             "status": "lobby" if state == "in_lobby" else "ongoing",
             "match_ref": ref,
             "match_id": ref,
+            # the WHEN of a live card reads the state's own "since"
+            # (owner 2026-11-23): the running game shows how long, the
+            # finished card keeps its end timestamp at the same place
+            "started_at": int(record.get("since") or 0) // 1000,
             "map_name": str(summary.get("map") or ""),
             "description": str(summary.get("match_type") or ""),
-            "started_at": 0,
             "finished_at": 0,
             "winners": [],
             "players": _live_summary_players(summary),
@@ -1793,6 +1849,7 @@ async def _finished_cards(
     interaction: discord.Interaction,
     me_ids: set[str],
     limit: int = 10,
+    refresh: bool = False,
 ) -> list[dict[str, Any]]:
     """Build the FINISHED cards - only the INTERESTING matches.
 
@@ -1804,7 +1861,7 @@ async def _finished_cards(
     """
     from botforge.discord.stats_views import recent_match_entries
 
-    entries = await recent_match_entries(sorted(me_ids), limit=limit)
+    entries = await recent_match_entries(sorted(me_ids), limit=limit, refresh=refresh)
     cards: list[dict[str, Any]] = []
     for entry in entries:
         finished_at = int(getattr(entry, "finished_at", 0) or 0)
@@ -1842,6 +1899,25 @@ def _entry_players_of(entry: Any) -> list[dict[str, Any]]:
     except Exception:
         return []
     return [dict(seat) for seat in seats if isinstance(seat, dict)]
+
+
+async def _sync_for_listing(interaction: discord.Interaction, me_ids: set[str]) -> None:
+    """Sync the viewed profiles' history on demand (the click's truth).
+
+    The daily loop is way too cold for a game that just ended (owner
+    2026-11-23: his finished match never showed in the five); the
+    listing owns its freshness: an upstream pass for the VIEWED
+    accounts, best-effort - a failure renders what the store has.
+    """
+    from botforge.discord.stats_views import stats_client
+
+    client = stats_client()
+    if client is None or not me_ids:
+        return
+    try:
+        await client.sync_stats(sorted(me_ids), wait=True)
+    except Exception:
+        logger.debug("the on-demand listing sync failed", exc_info=True)
 
 
 async def _send_match_panels(
@@ -1952,6 +2028,7 @@ async def _match_panel_labels(interaction: discord.Interaction) -> dict[str, Any
             "when": await reply(interaction, "profile.matches_when"),
             "duration": await reply(interaction, "profile.matches_duration"),
             "source": await reply(interaction, "profile.matches_source"),
+            "source_live": await reply(interaction, "profile.matches_source_live"),
             "colours": {
                 slot: await reply(interaction, f"profile.matches_colour_{slot}") for slot in SLOT_COLOURS
             },

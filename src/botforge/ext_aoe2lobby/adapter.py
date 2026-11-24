@@ -739,23 +739,34 @@ class Aoe2LobbyAdapter:
         match = self._matches[context].get(match_ref)
         if not isinstance(match, dict):
             return {}
-        slots = self._match_slots(match)
+        seats = self._match_seats(match)
         players: list[dict[str, Any]] = []
         teams: dict[int, int] = {}
-        for slot in slots:
+        for seat in seats:
+            slot, position = seat["slot"], seat["position"]
             profile_id = slot.get("profileid")
-            if profile_id in (None, ""):
-                continue
+            ai = profile_id in (None, "", 0) and int(
+                slot.get("civilization") or 0
+            ) != 0
+            name = str(slot.get("name") or "")
+            if ai and not name:
+                name = "Computer"
             team = int(slot.get("team") or 0)
-            teams[team] = teams.get(team, 0) + 1
+            if not ai:
+                teams[team] = teams.get(team, 0) + 1
             players.append(
                 {
-                    "profile_id": str(profile_id),
-                    "name": str(slot.get("name") or ""),
+                    "profile_id": str(profile_id or ""),
+                    "name": name,
                     "civilization": self._civ_label(slot.get("civilization")),
-                    "avatar": str(slot.get("steam_avatar") or ""),
-                    "country": str(slot.get("country") or ""),
+                    "avatar": "" if ai else str(slot.get("steam_avatar") or ""),
+                    "country": "" if ai else str(slot.get("country") or ""),
                     "team": team,
+                    # the seat position reads P1-8 (owner 2026-11-23: the
+                    # live cards showed no slot badge); an AI seat marks
+                    # itself so the panels render it honestly
+                    "slot": position,
+                    "ai": ai,
                 }
             )
         host_profile = str(match.get("host_profileid") or "")
@@ -777,6 +788,8 @@ class Aoe2LobbyAdapter:
                         "avatar": p["avatar"],
                         "country": p["country"],
                         "team": p["team"],
+                        "slot": p["slot"],
+                        "ai": p["ai"],
                     }
                     for p in players
                 ]
@@ -811,6 +824,12 @@ class Aoe2LobbyAdapter:
         "full_tech_tree",
         "record",
         "shared_exploration",
+        # the mode flags the owner asked for (2026-11-23): they ride the
+        # payload named, the schema ws labels them Yes/No
+        "ew_mode",
+        "sudden_death_mode",
+        "regicide_mode",
+        "antiquity_mode",
         "team_positions",
         "team_together",
         "turbo_mode",
@@ -823,10 +842,27 @@ class Aoe2LobbyAdapter:
 
     def _match_slots(self, match: dict[str, Any]) -> list[dict[str, Any]]:
         """Extract the occupied slot dicts of one match payload."""
+        return [seat["slot"] for seat in self._match_seats(match)]
+
+    def _match_seats(self, match: dict[str, Any]) -> list[dict[str, Any]]:
+        """Extract the occupied seats (humans AND AIs) with their P-position.
+
+        A FILLED seat (status 3) without a profile id is an AI seat
+        (owner 2026-11-23: the AI players never rendered); the slot
+        keys name the seat ("s1".."s8"), the position reads P1-8.
+        """
         slots = match.get("slots")
         if not isinstance(slots, dict):
             return []
-        return [s for s in slots.values() if isinstance(s, dict) and s.get("status") == 3]
+        seats: list[dict[str, Any]] = []
+        for key in sorted(slots.keys(), key=lambda k: _slot_position_of(k)):
+            slot = slots[key]
+            if not isinstance(slot, dict) or slot.get("status") != 3:
+                continue
+            if slot.get("profileid") in (None, "", 0) and not slot.get("civilization"):
+                continue  # an empty ready slot is nobody
+            seats.append({"slot": slot, "position": _slot_position_of(key)})
+        return seats
 
     def _schedule_close(self, profile_id: str, match_ref: str, now_ms: float) -> None:
         """Park a removal behind the game module's grace window (§4 trap).
@@ -904,6 +940,12 @@ def _profiles_of(matches: dict[str, dict[str, Any]]) -> set[str]:
             if isinstance(slot, dict) and slot.get("status") == 3 and slot.get("profileid") not in (None, ""):
                 profiles.add(str(slot["profileid"]))
     return profiles
+
+
+def _slot_position_of(key: str) -> int:
+    """Read the seat position off a slot key ("s4" -> 4, 0 unknown)."""
+    digits = "".join(ch for ch in str(key) if ch.isdigit())
+    return int(digits) if digits else 0
 
 
 def _format_label(teams: dict[int, int], player_count: int) -> str:

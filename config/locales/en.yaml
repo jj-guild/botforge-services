@@ -116,12 +116,22 @@ en:
       matches_setting_team_positions: "Team positions"
       matches_setting_team_together: "Teams together"
       matches_setting_turbo: "Turbo mode"
+
+      matches_setting_ew: "Empire Wars mode"
+
+      matches_setting_sudden_death: "Sudden death"
+
+      matches_setting_regicide: "Regicide mode"
+
+      matches_setting_antiquity: "Antiquity mode"
       matches_setting_full_tech: "Full tech tree"
       matches_setting_record: "Game recorded"
       matches_setting_shared_expl: "Shared exploration"
       matches_when: "Played {when}"
       matches_duration: "Duration: {clock}"
       matches_source: "Source: [libre:match]({url})"
+
+      matches_source_live: "Source: [aoe2lobby]({url})"
       matches_setting_mode: Mode
       matches_setting_size: Size
       matches_setting_pop: Pop

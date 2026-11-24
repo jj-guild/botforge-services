@@ -251,6 +251,39 @@ def _settings_of(options_json: str) -> list[list[str]]:
     return out
 
 
+def _ai_seats(slots_json: str, teams: dict[str, int]) -> list[dict[str, Any]]:
+    """Build the AI seats the slotinfo carries (owner 2026-11-23).
+
+    A filled slot without a profile is a computer - it never joined
+    the members walk, but it PLAYED; no elo lines, the civ speaks.
+    """
+    try:
+        slots = json.loads(slots_json) if slots_json else []
+    except Exception:
+        return []
+    if not isinstance(slots, list):
+        return []
+    seats: list[dict[str, Any]] = []
+    for slot in slots:
+        if not isinstance(slot, dict) or slot.get("slot_kind") != "ai":
+            continue
+        if str((slot or {}).get("profile_id", "")) in teams:
+            continue
+        seats.append(
+            {
+                "profile_id": "",
+                "alias": str(slot.get("ai_name") or "IA"),
+                "civ": civ_name_of(slot.get("civ")),
+                "team": int(slot.get("team") or 0),
+                "slot": int(slot.get("slot_index") or 0),
+                "ai": True,
+                "rating_before": 0,
+                "rating_after": 0,
+            }
+        )
+    return seats
+
+
 def _board_complete(doc: dict[str, Any] | None, board_ids: tuple[str, ...]) -> bool:
     """Return True when every wanted board is known (a value, a peak, or the absence)."""
     boards = (doc or {}).get("leaderboards") or {}
@@ -765,6 +798,8 @@ class MatchHistorySyncer:
             }
             for pid in profile_ids
         ]
+        # the AI seats ride the slotinfo too (owner 2026-11-23)
+        players.extend(_ai_seats(slots_json, teams))
         board = str(match.get("leaderboard") or "")
         lobby = str(match.get("description") or "").strip()
         return {
