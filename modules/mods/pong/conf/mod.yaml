@@ -2,12 +2,12 @@
 # Design: botforge repo docs/MODS/pong/ (REFERENCE.md = the S5 règlement,
 # RULES/ENVIRONMENT/TESTS/DECISIONS — PR botforge#231).
 #
-# Bootstrap declaration: enabled stays false until the mod package
-# (modules/mods/pong/{src,cogs,grpc}) lands — a disabled mod is never
-# loaded, so the envs can carry the declaration harmlessly.
+# Enabled with the slice package (modules/mods/pong/{src,cogs,grpc}):
+# a disabled mod is never loaded; flipping this in the SAME PR as the
+# package keeps main bootable at all times.
 # Design answers integrated (D-PONG-005..019, sessions 2026-11-23).
 id: pong
-enabled: false
+enabled: true
 # the visual identity is data
 emoji: "🏓"
 # season-based tournament (root lifecycle panel + per-season admin salon)
