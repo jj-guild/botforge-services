@@ -1,0 +1,22 @@
+# Strings FR du slice du mod pong (i18n-first : aucune string UI en dur dans le cog).
+pong:
+  commands:
+    pong:
+      description: "Panneau d'accueil AOE Pong"
+    register:
+      description: "S'inscrire au tournoi AOE Pong (consentement requis)"
+  home:
+    title: "AOE Pong"
+    state: "État de la saison : {state}"
+    players: "Joueurs inscrits : {players}"
+  register:
+    consent: "L'inscription stocke votre identifiant Discord dans les données du tournoi de ce serveur (porte de confidentialité, RG-REG-1). Acceptez-vous ?"
+    accept: "J'accepte"
+    refuse: "Non, annuler"
+    done: "Vous êtes inscrit·e comme candidat·e."
+    already: "Vous étiez déjà inscrit·e ; rien n'a changé."
+    refused: "Aucune donnée n'a été enregistrée."
+    no_season: "Pas de saison active pour l'instant : vous serez inscrit·e au démarrage de la prochaine."
+  errors:
+    unexpected: "Une erreur est survenue côté pong. Contactez un·e admin."
+    registration: "L'inscription a échoué de notre côté. Contactez un·e admin."
