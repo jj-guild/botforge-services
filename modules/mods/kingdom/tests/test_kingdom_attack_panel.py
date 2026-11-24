@@ -174,3 +174,38 @@ def test_phases_strings_are_phases_ready() -> None:
     for key in keys:
         assert key in DEFAULTS["fr"], key
         assert key in DEFAULTS["en"], key
+
+
+def _panel_button_ids(view: object) -> list[str]:
+    """Walk a LayoutView and collect every action-row button's custom_id."""
+    ids: list[str] = []
+
+    def _walk(node: object) -> None:
+        children = getattr(node, "children", None)
+        if isinstance(children, list):
+            for child in children:
+                custom = getattr(child, "custom_id", "")
+                if isinstance(custom, str) and custom:
+                    ids.append(custom)
+                _walk(child)
+
+    _walk(view)
+    return ids
+
+
+@pytest.mark.asyncio
+async def test_panel_stays_clean_reference_four_buttons() -> None:
+    """attaque-panel-clean-v1 (Drasah 24/11): the declare panel mirrors the
+    reference — EXACTLY the four battlefield buttons, NO navigation
+    (marry, alliances, market, treasury, tavern, mercenary belong to
+    their own surfaces, not to the attack panel)."""
+    from botforge.mods.kingdom.cogs.panel import build_attack_panel
+
+    view = await build_attack_panel("123")
+    ids = _panel_button_ids(view)
+    assert ids == [
+        "kingdom:attack:declare",
+        "kingdom:attack:history",
+        "kingdom:attack:plan",
+        "kingdom:attack:info",
+    ]
