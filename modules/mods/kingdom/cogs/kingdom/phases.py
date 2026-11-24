@@ -716,7 +716,7 @@ async def run_event_slots_safe(bot: Any) -> None:
             try:
                 channel = _geopolitics_channel(guild)
                 if channel is not None:
-                    await channel.send(_event_report_text(strings, report))
+                    await channel.send(await _event_report_text(strings, report))
             except Exception:
                 logger.warning("kingdom: one event report announcement failed", exc_info=True)
     # alliances-evenementiel-v1 (Drasah 23/11) : un changement de

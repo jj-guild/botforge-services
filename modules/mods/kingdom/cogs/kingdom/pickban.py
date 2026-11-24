@@ -552,7 +552,7 @@ async def edit_pickban_dms_reveal(bot: Any, attack: Any, strings: dict[str, str]
     ):
         if not player_id or (side == "defender" and attack.ai_defender):
             continue
-        _pid, content, view = sabotage_reveal_payload(stack, attack, side, strings)
+        _pid, content, view = await sabotage_reveal_payload(stack, attack, side, strings)
         ref = pickban.get(f"{side}_dm") or {}
         sent = await dm_user_safe(bot, player_id, content, view)
         if sent is not None:
@@ -637,7 +637,7 @@ async def sweep_sabotage_dms_on_open_safe(bot: Any, attack: Any, strings: dict[s
 
 async def refresh_sabotage_dm_safe(bot: Any, attack: Any, side: str, strings: dict[str, str]) -> None:
     """Edit one side's reveal DM after a sabotage pick (dm-fresh-v1)."""
-    player_id, content, view = sabotage_reveal_payload(wiring(), attack, side, strings)
+    player_id, content, view = await sabotage_reveal_payload(wiring(), attack, side, strings)
     if not player_id:
         return
     ref = (attack.pickban or {}).get(f"{side}_dm") or {}
