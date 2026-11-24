@@ -106,6 +106,7 @@ async def ensure_kingdom_surfaces(bot: Any) -> list[tuple[str, str]]:
         if _boot_provision_enabled():
             await _rattrapage_sidebar(guild, guild_id)
             await _rattrapage_tail(bot)
+            await _rattrapage_ranks(bot)
         try:
             commands = await _ensure_commands(bot, guild_id)
         except Exception:  # noqa: BLE001
@@ -172,6 +173,23 @@ async def _rattrapage_tail(bot: Any) -> None:
             logger.info("kingdom: boot re-asserted %d bottom categorie(s)", moved)
     except Exception:
         logger.warning("kingdom: the boot bottom assert failed", exc_info=True)
+
+
+async def _rattrapage_ranks(bot: Any) -> None:
+    """saisons-roles-v1 (Drasah 24/11) : le boot distribue les rangs.
+
+    Les saisons déjà engagées (l'incident Blanc) reçoivent leurs rôles
+    King/Lord dès le boot — la convergence relit la saison, les
+    manquants partent poser, les en trop retirer. Best-effort.
+    """
+    try:
+        from .season_roles_sync import sync_season_roles
+
+        moved = await sync_season_roles(bot)
+        if moved:
+            logger.info("kingdom: boot converged %d season role change(s)", moved)
+    except Exception:
+        logger.warning("kingdom: the boot rank assert failed", exc_info=True)
 
 
 async def _sweep_retired_profiles_category(guild: Any) -> int:

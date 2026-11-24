@@ -71,7 +71,7 @@ channels:
     access:
       everyone_view: true
       everyone_post: false
-      deny_view: [Kingdom Enregistré]
+      deny_view: [🪙 Kingdom Enregistré]
   - key: apply
     display_name: ⚔️ postuler
     description: Roi ou Seigneur ? — fonder ou rejoindre un royaume
@@ -79,7 +79,7 @@ channels:
     position: 2
     access:
       everyone_view: false
-      view: [Kingdom Enregistré, Kingdom Admin]
+      view: [🪙 Kingdom Enregistré, Kingdom Admin]
   - key: seigneurerie
     display_name: 🛡️ seigneurerie
     description: The lords' desk — queue, candidates, assignments (admin only)

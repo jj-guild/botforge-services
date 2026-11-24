@@ -845,6 +845,17 @@ async def _accept_season_entry(
                 realm = await service.save_habitat(str(realm.id), ids)
         except Exception:  # noqa: BLE001
             logger.warning("kingdom: realm habitat wake failed", exc_info=True)
+    # saisons-roles-v1 (Drasah 24/11) : l'acceptation DISTRIBUE les
+    # rangs de la saison — le Roi reçoit Kingdom King, ses seigneurs
+    # Kingdom Lord, la passe de convergence décide (best-effort).
+    try:
+        from .season_roles_sync import sync_season_roles
+
+        synced = await sync_season_roles(getattr(interaction, "client", None))
+        if synced:
+            logger.info("kingdom: acceptance converged %d season role change(s)", synced)
+    except Exception:  # never blocks the note
+        logger.warning("kingdom: the acceptance rank pass failed", exc_info=True)
     return note
 
 
@@ -907,6 +918,14 @@ async def _eject_season_entry(
                     ids["hub_message"] = hub_message
                 if ids:
                     await service.save_habitat(str(realm.id), ids)
+                # saisons-roles-v1 (Drasah 24/11) : l'éjection REPRIE
+                # le rang — la convergence retire King/Lord aux partants.
+                try:
+                    from .season_roles_sync import sync_season_roles
+
+                    await sync_season_roles(getattr(target, "client", None))
+                except Exception:  # never blocks the eject
+                    logger.warning("kingdom: the eject rank pass failed", exc_info=True)
                 # realm-content-v1 : hygiène d'éjection — les messages
                 # d'entrée partent avec le royaume (best-effort).
                 try:

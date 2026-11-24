@@ -945,6 +945,16 @@ async def run_mod_pin_refresh_pass(bot: Any) -> int:
                 guild_id,
                 exc_info=True,
             )
+        # saisons-roles-v1 (Drasah 24/11) : la passe RESSERRE aussi les
+        # rangs de la saison — un rang perdu, un membre éjecté, une
+        # fin de saison : tout guérit dans le cycle, la même convergence
+        # qui ouvre Kingdom-Gaïa et les champs de bataille aux joueurs.
+        from .season_roles_sync import sync_season_roles
+
+        try:
+            await sync_season_roles(bot)
+        except Exception:  # the pass never raises
+            logger.warning("kingdom: the season roles pass failed", exc_info=True)
     return touched
 
 

@@ -455,7 +455,7 @@ def test_the_conscription_declaration_rides_the_parcours() -> None:
     assert conscription == ["register", "apply", "seigneurerie", "realms"]
     register = next(c for c in conf["channels"] if c["key"] == "register")
     policy = ChannelAccessPolicy.from_dict(register["access"])
-    assert policy.deny_view == ("Kingdom Enregistré",), "registred players lose the salon"
+    assert policy.deny_view == ("🪙 Kingdom Enregistré",), "registred players lose the salon"
     assert policy.everyone_view is True, "the account door stays public"
     seigneurerie = next(c for c in conf["channels"] if c["key"] == "seigneurerie")
     assert seigneurerie["admin_only"] is True
