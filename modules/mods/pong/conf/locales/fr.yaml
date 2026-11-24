@@ -1,5 +1,14 @@
-# Strings FR du slice du mod pong (i18n-first : aucune string UI en dur dans le cog).
+# Strings FR du mod pong (i18n-first : aucune string UI en dur, jamais).
+# Slice v1 (D-PONG-037) : aucune surface mod livrée ; ces clés documentent
+# la front door d'inscription (SC-PONG-001/002, porte de consentement
+# RG-REG-1) qui arrive au step 3 en boutons d'action déclarés sur les menus
+# auto-générés. Le test de parité fr/en maintient l'honnêteté des deux
+# catalogues d'ici là.
 pong:
+  home:
+    title: "AOE Pong"
+    state: "État de la saison : {state}"
+    players: "Joueurs inscrits : {players}"
   register:
     consent: "L'inscription stocke votre identifiant Discord dans les données du tournoi de ce serveur (porte de confidentialité, RG-REG-1). Acceptez-vous ?"
     accept: "J'accepte"

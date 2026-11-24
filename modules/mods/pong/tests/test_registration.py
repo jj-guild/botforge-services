@@ -1,4 +1,5 @@
-"""pong mod slice tests: consent-gated registration + fr/en locale parity."""
+"""pong mod slice tests: consent-gated registration, locale parity, and the
+no-commands surface rule (D-PONG-037)."""
 
 from __future__ import annotations
 
@@ -63,6 +64,7 @@ async def test_registration_is_idempotent(store: RecordingStore) -> None:
 
 
 async def test_status_reports_the_guild_and_player_count(store: RecordingStore) -> None:
+    """The status payload feeds the home/status surfaces (mod + guild + count)."""
     service = RegistrationService(store)
     await service.register_with_consent("guild-1", "user-1", consent=True)
     status = await service.status("guild-1")
@@ -72,28 +74,28 @@ async def test_status_reports_the_guild_and_player_count(store: RecordingStore) 
 
 
 def test_impl_satisfies_the_contract() -> None:
+    """The grpc implementation implements the contract (R5: the cog's seam)."""
     impl = PongServiceImpl()
     assert isinstance(impl, PongContract)
 
 
-class _NullBot:
-    """A bot stand-in carrying only the home builders dict."""
+def test_cog_registers_no_slash_commands() -> None:
+    """D-PONG-037 (owner direction 2026-11-24): the pong cog adds NO slash
+    command — the mod surface rides the core /home + /admin commands and the
+    auto-generated mod menus (botforge-services#377)."""
+    from botforge.mods.pong import cogs
 
-    mod_home_builders: dict[str, Any] = {}
+    added: list[Any] = []
 
+    class _Tree:
+        def add_command(self, command: Any) -> None:
+            added.append(command)
 
-def test_cog_wires_views_and_actions_no_commands() -> None:
-    """The mod adds NO slash commands: its surface rides declared views/actions."""
-    from botforge.discord.views_routing import wired_actions, wired_views
+    class _Bot:
+        tree = _Tree()
 
-    import botforge.mods.pong.cogs as cogs
-
-    assert callable(getattr(cogs, "register", None))
-    bot = _NullBot()
-    cogs.register(bot)
-    assert "menu:mod:pong:register" in wired_actions()
-    assert "mod:pong" in wired_views()
-    assert callable(bot.mod_home_builders.get("pong"))
+    cogs.register(_Bot(), None)  # type: ignore[arg-type]
+    assert not added
 
 
 def _flatten(mapping: dict[str, Any], prefix: str = "") -> set[tuple[str, str]]:
