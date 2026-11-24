@@ -1626,6 +1626,14 @@ def _card_map_section(card: dict[str, Any], ctx: dict[str, Any], labels: dict[st
     when_at = int(card.get("finished_at") or card.get("started_at") or 0)
     when_line = str(labels.get("when", "Il y a {when}")).format(when=f"<t:{when_at}:R>") if when_at else ""
     sub_lines = [when_line]
+    # an INVALID match still shows, WITH ITS STATUS (owner 2026-11-24:
+    # a match under five minutes or without a result seeds the
+    # matches salon like any other - the status line says why)
+    if card.get("invalid"):
+        sub_lines.append(
+            "-# " + str(labels.get("invalid", "Match non compté"))
+            + (" \u2014 " + str(card.get("invalid_reason") or "") if card.get("invalid_reason") else "")
+        )
     if card.get("status") == "finished":
         duration = max(0, int(card.get("finished_at") or 0) - int(card.get("started_at") or 0))
         if duration:
