@@ -6,7 +6,16 @@
 # wire_action) next to the standard admin flip the home rule requires.
 # The labels resolve in the platform catalog (config/locales): the
 # views builder renders button labels there, the mod's own catalog
-# carries the flow copy.
+# (modules/mods/pong/conf/locales) carries the flow copy.
+#
+# The admin view mirror (menu:mod:pong:admin) is declared explicitly:
+# the registry validates cross-references BOTH ways, and the button
+# target menu:mod:pong:admin would be an undeclared drift in any
+# context that loads the declarations without the boot-time mod
+# generation (the CI pytest views fixtures). The mirror equals the
+# generated content (mod_views.py) — declaring it keeps
+# validate_registry() empty everywhere; when the generated admin
+# surface evolves (step 3), the mirror follows in the same PR.
 views:
   menu:mod:pong:
     kind: menu
@@ -17,3 +26,11 @@ views:
       - target: menu:mod:pong:admin
         label: ui.homes.btn_admin
         admin: true
+  menu:mod:pong:admin:
+    kind: menu
+    scope: mods/admin
+    admin_surface: true
+    title_emoji: 🔓
+    buttons:
+      - label: ui.homes.btn_sync
+        sync: true
