@@ -1,14 +1,5 @@
 # en strings for the pong mod slice (i18n-first: no raw UI strings in the cog).
 pong:
-  commands:
-    pong:
-      description: "AOE Pong home panel"
-    register:
-      description: "Register for the AOE Pong tournament (consent required)"
-  home:
-    title: "AOE Pong"
-    state: "Season state: {state}"
-    players: "Registered players: {players}"
   register:
     consent: "Registering stores your Discord ID in this guild's tournament data (privacy gate, RG-REG-1). Do you consent?"
     accept: "I consent"

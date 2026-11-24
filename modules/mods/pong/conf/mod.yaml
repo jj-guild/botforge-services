@@ -74,7 +74,7 @@ channels:
       view: [member, admin]
   - key: bot_commands
     display_name: 🤖 bot-commands
-    description: The mod's slash commands (/register, /register_to_tournament…)
+    description: The mod's front door — /home > Mods > Pong (the registration flows from the home)
     group: ladder
     access:
       everyone_view: false
@@ -143,9 +143,12 @@ roles:
     display_name: "🎙️ Pong Caster"
     color: 0x9B59B6
 workflows: []
-commands: []          # /register_to_tournament, /add_result,
-                      # /validate_score, /contest_score, /recap (ephemeral)
-                      # — land with the cogs PR
+commands: []          # NO mod slash commands (owner direction 2026-11-24): the
+                      # surface rides the generated menus (menu:mod:pong) and
+                      # DECLARED ACTIONS (register: config/mods/pong.views.yaml
+                      # + wire_action in the cog); future flows (add_result,
+                      # validate_score, recap) ride the same views, never
+                      # top-level commands
 dependencies: []      # register/player identity: soft dependency to declare
                       # when the cogs land (declaration kept minimal now)
 # pong is an AoE2-bound tournament mod

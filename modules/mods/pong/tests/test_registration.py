@@ -76,6 +76,26 @@ def test_impl_satisfies_the_contract() -> None:
     assert isinstance(impl, PongContract)
 
 
+class _NullBot:
+    """A bot stand-in carrying only the home builders dict."""
+
+    mod_home_builders: dict[str, Any] = {}
+
+
+def test_cog_wires_views_and_actions_no_commands() -> None:
+    """The mod adds NO slash commands: its surface rides declared views/actions."""
+    from botforge.discord.views_routing import wired_actions, wired_views
+
+    import botforge.mods.pong.cogs as cogs
+
+    assert callable(getattr(cogs, "register", None))
+    bot = _NullBot()
+    cogs.register(bot)
+    assert "menu:mod:pong:register" in wired_actions()
+    assert "mod:pong" in wired_views()
+    assert callable(bot.mod_home_builders.get("pong"))
+
+
 def _flatten(mapping: dict[str, Any], prefix: str = "") -> set[tuple[str, str]]:
     """Flatten a locale YAML to ( dotted key, placeholder signature ) pairs."""
     keys: set[tuple[str, str]] = set()

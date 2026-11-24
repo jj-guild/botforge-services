@@ -1,0 +1,19 @@
+# Pong's declared navigation: the mod's OWN buttons on its generated
+# home (menu:mod:pong is auto-generated per enabled mod — mod_views.py;
+# this declaration OVERRIDES the generated one, last wins in the
+# registry). One custom ACTION button (register: the consent-gated
+# registration flow, behavior wired in the mod's cog at boot through
+# wire_action) next to the standard admin flip the home rule requires.
+# The labels resolve in the platform catalog (config/locales): the
+# views builder renders button labels there, the mod's own catalog
+# carries the flow copy.
+views:
+  menu:mod:pong:
+    kind: menu
+    scope: mods/general
+    buttons:
+      - label: ui.views.menu.mod.pong.register
+        action: register
+      - target: menu:mod:pong:admin
+        label: ui.homes.btn_admin
+        admin: true
