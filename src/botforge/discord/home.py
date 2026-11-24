@@ -1678,8 +1678,16 @@ def _card_header(
     me_ids = me_ids or set()
     card = card or {}
     winners = {str(w) for w in card.get("winners") or []}
-    if me_ids and winners and card.get("status") == "finished":
-        scope_icon = "\U0001f3c6 " if winners & me_ids else "\U0001f480 "
+    if me_ids and card.get("status") == "finished" and not card.get("invalid"):
+        if winners:
+            scope_icon = "\U0001f3c6 " if winners & me_ids else "\U0001f480 "
+        elif any(bool((p or {}).get("ai")) for p in card.get("players") or []):
+            # no human victor with computers on the board: the AIs won,
+            # the scoped human LOST (owner 2026-11-24 - his 1v1v1
+            # against two AIs recorded no winner upstream)
+            scope_icon = "\U0001f480 "
+        elif card.get("status") == "finished":
+            scope_icon = ""
     return f"{scope_icon}**{name_part}** {noun}{id_part}"
 
 
@@ -1940,6 +1948,16 @@ async def _finished_cards(
         invalid = bool(getattr(entry, "invalid", False) or False)
         if (not finished_at or not winners) and not invalid:
             continue
+        seats = _entry_players_of(entry)
+        if invalid:
+            # the seal may pre-date the AI rule: a FINISHED match
+            # against computers with no recorded winner is DECIDED -
+            # the computers won (owner 2026-11-24: his 1v1v1 against
+            # two AIs returned no victor) - never a hole, the humans
+            # lost, the card renders the defeat
+            invalid = _invalid_reason_type_of(
+                int(getattr(entry, "started_at", 0) or 0), finished_at, winners, seats
+            ) != ""
         cards.append(
             {
                 "status": "finished",
@@ -1955,7 +1973,7 @@ async def _finished_cards(
                 "started_at": int(getattr(entry, "started_at", 0) or 0),
                 "finished_at": finished_at,
                 "winners": winners,
-                "players": _entry_players_of(entry),
+                "players": seats,
                 "settings": _entry_settings_of(entry),
                 "options_json": str(getattr(entry, "options_json", "") or ""),
             }
@@ -1963,16 +1981,31 @@ async def _finished_cards(
         if invalid:
             # the SEALED card rides its status (owner 2026-11-24)
             cards[-1]["invalid"] = True
-            cards[-1]["invalid_reason"] = _invalid_reason_type_of(entry, finished_at, winners)
+            cards[-1]["invalid_reason"] = _invalid_reason_type_of(
+                int(getattr(entry, "started_at", 0) or 0), finished_at, winners, seats
+            )
     return cards
 
 
-def _invalid_reason_type_of(entry: Any, finished_at: int, winners: tuple[str, ...]) -> str:
-    """Why the seal: a KEY, the label resolves at render time."""
-    del entry
-    if not finished_at or not winners:
+def _invalid_reason_type_of(
+    started_at: int, finished_at: int, winners: tuple[str, ...] | list[str], players: list[dict[str, Any]]
+) -> str:
+    """Why the seal: a KEY, the label resolves at render time.
+
+    A finished match without a winner is only NEVER DECIDED when no
+    computer played (owner 2026-11-24): the AIs carry no profile id,
+    upstream records no human victor - the computers won, the match
+    counts, the humans lost.
+    """
+    if not finished_at:
         return "no_result"
-    return "short"
+    if not winners:
+        if any(bool((p or {}).get("ai")) for p in players):
+            return ""  # the computers decided it - the humans lost
+        return "no_result"
+    if finished_at - max(0, int(started_at)) < 300:
+        return "short"
+    return ""
 
 
 def _entry_players_of(entry: Any) -> list[dict[str, Any]]:

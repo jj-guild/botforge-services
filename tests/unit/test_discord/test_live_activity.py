@@ -9,6 +9,7 @@ player. A guild WITHOUT the matches salon sees the logs only.
 
 from __future__ import annotations
 
+import json
 from typing import Any
 
 import botforge.discord.live_activity as feed
@@ -83,6 +84,19 @@ def test_the_seed_card_labels_the_invalid_matches() -> None:
          "winners": ["848567"], "players_json": "[]", "options_json": ""},
     )
     assert "invalid" not in valid, "a decided match never carries the status"
+    # the AI rule (owner 2026-11-24): a finished 1v1v1 against two
+    # computers records no human victor - the match COUNTS, the
+    # computers won, no seal on it
+    ffa = feed._seed_card_of(
+        {"match_id": "523338329", "started_at": 1732300000, "finished_at": 1732302000,
+         "winners": [],
+         "players": [{"profile_id": "848567", "alias": "Merlin Pinpin", "ai": False}],
+         "slots_json": '[{"slot_kind": "ai", "ai_name": "IA", "team": 2, "slot_index": 2}]',
+         "teams": {"848567": 1}, "options_json": ""},
+    )
+    assert "invalid" not in ffa, "the computers decided it - the humans lost, the match counts"
+    # the missing AI seats re-fold from the slotinfo at read time
+    assert any(bool((s or {}).get("ai")) for s in ffa["players"])
 
 
 def test_the_invalid_status_renders_on_the_card() -> None:
@@ -104,11 +118,70 @@ def test_the_invalid_status_renders_on_the_card() -> None:
     assert "forfait" in text
 
 
-async def test_the_listing_shows_the_sealed_matches() -> None:
+def test_the_listing_shows_the_sealed_matches() -> None:
     """An invalidated entry renders in the five - with its status key."""
     from botforge.discord.home import _invalid_reason_type_of
 
     # never decided: no completion, no winner
-    assert _invalid_reason_type_of(None, 0, ()) == "no_result"
+    assert _invalid_reason_type_of(0, 0, (), []) == "no_result"
     # decided but under five minutes
-    assert _invalid_reason_type_of(None, 1732300180, ("848567",)) == "short"
+    assert _invalid_reason_type_of(1732300000, 1732300180, ("848567",), []) == "short"
+    # the AI rule: finished, no human victor, computers on board -
+    # the match counts (the AIs won, the scoped human LOST)
+    seats = [{"profile_id": "848567", "ai": False}, {"profile_id": "", "ai": True}]
+    assert _invalid_reason_type_of(1732300000, 1732302000, (), seats) == ""
+
+
+def test_the_ai_decrease_the_scoped_emoji_to_a_loss() -> None:
+    """The 1v1v1 lost against the computers rides the skull, not a void."""
+    from botforge.discord.home import _card_header
+
+    card = {
+        "status": "finished",
+        "players": [
+            {"profile_id": "848567", "ai": False},
+            {"profile_id": "", "alias": "IA", "ai": True},
+        ],
+        "winners": [],
+    }
+    text = _card_header("CUSTOM FFA", "Match n\u00b0", "523338329", me_ids={"848567"}, card=card)
+    assert "\U0001f480" in text, "the human lost to the computers - the skull renders"
+
+
+def test_the_live_card_serves_the_ai_seats_of_the_other_provider() -> None:
+    """An aoe2lobby lobby against computers renders their seats (owner 2026-11-24).
+
+    The LIVE provider (the WS feed) rides a DIFFERENT payload than the
+    WE store: the summary's own ``players`` json carries ``ai: true``
+    for the computers - the shared builder must keep them, badge and
+    all, through ``_live_card_of``.
+    """
+    summary = {
+        "match_ref": "523338329",
+        "map": "Budapest",
+        "match_type": "Unranked solo",
+        "players": json.dumps(
+            [
+                {"profile_id": "848567", "name": "Merlin Pinpin", "civ": "Mayans", "team": 1, "slot": 4, "ai": False},
+                {"profile_id": "", "name": "Computer", "civ": "Franks", "team": 2, "slot": 2, "ai": True},
+            ]
+        ),
+    }
+    card = feed._live_card_of("523338329", summary, "lobby", 1732400000)
+    from botforge.discord.home import _match_card_parts
+
+    blocks, _buttons, match_id, _accent = _match_card_parts(
+        card, {"civ_urls": {}, "civ_images": {}, "map_urls": {}, "map_images": {},
+               "map_display": {}, "civ_display": {}, "ladder": {}},
+        set(), {"team": "Team"},
+    )
+    assert match_id == "523338329"
+    text = ""
+    import discord as _discord
+
+    view = _discord.ui.LayoutView(timeout=None)
+    for block in blocks:
+        view.add_item(block)
+    text = str(view.to_components())
+    assert any(bool((p or {}).get("ai")) for p in card["players"]), "the computers ride the card"
+    assert "Computer" in text, "the computer's seat renders"

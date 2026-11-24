@@ -251,6 +251,19 @@ def _settings_of(options_json: str) -> list[list[str]]:
     return out
 
 
+def _players_with_ai(doc: dict[str, Any]) -> list[dict[str, Any]]:
+    """Return the doc's seats - the AI seats ride along when the ingest missed them.
+
+    An old capture folds its players BEFORE the AI rule (owner
+    2026-11-24: his 1v1v1 against two computers served one seat);
+    the slotinfo carries the computers anyway - re-fold at read time.
+    """
+    players = list(doc.get("players") or [])
+    if any(bool((p or {}).get("ai")) for p in players):
+        return players
+    return [*players, *_ai_seats(str(doc.get("slots_json") or ""), doc.get("teams") or {})]
+
+
 def _ai_seats(slots_json: str, teams: dict[str, int]) -> list[dict[str, Any]]:
     """Build the AI seats the slotinfo carries (owner 2026-11-23).
 
@@ -847,7 +860,7 @@ class MatchHistorySyncer:
             options_json=str(doc.get("options_json", "")),
             slots_json=str(doc.get("slots_json", "")),
             description=str(doc.get("description", "")),
-            players_json=json.dumps(doc.get("players") or [], ensure_ascii=False),
+            players_json=json.dumps(_players_with_ai(doc), ensure_ascii=False),
             invalid=bool(doc.get("invalid") or False),
             settings_json=json.dumps(doc.get("settings") or [], ensure_ascii=False),
         )

@@ -53,7 +53,7 @@ _SEED_SWEEP_S = 300.0
 # the seed's BUILD: a seed producing broken cards gets versioned up -
 # every salon re-seeds once with the fixed build (the old cards stay,
 # the guild owns its channel)
-_SEED_VERSION = 4  # 4: the seeds read the raw doc's players list (the v3 cards rode seatless)
+_SEED_VERSION = 5  # 5: the AI seats re-fold from the slotinfo, an AI-decided match never seals
 
 _MATCHES_SCOPE = "games/aoe2"
 _MATCHES_KEY = "matches"
@@ -542,9 +542,16 @@ def _seed_card_of(doc: dict[str, Any]) -> dict[str, Any]:
     finished = _int_of(doc.get("finished_at"))
     winners = [str(w) for w in doc.get("winners") or []]
     duration = max(0, finished - started) if finished >= started > 0 else 0
+    seats = _players_json(doc)
     invalid_reason = ""
     if not finished or not winners:
-        invalid_reason = "no_result"
+        # the AI rule (owner 2026-11-24): a finished match against
+        # computers with no recorded winner is DECIDED - the AIs won,
+        # the humans lost; no seal, the defeat renders
+        if finished and any(bool((s or {}).get("ai")) for s in seats):
+            invalid_reason = ""
+        else:
+            invalid_reason = "no_result"
     elif duration < _INVALID_DURATION_S:
         invalid_reason = "short"
     card: dict[str, Any] = {
@@ -558,7 +565,7 @@ def _seed_card_of(doc: dict[str, Any]) -> dict[str, Any]:
         "started_at": started,
         "finished_at": finished,
         "winners": winners,
-        "players": _players_json(doc),
+        "players": seats,
         "settings": [],
         "options_json": str(doc.get("options_json") or ""),
     }
@@ -602,13 +609,20 @@ def _players_json(doc: dict[str, Any]) -> list[dict[str, Any]]:
     reads the raw collection, so the list comes first.
     """
     seats = doc.get("players")
-    if isinstance(seats, list):
-        return [dict(seat) for seat in seats if isinstance(seat, dict)]
-    try:
-        seats = json.loads(str(doc.get("players_json") or "[]"))
-    except (ValueError, TypeError):
-        return []
-    return [dict(seat) for seat in seats if isinstance(seat, dict)]
+    if not isinstance(seats, list):
+        try:
+            seats = json.loads(str(doc.get("players_json") or "[]"))
+        except (ValueError, TypeError):
+            seats = []
+    folded = [dict(seat) for seat in seats if isinstance(seat, dict)]
+    # an old capture predates the AI rule (owner 2026-11-24: his
+    # 1v1v1 against two computers served one seat): the slotinfo
+    # carries the computers anyway - re-fold at read time
+    from botforge.ext_librematch.history import _ai_seats
+
+    if not any(bool((s or {}).get("ai")) for s in folded):
+        folded.extend(_ai_seats(str(doc.get("slots_json") or ""), doc.get("teams") or {}))
+    return folded
 
 
 async def _seed_marker(guild_id: str) -> Any | None:
