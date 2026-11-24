@@ -980,6 +980,28 @@ _LIVE_SETTINGS_KEYS: dict[str, tuple[str, dict[str, str] | None]] = {
 
 #: the live lobby's named booleans -> the SAME locale keys as the
 #: finished cards' blob booleans (the panel renders one grammar)
+#: the game-rule checkboxes in THE GAME'S OWN ORDER (owner
+#: 2026-11-24), "(blob key, live key, locale)": the blob key serves
+#: the finished cards, the live key the lobbies/ongoing ones; a None
+#: key renders "?" - the option exists in the game but the provider
+#: never carries it (Handicap: no feed field, unknown blob key)
+SETTING_CHECKBOX_ORDER = (
+    ("66", "lock_teams", "profile.matches_setting_lock_teams"),
+    ("78", "team_together", "profile.matches_setting_team_together"),
+    ("77", "team_positions", "profile.matches_setting_team_positions"),
+    ("76", "shared_exploration", "profile.matches_setting_shared_expl"),
+    (None, None, "profile.matches_setting_handicap"),  # "?" always
+    ("65", "lock_speed", "profile.matches_setting_lock_speed"),
+    ("1", "cheats", "profile.matches_setting_cheats"),
+    ("79", "turbo_mode", "profile.matches_setting_turbo"),
+    ("62", "full_tech_tree", "profile.matches_setting_full_tech"),
+    (None, "ew_mode", "profile.matches_setting_ew"),
+    (None, "sudden_death_mode", "profile.matches_setting_sudden_death"),
+    (None, "regicide_mode", "profile.matches_setting_regicide"),
+    (None, "antiquity_mode", "profile.matches_setting_antiquity"),
+    ("75", "record", "profile.matches_setting_record"),
+)
+
 _LIVE_SETTING_BOOLEANS = {
     "cheats": "profile.matches_setting_cheats",
     "lock_speed": "profile.matches_setting_lock_speed",
@@ -1060,9 +1082,10 @@ def _card_footer_text(card: dict[str, Any], labels: dict[str, Any], me_ids: set[
         # a LIVE match names its source: aoe2lobby (owner 2026-11-23) -
         # the join page while the lobby stands, the watch page during
         # the game; libre:match serves the FINISHED history only
-        url = str(card.get("lobby_url") or card.get("spectate_url") or "")
+        # the site has NO per-match page (owner 2026-11-24): the link
+        # names the provider, the join/watch buttons own the match
         source = str(labels.get("source_live", "Source : [aoe2lobby]({url})")).format(
-            url=url or "https://aoe2lobby.com/"
+            url="https://aoe2lobby.com/"
         )
         return f"-# {source}"
     match_id = str(card.get("match_id") or "").strip()
@@ -1142,6 +1165,32 @@ def _settings_named_pairs(card: dict[str, Any]) -> list[tuple[str, str]]:
     return pairs
 
 
+def _live_bool_lines(card: dict[str, Any], labels: dict[str, Any], lines: list[str]) -> list[str]:
+    """Render the LIVE lobby's checkboxes (raw true/false, the game's order)."""
+    live = _live_settings(card)
+    if not live:
+        return lines
+    bool_labels: dict[str, str] = dict(labels.get("setting_bools_live") or {})
+    names: dict[str, str] = dict(labels.get("checkbox_names") or {})
+    separator_hit = False
+    for _blob_key, key, locale_key in SETTING_CHECKBOX_ORDER:
+        label = bool_labels.get(key or "") or names.get(locale_key) or str(locale_key).split(".")[-1]
+        if key is None:
+            # the option the feed never carries: "?" (owner
+            # 2026-11-24: Handicap is unknown in every source)
+            lines.append(f"❓ {label}")
+            continue
+        if key not in live:
+            continue
+        enabled = bool(live.get(key))
+        mark = "✅" if enabled else "⬜"
+        if not separator_hit and key == "lock_speed":
+            lines.append("──────────")
+            separator_hit = True
+        lines.append(f"{mark} {label}")
+    return lines
+
+
 def _live_named_pairs(card: dict[str, Any]) -> list[tuple[str, str]]:
     """Render the live lobby's named settings through the aoe2lobby tables."""
     live = _live_settings(card)
@@ -1189,27 +1238,22 @@ def _settings_bool_lines(card: dict[str, Any], labels: dict[str, Any]) -> list[s
     lines: list[str] = []
     if not isinstance(options, dict) or not options:
         # the live lobby's booleans are RAW true/false json (aoe2lobby)
-        live = _live_settings(card)
-        if not live:
-            return lines
-        bool_labels: dict[str, str] = dict(labels.get("setting_bools_live") or {})
-        for key, label_key_path in _LIVE_SETTING_BOOLEANS.items():
-            if key not in live:
-                continue
-            enabled = bool(live.get(key))
-            label = bool_labels.get(key) or str(label_key_path).split(".")[-1]
-            mark = "\u2705" if enabled else "\u2b1c"
-            lines.append(f"{mark} {label}")
-        return lines
-    # the finished cards: the blob's 'y'/'n' flags
+        return _live_bool_lines(card, labels, lines)
+    # the finished cards: the blob's 'y'/'n' flags, the game's order
     blob_labels: dict[str, str] = dict(labels.get("setting_bools") or {})
-    for key, label_key_path in SETTING_BOOLEANS.items():
-        raw_value = options.get(key)
+    names: dict[str, str] = dict(labels.get("checkbox_names") or {})
+    for blob_key, _live_key, locale_key in SETTING_CHECKBOX_ORDER:
+        label = blob_labels.get(blob_key or "") or names.get(locale_key) or str(locale_key).split(".")[-1]
+        if blob_key is None:
+            lines.append(f"❓ {label}")
+            continue
+        if blob_key == "65":
+            lines.append("──────────")
+        raw_value = options.get(blob_key)
         if raw_value in (None, ""):
             continue
         enabled = str(raw_value).lower() == "y"
-        label = blob_labels.get(key) or label_key_path.split(".")[-1]
-        mark = "\u2705" if enabled else "\u2b1c"
+        mark = "✅" if enabled else "⬜"
         lines.append(f"{mark} {label}")
     return lines
 
@@ -1517,6 +1561,10 @@ def _seat_text(
     is_team_game = len(_seat_teams(card)) and any(len(seats) > 1 for _, seats in _seat_teams(card))
     match_board = "rm_team" if is_team_game else "rm_1v1"
     ranked = str(card.get("lobby_title") or "").strip().upper() == "AUTOMATCH"
+    # the boards a player's card ALWAYS names: LB3 and LB4, nothing
+    # else (owner 2026-11-24: an Empire Wars TG automatch must not
+    # dress its board-14 elo as the TG line)
+    rm_board = str(card.get("leaderboard_id") or "") in ("3", "4")
     lines = [line]
     # an INVISIBLE fixed-width decal, no backticks (owner 2026-11-23:
     # the backtick span read as a visible token): Discord's renderer
@@ -1526,7 +1574,7 @@ def _seat_text(
     indent = "\u2800\u2800\u2800\u2800"
     for key, label in (("rm_1v1", "1v1"), ("rm_team", "TG")):
         current, peak = boards.get(key, (0, 0))
-        if key == match_board and (before if ranked else current):
+        if key == match_board and rm_board and (before if ranked else current):
             value = before if ranked else current
             highlight = max(value, peak, after if ranked else 0, 0)
             body = f"-# {indent}{label} : **{value}** - {highlight}"
@@ -1872,6 +1920,11 @@ async def _finished_cards(
             {
                 "status": "finished",
                 "match_id": str(getattr(entry, "match_id", "") or ""),
+                # the match's OWN WE board (3 = RM 1v1, 4 = RM TG, 13/14
+                # = Empire Wars...): the ladder lines stay LB3/LB4 only
+                # (owner 2026-11-24: his EW TG game displayed its
+                # board-14 elo as the "TG" line)
+                "leaderboard_id": str(getattr(entry, "leaderboard_id", "") or ""),
                 "map_name": str(getattr(entry, "map_name", "") or ""),
                 "lobby_title": str(getattr(entry, "description", "") or "").strip(),
                 "description": str(getattr(entry, "description", "") or ""),
@@ -2043,6 +2096,12 @@ async def _match_panel_labels(interaction: discord.Interaction) -> dict[str, Any
             "setting_bools_live": {
                 key: await reply(interaction, label_key)
                 for key, label_key in _LIVE_SETTING_BOOLEANS.items()
+            },
+            # one name per checkbox, whatever the source (the "-" keys
+            # render "?": the game's own order, owner 2026-11-24)
+            "checkbox_names": {
+                locale_key: await reply(interaction, locale_key)
+                for _blob_key, _live_key, locale_key in SETTING_CHECKBOX_ORDER
             },
             "match_noun": await reply(interaction, "profile.match_noun"),
             "lobby_noun": await reply(interaction, "profile.lobby_noun"),

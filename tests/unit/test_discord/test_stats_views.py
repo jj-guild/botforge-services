@@ -217,3 +217,65 @@ def test_the_live_dashboard_cards_come_from_the_snapshot_with_settings() -> None
     )
     assert match_id == "523203059"
     assert blocks and buttons and accent, "the card renders the full panel shape"
+
+def test_the_settings_checkboxes_read_the_games_order_with_a_separator() -> None:
+    """The checkbox block follows the game's own order (owner 2026-11-24)."""
+    from botforge.discord.home import _settings_bool_lines
+
+    card = {
+        "live_settings_json": (
+            '{"lock_teams": true, "team_together": true, "team_positions": false,'
+            ' "shared_exploration": false, "lock_speed": true, "cheats": false,'
+            ' "turbo_mode": false, "full_tech_tree": false, "ew_mode": false,'
+            ' "sudden_death_mode": false, "regicide_mode": false,'
+            ' "antiquity_mode": false, "record": true}'
+        ),
+    }
+    names = {
+        "lock_teams": "Équipes verrouillées", "team_together": "Équipes ensemble",
+        "team_positions": "Positions d'équipe", "shared_exploration": "Exploration partagée",
+        "lock_speed": "Vitesse verrouillée", "cheats": "Cheats",
+        "turbo_mode": "Mode Turbo", "full_tech_tree": "Arbre technologique complet",
+        "ew_mode": "Mode Empire Wars", "sudden_death_mode": "Mort subite",
+        "regicide_mode": "Mode Régicide", "antiquity_mode": "Mode Antiquité",
+        "record": "Partie enregistrée",
+    }
+    lines = _settings_bool_lines(card, {
+        "setting_bools_live": names,
+        "checkbox_names": {
+            "profile.matches_setting_handicap": "Handicap",
+            "profile.matches_setting_ew": "Mode Empire Wars",
+        },
+    })
+    # the game's own order: teams group, the "?" handicap, the separator, the rest
+    assert lines[0] == "✅ Équipes verrouillées"
+    assert lines[1] == "✅ Équipes ensemble"
+    assert lines[2] == "⬜ Positions d'équipe"
+    assert lines[3] == "⬜ Exploration partagée"
+    assert lines[4] == "❓ Handicap"
+    assert lines[5].startswith("──────────")
+    assert lines[6] == "✅ Vitesse verrouillée"
+    assert lines[-1] == "✅ Partie enregistrée"
+    assert "⬜ Mode Empire Wars" in lines  # the payload answers it: a checkbox, never a "?"
+
+
+def test_the_seat_ladder_lines_name_lb3_and_lb4_only() -> None:
+    """An Empire Wars TG automatch never dresses its board as the TG line."""
+    from botforge.discord.home import _seat_text
+
+    card = {
+        "status": "finished",
+        "match_id": "523338329",
+        "lobby_title": "AUTOMATCH",
+        # an Empire Wars TG match rides leaderboard 14 (owner 2026-11-24)
+        "leaderboard_id": "14",
+        "players": [{"profile_id": "848567", "alias": "Merlin", "team": 1, "slot": 1,
+                     "rating_before": 1499, "rating_after": 1511}],
+    }
+    ctx = {"civ_urls": {}, "civ_images": {}, "map_urls": {}, "map_images": {},
+           "civ_display": {}, "map_display": {},
+           "ladder": {"848567": {"rm_1v1": (1015, 1120), "rm_team": (1180, 1300)}}}
+    text, _ = _seat_text(card["players"][0], card, ctx, {})
+    # the RM TG board renders (plain, no board-14 bold masquerade)
+    assert "TG : 1180 - 1300" in text
+    assert "**1499**" not in text, "the EW board's own elo never dresses as TG"

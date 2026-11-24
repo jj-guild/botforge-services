@@ -124,6 +124,7 @@ en:
       matches_setting_regicide: "Regicide mode"
 
       matches_setting_antiquity: "Antiquity mode"
+      matches_setting_handicap: "Handicap"
       matches_setting_full_tech: "Full tech tree"
       matches_setting_record: "Game recorded"
       matches_setting_shared_expl: "Shared exploration"

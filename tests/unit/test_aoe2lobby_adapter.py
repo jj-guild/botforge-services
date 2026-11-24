@@ -414,7 +414,7 @@ async def test_known_player_event_logs_info_with_name(caplog: Any) -> None:
         events = _frame(adapter, {"lobby_match_all": {"111": lobby}})
     assert [e["type"] for e in events] == ["lobby_opened"]
     info_lines = [r.getMessage() for r in caplog.records if r.name == ADAPTER_LOGGER and r.levelno == logging.INFO]
-    assert any("Alice" in line and "lobby_opened" in line and "111" in line for line in info_lines)
+    assert any("Alice" in line and "lobby début" in line and "111" in line for line in info_lines)
 
 
 async def test_subscription_delta_logs_info_naming_profiles(caplog: Any) -> None:

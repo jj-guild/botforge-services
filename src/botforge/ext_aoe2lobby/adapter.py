@@ -745,15 +745,14 @@ class Aoe2LobbyAdapter:
         for seat in seats:
             slot, position = seat["slot"], seat["position"]
             profile_id = slot.get("profileid")
-            ai = profile_id in (None, "", 0) and int(
-                slot.get("civilization") or 0
-            ) != 0
+            ai = profile_id in (None, "", 0)
             name = str(slot.get("name") or "")
             if ai and not name:
                 name = "Computer"
             team = int(slot.get("team") or 0)
-            if not ai:
-                teams[team] = teams.get(team, 0) + 1
+            # the AIs count in the LAYOUT (1v1 vs a computer reads 1v1):
+            # a team holds *players*, human or computer
+            teams[team] = teams.get(team, 0) + 1
             players.append(
                 {
                     "profile_id": str(profile_id or ""),
@@ -847,9 +846,14 @@ class Aoe2LobbyAdapter:
     def _match_seats(self, match: dict[str, Any]) -> list[dict[str, Any]]:
         """Extract the occupied seats (humans AND AIs) with their P-position.
 
-        A FILLED seat (status 3) without a profile id is an AI seat
-        (owner 2026-11-23: the AI players never rendered); the slot
-        keys name the seat ("s1".."s8"), the position reads P1-8.
+        The feed's own grammar (verified live 2026-11-24, the owner's
+        AI lobby): status 3 = a human (with profileid), status 2 =
+        a COMPUTER (no profileid, its civ/team/color set), 0/1 =
+        open/closed - the first attempt keyed the AIs on status 3
+        and never caught one. The seat's game position reads the
+        COLOR (the game's own player number - the slot KEY follows
+        the join order, not the seat: "tu me mets toujours slot 1",
+        owner 2026-11-24); the keys only order the list.
         """
         slots = match.get("slots")
         if not isinstance(slots, dict):
@@ -857,11 +861,14 @@ class Aoe2LobbyAdapter:
         seats: list[dict[str, Any]] = []
         for key in sorted(slots.keys(), key=lambda k: _slot_position_of(k)):
             slot = slots[key]
-            if not isinstance(slot, dict) or slot.get("status") != 3:
+            if not isinstance(slot, dict):
                 continue
-            if slot.get("profileid") in (None, "", 0) and not slot.get("civilization"):
-                continue  # an empty ready slot is nobody
-            seats.append({"slot": slot, "position": _slot_position_of(key)})
+            status = int(slot.get("status") or 0)
+            if status not in (2, 3):
+                continue  # open/closed play nobody
+            if status == 2 and slot.get("profileid"):
+                continue  # a closed seat behind a player is not an AI
+            seats.append({"slot": slot, "position": _seat_position(slot, key)})
         return seats
 
     def _schedule_close(self, profile_id: str, match_ref: str, now_ms: float) -> None:
@@ -943,9 +950,25 @@ def _profiles_of(matches: dict[str, dict[str, Any]]) -> set[str]:
 
 
 def _slot_position_of(key: str) -> int:
-    """Read the seat position off a slot key ("s4" -> 4, 0 unknown)."""
+    """Read the ORDER of a slot key ("s4" -> 4, 0 unknown)."""
     digits = "".join(ch for ch in str(key) if ch.isdigit())
     return int(digits) if digits else 0
+
+
+def _seat_position(slot: dict[str, Any], key: str) -> int:
+    """Read the seat's GAME position: the color, 0 unknown.
+
+    The color IS the game's player number (owner 2026-11-24: the
+    badge read the slot key, which follows the join order, not the
+    seat); the key only keeps the list ordered.
+    """
+    try:
+        color = int(slot.get("color") or 0)
+    except (TypeError, ValueError):
+        color = 0
+    if 1 <= color <= 8:
+        return color
+    return _slot_position_of(key)
 
 
 def _format_label(teams: dict[int, int], player_count: int) -> str:

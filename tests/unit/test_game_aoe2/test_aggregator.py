@@ -227,7 +227,7 @@ async def test_known_event_logs_info_naming_the_player(caplog: Any) -> None:
     with caplog.at_level(logging.INFO, logger=AGGREGATOR_LOGGER):
         await agg.apply_event(FakeEvent("lobby_opened", ("123",), 1_000, "111", tuple(SUMMARY.items())))
     info_lines = [r.getMessage() for r in caplog.records if r.levelno == logging.INFO and r.name == AGGREGATOR_LOGGER]
-    assert any("Alice" in line and "lobby_opened" in line and "111" in line for line in info_lines)
+    assert any("Alice" in line and "lobby début" in line and "111" in line for line in info_lines)
 
 
 async def test_nameless_known_profile_falls_back_to_id_in_info(caplog: Any) -> None:
@@ -237,7 +237,7 @@ async def test_nameless_known_profile_falls_back_to_id_in_info(caplog: Any) -> N
     with caplog.at_level(logging.INFO, logger=AGGREGATOR_LOGGER):
         await agg.apply_event(FakeEvent("game_started", ("123",), 1_000, "111"))
     info_lines = [r.getMessage() for r in caplog.records if r.levelno == logging.INFO and r.name == AGGREGATOR_LOGGER]
-    assert any("123" in line and "game_started" in line for line in info_lines)
+    assert any("123" in line and "match début" in line for line in info_lines)
 
 async def test_the_summary_carries_its_match_ref() -> None:
     """A summary without its ref names nothing (owner 2026-11-23: the

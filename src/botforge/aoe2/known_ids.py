@@ -93,11 +93,22 @@ def log_match_event(
     """
     ids = [str(p) for p in profile_ids]
     known_ids = known.known_of(ids)
+    # ONE lifecycle lexicon (owner 2026-11-24: "début/update/fin de
+    # lobby/match n°123456"): lobby_opened... maps to plain French
+    # verbs, in the adapter, the game service and the panels' logs alike
+    verbs = {
+        "lobby_opened": "lobby début",
+        "lobby_closed": "lobby fin",
+        "match_updated": "lobby update",
+        "game_started": "match début",
+        "game_ended": "match fin",
+    }
+    event_type = verbs.get(event_type, event_type)
     if known_ids:
         map_name = str((metadata or {}).get("map", "") or "")
         suffix = f" map={map_name}" if map_name else ""
         logger.info(
-            "%s: %s — %s on match %s%s",
+            "%s: %s — %s n°%s%s",
             label,
             known.display_names(known_ids),
             event_type,
