@@ -104,16 +104,35 @@ def _window_string(interaction: discord.Interaction, key: str) -> str:
 
 def _with_close_row(view: "discord.ui.LayoutView", interaction: discord.Interaction) -> "discord.ui.LayoutView":
     """Append the explicit close control to a window view (#395: the
-    same parameterised row everywhere, never a bespoke per-view one)."""
-    row = discord.ui.ActionRow()
-    row.add_item(
+    same parameterised row everywhere, never a bespoke per-view one).
+
+    fenetres-classiques-v1 (Drasah 24/11, incident live « Kingdom Test
+    ne répond pas ») : the wizard steps pass a CLASSIC View, and
+    discord.py forbids v2 items there (``ValueError: v2 items cannot
+    be added to this view``) — the click crashed AFTER Discord's 3s
+    ack window, so the player saw « the application did not respond »
+    instead of his window. The branch keeps ONE close control, worn
+    the way the receiving view accepts it: an ActionRow (v2) on a
+    LayoutView, a plain Button on a classic View. Same custom_id,
+    same KingdomWindowCloseButton handler either way."""
+    if isinstance(view, discord.ui.LayoutView):
+        row = discord.ui.ActionRow()
+        row.add_item(
+            discord.ui.Button(
+                label=_window_string(interaction, "settings_window_close_button"),
+                style=discord.ButtonStyle.grey,
+                custom_id="kingdom:window:close",
+            )
+        )
+        view.add_item(row)
+        return view
+    view.add_item(
         discord.ui.Button(
             label=_window_string(interaction, "settings_window_close_button"),
             style=discord.ButtonStyle.grey,
             custom_id="kingdom:window:close",
         )
     )
-    view.add_item(row)
     return view
 
 

@@ -304,3 +304,27 @@ async def asyncio_sleep(seconds: float) -> None:
     import asyncio
 
     await asyncio.sleep(seconds)
+
+
+@pytest.mark.asyncio
+async def test_a_classic_view_window_wears_a_plain_close_button() -> None:
+    """fenetres-classiques-v1 (Drasah 24/11, incident « Kingdom Test ne
+    répond pas ») : the wizard steps pass a CLASSIC View — appending
+    the v2 ActionRow crashed with « v2 items cannot be added to this
+    view » AFTER the ack window, so the player saw « the application
+    did not respond ». The close control must wear the shape the
+    receiving view accepts, same custom_id either way."""
+    import discord as _discord
+    from botforge.mods.kingdom.cogs.common import open_unique_ephemeral
+
+    inter = _interaction()
+    classic = _discord.ui.View(timeout=600)
+    classic.add_item(
+        _discord.ui.Select(custom_id="kingdom:attack:choose:kingdom", options=[])
+    )
+    await open_unique_ephemeral(inter, view=classic)
+    _content, kwargs = inter.response.sent
+    view = kwargs["view"]
+    ids = [getattr(c, "custom_id", "") for c in view.children]
+    assert "kingdom:window:close" in ids, "the ✖️ rides the classic view too"
+    assert not isinstance(view, _discord.ui.LayoutView)

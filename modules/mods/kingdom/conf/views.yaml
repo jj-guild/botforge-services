@@ -49,6 +49,30 @@ views:
   # every pin refresh and answers "unknown view" if routed)
   panel:mod:kingdom:attack:
     kind: surface
+  # fenetres-classiques-v1 (Drasah 24/11) : the attack wizard's
+  # ephemeral steps + the battle/salon/alliance footers — every id the
+  # mod renders is DECLARED (the « NOT declared in conf/views.yaml »
+  # error at each click was the drift, #381 ruling 1).
+  panel:mod:kingdom:attack:declare:
+    kind: surface
+  panel:mod:kingdom:attack:history:
+    kind: surface
+  panel:mod:kingdom:attack:plan:
+    kind: surface
+  panel:mod:kingdom:attack:salon:
+    kind: surface
+  panel:mod:kingdom:alliances:
+    kind: surface
+  panel:mod:kingdom:battle:draft:
+    kind: surface
+  panel:mod:kingdom:battle:room:
+    kind: surface
+  panel:mod:kingdom:sabotage:
+    kind: surface
+  panel:mod:kingdom:card:
+    kind: surface
+  panel:mod:kingdom:chamber:
+    kind: surface
   panel:mod:kingdom:candidates:
     kind: surface
   panel:mod:kingdom:apply:
