@@ -42,6 +42,7 @@ from .common import (
     edit_dm_message_safe,
     fmt_paris,
     kingdom_by_id,
+    locale_of,
     own_picks_line,
     pickban_staged,
     surface_footer,
@@ -1288,9 +1289,15 @@ class SabotagePassButton(
             await open_unique_ephemeral(
                 interaction, strings["sab_phase_done"].format(map=fresh.map_key)
             )
-            # The early room-open rides the battle module (tranche 2c):
-            # until it lands, the tick opens the meeting at T — the
-            # players' DMs already say the phase is over.
+            # battle-rooms-early-v1 (tranche 2c landed): both camps
+            # answered — the meeting + the room open at once, BEFORE T.
+            # The scoreboard's 📜 draft button is live from now on and
+            # score_due skips the meeting at T (the engine's guard).
+            from .battle import open_meeting_and_room_safe
+
+            await open_meeting_and_room_safe(
+                interaction.client, stack, fresh, locale_of(interaction)
+            )
             return
         await open_unique_ephemeral(interaction, strings["sab_settled"])
 

@@ -522,6 +522,30 @@ async def open_battle_room(bot: Any, stack: Any, guild: Any, attack: Any, locale
         logger.warning("kingdom: battle room opening failed", exc_info=True)
 
 
+async def open_meeting_and_room_safe(bot: Any, stack: Any, attack: Any, locale: str) -> None:
+    """Open the meeting + the battle room once both camps settled (v4).
+
+    battle-rooms-early-v1 (Drasah 18/10 v4, tranche 2c): the LAST
+    Sabotage Pass opens the meeting at once, BEFORE T — the scoreboard
+    (and its 📜 draft sheet) lives from the phase's end, the sabotage
+    buttons stay live inside the grace exactly as at T. Idempotent by
+    construction: the engine refuses an already-open meeting, the
+    tick's score_due skips a meeting in the MEETING state, and
+    open_battle_room guards on the stored room_channel_id.
+    """
+    if stack is None:
+        return
+    try:
+        fresh = await stack.attacks.open_meeting_now(str(attack.id))
+    except Exception:  # a refused open retries at T (score_due)
+        logger.warning("kingdom: early meeting open failed", exc_info=True)
+        return
+    if fresh is None:
+        return
+    for guild in list(getattr(bot, "guilds", []) or []):
+        await open_battle_room(bot, stack, guild, fresh, locale)
+
+
 async def sweep_pre_room_announces_safe(guild: Any, stack: Any, attack: Any) -> None:
     """Delete the declaration announce of the attack salon (best effort)."""
     salon = attack_salon(guild, attack)
@@ -2102,6 +2126,7 @@ __all__ = [
     "handle_dispute_reply_safe",
     "on_score_resolved_safe",
     "open_battle_room",
+    "open_meeting_and_room_safe",
     "refresh_room_message_safe",
     "resolve_room_key",
     "room_body_text",
