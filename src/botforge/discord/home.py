@@ -1533,9 +1533,11 @@ def _seat_text(
     finished = card.get("status") == "finished"
     # the replay link ONLY when finished (owner 2026-11-23): a lobby
     # or a running game has no replay - the link was nonsense there
+    # an AI seat carries no profile id: the replay jump stays with
+    # the humans (owner 2026-11-24 - the computer link pointed nowhere)
     replay = (
         REPLAY_URL.format(match_id=match_id, profile_id=pid)
-        if match_id and finished
+        if match_id and finished and pid
         else ""
     )
     jump = f"[[ \u25b8 ]]({replay})" if replay else ""
@@ -1692,6 +1694,21 @@ def _card_header(
 
 
 
+def _ai_decided(card: dict[str, Any]) -> bool:
+    """Whether the COMPUTERS decided the match (owner 2026-11-24).
+
+    A finished match with NO human winner and computers on board is
+    decided: the AIs won, the humans lost. Renders like any verdict -
+    the unscoped teams take their medals, the scoped human takes the
+    skull and the strike.
+    """
+    if card.get("status") != "finished" or card.get("invalid"):
+        return False
+    if any(str(w) for w in card.get("winners") or []):
+        return False
+    return any(bool((p or {}).get("ai")) for p in card.get("players") or [])
+
+
 def _card_team_blocks(
     card: dict[str, Any],
     teams: list[tuple[int, list[dict[str, Any]]]],
@@ -1709,14 +1726,24 @@ def _card_team_blocks(
     scoped = bool(me_ids)
     winners = {str(w) for w in card.get("winners") or []}
     finished = card.get("status") == "finished"
+    # the AI verdict (owner 2026-11-24): no human winner with
+    # computers on board - the computer teams WON, the humans lost
+    ai_decided = _ai_decided(card)
+    verdict = bool(winners) or ai_decided
+
+    def _team_won(seats: list[dict[str, Any]]) -> bool:
+        if any(str((p or {}).get("profile_id", "")) in winners for p in seats):
+            return True
+        return ai_decided and any(bool((p or {}).get("ai")) for p in seats)
+
     blocks: list[Any] = []
     for index, (_team, seats) in enumerate(teams):
         if index:
             blocks.append(discord.ui.Separator())
         if len(teams) > 1:
-            won = any(str((p or {}).get("profile_id", "")) in winners for p in seats)
+            won = _team_won(seats)
             medal = ""
-            if not scoped and winners and finished:
+            if not scoped and verdict and finished:
                 medal = "\U0001f3c6 " if won else "\U0001f480 "
             # the SCOPE carries no per-team medal: the scoped player's
             # team reads BOLD, every other team reads italics, the
@@ -1724,7 +1751,7 @@ def _card_team_blocks(
             mine = any(str((p or {}).get("profile_id", "")) in me_ids for p in seats)
             base = f"{labels.get('team', 'Team')} {index + 1}"
             title = f"**{base}**" if mine else f"*{base}*"
-            if scoped and winners and finished and not won:
+            if scoped and verdict and finished and not won:
                 title = f"~~{title}~~"
             blocks.append(discord.ui.TextDisplay(f"{medal}{title}"))
         for player in seats:

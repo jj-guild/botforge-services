@@ -210,3 +210,29 @@ def test_the_we_slotinfo_decodes_the_computer_seats() -> None:
     human = _normalize_slot({"profileInfo.id": 848567, "teamID": 5, "raceID": 27,
                              "isReady": 1, "status": 0}, 0)
     assert human["slot_kind"] == "human" and human["filled"] and human["profile_id"] == "848567"
+
+
+def test_the_ai_verdict_names_the_computer_teams_winners() -> None:
+    """An AI-decided match strikes the humans and crowns the computers.
+
+    The salon card (unscoped, owner 2026-11-25): the AI teams ride
+    the trophy, the human team the skull - and the scoped view
+    strikes the loser.
+    """
+    from botforge.discord.home import _ai_decided
+
+    card = {
+        "status": "finished",
+        "winners": [],
+        "players": [
+            {"profile_id": "848567", "ai": False, "team": 1},
+            {"profile_id": "", "ai": True, "team": 6},
+        ],
+    }
+    assert _ai_decided(card) is True
+    # a HUMAN verdict keeps reading through the winners
+    decided = {**card, "winners": ["848567"]}
+    assert _ai_decided(decided) is False
+    # an invalid match never crowns the computers
+    sealed = {**card, "invalid": True}
+    assert _ai_decided(sealed) is False

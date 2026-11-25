@@ -118,13 +118,32 @@ async def reply_guild(guild_id: str, bot: object, key: str, **kwargs: object) ->
     The mirror of ``reply`` for the feed surfaces (live activity): the
     render rides the stored guild locale with the English fallback.
     """
-    from botforge.discord.locales import guild_locale_by_id
-
     catalog = getattr(bot, "messages", None)
     if catalog is None or not guild_id:
         return key
-    locale = guild_locale_by_id(bot, str(guild_id))
+    locale = await _feed_locale(guild_id, bot)
     rendered: str = catalog.render(f"replies.{key}", locale, **kwargs)
     if rendered == f"replies.{key}":
         rendered = catalog.render(key, locale, **kwargs)
     return rendered
+
+
+async def _feed_locale(guild_id: str, bot: object) -> str:
+    """Resolve a guild's language for an interaction-less surface.
+
+    The platforms' OWN seam first (owner 2026-11-24: the salon cards
+    rendered English - his guild reports the Discord-default en-US
+    while the STORED choice and the members' observed majority speak
+    French): the stored admin choice, then the observed member
+    majority, then Discord's raw signal.
+    """
+    from botforge.discord.locales import guild_locale_by_id
+
+    logs = getattr(bot, "logs_service", None)
+    if logs is not None and hasattr(logs, "get_locale"):
+        try:
+            stored = str(await logs.get_locale(str(guild_id)) or "")
+        except Exception:
+            stored = ""
+        return stored or guild_locale_by_id(bot, str(guild_id))
+    return guild_locale_by_id(bot, str(guild_id))
