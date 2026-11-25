@@ -297,6 +297,7 @@ DEFAULTS: dict[str, dict[str, str]] = {
         ),
         "room_dm_luck": "\n\nBonne chance ! 🍀",
         "room_event_name": "⚔️ {map} — {attacker} 🆚 {defender}",
+        "room_vocal_ai": "l'IA",
         "room_event_description": (
             "⚔️ Bataille Kingdom en direct — {attacker} 🆚 {defender}.\n"
             "Civilisations et boutons de jeu : dans le salon vocal de la bataille."
@@ -335,6 +336,10 @@ DEFAULTS: dict[str, dict[str, str]] = {
         "score_disputed": (
             "⚖️ Déclaration contradictoire — les admins arbitrent (game {game})."
             "\nVeuillez prendre contact avec un admin."
+        ),
+        "score_auto_dispute_open": (
+            "⚖️ Litige ouvert automatiquement (délai dépassé, aucun résultat"
+            " déclaré) — un admin tranche (game {game}). Patiente."
         ),
         "score_reminder_dm": (
             "⏰ **RDV — {map}** : aucun résultat déclaré depuis 3h — déclare le"
@@ -944,6 +949,7 @@ DEFAULTS: dict[str, dict[str, str]] = {
         ),
         "room_dm_luck": "\n\nGood luck! 🍀",
         "room_event_name": "⚔️ {map} — {attacker} 🆚 {defender}",
+        "room_vocal_ai": "the AI",
         "room_event_description": (
             "⚔️ Live Kingdom battle — {attacker} 🆚 {defender}.\n"
             "Civilizations and game buttons: in the battle's voice channel."
@@ -980,6 +986,10 @@ DEFAULTS: dict[str, dict[str, str]] = {
         "score_disputed": (
             "⚖️ Contradictory declarations — the admins arbitrate (game {game})."
             "\nPlease get in touch with an admin."
+        ),
+        "score_auto_dispute_open": (
+            "⚖️ Dispute auto-opened (deadline passed, no result declared)"
+            " — an admin adjudicates (game {game}). Please wait."
         ),
         "score_reminder_dm": (
             "⏰ **Meeting — {map}**: no result declared for 3 hours — declare the"

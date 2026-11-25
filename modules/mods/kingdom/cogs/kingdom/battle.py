@@ -44,6 +44,7 @@ from __future__ import annotations
 import logging
 import re
 from datetime import UTC, datetime, timedelta
+from types import SimpleNamespace
 from typing import Any
 
 import discord
@@ -342,6 +343,11 @@ async def post_meeting_message(guild: Any, stack: Any, attack: Any, strings: dic
             view=await room_view(stack, attack, strings),
         )
         await _record_safe(stack, "record_meeting_message", attack.id, int(salon.id), int(message.id))
+        # beta-fixes-v1: the scoreboard landing IS the phase's real
+        # opening — the reminder/dispute clocks re-anchor on it (a
+        # healed room inherits a fresh window, a healthy one land at
+        # the same second and notices nothing).
+        await _restamp_score_clock_safe(stack, attack)
         # The salon PINGS the players the moment the room
         # opens — never the AI (no ping-able user).
         if attack.defender_lord_id and not attack.ai_defender:
@@ -371,6 +377,71 @@ async def post_meeting_message(guild: Any, stack: Any, attack: Any, strings: dic
     return salon
 
 
+async def battle_room_defender_label(stack: Any, attack: Any, strings: dict[str, str]) -> str:
+    """Label the vocal's second side per the Affaire 11 rule (beta-fixes-v1).
+
+    « {joueur attaquant} vs {royaume adverse} » until the matchup
+    reveal — the ONLY moment the defender's identity exists — then
+    the REAL defender's name, or « l'IA » when the bot plays the
+    defense (the room stays open against the AI). The attack
+    announcement keeps the kingdom's name, even against the AI.
+    """
+    if getattr(attack, "ai_defender", False) or not getattr(attack, "defender_lord_id", None):
+        return str(strings["room_vocal_ai"])
+    if (attack.pickban or {}).get("matchup_announced"):
+        return await lord_name(stack.kingdoms, attack.defender_lord_id)
+    return await kingdom_name(stack.kingdoms, attack.defender_kingdom_id)
+
+
+async def rename_battle_room_vocal_safe(
+    guild: Any, stack: Any, attack: Any, strings: dict[str, str]
+) -> None:
+    """Swap the vocal's kingdom name for the defender at the reveal.
+
+    Rides the matchup announcement (the moment the defender's
+    identity becomes public). Idempotent and best effort — a failed
+    rename never blocks the reveal flow.
+    """
+    if guild is None:
+        return
+    channel_id = int((attack.score or {}).get("room_channel_id") or 0)
+    channel = guild.get_channel(channel_id) if channel_id else None
+    if channel is None:
+        return
+    attacker = await lord_name(stack.kingdoms, attack.attacker_lord_id)
+    label = await battle_room_defender_label(stack, attack, strings)
+    # The room itself is out of the uniqueness pass — renaming must not
+    # collide with the channel's own previous name.
+    others = SimpleNamespace(
+        channels=[item for item in getattr(guild, "channels", []) or [] if item is not channel]
+    )
+    desired = room_channel_name(others, "⚔️", attacker, label)
+    if str(getattr(channel, "name", "")) == desired:
+        return
+    try:
+        await channel.edit(name=desired)
+        logger.info("kingdom: battle room renamed at the reveal (%s)", attack.map_key)
+    except Exception:
+        logger.warning("kingdom: battle room rename failed", exc_info=True)
+
+
+async def _restamp_score_clock_safe(stack: Any, attack: Any) -> None:
+    """Re-anchor the score clock when the scoreboard REALLY lands.
+
+    beta-fixes-v1 (Affaires 14/17): ``opened_at`` is the moment the
+    phase effectively opens for the players — a room rescued by the
+    meeting heal gets a fresh reminder (T+3h) and auto-dispute
+    (T+12h) window instead of inheriting the clock of its pre-fix
+    life. Best effort, never raises.
+    """
+    if stack is None:
+        return
+    try:
+        await stack.attacks.restamp_score_opening(str(attack.id))
+    except Exception:
+        logger.warning("kingdom: score clock restamp failed", exc_info=True)
+
+
 async def open_battle_room(bot: Any, stack: Any, guild: Any, attack: Any, locale: str) -> None:
     """Open the battle room of a meeting (idempotent, best effort).
 
@@ -390,7 +461,11 @@ async def open_battle_room(bot: Any, stack: Any, guild: Any, attack: Any, locale
         return  # already opened (tick replay after a restart)
     try:
         attacker = await lord_name(stack.kingdoms, attack.attacker_lord_id)
-        defender = await lord_name(stack.kingdoms, attack.defender_lord_id)
+        # beta-fixes-v1 (Affaire 11): the vocal opens on « {joueur
+        # attaquant} vs {royaume adverse} » — the defender's identity
+        # stays hidden until the matchup reveal (« Blanc vs Bataille »
+        # was the AI fallback leaking through lord_name).
+        defender = await battle_room_defender_label(stack, attack, strings)
         role = await guild.create_role(name=strings["room_role"].format(map=attack.map_key)[:100])
         declare = await _declare_channel(guild)
         category = getattr(declare, "category", None) if declare is not None else None
@@ -1070,6 +1145,16 @@ async def create_room_event_safe(client: Any, stack: Any, attack: Any, strings: 
         return
     attacker_name = await kingdom_name(stack.kingdoms, attack.attacker_kingdom_id)
     defender_name = await kingdom_name(stack.kingdoms, attack.defender_kingdom_id)
+    # beta-fixes-v1 (Affaires 14/17): a retarded salon (meeting heal,
+    # room opened long after its RDV window) must not spam a WARNING
+    # traceback from Discord — the match's presence window is already
+    # over, the event is skipped quietly with an INFO line.
+    rdv = int((attack.score or {}).get("ready_deadline") or 0)
+    if rdv and datetime.now(UTC).timestamp() > rdv:
+        logger.info(
+            "kingdom: room event skipped — meeting time already passed (%s)", attack.map_key
+        )
+        return
     event_id = 0
     try:
         event = await guild.create_scheduled_event(
@@ -1635,10 +1720,17 @@ class RoomResultButton(
             return
         score = dict(attack.score or {})
         if score.get("disputed"):
-            # Once the dispute is open the flow is frozen — the
-            # ephemeral reminder STAYS until the admins arbitrate.
+            # Once the dispute is open the flow is frozen — the ephemeral
+            # reminder STAYS until the admins arbitrate. beta-fixes-v1
+            # (Affaires 14/17): a dispute AUTO-OPENED by the deadline is
+            # not a contradictory pair of declarations — the bubble
+            # says what really happened instead of the misleading
+            # generic label.
+            dispute_key = (
+                "score_auto_dispute_open" if score.get("auto_dispute") else "score_disputed"
+            )
             await interaction.response.send_message(
-                strings["score_disputed"].format(game=str(attack.lobby_url or "") or "—"),
+                strings[dispute_key].format(game=str(attack.lobby_url or "") or "—"),
                 ephemeral=True,
             )
             return

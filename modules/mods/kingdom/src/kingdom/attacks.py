@@ -2837,6 +2837,32 @@ class AttackService:
 
 
 
+    async def restamp_score_opening(self, attack_id: str) -> AttackModel:
+        """Re-anchor ``score["opened_at"]`` on the real opening (beta-fixes-v1).
+
+        The reminder (T+3h) and auto-dispute (T+12h) clocks count from
+        the moment the meeting scoreboard EFFECTIVELY lands for the
+        players — a room rescued by the meeting heal keeps a fresh
+        window instead of inheriting the clock of its pre-fix life
+        (Affaires 14/17: a dispute fired « 5 minutes » after a late
+        room finally appeared). Idempotent; meetings that already
+        carry declarations or a dispute are never touched
+        retroactively.
+        """
+        attack = await self._find_attack(attack_id)
+        if attack.is_over or attack.state is not AttackState.MEETING:
+            return attack
+        score = dict(attack.score)
+        if score.get("declarations") or score.get("disputed"):
+            return attack
+        score["opened_at"] = int(_now().timestamp())
+        attack.score = score
+        await self._store.upsert_attack(attack.to_mongo())
+        logger.info(
+            "kingdoms: score clock re-anchored on %s (real opening)", attack.map_key
+        )
+        return attack
+
     async def record_room_message(self, attack_id: str, channel_id: int, message_id: int) -> AttackModel:
         """Store the battle-room single-message ref (Drasah 18/10 v5).
 

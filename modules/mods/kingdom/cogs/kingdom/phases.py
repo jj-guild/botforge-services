@@ -285,6 +285,12 @@ async def _announce_matchup_safe(
             defender = await lord_name(stack.kingdoms, attack.defender_lord_id)
             content = str(strings["matchup_v1"]).format(attacker=attacker, defender=defender)
         await attack_salon_send_safe(guild, attack, content)
+        # beta-fixes-v1 (Affaire 11): the matchup is the ONLY moment
+        # the defender's identity exists — the vocal's name swaps the
+        # adverse kingdom for the real defender (or stays « vs l'IA »).
+        from .battle import rename_battle_room_vocal_safe
+
+        await rename_battle_room_vocal_safe(guild, stack, attack, strings)
     except Exception:
         logger.warning("kingdom: matchup note failed", exc_info=True)
 
