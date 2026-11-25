@@ -175,6 +175,9 @@ class LibrematchStore:
             query["finished_at"] = {"$gte": since_s}
         if leaderboard_id:
             query["leaderboard_id"] = str(leaderboard_id)
+        # the CONSOLIDATED store serves the index directly (owner
+        # 2026-11-25: the state lives here, no per-render gathering):
+        # newest end first, the index walks, the cap never scans far
         cursor = self._matches().find(query)
         cursor = cursor.sort("finished_at", -1)
         if limit > 0:

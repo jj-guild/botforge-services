@@ -94,7 +94,7 @@ async def refresh_aoe2_content() -> dict[str, int | list[str]]:
             )
             content_docs += 1
     logger.info(
-        "CONTENT REFRESH: %d factions created, %d content docs upserted (maps enrichment is on demand)",
+        "CONTENT REFRESH: %d factions created, %d content docs upserted",
         factions,
         content_docs,
     )
@@ -131,6 +131,7 @@ async def refresh_aoe2_maps() -> dict[str, int]:
     content = FactionContentService(database, content_state_from_env())
     await content.ensure_indexes()
     maps_total = 0
+    maps_unseeded: list[str] = []
     maps_enriched = 0
     try:
         entries = await game_data.list_maps("aoe2")
@@ -146,11 +147,9 @@ async def refresh_aoe2_maps() -> dict[str, int]:
                 pending.append((entry, entry.name))
         seeds = await _resolve_map_seeds([n for _, n in pending])
         for entry, name in pending:
-            seed = seeds.get(_title_variants_key(name))
+            seed = seeds.get(_title_variants_key(name)) or seeds.get(name)
             if seed is None:
-                seed = seeds.get(name)
-            if seed is None:
-                logger.info("CONTENT REFRESH: no seed resolved for %r — skipped", name)
+                maps_unseeded.append(name)
                 continue
             if not seed.image_url:
                 # the infobox's image file may 404 upstream (Nomad,
@@ -194,10 +193,16 @@ async def refresh_aoe2_maps() -> dict[str, int]:
     except Exception:
         logger.warning("CONTENT REFRESH: map image enrichment failed — best-effort", exc_info=True)
     logger.info(
-        "CONTENT REFRESH (maps, on demand): %d/%d maps enriched (full rebuild)",
+        "CONTENT REFRESH (maps, on demand): %d/%d maps enriched",
         maps_enriched,
         maps_total,
     )
+    if maps_unseeded:
+        logger.info(
+            "CONTENT REFRESH (maps, no seed): %d without seed (%s)",
+            len(maps_unseeded),
+            ", ".join(maps_unseeded),
+        )
     return {
         "maps_enriched": maps_enriched,
         "maps_checked": maps_total,
@@ -240,12 +245,24 @@ async def _resolve_map_seeds(names: list[str]) -> dict[str, Any]:
     client: Any = ContentProviderClient(provider_uri)
 
     async def _one(name: str) -> tuple[str, Any] | None:
-        try:
-            descriptor = await client.get_map_seed("aoe2", name, force=True)
-        except Exception:
-            return None  # a missing page degrades to no seed, per map
+        descriptor = None
+        # one retry (owner 2026-11-25: "3 echecs sur 9 c'est bizarre"):
+        # nine CONCURRENT channels to the provider, a dropped one was a
+        # silent None - the failure must tell its name, and retry once
+        for attempt in (1, 2):
+            try:
+                descriptor = await client.get_map_seed("aoe2", name, force=True)
+                break
+            except Exception:
+                logger.warning(
+                    "CONTENT REFRESH: the map seed fetch failed for %r (attempt %d)",
+                    name,
+                    attempt,
+                    exc_info=attempt > 1,
+                )
+                await asyncio.sleep(2.0 * attempt)
         if descriptor is None:
-            return None
+            return None  # a missing page degrades to no seed, per map
         return (
             name,
             MapSeed(

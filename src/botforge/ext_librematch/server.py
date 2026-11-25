@@ -178,28 +178,19 @@ def _stats_handlers(syncer: MatchHistorySyncer | None) -> dict[str, Any]:
         entries: list[MatchHistoryEntry] = await syncer.match_history(
             profile_ids, limit, since_s, leaderboard_id
         )
-        # Observable BY DESIGN (the 2026-11-20 bare-lines hunt): every
-        # served reply samples its newest entries \u2014 the id, the map,
-        # the lobby title and the players count the VIEW will read.
+        # Observable BY DESIGN, but NEVER noisy (owner 2026-11-25): the
+        # reply's count and its MATCH IDS tell what the view will read -
+        # the maps, lobbies and seat counts were three-paragraph noise
         if entries:
-            import json as _json
-
-            def _seat_count(entry: Any) -> int:
-                try:
-                    return len(_json.loads(entry.players_json or "[]"))
-                except Exception:
-                    return 0
-
-            sample = ", ".join(
-                "{} : {} joueur(s) · carte {} · lobby {}".format(
-                    e.match_id,
-                    _seat_count(e),
-                    e.map_name or "?",
-                    (e.description or "").strip() or "\u2014",
-                )
-                for e in entries[:3]
+            ids = [str(e.match_id) for e in entries[:6]]
+            more = f" (+{len(entries) - len(ids)}...)" if len(entries) > len(ids) else ""
+            logger.info(
+                "SERVE history: %s entr\u00e9e(s) pour %s \u2014 %s%s",
+                len(entries),
+                profile_ids,
+                ", ".join(ids),
+                more,
             )
-            logger.info("SERVE history: %s entr\u00e9e(s) pour %s \u2014 %s", len(entries), profile_ids, sample)
         return entries
 
     async def account_stats(profile_ids: list[str], at_s: int = 0) -> list[AccountEloStatus]:
