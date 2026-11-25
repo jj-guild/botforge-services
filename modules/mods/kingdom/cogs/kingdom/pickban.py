@@ -83,30 +83,51 @@ def _error_note_followup(interaction: discord.Interaction, content: str) -> None
     asyncio.create_task(_send())
 
 
-async def _arm_sabotage_panel_timer(key: tuple[str, str], seconds: float | None = None) -> None:
-    """(Re)arm the auto-destruction of one sabotage panel."""
-    await _delete_sabotage_panel(key)
-    try:
-        loop = asyncio.get_running_loop()
-    except RuntimeError:
+def _arm_sabotage_panel_timer(key: tuple[str, str], seconds: float | None = None) -> None:
+    """(Re)arm the auto-destruction of one sabotage panel.
+
+    affaire-26 (Drasah 25/11 live report): the panel flashed for a
+    millisecond then vanished — this arm used to DELETE the panel
+    before arming, so every open or click erased its own surface. The
+    arm now NEVER deletes: it cancels the prior timer and schedules a
+    fresh one; a short ``seconds`` (no action left) sweeps the closed
+    panel quickly.
+    """
+    panel = _SABOTAGE_PANELS.get(key)
+    if panel is None:
         return
-    loop.call_later(
-        seconds if seconds is not None else _SABOTAGE_PANEL_SECONDS,
-        lambda: asyncio.create_task(_delete_sabotage_panel(key, quiet=True)),
-    )
+    existing = panel.get("task")
+    if existing is not None:
+        existing.cancel()
+    interaction = panel["interaction"]
+
+    async def _delete_later() -> None:
+        try:
+            await asyncio.sleep(seconds if seconds is not None else _SABOTAGE_PANEL_SECONDS)
+            await interaction.delete_original_response()
+        except Exception:
+            logger.debug("kingdom: sabotage panel auto-delete skipped", exc_info=True)
+        finally:
+            if panel.get("task") is asyncio.current_task():
+                panel.pop("task", None)
+            if _SABOTAGE_PANELS.get(key) is panel and "task" not in panel:
+                _SABOTAGE_PANELS.pop(key, None)
+
+    panel["task"] = asyncio.create_task(_delete_later())
 
 
-async def _delete_sabotage_panel(key: tuple[str, str], *, quiet: bool = False) -> None:
+async def _delete_sabotage_panel(key: tuple[str, str]) -> None:
     """Delete one player's sabotage panel NOW and unarm it."""
-    entry = _SABOTAGE_PANELS.pop(key, None)
-    if entry is None:
+    panel = _SABOTAGE_PANELS.pop(key, None)
+    if panel is None:
         return
-    interaction = entry.get("interaction")
+    task = panel.get("task")
+    if task is not None:
+        task.cancel()
     try:
-        await interaction.delete_original_response()  # type: ignore[union-attr]
+        await panel["interaction"].delete_original_response()
     except Exception:
-        if not quiet:
-            logger.debug("kingdom: sabotage panel delete skipped", exc_info=True)
+        logger.debug("kingdom: sabotage panel delete skipped", exc_info=True)
 
 
 # ---------------------------------------------------------------------------
@@ -542,11 +563,39 @@ async def record_pickban_dm_safe(attack_id: str, player_id: str, message: Any) -
         logger.warning("kingdom: pick & ban DM refs not stored", exc_info=True)
 
 
+async def reveal_mosaic_files(
+    attack: Any, side: str, pickban: dict[str, Any], shuffled: list[str]
+) -> list[discord.File] | None:
+    """Build one side's reveal mosaic (best effort, None keeps text)."""
+    try:
+        from .civ_crests import civ_crest_mosaic_file
+
+        used = {str(civ) for civ in (pickban.get(f"{side}_sabotages") or [])}
+        mosaic = await civ_crest_mosaic_file(
+            [(civ, "", civ) for civ in shuffled],
+            filename="reveal.png",
+            with_origin_badges=False,
+            crossed=used,
+        )
+        return [mosaic] if mosaic is not None else None
+    except Exception:
+        logger.warning("kingdom: reveal mosaic composition failed", exc_info=True)
+        return None
+
+
 async def sabotage_reveal_payload(
     stack: Any, attack: Any, side: str, strings: dict[str, str]
-) -> tuple[str, str, discord.ui.View]:
-    """One side's REVEAL DM content + view (the mosaic degrades to
-    the bold civs block — the crest painter is a seam to come)."""
+) -> tuple[str, str, discord.ui.View, list[discord.File] | None]:
+    """Build one side's REVEAL DM content + view + crossed mosaic.
+
+    sabotage-visuel-v1 (Affaire 26): the revealed civs wear ONE
+    composite mosaic — each civ name painted above its crest (the
+    alliances-lisibilite-v1 style), in the SEEDED shuffled order (a
+    fresh shuffle would reorder the mosaic at each snipe), and every
+    civ this side already sabotaged wears the ❌ cross. Shared by the
+    initial reveal AND every post-pick refresh — the DM stays the ONE
+    living surface. Best effort: a failed composition keeps the text.
+    """
     pickban = dict(attack.pickban or {})
     player_id = str(attack.attacker_lord_id if side == "attacker" else attack.defender_lord_id)
     enemy = "defender" if side == "attacker" else "attacker"
@@ -564,7 +613,9 @@ async def sabotage_reveal_payload(
         if stock:
             content = f"{content}\n\n{stock}"
     view = await sabotage_dm_view(stack, attack, side, strings)
-    return player_id, content, view
+    files = await reveal_mosaic_files(attack, side, pickban, shuffled)
+    return player_id, content, view, files
+
 
 
 async def edit_pickban_dms_reveal(bot: Any, attack: Any, strings: dict[str, str]) -> None:
@@ -578,16 +629,16 @@ async def edit_pickban_dms_reveal(bot: Any, attack: Any, strings: dict[str, str]
     ):
         if not player_id or (side == "defender" and attack.ai_defender):
             continue
-        _pid, content, view = await sabotage_reveal_payload(stack, attack, side, strings)
+        _pid, content, view, files = await sabotage_reveal_payload(stack, attack, side, strings)
         ref = pickban.get(f"{side}_dm") or {}
-        sent = await dm_user_safe(bot, player_id, content, view)
+        sent = await dm_user_safe(bot, player_id, content, view, files)
         if sent is not None:
             await delete_dm_message_safe(bot, ref)
             await record_pickban_dm_safe(str(attack.id), player_id, sent)
         elif ref.get("channel_id") and ref.get("message_id"):
-            edited = await edit_dm_message_safe(bot, ref, content, view)
+            edited = await edit_dm_message_safe(bot, ref, content, view, files)
             if not edited:
-                await dm_user_safe(bot, player_id, content, view)
+                await dm_user_safe(bot, player_id, content, view, files)
 
 
 async def edit_pickban_dms_default_reveal(bot: Any, attack: Any, strings: dict[str, str]) -> None:
@@ -612,15 +663,16 @@ async def edit_pickban_dms_default_reveal(bot: Any, attack: Any, strings: dict[s
             f"{strings['pickban_default_reveal_dm'].format(map=attack.map_key)}"
         )
         view = await sabotage_dm_view(stack, attack, side, strings)
+        files = await reveal_mosaic_files(attack, side, pickban, shuffled)
         ref = pickban.get(f"{side}_dm") or {}
-        sent = await dm_user_safe(bot, player_id, content, view)
+        sent = await dm_user_safe(bot, player_id, content, view, files)
         if sent is not None:
             await delete_dm_message_safe(bot, ref)
             await record_pickban_dm_safe(str(attack.id), player_id, sent)
         elif ref.get("channel_id") and ref.get("message_id"):
-            edited = await edit_dm_message_safe(bot, ref, content, view)
+            edited = await edit_dm_message_safe(bot, ref, content, view, files)
             if not edited:
-                await dm_user_safe(bot, player_id, content, view)
+                await dm_user_safe(bot, player_id, content, view, files)
 
 
 async def edit_pickban_dms_cancelled_safe(bot: Any, attack: Any, strings: dict[str, str]) -> None:
@@ -663,15 +715,18 @@ async def sweep_sabotage_dms_on_open_safe(bot: Any, attack: Any, strings: dict[s
 
 async def refresh_sabotage_dm_safe(bot: Any, attack: Any, side: str, strings: dict[str, str]) -> None:
     """Edit one side's reveal DM after a sabotage pick (dm-fresh-v1)."""
-    player_id, content, view = await sabotage_reveal_payload(wiring(), attack, side, strings)
+    _pid, content, view, files = await sabotage_reveal_payload(wiring(), attack, side, strings)
+    player_id = str(
+        attack.attacker_lord_id if side == "attacker" else attack.defender_lord_id
+    )
     if not player_id:
         return
     ref = (attack.pickban or {}).get(f"{side}_dm") or {}
     edited = False
     if ref.get("channel_id") and ref.get("message_id"):
-        edited = await edit_dm_message_safe(bot, ref, content, view)
+        edited = await edit_dm_message_safe(bot, ref, content, view, files)
     if not edited:
-        await dm_user_safe(bot, player_id, content, view)
+        await dm_user_safe(bot, player_id, content, view, files)
 
 
 async def refresh_sabotage_dms_after_purchase_safe(bot: Any, player_id: str) -> None:
@@ -794,12 +849,12 @@ async def sabotage_action_button(
         civ_view = await sabotage_civ_select_view(stack, str(attack.id), side, action, strings)
         if civ_view is None:
             await target.response.edit_message(content=f"{content}\n\n{strings['sab_empty']}", view=menu)
-            await _arm_sabotage_panel_timer(key)
+            _arm_sabotage_panel_timer(key)
             return
         await target.response.edit_message(
             content=f"{content}\n\n{strings['sab_choose']}", view=civ_view
         )
-        await _arm_sabotage_panel_timer(key)
+        _arm_sabotage_panel_timer(key)
 
     button.callback = _on_action  # type: ignore[method-assign,assignment]
     return button
@@ -862,7 +917,7 @@ async def sabotage_civ_select_view(
             body = f"{body}\n\n{note}"
         confirm = sabotage_confirm_view(stack, attack_id, side, action, civ, strings)
         await target.response.edit_message(content=body, view=confirm)
-        await _arm_sabotage_panel_timer((attack_id, user_id))
+        _arm_sabotage_panel_timer((attack_id, user_id))
 
     select.callback = _on_pick  # type: ignore[method-assign,assignment]
     view.add_item(select)
@@ -902,10 +957,10 @@ def sabotage_confirm_view(
         )
         if retry is None or attack is None:
             await target.response.edit_message(content=f"{content}\n\n{strings['sab_empty']}", view=menu)
-            await _arm_sabotage_panel_timer((attack_id, user_id), seconds=_SABOTAGE_SWEEP_SECONDS)
+            _arm_sabotage_panel_timer((attack_id, user_id), seconds=_SABOTAGE_SWEEP_SECONDS)
             return
         await target.response.edit_message(content=f"{content}\n\n{strings['sab_choose']}", view=retry)
-        await _arm_sabotage_panel_timer((attack_id, user_id))
+        _arm_sabotage_panel_timer((attack_id, user_id))
 
     async def _on_validate(target: discord.Interaction) -> None:
         user_id = await _user_of(target)
@@ -928,10 +983,10 @@ def sabotage_confirm_view(
             await target.response.edit_message(
                 content=f"{content}\n\n{strings['sab_no_resources']}", view=None
             )
-            await _arm_sabotage_panel_timer((attack_id, user_id), seconds=_SABOTAGE_SWEEP_SECONDS)
+            _arm_sabotage_panel_timer((attack_id, user_id), seconds=_SABOTAGE_SWEEP_SECONDS)
             return
         await target.response.edit_message(content=content, view=menu)
-        await _arm_sabotage_panel_timer((attack_id, user_id))
+        _arm_sabotage_panel_timer((attack_id, user_id))
 
     modify = discord.ui.Button(label=strings["sab_modify_button"][:80], style=discord.ButtonStyle.secondary)
     validate = discord.ui.Button(label=strings["sab_validate_button"][:80], style=discord.ButtonStyle.success)
@@ -984,7 +1039,7 @@ async def sabotage_apply_pick(
                 content=f"{content}\n\n{strings['sab_choose']}\n\n{failed}", view=retry
             )
         if key[1]:
-            await _arm_sabotage_panel_timer(key)
+            _arm_sabotage_panel_timer(key)
         return
     try:
         fresh = await attack_by_id(stack, attack_id)
@@ -1010,7 +1065,7 @@ async def sabotage_apply_pick(
         await close_previous_ephemeral(user_id)
         await target.followup.send(body, view=view, ephemeral=True)
     if key[1]:
-        await _arm_sabotage_panel_timer(key, seconds=None if more else _SABOTAGE_SWEEP_SECONDS)
+        _arm_sabotage_panel_timer(key, seconds=None if more else _SABOTAGE_SWEEP_SECONDS)
 
 
 def sabotage_again_view(stack: Any, attack_id: str, side: str, strings: dict[str, str]) -> discord.ui.View:
@@ -1033,10 +1088,10 @@ def sabotage_again_view(stack: Any, attack_id: str, side: str, strings: dict[str
             await target.response.edit_message(
                 content=f"{content}\n\n{strings['sab_empty']}", view=None
             )
-            await _arm_sabotage_panel_timer(key, seconds=_SABOTAGE_SWEEP_SECONDS)
+            _arm_sabotage_panel_timer(key, seconds=_SABOTAGE_SWEEP_SECONDS)
             return
         await target.response.edit_message(content=f"{content}\n\n{strings['sab_choose']}", view=menu)
-        await _arm_sabotage_panel_timer(key)
+        _arm_sabotage_panel_timer(key)
 
     async def _on_no(target: discord.Interaction) -> None:
         await target.response.defer()
@@ -1138,7 +1193,7 @@ class SabotageOpenButton(
         content, _menu = await sabotage_panel_content(stack, attack, side, strings)
         await interaction.response.send_message(content, ephemeral=True, view=view)
         _SABOTAGE_PANELS[key] = {"interaction": interaction}
-        await _arm_sabotage_panel_timer(key)
+        _arm_sabotage_panel_timer(key)
 
 
 class SabotagePassButton(

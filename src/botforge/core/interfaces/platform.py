@@ -97,19 +97,34 @@ class IPlatform(Protocol):
         """Send a text message to a channel."""
         ...
 
-    async def send_dm(self, user: IUser, content: str, view: IView | None = None) -> IMessage:
+    async def send_dm(
+        self,
+        user: IUser,
+        content: str,
+        view: IView | None = None,
+        files: Any | None = None,
+    ) -> IMessage:
         """Send a direct message to a user, optionally with a view.
 
         DMs are interactive when a view rides along (botforge-services#407):
         the view handle is opaque to the contract (#221) and rendered by
-        the platform implementation.
+        the platform implementation. ``files`` (opaque attachments) rides
+        along the same seam — one DM contract, no bespoke image paths.
         """
         ...
 
     async def edit_dm(
-        self, message: IMessage, content: str, view: IView | None = None
+        self,
+        message: IMessage,
+        content: str,
+        view: IView | None = None,
+        files: Any | None = None,
     ) -> IMessage:
-        """Edit a previously sent direct message in place."""
+        """Edit a previously sent direct message in place.
+
+        An edit carrying ``files`` REPLACES the message's attachments
+        (the platform's own edit semantics); ``None`` keeps them.
+        """
         ...
 
     async def delete_dm(self, message: IMessage) -> None:

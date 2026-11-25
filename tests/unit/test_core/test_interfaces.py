@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 from botforge.core.interfaces.platform import (
     IChannel,
     IMessage,
@@ -59,11 +61,21 @@ class FakePlatform:
     async def send_message(self, channel: IChannel, content: str) -> IMessage:
         return FakeMessage()
 
-    async def send_dm(self, user: IUser, content: str, view: IView | None = None) -> IMessage:
+    async def send_dm(
+        self,
+        user: IUser,
+        content: str,
+        view: IView | None = None,
+        files: Any | None = None,
+    ) -> IMessage:
         return FakeMessage()
 
     async def edit_dm(
-        self, message: IMessage, content: str, view: IView | None = None
+        self,
+        message: IMessage,
+        content: str,
+        view: IView | None = None,
+        files: Any | None = None,
     ) -> IMessage:
         return FakeMessage()
 

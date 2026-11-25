@@ -729,7 +729,9 @@ def own_picks_line(own: list[str]) -> str:
 # ---------------------------------------------------------------------------
 
 
-async def dm_user_safe(bot: Any, user_id: str, content: str, view: Any = None) -> Any:
+async def dm_user_safe(
+    bot: Any, user_id: str, content: str, view: Any = None, files: Any = None
+) -> Any:
     """Best-effort DM to one player — returns the message (or None).
 
     Thin delegate to the platform DM seam (#407): the mod owns the
@@ -738,18 +740,20 @@ async def dm_user_safe(bot: Any, user_id: str, content: str, view: Any = None) -
     from botforge.discord.dm_platform import DiscordDMPlatform
 
     try:
-        return await DiscordDMPlatform(bot).send_dm(user_id, content, view)
+        return await DiscordDMPlatform(bot).send_dm(user_id, content, view, files)
     except Exception:
         logger.warning("kingdom: player DM failed (%s)", user_id, exc_info=True)
     return None
 
 
-async def edit_dm_message_safe(bot: Any, ref: Any, content: str, view: Any = None) -> bool:
+async def edit_dm_message_safe(
+    bot: Any, ref: Any, content: str, view: Any = None, files: Any = None
+) -> bool:
     """Edit a stored DM message (channel_id + message_id) — best effort."""
     from botforge.discord.dm_platform import DiscordDMPlatform
 
     try:
-        await DiscordDMPlatform(bot).edit_dm(ref, content, view)
+        await DiscordDMPlatform(bot).edit_dm(ref, content, view, files)
         return True
     except Exception:
         logger.warning("kingdom: DM edit failed — falling back to a new DM", exc_info=True)

@@ -75,25 +75,45 @@ class DiscordDMPlatform:
         return await cast("discord.abc.Messageable", channel).fetch_message(message_raw)
 
     async def send_dm(
-        self, user: UserLike, content: str, view: Any | None = None
+        self,
+        user: UserLike,
+        content: str,
+        view: Any | None = None,
+        files: Any | None = None,
     ) -> discord.Message:
-        """Send the DM (optionally interactive) — raises when unreachable."""
+        """Send the DM (optionally interactive, optionally with files) —
+        raises when unreachable."""
         target = await self._user(user)
         if target is None:
             raise RuntimeError(f"DM user unreachable: {getattr(user, 'id', user)}")
         messageable = cast("discord.abc.Messageable", target)
-        if view is None:
-            return await messageable.send(content)
-        return await messageable.send(content, view=cast("discord.ui.View", view))
+        kwargs: dict[str, Any] = {}
+        if view is not None:
+            kwargs["view"] = cast("discord.ui.View", view)
+        if files is not None:
+            kwargs["files"] = files
+        return await messageable.send(content, **kwargs)
 
     async def edit_dm(
-        self, message: MessageLike, content: str, view: Any | None = None
+        self,
+        message: MessageLike,
+        content: str,
+        view: Any | None = None,
+        files: Any | None = None,
     ) -> discord.Message:
-        """Edit a sent DM in place — raises when the message is gone."""
+        """Edit a sent DM in place — raises when the message is gone.
+
+        An edit carrying ``files`` passes them as ``attachments`` (the
+        only kwarg ``Message.edit`` accepts — a ``files`` kwarg raises
+        TypeError); callers may pass ``[]`` to strip old attachments.
+        """
         resolved = await self._message(message)
         if resolved is None:
             raise RuntimeError("DM message unresolvable")
-        return await resolved.edit(content=content, view=cast("discord.ui.View | None", view))
+        kwargs: dict[str, Any] = {"view": cast("discord.ui.View | None", view)}
+        if files is not None:
+            kwargs["attachments"] = files
+        return await resolved.edit(content=content, **kwargs)
 
     async def delete_dm(self, message: MessageLike) -> None:
         """Delete a sent DM — a miss is a no-op, never an error."""
