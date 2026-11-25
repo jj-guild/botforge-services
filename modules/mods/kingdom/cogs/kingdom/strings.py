@@ -205,7 +205,7 @@ DEFAULTS: dict[str, dict[str, str]] = {
             "❌ Vous ne pouvez pas avoir de doublons dans vos choix de civilisations."
         ),
         "pickban_waiting": "⏳ Picks enregistrés et validés — en attente de l'adversaire.",
-        "pickban_modify_button": "✏️ Modifier",
+        "pickban_modify_button": "♻️ Tout recommencer",
         "pickban_reveal_adversary": "**Draft de votre adversaire :**",
         "pickban_own_picks_line": "**Tes picks :** {picks}",
         "pickban_reveal_dm": (
@@ -1050,7 +1050,7 @@ DEFAULTS: dict[str, dict[str, str]] = {
         "pickban_missing": "❌ Rank your {count} civilizations first.",
         "pickban_duplicate": "❌ You cannot have duplicates in your civilization choices.",
         "pickban_waiting": "⏳ Picks recorded and validated — waiting for the adversary.",
-        "pickban_modify_button": "✏️ Modify",
+        "pickban_modify_button": "♻️ Start over",
         "pickban_reveal_adversary": "**Your adversary's draft:**",
         "pickban_own_picks_line": "**Your picks:** {picks}",
         "pickban_reveal_dm": (

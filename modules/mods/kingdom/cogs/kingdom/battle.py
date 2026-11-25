@@ -1209,8 +1209,12 @@ async def create_room_event_safe(client: Any, stack: Any, attack: Any, strings: 
 # ---------------------------------------------------------------------------
 
 
-async def _delete_battle_room_safe(bot: Any, channel_id: int, role_id: Any) -> None:
-    """Delete the battle room channel + role on every guild (best effort)."""
+async def _delete_battle_room_safe(bot: Any, channel_id: int, role_id: Any) -> bool:
+    """Delete the battle room channel + role on every guild (best effort).
+
+    affaire-29: the answer tells whether Discord ACCEPTED the delete —
+    a refused 403 no longer masquerades as a done cleanup.
+    """
     try:
         for guild in list(getattr(bot, "guilds", []) or []):
             channel = getattr(guild, "get_channel", lambda _id: None)(channel_id)
@@ -1222,6 +1226,8 @@ async def _delete_battle_room_safe(bot: Any, channel_id: int, role_id: Any) -> N
                     await role.delete()
     except Exception:
         logger.warning("kingdom: battle room cleanup failed", exc_info=True)
+        return False
+    return True
 
 
 def _battle_room_sweep_due(attacks: list[Any], delay_minutes: int, now: datetime) -> tuple[list[Any], set[int]]:
@@ -1389,8 +1395,18 @@ async def _sweep_battle_room_leftovers_safe(bot: Any, attacks_service: Any, atta
 
 
 async def _cleanup_one_battle_room(bot: Any, stack: Any, attack: Any, score: dict[str, Any]) -> int:
-    """Delete one resolved meeting's voice room (channel + role) and flag it."""
-    await _delete_battle_room_safe(bot, int(score["room_channel_id"]), score.get("room_role_id"))
+    """Delete one resolved meeting's voice room (channel + role) and flag it.
+
+    affaire-29 (Drasah 25/11, live 403): the « room_cleaned » flag is
+    ONLY set on an ACCEPTED delete — a refused channel stays uncleaned
+    so the sweep keeps retrying it instead of abandoning the ghost.
+    """
+    accepted = await _delete_battle_room_safe(
+        bot, int(score["room_channel_id"]), score.get("room_role_id")
+    )
+    if not accepted:
+        logger.warning("kingdom: battle room delete refused — the room stays uncleaned (retry at the sweep)")
+        return 0
     try:
         await stack.attacks.mark_room_cleaned(str(attack.id))
     except Exception:

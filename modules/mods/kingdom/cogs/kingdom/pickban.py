@@ -311,11 +311,13 @@ class PickBanModifyButton(
     def __init__(self, attack_id: str, player_id: str, chosen: bool, locale: str) -> None:
         strings = strings_by_locale(locale)
         key = ready_key(attack_id, player_id)
+        # affaire-29: « Tout recommencer » wipes EVERY slot — a full
+        # reset must never wear the safe grey/green of a soft edit.
         super().__init__(
             discord.ui.Button(
                 label=strings["pickban_modify_button"][:80],
                 custom_id=f"kingdom:attack:pickban:modify:{key}",
-                style=discord.ButtonStyle.success if chosen else discord.ButtonStyle.secondary,
+                style=discord.ButtonStyle.danger,
                 disabled=not chosen,
             )
         )
@@ -358,6 +360,24 @@ class PickBanModifyButton(
             await interaction.edit_original_response(view=view)
         except Exception:
             logger.warning("kingdom: pick & ban DM edit failed", exc_info=True)
+
+
+async def _rerender_draft_dm_safe(
+    stack: Any, attack_id: str, player_id: str, locale: str, interaction: discord.Interaction
+) -> None:
+    """affaire-29: a refused draft validation re-renders the player's DM.
+
+    The previous code left a stale view after a lost-update race — the
+    player never SAW his real staged picks (« ma draft s'est reset »).
+    """
+    try:
+        latest = await attack_by_id(stack, attack_id)
+        if latest is None:
+            return
+        view = await pickban_dm_view(stack, latest, side_of(latest, player_id), player_id, locale)
+        await interaction.edit_original_response(view=view)
+    except Exception:
+        logger.warning("kingdom: pick & ban DM edit failed", exc_info=True)
 
 
 class PickBanValidateButton(
@@ -411,14 +431,20 @@ class PickBanValidateButton(
             )
             return
         side = side_of(attack, self.player_id)
+
+        async def _rerender_dm() -> None:
+            await _rerender_draft_dm_safe(stack, self.attack_id, self.player_id, self.locale, interaction)
+
         pickban: dict[str, Any] = dict(attack.pickban or {})
         picks = [str(civ) for civ in pickban_staged(pickban, side) if civ]
         hand_count = min(3, len(pickban.get(f"{side}_hand") or []) or 3)
         if len(set(picks)) != len(picks):
             _error_note_followup(interaction, strings["pickban_duplicate"])
+            await _rerender_dm()
             return
         if not picks or len(picks) != hand_count:
             _error_note_followup(interaction, strings["pickban_missing"].format(count=hand_count))
+            await _rerender_dm()
             return
         try:
             await stack.attacks.set_picks(self.attack_id, self.player_id, picks)
@@ -426,6 +452,7 @@ class PickBanValidateButton(
         except Exception as exc:
             message = getattr(exc, "message", None) or str(exc)
             _error_note_followup(interaction, strings["failed"].format(message=message))
+            await _rerender_dm()
             return
         # Symmetry: the SAME answer for the first and the second
         # validator — nobody sees the adversary civs.
@@ -779,6 +806,10 @@ async def sabotage_stock_line(stack: Any, attack: Any, side: str, strings: dict[
 
 async def sabotage_open_available(stack: Any, attack: Any, side: str, strings: dict[str, str]) -> bool:
     """Whether this side can still sabotage (blue button vs grey)."""
+    # affaire-29: a settled (« Prêt ») side never sabotages again —
+    # whatever the stack says, the Prêt comes FIRST.
+    if (attack.pickban or {}).get(f"sabotage_settled_{side}"):
+        return False
     if stack is None:
         return True
     pickban = dict(attack.pickban or {})
@@ -793,11 +824,15 @@ async def sabotage_dm_view(stack: Any, attack: Any, side: str, strings: dict[str
     """The persistent sabotage-phase view of one player's DM."""
     player_id = str(attack.attacker_lord_id if side == "attacker" else attack.defender_lord_id)
     available = await sabotage_open_available(stack, attack, side, strings)
+    # affaire-29: a settled side's DM freezes — both buttons grey out.
+    settled = bool((attack.pickban or {}).get(f"sabotage_settled_{side}"))
     view = dm_view(timeout=None)
     view.add_item(
         SabotageOpenButton(str(attack.id), player_id, strings["sab_open_button"], available=available)
     )
-    view.add_item(SabotagePassButton(str(attack.id), player_id, strings["sab_pass_button"]))
+    view.add_item(
+        SabotagePassButton(str(attack.id), player_id, strings["sab_pass_button"], available=not settled)
+    )
     return view
 
 
@@ -1202,13 +1237,14 @@ class SabotagePassButton(
 ):
     """The restart-proof ⚔️ Passer button — settles the clicking side."""
 
-    def __init__(self, attack_id: str, player_id: str, label: str) -> None:
+    def __init__(self, attack_id: str, player_id: str, label: str, *, available: bool = True) -> None:
         key = ready_key(attack_id, player_id)
         super().__init__(
             discord.ui.Button(
                 label=label[:80],
                 custom_id=f"kingdom:attack:sab:pass:{key}",
-                style=discord.ButtonStyle.success,
+                style=discord.ButtonStyle.success if available else discord.ButtonStyle.secondary,
+                disabled=not available,
             )
         )
         self.attack_id = attack_id
@@ -1241,6 +1277,12 @@ class SabotagePassButton(
             await open_unique_ephemeral(interaction, strings["failed"].format(message=message))
             return
         await _delete_sabotage_panel((self.attack_id, self.player_id))
+        # affaire-29: the settling side's DM re-renders AT ONCE — its
+        # buttons freeze instead of staying green and clickable.
+        try:
+            await refresh_sabotage_dm_safe(interaction.client, fresh, side_of(fresh, self.player_id), strings)
+        except Exception:
+            logger.warning("kingdom: settled sabotage DM refresh failed", exc_info=True)
         if (fresh.pickban or {}).get("sabotage_resolved"):
             await edit_pickban_dms_phase_done(interaction.client, fresh, strings)
             await open_unique_ephemeral(

@@ -402,6 +402,13 @@ def _refuse_lords_day_execution(
         )
 
 
+def _stage_draft_slot(staged: list[str], index: int, civ: str) -> list[str]:
+    """affaire-29: apply ONE civ to ONE slot, clearing any duplicate."""
+    merged = ["" if (pos != index and val == civ) else val for pos, val in enumerate(staged)]
+    merged[index] = civ
+    return merged
+
+
 def _random_picks(hand: list[str]) -> list[str]:
     """Return 3 random civilizations of a hand (the anti-blocking draft default).
 
@@ -2627,12 +2634,27 @@ class AttackService:
             staged.append("")
         if not 0 <= index < 3:
             raise PickBanStateError("slot de draft invalide")
-        staged = ["" if (pos != index and val == civ) else val for pos, val in enumerate(staged)]
-        staged[index] = civ
-        pickban[f"{side}_draft"] = staged
-        attack.pickban = pickban
-        await self._store.upsert_attack(attack.to_mongo())
-        return attack
+        # affaire-29 (Drasah 25/11): two rapid dropdown clicks race on
+        # the same pickban document — each upsert used to replay the
+        # WHOLE staged array and could clobber the other click's slot
+        # (a live « ma draft s'est reset »). The write is now verified:
+        # a lost slot is re-merged from the FRESH document, bounded.
+        fresh: AttackModel | None = attack
+        for _attempt in range(3):
+            staged = _stage_draft_slot(staged, index, civ)
+            pickban[f"{side}_draft"] = staged
+            attack.pickban = pickban
+            await self._store.upsert_attack(attack.to_mongo())
+            fresh = await self._find_attack(attack_id)
+            if fresh is None:
+                return attack
+            staged = [str(x) for x in ((fresh.pickban or {}).get(f"{side}_draft") or [])]
+            while len(staged) < 3:
+                staged.append("")
+            if staged[index] == civ:
+                return fresh
+            pickban = dict(fresh.pickban)
+        return fresh
 
 
 
@@ -3551,6 +3573,10 @@ class AttackService:
         """
         attack = await self._require_sabotage_attack(attack_id, _now())
         side = await self._sabotage_side(attack, player_id)
+        # affaire-29 (Drasah 25/11): « Prêt = engagement » — a side
+        # that already settled (Passer) may never snipe afterwards.
+        if (attack.pickban or {}).get(f"sabotage_settled_{side}"):
+            raise SabotageError("vous avez déjà passé — le sabotage est verrouillé pour vous")
         kingdom_id = attack.attacker_kingdom_id if side == "attacker" else attack.defender_kingdom_id
         state = await self.technology_state(kingdom_id)
         if state.purchases.get("sabotage", 0) <= 0:
