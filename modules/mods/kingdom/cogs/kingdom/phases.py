@@ -14,6 +14,7 @@ process (the presence tracking feeds the forfeit line).
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from typing import Any
 
@@ -1142,4 +1143,91 @@ def start_attack_refresher(bot: Any) -> None:
             logger.warning("kingdom: conscription gate pass failed — best-effort", exc_info=True)
 
     _loop.start()
+    _start_attack_fast_lane(bot)
     logger.info("kingdom: attack phases loop started (every 5 minutes)")
+
+
+# -- the fast lane (temporalites-beta-v1, Drasah 25/11) ----------------------
+#
+# The 5-minute tick let every attack phase land up to 5 minutes late
+# (the reveal cutoff T-15, the T flip, the draft deadline): under the
+# 10-minute beta itinerary the whole draft window died before the
+# tick arrived. The lane REUSES the engine's next_phase_deadline probe
+# (attack-phases-tick-v1/v2) — no second computation, it only sleeps
+# at the next deadline and runs the SAME pass. Best effort: any probe
+# failure keeps the stock cadence, and the gate env above cuts it too.
+
+_ATTACK_TICK_EPSILON_SECONDS = 2.0
+_ATTACK_TICK_FLOOR_SECONDS = 5.0
+_ATTACK_BETA_TICK_SECONDS = 60
+_ATTACK_FASTLANE_TASK: Any = None
+
+
+async def attack_fastlane_sleep_seconds(bot: Any, default_seconds: int) -> int:
+    """Sleep until the NEXT attack deadline — never 5 minutes late.
+
+    The lane asks the engine's ``next_phase_deadline`` probe (ported
+    intact: the reveal cutoff, T, the AI think times, the no-show
+    line, the urgent state flips, the live plans) and sleeps exactly
+    that long — bounded by the stock (60 s under an armed beta)
+    cadence: an idle board sleeps as long as before, a deadline at
+    the door wakes the lane within seconds. Best effort: any probe
+    failure keeps the stock cadence.
+    """
+    from botforge.mods.kingdom.game_clock import game_now
+
+    from .common import wiring
+
+    base = default_seconds
+    stack = None
+    try:
+        stack = wiring()
+    except Exception:
+        logger.warning("kingdom: the fast lane wiring probe failed", exc_info=True)
+    if stack is not None:
+        try:
+            from botforge.mods.kingdom.beta_weekend import beta_started
+
+            season = await stack.kingdoms.current_season()
+            if season is not None and beta_started(season, game_now()):
+                base = min(base, _ATTACK_BETA_TICK_SECONDS)
+        except Exception:
+            logger.warning("kingdom: the fast lane beta probe failed", exc_info=True)
+        try:
+            now = game_now()
+            deadline = await stack.attacks.next_phase_deadline(now=now)
+            if deadline is not None:
+                delta = (deadline - now).total_seconds()
+                if delta <= 0:
+                    # A deadline already due (or an urgent state flip
+                    # that can advance RIGHT NOW): run the lane's work.
+                    return 1
+                seconds = max(_ATTACK_TICK_FLOOR_SECONDS, delta + _ATTACK_TICK_EPSILON_SECONDS)
+                return min(base, int(seconds))
+        except Exception:
+            logger.warning("kingdom: the fast lane deadline probe failed", exc_info=True)
+    return base
+
+
+async def _attack_fast_lane(bot: Any) -> None:
+    """Run the deadline-driven pass — same work as the tick, at the second."""
+    while True:
+        await asyncio.sleep(await attack_fastlane_sleep_seconds(bot, 300))
+        try:
+            await run_attack_phases_safe(bot)
+        except Exception:
+            logger.warning("kingdom: fast lane pass failed — best-effort", exc_info=True)
+
+
+def _start_attack_fast_lane(bot: Any) -> None:
+    """Arm the fast lane once per process (never a second loop)."""
+    global _ATTACK_FASTLANE_TASK
+
+    if _ATTACK_FASTLANE_TASK is not None and not _ATTACK_FASTLANE_TASK.done():
+        return
+    try:
+        loop = asyncio.get_running_loop()
+        _ATTACK_FASTLANE_TASK = loop.create_task(_attack_fast_lane(bot))
+        logger.info("kingdom: attack fast lane armed (deadline-driven)")
+    except RuntimeError:  # no running loop in the test journeys
+        logger.warning("kingdom: attack fast lane disarmed (no running loop)")

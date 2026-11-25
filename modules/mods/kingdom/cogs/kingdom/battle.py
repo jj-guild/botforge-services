@@ -1287,7 +1287,12 @@ async def _sweep_battle_room_leftovers_safe(bot: Any, attacks_service: Any, atta
     or not. Idempotent: a clean guild touches nothing, a live meeting
     keeps its room whatever its flag says.
     """
-    delay_minutes = int(getattr(attacks_service, "room_cleanup_delay_minutes", 30) or 30)
+    try:
+        delay_minutes = int(await attacks_service.room_cleanup_delay())
+    except Exception:
+        # temporalites-beta-v1 : le seam async peut manquer (vieille
+        # instance) — la propriété de config reste la valeur officielle.
+        delay_minutes = int(getattr(attacks_service, "room_cleanup_delay_minutes", 30) or 30)
     due, keep_role_ids = _battle_room_sweep_due(attacks, delay_minutes, datetime.now(UTC))
     swept = await _sweep_recorded_leftovers_safe(bot, due)
     swept += await _sweep_orphan_battle_roles_safe(bot, keep_role_ids)
@@ -1337,7 +1342,11 @@ async def cleanup_battle_rooms_safe(bot: Any, stack: Any, guild: Any) -> int:
     except Exception:
         logger.warning("kingdom: battle room scan failed", exc_info=True)
         return 0
-    delay_minutes = int(getattr(stack.attacks, "room_cleanup_delay_minutes", 30) or 30)
+    try:
+        delay_minutes = int(await stack.attacks.room_cleanup_delay())
+    except Exception:
+        # temporalites-beta-v1 : fallback sur la propriété de config.
+        delay_minutes = int(getattr(stack.attacks, "room_cleanup_delay_minutes", 30) or 30)
     now = datetime.now(UTC)
     for attack in attacks:
         score = attack.score or {}

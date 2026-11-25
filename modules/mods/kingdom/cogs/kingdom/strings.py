@@ -192,6 +192,12 @@ DEFAULTS: dict[str, dict[str, str]] = {
             "sabotage ni faucon ne s'appliquera. Le RDV a lieu quoi qu'il arrive.\n"
             "Ta main : {hand}\nMain adverse : {theirs}"
         ),
+        "pickban_dm_failed_sal": (
+            "⚠️ <@{player}> — le DM de draft n'a pas pu t'être remis (messages "
+            "privés fermés pour ce serveur ou pour ce bot). Vérifie tes réglages "
+            "Discord **tout de suite** : sans classement avant le RDV, la draft "
+            "sera tirée au hasard."
+        ),
         "pickban_pick": "Choix {n}",
         "pickban_validate": "✅ Valider",
         "pickban_missing": "❌ Classe d'abord tes {count} civilisations.",
@@ -425,6 +431,13 @@ DEFAULTS: dict[str, dict[str, str]] = {
         "decision_kind_declarations": "Déclarations contradictoires des joueurs.",
         "decision_action_title": "⚖️ Décision admin",
         "decision_action_header": "Attaque sur **{map}** — tranche ou annule.",
+        "decision_action_live_header": (
+            "Attaque **en cours** sur **{map}** — l'annulation admin rembourse"
+            " les budgets et ferme l'habitat sur place."
+        ),
+        "decision_state_declared": "siège (défense ouverte)",
+        "decision_state_defended": "draft en cours",
+        "decision_state_meeting": "RDV en cours",
         "decision_decide_button": "⚖️ Décider",
         # -- planning (P4.1b tranche 2d) --
         "plan_button": "📅 Planifier une attaque",
@@ -889,6 +902,12 @@ DEFAULTS: dict[str, dict[str, str]] = {
             "applies. The meeting happens anyway.\n"
             "Your hand: {hand}\nAdversary hand: {theirs}"
         ),
+        "pickban_dm_failed_sal": (
+            "⚠️ <@{player}> — the draft DM could not reach you (direct messages "
+            "closed for this server or for this bot). Check your Discord settings "
+            "**right now**: with no ranking before the meeting, the draft will be "
+            "drawn at random."
+        ),
         "pickban_pick": "Choice {n}",
         "pickban_validate": "✅ Validate",
         "pickban_missing": "❌ Rank your {count} civilizations first.",
@@ -1109,6 +1128,13 @@ DEFAULTS: dict[str, dict[str, str]] = {
         "decision_kind_declarations": "Contradictory player declarations.",
         "decision_action_title": "⚖️ Admin decision",
         "decision_action_header": "Attack on **{map}** — rule or cancel.",
+        "decision_action_live_header": (
+            "Attack **in progress** on **{map}** — the admin cancel refunds"
+            " the budgets and closes the habitat on the spot."
+        ),
+        "decision_state_declared": "siege (defense open)",
+        "decision_state_defended": "draft in progress",
+        "decision_state_meeting": "meeting in progress",
         "decision_decide_button": "⚖️ Decide",
         # -- planning (P4.1b tranche 2d) --
         "plan_button": "📅 Plan an attack",

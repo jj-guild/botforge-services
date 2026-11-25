@@ -68,7 +68,7 @@ async def test_pending_disputes_lists_both_roads_only() -> None:
     await healthy.draw(9)
     quiet, _, _ = await healthy.open_meeting()
     assert await healthy.attacks.pending_disputes() == []
-    await healthy.attacks.admin_cancel_attack(quiet.id, now=_T)
+    await healthy.attacks.admin_cancel_attack(quiet.id, now=_T, reason="test de non-regression")
     assert await healthy.attacks.pending_disputes() == []
 
 
@@ -107,7 +107,7 @@ async def test_admin_cancel_attack_terminal_on_a_healthy_meeting() -> None:
     await bundle.draw(9)
     attack, _, _ = await bundle.open_meeting()
     fresh = await bundle.attacks.admin_cancel_attack(
-        attack.id, now=_T + timedelta(minutes=2)
+        attack.id, now=_T + timedelta(minutes=2), reason="match mort jamais joué"
     )
     assert fresh.state is AttackState.EXPIRED
     assert fresh.winner_kingdom_id is None

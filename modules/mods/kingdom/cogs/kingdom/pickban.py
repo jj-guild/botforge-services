@@ -459,6 +459,28 @@ async def kingdom_name_safe(stack: Any, kingdom_id: str | None) -> str:
 # ---------------------------------------------------------------------------
 
 
+async def _salon_dm_failure_note_safe(bot: Any, attack: Any, player_id: str, strings: Any) -> None:
+    """Leave a LOUD note in the attack salon when a draft DM is refused.
+
+    Drasah's live finding (25/11): the defender's draft DM died on
+    Discord's 403 « no mutual guilds » (the account refuses the app's
+    DMs) and the draft silently defaulted 5 minutes later — nobody
+    knew WHY. The failed send now leaves a WARNING in the attack's
+    own salon: the player is told to fix his privacy settings before
+    the draft window closes. Never a crash, never a block.
+    """
+    guilds = list(getattr(bot, "guilds", []) or [])
+    if not guilds:
+        return
+    note = str(strings.get("pickban_dm_failed_sal", "")).format(player=str(player_id))
+    if not note:
+        return
+    try:
+        await attack_salon_send_safe(guilds[0], attack, note)
+    except Exception:
+        logger.warning("kingdom: the draft DM failure note failed", exc_info=True)
+
+
 async def send_pickban_dm(bot: Any, attack: Any, locale: str) -> None:
     """Send the pick & ban DM to each human player."""
     strings = strings_by_locale(locale)
@@ -482,6 +504,8 @@ async def send_pickban_dm(bot: Any, attack: Any, locale: str) -> None:
     )
     if message is not None:
         await record_pickban_dm_safe(str(attack.id), str(attack.attacker_lord_id), message)
+    else:
+        await _salon_dm_failure_note_safe(bot, attack, str(attack.attacker_lord_id), strings)
     if not attack.ai_defender and attack.defender_lord_id:
         view = await pickban_dm_view(stack, attack, "defender", str(attack.defender_lord_id), locale)
         stock_defender = await sabotage_stock_line(stack, attack, "defender", strings)
@@ -500,6 +524,8 @@ async def send_pickban_dm(bot: Any, attack: Any, locale: str) -> None:
         )
         if message is not None:
             await record_pickban_dm_safe(str(attack.id), str(attack.defender_lord_id), message)
+        else:
+            await _salon_dm_failure_note_safe(bot, attack, str(attack.defender_lord_id), strings)
 
 
 async def record_pickban_dm_safe(attack_id: str, player_id: str, message: Any) -> None:

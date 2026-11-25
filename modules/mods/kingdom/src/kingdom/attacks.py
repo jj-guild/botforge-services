@@ -3671,6 +3671,28 @@ class AttackService:
         """The post-resolution battle-room survival (Drasah 18/10 v4)."""
         return int(self._config.attacks.room_cleanup_delay_minutes)
 
+    async def room_cleanup_delay(self, *, now: datetime | None = None) -> int:
+        """Return the effective cleanup delay: 5 minutes under an armed beta.
+
+        beta-cleanup-5min-v1 (Drasah 25/11): the beta itinerary is
+        minutes — a post-game habitat surviving 30 real minutes drowns
+        every beta test session in ghost salons. Under an armed beta
+        the battle room, its role AND the per-attack salon close 5
+        minutes after the decision instead. Data-driven compression
+        (traquenard-beta-v1 pattern), the official 30 minutes stay.
+        """
+        delay = int(self._config.attacks.room_cleanup_delay_minutes)
+        timestamp = now or _now()
+        try:
+            from botforge.mods.kingdom.beta_weekend import beta_started
+
+            season = await self._kingdoms.current_season()
+            if season is not None and beta_started(season, timestamp):
+                return min(delay, 5)
+        except Exception:
+            logger.warning("kingdom: the cleanup delay beta probe failed — %d kept", delay)
+        return delay
+
 
 
     async def ready_due(self, *, now: datetime | None = None) -> list[AttackModel]:
@@ -4157,27 +4179,75 @@ class AttackService:
                 "kingdoms: admin CANCELLED the meeting on %s — no winner, no points",
                 attack.map_key,
             )
-            # annulation-joueur-v2 (Drasah 25/11): the aborted meeting
-            # refunds what it consumed — the attacker's attack point AND
-            # a recorded player defense. The double forfait keeps the
-            # budgets (a played meeting is never a free restart).
-            try:
-                await self.restitute(str(attack.id))
-            except Exception:
-                logger.warning(
-                    "kingdoms: the admin-cancel restitution failed on %s",
-                    attack.map_key,
-                    exc_info=True,
+            await self._refund_admin_cancel_budgets(attack)
+        return attack
+
+    async def live_attacks(self) -> list[AttackModel]:
+        """Ongoing attacks for the admin ⚖️ inbox (temporalites-beta-v1).
+
+        Sorted by expiry so the first to die shows first; finished
+        attacks stay out of the admin drawer (is_over).
+        """
+        try:
+            every = await self.attacks()
+        except Exception:
+            logger.warning("kingdoms: live_attacks listing failed", exc_info=True)
+            return []
+        attacks = [attack for attack in every if not attack.is_over]
+        attacks.sort(key=lambda attack: attack.expires_at)
+        return attacks
+
+    async def _refund_admin_cancel_budgets(self, attack: AttackModel) -> None:
+        """Refund both budgets of an admin-annulled attack (annulation-joueur-v2).
+
+        annulation-joueur-v2 (Drasah 25/11): the aborted attack refunds
+        what it consumed — the attacker's attack point AND a recorded
+        player defense. The double forfait keeps the budgets (a played
+        meeting is never a free restart); temporalites-beta-v1 reuses
+        the exact same refunds for a LIVE annulation.
+        """
+        try:
+            await self.restitute(str(attack.id))
+        except Exception:
+            logger.warning(
+                "kingdoms: the admin-cancel restitution failed on %s",
+                attack.map_key,
+                exc_info=True,
+            )
+        if attack.defender_lord_id and not attack.ai_defender:
+            defender = await self._require_lord(str(attack.defender_lord_id))
+            if defender.defense_used > 0:
+                defender.defense_used -= 1
+                await self._store.upsert_lord(defender.to_mongo())
+                logger.info(
+                    "kingdoms: defense budget refunded to %s (admin cancel)",
+                    defender.id,
                 )
-            if attack.defender_lord_id and not attack.ai_defender:
-                defender = await self._require_lord(str(attack.defender_lord_id))
-                if defender.defense_used > 0:
-                    defender.defense_used -= 1
-                    await self._store.upsert_lord(defender.to_mongo())
-                    logger.info(
-                        "kingdoms: defense budget refunded to %s (admin cancel)",
-                        defender.id,
-                    )
+
+    async def _cancel_live_attack(
+        self, attack: AttackModel, timestamp: datetime, *, reason: str = ""
+    ) -> AttackModel:
+        """Terminal annulation of a LIVE (non-meeting) attack (temporalites-beta-v1).
+
+        Drasah 25/11: the admin needed to abort a DECLARED/DEFENDED
+        attack from the ⚖️ inbox (a broken test flank, a ghost to
+        clear) without waiting for T. Same terminal bookkeeping as the
+        meeting cancel — EXPIRED, no winner, the admin_cancelled flag,
+        the refunds — minus the dispute/ledger wording of its own.
+        """
+        attack.winner_kingdom_id = None
+        score = dict(attack.score or {})
+        score["admin_cancelled"] = True
+        attack.score = score
+        attack.state = AttackState.EXPIRED
+        attack.resolved_at = timestamp
+        await self._store.upsert_attack(attack.to_mongo())
+        await self._refund_admin_cancel_budgets(attack)
+        logger.info(
+            "kingdoms: admin CANCELLED the LIVE attack on %s (state flip, budgets refunded, reason %r)",
+            attack.map_key,
+            reason,
+        )
         return attack
 
     async def resolve_dispute(self, attack_id: str, admin_choice: str, *, now: datetime | None = None) -> AttackModel:
@@ -4260,23 +4330,35 @@ class AttackService:
 
 
 
-    async def admin_cancel_attack(self, attack_id: str, *, now: datetime | None = None) -> AttackModel:
-        """Abort a MEETING with no winner, disputed or not (Drasah 25/11).
+    async def admin_cancel_attack(
+        self, attack_id: str, *, now: datetime | None = None, reason: str = ""
+    ) -> AttackModel:
+        """Abort any live attack, meeting or not (temporalites-beta-v1).
 
         decisions-admin-v1: the « annulation » decision must work on
-        ANY stuck meeting, not only a litigated one (a dead match that
-        never reached the dispute line). The seam rides resolve_dispute
-        («cancel») — one terminal path, no duplicated bookkeeping.
+        ANY stuck meeting, not only a litigated one. temporalites-beta-v1
+        extends it to DECLARED/DEFENDED attacks (a broken test flank, a
+        ghost to clear without waiting for T). One entry point, two
+        terminal paths: the meeting rides resolve_dispute («cancel»),
+        the live one flips state on the spot — both refund the budgets.
+        The admin reason is mandatory (Drasah's ⚖️ rule) and lands in
+        the log line.
         """
         attack = await self._find_attack(attack_id)
-        if attack.state is not AttackState.MEETING:
-            raise AttackStateError("cette attaque n'est pas une rencontre en cours")
-        if not (attack.score or {}).get("disputed"):
-            score = dict(attack.score or {})
-            score["disputed"] = True  # the cancellation rides the unique terminal path
-            attack.score = score
-            await self._store.upsert_attack(attack.to_mongo())
-        return await self.resolve_dispute(attack_id, "cancel", now=now)
+        if attack.is_over:
+            raise AttackStateError("cette attaque est terminée")
+        if attack.kind is not AttackKind.PLAYER:
+            raise AttackStateError("cette attaque n'est pas une attaque joueur")
+        if not reason.strip():
+            raise AttackStateError("la raison de l'annulation admin est obligatoire")
+        if attack.state is AttackState.MEETING:
+            if not (attack.score or {}).get("disputed"):
+                score = dict(attack.score or {})
+                score["disputed"] = True  # the cancellation rides the unique terminal path
+                attack.score = score
+                await self._store.upsert_attack(attack.to_mongo())
+            return await self.resolve_dispute(attack_id, "cancel", now=now)
+        return await self._cancel_live_attack(attack, now or _now(), reason=reason.strip())
 
 
 

@@ -2037,20 +2037,36 @@ async def _season_live(stack: Any | None) -> bool:
         return False
 
 
+def _live_state_label(vstrings: dict[str, str], attack: Any) -> str:
+    """Return the FR/EN phase word of a live drawer line (data, not code)."""
+    from botforge.mods.kingdom.models import AttackState
+
+    state = getattr(attack, "state", None)
+    key = "decision_state_meeting"
+    if state is AttackState.DECLARED:
+        key = "decision_state_declared"
+    elif state is AttackState.DEFENDED:
+        key = "decision_state_defended"
+    return str(vstrings.get(key) or str(state))
+
+
 def _decisions_drawer(
     strings: dict[str, str],
     vstrings: dict[str, str],
     disputes: list[Any],
     history: list[dict[str, Any]],
     names: dict[str, str],
+    live: list[Any] | None = None,
 ) -> discord.ui.LayoutView:
-    """Build the decisions inbox — ONE queue, both dispute roads + the ledger.
+    """Build the decisions inbox — disputes, LIVE attacks + the ledger.
 
     decisions-admin-v1 (Drasah 25/11): the admin never DM-hunts a
     litige nor types a console id again — the dispute sits in the
     inbox with its ⚖️ Décider button (the action window + the reason
-    modal do the rest). The 40-component cap stays sacred: at most 15
-    disputes rendered, the ledger shows the last 10.
+    modal do the rest). temporalites-beta-v1: the same drawer lists
+    the ONGOING attacks (« Attaques en cours ») — a stuck flank gets
+    cancelled WITHOUT waiting for T. The 40-component cap stays
+    sacred: at most 15 disputes + 5 live, ledger = last 10.
     """
     def _hint(key: str) -> discord.ui.Item[discord.ui.LayoutView]:
         return discord.ui.TextDisplay(str(strings.get(key) or ""))
@@ -2086,6 +2102,30 @@ def _decisions_drawer(
             items.append(row)
     else:
         items.append(discord.ui.TextDisplay(str(strings.get("decisions_inbox_empty") or "")))
+    if live:
+        items.append(discord.ui.Separator())
+        items.append(discord.ui.TextDisplay(str(strings.get("decisions_live_label") or "")))
+        for attack in live[:5]:
+            line = str(strings.get("decisions_live_line") or "- {map} — {line}").format(
+                map=str(getattr(attack, "map_key", "?")),
+                line="{a} ⚔️ {d} · {state}".format(
+                    a=names.get(str(getattr(attack, "attacker_kingdom_id", "")), "?"),
+                    d=names.get(str(getattr(attack, "defender_kingdom_id", "")), "?"),
+                    state=_live_state_label(vstrings, attack),
+                ),
+            )
+            live_row: Any = discord.ui.ActionRow()
+            live_row.add_item(
+                _decide_button(
+                    str(vstrings.get("decision_decide_button") or "⚖️"),
+                    str(getattr(attack, "id", "")),
+                )
+            )
+            items.append(discord.ui.TextDisplay(line))
+            items.append(live_row)
+    elif live is not None:
+        items.append(discord.ui.Separator())
+        items.append(discord.ui.TextDisplay(str(strings.get("decisions_live_empty") or "")))
     if history:
         items.append(discord.ui.Separator())
         items.append(discord.ui.TextDisplay(str(strings.get("decisions_history_label") or "")))
@@ -2118,8 +2158,11 @@ async def _decisions_drawer_view(
     # decisions-admin-v1 : la file (les DEUX routes de litige) + le
     # ledger des 10 dernières décisions — lectures défensives, un
     # tiroir jamais vide ne rend jamais la console muette.
+    # temporalites-beta-v1 : + les attaques EN COURS (une ligne, un
+    # ⚖️, jamais deux fois la même attaque dans le tiroir).
     disputes: list[Any] = []
     history: list[dict[str, Any]] = []
+    live: list[Any] = []
     names: dict[str, str] = {}
     try:
         stack_d = wiring()
@@ -2132,10 +2175,17 @@ async def _decisions_drawer_view(
         except Exception:  # a read, never a crash
             logger.warning("kingdom: the disputes read failed", exc_info=True)
         try:
+            raw_live = await stack_d.attacks.live_attacks()
+        except Exception:  # a read, never a crash
+            logger.warning("kingdom: the live attacks read failed", exc_info=True)
+            raw_live = []
+        disputed_ids = {str(getattr(attack, "id", "")) for attack in disputes}
+        live = [attack for attack in raw_live if str(getattr(attack, "id", "")) not in disputed_ids]
+        try:
             history = list(await stack_d.decisions.last_decisions(10))
         except Exception:  # a read, never a crash
             logger.warning("kingdom: the decisions history read failed", exc_info=True)
-        for attack in disputes[:15]:
+        for attack in disputes[:15] + live[:5]:
             for kid in (
                 getattr(attack, "attacker_kingdom_id", ""),
                 getattr(attack, "defender_kingdom_id", ""),
@@ -2147,7 +2197,7 @@ async def _decisions_drawer_view(
                     except Exception:  # a name, never a crash
                         names[kid] = "?"
     return _decisions_drawer(
-        strings, strings_by_locale(locale), disputes, history, names
+        strings, strings_by_locale(locale), disputes, history, names, live
     )
 
 

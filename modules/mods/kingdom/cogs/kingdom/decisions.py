@@ -32,6 +32,7 @@ import re
 from typing import Any
 
 import discord
+from botforge.mods.kingdom.models import AttackState
 
 from .common import (
     _bot_admins,
@@ -100,7 +101,7 @@ async def apply_admin_decision(
     if not cleaned:
         raise ValueError(strings["decision_reason_required"])
     if choice == "cancel":
-        attack = await stack.attacks.admin_cancel_attack(str(attack.id))
+        attack = await stack.attacks.admin_cancel_attack(str(attack.id), reason=cleaned)
     else:
         attack = await stack.attacks.resolve_dispute(str(attack.id), choice)
     winner_name = ""
@@ -405,28 +406,47 @@ class DecisionOpenButton(
         if attack is None or getattr(attack, "is_over", True):
             await open_unique_ephemeral(interaction, content=strings["no_service"])
             return
-        view = decision_action_surface(strings, attack)
+        if attack.state is not AttackState.MEETING:
+            # temporalites-beta-v1: a live DECLARED/DEFENDED attack gets
+            # the SAME window, one « Annuler » choice (refunds + closes).
+            view = decision_action_surface(
+                strings,
+                attack,
+                choices=(("cancel", "dispute_cancel_button"),),
+                header=str(strings["decision_action_live_header"]).format(map=str(attack.map_key)),
+            )
+        else:
+            view = decision_action_surface(strings, attack)
         await open_unique_ephemeral(interaction, view=view)
 
 
-def decision_action_surface(strings: dict[str, str], attack: Any) -> Any:
-    """Build the per-attack action window — context + the four choices.
+def decision_action_surface(
+    strings: dict[str, str],
+    attack: Any,
+    choices: tuple[tuple[str, str], ...] = DECISION_CHOICES,
+    header: str = "",
+    kind_line: str = "",
+) -> Any:
+    """Feed the action window — context + the choices of the call.
 
     One template (the declared surface id), parameters only: the same
-    window serves the inbox and any future notification surface.
+    window serves the inbox (the four meeting choices) AND the LIVE
+    attack lines (one « Annuler » choice, temporalites-beta-v1).
     """
     key = room_key(str(attack.id))
-    kind = dispute_kind(attack)
-    kind_line = str(strings["decision_kind_auto" if kind == "auto" else "decision_kind_declarations"])
-    header = str(strings["decision_action_header"]).format(map=str(attack.map_key))
+    if not header:
+        kind = dispute_kind(attack)
+        kind_line = str(strings["decision_kind_auto" if kind == "auto" else "decision_kind_declarations"])
+        header = str(strings["decision_action_header"]).format(map=str(attack.map_key))
     items: list[Any] = [
         discord.ui.TextDisplay(f"# {strings['decision_action_title']}"),
         discord.ui.Separator(),
         discord.ui.TextDisplay(header),
-        discord.ui.TextDisplay(kind_line),
     ]
+    if kind_line:
+        items.append(discord.ui.TextDisplay(kind_line))
     row: Any = discord.ui.ActionRow()
-    for choice, label_key in DECISION_CHOICES:
+    for choice, label_key in choices:
         row.add_item(
             DecisionActButton(choice, key, str(strings[label_key]), discord.ButtonStyle.secondary).item
         )
