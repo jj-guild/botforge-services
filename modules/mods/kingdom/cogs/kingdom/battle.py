@@ -41,6 +41,7 @@ exists).
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import re
 from datetime import UTC, datetime, timedelta
@@ -83,6 +84,8 @@ _ROOM_DRAFT = "kingdom:attack:room:draft:{key}"
 _ROOM_URL = "kingdom:attack:room:url:{key}"
 _ROOM_RESULT = "kingdom:attack:room:result:{key}"
 _ROOM_READY = "kingdom:attack:room:ready:{key}"
+# affaire-27: the ready-click phase wake — held so it is never GC'd mid-run.
+_PHASE_WAKE_TASKS: set[asyncio.Task[None]] = set()
 _ROOM_READY_SIDE = "kingdom:attack:room:ready:{key}:{side}"
 _DISPUTE_PICK = "kingdom:attack:dispute:pick:{key}"
 _DISPUTE_CONFIRM = "kingdom:attack:dispute:confirm:{key}"
@@ -693,6 +696,31 @@ async def on_score_resolved_safe(
     await announce_conquest_safe(bot, stack, attack, locale)
     await refresh_room_message_safe(bot, stack, attack, locale)
     await sweep_reveal_notes_safe(bot, attack)
+    # affaire-27 (Drasah 25/11 tranché) : une PARTIE JOUÉE ferme son
+    # habitat immédiatement en bêta (le délai officiel de 30 min garde
+    # sa salle de discussion) — l'annonce part TOUJOURS avant la porte.
+    if await _played_result_closes_now_safe(stack):
+        await cleanup_decided_attack_safe(bot, stack, attack)
+
+
+async def _played_result_closes_now_safe(stack: Any) -> bool:
+    """Whether a PLAYED result closes its habitat at once (beta only).
+
+    affaire-27 : en version officielle une partie jouée laisse la
+    salle ouverte ``room_cleanup_delay`` (30 min) — les joueurs
+    commentent la game ; en bêta armée tout repart vite, la fermeture
+    est immédiate. Best effort : une sonde en échec garde le
+    comportement officiel.
+    """
+    try:
+        from botforge.mods.kingdom.beta_weekend import beta_started
+        from botforge.mods.kingdom.game_clock import game_now
+
+        season = await stack.kingdoms.current_season()
+        return season is not None and beta_started(season, game_now())
+    except Exception:
+        logger.debug("kingdom: played-result beta probe failed", exc_info=True)
+    return False
 
 
 # ---------------------------------------------------------------------------
@@ -1231,28 +1259,87 @@ async def _sweep_recorded_leftovers_safe(bot: Any, due: list[Any]) -> int:
     swept = 0
     for attack in due:
         score = attack.score or {}
-        room_channel_id = _ref_as_int(score, "room_channel_id")
-        salon_channel_id = _ref_as_int(score, "attack_channel_id")
-        role_id = _ref_as_int(score, "room_role_id")
-        if not room_channel_id and not salon_channel_id and not role_id:
+        refs = (
+            _ref_as_int(score, "room_channel_id"),
+            _ref_as_int(score, "attack_channel_id"),
+            _ref_as_int(score, "room_role_id"),
+        )
+        if not any(refs):
             continue
         try:
             for guild in list(getattr(bot, "guilds", []) or []):
-                for channel_id in (room_channel_id, salon_channel_id):
-                    if not channel_id:
-                        continue
-                    channel = getattr(guild, "get_channel", lambda _id: None)(channel_id)
-                    if channel is not None and hasattr(channel, "delete"):
-                        await channel.delete()
-                        swept += 1
-                if role_id:
-                    role = getattr(guild, "get_role", lambda _id: None)(role_id)
-                    if role is not None and hasattr(role, "delete"):
-                        await role.delete()
-                        swept += 1
+                swept += await _delete_recorded_refs_safe(guild, refs)
         except Exception:
             logger.warning("kingdom: battle room leftover sweep failed", exc_info=True)
     return swept
+
+
+async def _delete_recorded_refs_safe(guild: Any, refs: tuple[int, int, int]) -> int:
+    """Delete one meeting's recorded channel/role refs on one guild.
+
+    affaire-27 (Drasah 25/11 live report): the sweep hammered Discord
+    with 403 « Missing Access » every pass on leftover channels the
+    bot may NOT manage (old-app ghosts a permission check can't
+    heal) — deleting them is the guild's roles' business, not ours.
+    The guards skip the undeletable SILENTLY: no call, no 403, no
+    rate-limit admission storm.
+    """
+    room_channel_id, salon_channel_id, role_id = refs
+    swept = 0
+    me = getattr(guild, "me", None)
+    for channel_id in (room_channel_id, salon_channel_id):
+        if not channel_id:
+            continue
+        channel = getattr(guild, "get_channel", lambda _id: None)(channel_id)
+        if channel is None or not hasattr(channel, "delete"):
+            continue
+        if not _bot_may_delete_channel(me, channel):
+            logger.info(
+                "kingdom: leftover channel %s skipped (no Manage Channels)",
+                channel_id,
+            )
+            continue
+        await channel.delete()
+        swept += 1
+    if role_id:
+        role = getattr(guild, "get_role", lambda _id: None)(role_id)
+        if role is not None and hasattr(role, "delete"):
+            if not _bot_may_delete_role(me, role):
+                logger.info("kingdom: leftover role %s skipped (above the bot)", role_id)
+                return swept
+            await role.delete()
+            swept += 1
+    return swept
+
+
+def _bot_may_delete_channel(me: Any, channel: Any) -> bool:
+    """Whether the bot holds Manage Channels on a leftover channel.
+
+    Best effort: an unreadable permission surface reads ALLOWED (the
+    delete stays best-effort, exactly as before).
+    """
+    perms = getattr(channel, "permissions_for", None)
+    if me is None or perms is None:
+        return True
+    try:
+        return bool(perms(me).manage_channels)
+    except Exception:
+        logger.debug("kingdom: leftover channel permission probe failed", exc_info=True)
+    return True
+
+
+def _bot_may_delete_role(me: Any, role: Any) -> bool:
+    """Whether the bot's top role sits ABOVE a leftover battle role."""
+    me_top = getattr(getattr(me, "top_role", None), "position", None)
+    top = None if isinstance(me_top, bool) else me_top
+    role_top = getattr(role, "position", None)
+    if me is None or top is None or role_top is None:
+        return True
+    try:
+        return bool(top > role_top)
+    except Exception:
+        logger.debug("kingdom: leftover role hierarchy probe failed", exc_info=True)
+    return True
 
 
 async def _sweep_orphan_battle_roles_safe(bot: Any, keep_role_ids: set[int]) -> int:
@@ -1696,6 +1783,18 @@ class RoomReadyButton(
         if score.get("room_event_id"):
             return
         await create_room_event_safe(interaction.client, stack, attack, strings, interaction.channel)
+        # affaire-27 : « Prêt = la partie part » ne doit jamais
+        # dépendre de la cadence du tick — le clic réveille la passe
+        # de phases (idempotente, best effort), le vocal et l'événement
+        # atterrissent dans la seconde du clic.
+        try:
+            from .phases import run_attack_phases_safe
+
+            task = asyncio.create_task(run_attack_phases_safe(interaction.client))
+            _PHASE_WAKE_TASKS.add(task)
+            task.add_done_callback(_PHASE_WAKE_TASKS.discard)
+        except Exception:
+            logger.debug("kingdom: ready-click phase wake skipped", exc_info=True)
 
 
 class RoomResultButton(

@@ -318,7 +318,15 @@ async def _send_score_reminder_dm(bot: Any, attack: Any, strings: dict[str, str]
 async def _run_forfeits_safe(
     bot: Any, stack: Any, guild: Any, strings: dict[str, str]
 ) -> int:
-    """Announce the meeting-time forfeits of the expired attacks."""
+    """Announce the meeting-time forfeits of the expired attacks.
+
+    affaire-27 (Drasah 25/11 tranché) : l'annonce part, PUIS l'habitat
+    (vocal + rôle + salon texte) d'une résolution AUTO ferme
+    immédiatement — un forfait n'ouvre pas de salle de discussion.
+    L'anti-blocking AI defense n'est PAS une résolution : la partie
+    continue (garde ``is_over``), rien ne se ferme.
+    """
+    from .battle import cleanup_decided_attack_safe
     from .common import attack_salon_send_safe, kingdom_name
 
     played = 0
@@ -352,14 +360,25 @@ async def _run_forfeits_safe(
                     map=attack.map_key, side=strings[f"side_{side}"], kingdom=kingdom
                 ),
             )
+        if getattr(attack, "is_over", False):
+            await cleanup_decided_attack_safe(bot, stack, attack)
     return played
 
 
 async def _run_noshows_safe(
     bot: Any, stack: Any, guild: Any, strings: dict[str, str]
 ) -> int:
-    """Announce the T+5 no-show resolutions of the meetings."""
-    from .battle import stamp_room_ping_winner_safe, sweep_reveal_notes_safe
+    """Announce the T+5 no-show resolutions of the meetings.
+
+    affaire-27 (Drasah 25/11 tranché) : l'annonce (et le ping du
+    vainqueur) part, PUIS l'habitat du no-show ferme immédiatement —
+    un forfait ne laisse jamais un rendez-vous fantôme de 30 minutes.
+    """
+    from .battle import (
+        cleanup_decided_attack_safe,
+        stamp_room_ping_winner_safe,
+        sweep_reveal_notes_safe,
+    )
     from .common import attack_salon_send_safe, kingdom_name
 
     played = 0
@@ -372,6 +391,8 @@ async def _run_noshows_safe(
             await attack_salon_send_safe(
                 guild, attack, strings["noshow_both"].format(map=attack.map_key)
             )
+            if getattr(attack, "is_over", False):
+                await cleanup_decided_attack_safe(bot, stack, attack)
             continue
         kingdom = await kingdom_name(stack.kingdoms, attack.winner_kingdom_id)
         await attack_salon_send_safe(
@@ -385,6 +406,8 @@ async def _run_noshows_safe(
         # scoreboard dies with the meeting.
         await stamp_room_ping_winner_safe(bot, attack, kingdom, strings)
         await sweep_reveal_notes_safe(bot, attack)
+        if getattr(attack, "is_over", False):
+            await cleanup_decided_attack_safe(bot, stack, attack)
     return played
 
 
