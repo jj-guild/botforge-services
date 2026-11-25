@@ -702,7 +702,6 @@ def test_a_repaired_salon_clears_the_husky_refs_and_reseeds() -> None:
     import botforge.discord.live_activity as feed
 
     reset_calls: list[str] = []
-    posted_back: dict[str, set[str]] = {}
 
     async def _fake_reset(guild_id: str) -> None:
         reset_calls.append(guild_id)
@@ -725,7 +724,6 @@ def test_a_repaired_salon_clears_the_husky_refs_and_reseeds() -> None:
     async def _fake_guild_profiles(bot, guild_id):
         return []
 
-    (monkey_ok,) = (True,)
     original = {
         "_posted_refs": feed._posted_refs,
         "_week_cards": feed._week_cards,
@@ -753,4 +751,3 @@ def test_a_repaired_salon_clears_the_husky_refs_and_reseeds() -> None:
         feed._guild_profiles = original["_guild_profiles"]
         feed._reset_posted_refs = original["_reset_posted_refs"]
     assert reset_calls == ["42"], "the repair wipes the husky refs before reposting"
-    assert monkey_ok
