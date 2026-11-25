@@ -348,16 +348,42 @@ def _needs_repair(candidate_docs: list[dict[str, Any]]) -> bool:
 class MatchHistorySyncer:
     """Pull the known accounts' history into the store, exploit it after."""
 
+    def _ladder_of_doc(self, doc: dict[str, Any]) -> str:
+        """Infer the doc's RATED board (owner 2026-11-25).
+
+        The upstream carries NO per-match leaderboard (verified live
+        - ``leaderboard_id`` reads empty on every sync payload), so
+        the rated matches infer their board: ``AUTOMATCH`` only (a
+        rated row never rides a custom lobby), the game's own MODE
+        key splits Empire Wars (13/14) from Random Map, then exactly
+        two rated seats read RM 1v1 (3), a team game reads RM TG (4).
+        """
+        if str(doc.get("leaderboard_id") or ""):
+            return str(doc.get("leaderboard_id"))  # a legacy board rides
+        ratings = doc.get("rating_after") or {}
+        if not ratings or str(doc.get("description") or "").strip().upper() != "AUTOMATCH":
+            return ""
+        mode = ""
+        try:
+            options = json.loads(str(doc.get("options_json") or "") or "{}")
+            mode = str(options.get("5", "")).strip()
+        except Exception:
+            mode = ""
+        if mode in ("13", "14"):
+            return mode  # Empire Wars: its own series, never the RM ladders
+        rated = [p for p in (doc.get("players") or []) if str((p or {}).get("profile_id", "")) in ratings]
+        return "3" if len(rated) == 2 else "4"
+
     async def _fold_elo_points(self, documents: list[dict[str, Any]]) -> None:
         """Record one dated elo point per (profile, board) of the fold.
 
-        Each match carries the players' after-ratings - one point at
-        the match's own end (owner 2026-11-25): the seat lines read
-        the match's day, not the card's.
+        Each RATED match carries the players' after-ratings - one
+        point at the match's own end (owner 2026-11-25): the seat
+        lines read the match's day, not the card's.
         """
         try:
             for doc in documents:
-                board = str(doc.get("leaderboard_id") or "")
+                board = self._ladder_of_doc(doc)
                 point_at = _int(doc.get("finished_at")) or _int(doc.get("started_at"))
                 if not board or not point_at:
                     continue
@@ -385,7 +411,7 @@ class MatchHistorySyncer:
             return 0
         written = 0
         for doc in docs:
-            board = str(doc.get("leaderboard_id") or "")
+            board = self._ladder_of_doc(doc)
             point_at = _int(doc.get("finished_at")) or _int(doc.get("started_at"))
             if not board or not point_at:
                 continue
@@ -393,8 +419,7 @@ class MatchHistorySyncer:
                 if _int(after) > 0 and str(pid):
                     written += 1
                     await self._store.record_elo_points(str(pid), board, [(point_at, _int(after))])
-        if written:
-            logger.info("elo series backfilled: %d point(s) from the stored history", written)
+        logger.info("elo series backfill: %d doc(s), %d point(s)", len(docs), written)
         return written
 
     def __init__(

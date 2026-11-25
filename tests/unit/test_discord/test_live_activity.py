@@ -596,3 +596,43 @@ def test_the_timeseries_pipe_records_the_running_max() -> None:
         (1200, 1200, 1200),
         (3000, 900, 1200),
     ], "the duplicate point folds, the max still climbs"
+
+
+def test_the_rated_fold_infers_the_board() -> None:
+    """AUTOMATCH + mode + seatcount infer the board (the upstream carries none)."""
+    from botforge.ext_librematch.history import MatchHistorySyncer
+
+    syncer = MatchHistorySyncer.__new__(MatchHistorySyncer)
+
+    def _doc(desc, players, options, ratings):
+        return {
+            "leaderboard_id": "",
+            "description": desc,
+            "players": players,
+            "options_json": options,
+            "rating_after": ratings,
+        }
+
+    # a RANKED 1v1: AUTOMATCH, RM mode, two rated seats -> board 3
+    rm1v1 = _doc("AUTOMATCH", [{"profile_id": "848567"}, {"profile_id": "111"}], '{"5": "0"}',
+                 {"848567": 1300, "111": 1100})
+    assert syncer._ladder_of_doc(rm1v1) == "3"
+    # a RANKED TG: more than two rated seats -> board 4
+    rmtg = _doc("AUTOMATCH", [{"profile_id": "848567"}, {"profile_id": "111"},
+                              {"profile_id": "222"}, {"profile_id": "333"}], '{"5": "0"}',
+                {"848567": 1300, "111": 1100, "222": 1200, "333": 1400})
+    assert syncer._ladder_of_doc(rmtg) == "4"
+    # an Empire Wars automatch: its OWN boards, never the RM ladders
+    ew = _doc("AUTOMATCH", [{"profile_id": "848567"}, {"profile_id": "111"}], '{"5": "13"}',
+              {"848567": 1300, "111": 1100})
+    assert syncer._ladder_of_doc(ew) == "13"
+    # a CUSTOM lobby (or no ratings): no series point ever
+    custom = _doc("test", [{"profile_id": "848567"}, {"profile_id": "111"}], '{"5": "0"}',
+                  {"848567": 0, "111": 0})
+    assert syncer._ladder_of_doc(custom) == ""
+    unrated = _doc("AUTOMATCH", [{"profile_id": "848567"}, {"profile_id": "111"}], '{"5": "0"}', {})
+    assert syncer._ladder_of_doc(unrated) == ""
+    # a LEGACY doc that carries its own board rides as-is
+    legacy = _doc("AUTOMATCH", [{"profile_id": "848567"}], "", {"848567": 1300})
+    legacy["leaderboard_id"] = "4"
+    assert syncer._ladder_of_doc(legacy) == "4"
