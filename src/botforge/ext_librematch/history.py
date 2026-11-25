@@ -396,14 +396,18 @@ class MatchHistorySyncer:
     async def backfill_elo_series(self) -> int:
         """Fold the STORED matches into the elo timeseries (once).
 
-        The series starts empty; the matches already carry every
-        after-rating with its date (owner 2026-11-25) - one pass over
-        the store rebuilds the whole history retroactively, the
-        regular fold keeps it alive afterwards. Idempotent: the
-        points deduplicate on the upsert.
+        The matches already carry every after-rating with its date
+        (owner 2026-11-25) - one boot-time pass folds the whole store
+        into the series; the regular fold keeps it alive afterwards.
+        ALWAYS observably logged, never gated on the collection being
+        empty (the previous empty-gate silently skipped the rebuild:
+        the first boot's elo refresh had already written the day's
+        points, and the seat lines kept reading TODAY).
+
+        Idempotent but READ-MODIFY-WRITE per point: cheap at today's
+        scale, the incremental gate (last folded finished_at) comes
+        with the 1M-matches horizon.
         """
-        if not await self._store.elo_series_is_empty():
-            return 0
         try:
             docs = await self._store.find_matches([], limit=0, include_invalid=True)
         except Exception:

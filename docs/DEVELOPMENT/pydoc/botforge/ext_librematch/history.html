@@ -79,11 +79,17 @@ reads&nbsp;UNKNOWN,&nbsp;never&nbsp;a&nbsp;guess.</span></dd></dl>
 
 <dl><dt>async <a name="MatchHistorySyncer-backfill_elo_series"><strong>backfill_elo_series</strong></a>(self) -&gt; 'int'</dt><dd><span class="code">Fold&nbsp;the&nbsp;STORED&nbsp;matches&nbsp;into&nbsp;the&nbsp;elo&nbsp;timeseries&nbsp;(once).<br>
 &nbsp;<br>
-The&nbsp;series&nbsp;starts&nbsp;empty;&nbsp;the&nbsp;matches&nbsp;already&nbsp;carry&nbsp;every<br>
-after-rating&nbsp;with&nbsp;its&nbsp;date&nbsp;(owner&nbsp;2026-11-25)&nbsp;-&nbsp;one&nbsp;pass&nbsp;over<br>
-the&nbsp;store&nbsp;rebuilds&nbsp;the&nbsp;whole&nbsp;history&nbsp;retroactively,&nbsp;the<br>
-regular&nbsp;fold&nbsp;keeps&nbsp;it&nbsp;alive&nbsp;afterwards.&nbsp;Idempotent:&nbsp;the<br>
-points&nbsp;deduplicate&nbsp;on&nbsp;the&nbsp;upsert.</span></dd></dl>
+The&nbsp;matches&nbsp;already&nbsp;carry&nbsp;every&nbsp;after-rating&nbsp;with&nbsp;its&nbsp;date<br>
+(owner&nbsp;2026-11-25)&nbsp;-&nbsp;one&nbsp;boot-time&nbsp;pass&nbsp;folds&nbsp;the&nbsp;whole&nbsp;store<br>
+into&nbsp;the&nbsp;series;&nbsp;the&nbsp;regular&nbsp;fold&nbsp;keeps&nbsp;it&nbsp;alive&nbsp;afterwards.<br>
+ALWAYS&nbsp;observably&nbsp;logged,&nbsp;never&nbsp;gated&nbsp;on&nbsp;the&nbsp;collection&nbsp;being<br>
+empty&nbsp;(the&nbsp;previous&nbsp;empty-gate&nbsp;silently&nbsp;skipped&nbsp;the&nbsp;rebuild:<br>
+the&nbsp;first&nbsp;boot's&nbsp;elo&nbsp;refresh&nbsp;had&nbsp;already&nbsp;written&nbsp;the&nbsp;day's<br>
+points,&nbsp;and&nbsp;the&nbsp;seat&nbsp;lines&nbsp;kept&nbsp;reading&nbsp;TODAY).<br>
+&nbsp;<br>
+Idempotent&nbsp;but&nbsp;READ-MODIFY-WRITE&nbsp;per&nbsp;point:&nbsp;cheap&nbsp;at&nbsp;today's<br>
+scale,&nbsp;the&nbsp;incremental&nbsp;gate&nbsp;(last&nbsp;folded&nbsp;finished_at)&nbsp;comes<br>
+with&nbsp;the&nbsp;1M-matches&nbsp;horizon.</span></dd></dl>
 
 <dl><dt>async <a name="MatchHistorySyncer-decode_stored"><strong>decode_stored</strong></a>(self, profile_ids: 'list[str]', batch: 'int' = 25) -&gt; 'int'</dt><dd><span class="code">Decode&nbsp;the&nbsp;stored&nbsp;matches'&nbsp;encoded&nbsp;fields&nbsp;(#288,&nbsp;T2).<br>
 &nbsp;<br>

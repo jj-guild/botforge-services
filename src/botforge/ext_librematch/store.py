@@ -270,13 +270,6 @@ class LibrematchStore:
             out.setdefault(str(doc.get("profile_id")), {})[str(doc.get("board"))] = (cur, peak)
         return out
 
-    async def elo_series_is_empty(self) -> bool:
-        """Whether the timeseries never started (the backfill's gate)."""
-        try:
-            return int(await self._elo().count_documents({})) == 0
-        except Exception:
-            return True
-
     async def ensure_indexes(self) -> None:
         """Create the provider's hot-path indexes (idempotent, best-effort).
 
