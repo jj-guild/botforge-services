@@ -227,21 +227,35 @@ class DecisionReasonModal(discord.ui.Modal):
         self.add_item(self.reason_input)
 
     async def on_submit(self, interaction: discord.Interaction) -> None:
-        """Apply the decision — resolve, record, announce, confirm."""
+        """Apply the decision — resolve, record, announce, confirm.
+
+        drawer-build-v1's lesson (Check 136, « n'a pas répondu à
+        temps ») : la soumission est acquittée IMMÉDIATEMENT —
+        l'arbitrage, le ledger et l'annonce aux salons prennent leur
+        temps (et le rate-limit de Discord met parfois 9 s à
+        laisser passer un envoi), le chrono de 3 s appartient à
+        l'ACK, la note vit dans le followup.
+        """
         strings = self.strings
+        try:
+            await interaction.response.defer(ephemeral=True)
+        except Exception:  # an already-acked submit
+            logger.debug("kingdom: the decision modal defer skipped", exc_info=True)
+
+        async def _note(content: str) -> None:
+            await interaction.followup.send(content, ephemeral=True)
+
         stack = wiring()
         if stack is None:
-            await interaction.response.send_message(strings["no_service"], ephemeral=True)
+            await _note(strings["no_service"])
             return
         reason = str(self.reason_input.value or "").strip()
         if not reason:
-            await interaction.response.send_message(
-                strings["decision_reason_required"], ephemeral=True
-            )
+            await _note(strings["decision_reason_required"])
             return
         attack = await attack_by_id(stack, self.attack_id)
         if attack is None or getattr(attack, "is_over", True):
-            await interaction.response.send_message(strings["no_service"], ephemeral=True)
+            await _note(strings["no_service"])
             return
         try:
             attack, decision = await apply_admin_decision(
@@ -250,9 +264,7 @@ class DecisionReasonModal(discord.ui.Modal):
             )
         except Exception as exc:  # a live surface never crashes
             message = getattr(exc, "message", None) or str(exc)
-            await interaction.response.send_message(
-                strings["failed"].format(message=message), ephemeral=True
-            )
+            await _note(strings["failed"].format(message=message))
             return
         try:
             await announce_decision_safe(interaction.client, stack, decision, locale_of(interaction))
@@ -265,7 +277,7 @@ class DecisionReasonModal(discord.ui.Modal):
         else:
             kingdom = await kingdom_name(stack.kingdoms, str(attack.winner_kingdom_id or ""))
             note = str(strings["dispute_applied"]).format(kingdom=kingdom, map=str(attack.map_key))
-        await interaction.response.send_message(note, ephemeral=True)
+        await _note(note)
 
 
 class DecisionActButton(
@@ -348,21 +360,30 @@ class DecisionOpenButton(
         return cls(match["key"], str(strings["decision_decide_button"]))
 
     async def callback(self, interaction: discord.Interaction) -> None:
-        """Re-read the attack fresh, then open the action window."""
+        """Re-read the attack fresh, then open the action window.
+
+        Fast-ack d'abord (Check 136) : la relecture de la clé + le
+        refetch prennent leur temps sous rate-limit, la fenêtre vit
+        dans le followup, les refus deviennent des notes déclarées.
+        """
         from .battle import resolve_room_key
 
         strings = strings_by_locale(locale_of(interaction))
+        try:
+            await interaction.response.defer(ephemeral=True)
+        except Exception:  # an already-acked click
+            logger.debug("kingdom: the decision open defer skipped", exc_info=True)
         if str(getattr(interaction.user, "id", "")) not in (_bot_admins(interaction) or ()):
-            await interaction.response.send_message(strings["dispute_not_admin"], ephemeral=True)
+            await open_unique_ephemeral(interaction, content=strings["dispute_not_admin"])
             return
         stack = wiring()
         if stack is None:
-            await interaction.response.send_message(strings["no_service"], ephemeral=True)
+            await open_unique_ephemeral(interaction, content=strings["no_service"])
             return
         attack_id = await resolve_room_key(stack, self.key)
         attack = await attack_by_id(stack, attack_id) if attack_id else None
         if attack is None or getattr(attack, "is_over", True):
-            await interaction.response.send_message(strings["no_service"], ephemeral=True)
+            await open_unique_ephemeral(interaction, content=strings["no_service"])
             return
         view = decision_action_surface(strings, attack)
         await open_unique_ephemeral(interaction, view=view)
