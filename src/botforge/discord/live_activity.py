@@ -58,7 +58,9 @@ _SEED_VERSION = 6  # 6: the WE slotinfo AI decodes (status 2 + civ); a repaired 
 _MATCHES_SCOPE = "games/aoe2"
 _MATCHES_KEY = "matches"
 # the seed window: the salon's first use replays the last WEEK
-_SEED_WINDOW_S = 7 * 86400
+# the salon's window (owner 2026-11-25: the week was starving it - his
+# November history deserves its cards; 90 days)
+_SEED_WINDOW_S = 90 * 86400
 # an invalid match (owner 2026-11-24): under 5 minutes or no result
 _INVALID_DURATION_S = 5 * 60
 
@@ -134,6 +136,43 @@ async def _card_ctx(bot: discord.Client, guild_id: str, card: dict[str, Any]) ->
     return ctx
 
 
+def _bind_instant_repair(bot: discord.Client) -> None:
+    """Bind the channel delete/create events to an INSTANT salon sweep.
+
+    The owner's rule (2026-11-25): a repaired salon repopulates
+    INSTANTLY, nobody waits for the 5-minute sweep - the sweep stays
+    the safety net, the event is the fast path. The marker decides
+    cheaply: an unchanged salon returns in one read.
+    """
+
+    async def _on_channel_event(channel: Any) -> None:
+        try:
+            guild = getattr(channel, "guild", None)
+            if guild is None:
+                return
+            guild_id = str(guild.id)
+            channel_id = await _matches_channel_id(bot, guild_id)
+            if channel_id is None:
+                return
+            _SEEDED.discard(guild_id)
+            await _maybe_seed_matches_salon(bot, guild_id, channel_id)
+            await _gap_fill_matches_salon(bot, guild_id, channel_id)
+        except Exception:
+            logger.debug("the instant salon sweep skipped - best-effort", exc_info=True)
+
+    if getattr(bot, "_matches_instant_bound", False):
+        return
+    try:
+        bot._matches_instant_bound = True  # type: ignore[attr-defined]
+        add_listener: Any = getattr(bot, "add_listener", None)
+        if add_listener is None:
+            return
+        add_listener(_on_channel_event, "on_guild_channel_delete")
+        add_listener(_on_channel_event, "on_guild_channel_create")
+    except Exception:
+        logger.debug("the instant salon binding failed - the sweep stays", exc_info=True)
+
+
 def start_live_activity_feed(bot: discord.Client) -> asyncio.Task[None] | None:
     """Run the AoE2 activity feed: matches cards + short event logs.
 
@@ -172,6 +211,9 @@ def start_live_activity_feed(bot: discord.Client) -> asyncio.Task[None] | None:
     # salon: a channel provisioned AFTER the boot seeds within the
     # sweep window - never waiting on the next match to fire an event
     seed_task = asyncio.create_task(_seed_loop(bot))
+    # the INSTANT repair (owner 2026-11-25: "au delete, tout repopulate
+    # instant"): a channel deleted or created sweeps NOW
+    _bind_instant_repair(bot)
 
     def _log_death(task: asyncio.Task[None]) -> None:
         if not task.cancelled() and task.exception() is not None:
@@ -475,18 +517,20 @@ async def _maybe_seed_matches_salon(
         _SEEDED.add(guild_id)
         return
     _SEEDED.add(guild_id)
-    # a REPAIR (new channel id) reposts its whole week: the old salon's
-    # refs were pointing at messages that no longer exist, they blocked
-    # the re-seed silently (owner 2026-11-25)
+    # a REPAIR (new channel id) reconciles against the LIVE messages
+    # (owner 2026-11-25): drop the refs whose message was deleted,
+    # recreate the missing - the blanket reset could not tell a living
+    # card from a husk, the listing can
     marker_channel = str((marker or {}).get("channel_id") or "") if isinstance(marker, dict) else ""
     if marker_channel and marker_channel != str(channel_id):
-        await _reset_posted_refs(guild_id)
         logger.info(
-            "matches salon repaired (guild %s): channel %s -> %s, refs cleared, reseeding",
+            "matches salon repaired (guild %s): channel %s -> %s, reconciling",
             guild_id,
             marker_channel,
             channel_id,
         )
+    if marker_channel != str(channel_id):
+        await _reconcile_posted_refs(bot, guild_id, channel_id)
     try:
         cards = await _week_cards(bot, guild_id)
         await _write_seed_marker(guild_id, channel_id)
@@ -497,7 +541,7 @@ async def _maybe_seed_matches_salon(
         if not cards:
             return
         logger.info(
-            "matches salon seed: %d card(s) for guild %s (the last week)",
+            "matches salon seed: %d card(s) for guild %s (the last window)",
             len(cards),
             guild_id,
         )
@@ -505,15 +549,19 @@ async def _maybe_seed_matches_salon(
 
         labels = await _label_pack(bot, guild_id)
         known = set(await _guild_profiles(bot, guild_id))
+        # the channel resolves BEFORE the loop (owner 2026-11-25): a
+        # channel created after the boot rides no cache - the sweep
+        # fetches it, the send never starves in silence again
+        channel = await _sweep_channel(bot, guild_id, channel_id)
+        if channel is None:
+            return
         for card in cards:
             try:
                 ctx = await _card_ctx(bot, guild_id, card)
-                guild = bot.get_guild(int(guild_id))
-                channel = guild.get_channel(int(channel_id)) if guild else None
-                if channel is None or not isinstance(channel, discord.TextChannel):
-                    return
-                await channel.send(view=_match_card_view(card, ctx, set(), labels, known), silent=True)
-                await _mark_posted(guild_id, str(card.get("match_id") or ""))
+                message = await channel.send(
+                    view=_match_card_view(card, ctx, set(), labels, known), silent=True
+                )
+                await _mark_posted(guild_id, str(card.get("match_id") or ""), str(message.id))
             except Exception:
                 logger.debug("matches salon seed card skipped - best-effort", exc_info=True)
     except Exception:
@@ -534,7 +582,9 @@ async def _week_cards(bot: discord.Client, guild_id: str) -> list[dict[str, Any]
         return []
     from botforge.discord.stats_views import recent_match_entries
 
-    entries = await recent_match_entries(profiles, limit=50)
+    # the fetch window rides the SALON's own window (owner 2026-11-
+    # 25): 90 days of history BEFORE the local filter, never a bare 50
+    entries = await recent_match_entries(profiles, limit=200)
     deadline = int(time.time()) - _SEED_WINDOW_S
     cards: list[dict[str, Any]] = []
     for entry in entries:
@@ -594,6 +644,27 @@ def _seed_card_of(entry: Any) -> dict[str, Any]:
     return card
 
 
+async def _posted_messages(guild_id: str) -> dict[str, str]:
+    """Return the salon's match-ref -> message-id map (the reconcile's truth).
+
+    A posted ref carries the DISCORD MESSAGE it lives in (owner
+    2026-11-25): listing the channel tells live from deleted - the
+    reconcile drops the dead ones, the re-seed recreates the missing.
+    """
+    try:
+        from botforge.core.models.db import get_async_database
+
+        document = await get_async_database()["channels"].find_one(
+            {"_id": f"{guild_id}:livefeed:matches:posted"}
+        )
+        raw: Any = (document or {}).get("messages") or {}
+        if not isinstance(raw, dict):
+            raw = {}
+        return {str(k): str(v) for k, v in raw.items() if str(k) and str(v)}
+    except Exception:
+        return {}
+
+
 async def _posted_refs(guild_id: str) -> set[str]:
     """Retrieve the salon messages' matches - persisted, process-wide cache."""
     cached = _POSTED.get(guild_id)
@@ -616,43 +687,96 @@ async def _posted_refs(guild_id: str) -> set[str]:
     return refs
 
 
-async def _reset_posted_refs(guild_id: str) -> None:
-    """Wipe the posted registry - a salon REPAIR posts its week again.
+async def _mark_posted(
+    guild_id: str, match_ref: str, message_id: str | None = None
+) -> None:
+    """Record one match's salon message - the ONE-message bookkeeping.
 
-    The deleted salon's messages do not exist anymore, but their refs
-    lingered and the repair re-seeded NOTHING (owner 2026-11-25: "le
-    salon matches n'est pas alimente au repair" - every card hit the
-    "already posted" filter and the branch stayed silent). The repair
-    clears the husks, the week lands again.
+    The message id rides the ref when known (owner 2026-11-25): the
+    reconcile reads it to tell a LIVING card from a deleted one.
     """
-    _POSTED.pop(guild_id, None)
-    try:
-        from botforge.core.models.db import get_async_database
-
-        await get_async_database()["channels"].update_one(
-            {"_id": f"{guild_id}:livefeed:matches:posted"},
-            {"$set": {"refs": []}},
-        )
-    except Exception:
-        logger.debug("the posted-refs reset failed (guild %s)", guild_id, exc_info=True)
-
-
-async def _mark_posted(guild_id: str, match_ref: str) -> None:
-    """Record one match's salon message - the ONE-message bookkeeping."""
     refs = await _posted_refs(guild_id)
-    if match_ref in refs:
+    if match_ref in refs and not message_id:
         return
     refs.add(match_ref)
+    patch: dict[str, Any] = {"$addToSet": {"refs": match_ref}}
+    if message_id:
+        patch["$set"] = {f"messages.{match_ref}": str(message_id)}
     try:
         from botforge.core.models.db import get_async_database
 
         await get_async_database()["channels"].update_one(
             {"_id": f"{guild_id}:livefeed:matches:posted"},
-            {"$addToSet": {"refs": match_ref}},
+            patch,
             upsert=True,
         )
     except Exception:
         logger.debug("the posted-refs write failed (match %s)", match_ref, exc_info=True)
+
+
+async def _sweep_channel(bot: discord.Client, guild_id: str, channel_id: str) -> Any | None:
+    """Resolve the salon's text channel - the CACHE may not know it yet.
+
+    A channel created after the boot never rides the client's cache
+    (owner 2026-11-25: the repaired salon stayed EMPTY - the seed
+    resolved get_channel, read None, returned in silence).
+    """
+    guild = bot.get_guild(int(guild_id))
+    if guild is None:
+        return None
+    channel: Any = guild.get_channel(int(channel_id))
+    if channel is not None:
+        return channel
+    try:
+        fetched: Any = await guild.fetch_channel(int(channel_id))
+    except Exception:
+        return None
+    return fetched if isinstance(fetched, discord.TextChannel) else None
+
+
+async def _reconcile_posted_refs(bot: discord.Client, guild_id: str, channel_id: str) -> None:
+    """Reconcile the posted refs with the LIVE channel messages.
+
+    The owner's rule (2026-11-25): on repair, LIST the salon's
+    messages, DROP the refs whose message was deleted, RECREATE the
+    missing cards - ZERO duplicates (a living message keeps its ref, a
+    dead one posts again exactly once).
+    """
+    channel = await _sweep_channel(bot, guild_id, channel_id)
+    if channel is None:
+        return
+    messages = await _posted_messages(guild_id)
+    if not messages:
+        return  # nothing mapped yet: the refs assume alive, never a dup
+    live: set[int] = set()
+    try:
+        async for message in channel.history(limit=500):
+            live.add(message.id)
+    except Exception:
+        logger.debug("the salon history read failed (guild %s)", guild_id, exc_info=True)
+        return
+    dead = [ref for ref, mid in messages.items() if int(mid) not in live]
+    if not dead:
+        return
+    try:
+        from botforge.core.models.db import get_async_database
+
+        await get_async_database()["channels"].update_one(
+            {"_id": f"{guild_id}:livefeed:matches:posted"},
+            {
+                "$pull": {"refs": {"$in": dead}},
+                "$unset": {f"messages.{ref}": "" for ref in dead},
+            },
+        )
+    except Exception:
+        logger.debug("the posted-refs reconcile write failed (guild %s)", guild_id, exc_info=True)
+        return
+    _POSTED.pop(guild_id, None)
+    logger.info(
+        "matches salon reconcile (guild %s): %d dead message(s) dropped, recreating",
+        guild_id,
+        len(dead),
+    )
 
 
 async def _gap_fill_matches_salon(bot: discord.Client, guild_id: str, channel_id: str) -> None:
@@ -691,12 +815,13 @@ async def _gap_fill_matches_salon(bot: discord.Client, guild_id: str, channel_id
         card = _seed_card_of(entry)
         try:
             ctx = await _card_ctx(bot, guild_id, card)
-            guild = bot.get_guild(int(guild_id))
-            channel = guild.get_channel(int(channel_id)) if guild else None
-            if channel is None or not isinstance(channel, discord.TextChannel):
+            channel = await _sweep_channel(bot, guild_id, channel_id)
+            if channel is None:
                 return
-            await channel.send(view=_match_card_view(card, ctx, set(), labels, known), silent=True)
-            await _mark_posted(guild_id, ref)
+            message = await channel.send(
+                view=_match_card_view(card, ctx, set(), labels, known), silent=True
+            )
+            await _mark_posted(guild_id, ref, str(message.id))
             logger.info("matches salon gap-fill: match %s posted (guild %s)", ref, guild_id)
         except Exception:
             logger.debug("the gap-fill card skipped (match %s) - best-effort", ref, exc_info=True)

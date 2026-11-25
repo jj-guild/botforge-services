@@ -691,26 +691,33 @@ def test_the_ranked_diff_rides_the_cards_own_board() -> None:
     assert "(-26)" not in text and "**1313**" not in text
 
 
-def test_a_repaired_salon_clears_the_husky_refs_and_reseeds() -> None:
-    """A repair (new channel id) reposts the week - the old refs were husks.
+def test_a_repair_reconciles_the_live_messages_and_recreates_the_missing() -> None:  # noqa: C901
+    """A repair LISTs the salon, drops the dead refs, recreates the rest.
 
-    The owner's 2026-11-25 hunt: the deleted salon's posted refs blocked
-    the re-seed silently - every card answered "already posted".
+    The owner's rule (2026-11-25): zero duplicates - a living message
+    keeps its ref, a missing card posts exactly once.
     """
     import asyncio
+    from unittest.mock import patch
 
     import botforge.discord.live_activity as feed
 
-    reset_calls: list[str] = []
+    calls: dict[str, list[Any]] = {"reconcile": [], "posted": [], "sent": []}
 
-    async def _fake_reset(guild_id: str) -> None:
-        reset_calls.append(guild_id)
+    class _Message:
+        id = 4242
 
-    async def _fake_refs(guild_id: str) -> set[str]:
-        return {f"{guild_id}-card-1", f"{guild_id}-card-2"}
+    class _Channel:
+        async def send(self, view=None, silent=True):
+            del view, silent
+            calls["sent"].append(_Message.id)
+            return _Message()
 
-    async def _fake_week_cards(bot, guild_id):
-        return [{"match_id": f"{guild_id}-card-1"}, {"match_id": "new-1"}]
+    async def _fake_reconcile(bot, guild_id, channel_id):
+        calls["reconcile"].append((guild_id, channel_id))
+
+    async def _fake_sweep(bot, guild_id, channel_id):
+        return _Channel()
 
     async def _fake_marker(guild_id):
         return {"v": feed._SEED_VERSION, "channel_id": "111"}  # the OLD salon
@@ -718,36 +725,100 @@ def test_a_repaired_salon_clears_the_husky_refs_and_reseeds() -> None:
     async def _fake_write_marker(guild_id, channel_id):
         return None
 
+    async def _fake_week_cards(bot, guild_id):
+        return [{"match_id": "husky"}, {"match_id": "fresh"}]
+
+    async def _fake_refs(guild_id):
+        return {"husky"}  # the ref whose message LIVES on
+
+    async def _fake_mark(guild_id, ref, message_id=None):
+        calls["posted"].append((ref, message_id))
+
     async def _fake_label_pack(bot, guild_id):
         return {}
 
     async def _fake_guild_profiles(bot, guild_id):
         return []
 
-    original = {
-        "_posted_refs": feed._posted_refs,
-        "_week_cards": feed._week_cards,
-        "_seed_marker": feed._seed_marker,
-        "_write_seed_marker": feed._write_seed_marker,
-        "_label_pack": feed._label_pack,
-        "_guild_profiles": feed._guild_profiles,
-        "_reset_posted_refs": feed._reset_posted_refs,
-    }
-    feed._posted_refs = _fake_refs
-    feed._week_cards = _fake_week_cards
+    async def _fake_ctx(bot, guild_id, card):
+        return {}
+
+    async def _fake_view(card, ctx, me_ids, labels, known=None):
+        return None
+
+    original = {name: getattr(feed, name) for name in (
+        "_reconcile_posted_refs", "_sweep_channel", "_seed_marker",
+        "_write_seed_marker", "_week_cards", "_posted_refs", "_mark_posted",
+        "_label_pack", "_guild_profiles", "_card_ctx",
+    )}
+    feed._reconcile_posted_refs = _fake_reconcile
+    feed._sweep_channel = _fake_sweep
     feed._seed_marker = _fake_marker
     feed._write_seed_marker = _fake_write_marker
+    feed._week_cards = _fake_week_cards
+    feed._posted_refs = _fake_refs
+    feed._mark_posted = _fake_mark
     feed._label_pack = _fake_label_pack
     feed._guild_profiles = _fake_guild_profiles
-    feed._reset_posted_refs = _fake_reset
+    feed._card_ctx = _fake_ctx
     try:
-        asyncio.run(feed._maybe_seed_matches_salon(None, "42", "999"))
+        with patch("botforge.discord.home._match_card_view", _fake_view):
+            asyncio.run(feed._maybe_seed_matches_salon(None, "42", "999"))
     finally:
-        feed._posted_refs = original["_posted_refs"]
-        feed._week_cards = original["_week_cards"]
-        feed._seed_marker = original["_seed_marker"]
-        feed._write_seed_marker = original["_write_seed_marker"]
-        feed._label_pack = original["_label_pack"]
-        feed._guild_profiles = original["_guild_profiles"]
-        feed._reset_posted_refs = original["_reset_posted_refs"]
-    assert reset_calls == ["42"], "the repair wipes the husky refs before reposting"
+        for key, value in original.items():
+            setattr(feed, key, value)
+    assert calls["reconcile"] == [("42", "999")], "the repair reconciles the live messages"
+    assert calls["sent"] == [4242], "only the MISSING card posts - the husky keeps its ref"
+    assert calls["posted"] == [("fresh", "4242")], "the new message id rides the ref"
+
+
+def test_the_reconcile_drops_the_dead_refs_only() -> None:  # noqa: C901
+    """Listing wins: a ref whose message lives STAYS, a dead one falls."""
+    import asyncio
+    from unittest.mock import patch
+
+    import botforge.discord.live_activity as feed
+
+    written: dict[str, Any] = {}
+
+    class _Message:
+        def __init__(self, mid: int) -> None:
+            self.id = mid
+
+    class _Channel:
+        def history(self, limit=500):
+            async def _gen():
+                for mid in (10, 11):
+                    yield _Message(mid)
+            return _gen()
+
+    async def _fake_messages(guild_id):
+        return {"alive": "10", "dead": "12"}
+
+    async def _fake_update(query, patch_doc, upsert=False):
+        written.update({"query": query, "patch": patch_doc})
+
+    class _Coll:
+        @staticmethod
+        async def update_one(query, patch_doc, upsert=False):
+            await _fake_update(query, patch_doc, upsert)
+
+    class _Db(dict):
+        def __getitem__(self, k):
+            return _Coll
+
+    def _fake_db():
+        return _Db()
+
+    async def _fake_sweep(bot, guild_id, channel_id):
+        return _Channel()
+
+    with (
+        patch.object(feed, "_posted_messages", _fake_messages),
+        patch.object(feed, "_sweep_channel", _fake_sweep),
+        patch("botforge.core.models.db.get_async_database", _fake_db),
+    ):
+        asyncio.run(feed._reconcile_posted_refs(None, "42", "999"))
+    assert written["patch"]["$pull"]["refs"]["$in"] == ["dead"], "only the dead ref falls"
+    assert "messages.dead" in written["patch"]["$unset"]
+    assert "messages.alive" not in written["patch"]["$unset"], "the living ref stays - zero dup"

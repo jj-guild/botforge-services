@@ -135,7 +135,9 @@ async def recent_match_blocks(
     if client is None:
         return []
     try:
-        entries = await client.get_match_history(sorted(wanted), limit=50)
+        entries = await client.get_match_history(
+            sorted(wanted), limit=int(limit) if int(limit) > 0 else 50
+        )
     except Exception:
         logger.warning("STATS VIEWS: the match history fetch failed", exc_info=True)
         return []
@@ -179,7 +181,9 @@ async def recent_match_entries(
     if client is None:
         return []
     try:
-        entries = await client.get_match_history(sorted(wanted), limit=50, refresh=refresh)
+        entries = await client.get_match_history(
+            sorted(wanted), limit=int(limit) if int(limit) > 0 else 50, refresh=refresh
+        )
     except Exception:
         logger.warning("STATS VIEWS: the match history fetch failed", exc_info=True)
         return []
