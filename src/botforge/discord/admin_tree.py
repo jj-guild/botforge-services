@@ -181,6 +181,17 @@ async def _ensure_scope(bot: Any, guild_id: str, scope: str) -> str:  # noqa: C9
     lines.append(f"\n\U0001f4cc Vues \u00e9pingl\u00e9es v\u00e9rifi\u00e9es/recr\u00e9\u00e9es : {pins_ok}")
     lines.append(f"\U0001F465 R\u00f4les v\u00e9rifi\u00e9s/cr\u00e9\u00e9s : {roles_ok}")
     lines.append(f"\U0001f4dc Posts de forum v\u00e9rifi\u00e9s/recr\u00e9\u00e9s : {synced_posts}")
+    # the tree just moved: a repaired salon (its stored id changed) must
+    # repopulate NOW (owner 2026-11-25) - the gateway events only fire
+    # on channel create/delete, a tree-ensure repair is this side's own
+    # move, the poke rides here
+    if any(spec.scope.startswith("games/") for spec in specs):
+        try:
+            from botforge.discord import live_activity
+
+            await live_activity.instant_sweep(bot, guild_id)
+        except Exception:
+            logger.debug("the post-ensure salon sweep failed - best-effort", exc_info=True)
     return "\n".join(lines)
 
 
