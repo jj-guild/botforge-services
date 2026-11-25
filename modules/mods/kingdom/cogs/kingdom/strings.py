@@ -489,7 +489,7 @@ DEFAULTS: dict[str, dict[str, str]] = {
         ),
         "plan_event_cancelled": "❌ Ta plannification a été annulée — aucun budget n'a été consommé.",
         "plan_no_service": "❌ Le service des attaques est indisponible.",
-        "market_button": "🛒 Marché",
+        "market_button": "💰 Marché",
         "chamber_button": "🏛️ Comptes",
         "market_title": "💰 Marché du Royaume",
         "market_rules": (
@@ -605,6 +605,38 @@ DEFAULTS: dict[str, dict[str, str]] = {
         "market_not_king": "Seuls les Rois peuvent acheter au marché.",
         "market_bought": "✅ Acheté : **{0}** — il reste {1} ⚙️ au trésor.",
         "market_bought_left": "\nReste cette saison : {0}/{1}.",
+        # achat-recu-v1 (Affaire 25) : le reçu cumulatif et les échos
+        # d'article — portés verbatim de la référence (30/10).
+        "market_receipt_title": "🧾 Reçu — achats de la session",
+        "market_receipt_ledger_help_named": (
+            "🏛️ Retrouve l'ensemble de tes achats dans la Chambre des comptes "
+            "— panneau **Le-Royaume** : {mention}"
+        ),
+        "market_receipt_ledger_help": (
+            "🏛️ Retrouve l'ensemble de tes achats dans la Chambre des comptes "
+            "— panneau **Le-Royaume** de ton royaume."
+        ),
+        "market_arranged_token_ok": (
+            "💐 Mariage arrangé acheté — stock : {}. Consommez-le à la Paroisse."
+        ),
+        "market_garde_token_ok": (
+            "🛡️ Garde Royale achetée — en réserve : {}. Pose-la depuis le salon 🧱 Remparts."
+        ),
+        "market_patrouille_slot_ok": (
+            "🛡️ Emplacement de patrouille {} débloqué — pose le créneau depuis le salon 🧱 Remparts."
+        ),
+        "market_corruption_token_ok": (
+            "💰 Jeton Corruption acheté — en réserve : {}. Utilise-le depuis "
+            "la 🏛️ Chambre des comptes."
+        ),
+        "market_jeu_d_armes_token_ok": (
+            "⚔️ Jeu d'armes acheté — en réserve : {}. Utilise-le depuis la "
+            "🏛️ Chambre des comptes (+1 niveau d'IA)."
+        ),
+        "market_explorateur_token_ok": (
+            "🛡️ Explorateur acheté — en réserve : {}. Utilise-le depuis la "
+            "🏛️ Chambre des comptes."
+        ),
         "market_ledger_summary": "Bilan de saison — dépensé : {0} ⚙️ · trésor : {1} ⚙️",
         "market_ledger_limits": "Limites — {0}",
         "market_ledger_empty": "Aucun achat pour le moment.",
@@ -1291,7 +1323,7 @@ DEFAULTS: dict[str, dict[str, str]] = {
         ),
         "plan_event_cancelled": "❌ Your planning was cancelled — no budget was consumed.",
         "plan_no_service": "❌ The attack service is unavailable.",
-        "market_button": "🛒 Market",
+        "market_button": "💰 Market",
         "chamber_button": "🏛️ Treasury",
         "market_title": "💰 Kingdom Market",
         "market_rules": (
@@ -1402,6 +1434,36 @@ DEFAULTS: dict[str, dict[str, str]] = {
         "market_not_king": "Only Kings may buy at the market.",
         "market_bought": "✅ Purchased: **{0}** — the treasury holds {1} ⚙️ left.",
         "market_bought_left": "\nLeft this season: {0}/{1}.",
+        "market_receipt_title": "🧾 Receipt — this session's purchases",
+        "market_receipt_ledger_help_named": (
+            "🏛️ Find every one of your purchases in the Chamber of Accounts — "
+            "**Le-Royaume** panel: {mention}"
+        ),
+        "market_receipt_ledger_help": (
+            "🏛️ Find every one of your purchases in the Chamber of Accounts — "
+            "the **Le-Royaume** panel of your kingdom."
+        ),
+        "market_arranged_token_ok": (
+            "💐 Arranged-marriage token bought — stock: {}. Consume it at the Parish."
+        ),
+        "market_garde_token_ok": (
+            "🛡️ Royal Guard bought — in reserve: {}. Place it from the 🧱 Remparts salon."
+        ),
+        "market_patrouille_slot_ok": (
+            "🛡️ Patrol slot {} unlocked — place the window from the 🧱 Remparts salon."
+        ),
+        "market_corruption_token_ok": (
+            "💰 Corruption token bought — in reserve: {}. Use it from the "
+            "🏛️ Chamber of Accounts."
+        ),
+        "market_jeu_d_armes_token_ok": (
+            "⚔️ Arms mastery bought — in reserve: {}. Use it from the "
+            "🏛️ Chamber of Accounts (+1 AI level)."
+        ),
+        "market_explorateur_token_ok": (
+            "🛡️ Explorer bought — in reserve: {}. Use it from the "
+            "🏛️ Chamber of Accounts."
+        ),
         "market_ledger_summary": "Season balance — spent: {0} ⚙️ · treasury: {1} ⚙️",
         "market_ledger_limits": "Limits — {0}",
         "market_ledger_empty": "No purchase yet.",

@@ -563,7 +563,7 @@ async def sabotage_reveal_payload(
         stock = await sabotage_stock_line(stack, attack, side, strings)
         if stock:
             content = f"{content}\n\n{stock}"
-    view = sabotage_dm_view(stack, attack, side, strings)
+    view = await sabotage_dm_view(stack, attack, side, strings)
     return player_id, content, view
 
 
@@ -611,7 +611,7 @@ async def edit_pickban_dms_default_reveal(bot: Any, attack: Any, strings: dict[s
             f"{strings['pickban_own_picks_line'].format(picks=own_picks_line(own) or '—')}\n\n"
             f"{strings['pickban_default_reveal_dm'].format(map=attack.map_key)}"
         )
-        view = sabotage_dm_view(stack, attack, side, strings)
+        view = await sabotage_dm_view(stack, attack, side, strings)
         ref = pickban.get(f"{side}_dm") or {}
         sent = await dm_user_safe(bot, player_id, content, view)
         if sent is not None:

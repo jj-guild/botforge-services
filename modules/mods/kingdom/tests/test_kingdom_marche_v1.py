@@ -264,3 +264,205 @@ def test_setup_hook_lands_every_stall_button() -> None:
         "register() never landed these stall buttons — their clicks "
         f"silently die: {sorted(c.__name__ for c in missing)}"
     )
+
+
+# ---------------------------------------------------------------------------
+# achat-recu-v1 (Affaire 25) — the cumulative purchase receipt
+# ---------------------------------------------------------------------------
+
+
+class _FakeResponse:
+    def __init__(self) -> None:
+        self.done = False
+        self.deferred = 0
+
+    def is_done(self) -> bool:
+        return self.done
+
+    async def defer(self, ephemeral: bool = True) -> None:
+        self.done = True
+        self.deferred += 1
+
+
+class _FakeMessage:
+    def __init__(self) -> None:
+        self.edits: list[str] = []
+        self.dead = False
+
+    async def edit(self, content: str) -> None:
+        if self.dead:
+            raise RuntimeError("webhook token expired")
+        self.edits.append(content)
+
+    async def delete(self) -> None:
+        self.dead = True
+
+
+class _FakeFollowup:
+    def __init__(self, sent: list[Any]) -> None:
+        self._sent = sent
+
+    async def send(self, content: str, ephemeral: bool = False) -> Any:
+        message = _FakeMessage()
+        self._sent.append(content)
+        return message
+
+
+class _FakeInteraction:
+    def __init__(self, user_id: str = "u-1", guild: Any = None) -> None:
+        self.user = type("U", (), {"id": user_id})()
+        self.guild = guild
+        self.response = _FakeResponse()
+        self.followup = _FakeFollowup([])
+        self.sent_contents: list[str] = self.followup._sent
+
+
+@pytest.mark.asyncio
+async def test_the_receipt_edits_the_same_window_until_ttl(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A living receipt = ONE ephemeral edited in place, line by line."""
+    import botforge.mods.kingdom.cogs.market as market
+    from botforge.mods.kingdom.cogs.strings import strings
+
+    monkeypatch.setattr(market, "_RECEIPT_WINDOWS", {})
+    interaction = _FakeInteraction("u-9")
+    kingdom = type("K", (), {"id": "k-1", "name": "Aegis"})()
+
+    await market.append_purchase_receipt(interaction, "achat 1", kingdom, strings("fr"))
+    first = market._RECEIPT_WINDOWS["u-9"]["message"]
+    await market.append_purchase_receipt(interaction, "achat 2", kingdom, strings("fr"))
+    await market.append_purchase_receipt(interaction, "achat 3", kingdom, strings("fr"))
+
+    assert market._RECEIPT_WINDOWS["u-9"]["message"] is first, "one window per player"
+    assert len(first.edits) == 2, "the 2nd and 3rd purchases EDIT, never re-send"
+    assert "achat 1" in first.edits[-1] and "achat 3" in first.edits[-1]
+    assert first.edits[-1].count("achats de la session") == 1, "the title never duplicates"
+
+
+@pytest.mark.asyncio
+async def test_a_dead_receipt_opens_a_fresh_one(monkeypatch: pytest.MonkeyPatch) -> None:
+    """An expired window (TTL or dead webhook token) = a NEW receipt."""
+    import time as _time
+
+    import botforge.mods.kingdom.cogs.market as market
+    from botforge.mods.kingdom.cogs.strings import strings
+
+    monkeypatch.setattr(market, "_RECEIPT_WINDOWS", {})
+    interaction = _FakeInteraction("u-8")
+    kingdom = type("K", (), {"id": "k-1", "name": "Aegis"})()
+
+    await market.append_purchase_receipt(interaction, "achat 1", kingdom, strings("fr"))
+    # TTL expiry: the tracked window turns stale
+    market._RECEIPT_WINDOWS["u-8"]["opened_at"] = _time.monotonic() - (
+        market._RECEIPT_TTL + 1
+    )
+    await market.append_purchase_receipt(interaction, "achat 2", kingdom, strings("fr"))
+    assert "achat 2" in interaction.sent_contents[-1], "a stale window re-opens"
+    assert "achat 1" not in interaction.sent_contents[-1], "the dead receipt dies alone"
+
+    # a failed edit (dead webhook token) also re-opens a fresh receipt
+    interaction2 = _FakeInteraction("u-7")
+    await market.append_purchase_receipt(interaction2, "achat A", kingdom, strings("fr"))
+    market._RECEIPT_WINDOWS["u-7"]["message"].dead = True
+    await market.append_purchase_receipt(interaction2, "achat B", kingdom, strings("fr"))
+    assert "achat B" in interaction2.sent_contents[-1]
+
+
+def test_the_receipt_body_trims_and_footers_once() -> None:
+    """Old lines fall off past 3400 chars; the footer rides ONCE at the bottom."""
+    from botforge.mods.kingdom.cogs.market import _receipt_body
+
+    lines = [f"L{i} {'x' * 900}" for i in range(10)]
+    body = _receipt_body("TITRE", lines, "FOOTER")
+    assert len(body) < 4000
+    assert body.startswith("TITRE\nL7"), (
+        "the OLDEST lines fall off first (only the newest ones stay)"
+    )
+    assert body.endswith("\n\nFOOTER") and body.count("FOOTER") == 1
+
+
+@pytest.mark.asyncio
+async def test_each_article_gets_its_own_receipt_line() -> None:
+    """The line is the article's own echo (never a generic « acheté »)."""
+    from botforge.mods.kingdom.cogs.market import _purchase_line
+    from botforge.mods.kingdom.cogs.strings import strings
+
+    stack = _Stack(
+        {
+            "garde_royale_stock": 2,
+            "corruption_stock": 4,
+            "jeu_d_armes_stock": 1,
+            "explorateur_stock": 3,
+            "patrouille_slot_2": 6,
+        },
+        wallet=10,
+    )
+    kingdom = type(
+        "K", (), {"id": "k-1", "tech_points_bank": 10, "arranged_marriage_stock": 5}
+    )()
+    s = strings("fr")
+    assert "en réserve : 2" in await _purchase_line(stack, kingdom, "garde_royale", s)
+    assert "en réserve : 4" in await _purchase_line(stack, kingdom, "corruption", s)
+    assert "en réserve : 1" in await _purchase_line(stack, kingdom, "jeu_d_armes", s)
+    assert "en réserve : 3" in await _purchase_line(stack, kingdom, "explorateur", s)
+    assert "stock : 5" in await _purchase_line(stack, kingdom, "mariage_arrange", s)
+    assert "Emplacement de patrouille 2" in await _purchase_line(
+        stack, kingdom, "patrouille", s
+    )
+    assert "✅ Acheté : **🥷 Embuscade**" in await _purchase_line(
+        stack, kingdom, "embuscade", s
+    )
+
+
+@pytest.mark.asyncio
+async def test_the_receipt_footer_mentions_le_royaume_or_falls_back() -> None:
+    """The footer: the clickable salon mention, else the static text."""
+    from botforge.mods.kingdom.cogs.strings import strings
+
+    s = strings("fr")
+
+    channel = type("C", (), {"id": 555, "name": "Le-Royaume"})()
+    category = type("Cat", (), {"channels": [channel]})()
+
+    import unittest.mock as mock
+
+    import botforge.mods.kingdom.cogs.market as market
+    import botforge.mods.kingdom.cogs.realms as realms
+
+    with mock.patch.object(realms, "_find_realm_category", lambda g, n: category):
+        footer = await market._realm_ledger_footer(
+            object(), type("K", (), {"name": "Aegis"})(), s
+        )
+    assert "<#555>" in footer, "the resolved salon becomes a clickable mention"
+
+    fallback = await market._realm_ledger_footer(None, None, s)
+    assert fallback == s["market_receipt_ledger_help"], "no salon = static fallback"
+
+
+def test_sabotage_reveal_views_are_always_awaited() -> None:
+    """Affaire 25 contract: `sabotage_dm_view(...)` is async — a bare
+    (un-awaited) call ships a coroutine as the view and the reveal DM
+    dies silently (the 25/11 live incident). Lock EVERY call site to
+    an await."""
+    import ast
+    import inspect
+    from pathlib import Path
+
+    from botforge.mods.kingdom.cogs import pickban
+
+    source = Path(str(inspect.getsourcefile(pickban) or pickban.__file__)).read_text()
+    tree = ast.parse(source)
+    calls = [
+        node
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Name)
+        and node.func.id == "sabotage_dm_view"
+    ]
+    awaited = {
+        id(node.value)
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Await) and isinstance(node.value, ast.Call)
+    }
+    bare = [node for node in calls if id(node) not in awaited]
+    assert not bare, f"{len(bare)} bare sabotage_dm_view call(s) — the reveal dies"
+    assert len(calls) >= 2, "the two reveal call sites must stay awaited"

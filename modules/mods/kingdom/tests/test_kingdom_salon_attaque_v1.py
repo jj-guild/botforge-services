@@ -37,7 +37,7 @@ async def test_the_reveal_dm_is_actually_sent_now(monkeypatch) -> None:
     async def _stock(stack: object, attack: object, side: str, strings: dict[str, str]) -> str:
         return ""
 
-    def _view(stack: object, attack: object, side: str, strings: dict[str, str]) -> object:
+    async def _view(stack: object, attack: object, side: str, strings: dict[str, str]) -> object:
         return None
 
     monkeypatch.setattr(pb, "dm_user_safe", _dm)

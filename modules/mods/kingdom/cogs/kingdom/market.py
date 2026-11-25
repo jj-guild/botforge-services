@@ -1,4 +1,4 @@
-"""The 🛒 Marché & the 🏛️ Chambre des comptes (P4.3, #368 T7, Affaire 24).
+"""The 💰 Marché & the 🏛️ Chambre des comptes (P4.3, #368 T7, Affaires 24-25).
 
 The Marché is the reference merchant stall (marche-reference-v1):
 one pinned panel, the banner, FOUR shelves in Drasah's order (his
@@ -21,13 +21,21 @@ from __future__ import annotations
 import io
 import logging
 import re
+import time
 from datetime import datetime
 from typing import Any, cast
 from zoneinfo import ZoneInfo
 
 import discord
 
-from .common import lord_of, open_unique_ephemeral, strings_for, surface, wiring
+from .common import (
+    close_previous_ephemeral,
+    lord_of,
+    open_unique_ephemeral,
+    strings_for,
+    surface,
+    wiring,
+)
 
 logger = logging.getLogger("kingdom.market")
 
@@ -208,6 +216,130 @@ async def _success_note(
 
 
 # ---------------------------------------------------------------------------
+# The cumulative purchase receipt (achat-recu-v1 — Reference 30/10, Affaire 25)
+# ---------------------------------------------------------------------------
+
+_RECEIPT_TTL = 15 * 60
+_RECEIPT_WINDOWS: dict[str, dict[str, Any]] = {}
+
+
+def _receipt_body(title: str, lines: list[str], footer: str = "") -> str:
+    """Render one cumulative receipt (title + live lines + the footer).
+
+    The footer is appended ONCE at the bottom (never per purchase
+    line); the OLDEST lines fall off past 3400 chars — the ~15-minute
+    webhook edit window bounds the growth on its own, the trim is the
+    hard stop.
+    """
+    while sum(len(x) for x in lines) > 3400 and len(lines) > 1:
+        lines = lines[1:]
+    body = f"{title}\n" + "\n".join(lines)
+    if footer:
+        body = f"{body}\n\n{footer}"
+    return body
+
+
+async def _realm_ledger_footer(guild: Any, kingdom: Any, strings: dict[str, Any]) -> str:
+    """Build the receipt's « where are my purchases » footer.
+
+    Best effort: the clickable mention of HIS kingdom's « le-royaume »
+    salon when it resolves, the static fallback text otherwise — a
+    failed lookup never breaks the receipt.
+    """
+    named = str(strings.get("market_receipt_ledger_help_named") or "")
+    fallback = str(strings.get("market_receipt_ledger_help") or "")
+    if not named and not fallback:
+        return ""
+    try:
+        if guild is not None and kingdom is not None:
+            from .realms import _find_realm_category, _slug
+
+            category = _find_realm_category(guild, str(getattr(kingdom, "name", "")))
+            channel = next(
+                (
+                    c
+                    for c in getattr(category, "channels", [])
+                    if _slug(getattr(c, "name", "")) == "le-royaume"
+                ),
+                None,
+            )
+            if channel is not None:
+                return named.format(mention=f"<#{channel.id}>")
+    except Exception:
+        logger.warning("marche: receipt ledger lookup failed", exc_info=True)
+    return fallback
+
+
+async def append_purchase_receipt(
+    interaction: discord.Interaction, line: str, kingdom: Any, strings: dict[str, Any]
+) -> None:
+    """Add one ✅ purchase line to the player's cumulative receipt.
+
+    The receipt is the living trace of the session's purchases — an
+    EDIT IN PLACE of the same ephemeral while its ~15-minute webhook
+    token lives, a FRESH receipt once that window is dead. It lives in
+    its OWN slot (never the fenêtre unique): opening other market cards
+    never closes it. Best effort — a failed edit/send never breaks a
+    purchase that already happened.
+    """
+    user_id = str(getattr(interaction.user, "id", "") or "")
+    if not user_id:
+        return
+    title = str(strings["market_receipt_title"])
+    receipt = _RECEIPT_WINDOWS.get(user_id)
+    if receipt is not None and time.monotonic() - receipt["opened_at"] <= _RECEIPT_TTL:
+        receipt["lines"].append(line)
+        try:
+            await receipt["message"].edit(
+                content=_receipt_body(title, receipt["lines"], receipt.get("footer", ""))
+            )
+            return
+        except Exception:
+            logger.warning("marche: receipt edit failed — fresh receipt", exc_info=True)
+            _RECEIPT_WINDOWS.pop(user_id, None)
+    lines = [line]
+    footer = await _realm_ledger_footer(interaction.guild, kingdom, strings)
+    try:
+        if not interaction.response.is_done():
+            await interaction.response.defer(ephemeral=True)
+        message: Any = await interaction.followup.send(  # type: ignore[func-returns-value]
+            _receipt_body(title, lines, footer), ephemeral=True
+        )
+    except Exception:
+        logger.warning("marche: receipt send failed (purchase stands)", exc_info=True)
+        return
+    _RECEIPT_WINDOWS[user_id] = {
+        "opened_at": time.monotonic(),
+        "message": message,
+        "lines": lines,
+        "footer": footer,
+    }
+
+
+async def _purchase_line(
+    stack: Any, kingdom: Any, item: str, strings: dict[str, Any]
+) -> str:
+    """Build the item's own ✅ receipt line (never a generic echo)."""
+    if item in _COMBAT_TECHNOLOGIES:
+        return await _success_note(stack, kingdom, item, strings)
+    state = await stack.attacks.technology_state(str(kingdom.id))
+    purchases = getattr(state, "purchases", None) or {}
+    if item == "patrouille":
+        slot = 2 if "patrouille_slot_2" in purchases else 1
+        return str(strings["market_patrouille_slot_ok"]).format(slot)
+    if item == "mariage_arrange":
+        stock = int(getattr(kingdom, "arranged_marriage_stock", 0) or 0)
+        return str(strings["market_arranged_token_ok"]).format(stock)
+    if item == "garde_royale":
+        return str(strings["market_garde_token_ok"]).format(
+            int(purchases.get("garde_royale_stock", 0) or 0)
+        )
+    return str(strings[f"market_{item}_token_ok"]).format(
+        int(purchases.get(f"{item}_stock", 0) or 0)
+    )
+
+
+# ---------------------------------------------------------------------------
 # The pinned merchant stall (salon market)
 # ---------------------------------------------------------------------------
 
@@ -364,7 +496,11 @@ class MarketBuyButton(
         )
 
     async def callback(self, interaction: discord.Interaction) -> None:
-        """Run the purchase the card announced — one echo, never a grant."""
+        """Run the purchase the card announced — then grow the receipt.
+
+        One echo, never a grant: the card closes, the cumulative
+        receipt gains its line (edit in place while its window lives).
+        """
         strings = strings_for(interaction)
         stack = wiring()
         if stack is None:
@@ -375,14 +511,20 @@ class MarketBuyButton(
             return
         _lord, kingdom = resolved
         item = str(getattr(self.item, "custom_id", "")).rsplit(":", 1)[-1]
+        if not interaction.response.is_done():
+            await interaction.response.defer(ephemeral=True)
         try:
             await _purchase(stack, str(kingdom.id), item)
         except Exception as exc:  # noqa: BLE001 — every engine refusal is a note
             await open_unique_ephemeral(interaction, _market_error_note(exc, strings))
             return
         refreshed = await _kingdom_of(stack, resolved[0])
-        await open_unique_ephemeral(
-            interaction, await _success_note(stack, refreshed or kingdom, item, strings)
+        await close_previous_ephemeral(str(interaction.user.id))
+        await append_purchase_receipt(
+            interaction,
+            await _purchase_line(stack, refreshed or kingdom, item, strings),
+            refreshed or kingdom,
+            strings,
         )
 
 
