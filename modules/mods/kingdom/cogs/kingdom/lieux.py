@@ -31,7 +31,10 @@ import discord
 
 from .common import (
     fmt_paris,
+    kingdom_name,
+    lord_name,
     open_unique_ephemeral,
+    room_key,
     surface,
     wiring,
 )
@@ -54,6 +57,8 @@ GREEN = discord.Colour.green()
 ENTREE_SURFACE = "panel:mod:kingdom:lieux:entree"
 CONSEIL_SURFACE = "panel:mod:kingdom:lieux:conseil"
 REMPARTS_SURFACE = "panel:mod:kingdom:lieux:remparts"
+# classement-vue-v1 (Drasah 26/11, T-C) : la fenêtre Classement du Conseil
+CLASSEMENT_SURFACE = "panel:mod:kingdom:lieux:classement"
 COMPTES_SURFACE = "panel:mod:kingdom:lieux:comptes"
 PAROISSE_SURFACE = "panel:mod:kingdom:lieux:paroisse"
 VOLIERE_SURFACE = "panel:mod:kingdom:lieux:voliere"
@@ -213,6 +218,64 @@ LIEUX_STRINGS: dict[str, dict[str, str]] = {
         "remparts_use_jeu": "⚔️ Jeu d'armes",
         "remparts_use_patrouille": "🚨 Patrouille",
         "remparts_use_garde": "💂 Garde royale",
+        # remparts-managers-v1 (Drasah 26/11, T-C) : la rangée 1 de la
+        # référence — les deux salles de guerre + la face En savoir plus.
+        "defense_manager_button": "🛡️ Gestion de la défense",
+        "defense_manager_title": "🛡️ Gestion de la défense — attaques contre **{kingdom}**",
+        "defense_manager_empty": "🐺 Aucune attaque en cours contre ton royaume.",
+        "defense_manager_row": "• **{map}** — aura lieu **{when}** · {state}",
+        "defense_manager_defended": "défendue par **{lord}** ✓",
+        "defense_manager_waiting": "en attente de défenseur ⏳",
+        "defense_manager_not_lord": "❌ Tu n'es pas un seigneur actif d'un royaume.",
+        "defense_manager_no_service": "❌ Le service des attaques est indisponible.",
+        "cancel_defense_button": "↩️ Retirer ma défense",
+        "plan_manager_button": "⚔️ Gestion d'attaque",
+        "plan_manager_title": "⚔️ Gestion d'attaque — **{kingdom}**",
+        "plan_manager_declared_section": "**⚔️ Attaques déclarées**",
+        "plan_manager_planned_section": "**📅 Attaques planifiées**",
+        "plan_manager_empty": "Aucune attaque en cours ni planifiée.",
+        "plan_manager_declared_row": (
+            "• **{map}** (royaume **{kingdom}**) — déclarée par **{lord}** —"
+            " aura lieu **{when}**"
+        ),
+        "plan_manager_planned_row": "• **{map}** — aura lieu **{when}** · {lord} · choix {index}/{total}",
+        "plan_choices_line": "·· Choix {n} : **{map}**{active}",
+        "plan_active_tag": " ✅",
+        "remparts_info_button": "🔎 En savoir plus",
+        "remparts_state_button": "✅ Compris",
+        "remparts_back_button": "🧱 Remparts",
+        "remparts_ai_intro": (
+            "🤖 **Bot de défense (IA) :**\n"
+            "Si aucun seigneur ne défend votre royaume, votre bot IA prend le"
+            " relais de votre défense automatiquement. Vous pouvez augmenter le"
+            " niveau de votre IA en l'entraînant via l'achat d'un Jeu d'armes au"
+            " Marché ; lorsque votre IA est au niveau max, cela améliore votre"
+            " Patrouille (Patrouilles Renforcées, créneaux de 3h)."
+        ),
+        "remparts_patrouille_intro": (
+            "🛡️ **Patrouille :**\n"
+            "Permet de vous protéger d'une attaque normale, exceptionnelle et"
+            " technologique, sur un créneau de 2h fixe dans une journée — cela"
+            " s'applique donc tous les jours de la semaine. Si votre patrouille"
+            " est améliorée, le créneau de protection passe à 3h. Limite de 2"
+            " patrouilles par royaume, une patrouille est utilisable pour la"
+            " durée de toute la saison."
+        ),
+        "remparts_patrol_window": (
+            "🔄 Redéfinition des créneaux : uniquement pendant le Jour du"
+            " Seigneur (dimanche 23h30 → lundi 10h00)."
+        ),
+        "remparts_garde_intro": (
+            "💂 **Gardes Royaux :**\n"
+            "Permet de protéger un territoire de toute attaque — normale,"
+            " exceptionnelle et technologique — pour une durée de 12h. Le"
+            " Garde Royal se consomme."
+        ),
+        # classement-vue-v1 (Drasah 26/11, T-C) : la fenêtre Classement
+        "classement_button": "🏆 Classement",
+        "classement_title": "🏆 Classement de la saison",
+        "classement_line": "{0} {1}. **{2}** — {3} 🗺️ · {4} 🤝",
+        "classement_empty": "Aucun royaume à classer pour le moment.",
         "conseil_card_exploration": "🧭 Exploration",
         "conseil_card_traquenard": "🪤 Traquenard",
         "traquenard_select": "Choisissez le royaume à piéger :",
@@ -350,6 +413,57 @@ LIEUX_STRINGS: dict[str, dict[str, str]] = {
         "remparts_use_jeu": "⚔️ Arms Mastery",
         "remparts_use_patrouille": "🚨 Patrol",
         "remparts_use_garde": "💂 Royal Guard",
+        "defense_manager_button": "🛡️ Defense management",
+        "defense_manager_title": "🛡️ Defense management — attacks against **{kingdom}**",
+        "defense_manager_empty": "🐺 No ongoing attack against your kingdom.",
+        "defense_manager_row": "• **{map}** — due **{when}** · {state}",
+        "defense_manager_defended": "defended by **{lord}** ✓",
+        "defense_manager_waiting": "waiting for a defender ⏳",
+        "defense_manager_not_lord": "❌ You are not an active lord of a kingdom.",
+        "defense_manager_no_service": "❌ The attacks service is unavailable.",
+        "cancel_defense_button": "↩️ Withdraw my defense",
+        "plan_manager_button": "⚔️ Attack management",
+        "plan_manager_title": "⚔️ Attack management — **{kingdom}**",
+        "plan_manager_declared_section": "**⚔️ Declared attacks**",
+        "plan_manager_planned_section": "**📅 Planned attacks**",
+        "plan_manager_empty": "No ongoing or planned attack.",
+        "plan_manager_declared_row": (
+            "• **{map}** (kingdom **{kingdom}**) — declared by **{lord}** —"
+            " due **{when}**"
+        ),
+        "plan_manager_planned_row": "• **{map}** — due **{when}** · {lord} · choice {index}/{total}",
+        "plan_choices_line": "·· Choice {n}: **{map}**{active}",
+        "plan_active_tag": " ✅",
+        "remparts_info_button": "🔎 Learn more",
+        "remparts_state_button": "✅ Got it",
+        "remparts_back_button": "🧱 Ramparts",
+        "remparts_ai_intro": (
+            "🤖 **Defense bot (AI):**\n"
+            "If no lord defends your kingdom, your AI bot automatically takes"
+            " over your defense. You can raise your AI's level by training it —"
+            " buy a Set of Arms at the Market; once your AI reaches its max"
+            " level, it improves your Patrol (Reinforced Patrols, 3h slots)."
+        ),
+        "remparts_patrouille_intro": (
+            "🛡️ **Patrol:**\n"
+            "Shields your kingdom from a normal, exceptional and technological"
+            " attack on a fixed 2h slot each day — every day of the week. An"
+            " improved patrol widens the protection slot to 3h. Limit of 2"
+            " patrols per kingdom, usable for the whole season."
+        ),
+        "remparts_patrol_window": (
+            "🔄 Window redefinition: only during the Lord's Day"
+            " (Sunday 23:30 → Monday 10:00)."
+        ),
+        "remparts_garde_intro": (
+            "💂 **Royal Guards:**\n"
+            "Shields one territory from every attack — normal, exceptional"
+            " and technological — for 12 hours. The Royal Guard is consumed."
+        ),
+        "classement_button": "🏆 Ranking",
+        "classement_title": "🏆 Season ranking",
+        "classement_line": "{0} {1}. **{2}** — {3} 🗺️ · {4} 🤝",
+        "classement_empty": "No kingdom to rank yet.",
         "conseil_card_exploration": "🧭 Exploration",
         "conseil_card_traquenard": "🪤 Traquenard",
         "traquenard_select": "Pick the kingdom to trap:",
@@ -664,6 +778,13 @@ def lieux_dynamic_items() -> tuple:
         LieuxObjectifValidateButton,
         # vague2-actions-v1 (Drasah 21/11)
         LieuxRempartsUseButton,
+        # remparts-managers-v1 / classement-vue-v1 (Drasah 26/11, T-C)
+        LieuxRempartsManagerButton,
+        LieuxRempartsInfoButton,
+        LieuxRempartsStateButton,
+        LieuxRempartsBackButton,
+        LieuxCancelDefenseButton,
+        LieuxClassementButton,
         LieuxExplorationButton,
         LieuxTraquenardButton,
         LieuxTraquenardSelect,
@@ -885,6 +1006,8 @@ async def _conseil_window(
     rows = [[
         LieuxSeigneurieButton(strings["conseil_seigneurie_button"]).item,
         objectif.item,
+        # classement-vue-v1 (Drasah 26/11, T-C) : entre 🎯 et 🚪 (la référence)
+        _lieu_item(strings, "classement", discord.ButtonStyle.primary),
         _sortir_item(strings),
     ]]
     # vague2-actions-v1 (Drasah 21/11) : rangée 2 — les cartes d'action
@@ -1304,7 +1427,30 @@ def _remparts_window(
         lines.append(strings["remparts_guard_stock"].format(reserve))
     # vague2-actions-v1 (Drasah 21/11) : rangée 2 — Jeu d'armes,
     # Patrouille, Garde royale (verts si détenus, gris sinon, jamais cachés)
-    rows = [[_sortir_item(strings)], _remparts_use_row(strings, state)]
+    # remparts-managers-v1 (Drasah 26/11, T-C) : rangée 1 — les deux
+    # salles de guerre + En savoir plus + Sortir (la référence) ; la
+    # rangée 2 garde les cartes jeu d'armes/patrouille/garde.
+    rows = [
+        [
+            _remparts_wire_button(
+                f"{_NS}:remparts:defense-manager",
+                strings["defense_manager_button"],
+                discord.ButtonStyle.success,
+            ),
+            _remparts_wire_button(
+                f"{_NS}:remparts:attack-manager",
+                strings["plan_manager_button"],
+                discord.ButtonStyle.success,
+            ),
+            _remparts_wire_button(
+                f"{_NS}:remparts:info",
+                strings["remparts_info_button"],
+                discord.ButtonStyle.primary,
+            ),
+            _sortir_item(strings),
+        ],
+        _remparts_use_row(strings, state),
+    ]
     view = _lieu_window(
         strings,
         REMPARTS_SURFACE,
@@ -1902,5 +2048,466 @@ class LieuxHistButton(
                 discord.ui.ActionRow(_sortir_item(strings)),
                 accent_colour=GOLD,
             ),
+        )
+        await open_unique_ephemeral(interaction, view=view)
+
+
+# ---------------------------------------------------------------------------
+# remparts-managers-v1 (Drasah 26/11, T-C) — les salles de guerre des
+# Remparts + la face En savoir plus + la fenêtre Classement du Conseil.
+# Le portage de la rangée 1 de la référence : 🛡️ Gestion de la défense
+# (l'effet de surprise : QUI défend ne se voit QUE dans le royaume),
+# ⚔️ Gestion d'attaque (declared + planned, l'état de la défense JAMAIS
+# — synfoni-v1), 🔎 En savoir plus (toggle EN PLACE), 🏆 Classement.
+# Tout consomme les seams existants : stack.attacks.attacks/plans/
+# cancel_defense, _classement_rows déjà porté — zéro nouveau moteur.
+# ---------------------------------------------------------------------------
+
+
+def _remparts_wire_button(
+    custom_id: str, label: str, style: discord.ButtonStyle
+) -> discord.ui.Button:
+    """One plain wire button — the DynamicItems below catch the clicks."""
+    return discord.ui.Button(label=str(label)[:80], custom_id=custom_id[:100], style=style)
+
+
+def _remparts_back_row(strings: dict[str, str]) -> list[Any]:
+    """The sheet's ↩️ Remparts row — walks home without reopening Entrée."""
+    return [
+        _remparts_wire_button(
+            f"{_NS}:remparts:back", strings["remparts_back_button"], discord.ButtonStyle.secondary
+        )
+    ]
+
+
+def _remparts_media_of(interaction: discord.Interaction) -> str | None:
+    """The rempart attachment ref — kept ONLY when already on the message."""
+    media = next(
+        (
+            f"attachment://{attachment.filename}"
+            for attachment in getattr(interaction.message, "attachments", None) or []
+            if str(attachment.filename) == "rempart.png"
+        ),
+        None,
+    )
+    return media
+
+
+async def defense_manager_payload(
+    stack: Any, lord: Any, strings: dict[str, str]
+) -> tuple[str, list[discord.ui.Button]]:
+    """The defense sheet — one row per attack ON the kingdom, WHO defends.
+
+    Drasah 18/10 — effet de surprise : la défense n'est jamais annoncée
+    publiquement ; cette fiche PRIVÉE du royaume défenseur porte seule
+    le nom du défenseur. Le ↩️ Retirer ma défense ne vit QUE sur les
+    attaques que CE seigneur défend (le seam moteur cancel_defense
+    existait — la référence gardait son unique appelant).
+    """
+    from botforge.mods.kingdom.models import AttackState
+
+    kingdoms = getattr(stack, "kingdoms", None)
+    kingdom_id = str(getattr(lord, "kingdom_id", "") or "")
+    text_rows: list[str] = []
+    try:
+        ongoing = [
+            attack
+            for attack in await stack.attacks.attacks()
+            if not getattr(attack, "is_over", True)
+            and str(getattr(attack, "defender_kingdom_id", "")) == kingdom_id
+        ]
+    except Exception:
+        ongoing = []
+    for attack in ongoing:
+        defended = (
+            getattr(attack, "state", None) is AttackState.DEFENDED
+            and not getattr(attack, "ai_defender", False)
+        )
+        if defended:
+            state_txt = strings["defense_manager_defended"].format(
+                lord=await lord_name(kingdoms, str(getattr(attack, "defender_lord_id", "")))
+            )
+        else:
+            state_txt = strings["defense_manager_waiting"]
+        text_rows.append(
+            strings["defense_manager_row"].format(
+                map=str(getattr(attack, "map_key", "?")),
+                when=fmt_paris(getattr(attack, "expires_at", None)),
+                state=state_txt,
+            )
+        )
+    body = "\n".join(text_rows) if text_rows else strings["defense_manager_empty"]
+    title = strings["defense_manager_title"].format(
+        kingdom=await kingdom_name(kingdoms, kingdom_id)
+    )
+    cancels = [
+        _remparts_wire_button(
+            f"{_NS}:remparts:cancel-defense:{room_key(str(attack.id))}",
+            strings["cancel_defense_button"],
+            discord.ButtonStyle.secondary,
+        )
+        for attack in ongoing
+        if (
+            getattr(attack, "state", None) is AttackState.DEFENDED
+            and not getattr(attack, "revealed", False)
+            and not getattr(attack, "ai_defender", False)
+            and str(getattr(attack, "defender_lord_id", "") or "") == str(getattr(lord, "id", ""))
+        )
+    ]
+    return f"{title}\n{body}", cancels
+
+
+async def attack_manager_payload(stack: Any, lord: Any, strings: dict[str, str]) -> str:
+    """The war room — the kingdom's declared + planned attacks (ephemeral).
+
+    synfoni-v1 (Drasah 06/11) : la ligne d'une declared nomme l'AUTEUR
+    et le royaume cible et ne JAMAIS dire l'état de la défense (SECRET
+    — un attaquant ne doit pas apprendre si le territoire est déjà
+    défendu). Les plans montrent les 3 choix, le ✅ sur l'actif.
+    """
+    from botforge.mods.kingdom.models import PlanState
+
+    kingdoms = getattr(stack, "kingdoms", None)
+    kingdom_id = str(getattr(lord, "kingdom_id", "") or "")
+    sections: list[str] = [
+        strings["plan_manager_title"].format(
+            kingdom=await kingdom_name(kingdoms, kingdom_id)
+        )
+    ]
+    try:
+        attacks = [
+            attack
+            for attack in await stack.attacks.attacks()
+            if not getattr(attack, "is_over", True)
+            and str(getattr(attack, "attacker_kingdom_id", "")) == kingdom_id
+        ]
+        plans = [
+            plan
+            for plan in await stack.attacks.plans()
+            if getattr(plan, "state", None) is PlanState.PLANNED
+            and str(getattr(plan, "kingdom_id", "")) == kingdom_id
+        ]
+    except Exception:
+        attacks, plans = [], []
+    if not attacks and not plans:
+        sections.append(strings["plan_manager_empty"])
+    if attacks:
+        sections.append(strings["plan_manager_declared_section"])
+        for attack in attacks:
+            sections.append(
+                strings["plan_manager_declared_row"].format(
+                    map=str(getattr(attack, "map_key", "?")),
+                    kingdom=await kingdom_name(
+                        kingdoms, str(getattr(attack, "defender_kingdom_id", ""))
+                    ),
+                    lord=await lord_name(
+                        kingdoms, str(getattr(attack, "attacker_lord_id", ""))
+                    ),
+                    when=fmt_paris(getattr(attack, "expires_at", None)),
+                )
+            )
+    if plans:
+        sections.append(strings["plan_manager_planned_section"])
+        for plan in plans:
+            lord_id = str(getattr(plan, "lord_id", ""))
+            choices = [str(choice) for choice in getattr(plan, "choices", None) or []]
+            active_index = int(getattr(plan, "active_index", 0) or 0)
+            for index, choice in enumerate(choices, start=1):
+                sections.append(
+                    strings["plan_choices_line"].format(
+                        n=index,
+                        map=choice,
+                        active=strings["plan_active_tag"] if index - 1 == active_index else "",
+                    )
+                )
+            sections.append(
+                strings["plan_manager_planned_row"].format(
+                    map=str(getattr(plan, "active_choice", "") or ""),
+                    when=fmt_paris(getattr(plan, "meeting_at", None)),
+                    lord=await lord_name(kingdoms, lord_id),
+                    index=active_index + 1,
+                    total=len(choices),
+                )
+            )
+    return "\n".join(sections)
+
+
+def remparts_info_body(strings: dict[str, str]) -> str:
+    """The EXPLANATIONS face — the IA loop, the Patrouille, the Gardes."""
+    blocks = [
+        strings["remparts_ai_intro"],
+        f'{strings["remparts_patrouille_intro"]}\n{strings["remparts_patrol_window"]}',
+        strings["remparts_garde_intro"],
+    ]
+    return "\n\n".join(blocks)
+
+
+def classement_content(strings: dict[str, str], rows: list[tuple[Any, int, int]]) -> str:
+    """classement-vue-v1 — one line per kingdom, a blank before the 4th."""
+    lines: list[str] = [strings["classement_title"], ""]
+    for index, (kingdom, territories, alliances) in enumerate(rows, start=1):
+        if index == 4:
+            lines.append("")
+        lines.append(
+            strings["classement_line"].format(
+                _rank_medal(index),
+                index,
+                str(getattr(kingdom, "name", "?")),
+                territories,
+                alliances,
+            )
+        )
+    lines += ["", strings["conseil_classement_hint"]]
+    return "\n".join(lines)
+
+
+def _manager_sheet_rows(cancels: list[discord.ui.Button], strings: dict[str, str]) -> list[list[Any]]:
+    rows: list[list[Any]] = []
+    if cancels:
+        rows.append(cancels)
+    rows.append(_remparts_back_row(strings))
+    return rows
+
+
+class LieuxRempartsManagerButton(
+    discord.ui.DynamicItem[discord.ui.Button[Any]],
+    template=rf"{_NS}:remparts:(?P<which>defense|attack)-manager",
+):
+    """The war-room door — ONE class, the `which` parameter tells the sheet."""
+
+    def __init__(self, which: str, label: str) -> None:
+        super().__init__(
+            _remparts_wire_button(
+                f"{_NS}:remparts:{which}-manager", label, discord.ButtonStyle.success
+            )
+        )
+        self.which = str(which)
+
+    @classmethod
+    async def from_custom_id(cls, interaction, item, match, /):  # type: ignore[no-untyped-def]
+        strings = lieux_strings(_locale_of(interaction))
+        which = str(match["which"])
+        key = "defense_manager_button" if which == "defense" else "plan_manager_button"
+        return cls(which, strings[key])
+
+    async def callback(self, interaction: discord.Interaction) -> None:
+        """Show the kingdom's war sheet (ephemeral, the single window)."""
+        strings = lieux_strings(_locale_of(interaction))
+        lord, kingdom, stack = await _lord_kingdom_of(interaction, strings)
+        if lord is None or kingdom is None:
+            await open_unique_ephemeral(interaction, content=strings["defense_manager_not_lord"])
+            return
+        if getattr(stack, "attacks", None) is None:
+            await open_unique_ephemeral(interaction, content=strings["defense_manager_no_service"])
+            return
+        await interaction.response.defer(ephemeral=True)
+        if self.which == "defense":
+            body, cancels = await defense_manager_payload(stack, lord, strings)
+        else:
+            body = await attack_manager_payload(stack, lord, strings)
+            cancels = []
+        view = _lieu_window(
+            strings,
+            REMPARTS_SURFACE,
+            TEAL,
+            strings["patrol_title"].format(str(getattr(kingdom, "name", ""))),
+            body,
+            "attachment://rempart.png",
+            _manager_sheet_rows(cancels, strings),
+        )
+        await open_unique_ephemeral(
+            interaction, view=view, files=_lieu_files("Rempart.png", "rempart.png") or None
+        )
+
+
+async def _remparts_face(interaction: discord.Interaction, mode: str) -> None:
+    """Toggle the Remparts window EN PLACE — state ↔ explanations."""
+    strings = lieux_strings(_locale_of(interaction))
+    lord, kingdom, stack = await _lord_kingdom_of(interaction, strings)
+    if lord is None or kingdom is None:
+        return
+    try:
+        state = await _gather_state(stack, kingdom)
+    except Exception:
+        logger.warning("kingdom lieux: the remparts face failed", exc_info=True)
+        return
+    media = _remparts_media_of(interaction)
+    if mode == "info":
+        view = _lieu_window(
+            strings,
+            REMPARTS_SURFACE,
+            TEAL,
+            strings["patrol_title"].format(str(getattr(kingdom, "name", ""))),
+            remparts_info_body(strings),
+            media,
+            [[
+                _remparts_wire_button(
+                    f"{_NS}:remparts:state",
+                    strings["remparts_state_button"],
+                    discord.ButtonStyle.success,
+                ),
+                _sortir_item(strings),
+            ]],
+        )
+    else:
+        view, _files = _remparts_window(strings, kingdom, state)
+    try:
+        await interaction.response.edit_message(view=view)
+    except Exception:
+        logger.warning("kingdom lieux: the remparts toggle failed", exc_info=True)
+
+
+class LieuxRempartsInfoButton(
+    discord.ui.DynamicItem[discord.ui.Button[Any]], template=rf"{_NS}:remparts:info"
+):
+    """« 🔎 En savoir plus » — swap the window to its explanations face."""
+
+    def __init__(self, label: str) -> None:
+        super().__init__(
+            _remparts_wire_button(
+                f"{_NS}:remparts:info", label, discord.ButtonStyle.primary
+            )
+        )
+
+    @classmethod
+    async def from_custom_id(cls, interaction, item, match, /):  # type: ignore[no-untyped-def]
+        return cls(lieux_strings(_locale_of(interaction))["remparts_info_button"])
+
+    async def callback(self, interaction: discord.Interaction) -> None:
+        await _remparts_face(interaction, "info")
+
+
+class LieuxRempartsStateButton(
+    discord.ui.DynamicItem[discord.ui.Button[Any]], template=rf"{_NS}:remparts:state"
+):
+    """« ✅ Compris » — swap back to the live-state face."""
+
+    def __init__(self, label: str) -> None:
+        super().__init__(
+            _remparts_wire_button(
+                f"{_NS}:remparts:state", label, discord.ButtonStyle.success
+            )
+        )
+
+    @classmethod
+    async def from_custom_id(cls, interaction, item, match, /):  # type: ignore[no-untyped-def]
+        return cls(lieux_strings(_locale_of(interaction))["remparts_state_button"])
+
+    async def callback(self, interaction: discord.Interaction) -> None:
+        await _remparts_face(interaction, "state")
+
+
+class LieuxRempartsBackButton(
+    discord.ui.DynamicItem[discord.ui.Button[Any]], template=rf"{_NS}:remparts:back"
+):
+    """The 🧱 Remparts back of the war sheets — walks home directly."""
+
+    def __init__(self, label: str) -> None:
+        super().__init__(
+            _remparts_wire_button(
+                f"{_NS}:remparts:back", label, discord.ButtonStyle.secondary
+            )
+        )
+
+    @classmethod
+    async def from_custom_id(cls, interaction, item, match, /):  # type: ignore[no-untyped-def]
+        return cls(lieux_strings(_locale_of(interaction))["remparts_back_button"])
+
+    async def callback(self, interaction: discord.Interaction) -> None:
+        await _open_lieu(interaction, "remparts")
+
+
+class LieuxCancelDefenseButton(
+    discord.ui.DynamicItem[discord.ui.Button[Any]],
+    template=rf"{_NS}:remparts:cancel-defense:(?P<key>[0-9a-f]{{16}})",
+):
+    """The ↩️ Retirer ma défense of the defense sheet (in-place re-render)."""
+
+    def __init__(self, key: str, label: str) -> None:
+        super().__init__(
+            _remparts_wire_button(
+                f"{_NS}:remparts:cancel-defense:{key}", label, discord.ButtonStyle.secondary
+            )
+        )
+        self.key = str(key)
+
+    @classmethod
+    async def from_custom_id(cls, interaction, item, match, /):  # type: ignore[no-untyped-def]
+        return cls(str(match["key"]), lieux_strings(_locale_of(interaction))["cancel_defense_button"])
+
+    async def callback(self, interaction: discord.Interaction) -> None:
+        """Withdraw — then re-render the SAME sheet in place (gestion-inplace-v1)."""
+        from .battle import resolve_room_key
+
+        strings = lieux_strings(_locale_of(interaction))
+        lord, kingdom, stack = await _lord_kingdom_of(interaction, strings)
+        if lord is None or kingdom is None:
+            return
+        attacks = getattr(stack, "attacks", None)
+        if attacks is None:
+            await open_unique_ephemeral(interaction, content=strings["defense_manager_no_service"])
+            return
+        try:
+            attack_id = await resolve_room_key(stack, self.key)
+        except Exception:
+            attack_id = ""
+        if not attack_id:
+            await open_unique_ephemeral(interaction, content=strings["defense_manager_no_service"])
+            return
+        try:
+            await attacks.cancel_defense(attack_id, str(getattr(interaction.user, "id", "")))
+        except Exception as exc:
+            message = getattr(exc, "message", None) or str(exc)
+            await open_unique_ephemeral(interaction, content=str(message))
+            return
+        body, cancels = await defense_manager_payload(stack, lord, strings)
+        view = _lieu_window(
+            strings,
+            REMPARTS_SURFACE,
+            TEAL,
+            strings["patrol_title"].format(str(getattr(kingdom, "name", ""))),
+            body,
+            _remparts_media_of(interaction),
+            _manager_sheet_rows(cancels, strings),
+        )
+        try:
+            await interaction.response.edit_message(view=view)
+        except Exception:
+            logger.warning("kingdom lieux: defense sheet re-render failed", exc_info=True)
+
+
+class LieuxClassementButton(
+    discord.ui.DynamicItem[discord.ui.Button[Any]], template=rf"{_NS}:classement"
+):
+    """classement-vue-v1 — the 🏆 Classement window of the Salle du conseil."""
+
+    def __init__(self, label: str) -> None:
+        super().__init__(
+            _remparts_wire_button(f"{_NS}:classement", label, discord.ButtonStyle.primary)
+        )
+
+    @classmethod
+    async def from_custom_id(cls, interaction, item, match, /):  # type: ignore[no-untyped-def]
+        return cls(lieux_strings(_locale_of(interaction))["classement_button"])
+
+    async def callback(self, interaction: discord.Interaction) -> None:
+        """The season ranking — one line per kingdom, ephemeral."""
+        strings = lieux_strings(_locale_of(interaction))
+        lord, kingdom, stack = await _lord_kingdom_of(interaction, strings)
+        if lord is None or kingdom is None:
+            return
+        await interaction.response.defer(ephemeral=True)
+        rows = await _classement_rows(stack)
+        if not rows:
+            await open_unique_ephemeral(interaction, content=strings["classement_empty"])
+            return
+        view = _lieu_window(
+            strings,
+            CLASSEMENT_SURFACE,
+            discord.Colour.gold(),
+            strings["classement_title"],
+            classement_content(strings, rows),
+            None,
+            [[_sortir_item(strings)]],
         )
         await open_unique_ephemeral(interaction, view=view)
