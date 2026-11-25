@@ -108,6 +108,12 @@ met&nbsp;would&nbsp;hammer&nbsp;the&nbsp;upstream&nbsp;for&nbsp;data&nbsp;the&nb
 (owner&nbsp;2026-11-22&nbsp;—&nbsp;the&nbsp;post-purge&nbsp;boot&nbsp;walked&nbsp;thousands&nbsp;of<br>
 unrelated&nbsp;profiles).</span></dd></dl>
 
+<dl><dt>async <a name="MatchHistorySyncer-stale_sync_targets"><strong>stale_sync_targets</strong></a>(self, profile_ids: 'list[str]', window_s: 'int' = 120) -&gt; 'list[str]'</dt><dd><span class="code">Return&nbsp;the&nbsp;profiles&nbsp;whose&nbsp;sync&nbsp;stamp&nbsp;is&nbsp;OLDER&nbsp;than&nbsp;the&nbsp;window.<br>
+&nbsp;<br>
+The&nbsp;on-demand&nbsp;listing&nbsp;gate&nbsp;(owner&nbsp;2026-11-25):&nbsp;the&nbsp;profile<br>
+synced&nbsp;seconds&nbsp;ago&nbsp;already&nbsp;owns&nbsp;the&nbsp;match&nbsp;that&nbsp;just&nbsp;ended<br>
+upstream&nbsp;-&nbsp;re-fetching&nbsp;it&nbsp;only&nbsp;added&nbsp;seconds&nbsp;to&nbsp;the&nbsp;click.</span></dd></dl>
+
 <dl><dt>async <a name="MatchHistorySyncer-sync_account"><strong>sync_account</strong></a>(self, profile_id: 'str') -&gt; 'bool'</dt><dd><span class="code">Sync&nbsp;one&nbsp;account:&nbsp;raw&nbsp;history&nbsp;+&nbsp;status,&nbsp;then&nbsp;the&nbsp;elo&nbsp;max.<br>
 &nbsp;<br>
 The&nbsp;SMART&nbsp;fetch&nbsp;(the&nbsp;#404&nbsp;T4&nbsp;rule):&nbsp;the&nbsp;account's&nbsp;FIRST&nbsp;sync<br>

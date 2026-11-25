@@ -359,9 +359,10 @@ def test_the_ranked_marker_and_the_live_icons_ride_outside_the_link() -> None:
 
     ranked = _card_header("2v2", " Match n°", "1", me_ids={"8"}, card={"status": "finished", "winners": ["8"]},
                           ranked_prefix="\U0001F3AF ")
-    # the marker rides BEFORE the masked link's bold - an emoji inside a
-    # link's text never renders
-    assert "\U0001F3AF **[[ 2v2 ]]" in ranked
+    # the marker rides AFTER the badge link, still OUTSIDE it (owner
+    # 2026-11-25) - an emoji inside a link's text never renders
+    assert "\U0001F3AF" in ranked
+    assert ranked.index("\U0001F3AF") > ranked.index("]") and ranked.index("\U0001F3AF") < ranked.index("Match n")
     joiner = _card_header("2v2", " Lobby n°", "1", me_ids={"8"}, card={"status": "lobby"})
     assert joiner.startswith("\U0001F7E1 ")
     runner = _card_header("2v2", " Match n°", "1", me_ids={"8"}, card={"status": "ongoing"})
@@ -445,3 +446,30 @@ def test_the_ffa_wears_the_verdict_on_every_seat() -> None:
     }
     text = _ffa_text(human)
     assert text.count("\U0001f3c6") == 1 and text.count("\U0001f480") == 2
+
+
+def test_the_settings_tick_the_exotic_rules_from_the_game_mode() -> None:
+    """EW/sudden death/regicide read the MODE (the 3651-match sweep)."""
+    from botforge.discord.home import _settings_bool_lines
+
+    labels = {
+        "setting_bools": {},
+        "checkbox_names": {
+            "profile.matches_setting_ew": "Mode Empire Wars",
+            "profile.matches_setting_sudden_death": "Mort subite",
+            "profile.matches_setting_regicide": "Mode Régicide",
+            "profile.matches_setting_antiquity": "Mode Antiquité",
+            "profile.matches_setting_record": "Partie enregistrée",
+        },
+    }
+    import json as _json
+
+    ew = _settings_bool_lines({"options_json": _json.dumps({"5": "13", "75": "y"})}, labels)
+    assert "\u2705 Mode Empire Wars" in ew
+    assert "\u2b1c Mort subite" in ew and "\u2b1c Mode Régicide" in ew
+    sd = _settings_bool_lines({"options_json": _json.dumps({"5": "11"})}, labels)
+    assert "\u2705 Mort subite" in sd and "\u2b1c Mode Empire Wars" in sd
+    reg = _settings_bool_lines({"options_json": _json.dumps({"5": "1"})}, labels)
+    assert "\u2705 Mode Régicide" in reg
+    # antiquity: no positive sample upstream - "?" stays honest
+    assert "\u2753 Mode Antiquité" in reg

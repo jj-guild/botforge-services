@@ -55,6 +55,8 @@ def main() -> None:
         return True
 
     async def _boot() -> None:
+        if store is not None:
+            await store.ensure_indexes()
         if syncer is not None:
             task = asyncio.get_running_loop().create_task(_daily_sync_loop(syncer))
             _BACKGROUND_TASKS.add(task)
@@ -125,12 +127,25 @@ def _sync_stats_handler(
     """Build the on-demand sync callable; None syncer degrades."""
 
     async def sync_stats(profile_ids: list[str], wait: bool) -> tuple[bool, int, str]:
-        """Serve the on-demand sync (T4): the given accounts, or all."""
+        """Serve the on-demand sync (T4): the given accounts, or all.
+
+        The CLICK owns its freshness but never twice in a row
+        (owner 2026-11-25: "tu dois d\u00e9j\u00e0 avoir la data - le
+        chargement est beaucoup trop lent"): a profile synced within
+        the freshness window answers straight from the store, only
+        the STALE ones wait for the upstream pass.
+        """
         if syncer is None:
             return False, 0, "stats store not configured (MONGO_URI unset)"
         if wait:
             try:
-                synced = await syncer.sync_accounts(profile_ids)
+                targets = [str(p) for p in profile_ids]
+                if targets:
+                    stale_s = int(os.environ.get("LIBREMATCH_SYNC_STALE_S", "120"))
+                    targets = await syncer.stale_sync_targets(targets, stale_s)
+                if not targets:
+                    return True, 0, ""  # all warm: the store IS the truth
+                synced = await syncer.sync_accounts(targets)
                 return True, synced, ""
             except Exception as exc:  # a functional error, not a crash
                 return False, 0, f"{type(exc).__name__}: {exc}"[:400]

@@ -361,6 +361,7 @@ class MatchHistorySyncer:
         self._leaderboards = leaderboards
         self._sync_count = sync_count
         self._quick_count = quick_count
+        self._last_seal_s = 0.0
 
     async def sync_account(self, profile_id: str) -> bool:
         """Sync one account: raw history + status, then the elo max.
@@ -439,18 +440,32 @@ class MatchHistorySyncer:
         if boards:
             stored_any = True
         await self._store.upsert_account(self._account_doc(profile_id, boards, previous))
+        # the freshness stamp rides the ACCOUNT (owner 2026-11-25):
+        # the next listing click within the window reads the store,
+        # no upstream wait
+        try:
+            await self._store.stamp_synced([profile_id])
+        except Exception:
+            logger.debug("the sync stamp failed", exc_info=True)
         # The catch-up decode for documents stored by an older revision
         # (their blobs sit verbatim in ``raw``): no network, no re-fetch.
         await self.decode_stored([profile_id])
         # Seal the never-played captures: a match started long ago
         # with no result is an abandoned lobby, not a game (owner
         # 2026-11-23 - the served "test" lobbies never went away).
-        try:
-            stale = await self._store.invalidate_stale_matches()
-            if stale:
-                logger.info("stale matches invalidated: %d", stale)
-        except Exception:
-            logger.debug("the stale-match seal failed", exc_info=True)
+        import os
+        import time
+
+        # the seal sweeps the WHOLE matches collection - never per
+        # click (owner 2026-11-25): one throttled pass, then silence
+        if time.time() - self._last_seal_s > float(os.environ.get("LIBREMATCH_SEAL_INTERVAL_S", "600")):
+            self._last_seal_s = time.time()
+            try:
+                stale = await self._store.invalidate_stale_matches()
+                if stale:
+                    logger.info("stale matches invalidated: %d", stale)
+            except Exception:
+                logger.debug("the stale-match seal failed", exc_info=True)
         return stored_any
 
     async def refresh_status(self, profile_id: str) -> bool:
@@ -488,6 +503,19 @@ class MatchHistorySyncer:
             except Exception:
                 logger.warning("elo refresh failed (%s)", profile_id, exc_info=True)
         return refreshed
+
+    async def stale_sync_targets(self, profile_ids: list[str], window_s: int = 120) -> list[str]:
+        """Return the profiles whose sync stamp is OLDER than the window.
+
+        The on-demand listing gate (owner 2026-11-25): the profile
+        synced seconds ago already owns the match that just ended
+        upstream - re-fetching it only added seconds to the click.
+        """
+        try:
+            fresh = await self._store.recently_synced(profile_ids, window_s)
+        except Exception:
+            return [str(p) for p in profile_ids]
+        return [str(p) for p in profile_ids if str(p) not in fresh]
 
     async def sync_accounts(self, profile_ids: list[str]) -> int:
         """Sync the given accounts (every BOUND one when empty). T4 rides.

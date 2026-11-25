@@ -74,6 +74,15 @@ capture.&nbsp;An&nbsp;empty&nbsp;(or&nbsp;absent)&nbsp;``players``&nbsp;list&nbs
 
 <dl><dt>async <a name="LibrematchStore-delete_matches"><strong>delete_matches</strong></a>(self, doc_ids: 'list[str]') -&gt; 'int'</dt><dd><span class="code">Delete&nbsp;stored&nbsp;captures&nbsp;by&nbsp;their&nbsp;document&nbsp;ids&nbsp;(the&nbsp;repair).</span></dd></dl>
 
+<dl><dt>async <a name="LibrematchStore-ensure_indexes"><strong>ensure_indexes</strong></a>(self) -&gt; 'None'</dt><dd><span class="code">Create&nbsp;the&nbsp;provider's&nbsp;hot-path&nbsp;indexes&nbsp;(idempotent,&nbsp;best-effort).<br>
+&nbsp;<br>
+Rule&nbsp;5&nbsp;(one&nbsp;owner&nbsp;per&nbsp;collection):&nbsp;the&nbsp;provider&nbsp;ensures&nbsp;ITS<br>
+OWN&nbsp;collections'&nbsp;indexes&nbsp;at&nbsp;ITS&nbsp;boot.&nbsp;The&nbsp;listing's&nbsp;read<br>
+(`profile_ids&nbsp;$in`&nbsp;+&nbsp;`finished_at`&nbsp;sort)&nbsp;was&nbsp;a&nbsp;COLLSCAN&nbsp;over<br>
+the&nbsp;whole&nbsp;raw&nbsp;history&nbsp;(owner&nbsp;2026-11-25:&nbsp;"le&nbsp;chargement&nbsp;est<br>
+beaucoup&nbsp;trop&nbsp;lent&nbsp;-&nbsp;problème&nbsp;d'index")&nbsp;—&nbsp;the&nbsp;compound<br>
+index&nbsp;walks&nbsp;it&nbsp;in&nbsp;one&nbsp;seek.</span></dd></dl>
+
 <dl><dt>async <a name="LibrematchStore-find_accounts"><strong>find_accounts</strong></a>(self, profile_ids: 'list[str]') -&gt; 'list[dict[str, Any]]'</dt><dd><span class="code">Return&nbsp;the&nbsp;status&nbsp;documents&nbsp;of&nbsp;the&nbsp;accounts&nbsp;(missing&nbsp;ones&nbsp;absent).</span></dd></dl>
 
 <dl><dt>async <a name="LibrematchStore-find_incomplete_docs"><strong>find_incomplete_docs</strong></a>(self, profile_id: 'str', limit: 'int' = 100) -&gt; 'list[dict[str, Any]]'</dt><dd><span class="code">Return&nbsp;the&nbsp;profile's&nbsp;stored&nbsp;captures&nbsp;of&nbsp;an&nbsp;OLDER&nbsp;era.<br>
@@ -133,6 +142,15 @@ the&nbsp;post-purge&nbsp;boot&nbsp;walked&nbsp;thousands&nbsp;of&nbsp;unrelated&
 <dl><dt>async <a name="LibrematchStore-list_known_profiles"><strong>list_known_profiles</strong></a>(self) -&gt; 'list[str]'</dt><dd><span class="code">List&nbsp;every&nbsp;account&nbsp;the&nbsp;store&nbsp;has&nbsp;a&nbsp;status&nbsp;or&nbsp;binding&nbsp;for.</span></dd></dl>
 
 <dl><dt>async <a name="LibrematchStore-mark_missing_board"><strong>mark_missing_board</strong></a>(self, profile_id: 'str', board_id: 'str') -&gt; 'None'</dt><dd><span class="code">Mark&nbsp;one&nbsp;honestly-absent&nbsp;board&nbsp;(the&nbsp;probe&nbsp;never&nbsp;repeats).</span></dd></dl>
+
+<dl><dt>async <a name="LibrematchStore-recently_synced"><strong>recently_synced</strong></a>(self, profile_ids: 'list[str]', within_s: 'int') -&gt; 'set[str]'</dt><dd><span class="code">Return&nbsp;the&nbsp;profile&nbsp;ids&nbsp;whose&nbsp;sync&nbsp;stamp&nbsp;is&nbsp;FRESHER&nbsp;than&nbsp;the&nbsp;window.</span></dd></dl>
+
+<dl><dt>async <a name="LibrematchStore-stamp_synced"><strong>stamp_synced</strong></a>(self, profile_ids: 'list[str]', when: 'int' = 0) -&gt; 'None'</dt><dd><span class="code">Stamp&nbsp;the&nbsp;accounts'&nbsp;LAST&nbsp;history&nbsp;sync&nbsp;(the&nbsp;click's&nbsp;freshness&nbsp;gate).<br>
+&nbsp;<br>
+The&nbsp;on-demand&nbsp;sync&nbsp;(the&nbsp;listing's&nbsp;click)&nbsp;checks&nbsp;this&nbsp;stamp<br>
+before&nbsp;re-fetching&nbsp;the&nbsp;upstream:&nbsp;a&nbsp;profile&nbsp;synced&nbsp;seconds&nbsp;ago<br>
+answers&nbsp;straight&nbsp;from&nbsp;the&nbsp;store,&nbsp;the&nbsp;STALE&nbsp;ones&nbsp;only&nbsp;wait<br>
+(owner&nbsp;2026-11-25:&nbsp;"le&nbsp;chargement&nbsp;est&nbsp;beaucoup&nbsp;trop&nbsp;lent").</span></dd></dl>
 
 <dl><dt>async <a name="LibrematchStore-stored_match_ids"><strong>stored_match_ids</strong></a>(self, ids: 'list[str]') -&gt; 'set[str]'</dt><dd><span class="code">Return&nbsp;which&nbsp;of&nbsp;the&nbsp;given&nbsp;match&nbsp;ids&nbsp;are&nbsp;already&nbsp;stored.</span></dd></dl>
 

@@ -177,6 +177,49 @@ class LibrematchStore:
             cursor = cursor.limit(limit)
         return [dict(doc) async for doc in cursor]
 
+    async def stamp_synced(self, profile_ids: list[str], when: int = 0) -> None:
+        """Stamp the accounts' LAST history sync (the click's freshness gate).
+
+        The on-demand sync (the listing's click) checks this stamp
+        before re-fetching the upstream: a profile synced seconds ago
+        answers straight from the store, the STALE ones only wait
+        (owner 2026-11-25: "le chargement est beaucoup trop lent").
+        """
+        ids = [str(p) for p in profile_ids if str(p)]
+        if not ids:
+            return
+        import time
+
+        now = int(when or time.time())
+        await self._accounts().update_many({"_id": {"$in": ids}}, {"$set": {"synced_at": now}})
+
+    async def recently_synced(self, profile_ids: list[str], within_s: int) -> set[str]:
+        """Return the profile ids whose sync stamp is FRESHER than the window."""
+        import time
+
+        ids = [str(p) for p in profile_ids if str(p)]
+        if not ids:
+            return set()
+        floor = int(time.time()) - max(0, int(within_s))
+        cursor = self._accounts().find({"_id": {"$in": ids}, "synced_at": {"$gte": floor}}, {"_id": 1})
+        return {str(doc["_id"]) async for doc in cursor}
+
+    async def ensure_indexes(self) -> None:
+        """Create the provider's hot-path indexes (idempotent, best-effort).
+
+        Rule 5 (one owner per collection): the provider ensures ITS
+        OWN collections' indexes at ITS boot. The listing's read
+        (`profile_ids $in` + `finished_at` sort) was a COLLSCAN over
+        the whole raw history (owner 2026-11-25: "le chargement est
+        beaucoup trop lent - probl\u00e8me d'index") \u2014 the compound
+        index walks it in one seek.
+        """
+        try:
+            await self._matches().create_index([("profile_ids", 1), ("finished_at", -1)])
+            logger.info("libre:match indexes ensured")
+        except Exception:
+            logger.warning("libre:match index creation failed \u2014 best-effort", exc_info=True)
+
     async def invalidate_stale_matches(self, stale_after_s: int = 86400) -> int:
         """Flag the never-played captures: started long ago, never decided.
 

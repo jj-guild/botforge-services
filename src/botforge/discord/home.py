@@ -995,9 +995,9 @@ SETTING_CHECKBOX_ORDER = (
     ("1", "cheats", "profile.matches_setting_cheats"),
     ("79", "turbo_mode", "profile.matches_setting_turbo"),
     ("62", "full_tech_tree", "profile.matches_setting_full_tech"),
-    (None, "ew_mode", "profile.matches_setting_ew"),
-    (None, "sudden_death_mode", "profile.matches_setting_sudden_death"),
-    (None, "regicide_mode", "profile.matches_setting_regicide"),
+    ("@ew", "ew_mode", "profile.matches_setting_ew"),
+    ("@sudden", "sudden_death_mode", "profile.matches_setting_sudden_death"),
+    ("@regicide", "regicide_mode", "profile.matches_setting_regicide"),
     (None, "antiquity_mode", "profile.matches_setting_antiquity"),
     ("75", "record", "profile.matches_setting_record"),
 )
@@ -1249,6 +1249,15 @@ def _settings_bool_lines(card: dict[str, Any], labels: dict[str, Any]) -> list[s
             continue
         if blob_key == "65":
             lines.append("──────────")
+        if blob_key.startswith("@"):
+            # the MODE carries the exotic rule (owner 2026-11-25 - a
+            # 3651-match upstream sweep: NO dedicated boolean rides
+            # the finished blob for these three; EW ticks when the
+            # game mode key 5 reads 13, sudden death 11, regicide 1)
+            _flags_of = {"@ew": "13", "@sudden": "11", "@regicide": "1"}
+            enabled = str(options.get("5", "")).strip() == _flags_of[blob_key]
+            lines.append(f"{'✅' if enabled else '⬜'} {label}")
+            continue
         raw_value = options.get(blob_key)
         if raw_value in (None, ""):
             continue
@@ -1765,10 +1774,9 @@ def _card_header(
             scope_icon = "\U0001f480 "
         elif card.get("status") == "finished":
             scope_icon = ""
-    # the ranked marker rides OUTSIDE the link (owner 2026-11-25): a
-    # masked-link's text never renders an emoji right - the marker
-    # prefixes the whole badge instead
-    return f"{scope_icon}{ranked_prefix}**{name_part}** {noun}{id_part}"
+    # the ranked marker rides OUTSIDE the link, AFTER the badge
+    # (owner 2026-11-25): a masked link's text never renders an emoji
+    return f"{scope_icon}**{name_part}** {ranked_prefix}{noun}{id_part}"
 
 
 
@@ -2110,7 +2118,10 @@ async def _finished_cards(
     """
     from botforge.discord.stats_views import recent_match_entries
 
-    entries = await recent_match_entries(sorted(me_ids), limit=limit, refresh=refresh)
+    # OVERFETCH (owner 2026-11-25): the listing must show its FULL
+    # budget - the solo lobby tests and other skips between the
+    # fetch and the trim starved it at nine of ten
+    entries = await recent_match_entries(sorted(me_ids), limit=max(limit * 2, 10), refresh=refresh)
     cards: list[dict[str, Any]] = []
     for entry in entries:
         finished_at = int(getattr(entry, "finished_at", 0) or 0)
@@ -2152,6 +2163,8 @@ async def _finished_cards(
             # the SEALED card rides its status (owner 2026-11-24)
             cards[-1]["invalid"] = True
             cards[-1]["invalid_reason"] = reason
+        if len(cards) >= limit:
+            break
     return cards
 
 
@@ -2237,8 +2250,14 @@ async def _send_match_panels(
     await _sync_for_listing(interaction, me_ids)
     live = await _live_cards(interaction, me_ids)
     cards = list(live)
+    # OVERFETCH then trim (owner 2026-11-25: "tu n'as affich\u00e9 que 9
+    # matchs" - the solo lobby tests eat entries between the fetch
+    # and the budget); the store serves more than it shows
     finished = await _finished_cards(interaction, me_ids, limit=10, refresh=True)
-    cards += finished[: max(0, 10 - len(live))]
+    for card in finished:
+        if len(cards) >= 10:
+            break
+        cards.append(card)
     if not cards:
         await interaction.followup.send(await reply(interaction, "profile.matches_empty"), ephemeral=True)
         return
