@@ -376,3 +376,72 @@ def test_the_when_line_never_doubles_the_discord_prefix() -> None:
     ctx = {"map_display": {}, "map_urls": {}, "map_images": {}, "civ_display": {}}
     text = str(getattr(_card_map_section(card, ctx, {}), "content", ""))
     assert "Il y a" not in text
+
+
+def test_the_listing_keeps_the_unplayed_matches() -> None:
+    """The 10-match listing never pokes holes (owner 2026-11-25)."""
+    import asyncio
+    from types import SimpleNamespace
+
+    import botforge.discord.stats_views as stats_views
+    from botforge.discord.home import _finished_cards
+
+    def _entry(mid, finished, winners, players, invalid=False):
+        return SimpleNamespace(
+            match_id=mid, leaderboard_id="", started_at=100, finished_at=finished,
+            winners=winners, description="test", map_name="Budapest", options_json="",
+            players_json=players, settings_json="[]", invalid=invalid,
+        )
+
+    async def _fake_entries(profile_ids, limit=10, refresh=False):
+        del profile_ids, limit, refresh
+        return [
+            _entry("live-1", 0, (), '[{"profile_id": "848567"}, {"profile_id": "111"}]'),
+            _entry("decided-1", 200, ("848567",), '[{"profile_id": "848567"}, {"profile_id": "111"}]'),
+            _entry("test", None, (), '[{"profile_id": "848567"}, {"profile_id": "111"}]', invalid=True),
+        ]
+
+    stats_views.recent_match_entries = _fake_entries
+    cards = asyncio.run(_finished_cards(_NullInteraction(), {"848567"}, limit=10))
+    ids = {c["match_id"] for c in cards}
+    assert ids == {"live-1", "decided-1", "test"}, "an unplayed match lists, WITH its seal"
+    sealed = next(c for c in cards if c["match_id"] == "test")
+    assert sealed["invalid"] is True and sealed["invalid_reason"] == "no_result"
+
+
+def _ffa_text(card: dict[str, Any], me_ids: set[str] | None = None) -> str:
+    from botforge.discord.home import _card_team_blocks, _ordered_teams
+
+    ctx = {"civ_urls": {}, "civ_images": {}, "map_display": {}, "civ_display": {}, "ladder": {}}
+    blocks = _card_team_blocks(card, _ordered_teams(card, me_ids or set()), me_ids or set(), {"team": "Team"}, ctx)
+    return "\n".join(str(getattr(b, "content", "") or "") for b in blocks)
+
+
+def test_the_ffa_wears_the_verdict_on_every_seat() -> None:
+    """The melee: per-seat W/LOSS, no strike, all the living AIs win."""
+    ai_1v1v1 = {
+        "status": "finished",
+        "players": [
+            {"profile_id": "848567", "alias": "Merlin Pinpin", "team": 1, "slot": 4, "civ": "Mayans"},
+            {"profile_id": "", "alias": "IA", "ai": True, "team": 2, "slot": 3},
+            {"profile_id": "", "alias": "IA", "ai": True, "team": 3, "slot": 1},
+        ],
+        "winners": [],
+    }
+    text = _ffa_text(ai_1v1v1)
+    # every seat carries its own verdict, scope or not
+    assert text.count("\U0001f3c6") == 2, "the computers decide it: every living AI wins"
+    assert "\U0001f480" in text, "the human lost"
+    assert "~~" not in text, "the melee never strikes - each seat tells its own tale"
+    # a human-decided melee crowns the victor alone
+    human = {
+        "status": "finished",
+        "players": [
+            {"profile_id": "848567", "alias": "A", "team": 1, "slot": 1},
+            {"profile_id": "111", "alias": "B", "team": 2, "slot": 2},
+            {"profile_id": "222", "alias": "C", "team": 3, "slot": 3},
+        ],
+        "winners": ["111"],
+    }
+    text = _ffa_text(human)
+    assert text.count("\U0001f3c6") == 1 and text.count("\U0001f480") == 2

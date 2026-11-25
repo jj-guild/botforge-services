@@ -91,7 +91,7 @@ en:
       remove_button: Remove an account
       matches_button: "Last matches played"
       matches_ladder: "Ladder {name} \u2014 Match #{number}"
-      matches_title: "Your last 5 matches played"
+      matches_title: "Your last 10 matches played"
       matches_live_title: "🎯 In progress"
       matches_with: with
       matches_join: Join

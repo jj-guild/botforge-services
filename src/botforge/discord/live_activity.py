@@ -632,13 +632,17 @@ async def _gap_fill_matches_salon(bot: discord.Client, guild_id: str, channel_id
     known = set(profiles)  # the salon's bound profiles: the KNOWN names
     entries = await recent_match_entries(profiles, limit=25)
     deadline = int(time.time()) - _SEED_WINDOW_S  # the salon's OWN week (owner 2026-11-25)
-    for entry in entries:
+    # the salon reads CHRONOLOGICAL (owner 2026-11-25): the feed serves
+    # newest-first, the salon keeps the oldest on top - sort before posting
+    pending = sorted(
+        (entry for entry in entries if getattr(entry, "finished_at", 0)),
+        key=lambda e: int(getattr(e, "finished_at", 0) or 0),
+    )
+    for entry in pending:
         ref = str(getattr(entry, "match_id", "") or "")
         if not ref or ref in posted:
             continue
         finished_at = int(getattr(entry, "finished_at", 0) or 0)
-        if not finished_at:
-            continue  # the live feeds carry the running games
         if finished_at < deadline:
             continue  # never post beyond the week
         card = _seed_card_of(entry)

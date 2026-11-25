@@ -1796,24 +1796,30 @@ def _card_ffa_blocks(
     winners: set[str],
     ai_decided: bool,
 ) -> list[Any]:
-    """Render the free-for-all ladder: no team, a SINGLE crowned winner.
+    """Render the free-for-all ladder: no team, a per-seat W/LOSS mark.
 
     A melee reads as one list of seats (owner 2026-11-25) - no team
-    titles, no per-team medals; the winner (human victor, or the
-    computers when they decided it) carries the crown on his seat in
-    the unscoped view, the header tells the scope's outcome.
+    titles, so NOTHING strikes through (owner 2026-11-25: "pas besoin
+    de barrer les perdants" - each player carries his own verdict at
+    the front of his line). When the computers decided it, EVERY
+    living AI seat wins and every human lost (owner 2026-11-25:
+    upstream records no victor, the eyes still see a defeat).
     """
     blocks: list[Any] = []
     finished = card.get("status") == "finished" and not card.get("invalid")
+    verdict = bool(winners) or ai_decided
     for _team, seats in teams:
         for player in seats:
             pid = str(player.get("profile_id", ""))
-            won = (pid in winners) if winners else ai_decided and bool(player.get("ai"))
             text, civ_image = _seat_text(player, card, ctx, labels, me_ids)
-            if me_ids:
-                blocks.append(_seat_component(text, civ_image))
-                continue
-            blocks.append(_seat_component(("\U0001f3c6 " if won and finished else "") + text, civ_image))
+            mark = ""
+            if finished and verdict:
+                if winners:
+                    won = pid in winners
+                else:  # the computers decided it: the AIs win, the humans lost
+                    won = bool(player.get("ai"))
+                mark = "\U0001f3c6 " if won else "\U0001f480 "
+            blocks.append(_seat_component(mark + text, civ_image))
     return blocks
 
 
@@ -2094,12 +2100,13 @@ async def _finished_cards(
     limit: int = 10,
     refresh: bool = False,
 ) -> list[dict[str, Any]]:
-    """Build the FINISHED cards - only the INTERESTING matches.
+    """Build the FINISHED cards - the listing NEVER pokes holes.
 
-    A match displays only when it truly ended AND its winner came
-    back (owner 2026-11-22) - EXCEPT the SEALED ones (owner
-    2026-11-24): an invalidated match (never decided, or too short)
-    still shows, WITH its status line instead of a hole in the five.
+    An unplayed match still lists (owner 2026-11-25: "tu n'as affiché que
+    3 matchs" - the winner-only gate starved the listing): every
+    stored entry renders, the SEALED ones carry their status line
+    instead of a silent skip. The solo lobby tests stay out - a
+    single seat is not a game (owner 2026-11-25).
     """
     from botforge.discord.stats_views import recent_match_entries
 
@@ -2108,24 +2115,19 @@ async def _finished_cards(
     for entry in entries:
         finished_at = int(getattr(entry, "finished_at", 0) or 0)
         winners = tuple(getattr(entry, "winners", ()) or ())
-        invalid = bool(getattr(entry, "invalid", False) or False)
-        if (not finished_at or not winners) and not invalid:
-            continue
         seats = _entry_players_of(entry)
         # a SOLO match never lists (owner 2026-11-25): a single seat
         # - human or computer - is a lobby test, not a game
         valid_seats = [s for s in seats if isinstance(s, dict)]
         if len(valid_seats) < 2:
             continue
-        if invalid:
-            # the seal may pre-date the AI rule: a FINISHED match
-            # against computers with no recorded winner is DECIDED -
-            # the computers won (owner 2026-11-24: his 1v1v1 against
-            # two AIs returned no victor) - never a hole, the humans
-            # lost, the card renders the defeat
-            invalid = _invalid_reason_type_of(
-                int(getattr(entry, "started_at", 0) or 0), finished_at, winners, seats
-            ) != ""
+        started_at = int(getattr(entry, "started_at", 0) or 0)
+        # the seal recomputes fresh (owner 2026-11-24): a store flag may
+        # pre-date the AI rule - a FINISHED match against computers
+        # with no recorded winner is DECIDED (the computers won, the
+        # humans lost - his 1v1v1 returned no victor upstream) - and
+        # the UPSTREAM-invalid ones stay, WITH their status line
+        reason = _invalid_reason_type_of(started_at, finished_at, winners, seats)
         cards.append(
             {
                 "status": "finished",
@@ -2138,7 +2140,7 @@ async def _finished_cards(
                 "map_name": str(getattr(entry, "map_name", "") or ""),
                 "lobby_title": str(getattr(entry, "description", "") or "").strip(),
                 "description": str(getattr(entry, "description", "") or ""),
-                "started_at": int(getattr(entry, "started_at", 0) or 0),
+                "started_at": started_at,
                 "finished_at": finished_at,
                 "winners": winners,
                 "players": seats,
@@ -2146,12 +2148,10 @@ async def _finished_cards(
                 "options_json": str(getattr(entry, "options_json", "") or ""),
             }
         )
-        if invalid:
+        if reason:
             # the SEALED card rides its status (owner 2026-11-24)
             cards[-1]["invalid"] = True
-            cards[-1]["invalid_reason"] = _invalid_reason_type_of(
-                int(getattr(entry, "started_at", 0) or 0), finished_at, winners, seats
-            )
+            cards[-1]["invalid_reason"] = reason
     return cards
 
 
@@ -2223,9 +2223,9 @@ async def _send_match_panels(
     the status only drives the badge, the duration, the buttons and
     the links.
 
-    The LIVE matches EAT the budget (owner 2026-11-23: one live
-    match in progress means 1 live card + 4 finished ones - the
-    panel reads "5 derniers matchs", five cards, never more).
+    The LIVE matches EAT the budget (owner 2026-11-25: the panel
+    reads "10 derniers matchs joués" - a live match in progress means
+    1 live card + 9 finished ones, ten cards, never more).
 
     The listing owns its FRESHNESS (owner 2026-11-24: his finished
     match never showed - the click read a COLD store under a TTL
@@ -2237,8 +2237,8 @@ async def _send_match_panels(
     await _sync_for_listing(interaction, me_ids)
     live = await _live_cards(interaction, me_ids)
     cards = list(live)
-    finished = await _finished_cards(interaction, me_ids, limit=5, refresh=True)
-    cards += finished[: max(0, 5 - len(live))]
+    finished = await _finished_cards(interaction, me_ids, limit=10, refresh=True)
+    cards += finished[: max(0, 10 - len(live))]
     if not cards:
         await interaction.followup.send(await reply(interaction, "profile.matches_empty"), ephemeral=True)
         return
