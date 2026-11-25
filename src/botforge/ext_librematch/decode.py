@@ -119,8 +119,17 @@ def _normalize_slot(slot: Any, index: int) -> dict[str, Any]:
         or slot.get("factionID")
         or slot.get("faction_id")
     )
+    # a NEGATIVE profile id is no profile: the WE slotinfo answers
+    # ``profileInfo.id: -1`` for a COMPUTER seat (match 518232462,
+    # verified live 2026-11-24) - the bare truthiness read the AI as
+    # a filled human seat
+    try:
+        pid = int(profile_id or 0)
+    except (TypeError, ValueError):
+        pid = 0
+    profile_id = str(profile_id or "") if pid > 0 else ""
     filled = (
-        bool(profile_id)
+        pid > 0
         or slot.get("filled") is True
         or slot.get("status") == 3
         or slot.get("isReady") == 1
@@ -136,8 +145,22 @@ def _normalize_slot(slot: Any, index: int) -> dict[str, Any]:
 
 
 def _slot_kind(slot: dict[str, Any], filled: bool) -> str:
-    """Derive the slot's kind label from the decoded record."""
+    """Derive the slot's kind label from the decoded record.
+
+    A status-2 seat WITHOUT a profile that carries a CIV is a
+    COMPUTER (verified live 2026-11-24, match 518232462: the AI rides
+    ``status: 2, profileInfo.id: -1, raceID: 40`` while the truly
+    closed seats answer ``status: 1, raceID: -1``) - the first rule
+    read them all as "closed" and the panels never saw an AI.
+    """
     if not filled:
+        civ = slot.get("raceID", slot.get("factionID", slot.get("civ")))
+        try:
+            has_civ = int(civ if civ is not None else -1) >= 0
+        except (TypeError, ValueError):
+            has_civ = bool(civ) and str(civ) not in ("-1", "", "None")
+        if slot.get("status") == 2 and has_civ:
+            return "ai"
         return str(slot.get("slot_kind") or ("closed" if slot.get("status") == 2 else "open"))
     if slot.get("ai") or slot.get("is_ai") or str(slot.get("name", "")).lower().startswith("ai "):
         return "ai"

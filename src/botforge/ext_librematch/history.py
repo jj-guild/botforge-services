@@ -264,6 +264,30 @@ def _players_with_ai(doc: dict[str, Any]) -> list[dict[str, Any]]:
     return [*players, *_ai_seats(str(doc.get("slots_json") or ""), doc.get("teams") or {})]
 
 
+def _int_of_slot(value: Any) -> int:
+    """Coerce a slot field to int (-1 on garbage)."""
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return -1
+
+
+def _is_computer_slot(slot: dict[str, Any]) -> bool:
+    """Whether a normalised slot is a computer seat.
+
+    One grammar for every capture AGE (owner 2026-11-24): the WE
+    slotinfo answers a NEGATIVE profile id for a computer (verified
+    live, matches 518232462/523338329); the old decode stored those
+    seats as filled humans. The truth: NO profile (pid <= 0) with a
+    civ is a computer; a closed slot carries neither.
+    """
+    if str(slot.get("slot_kind") or "") == "ai":
+        return True
+    pid = _int_of_slot(slot.get("profile_id"))
+    civ = _int_of_slot(slot.get("civ"))
+    return pid <= 0 and civ >= 0
+
+
 def _ai_seats(slots_json: str, teams: dict[str, int]) -> list[dict[str, Any]]:
     """Build the AI seats the slotinfo carries (owner 2026-11-23).
 
@@ -278,7 +302,7 @@ def _ai_seats(slots_json: str, teams: dict[str, int]) -> list[dict[str, Any]]:
         return []
     seats: list[dict[str, Any]] = []
     for slot in slots:
-        if not isinstance(slot, dict) or slot.get("slot_kind") != "ai":
+        if not isinstance(slot, dict) or not _is_computer_slot(slot):
             continue
         if str((slot or {}).get("profile_id", "")) in teams:
             continue

@@ -62,41 +62,42 @@ def test_the_logs_verbs_and_the_one_line_per_event_dedupe() -> None:
     assert feed._verb_of({"new_status": "offline", "old_status": "offline"}) == ""
 
 
+def _entry(**kw: Any) -> Any:
+    """A served MatchHistoryEntry stand-in."""
+    from types import SimpleNamespace
+
+    base = {
+        "match_id": "507", "leaderboard_id": "", "started_at": 1732300000, "finished_at": 0,
+        "winners": (), "players_json": "[]", "settings_json": "[]", "options_json": "",
+        "map_name": "Budapest", "description": "lobby test", "invalid": True,
+    }
+    base.update(kw)
+    return SimpleNamespace(**base)
+
+
 def test_the_seed_card_labels_the_invalid_matches() -> None:
     """An invalid match (no result - under five minutes) seeds WITH its status."""
-    undecided = feed._seed_card_of(
-        {"match_id": "507", "started_at": 1732300000, "finished_at": 0, "winners": [],
-         "players": [], "options_json": "", "description": "lobby test"},
-    )
+    undecided = feed._seed_card_of(_entry(finished_at=0, winners=()))
     assert undecided["invalid"] is True
     assert undecided["invalid_reason"] == "no_result"
     short = feed._seed_card_of(
-        {"match_id": "508", "started_at": 1732300000, "finished_at": 1732300180,
-         "winners": ["848567"], "players": [{"profile_id": "848567", "alias": "Merlin"}],
-         "options_json": ""},
+        _entry(finished_at=1732300180, winners=("848567",),
+               players_json='[{"profile_id": "848567", "alias": "Merlin"}]')
     )
     assert short["invalid"] is True
     assert short["invalid_reason"] == "short"
-    # the raw doc's seats ride "players" (a list), the panel reads them
-    assert short["players"] == [{"profile_id": "848567", "alias": "Merlin"}]
-    valid = feed._seed_card_of(
-        {"match_id": "509", "started_at": 1732300000, "finished_at": 1732303600,
-         "winners": ["848567"], "players_json": "[]", "options_json": ""},
-    )
-    assert "invalid" not in valid, "a decided match never carries the status"
     # the AI rule (owner 2026-11-24): a finished 1v1v1 against two
     # computers records no human victor - the match COUNTS, the
     # computers won, no seal on it
     ffa = feed._seed_card_of(
-        {"match_id": "523338329", "started_at": 1732300000, "finished_at": 1732302000,
-         "winners": [],
-         "players": [{"profile_id": "848567", "alias": "Merlin Pinpin", "ai": False}],
-         "slots_json": '[{"slot_kind": "ai", "ai_name": "IA", "team": 2, "slot_index": 2}]',
-         "teams": {"848567": 1}, "options_json": ""},
+        _entry(match_id="523338329", finished_at=1732302000, winners=(),
+               players_json='[{"profile_id": "848567", "alias": "Merlin Pinpin"},'
+                            ' {"profile_id": "", "alias": "IA", "ai": true, "team": 2},'
+                            ' {"profile_id": "", "alias": "IA", "ai": true, "team": 6}]')
     )
     assert "invalid" not in ffa, "the computers decided it - the humans lost, the match counts"
-    # the missing AI seats re-fold from the slotinfo at read time
-    assert any(bool((s or {}).get("ai")) for s in ffa["players"])
+    valid = feed._seed_card_of(_entry(match_id="509", finished_at=1732303600, winners=("848567",)))
+    assert "invalid" not in valid, "a decided match never carries the status"
 
 
 def test_the_invalid_status_renders_on_the_card() -> None:
@@ -185,3 +186,27 @@ def test_the_live_card_serves_the_ai_seats_of_the_other_provider() -> None:
     text = str(view.to_components())
     assert any(bool((p or {}).get("ai")) for p in card["players"]), "the computers ride the card"
     assert "Computer" in text, "the computer's seat renders"
+
+
+def test_the_we_slotinfo_decodes_the_computer_seats() -> None:
+    """A status-2 seat WITHOUT a profile but WITH a civ is a computer.
+
+    The owner's match 518232462 (verified live 2026-11-24): the AI
+    rides ``profileInfo.id: -1, status: 2, raceID: 40`` while the
+    closed seats answer ``raceID: -1`` - the first decode read the
+    computer as a closed slot and the panels never saw an AI.
+    """
+    slot_ai = {"profileInfo.id": -1, "stationID": -1, "teamID": 6, "factionID": -1, "raceID": 40,
+               "isReady": 0, "status": 2}
+    slot_closed = {"profileInfo.id": -1, "stationID": -1, "teamID": 0, "factionID": -1,
+                   "raceID": -1, "isReady": 0, "status": 1}
+    from botforge.ext_librematch.decode import _normalize_slot
+
+    ai = _normalize_slot(slot_ai, 1)
+    closed = _normalize_slot(slot_closed, 2)
+    assert ai["slot_kind"] == "ai" and not ai["filled"] and ai["profile_id"] == ""
+    assert closed["slot_kind"] == "open" and not closed["filled"]
+    # a NEGATIVE profile id is NO profile: the AI never reads as filled
+    human = _normalize_slot({"profileInfo.id": 848567, "teamID": 5, "raceID": 27,
+                             "isReady": 1, "status": 0}, 0)
+    assert human["slot_kind"] == "human" and human["filled"] and human["profile_id"] == "848567"

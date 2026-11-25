@@ -53,7 +53,7 @@ _SEED_SWEEP_S = 300.0
 # the seed's BUILD: a seed producing broken cards gets versioned up -
 # every salon re-seeds once with the fixed build (the old cards stay,
 # the guild owns its channel)
-_SEED_VERSION = 5  # 5: the AI seats re-fold from the slotinfo, an AI-decided match never seals
+_SEED_VERSION = 6  # 6: the WE slotinfo AI decodes (status 2 + civ); a repaired salon reseeds
 
 _MATCHES_SCOPE = "games/aoe2"
 _MATCHES_KEY = "matches"
@@ -443,14 +443,19 @@ async def _maybe_seed_matches_salon(
     """
     marker = await _seed_marker(guild_id)
     if guild_id in _SEEDED or (
-        isinstance(marker, dict) and marker.get("v") == _SEED_VERSION
+        isinstance(marker, dict)
+        and marker.get("v") == _SEED_VERSION
+        # a REPAIRED salon (deleted, recreated) changed its id - the
+        # week re-seeds into the new channel (owner 2026-11-24: his
+        # repair never saw a card again)
+        and str(marker.get("channel_id") or "") == str(channel_id)
     ):
         _SEEDED.add(guild_id)
         return
     _SEEDED.add(guild_id)
     try:
         cards = await _week_cards(bot, guild_id)
-        await _write_seed_marker(guild_id)
+        await _write_seed_marker(guild_id, channel_id)
         if not cards:
             return
         logger.info(
@@ -478,100 +483,74 @@ async def _maybe_seed_matches_salon(
 async def _week_cards(bot: discord.Client, guild_id: str) -> list[dict[str, Any]]:
     """Return the guild's stored matches of the last week, OLDEST first.
 
-    Seeded cards read the RAW store (the served history skips the
-    invalidated matches - the seed shows them with their status).
+    The seed rides the SERVED history (rule 4): the entries commute
+    through the game service, the AI seats already fold ext-side with
+    their real civ names, and the SEAL travels with the entry - the
+    seed renders the invalid matches with their status, never as a
+    hole (owner 2026-11-24).
     """
     profiles = await _guild_profiles(bot, guild_id)
     if not profiles:
         return []
-    try:
-        from botforge.core.models.db import get_async_database
+    from botforge.discord.stats_views import recent_match_entries
 
-        cursor = get_async_database()["librematch:matches"].find(
-            {"profile_ids": {"$in": profiles}}
-        )
-        docs = [dict(doc) async for doc in cursor]
-    except Exception:
-        logger.debug("the seed's raw store read failed", exc_info=True)
-        return []
+    entries = await recent_match_entries(profiles, limit=50)
     deadline = int(time.time()) - _SEED_WINDOW_S
-    by_ref: dict[str, dict[str, Any]] = {}
-    for doc in docs:
-        ref = str(doc.get("match_id") or "")
-        stamp = _int_of(doc.get("finished_at") or doc.get("started_at"))
-        if not ref or stamp < deadline:
+    cards: list[dict[str, Any]] = []
+    for entry in entries:
+        stamp = _int_of(getattr(entry, "finished_at", 0) or getattr(entry, "started_at", 0))
+        if stamp and stamp < deadline:
             continue
-        # an INVALIDATED match still seeds - with its status (owner
-        # 2026-11-24); a (match, leaderboard) pair may store twice,
-        # the richer capture (decided, options decoded) wins
-        previous = by_ref.get(ref)
-        if previous is None or _doc_weight(doc) > _doc_weight(previous):
-            by_ref[ref] = doc
-    cards = [_seed_card_of(doc) for doc in by_ref.values()]
+        cards.append(_seed_card_of(entry))
     cards.sort(key=lambda c: int(c.get("started_at") or 0))
     return cards
 
 
 def _int_of(value: Any) -> int:
-    """Coerce a raw document field to int (0 on garbage)."""
+    """Coerce a raw field to int (0 on garbage)."""
     try:
         return int(value)
     except (TypeError, ValueError):
         return 0
 
 
-def _doc_weight(doc: dict[str, Any]) -> int:
-    """Weigh a duplicate capture: decided > described > raw."""
-    weight = 0
-    if doc.get("finished_at"):
-        weight += 4
-    if doc.get("winners"):
-        weight += 2
-    if doc.get("options_json"):
-        weight += 1
-    return weight
+def _seed_card_of(entry: Any) -> dict[str, Any]:
+    """Build one served entry's seed card - valid OR invalid.
 
-
-def _seed_card_of(doc: dict[str, Any]) -> dict[str, Any]:
-    """Build one stored document's seed card - valid OR invalid.
-
-    The stored document IS the served projection (the decode folded
-    the seats back onto it): ``players_json`` parses like the entry's.
+    The entry IS the served projection: the players json folds the AI
+    seats ext-side, with their civ names; the seal rule colours the
+    AI-decided matches as the DEFEAT they are (owner 2026-11-24).
     """
-    started = _int_of(doc.get("started_at"))
-    finished = _int_of(doc.get("finished_at"))
-    winners = [str(w) for w in doc.get("winners") or []]
-    duration = max(0, finished - started) if finished >= started > 0 else 0
-    seats = _players_json(doc)
-    invalid_reason = ""
-    if not finished or not winners:
-        # the AI rule (owner 2026-11-24): a finished match against
-        # computers with no recorded winner is DECIDED - the AIs won,
-        # the humans lost; no seal, the defeat renders
-        if finished and any(bool((s or {}).get("ai")) for s in seats):
-            invalid_reason = ""
-        else:
-            invalid_reason = "no_result"
-    elif duration < _INVALID_DURATION_S:
-        invalid_reason = "short"
+    from botforge.discord.home import _entry_settings_of, _invalid_reason_type_of
+
+    started = _int_of(getattr(entry, "started_at", 0))
+    finished = _int_of(getattr(entry, "finished_at", 0))
+    winners = [str(w) for w in getattr(entry, "winners", ()) or ()]
+    import json as _json
+
+    try:
+        seats = [dict(s) for s in _json.loads(str(getattr(entry, "players_json", "") or "[]")) if isinstance(s, dict)]
+    except (ValueError, TypeError):
+        seats = []
     card: dict[str, Any] = {
         "status": "finished",
-        "match_id": str(doc.get("match_id") or ""),
-        "match_ref": str(doc.get("match_id") or ""),
-        "leaderboard_id": str(doc.get("leaderboard_id") or ""),
-        "map_name": str(doc.get("map_name") or ""),
-        "lobby_title": str(doc.get("description") or ""),
-        "description": str(doc.get("description") or ""),
+        "match_id": str(getattr(entry, "match_id", "") or ""),
+        "match_ref": str(getattr(entry, "match_id", "") or ""),
+        "leaderboard_id": str(getattr(entry, "leaderboard_id", "") or ""),
+        "map_name": str(getattr(entry, "map_name", "") or ""),
+        "lobby_title": str(getattr(entry, "description", "") or "").strip(),
+        "description": str(getattr(entry, "description", "") or ""),
         "started_at": started,
         "finished_at": finished,
         "winners": winners,
         "players": seats,
-        "settings": [],
-        "options_json": str(doc.get("options_json") or ""),
+        "settings": _entry_settings_of(entry),
+        "options_json": str(getattr(entry, "options_json", "") or ""),
     }
-    if invalid_reason:
+    reason = _invalid_reason_type_of(started, finished, winners, seats)
+    if reason:
         card["invalid"] = True
-        card["invalid_reason"] = invalid_reason
+        card["invalid_reason"] = reason
     return card
 
 
@@ -601,64 +580,6 @@ async def _guild_profiles(bot: discord.Client, guild_id: str) -> list[str]:
     return sorted(set(out))
 
 
-def _players_json(doc: dict[str, Any]) -> list[dict[str, Any]]:
-    """Parse a stored document's seats.
-
-    The RAW store rides ``players`` (a list, written by the ingest);
-    ``players_json`` is the SERVING entry's serialisation - the seed
-    reads the raw collection, so the list comes first.
-    """
-    seats = doc.get("players")
-    if not isinstance(seats, list):
-        try:
-            seats = json.loads(str(doc.get("players_json") or "[]"))
-        except (ValueError, TypeError):
-            seats = []
-    folded = [dict(seat) for seat in seats if isinstance(seat, dict)]
-    # an old capture predates the AI rule (owner 2026-11-24: his
-    # 1v1v1 against two computers served one seat): the slotinfo
-    # carries the computers anyway - re-fold at read time. The fold
-    # lives HERE (rule 4): the discord side never imports a provider
-    if not any(bool((s or {}).get("ai")) for s in folded):
-        folded.extend(_fold_ai_seats(str(doc.get("slots_json") or ""), doc.get("teams") or {}))
-    return folded
-
-
-def _fold_ai_seats(slots_json: str, teams: dict[str, Any] | Any) -> list[dict[str, Any]]:
-    """Build the AI seats a stored slotinfo carries (the provider-agnostic fold).
-
-    The store's OWN fold lives ext-side; the feed's seed reads the raw
-    collection directly and rule 4 (discord never touches a provider)
-    keeps this mirror small: a filled slot without a profile is a
-    computer - no elo lines, the civ speaks (owner 2026-11-23/24).
-    """
-    try:
-        slots = json.loads(slots_json) if slots_json else []
-    except (ValueError, TypeError):
-        return []
-    if not isinstance(slots, list):
-        return []
-    seats: list[dict[str, Any]] = []
-    for slot in slots:
-        if not isinstance(slot, dict) or slot.get("slot_kind") != "ai":
-            continue
-        if str((slot or {}).get("profile_id", "")) in (teams or {}):
-            continue
-        seats.append(
-            {
-                "profile_id": "",
-                "alias": str(slot.get("ai_name") or "IA"),
-                "civ": str(slot.get("civ") or ""),
-                "team": int(slot.get("team") or 0),
-                "slot": int(slot.get("slot_index") or 0),
-                "ai": True,
-                "rating_before": 0,
-                "rating_after": 0,
-            }
-        )
-    return seats
-
-
 async def _seed_marker(guild_id: str) -> Any | None:
     """Read the guild's seed marker (None when the salon never seeded)."""
     try:
@@ -671,14 +592,14 @@ async def _seed_marker(guild_id: str) -> Any | None:
         return "unreachable"  # a broken read never re-seeds
 
 
-async def _write_seed_marker(guild_id: str) -> None:
-    """Write the guild's seed marker (once, forever)."""
+async def _write_seed_marker(guild_id: str, channel_id: str) -> None:
+    """Write the guild's seed marker (the salon it last seeded)."""
     try:
         from botforge.core.models.db import get_async_database
 
         await get_async_database()["channels"].update_one(
             {"_id": f"{guild_id}:livefeed:matches:seeded"},
-            {"$set": {"seeded_at": int(time.time()), "v": _SEED_VERSION}},
+            {"$set": {"seeded_at": int(time.time()), "v": _SEED_VERSION, "channel_id": str(channel_id)}},
             upsert=True,
         )
     except Exception:
