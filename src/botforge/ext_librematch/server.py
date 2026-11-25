@@ -58,6 +58,14 @@ def main() -> None:
         if store is not None:
             await store.ensure_indexes()
         if syncer is not None:
+            # the elo TIMESERIES backfill (owner 2026-11-25): one observable
+            # pass per boot folds the stored history into the series - the
+            # seat lines read the match's day
+            try:
+                await syncer.backfill_elo_series()
+            except Exception:
+                logger.warning("the elo series backfill failed - best-effort", exc_info=True)
+            task = asyncio.get_running_loop().create_task(_daily_sync_loop(syncer))
             task = asyncio.get_running_loop().create_task(_daily_sync_loop(syncer))
             _BACKGROUND_TASKS.add(task)
             task.add_done_callback(_BACKGROUND_TASKS.discard)
