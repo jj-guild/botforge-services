@@ -1618,15 +1618,28 @@ async def draft_sheet_embed(stack: Any, attack: Any, strings: dict[str, str]) ->
         picks = [str(civ) for civ in (pickban.get(f"{side}_picks") or [])]
         enemy = "defender" if side == "attacker" else "attacker"
         struck = {str(civ) for civ in (pickban.get(f"{enemy}_sabotages") or [])}
+        # sabotage-source-v1 (Drasah 26/11): a struck pick wears its
+        # kind — 🗡️ Sabotage (the bought card) vs 🦅 Faucon; a legacy
+        # strike without a recorded kind stays bare (no invented past).
+        kinds = {
+            str(civ): str(kind)
+            for civ, kind in (pickban.get(f"{enemy}_sabotage_sources") or {}).items()
+        }
         shown = picks if phase_over else shuffled_civs(f"{attack.id}:{side}", picks)
         marks = ("1️⃣", "2️⃣", "3️⃣") if phase_over else ("•", "•", "•")
         defaulted = side in [str(x) for x in (pickban.get("default_picks") or [])]
         mode = str(strings["draft_mode_random"] if defaulted else strings["draft_mode_player"])
+        def _cell(civ: str) -> str:
+            """One pick's cell — the struck carry their source kind."""
+            if civ not in struck:
+                return civ
+            struck_cell = f"~~{civ}~~ ❌"
+            kind = kinds.get(civ, "")
+            mark = str(strings.get(f"draft_source_{kind}", "")) if kind else ""
+            return f"{struck_cell} · {mark}" if mark else struck_cell
+
         body = (
-            "\n".join(
-                f"{marks[i]} {f'~~{civ}~~ ❌' if civ in struck else civ}"
-                for i, civ in enumerate(shown[: len(marks)])
-            )
+            "\n".join(f"{marks[i]} {_cell(civ)}" for i, civ in enumerate(shown[: len(marks)]))
             or "—"
         )
         return f"*{mode}*\n{body}"

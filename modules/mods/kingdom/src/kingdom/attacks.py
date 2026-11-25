@@ -3599,6 +3599,12 @@ class AttackService:
         await self._record_action(kingdom_id, "sabotage", f"civilisation {civ_key}")
         sabotages.append(civ_key)
         pickban[f"{side}_sabotages"] = sabotages
+        # sabotage-source-v1 (Drasah 26/11): every strike records ITS
+        # kind as DATA — the volière's faucon will land as "faucon" the
+        # day its seam exists, without touching this path again.
+        sources = dict(pickban.get(f"{side}_sabotage_sources") or {})
+        sources[civ_key] = "techno"
+        pickban[f"{side}_sabotage_sources"] = sources
         attack.pickban = pickban
         await self._store.upsert_attack(attack.to_mongo())
         logger.info(

@@ -323,6 +323,8 @@ DEFAULTS: dict[str, dict[str, str]] = {
         "draft_sheet": "📜 Draft — {map}",
         "draft_mode_player": "Choix du joueur",
         "draft_mode_random": "Choix aléatoire",
+        "draft_source_techno": "🗡️ Sabotage",
+        "draft_source_faucon": "🦅 Faucon",
         "draft_sheet_help": (
             "Ordre des choix des joueurs durant la draft — ordre réel"
             " une fois la phase de sabotage terminée (aléatoire et"
@@ -1167,6 +1169,8 @@ DEFAULTS: dict[str, dict[str, str]] = {
         "draft_sheet": "📜 Draft — {map}",
         "draft_mode_player": "Player's choice",
         "draft_mode_random": "Random pick",
+        "draft_source_techno": "🗡️ Sabotage",
+        "draft_source_faucon": "🦅 Falcon",
         "draft_sheet_help": (
             "The players' pick order during the draft — the real order"
             " once the sabotage phase is over (random, ranking secret"
