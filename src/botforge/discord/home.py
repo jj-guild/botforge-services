@@ -780,38 +780,71 @@ async def _entity_post_url(
     return await _thread_named(channel, forms)
 
 
-async def _thread_named(channel: Any, forms: list[str]) -> str:
-    """Find the forum thread whose title matches one of the forms."""
-    # the client's channel.threads cache only carries the threads it
-    # happened to load (owner 2026-11-23: Magyars linked, Italiens did
-    # not - the cache had one and not the other); the guild's ACTIVE
-    # thread list is the complete scan
-    threads: list[Any] = list(getattr(channel, "threads", []) or [])
+#: the forum scan answers from a TTL SNAPSHOT (owner 2026-11-25:
+#: "15 secondes... probleme de design evidente") - the civ/map link
+#: resolution walked the guild's active threads AND both archives
+#: PER ENTITY (three REST calls each, ~40 calls for a ten-card
+#: batch). One snapshot per forum every five minutes, the miss too.
+_THREAD_SCAN_TTL_S = 300.0
+_THREAD_SNAPSHOT: dict[tuple[str, str], tuple[float, dict[str, str]]] = {}
+
+
+async def _forum_snapshot(channel: Any) -> dict[str, str]:
+    """Scan one forum COMPLETELY: every thread title -> its jump url.
+
+    The client's channel.threads cache only carries the threads it
+    happened to load (owner 2026-11-23: Magyars linked, Italiens did
+    not - the cache had one and not the other); the guild's ACTIVE
+    thread list plus BOTH archives is the complete walk - ONE scan
+    per forum, the TTL snapshot below answers the rest.
+    """
+    snapshot: dict[str, str] = {}
+    for thread in getattr(channel, "threads", []) or []:
+        name = str(getattr(thread, "name", "")).strip().casefold()
+        if name:
+            snapshot[name] = str(getattr(thread, "jump_url", "") or "")
     try:
         parent_id = getattr(channel, "id", None)
         active = await channel.guild.fetch_active_threads()
         for thread in getattr(active, "threads", []) or []:
-            if getattr(thread, "parent_id", None) == parent_id and all(
-                str(getattr(t, "id", "")) != str(getattr(thread, "id", "")) for t in threads
-            ):
-                threads.append(thread)
+            if getattr(thread, "parent_id", None) == parent_id:
+                name = str(getattr(thread, "name", "")).strip().casefold()
+                snapshot.setdefault(name, str(getattr(thread, "jump_url", "") or ""))
     except Exception:
         logger.debug("the active thread walk failed", exc_info=True)
     for private in (False, True):
         try:
             async for thread in channel.archived_threads(limit=100, private=private):
-                threads.append(thread)
+                name = str(getattr(thread, "name", "")).strip().casefold()
+                if name:
+                    snapshot.setdefault(name, str(getattr(thread, "jump_url", "") or ""))
         except Exception:
             logger.debug("the archived thread walk failed", exc_info=True)
-        for thread in threads:
-            thread_name = str(getattr(thread, "name", "")).strip().casefold()
-            for form in forms:
-                if thread_name == form or thread_name.startswith(
-                    f"{form} "
-                ) or thread_name.startswith(f"{form} \u2014"):
-                    # thread.jump_url is Discord's OWN canonical link
-                    return str(getattr(thread, "jump_url", "") or "")
-    logger.debug("the entity post was not found (forms: %s)", forms)
+    return snapshot
+
+
+async def _thread_named(channel: Any, forms: list[str]) -> str:
+    """Find the forum thread whose title matches one of the forms."""
+    from time import monotonic
+
+    key = (
+        str(getattr(getattr(channel, "guild", None), "id", "") or ""),
+        str(getattr(channel, "id", "") or ""),
+    )
+    now = monotonic()
+    hit = _THREAD_SNAPSHOT.get(key)
+    if hit is None or now - hit[0] > _THREAD_SCAN_TTL_S:
+        _THREAD_SNAPSHOT[key] = (now, await _forum_snapshot(channel))
+        hit = _THREAD_SNAPSHOT[key]
+    snapshot = hit[1]
+    for raw in forms:
+        form = str(raw).strip().casefold()
+        # the exact title, then the "Name - whatever" prefixes
+        if form in snapshot:
+            return snapshot[form]
+        for name, url in snapshot.items():
+            if name.startswith(f"{form} ") or name.startswith(f"{form} -"):
+                return url
     return ""
 
 
@@ -2205,12 +2238,14 @@ def _entry_players_of(entry: Any) -> list[dict[str, Any]]:
 
 
 async def _sync_for_listing(interaction: discord.Interaction, me_ids: set[str]) -> None:
-    """Sync the viewed profiles' history on demand (the click's truth).
+    """Warm the viewed profiles' history - NEVER on the click's clock.
 
-    The daily loop is way too cold for a game that just ended (owner
-    2026-11-23: his finished match never showed in the five); the
-    listing owns its freshness: an upstream pass for the VIEWED
-    accounts, best-effort - a failure renders what the store has.
+    The listing answers in UNDER A SECOND (owner 2026-11-25: "15
+    secondes... au-del\u00e0 d'une seconde c'est d\u00e9j\u00e0 trop"):
+    the click reads the STORE, the sync rides the BACKGROUND - the
+    store stays fresh through the match-end hook (the live feed's
+    result correlation syncs the playing accounts the moment a game
+    ends) and the periodic loops; the next click sees every match.
     """
     from botforge.discord.stats_views import stats_client
 
@@ -2218,9 +2253,9 @@ async def _sync_for_listing(interaction: discord.Interaction, me_ids: set[str]) 
     if client is None or not me_ids:
         return
     try:
-        await client.sync_stats(sorted(me_ids), wait=True)
+        await client.sync_stats(sorted(me_ids), wait=False)
     except Exception:
-        logger.debug("the on-demand listing sync failed", exc_info=True)
+        logger.debug("the background listing sync failed", exc_info=True)
 
 
 async def _send_match_panels(

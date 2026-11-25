@@ -215,7 +215,18 @@ class LibrematchStore:
         index walks it in one seek.
         """
         try:
+            # the matches: the ids and the dates, one index per READ
             await self._matches().create_index([("profile_ids", 1), ("finished_at", -1)])
+            await self._matches().create_index([("match_id", 1)])
+            await self._matches().create_index([("finished_at", -1)])
+            await self._matches().create_index([("started_at", -1)])
+            await self._matches().create_index([("leaderboard_id", 1), ("finished_at", -1)])
+            # the direct ENTITY access (owner 2026-11-25): a civ or a
+            # map reads every match it ever rode - multikey array
+            await self._matches().create_index("map_name")
+            await self._matches().create_index("players.civ")
+            # the bindings: the user's profiles resolve directly
+            await self._bindings().create_index([("user_id", 1)])
             logger.info("libre:match indexes ensured")
         except Exception:
             logger.warning("libre:match index creation failed \u2014 best-effort", exc_info=True)

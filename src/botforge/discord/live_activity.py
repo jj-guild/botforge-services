@@ -916,6 +916,17 @@ async def _fetch_result_then_update(
     await _apply_result_to_card(bot, guild_id, channel_id, match_ref, result)
     for pid in profile_ids:
         _forget_player_ref(pid)
+    # the store warms the MOMENT the verdict lands (owner 2026-11-25):
+    # the listing answers from the store in under a second - its sync
+    # rides the background, this hook is what keeps it fresh
+    try:
+        from botforge.discord.stats_views import stats_client
+
+        stats = stats_client()
+        if stats is not None:
+            await stats.sync_stats(profile_ids, wait=False)
+    except Exception:
+        logger.debug("the post-match store sync failed", exc_info=True)
 
 
 async def _is_guild_member(bot: discord.Client, guild: discord.Guild, user_id: str) -> bool:

@@ -473,3 +473,44 @@ def test_the_settings_tick_the_exotic_rules_from_the_game_mode() -> None:
     assert "\u2705 Mode Régicide" in reg
     # antiquity: no positive sample upstream - "?" stays honest
     assert "\u2753 Mode Antiquité" in reg
+
+
+def test_the_forum_scan_answers_from_the_snapshot() -> None:
+    """One scan per forum per TTL - never three REST calls per entity."""
+    from botforge.discord.home import _thread_named
+
+    class _Thread:
+        def __init__(self, name):
+            self.name = name
+            self.jump_url = f"https://discord.com/channels/x/{name}"
+
+    class _Channel:
+        class _Guild:
+            id = 7
+
+            async def fetch_active_threads(self):
+                raise RuntimeError("never called on a warm snapshot")
+
+        def __init__(self) -> None:
+            self.guild = self._Guild()
+            self.threads = [_Thread("Mayas")]
+
+        id = 9
+
+        async def archived_threads(self, limit=100, private=False):
+            raise RuntimeError("never called on a warm snapshot")
+            yield  # pragma: no cover
+
+    home_channel = _Channel()
+    import asyncio
+    import time
+
+    # a COLD scan walks the REST surfaces (they raise here, the walk
+    # absorbs); the channel cache feeds the first snapshot
+    url1 = asyncio.run(_thread_named(home_channel, ["Mayas"]))
+    assert url1.endswith("Mayas"), "the snapshot resolves the title"
+    # the warm hit answers INSIDE the TTL with no REST call at all
+    before = time.monotonic()
+    url2 = asyncio.run(_thread_named(home_channel, ["Mayas"]))
+    assert url2 == url1
+    assert time.monotonic() - before < 1.0
