@@ -185,7 +185,9 @@ def test_the_live_card_serves_the_ai_seats_of_the_other_provider() -> None:
         view.add_item(block)
     text = str(view.to_components())
     assert any(bool((p or {}).get("ai")) for p in card["players"]), "the computers ride the card"
-    assert "Computer" in text, "the computer's seat renders"
+    # the computer rides its own label ("IA" + the level when the
+    # settings answer one)
+    assert "IA" in text, "the computer's seat renders"
 
 
 def test_the_we_slotinfo_decodes_the_computer_seats() -> None:
@@ -236,3 +238,22 @@ def test_the_ai_verdict_names_the_computer_teams_winners() -> None:
     # an invalid match never crowns the computers
     sealed = {**card, "invalid": True}
     assert _ai_decided(sealed) is False
+
+
+def test_the_computer_wears_its_level_and_the_grammar_scopes() -> None:
+    """The 1v1v1 card: 'IA (Extrême)' + the scoped names grammar."""
+    from botforge.discord.home import _ai_level_label, _seat_name
+
+    # calibrated on the owner's match 523338329 (his Extreme lobby):
+    # the blob's key 61 rides the live enum shifted by one
+    blob_card = {"options_json": '{"61": "2"}'}
+    live_card = {"live_settings_json": '{"ai_difficulty": 3}'}
+    assert _ai_level_label(blob_card) == "Extrême"
+    assert _ai_level_label(live_card) == "Extrême"
+    assert _ai_level_label({}) == ""  # no settings, no level - "IA" alone
+    # the scoped grammar: my team bold, the others italic, the losers struck
+    assert _seat_name("Jean", "u1", {"u1"}, True, False) == "**Jean**"
+    assert _seat_name("Foe", "u2", {"u1"}, False, True) == "~~*Foe*~~"
+    assert _seat_name("Mate", "u3", {"u1"}, True, True) == "~~**Mate**~~"
+    # unscoped: plain seats (the medals tell the outcome)
+    assert _seat_name("Jean", "u1", set(), False, False) == "Jean"

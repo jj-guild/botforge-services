@@ -120,6 +120,7 @@ fr:
       matches_setting_sudden_death: "Mort subite"
       matches_setting_regicide: "Mode Régicide"
       matches_setting_antiquity: "Mode Antiquité"
+      matches_ai: IA
       matches_setting_handicap: "Handicap"
       matches_setting_full_tech: "Arbre technologique complet"
       matches_setting_record: "Partie enregistrée"

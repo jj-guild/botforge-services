@@ -1506,12 +1506,58 @@ async def _match_panels_ctx_for(
     }
 
 
+def _seat_name(
+    alias_link: str, pid: str, me_ids: set[str], team_mine: bool, team_lost: bool
+) -> str:
+    """Style one seat's name per the scoped grammar (owner 2026-11-25).
+
+    The scoped player AND his team read BOLD, every other seat
+    ITALIC, the losing teams' seats STRIKE through; the unscoped
+    card keeps its per-team medals and plain seats.
+    """
+    if not me_ids:
+        return alias_link
+    if pid in me_ids or team_mine:
+        name = f"**{alias_link}**"
+    else:
+        name = f"*{alias_link}*"
+    return f"~~{name}~~" if team_lost else name
+
+
+def _ai_level_label(card: dict[str, Any]) -> str:
+    """Return the computer seats' difficulty level (owner 2026-11-25).
+
+    TWO payloads, ONE scale (calibrated on the owner's match
+    523338329 - his Extreme lobby): the live WS answers
+    ``ai_difficulty`` verbatim, the finished blob's key 61 rides the
+    SAME enum shifted by one (blob '2' == live '3' == Extreme).
+    """
+    import json as _json
+
+    value: int | None = None
+    try:
+        live = _json.loads(str(card.get("live_settings_json") or "{}"))
+        value = int(live.get("ai_difficulty"))
+    except (ValueError, TypeError, AttributeError):
+        value = None
+    if value is None:
+        try:
+            blob = _json.loads(str(card.get("options_json") or "{}"))
+            value = int(blob.get("61")) + 1
+        except (ValueError, TypeError, AttributeError, KeyError):
+            return ""
+    table = (_LIVE_SETTINGS_KEYS.get("ai_difficulty") or (None, {}))[1] or {}
+    return str(table.get(str(value), ""))
+
+
 def _seat_text(
     player: dict[str, Any],
     card: dict[str, Any],
     ctx: dict[str, Any],
     labels: dict[str, str],
     me_ids: set[str] | None = None,
+    team_mine: bool = False,
+    team_lost: bool = False,
 ) -> tuple[str, str]:
     me_ids = me_ids or set()
     """Render ONE seat: (text, civ image url).
@@ -1551,7 +1597,12 @@ def _seat_text(
     # viewed player's alias carries the bold (owner 2026-11-22)
     insights_profile = f"https://www.aoe2insights.com/user/relic/{pid}/" if pid else ""
     alias_link = f"[{alias}]({insights_profile})" if insights_profile else alias
-    name = f"**{alias_link}**" if pid in me_ids else alias_link
+    # a COMPUTER wears its level (owner 2026-11-25: "IA (Extrême)")
+    if bool(player.get("ai")):
+        level = _ai_level_label(card)
+        base = str(labels.get("ai") or "IA")
+        alias_link = f"{base} ({level})" if level else base
+    name = _seat_name(alias_link, pid, me_ids, team_mine, team_lost)
     slot = int(player.get("slot", 0) or 0)
     # the position reads P1-8, backticked for a FIXED width; the
     # ladder lines underneath indent 4 spaces so the columns align
@@ -1740,6 +1791,9 @@ def _card_team_blocks(
     for index, (_team, seats) in enumerate(teams):
         if index:
             blocks.append(discord.ui.Separator())
+        # the scoped player's team (the seat grammar rides it,
+        # whatever the team count)
+        mine = any(str((p or {}).get("profile_id", "")) in me_ids for p in seats)
         if len(teams) > 1:
             won = _team_won(seats)
             medal = ""
@@ -1748,14 +1802,21 @@ def _card_team_blocks(
             # the SCOPE carries no per-team medal: the scoped player's
             # team reads BOLD, every other team reads italics, the
             # losers strike through (owner 2026-11-23)
-            mine = any(str((p or {}).get("profile_id", "")) in me_ids for p in seats)
             base = f"{labels.get('team', 'Team')} {index + 1}"
             title = f"**{base}**" if mine else f"*{base}*"
             if scoped and verdict and finished and not won:
                 title = f"~~{title}~~"
             blocks.append(discord.ui.TextDisplay(f"{medal}{title}"))
         for player in seats:
-            text, civ_image = _seat_text(player, card, ctx, labels, me_ids)
+            text, civ_image = _seat_text(
+                player,
+                card,
+                ctx,
+                labels,
+                me_ids,
+                team_mine=mine,
+                team_lost=scoped and verdict and finished and not won,
+            )
             blocks.append(_seat_component(text, civ_image))
     return blocks
 
@@ -2197,6 +2258,8 @@ async def _match_panel_labels_guild(guild_id: str, bot: Any) -> dict[str, Any]:
             "source": await _r("profile.matches_source"),
             "source_live": await _r("profile.matches_source_live"),
             "invalid": await _r("profile.matches_invalid"),
+            # the COMPUTER's seat name (owner 2026-11-25): "IA (Extrême)"
+            "ai": await _r("profile.matches_ai"),
             "invalid_no_result": await _r("profile.matches_invalid_no_result"),
             "invalid_short": await _r("profile.matches_invalid_short"),
             "colours": {
