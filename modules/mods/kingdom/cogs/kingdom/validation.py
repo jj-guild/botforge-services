@@ -348,6 +348,9 @@ class ValidationDecisionButton(
             else:
                 kingdom = await stack.kingdoms.refuse_kingdom(self.kingdom_id)
                 note = str(strings["refused_note"]).format(name=kingdom.name)
+            from .admin_logs import log_admin_action_on_interaction
+
+            await log_admin_action_on_interaction(interaction, "decision", note)
         except Exception as exc:  # noqa: BLE001 — the dashboard reports, never raises
             logger.warning("kingdom: validation decision failed (%s)", self.kingdom_id, exc_info=True)
             note = str(shared["console_error"]).format(str(exc)[:150])
@@ -735,6 +738,9 @@ class ValidationRealmEntryButton(
             note = await _refuse_season_entry(service, realm, strings)
         else:
             note = await _accept_season_entry(interaction, stack, service, realm, strings, locale)
+        from .admin_logs import log_admin_action_on_interaction
+
+        await log_admin_action_on_interaction(interaction, "realm", note)
         try:
             await interaction.followup.edit_message(
                 interaction.message.id,
@@ -1000,6 +1006,9 @@ class _EjectReasonModal(discord.ui.Modal):
         note = await _eject_season_entry(
             interaction, realm, str(self.reason.value or "").strip()[:400], strings, self._locale
         )
+        from .admin_logs import log_admin_action_on_interaction
+
+        await log_admin_action_on_interaction(interaction, "realm", note)
         await open_unique_ephemeral(interaction, note)
 
 
@@ -1044,6 +1053,9 @@ def _eject_window(
         note = await _eject_season_entry(
             target, realm_now, str(strings[f"eject_reason_{choice}"]), strings, locale
         )
+        from .admin_logs import log_admin_action_on_interaction
+
+        await log_admin_action_on_interaction(target, "realm", note)
         await open_unique_ephemeral_safe(target, note)
 
     for choice, label in choices:

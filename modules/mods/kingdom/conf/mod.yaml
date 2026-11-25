@@ -211,19 +211,16 @@ channels:
   # console-removal-v1 (Drasah 25/10): the console channel block is
   # GONE — the listener never booted in prod; the live flows live on
   # the ⚙️ Paramètres panel and the salon is swept as a legacy slug.
-  - key: requests
-    display_name: 📬 demandes
-    description: Edit/leave requests (admin only)
-    group: admin
-    position: 33
-    access:
-      everyone_view: false
-      view: [Kingdom Admin]
+  # admin-logs-v2 (Drasah 25/11): the 📬 demandes block is GONE — T4a
+  # merges the requests INTO 📜 logs; the slug joins the undeclared
+  # legacy sweep and the ONLY live branch (the notices' season entry
+  # request) now lands in admin_log.
   # admin-logs-v1 (Drasah 30/10): the destructive admin actions land in
-  # 📜 journal-admin — a timestamped trail (ejection, reking, validation).
+  # 📜 logs — a timestamped trail (ejection, reking, validation);
+  # admin-logs-v2 (Drasah 25/11): the entry requests land here too.
   - key: admin_log
-    display_name: 📜 journal-admin
-    description: Timestamped admin actions log (admin only)
+    display_name: 📜 logs
+    description: Timestamped admin log, requests included (admin only)
     group: admin
     position: 34
     admin_only: true

@@ -93,6 +93,9 @@ def _confirm_view(strings: dict[str, str], action_key: str) -> discord.ui.Layout
             else:
                 await stack.kingdoms.reset()
                 note = str(strings["console_reset_done"])
+            from .admin_logs import log_admin_action_on_interaction
+
+            await log_admin_action_on_interaction(target, "console", note)
         except Exception as exc:  # noqa: BLE001 — the console reports, never raises
             logger.warning("kingdom: console %s failed", action_key, exc_info=True)
             from .common import service_failure_note

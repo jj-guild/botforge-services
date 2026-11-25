@@ -3,7 +3,7 @@ Drasah 21/11).
 
 The Roi clicks « S'inscrire à la saison » and the staff learns NOTHING:
 the Admission drawer counts the pendings, but a counter never PREVIEWS
-itself. The designer's fix: a short notice lands in 📬 demandes with a
+itself. The designer's fix: a short notice lands in 📜 logs with a
 Kingdom Admin ping attached.
 
 The template rule (#396 annonce-ready): a notice is ONE kind key +
@@ -30,7 +30,7 @@ SCOPE = "mod/kingdom"
 # One notice kind = one row of data. channel: the declared channel key
 # (conf/mod.yaml) ; role: the declared role key to ping (None = no ping).
 NOTICES: dict[str, dict[str, str | None]] = {
-    "season_entry_request": {"channel": "requests", "role": "kingdom_admin"},
+    "season_entry_request": {"channel": "admin_log", "role": "kingdom_admin"},
 }
 
 # the catalog section that renders every notice's text (fr/en, .format params)

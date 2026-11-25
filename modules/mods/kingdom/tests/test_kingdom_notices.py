@@ -6,7 +6,7 @@ never previews itself. The fix rides ONE parametrable notice seam:
 
 - every notice is DATA (kind table + conf/locales fr/en), never a
   hand-rolled send — annonce-ready, the #396 seam can absorb the table;
-- the notice lands in the DECLARED salon (requests = 📬 demandes) with
+- the notice lands in the DECLARED salon (admin_log = 📜 logs) with
   the declared admin role pinged, roles-only mentions, silent;
 - the notice is a COURTESY: a missing salon, an unknown role or a
   refused send can never break the Roi's own flow;
@@ -53,7 +53,7 @@ def _patched_stored_channel(monkeypatch, channel_id: str) -> None:
     import botforge.discord.ui.panels_provisioning as provisioning
 
     async def fake_stored(gid: str, scope: str, key: str) -> str:
-        assert (scope, key) == ("mod/kingdom", "requests"), "the notice's salon is data"
+        assert (scope, key) == ("mod/kingdom", "admin_log"), "the notice's salon is data"
         return channel_id
 
     monkeypatch.setattr(provisioning, "stored_channel_id", fake_stored)

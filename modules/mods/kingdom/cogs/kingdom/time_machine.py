@@ -297,6 +297,7 @@ async def _run(interaction: discord.Interaction, action: str) -> None:
         await interaction.followup.send(strings["no_service"], ephemeral=True)
         return
     note = strings["error"]
+    failed = False
     try:
         if action == "refresh":
             from botforge.discord.scope_pins import ensure_mod_pins
@@ -362,9 +363,17 @@ async def _run(interaction: discord.Interaction, action: str) -> None:
                     note = str(strings["lords_closed"])
     except ValueError as exc:
         note = str(strings["bad_input"]).format(str(exc)[:150])
+        failed = True
     except Exception as exc:  # noqa: BLE001 — the machine reports, never raises
         logger.warning("kingdom: machine action %s failed", action, exc_info=True)
         note = service_failure_note(strings, "error", exc)
+        failed = True
+    # logs-admin-v1 (T4a): every machine action SANS refresh (pure
+    # navigation) lands in 📜 logs — the mutation trail, failures excluded.
+    if action != "refresh" and not failed:
+        from .admin_logs import log_admin_action_on_interaction
+
+        await log_admin_action_on_interaction(interaction, "time", note)
     from .settings_panel import _safe_followup
 
     await _safe_followup(interaction, note)
@@ -689,6 +698,9 @@ class _MachineJumpModal(discord.ui.Modal):
             offset = int(getattr(season, "clock_offset", 0) or 0)
             await stack.kingdoms.set_clock_offset(offset + seconds)
             note = str(strings["freejump_done"]).format(seconds // 86400)
+            from .admin_logs import log_admin_action_on_interaction
+
+            await log_admin_action_on_interaction(interaction, "time", note)
         except Exception as exc:  # noqa: BLE001 — the machine reports, never raises
             logger.warning("kingdom: free jump failed", exc_info=True)
             from .common import service_failure_note

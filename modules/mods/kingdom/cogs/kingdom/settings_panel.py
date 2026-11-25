@@ -691,6 +691,9 @@ async def _start_season(interaction: discord.Interaction, strings: dict[str, str
         logger.warning("kingdom: start_season failed", exc_info=True)
         note = service_failure_note(strings, "settings_start_season_failed", exc)
     else:
+        from .admin_logs import log_admin_action_on_interaction
+
+        await log_admin_action_on_interaction(interaction, "season", note)
         # console-etats-regie-v1 (Drasah 21/11) : « de base, oui, le sas
         # se ferme » — le départ de la saison ferme le sas LUI-MÊME (le
         # casting part avec les royaumes validés). Les retardataires
@@ -755,6 +758,9 @@ async def _false_start(interaction: discord.Interaction, strings: dict[str, str]
         logger.warning("kingdom: false start failed", exc_info=True)
         note = service_failure_note(strings, "settings_false_start_failed", exc)
     else:
+        from .admin_logs import log_admin_action_on_interaction
+
+        await log_admin_action_on_interaction(interaction, "season", note)
         # le sas se RÉ-OUVRE au faux départ (l'état d'origine)
         from .regie import set_switch
 
@@ -1132,6 +1138,9 @@ async def _start_beta(
         logger.warning("kingdom: the beta departure start failed", exc_info=True)
         note = service_failure_note(strings, "settings_start_season_failed", exc)
     else:
+        from .admin_logs import log_admin_action_on_interaction
+
+        await log_admin_action_on_interaction(interaction, "season", note)
         # depart-fourche-v1: the beta departure closes the sas and
         # feeds the realm content — the SAME engine as the classic one
         # (territory-reveal-v1: draw + realms + Gaïa, one seam)

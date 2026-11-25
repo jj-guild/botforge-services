@@ -87,8 +87,8 @@ def test_the_declared_groups_order_is_explicit_positions() -> None:
     # l'ordre interne d'admin est EXPLICITE (jamais un accident alphabétique)
     assert (
         positions["time_machine"] < positions["distributor"] < positions["console"]
-        < positions["requests"] < positions["admin_log"]
-    )
+        < positions["admin_log"]
+    ), "admin-logs-v2: the requests salon is merged into logs"
 
 
 # ---------------------------------------------------------------------------

@@ -288,6 +288,17 @@ class DecisionReasonModal(discord.ui.Modal):
             await announce_decision_safe(interaction.client, stack, decision, locale_of(interaction))
         except Exception:  # the announce replays on the tick
             logger.warning("kingdom: the decision announce failed", exc_info=True)
+        # logs-admin-v1 (T4a): the trail — the LEDGER's own summary,
+        # the same text the kingdoms' salons announce.
+        from .admin_logs import log_admin_action_safe
+
+        await log_admin_action_safe(
+            interaction.client,
+            str(interaction.guild_id or ""),
+            "decision",
+            str(decision.get("summary") or ""),
+            str(interaction.user.id),
+        )
         # annulation-joueur-v2: the decided meeting's habitat closes
         # WITH the decision — voice + role + salon, flags idempotent.
         await _close_decided_habitat_safe(interaction.client, stack, attack)
