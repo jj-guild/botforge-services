@@ -145,16 +145,14 @@ def _seen_board_updates(documents: list[dict[str, Any]]) -> dict[str, dict[str, 
     for doc in documents:
         if str(doc.get("lobby_title") or "").strip().upper() != "AUTOMATCH":
             continue
-        teams: dict[int, int] = {}
-        for player in doc.get("players") or []:
-            team = int((player or {}).get("team", 0) or 0)
-            teams[team] = teams.get(team, 0) + 1
-        # the SAME keys as the authority (GetPersonalStat boards are
-        # the WE leaderboard ids: 3 = RM 1v1, 4 = RM team) — a
-        # differently-keyed copy of the same board would carry the
-        # same display name and the panels would read whichever the
-        # dict order kept.
-        board = "4" if any(count > 1 for count in teams.values()) else "3"
+        # the match's OWN leaderboard read - the SAME keys as the
+        # authority (GetPersonalStat boards are the WE leaderboard
+        # ids: 3 = RM 1v1, 4 = RM team). The team-size HEURISTIC
+        # folded an Empire Wars automatch (boards 13/14) into the RM
+        # TG line and the panels read the EW elo (owner 2026-11-25)
+        board = str(doc.get("leaderboard_id") or "")
+        if board not in ("3", "4"):
+            continue  # an EW/dm automatch never feeds the RM ladders
         ts = int(doc.get("finished_at") or doc.get("started_at") or 0)
         for player in doc.get("players") or []:
             pid = str((player or {}).get("profile_id", ""))

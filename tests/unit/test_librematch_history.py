@@ -903,7 +903,7 @@ async def test_the_encountered_seats_become_known_players() -> None:
     adapter.history["123"] = [
         _match(
             "m11",
-            "",
+            "4",  # the RM TEAM board (owner 2026-11-25): an automatch's own id decides the ladder
             100,
             200,
             [

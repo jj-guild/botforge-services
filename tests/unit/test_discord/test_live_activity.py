@@ -244,16 +244,34 @@ def test_the_computer_wears_its_level_and_the_grammar_scopes() -> None:
     """The 1v1v1 card: 'IA (Extrême)' + the scoped names grammar."""
     from botforge.discord.home import _ai_level_label, _seat_name
 
-    # calibrated on the owner's match 523338329 (his Extreme lobby):
-    # the blob's key 61 rides the live enum shifted by one
+    # each payload reads its OWN settings table (owner 2026-11-25):
+    # the finished blob's key 61 maps through the settings enums, the
+    # live WS through the lobby's - the seat never disagrees with the
+    # game settings popup that renders beside it
     blob_card = {"options_json": '{"61": "2"}'}
     live_card = {"live_settings_json": '{"ai_difficulty": 3}'}
-    assert _ai_level_label(blob_card) == "Extrême"
+    assert _ai_level_label(blob_card) == "Modérée"
     assert _ai_level_label(live_card) == "Extrême"
     assert _ai_level_label({}) == ""  # no settings, no level - "IA" alone
-    # the scoped grammar: my team bold, the others italic, the losers struck
-    assert _seat_name("Jean", "u1", {"u1"}, True, False) == "**Jean**"
-    assert _seat_name("Foe", "u2", {"u1"}, False, True) == "~~*Foe*~~"
-    assert _seat_name("Mate", "u3", {"u1"}, True, True) == "~~**Mate**~~"
+    # the names: bold when scoped - the STRIKE stays on the team
+    # titles (owner 2026-11-25), every name whole
+    assert _seat_name("Jean", "u1", {"u1"}, True, True) == "**Jean**"
+    assert _seat_name("Foe", "u2", {"u1"}, False, True) == "Foe"
     # unscoped: plain seats (the medals tell the outcome)
     assert _seat_name("Jean", "u1", set(), False, False) == "Jean"
+
+
+def test_the_format_reads_the_exact_sizes_and_the_ffa_stands_alone() -> None:
+    """The badge reads 1v2v3v1; the melee shows no team and one crown."""
+    from botforge.discord.home import _card_format, _is_ffa
+
+    assert _card_format({"players": []}) == ""
+    two = {"players": [{"team": 1}, {"team": 1}, {"team": 2}, {"team": 2}]}
+    assert _card_format(two) == "2v2", "the exact sizes read"
+    mixed = {
+        "players": [{"team": 1}, {"team": 2}, {"team": 2}, {"team": 3}, {"team": 3}, {"team": 3}, {"team": 4}]
+    }
+    assert _card_format(mixed) == "1v2v3v1", "the format lists team by team"
+    melee = {"players": [{"team": 1}, {"team": 2}, {"team": 3}]}
+    assert _card_format(melee) == "FFA" and _is_ffa(melee), "the all-alone melee reads FFA"
+    assert not _is_ffa(two) and not _is_ffa({"players": [{"team": 1}, {"team": 2}]})

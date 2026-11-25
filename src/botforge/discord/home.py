@@ -1340,27 +1340,33 @@ def _settings_view(card: dict[str, Any], labels: dict[str, Any]) -> discord.ui.L
 
 
 def _card_format(card: dict[str, Any]) -> str:
-    """Return the match's format tag (1v1 / 2v2 / 4v4 / custom...)."""
-    teams = _seat_teams(card)
-    if not teams:
+    """Return the match's format tag - the teams' EXACT sizes (owner 2026-11-25).
+
+    ``1v2v3v1`` reads team by team; the all-alone melee (every team
+    a single player, three teams or more) reads FFA.
+    """
+    sizes = [len(seats) for _, seats in _seat_teams(card)]
+    if not sizes:
         return ""
-    sizes = [len(seats) for _, seats in teams]
-    if len(teams) == 1:
-        return "custom" if sizes[0] > 2 else ("1v1" if sizes[0] == 1 else "custom")
-    if len(teams) == 2 and sizes[0] == sizes[1]:
-        return f"{sizes[0]}v{sizes[1]}" if sizes[0] > 1 else "1v1"
-    return "FFA" if len(teams) > 2 else "custom"
+    if len(sizes) >= 3 and all(size == 1 for size in sizes):
+        return "FFA"
+    return "v".join(str(size) for size in sizes)
+
+
+def _is_ffa(card: dict[str, Any]) -> bool:
+    """Whether the match is a free-for-all (owner 2026-11-25).
+
+    An FFA shows NO team - the seats read as one ladder, a single
+    winner carries the crown.
+    """
+    sizes = [len(seats) for _, seats in _seat_teams(card)]
+    return len(sizes) >= 3 and all(size == 1 for size in sizes)
 
 
 def _is_ranked(card: dict[str, Any]) -> bool:
     """Return True when the match is an AUTOMATCH (the ranked label)."""
     lobby = str(card.get("lobby_title") or card.get("description") or "").strip().upper()
     return lobby == "AUTOMATCH" or (not lobby and card.get("status") == "finished")
-
-
-def _card_kind(card: dict[str, Any]) -> str:
-    """Return Ranked / Custom: a NON-automatch lobby title says custom."""
-    return "ranked" if _is_ranked(card) else "custom"
 
 
 
@@ -1511,42 +1517,41 @@ def _seat_name(
 ) -> str:
     """Style one seat's name per the scoped grammar (owner 2026-11-25).
 
-    The scoped player AND his team read BOLD, every other seat
-    ITALIC, the losing teams' seats STRIKE through; the unscoped
-    card keeps its per-team medals and plain seats.
+    The scoped player reads BOLD (owner 2026-11-25): the strike
+    belongs to the TEAM TITLES only, every name stays whole.
     """
+    del team_mine, team_lost  # the titles carry the verdict
     if not me_ids:
         return alias_link
-    if pid in me_ids or team_mine:
-        name = f"**{alias_link}**"
-    else:
-        name = f"*{alias_link}*"
-    return f"~~{name}~~" if team_lost else name
+    return f"**{alias_link}**" if pid in me_ids else alias_link
 
 
 def _ai_level_label(card: dict[str, Any]) -> str:
     """Return the computer seats' difficulty level (owner 2026-11-25).
 
-    TWO payloads, ONE scale (calibrated on the owner's match
-    523338329 - his Extreme lobby): the live WS answers
-    ``ai_difficulty`` verbatim, the finished blob's key 61 rides the
-    SAME enum shifted by one (blob '2' == live '3' == Extreme).
+    The seat reads the SAME table the settings popup renders (owner
+    2026-11-25: the seat said Extrême while the game settings
+    answered Modérée): the finished blob's key 61 maps through the
+    settings enums, the live WS's ``ai_difficulty`` through the live
+    lobby's own - each payload speaks its own scale.
     """
     import json as _json
 
     value: int | None = None
+    table: dict[str, str] = {}
     try:
         live = _json.loads(str(card.get("live_settings_json") or "{}"))
         value = int(live.get("ai_difficulty"))
+        table = (_LIVE_SETTINGS_KEYS.get("ai_difficulty") or (None, {}))[1] or {}
     except (ValueError, TypeError, AttributeError):
         value = None
     if value is None:
         try:
             blob = _json.loads(str(card.get("options_json") or "{}"))
-            value = int(blob.get("61")) + 1
+            value = int(blob.get("61"))
+            table = (_SETTINGS_RAW_KEYS.get("61") or (None, {}))[1] or {}
         except (ValueError, TypeError, AttributeError, KeyError):
             return ""
-    table = (_LIVE_SETTINGS_KEYS.get("ai_difficulty") or (None, {}))[1] or {}
     return str(table.get(str(value), ""))
 
 
@@ -1760,6 +1765,36 @@ def _ai_decided(card: dict[str, Any]) -> bool:
     return any(bool((p or {}).get("ai")) for p in card.get("players") or [])
 
 
+def _card_ffa_blocks(
+    card: dict[str, Any],
+    teams: list[tuple[int, list[dict[str, Any]]]],
+    ctx: dict[str, Any],
+    labels: dict[str, Any],
+    me_ids: set[str],
+    winners: set[str],
+    ai_decided: bool,
+) -> list[Any]:
+    """Render the free-for-all ladder: no team, a SINGLE crowned winner.
+
+    A melee reads as one list of seats (owner 2026-11-25) - no team
+    titles, no per-team medals; the winner (human victor, or the
+    computers when they decided it) carries the crown on his seat in
+    the unscoped view, the header tells the scope's outcome.
+    """
+    blocks: list[Any] = []
+    finished = card.get("status") == "finished" and not card.get("invalid")
+    for _team, seats in teams:
+        for player in seats:
+            pid = str(player.get("profile_id", ""))
+            won = (pid in winners) if winners else ai_decided and bool(player.get("ai"))
+            text, civ_image = _seat_text(player, card, ctx, labels, me_ids)
+            if me_ids:
+                blocks.append(_seat_component(text, civ_image))
+                continue
+            blocks.append(_seat_component(("\U0001f3c6 " if won and finished else "") + text, civ_image))
+    return blocks
+
+
 def _card_team_blocks(
     card: dict[str, Any],
     teams: list[tuple[int, list[dict[str, Any]]]],
@@ -1787,6 +1822,9 @@ def _card_team_blocks(
             return True
         return ai_decided and any(bool((p or {}).get("ai")) for p in seats)
 
+    # an FFA reads ONE ladder (owner 2026-11-25)
+    if _is_ffa(card):
+        return _card_ffa_blocks(card, teams, ctx, labels, me_ids, winners, ai_decided)
     blocks: list[Any] = []
     for index, (_team, seats) in enumerate(teams):
         if index:
@@ -1868,9 +1906,11 @@ def _match_card_parts(
     """
     status = card["status"]  # lobby | ongoing | finished
     fmt = _card_format(card)
-    kind = _card_kind(card)
     match_id = str(card.get("match_id") or card.get("match_ref") or "?")
-    badge = " ".join(part for part in [kind.upper(), fmt] if part)
+    # the badge carries the FORMAT only (owner 2026-11-25: no CUSTOM
+    # word - a ranked marker emoji says classée, nothing else does)
+    prefix = "\U0001f3af " if _is_ranked(card) else ""
+    badge = prefix + fmt if fmt else prefix.strip()
     noun_key = "lobby_noun" if status == "lobby" else "match_noun"
     noun = str(labels.get(noun_key, "Match n\u00b0" if status != "lobby" else "Lobby n\u00b0"))
     winners = {str(w) for w in card.get("winners") or []}
