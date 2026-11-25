@@ -116,7 +116,7 @@ class TestProvisioning:
         resolved = await provision_scope(guild, AOE2_SCOPE, "en", _translate)
         assert resolved["civs"] and resolved["maps"] and resolved["map-pools"]
         forums = {f.name: f for f in guild.forums}
-        assert set(forums) == {"🏛️ civs", "🌍 maps", "🧱 map pools"}  # EN locale: emoji + translated
+        assert set(forums) == {"🏛️ civs", "🌍 maps", "🧱 map pools", "🏁 matches"}  # EN locale: emoji + translated
         for forum in forums.values():
             assert forum.category is not None
             assert forum.category.name == "⚔️ games/aoe2"

@@ -173,12 +173,13 @@ scopes:
       kind: forum
       access: readonly
       description: ui.panels.channels.civs_description
-    # the match feed (botforge-services#405): one card per match, live
-    # then finished - the guild's own AoE2 history. Public: the feed
-    # is the point, the members react under the cards
+    # the match feed (botforge-services#405): a FORUM, one post per
+    # KNOWN player, the player's matches as cards (owner 2026-11-25:
+    # a match with several known players lands in each one's post -
+    # the duplicates are assumed). Public: the feed is the point
     - key: matches
       label: ui.panels.channels.matches
-      kind: text
+      kind: forum
       access: public
       description: ui.panels.channels.matches_description
     - key: maps

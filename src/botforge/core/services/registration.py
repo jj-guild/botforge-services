@@ -136,6 +136,13 @@ class RegistrationService:
             "bound_at": _now_ms(),
         }
         await self._db.upsert_entry(PROFILE_BINDINGS_COLLECTION, binding)
+        # the binding's lifecycle travels (owner 2026-11-25): a member
+        # adding an account must create/update the forums' per-player
+        # posts - the live feed's reconcile listens
+        await self._emit(
+            "profile.bound",
+            {"user_id": user_id, "game_key": game_key, "profile_id": canonical_id},
+        )
         await self._audit_record("profile.bind", {"user_id": user_id, "game_key": game_key, "profile_id": canonical_id})
         return binding
 
@@ -201,6 +208,10 @@ class RegistrationService:
         """
         removed = await self._db.delete_binding(game_key, user_id, profile_id)
         if removed:
+            await self._emit(
+                "profile.unbound",
+                {"user_id": user_id, "game_key": game_key, "profile_id": profile_id},
+            )
             await self._audit_record(
                 "profile.unbind", {"user_id": user_id, "game_key": game_key, "profile_id": profile_id}
             )

@@ -53,7 +53,7 @@ _SEED_SWEEP_S = 300.0
 # the seed's BUILD: a seed producing broken cards gets versioned up -
 # every salon re-seeds once with the fixed build (the old cards stay,
 # the guild owns its channel)
-_SEED_VERSION = 6  # 6: the WE slotinfo AI decodes (status 2 + civ); a repaired salon reseeds
+_SEED_VERSION = 7  # 7: the salon becomes a FORUM, one post per known player (owner 2026-11-25)
 
 _MATCHES_SCOPE = "games/aoe2"
 _MATCHES_KEY = "matches"
@@ -64,8 +64,11 @@ _SEED_WINDOW_S = 90 * 86400
 # an invalid match (owner 2026-11-24): under 5 minutes or no result
 _INVALID_DURATION_S = 5 * 60
 
-# (guild, match_ref) -> the sent message (the LIVING card)
-_CARDS: dict[tuple[str, str], Any] = {}
+# (guild, profile_id, match_ref) -> the sent message - one LIVING
+# card per known participant's post (owner 2026-11-25: the forum is
+# per player), updated in place while the match lives, dropped at the
+# end
+_CARDS: dict[tuple[str, str, str], Any] = {}
 # (guild, match_ref) -> the card's current model (re-rendered in place)
 _CARD_STATE: dict[tuple[str, str], dict[str, Any]] = {}
 # (guild, match_ref) -> the first-seen epoch s (the live card's "since")
@@ -136,6 +139,24 @@ async def _card_ctx(bot: discord.Client, guild_id: str, card: dict[str, Any]) ->
     return ctx
 
 
+async def instant_sweep(bot: discord.Client, guild_id: str) -> None:
+    """Run the salon reconcile NOW for one guild (the pokes' entry).
+
+    The member join/leave and the bind/unbind hooks ride this - the
+    posts' lifecycle answers the EVENT, the 5-minute sweep stays the
+    safety net.
+    """
+    try:
+        channel_id = await _matches_channel_id(bot, guild_id)
+        if channel_id is None:
+            return
+        _SEEDED.discard(guild_id)
+        await _maybe_seed_matches_salon(bot, guild_id, channel_id)
+        await _gap_fill_matches_salon(bot, guild_id, channel_id)
+    except Exception:
+        logger.debug("the instant salon sweep failed (guild %s)", guild_id, exc_info=True)
+
+
 def _bind_instant_repair(bot: discord.Client) -> None:
     """Bind the channel delete/create events to an INSTANT salon sweep.
 
@@ -146,19 +167,18 @@ def _bind_instant_repair(bot: discord.Client) -> None:
     """
 
     async def _on_channel_event(channel: Any) -> None:
-        try:
-            guild = getattr(channel, "guild", None)
-            if guild is None:
-                return
-            guild_id = str(guild.id)
-            channel_id = await _matches_channel_id(bot, guild_id)
-            if channel_id is None:
-                return
-            _SEEDED.discard(guild_id)
-            await _maybe_seed_matches_salon(bot, guild_id, channel_id)
-            await _gap_fill_matches_salon(bot, guild_id, channel_id)
-        except Exception:
-            logger.debug("the instant salon sweep skipped - best-effort", exc_info=True)
+        guild = getattr(channel, "guild", None)
+        if guild is None:
+            return
+        await instant_sweep(bot, str(guild.id))
+
+    async def _on_member_event(member: Any) -> None:
+        # a known player ENTERS or LEAVES the guild (owner 2026-11-25):
+        # his post is created/deleted NOW, not at the next sweep
+        guild = getattr(member, "guild", None)
+        if guild is None:
+            return
+        await instant_sweep(bot, str(guild.id))
 
     if getattr(bot, "_matches_instant_bound", False):
         return
@@ -169,6 +189,8 @@ def _bind_instant_repair(bot: discord.Client) -> None:
             return
         add_listener(_on_channel_event, "on_guild_channel_delete")
         add_listener(_on_channel_event, "on_guild_channel_create")
+        add_listener(_on_member_event, "on_member_join")
+        add_listener(_on_member_event, "on_member_remove")
     except Exception:
         logger.debug("the instant salon binding failed - the sweep stays", exc_info=True)
 
@@ -386,48 +408,96 @@ async def _send_card(
     channel_id: str,
     match_ref: str,
 ) -> None:
-    """Send (create) or edit (update) the guild's card for one match."""
+    """Send (create) or edit (update) the match's LIVING cards.
+
+    The salon is a FORUM, one post per KNOWN player (owner
+    2026-11-25): every known participant of the match carries a live
+    card in HIS post, updated in place. A match with several known
+    players duplicates (assumed).
+    """
     from botforge.discord.home import _match_card_view
 
     key = (guild_id, match_ref)
     card = _CARD_STATE.get(key)
     if card is None:
         return
+    participants = _known_participants(card, await _guild_profiles(bot, guild_id))
+    if not participants:
+        return
+    forum = await _sweep_channel(bot, guild_id, channel_id)
+    if forum is None or not isinstance(forum, discord.ForumChannel):
+        return
+    posts = await _ensure_player_posts(bot, guild_id, forum, sorted(participants))
     try:
         labels = await _label_pack(bot, guild_id)
         ctx = await _card_ctx(bot, guild_id, card)
-        # the salon is UNSCOPED (owner 2026-11-25): the guild's bound
-        # profiles render BOLD, the rest stays plain
-        known = set(await _guild_profiles(bot, guild_id))
+        known = set(participants)
         view = _match_card_view(card, ctx, set(), labels, known)
     except Exception:
         # the render NEVER kills the feed - the card stays as it was
         logger.debug("live activity card render failed (match %s)", match_ref, exc_info=True)
         return
-    live = _CARDS.get(key)
+    for profile_id in sorted(participants):
+        await _upsert_participant_card(bot, guild_id, profile_id, match_ref, posts, forum, view)
+
+
+async def _upsert_participant_card(
+    bot: discord.Client,
+    guild_id: str,
+    profile_id: str,
+    match_ref: str,
+    posts: dict[str, dict[str, Any]],
+    forum: Any,
+    view: Any,
+) -> None:
+    """Edit one participant's live card in HIS post, send it when new."""
+    del bot
+    entry = posts.get(profile_id)
+    if entry is None:
+        return
+    thread = _thread_of(forum, entry)
+    if thread is None:
+        return
+    live_key = (guild_id, profile_id, match_ref)
+    live = _CARDS.get(live_key)
     if live is not None:
         try:
             await live.edit(view=view)
             return
         except Exception:
             logger.info(
-                "live activity card edit failed (guild %s, match %s) - recreating",
+                "live activity card edit failed (guild %s, post %s, match %s) - recreating",
                 guild_id,
+                profile_id,
                 match_ref,
             )
-            _CARDS.pop(key, None)
-    guild = bot.get_guild(int(guild_id))
-    channel = guild.get_channel(int(channel_id)) if guild else None
-    if channel is None or not isinstance(channel, discord.TextChannel):
-        return
+            _CARDS.pop(live_key, None)
     try:
-        message = await channel.send(view=view, silent=True)
-        _CARDS[key] = message
-        # ONE message per match (owner 2026-11-25): the gap-fill never
+        message = await thread.send(view=view, silent=True)
+        _CARDS[live_key] = message
+        # the live card rides the post's registry: the gap-fill never
         # duplicates a match the live feed already carries
-        await _mark_posted(guild_id, match_ref)
+        if match_ref not in _post_refs(entry):
+            entry.setdefault("refs", [])
+            entry["refs"] = sorted({*entry["refs"], match_ref})
+            entry.setdefault("messages", {})[match_ref] = str(message.id)
+            await _save_post(guild_id, profile_id, entry)
     except Exception:
-        logger.debug("live activity card send skipped (guild %s) - best-effort", guild_id, exc_info=True)
+        logger.debug(
+            "live activity card send skipped (guild %s, post %s) - best-effort",
+            guild_id,
+            profile_id,
+            exc_info=True,
+        )
+
+
+def _known_participants(card: dict[str, Any], profiles: list[str]) -> set[str]:
+    """Return the match's seats that belong to the guild's KNOWN players."""
+    known = {str(p) for p in profiles}
+    return {
+        str((player or {}).get("profile_id") or "")
+        for player in card.get("players") or []
+    } & known
 
 
 async def _drop_card(
@@ -441,7 +511,8 @@ async def _drop_card(
     del status_suffix
     key = (guild_id, match_ref)
     _CARD_STATE.pop(key, None)
-    _CARDS.pop(key, None)
+    for live_key in [k for k in _CARDS if k[0] == guild_id and k[2] == match_ref]:
+        _CARDS.pop(live_key, None)
     _FIRST_SEEN.pop(key, None)
     _MATCH_PLAYERS.pop(match_ref, None)
     _LAST_SUMMARY.pop(match_ref, None)
@@ -486,7 +557,8 @@ async def _apply_result_to_card(
     # 2026-11-25): the verdict reads partners, map and format from it
     _FINISHED_CARDS[match_ref] = dict(_CARD_STATE.get(key) or {})
     _CARD_STATE.pop(key, None)
-    _CARDS.pop(key, None)
+    for live_key in [k for k in _CARDS if k[0] == guild_id and k[2] == match_ref]:
+        _CARDS.pop(live_key, None)
     _FIRST_SEEN.pop(key, None)
     _MATCH_PLAYERS.pop(match_ref, None)
 
@@ -495,77 +567,109 @@ async def _apply_result_to_card(
 # the salon's SEED: the last week of stored history, oldest first
 
 
-async def _maybe_seed_matches_salon(
+async def _maybe_seed_matches_salon(  # noqa: C901 - one orchestration, no branch soup
     bot: discord.Client, guild_id: str, channel_id: str
 ) -> None:
-    """Seed a FRESH matches salon with the guild's last week.
+    """Seed the guild's matches FORUM: one post per KNOWN player.
 
-    Once per guild (a stored marker): the finished matches AND the
-    invalid ones (no result, under five minutes) - an invalid match
-    still shows, with its status (owner 2026-11-24). The cards go in
-    CHRONOLOGICAL order, the guild's history reads itself.
+    Once per guild (a stored marker): the window's finished matches
+    AND the invalid ones (no result, under five minutes) - an invalid
+    match still shows, with its status (owner 2026-11-24). A match
+    with several known players lands in EACH one's post (owner
+    2026-11-25: the duplicates are assumed), chronologically.
     """
     marker = await _seed_marker(guild_id)
     if guild_id in _SEEDED or (
         isinstance(marker, dict)
         and marker.get("v") == _SEED_VERSION
         # a REPAIRED salon (deleted, recreated) changed its id - the
-        # week re-seeds into the new channel (owner 2026-11-24: his
-        # repair never saw a card again)
+        # window re-seeds into the new channel (owner 2026-11-24)
         and str(marker.get("channel_id") or "") == str(channel_id)
     ):
         _SEEDED.add(guild_id)
         return
     _SEEDED.add(guild_id)
-    # a REPAIR (new channel id) reconciles against the LIVE messages
-    # (owner 2026-11-25): drop the refs whose message was deleted,
-    # recreate the missing - the blanket reset could not tell a living
-    # card from a husk, the listing can
     marker_channel = str((marker or {}).get("channel_id") or "") if isinstance(marker, dict) else ""
     if marker_channel and marker_channel != str(channel_id):
         logger.info(
-            "matches salon repaired (guild %s): channel %s -> %s, reconciling",
+            "matches forum repaired (guild %s): channel %s -> %s",
             guild_id,
             marker_channel,
             channel_id,
         )
-    if marker_channel != str(channel_id):
-        await _reconcile_posted_refs(bot, guild_id, channel_id)
     try:
+        forum = await _sweep_channel(bot, guild_id, channel_id)
+        if forum is None:
+            return
+        profiles = await _guild_profiles(bot, guild_id)
+        if not profiles:
+            await _write_seed_marker(guild_id, channel_id)
+            return
+        posts = await _ensure_player_posts(bot, guild_id, forum, profiles)
         cards = await _week_cards(bot, guild_id)
         await _write_seed_marker(guild_id, channel_id)
         if not cards:
             return
-        posted = await _posted_refs(guild_id)
-        cards = [card for card in cards if str(card.get("match_id") or "") not in posted]
-        if not cards:
-            return
-        logger.info(
-            "matches salon seed: %d card(s) for guild %s (the last window)",
-            len(cards),
-            guild_id,
-        )
-        from botforge.discord.home import _match_card_view
-
         labels = await _label_pack(bot, guild_id)
-        known = set(await _guild_profiles(bot, guild_id))
-        # the channel resolves BEFORE the loop (owner 2026-11-25): a
-        # channel created after the boot rides no cache - the sweep
-        # fetches it, the send never starves in silence again
-        channel = await _sweep_channel(bot, guild_id, channel_id)
-        if channel is None:
-            return
-        for card in cards:
-            try:
-                ctx = await _card_ctx(bot, guild_id, card)
-                message = await channel.send(
-                    view=_match_card_view(card, ctx, set(), labels, known), silent=True
-                )
-                await _mark_posted(guild_id, str(card.get("match_id") or ""), str(message.id))
-            except Exception:
-                logger.debug("matches salon seed card skipped - best-effort", exc_info=True)
+        known = set(profiles)
+        posted_total = 0
+        for profile_id, entry in posts.items():
+            group = _cards_of_player(cards, profile_id)
+            if not group:
+                continue
+            refs = _post_refs(entry)
+            pending_cards = [c for c in group if str(c.get("match_id") or "") not in refs]
+            if not pending_cards:
+                continue
+            thread = _thread_of(forum, entry)
+            if thread is None:
+                continue
+            ctx_by_ref: dict[str, dict[str, Any]] = {}
+            for card in pending_cards:
+                ctx_by_ref[str(card.get("match_id"))] = await _card_ctx(bot, guild_id, card)
+            marked = await _send_cards_grouped(thread, pending_cards, ctx_by_ref, labels, known)
+            if marked:
+                entry.setdefault("refs", [])
+                entry["refs"].extend(ref for ref, _mid in marked)
+                entry["refs"] = sorted(set(entry["refs"]))
+                entry.setdefault("messages", {}).update(dict(marked))
+                await _save_post(guild_id, profile_id, entry)
+                posted_total += len(marked)
+        if posted_total:
+            logger.info(
+                "matches forum seed: %d card(s) across %d post(s) for guild %s (the last window)",
+                posted_total,
+                len(posts),
+                guild_id,
+            )
     except Exception:
-        logger.warning("matches salon seed failed (guild %s) - best-effort", guild_id, exc_info=True)
+        logger.warning("matches forum seed failed (guild %s) - best-effort", guild_id, exc_info=True)
+
+
+def _cards_of_player(cards: list[dict[str, Any]], profile_id: str) -> list[dict[str, Any]]:
+    """Return the match cards the player took part in (the duplicates are assumed)."""
+    pid = str(profile_id)
+    out: list[dict[str, Any]] = []
+    for card in cards:
+        for player in card.get("players") or []:
+            if str((player or {}).get("profile_id") or "") == pid:
+                out.append(card)
+                break
+    return out
+
+
+def _thread_of(forum: Any, entry: dict[str, Any]) -> Any | None:
+    """Resolve a post's thread object from the forum's caches."""
+    thread_id = int(entry.get("thread_id") or 0)
+    if not thread_id:
+        return None
+    thread = forum.get_thread(thread_id)
+    if thread is not None:
+        return thread
+    try:
+        return forum.get_partial_messageable(thread_id)
+    except Exception:
+        return None
 
 
 async def _week_cards(bot: discord.Client, guild_id: str) -> list[dict[str, Any]]:
@@ -644,6 +748,144 @@ def _seed_card_of(entry: Any) -> dict[str, Any]:
     return card
 
 
+def _posts_doc_id(guild_id: str) -> str:
+    """Return the per-player posts registry's mongo id."""
+    return f"{guild_id}:livefeed:matches:posts"
+
+
+async def _posts_of(guild_id: str) -> dict[str, dict[str, Any]]:
+    """Read the salon's PER-PLAYER posts registry (owner 2026-11-25).
+
+    The salon is a FORUM, one post per KNOWN player:
+    ``{profile_id: {"thread_id": ..., "name": ..., "refs": [...],
+    "messages": {match_ref: message_id}}}`` - a match with several
+    known participants lands in EACH one's post (the duplicate is
+    assumed), each post owns its own refs and message ids.
+    """
+    try:
+        from botforge.core.models.db import get_async_database
+
+        document = await get_async_database()["channels"].find_one({"_id": _posts_doc_id(guild_id)})
+        raw = (document or {}).get("posts") or {}
+        if not isinstance(raw, dict):
+            raw = {}
+        posts: dict[str, dict[str, Any]] = {}
+        for pid, entry in raw.items():
+            if isinstance(entry, dict) and str(entry.get("thread_id") or ""):
+                posts[str(pid)] = {
+                    "thread_id": str(entry.get("thread_id")),
+                    "name": str(entry.get("name") or ""),
+                    "refs": sorted({str(r) for r in (entry.get("refs") or [None]) if r}),
+                    "messages": {
+                        str(k): str(v)
+                        for k, v in (entry.get("messages") or {}).items()
+                        if str(k) and str(v)
+                    },
+                }
+        return posts
+    except Exception:
+        return {}
+
+
+async def _save_post(guild_id: str, profile_id: str, entry: dict[str, Any] | None) -> None:
+    """Write one player's post entry - None drops it (the post died)."""
+    try:
+        from botforge.core.models.db import get_async_database
+
+        patch: dict[str, Any] = {"$set": {f"posts.{profile_id}": entry}}
+        if entry is None:
+            patch = {"$unset": {f"posts.{profile_id}": ""}}
+        await get_async_database()["channels"].update_one(
+            {"_id": _posts_doc_id(guild_id)}, patch, upsert=True
+        )
+    except Exception:
+        logger.debug("the posts registry write failed (guild %s, post %s)", guild_id, profile_id, exc_info=True)
+
+
+def _post_refs(entry: dict[str, Any]) -> set[str]:
+    """Return the post's posted match refs."""
+    return {str(r) for r in (entry.get("refs") or [])}
+
+
+def _post_messages(entry: dict[str, Any]) -> dict[str, str]:
+    """Return the post's match-ref -> message-id map."""
+    return {str(k): str(v) for k, v in (entry.get("messages") or {}).items()}
+
+
+async def _player_names(bot: discord.Client, guild_id: str) -> dict[str, str]:
+    """Return the known profiles' display names (the bindings' own aliases)."""
+    registration = getattr(bot, "registration_service", None)
+    if registration is None:
+        return {}
+    out: dict[str, str] = {}
+    try:
+        for binding in await registration.list_bindings_for_game("aoe2"):
+            profile = str(binding.get("profile_id", ""))
+            if profile:
+                name = str((binding.get("profile") or {}).get("alias") or "")
+                out[profile] = name
+    except Exception:
+        out.clear()
+    out.update({pid: name for pid, name in _LAST_NAME.items() if pid in out and not out.get(pid)})
+    return out
+
+
+async def _ensure_player_posts(
+    bot: discord.Client, guild_id: str, forum: Any, profiles: list[str]
+) -> dict[str, dict[str, Any]]:
+    """Reconcile the forum's posts with the KNOWN players.
+
+    The owner's lifecycle rule (2026-11-25): a known player entering
+    or leaving the guild creates/deletes his post; a member binding
+    or unbinding a profile does the same - the reconcile creates the
+    missing threads, deletes the orphaned ones, the sweep (and the
+    join/leave/bind listeners) trigger it.
+    """
+    known = [str(p) for p in profiles if str(p)]
+    posts = await _posts_of(guild_id)
+    names = await _player_names(bot, guild_id)
+    for profile_id in list(posts):
+        if profile_id not in known:
+            # the player left or unbound: the post dies
+            try:
+                thread = forum.get_thread(int(posts[profile_id]["thread_id"]))
+                if thread is None:
+                    threads = getattr(forum, "threads", {})
+                    thread = threads.get(int(posts[profile_id]["thread_id"]))
+                if thread is not None:
+                    await thread.delete()
+            except Exception:
+                logger.debug("the orphan post delete failed (post %s)", profile_id, exc_info=True)
+            await _save_post(guild_id, profile_id, None)
+            posts.pop(profile_id, None)
+            logger.info("matches forum: post deleted for %s (guild %s)", profile_id, guild_id)
+    for profile_id in known:
+        if profile_id in posts and str(posts[profile_id].get("name") or ""):
+            continue
+        name = names.get(profile_id) or f"Profil {profile_id}"
+        try:
+            thread = await forum.create_thread(name=_thread_title(name), auto_archive_duration=10080)
+        except Exception:
+            logger.debug("the player post creation failed (post %s)", profile_id, exc_info=True)
+            continue
+        entry = {
+            "thread_id": str(thread.id),
+            "name": name,
+            "refs": [],
+            "messages": {},
+        }
+        posts[profile_id] = entry
+        await _save_post(guild_id, profile_id, entry)
+        logger.info("matches forum: post created for %s (guild %s, thread %s)", profile_id, guild_id, thread.id)
+    return posts
+
+
+def _thread_title(name: str) -> str:
+    """Build the post's title: the player's name, capped at the forum's limit."""
+    clean = " ".join(str(name or "?").split())[:90] or "?"
+    return clean
+
+
 async def _posted_messages(guild_id: str) -> dict[str, str]:
     """Return the salon's match-ref -> message-id map (the reconcile's truth).
 
@@ -719,7 +961,9 @@ async def _sweep_channel(bot: discord.Client, guild_id: str, channel_id: str) ->
 
     A channel created after the boot never rides the client's cache
     (owner 2026-11-25: the repaired salon stayed EMPTY - the seed
-    resolved get_channel, read None, returned in silence).
+    resolved get_channel, read None, returned in silence). The
+    matches salon is a FORUM (owner 2026-11-25) - both text and
+    forum channels resolve here.
     """
     guild = bot.get_guild(int(guild_id))
     if guild is None:
@@ -731,7 +975,49 @@ async def _sweep_channel(bot: discord.Client, guild_id: str, channel_id: str) ->
         fetched: Any = await guild.fetch_channel(int(channel_id))
     except Exception:
         return None
-    return fetched if isinstance(fetched, discord.TextChannel) else None
+    return fetched if isinstance(fetched, (discord.TextChannel, discord.ForumChannel)) else None
+
+
+async def _send_cards_grouped(
+    thread: Any, cards: list[dict[str, Any]], ctx_by_ref: dict[str, dict[str, Any]],
+    labels: dict[str, Any], known: set[str], max_group: int = 10,
+) -> list[tuple[str, str]]:
+    """Send cards into one forum post, GROUPED messages (owner 2026-11-25).
+
+    "Cree les messages par groupe de 10 si tu peux": the cards fold
+    into ONE LayoutView per message (the same multi-
+    card fold the live dashboard rides); a batch Discord refuses
+    (the component cap bites) halves until it fits - one card per
+    message as the floor. Returns [(match_ref, message_id), ...].
+    """
+    from botforge.discord.home import _match_card_parts
+    from botforge.discord.ui.view_footer import add_view_footer
+
+    marked: list[tuple[str, str]] = []
+    for start in range(0, len(cards), max_group):
+        group = cards[start : start + max_group]
+        while group:
+            try:
+                view = discord.ui.LayoutView(timeout=None)
+                refs: list[str] = []
+                for card in group:
+                    blocks, buttons, match_id, accent = _match_card_parts(
+                        card, ctx_by_ref.get(str(card.get("match_id")), {}), set(), labels, known
+                    )
+                    view.add_item(discord.ui.Container(*blocks, accent_colour=discord.Colour(accent)))
+                    if buttons:
+                        view.add_item(discord.ui.ActionRow(*buttons))
+                    refs.append(str(card.get("match_id") or match_id))
+                view = add_view_footer(view, f"panel:match:aoe2:{refs[0]}")
+                message = await thread.send(view=view, silent=True)
+                marked.extend((ref, str(message.id)) for ref in refs)
+                break
+            except Exception:
+                if len(group) == 1:
+                    logger.debug("the grouped card send failed (post %s)", thread.id, exc_info=True)
+                    break  # even a single card refuses: move on, never a crash
+                group = group[: len(group) // 2]  # the 40-component cap bites: halve
+    return marked
 
 
 async def _reconcile_posted_refs(bot: discord.Client, guild_id: str, channel_id: str) -> None:
@@ -779,52 +1065,66 @@ async def _reconcile_posted_refs(bot: discord.Client, guild_id: str, channel_id:
     )
 
 
-async def _gap_fill_matches_salon(bot: discord.Client, guild_id: str, channel_id: str) -> None:
-    """Post the store matches the salon never saw (owner 2026-11-25).
+async def _gap_fill_matches_salon(  # noqa: C901 - one orchestration, no branch soup
+    bot: discord.Client, guild_id: str, channel_id: str
+) -> None:
+    """Post the store matches the forum's posts never saw (owner 2026-11-25).
 
-    A match played without a live feed - an automatch nobody opened a
-    lobby for, a game during a restart - only lives in the store: the
-    sweep posts its card as soon as the history owns a verdict. The
-    posted-refs registry keeps ONE message per match, whatever road it
-    took (live event, salon seed, gap-fill).
+    A match played without a live feed only lives in the store: the
+    sweep posts its card into EVERY known participant's post (the
+    duplicates are assumed), batched, one registry per post - the
+    live events, the seeds and the store gap-fills all share it.
     """
-    posted = await _posted_refs(guild_id)
     profiles = await _guild_profiles(bot, guild_id)
     if not profiles:
         return
-    from botforge.discord.home import _match_card_view
+    forum = await _sweep_channel(bot, guild_id, channel_id)
+    if forum is None:
+        return
+    posts = await _ensure_player_posts(bot, guild_id, forum, profiles)
     from botforge.discord.stats_views import recent_match_entries
 
+    known = set(profiles)
+    entries = await recent_match_entries(profiles, limit=200)
+    deadline = int(time.time()) - _SEED_WINDOW_S
+    cards: list[dict[str, Any]] = []
+    for entry in entries:
+        finished_at = _int_of(getattr(entry, "finished_at", 0))
+        if finished_at and finished_at >= deadline:
+            cards.append(_seed_card_of(entry))
+    if not cards:
+        return
     labels = await _label_pack(bot, guild_id)
-    known = set(profiles)  # the salon's bound profiles: the KNOWN names
-    entries = await recent_match_entries(profiles, limit=25)
-    deadline = int(time.time()) - _SEED_WINDOW_S  # the salon's OWN week (owner 2026-11-25)
-    # the salon reads CHRONOLOGICAL (owner 2026-11-25): the feed serves
-    # newest-first, the salon keeps the oldest on top - sort before posting
-    pending = sorted(
-        (entry for entry in entries if getattr(entry, "finished_at", 0)),
-        key=lambda e: int(getattr(e, "finished_at", 0) or 0),
-    )
-    for entry in pending:
-        ref = str(getattr(entry, "match_id", "") or "")
-        if not ref or ref in posted:
+    for profile_id, entry in posts.items():
+        refs = _post_refs(entry)
+        group = [
+            c for c in _cards_of_player(cards, profile_id)
+            if str(c.get("match_id") or "") not in refs
+        ]
+        if not group:
             continue
-        finished_at = int(getattr(entry, "finished_at", 0) or 0)
-        if finished_at < deadline:
-            continue  # never post beyond the week
-        card = _seed_card_of(entry)
+        thread = _thread_of(forum, entry)
+        if thread is None:
+            continue
+        ctx_by_ref: dict[str, dict[str, Any]] = {}
+        for card in group:
+            ctx_by_ref[str(card.get("match_id"))] = await _card_ctx(bot, guild_id, card)
         try:
-            ctx = await _card_ctx(bot, guild_id, card)
-            channel = await _sweep_channel(bot, guild_id, channel_id)
-            if channel is None:
-                return
-            message = await channel.send(
-                view=_match_card_view(card, ctx, set(), labels, known), silent=True
-            )
-            await _mark_posted(guild_id, ref, str(message.id))
-            logger.info("matches salon gap-fill: match %s posted (guild %s)", ref, guild_id)
+            marked = await _send_cards_grouped(thread, group, ctx_by_ref, labels, known)
         except Exception:
-            logger.debug("the gap-fill card skipped (match %s) - best-effort", ref, exc_info=True)
+            logger.debug("the gap-fill group skipped (post %s) - best-effort", profile_id, exc_info=True)
+            continue
+        if marked:
+            entry.setdefault("refs", []).extend(ref for ref, _mid in marked)
+            entry["refs"] = sorted(set(entry["refs"]))
+            entry.setdefault("messages", {}).update(dict(marked))
+            await _save_post(guild_id, profile_id, entry)
+            logger.info(
+                "matches forum gap-fill: %d card(s) posted in %s's post (guild %s)",
+                len(marked),
+                profile_id,
+                guild_id,
+            )
 
 
 async def _guild_profiles(bot: discord.Client, guild_id: str) -> list[str]:

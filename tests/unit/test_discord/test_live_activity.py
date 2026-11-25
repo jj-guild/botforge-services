@@ -691,88 +691,130 @@ def test_the_ranked_diff_rides_the_cards_own_board() -> None:
     assert "(-26)" not in text and "**1313**" not in text
 
 
-def test_a_repair_reconciles_the_live_messages_and_recreates_the_missing() -> None:  # noqa: C901
-    """A repair LISTs the salon, drops the dead refs, recreates the rest.
-
-    The owner's rule (2026-11-25): zero duplicates - a living message
-    keeps its ref, a missing card posts exactly once.
-    """
+def test_the_forum_seed_posts_each_players_group_in_his_post() -> None:  # noqa: C901
+    """The FORUM seed routes each player's matches into HIS post (dups assumed)."""
     import asyncio
     from unittest.mock import patch
 
     import botforge.discord.live_activity as feed
 
-    calls: dict[str, list[Any]] = {"reconcile": [], "posted": [], "sent": []}
+    sent: dict[str, list[str]] = {}
 
-    class _Message:
-        id = 4242
+    class _ForumBase:
+        pass
 
-    class _Channel:
+    class _Forum(_ForumBase):
+        pass
+
+    class _Thread:
         async def send(self, view=None, silent=True):
             del view, silent
-            calls["sent"].append(_Message.id)
-            return _Message()
+            return type("M", (), {"id": 77})()
 
-    async def _fake_reconcile(bot, guild_id, channel_id):
-        calls["reconcile"].append((guild_id, channel_id))
+    threads: list[Any] = []
 
     async def _fake_sweep(bot, guild_id, channel_id):
-        return _Channel()
+        return _Forum()
+
+    async def _fake_ensure(bot, guild_id, forum, profiles):
+        return {pid: {"thread_id": f"t-{pid}", "name": pid, "refs": [], "messages": {}} for pid in profiles}
+
+    async def _fake_profiles(bot, guild_id):
+        return ["7", "8"]
 
     async def _fake_marker(guild_id):
-        return {"v": feed._SEED_VERSION, "channel_id": "111"}  # the OLD salon
+        return None  # a fresh forum: the seed runs
 
     async def _fake_write_marker(guild_id, channel_id):
         return None
 
     async def _fake_week_cards(bot, guild_id):
-        return [{"match_id": "husky"}, {"match_id": "fresh"}]
+        return [
+            {"match_id": "m1", "players": [{"profile_id": "7"}, {"profile_id": "8"}]},
+            {"match_id": "m2", "players": [{"profile_id": "7"}]},
+        ]
 
-    async def _fake_refs(guild_id):
-        return {"husky"}  # the ref whose message LIVES on
+    async def _fake_grouped(thread, cards, ctx_by_ref, labels, known, max_group=10):
+        sent[str(id(thread))] = [str(c["match_id"]) for c in cards]
+        return [(str(c["match_id"]), "77") for c in cards]
 
-    async def _fake_mark(guild_id, ref, message_id=None):
-        calls["posted"].append((ref, message_id))
+    def _fake_thread_of(forum, entry):
+        thread = _Thread()
+        threads.append(thread)  # hold the ref: id() must stay unique
+        return thread
+
+    async def _fake_save_post(guild_id, pid, entry):
+        return None
 
     async def _fake_label_pack(bot, guild_id):
         return {}
 
-    async def _fake_guild_profiles(bot, guild_id):
-        return []
-
     async def _fake_ctx(bot, guild_id, card):
         return {}
 
-    async def _fake_view(card, ctx, me_ids, labels, known=None):
-        return None
-
     original = {name: getattr(feed, name) for name in (
-        "_reconcile_posted_refs", "_sweep_channel", "_seed_marker",
-        "_write_seed_marker", "_week_cards", "_posted_refs", "_mark_posted",
-        "_label_pack", "_guild_profiles", "_card_ctx",
+        "_sweep_channel", "_ensure_player_posts", "_guild_profiles", "_seed_marker",
+        "_write_seed_marker", "_week_cards", "_send_cards_grouped", "_thread_of",
+        "_save_post", "_label_pack", "_card_ctx",
     )}
-    feed._reconcile_posted_refs = _fake_reconcile
     feed._sweep_channel = _fake_sweep
+    feed._ensure_player_posts = _fake_ensure
+    feed._guild_profiles = _fake_profiles
     feed._seed_marker = _fake_marker
     feed._write_seed_marker = _fake_write_marker
     feed._week_cards = _fake_week_cards
-    feed._posted_refs = _fake_refs
-    feed._mark_posted = _fake_mark
+    feed._send_cards_grouped = _fake_grouped
+    feed._thread_of = _fake_thread_of
+    feed._save_post = _fake_save_post
     feed._label_pack = _fake_label_pack
-    feed._guild_profiles = _fake_guild_profiles
     feed._card_ctx = _fake_ctx
     try:
-        with patch("botforge.discord.home._match_card_view", _fake_view):
+        with patch.object(feed.discord, "ForumChannel", _ForumBase):
             asyncio.run(feed._maybe_seed_matches_salon(None, "42", "999"))
     finally:
         for key, value in original.items():
             setattr(feed, key, value)
-    assert calls["reconcile"] == [("42", "999")], "the repair reconciles the live messages"
-    assert calls["sent"] == [4242], "only the MISSING card posts - the husky keeps its ref"
-    assert calls["posted"] == [("fresh", "4242")], "the new message id rides the ref"
+    threads = list(sent.values())
+    assert sorted(threads[0]) == ["m1", "m2"], "player 7's post carries BOTH his matches"
+    assert threads[1] == ["m1"], "player 8's post carries the shared match (duplicates assumed)"
 
 
-def test_the_reconcile_drops_the_dead_refs_only() -> None:  # noqa: C901
+def test_the_grouped_sender_halves_when_discord_refuses() -> None:
+    """10 per message when it fits, halved when the component cap bites."""
+    import asyncio
+
+    import botforge.discord.live_activity as feed
+
+    calls: list[int] = []
+
+    class _Thread:
+        counter = 0
+
+        async def send(self, view=None, silent=True):
+            _Thread.counter += 1
+            calls.append(sum(1 for _ in _containers(view)))
+            return type("M", (), {"id": 1})()
+
+    def _containers(view):
+        return getattr(view, "to_components", lambda: [])() or getattr(view, "children", [])
+
+    def _fake_parts(card, ctx, me_ids, labels, known=None):
+        return [], [], str(card["match_id"]), 0
+
+    from unittest.mock import patch
+
+    cards = [{"match_id": f"m{i}"} for i in range(10)]
+    with (
+        patch("botforge.discord.home._match_card_parts", _fake_parts),
+        patch("botforge.discord.ui.view_footer.add_view_footer", lambda v, f: v),
+    ):
+        marked = asyncio.run(
+            feed._send_cards_grouped(_Thread(), cards, {}, {}, set())
+        )
+    assert len(marked) == 10, "every card lands even when halved"
+
+
+def test_the_reconcile_drops_the_dead_refs_only() -> None:
     """Listing wins: a ref whose message lives STAYS, a dead one falls."""
     import asyncio
     from unittest.mock import patch
@@ -795,13 +837,10 @@ def test_the_reconcile_drops_the_dead_refs_only() -> None:  # noqa: C901
     async def _fake_messages(guild_id):
         return {"alive": "10", "dead": "12"}
 
-    async def _fake_update(query, patch_doc, upsert=False):
-        written.update({"query": query, "patch": patch_doc})
-
     class _Coll:
         @staticmethod
         async def update_one(query, patch_doc, upsert=False):
-            await _fake_update(query, patch_doc, upsert)
+            written.update({"query": query, "patch": patch_doc})
 
     class _Db(dict):
         def __getitem__(self, k):

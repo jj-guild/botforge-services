@@ -1029,6 +1029,11 @@ def create_bot(config: BotConfig | None = None) -> BotforgeBot:  # noqa: C901
     registration_engine, registration_service = _build_registration(resolved, state=shared_state)
     bot.registration_engine = registration_engine
     bot.registration_service = registration_service
+    # bind the pokes now the bot lives: the bind/unbind events sweep
+    # the matches forums instantly (owner 2026-11-25)
+    for _events_holder in (getattr(registration_service, "_events", None),):
+        if isinstance(_events_holder, _BindingPokes):
+            _events_holder.bot = bot
     bot.identity_service = _build_identity_service(resolved, state=shared_state)
     home_channel_service = _build_home_channel_service(resolved, bot)
     bot.home_channel_service = home_channel_service
@@ -1214,6 +1219,7 @@ def _build_registration(
     service = RegistrationService(
         registration_db,
         profile_seams={"aoe2": Aoe2ProfileValidationSeam()},
+        events=_BindingPokes(),
     )
     # One boot sweep (best-effort): the #402 insights ids the old
     # resolution stored are gone with it — the legacy field leaves
@@ -1222,6 +1228,48 @@ def _build_registration(
     engine.register_workflow(RegistrationWorkflow(service))
     return engine, service
 
+
+class _BindingPokes:
+    """The registration events -> the matches forums' instant reconcile.
+
+    The bind/unbind lifecycle must reach the posts (owner 2026-11-25):
+    a member adding an account creates his post, removing it deletes
+    the orphan. The bot reference binds LATE - the service is built
+    before the client, the factory attaches itself once it lives.
+    """
+
+    def __init__(self) -> None:
+        self.bot: Any = None
+
+    async def emit(self, intent: str, payload: dict[str, Any]) -> None:
+        bot = self.bot
+        if bot is None or intent not in ("profile.bound", "profile.unbound"):
+            return
+        if str(payload.get("game_key") or "") != "aoe2":
+            return
+        _spawn_instant_forums_sweep(bot)
+
+
+def _spawn_instant_forums_sweep(bot: Any) -> None:
+    """Sweep the matches forums NOW (best-effort, never raises)."""
+
+    async def _one() -> None:
+        from botforge.discord import live_activity
+
+        for guild in list(getattr(bot, "guilds", []) or []):
+            await live_activity.instant_sweep(bot, str(guild.id))
+
+    try:
+        import asyncio
+
+        task = asyncio.get_running_loop().create_task(_one())
+        _BOOT_TASKS_POOL.add(task)
+        task.add_done_callback(_BOOT_TASKS_POOL.discard)
+    except Exception:
+        logger.debug("the instant forums sweep spawn failed - best-effort", exc_info=True)
+
+
+_BOOT_TASKS_POOL: set[Any] = set()
 
 _boot_tasks: list[Any] = []
 
