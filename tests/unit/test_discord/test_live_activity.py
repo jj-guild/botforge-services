@@ -636,3 +636,56 @@ def test_the_rated_fold_infers_the_board() -> None:
     legacy = _doc("AUTOMATCH", [{"profile_id": "848567"}], "", {"848567": 1300})
     legacy["leaderboard_id"] = "4"
     assert syncer._ladder_of_doc(legacy) == "4"
+
+
+def test_the_ranked_diff_rides_the_cards_own_board() -> None:
+    """The bold line + the elo diff need the card's healed board (3/4)."""
+    import asyncio
+
+    from botforge.discord.home import _ladder_as_of, _seat_text
+
+    class _Stats:
+        async def get_account_stats(self, profile_ids, at_s=0):
+            del at_s
+            return []
+
+    card = {
+        "match_id": "141801184",
+        "status": "finished",
+        "finished_at": 1200,
+        "leaderboard_id": "3",
+        "lobby_title": "AUTOMATCH",
+        "players": [
+            {
+                "profile_id": "848567",
+                "alias": "Merlin",
+                "team": 1,
+                "slot": 4,
+                "civ": "Mayans",
+                "rating_before": 1313,
+                "rating_after": 1287,
+            }
+        ],
+    }
+    ctx = {
+        "civ_urls": {},
+        "civ_images": {},
+        "map_display": {},
+        "civ_display": {},
+        "map_urls": {},
+        "map_images": {},
+        "ladder": {},
+        "ladder_by_ts": asyncio.run(
+            _ladder_as_of(_Stats(), [card])
+        ),
+    }
+    by_ts = ctx["ladder_by_ts"]
+    assert by_ts == {}, "the empty as-of reply degrades to the current ladder"
+    ctx["ladder"] = {"848567": {"rm_1v1": (1287, 1313), "rm_team": (946, 946)}}
+    ctx["ladder_by_ts"] = {}
+    text, _img = _seat_text(card["players"][0], card, ctx, {}, me_ids={"848567"})
+    assert "**1313**" in text and "(-26)" in text, "the ranked diff rides the healed board"
+    # the boardless card never bolds nor diffs - the plain sides stay honest
+    card["leaderboard_id"] = ""
+    text, _img = _seat_text(card["players"][0], card, ctx, {}, me_ids={"848567"})
+    assert "(-26)" not in text and "**1313**" not in text

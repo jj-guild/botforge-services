@@ -387,6 +387,17 @@ class MatchHistorySyncer:
                 point_at = _int(doc.get("finished_at")) or _int(doc.get("started_at"))
                 if not board or not point_at:
                     continue
+                # the healed board rides the DOC too (owner 2026-11-25): the
+                # seats read it for the bold line and the elo diff - the
+                # upstream never carries it, the inference is the word
+                if str(doc.get("leaderboard_id") or "") != board and str(doc.get("_id") or ""):
+                    try:
+                        await self._store.update_match_fields(
+                            str(doc["_id"]), {"leaderboard_id": board}
+                        )
+                        doc["leaderboard_id"] = board
+                    except Exception:
+                        logger.debug("the board heal failed (match %s)", doc.get("_id"), exc_info=True)
                 for pid, after in (doc.get("rating_after") or {}).items():
                     if _int(after) > 0 and str(pid):
                         await self._store.record_elo_points(str(pid), board, [(point_at, _int(after))])
@@ -414,16 +425,25 @@ class MatchHistorySyncer:
             logger.warning("the elo backfill read failed", exc_info=True)
             return 0
         written = 0
+        healed = 0
         for doc in docs:
             board = self._ladder_of_doc(doc)
             point_at = _int(doc.get("finished_at")) or _int(doc.get("started_at"))
             if not board or not point_at:
                 continue
+            if str(doc.get("leaderboard_id") or "") != board and str(doc.get("_id") or ""):
+                try:
+                    await self._store.update_match_fields(
+                        str(doc["_id"]), {"leaderboard_id": board}
+                    )
+                    healed += 1
+                except Exception:
+                    logger.debug("the board heal failed (match %s)", doc.get("_id"), exc_info=True)
             for pid, after in (doc.get("rating_after") or {}).items():
                 if _int(after) > 0 and str(pid):
                     written += 1
                     await self._store.record_elo_points(str(pid), board, [(point_at, _int(after))])
-        logger.info("elo series backfill: %d doc(s), %d point(s)", len(docs), written)
+        logger.info("elo series backfill: %d doc(s), %d point(s), %d board(s) healed", len(docs), written, healed)
         return written
 
     def __init__(
