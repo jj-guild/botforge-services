@@ -592,11 +592,18 @@ async def _maybe_seed_matches_salon(  # noqa: C901 - one orchestration, no branc
     marker_channel = str((marker or {}).get("channel_id") or "") if isinstance(marker, dict) else ""
     if marker_channel and marker_channel != str(channel_id):
         logger.info(
-            "matches forum repaired (guild %s): channel %s -> %s",
+            "matches forum repaired (guild %s): channel %s -> %s - the posts died with the old forum",
             guild_id,
             marker_channel,
             channel_id,
         )
+        # the posts registry carries THREADS of the deleted forum and
+        # refs "already posted" there (owner 2026-11-25: the repair
+        # silently starved - every card answered into a dead thread) -
+        # the registry dies with the forum, the ensure (and its
+        # dead-thread recreate) rebuilds everything in the new one
+        for _pid in list((await _posts_of(guild_id)).keys()):
+            await _save_post(guild_id, _pid, None)
     try:
         forum = await _sweep_channel(bot, guild_id, channel_id)
         if forum is None:
