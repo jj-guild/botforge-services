@@ -89,9 +89,9 @@ fr:
       rename_failed: Renommage impossible pour le moment.
       rename_success: '✅ Pseudo mis à jour : {name}'
       remove_button: Retirer un compte
-      matches_button: "Derniers matchs"
+      matches_button: "Derniers matchs joués"
       matches_ladder: "Ladder {name} \u2014 Match n\u00b0{number}"
-      matches_title: "Tes 5 derniers matchs"
+      matches_title: "Tes 5 derniers matchs joués"
       matches_live_title: "🎯 En cours"
       matches_with: avec
       matches_join: Rejoindre

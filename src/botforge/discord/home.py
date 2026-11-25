@@ -2077,6 +2077,11 @@ async def _finished_cards(
         if (not finished_at or not winners) and not invalid:
             continue
         seats = _entry_players_of(entry)
+        # a SOLO match never lists (owner 2026-11-25): a single seat
+        # - human or computer - is a lobby test, not a game
+        valid_seats = [s for s in seats if isinstance(s, dict)]
+        if len(valid_seats) < 2:
+            continue
         if invalid:
             # the seal may pre-date the AI rule: a FINISHED match
             # against computers with no recorded winner is DECIDED -

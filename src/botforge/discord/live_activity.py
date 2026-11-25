@@ -78,6 +78,10 @@ _MATCH_PLAYERS: dict[str, tuple[list[str], int]] = {}
 _LOGGED: set[tuple[str, str, str]] = set()
 # the guilds whose matches salon already saw their week of history
 _SEEDED: set[str] = set()
+# the (guild, match_ref) the salon already carries a message for - the
+# ONE-message-per-match bookkeeping (owner 2026-11-25): the live cards,
+# the seeds and the store gap-fills all share it
+_POSTED: dict[str, set[str]] = {}
 # the fire-and-forget tasks (kept alive until they finish)
 _BG_TASKS: set[asyncio.Task[Any]] = set()
 
@@ -180,10 +184,12 @@ async def _seed_loop(bot: discord.Client) -> None:
     while True:
         for guild in list(bot.guilds):
             try:
-                channel_id = await _matches_channel_id(bot, str(guild.id))
+                guild_id = str(guild.id)
+                channel_id = await _matches_channel_id(bot, guild_id)
                 if channel_id is None:
                     continue
-                await _maybe_seed_matches_salon(bot, str(guild.id), channel_id)
+                await _maybe_seed_matches_salon(bot, guild_id, channel_id)
+                await _gap_fill_matches_salon(bot, guild_id, channel_id)
             except Exception:
                 logger.debug(
                     "the seed sweep skipped a guild (%s) - best-effort", guild.id, exc_info=True
@@ -365,6 +371,9 @@ async def _send_card(
     try:
         message = await channel.send(view=view, silent=True)
         _CARDS[key] = message
+        # ONE message per match (owner 2026-11-25): the gap-fill never
+        # duplicates a match the live feed already carries
+        await _mark_posted(guild_id, match_ref)
     except Exception:
         logger.debug("live activity card send skipped (guild %s) - best-effort", guild_id, exc_info=True)
 
@@ -458,6 +467,10 @@ async def _maybe_seed_matches_salon(
         await _write_seed_marker(guild_id, channel_id)
         if not cards:
             return
+        posted = await _posted_refs(guild_id)
+        cards = [card for card in cards if str(card.get("match_id") or "") not in posted]
+        if not cards:
+            return
         logger.info(
             "matches salon seed: %d card(s) for guild %s (the last week)",
             len(cards),
@@ -474,6 +487,7 @@ async def _maybe_seed_matches_salon(
                 if channel is None or not isinstance(channel, discord.TextChannel):
                     return
                 await channel.send(view=_match_card_view(card, ctx, set(), labels), silent=True)
+                await _mark_posted(guild_id, str(card.get("match_id") or ""))
             except Exception:
                 logger.debug("matches salon seed card skipped - best-effort", exc_info=True)
     except Exception:
@@ -552,6 +566,85 @@ def _seed_card_of(entry: Any) -> dict[str, Any]:
         card["invalid"] = True
         card["invalid_reason"] = reason
     return card
+
+
+async def _posted_refs(guild_id: str) -> set[str]:
+    """Retrieve the salon messages' matches - persisted, process-wide cache."""
+    cached = _POSTED.get(guild_id)
+    if cached is not None:
+        return cached
+    refs: set[str] = set()
+    try:
+        from botforge.core.models.db import get_async_database
+
+        document = await get_async_database()["channels"].find_one(
+            {"_id": f"{guild_id}:livefeed:matches:posted"}
+        )
+        raw_refs: Any = (document or {}).get("refs") or []
+        if not isinstance(raw_refs, (list, tuple, set)):
+            raw_refs = []
+        refs = {str(ref) for ref in raw_refs}
+    except Exception:
+        refs = set()
+    _POSTED[guild_id] = refs
+    return refs
+
+
+async def _mark_posted(guild_id: str, match_ref: str) -> None:
+    """Record one match's salon message - the ONE-message bookkeeping."""
+    refs = await _posted_refs(guild_id)
+    if match_ref in refs:
+        return
+    refs.add(match_ref)
+    try:
+        from botforge.core.models.db import get_async_database
+
+        await get_async_database()["channels"].update_one(
+            {"_id": f"{guild_id}:livefeed:matches:posted"},
+            {"$addToSet": {"refs": match_ref}},
+            upsert=True,
+        )
+    except Exception:
+        logger.debug("the posted-refs write failed (match %s)", match_ref, exc_info=True)
+
+
+async def _gap_fill_matches_salon(bot: discord.Client, guild_id: str, channel_id: str) -> None:
+    """Post the store matches the salon never saw (owner 2026-11-25).
+
+    A match played without a live feed - an automatch nobody opened a
+    lobby for, a game during a restart - only lives in the store: the
+    sweep posts its card as soon as the history owns a verdict. The
+    posted-refs registry keeps ONE message per match, whatever road it
+    took (live event, salon seed, gap-fill).
+    """
+    posted = await _posted_refs(guild_id)
+    profiles = await _guild_profiles(bot, guild_id)
+    if not profiles:
+        return
+    from botforge.discord.home import _match_card_view
+    from botforge.discord.stats_views import recent_match_entries
+
+    labels = await _label_pack(bot, guild_id)
+    entries = await recent_match_entries(profiles, limit=25)
+    for entry in entries:
+        ref = str(getattr(entry, "match_id", "") or "")
+        if not ref or ref in posted:
+            continue
+        finished_at = int(getattr(entry, "finished_at", 0) or 0)
+        if not finished_at:
+            continue  # the live feeds carry the running games
+        card = _seed_card_of(entry)
+        try:
+            ctx = await _card_ctx(bot, guild_id, card)
+            guild = bot.get_guild(int(guild_id))
+            channel = guild.get_channel(int(channel_id)) if guild else None
+            if channel is None or not isinstance(channel, discord.TextChannel):
+                return
+            await channel.send(view=_match_card_view(card, ctx, set(), labels), silent=True)
+            await _mark_posted(guild_id, ref)
+            logger.info("matches salon gap-fill: match %s posted (guild %s)", ref, guild_id)
+        except Exception:
+            logger.debug("the gap-fill card skipped (match %s) - best-effort", ref, exc_info=True)
 
 
 async def _guild_profiles(bot: discord.Client, guild_id: str) -> list[str]:

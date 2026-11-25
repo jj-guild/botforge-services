@@ -275,3 +275,45 @@ def test_the_format_reads_the_exact_sizes_and_the_ffa_stands_alone() -> None:
     melee = {"players": [{"team": 1}, {"team": 2}, {"team": 3}]}
     assert _card_format(melee) == "FFA" and _is_ffa(melee), "the all-alone melee reads FFA"
     assert not _is_ffa(two) and not _is_ffa({"players": [{"team": 1}, {"team": 2}]})
+
+
+def test_a_solo_match_never_lists_in_the_five() -> None:
+    """A single-seat match is a lobby test, not a game (owner 2026-11-25)."""
+    from types import SimpleNamespace
+
+    # the guard on the listing path: seats < 2 skips the entry
+    from botforge.discord import home
+    from botforge.discord.home import _finished_cards  # noqa: F401 (async, guarded below)
+
+    async def _fake_entries(profile_ids, limit=10, refresh=False):
+        del profile_ids, limit, refresh
+        return [
+            SimpleNamespace(
+                match_id="solo-1", leaderboard_id="", started_at=100, finished_at=200,
+                winners=("848567",), description="test",
+                map_name="Budapest", options_json="", players_json='[{"profile_id": "848567"}]',
+                settings_json="[]", invalid=False,
+            ),
+            SimpleNamespace(
+                match_id="duo-1", leaderboard_id="", started_at=100, finished_at=200,
+                winners=("848567",), description="test",
+                map_name="Budapest", options_json="",
+                players_json='[{"profile_id": "848567"}, {"profile_id": "", "ai": true}]',
+                settings_json="[]", invalid=False,
+            ),
+        ]
+
+    import asyncio
+
+    import botforge.discord.stats_views as stats_views
+
+    stats_views.recent_match_entries = _fake_entries
+    cards = asyncio.run(home._finished_cards(_NullInteraction(), {"848567"}, limit=5))
+    ids = [card["match_id"] for card in cards]
+    assert "solo-1" not in ids, "a single-seat lobby test never lists"
+    assert "duo-1" in ids, "a match against a computer lists"
+
+
+class _NullInteraction:
+    client = None
+    guild_id = None
