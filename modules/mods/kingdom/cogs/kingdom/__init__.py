@@ -275,6 +275,7 @@ def setup_hook(bot: Any) -> None:
     from .camp_beta import camp_dynamic_items
     from .common import KingdomWindowCloseButton
     from .console import KingdomClockButton, KingdomRelaunchButton, KingdomResetButton
+    from .decisions import decisions_dynamic_items
     from .distributor import distributor_dynamic_items
     from .ffa import FFAJoinButton
     from .lieux import lieux_dynamic_items
@@ -364,6 +365,7 @@ def setup_hook(bot: Any) -> None:
         KingdomRegieResetPlayersButton,
         KingdomRoyaumesPageButton,
         KingdomWindowCloseButton,
+        *decisions_dynamic_items(),
         *machine_dynamic_items(),
         *distributor_dynamic_items(),
         *camp_dynamic_items(),

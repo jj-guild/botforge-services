@@ -412,3 +412,16 @@ def decision_action_surface(strings: dict[str, str], attack: Any) -> Any:
         )
     items.append(row)
     return surface(DECISION_ACTION_VIEW_ID, discord.ui.Container(*items))
+
+def decisions_dynamic_items() -> tuple[type, ...]:
+    """Return the restart-proof dynamic items of the decisions layer.
+
+    decisions-admin-v1 (Affaire 21bis, « n'a pas répondu à temps ») :
+    a DynamicItem the boot never registers is a button Discord clicks
+    into the VOID — the drawer renders it, the click finds no handler.
+    Every new decision surface lands HERE.
+    """
+    return (
+        DecisionOpenButton,
+        DecisionActButton,
+    )

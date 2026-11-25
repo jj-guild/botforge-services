@@ -47,3 +47,27 @@ def test_boot_register_lands_every_declared_pin() -> None:
         "register() died mid-flow — these pins never registered "
         f"(an import below its use? a wiring crash?): {sorted(missing)}"
     )
+
+
+def test_boot_register_lands_every_dynamic_item() -> None:
+    """Affaire 21bis (« n'a pas répondu à temps ») : a DynamicItem the
+    register loop never lands is a button Discord clicks into the
+    void — the drawer rendered it, but the bot had no handler. The
+    guard executes the REAL register() on a recording bot and fails
+    loudly the moment one declared dynamic class goes missing (the
+    dynamic items live in setup_hook, the boot's second pass)."""
+    from botforge.mods.kingdom.cogs import setup_hook
+    from botforge.mods.kingdom.cogs.decisions import DecisionActButton, DecisionOpenButton
+
+    landed: list[object] = []
+
+    class _RecordingBot:
+        def add_dynamic_items(self, item: object) -> None:
+            landed.append(item)
+
+    setup_hook(_RecordingBot())
+    missing = {DecisionOpenButton, DecisionActButton} - set(landed)
+    assert not missing, (
+        "register() never landed these dynamic items — their clicks "
+        f"silently die ('n'a pas répondu à temps'): {sorted(c.__name__ for c in missing)}"
+    )
