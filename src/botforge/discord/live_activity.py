@@ -680,15 +680,23 @@ def _cards_of_player(cards: list[dict[str, Any]], profile_id: str) -> list[dict[
 
 
 def _thread_of(forum: Any, entry: dict[str, Any]) -> Any | None:
-    """Resolve a post's thread object from the forum's caches."""
+    """Resolve a post's LIVE thread - a dead id reads None, never a ghost.
+
+    The partial-messageable fallback "resolved" ANY id (owner
+    2026-11-25: every repair starved on it - the zombie threads looked
+    alive, the ensure skipped, the sends 404'd in silence). Only the
+    forum's OWN caches answer: a thread that does not resolve is DEAD
+    and gets recreated.
+    """
     thread_id = int(entry.get("thread_id") or 0)
     if not thread_id:
         return None
     thread = forum.get_thread(thread_id)
     if thread is not None:
         return thread
+    threads_map = getattr(forum, "threads", {}) or {}
     try:
-        return forum.get_partial_messageable(thread_id)
+        return threads_map.get(thread_id)
     except Exception:
         return None
 
