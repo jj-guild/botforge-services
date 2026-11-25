@@ -290,14 +290,22 @@ class GameProviderClient:
                 raise
         return [match_history_from_wire(e) for e in reply.matches]
 
-    async def get_account_stats(self, profile_ids: list[str]) -> list[AccountEloStatus]:
-        """Fetch the per-account elo status (current + max, #404 T1)."""
+    async def get_account_stats(
+        self, profile_ids: list[str], at_s: int = 0
+    ) -> list[AccountEloStatus]:
+        """Fetch the per-account elo status (current + max, #404 T1).
+
+        ``at_s > 0`` fetches the elo AS OF that epoch second (owner
+        2026-11-25): the seat lines render the match's day, not the
+        card's - the provider's timeseries answers the last point at
+        or before it.
+        """
         async with build_channel(self._provider_uri) as channel:
             stub = game_pb2_grpc.GameStub(channel)
             try:
                 reply = await call_with_retry(
                     stub.GetAccountStats,
-                    game_pb2.AccountStatsRequest(profile_ids=profile_ids),
+                    game_pb2.AccountStatsRequest(profile_ids=profile_ids, at_s=int(at_s)),
                 )
             except grpc.aio.AioRpcError as exc:
                 if exc.code() in (

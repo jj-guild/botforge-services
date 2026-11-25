@@ -258,6 +258,10 @@ message MatchHistoryReply {
 
 message AccountStatsRequest {
   repeated string profile_ids = 1;
+  // AS-OF read (owner 2026-11-25): >0 serves the elo (current + max)
+  // as it stood AT that epoch-second moment - the seat lines render
+  // the match's day, not the card's; 0 keeps the live current status.
+  int64 at_s = 2;
 }
 
 message LeaderboardElo {

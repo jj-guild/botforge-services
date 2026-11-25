@@ -27,6 +27,10 @@ logger = logging.getLogger("botforge.ext_librematch.store")
 MATCHES_COLLECTION = "librematch:matches"
 ACCOUNTS_COLLECTION = "librematch:accounts"
 BINDINGS_COLLECTION = "librematch:bindings"
+#: the ELO TIMESERIES (owner 2026-11-25): one document per (profile,
+#: board), points ``[at, current, max_so_far]`` sorted ASC - the seat
+#: lines read the match's day, and a graph reads the array as-is.
+ELO_COLLECTION = "librematch:elo"
 
 DEFAULT_HISTORY_LIMIT = 50
 
@@ -203,6 +207,75 @@ class LibrematchStore:
         floor = int(time.time()) - max(0, int(within_s))
         cursor = self._accounts().find({"_id": {"$in": ids}, "synced_at": {"$gte": floor}}, {"_id": 1})
         return {str(doc["_id"]) async for doc in cursor}
+
+    def _elo(self) -> Any:
+        """Return the elo timeseries collection."""
+        return self._db[ELO_COLLECTION]
+
+    async def record_elo_points(
+        self, profile_id: str, board: str, points: list[tuple[int, int]]
+    ) -> None:
+        """Append dated elo points to one (profile, board) timeseries.
+
+        Each point carries the RUNNING MAX (owner 2026-11-25: the seat
+        lines read the match's day - ``1039 - 1120`` is what the player
+        carried THAT day, not today). Cheap and idempotent: duplicates
+        fold on upsert, unsorted batches sort before the write.
+        """
+        profile_id = str(profile_id)
+        board = str(board)
+        clean = sorted({(int(at), int(cur)) for at, cur in points if int(cur or 0) > 0})
+        if not clean:
+            return
+        doc_id = f"{profile_id}:{board}"
+        existing = await self._elo().find_one({"_id": doc_id}) or {}
+        series: list[list[int]] = [list(p) for p in (existing.get("points") or [])]
+        known = {(p[0], p[1]) for p in series}
+        peak = max((p[2] for p in series), default=0)
+        for at, cur in clean:
+            if (at, cur) in known:
+                continue
+            peak = max(peak, cur)
+            series.append([at, cur, peak])
+        series.sort(key=lambda p: p[0])
+        await self._elo().update_one(
+            {"_id": doc_id},
+            {"$set": {"profile_id": profile_id, "board": board, "points": series}},
+            upsert=True,
+        )
+
+    async def elo_as_of(
+        self, profile_ids: list[str], at_s: int, boards: tuple[str, ...] = ("3", "4")
+    ) -> dict[str, dict[str, tuple[int, int]]]:
+        """Read the elo (current, running-max) AS OF one moment.
+
+        The LAST point at or before ``at_s`` answers (owner
+        2026-11-25): before the first point the profile carries
+        nothing - the caller renders the absent line, never a guess.
+        """
+        ids = [str(p) for p in profile_ids if str(p)]
+        out: dict[str, dict[str, tuple[int, int]]] = {}
+        if not ids or at_s <= 0:
+            return out
+        cursor = self._elo().find({"profile_id": {"$in": ids}, "board": {"$in": list(boards)}})
+        async for doc in cursor:
+            series = sorted(
+                p for p in doc.get("points") or [] if isinstance(p, (list, tuple)) and len(p) >= 2
+            )
+            row = [p for p in series if int(p[0]) <= at_s]
+            if not row:
+                continue
+            cur = int(row[-1][1])
+            peak = int(row[-1][2]) if len(row[-1]) >= 3 else cur
+            out.setdefault(str(doc.get("profile_id")), {})[str(doc.get("board"))] = (cur, peak)
+        return out
+
+    async def elo_series_is_empty(self) -> bool:
+        """Whether the timeseries never started (the backfill's gate)."""
+        try:
+            return int(await self._elo().count_documents({})) == 0
+        except Exception:
+            return True
 
     async def ensure_indexes(self) -> None:
         """Create the provider's hot-path indexes (idempotent, best-effort).

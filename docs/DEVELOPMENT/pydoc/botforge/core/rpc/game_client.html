@@ -57,7 +57,12 @@ Typed&nbsp;client&nbsp;for&nbsp;a&nbsp;botforge.v1.Game&nbsp;provider&nbsp;proce
 <td class="singlecolumn">Methods defined here:<br>
 <dl><dt><a name="GameProviderClient-__init__"><strong>__init__</strong></a>(self, provider_uri: 'str', provider_id: 'str', game_key: 'str') -&gt; 'None'</dt><dd><span class="code">Initialize&nbsp;self.&nbsp;&nbsp;See&nbsp;help(type(self))&nbsp;for&nbsp;accurate&nbsp;signature.</span></dd></dl>
 
-<dl><dt>async <a name="GameProviderClient-get_account_stats"><strong>get_account_stats</strong></a>(self, profile_ids: 'list[str]') -&gt; 'list[AccountEloStatus]'</dt><dd><span class="code">Fetch&nbsp;the&nbsp;per-account&nbsp;elo&nbsp;status&nbsp;(current&nbsp;+&nbsp;max,&nbsp;#404&nbsp;T1).</span></dd></dl>
+<dl><dt>async <a name="GameProviderClient-get_account_stats"><strong>get_account_stats</strong></a>(self, profile_ids: 'list[str]', at_s: 'int' = 0) -&gt; 'list[AccountEloStatus]'</dt><dd><span class="code">Fetch&nbsp;the&nbsp;per-account&nbsp;elo&nbsp;status&nbsp;(current&nbsp;+&nbsp;max,&nbsp;#404&nbsp;T1).<br>
+&nbsp;<br>
+``at_s&nbsp;&gt;&nbsp;0``&nbsp;fetches&nbsp;the&nbsp;elo&nbsp;AS&nbsp;OF&nbsp;that&nbsp;epoch&nbsp;second&nbsp;(owner<br>
+2026-11-25):&nbsp;the&nbsp;seat&nbsp;lines&nbsp;render&nbsp;the&nbsp;match's&nbsp;day,&nbsp;not&nbsp;the<br>
+card's&nbsp;-&nbsp;the&nbsp;provider's&nbsp;timeseries&nbsp;answers&nbsp;the&nbsp;last&nbsp;point&nbsp;at<br>
+or&nbsp;before&nbsp;it.</span></dd></dl>
 
 <dl><dt>async <a name="GameProviderClient-get_account_stats_wire"><strong>get_account_stats_wire</strong></a>(self, request: 'Any') -&gt; 'Any'</dt><dd><span class="code">Fetch&nbsp;the&nbsp;per-account&nbsp;status&nbsp;as&nbsp;the&nbsp;wire&nbsp;reply.</span></dd></dl>
 

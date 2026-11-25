@@ -60,8 +60,13 @@ class GameDataClient:
         stats = user_stats_from_wire(reply.stats)
         return stats if stats.known else None
 
-    async def get_account_stats(self, profile_ids: list[str]) -> Any:
-        """Fetch the per-account elo status (current + max, #404)."""
+    async def get_account_stats(self, profile_ids: list[str], at_s: int = 0) -> Any:
+        """Fetch the per-account elo status (current + max, #404).
+
+        ``at_s > 0`` fetches the elo AS OF that epoch second (owner
+        2026-11-25): the seat lines render the match's day - the
+        provider's timeseries answers the last point at or before it.
+        """
         from botforge.core.rpc.client import build_channel
         from botforge.core.rpc.game import account_stats_from_wire
         from botforge.rpc_generated.botforge.v1 import game_pb2, gamedata_pb2_grpc
@@ -69,7 +74,7 @@ class GameDataClient:
         async with build_channel(self._uri) as channel:
             stub = gamedata_pb2_grpc.GameDataStub(channel)
             reply = await stub.GetAccountStats(
-                game_pb2.AccountStatsRequest(profile_ids=list(profile_ids)),
+                game_pb2.AccountStatsRequest(profile_ids=list(profile_ids), at_s=int(at_s)),
                 timeout=15.0,
             )
         return [account_stats_from_wire(a) for a in reply.accounts]

@@ -345,7 +345,7 @@ class GameServicer(game_pb2_grpc.GameServicer):
         match_result: Callable[[list[str], int], Awaitable[MatchResult | None]] | None = None,
         sync_stats: Callable[[list[str], bool], Awaitable[tuple[bool, int, str]]] | None = None,
         match_history: Callable[[list[str], int, int, str], Awaitable[list[MatchHistoryEntry]]] | None = None,
-        account_stats: Callable[[list[str]], Awaitable[list[AccountEloStatus]]] | None = None,
+        account_stats: Callable[..., Awaitable[list[AccountEloStatus]]] | None = None,
         user_stats: Callable[[str, int], Awaitable[UserEloStats | None]] | None = None,
         live_matches: Callable[[int], Awaitable[list[dict[str, Any]]]] | None = None,
         search_profiles: Callable[[str], Awaitable[list[dict[str, str]]]] | None = None,

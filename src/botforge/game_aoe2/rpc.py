@@ -561,6 +561,12 @@ class GameDataServicer(gamedata_pb2_grpc.GameDataServicer):
         async def fetch() -> Any:
             return await self._stats_provider.get_account_stats_wire(request)
 
+        # the AS-OF read never caches (owner 2026-11-25): the elo
+        # history answer is point-per-moment, the CURRENT status
+        # alone rides the TTL cache
+        at_s = int(getattr(request, "at_s", 0) or 0)
+        if at_s > 0:
+            return await fetch()
         return await self._cached(
             "account", TTL_ACCOUNT_STATS_S, [str(p) for p in request.profile_ids], fetch
         )

@@ -514,3 +514,85 @@ def test_the_forum_scan_answers_from_the_snapshot() -> None:
     url2 = asyncio.run(_thread_named(home_channel, ["Mayas"]))
     assert url2 == url1
     assert time.monotonic() - before < 1.0
+
+
+def test_the_elo_timeseries_reads_the_matchs_day() -> None:
+    """The (current, running-max) answer the AS-OF moment, never today."""
+    import asyncio
+
+    class _Store:
+        def __init__(self):
+            self.series = {"848567:3": [[1000, 1000, 1000], [2000, 1200, 1200], [3000, 900, 1200]]}
+            self.points = []
+
+        async def elo_as_of(self, profile_ids, at_s, boards=("3", "4")):
+            del boards
+            out = {}
+            for pid in profile_ids:
+                row = [p for p in self.series.get(f"{pid}:3", []) if p[0] <= at_s]
+                if row:
+                    out[pid] = {"3": (row[-1][1], row[-1][2])}
+            return out
+
+        async def find_accounts(self, profile_ids):
+            del profile_ids
+            return []  # no stored account doc: the current serve stays unknown
+
+        async def record_elo_points(self, profile_id, board, points):
+            self.points.append((profile_id, board, list(points)))
+
+    from botforge.ext_librematch.history import MatchHistorySyncer
+
+    syncer = MatchHistorySyncer.__new__(MatchHistorySyncer)
+    syncer._store = _Store()
+    # BEFORE the first point: unknown, never a guess
+    before = asyncio.run(syncer.account_stats(["848567"], at_s=500))
+    assert before[0].known is False
+    # at the peak day: 1200 with the max SO FAR 1200
+    mid = asyncio.run(syncer.account_stats(["848567"], at_s=2500))
+    assert mid[0].known is True
+    board = mid[0].leaderboards[0]
+    assert (board.current, board.max) == (1200, 1200)
+    # LATER, after a drop: the current reads 900 but the MAX stays 1200
+    late = asyncio.run(syncer.account_stats(["848567"], at_s=3100))
+    board = late[0].leaderboards[0]
+    assert (board.current, board.max) == (900, 1200), "the max never travels back in time"
+    # at_s=0 keeps the CURRENT serve path (the store's account doc)
+    now = asyncio.run(syncer.account_stats(["848567"]))
+    assert now[0].known is False, "the empty account doc stays unknown"
+
+
+def test_the_timeseries_pipe_records_the_running_max() -> None:
+    """The points deduplicate and the running max climbs, never drops."""
+    import asyncio
+
+    class _Collection:
+        def __init__(self):
+            self.docs = {}
+
+        async def find_one(self, q):
+            return self.docs.get(q["_id"])
+
+        async def update_one(self, q, patch, upsert=False):
+            del upsert
+            self.docs[q["_id"]] = {"_id": q["_id"], **patch["$set"]}
+
+        async def count_documents(self, q):
+            del q
+            return len(self.docs)
+
+    from botforge.ext_librematch.store import ELO_COLLECTION, LibrematchStore
+
+    class _Db(dict):
+        def __init__(self):
+            super().__setitem__(ELO_COLLECTION, _Collection())
+
+    store = LibrematchStore(_Db())
+    asyncio.run(store.record_elo_points("848567", "3", [(1000, 1000), (1200, 1200)]))
+    asyncio.run(store.record_elo_points("848567", "3", [(3000, 900), (1200, 1200)]))
+    doc = store._db[ELO_COLLECTION].docs["848567:3"]
+    assert [tuple(p) for p in doc["points"]] == [
+        (1000, 1000, 1000),
+        (1200, 1200, 1200),
+        (3000, 900, 1200),
+    ], "the duplicate point folds, the max still climbs"

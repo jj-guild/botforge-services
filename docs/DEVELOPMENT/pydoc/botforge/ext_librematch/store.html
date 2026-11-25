@@ -74,6 +74,14 @@ capture.&nbsp;An&nbsp;empty&nbsp;(or&nbsp;absent)&nbsp;``players``&nbsp;list&nbs
 
 <dl><dt>async <a name="LibrematchStore-delete_matches"><strong>delete_matches</strong></a>(self, doc_ids: 'list[str]') -&gt; 'int'</dt><dd><span class="code">Delete&nbsp;stored&nbsp;captures&nbsp;by&nbsp;their&nbsp;document&nbsp;ids&nbsp;(the&nbsp;repair).</span></dd></dl>
 
+<dl><dt>async <a name="LibrematchStore-elo_as_of"><strong>elo_as_of</strong></a>(self, profile_ids: 'list[str]', at_s: 'int', boards: 'tuple[str, ...]' = ('3', '4')) -&gt; 'dict[str, dict[str, tuple[int, int]]]'</dt><dd><span class="code">Read&nbsp;the&nbsp;elo&nbsp;(current,&nbsp;running-max)&nbsp;AS&nbsp;OF&nbsp;one&nbsp;moment.<br>
+&nbsp;<br>
+The&nbsp;LAST&nbsp;point&nbsp;at&nbsp;or&nbsp;before&nbsp;``at_s``&nbsp;answers&nbsp;(owner<br>
+2026-11-25):&nbsp;before&nbsp;the&nbsp;first&nbsp;point&nbsp;the&nbsp;profile&nbsp;carries<br>
+nothing&nbsp;-&nbsp;the&nbsp;caller&nbsp;renders&nbsp;the&nbsp;absent&nbsp;line,&nbsp;never&nbsp;a&nbsp;guess.</span></dd></dl>
+
+<dl><dt>async <a name="LibrematchStore-elo_series_is_empty"><strong>elo_series_is_empty</strong></a>(self) -&gt; 'bool'</dt><dd><span class="code">Whether&nbsp;the&nbsp;timeseries&nbsp;never&nbsp;started&nbsp;(the&nbsp;backfill's&nbsp;gate).</span></dd></dl>
+
 <dl><dt>async <a name="LibrematchStore-ensure_indexes"><strong>ensure_indexes</strong></a>(self) -&gt; 'None'</dt><dd><span class="code">Create&nbsp;the&nbsp;provider's&nbsp;hot-path&nbsp;indexes&nbsp;(idempotent,&nbsp;best-effort).<br>
 &nbsp;<br>
 Rule&nbsp;5&nbsp;(one&nbsp;owner&nbsp;per&nbsp;collection):&nbsp;the&nbsp;provider&nbsp;ensures&nbsp;ITS<br>
@@ -145,6 +153,13 @@ the&nbsp;post-purge&nbsp;boot&nbsp;walked&nbsp;thousands&nbsp;of&nbsp;unrelated&
 
 <dl><dt>async <a name="LibrematchStore-recently_synced"><strong>recently_synced</strong></a>(self, profile_ids: 'list[str]', within_s: 'int') -&gt; 'set[str]'</dt><dd><span class="code">Return&nbsp;the&nbsp;profile&nbsp;ids&nbsp;whose&nbsp;sync&nbsp;stamp&nbsp;is&nbsp;FRESHER&nbsp;than&nbsp;the&nbsp;window.</span></dd></dl>
 
+<dl><dt>async <a name="LibrematchStore-record_elo_points"><strong>record_elo_points</strong></a>(self, profile_id: 'str', board: 'str', points: 'list[tuple[int, int]]') -&gt; 'None'</dt><dd><span class="code">Append&nbsp;dated&nbsp;elo&nbsp;points&nbsp;to&nbsp;one&nbsp;(profile,&nbsp;board)&nbsp;timeseries.<br>
+&nbsp;<br>
+Each&nbsp;point&nbsp;carries&nbsp;the&nbsp;RUNNING&nbsp;MAX&nbsp;(owner&nbsp;2026-11-25:&nbsp;the&nbsp;seat<br>
+lines&nbsp;read&nbsp;the&nbsp;match's&nbsp;day&nbsp;-&nbsp;``1039&nbsp;-&nbsp;1120``&nbsp;is&nbsp;what&nbsp;the&nbsp;player<br>
+carried&nbsp;THAT&nbsp;day,&nbsp;not&nbsp;today).&nbsp;Cheap&nbsp;and&nbsp;idempotent:&nbsp;duplicates<br>
+fold&nbsp;on&nbsp;upsert,&nbsp;unsorted&nbsp;batches&nbsp;sort&nbsp;before&nbsp;the&nbsp;write.</span></dd></dl>
+
 <dl><dt>async <a name="LibrematchStore-stamp_synced"><strong>stamp_synced</strong></a>(self, profile_ids: 'list[str]', when: 'int' = 0) -&gt; 'None'</dt><dd><span class="code">Stamp&nbsp;the&nbsp;accounts'&nbsp;LAST&nbsp;history&nbsp;sync&nbsp;(the&nbsp;click's&nbsp;freshness&nbsp;gate).<br>
 &nbsp;<br>
 The&nbsp;on-demand&nbsp;sync&nbsp;(the&nbsp;listing's&nbsp;click)&nbsp;checks&nbsp;this&nbsp;stamp<br>
@@ -188,6 +203,7 @@ Data descriptors defined here:<br>
 <td class="singlecolumn"><strong>ACCOUNTS_COLLECTION</strong> = 'librematch:accounts'<br>
 <strong>BINDINGS_COLLECTION</strong> = 'librematch:bindings'<br>
 <strong>DEFAULT_HISTORY_LIMIT</strong> = 50<br>
+<strong>ELO_COLLECTION</strong> = 'librematch:elo'<br>
 <strong>MATCHES_COLLECTION</strong> = 'librematch:matches'<br>
 <strong>logger</strong> = &lt;Logger botforge.ext_librematch.store (INFO)&gt;</td></tr></table>
 </body></html>

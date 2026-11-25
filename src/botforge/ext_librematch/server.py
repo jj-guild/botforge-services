@@ -194,11 +194,15 @@ def _stats_handlers(syncer: MatchHistorySyncer | None) -> dict[str, Any]:
             logger.info("SERVE history: %s entr\u00e9e(s) pour %s \u2014 %s", len(entries), profile_ids, sample)
         return entries
 
-    async def account_stats(profile_ids: list[str]) -> list[AccountEloStatus]:
-        """Serve the per-account status: current + max elo (T1)."""
+    async def account_stats(profile_ids: list[str], at_s: int = 0) -> list[AccountEloStatus]:
+        """Serve the per-account status: current + max elo (T1).
+
+        ``at_s > 0`` answers the elo AS OF that moment (owner
+        2026-11-25) - the seat lines render the match's day.
+        """
         if syncer is None:
             return []
-        statuses: list[AccountEloStatus] = await syncer.account_stats(profile_ids)
+        statuses: list[AccountEloStatus] = await syncer.account_stats(profile_ids, at_s)
         return statuses
 
     async def user_stats(user_id: str, window_days: int) -> UserEloStats | None:

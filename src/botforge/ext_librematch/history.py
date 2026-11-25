@@ -348,6 +348,55 @@ def _needs_repair(candidate_docs: list[dict[str, Any]]) -> bool:
 class MatchHistorySyncer:
     """Pull the known accounts' history into the store, exploit it after."""
 
+    async def _fold_elo_points(self, documents: list[dict[str, Any]]) -> None:
+        """Record one dated elo point per (profile, board) of the fold.
+
+        Each match carries the players' after-ratings - one point at
+        the match's own end (owner 2026-11-25): the seat lines read
+        the match's day, not the card's.
+        """
+        try:
+            for doc in documents:
+                board = str(doc.get("leaderboard_id") or "")
+                point_at = _int(doc.get("finished_at")) or _int(doc.get("started_at"))
+                if not board or not point_at:
+                    continue
+                for pid, after in (doc.get("rating_after") or {}).items():
+                    if _int(after) > 0 and str(pid):
+                        await self._store.record_elo_points(str(pid), board, [(point_at, _int(after))])
+        except Exception:
+            logger.debug("the elo series fold failed", exc_info=True)
+
+    async def backfill_elo_series(self) -> int:
+        """Fold the STORED matches into the elo timeseries (once).
+
+        The series starts empty; the matches already carry every
+        after-rating with its date (owner 2026-11-25) - one pass over
+        the store rebuilds the whole history retroactively, the
+        regular fold keeps it alive afterwards. Idempotent: the
+        points deduplicate on the upsert.
+        """
+        if not await self._store.elo_series_is_empty():
+            return 0
+        try:
+            docs = await self._store.find_matches([], limit=0, include_invalid=True)
+        except Exception:
+            logger.warning("the elo backfill read failed", exc_info=True)
+            return 0
+        written = 0
+        for doc in docs:
+            board = str(doc.get("leaderboard_id") or "")
+            point_at = _int(doc.get("finished_at")) or _int(doc.get("started_at"))
+            if not board or not point_at:
+                continue
+            for pid, after in (doc.get("rating_after") or {}).items():
+                if _int(after) > 0 and str(pid):
+                    written += 1
+                    await self._store.record_elo_points(str(pid), board, [(point_at, _int(after))])
+        if written:
+            logger.info("elo series backfilled: %d point(s) from the stored history", written)
+        return written
+
     def __init__(
         self,
         adapter: Any,
@@ -420,6 +469,8 @@ class MatchHistorySyncer:
                 # known id is never rewritten \u2014 insert-only
                 inserted = await self._store.insert_matches_new_only(documents)
                 stored_any = stored_any or inserted > 0
+            # the elo TIMESERIES rides the fold (owner 2026-11-25)
+            await self._fold_elo_points(documents)
             # every seat met becomes a known player: his boards ride
             # the encounter itself (no extra upstream call), and the
             # seats lacking a 1v1 elo get probed once (owner 2026-11-22)
@@ -453,11 +504,18 @@ class MatchHistorySyncer:
         # Seal the never-played captures: a match started long ago
         # with no result is an abandoned lobby, not a game (owner
         # 2026-11-23 - the served "test" lobbies never went away).
+        await self._seal_stale_when_due()
+        return stored_any
+
+    async def _seal_stale_when_due(self) -> None:
+        """Run the never-played sweep THROTTLED - never per click.
+
+        The seal sweeps the WHOLE matches collection (owner
+        2026-11-25): one pass every ten minutes, then silence.
+        """
         import os
         import time
 
-        # the seal sweeps the WHOLE matches collection - never per
-        # click (owner 2026-11-25): one throttled pass, then silence
         if time.time() - self._last_seal_s > float(os.environ.get("LIBREMATCH_SEAL_INTERVAL_S", "600")):
             self._last_seal_s = time.time()
             try:
@@ -466,7 +524,6 @@ class MatchHistorySyncer:
                     logger.info("stale matches invalidated: %d", stale)
             except Exception:
                 logger.debug("the stale-match seal failed", exc_info=True)
-        return stored_any
 
     async def refresh_status(self, profile_id: str) -> bool:
         """Refresh ONE account's elo status — no history fetch at all.
@@ -483,6 +540,18 @@ class MatchHistorySyncer:
         if not boards:
             return False
         await self._store.upsert_account(self._account_doc(profile_id, boards, previous))
+        # the timeseries wants the refresh too (owner 2026-11-25): a
+        # board the matches never carried still tracks its current
+        try:
+            import time
+
+            now = int(time.time())
+            for board, entry in (boards or {}).items():
+                cur = _int((entry or {}).get("current"))
+                if cur > 0:
+                    await self._store.record_elo_points(profile_id, str(board), [(now, cur)])
+        except Exception:
+            logger.debug("the elo series refresh failed", exc_info=True)
         return True
 
     async def refresh_statuses(self, profile_ids: list[str]) -> int:
@@ -614,7 +683,9 @@ class MatchHistorySyncer:
                 fresh[profile_id] = found
         return fresh, absent
 
-    async def account_stats(self, profile_ids: list[str]) -> list[AccountEloStatus]:
+    async def account_stats(
+        self, profile_ids: list[str], at_s: int = 0
+    ) -> list[AccountEloStatus]:
         """Serve the per-account status (current + max elo per board).
 
         Store-only, NEVER a probe on the serve path (owner
@@ -624,9 +695,21 @@ class MatchHistorySyncer:
         (DEADLINE_EXCEEDED, merlin 14:27). The probes ride the SYNC
         flow (sync_account probes the met players, capped); the
         serve answers what the store already knows.
+
+        ``at_s > 0`` serves the ELO AS OF THAT MOMENT (owner
+        2026-11-25): the seat lines render the match's day, not the
+        card's - the timeseries (librematch:elo) answers the last
+        point at or before it; before the first point the status
+        reads UNKNOWN, never a guess.
         """
         if not profile_ids:
             return []
+        if at_s > 0:
+            series = await self._store.elo_as_of([str(p) for p in profile_ids], int(at_s))
+            return [
+                self._as_of_status(str(profile_id), series.get(str(profile_id)) or {})
+                for profile_id in profile_ids
+            ]
         docs = await self._store.find_accounts([str(p) for p in profile_ids])
         by_id = {str(doc["_id"]): doc for doc in docs}
         statuses: list[AccountEloStatus] = []
@@ -634,6 +717,24 @@ class MatchHistorySyncer:
             doc = by_id.get(str(profile_id))
             statuses.append(self._status_of(str(profile_id), doc))
         return statuses
+
+    def _as_of_status(self, profile_id: str, boards: dict[str, tuple[int, int]]) -> AccountEloStatus:
+        """Build the as-of account status from the timeseries row."""
+        from botforge.core.models.game import LeaderboardElo
+
+        if not boards:
+            return AccountEloStatus(profile_id=profile_id, known=False)
+        names = {"3": "rm_1v1", "4": "rm_team"}
+        return AccountEloStatus(
+            profile_id=profile_id,
+            leaderboards=tuple(
+                LeaderboardElo(
+                    leaderboard_id=board, name=names.get(board, board), current=cur, max=peak
+                )
+                for board, (cur, peak) in sorted(boards.items())
+            ),
+            known=True,
+        )
 
     async def user_stats(self, user_id: str, window_days: int = 0) -> UserEloStats | None:
         """Serve the per-USER unified view over the user's accounts.

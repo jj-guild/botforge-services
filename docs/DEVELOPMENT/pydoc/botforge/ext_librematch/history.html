@@ -61,7 +61,7 @@ Pull&nbsp;the&nbsp;known&nbsp;accounts'&nbsp;history&nbsp;into&nbsp;the&nbsp;sto
 <td class="singlecolumn">Methods defined here:<br>
 <dl><dt><a name="MatchHistorySyncer-__init__"><strong>__init__</strong></a>(self, adapter: 'Any', store: 'LibrematchStore', leaderboards: 'tuple[str, ...]' = ('0', '3', '4'), sync_count: 'int' = 1000, quick_count: 'int' = 25) -&gt; 'None'</dt><dd><span class="code">Initialize&nbsp;self.&nbsp;&nbsp;See&nbsp;help(type(self))&nbsp;for&nbsp;accurate&nbsp;signature.</span></dd></dl>
 
-<dl><dt>async <a name="MatchHistorySyncer-account_stats"><strong>account_stats</strong></a>(self, profile_ids: 'list[str]') -&gt; 'list[AccountEloStatus]'</dt><dd><span class="code">Serve&nbsp;the&nbsp;per-account&nbsp;status&nbsp;(current&nbsp;+&nbsp;max&nbsp;elo&nbsp;per&nbsp;board).<br>
+<dl><dt>async <a name="MatchHistorySyncer-account_stats"><strong>account_stats</strong></a>(self, profile_ids: 'list[str]', at_s: 'int' = 0) -&gt; 'list[AccountEloStatus]'</dt><dd><span class="code">Serve&nbsp;the&nbsp;per-account&nbsp;status&nbsp;(current&nbsp;+&nbsp;max&nbsp;elo&nbsp;per&nbsp;board).<br>
 &nbsp;<br>
 Store-only,&nbsp;NEVER&nbsp;a&nbsp;probe&nbsp;on&nbsp;the&nbsp;serve&nbsp;path&nbsp;(owner<br>
 2026-11-23):&nbsp;a&nbsp;batch&nbsp;of&nbsp;8&nbsp;seats&nbsp;probing&nbsp;the&nbsp;missing&nbsp;1v1/TG<br>
@@ -69,7 +69,21 @@ boards&nbsp;walked&nbsp;the&nbsp;upstream&nbsp;and&nbsp;the&nbsp;gRPC&nbsp;reply
 deadline&nbsp;-&nbsp;the&nbsp;panels&nbsp;then&nbsp;rendered&nbsp;NO&nbsp;elo&nbsp;lines&nbsp;at&nbsp;all<br>
 (DEADLINE_EXCEEDED,&nbsp;merlin&nbsp;14:27).&nbsp;The&nbsp;probes&nbsp;ride&nbsp;the&nbsp;SYNC<br>
 flow&nbsp;(sync_account&nbsp;probes&nbsp;the&nbsp;met&nbsp;players,&nbsp;capped);&nbsp;the<br>
-serve&nbsp;answers&nbsp;what&nbsp;the&nbsp;store&nbsp;already&nbsp;knows.</span></dd></dl>
+serve&nbsp;answers&nbsp;what&nbsp;the&nbsp;store&nbsp;already&nbsp;knows.<br>
+&nbsp;<br>
+``at_s&nbsp;&gt;&nbsp;0``&nbsp;serves&nbsp;the&nbsp;ELO&nbsp;AS&nbsp;OF&nbsp;THAT&nbsp;MOMENT&nbsp;(owner<br>
+2026-11-25):&nbsp;the&nbsp;seat&nbsp;lines&nbsp;render&nbsp;the&nbsp;match's&nbsp;day,&nbsp;not&nbsp;the<br>
+card's&nbsp;-&nbsp;the&nbsp;timeseries&nbsp;(librematch:elo)&nbsp;answers&nbsp;the&nbsp;last<br>
+point&nbsp;at&nbsp;or&nbsp;before&nbsp;it;&nbsp;before&nbsp;the&nbsp;first&nbsp;point&nbsp;the&nbsp;status<br>
+reads&nbsp;UNKNOWN,&nbsp;never&nbsp;a&nbsp;guess.</span></dd></dl>
+
+<dl><dt>async <a name="MatchHistorySyncer-backfill_elo_series"><strong>backfill_elo_series</strong></a>(self) -&gt; 'int'</dt><dd><span class="code">Fold&nbsp;the&nbsp;STORED&nbsp;matches&nbsp;into&nbsp;the&nbsp;elo&nbsp;timeseries&nbsp;(once).<br>
+&nbsp;<br>
+The&nbsp;series&nbsp;starts&nbsp;empty;&nbsp;the&nbsp;matches&nbsp;already&nbsp;carry&nbsp;every<br>
+after-rating&nbsp;with&nbsp;its&nbsp;date&nbsp;(owner&nbsp;2026-11-25)&nbsp;-&nbsp;one&nbsp;pass&nbsp;over<br>
+the&nbsp;store&nbsp;rebuilds&nbsp;the&nbsp;whole&nbsp;history&nbsp;retroactively,&nbsp;the<br>
+regular&nbsp;fold&nbsp;keeps&nbsp;it&nbsp;alive&nbsp;afterwards.&nbsp;Idempotent:&nbsp;the<br>
+points&nbsp;deduplicate&nbsp;on&nbsp;the&nbsp;upsert.</span></dd></dl>
 
 <dl><dt>async <a name="MatchHistorySyncer-decode_stored"><strong>decode_stored</strong></a>(self, profile_ids: 'list[str]', batch: 'int' = 25) -&gt; 'int'</dt><dd><span class="code">Decode&nbsp;the&nbsp;stored&nbsp;matches'&nbsp;encoded&nbsp;fields&nbsp;(#288,&nbsp;T2).<br>
 &nbsp;<br>

@@ -1535,15 +1535,10 @@ async def _match_panels_ctx_for(
             logger.debug("the account stats fetch failed", exc_info=True)
             accounts = []
         for account in accounts:
-            boards: dict[str, tuple[int, int]] = {}
-            for board in account.leaderboards:
-                # only the shown boards: unranked/custom (leaderboard 0)
-                # never renders on a seat (owner 2026-11-22)
-                if str(board.name) in ("rm_1v1", "rm_team"):
-                    boards[str(board.name)] = (int(board.current), int(board.max))
+            boards = _rm_boards_of(account)
             if boards:
                 ladder[str(account.profile_id)] = boards
-    return {
+    ctx = {
         "civ_urls": civ_urls,
         "civ_images": civ_images,
         "map_urls": map_urls,
@@ -1552,6 +1547,69 @@ async def _match_panels_ctx_for(
         "map_display": map_display,
         "ladder": ladder,
     }
+    ctx["ladder_by_ts"] = await _ladder_as_of(stats, cards)
+    return ctx
+
+
+def _rm_boards_of(account: Any) -> dict[str, tuple[int, int]]:
+    """Extract the SHOWN boards (rm_1v1, rm_team) of one account reply.
+
+    Unranked/custom (leaderboard 0) never renders on a seat (owner
+    2026-11-22).
+    """
+    boards: dict[str, tuple[int, int]] = {}
+    for board in account.leaderboards:
+        if str(board.name) in ("rm_1v1", "rm_team"):
+            boards[str(board.name)] = (int(board.current), int(board.max))
+    return boards
+
+
+def _seats_by_day(cards: list[dict[str, Any]]) -> dict[int, set[str]]:
+    """Group the finished cards' seat ids per THEIR OWN end timestamp.
+
+    A running match (no finished date) stays out: it reads the
+    CURRENT ladder.
+    """
+    by_ts: dict[int, set[str]] = {}
+    for card in cards:
+        ts = int(card.get("finished_at") or 0)
+        if ts <= 0:
+            continue
+        for player in card.get("players") or []:
+            pid = str((player or {}).get("profile_id") or "")
+            if pid:
+                by_ts.setdefault(ts, set()).add(pid)
+    return by_ts
+
+
+async def _ladder_as_of(
+    stats: Any, cards: list[dict[str, Any]]
+) -> dict[int, dict[str, dict[str, tuple[int, int]]]]:
+    """Read the elo (current + max) PER MATCH DAY (owner 2026-11-25).
+
+    They answer AS OF the match's own end - the seat lines render the
+    match's day, not the card's. One as-of read per DISTINCT
+    timestamp of the batch (a seek on the elo timeseries, never per
+    seat); a running game keeps the CURRENT ladder via ``ctx["ladder"]``.
+    """
+    by_ts = _seats_by_day(cards)
+    if stats is None or not by_ts:
+        return {}
+    out: dict[int, dict[str, dict[str, tuple[int, int]]]] = {}
+    for ts, pids in sorted(by_ts.items()):
+        try:
+            accounts = await stats.get_account_stats(sorted(pids), at_s=ts)
+        except Exception:
+            logger.debug("the as-of account stats fetch failed", exc_info=True)
+            continue
+        boards_of = {
+            str(account.profile_id): boards
+            for account in accounts
+            if (boards := _rm_boards_of(account))
+        }
+        if boards_of:
+            out[ts] = boards_of
+    return out
 
 
 def _seat_name(
@@ -1627,6 +1685,10 @@ def _seat_text(
     """
     civ_urls = ctx["civ_urls"]
     ladder = ctx["ladder"]
+    # the finished match reads its OWN day (owner 2026-11-25): the elo
+    # (current + max) as it stood at the match's end; a running game
+    # (no finished date) keeps the CURRENT ladder
+    day_ladder = (ctx.get("ladder_by_ts") or {}).get(int(card.get("finished_at") or 0)) or {}
     pid = str(player.get("profile_id", ""))
     alias = str(player.get("alias") or player.get("name") or pid or "?")
     civ = str(player.get("civ") or "").strip()
@@ -1672,7 +1734,7 @@ def _seat_text(
     # the other; the match's own board carries the bold elo — even
     # in a custom game — and the elo DIFF renders for RANKED
     # matches only (an unranked diff means nothing, owner 2026-11-22)
-    boards = ladder.get(pid) or {}
+    boards = day_ladder.get(pid) or ladder.get(pid) or {}
     boards = dict(boards)
     before = int(player.get("rating_before") or 0)
     after = int(player.get("rating_after") or 0)
