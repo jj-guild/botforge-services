@@ -388,6 +388,37 @@ DEFAULTS: dict[str, dict[str, str]] = {
         "dispute_applied": "⚖️ Arbitrage appliqué — **{kingdom}** remporte **{map}**.",
         "dispute_forfeit": "⚖️ Arbitrage appliqué — double forfait sur **{map}**.",
         "dispute_not_admin": "❌ Seuls les bot-admins arbitrent un litige.",
+        # -- decisions-admin-v1 (Drasah 25/11) : la boîte de réception
+        # admin + la raison obligatoire + l'annonce aux royaumes --
+        "dispute_cancel_button": "✖️ Annuler l'attaque",
+        "decision_reason_modal_title": "⚖️ Décision admin",
+        "decision_reason_label": "Raison (obligatoire, visible)",
+        "decision_reason_placeholder": "ex. résultat non déclaré, aucun contre-élément…",
+        "decision_reason_required": (
+            "❌ La raison est OBLIGATOIRE — la décision n'a pas été appliquée."
+        ),
+        "decision_applied_cancel": (
+            "✖️ Décision appliquée — **{map}** est annulée : aucun vainqueur, aucun point,"
+            " verrou levé, slots libérés."
+        ),
+        "decision_announce_arbitrage": (
+            "⚖️ **Décision admin** — l'attaque sur **{map}** (game {game}) est arbitrée :"
+            " **{winner}** remporte la rencontre.\n"
+            "Décidée par <@{admin}> — Raison : {reason}"
+        ),
+        "decision_announce_cancel": (
+            "⚖️ **Décision admin** — l'attaque sur **{map}** (game {game}) est ANNULEE :"
+            " aucun vainqueur, aucun point, les verrous sont levés.\n"
+            "Décidée par <@{admin}> — Raison : {reason}"
+        ),
+        "decision_summary_arbitrage": "arbitrage — {winner} remporte {map}",
+        "decision_summary_both": "double forfait — {map}",
+        "decision_summary_cancel": "annulation — {map}",
+        "decision_kind_auto": "Litige auto-ouvert (délai sans résultat).",
+        "decision_kind_declarations": "Déclarations contradictoires des joueurs.",
+        "decision_action_title": "⚖️ Décision admin",
+        "decision_action_header": "Attaque sur **{map}** — tranche ou annule.",
+        "decision_decide_button": "⚖️ Décider",
         # -- planning (P4.1b tranche 2d) --
         "plan_button": "📅 Planifier une attaque",
         "plan_disclaimer": (
@@ -1034,6 +1065,37 @@ DEFAULTS: dict[str, dict[str, str]] = {
         "dispute_applied": "⚖️ Arbitration applied — **{kingdom}** wins **{map}**.",
         "dispute_forfeit": "⚖️ Arbitration applied — double forfeit on **{map}**.",
         "dispute_not_admin": "❌ Only bot-admins arbitrate a dispute.",
+        # -- decisions-admin-v1 (Drasah 25/11): the admin inbox, the
+        # mandatory reason and the kingdoms announcement --
+        "dispute_cancel_button": "✖️ Cancel the attack",
+        "decision_reason_modal_title": "⚖️ Admin decision",
+        "decision_reason_label": "Reason (mandatory, public)",
+        "decision_reason_placeholder": "e.g. no result declared, no counter-claim…",
+        "decision_reason_required": (
+            "❌ The reason is MANDATORY — the decision was NOT applied."
+        ),
+        "decision_applied_cancel": (
+            "✖️ Decision applied — **{map}** is cancelled: no winner, no points,"
+            " lock released, slots freed."
+        ),
+        "decision_announce_arbitrage": (
+            "⚖️ **Admin decision** — the attack on **{map}** (game {game}) is ruled:"
+            " **{winner}** wins the meeting.\n"
+            "Decided by <@{admin}> — Reason: {reason}"
+        ),
+        "decision_announce_cancel": (
+            "⚖️ **Admin decision** — the attack on **{map}** (game {game}) is CANCELLED:"
+            " no winner, no points, the locks are released.\n"
+            "Decided by <@{admin}> — Reason: {reason}"
+        ),
+        "decision_summary_arbitrage": "arbitration — {winner} wins {map}",
+        "decision_summary_both": "double forfeit — {map}",
+        "decision_summary_cancel": "cancellation — {map}",
+        "decision_kind_auto": "Auto-opened dispute (no result in time).",
+        "decision_kind_declarations": "Contradictory player declarations.",
+        "decision_action_title": "⚖️ Admin decision",
+        "decision_action_header": "Attack on **{map}** — rule or cancel.",
+        "decision_decide_button": "⚖️ Decide",
         # -- planning (P4.1b tranche 2d) --
         "plan_button": "📅 Plan an attack",
         "plan_disclaimer": (

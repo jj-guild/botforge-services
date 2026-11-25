@@ -35,6 +35,7 @@ class _KingdomStackImpl(KingdomStackContract):
         from botforge.mods.kingdom.mercenary import MercenaryService
         from botforge.mods.kingdom.tavern import TavernService
         from botforge.mods.kingdom.realms import RealmService
+        from botforge.mods.kingdom.decisions import DecisionService
 
         self._store = store
         self._config = config
@@ -60,10 +61,17 @@ class _KingdomStackImpl(KingdomStackContract):
         # royaume-persistant-v1 (Drasah 20/11): the PERSISTENT shell —
         # the realm outlives seasons; the engine stays season-scoped.
         self._realms = RealmService(store)
+        # decisions-admin-v1 (Drasah 25/11): the admin decisions ledger
+        # — season-transcendent like the realm shells, never wiped.
+        self._decisions = DecisionService(store)
 
     @property
     def realms(self) -> Any:
         return self._realms
+
+    @property
+    def decisions(self) -> Any:
+        return self._decisions
 
     @property
     def kingdoms(self) -> Any:

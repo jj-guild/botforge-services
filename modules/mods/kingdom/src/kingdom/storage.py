@@ -24,6 +24,11 @@ SEASON_ARCHIVES_COLLECTION = "kingdoms_season_archives"
 # royaume-persistant-v1 (Drasah 20/11): the PERSISTENT realm shells —
 # NEVER listed in wipe_season_data (a realm outlives every season).
 REALMS_COLLECTION = "kingdoms_realms"
+# decisions-admin-v1 (Drasah 25/11): the admin decisions LEDGER — a
+# decision outlives the season it was taken in (the B2 consultation
+# surface reads it across seasons), so like the realm shells it is
+# NEVER listed in wipe_season_data.
+DECISIONS_COLLECTION = "kingdoms_decisions"
 
 # The season wipe's collection list — the PERSISTENT shells
 # (REALMS_COLLECTION, royaume-persistant-v1 Drasah 20/11) are
@@ -165,6 +170,14 @@ class KingdomStore(Protocol):
 
     async def delete_realm(self, realm_id: str) -> None:
         """Drop one persistent realm shell (dissolution, admin/Roi)."""
+        ...
+
+    async def upsert_decision(self, document: dict[str, Any]) -> None:
+        """Insert or replace one admin-decision document by ``_id``."""
+        ...
+
+    async def find_decisions(self) -> list[dict[str, Any]]:
+        """Return every admin-decision document (newest last)."""
         ...
 
 
@@ -339,3 +352,18 @@ class MongoKingdomStore:
     async def delete_realm(self, realm_id: str) -> None:
         """Drop one persistent realm shell (best-effort, one id)."""
         await self._storage.collection(REALMS_COLLECTION).delete_one({"_id": realm_id})
+
+    async def upsert_decision(self, document: dict[str, Any]) -> None:
+        """Upsert one admin-decision document (decisions-admin-v1)."""
+        await self._storage.collection(DECISIONS_COLLECTION).replace_one(
+            {"_id": document["_id"]}, document, upsert=True
+        )
+
+    async def find_decisions(self) -> list[dict[str, Any]]:
+        """Every admin-decision document, ascending by ``created_at``.
+
+        Never wiped (like the realm shells): a decision outlives its
+        season — the B2 consultation reads it across seasons.
+        """
+        cursor = self._storage.collection(DECISIONS_COLLECTION).find({}).sort("created_at", 1)
+        return [dict(doc) async for doc in cursor]

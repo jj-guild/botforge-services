@@ -272,7 +272,10 @@ def test_the_fixed_drawers_reuse_only_existing_registrations() -> None:
         "kingdom:console-regie:parcours:beta",
     ])
     # tiroir-bêta retiré (Drasah 22/11) : il ne reste QUE ces tiroirs
-    assert sorted(_DRAWERS) == ["admissions", "atelier", "regie", "royaumes"]
+    # decisions-admin-v1 (25/11) : la file des litiges + l'historique
+    assert sorted(_DRAWERS) == [
+        "admissions", "atelier", "decisions", "regie", "royaumes",
+    ]
 
 
 def _buttons(view: object) -> dict[str, object]:

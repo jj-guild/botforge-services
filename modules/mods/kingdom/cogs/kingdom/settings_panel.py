@@ -346,6 +346,22 @@ async def build_settings_panel(guild_id: str) -> discord.ui.LayoutView:
     regie_row.add_item(
         KingdomSettingsNavButton("royaumes", str(strings["settings_nav_royaumes_button"])).item
     )
+    # decisions-admin-v1 (Drasah 25/11) : la FILE des litiges se voit
+    # AU cockpit — le badge dit combien attendent un arbitrage avant
+    # même d'ouvrir le tiroir (les DEUX routes, auto et contradictoire).
+    disputes_pending = 0
+    try:
+        _stack = wiring()
+        if _stack is not None:
+            disputes_pending = len(await _stack.attacks.pending_disputes())
+    except Exception:  # a read, never a crash
+        logger.warning("kingdom: the disputes count read failed", exc_info=True)
+    regie_row.add_item(
+        KingdomSettingsNavButton(
+            "decisions", str(strings.get("settings_nav_decisions_button") or "⚖️"),
+            disputes_pending,
+        ).item
+    )
     atelier_row: Any = discord.ui.ActionRow()
     atelier_row.add_item(
         KingdomSettingsNavButton("atelier", str(strings["settings_nav_atelier_button"])).item
@@ -1540,6 +1556,9 @@ _DRAWERS: dict[str, str] = {
     "regie": "panel:mod:kingdom:admin:regie",
     "royaumes": "panel:mod:kingdom:admin:royaumes",
     "atelier": "panel:mod:kingdom:admin:atelier",
+    # decisions-admin-v1 (Drasah 25/11) : la file des litiges + l'historique
+    # des décisions — UN tiroir, déclaré comme les autres
+    "decisions": "panel:mod:kingdom:admin:decisions",
 }
 
 
@@ -2018,6 +2037,120 @@ async def _season_live(stack: Any | None) -> bool:
         return False
 
 
+def _decisions_drawer(
+    strings: dict[str, str],
+    vstrings: dict[str, str],
+    disputes: list[Any],
+    history: list[dict[str, Any]],
+    names: dict[str, str],
+) -> discord.ui.LayoutView:
+    """Build the decisions inbox — ONE queue, both dispute roads + the ledger.
+
+    decisions-admin-v1 (Drasah 25/11): the admin never DM-hunts a
+    litige nor types a console id again — the dispute sits in the
+    inbox with its ⚖️ Décider button (the action window + the reason
+    modal do the rest). The 40-component cap stays sacred: at most 15
+    disputes rendered, the ledger shows the last 10.
+    """
+    def _hint(key: str) -> discord.ui.Item[discord.ui.LayoutView]:
+        return discord.ui.TextDisplay(str(strings.get(key) or ""))
+
+    items: list[discord.ui.Item[discord.ui.LayoutView]] = [
+        discord.ui.TextDisplay(f"# {strings.get('settings_zone_decisions_label') or '⚖️'}"),
+        _hint("settings_zone_decisions_hint"),
+        discord.ui.Separator(),
+    ]
+    if disputes:
+        for attack in disputes[:15]:
+            kind_key = (
+                "decision_kind_auto"
+                if (getattr(attack, "score", None) or {}).get("auto_dispute")
+                else "decision_kind_declarations"
+            )
+            line = str(strings.get("decisions_inbox_line") or "- {map} — {line}").format(
+                map=str(getattr(attack, "map_key", "?")),
+                line="{a} vs {d} · {k}".format(
+                    a=names.get(str(getattr(attack, "attacker_kingdom_id", "")), "?"),
+                    d=names.get(str(getattr(attack, "defender_kingdom_id", "")), "?"),
+                    k=str(vstrings.get(kind_key) or ""),
+                ),
+            )
+            row: Any = discord.ui.ActionRow()
+            row.add_item(
+                _decide_button(
+                    str(vstrings.get("decision_decide_button") or "⚖️"),
+                    str(getattr(attack, "id", "")),
+                )
+            )
+            items.append(discord.ui.TextDisplay(line))
+            items.append(row)
+    else:
+        items.append(discord.ui.TextDisplay(str(strings.get("decisions_inbox_empty") or "")))
+    if history:
+        items.append(discord.ui.Separator())
+        items.append(discord.ui.TextDisplay(str(strings.get("decisions_history_label") or "")))
+        for decision in history[:10]:
+            items.append(
+                discord.ui.TextDisplay(
+                    str(strings.get("decisions_history_line") or "- {summary}").format(
+                        summary=str(decision.get("summary") or "")
+                    )
+                )
+            )
+    container = discord.ui.Container(*items, accent_colour=_ADMIN_COLOUR)
+    return surface(_DRAWERS["decisions"], container)
+
+
+def _decide_button(label: str, attack_id: str) -> Any:
+    """Build the inbox's ⚖️ Décider opener (the local import avoids cycles)."""
+    from .common import room_key
+    from .decisions import DecisionOpenButton
+
+    return DecisionOpenButton(room_key(attack_id), label).item
+
+
+async def _decisions_drawer_view(
+    locale: str, strings: dict[str, str]
+) -> discord.ui.LayoutView:
+    """Assemble the decisions drawer's data (every read defensive)."""
+    from .common import kingdom_name, strings_by_locale
+
+    # decisions-admin-v1 : la file (les DEUX routes de litige) + le
+    # ledger des 10 dernières décisions — lectures défensives, un
+    # tiroir jamais vide ne rend jamais la console muette.
+    disputes: list[Any] = []
+    history: list[dict[str, Any]] = []
+    names: dict[str, str] = {}
+    try:
+        stack_d = wiring()
+    except Exception:  # the wiring failure degrades to an empty drawer
+        logger.warning("kingdom: the decisions drawer wiring failed", exc_info=True)
+        stack_d = None
+    if stack_d is not None:
+        try:
+            disputes = await stack_d.attacks.pending_disputes()
+        except Exception:  # a read, never a crash
+            logger.warning("kingdom: the disputes read failed", exc_info=True)
+        try:
+            history = list(await stack_d.decisions.last_decisions(10))
+        except Exception:  # a read, never a crash
+            logger.warning("kingdom: the decisions history read failed", exc_info=True)
+        for attack in disputes[:15]:
+            for kid in (
+                getattr(attack, "attacker_kingdom_id", ""),
+                getattr(attack, "defender_kingdom_id", ""),
+            ):
+                kid = str(kid or "")
+                if kid and kid not in names:
+                    try:
+                        names[kid] = str(await kingdom_name(stack_d.kingdoms, kid))
+                    except Exception:  # a name, never a crash
+                        names[kid] = "?"
+    return _decisions_drawer(
+        strings, strings_by_locale(locale), disputes, history, names
+    )
+
+
 async def _build_drawer(
     drawer: str,
     locale: str,
@@ -2116,6 +2249,8 @@ async def _build_drawer(
         from .common import strings_by_locale
 
         view = _atelier_drawer(strings, strings_by_locale(locale))
+    elif drawer == "decisions":
+        view = await _decisions_drawer_view(locale, strings)
     else:  # pragma: no cover — the registry and the nav share the keys
         raise KeyError(f"kingdom: unknown drawer {drawer!r}")
     return view

@@ -4101,46 +4101,72 @@ class AttackService:
 
 
 
+
+    async def _apply_dispute_forfeit(
+        self, attack: AttackModel, admin_choice: str, timestamp: datetime
+    ) -> AttackModel:
+        """Close a dispute with NO winner (double forfait or annulation)."""
+        previous = attack.winner_kingdom_id
+        attack.state = AttackState.EXPIRED
+        attack.winner_kingdom_id = None
+        attack.resolved_at = timestamp
+        if admin_choice == "cancel":
+            # decisions-admin-v1 (Drasah 25/11): the aborted meeting
+            # carries its OWN flag — the B2 consultation and the
+            # history lines tell a cancellation from a forfait.
+            score = dict(attack.score)
+            score["admin_cancelled"] = True
+            attack.score = score
+        territory = next(
+            (item for item in await self._territories.territories() if item.id == attack.territory_id),
+            None,
+        )
+        if (
+            territory is not None
+            and previous == attack.attacker_kingdom_id
+            and territory.owner_kingdom_id == previous
+        ):
+            await self._territories.transfer(attack.territory_id, attack.defender_kingdom_id)
+        await self._store.upsert_attack(attack.to_mongo())
+        logger.warning(
+            "kingdoms: admin arbitration on %s — double forfait, territory kept",
+            attack.map_key,
+        )
+        if admin_choice == "cancel":
+            logger.info(
+                "kingdoms: admin CANCELLED the meeting on %s — no winner, no points",
+                attack.map_key,
+            )
+        return attack
+
     async def resolve_dispute(self, attack_id: str, admin_choice: str, *, now: datetime | None = None) -> AttackModel:
         """Admin arbitration of a disputed meeting (attaques-score-v1).
 
         ``admin_choice`` is ``"attacker"``, ``"defender"`` (the side
-        that actually won) or ``"both"`` (double forfait). Best-effort
-        override: a reversed attacker win gives the territory back,
-        a new attacker win applies the usual chantier/sacré rules —
-        the chantier case cannot be undone (logged limitation).
+        that actually won), ``"both"`` (double forfait) or ``"cancel"``
+        (decisions-admin-v1, Drasah 25/11: the admin ABORTS the
+        meeting — no winner, no points, the locks release — versus the
+        ``both`` double-forfait wording). Best-effort override: a
+        reversed attacker win gives the territory back, a new attacker
+        win applies the usual chantier/sacré rules — the chantier case
+        cannot be undone (logged limitation).
         """
         timestamp = now or _now()
         attack = await self._find_attack(attack_id)
         if not attack.score.get("disputed"):
             raise AttackStateError("cette attaque ne porte aucun litige")
-        if admin_choice not in ("attacker", "defender", "both"):
-            raise AttackError("admin_choice doit être attacker, defender ou both")
+        if admin_choice not in ("attacker", "defender", "both", "cancel"):
+            raise AttackError("admin_choice doit être attacker, defender, both ou cancel")
         score = dict(attack.score)
         score["admin_choice"] = admin_choice
         score["disputed"] = False
         attack.score = score
+        if admin_choice in ("both", "cancel"):
+            return await self._apply_dispute_forfeit(attack, admin_choice, timestamp)
         territory = next(
             (item for item in await self._territories.territories() if item.id == attack.territory_id),
             None,
         )
-        if admin_choice == "both":
-            previous = attack.winner_kingdom_id
-            attack.state = AttackState.EXPIRED
-            attack.winner_kingdom_id = None
-            attack.resolved_at = timestamp
-            if (
-                territory is not None
-                and previous == attack.attacker_kingdom_id
-                and territory.owner_kingdom_id == previous
-            ):
-                await self._territories.transfer(attack.territory_id, attack.defender_kingdom_id)
-            await self._store.upsert_attack(attack.to_mongo())
-            logger.warning(
-                "kingdoms: admin arbitration on %s — double forfait, territory kept",
-                attack.map_key,
-            )
-            return attack
         winner = attack.attacker_kingdom_id if admin_choice == "attacker" else attack.defender_kingdom_id
         if attack.winner_kingdom_id == winner:
             await self._store.upsert_attack(attack.to_mongo())  # confirm the resolution
@@ -4170,6 +4196,46 @@ class AttackService:
             winner,
         )
         return attack
+
+
+
+    async def pending_disputes(self) -> list[AttackModel]:
+        """Return the meetings awaiting an admin decision (decisions-admin-v1).
+
+        BOTH dispute roads land here, TOGETHER (Drasah 25/11): the
+        auto-opened ones (« no result 15h after opening ») and the
+        contradictory-declaration ones — the inbox is ONE queue, the
+        admin never goes DM-hunting for one road and console-typing
+        for the other.
+        """
+        pending: list[AttackModel] = []
+        for attack in await self.attacks():
+            if attack.kind is not AttackKind.PLAYER or attack.state is not AttackState.MEETING:
+                continue
+            score = dict(attack.score or {})
+            if score.get("disputed") or score.get("auto_dispute"):
+                pending.append(attack)
+        return pending
+
+
+
+    async def admin_cancel_attack(self, attack_id: str, *, now: datetime | None = None) -> AttackModel:
+        """Abort a MEETING with no winner, disputed or not (Drasah 25/11).
+
+        decisions-admin-v1: the « annulation » decision must work on
+        ANY stuck meeting, not only a litigated one (a dead match that
+        never reached the dispute line). The seam rides resolve_dispute
+        («cancel») — one terminal path, no duplicated bookkeeping.
+        """
+        attack = await self._find_attack(attack_id)
+        if attack.state is not AttackState.MEETING:
+            raise AttackStateError("cette attaque n'est pas une rencontre en cours")
+        if not (attack.score or {}).get("disputed"):
+            score = dict(attack.score or {})
+            score["disputed"] = True  # the cancellation rides the unique terminal path
+            attack.score = score
+            await self._store.upsert_attack(attack.to_mongo())
+        return await self.resolve_dispute(attack_id, "cancel", now=now)
 
 
 

@@ -65,6 +65,11 @@ class KingdomStack(Protocol):
         """The validated season configuration (KingdomSeasonConfig)."""
         ...
 
+    @property
+    def decisions(self) -> Any:
+        """The admin decisions ledger (DecisionService, decisions-admin-v1)."""
+        ...
+
 
 @runtime_checkable
 class KingdomService(Protocol):

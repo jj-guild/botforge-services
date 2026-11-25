@@ -524,11 +524,16 @@ async def _run_phases_announce_safe(
 
         # 15h without a declared result — the dispute auto-opens, the
         # admins arbitrate; no meeting hangs forever.
+        # decisions-admin-v1 (Drasah 25/11): the auto road now DMs the
+        # bot-admins the SAME arbitration panel as the contradictory
+        # road — the admin never learns of a dead match by typing a
+        # console command.
         disputes = await stack.attacks.dispute_due()
         for attack in disputes:
             await attack_salon_send_safe(
                 guild, attack, strings["auto_dispute"].format(map=attack.map_key)
             )
+            await dm_admins_dispute_safe(bot, stack, attack, strings)
         dirty += len(disputes)
 
         dirty += await _run_forfeits_safe(bot, stack, guild, strings)

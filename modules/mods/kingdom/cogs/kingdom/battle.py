@@ -1857,17 +1857,28 @@ class DisputeConfirmButton(
 
 
 class DisputeView(ComposedView):
-    """The admin arbitration view of a disputed meeting (bot-admin only)."""
+    """The admin arbitration view of a disputed meeting (bot-admin only).
+
+    decisions-admin-v1 (Drasah 25/11): the view serves EVERY admin
+    surface (the bot-admins DM and the console's ⚖️ inbox alike) and
+    every click demands the MANDATORY reason modal — the public trace
+    is the anti-abus. «cancel» (annulation) joins the choices: no
+    winner, no points, the locks release — versus «both», the double
+    forfait. The resolve/record/announce path lives ONCE in the
+    decisions layer (apply_admin_decision + DecisionReasonModal).
+    """
 
     def __init__(self, attack_id: str, locale: str) -> None:
         super().__init__(mod="kingdom", timeout=None)
         self.attack_id = attack_id
+        self.locale = locale
         strings = strings_by_locale(locale)
         self.strings = strings
         for choice, key in (
             ("attacker", "dispute_win_attacker"),
             ("defender", "dispute_win_defender"),
             ("both", "dispute_double"),
+            ("cancel", "dispute_cancel_button"),
         ):
             button: discord.ui.Button[discord.ui.View] = discord.ui.Button(
                 label=strings[key][:80],
@@ -1880,33 +1891,16 @@ class DisputeView(ComposedView):
     def _make_on_arbitrate(self, choice: str) -> Any:
         async def _on_arbitrate(interaction: discord.Interaction) -> None:
             strings = self.strings
-            stack = wiring()
             from .common import _bot_admins
 
             if str(getattr(interaction.user, "id", "")) not in (_bot_admins(interaction) or ()):
                 await interaction.response.send_message(strings["dispute_not_admin"], ephemeral=True)
                 return
-            if stack is None:
-                await interaction.response.send_message(strings["no_service"], ephemeral=True)
-                return
-            try:
-                attack = await stack.attacks.resolve_dispute(self.attack_id, choice)
-            except Exception as exc:
-                message = getattr(exc, "message", None) or str(exc)
-                await interaction.response.send_message(
-                    strings["failed"].format(message=message), ephemeral=True
-                )
-                return
-            if choice == "both":
-                await interaction.response.send_message(
-                    strings["dispute_forfeit"].format(map=attack.map_key), ephemeral=True
-                )
-            else:
-                kingdom = await kingdom_name(stack.kingdoms, attack.winner_kingdom_id)
-                await interaction.response.send_message(
-                    strings["dispute_applied"].format(kingdom=kingdom, map=attack.map_key),
-                    ephemeral=True,
-                )
+            from .decisions import DecisionReasonModal
+
+            await interaction.response.send_modal(
+                DecisionReasonModal(self.attack_id, choice, self.locale)
+            )
 
         return _on_arbitrate
 
