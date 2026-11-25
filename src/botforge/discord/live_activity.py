@@ -53,7 +53,7 @@ _SEED_SWEEP_S = 300.0
 # the seed's BUILD: a seed producing broken cards gets versioned up -
 # every salon re-seeds once with the fixed build (the old cards stay,
 # the guild owns its channel)
-_SEED_VERSION = 7  # 7: the salon becomes a FORUM, one post per known player (owner 2026-11-25)
+_SEED_VERSION = 8  # 8: the seed's silent stops speak (the 23:24 repair starved silently)
 
 _MATCHES_SCOPE = "games/aoe2"
 _MATCHES_KEY = "matches"
@@ -607,15 +607,29 @@ async def _maybe_seed_matches_salon(  # noqa: C901 - one orchestration, no branc
     try:
         forum = await _sweep_channel(bot, guild_id, channel_id)
         if forum is None:
+            logger.info("matches forum seed STOP: the channel %s resolves nothing (guild %s)", channel_id, guild_id)
             return
         profiles = await _guild_profiles(bot, guild_id)
         if not profiles:
+            # no KNOWN player rides the guild (no binding in the member
+            # list): nothing to post - the WHY says itself (owner
+            # 2026-11-25: the silent starves hunted us twice)
+            logger.info("matches forum seed STOP: no known profiles (guild %s)", guild_id)
             await _write_seed_marker(guild_id, channel_id)
             return
         posts = await _ensure_player_posts(bot, guild_id, forum, profiles)
+        logger.info(
+            "matches forum seed: %d post(s) ensured for %d known profile(s) (guild %s)",
+            len(posts),
+            len(profiles),
+            guild_id,
+        )
         cards = await _week_cards(bot, guild_id)
         await _write_seed_marker(guild_id, channel_id)
         if not cards:
+            logger.info(
+                "matches forum seed STOP: the window carries no card (guild %s)", guild_id
+            )
             return
         labels = await _label_pack(bot, guild_id)
         known = set(profiles)
