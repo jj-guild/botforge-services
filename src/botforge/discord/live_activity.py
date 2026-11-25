@@ -475,6 +475,18 @@ async def _maybe_seed_matches_salon(
         _SEEDED.add(guild_id)
         return
     _SEEDED.add(guild_id)
+    # a REPAIR (new channel id) reposts its whole week: the old salon's
+    # refs were pointing at messages that no longer exist, they blocked
+    # the re-seed silently (owner 2026-11-25)
+    marker_channel = str((marker or {}).get("channel_id") or "") if isinstance(marker, dict) else ""
+    if marker_channel and marker_channel != str(channel_id):
+        await _reset_posted_refs(guild_id)
+        logger.info(
+            "matches salon repaired (guild %s): channel %s -> %s, refs cleared, reseeding",
+            guild_id,
+            marker_channel,
+            channel_id,
+        )
     try:
         cards = await _week_cards(bot, guild_id)
         await _write_seed_marker(guild_id, channel_id)
@@ -602,6 +614,27 @@ async def _posted_refs(guild_id: str) -> set[str]:
         refs = set()
     _POSTED[guild_id] = refs
     return refs
+
+
+async def _reset_posted_refs(guild_id: str) -> None:
+    """Wipe the posted registry - a salon REPAIR posts its week again.
+
+    The deleted salon's messages do not exist anymore, but their refs
+    lingered and the repair re-seeded NOTHING (owner 2026-11-25: "le
+    salon matches n'est pas alimente au repair" - every card hit the
+    "already posted" filter and the branch stayed silent). The repair
+    clears the husks, the week lands again.
+    """
+    _POSTED.pop(guild_id, None)
+    try:
+        from botforge.core.models.db import get_async_database
+
+        await get_async_database()["channels"].update_one(
+            {"_id": f"{guild_id}:livefeed:matches:posted"},
+            {"$set": {"refs": []}},
+        )
+    except Exception:
+        logger.debug("the posted-refs reset failed (guild %s)", guild_id, exc_info=True)
 
 
 async def _mark_posted(guild_id: str, match_ref: str) -> None:

@@ -689,3 +689,68 @@ def test_the_ranked_diff_rides_the_cards_own_board() -> None:
     card["leaderboard_id"] = ""
     text, _img = _seat_text(card["players"][0], card, ctx, {}, me_ids={"848567"})
     assert "(-26)" not in text and "**1313**" not in text
+
+
+def test_a_repaired_salon_clears_the_husky_refs_and_reseeds() -> None:
+    """A repair (new channel id) reposts the week - the old refs were husks.
+
+    The owner's 2026-11-25 hunt: the deleted salon's posted refs blocked
+    the re-seed silently - every card answered "already posted".
+    """
+    import asyncio
+
+    import botforge.discord.live_activity as feed
+
+    reset_calls: list[str] = []
+    posted_back: dict[str, set[str]] = {}
+
+    async def _fake_reset(guild_id: str) -> None:
+        reset_calls.append(guild_id)
+
+    async def _fake_refs(guild_id: str) -> set[str]:
+        return {f"{guild_id}-card-1", f"{guild_id}-card-2"}
+
+    async def _fake_week_cards(bot, guild_id):
+        return [{"match_id": f"{guild_id}-card-1"}, {"match_id": "new-1"}]
+
+    async def _fake_marker(guild_id):
+        return {"v": feed._SEED_VERSION, "channel_id": "111"}  # the OLD salon
+
+    async def _fake_write_marker(guild_id, channel_id):
+        return None
+
+    async def _fake_label_pack(bot, guild_id):
+        return {}
+
+    async def _fake_guild_profiles(bot, guild_id):
+        return []
+
+    (monkey_ok,) = (True,)
+    original = {
+        "_posted_refs": feed._posted_refs,
+        "_week_cards": feed._week_cards,
+        "_seed_marker": feed._seed_marker,
+        "_write_seed_marker": feed._write_seed_marker,
+        "_label_pack": feed._label_pack,
+        "_guild_profiles": feed._guild_profiles,
+        "_reset_posted_refs": feed._reset_posted_refs,
+    }
+    feed._posted_refs = _fake_refs
+    feed._week_cards = _fake_week_cards
+    feed._seed_marker = _fake_marker
+    feed._write_seed_marker = _fake_write_marker
+    feed._label_pack = _fake_label_pack
+    feed._guild_profiles = _fake_guild_profiles
+    feed._reset_posted_refs = _fake_reset
+    try:
+        asyncio.run(feed._maybe_seed_matches_salon(None, "42", "999"))
+    finally:
+        feed._posted_refs = original["_posted_refs"]
+        feed._week_cards = original["_week_cards"]
+        feed._seed_marker = original["_seed_marker"]
+        feed._write_seed_marker = original["_write_seed_marker"]
+        feed._label_pack = original["_label_pack"]
+        feed._guild_profiles = original["_guild_profiles"]
+        feed._reset_posted_refs = original["_reset_posted_refs"]
+    assert reset_calls == ["42"], "the repair wipes the husky refs before reposting"
+    assert monkey_ok
