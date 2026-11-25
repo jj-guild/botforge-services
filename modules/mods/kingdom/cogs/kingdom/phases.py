@@ -326,7 +326,7 @@ async def _run_forfeits_safe(
     L'anti-blocking AI defense n'est PAS une résolution : la partie
     continue (garde ``is_over``), rien ne se ferme.
     """
-    from .battle import cleanup_decided_attack_safe
+    from .battle import announce_forfeit_safe, cleanup_decided_attack_safe
     from .common import attack_salon_send_safe, kingdom_name
 
     played = 0
@@ -360,6 +360,10 @@ async def _run_forfeits_safe(
                     map=attack.map_key, side=strings[f"side_{side}"], kingdom=kingdom
                 ),
             )
+        # affaire-30 (Drasah 25/11): la forfaiture atteint Géopolitique —
+        # le salon ci-dessous ferme immédiatement, il n'est PAS une
+        # surface durable ; Géo est LA surface de vérité des résolutions.
+        await announce_forfeit_safe(bot, stack, attack, side, kingdom, strings)
         if getattr(attack, "is_over", False):
             await cleanup_decided_attack_safe(bot, stack, attack)
     return played

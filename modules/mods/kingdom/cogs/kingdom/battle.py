@@ -677,6 +677,33 @@ async def announce_conquest_safe(bot: Any, stack: Any, attack: Any, locale: str)
                 logger.warning("kingdom: conquest detail post failed", exc_info=True)
 
 
+async def announce_forfeit_safe(
+    bot: Any, stack: Any, attack: Any, side: str, winner: str, strings: dict[str, str]
+) -> None:
+    """affaire-30 (Drasah 25/11): every draft forfeit reaches Géopolitique.
+
+    A played game ends with its conquest recap; a forfeit's note used
+    to die inside the attack salon the immediate closure deletes a
+    second later. Géopolitique is the durable surface: one flat line,
+    the camp that forfeited, the winner by forfeit — the general
+    forfeit carries its winner too (the present attacker wins).
+    """
+    for guild in list(getattr(bot, "guilds", []) or []):
+        channel = _geopolitics_channel(guild)
+        if channel is None:
+            continue
+        if side == "both":
+            line = strings["forfeit_geo_both"].format(map=attack.map_key, winner=winner)
+        else:
+            line = strings["forfeit_geo_side"].format(
+                map=attack.map_key, side=strings[f"side_{side}"], winner=winner
+            )
+        try:
+            await channel.send(line)
+        except Exception:
+            logger.warning("kingdom: forfeit recap post failed", exc_info=True)
+
+
 # ---------------------------------------------------------------------------
 # The resolution's shared post-treatment (litige-mp-v1 factoring)
 # ---------------------------------------------------------------------------
@@ -2065,6 +2092,7 @@ __all__ = [
     "RoomUrlButton",
     "RoomUrlModal",
     "announce_conquest_safe",
+    "announce_forfeit_safe",
     "cleanup_battle_rooms_safe",
     "cleanup_decided_attack_safe",
     "create_room_event_safe",

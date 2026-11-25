@@ -177,6 +177,10 @@ DEFAULTS: dict[str, dict[str, str]] = {
             "🏳️ Forfait général sur **{map}** — personne n'a validé : l'attaquant, présent, l'emporte (**{kingdom}**)."
         ),
         "forfeit_side": "🏳️ Forfait sur **{map}** — **{side}** a manqué la validation : victoire de **{kingdom}**.",
+        "forfeit_geo_side": "🏳️ **{map}** : forfait de {side} — victoire de **{winner}** par forfait.",
+        "forfeit_geo_both": (
+            "🏳️ **{map}** : forfait général — aucun camp n'a validé, **{winner}** l'emporte par forfait."
+        ),
         "side_attacker": "l'attaquant",
         "side_defender": "le défenseur",
         "noshow_side": "🏳️ **{map}** — **{side}** a manqué le RDV : victoire de **{kingdom}**.",
@@ -1024,6 +1028,10 @@ DEFAULTS: dict[str, dict[str, str]] = {
             "🏳️ General forfeit on **{map}** — nobody validated: the attacker, present, wins (**{kingdom}**)."
         ),
         "forfeit_side": "🏳️ Forfeit on **{map}** — **{side}** missed the validation: victory of **{kingdom}**.",
+        "forfeit_geo_side": "🏳️ **{map}**: forfeit by {side} — **{winner}** wins by forfeit.",
+        "forfeit_geo_both": (
+            "🏳️ **{map}**: general forfeit — nobody validated, **{winner}** wins by forfeit."
+        ),
         "side_attacker": "the attacker",
         "side_defender": "the defender",
         "noshow_side": "🏳️ **{map}** — **{side}** missed the meeting: victory of **{kingdom}**.",
