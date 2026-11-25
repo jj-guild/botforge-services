@@ -491,24 +491,128 @@ DEFAULTS: dict[str, dict[str, str]] = {
         "plan_no_service": "❌ Le service des attaques est indisponible.",
         "market_button": "🛒 Marché",
         "chamber_button": "🏛️ Comptes",
-        "market_title": "🛒 Marché",
+        "market_title": "💰 Marché du Royaume",
         "market_rules": (
             "**Paiement d'abord** — tout achat débite la banque du royaume.\n"
             "Une carte achetée vit dans la Chambre des comptes."
         ),
         "market_wallet": "💰 Banque du royaume : **{0}** ⚙️",
-        "market_intro": "Choisissez une carte à acheter :",
-        "market_item_technology": "🔬 {0}",
-        "market_item_mariage_arrange": "💍 Jeton mariage arrangé",
-        "market_item_explorateur": "🧭 Jeton Explorateur",
-        "market_item_corruption": "🎭 Jeton Corruption",
-        "market_item_jeu_d_armes": "⚔️ Jeton Jeu d'armes",
-        "market_item_garde_royale": "🛡️ Garde Royale",
-        "market_item_patrouille": "🚨 Slot Patrouille",
-        "market_confirm_title": "🛒 Confirmer l'achat",
-        "market_confirm_sub": "Coût : **{0}** ⚙️",
-        "market_yes": "✅ Acheter",
-        "market_bought": "✅ Achat effectué : {0}",
+        # marche-reference-v1 (Affaire 24) : l'étal du marchand, ses
+        # quatre rayons, ses cartes TCG — portés de la référence.
+        "market_hint_panel": (
+            "👑 Seul le Roi d'un royaume peut acheter — chaque achat débite "
+            "immédiatement le trésor du royaume (coût affiché par article)."
+        ),
+        "market_section_ia": "🤖 Gestion de la défense / attaque IA",
+        "market_section_defense": "🛡️ Défense du royaume",
+        "market_section_attaque": "⚔️ Amélioration de l'attaque",
+        "market_section_speciales": "✨ Actions spéciales",
+        "market_tech": {  # type: ignore[dict-item]
+            "embuscade": "🥷 Embuscade",
+            "traquenard": "🪤 Traquenard",
+            "contre_espionnage": "👀 Contre-espionnage",
+            "sabotage": "🗡️ Sabotage",
+            "jeu_d_armes": "⚔️ Jeu d'armes",
+        },
+        "market_action": {  # type: ignore[dict-item]
+            "explorateur": "🧭 Explorateur",
+            "corruption": "💰 Corruption",
+            "garde_royale": "💂 Garde Royale",
+            "patrouille": "👣 Patrouille",
+            "mariage_arrange": "💐 Mariage arrangé",
+        },
+        "market_effect": {  # type: ignore[dict-item]
+            "embuscade": (
+                "Déclare une attaque exceptionnelle sans point d'attaque. "
+                "Défendre une embuscade utilise aussi une défense "
+                "exceptionnelle."
+            ),
+            "traquenard": (
+                "À l'usage : l'IA affrontée devient Facile durant une "
+                "fenêtre cumulée de 2h par activation, et les verrous "
+                "vivants du royaume ciblé (mariages, exploration, boisson "
+                "de taverne) prennent +2h en one-shot."
+            ),
+            "contre_espionnage": (
+                "Lorsque vous attaquez, vous pouvez la déclarer au nom de "
+                "n'importe quel autre seigneur, excepté un seigneur provenant "
+                "du royaume que vous attaquez. Ton identité est révélée "
+                "15 min avant la partie."
+            ),
+            "sabotage": (
+                "Permet de retirer un choix de civilisation à votre adversaire "
+                "lors d'une confrontation. Vous ne pouvez saboter que deux "
+                "civilisations maximum par rencontre."
+            ),
+            "jeu_d_armes": (
+                "Achète UN jeton Jeu d'armes. Utilise-le depuis la Chambre "
+                "des comptes : +1 niveau d'IA permanent (jusqu'à la fin de "
+                "saison) sur ton bot de défense — plafond 5, atteint : les "
+                "Patrouilles deviennent Renforcées (3h). Le seigneur qui "
+                "l'utilise réduit de 1h le délai de déclaration de sa "
+                "prochaine attaque normale (pas d'embuscade) ; non "
+                "cumulable — un seul Jeu d'armes actif par seigneur."
+            ),
+            "explorateur": (
+                "Achète UN jeton Explorateur. Utilise-le depuis la Chambre "
+                "des comptes : le seigneur choisi est verrouillé 48h (🔒 ni "
+                "attaque ni défense) puis le royaume reçoit une map inédite. "
+                "1 par saison."
+            ),
+            "corruption": (
+                "Achète UN jeton Corruption. Utilise-le depuis la Chambre des "
+                "comptes : transfert d'un territoire adverse vers ton royaume, "
+                "sans combat. Bloquée si la map est sous Garde Royale. "
+                "2 par saison."
+            ),
+            "garde_royale": (
+                "Achète UNE Garde Royale en réserve (plusieurs gardes "
+                "possibles, sans limite). Le Roi la pose ensuite depuis "
+                "le salon Remparts : 12h d'immunité sur UNE map au choix."
+            ),
+            "patrouille": (
+                "Débloque UN emplacement de patrouille (slot 1 puis slot 2). "
+                "Le Roi pose le créneau quotidien de 2h depuis le salon "
+                "Remparts — figé pour le cycle, redéfini le Jour du "
+                "Seigneur (3h si Renforcée)."
+            ),
+            "mariage_arrange": (
+                "Jeton 💰 à consommer à la Paroisse : mariage arrangé d'un "
+                "seigneur de ton choix avec une civilisation non mariée "
+                "(verrou 6h)."
+            ),
+        },
+        "market_ledger_emoji": {  # type: ignore[dict-item]
+            "embuscade": "🥷",
+            "traquenard": "🪤",
+            "contre_espionnage": "👀",
+            "sabotage": "🗡️",
+            "jeu_d_armes": "⚔️",
+            "explorateur": "🧭",
+            "corruption": "💰",
+            "garde_royale": "💂",
+            "patrouille": "👣",
+            "mariage_arrange": "💐",
+        },
+        "market_fiche_effect": "**__EFFET :__**\n> {0}",
+        "market_fiche_cost": "**__COÛT :__** {0} ⚙️",
+        "market_fiche_wallet": "**__TRÉSORERIE ACTUELLE :__** {0} ⚙️",
+        "market_fiche_left": "**__RESTE CETTE SAISON :__** {0}/{1}",
+        "market_fiche_king_only": "*👑 Réservé au Roi — débité immédiatement du trésor.*",
+        "market_buy_button": "✅ Acheter",
+        "market_cancel_button": "❌ Annuler",
+        "market_cancelled": "Achat annulé — la carte retourne sous l'étal du marchand.",
+        "market_not_king": "Seuls les Rois peuvent acheter au marché.",
+        "market_bought": "✅ Acheté : **{0}** — il reste {1} ⚙️ au trésor.",
+        "market_bought_left": "\nReste cette saison : {0}/{1}.",
+        "market_ledger_summary": "Bilan de saison — dépensé : {0} ⚙️ · trésor : {1} ⚙️",
+        "market_ledger_limits": "Limites — {0}",
+        "market_ledger_empty": "Aucun achat pour le moment.",
+        "market_ledger_purchases_title": "Achats",
+        "market_ledger_line": "{0} {1} — {2} · {3} ⚙️ · {4}",
+        "market_ledger_cards_title": "Cartes en main",
+        "market_ledger_cards_empty": "Aucune carte en main pour le moment.",
+        "market_ledger_card_line": "{0} **{1}** — x{2}",
         "market_no_points": "❌ Le royaume manque de points de technologie.",
         "market_limit": "❌ La limite d'achat par saison est atteinte.",
         "market_error": "❌ L'achat a échoué : {0}",
@@ -517,6 +621,7 @@ DEFAULTS: dict[str, dict[str, str]] = {
         "chamber_stock_corruption": "🎭 Jetons Corruption : **{0}**",
         "chamber_stock_jeu_d_armes": "⚔️ Jetons Jeu d'armes : **{0}**",
         "chamber_stock_garde": "🛡️ Gardes Royales : **{0}**",
+        "chamber_stock_mariage": "💐 Jetons mariage arrangé : **{0}**",
         "chamber_patrouille": "🚨 Patrouille : {0}",
         "chamber_use_explorateur": "🧭 Envoyer explorer",
         "chamber_use_corruption": "🎭 Corrompre",
@@ -1188,24 +1293,123 @@ DEFAULTS: dict[str, dict[str, str]] = {
         "plan_no_service": "❌ The attack service is unavailable.",
         "market_button": "🛒 Market",
         "chamber_button": "🏛️ Treasury",
-        "market_title": "🛒 Market",
+        "market_title": "💰 Kingdom Market",
         "market_rules": (
             "**Payment first** — every purchase debits the kingdom bank.\n"
             "A bought card lives in the Chambre des comptes."
         ),
         "market_wallet": "💰 Kingdom bank: **{0}** ⚙️",
-        "market_intro": "Choose a card to buy:",
-        "market_item_technology": "🔬 {0}",
-        "market_item_mariage_arrange": "💍 Arranged-marriage token",
-        "market_item_explorateur": "🧭 Explorer token",
-        "market_item_corruption": "🎭 Corruption token",
-        "market_item_jeu_d_armes": "⚔️ Arms-mastery token",
-        "market_item_garde_royale": "🛡️ Royal Guard",
-        "market_item_patrouille": "🚨 Patrol slot",
-        "market_confirm_title": "🛒 Confirm the purchase",
-        "market_confirm_sub": "Cost: **{0}** ⚙️",
-        "market_yes": "✅ Buy",
-        "market_bought": "✅ Purchase done: {0}",
+        # marche-reference-v1 (Affaire 24) — the merchant stall, ported.
+        "market_hint_panel": (
+            "👑 Only a kingdom's King may buy — every purchase debits "
+            "the kingdom treasury immediately (the price rides each article)."
+        ),
+        "market_section_ia": "🤖 AI defense / attack management",
+        "market_section_defense": "🛡️ Kingdom defense",
+        "market_section_attaque": "⚔️ Attack improvements",
+        "market_section_speciales": "✨ Special actions",
+        "market_tech": {  # type: ignore[dict-item]
+            "embuscade": "🥷 Embuscade",
+            "traquenard": "🪤 Traquenard",
+            "contre_espionnage": "👀 Counter-espionage",
+            "sabotage": "🗡️ Sabotage",
+            "jeu_d_armes": "⚔️ Arms Mastery",
+        },
+        "market_action": {  # type: ignore[dict-item]
+            "explorateur": "🧭 Explorer",
+            "corruption": "💰 Corruption",
+            "garde_royale": "💂 Royal Guard",
+            "patrouille": "👣 Patrol",
+            "mariage_arrange": "💐 Arranged marriage",
+        },
+        "market_effect": {  # type: ignore[dict-item]
+            "embuscade": (
+                "Declare an exceptional attack without spending an attack "
+                "point. Defending an ambush also uses an exceptional defence."
+            ),
+            "traquenard": (
+                "On use: the AI you face becomes Easy for a cumulative 2h "
+                "window per activation, and the target kingdom's living "
+                "lockouts (marriages, exploration, tavern drink) gain a "
+                "one-shot +2h."
+            ),
+            "contre_espionnage": (
+                "When attacking, you may declare the attack in the name of "
+                "any other lord, except a lord from the kingdom you attack. "
+                "Your identity is revealed 15 minutes before the game."
+            ),
+            "sabotage": (
+                "Removes one civilization choice from your opponent during a "
+                "confrontation. You may sabotage at most two civilizations "
+                "per encounter."
+            ),
+            "jeu_d_armes": (
+                "Buys ONE Arms-mastery token. Use it from the Chambre des "
+                "comptes: +1 permanent AI level (until the season ends) on "
+                "your defence bot — cap 5, reached: your Patrols become "
+                "Reinforced (3h). The lord who uses it cuts 1h off his "
+                "next normal attack's declaration delay (no Embuscade); "
+                "not stackable — one active Arms mastery per lord."
+            ),
+            "explorateur": (
+                "Buys ONE Explorateur token. Use it from the Chambre des "
+                "comptes: the chosen lord is locked for 48h (🔒 no attack, no "
+                "defence) then the kingdom receives a brand-new map. Once per "
+                "season."
+            ),
+            "corruption": (
+                "Buys ONE Corruption token. Use it from the Chambre des "
+                "comptes: instantly transfers an enemy territory to your "
+                "kingdom, no combat. Blocked if the map is under Royal Guard. "
+                "2 per season."
+            ),
+            "garde_royale": (
+                "Buys ONE Royal Guard token (several may be held at once, "
+                "no limit). The King then places it from the Remparts "
+                "salon: 12h of immunity on ONE chosen map."
+            ),
+            "patrouille": (
+                "Unlocks ONE patrol slot (slot 1, then slot 2). The King "
+                "places the daily 2h window from the Remparts salon — "
+                "fixed for the cycle, redefined on the Lord's Day "
+                "(3h when Reinforced)."
+            ),
+            "mariage_arrange": (
+                "A 💰 token to consume at the Parish: arranged marriage of a "
+                "lord of your choice with an unmarried civilization (6h lock)."
+            ),
+        },
+        "market_ledger_emoji": {  # type: ignore[dict-item]
+            "embuscade": "🥷",
+            "traquenard": "🪤",
+            "contre_espionnage": "👀",
+            "sabotage": "🗡️",
+            "jeu_d_armes": "⚔️",
+            "explorateur": "🧭",
+            "corruption": "💰",
+            "garde_royale": "💂",
+            "patrouille": "👣",
+            "mariage_arrange": "💐",
+        },
+        "market_fiche_effect": "**__EFFECT :__**\n> {0}",
+        "market_fiche_cost": "**__COST :__** {0} ⚙️",
+        "market_fiche_wallet": "**__CURRENT TREASURY :__** {0} ⚙️",
+        "market_fiche_left": "**__LEFT THIS SEASON :__** {0}/{1}",
+        "market_fiche_king_only": "*👑 King only — debited from the treasury immediately.*",
+        "market_buy_button": "✅ Buy",
+        "market_cancel_button": "❌ Cancel",
+        "market_cancelled": "Purchase cancelled — the card goes back under the merchant's stall.",
+        "market_not_king": "Only Kings may buy at the market.",
+        "market_bought": "✅ Purchased: **{0}** — the treasury holds {1} ⚙️ left.",
+        "market_bought_left": "\nLeft this season: {0}/{1}.",
+        "market_ledger_summary": "Season balance — spent: {0} ⚙️ · treasury: {1} ⚙️",
+        "market_ledger_limits": "Limits — {0}",
+        "market_ledger_empty": "No purchase yet.",
+        "market_ledger_purchases_title": "Purchases",
+        "market_ledger_line": "{0} {1} — {2} · {3} ⚙️ · {4}",
+        "market_ledger_cards_title": "Cards in hand",
+        "market_ledger_cards_empty": "No card in hand right now.",
+        "market_ledger_card_line": "{0} **{1}** — x{2}",
         "market_no_points": "❌ The kingdom lacks tech points.",
         "market_limit": "❌ The per-season purchase limit is reached.",
         "market_error": "❌ The purchase failed: {0}",
@@ -1214,6 +1418,7 @@ DEFAULTS: dict[str, dict[str, str]] = {
         "chamber_stock_corruption": "🎭 Corruption tokens: **{0}**",
         "chamber_stock_jeu_d_armes": "⚔️ Arms-mastery tokens: **{0}**",
         "chamber_stock_garde": "🛡️ Royal guards: **{0}**",
+        "chamber_stock_mariage": "💐 Arranged-marriage tokens: **{0}**",
         "chamber_patrouille": "🚨 Patrol: {0}",
         "chamber_use_explorateur": "🧭 Send exploring",
         "chamber_use_corruption": "🎭 Corrupt",

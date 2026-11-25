@@ -279,7 +279,12 @@ def setup_hook(bot: Any) -> None:
     from .distributor import distributor_dynamic_items
     from .ffa import FFAJoinButton
     from .lieux import lieux_dynamic_items
-    from .market import ChamberButton, MarketButton
+    from .market import (
+        ChamberButton,
+        MarketBuyButton,
+        MarketCancelButton,
+        MarketItemButton,
+    )
     from .marry import MarryButton
     from .panel import (
         CancelButton,
@@ -341,7 +346,9 @@ def setup_hook(bot: Any) -> None:
         PlanCancelButton,
         MarryButton,
         AlliancesButton,
-        MarketButton,
+        MarketBuyButton,
+        MarketCancelButton,
+        MarketItemButton,
         ChamberButton,
         TavernButton,
         MercenaryButton,

@@ -1,7 +1,7 @@
 """Kingdom mod market surfaces (P4.3) — wiring smoke tests (#368).
 
 The Marché and the Chambre des comptes degrade quietly without a
-stack; the pure helpers (cost lookup, error mapping, market options)
+stack; the pure helpers (cost lookup, error mapping, market shelves)
 stay stable across locales, and the ported EconomyService carries
 its error hierarchy.
 """
@@ -62,8 +62,8 @@ def test_market_error_note_maps_engine_errors() -> None:
 
 
 def test_market_options_carry_costs() -> None:
-    """The market select lists the combat techs and the consumables."""
-    from botforge.mods.kingdom.cogs.market import _market_options
+    """The stall's shelves list the articles with their price."""
+    from botforge.mods.kingdom.cogs.market import MARKET_SECTIONS, market_shelf_items
     from botforge.mods.kingdom.cogs.strings import strings
 
     class _Tech:
@@ -84,13 +84,13 @@ def test_market_options_carry_costs() -> None:
     class _Stack:
         config = _Config()
 
-    options = _market_options(_Stack(), strings("fr"))
-    values = [opt.value for opt in options]
-    assert "tech:embuscade" in values
-    assert "item:mariage_arrange" in values
-    assert "item:patrouille" in values
-    assert all("⚙️" in (opt.description or "") for opt in options)
-    assert len(options) <= 25
+    items = market_shelf_items(_Stack(), strings("fr"))
+    keys = [key for key, _label, _cost in items]
+    assert "embuscade" in keys
+    assert "mariage_arrange" in keys
+    assert "patrouille" in keys
+    assert len(keys) == sum(len(k) for _h, k in MARKET_SECTIONS)
+    assert all(label and cost >= 0 for _key, label, cost in items)
 
 
 @pytest.mark.asyncio

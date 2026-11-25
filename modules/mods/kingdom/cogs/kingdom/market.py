@@ -1,39 +1,65 @@
-"""The 🛒 Marché & the 🏛️ Chambre des comptes (P4.3, #368 T7).
+"""The 🛒 Marché & the 🏛️ Chambre des comptes (P4.3, #368 T7, Affaire 24).
 
-The Marché sells the CARDS (D9/D36): the King pays from the kingdom's
-single tech-point wallet, payment first — a refused purchase never
-grants anything. The Chambre des comptes is where the bought tokens
-live and fire (chambre-utiliser-v1): one stock view, one use-wizard
-per card (Explorateur → a lord, Corruption → a foreign territory,
-Jeu d'armes → the clicker, Garde Royale → an owned map, Patrouille
-→ a daily 2h tranche). The ledger (purchases + uses) rides the
-kingdom documents, best effort.
+The Marché is the reference merchant stall (marche-reference-v1):
+one pinned panel, the banner, FOUR shelves in Drasah's order (his
+taxonomy, NOT a flat select), one purchase button per article wearing
+its price — a click reveals the article CARD (the TCG art streamed
+from the reference assets, the full fiche: effect, cost, live treasury,
+per-season remainder) with its ✅ Acheter / ❌ Annuler row. Only the
+King buys; the engine owns every check, this surface only renders,
+reports and never grants anything on its own.
 
-The engine owns every check; this surface only renders and reports.
+The Chambre des comptes keeps its ported roles (chambre-utiliser-v1:
+one stock view, one use-wizard per card) and gains the reference
+ledger: the season balance, the purchase registry in reverse
+chronology, the CARDS IN HAND with their remaining stocks, and the
+held-cards mosaic — one composite image, X<stock> painted per tile.
 """
 
 from __future__ import annotations
 
+import io
 import logging
 import re
-from typing import Any
+from datetime import datetime
+from typing import Any, cast
+from zoneinfo import ZoneInfo
 
 import discord
 
-from .common import lord_of, open_unique_ephemeral, strings_for, wiring
+from .common import lord_of, open_unique_ephemeral, strings_for, surface, wiring
 
 logger = logging.getLogger("kingdom.market")
 
-# (item key, buy method suffix, description string key)
-_CONSUMABLE_ITEMS: tuple[tuple[str, str, str], ...] = (
-    ("mariage_arrange", "arranged_marriage_token", "market_item_mariage_arrange"),
-    ("explorateur", "explorateur_token", "market_item_explorateur"),
-    ("corruption", "corruption_token", "market_item_corruption"),
-    ("jeu_d_armes", "jeu_d_armes_token", "market_item_jeu_d_armes"),
-    ("garde_royale", "royal_guard", "market_item_garde_royale"),
+# (item key, buy method suffix) — the consumable cards of the stall.
+_CONSUMABLE_ITEMS: tuple[tuple[str, str], ...] = (
+    ("mariage_arrange", "arranged_marriage_token"),
+    ("explorateur", "explorateur_token"),
+    ("corruption", "corruption_token"),
+    ("jeu_d_armes", "jeu_d_armes_token"),
+    ("garde_royale", "royal_guard"),
 )
 _COMBAT_TECHNOLOGIES = ("embuscade", "traquenard", "contre_espionnage", "sabotage")
 _PATROUILLE_HOURS = tuple(range(0, 24, 2))
+
+# marche-reference-v1: the four shelves of the merchant stall —
+# Drasah's own taxonomy and order (the reference MARKET_SECTIONS).
+MARKET_SECTIONS: tuple[tuple[str, tuple[str, ...]], ...] = (
+    ("market_section_ia", ("traquenard", "jeu_d_armes")),
+    ("market_section_defense", ("patrouille", "garde_royale")),
+    ("market_section_attaque", ("sabotage", "contre_espionnage", "embuscade")),
+    ("market_section_speciales", ("explorateur", "mariage_arrange", "corruption")),
+)
+
+# The card keys of the CARDS IN HAND section: the stock counter each
+# one reads (the buys ride the article counter, the remaining stock
+# under its own — the pattern of the reference _LEDGER_CARD_KEYS).
+_LEDGER_CARD_STOCK_KEYS = {
+    "explorateur": "explorateur_stock",
+    "corruption": "corruption_stock",
+    "jeu_d_armes": "jeu_d_armes_stock",
+    "garde_royale": "garde_royale_stock",
+}
 
 
 def _cost(stack: Any, action: str) -> int:
@@ -65,131 +91,334 @@ def _market_error_note(exc: Exception, strings: dict[str, str]) -> str:
     return str(strings["market_error"]).format(str(exc)[:150])
 
 
+def _market_label(item: str, strings: dict[str, Any]) -> str:
+    """Return the localized article label (tech shelf or action shelf)."""
+    tech = strings.get("market_tech") or {}
+    action = strings.get("market_action") or {}
+    return str(tech.get(item) or action.get(item) or item)
+
+
+def market_shelf_items(stack: Any, strings: dict[str, Any]) -> list[tuple[str, str, int]]:
+    """Return the stall's articles in shelf order (key, label, cost).
+
+    The ONE data seam behind the pinned panel AND the tests: the
+    shelves, the labels and the prices carry through a single helper
+    (a drift between the render and the rules becomes impossible).
+    """
+    items: list[tuple[str, str, int]] = []
+    for _header_key, keys in MARKET_SECTIONS:
+        for key in keys:
+            items.append((key, _market_label(key, strings), _cost(stack, key)))
+    return items
+
+
+def _is_king(lord: Any) -> bool:
+    """Return True when the lord document holds the KING role."""
+    role = getattr(lord, "role", None)
+    return str(getattr(role, "name", role or "")).upper().find("KING") >= 0
+
+
+async def _clicker_kingdom(
+    interaction: discord.Interaction, stack: Any, strings: dict[str, str]
+) -> tuple[Any, Any] | None:
+    """Resolve the clicker's (lord, kingdom), the King gate included."""
+    lord = await lord_of(stack.kingdoms, str(interaction.user.id), interaction)
+    if lord is None or getattr(lord, "kingdom_id", None) is None:
+        await open_unique_ephemeral(interaction, strings["not_a_lord"])
+        return None
+    if not _is_king(lord):
+        await open_unique_ephemeral(interaction, strings["market_not_king"])
+        return None
+    kingdom = await _kingdom_of(stack, lord)
+    if kingdom is None:
+        await open_unique_ephemeral(interaction, strings["not_a_lord"])
+        return None
+    return lord, kingdom
+
+
+def _market_limit(stack: Any, item: str) -> int:
+    """Return the configured per-season purchase limit (0 = unlimited)."""
+    limits = getattr(stack.config.technologies, "limits", None) or {}
+    return int(limits.get(item, 0) or 0)
+
+
+async def _market_bought(stack: Any, kingdom_id: str, item: str) -> int:
+    """Return the season purchase counter of one article (0 on failure)."""
+    try:
+        state = await stack.attacks.technology_state(kingdom_id)
+        purchases = getattr(state, "purchases", None) or {}
+        if item == "jeu_d_armes":
+            return int(purchases.get("jeu_d_armes_bought", 0) or 0)
+        return int(purchases.get(item, 0) or 0)
+    except Exception:
+        logger.info("marche: purchase counter read failed (%s)", item, exc_info=True)
+        return 0
+
+
+async def market_fiche(stack: Any, kingdom: Any, item: str, strings: dict[str, Any]) -> str:
+    """Build the article sheet: effect, cost, live treasury, limits."""
+    kingdom_id = str(kingdom.id)
+    wallet = int(kingdom.tech_points_bank)
+    try:
+        wallet = int(await stack.economy.wallet(kingdom_id))
+    except Exception:
+        logger.info("marche: wallet read failed", exc_info=True)
+    lines = [
+        str(strings["market_fiche_effect"]).format((strings.get("market_effect") or {}).get(item, "")),
+        str(strings["market_fiche_cost"]).format(_cost(stack, item)),
+        str(strings["market_fiche_wallet"]).format(wallet),
+    ]
+    limit = _market_limit(stack, item)
+    if limit > 0:
+        bought = await _market_bought(stack, kingdom_id, item)
+        lines.append(str(strings["market_fiche_left"]).format(max(0, limit - bought), limit))
+    lines.append(str(strings["market_fiche_king_only"]))
+    return "\n\n".join(lines)
+
+
+async def _purchase(stack: Any, kingdom_id: str, item: str) -> None:
+    """Run ONE engine purchase — the single dispatch, no ad hoc buys."""
+    if item in _COMBAT_TECHNOLOGIES:
+        await stack.economy.buy_combat_technology(kingdom_id, item)
+    elif item == "patrouille":
+        state = await stack.attacks.technology_state(kingdom_id)
+        slot = 2 if "patrouille_unlock_1" in state.purchases else 1
+        await stack.economy.buy_patrouille_slot(kingdom_id, slot)
+    else:
+        method = dict(_CONSUMABLE_ITEMS)[item]
+        await getattr(stack.economy, f"buy_{method}")(kingdom_id)
+
+
+async def _success_note(
+    stack: Any, kingdom: Any, item: str, strings: dict[str, Any]
+) -> str:
+    """Build the unique post-purchase echo: bought + treasury + limit."""
+    label = _market_label(item, strings)
+    wallet = int(kingdom.tech_points_bank)
+    try:
+        wallet = int(await stack.economy.wallet(str(kingdom.id)))
+    except Exception:
+        logger.info("marche: wallet read failed", exc_info=True)
+    note = str(strings["market_bought"]).format(label, wallet)
+    limit = _market_limit(stack, item)
+    if limit > 0:
+        bought = await _market_bought(stack, str(kingdom.id), item)
+        note += str(strings["market_bought_left"]).format(max(0, limit - bought), limit)
+    return note
+
+
 # ---------------------------------------------------------------------------
-# The Marché (the card shop)
+# The pinned merchant stall (salon market)
 # ---------------------------------------------------------------------------
 
 
-def _market_options(stack: Any, strings: dict[str, str]) -> list[discord.SelectOption]:
-    """The purchasable cards with their price (combat techs + consumables)."""
-    options: list[discord.SelectOption] = []
-    for tech in _COMBAT_TECHNOLOGIES:
-        options.append(
-            discord.SelectOption(
-                label=str(strings["market_item_technology"]).format(tech)[:100],
-                value=f"tech:{tech}",
-                description=f"{_cost(stack, tech)} ⚙️",
+async def build_market_panel(guild_id: str) -> discord.ui.LayoutView:
+    """Build the pinned Marché panel — the reference merchant stall.
+
+    The banner rides as a TOP-LEVEL MediaGallery (a pinned CV2 message
+    carries no attachments, so the art streams from the reference
+    raw URLs), then the four shelves in Drasah's order, one purchase
+    button per article wearing its price, and the Chambre des
+    comptes row at the bottom.
+    """
+    from .marche_art import banner_url
+    from .panel import _guild_locale
+    from .strings import strings as _strings
+
+    locale = await _guild_locale(guild_id)
+    strings: dict[str, Any] = _strings(locale[:2])
+    items: list[Any] = [
+        discord.ui.MediaGallery(discord.MediaGalleryItem(media=banner_url())),
+        discord.ui.TextDisplay(f"# {strings['market_title']}"),
+        discord.ui.TextDisplay(strings["market_hint_panel"]),
+        discord.ui.Separator(),
+    ]
+    costs_stack = _stack_for_costs()
+    for header_key, keys in MARKET_SECTIONS:
+        items.append(discord.ui.TextDisplay(f"## {strings[header_key]}"))
+        row = discord.ui.ActionRow()
+        for key in keys:
+            row.add_item(
+                MarketItemButton(
+                    key, f"{_market_label(key, strings)} — {_cost(costs_stack, key)} ⚙️"
+                )
+            )
+        items.append(row)
+    items.append(
+        discord.ui.ActionRow(ChamberButton(strings["chamber_button"]))
+    )
+    return surface("panel:mod:kingdom:market", *items)
+
+
+def _stack_for_costs() -> Any:
+    """Return the wired stack for the pinned render (defaults if absent)."""
+    stack = wiring()
+    if stack is None:
+        from botforge.mods.kingdom.config import TechnologyCosts
+
+        class _Defaults:
+            config = type("Config", (), {"technologies": TechnologyCosts()})()
+
+        return _Defaults()
+    return stack
+
+
+# ---------------------------------------------------------------------------
+# The stall buttons (restart-proof DynamicItems)
+# ---------------------------------------------------------------------------
+
+
+class MarketItemButton(
+    discord.ui.DynamicItem[discord.ui.Button[Any]],
+    template=r"kingdom:market:item:(?P<key>[a-z_]+)",
+):
+    """One article button of a shelf — reveals the ephemeral card."""
+
+    def __init__(self, key: str, label: str) -> None:
+        super().__init__(
+            discord.ui.Button(
+                label=str(label)[:80],
+                custom_id=f"kingdom:market:item:{key}",
+                style=discord.ButtonStyle.primary,
             )
         )
-    for key, _method, label_key in _CONSUMABLE_ITEMS:
-        options.append(
-            discord.SelectOption(
-                label=str(strings[label_key])[:100],
-                value=f"item:{key}",
-                description=f"{_cost(stack, key)} ⚙️",
-            )
-        )
-    options.append(
-        discord.SelectOption(
-            label=str(strings["market_item_patrouille"])[:100],
-            value="item:patrouille",
-            description=f"{_cost(stack, 'patrouille')} ⚙️",
-        )
-    )
-    return options[:25]
 
+    @classmethod
+    async def from_custom_id(
+        cls,
+        interaction: discord.Interaction,
+        item: discord.ui.Item[Any],
+        match: re.Match[str],
+        /,
+    ) -> MarketItemButton:
+        """Rebuild the article button from the wire (its shelf label)."""
+        strings = strings_for(interaction)
+        return cls(match.group("key"), _market_label(match.group("key"), strings))
 
-def _market_view(stack: Any, wallet: int, strings: dict[str, str], kingdom_id: str) -> discord.ui.LayoutView:
-    """The market window — wallet, rules, one select of the cards."""
-    select: discord.ui.Select[Any] = discord.ui.Select(
-        custom_id="kingdom:attack:marketpick",
-        placeholder=str(strings["market_intro"])[:100],
-        options=_market_options(stack, strings),
-    )
-
-    async def on_pick(target: discord.Interaction) -> None:
-        values = getattr(target, "data", None) or {}
-        chosen = [str(v) for v in values.get("values", [])]
-        if not chosen:
+    async def callback(self, interaction: discord.Interaction) -> None:
+        """Reveal the article card: the TCG art plus the full fiche."""
+        strings = strings_for(interaction)
+        stack = wiring()
+        if stack is None:
+            await open_unique_ephemeral(interaction, strings["plan_no_service"])
             return
-        label = next(
-            (
-                opt.label
-                for opt in _market_options(stack, strings)
-                if opt.value == chosen[0]
-            ),
-            chosen[0],
+        resolved = await _clicker_kingdom(interaction, stack, strings)
+        if resolved is None:
+            return
+        _lord, kingdom = resolved
+        item = str(getattr(self.item, "custom_id", "")).rsplit(":", 1)[-1]
+        from .marche_art import card_url
+
+        view_items: list[Any] = []
+        url = card_url(item)
+        if url:
+            view_items.append(
+                discord.ui.MediaGallery(discord.MediaGalleryItem(media=url))
+            )
+        view_items.append(
+            discord.ui.TextDisplay(
+                f"## 💰 {_market_label(item, strings)} — {_cost(stack, item)} ⚙️"
+            )
         )
-        await _confirm_purchase(target, stack, strings, chosen[0], label, kingdom_id)
+        view_items.append(
+            discord.ui.TextDisplay(await market_fiche(stack, kingdom, item, strings))
+        )
+        view_items.append(
+            discord.ui.ActionRow(
+                MarketBuyButton(item, strings["market_buy_button"]),
+                MarketCancelButton(strings["market_cancel_button"]),
+            )
+        )
+        await open_unique_ephemeral(
+            interaction, view=surface("panel:mod:kingdom:card", *view_items)
+        )
 
-    select.callback = on_pick  # type: ignore[method-assign, assignment]
-    from .common import surface
 
-    return surface(
-        "panel:mod:kingdom:market",
-        discord.ui.TextDisplay(f"## {strings['market_title']}\n{strings['market_rules']}"),
-        discord.ui.TextDisplay(str(strings["market_wallet"]).format(wallet)),
-        discord.ui.ActionRow(select),
-    )
+class MarketBuyButton(
+    discord.ui.DynamicItem[discord.ui.Button[Any]],
+    template=r"kingdom:market:buy:(?P<key>[a-z_]+)",
+):
+    """The restart-proof ✅ of the revealed article card."""
 
+    def __init__(self, key: str, label: str) -> None:
+        super().__init__(
+            discord.ui.Button(
+                label=str(label)[:80],
+                custom_id=f"kingdom:market:buy:{key}",
+                style=discord.ButtonStyle.success,
+            )
+        )
 
-async def _confirm_purchase(
-    interaction: discord.Interaction,
-    stack: Any,
-    strings: dict[str, str],
-    value: str,
-    label: str,
-    kingdom_id: str,
-) -> None:
-    """The confirm card — one Yes (no back button, norm #381.2)."""
-    cost = _cost(stack, value.split(":", 1)[1])
-    body = (
-        f"## {strings['market_confirm_title']}\n"
-        f"**{label}**\n{strings['market_confirm_sub'].format(cost)}"
-    )
-    yes: discord.ui.Button[Any] = discord.ui.Button(
-        label=str(strings["market_yes"])[:80],
-        custom_id="kingdom:attack:marketyes",
-        style=discord.ButtonStyle.success,
-    )
-    async def on_yes(target: discord.Interaction) -> None:
-        await target.response.defer()
-        kind, key = value.split(":", 1)
+    @classmethod
+    async def from_custom_id(
+        cls,
+        interaction: discord.Interaction,
+        item: discord.ui.Item[Any],
+        match: re.Match[str],
+        /,
+    ) -> MarketBuyButton:
+        """Rebuild the ✅ of the revealed card from the wire."""
+        return cls(
+            match.group("key"),
+            strings_for(interaction)["market_buy_button"],
+        )
+
+    async def callback(self, interaction: discord.Interaction) -> None:
+        """Run the purchase the card announced — one echo, never a grant."""
+        strings = strings_for(interaction)
+        stack = wiring()
+        if stack is None:
+            await open_unique_ephemeral(interaction, strings["plan_no_service"])
+            return
+        resolved = await _clicker_kingdom(interaction, stack, strings)
+        if resolved is None:
+            return
+        _lord, kingdom = resolved
+        item = str(getattr(self.item, "custom_id", "")).rsplit(":", 1)[-1]
         try:
-            if kind == "tech":
-                await stack.economy.buy_combat_technology(kingdom_id, key)
-            elif key == "patrouille":
-                state = await stack.attacks.technology_state(kingdom_id)
-                slot = 2 if "patrouille_unlock_1" in state.purchases else 1
-                await stack.economy.buy_patrouille_slot(kingdom_id, slot)
-            else:
-                method = dict((k, m) for k, m, _ in _CONSUMABLE_ITEMS)[key]
-                await getattr(stack.economy, f"buy_{method}")(kingdom_id)
+            await _purchase(stack, str(kingdom.id), item)
         except Exception as exc:  # noqa: BLE001 — every engine refusal is a note
-            await target.followup.send(_market_error_note(exc, strings), ephemeral=True)
+            await open_unique_ephemeral(interaction, _market_error_note(exc, strings))
             return
-        try:
-            await target.edit_original_response(
-                content=str(strings["market_bought"]).format(label), view=None
-            )
-        except Exception:
-            await target.followup.send(
-                str(strings["market_bought"]).format(label), ephemeral=True
-            )
+        refreshed = await _kingdom_of(stack, resolved[0])
+        await open_unique_ephemeral(
+            interaction, await _success_note(stack, refreshed or kingdom, item, strings)
+        )
 
-    yes.callback = on_yes  # type: ignore[method-assign, assignment]
-    from .common import surface
 
-    view = surface(
-        "panel:mod:kingdom:card",
-        discord.ui.TextDisplay(body),
-        discord.ui.ActionRow(yes),
-    )
-    await interaction.response.edit_message(content=None, view=view)
+class MarketCancelButton(
+    discord.ui.DynamicItem[discord.ui.Button[Any]],
+    template=r"kingdom:market:cancel$",
+):
+    """The ❌ of the revealed card — the purchase never happened."""
+
+    def __init__(self, label: str) -> None:
+        super().__init__(
+            discord.ui.Button(
+                label=str(label)[:80],
+                custom_id="kingdom:market:cancel",
+                style=discord.ButtonStyle.danger,
+            )
+        )
+
+    @classmethod
+    async def from_custom_id(
+        cls,
+        interaction: discord.Interaction,
+        item: discord.ui.Item[Any],
+        match: re.Match[str],
+        /,
+    ) -> MarketCancelButton:
+        """Rebuild the ❌ of the revealed card from the wire."""
+        return cls(strings_for(interaction)["market_cancel_button"])
+
+    async def callback(self, interaction: discord.Interaction) -> None:
+        """Close the revealed card — nothing was bought, nothing spent."""
+        await open_unique_ephemeral(interaction, strings_for(interaction)["market_cancelled"])
 
 
 # ---------------------------------------------------------------------------
-# The Chambre des comptes (the stock + use surface)
+# The Chambre des comptes (the stock + use + ledger surface)
 # ---------------------------------------------------------------------------
 
 
@@ -211,6 +440,11 @@ async def chamber_text(stack: Any, kingdom: Any, strings: dict[str, str]) -> str
     lines.append(
         strings["chamber_stock_garde"].format(int(p.get("garde_royale_stock", 0) or 0))
     )
+    lines.append(
+        strings["chamber_stock_mariage"].format(
+            int(getattr(kingdom, "arranged_marriage_stock", 0) or 0)
+        )
+    )
     slots = [
         f"slot {i + 1} @ {int(p.get(key, -1)):02d}h"
         for i, key in enumerate(("patrouille_slot_1", "patrouille_slot_2"))
@@ -220,6 +454,70 @@ async def chamber_text(stack: Any, kingdom: Any, strings: dict[str, str]) -> str
         strings["chamber_patrouille"].format(" · ".join(slots) or strings["alliances_none"])
     )
     return "\n".join(lines)
+
+
+async def chamber_ledger_text(stack: Any, kingdom: Any, strings: dict[str, Any]) -> str:
+    """Build the season register: balance, limits, purchases."""
+    registry = list(getattr(kingdom, "market_registry", None) or [])
+    kingdom_id = str(kingdom.id)
+    wallet = int(getattr(kingdom, "tech_points_bank", 0) or 0)
+    try:
+        wallet = int(await stack.economy.wallet(kingdom_id))
+    except Exception:
+        logger.info("marche: wallet read failed", exc_info=True)
+    spent = sum(int(entry.get("cost", 0) or 0) for entry in registry)
+    lines = [str(strings["market_ledger_summary"]).format(spent, wallet)]
+
+    limits_parts: list[str] = []
+    limits = getattr(stack.config.technologies, "limits", None) or {}
+    for item, limit in limits.items():
+        item, limit = str(item), int(limit or 0)
+        if limit <= 0:
+            continue
+        bought = await _market_bought(stack, kingdom_id, item)
+        limits_parts.append(f"{_market_label(item, strings)} {min(bought, limit)}/{limit}")
+    if limits_parts:
+        lines.append(str(strings["market_ledger_limits"]).format(" · ".join(limits_parts)))
+
+    lines.append("")
+    lines.append(f"## {strings['market_ledger_purchases_title']}")
+    if not registry:
+        lines.append(str(strings["market_ledger_empty"]))
+    else:
+        emojis = strings.get("market_ledger_emoji") or {}
+        for entry in sorted(registry, key=lambda e: int(e.get("at", 0) or 0), reverse=True):
+            item = str(entry.get("item", ""))
+            when = datetime.fromtimestamp(
+                int(entry.get("at", 0) or 0), tz=ZoneInfo("Europe/Paris")
+            ).strftime("%d/%m %H:%M")
+            lines.append(
+                str(strings["market_ledger_line"]).format(
+                    emojis.get(item, "•"),
+                    _market_label(item, strings),
+                    str(entry.get("detail", "")),
+                    int(entry.get("cost", 0) or 0),
+                    when,
+                )
+            )
+    return "\n".join(lines)
+
+
+async def chamber_held_cards(
+    stack: Any, kingdom: Any, strings: dict[str, Any]
+) -> list[tuple[str, int]]:
+    """Return the (card key, remaining stock) pairs of the hand, deduped."""
+    state = await stack.attacks.technology_state(str(kingdom.id))
+    purchases = dict(getattr(state, "purchases", None) or {})
+    held: list[tuple[str, int]] = []
+    for key in MARKET_SECTIONS_ORDERED_CARDS:
+        stock_key = _LEDGER_CARD_STOCK_KEYS.get(key, key)
+        stock = int(purchases.get(stock_key, 0) or 0)
+        if key == "mariage_arrange":
+            stock = int(getattr(kingdom, "arranged_marriage_stock", 0) or 0)
+        if stock <= 0:
+            continue
+        held.append((key, stock))
+    return held
 
 
 async def _use_wizard(
@@ -344,7 +642,6 @@ async def _wizard_edit(
         options=options,
     )
     select.callback = on_pick  # type: ignore[method-assign, assignment]
-    from .common import surface
 
     view = surface("panel:mod:kingdom:card", discord.ui.ActionRow(select))
     await interaction.response.edit_message(content=None, view=view)
@@ -368,57 +665,20 @@ async def _fire(target: discord.Interaction, stack: Any, strings: dict[str, str]
 # The panel buttons
 # ---------------------------------------------------------------------------
 
-
-class MarketButton(
-    discord.ui.DynamicItem[discord.ui.Button[Any]],
-    template=r"kingdom:attack:market$",
-):
-    """The 🛒 « Marché » button of the declare panel."""
-
-    def __init__(self, label: str) -> None:
-        super().__init__(
-            discord.ui.Button(
-                label=label[:80],
-                custom_id="kingdom:attack:market",
-                style=discord.ButtonStyle.primary,
-            )
-        )
-
-    @classmethod
-    async def from_custom_id(
-        cls,
-        interaction: discord.Interaction,
-        item: discord.ui.Item[Any],
-        match: re.Match[str],
-        /,
-    ) -> MarketButton:
-        return cls(strings_for(interaction)["market_button"])
-
-    async def callback(self, interaction: discord.Interaction) -> None:
-        strings = strings_for(interaction)
-        stack = wiring()
-        if stack is None:
-            await open_unique_ephemeral(interaction, strings["plan_no_service"])
-            return
-        lord = await lord_of(stack.kingdoms, str(interaction.user.id), interaction)
-        if lord is None or getattr(lord, "kingdom_id", None) is None:
-            await open_unique_ephemeral(interaction, strings["not_a_lord"])
-            return
-        kingdom = await _kingdom_of(stack, lord)
-        if kingdom is None:
-            await open_unique_ephemeral(interaction, strings["not_a_lord"])
-            return
-        await open_unique_ephemeral(
-            interaction,
-            view=_market_view(stack, int(kingdom.tech_points_bank), strings, str(kingdom.id)),
-        )
+# The hand carries the TOKEN cards, in the shelves' own order.
+MARKET_SECTIONS_ORDERED_CARDS = tuple(
+    key
+    for _header_key, keys in MARKET_SECTIONS
+    for key in keys
+    if key in _LEDGER_CARD_STOCK_KEYS or key == "mariage_arrange"
+)
 
 
 class ChamberButton(
     discord.ui.DynamicItem[discord.ui.Button[Any]],
     template=r"kingdom:attack:chamber$",
 ):
-    """The 🏛️ « Comptes » button of the declare panel."""
+    """The 🏛️ « Comptes » button of the declare panel & the stall."""
 
     def __init__(self, label: str) -> None:
         super().__init__(
@@ -437,9 +697,11 @@ class ChamberButton(
         match: re.Match[str],
         /,
     ) -> ChamberButton:
+        """Rebuild the Comptes button from the wire (its entry label)."""
         return cls(strings_for(interaction)["chamber_button"])
 
     async def callback(self, interaction: discord.Interaction) -> None:
+        """Open the Chambre des comptes: stocks, use-wizards, the ledger."""
         strings = strings_for(interaction)
         stack = wiring()
         if stack is None:
@@ -454,19 +716,25 @@ class ChamberButton(
             await open_unique_ephemeral(interaction, strings["not_a_lord"])
             return
         text = await chamber_text(stack, kingdom, strings)
+        ledger = await chamber_ledger_text(stack, kingdom, strings)
+        held = await chamber_held_cards(stack, kingdom, strings)
         state = await stack.attacks.technology_state(str(kingdom.id))
         p = state.purchases
-        cards: list[tuple[str, bool]] = [
-            ("explorateur", int(p.get("explorateur_stock", 0) or 0) > 0),
-            ("corruption", int(p.get("corruption_stock", 0) or 0) > 0),
-            ("jeu_d_armes", int(p.get("jeu_d_armes_stock", 0) or 0) > 0),
-            ("garde_royale", int(p.get("garde_royale_stock", 0) or 0) > 0),
-            ("patrouille", "patrouille_unlock_1" in p or "patrouille_unlock_2" in p),
+        emojis = cast(dict[str, Any], strings.get("market_ledger_emoji") or {})
+        items: list[Any] = [
+            discord.ui.TextDisplay(text),
+            discord.ui.TextDisplay(ledger),
+            discord.ui.TextDisplay(f"## {strings['market_ledger_cards_title']}"),
         ]
-        from .common import surface
-
-        items: list[Any] = [discord.ui.TextDisplay(text)]
+        card_lines = [
+            str(strings["market_ledger_card_line"]).format(
+                emojis.get(key, "•"), _market_label(key, strings), stock
+            )
+            for key, stock in held
+        ] or [str(strings["market_ledger_cards_empty"])]
+        items.append(discord.ui.TextDisplay("\n".join(card_lines)))
         row: list[discord.ui.Button[Any]] = []
+        held_keys = {key for key, _stock in held}
         labels = {
             "explorateur": "chamber_use_explorateur",
             "corruption": "chamber_use_corruption",
@@ -474,8 +742,15 @@ class ChamberButton(
             "garde_royale": "chamber_use_garde",
             "patrouille": "chamber_use_patrouille",
         }
-        for card, held in cards:
-            if not held:
+        cards = [
+            ("explorateur", int(p.get("explorateur_stock", 0) or 0) > 0 or "explorateur" in held_keys),
+            ("corruption", int(p.get("corruption_stock", 0) or 0) > 0 or "corruption" in held_keys),
+            ("jeu_d_armes", int(p.get("jeu_d_armes_stock", 0) or 0) > 0 or "jeu_d_armes" in held_keys),
+            ("garde_royale", int(p.get("garde_royale_stock", 0) or 0) > 0 or "garde_royale" in held_keys),
+            ("patrouille", "patrouille_unlock_1" in p or "patrouille_unlock_2" in p),
+        ]
+        for card, stock in cards:
+            if not stock:
                 continue
             button: discord.ui.Button[Any] = discord.ui.Button(
                 label=str(strings[labels[card]])[:80],
@@ -493,36 +768,22 @@ class ChamberButton(
         if row:
             items.append(discord.ui.ActionRow(*row[:5]))
         view = surface("panel:mod:kingdom:chamber", *items)
-        await open_unique_ephemeral(interaction, view=view)
+        files_now = await held_cards_files(held)
+        if files_now:
+            await open_unique_ephemeral(interaction, view=view, files=files_now)
+        else:
+            await open_unique_ephemeral(interaction, view=view)
 
 
-async def build_market_panel(guild_id: str) -> discord.ui.LayoutView:
-    """The pinned Marché panel (salon `market`) — ported from the reference
-    `panel:marche`: an entry point whose buttons open the clicker's own
-    ephemeral market / treasury windows.
+async def held_cards_files(held: list[tuple[str, int]]) -> list[discord.File]:
+    """Return the held-cards mosaic as ONE attachment (empty hand = none)."""
+    from .marche_art import held_cards_mosaic_png
 
-    static-pin-market-fix (Merlin's logs 23/11, ~18:22-18:32): the old
-    tail crashed INSIDE ``surface()`` — ``surface(view_id, view)`` passes
-    a whole LayoutView where ``build_view`` expects Items, and wrapping
-    the returned LayoutView in a TextDisplay type-errors besides. THE
-    canonical pattern (the #381 seam, same as ``_open_market_view``
-    below): build the items, CLOSE with ``return surface(id, *items)``
-    — the declared id footer rides the view, never hand-rolled.
-    """
-    from .common import surface
-    from .panel import _guild_locale
-    from .strings import strings as _strings
-
-    locale = await _guild_locale(guild_id)
-    strings = _strings(locale[:2])
-    row = discord.ui.ActionRow()
-    row.add_item(MarketButton(strings["market_button"]))
-    row.add_item(ChamberButton(strings["chamber_button"]))
-    return surface(
-        "panel:mod:kingdom:market",
-        discord.ui.TextDisplay(f"# {strings['market_button']}"),
-        discord.ui.TextDisplay(
-            str(strings.get("market_help", strings["market_button"]))[:1000]
-        ),
-        row,
-    )
+    png = await held_cards_mosaic_png(held)
+    if png is None:
+        return []
+    try:
+        return [discord.File(io.BytesIO(png), filename="cartes_en_main.png")]
+    except Exception:
+        logger.warning("marche: mosaic attach failed", exc_info=True)
+        return []
