@@ -129,7 +129,7 @@ en:
       matches_setting_full_tech: "Full tech tree"
       matches_setting_record: "Game recorded"
       matches_setting_shared_expl: "Shared exploration"
-      matches_when: "Played {when}"
+      matches_when: "{when}"
       matches_duration: "Duration: {clock}"
       matches_source: "Source: [libre:match]({url})"
 

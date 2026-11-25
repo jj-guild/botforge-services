@@ -1513,17 +1513,24 @@ async def _match_panels_ctx_for(
 
 
 def _seat_name(
-    alias_link: str, pid: str, me_ids: set[str], team_mine: bool, team_lost: bool
+    alias_link: str,
+    pid: str,
+    me_ids: set[str],
+    team_mine: bool,
+    team_lost: bool,
+    known_ids: set[str] | None = None,
 ) -> str:
-    """Style one seat's name per the scoped grammar (owner 2026-11-25).
+    """Style one seat's name - ONE typography (owner 2026-11-25).
 
-    The scoped player reads BOLD (owner 2026-11-25): the strike
-    belongs to the TEAM TITLES only, every name stays whole.
+    The strike belongs to the TEAM TITLES only, every name stays
+    whole. The SCOPED card bolds the scoped player; the UNSCOPED
+    card bolds the players the bot KNOWS (the bound profiles).
     """
     del team_mine, team_lost  # the titles carry the verdict
-    if not me_ids:
-        return alias_link
-    return f"**{alias_link}**" if pid in me_ids else alias_link
+    if me_ids:
+        return f"**{alias_link}**" if pid in me_ids else alias_link
+    known = known_ids or set()
+    return f"**{alias_link}**" if pid in known else alias_link
 
 
 def _ai_level_label(card: dict[str, Any]) -> str:
@@ -1563,6 +1570,7 @@ def _seat_text(
     me_ids: set[str] | None = None,
     team_mine: bool = False,
     team_lost: bool = False,
+    known_ids: set[str] | None = None,
 ) -> tuple[str, str]:
     me_ids = me_ids or set()
     """Render ONE seat: (text, civ image url).
@@ -1607,7 +1615,7 @@ def _seat_text(
         level = _ai_level_label(card)
         base = str(labels.get("ai") or "IA")
         alias_link = f"{base} ({level})" if level else base
-    name = _seat_name(alias_link, pid, me_ids, team_mine, team_lost)
+    name = _seat_name(alias_link, pid, me_ids, team_mine, team_lost, known_ids)
     slot = int(player.get("slot", 0) or 0)
     # the position reads P1-8, backticked for a FIXED width; the
     # ladder lines underneath indent 4 spaces so the columns align
@@ -1682,7 +1690,9 @@ def _card_map_section(card: dict[str, Any], ctx: dict[str, Any], labels: dict[st
     map_link = f"[{map_label}]({map_url})" if map_url else f"**{map_label}**"
     labels = labels or {}
     when_at = int(card.get("finished_at") or card.get("started_at") or 0)
-    when_line = str(labels.get("when", "Il y a {when}")).format(when=f"<t:{when_at}:R>") if when_at else ""
+    # the relative timestamp renders "Il y a" ITSELF (owner 2026-11-25):
+    # the locale carries {when} alone, the fallback too - never twice
+    when_line = str(labels.get("when", "{when}")).format(when=f"<t:{when_at}:R>") if when_at else ""
     sub_lines = [when_line]
     # an INVALID match still shows, WITH ITS STATUS (owner 2026-11-24:
     # a match under five minutes or without a result seeds the
@@ -1716,7 +1726,12 @@ def _card_map_section(card: dict[str, Any], ctx: dict[str, Any], labels: dict[st
 
 
 def _card_header(
-    badge: str, noun: str, match_id: str, me_ids: set[str] | None = None, card: dict[str, Any] | None = None
+    badge: str,
+    noun: str,
+    match_id: str,
+    me_ids: set[str] | None = None,
+    card: dict[str, Any] | None = None,
+    ranked_prefix: str = "",
 ) -> str:
     """Render the card's header: the badge line, the match id linked.
 
@@ -1736,7 +1751,11 @@ def _card_header(
     me_ids = me_ids or set()
     card = card or {}
     winners = {str(w) for w in card.get("winners") or []}
-    if me_ids and card.get("status") == "finished" and not card.get("invalid"):
+    if me_ids and card.get("status") in ("lobby", "ongoing"):
+        # the scoped LIVE view wears its OWN icon (owner 2026-11-25):
+        # the lobby stands, the game runs
+        scope_icon = "\U0001F7E1 " if card.get("status") == "lobby" else "\U0001F7E2 "
+    elif me_ids and card.get("status") == "finished" and not card.get("invalid"):
         if winners:
             scope_icon = "\U0001f3c6 " if winners & me_ids else "\U0001f480 "
         elif any(bool((p or {}).get("ai")) for p in card.get("players") or []):
@@ -1746,7 +1765,10 @@ def _card_header(
             scope_icon = "\U0001f480 "
         elif card.get("status") == "finished":
             scope_icon = ""
-    return f"{scope_icon}**{name_part}** {noun}{id_part}"
+    # the ranked marker rides OUTSIDE the link (owner 2026-11-25): a
+    # masked-link's text never renders an emoji right - the marker
+    # prefixes the whole badge instead
+    return f"{scope_icon}{ranked_prefix}**{name_part}** {noun}{id_part}"
 
 
 
@@ -1801,6 +1823,7 @@ def _card_team_blocks(
     me_ids: set[str],
     labels: dict[str, Any],
     ctx: dict[str, Any],
+    known_ids: set[str] | None = None,
 ) -> list[Any]:
     """Render the card's team sections: ONE block per seat.
 
@@ -1842,7 +1865,9 @@ def _card_team_blocks(
             # losers strike through (owner 2026-11-23)
             base = f"{labels.get('team', 'Team')} {index + 1}"
             title = f"**{base}**" if mine else f"*{base}*"
-            if scoped and verdict and finished and not won:
+            if verdict and finished and not won:
+                # the losing team titles strike through, scoped AND
+                # unscoped (owner 2026-11-25 - one typography)
                 title = f"~~{title}~~"
             blocks.append(discord.ui.TextDisplay(f"{medal}{title}"))
         for player in seats:
@@ -1854,6 +1879,7 @@ def _card_team_blocks(
                 me_ids,
                 team_mine=mine,
                 team_lost=scoped and verdict and finished and not won,
+                known_ids=known_ids or set(),
             )
             blocks.append(_seat_component(text, civ_image))
     return blocks
@@ -1863,6 +1889,7 @@ def _match_card_view(
     ctx: dict[str, Any],
     me_ids: set[str],
     labels: dict[str, Any],
+    known_ids: set[str] | None = None,
 ) -> discord.ui.LayoutView:
     """Build ONE match card's view - the SAME panel everywhere.
 
@@ -1882,7 +1909,7 @@ def _match_card_view(
     """
     from botforge.discord.ui.view_footer import add_view_footer
 
-    blocks, buttons, match_id, accent = _match_card_parts(card, ctx, me_ids, labels)
+    blocks, buttons, match_id, accent = _match_card_parts(card, ctx, me_ids, labels, known_ids)
     view = discord.ui.LayoutView(timeout=None)
     view.add_item(discord.ui.Container(*blocks, accent_colour=discord.Colour(accent)))
     if buttons:
@@ -1895,6 +1922,7 @@ def _match_card_parts(
     ctx: dict[str, Any],
     me_ids: set[str],
     labels: dict[str, Any],
+    known_ids: set[str] | None = None,
 ) -> tuple[list[Any], list[discord.ui.Button[Any]], str, int]:
     """Build ONE match card's inner parts: (blocks, buttons, id, accent).
 
@@ -1908,9 +1936,10 @@ def _match_card_parts(
     fmt = _card_format(card)
     match_id = str(card.get("match_id") or card.get("match_ref") or "?")
     # the badge carries the FORMAT only (owner 2026-11-25: no CUSTOM
-    # word - a ranked marker emoji says classée, nothing else does)
-    prefix = "\U0001f3af " if _is_ranked(card) else ""
-    badge = prefix + fmt if fmt else prefix.strip()
+    # word) - the ranked marker rides the header OUTSIDE the insights
+    # link (a masked link never renders an emoji right)
+    badge = fmt
+    ranked_prefix = "\U0001F3AF " if _is_ranked(card) else ""
     noun_key = "lobby_noun" if status == "lobby" else "match_noun"
     noun = str(labels.get(noun_key, "Match n\u00b0" if status != "lobby" else "Lobby n\u00b0"))
     winners = {str(w) for w in card.get("winners") or []}
@@ -1925,11 +1954,17 @@ def _match_card_parts(
     # rides his OWN outcome emoji on the header and strikes the
     # losers' titles - see _card_team_blocks
     blocks: list[Any] = [
-        discord.ui.TextDisplay(_card_header(badge, noun, match_id, me_ids=me_ids, card=card)),
+        discord.ui.TextDisplay(
+            _card_header(
+                badge, noun, match_id, me_ids=me_ids, card=card, ranked_prefix=ranked_prefix
+            )
+        ),
     ]
     blocks.append(_card_map_section(card, ctx, labels))
     blocks.append(discord.ui.Separator())
-    blocks.extend(_card_team_blocks(card, _ordered_teams(card, me_ids), me_ids, labels, ctx))
+    blocks.extend(
+        _card_team_blocks(card, _ordered_teams(card, me_ids), me_ids, labels, ctx, known_ids or set())
+    )
     # the footer: the source, then the status-led action row
     blocks.append(discord.ui.Separator())
     blocks.append(discord.ui.TextDisplay(_card_footer_text(card, labels, me_ids)))
@@ -2209,7 +2244,7 @@ async def _send_match_panels(
         return
     ctx = await _match_panels_ctx(interaction, cards)
     for card in cards:
-        view = _match_card_view(card, ctx, me_ids, labels)
+        view = _match_card_view(card, ctx, me_ids, labels, known_ids)
         try:
             await interaction.followup.send(view=view, ephemeral=True)
         except Exception:
@@ -2708,6 +2743,23 @@ async def _view_live(interaction: discord.Interaction, game_key: str = "aoe2") -
     await interaction.followup.send(view=view, ephemeral=True)
 
 
+async def _live_known_ids(bot: Any, guild_id: str, game_key: str) -> set[str]:
+    """Return the guild's bound profiles - the KNOWN names (owner 2026-11-25).
+
+    An UNSCOPED card (a match the viewer does not play) still bolds
+    the players the bot knows: the guild's bound game profiles.
+    """
+    if game_key != "aoe2":
+        return set()
+    try:
+        from botforge.discord.live_activity import _guild_profiles
+
+        return set(await _guild_profiles(bot, guild_id))
+    except Exception:
+        logger.debug("the live known-ids lookup failed", exc_info=True)
+        return set()
+
+
 async def _build_live_view(
     interaction: discord.Interaction, game_key: str = "aoe2"
 ) -> Any:
@@ -2742,6 +2794,7 @@ async def _build_live_view(
                     me_ids.add(str(binding.get("profile_id", "")))
         except Exception:
             logger.debug("the live scope lookup failed", exc_info=True)
+    known_ids = await _live_known_ids(interaction.client, str(interaction.guild_id or ""), game_key)
     cards = _cards_from_live_snapshot(snapshot)[:4] if game_key == "aoe2" else []
     if cards:
         try:
@@ -2752,7 +2805,7 @@ async def _build_live_view(
             ctx, labels = {}, {}
     else:
         ctx, labels = {}, {}
-    return await _live_dashboard_view(interaction, snapshot, cards, me_ids, ctx, labels, game_key)
+    return await _live_dashboard_view(interaction, snapshot, cards, me_ids, ctx, labels, game_key, known_ids)
 
 
 async def _live_dashboard_view(
@@ -2763,6 +2816,7 @@ async def _live_dashboard_view(
     ctx: dict[str, Any],
     labels: dict[str, Any],
     game_key: str = "aoe2",
+    known_ids: set[str] | None = None,
 ) -> Any:
     """Compose the /live view: the title, the MATCH CARDS, the tail.
 
@@ -2793,7 +2847,9 @@ async def _live_dashboard_view(
         )
     )
     for card in cards:
-        blocks, buttons, _match_id, accent = _match_card_parts(card, ctx, me_ids, labels or {})
+        blocks, buttons, _match_id, accent = _match_card_parts(
+            card, ctx, me_ids, labels or {}, known_ids
+        )
         view.add_item(discord.ui.Container(*blocks, accent_colour=discord.Colour(accent)))
         if buttons:
             view.add_item(discord.ui.ActionRow(*buttons))

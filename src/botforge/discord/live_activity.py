@@ -347,7 +347,10 @@ async def _send_card(
     try:
         labels = await _label_pack(bot, guild_id)
         ctx = await _card_ctx(bot, guild_id, card)
-        view = _match_card_view(card, ctx, set(), labels)
+        # the salon is UNSCOPED (owner 2026-11-25): the guild's bound
+        # profiles render BOLD, the rest stays plain
+        known = set(await _guild_profiles(bot, guild_id))
+        view = _match_card_view(card, ctx, set(), labels, known)
     except Exception:
         # the render NEVER kills the feed - the card stays as it was
         logger.debug("live activity card render failed (match %s)", match_ref, exc_info=True)
@@ -479,6 +482,7 @@ async def _maybe_seed_matches_salon(
         from botforge.discord.home import _match_card_view
 
         labels = await _label_pack(bot, guild_id)
+        known = set(await _guild_profiles(bot, guild_id))
         for card in cards:
             try:
                 ctx = await _card_ctx(bot, guild_id, card)
@@ -486,7 +490,7 @@ async def _maybe_seed_matches_salon(
                 channel = guild.get_channel(int(channel_id)) if guild else None
                 if channel is None or not isinstance(channel, discord.TextChannel):
                     return
-                await channel.send(view=_match_card_view(card, ctx, set(), labels), silent=True)
+                await channel.send(view=_match_card_view(card, ctx, set(), labels, known), silent=True)
                 await _mark_posted(guild_id, str(card.get("match_id") or ""))
             except Exception:
                 logger.debug("matches salon seed card skipped - best-effort", exc_info=True)
@@ -625,7 +629,9 @@ async def _gap_fill_matches_salon(bot: discord.Client, guild_id: str, channel_id
     from botforge.discord.stats_views import recent_match_entries
 
     labels = await _label_pack(bot, guild_id)
+    known = set(profiles)  # the salon's bound profiles: the KNOWN names
     entries = await recent_match_entries(profiles, limit=25)
+    deadline = int(time.time()) - _SEED_WINDOW_S  # the salon's OWN week (owner 2026-11-25)
     for entry in entries:
         ref = str(getattr(entry, "match_id", "") or "")
         if not ref or ref in posted:
@@ -633,6 +639,8 @@ async def _gap_fill_matches_salon(bot: discord.Client, guild_id: str, channel_id
         finished_at = int(getattr(entry, "finished_at", 0) or 0)
         if not finished_at:
             continue  # the live feeds carry the running games
+        if finished_at < deadline:
+            continue  # never post beyond the week
         card = _seed_card_of(entry)
         try:
             ctx = await _card_ctx(bot, guild_id, card)
@@ -640,7 +648,7 @@ async def _gap_fill_matches_salon(bot: discord.Client, guild_id: str, channel_id
             channel = guild.get_channel(int(channel_id)) if guild else None
             if channel is None or not isinstance(channel, discord.TextChannel):
                 return
-            await channel.send(view=_match_card_view(card, ctx, set(), labels), silent=True)
+            await channel.send(view=_match_card_view(card, ctx, set(), labels, known), silent=True)
             await _mark_posted(guild_id, ref)
             logger.info("matches salon gap-fill: match %s posted (guild %s)", ref, guild_id)
         except Exception:

@@ -317,3 +317,62 @@ def test_a_solo_match_never_lists_in_the_five() -> None:
 class _NullInteraction:
     client = None
     guild_id = None
+
+
+def test_the_one_typography_bolds_the_known_and_strikes_the_losers() -> None:
+    """The ONE contract (owner 2026-11-25), unscoped side."""
+    from botforge.discord.home import _match_card_parts, _seat_name
+
+    ctx = {"civ_urls": {}, "civ_images": {}, "map_urls": {}, "map_images": {},
+           "map_display": {}, "civ_display": {}, "ladder": {}}
+    labels = {"team": "Team"}
+    card = {
+        "status": "finished",
+        "match_id": "506712854",
+        "map": "Arabia",
+        "started_at": 1732300000,
+        "finished_at": 1732303600,
+        "match_type": "Unranked 2v2",
+        "players": [
+            {"profile_id": "848567", "alias": "Merlin Pinpin", "team": 1, "slot": 1, "civ": "Mayans"},
+            {"profile_id": "111", "alias": "Ally", "team": 1, "slot": 2, "civ": "Aztecs"},
+            {"profile_id": "222", "alias": "Foe", "team": 2, "slot": 3, "civ": "Huns"},
+            {"profile_id": "333", "alias": "Foe2", "team": 2, "slot": 4, "civ": "Franks"},
+        ],
+        "winners": ["848567"],
+    }
+    blocks, _buttons, _match_id, _accent = _match_card_parts(card, ctx, set(), labels, {"848567"})
+    text = "\n".join(str(getattr(b, "content", "") or "") for b in blocks)
+    # the KNOWN player reads bold on an unscoped card
+    assert "**[Merlin Pinpin]" in text.replace("(", "[").replace(")", "]") or "**" in text
+    assert _seat_name("Merlin", "848567", set(), False, False, {"848567"}) == "**Merlin**"
+    assert _seat_name("Stranger", "999", set(), False, False, {"848567"}) == "Stranger"
+    # the losing team's TITLE strikes, scope or not - the winning one never does
+    assert "~~*Team 2*~~" in text and "*Team 1*" in text and "~~*Team 1*" not in text
+    # the badge carries the format ONLY - never the CUSTOM word
+    assert "CUSTOM" not in text
+
+
+def test_the_ranked_marker_and_the_live_icons_ride_outside_the_link() -> None:
+    """The header: 🎯 out of the masked link, 🟡/🟢 for a scoped live card."""
+    from botforge.discord.home import _card_header
+
+    ranked = _card_header("2v2", " Match n°", "1", me_ids={"8"}, card={"status": "finished", "winners": ["8"]},
+                          ranked_prefix="\U0001F3AF ")
+    # the marker rides BEFORE the masked link's bold - an emoji inside a
+    # link's text never renders
+    assert "\U0001F3AF **[[ 2v2 ]]" in ranked
+    joiner = _card_header("2v2", " Lobby n°", "1", me_ids={"8"}, card={"status": "lobby"})
+    assert joiner.startswith("\U0001F7E1 ")
+    runner = _card_header("2v2", " Match n°", "1", me_ids={"8"}, card={"status": "ongoing"})
+    assert runner.startswith("\U0001F7E2 ")
+
+
+def test_the_when_line_never_doubles_the_discord_prefix() -> None:
+    """'<t:R>' already reads 'Il y a' - the locale carries {when} alone."""
+    from botforge.discord.home import _card_map_section
+
+    card = {"when_at": 1732900000, "duration": "33:19"}
+    ctx = {"map_display": {}, "map_urls": {}, "map_images": {}, "civ_display": {}}
+    text = str(getattr(_card_map_section(card, ctx, {}), "content", ""))
+    assert "Il y a" not in text

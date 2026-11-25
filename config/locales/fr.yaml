@@ -125,7 +125,7 @@ fr:
       matches_setting_full_tech: "Arbre technologique complet"
       matches_setting_record: "Partie enregistrée"
       matches_setting_shared_expl: "Exploration partagée"
-      matches_when: "Il y a {when}"
+      matches_when: "{when}"
       matches_duration: "Durée : {clock}"
       matches_source: "Source : [libre:match]({url})"
       matches_source_live: "Source : [aoe2lobby]({url})"
