@@ -205,6 +205,23 @@ def _guild_of(bot: Any) -> Any:
     return None
 
 
+async def _close_decided_habitat_safe(bot: Any, stack: Any, attack: Any) -> None:
+    """Close the decided meeting's habitat at once (best effort).
+
+    annulation-joueur-v2 (Drasah 25/11): a DECIDED meeting releases its
+    voice room, its role and its text salon WITH the decision — not 30
+    minutes later. The flags (``room_cleaned`` / ``attack_salon_cleaned``)
+    keep the cleanup tick idempotent; the tick sweeps the leftovers when
+    Discord refuses the immediate delete anyway.
+    """
+    try:
+        from .battle import cleanup_decided_attack_safe
+
+        await cleanup_decided_attack_safe(bot, stack, attack)
+    except Exception:  # the tick sweeps the leftovers anyway
+        logger.warning("kingdom: the decided attack habitat close failed", exc_info=True)
+
+
 class DecisionReasonModal(discord.ui.Modal):
     """The MANDATORY reason of an admin decision (anti-abus, public).
 
@@ -270,6 +287,9 @@ class DecisionReasonModal(discord.ui.Modal):
             await announce_decision_safe(interaction.client, stack, decision, locale_of(interaction))
         except Exception:  # the announce replays on the tick
             logger.warning("kingdom: the decision announce failed", exc_info=True)
+        # annulation-joueur-v2: the decided meeting's habitat closes
+        # WITH the decision — voice + role + salon, flags idempotent.
+        await _close_decided_habitat_safe(interaction.client, stack, attack)
         if self.choice == "cancel":
             note = str(strings["decision_applied_cancel"]).format(map=str(attack.map_key))
         elif self.choice == "both":

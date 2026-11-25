@@ -238,3 +238,114 @@ async def test_apply_admin_decision_records_the_cancellation() -> None:
     assert decision["admin_id"] == "admin-1"
     with pytest.raises(ValueError):
         await apply_admin_decision(stack, fresh, "cancel", "  ", "admin-1", "fr")
+
+
+async def _lord_of(bundle: ScoreBundle, lord_id: str) -> Any:
+    return next(item for item in await bundle.kingdoms.lords() if item.id == lord_id)
+
+
+async def test_admin_cancel_refunds_both_budgets() -> None:
+    """annulation-joueur-v2: the admin cancel refunds attacker AND defender.
+
+    A meeting that reached the RDV consumed the attacker's attack
+    point and the defender's defense point — the aborted meeting gives
+    BOTH back (the withdrawal is not a free restart of the budgets, it
+    is the annulation).
+    """
+    bundle = ScoreBundle()
+    attack, _, _ = await _disputed_meeting(bundle)
+    assert (await _lord_of(bundle, "king-a")).attack_used == 1
+    assert (await _lord_of(bundle, "lord-b")).defense_used == 1
+    fresh = await bundle.attacks.resolve_dispute(
+        attack.id, "cancel", now=_T + timedelta(minutes=2)
+    )
+    assert fresh.score["admin_cancelled"] is True
+    assert (await _lord_of(bundle, "king-a")).attack_used == 0
+    assert (await _lord_of(bundle, "lord-b")).defense_used == 0
+    # the restitution latches (restatuting twice never double-refunds)
+    assert (await bundle.attacks._find_attack(attack.id)).restituted is True
+
+
+async def test_double_forfeit_keeps_the_budgets() -> None:
+    """The double forfait is NOT the annulation: the budgets stay spent."""
+    bundle = ScoreBundle()
+    attack, _, _ = await _disputed_meeting(bundle)
+    fresh = await bundle.attacks.resolve_dispute(
+        attack.id, "both", now=_T + timedelta(minutes=2)
+    )
+    assert fresh.state is AttackState.EXPIRED
+    assert "admin_cancelled" not in fresh.score
+    assert (await _lord_of(bundle, "king-a")).attack_used == 1
+    assert (await _lord_of(bundle, "lord-b")).defense_used == 1
+    assert (await bundle.attacks._find_attack(attack.id)).restituted is False
+
+
+async def test_decided_attack_habitat_closes_at_once() -> None:
+    """annulation-joueur-v2: voice + role + salon close WITH the decision.
+
+    The admin modal calls cleanup_decided_attack_safe right after the
+    resolution — the flags keep the 30-minute cleanup tick idempotent
+    and a second call touches nothing.
+    """
+    from botforge.mods.kingdom.cogs.battle import cleanup_decided_attack_safe
+
+    deleted: list[str] = []
+    flags: list[str] = []
+
+    class _Channel:
+        def __init__(self, name: str) -> None:
+            self.name = name
+
+        async def delete(self) -> None:
+            deleted.append(self.name)
+
+    class _Role(_Channel):
+        pass
+
+    salon = _Channel("salon")
+    room = _Channel("room")
+    role = _Role("role")
+
+    class _Guild:
+        def get_channel(self, channel_id: int) -> Any:
+            return {1: salon, 2: room}.get(channel_id)
+
+        def get_role(self, role_id: int) -> Any:
+            return role if role_id == 3 else None
+
+    class _Attacks:
+        async def mark_room_cleaned(self, attack_id: str) -> None:
+            flags.append("room")
+
+        async def mark_attack_salon_cleaned(self, attack_id: str) -> None:
+            flags.append("salon")
+
+    attack = SimpleNamespace(
+        id="a1",
+        score={
+            "attack_channel_id": 1,
+            "room_channel_id": 2,
+            "room_role_id": 3,
+        },
+    )
+    bot = SimpleNamespace(guilds=[_Guild()])
+    stack = SimpleNamespace(attacks=_Attacks())
+    played = await cleanup_decided_attack_safe(bot, stack, attack)
+    assert played == 2
+    assert set(deleted) == {"salon", "room", "role"}
+    assert set(flags) == {"room", "salon"}
+    # the flags latched: a replay cleans NOTHING (tick idempotence)
+    deleted.clear()
+    flags.clear()
+    attack = SimpleNamespace(
+        id="a1",
+        score={
+            "attack_channel_id": 1,
+            "attack_salon_cleaned": True,
+            "room_channel_id": 2,
+            "room_cleaned": True,
+            "room_role_id": 3,
+        },
+    )
+    assert await cleanup_decided_attack_safe(bot, stack, attack) == 0
+    assert deleted == [] and flags == []

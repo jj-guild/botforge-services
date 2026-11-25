@@ -1358,6 +1358,32 @@ async def cleanup_battle_rooms_safe(bot: Any, stack: Any, guild: Any) -> int:
     return played
 
 
+async def cleanup_decided_attack_safe(bot: Any, stack: Any, attack: Any) -> int:
+    """Close a DECIDED meeting's habitat AT ONCE (annulation-joueur-v2).
+
+    Drasah's live finding (25/11): a decided meeting kept its voice
+    room, its role and its text salon for the whole 30-minute cleanup
+    delay — the closed decision left a ghost rendezvous behind. The
+    admin decision modal calls this right after the resolution: the
+    room, the role and the salon disappear IMMEDIATELY. Idempotent —
+    the flags (``room_cleaned`` / ``attack_salon_cleaned``) make the
+    30-minute tick replay nothing, and a second call touches nothing.
+    """
+    if stack is None or attack is None:
+        return 0
+    played = 0
+    score = dict(getattr(attack, "score", None) or {})
+    if score.get("room_channel_id") and not score.get("room_cleaned"):
+        played += await _cleanup_one_battle_room(bot, stack, attack, score)
+    if score.get("attack_channel_id") and not score.get("attack_salon_cleaned"):
+        for guild in list(getattr(bot, "guilds", []) or []):
+            played += await _cleanup_one_attack_salon(guild, stack, attack)
+            break
+    if played:
+        logger.info("kingdom: closed the decided meeting's habitat at once (%d)", played)
+    return played
+
+
 # ---------------------------------------------------------------------------
 # The persistent buttons
 # ---------------------------------------------------------------------------
@@ -1916,6 +1942,7 @@ __all__ = [
     "RoomUrlModal",
     "announce_conquest_safe",
     "cleanup_battle_rooms_safe",
+    "cleanup_decided_attack_safe",
     "create_room_event_safe",
     "declare_room_score",
     "dm_admins_dispute_safe",

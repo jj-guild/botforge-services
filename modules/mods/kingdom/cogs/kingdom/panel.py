@@ -999,7 +999,16 @@ class DefendButton(
             await open_unique_ephemeral(interaction, strings["gaia_gone"])
             return
         if attack.is_over:
-            await open_unique_ephemeral(interaction, strings["gaia_gone"])
+            # annulation-joueur-v2 (Drasah 25/11): a late defense click
+            # on a WITHDRAWN attack reads « annulée » — not the generic
+            # « plus de participants » line (the defender must learn
+            # the withdrawal, the salon purge alone is too silent).
+            key = (
+                "defend_cancelled"
+                if getattr(attack, "state", None) is AttackState.CANCELLED
+                else "gaia_gone"
+            )
+            await open_unique_ephemeral(interaction, strings[key])
             return
         lord = await lord_of(stack.kingdoms, str(interaction.user.id), interaction)
         # shirar-v1: the ATTACKER's camp clicks NOTHING.
@@ -1133,6 +1142,43 @@ class JoinButton(
         )
 
 
+async def _notify_defender_cancel_safe(
+    interaction: Any, strings: dict[str, str], attack: Any
+) -> None:
+    """Best-effort DM to the recorded defender of a cancelled attack.
+
+    annulation-joueur-v2 (Drasah 25/11): a defense already posed when
+    the declarant withdraws must never stay silent — the defender
+    learns the attack died and his budget came back. A silent attack
+    (no defense, AI defense) or a silent guild notifies nobody.
+    """
+    defender_id = getattr(attack, "defender_lord_id", None)
+    if not defender_id or getattr(attack, "ai_defender", False):
+        return
+    guilds = list(getattr(getattr(interaction, "client", None), "guilds", []) or [])
+    if not guilds:
+        return
+    guild = guilds[0]  # the mod's single-guild habitat
+    member = None
+    try:
+        getter = getattr(guild, "get_member", None)
+        if getter is not None:
+            member = getter(str(defender_id))
+        if member is None:
+            fetcher = getattr(guild, "fetch_member", None)
+            if fetcher is not None:
+                member = await fetcher(str(defender_id))
+    except Exception:
+        member = None  # the member may have left — a DM is best-effort
+    if member is None:
+        return
+    try:
+        content = str(strings["cancel_attack_defender_dm"]).format(map=str(attack.map_key))
+        await member.send(content)
+    except Exception:
+        logger.warning("kingdom: the defender cancel DM failed", exc_info=True)
+
+
 class CancelButton(
     discord.ui.DynamicItem[discord.ui.Button[Any]],
     template=r"kingdom:attack:cancel:(?P<key>[0-9a-f]{16})",
@@ -1210,6 +1256,9 @@ class CancelButton(
         # beta-retours-v1 point 8: the cancelled attack leaves NO stale
         # window behind — the declarant's ephemeral view dies with it.
         await close_previous_ephemeral(str(interaction.user.id))
+        # annulation-joueur-v2: a defense already recorded is TOLD —
+        # the defender discovers the withdrawal (and his refund) by DM.
+        await _notify_defender_cancel_safe(interaction, strings, attack)
         note = (
             strings["cancel_attack_embuscade_done"]
             if getattr(attack, "embuscade", False)

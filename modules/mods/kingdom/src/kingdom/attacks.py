@@ -1631,6 +1631,11 @@ class AttackService:
         attack = await self._find_attack(attack_id)
         if attack.kind is not AttackKind.PLAYER:
             raise AttackStateError("une bataille libre Gaïa n'a pas de camp défenseur")
+        if attack.state is AttackState.CANCELLED:
+            # annulation-joueur-v2: a cancelled attack carries its OWN
+            # refusal — the defender must read « annulée », not a generic
+            # « plus de défenseur » (the salon may still show the panel).
+            raise AttackStateError("cette attaque a été annulée par son déclarant")
         if attack.state is not AttackState.DECLARED:
             raise AttackStateError("l'attaque n'attend plus de défenseur")
         timestamp = now or _now()
@@ -1732,6 +1737,21 @@ class AttackService:
             cover_state.purchases["contre_espionnage"] = (
                 int(cover_state.purchases.get("contre_espionnage", 0) or 0) + 1
             )
+            await self._store.upsert_technology(cover_state.to_mongo())
+        # annulation-joueur-v2 (Drasah 25/11): the withdrawal TERMINATES
+        # the attack — CANCELLED is a final state (is_over), so the
+        # battle lock releases, a second cancel refuses, a defender can
+        # never defend a dead attack, and the salon purge (the cog)
+        # receives the model back instead of None.
+        attack.state = AttackState.CANCELLED
+        attack.resolved_at = timestamp
+        await self._store.upsert_attack(attack.to_mongo())
+        logger.info(
+            "kingdom: %s cancelled his attack on %s (budgets refunded)",
+            player_id,
+            attack.map_key,
+        )
+        return attack
 
     # ------------------------------------------------------------------
     # Expiry of a defenseless or un-resolved attack (D8/D77, expire-v1)
@@ -4137,6 +4157,27 @@ class AttackService:
                 "kingdoms: admin CANCELLED the meeting on %s — no winner, no points",
                 attack.map_key,
             )
+            # annulation-joueur-v2 (Drasah 25/11): the aborted meeting
+            # refunds what it consumed — the attacker's attack point AND
+            # a recorded player defense. The double forfait keeps the
+            # budgets (a played meeting is never a free restart).
+            try:
+                await self.restitute(str(attack.id))
+            except Exception:
+                logger.warning(
+                    "kingdoms: the admin-cancel restitution failed on %s",
+                    attack.map_key,
+                    exc_info=True,
+                )
+            if attack.defender_lord_id and not attack.ai_defender:
+                defender = await self._require_lord(str(attack.defender_lord_id))
+                if defender.defense_used > 0:
+                    defender.defense_used -= 1
+                    await self._store.upsert_lord(defender.to_mongo())
+                    logger.info(
+                        "kingdoms: defense budget refunded to %s (admin cancel)",
+                        defender.id,
+                    )
         return attack
 
     async def resolve_dispute(self, attack_id: str, admin_choice: str, *, now: datetime | None = None) -> AttackModel:

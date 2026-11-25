@@ -50,6 +50,13 @@ DEFAULTS: dict[str, dict[str, str]] = {
             "🕵️ La couverture (Contre-espionnage) est rendue au stock du royaume."
         ),
         "defend_wrong_kingdom": "❌ Vous ne pouvez défendre ce territoire.",
+        "defend_cancelled": (
+            "🏳️ Cette attaque a été annulée par son déclarant — elle n'attend plus de défense."
+        ),
+        "cancel_attack_defender_dm": (
+            "🗡️ L'attaque que vous défendiez sur **{map}** a été annulée par son déclarant"
+            " — votre budget de défense est intégralement remboursé."
+        ),
         "defend_button": "🛡️ Défendre",
         "defend_already": "❌ Le royaume est déjà défendu.",
         "gaia_join_button": "🦅 Rejoindre la bataille",
@@ -741,6 +748,13 @@ DEFAULTS: dict[str, dict[str, str]] = {
             "🕵️ The cover (Counter-espionage) returns to the kingdom's stock."
         ),
         "defend_wrong_kingdom": "❌ You cannot defend this territory.",
+        "defend_cancelled": (
+            "🏳️ This attack was withdrawn by its declarant — it no longer awaits a defense."
+        ),
+        "cancel_attack_defender_dm": (
+            "🗡️ The attack you were defending on **{map}** was withdrawn by its declarant"
+            " — your defense budget is refunded in full."
+        ),
         "defend_button": "🛡️ Defend",
         "defend_already": "❌ The kingdom is already defended.",
         "gaia_join_button": "🦅 Join the battle",
