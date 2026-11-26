@@ -328,14 +328,18 @@ class Aoe2LobbyAdapter:
                         "aoe2lobby ws CLOSED by the server; reconnecting in %ss",
                         self._reconnect_delay_s,
                     )
-            except (TimeoutError, websockets.WebSocketException, OSError):
+            except (TimeoutError, websockets.WebSocketException, OSError) as exc:
                 # the DEGRADED path: the Fibonacci sequence (8, 13, 21,
                 # 34, 55 min - the skill's rule, a refused connect is
-                # not a 5s retry signal)
+                # not a 5s retry signal); the exception NAMED tells a
+                # refusal (503/403/blocked?) from a plain timeout
                 delay_s = backoff_a
                 backoff_a, backoff_b = backoff_b, min(backoff_a + backoff_b, backoff_cap_s)
                 logger.warning(
-                    "aoe2lobby ws FAILED; the degraded upstream gets SPACE - retrying in %.0fs",
+                    "aoe2lobby ws FAILED (%s: %s); the degraded upstream gets SPACE -"
+                    " retrying in %.0fs",
+                    type(exc).__name__,
+                    str(exc)[:120],
                     delay_s,
                 )
             except Exception:
