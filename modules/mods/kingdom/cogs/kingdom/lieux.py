@@ -1727,6 +1727,7 @@ async def _comptes_window(
     kingdom: Any,
     state: dict[str, Any],
     selected: str | None = None,
+    extra_text: str | None = None,
 ) -> tuple[discord.ui.LayoutView, list[discord.File]]:
     from .market import chamber_text
     from .strings import strings as mod_strings
@@ -1741,6 +1742,25 @@ async def _comptes_window(
     from .market import _market_label, chamber_held_cards
 
     held = await chamber_held_cards(stack, kingdom, mod_catalog)
+    # comptes-cv2-conformité (Drasah 26/11, Affaire 40) : le bloc
+    # « Cartes en main » vit SOUS le corps (une ligne par carte,
+    # emoji + nom + compteur), le bouton porte le nom seul.
+    emojis = dict(mod_catalog.get("market_ledger_emoji") or {})
+    cards_block = [f"## {mod_catalog['market_ledger_cards_title']}"]
+    if held:
+        for key, stock in held:
+            cards_block.append(
+                str(mod_catalog["market_ledger_card_line"]).format(
+                    emojis.get(key, "•"),
+                    _market_label(key, mod_catalog),
+                    int(stock),
+                )
+            )
+    else:
+        cards_block.append(str(mod_catalog["market_ledger_cards_empty"]))
+    body = body + "\n" + "\n".join(cards_block)
+    if extra_text:
+        body = body + "\n\n" + str(extra_text)
     selected = str(selected or "") or None
     row1: list[discord.ui.Item[Any]] = []
     if selected in {key for key, _stock in held} and selected in _COMPTES_USABLE:
@@ -1756,11 +1776,11 @@ async def _comptes_window(
     row1.append(_sortir_item(strings))
     rows: list[list[discord.ui.Item[Any]]] = [row1]
     current: list[discord.ui.Item[Any]] = []
-    for key, stock in held:
-        label = str(_market_label(key, mod_catalog))[:60]
+    for key, _stock in held:
+        label = str(_market_label(key, mod_catalog))[:80]
         current.append(
             discord.ui.Button(
-                label=f"{label} ({stock})"[:80],
+                label=label,
                 custom_id=f"{_NS}:comptes:card:{key}",
                 style=(
                     discord.ButtonStyle.primary
@@ -1774,9 +1794,12 @@ async def _comptes_window(
             current = []
     if current:
         rows.append(current)
-    card_file: discord.File | None = None
-    if selected:
-        card_file = _comptes_card_file(selected)
+    # comptes-cv2-conformité (Drasah 26/11, Affaire 40) : la zone carte
+    # montre TOUJOURS une image — l'art de la carte choisie, sinon le
+    # dos de carte par défaut.
+    card_file: discord.File | None = (
+        await _comptes_card_file(selected) if selected else await _comptes_card_back_file()
+    )
     view = _lieu_window(
         strings,
         COMPTES_SURFACE,
@@ -1798,18 +1821,54 @@ _COMPTES_USABLE = frozenset(
 )
 
 
-def _comptes_card_file(card: str) -> discord.File | None:
+def _comptes_card_fiche(card: str, locale: Any) -> str:
+    """comptes-cv2-conformité (Affaire 40) : la fiche de LA carte cliquée.
+
+    Titre « ## emoji nom » + « Effet : … » + « Usage : … », les textes
+    viennent du catalogue central (market_effect / market_usage).
+    """
+    from .market import _market_label
+    from .strings import strings as mod_strings
+
+    mod_catalog = mod_strings(locale)
+    emojis = dict(mod_catalog.get("market_ledger_emoji") or {})
+    fiche = [f"## {emojis.get(card, '•')} {_market_label(card, mod_catalog)}"]
+    effect = (mod_catalog.get("market_effect") or {}).get(card)
+    if effect:
+        fiche.append(str(mod_catalog["market_card_effect"]).format(effect))
+    usage = (mod_catalog.get("market_usage") or {}).get(card)
+    if usage:
+        fiche.append(str(mod_catalog["market_card_usage"]).format(usage))
+    return "\n".join(fiche)
+
+
+async def _comptes_card_file(card: str) -> discord.File | None:
     """The revealed art of the selected card (best effort, None stays dos)."""
     from io import BytesIO
 
     try:
         from .marche_art import card_bytes
 
-        data = card_bytes(card)
+        data = await card_bytes(card)
         if data:
             return discord.File(BytesIO(data), filename="carte.png")
-    except Exception:  # noqa: BLE001 — the missing art never kills the sheet
+    except Exception:  # the missing art never kills the sheet
         logger.warning("kingdom lieux: card art read failed (%s)", card, exc_info=True)
+    return None
+
+
+async def _comptes_card_back_file() -> discord.File | None:
+    """Return the default reveal: the card BACK (best effort, None = no image)."""
+    from io import BytesIO
+
+    try:
+        from .marche_art import card_back_bytes
+
+        data = await card_back_bytes()
+        if data:
+            return discord.File(BytesIO(data), filename="carte.png")
+    except Exception:  # the missing art never kills the sheet
+        logger.warning("kingdom lieux: card back read failed", exc_info=True)
     return None
 
 
@@ -2823,7 +2882,9 @@ class LieuxComptesCardButton(
     def __init__(self, card: str, label: str, stock: int, selected: bool) -> None:
         super().__init__(
             discord.ui.Button(
-                label=f"{label} ({stock})"[:80],
+                # comptes-cv2-conformité (Affaire 40) : nom seul — le
+                # compteur vit dans le bloc « Cartes en main ».
+                label=str(label)[:80],
                 custom_id=f"{_NS}:comptes:card:{card}",
                 style=(
                     discord.ButtonStyle.primary
@@ -2846,7 +2907,12 @@ class LieuxComptesCardButton(
             return
         try:
             state = await _gather_state(stack, kingdom)
-            view, files = await _comptes_window(strings, kingdom, state, self.card)
+            # comptes-cv2-conformité (Affaire 40) : la fiche de la carte
+            # cliquée — titre + Effet + Usage, collée sous le corps.
+            fiche = _comptes_card_fiche(self.card, _locale_of(interaction))
+            view, files = await _comptes_window(
+                strings, kingdom, state, self.card, extra_text=fiche
+            )
         except Exception:  # noqa: BLE001
             logger.warning("kingdom lieux: comptes card view failed", exc_info=True)
             return

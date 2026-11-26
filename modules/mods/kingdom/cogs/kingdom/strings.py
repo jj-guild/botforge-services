@@ -651,6 +651,45 @@ DEFAULTS: dict[str, dict[str, str]] = {
         "market_ledger_cards_title": "Cartes en main",
         "market_ledger_cards_empty": "Aucune carte en main pour le moment.",
         "market_ledger_card_line": "{0} **{1}** — x{2}",
+        "market_card_effect": "Effet : {0}",
+        "market_card_usage": "Usage : {0}",
+        "market_usage": {  # type: ignore[dict-item]
+            "embuscade": (
+                "Dans « Déclarer une attaque », vous avez le choix entre une "
+                "attaque classique ou une embuscade."
+            ),
+            "traquenard": (
+                "S'utilise depuis la Salle du conseil (ou la Chambre des "
+                "comptes) : l'IA affrontée devient Facile durant une fenêtre "
+                "cumulée de 2h par activation, et les verrous vivants du "
+                "royaume ciblé (mariages, exploration, boisson de taverne) "
+                "prennent +2h en one-shot."
+            ),
+            "contre_espionnage": (
+                "À la déclaration de l'attaque, vous pouvez utiliser le "
+                "Contre-espionnage."
+            ),
+            "sabotage": (
+                "S'utilise après avoir choisi l'ordre de vos 3 civilisations "
+                "contre un adversaire — le bouton « Saboter » devient "
+                "disponible."
+            ),
+            "jeu_d_armes": (
+                "S'utilise depuis la Chambre des comptes : ton bot de défense "
+                "gagne immédiatement +1 niveau d'IA permanent (plafond 5) et "
+                "ta prochaine attaque normale partira avec 1h de délai en "
+                "moins (pas d'embuscade)."
+            ),
+            "explorateur": (
+                "S'utilise depuis la Chambre des comptes : choisis le seigneur "
+                "à envoyer explorer (verrou 48h) — la map arrive au terme."
+            ),
+            "corruption": (
+                "S'utilise depuis la Chambre des comptes : choisis le "
+                "territoire adverse à corrompre — le jeton n'est consommé "
+                "qu'une fois le vol réussi."
+            ),
+        },
         "market_no_points": "❌ Le royaume manque de points de technologie.",
         "market_limit": "❌ La limite d'achat par saison est atteinte.",
         "market_error": "❌ L'achat a échoué : {0}",
@@ -1581,6 +1620,44 @@ DEFAULTS: dict[str, dict[str, str]] = {
         "market_ledger_cards_title": "Cards in hand",
         "market_ledger_cards_empty": "No card in hand right now.",
         "market_ledger_card_line": "{0} **{1}** — x{2}",
+        "market_card_effect": "Effect: {0}",
+        "market_card_usage": "Usage: {0}",
+        "market_usage": {  # type: ignore[dict-item]
+            "embuscade": (
+                "In « Declare an attack », you choose between a classic "
+                "attack or an ambush."
+            ),
+            "traquenard": (
+                "Use it from the Salle du conseil (or the Chambre des "
+                "comptes): the AI faced becomes Easy for a cumulative 2h "
+                "window per activation, and the target kingdom's living "
+                "lockouts (marriages, exploration, tavern drink) gain a "
+                "one-shot +2h."
+            ),
+            "contre_espionnage": (
+                "When declaring the attack, you can use the "
+                "Counter-espionage."
+            ),
+            "sabotage": (
+                "Used after ordering your 3 civilizations against an "
+                "opponent — the « Sabotage » button becomes available."
+            ),
+            "jeu_d_armes": (
+                "Use it from the Chambre des comptes: your defence bot gains "
+                "+1 permanent AI level on the spot (cap 5) — and your next "
+                "normal attack rides with 1h less of declaration delay "
+                "(no Embuscade)."
+            ),
+            "explorateur": (
+                "Use it from the Chambre des comptes: choose the lord to send "
+                "exploring (48h lock) — the map comes at the end."
+            ),
+            "corruption": (
+                "Use it from the Chambre des comptes: choose the enemy "
+                "territory to corrupt — the token is only consumed once the "
+                "steal lands."
+            ),
+        },
         "market_no_points": "❌ The kingdom lacks tech points.",
         "market_limit": "❌ The per-season purchase limit is reached.",
         "market_error": "❌ The purchase failed: {0}",

@@ -103,6 +103,22 @@ async def card_bytes(item: str) -> bytes | None:
     return await _crest_bytes(url)
 
 
+async def card_back_bytes() -> bytes | None:
+    """Return the PNG bytes of the card BACK (the chamber's default reveal).
+
+    Local-first exactly like card_bytes: the shipped Dos_de_carte.png
+    wins, the reference raw URL is the fallback through the crest
+    seam (cached in memory).
+    """
+    candidate = _ASSET_DIR / "Dos_de_carte.png"
+    if candidate.is_file():
+        try:
+            return candidate.read_bytes()
+        except Exception:
+            logger.warning("marche: local card back read failed", exc_info=True)
+    return await _crest_bytes(f"{_RAW_BASE}/Dos_de_carte.png")
+
+
 # ---------------------------------------------------------------------------
 # The held-cards MOSAIC (Chambre des comptes) — one composite image, the
 # pattern of the civ-crest mosaics: each card downscaled to a small tile
