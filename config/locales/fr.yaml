@@ -111,7 +111,7 @@ fr:
       matches_settings_button: "Param\u00e8tres de la partie"
       matches_refresh_button: "Rafra\u00eechir"
       matches_refresh_match_button: "Match"
-      matches_settings_title: "\u2699\ufe0f Param\u00e8tres de la partie \u2014 Match n\u00b0{id}"
+      matches_settings_title: "\u2699\ufe0f Param\u00e8tres de la partie \u2014 [{id}](https://www.aoe2insights.com/match/{id}/)"
       matches_setting_resources: "Ressources"
       matches_setting_reveal: "Vision de la carte"
       matches_setting_start_age: "Âge de départ"

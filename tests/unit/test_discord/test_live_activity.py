@@ -792,39 +792,48 @@ def test_the_forum_seed_posts_each_players_group_in_his_post() -> None:  # noqa:
     assert threads[1] == ["m1"], "Bob's post carries the shared match (duplicates assumed)"
 
 
-def test_the_grouped_sender_halves_when_discord_refuses() -> None:
-    """10 per message when it fits, halved when the component cap bites."""
+def test_one_card_per_message_and_a_refusal_never_stops_the_run() -> None:
+    """One card = ONE message (owner 2026-11-26: the 40-component cap
+    made the grouped fold LOSE cards - the halving is dead); a refused
+    card skips, the run goes on."""
     import asyncio
 
     import botforge.discord.live_activity as feed
 
-    calls: list[int] = []
+    sent: list[str] = []
 
     class _Thread:
         counter = 0
 
         async def send(self, view=None, silent=True):
+            del silent
             _Thread.counter += 1
-            calls.append(sum(1 for _ in _containers(view)))
-            return type("M", (), {"id": 1})()
+            # the THIRD card refuses (a heavy view, a throttle): the run
+            # continues - the others land
+            if _Thread.counter == 3:
+                raise RuntimeError("refused")
+            sent.extend(_cards_of(view))
+            return type("M", (), {"id": _Thread.counter})()
 
-    def _containers(view):
-        return getattr(view, "to_components", lambda: [])() or getattr(view, "children", [])
+        def id(self):
+            return 1
+
+    def _cards_of(view):
+        return getattr(view, "_sent_cards", [])
 
     def _fake_parts(card, ctx, me_ids, labels, known=None):
+        del ctx, me_ids, labels, known
         return [], [], str(card["match_id"]), 0
 
     from unittest.mock import patch
 
-    cards = [{"match_id": f"m{i}"} for i in range(10)]
+    cards = [{"match_id": f"m{i}"} for i in range(5)]
     with (
         patch("botforge.discord.home._match_card_parts", _fake_parts),
         patch("botforge.discord.ui.view_footer.add_view_footer", lambda v, f: v),
     ):
-        marked = asyncio.run(
-            feed._send_cards_grouped(_Thread(), cards, {}, {}, set())
-        )
-    assert len(marked) == 10, "every card lands even when halved"
+        marked = asyncio.run(feed._send_cards_grouped(_Thread(), cards, {}, {}, set()))
+    assert [m for m, _ in marked] == ["m0", "m1", "m3", "m4"], "the refusal skips, the run goes on"
 
 
 def test_the_reconcile_drops_the_dead_refs_only() -> None:

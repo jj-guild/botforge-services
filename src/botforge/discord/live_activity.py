@@ -642,6 +642,16 @@ async def _maybe_seed_matches_salon(  # noqa: C901 - one orchestration, no branc
             logger.info("matches forum seed STOP: no known profiles (guild %s)", guild_id)
             await _write_seed_marker(guild_id, channel_id)
             return
+        cards = await _week_cards(bot, guild_id)
+        # the served history NAMES the accounts (owner 2026-11-26: the
+        # intro's links read the players' own names, the bare ids read
+        # like a bug) - harvest BEFORE the ensure builds the intro
+        for card in cards:
+            for player in card.get("players") or []:
+                pid = str((player or {}).get("profile_id") or "")
+                nickname = str((player or {}).get("name") or "")
+                if pid and nickname:
+                    _LAST_NAME[pid] = nickname
         users = await _guild_users(bot, guild_id)
         posts = await _ensure_player_posts(bot, guild_id, forum, users)
         logger.info(
@@ -650,7 +660,6 @@ async def _maybe_seed_matches_salon(  # noqa: C901 - one orchestration, no branc
             len(users),
             guild_id,
         )
-        cards = await _week_cards(bot, guild_id)
         await _write_seed_marker(guild_id, channel_id)
         if not cards:
             logger.info(
@@ -734,7 +743,7 @@ def _thread_of(forum: Any, entry: dict[str, Any]) -> Any | None:
 
 
 async def _week_cards(bot: discord.Client, guild_id: str) -> list[dict[str, Any]]:
-    """Return the guild's stored FINISHED matches, NEWEST first.
+    """Return the guild's stored FINISHED matches, OLDEST first.
 
     The seed rides the SERVED history (rule 4): the entries commute
     through the game service, the AI seats already fold ext-side with
@@ -759,7 +768,10 @@ async def _week_cards(bot: discord.Client, guild_id: str) -> list[dict[str, Any]
         if not finished_at or finished_at < deadline:
             continue  # NEWEST first, FINISHED only
         cards.append(_seed_card_of(entry))
-    cards.sort(key=lambda c: int(c.get("finished_at") or 0), reverse=True)
+    # ASCENDING (owner 2026-11-26): the thread reads chronologically
+    # top-to-bottom and a LIVE match's message lands at the bottom,
+    # where the newest belongs - the order never breaks
+    cards.sort(key=lambda c: int(c.get("finished_at") or 0))
     return cards
 
 
@@ -1045,7 +1057,7 @@ async def _dedupe_twins(guild_id: str, forum: Any, posts: dict[str, dict[str, An
 
 
 
-async def _ensure_player_posts(
+async def _ensure_player_posts(  # noqa: C901 - one reconcile
     bot: discord.Client, guild_id: str, forum: Any, users: dict[str, dict[str, Any]]
 ) -> dict[str, dict[str, Any]]:
     """Reconcile the forum's posts with the guild's BOT USERS.
@@ -1077,8 +1089,17 @@ async def _ensure_player_posts(
         name = str(profile.get("name") or uid)
         intro = _post_intro(name, profile)
         if uid in posts and str(posts[uid].get("name") or ""):
-            await _refresh_post_intro(guild_id, forum, posts, uid, intro)
-            continue
+            # the liveness check (owner 2026-11-26: a DELETED post left
+            # a registered-but-dead entry - "nothing happened" on the
+            # repair and the account rebind; a dead thread recreates)
+            if _thread_of(forum, posts[uid]) is not None:
+                await _refresh_post_intro(guild_id, forum, posts, uid, intro)
+                continue
+            logger.info(
+                "matches forum: %s's post is DEAD - recreating (guild %s)", uid, guild_id
+            )
+            await _save_post(guild_id, uid, None)
+            posts.pop(uid, None)
         # the idempotence latch (owner 2026-11-26: a crash between the
         # create_thread and its registry save re-created the post on
         # every sweep - SIX twins): a boot never asks twice
@@ -1244,47 +1265,41 @@ async def _send_cards_grouped(
     labels: dict[str, Any], known: set[str], me_ids: set[str] | None = None,
     max_group: int = 10,
 ) -> list[tuple[str, str]]:
-    """Send cards into one forum post, GROUPED messages (owner 2026-11-25).
+    """Send one card per message into the post, IN THE GIVEN ORDER.
 
-    "Cree les messages par groupe de 10 si tu peux": the cards fold
-    into ONE LayoutView per message (the same multi-
-    card fold the live dashboard rides); a batch Discord refuses
-    (the component cap bites) halves until it fits - one card per
-    message as the floor. Returns [(match_ref, message_id), ...].
+    The grouped multi-card messages died on Discord's 40-component
+    cap (owner 2026-11-26: each card is heavy - two per message was
+    the ceiling, the halving loop LOST the rest and the next sweep
+    re-posted the survivors in a jumbled order). One card = one
+    message; the ORDER rides the given list, discord.py paces the
+    channel's own rate limit. ``max_group`` now batches MESSAGES (10
+    messages per burst). Returns [(match_ref, message_id), ...].
     """
+    del max_group  # the burst rides discord.py's own bucket pacing now
     from botforge.discord.home import _match_card_parts
     from botforge.discord.ui.view_footer import add_view_footer
 
     marked: list[tuple[str, str]] = []
-    for start in range(0, len(cards), max_group):
-        group = cards[start : start + max_group]
-        while group:
-            try:
-                view = discord.ui.LayoutView(timeout=None)
-                refs: list[str] = []
-                for card in group:
-                    # the card rides the POST owner's scope (owner
-                    # 2026-11-26): his profiles bold, HIS verdict
-                    blocks, buttons, match_id, accent = _match_card_parts(
-                        card,
-                        ctx_by_ref.get(str(card.get("match_id")), {}),
-                        set(me_ids or set()),
-                        labels,
-                        known,
-                    )
-                    view.add_item(discord.ui.Container(*blocks, accent_colour=discord.Colour(accent)))
-                    if buttons:
-                        view.add_item(discord.ui.ActionRow(*buttons))
-                    refs.append(str(card.get("match_id") or match_id))
-                view = add_view_footer(view, f"panel:match:aoe2:{refs[0]}")
-                message = await thread.send(view=view, silent=True)
-                marked.extend((ref, str(message.id)) for ref in refs)
-                break
-            except Exception:
-                if len(group) == 1:
-                    logger.warning("matches forum: card send failed (post %s) - %s", thread.id, exc_info=True)
-                    break  # even a single card refuses: move on, never a crash
-                group = group[: len(group) // 2]  # the 40-component cap bites: halve
+    for card in cards:
+        match_id = str(card.get("match_id") or card.get("match_ref") or "")
+        try:
+            # the card rides the POST owner's scope (owner
+            # 2026-11-26): his profiles bold, HIS verdict
+            blocks, buttons, _mid, accent = _match_card_parts(
+                card, ctx_by_ref.get(match_id, {}), set(me_ids or set()), labels, known
+            )
+            view = discord.ui.LayoutView(timeout=None)
+            view.add_item(discord.ui.Container(*blocks, accent_colour=discord.Colour(accent)))
+            if buttons:
+                view.add_item(discord.ui.ActionRow(*buttons))
+            view = add_view_footer(view, f"panel:match:aoe2:{match_id}")
+            message = await thread.send(view=view, silent=True)
+        except Exception:
+            logger.warning(
+                "matches forum: card send failed (post %s, match %s)", thread.id, match_id, exc_info=True
+            )
+            continue  # one refusal never stops the run - best-effort
+        marked.append((match_id, str(message.id)))
     return marked
 
 
@@ -1355,9 +1370,10 @@ async def _gap_fill_matches_salon(  # noqa: C901 - one orchestration, no branch 
             guild_id,
         )
         return
+    from botforge.discord.stats_views import recent_match_entries
+
     users = await _guild_users(bot, guild_id)
     posts = await _ensure_player_posts(bot, guild_id, forum, users)
-    from botforge.discord.stats_views import recent_match_entries
 
     known = set(profiles)
     entries = await recent_match_entries(profiles, limit=200)
@@ -1368,10 +1384,16 @@ async def _gap_fill_matches_salon(  # noqa: C901 - one orchestration, no branch 
         # FINISHED matches only (owner 2026-11-26): the ongoing ones
         # live on the live card, the store's seed never touches them
         if finished_at and finished_at >= deadline:
-            cards.append(_seed_card_of(entry))
-    # NEWEST first (owner 2026-11-26): the post reads the latest match
-    # right under the intro
-    cards.sort(key=lambda c: int(c.get("finished_at") or 0), reverse=True)
+            card = _seed_card_of(entry)
+            cards.append(card)
+            for player in card.get("players") or []:
+                pid = str((player or {}).get("profile_id") or "")
+                nickname = str((player or {}).get("name") or "")
+                if pid and nickname:
+                    _LAST_NAME[pid] = nickname
+    # ASCENDING (owner 2026-11-26): chronological top-to-bottom, the
+    # live matches land at the bottom where the newest belongs
+    cards.sort(key=lambda c: int(c.get("finished_at") or 0))
     if not cards:
         # the WHY says itself (owner 2026-11-26: the forum starved for
         # hours without one line - every silent stop hid the culprit)

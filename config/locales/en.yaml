@@ -111,7 +111,7 @@ en:
       matches_settings_button: "Game settings"
       matches_refresh_button: "Refresh"
       matches_refresh_match_button: "Match"
-      matches_settings_title: "\u2699\ufe0f Game settings \u2014 Match #{id}"
+      matches_settings_title: "\u2699\ufe0f Game settings \u2014 [{id}](https://www.aoe2insights.com/match/{id}/)"
       matches_setting_resources: "Resources"
       matches_setting_reveal: "Reveal map"
       matches_setting_start_age: "Starting age"
