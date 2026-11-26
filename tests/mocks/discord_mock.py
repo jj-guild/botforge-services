@@ -577,6 +577,10 @@ class MockGuild(discord.Guild):
     def channels(self) -> list[MockChannel]:
         return list(self._channels.values())
 
+    async def fetch_channels(self) -> list[MockChannel]:
+        """The in-memory channels (the provisioning's single-fetch reads this)."""
+        return list(self._channels.values())
+
     @property
     def system_channel(self) -> MockTextChannel | None:
         """The guild's system channel (overridden in-memory for tests)."""
