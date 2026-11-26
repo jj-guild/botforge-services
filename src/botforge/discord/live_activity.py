@@ -87,6 +87,10 @@ _MATCH_PLAYERS: dict[str, tuple[list[str], int]] = {}
 _LOGGED: set[tuple[str, str, str]] = set()
 # the guilds whose matches salon already saw their week of history
 _SEEDED: set[str] = set()
+# the (guild, user) whose post creation ran this boot - the idempotence
+# latch: a crash between the create and the registry save NEVER spawns
+# a twin post on the next sweep (owner 2026-11-26: SIX of them)
+_ENSURING: set[tuple[str, str]] = set()
 # the (guild, match_ref) the salon already carries a message for - the
 # ONE-message-per-match bookkeeping (owner 2026-11-25): the live cards,
 # the seeds and the store gap-fills all share it
@@ -817,6 +821,8 @@ async def _posts_of(guild_id: str) -> dict[str, dict[str, Any]]:
                         for k, v in (entry.get("messages") or {}).items()
                         if str(k) and str(v)
                     },
+                    "intro": str(entry.get("intro") or ""),
+                    "intro_id": str(entry.get("intro_id") or ""),
                 }
         return posts
     except Exception:
@@ -939,6 +945,51 @@ async def _player_names(bot: discord.Client, guild_id: str) -> dict[str, str]:
     return out
 
 
+def _post_intro(name: str, profile: dict[str, Any]) -> str:
+    """Build the post's first message: the user, his insight-linked accounts.
+
+    The intro RECOMPUTES on every ensure (owner 2026-11-26): an added or
+    removed account re-edits the first message, never a new post.
+    """
+    links = [
+        f"[{alias}](https://www.aoe2insights.com/user/relic/{pid}/)"
+        for pid, alias in sorted((profile.get("profiles") or {}).items())
+    ]
+    return f"**{name}**\n" + (" \u00b7 ".join(links) if links else "\u2014")
+
+
+async def _refresh_post_intro(
+    guild_id: str,
+    forum: Any,
+    posts: dict[str, dict[str, Any]],
+    uid: str,
+    intro: str,
+) -> None:
+    """Re-edit the post's first message when the accounts changed."""
+    entry = posts.get(uid) or {}
+    if not intro or str(entry.get("intro") or "") == intro:
+        return
+    thread = _thread_of(forum, entry)
+    intro_id = str(entry.get("intro_id") or "")
+    if thread is None or not intro_id:
+        return
+    try:
+        await thread.get_partial_message(int(intro_id)).edit(content=intro)
+    except Exception:
+        logger.warning(
+            "matches forum: %s's post intro refused its re-edit (guild %s)",
+            uid,
+            guild_id,
+            exc_info=True,
+        )
+        return
+    entry["intro"] = intro
+    posts[uid] = entry
+    await _save_post(guild_id, uid, entry)
+    logger.info("matches forum: %s's post intro refreshed (guild %s)", uid, guild_id)
+
+
+
 async def _ensure_player_posts(
     bot: discord.Client, guild_id: str, forum: Any, users: dict[str, dict[str, Any]]
 ) -> dict[str, dict[str, Any]]:
@@ -970,21 +1021,33 @@ async def _ensure_player_posts(
             logger.info("matches forum: post deleted for %s (guild %s)", key, guild_id)
     for uid, profile in users.items():
         name = str(profile.get("name") or uid)
+        intro = _post_intro(name, profile)
         if uid in posts and str(posts[uid].get("name") or ""):
+            await _refresh_post_intro(guild_id, forum, posts, uid, intro)
             continue
-        aliases = sorted(set(profile.get("profiles") or {uid: uid}.values()))
-        intro = f"**{name}**\n" + " \u00b7 ".join(aliases)
+        # the idempotence latch (owner 2026-11-26: a crash between the
+        # create_thread and its registry save re-created the post on
+        # every sweep - SIX twins): a boot never asks twice
+        if (guild_id, uid) in _ENSURING:
+            continue
         try:
             # the forum post's FIRST message can never be empty (the
             # forum-empty root cause, found by the WARNING: Discord's
             # 400 "Cannot send an empty message" refused EVERY
             # create_thread - the forum starved from day one); the
-            # intro names the USER and his accounts
-            thread = await forum.create_thread(
+            # intro names the USER and his accounts (the links go to
+            # insights - owner 2026-11-26)
+            _ENSURING.add((guild_id, uid))
+            created = await forum.create_thread(
                 name=_thread_title(name),
                 content=intro,
                 auto_archive_duration=10080,
             )
+            # discord.py returns a ThreadWithMessage PAIR when the
+            # creation carries a first message: unpack (the pair has
+            # no .id - the crash that spawned the twin posts)
+            thread = getattr(created, "thread", created)
+            first_message = getattr(created, "message", None)
         except Exception:
             # WARNING (owner 2026-11-26: the forum starved SILENTLY
             # for 15 prompts - "0 post(s) ensured" with not one line
@@ -998,6 +1061,8 @@ async def _ensure_player_posts(
             "name": name,
             "refs": [],
             "messages": {},
+            "intro": intro,
+            "intro_id": str(first_message.id) if first_message is not None else "",
         }
         posts[uid] = entry
         await _save_post(guild_id, uid, entry)
