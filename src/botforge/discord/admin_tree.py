@@ -135,6 +135,9 @@ async def _ensure_scope(bot: Any, guild_id: str, scope: str) -> str:  # noqa: C9
             locale = str(await logs.get_locale(guild_id) or DEFAULT_LOCALE)
         except Exception:
             locale = DEFAULT_LOCALE
+    from botforge.discord.repair import RepairReport
+
+    tree_repair = RepairReport(logger, "tree ensure", subject=guild_id)
     lines: list[str] = []
     pins_ok = 0
     roles_ok = 0
@@ -173,11 +176,16 @@ async def _ensure_scope(bot: Any, guild_id: str, scope: str) -> str:  # noqa: C9
             lock = "\U0001F512" if decl.access == "admin" else ""
             where = f"<#{channel_id}>{lock}" if channel_id else f"**{decl.key}** (absent)"
             lines.append(f"\u2022 {where}")
+        tree_repair.step(f"scope {spec.scope} provisioned", channels=len(spec.channels))
         pins_ok += await _ensure_scope_pins(bot, guild_id, spec.scope)
         roles_ok += await _ensure_scope_roles(bot, guild_id, spec.scope)
+        tree_repair.step(f"scope {spec.scope} surfaced", pins=pins_ok, roles=roles_ok)
     from botforge.discord.scope_surfaces import run_scope_syncs
 
     synced_posts = await run_scope_syncs(guild_id, bot, ",".join(scopes))
+    tree_repair.done(
+        "the scopes stand", scopes=len(specs), pins=pins_ok, roles=roles_ok, posts=synced_posts
+    )
     lines.append(f"\n\U0001f4cc Vues \u00e9pingl\u00e9es v\u00e9rifi\u00e9es/recr\u00e9\u00e9es : {pins_ok}")
     lines.append(f"\U0001F465 R\u00f4les v\u00e9rifi\u00e9s/cr\u00e9\u00e9s : {roles_ok}")
     lines.append(f"\U0001f4dc Posts de forum v\u00e9rifi\u00e9s/recr\u00e9\u00e9s : {synced_posts}")

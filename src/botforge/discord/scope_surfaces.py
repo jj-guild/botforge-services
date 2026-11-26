@@ -45,16 +45,23 @@ async def run_scope_syncs(guild_id: str, bot: Any, scope: str) -> int:
     ``scope`` carries a comma-separated list (the sync button's
     contract): each scope contributes its own prefixes.
     """
+    from botforge.discord.repair import RepairReport
+
+    sync_repair = RepairReport(logger, "scope syncs", subject=guild_id)
     actions = 0
     for item in scope.split(","):
         for prefix in _descendant_prefixes(item):
             for sync in _REGISTRY.get(prefix, ()):
                 try:
+                    before = actions
                     actions += await sync(guild_id, bot)
+                    if actions != before:
+                        sync_repair.step(f"sync {prefix}", posts=actions - before)
                 except Exception:
                     logger.warning(
                         "scope sync failed (%s, guild %s) — best-effort", prefix, guild_id, exc_info=True
                     )
+    sync_repair.done("the syncs ran", posts=actions)
     return actions
 
 

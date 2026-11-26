@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Python: botforge.discord.repair</title>
+</head><body>
+
+<table class="heading">
+<tr class="heading-text decor">
+<td class="title">&nbsp;<br><strong class="title"><a href="botforge.html" class="white">botforge</a>.<a href="botforge.discord.html" class="white">discord</a>.repair</strong></td>
+<td class="extra"><a href=".">index</a><br><a href="file:SOURCE_ROOT/discord/repair.py">SOURCE_ROOT/discord/repair.py</a></td></tr></table>
+    <p><span class="code">The&nbsp;repair&nbsp;report:&nbsp;one&nbsp;SDK&nbsp;<a href="builtins.html#object">object</a>&nbsp;that&nbsp;speaks&nbsp;the&nbsp;repair's&nbsp;own&nbsp;story.<br>
+&nbsp;<br>
+A&nbsp;repair&nbsp;is&nbsp;ANY&nbsp;reconcile&nbsp;pass&nbsp;(owner&nbsp;2026-11-26:&nbsp;"fais&nbsp;le&nbsp;pour&nbsp;tous<br>
+les&nbsp;repair,&nbsp;niveau&nbsp;sdk"):&nbsp;the&nbsp;tree-ensure&nbsp;provisioning,&nbsp;the&nbsp;pins&nbsp;and<br>
+roles,&nbsp;the&nbsp;forum&nbsp;syncs,&nbsp;the&nbsp;matches&nbsp;forum's&nbsp;seed.&nbsp;The&nbsp;lesson&nbsp;engraved<br>
+this&nbsp;week:&nbsp;a&nbsp;SILENT&nbsp;repair&nbsp;reads&nbsp;like&nbsp;an&nbsp;eternity&nbsp;that&nbsp;did&nbsp;nothing&nbsp;-<br>
+every&nbsp;phase&nbsp;announces&nbsp;itself,&nbsp;every&nbsp;phase&nbsp;carries&nbsp;its&nbsp;count,&nbsp;the<br>
+finish&nbsp;speaks&nbsp;the&nbsp;duration.<br>
+&nbsp;<br>
+Usage::<br>
+&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;with&nbsp;<a href="#-repair">repair</a>(logger,&nbsp;"matches&nbsp;forum",&nbsp;subject=guild_id)&nbsp;as&nbsp;rep:<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;rep.step("ensure&nbsp;posts",&nbsp;created=1,&nbsp;dead=0)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;rep.step("post&nbsp;cards",&nbsp;cards=17)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;-&gt;&nbsp;INFO&nbsp;matches&nbsp;forum&nbsp;REPAIR&nbsp;(guild&nbsp;X):&nbsp;ensure&nbsp;posts&nbsp;(created=1,&nbsp;dead=0)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;-&gt;&nbsp;INFO&nbsp;matches&nbsp;forum&nbsp;REPAIR&nbsp;(guild&nbsp;X):&nbsp;post&nbsp;cards&nbsp;(cards=17)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;#&nbsp;-&gt;&nbsp;INFO&nbsp;matches&nbsp;forum&nbsp;REPAIR&nbsp;(guild&nbsp;X):&nbsp;DONE&nbsp;in&nbsp;12.3s&nbsp;(cards=17,&nbsp;created=1)</span></p>
+<p>
+<table class="section">
+<tr class="decor pkg-content-decor heading-text">
+<td class="section-title" colspan=3>&nbsp;<br><strong class="bigsection">Modules</strong></td></tr>
+    
+<tr><td class="decor pkg-content-decor"><span class="code">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span></td><td>&nbsp;</td>
+<td class="singlecolumn"><table><tr><td class="multicolumn"><a href="time.html">time</a><br>
+</td><td class="multicolumn"></td><td class="multicolumn"></td><td class="multicolumn"></td></tr></table></td></tr></table><p>
+<table class="section">
+<tr class="decor index-decor heading-text">
+<td class="section-title" colspan=3>&nbsp;<br><strong class="bigsection">Classes</strong></td></tr>
+    
+<tr><td class="decor index-decor"><span class="code">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span></td><td>&nbsp;</td>
+<td class="singlecolumn"><dl>
+<dt class="heading-text"><a href="builtins.html#object">builtins.object</a>
+</dt><dd>
+<dl>
+<dt class="heading-text"><a href="botforge.discord.repair.html#RepairReport">RepairReport</a>
+</dt></dl>
+</dd>
+</dl>
+ <p>
+<table class="section">
+<tr class="decor title-decor heading-text">
+<td class="section-title" colspan=3>&nbsp;<br><a name="RepairReport">class <strong>RepairReport</strong></a>(<a href="builtins.html#object">builtins.object</a>)</td></tr>
+    
+<tr><td class="decor title-decor" rowspan=2><span class="code">&nbsp;&nbsp;&nbsp;</span></td>
+<td class="decor title-decor" colspan=2><span class="code"><a href="#RepairReport">RepairReport</a>(logger:&nbsp;'Logger',&nbsp;name:&nbsp;'str',&nbsp;subject:&nbsp;'str'&nbsp;=&nbsp;'')&nbsp;-&amp;gt;&nbsp;'None'<br>
+&nbsp;<br>
+One&nbsp;repair's&nbsp;progress:&nbsp;steps&nbsp;with&nbsp;counts,&nbsp;a&nbsp;finish&nbsp;with&nbsp;the&nbsp;duration.<br>&nbsp;</span></td></tr>
+<tr><td>&nbsp;</td>
+<td class="singlecolumn">Methods defined here:<br>
+<dl><dt><a name="RepairReport-__init__"><strong>__init__</strong></a>(self, logger: 'Logger', name: 'str', subject: 'str' = '') -&gt; 'None'</dt><dd><span class="code">Initialize&nbsp;self.&nbsp;&nbsp;See&nbsp;help(type(self))&nbsp;for&nbsp;accurate&nbsp;signature.</span></dd></dl>
+
+<dl><dt><a name="RepairReport-done"><strong>done</strong></a>(self, message: 'str' = 'DONE', **counts: 'int') -&gt; 'None'</dt><dd><span class="code">Finish&nbsp;the&nbsp;repair:&nbsp;the&nbsp;duration&nbsp;and&nbsp;the&nbsp;accumulated&nbsp;counts.</span></dd></dl>
+
+<dl><dt><a name="RepairReport-phase"><strong>phase</strong></a>(self, label: 'str', **counts: 'int') -&gt; 'Iterator[RepairReport]'</dt><dd><span class="code">One&nbsp;timed&nbsp;phase:&nbsp;the&nbsp;step&nbsp;at&nbsp;the&nbsp;entry,&nbsp;the&nbsp;duration&nbsp;at&nbsp;the&nbsp;exit.</span></dd></dl>
+
+<dl><dt><a name="RepairReport-step"><strong>step</strong></a>(self, message: 'str', **counts: 'int') -&gt; 'None'</dt><dd><span class="code">Announce&nbsp;one&nbsp;phase&nbsp;with&nbsp;its&nbsp;own&nbsp;counts&nbsp;(INFO,&nbsp;always).</span></dd></dl>
+
+<hr>
+Readonly properties defined here:<br>
+<dl><dt><strong>tag</strong></dt>
+<dd><span class="code">The&nbsp;log&nbsp;prefix:&nbsp;the&nbsp;repair's&nbsp;own&nbsp;name&nbsp;(and&nbsp;its&nbsp;subject).</span></dd>
+</dl>
+<hr>
+Data descriptors defined here:<br>
+<dl><dt><strong>__dict__</strong></dt>
+<dd><span class="code">dictionary&nbsp;for&nbsp;instance&nbsp;variables</span></dd>
+</dl>
+<dl><dt><strong>__weakref__</strong></dt>
+<dd><span class="code">list&nbsp;of&nbsp;weak&nbsp;references&nbsp;to&nbsp;the&nbsp;object</span></dd>
+</dl>
+</td></tr></table></td></tr></table><p>
+<table class="section">
+<tr class="decor functions-decor heading-text">
+<td class="section-title" colspan=3>&nbsp;<br><strong class="bigsection">Functions</strong></td></tr>
+    
+<tr><td class="decor functions-decor"><span class="code">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span></td><td>&nbsp;</td>
+<td class="singlecolumn"><dl><dt><a name="-repair"><strong>repair</strong></a>(logger: 'Logger', name: 'str', subject: 'Any' = '') -&gt; 'Iterator[RepairReport]'</dt><dd><span class="code">Open&nbsp;one&nbsp;repair:&nbsp;the&nbsp;report&nbsp;speaks,&nbsp;the&nbsp;``with``&nbsp;guarantees&nbsp;the&nbsp;DONE.</span></dd></dl>
+</td></tr></table>
+</body></html>
