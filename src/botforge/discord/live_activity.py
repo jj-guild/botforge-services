@@ -1288,7 +1288,8 @@ async def rename_user_posts(bot: discord.Client, user_id: str, new_name: str) ->
             continue
         try:
             thread = await bot.fetch_channel(int(entry["thread_id"]))
-            await thread.edit(name=_thread_title(new_name))
+            if isinstance(thread, discord.Thread):
+                await thread.edit(name=_thread_title(new_name))
         except Exception:
             logger.debug(
                 "the post retitle failed (guild %s, user %s) - best-effort", gid, user_id, exc_info=True
