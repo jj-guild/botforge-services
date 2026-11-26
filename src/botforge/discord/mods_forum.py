@@ -499,7 +499,15 @@ def _seasonal_standard_channels(definition: Any) -> tuple[Any, ...]:
     from botforge.core.services.mod_definition import ChannelCategoryDef
 
     standard_keys = {"general", "admin", "seasons", "candidates", "participants"}
-    out = [channel for channel in declared if str(channel.key) not in standard_keys]
+    # MANUAL salons (vitrine-v1, Drasah 26/11): declared as data, NEVER
+    # auto-provisioned — the organiser creates them on demand (the
+    # mod's atelier) and positions them by hand; a stored resolution
+    # (a salon the atelier already created) is simply left alone.
+    out = [
+        channel
+        for channel in declared
+        if str(channel.key) not in standard_keys and not getattr(channel, "manual", False)
+    ]
     out.extend(
         [
             ChannelCategoryDef(

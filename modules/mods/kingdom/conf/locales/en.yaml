@@ -324,6 +324,13 @@ en:
       settings_test_end_button: "🏁 Normal end"
       settings_test_tie_button: "⚖️ Classic tie"
       settings_test_duel_button: "⚔️ Simulate a duel"
+      # panthéon-manuel-v1 (Drasah 26/11) : la vitrine se crée à la demande
+      settings_add_pantheon_button: "🏛️ Add Pantheon"
+      settings_add-pantheon_button: "🏛️ Add Pantheon"
+      settings_add_pantheon_done: "✅ The **🏛️ pantheon** salon was created at the very top, outside any category. Drag it anywhere: the panel and its windows follow the salon."
+      settings_add_pantheon_exists: "ℹ️ The **🏛️ pantheon** salon already exists — just drag it anywhere, everything follows."
+      settings_add_pantheon_no_guild: "⚠️ This button only lives inside a server."
+      settings_add_pantheon_failed: "⚠️ Creating the pantheon salon failed — try again in a moment."
       settings_test_end_done: "✅ Season end played — {0} attack(s) cancelled, verdict: **{1}**."
       settings_test_end_showmatch: "✅ Season end played — {0} attack(s) cancelled, the top kingdoms are tied: the outside-season ShowMatch decides."
       settings_test_tie_done: "⚖️ Tie forced — season closed ex aequo, {0} attack(s) cancelled, the outside-season ShowMatch is open."

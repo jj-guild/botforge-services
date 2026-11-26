@@ -36,6 +36,7 @@ from .strings import strings
 logger = logging.getLogger("kingdom.pantheon")
 
 PANTHEON_PIN_KEY = "panel:mod:kingdom:pantheon"
+PANTHEON_CHANNEL_KEY = "pantheon"
 _MEDALS = ("🥇", "🥈", "🥉")
 _PAGE_CHARS = 1700
 _GAIA_NAME = "Gaïa"
@@ -607,6 +608,109 @@ def pantheon_dynamic_items() -> tuple:
         PantheonKingdomSelect,
         PantheonCompareButton,
     )
+
+
+# ---------------------------------------------------------------------------
+# panthéon-manuel-v1 (Drasah 26/11) : le salon se CRÉE depuis l'atelier
+# ---------------------------------------------------------------------------
+def _decl_registry(bot: Any, mod_name: str) -> Any:
+    """Return the mod's definition from the registry (None-safe)."""
+    registry = getattr(bot, "registry", None)
+    return registry.get(mod_name) if registry is not None else None
+
+
+def _pantheon_decl(bot: Any) -> Any:
+    """Return the mod's declared panthéon salon (the declaration is data)."""
+    definition = _decl_registry(bot, "kingdom")
+    for channel in getattr(definition, "channel_categories", ()) or ():
+        if str(getattr(channel, "key", "")) == PANTHEON_CHANNEL_KEY:
+            return channel
+    return None
+
+
+async def _pantheon_overwrites(bot: Any, guild: Any) -> dict[str, Any]:
+    """Build the salon's overwrites from the DECLARED policy (data, #216)."""
+    overwrites: dict[str, Any] = {
+        guild.default_role: discord.PermissionOverwrite(view_channel=False),
+    }
+    # the bot's own member always carries an explicit operating allow
+    me = getattr(guild, "me", None)
+    if me is not None:
+        overwrites[me] = discord.PermissionOverwrite(
+            view_channel=True, send_messages=True, read_message_history=True
+        )
+    decl = _pantheon_decl(bot)
+    policy = getattr(decl, "access", None)
+    roles_service = getattr(bot, "mod_roles_service", None)
+    role_keys_by_name = {
+        str(getattr(role, "display_name", "")): str(getattr(role, "key", ""))
+        for role in getattr(_decl_registry(bot, "kingdom"), "roles", ()) or ()
+    }
+    for name in getattr(policy, "view", ()) or ():
+        if roles_service is None:
+            break
+        role_key = role_keys_by_name.get(str(name), "")
+        if not role_key:
+            logger.warning("kingdom: pantheon — the view role %r is not declared", name)
+            continue
+        role_id = await roles_service.resolve_role_id(str(guild.id), "kingdom", role_key)
+        role = guild.get_role(int(role_id)) if role_id and str(role_id).isdigit() else None
+        if role is not None:
+            overwrites[role] = discord.PermissionOverwrite(
+                view_channel=True,
+                send_messages=not getattr(policy, "everyone_post", False),
+                read_message_history=True,
+            )
+    return overwrites
+
+
+async def add_pantheon_salon(bot: Any, guild: Any) -> tuple[str, str]:
+    """Create (or find) the panthéon salon — top of the sidebar, no category.
+
+    Returns ``(channel_id, "created" | "exists")``. The salon is MANUAL
+    (panthéon-manuel-v1, Drasah 26/11): it never rides the provisioning —
+    the atelier creates it once, TOUT EN HAUT hors catégorie, and the
+    organiser then drags it wherever he wants: the resolution is by
+    STORED ID, so the pin and every wiring follow the move.
+    """
+    from botforge.discord.ui.panels_provisioning import (
+        persist_resolutions,
+        stored_channel_id,
+    )
+
+    guild_id = str(guild.id)
+    stored = await stored_channel_id(guild_id, "mod/kingdom", PANTHEON_CHANNEL_KEY)
+    if stored and stored.isdigit() and guild.get_channel(int(stored)) is not None:
+        await ensure_pantheon_pin(bot, guild_id)
+        return stored, "exists"
+    decl = _pantheon_decl(bot)
+    name = str(getattr(decl, "display_name", "🏛️ panthéon"))
+    overwrites = await _pantheon_overwrites(bot, guild)
+    channel = await guild.create_text_channel(
+        name,
+        overwrites=overwrites,
+        reason="kingdom: panthéon-manuel-v1 (l'atelier crée la vitrine)",
+    )
+    try:  # best-effort : tout en haut, hors catégorie
+        await channel.edit(position=0, reason="kingdom: panthéon — top of the sidebar")
+    except discord.HTTPException:
+        logger.warning("kingdom: pantheon top-position failed — best-effort", exc_info=True)
+    await persist_resolutions(guild_id, "mod/kingdom", {PANTHEON_CHANNEL_KEY: str(channel.id)})
+    await ensure_pantheon_pin(bot, guild_id)
+    return str(channel.id), "created"
+
+
+async def ensure_pantheon_pin(bot: Any, guild_id: str) -> None:
+    """Ensure the panthéon panel lives in its salon (best-effort)."""
+    from botforge.discord.static_pins import ensure_static_pin, registered_static_pins
+
+    for spec in registered_static_pins():
+        if spec.key == PANTHEON_PIN_KEY:
+            try:
+                await ensure_static_pin(bot, spec, guild_id)
+            except Exception:
+                logger.warning("kingdom: pantheon pin ensure failed — best-effort", exc_info=True)
+            return
 
 
 __all__ = [

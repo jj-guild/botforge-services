@@ -294,6 +294,40 @@ def register(bot: Any, config: Any) -> None:
         )
     )
 
+    # panthéon-manuel-v1 (Drasah 26/11) : le salon vitrine est MANUEL —
+    # au boot, si le panthéon n'existe pas encore, l'organisateur est
+    # prévenu DANS LES LOGS : il le crée depuis l'atelier puis le
+    # positionne à la main (le branchement suit l'id stocké).
+    async def _pantheon_boot_notice() -> None:
+        import asyncio
+        import logging
+
+        boot_logger = logging.getLogger("kingdom.pantheon")
+        try:
+            await asyncio.wait_for(bot.wait_until_ready(), timeout=180)
+        except Exception:
+            return
+        for guild in getattr(bot, "guilds", ()) or ():
+            try:
+                stored = await stored_channel_id(str(guild.id), "mod/kingdom", "pantheon")
+            except Exception:
+                stored = None
+            if not stored or not str(stored).isdigit() or guild.get_channel(int(stored)) is None:
+                boot_logger.warning(
+                    "kingdom: le salon 🏛️ panthéon n'est pas encore créé sur %s — "
+                    "l'organisateur doit le créer depuis l'atelier "
+                    "(🛠️ Paramètres → 🏛️ Ajouter Panthéon), puis le glisser où il veut "
+                    "(il naît tout en haut, hors catégorie)",
+                    getattr(guild, "name", guild.id),
+                )
+
+    import asyncio
+
+    try:
+        asyncio.get_running_loop().create_task(_pantheon_boot_notice())
+    except RuntimeError:
+        pass
+
     # the salon gate's subscription (profile.bound → the access role):
     # idempotent (the sink keeps one handler reference per bot)
     subscribe_profile_gate(bot)

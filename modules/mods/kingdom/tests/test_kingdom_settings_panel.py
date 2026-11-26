@@ -54,6 +54,9 @@ def test_settings_panel_is_one_template_of_twelve_actions() -> None:
         "test-end",
         "test-tie",
         "test-duel",
+        # panthéon-manuel-v1 (Drasah 26/11) : la vitrine se crée depuis
+        # l'atelier — le salon manuel, tout en haut hors catégorie
+        "add-pantheon",
     )
     # every action key answers a DynamicItem custom id + a FR label
     from botforge.mods.kingdom.cogs.settings_panel import SettingsActionButton

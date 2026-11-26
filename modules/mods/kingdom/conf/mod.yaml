@@ -158,11 +158,15 @@ channels:
   # SOLO et PERMANENT qui vit HORS de la partie, la vitrine des
   # saisons (score en direct, palmarès, historique, chronique). Il
   # n'est jamais renommé ni rembobiné : il lit les archives.
+  # panthéon-manuel-v1 (Drasah 26/11) : salon MANUEL — le provisioning
+  # ne le crée JAMAIS ; l'organisateur le crée depuis l'atelier
+  # (🛠️ Paramètres → 🏛️ Ajouter Panthéon), il naît TOUT EN HAUT hors
+  # catégorie, puis se positionne à la main (la résolution suit
+  # l'id stocké : tout le branchement suit le salon glissé).
   - key: pantheon
     display_name: 🏛️ panthéon
     description: The seasons' showcase — live score, palmarès, historique, chronicle (vitrine-v1)
-    group: kingdom
-    position: 25
+    manual: true
     access:
       everyone_view: false
       view: [Kingdom Lord, Kingdom King, Kingdom Admin]

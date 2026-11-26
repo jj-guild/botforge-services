@@ -89,6 +89,12 @@ class ChannelCategoryDef:
     # the channel's declared POSITION inside its band (the sidebar's
     # order is data, #216): ties break on it, then on the key
     position: int | None = None
+    # MANUAL salon (vitrine-v1, Drasah 26/11): the channel is DECLARED
+    # (its name, its access policy stay data) but the provisioning
+    # NEVER creates it — the organiser creates it on demand (the mod's
+    # atelier) and positions it by hand; the resolution stays by
+    # STORED ID, so everything wired to it follows the hand-made move
+    manual: bool = False
 
 
 @dataclass(frozen=True, slots=True)

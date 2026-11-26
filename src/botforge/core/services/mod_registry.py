@@ -83,6 +83,7 @@ def _parse_channel_categories(
                 group_bottom=group_bottom,
                 admin_only=admin_only,
                 position=position,
+                manual=bool(entry.get("manual", False)),
                 key=key,
                 display_name=display,
                 description=str(entry.get("description", "")),

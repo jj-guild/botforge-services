@@ -92,6 +92,10 @@ _SETTINGS_ACTIONS: tuple[tuple[str, str, discord.ButtonStyle], ...] = (
     ("test-end", "settings_test_end_button", discord.ButtonStyle.danger),
     ("test-tie", "settings_test_tie_button", discord.ButtonStyle.primary),
     ("test-duel", "settings_test_duel_button", discord.ButtonStyle.secondary),
+    # panthéon-manuel-v1 (Drasah 26/11) : « 🏛️ Ajouter Panthéon » — la
+    # vitrine est MANUELLE : l'atelier la crée (tout en haut, hors
+    # catégorie), l'organisateur la glisse ensuite où il veut.
+    ("add-pantheon", "settings_add_pantheon_button", discord.ButtonStyle.primary),
 )
 # casquette-removal-v1 (Drasah 19/11): the hat op RETIRES from the
 # console (11 actions) — the bypass lives in the code's own seams and
@@ -2159,6 +2163,16 @@ def _atelier_drawer(strings: dict[str, str], ops_strings: dict[str, str]) -> dis
             "etat", str(strings["settings_etat_button"]), discord.ButtonStyle.secondary
         ).item
     )
+    # panthéon-manuel-v1 (Drasah 26/11) : la vitrine est MANUELLE —
+    # c'est L'ATELIER qui la crée (tout en haut, hors catégorie),
+    # puis l'organisateur la glisse où il veut (tout suit l'id stocké).
+    row.add_item(
+        SettingsActionButton(
+            "add-pantheon",
+            str(strings["settings_add_pantheon_button"]),
+            discord.ButtonStyle.primary,
+        ).item
+    )
     # the mod-scoped console ops (relaunch / reset / clock): the SAME
     # restart-proof DynamicItems the registry owns, re-rendered with
     # the GUILD locale's labels (stable custom ids, localized text)
@@ -3559,6 +3573,30 @@ async def _open_remove(interaction: discord.Interaction, strings: dict[str, str]
     await interaction.response.send_modal(_RemoveModal(strings))
 
 
+async def _add_pantheon(interaction: discord.Interaction, strings: dict[str, str]) -> None:
+    """Create the panthéon salon from the atelier (manual, top, no category).
+
+    panthéon-manuel-v1 (Drasah 26/11) : le salon vitrine n'est JAMAIS
+    provisionné — l'organisateur le crée ici ; il naît tout en haut
+    hors catégorie, puis se glisse à la main (la résolution suit l'id
+    stocké : le panneau et ses fenêtres suivent le salon déplacé).
+    """
+    from .pantheon import add_pantheon_salon
+
+    guild = interaction.guild
+    if guild is None:
+        await _safe_send(interaction, str(strings["settings_add_pantheon_no_guild"]))
+        return
+    try:
+        _channel_id, status = await add_pantheon_salon(interaction.client, guild)
+    except Exception:
+        logger.warning("kingdom: add-pantheon failed — best-effort", exc_info=True)
+        await _safe_send(interaction, str(strings["settings_add_pantheon_failed"]))
+        return
+    key = "settings_add_pantheon_exists" if status == "exists" else "settings_add_pantheon_done"
+    await _safe_send(interaction, str(strings[key]))
+
+
 _SETTINGS_HANDLERS: dict[str, Any] = {
     "launch": _open_launch,
     "announce": _announce_season,
@@ -3574,6 +3612,8 @@ _SETTINGS_HANDLERS: dict[str, Any] = {
     "test-end": _test_end,
     "test-tie": _test_tie,
     "test-duel": _test_duel,
+    # panthéon-manuel-v1 (Drasah 26/11) : la vitrine se crée à la demande
+    "add-pantheon": _add_pantheon,
 }
 
 

@@ -74,10 +74,16 @@ def test_the_declared_groups_order_is_explicit_positions() -> None:
     # architecture-salons-v1 : PROFILS est RETIRE de la declaration
     assert "profiles" not in groups, "the profiles group must be GONE from the declaration"
     positions = {
-        str(c["key"]): int(c["position"]) for c in data.get("channels") or []
+        str(c["key"]): int(c["position"])
+        for c in data.get("channels") or []
+        if "position" in c
     }
     first_of = {
-        group: min(positions[c["key"]] for c in data["channels"] if c["group"] == group)
+        group: min(
+            positions[c["key"]]
+            for c in data["channels"]
+            if c.get("group") == group and c["key"] in positions
+        )
         for group in ("conscription", "battlefield", "kingdom", "admin")
     }
     # conscription < champs de bataille < Kingdom-Gaïa < admin (dernier)

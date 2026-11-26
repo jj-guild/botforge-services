@@ -317,6 +317,11 @@ def test_the_pantheon_salon_is_declared_in_mod_yaml() -> None:
     content = (_conf_dir() / "mod.yaml").read_text(encoding="utf-8")
     assert "key: pantheon" in content
     assert "🏛️ panthéon" in content
+    # panthéon-manuel-v1 (Drasah 26/11) : le salon est MANUEL — jamais
+    # provisionné, jamais dans un groupe (il naît hors catégorie)
+    pantheon_block = content.split("- key: pantheon", 1)[1].split("- key:", 1)[0]
+    assert "manual: true" in pantheon_block
+    assert "group:" not in pantheon_block
 
 
 def test_the_six_surfaces_are_declared_in_views_yaml() -> None:
