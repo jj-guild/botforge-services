@@ -32,6 +32,30 @@ _REALM_STRINGS: dict[str, _Strings] = {
             "partira au lancement de la saison par l'admin."
         ),
         "realm_enter_button": "🏰 Entrée",
+        # kingdom-report-v1 (Drasah 26/11, acté) : le signalement vit à
+        # droite de l'Entrée, membres du royaume, Roi inclus — la ligne
+        # part dans le journal admin (guichet fusionné, kind « report »).
+        "report_button": "🚩 Signaler",
+        "report_intro": (
+            "Un souci en jeu ? Préviens le staff — ta ligne arrive dans le\n"
+            "journal admin, un membre de l'équipe la traitera."
+        ),
+        "report_hint": "-# Choisis la nature du problème, puis décris-le clairement.",
+        "report_cat_bug": "🐞 Bug de jeu",
+        "report_cat_score": "⚔️ Litige de score",
+        "report_cat_behavior": "👤 Comportement d'un joueur",
+        "report_cat_other": "❓ Autre",
+        "report_modal_title": "🚩 Signaler un problème",
+        "report_text_label": "Que se passe-t-il ?",
+        "report_text_placeholder": "Décris le problème en quelques phrases claires.",
+        "report_empty_note": "⚠️ Un signalement a besoin d'une description — retente le bouton 🚩.",
+        "report_done_note": (
+            "✅ Signalement transmis au staff — il arrive dans le journal 📜 logs. Merci !"
+        ),
+        "report_cooldown_note": (
+            "⏳ Tu viens déjà d'envoyer un signalement — retente dans {0} min."
+        ),
+        "report_log_line": "Signalement — {0} : {1}",
         # hub-dormant-actions (Drasah 21/11): à droite de l'Entrée, le
         # royaume endormi porte sa saison — la vue + l'acte du Roi
         "realm_hub_join_button": "⚔️ Inscrire son royaume",
@@ -115,6 +139,24 @@ _REALM_STRINGS: dict[str, _Strings] = {
             "will fire when the admin launches the season."
         ),
         "realm_enter_button": "🏰 Enter",
+        # kingdom-report-v1 (Drasah 26/11) — the report door, right of Enter.
+        "report_button": "🚩 Report",
+        "report_intro": (
+            "An in-game issue? Warn the staff — your line lands in the\n"
+            "admin journal, a staff member will handle it."
+        ),
+        "report_hint": "-# Pick the nature of the problem, then describe it clearly.",
+        "report_cat_bug": "🐞 Game bug",
+        "report_cat_score": "⚔️ Score dispute",
+        "report_cat_behavior": "👤 A player's behavior",
+        "report_cat_other": "❓ Other",
+        "report_modal_title": "🚩 Report a problem",
+        "report_text_label": "What is going on?",
+        "report_text_placeholder": "Describe the problem in a few clear sentences.",
+        "report_empty_note": "⚠️ A report needs a description — try the 🚩 button again.",
+        "report_done_note": "✅ Report sent to the staff — it lands in the 📜 logs journal. Thanks!",
+        "report_cooldown_note": "⏳ You just sent a report — try again in {0} min.",
+        "report_log_line": "Report — {0}: {1}",
         # hub-dormant-actions (Drasah 21/11): beside the door, the
         # dormant realm carries its season — the view + the King's act
         "realm_hub_join_button": "⚔️ Enroll the realm",

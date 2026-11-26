@@ -37,6 +37,8 @@ KIND_EMOJI: dict[str, str] = {
     "decision": "⚖️",
     "realm": "👑",
     "console": "🧹",
+    # kingdom-report-v1 (Drasah 26/11) : le signalement joueur (Affaire 38)
+    "report": "🚩",
 }
 
 # kinds the hue of the fallback when a call site forgets its own (never a

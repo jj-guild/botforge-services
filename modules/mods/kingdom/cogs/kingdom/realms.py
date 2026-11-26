@@ -761,6 +761,13 @@ def hub_layout(realm: Any, strings: dict[str, str], *, dormant: bool) -> discord
             str(realm.slug),
         ).item
     )
+    # kingdom-report-v1 (Drasah 26/11, acté) : « à droite de l'Entrée » —
+    # la porte du signalement, MEMBRES du royaume (Roi inclus), les deux
+    # états du hub (dormant et vivant). Elle n'est pas une porte de jeu :
+    # une action méta, toujours sous la main.
+    from .report import RealmReportButton
+
+    row.add_item(RealmReportButton(str(strings["report_button"])).item)
     if dormant:
         # hub-dormant-actions (Drasah 21/11) : « l'Entrée n'a jamais été
         # un bouton rouage » — la porte s'ouvre (chez soi) même sans
@@ -1627,6 +1634,8 @@ class RealmCrownSelect(
 
 def realm_dynamic_items() -> tuple:
     """Every restart-proof DynamicItem of the realm surfaces."""
+    from .report import realm_report_dynamic_items
+
     return (
         RealmHomeButton,
         RealmNavButton,
@@ -1635,4 +1644,5 @@ def realm_dynamic_items() -> tuple:
         RealmJoinWithdrawButton,
         RealmQuitButton,
         RealmCrownSelect,
+        *realm_report_dynamic_items(),
     )
