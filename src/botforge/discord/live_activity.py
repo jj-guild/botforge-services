@@ -426,6 +426,12 @@ async def _send_card(
     card = _CARD_STATE.get(key)
     if card is None:
         return
+    # NO message until the game STARTS (owner 2026-11-26): the lobby's
+    # state warms the model, the POST waits the launch - the card then
+    # updates at the end and stays immutable afterwards
+    status = str(card.get("status") or "")
+    if status == "lobby":
+        return
     participants = _known_participants(card, await _guild_profiles(bot, guild_id))
     if not participants:
         return
@@ -442,12 +448,21 @@ async def _send_card(
         labels = await _label_pack(bot, guild_id)
         ctx = await _card_ctx(bot, guild_id, card)
         known = set(participants)
-        view = _match_card_view(card, ctx, set(), labels, known)
     except Exception:
         # the render NEVER kills the feed - the card stays as it was
         logger.debug("live activity card render failed (match %s)", match_ref, exc_info=True)
         return
     for uid in post_owners:
+        # each post's card is SCOPED to its owner (owner 2026-11-26):
+        # his own view - his profiles bold, HIS verdict - rendered per
+        # post, never one unscoped view shared by everyone
+        try:
+            view = _match_card_view(
+                card, ctx, set((users.get(uid) or {}).get("profiles") or {}), labels, known
+            )
+        except Exception:
+            logger.debug("live activity card render failed (match %s)", match_ref, exc_info=True)
+            continue
         await _upsert_participant_card(bot, guild_id, uid, match_ref, posts, forum, view)
 
 
@@ -659,7 +674,14 @@ async def _maybe_seed_matches_salon(  # noqa: C901 - one orchestration, no branc
             ctx_by_ref: dict[str, dict[str, Any]] = {}
             for card in pending_cards:
                 ctx_by_ref[str(card.get("match_id"))] = await _card_ctx(bot, guild_id, card)
-            marked = await _send_cards_grouped(thread, pending_cards, ctx_by_ref, labels, known)
+            marked = await _send_cards_grouped(
+                thread,
+                pending_cards,
+                ctx_by_ref,
+                labels,
+                known,
+                me_ids=set((users.get(uid) or {}).get("profiles") or {}),
+            )
             if marked:
                 entry.setdefault("refs", [])
                 entry["refs"].extend(ref for ref, _mid in marked)
@@ -712,13 +734,15 @@ def _thread_of(forum: Any, entry: dict[str, Any]) -> Any | None:
 
 
 async def _week_cards(bot: discord.Client, guild_id: str) -> list[dict[str, Any]]:
-    """Return the guild's stored matches of the last week, OLDEST first.
+    """Return the guild's stored FINISHED matches, NEWEST first.
 
     The seed rides the SERVED history (rule 4): the entries commute
     through the game service, the AI seats already fold ext-side with
     their real civ names, and the SEAL travels with the entry - the
     seed renders the invalid matches with their status, never as a
-    hole (owner 2026-11-24).
+    hole (owner 2026-11-24). Only FINISHED matches post (owner
+    2026-11-26): the ongoing ones live on the live card, never the
+    store's seed.
     """
     profiles = await _guild_profiles(bot, guild_id)
     if not profiles:
@@ -731,11 +755,11 @@ async def _week_cards(bot: discord.Client, guild_id: str) -> list[dict[str, Any]
     deadline = int(time.time()) - _SEED_WINDOW_S
     cards: list[dict[str, Any]] = []
     for entry in entries:
-        stamp = _int_of(getattr(entry, "finished_at", 0) or getattr(entry, "started_at", 0))
-        if stamp and stamp < deadline:
-            continue
+        finished_at = _int_of(getattr(entry, "finished_at", 0))
+        if not finished_at or finished_at < deadline:
+            continue  # NEWEST first, FINISHED only
         cards.append(_seed_card_of(entry))
-    cards.sort(key=lambda c: int(c.get("started_at") or 0))
+    cards.sort(key=lambda c: int(c.get("finished_at") or 0), reverse=True)
     return cards
 
 
@@ -950,10 +974,13 @@ def _post_intro(name: str, profile: dict[str, Any]) -> str:
     The intro RECOMPUTES on every ensure (owner 2026-11-26): an added or
     removed account re-edits the first message, never a new post.
     """
-    links = [
-        f"[{alias}](https://www.aoe2insights.com/user/relic/{pid}/)"
-        for pid, alias in sorted((profile.get("profiles") or {}).items())
-    ]
+    links = []
+    for pid, alias in sorted((profile.get("profiles") or {}).items()):
+        # the link LABEL is the account's NAME (owner 2026-11-26):
+        # the binding alias, the live feed's own name, the id as the
+        # floor - never an unnamed link
+        label = str(alias or "") or _LAST_NAME.get(str(pid)) or f"Compte {pid}"
+        links.append(f"[{label}](https://www.aoe2insights.com/user/relic/{pid}/)")
     return f"**{name}**\n" + (" \u00b7 ".join(links) if links else "\u2014")
 
 
@@ -1214,7 +1241,8 @@ async def _sweep_channel(bot: discord.Client, guild_id: str, channel_id: str) ->
 
 async def _send_cards_grouped(
     thread: Any, cards: list[dict[str, Any]], ctx_by_ref: dict[str, dict[str, Any]],
-    labels: dict[str, Any], known: set[str], max_group: int = 10,
+    labels: dict[str, Any], known: set[str], me_ids: set[str] | None = None,
+    max_group: int = 10,
 ) -> list[tuple[str, str]]:
     """Send cards into one forum post, GROUPED messages (owner 2026-11-25).
 
@@ -1235,8 +1263,14 @@ async def _send_cards_grouped(
                 view = discord.ui.LayoutView(timeout=None)
                 refs: list[str] = []
                 for card in group:
+                    # the card rides the POST owner's scope (owner
+                    # 2026-11-26): his profiles bold, HIS verdict
                     blocks, buttons, match_id, accent = _match_card_parts(
-                        card, ctx_by_ref.get(str(card.get("match_id")), {}), set(), labels, known
+                        card,
+                        ctx_by_ref.get(str(card.get("match_id")), {}),
+                        set(me_ids or set()),
+                        labels,
+                        known,
                     )
                     view.add_item(discord.ui.Container(*blocks, accent_colour=discord.Colour(accent)))
                     if buttons:
@@ -1331,8 +1365,13 @@ async def _gap_fill_matches_salon(  # noqa: C901 - one orchestration, no branch 
     cards: list[dict[str, Any]] = []
     for entry in entries:
         finished_at = _int_of(getattr(entry, "finished_at", 0))
+        # FINISHED matches only (owner 2026-11-26): the ongoing ones
+        # live on the live card, the store's seed never touches them
         if finished_at and finished_at >= deadline:
             cards.append(_seed_card_of(entry))
+    # NEWEST first (owner 2026-11-26): the post reads the latest match
+    # right under the intro
+    cards.sort(key=lambda c: int(c.get("finished_at") or 0), reverse=True)
     if not cards:
         # the WHY says itself (owner 2026-11-26: the forum starved for
         # hours without one line - every silent stop hid the culprit)
@@ -1363,7 +1402,14 @@ async def _gap_fill_matches_salon(  # noqa: C901 - one orchestration, no branch 
         for card in group:
             ctx_by_ref[str(card.get("match_id"))] = await _card_ctx(bot, guild_id, card)
         try:
-            marked = await _send_cards_grouped(thread, group, ctx_by_ref, labels, known)
+            marked = await _send_cards_grouped(
+                thread,
+                group,
+                ctx_by_ref,
+                labels,
+                known,
+                me_ids=set((users.get(uid) or {}).get("profiles") or {}),
+            )
         except Exception:
             logger.debug("the gap-fill group skipped (post %s) - best-effort", uid, exc_info=True)
             continue

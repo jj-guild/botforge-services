@@ -741,11 +741,12 @@ def test_the_forum_seed_posts_each_players_group_in_his_post() -> None:  # noqa:
 
     async def _fake_week_cards(bot, guild_id):
         return [
-            {"match_id": "m1", "players": [{"profile_id": "7"}, {"profile_id": "8"}]},
-            {"match_id": "m2", "players": [{"profile_id": "7"}, {"profile_id": "9"}]},
+            {"match_id": "m1", "finished_at": 200, "players": [{"profile_id": "7"}, {"profile_id": "8"}]},
+            {"match_id": "m2", "finished_at": 100, "players": [{"profile_id": "7"}, {"profile_id": "9"}]},
         ]
 
-    async def _fake_grouped(thread, cards, ctx_by_ref, labels, known, max_group=10):
+    async def _fake_grouped(thread, cards, ctx_by_ref, labels, known, me_ids=None, max_group=10):
+        del me_ids
         sent[str(id(thread))] = [str(c["match_id"]) for c in cards]
         return [(str(c["match_id"]), "77") for c in cards]
 
