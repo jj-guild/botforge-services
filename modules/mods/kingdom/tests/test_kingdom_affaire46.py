@@ -191,8 +191,10 @@ async def test_the_panel_reads_like_the_mockup(monkeypatch: pytest.MonkeyPatch) 
     body = _texts(view)
     assert "📅 **Saison en cours** — phase : ⚔️ les armes sont levées" in body
     assert "🌱 La vitrine des saisons" in body
-    assert "Dernier podium — s-2026-1 (terminée)" in body
-    assert "🌙" not in body.split("Dernier podium")[0], "a live season is never « dormant »"
+    # affaire 47 : une saison COURT = le gros bloc est le classement LIVE
+    # (le podium vit dans la fenêtre Palmarès, plus dans le panneau).
+    assert "Dernier podium" not in body, "the podium block moved to the Palmarès window"
+    assert "🌙" not in body, "a live season is never « dormant »"
 
 
 @pytest.mark.asyncio

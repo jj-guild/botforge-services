@@ -107,18 +107,27 @@ def _count_words(strings: dict[str, str], territories: int, alliances: int) -> t
     return terr_word, all_word
 
 
-def _score_text(strings: dict[str, str], rows: list[tuple[str, int, int, bool]]) -> str:
-    """Render the at-a-glance LIVE score block (the panel's fallback)."""
+def _score_text(
+    strings: dict[str, str],
+    rows: list[tuple[str, int, int, bool]],
+    with_alliances: bool = True,
+) -> str:
+    """Render the LIVE standings (the alliances hide while a season runs)."""
     lines: list[str] = []
     for rank, (name, territories, alliances, is_gaia) in enumerate(rows):
         medal = _MEDALS[rank] if rank < len(_MEDALS) else "▫️"
         if is_gaia:
             terr_word, _all_word = _count_words(strings, territories, alliances)
             line = strings["pantheon_pin_gaia_line"].format(territories, terr_word)
-        else:
+        elif with_alliances:
             terr_word, all_word = _count_words(strings, territories, alliances)
             line = strings["pantheon_pin_line"].format(
                 medal, name, territories, terr_word, alliances, all_word
+            )
+        else:
+            terr_word, _all_word = _count_words(strings, territories, alliances)
+            line = strings["pantheon_pin_live_line"].format(
+                medal, name, territories, terr_word
             )
         lines.append(line)
     if not lines:
@@ -220,11 +229,16 @@ async def build_pantheon_panel(guild_id: str) -> discord.ui.LayoutView:
         )
     else:
         season_line = strings_map["pantheon_pin_no_season"]
-    # panthéon-polish-v1 : le gros bloc par défaut = le PODIUM de la
-    # dernière saison terminée ; sans archive (la première saison), la
-    # vitrine retombe sur le score live — jamais vide.
-    podium = await _last_podium_lines(strings_map, stack)
-    score_text = "\n".join(podium) if podium else _score_text(strings_map, rows)
+    # affaire 47 : la vitrine suit l'état du monde — une saison COURT,
+    # le gros bloc = le CLASSEMENT LIVE (royaumes + territoires, les
+    # alliances restent privées) ; les royaumes DORMENT, le bloc = le
+    # podium de la dernière saison terminée ; sans archive, la vitrine
+    # retombe sur le score live — jamais vide.
+    podium = None if season is not None else await _last_podium_lines(strings_map, stack)
+    if season is not None:
+        score_text = _score_text(strings_map, rows, with_alliances=False)
+    else:
+        score_text = "\n".join(podium) if podium else _score_text(strings_map, rows)
     return surface(
         PANTHEON_PIN_KEY,
         discord.ui.TextDisplay(f"# {strings_map['pantheon_pin_title']}"),

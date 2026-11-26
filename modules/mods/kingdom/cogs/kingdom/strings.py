@@ -815,6 +815,7 @@ DEFAULTS: dict[str, dict[str, str]] = {
         "pantheon_pin_season": "📅 **{0}** — phase : {1}",
         "pantheon_pin_season_unnamed": "Saison en cours",
         "pantheon_pin_line": "{0} **{1}** — {2} {3} · {4} {5}",
+        "pantheon_pin_live_line": "{0} **{1}** — {2} {3}",
         "pantheon_pin_gaia_line": "▫️ Gaïa — {0} {1}, le monde sauvage",
         "pantheon_pin_no_season": "🌙 Les royaumes dorment, l'Histoire attend la prochaine saison.",
         # panthéon-polish-v1 (Drasah 26/11) : le gros bloc par défaut = le
@@ -1855,6 +1856,7 @@ DEFAULTS: dict[str, dict[str, str]] = {
         "pantheon_pin_season": "📅 **{0}** — phase: {1}",
         "pantheon_pin_season_unnamed": "Current season",
         "pantheon_pin_line": "{0} **{1}** — {2} {3} · {4} {5}",
+        "pantheon_pin_live_line": "{0} **{1}** — {2} {3}",
         "pantheon_pin_gaia_line": "▫️ Gaïa — {0} {1}, the wild world",
         "pantheon_pin_no_season": "🌙 The kingdoms sleep, History awaits the next season.",
         # panthéon-polish-v1 (Drasah 26/11) : the default block = the LAST
