@@ -920,7 +920,15 @@ async def _guild_users(bot: discord.Client, guild_id: str) -> dict[str, dict[str
         pid = str(binding.get("profile_id", ""))
         if not uid or not pid or not (uid.isdigit() and int(uid) in members):
             continue
-        alias = str((binding.get("profile") or {}).get("alias") or pid)
+        # the binding's validated profile carries the NAME under
+        # "profile_name" (the seam's own shape) - the alias key reads
+        # empty, the intro's links fell back to the bare id
+        alias = (
+            str((binding.get("profile") or {}).get("profile_name") or "")
+            or str((binding.get("profile") or {}).get("alias") or "")
+            or _LAST_NAME.get(pid)
+            or pid
+        )
         out.setdefault(uid, {"name": "", "profiles": {}})["profiles"][pid] = alias
     identity = getattr(bot, "identity_service", None)
     for uid, entry in out.items():
