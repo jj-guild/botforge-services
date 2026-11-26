@@ -502,7 +502,7 @@ DEFAULTS: dict[str, dict[str, str]] = {
             "**Paiement d'abord** — tout achat débite la banque du royaume.\n"
             "Une carte achetée vit dans la Chambre des comptes."
         ),
-        "market_wallet": "💰 Banque du royaume : **{0}** ⚙️",
+        "market_wallet": "⚙️ Points technologiques du royaume : **{0}**",
         # marche-reference-v1 (Affaire 24) : l'étal du marchand, ses
         # quatre rayons, ses cartes TCG — portés de la référence.
         "market_hint_panel": (
@@ -1478,7 +1478,7 @@ DEFAULTS: dict[str, dict[str, str]] = {
             "**Payment first** — every purchase debits the kingdom bank.\n"
             "A bought card lives in the Chambre des comptes."
         ),
-        "market_wallet": "💰 Kingdom bank: **{0}** ⚙️",
+        "market_wallet": "⚙️ Kingdom tech points: **{0}**",
         # marche-reference-v1 (Affaire 24) — the merchant stall, ported.
         "market_hint_panel": (
             "👑 Only a kingdom's King may buy — every purchase debits "

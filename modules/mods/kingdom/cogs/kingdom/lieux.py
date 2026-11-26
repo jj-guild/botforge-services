@@ -1734,7 +1734,10 @@ async def _comptes_window(
 
     stack = wiring()
     mod_catalog = mod_strings(_locale_of_catalog(strings))
-    body = await chamber_text(stack, kingdom, mod_catalog)
+    # comptes-feuille-v2 (Drasah 26/11, Affaire 41) : le corps se
+    # réduit au titre + aux points technologiques — les cartes en main
+    # vivent dans leur bloc dédié, les lignes de jetons dégagent.
+    body = await chamber_text(stack, kingdom, mod_catalog, compact=True)
     # comptes-cv2-v1 (Drasah 26/11, T-D) : la sélection de carte —
     # chaque carte en main est un bouton, la carte choisie révèle son
     # art dans le container et porte le bouton 🚀 Utiliser (le wizard
@@ -1749,10 +1752,13 @@ async def _comptes_window(
     cards_block = [f"## {mod_catalog['market_ledger_cards_title']}"]
     if held:
         for key, stock in held:
+            # comptes-feuille-v2 (Affaire 41) : UN SEUL emoji par ligne —
+            # celui du comptoir (market_ledger_emoji), le nom de la carte
+            # est NU (le label du marché porte déjà son emoji).
             cards_block.append(
                 str(mod_catalog["market_ledger_card_line"]).format(
                     emojis.get(key, "•"),
-                    _market_label(key, mod_catalog),
+                    _market_bare_label(_market_label(key, mod_catalog)),
                     int(stock),
                 )
             )
@@ -1782,10 +1788,14 @@ async def _comptes_window(
             discord.ui.Button(
                 label=label,
                 custom_id=f"{_NS}:comptes:card:{key}",
+                # comptes-feuille-v2 (Affaire 41) : les cartes sont
+                # BLEUES (des objets à manipuler), la carte SÉLECTIONNÉE
+                # devient VERTE — les boutons du bas se détachent de la
+                # rangée verte des historiques.
                 style=(
-                    discord.ButtonStyle.primary
+                    discord.ButtonStyle.success
                     if key == selected
-                    else discord.ButtonStyle.success
+                    else discord.ButtonStyle.primary
                 ),
             )
         )
@@ -1821,6 +1831,16 @@ _COMPTES_USABLE = frozenset(
 )
 
 
+def _market_bare_label(label: str) -> str:
+    """Strip the label's LEADING emoji — one glyph per line, not two.
+
+    comptes-feuille-v2 (Drasah 26/11, Affaire 41) : le comptoir pose
+    déjà l'emoji de la carte (market_ledger_emoji), le label du marché
+    en porte un aussi — ici le nom sort NU.
+    """
+    return re.sub(r"^\W+\s", "", str(label), count=1)
+
+
 def _comptes_card_fiche(card: str, locale: Any) -> str:
     """comptes-cv2-conformité (Affaire 40) : la fiche de LA carte cliquée.
 
@@ -1832,7 +1852,10 @@ def _comptes_card_fiche(card: str, locale: Any) -> str:
 
     mod_catalog = mod_strings(locale)
     emojis = dict(mod_catalog.get("market_ledger_emoji") or {})
-    fiche = [f"## {emojis.get(card, '•')} {_market_label(card, mod_catalog)}"]
+    fiche = [
+        f"## {emojis.get(card, '•')} "
+        f"{_market_bare_label(_market_label(card, mod_catalog))}"
+    ]
     effect = (mod_catalog.get("market_effect") or {}).get(card)
     if effect:
         fiche.append(str(mod_catalog["market_card_effect"]).format(effect))
@@ -2884,12 +2907,14 @@ class LieuxComptesCardButton(
             discord.ui.Button(
                 # comptes-cv2-conformité (Affaire 40) : nom seul — le
                 # compteur vit dans le bloc « Cartes en main ».
+                # comptes-feuille-v2 (Affaire 41) : BLEUE par défaut,
+                # VERTE quand sélectionnée (dissociée des historiques).
                 label=str(label)[:80],
                 custom_id=f"{_NS}:comptes:card:{card}",
                 style=(
-                    discord.ButtonStyle.primary
+                    discord.ButtonStyle.success
                     if selected
-                    else discord.ButtonStyle.success
+                    else discord.ButtonStyle.primary
                 ),
             )
         )

@@ -564,12 +564,22 @@ class MarketCancelButton(
 # ---------------------------------------------------------------------------
 
 
-async def chamber_text(stack: Any, kingdom: Any, strings: dict[str, str]) -> str:
-    """The wallet, the stocks and the use entries (pure read)."""
-    state = await stack.attacks.technology_state(str(kingdom.id))
-    p = state.purchases
+async def chamber_text(
+    stack: Any, kingdom: Any, strings: dict[str, str], compact: bool = False
+) -> str:
+    """The wallet, the stocks and the use entries (pure read).
+
+    comptes-feuille-v2 (Drasah 26/11, Affaire 41) : compact=True rend
+    TITRE + PORTEFEUILLE seulement — la Chambre des comptes du hub
+    vit ses cartes dans son propre bloc, les lignes de jetons restent
+    sur la feuille COMPLÈTE du marché.
+    """
     lines = [f"## {strings['chamber_title'].format(str(getattr(kingdom, 'name', '')))}"]
     lines.append(str(strings["market_wallet"]).format(int(kingdom.tech_points_bank)))
+    if compact:
+        return "\n".join(lines)
+    state = await stack.attacks.technology_state(str(kingdom.id))
+    p = state.purchases
     lines.append(
         strings["chamber_stock_explorateur"].format(int(p.get("explorateur_stock", 0) or 0))
     )

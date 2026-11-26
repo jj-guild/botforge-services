@@ -114,7 +114,9 @@ async def test_the_comptes_window_carries_the_two_hist_buttons(monkeypatch: pyte
     lieux = _lieux()
     strings = _strings()
 
-    async def fake_chamber_text(stack: Any, kingdom: Any, catalog: dict) -> str:
+    async def fake_chamber_text(
+    stack: Any, kingdom: Any, catalog: dict, compact: bool = False
+) -> str:
         return "## Chambre"
 
     import botforge.mods.kingdom.cogs.market as market_module

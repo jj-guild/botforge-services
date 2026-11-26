@@ -50,7 +50,7 @@ def _wire_market(
 ) -> None:
     import botforge.mods.kingdom.cogs.market as market_module
 
-    async def fake_chamber_text(stack: Any, kingdom: Any, catalog: dict) -> str:
+    async def fake_chamber_text(stack: Any, kingdom: Any, catalog: dict, compact: bool = False) -> str:
         return "## 🏛️ Chambre des comptes — AEGIS"
 
     async def fake_held(stack: Any, kingdom: Any, catalog: dict) -> list[tuple[str, int]]:
