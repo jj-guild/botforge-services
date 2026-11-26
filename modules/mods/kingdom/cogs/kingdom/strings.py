@@ -148,6 +148,7 @@ DEFAULTS: dict[str, dict[str, str]] = {
             " bouton du panel **Déclarer une attaque**.\n"
             "🪤 Un royaume peut activer un Traquenard sur son adversaire : l'IA de"
             " défense devient Facile pendant 6h et les mariages scellés prennent +2h"
+
             " de verrou."
         ),
         "reveal_cover": (
@@ -298,6 +299,7 @@ DEFAULTS: dict[str, dict[str, str]] = {
         "room_scoreboard_footer": (
             "🎮 Les deux joueurs sont prêts — bonne game ! Déclarez le vainqueur avec 🏆."
         ),
+
         "room_ping_message": (
             "⚔️ {attacker} {defender} — la salle de bataille est ouverte, à vos armes !"
         ),
@@ -448,6 +450,7 @@ DEFAULTS: dict[str, dict[str, str]] = {
         # -- planning (P4.1b tranche 2d) --
         "plan_button": "📅 Planifier une attaque",
         "plan_disclaimer": (
+
             "⚠️ Une plannification ne réserve pas le territoire : si un autre royaume déclare"
             " une attaque dessus avant l'heure choisie, ta plannification basculera sur ton"
             " choix suivant — ou sera rompue s'il n'en reste aucun."
@@ -598,6 +601,7 @@ DEFAULTS: dict[str, dict[str, str]] = {
             "corruption": "💰",
             "garde_royale": "💂",
             "patrouille": "👣",
+
             "mariage_arrange": "💐",
         },
         "market_fiche_effect": "**__EFFET :__**\n> {0}",
@@ -748,6 +752,7 @@ DEFAULTS: dict[str, dict[str, str]] = {
         "alliances_next_dropping": "➖ Perdues : {0}",
         "alliances_next_elsewhere": "🔒 Épousées ailleurs : {0}",
         "alliances_near_title": "🎯 Presque déverrouillées",
+
         "alliances_near_line": "• **{0}** — {1}",
         "alliances_none": "—",
         "alliances_no_data": "❌ Aucune donnée d'alliance pour l'instant.",
@@ -898,6 +903,7 @@ DEFAULTS: dict[str, dict[str, str]] = {
             "👁️ Suivi par votre Corbeau — statut et chronique visibles pendant 24h."
         ),
         "scriptorium_fiche_gated": (
+
             "🔒 Seule l'identité est visible — un Corbeau `corbeau_track` (24h)"
             " ouvre le statut et la chronique."
         ),
@@ -1048,6 +1054,7 @@ DEFAULTS: dict[str, dict[str, str]] = {
         "protected_line": "🛡️ Under patrol (impossible to attack): {kingdoms}",
         "patrol_kingdom": "**{name}** until {end}:00",
         "ai_level_desc": "Defense AI: {level}/5 · {count} territory(ies)",
+
         "choose_territory": "🗺️ **Pick the territory of {kingdom} to attack:**",
         "mode_choose": "⚔️ **Declare an attack — pick your itinerary:**",
         "mode_classic_button": "⚔️ Classic attack — {delay} itinerary",
@@ -1118,3 +1125,793 @@ DEFAULTS: dict[str, dict[str, str]] = {
             " the match can begin!"
         ),
         "matchup_ai": (
+            "🆚 **{attacker}** VS **AI {kingdom}** — AI level: **{level}**/5.\n"
+            "🎮 Reminder: the attacker creates the game in **multiplayer** (never local)"
+            " with **spectators allowed**."
+        ),
+        "reveal_battle_anon": "⚔️ Battle ahead",
+        "forfeit_both": (
+            "🏳️ General forfeit on **{map}** — nobody validated: the attacker, present, wins (**{kingdom}**)."
+        ),
+        "forfeit_side": "🏳️ Forfeit on **{map}** — **{side}** missed the validation: victory of **{kingdom}**.",
+        "forfeit_geo_side": "🏳️ **{map}**: forfeit by {side} — **{winner}** wins by forfeit.",
+        "forfeit_geo_both": (
+            "🏳️ **{map}**: general forfeit — nobody validated, **{winner}** wins by forfeit."
+        ),
+        "side_attacker": "the attacker",
+        "side_defender": "the defender",
+        "noshow_side": "🏳️ **{map}** — **{side}** missed the meeting: victory of **{kingdom}**.",
+        "noshow_both": "🏳️ **{map}** — double forfeit: no player at the meeting, the territory stays with its owner.",
+        "pickban_dm": (
+            "⚔️ **Pick & ban — {map}**\nRank your **{count}** civilization picks by order of"
+            " preference (your ranking orders the fallbacks).\n"
+            "🕒 **Window closes: {deadline}** (meeting hour).\n"
+            "If you own a Sabotage or a Faucon, you will use it in the battle room.\n"
+            "\n"
+            "⚠️ **Anti-blocking rule**: no choice validated before the meeting → "
+            "3 **random** civilizations from your hand — and no sabotage or faucon "
+            "applies. The meeting happens anyway.\n"
+            "Your hand: {hand}\nAdversary hand: {theirs}"
+        ),
+        "pickban_dm_failed_sal": (
+            "⚠️ <@{player}> — the draft DM could not reach you (direct messages "
+            "closed for this server or for this bot). Check your Discord settings "
+            "**right now**: with no ranking before the meeting, the draft will be "
+            "drawn at random."
+        ),
+        "pickban_pick": "Choice {n}",
+        "pickban_validate": "✅ Validate",
+        "pickban_missing": "❌ Rank your {count} civilizations first.",
+        "pickban_duplicate": "❌ You cannot have duplicates in your civilization choices.",
+        "pickban_waiting": "⏳ Picks recorded and validated — waiting for the adversary.",
+        "pickban_modify_button": "♻️ Start over",
+        "pickban_reveal_adversary": "**Your adversary's draft:**",
+        "pickban_own_picks_line": "**Your picks:** {picks}",
+        "pickban_reveal_dm": (
+            "🎭 **Reveal — {map}**\n🕒 **Meeting: {deadline}** — the sabotage"
+            " window closes at that time.\n🗡️ Do you want to sabotage or use"
+            " a Faucon? — up to 2 enemy civilizations removed per side.\n⚔️"
+            " Otherwise confirm with Pass — a player missing from the voice"
+            " room at the meeting time is a forfeit!"
+        ),
+        "pickban_default_reveal_dm": (
+            "🎭 **Reveal — {map}**\n⏱️ The draft closed on time: the"
+            " never-ranked civilizations were drawn at random (no sabotage,"
+            " no Faucon).\n🕒 The meeting is NOW — join the voice salon."
+        ),
+        "attack_cancelled_dm": "❌ The attack on **{map}** was cancelled — the draft is closed.",
+        "sab_open_button": "🗡️ Sabotage / Use a Faucon",
+        "sab_pass_button": "⚔️ Pass — I am ready",
+        "sab_no_resources": (
+            "🕊️ **You have no sabotage nor a Faucon** — waiting for your adversary. You can confirm with ⚔️ Pass."
+        ),
+        "sab_faucon": "🦅 Faucon",
+        "sab_techno": "🧪 Sabotage",
+        "sab_choose": "🎯 **Pick the enemy civilization to remove:**",
+        "sab_pick_line": "🎯 {action}: **{civ}**",
+        "sab_modify_button": "✏️ Modify",
+        "sab_validate_button": "✅ Validate",
+        "sab_cancel_button": "❌ Cancel",
+        "sab_done": "🪶 **{civ}** removed from the enemy side.",
+        "sab_settled": "✅ Your side confirmed — waiting for the other side…",
+        "sab_phase_done": (
+            "🎭 **Sabotage phase over — {map}**\nJoin the voice room at the"
+            " meeting time: the final civilizations are shown there."
+        ),
+        "sab_over": "🕊️ The sabotage phase is over.",
+        "sab_empty": "🕊️ No enemy civilization available.",
+        "sab_not_player": "❌ Only the two players of the match may act here.",
+        "sab_stock_line": (
+            "🗡️ Sabotage: {sabotage} · 🦅 Faucon: {faucon}\nOne side can suffer at most 2 sabotaged civilizations."
+        ),
+        "sab_faucon_ready": "ready",
+
+        "sab_faucon_flying": "flying until {time}",
+        "sab_faucon_absent": "absent",
+        "sab_panel_title": "🪶 **Sabotage** — {used}/2 civilizations removed in this attack",
+        "sab_panel_used": "Removed: {list}",
+        "sab_panel_none": "No civilization removed yet.",
+        "sab_panel_done": "🪶 **{civ}** removed from the enemy side — {used}/2.",
+        "sab_again_ask": "🗡️ Do you want to sabotage another civilization?",
+        "sab_again_yes": "Yes — another sabotage",
+        "sab_again_no": "No — I'm done",
+        # -- battle room / meeting (P4.1b tranche 2b) --
+        "room_not_player": "❌ Only the two players of the match may act here.",
+        "defender_ai": "AI 🤖",
+        "room_role": "Battle {map}",
+        "room_scoreboard_map": "⚔️ {map}",
+        "room_scoreboard_id": "🆔 Game ID: {id}",
+        "room_side_attacker": "Attacker",
+        "room_side_defender": "Defender",
+        "room_side_ready": "✅ Ready",
+        "room_side_wait": "⏳ waiting for Ready",
+        "room_side_none": "🔗 waiting for the game ID",
+        "room_side_ai": "🤖 AI — lvl {level}/5",
+        "room_ai_disclaimer": (
+            "⚠️ **AI of level {level}/5** — the game is played in multiplayer"
+            " with a game ID (never locally) to stay traceable and verifiable"
+            " post-game. The player is believed on their word; any presumed"
+            " fraud may be contested ⚖️ then arbitrated by the admins."
+        ),
+        "room_id_button": "🔗 Enter the game ID",
+        "room_id_modify_button": "🔴 Change the game ID",
+        "room_id_pending_button": "⏳ Game ID being entered…",
+        "room_id_locked_other": (
+            "⏳ The other player is entering the game ID right now — try again in a moment."
+        ),
+        "room_ready_button": "✅ Ready",
+        "room_ready_attacker_button": "⚔️ Ready — {player}",
+        "room_ready_defender_button": "Ready 🛡️ — {player}",
+        "room_ready_done_attacker_button": "⚔️ I'm ready! — {player}",
+        "room_ready_done_defender_button": "I'm ready! 🛡️ — {player}",
+        "room_not_your_side": "⛔ This Ready button belongs to your adversary.",
+        "room_ready_needs_url": (
+            "🔗 Enter the game ID first (🔗 button) — the ✅ Ready button appears afterwards."
+        ),
+        "room_scoreboard_footer": (
+            "🎮 Both players are ready — good luck! Declare the winner with 🏆."
+        ),
+        "room_ping_message": "⚔️ {attacker} {defender} — the battle room is open, to arms!",
+        "room_ping_attacker_only": "⚔️ {attacker} — the battle room is open, to arms!",
+        "room_ping_winner": "🏆 Winner: **{winner}**",
+        "room_dm": (
+            "🏟️ **Stand ready — {map}**\n"
+            "Join your adversary in voice: {room}\n"
+            "Join the text salon to go on: {salon}"
+        ),
+        "room_dm_deadline": (
+            "\n\n⏳ Presence required (voice or ✅ Ready) before {deadline} —"
+            " past it, an absent player is declared forfeit."
+        ),
+        "room_dm_luck": "\n\nGood luck! 🍀",
+        "room_event_name": "⚔️ {map} — {attacker} 🆚 {defender}",
+        "room_vocal_ai": "the AI",
+        "room_event_description": (
+            "⚔️ Live Kingdom battle — {attacker} 🆚 {defender}.\n"
+            "Civilizations and game buttons: in the battle's voice channel."
+        ),
+        "draft_button": "📜 View the draft",
+        "draft_sheet": "📜 Draft — {map}",
+        "draft_mode_player": "Player's choice",
+        "draft_mode_random": "Random pick",
+        "draft_source_techno": "🗡️ Sabotage",
+        "draft_source_faucon": "🦅 Falcon",
+        "draft_sheet_help": (
+            "The players' pick order during the draft — the real order"
+            " once the sabotage phase is over (random, ranking secret"
+            " during the phase), sabotaged picks struck through:"
+        ),
+        "result_button": "🏆 Declare the winner",
+        "result_select_title": "🏆 **Who wins the game?**",
+        "result_select_placeholder": "The game's winner",
+        "result_confirm_title": "🏆 **Winner: {winner}** — confirm this result?",
+        "result_confirm_button": "✅ Confirm",
+        "result_edit_button": "✏️ Change",
+        "result_review_title": "⏳ **{player} declared {winner} the winner.**",
+        "result_review_confirm_button": "✅ Confirm the result",
+        "result_review_contest_button": "⚖️ Contest",
+        "result_mine_title": "⏳ **Your choice: {winner}** — you may change it below.",
+        "result_not_ready": "⏳ The Declare-the-winner button appears once both players are Ready.",
+        "score_url_modal_title": "Game URL",
+        "score_url_modal_label": "Game lobby URL",
+        "score_url_modal_placeholder": "ex. 123456",
+        "score_pending": (
+            "⏳ Result recorded (game {game}) — it applies unless the other"
+            " player contests it within the next {minutes} minutes."
+        ),
+        "score_resolved": "🏆 Result recorded — **{winner}** wins **{map}** (game {game}).",
+        "score_already": "✅ This result was already recorded — nothing to do.",
+        "score_disputed": (
+            "⚖️ Contradictory declarations — the admins arbitrate (game {game})."
+            "\nPlease get in touch with an admin."
+        ),
+        "score_auto_dispute_open": (
+            "⚖️ Dispute auto-opened (deadline passed, no result declared)"
+            " — an admin adjudicates (game {game}). Please wait."
+        ),
+        "score_reminder_dm": (
+            "⏰ **Meeting — {map}**: no result declared for 3 hours — declare the"
+            " game result with the 🏆 button of the battle room!"
+        ),
+        "auto_dispute": (
+            "⚖️ **Dispute auto-opened on {map}** — no result declared 15h after the"
+            " game opened: an admin arbitrates through the console (`resultat`)."
+        ),
+        "conquest_title": "⚔️ Kingdom **{winner}** conquered **{map}**!",
+        "conquest_defense_title": "🛡️ Kingdom **{winner}** defended **{map}**!",
+        "conquest_thread": "Conquest details",
+        "conquest_thread_defense": "Defense details",
+        "conquest_attacker_line": "⚔️ Attacker: **{player}** ({kingdom})",
+        "conquest_defense_line": "🛡️ Defense: **{player}** ({kingdom})",
+        "conquest_ai_defense": "🛡️ Defense: the kingdom **{kingdom}**'s AI (level {level})",
+        "conquest_civ_line": "🎯 {player} played **{civ}**",
+        "conquest_embuscade_line": "🥷 Ambush used",
+        "conquest_sabotages_line": "🧨 Sabotages ({side}, Falcon/Tech): {civs}",
+        "conquest_id_line": "🔗 Game ID: **{game}**",
+        "conquest_none": "none",
+        "conquest_side_attacker": "attacker",
+        "conquest_side_defender": "defender",
+        "conquest_married_lost": "💔 **{player}** loses their sacred bond with civilization **{civ}**.",
+        "dispute_admin_dm": "⚖️ **Dispute — {map}**\n{declarations}\nCut the result (game {game}).",
+        "dispute_dm_open": (
+            "⚖️ It seems you did not choose the same winner of the game, "
+            "your choice was **{winner}**.\n"
+            "We suggest you modify or confirm your choice.\n"
+            "-# In case of a dispute, an admin will take over."
+        ),
+        "dispute_dm_confirmed": (
+            "✅ Your choice (**{winner}**) is recorded — waiting for your "
+            "adversary.\n-# In case of a dispute, an admin will take over."
+        ),
+        "dispute_dm_handover": "⚖️ The dispute stands — an admin takes over and will reach you here.",
+        "dispute_dm_resolved": "✅ Dispute closed — you both named the same winner: **{winner}**.",
+        "dispute_confirm_button": "✅ Confirm my choice",
+        "dispute_win_attacker": "⚖️ Rule: attacker",
+        "dispute_win_defender": "⚖️ Rule: defender",
+        "dispute_double": "🏳️ Double forfeit",
+        "dispute_applied": "⚖️ Arbitration applied — **{kingdom}** wins **{map}**.",
+        "dispute_forfeit": "⚖️ Arbitration applied — double forfeit on **{map}**.",
+        "dispute_not_admin": "❌ Only bot-admins arbitrate a dispute.",
+        # -- decisions-admin-v1 (Drasah 25/11): the admin inbox, the
+        # mandatory reason and the kingdoms announcement --
+        "dispute_cancel_button": "✖️ Cancel the attack",
+        "decision_reason_modal_title": "⚖️ Admin decision",
+
+        "decision_reason_label": "Reason (mandatory, public)",
+        "decision_reason_placeholder": "e.g. no result declared, no counter-claim…",
+        "decision_reason_required": (
+            "❌ The reason is MANDATORY — the decision was NOT applied."
+        ),
+        "decision_applied_cancel": (
+            "✖️ Decision applied — **{map}** is cancelled: no winner, no points,"
+            " lock released, slots freed."
+        ),
+        "decision_announce_arbitrage": (
+            "⚖️ **Admin decision** — the attack on **{map}** (game {game}) is ruled:"
+            " **{winner}** wins the meeting.\n"
+            "Decided by <@{admin}> — Reason: {reason}"
+        ),
+        "decision_announce_cancel": (
+            "⚖️ **Admin decision** — the attack on **{map}** (game {game}) is CANCELLED:"
+            " no winner, no points, the locks are released.\n"
+            "Decided by <@{admin}> — Reason: {reason}"
+        ),
+        "decision_summary_arbitrage": "arbitration — {winner} wins {map}",
+        "decision_summary_both": "double forfeit — {map}",
+        "decision_summary_cancel": "cancellation — {map}",
+        "decision_kind_auto": "Auto-opened dispute (no result in time).",
+        "decision_kind_declarations": "Contradictory player declarations.",
+        "decision_action_title": "⚖️ Admin decision",
+        "decision_action_header": "Attack on **{map}** — rule or cancel.",
+        "decision_action_live_header": (
+            "Attack **in progress** on **{map}** — the admin cancel refunds"
+            " the budgets and closes the habitat on the spot."
+        ),
+        "decision_state_declared": "siege (defense open)",
+        "decision_state_defended": "draft in progress",
+        "decision_state_meeting": "meeting in progress",
+        "decision_decide_button": "⚖️ Decide",
+        # -- planning (P4.1b tranche 2d) --
+        "plan_button": "📅 Plan an attack",
+        "plan_disclaimer": (
+            "⚠️ A planning reserves NOTHING: if another kingdom declares an attack on the"
+            " territory before your chosen hour, your planning switches to your next choice"
+            " — or breaks when none remains."
+        ),
+        "plan_wizard_title": "📅 Plan an attack",
+        "plan_time_day_label": "Meeting day",
+        "plan_time_day_today": "Today — {date}",
+        "plan_time_day_tomorrow": "Tomorrow — {date}",
+        "plan_time_hour_label": "Hour",
+        "plan_time_minute_label": "Minute",
+        "plan_time_hint": (
+            "Pick the meeting day, hour and minute (Paris time), then validate."
+            " Golden rule: 24h maximum ahead."
+        ),
+        "plan_time_validate_button": "✅ Validate the time",
+        "plan_time_invalid": (
+            "❌ That meeting is impossible: it must be in the future and within 24h."
+            " Pick another slot."
+        ),
+        "plan_confirm_title": "📅 Planning — choice 1: **{map}** · meeting **{time}** (Paris)",
+        "plan_choice2_placeholder": "Choice 2 (optional)",
+        "plan_choice3_placeholder": "Choice 3 (optional)",
+        "plan_confirm_button": "✅ Confirm the planning",
+        "plan_dm_header": "📅 Attack planning — {map}",
+        "plan_choices_line": "Choice {n}: **{map}**{active}",
+        "plan_active_tag": " ✅",
+        "plan_dm_time": "Meeting: **{time}** (Paris) — automatic declaration at **{declare_time}** (Paris).",
+        "plan_dm_budget": "The attack budget (⚔️) is consumed at the DECLARATION — not now.",
+        "plan_created_note": "📅 Planning saved — the recap is in your DMs.",
+        "plan_no_dm": "⚠️ Planning saved, but the DM failed (DMs closed?).",
+        "plan_failed": "❌ The planning failed: {message}",
+        "plan_cancel_button": "❌ Cancel my planning",
+        "plan_cancelled_ephemeral": "❌ Planning cancelled — no budget was consumed.",
+        "plan_event_executed": (
+            "✅ Your planned attack was DECLARED on **{map}** — meeting **{time}** (Paris)."
+            " The attack budget was consumed at the declaration."
+        ),
+        "plan_event_switched": (
+            "⚠️ Your choice on **{old}** cannot proceed (the battle was already declared there)"
+            " — switched to the next choice: **{map}**."
+        ),
+        "plan_event_broken": (
+            "⛔ Your planned attack cannot proceed: the battle was already declared on"
+            " **{map}** and no other choice is available. No budget was consumed."
+        ),
+        "plan_event_cancelled": "❌ Your planning was cancelled — no budget was consumed.",
+        "plan_no_service": "❌ The attack service is unavailable.",
+        "market_button": "💰 Market",
+        "chamber_button": "🏛️ Treasury",
+        "market_title": "💰 Kingdom Market",
+        "market_rules": (
+            "**Payment first** — every purchase debits the kingdom bank.\n"
+            "A bought card lives in the Chambre des comptes."
+        ),
+        "market_wallet": "💰 Kingdom bank: **{0}** ⚙️",
+        # marche-reference-v1 (Affaire 24) — the merchant stall, ported.
+        "market_hint_panel": (
+            "👑 Only a kingdom's King may buy — every purchase debits "
+            "the kingdom treasury immediately (the price rides each article)."
+        ),
+        "market_section_ia": "🤖 AI defense / attack management",
+        "market_section_defense": "🛡️ Kingdom defense",
+        "market_section_attaque": "⚔️ Attack improvements",
+        "market_section_speciales": "✨ Special actions",
+        "market_tech": {  # type: ignore[dict-item]
+            "embuscade": "🥷 Embuscade",
+            "traquenard": "🪤 Traquenard",
+            "contre_espionnage": "👀 Counter-espionage",
+            "sabotage": "🗡️ Sabotage",
+            "jeu_d_armes": "⚔️ Arms Mastery",
+        },
+        "market_action": {  # type: ignore[dict-item]
+            "explorateur": "🧭 Explorer",
+            "corruption": "💰 Corruption",
+            "garde_royale": "💂 Royal Guard",
+            "patrouille": "👣 Patrol",
+            "mariage_arrange": "💐 Arranged marriage",
+        },
+        "market_effect": {  # type: ignore[dict-item]
+            "embuscade": (
+                "Declare an exceptional attack without spending an attack "
+                "point. Defending an ambush also uses an exceptional defence."
+            ),
+            "traquenard": (
+                "On use: the AI you face becomes Easy for a cumulative 2h "
+                "window per activation, and the target kingdom's living "
+                "lockouts (marriages, exploration, tavern drink) gain a "
+                "one-shot +2h."
+            ),
+            "contre_espionnage": (
+                "When attacking, you may declare the attack in the name of "
+                "any other lord, except a lord from the kingdom you attack. "
+                "Your identity is revealed 15 minutes before the game."
+            ),
+            "sabotage": (
+                "Removes one civilization choice from your opponent during a "
+                "confrontation. You may sabotage at most two civilizations "
+                "per encounter."
+            ),
+            "jeu_d_armes": (
+                "Buys ONE Arms-mastery token. Use it from the Chambre des "
+                "comptes: +1 permanent AI level (until the season ends) on "
+                "your defence bot — cap 5, reached: your Patrols become "
+                "Reinforced (3h). The lord who uses it cuts 1h off his "
+                "next normal attack's declaration delay (no Embuscade); "
+                "not stackable — one active Arms mastery per lord."
+            ),
+            "explorateur": (
+                "Buys ONE Explorateur token. Use it from the Chambre des "
+                "comptes: the chosen lord is locked for 48h (🔒 no attack, no "
+                "defence) then the kingdom receives a brand-new map. Once per "
+                "season."
+            ),
+
+            "corruption": (
+                "Buys ONE Corruption token. Use it from the Chambre des "
+                "comptes: instantly transfers an enemy territory to your "
+                "kingdom, no combat. Blocked if the map is under Royal Guard. "
+                "2 per season."
+            ),
+            "garde_royale": (
+                "Buys ONE Royal Guard token (several may be held at once, "
+                "no limit). The King then places it from the Remparts "
+                "salon: 12h of immunity on ONE chosen map."
+            ),
+            "patrouille": (
+                "Unlocks ONE patrol slot (slot 1, then slot 2). The King "
+                "places the daily 2h window from the Remparts salon — "
+                "fixed for the cycle, redefined on the Lord's Day "
+                "(3h when Reinforced)."
+            ),
+            "mariage_arrange": (
+                "A 💰 token to consume at the Parish: arranged marriage of a "
+                "lord of your choice with an unmarried civilization (6h lock)."
+            ),
+        },
+        "market_ledger_emoji": {  # type: ignore[dict-item]
+            "embuscade": "🥷",
+            "traquenard": "🪤",
+            "contre_espionnage": "👀",
+            "sabotage": "🗡️",
+            "jeu_d_armes": "⚔️",
+            "explorateur": "🧭",
+            "corruption": "💰",
+            "garde_royale": "💂",
+            "patrouille": "👣",
+            "mariage_arrange": "💐",
+        },
+        "market_fiche_effect": "**__EFFECT :__**\n> {0}",
+        "market_fiche_cost": "**__COST :__** {0} ⚙️",
+        "market_fiche_wallet": "**__CURRENT TREASURY :__** {0} ⚙️",
+        "market_fiche_left": "**__LEFT THIS SEASON :__** {0}/{1}",
+        "market_fiche_king_only": "*👑 King only — debited from the treasury immediately.*",
+        "market_buy_button": "✅ Buy",
+        "market_cancel_button": "❌ Cancel",
+        "market_cancelled": "Purchase cancelled — the card goes back under the merchant's stall.",
+        "market_not_king": "Only Kings may buy at the market.",
+        "market_bought": "✅ Purchased: **{0}** — the treasury holds {1} ⚙️ left.",
+        "market_bought_left": "\nLeft this season: {0}/{1}.",
+        "market_receipt_title": "🧾 Receipt — this session's purchases",
+        "market_receipt_ledger_help_named": (
+            "🏛️ Find every one of your purchases in the Chamber of Accounts — "
+            "**Le-Royaume** panel: {mention}"
+        ),
+        "market_receipt_ledger_help": (
+            "🏛️ Find every one of your purchases in the Chamber of Accounts — "
+            "the **Le-Royaume** panel of your kingdom."
+        ),
+        "market_arranged_token_ok": (
+            "💐 Arranged-marriage token bought — stock: {}. Consume it at the Parish."
+        ),
+        "market_garde_token_ok": (
+            "🛡️ Royal Guard bought — in reserve: {}. Place it from the 🧱 Remparts salon."
+        ),
+        "market_patrouille_slot_ok": (
+            "🛡️ Patrol slot {} unlocked — place the window from the 🧱 Remparts salon."
+        ),
+        "market_corruption_token_ok": (
+            "💰 Corruption token bought — in reserve: {}. Use it from the "
+            "🏛️ Chamber of Accounts."
+        ),
+        "market_jeu_d_armes_token_ok": (
+            "⚔️ Arms mastery bought — in reserve: {}. Use it from the "
+            "🏛️ Chamber of Accounts (+1 AI level)."
+        ),
+        "market_explorateur_token_ok": (
+            "🛡️ Explorer bought — in reserve: {}. Use it from the "
+            "🏛️ Chamber of Accounts."
+        ),
+        "market_ledger_summary": "Season balance — spent: {0} ⚙️ · treasury: {1} ⚙️",
+        "market_ledger_limits": "Limits — {0}",
+        "market_ledger_empty": "No purchase yet.",
+        "market_ledger_purchases_title": "Purchases",
+        "market_ledger_line": "{0} {1} — {2} · {3} ⚙️ · {4}",
+        "market_ledger_cards_title": "Cards in hand",
+        "market_ledger_cards_empty": "No card in hand right now.",
+        "market_ledger_card_line": "{0} **{1}** — x{2}",
+        "market_no_points": "❌ The kingdom lacks tech points.",
+        "market_limit": "❌ The per-season purchase limit is reached.",
+        "market_error": "❌ The purchase failed: {0}",
+        "chamber_title": "🏛️ Chambre des comptes — {0}",
+        "chamber_stock_explorateur": "🧭 Explorer tokens: **{0}**",
+        "chamber_stock_corruption": "🎭 Corruption tokens: **{0}**",
+        "chamber_stock_jeu_d_armes": "⚔️ Arms-mastery tokens: **{0}**",
+        "chamber_stock_garde": "🛡️ Royal guards: **{0}**",
+        "chamber_stock_mariage": "💐 Arranged-marriage tokens: **{0}**",
+        "chamber_patrouille": "🚨 Patrol: {0}",
+        "chamber_use_explorateur": "🧭 Send exploring",
+        "chamber_use_corruption": "🎭 Corrupt",
+        "chamber_use_jeu_d_armes": "⚔️ Use",
+        "chamber_use_garde": "🛡️ Place the guard",
+        "chamber_use_patrouille": "🚨 Place the patrol",
+        "chamber_select_lord": "Choose the lord who goes exploring:",
+        "chamber_select_territory": "Choose the territory to corrupt:",
+        "chamber_select_own_territory": "Choose the territory to shield:",
+        "chamber_select_hour": "Choose the daily 2h tranche:",
+        "chamber_done": "✅ Done — the kingdom's ledger is up to date.",
+        "chamber_no_stock": "❌ No usable card in reserve.",
+        "expedition_launch_note": (
+            "🧭 The expedition of the **{0}** casts off — the crew is at sea."
+        ),
+        "expedition_return_map": (
+            "🧭 The expedition of the **{0}** is back — the map **{1}** is revealed!"
+        ),
+        "expedition_return_civ": (
+            "🧭 The expedition of the **{0}** is back — the civilization **{1}** joins the kingdom!"
+        ),
+        "expedition_return_tech": (
+            "🧭 The expedition of the **{0}** is back — compensation: +2 ⚙️."
+        ),
+        "sacree_verdict_note": (
+            "⛪ The Sacred Place chantier of **{0}** on **{1}** HELD —"
+            " the territory stays SACRED forever, immune to everything."
+        ),
+        "marry_button": "💍 Marry",
+        "alliances_button": "🤝 Alliances",
+        "church_marry_intro": "👰 Choose the Princess of your marriage:",
+        "church_marry_view_title": "💍 Marry — {0}",
+        "church_marry_badge": "ROYAL MARRIAGE",
+        "church_marry_rules": (
+            "**One active marriage only** — the chosen civilization"
+            " becomes **exclusive** to your kingdom.\n"
+            "💍 **{0} ring(s)** will be consumed at the celebration.\n"
+            "👑 Your bond is **guaranteed until the season ends**, even"
+            " on defeat.\n"
+            "🔒 Combat lock: **{1}h** — indicative end of the lock counted"
+            " from the click: {2}.\n"
+            "🛡️ Lock state: while locked you can **neither attack, nor"
+            " defend, nor use a technology card**."
+        ),
+        "church_marry_rules_royal": (
+            "👑 Your bond is **guaranteed until the season ends**, even on"
+            " defeat."
+        ),
+        "church_marry_princess": "Princess {0}",
+        "church_marry_lock": "lock ends <t:{0}:R>",
+        "church_marry_confirm_title": "💍 Confirm your marriage",
+        "church_marry_confirm_sub": "princess to be · {0} ring(s) · lock {1}h",
+        "church_marry_yes_button": "💍 Yes, I do",
+        "church_marry_edit_button": "✏️ Change",
+        "church_marry_sealed_title": "💍 Marriage sealed: **{0}**",
+        "church_marry_sealed_note": (
+            "The kingdom is informed — the announcement was just published"
+            " in **Geopolitics**."
+
+        ),
+        "church_wedding_announce": (
+            "💍 Marriage sealed — {0} of the {1} weds the **{2}** · 🔒 lock"
+            " {3}h · 🎁 Offering +{4} ⚙️ · the civilization is now"
+            " **exclusive** to the {1} kingdom until the bond breaks."
+        ),
+        "church_marry_already": (
+            "💍 You already hold an active marriage — one at a time (D34)."
+        ),
+        "church_marry_no_options": (
+            "💔 No Princess available — your hand is empty or already wed."
+        ),
+        "church_marry_no_points": "❌ Your kingdom holds no marriage point left (D59).",
+        "church_marry_no_points_royal": "❌ A royal marriage (Reine) costs 2 marriage points.",
+        "church_marry_not_in_hand": (
+            "❌ This civilization is not in your kingdom's hand (Alliances)."
+        ),
+        "marry_error": "❌ The marriage failed: {0}",
+        "alliances_title": "🤝 Alliances — {0}",
+        "alliances_points": (
+            "💍 Marriage points: **{0}** · Arranged-marriage tokens: **{1}**"
+        ),
+        "alliances_hand": "🃏 Current hand ({0})",
+        "alliances_next_intro": "🔮 Next cycle (projection)",
+        "alliances_next_kept": "✅ Kept: {0}",
+        "alliances_next_arriving": "➕ Arriving: {0}",
+        "alliances_next_dropping": "➖ Dropping: {0}",
+        "alliances_next_elsewhere": "🔒 Wed elsewhere: {0}",
+        "alliances_near_title": "🎯 Near unlocks",
+        "alliances_near_line": "• **{0}** — {1}",
+        "alliances_none": "—",
+        "alliances_no_data": "❌ No alliances data yet.",
+        "event_cycle": (
+            "🔄 **Cycle {cycle}** — weekly budgets recharged, "
+            "{maps} new maps for Gaïa."
+        ),
+        "event_age": (
+            "🏺 **{age}** — every kingdom gains {tech} tech point(s) "
+            "and {marriages} marriage slot(s)."
+        ),
+        "event_end": (
+            "🏁 **End of the season** — the attacks are cancelled and "
+            "the verdict is in: {winner}."
+        ),
+        "event_end_showmatch": (
+            "🏁 **End of the season** — the attacks are cancelled and "
+            "the top kingdoms are tied: the ShowMatch decides!"
+        ),
+        "tavern_button": "🍺 Taverne",
+        "mercenary_button": "🗡️ Mercenaires",
+        "tavern_title": "🍺 The Taverne",
+        "tavern_purse": "🪙 Your purse: **{0}** écu(s)",
+        "tavern_cooldown": "⏳ Next round possible <t:{0}:R> (global 24h cooldown).",
+        "tavern_locked": "🔒 A combat lock is still running — ends <t:{0}:R>.",
+        "tavern_select": "Choose a drink:",
+        "tavern_drink_line": "{0} — {1} 🪙",
+        "tavern_lock_line": "Lock {0} min",
+        "tavern_confirm_title": "🍺 Confirm the order",
+        "tavern_confirm_sub": "Price: **{0}** 🪙 — combat lock: **{1}** minutes.",
+        "tavern_yes": "Drink",
+        "tavern_drunk": "🍺 You drank **{0}** — **{1}** écu(s) left in your purse.",
+        "tavern_cooldown_note": "⏳ The global 24h cooldown is still running.",
+        "tavern_no_purse": "❌ Your purse cannot afford it.",
+        "tavern_no_season": "❌ No season is running.",
+        "tavern_season_closed": "❌ The season is over — the counter is closed.",
+        "tavern_error": "❌ The Taverne refuses: {0}",
+        "mercenary_title": "🗡️ The Mercenary Chief",
+        "mercenary_lot_line": "• **{0}** ({1} use(s)) — highest bid: **{2}** 🪙",
+        "mercenary_own_bid": "_You bid {0} 🪙._",
+        "mercenary_winners": "🏆 Lots awarded: {0}",
+        "mercenary_no_winner": "🍂 No lot found a buyer.",
+        "mercenary_select_lot": "Choose a lot to bid on:",
+        "mercenary_select_amount": "Your bid amount (écus):",
+        "mercenary_bid_placed": "🗡️ Bid of **{1}** 🪙 placed on **{0}** — the écus are escrowed.",
+        "mercenary_withdraw": "Withdraw my bid",
+        "mercenary_withdraw_done": "✅ Your bid is withdrawn — the escrowed écus are refunded.",
+        "mercenary_withdraw_none": "ℹ️ You hold no bid.",
+        "mercenary_none": (
+            "🍂 The Mercenary Chief is not here — he stands at the Taverne"
+            " between 8pm and 9pm Paris time."
+        ),
+        "mercenary_bid_too_low": "❌ The bid must STRICTLY exceed the current highest.",
+        "mercenary_not_open_yet": "⏳ The bids are not open yet.",
+        "mercenary_closed_note": "❌ The market is closed.",
+        "mercenary_already_held": "❌ One mercenary civilization at a time — you already hold one.",
+        "mercenary_open_note": (
+            "🗡️ **The Mercenary Chief is here** — the mercenary market is open,"
+            " the bids close at the time shown on the spot. At the Taverne!"
+        ),
+        "mercenary_close_note": "🗡️ The mercenary market is closed — **{0}** lot(s) awarded.",
+        # Affaire 39 (branchement, Drasah 26/11) : the pinned 🍺 Taverne
+        # panel (menu + info) and the 📜 Scriptorium sommaire with its
+        # ephemeral rubrics.
+        "tavern_pin_title": "🍺 The Taverne",
+        "tavern_pin_intro": (
+            "The lords' common room — the purse is personal, in **écus**, and"
+            " is spent only here."
+        ),
+        "tavern_pin_rules": (
+            "• A drink **locks combat** like an ongoing battle: no declaring,"
+            " no planning, no defending, no ambush while the lock runs.\n•"
+            " **24h** minimum between two drinks, whatever they are.\n• Every"
+            " lord pays from **his own purse**."
+        ),
+        "tavern_menu_button": "🍺 Ask for a drink",
+        "tavern_info_button": "🗣️ Ask for information",
+        "tavern_purse_button": "💰 Check your purse",
+        "tavern_info_rp": (
+            "The barkeep wipes a cup without looking up, then lowers his"
+            " voice:\n« Nothing is free here, my lord. Information costs"
+            " dear… but you'll notice tongues tend to loosen over a drink. »"
+        ),
+        "tavern_info_header": "**What each drink really does:**",
+        "tavern_info_line": "• {0} — {1} · lock {2} min",
+        "tavern_effect_verre": "opens a listening window on the closest rumors",
+        "tavern_effect_vin": "reveals the FFA schedule",
+        "tavern_effect_alcool": "forces the next map",
+        "tavern_effect_generic": "tongues loosen",
+        "tavern_purse_line": "💰 Your purse holds **{0}** écu(s).",
+        "scriptorium_title": "📜 Scriptorium",
+        "scriptorium_intro": "The archive of the realm — consult the rubrics below.",
+        "scriptorium_topic_cadastre": "🗺️ Cadastre",
+        "scriptorium_topic_diplomatie": "🤝 Diplomatie",
+        "scriptorium_topic_seigneurie": "🛡️ Seigneurie",
+        "scriptorium_cadastre_title": "🗺️ Cadastre — territories and their effects",
+        "scriptorium_cadastre_intro": (
+            "🗺️ **What it's for**: the living inventory of the realm's "
+            "territories. Pick your first land at enrollment, spot each "
+            "land's bonus (spy, counter-spy, resources…) and plan your "
+            "attacks knowingly."
+        ),
+        "scriptorium_cadastre_empty": "The map catalog is empty.",
+        "scriptorium_diplomatie_title": "🤝 Diplomatie — civilizations and their conditions",
+        "scriptorium_diplomatie_intro": (
+            "🤝 **What it's for**: the registry of alliances. Every "
+            "civilization imposes its own conditions (offerings, "
+            "territory…). Read them before proposing a pact: your choice "
+            "shapes your bonuses and your enemies."
+        ),
+        "scriptorium_diplomatie_empty": "No civilization declared yet.",
+        "scriptorium_condition_map": "own the map {maps}",
+        "scriptorium_condition_map_count": "own at least {count} of: {maps}",
+        "scriptorium_condition_map_type": "own at least {count} map(s) of type {types}",
+        "scriptorium_condition_min_maps": "own at least {count} map(s)",
+        "scriptorium_condition_max_maps": "own at most {count} map(s)",
+        "scriptorium_condition_civ": "hold the {civ} civilization",
+        "scriptorium_condition_pattern": "belong to the {pattern} kingdom",
+        "scriptorium_condition_tech": "hold at least {count} tech point(s)",
+        "scriptorium_condition_marriages": "have at least {count} married lord(s)",
+        "scriptorium_condition_civ_count": "hold at least {count} civilization(s)",
+
+        "scriptorium_seigneurie_title": "🛡️ Seigneurie — lords and remaining budgets",
+        "scriptorium_seigneurie_intro": (
+            "🛡️ **What it's for**: the census of lords — kingdoms, roles and"
+            " fiches. Open a fiche to read one's status, Parish tier and "
+            "chronicle of deeds."
+        ),
+        "scriptorium_seigneurie_empty": "No kingdom yet — enrollments are open in Postuler.",
+        "scriptorium_seigneurie_king": "King",
+        "scriptorium_seigneurie_lords": "Lords",
+        "scriptorium_seigneurie_pending": "Waiting for a kingdom",
+        "scriptorium_fiche_choose": "🛡️ Which lord's fiche do you consult?",
+        "scriptorium_fiche_title": "## 🛡️ Fiche — {name}",
+        "scriptorium_fiche_identity": "👤 {name} · Insight: {insight} · {kingdom} ({role})",
+        "scriptorium_fiche_status": "📊 Status",
+        "scriptorium_fiche_married": "💍 Married civilization: {civ}",
+        "scriptorium_fiche_secured": "🔒 Secured civilizations: {civs}",
+        "scriptorium_fiche_territories": "🗺️ Territories held by the kingdom: {count}",
+        "scriptorium_fiche_parish": "⛪ Parish tier: {tier}",
+        "scriptorium_fiche_chronicle": "📜 Chronicle of the deeds (last 3)",
+        "scriptorium_fiche_chronicle_more": "… and {count} more in the full history.",
+        "scriptorium_fiche_history": "📜 Full chronicle of {name}",
+        "scriptorium_fiche_history_button": "📜 Full history",
+        "scriptorium_fiche_tracked": (
+            "👁️ Followed by your Corbeau — status and chronicle visible for 24h."
+        ),
+        "scriptorium_fiche_gated": (
+            "🔒 Only the identity is visible — a Corbeau `corbeau_track` (24h)"
+            " opens the status and the chronicle."
+        ),
+        "scriptorium_unknown": "unknown",
+        "ffa_join_button": "🗺️ Join the Expedition",
+        "ffa_join_note": (
+            "✅ **{0}** holds an Expedition slot — {1}/{2} participant(s)."
+        ),
+        "ffa_left_note": "🚪 **{0}** released their slot — {1}/{2} participant(s).",
+        "ffa_not_open": "❌ No Expedition is open for enrollment right now.",
+        "ffa_full": "❌ The Expedition is full.",
+        "ffa_kingdom_full": (
+            "❌ Your kingdom already holds a slot (mode: one lord per kingdom)."
+        ),
+        "ffa_locked": (
+            "❌ You are locked (a fresh Explorateur 48h lock or a missed FFA)"
+            " — you cannot enroll."
+        ),
+        "ffa_announce": (
+            "🧭 **Expedition — Saturday <t:{0}:F>**\n"
+            "One FREE {1}-minute game against the Gaïa AI and the other"
+            " participants — {2} slots, mode: {3}. Click"
+            " **« Join the Expedition »** to reserve yours (first come, first"
+            " served; click again to release it)."
+        ),
+        "ffa_start": (
+            "🧭 **The Expedition starts now** — {0} participant(s),"
+            " {1} minutes. Good luck!"
+        ),
+        "ffa_salon_title": "🗺️ Expedition",
+        "ffa_mode_one": "one lord per kingdom",
+        "ffa_mode_free": "free slots",
+        "console_relaunch_label": "🔁 Relaunch the season",
+        "console_reset_label": "🧹 Reset the data",
+        "console_clock_label": "⏩ Game clock",
+        "console_debug_status_label": "🐞 Debug status",
+        "console_bypass_on_label": "🐞 Bypass ON",
+        "console_bypass_off_label": "🐞 Bypass OFF",
+        "console_skip_event_label": "⏭️ Next event",
+        "console_service_not_ready": "❌ The Kingdom service is not ready.",
+        "console_debug_done": "✅ {0}",
+        "console_relaunch_confirm": (
+            "🔁 **Relaunch the season?**\n"
+            "The current data is archived then wiped, and a fresh season"
+            " starts (new candidatures)."
+        ),
+        "console_reset_confirm": (
+            "🧹 **Reset the data?**\n"
+            "The current data is archived then wiped — no new season"
+            " is launched."
+        ),
+        "console_confirm_button": "⚠️ Confirm",
+        "console_cancel_button": "Cancel",
+        "console_cancelled": "❌ Cancelled — nothing was touched.",
+        "console_relaunch_done": "✅ Season relaunched — the old data is archived.",
+        "console_reset_done": "✅ Data reset — the old data is archived.",
+        "console_error": "❌ {0}",
+        "console_clock_modal_title": "⏩ Advance the clock",
+        "console_clock_duration_label": "Duration (90m, 2h, 3d…)",
+        "console_clock_bad": "❌ {0}",
+        "console_clock_done": "✅ Game clock advanced: **{0}**.",
+    },
+}
+
+
+def strings(locale: str) -> dict[str, str]:
+    """The attack strings for one locale (defaults + catalog overrides)."""
+    base = dict(DEFAULTS["fr"] if str(locale).lower().startswith("fr") else DEFAULTS["en"])
+    try:
+        from botforge.core.services.i18n import MessageCatalog
+
+        section = MessageCatalog("config").section("kingdom.attack", str(locale)[:2])
+        base.update({key: value for key, value in section.items() if value})
+    except Exception:
+        pass
+    return base
+
+
+__all__ = ["DEFAULTS", "strings"]
