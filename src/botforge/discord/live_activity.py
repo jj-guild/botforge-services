@@ -895,7 +895,12 @@ async def _ensure_player_posts(
         try:
             thread = await forum.create_thread(name=_thread_title(name), auto_archive_duration=10080)
         except Exception:
-            logger.debug("the player post creation failed (post %s)", profile_id, exc_info=True)
+            # WARNING (owner 2026-11-26: the forum starved SILENTLY
+            # for 15 prompts - "0 post(s) ensured" with not one line
+            # saying WHY; a starved catch is a liar)
+            logger.warning(
+                "matches forum: post NOT created for %s (guild %s)", profile_id, guild_id, exc_info=True
+            )
             continue
         entry = {
             "thread_id": str(thread.id),
@@ -1043,7 +1048,7 @@ async def _send_cards_grouped(
                 break
             except Exception:
                 if len(group) == 1:
-                    logger.debug("the grouped card send failed (post %s)", thread.id, exc_info=True)
+                    logger.warning("matches forum: card send failed (post %s) - %s", thread.id, exc_info=True)
                     break  # even a single card refuses: move on, never a crash
                 group = group[: len(group) // 2]  # the 40-component cap bites: halve
     return marked
@@ -1106,9 +1111,15 @@ async def _gap_fill_matches_salon(  # noqa: C901 - one orchestration, no branch 
     """
     profiles = await _guild_profiles(bot, guild_id)
     if not profiles:
+        logger.info("matches forum gap-fill STOP: no known profiles (guild %s)", guild_id)
         return
     forum = await _sweep_channel(bot, guild_id, channel_id)
     if forum is None:
+        logger.info(
+            "matches forum gap-fill STOP: the channel %s resolves nothing (guild %s)",
+            channel_id,
+            guild_id,
+        )
         return
     posts = await _ensure_player_posts(bot, guild_id, forum, profiles)
     from botforge.discord.stats_views import recent_match_entries
@@ -1122,6 +1133,13 @@ async def _gap_fill_matches_salon(  # noqa: C901 - one orchestration, no branch 
         if finished_at and finished_at >= deadline:
             cards.append(_seed_card_of(entry))
     if not cards:
+        # the WHY says itself (owner 2026-11-26: the forum starved for
+        # hours without one line - every silent stop hid the culprit)
+        logger.info(
+            "matches forum gap-fill STOP: no stored card in the window (guild %s, %d entr\u00e9e(s) servie(s))",
+            guild_id,
+            len(entries),
+        )
         return
     labels = await _label_pack(bot, guild_id)
     for profile_id, entry in posts.items():
@@ -1134,6 +1152,11 @@ async def _gap_fill_matches_salon(  # noqa: C901 - one orchestration, no branch 
             continue
         thread = _thread_of(forum, entry)
         if thread is None:
+            logger.info(
+                "matches forum gap-fill SKIP: %s's post thread is dead (guild %s)",
+                profile_id,
+                guild_id,
+            )
             continue
         ctx_by_ref: dict[str, dict[str, Any]] = {}
         for card in group:

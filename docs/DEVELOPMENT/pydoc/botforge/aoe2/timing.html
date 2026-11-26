@@ -57,10 +57,13 @@ Track&nbsp;lobby_closed&nbsp;grace&nbsp;windows&nbsp;per&nbsp;match&nbsp;referen
 
 <dl><dt><a name="LobbyClosedGrace-on_lobby_closed"><strong>on_lobby_closed</strong></a>(self, match_ref: 'str', now: 'float | None' = None) -&gt; 'None'</dt><dd><span class="code">Record&nbsp;a&nbsp;lobby_closed&nbsp;event&nbsp;for&nbsp;the&nbsp;match.</span></dd></dl>
 
-<dl><dt><a name="LobbyClosedGrace-should_downgrade"><strong>should_downgrade</strong></a>(self, match_ref: 'str', now: 'float | None' = None) -&gt; 'bool'</dt><dd><span class="code">Report&nbsp;whether&nbsp;the&nbsp;grace&nbsp;period&nbsp;has&nbsp;fully&nbsp;elapsed&nbsp;since&nbsp;lobby_closed.<br>
+<dl><dt><a name="LobbyClosedGrace-should_downgrade"><strong>should_downgrade</strong></a>(self, match_ref: 'str', now: 'float | None' = None, grace_s: 'float | None' = None) -&gt; 'bool'</dt><dd><span class="code">Report&nbsp;whether&nbsp;the&nbsp;grace&nbsp;period&nbsp;has&nbsp;fully&nbsp;elapsed&nbsp;since&nbsp;lobby_closed.<br>
 &nbsp;<br>
 No&nbsp;recorded&nbsp;lobby_closed&nbsp;means&nbsp;nothing&nbsp;to&nbsp;downgrade&nbsp;(idempotent<br>
-—&nbsp;external&nbsp;events&nbsp;can&nbsp;be&nbsp;received&nbsp;multiple&nbsp;times).</span></dd></dl>
+—&nbsp;external&nbsp;events&nbsp;can&nbsp;be&nbsp;received&nbsp;multiple&nbsp;times).&nbsp;A&nbsp;caller&nbsp;may<br>
+pass&nbsp;its&nbsp;OWN&nbsp;window&nbsp;(``grace_s``):&nbsp;the&nbsp;aoe2lobby&nbsp;close&nbsp;rides&nbsp;the<br>
+reason's&nbsp;window&nbsp;—&nbsp;an&nbsp;explicit&nbsp;leave&nbsp;fires&nbsp;fast,&nbsp;a&nbsp;snapshot<br>
+absence&nbsp;needs&nbsp;sustained&nbsp;silence&nbsp;(owner&nbsp;2026-11-26).</span></dd></dl>
 
 <hr>
 Data descriptors defined here:<br>
