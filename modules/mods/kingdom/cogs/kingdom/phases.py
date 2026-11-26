@@ -762,6 +762,61 @@ async def run_economy_due_safe(bot: Any) -> None:
             )
 
 
+async def run_cathedrals_due_safe(bot: Any) -> None:
+    """lieu-sacree-v1 (Drasah 26/11, T-D) : the 72h chantier verdict.
+
+    Every expired chantier becomes a SACRED territory — the tick is
+    idempotent (the chantier is consumed by the verdict). The
+    announcement lands in Géopolitique, best effort per guild.
+    """
+    from .common import wiring
+
+    stack = wiring()
+    if stack is None:
+        return
+    cathedrals = getattr(stack, "cathedrals", None)
+    if cathedrals is None:
+        return
+    try:
+        consecrated = await cathedrals.resolve_due()
+    except Exception:
+        logger.warning("kingdom: cathedral verdict pass failed — best-effort", exc_info=True)
+        return
+    if not consecrated:
+        return
+    await _announce_sacred_verdicts(bot, stack, consecrated)
+
+
+async def _announce_sacred_verdicts(bot: Any, stack: Any, consecrated: list[Any]) -> None:
+    """Publish every SACRED verdict in Géopolitique, best effort."""
+    from .battle import _geopolitics_channel
+    from .common import strings_by_locale
+
+    kingdom_names: dict[str, str] = {}
+    try:
+        for kingdom in await stack.kingdoms.kingdoms():
+            kingdom_names[str(getattr(kingdom, "id", ""))] = str(getattr(kingdom, "name", ""))
+    except Exception:  # noqa: BLE001 — the names are cosmetic
+        kingdom_names = {}
+    for guild in list(getattr(bot, "guilds", []) or []):
+        locale = await _guild_locale(bot, str(guild.id))
+        strings = strings_by_locale(locale)
+        try:
+            channel = _geopolitics_channel(guild)
+            if channel is None:
+                continue
+            for territory in consecrated:
+                map_key = str(getattr(territory, "map_key", ""))
+                owner = str(getattr(territory, "owner_kingdom_id", ""))
+                await channel.send(
+                    str(strings["sacree_verdict_note"]).format(
+                        kingdom_names.get(owner, owner), map_key
+                    )
+                )
+        except Exception:
+            logger.warning("kingdom: one cathedral announcement failed", exc_info=True)
+
+
 async def run_event_slots_safe(bot: Any) -> None:
     """Replay the due weekly slots (cycle/age/season end) and announce.
 
@@ -1120,6 +1175,10 @@ def start_attack_refresher(bot: Any) -> None:
             await run_economy_due_safe(bot)
         except Exception:
             logger.warning("kingdom: economy due pass failed — best-effort", exc_info=True)
+        try:
+            await run_cathedrals_due_safe(bot)
+        except Exception:
+            logger.warning("kingdom: cathedral due pass failed — best-effort", exc_info=True)
         try:
             await run_mercenary_tick_safe(bot)
         except Exception:

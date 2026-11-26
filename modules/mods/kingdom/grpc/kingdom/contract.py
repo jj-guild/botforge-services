@@ -70,6 +70,11 @@ class KingdomStack(Protocol):
         """The admin decisions ledger (DecisionService, decisions-admin-v1)."""
         ...
 
+    @property
+    def cathedrals(self) -> Any:
+        """The Lieu Sacrée engine (CathedralService, lieu-sacree-v1)."""
+        ...
+
 
 @runtime_checkable
 class KingdomService(Protocol):

@@ -684,6 +684,10 @@ DEFAULTS: dict[str, dict[str, str]] = {
         "expedition_return_tech": (
             "🧭 L'expédition des **{0}** est de retour — compensation : +2 ⚙️."
         ),
+        "sacree_verdict_note": (
+            "⛪ Le chantier du Lieu Sacrée de **{0}** sur **{1}** a TENU —"
+            " le territoire est SACRÉ à vie, immunisé contre tout."
+        ),
         "marry_button": "💍 Se marier",
         "alliances_button": "🤝 Alliances",
         "church_marry_intro": "👰 Choisissez la Princesse de ton mariage :",
@@ -1516,6 +1520,10 @@ DEFAULTS: dict[str, dict[str, str]] = {
         ),
         "expedition_return_tech": (
             "🧭 The expedition of the **{0}** is back — compensation: +2 ⚙️."
+        ),
+        "sacree_verdict_note": (
+            "⛪ The Sacred Place chantier of **{0}** on **{1}** HELD —"
+            " the territory stays SACRED forever, immune to everything."
         ),
         "marry_button": "💍 Marry",
         "alliances_button": "🤝 Alliances",

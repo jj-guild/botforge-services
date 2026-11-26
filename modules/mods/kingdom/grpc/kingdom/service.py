@@ -36,6 +36,7 @@ class _KingdomStackImpl(KingdomStackContract):
         from botforge.mods.kingdom.tavern import TavernService
         from botforge.mods.kingdom.realms import RealmService
         from botforge.mods.kingdom.decisions import DecisionService
+        from botforge.mods.kingdom.cathedrale import CathedralService
 
         self._store = store
         self._config = config
@@ -64,6 +65,10 @@ class _KingdomStackImpl(KingdomStackContract):
         # decisions-admin-v1 (Drasah 25/11): the admin decisions ledger
         # — season-transcendent like the realm shells, never wiped.
         self._decisions = DecisionService(store)
+        # lieu-sacree-v1 (Drasah 26/11, T-D): the cathedral engine —
+        # the FIRST writer of cathedral_until (the immunities were
+        # already ported, no cog ever wrote the field).
+        self._cathedrals = CathedralService(store, config, self._kingdoms, self._territories)
 
     @property
     def realms(self) -> Any:
@@ -72,6 +77,10 @@ class _KingdomStackImpl(KingdomStackContract):
     @property
     def decisions(self) -> Any:
         return self._decisions
+
+    @property
+    def cathedrals(self) -> Any:
+        return self._cathedrals
 
     @property
     def kingdoms(self) -> Any:

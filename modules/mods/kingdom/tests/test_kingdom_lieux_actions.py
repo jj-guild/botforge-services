@@ -120,11 +120,22 @@ async def test_the_comptes_window_carries_the_two_hist_buttons(monkeypatch: pyte
     import botforge.mods.kingdom.cogs.market as market_module
 
     monkeypatch.setattr(market_module, "chamber_text", fake_chamber_text)
+
+    async def fake_held(stack: Any, kingdom: Any, catalog: dict) -> list[tuple[str, int]]:
+        # comptes-cv2-v1 (T-D) : deux cartes en main, comme au vrai marché
+        return [("explorateur", 2), ("corruption", 1)]
+
+    monkeypatch.setattr(market_module, "chamber_held_cards", fake_held)
     kingdom = SimpleNamespace(id="k-1", name="AEGIS", tech_points_bank=7)
-    view, files = await lieux._comptes_window(strings, kingdom, {})
+    view, _files = await lieux._comptes_window(strings, kingdom, {})
     ids = _ids(view)
     assert "kingdoms:lieux:hist:achats" in ids and "kingdoms:lieux:hist:actions" in ids
     assert "kingdoms:lieux:sortir" in ids
+    # comptes-cv2-v1 (Drasah 26/11, T-D) : chaque carte en main est un bouton
+    assert "kingdoms:lieux:comptes:card:explorateur" in ids
+    assert "kingdoms:lieux:comptes:card:corruption" in ids
+    assert "kingdoms:lieux:comptes:use:explorateur" not in ids, ("use rides the "
+    "SELECTED card only")
 
 
 @pytest.mark.asyncio
