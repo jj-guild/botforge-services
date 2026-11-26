@@ -603,6 +603,7 @@ async def _maybe_seed_matches_salon(  # noqa: C901 - one orchestration, no branc
     with several known players lands in EACH one's post (owner
     2026-11-25: the duplicates are assumed), chronologically.
     """
+    _seed_started_at = time.time()
     marker = await _seed_marker(guild_id)
     if guild_id in _SEEDED or (
         isinstance(marker, dict)
@@ -698,13 +699,13 @@ async def _maybe_seed_matches_salon(  # noqa: C901 - one orchestration, no branc
                 entry.setdefault("messages", {}).update(dict(marked))
                 await _save_post(guild_id, uid, entry)
                 posted_total += len(marked)
-        if posted_total:
-            logger.info(
-                "matches forum seed: %d card(s) across %d post(s) for guild %s (the last window)",
-                posted_total,
-                len(posts),
-                guild_id,
-            )
+        logger.info(
+            "matches forum seed DONE: %d card(s) across %d post(s) for guild %s in %.1fs (the last window)",
+            posted_total,
+            len(posts),
+            guild_id,
+            time.time() - _seed_started_at,
+        )
     except Exception:
         logger.warning("matches forum seed failed (guild %s) - best-effort", guild_id, exc_info=True)
 
@@ -1351,6 +1352,7 @@ async def _reconcile_posted_refs(bot: discord.Client, guild_id: str, channel_id:
 async def _gap_fill_matches_salon(  # noqa: C901 - one orchestration, no branch soup
     bot: discord.Client, guild_id: str, channel_id: str
 ) -> None:
+    _fill_started_at = time.time()
     """Post the store matches the forum's posts never saw (owner 2026-11-25).
 
     A match played without a live feed only lives in the store: the
@@ -1441,10 +1443,11 @@ async def _gap_fill_matches_salon(  # noqa: C901 - one orchestration, no branch 
             entry.setdefault("messages", {}).update(dict(marked))
             await _save_post(guild_id, uid, entry)
             logger.info(
-                "matches forum gap-fill: %d card(s) posted in %s's post (guild %s)",
+                "matches forum gap-fill: %d card(s) posted in %s's post (guild %s, %.1fs)",
                 len(marked),
                 uid,
                 guild_id,
+                time.time() - _fill_started_at,
             )
 
 
