@@ -154,6 +154,18 @@ channels:
     access:
       everyone_view: false
       view: [Kingdom Lord, Kingdom King, Kingdom Admin]
+  # vitrine-v1 (Drasah 26/11, tranche 44) : le 🏛️ Panthéon — le salon
+  # SOLO et PERMANENT qui vit HORS de la partie, la vitrine des
+  # saisons (score en direct, palmarès, historique, chronique). Il
+  # n'est jamais renommé ni rembobiné : il lit les archives.
+  - key: pantheon
+    display_name: 🏛️ panthéon
+    description: The seasons' showcase — live score, palmarès, historique, chronicle (vitrine-v1)
+    group: kingdom
+    position: 25
+    access:
+      everyone_view: false
+      view: [Kingdom Lord, Kingdom King, Kingdom Admin]
   - key: attack
     display_name: ⚔️ déclarer une attaque
     description: The guided attack declaration panel

@@ -275,6 +275,25 @@ def register(bot: Any, config: Any) -> None:
         )
     )
 
+    # vitrine-v1 (Drasah 26/11, tranche 44) : le 🏛️ Panthéon — le salon
+    # vitrine des saisons (score d'un coup d'œil + palmarès, historique,
+    # chronique). Même seam static-pin : un re-provisioning converge.
+    from .pantheon import build_pantheon_panel
+
+    async def _resolve_pantheon_channel(guild_id: str) -> str:
+        return await stored_channel_id(guild_id, "mod/kingdom", "pantheon") or ""
+
+    register_static_pin(
+        StaticPinnedView(
+            key="panel:mod:kingdom:pantheon",
+            mark_suffix="panel:mod:kingdom:pantheon",
+            resolve_channel=_resolve_pantheon_channel,
+            build_layout=build_pantheon_panel,
+            registry=getattr(bot, "message_registry", None),
+            scope="mod/kingdom",
+        )
+    )
+
     # the salon gate's subscription (profile.bound → the access role):
     # idempotent (the sink keeps one handler reference per bot)
     subscribe_profile_gate(bot)
@@ -323,6 +342,7 @@ def setup_hook(bot: Any) -> None:
         MarketItemButton,
     )
     from .marry import MarryButton
+    from .pantheon import pantheon_dynamic_items
     from .panel import (
         CancelButton,
         DeclareButton,
@@ -427,6 +447,7 @@ def setup_hook(bot: Any) -> None:
         *realm_dynamic_items(),
         *lieux_dynamic_items(),
         *realm_content_dynamic_items(),
+        *pantheon_dynamic_items(),
     ):
         try:
             bot.add_dynamic_items(item)

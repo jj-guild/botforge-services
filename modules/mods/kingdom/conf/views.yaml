@@ -142,6 +142,21 @@ views:
     kind: surface
   panel:mod:kingdom:tavern:pin:
     kind: surface
+  # vitrine-v1 (Drasah 26/11, tranche 44) : le Panthéon — le pin du
+  # salon vitrine + ses fenêtres de navigation (palmarès, historique,
+  # chronique, chronique croisée), toutes déclarées (#381 règle 1)
+  panel:mod:kingdom:pantheon:
+    kind: surface
+  panel:mod:kingdom:pantheon:palmares:
+    kind: surface
+  panel:mod:kingdom:pantheon:historique:
+    kind: surface
+  panel:mod:kingdom:pantheon:histo:
+    kind: surface
+  panel:mod:kingdom:pantheon:chronique:
+    kind: surface
+  panel:mod:kingdom:pantheon:compare:
+    kind: surface
   panel:mod:kingdom:tavern:confirm:
     kind: surface
   panel:mod:kingdom:tavern:info:
