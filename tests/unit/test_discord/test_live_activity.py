@@ -1,10 +1,10 @@
 """The live activity surfaces' guards (botforge-services#405).
 
-The feed owns TWO surfaces (owner 2026-11-24): the matches salon
+The feed owns TWO surfaces (owner 2026-11-24): the players forum
 carries the SAME card class as the profile panels (rendered through
 ``_match_card_parts``), and the logs channel carries short, DENSE,
 append-only event lines - one log per (match, event), never per
-player. A guild WITHOUT the matches salon sees the logs only.
+player. A guild WITHOUT the players forum sees the logs only.
 """
 
 from __future__ import annotations
@@ -745,8 +745,10 @@ def test_the_forum_seed_posts_each_players_group_in_his_post() -> None:  # noqa:
             {"match_id": "m2", "finished_at": 100, "players": [{"profile_id": "7"}, {"profile_id": "9"}]},
         ]
 
-    async def _fake_grouped(thread, cards, ctx_by_ref, labels, known, me_ids=None, max_group=10):
-        del me_ids
+    async def _fake_grouped(
+        thread, cards, ctx_by_ref, labels, known, me_ids=None, max_group=10, owner_avatar=""
+    ):
+        del me_ids, owner_avatar
         sent[str(id(thread))] = [str(c["match_id"]) for c in cards]
         return [(str(c["match_id"]), "77") for c in cards]
 
@@ -783,7 +785,7 @@ def test_the_forum_seed_posts_each_players_group_in_his_post() -> None:  # noqa:
     feed._card_ctx = _fake_ctx
     try:
         with patch.object(feed.discord, "ForumChannel", _ForumBase):
-            asyncio.run(feed._maybe_seed_matches_salon(None, "42", "999"))
+            asyncio.run(feed._maybe_seed_players_forum(None, "42", "999"))
     finally:
         for key, value in original.items():
             setattr(feed, key, value)
@@ -821,8 +823,8 @@ def test_one_card_per_message_and_a_refusal_never_stops_the_run() -> None:
     def _cards_of(view):
         return getattr(view, "_sent_cards", [])
 
-    def _fake_parts(card, ctx, me_ids, labels, known=None):
-        del ctx, me_ids, labels, known
+    def _fake_parts(card, ctx, me_ids, labels, known=None, owner_avatar=""):
+        del ctx, me_ids, labels, known, owner_avatar
         return [], [], str(card["match_id"]), 0
 
     from unittest.mock import patch
@@ -905,3 +907,127 @@ def test_one_team_for_everyone_is_no_team_at_all() -> None:
     # two REAL teams stay teams
     split = {"players": [{"team": 1}, {"team": 2}]}
     assert _card_format(split) == "1v1"
+
+
+# ----------------------------------------------------------------------
+# the PLAYERS forum (owner 2026-11-26): "#matchs" is "#joueurs" now
+
+
+def test_the_players_forum_keys_and_names_are_renamed() -> None:
+    """The channel key, the scope constants and the registry ids read
+    "joueurs" - the salon's old "matches" identity is GONE."""
+    import botforge.discord.live_activity as feed
+
+    assert feed._PLAYERS_KEY == "joueurs", "the channel key is joueurs"
+    assert feed._PLAYERS_SCOPE == "games/aoe2"
+    assert feed._posts_doc_id("42") == "42:livefeed:joueurs:posts"
+    assert feed._SEED_VERSION >= 10, "the rename bumps the seed: every forum re-seeds"
+
+
+def test_the_post_intro_signature_tracks_the_name_the_accounts_and_the_avatar() -> None:
+    """The first message is a VIEW now - the registry stores its
+    signature; a moved account, a rename or a new avatar re-edits it."""
+    import json
+
+    import botforge.discord.live_activity as feed
+
+    base = feed._post_intro_signature(
+        "Merlin", {"profiles": {"848567": "Merlin"}}, "https://a/1.png"
+    )
+    assert json.loads(base) == {
+        "name": "Merlin",
+        "avatar": "https://a/1.png",
+        "profiles": {"848567": "Merlin"},
+    }
+    assert (
+        feed._post_intro_signature("Merlin", {"profiles": {"848567": "Merlin"}}, "https://a/2.png")
+        != base
+    )
+    assert (
+        feed._post_intro_signature(
+            "Merlin", {"profiles": {"848567": "Merlin", "17190369": "alt"}}, "https://a/1.png"
+        )
+        != base
+    )
+    assert (
+        feed._post_intro_signature("Merlin II", {"profiles": {"848567": "Merlin"}}, "https://a/1.png")
+        != base
+    )
+
+
+def test_the_post_intro_is_the_profile_view_without_any_button() -> None:
+    """The post's first message is the player's PROFILE VIEW (owner
+    2026-11-26): his header, his insight-linked accounts, his DISCORD
+    avatar in accessory - and NOT ONE button."""
+    import asyncio
+    from unittest.mock import patch
+
+    import discord
+
+    import botforge.discord.live_activity as feed
+
+    async def _fake_reply_guild(guild_id, bot, key, **fmt):
+        return f"header {fmt.get('name', '')}"
+
+    async def _fake_elo(bot, profile_ids, translate=None):
+        return {"848567": "1039 Elo 1v1 (max 1120)"}
+
+    with (
+        patch("botforge.discord.commands_i18n.reply_guild", _fake_reply_guild),
+        patch("botforge.discord.stats_views.account_elo_by_profile", _fake_elo),
+    ):
+        view = asyncio.run(
+            feed._post_intro_view(
+                None, "42", "Merlin", {"profiles": {"848567": "Merlin"}}, "https://a/discord.png"
+            )
+        )
+    assert not any(isinstance(item, discord.ui.ActionRow) for item in view.children), "no buttons"
+    containers = [c for c in view.children if isinstance(c, discord.ui.Container)]
+    assert len(containers) == 1
+    blocks = list(containers[0].children)
+    header = blocks[0]
+    assert isinstance(header, discord.ui.Section), "the avatar rides the header's accessory"
+    assert header.accessory.media.url == "https://a/discord.png"
+    accounts = blocks[1].content
+    assert "[Merlin](https://www.aoe2insights.com/user/relic/848567/)" in accounts
+    assert "`848567`" in accounts
+    assert "1039 Elo 1v1" in accounts, "the account line carries its elo"
+
+
+def test_the_card_wears_the_post_owners_discord_avatar() -> None:
+    """The players forum's cards carry the post owner's DISCORD avatar:
+    the header's accessory AND his own seat's - never the provider's."""
+    import discord
+
+    from botforge.discord.home import _match_card_parts
+
+    card = {
+        "status": "finished",
+        "match_id": "523338329",
+        "match_ref": "523338329",
+        "started_at": 100,
+        "finished_at": 200,
+        "winners": ["848567"],
+        "map_name": "Budapest",
+        "players": [
+            {"profile_id": "848567", "name": "Merlin", "team": 1, "civ": "Mayans"},
+            {"profile_id": "424242", "name": "Bob", "team": 2, "civ": "Teutons"},
+        ],
+    }
+    ctx: dict[str, Any] = {
+        "civ_urls": {}, "civ_images": {}, "map_urls": {}, "map_images": {},
+        "map_display": {}, "civ_display": {}, "ladder": {},
+    }
+    blocks, _buttons, _mid, _accent = _match_card_parts(
+        card, ctx, {"848567"}, {}, owner_avatar="https://a/discord.png"
+    )
+    header = blocks[0]
+    assert isinstance(header, discord.ui.Section), "the header carries the avatar accessory"
+    assert header.accessory.media.url == "https://a/discord.png"
+    # his OWN seat wears his avatar; the stranger keeps the civ icon
+    seats = [b for b in blocks if isinstance(b, discord.ui.Section) and b is not header]
+    mine = [b for b in seats if getattr(b.accessory.media, "url", "") == "https://a/discord.png"]
+    assert len(mine) == 1, "only the post owner's seat wears his avatar"
+    # without an avatar the header stays a plain text block
+    plain_blocks, _b, _m, _a = _match_card_parts(card, ctx, {"848567"}, {})
+    assert not isinstance(plain_blocks[0], discord.ui.Section)

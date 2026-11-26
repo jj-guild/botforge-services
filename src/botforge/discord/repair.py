@@ -2,19 +2,19 @@
 
 A repair is ANY reconcile pass (owner 2026-11-26: "fais le pour tous
 les repair, niveau sdk"): the tree-ensure provisioning, the pins and
-roles, the forum syncs, the matches forum's seed. The lesson engraved
+roles, the forum syncs, the players forum's seed. The lesson engraved
 this week: a SILENT repair reads like an eternity that did nothing -
 every phase announces itself, every phase carries its count, the
 finish speaks the duration.
 
 Usage::
 
-    with repair(logger, "matches forum", subject=guild_id) as rep:
+    with repair(logger, "players forum", subject=guild_id) as rep:
         rep.step("ensure posts", created=1, dead=0)
         rep.step("post cards", cards=17)
-    # -> INFO matches forum REPAIR (guild X): ensure posts (created=1, dead=0)
-    # -> INFO matches forum REPAIR (guild X): post cards (cards=17)
-    # -> INFO matches forum REPAIR (guild X): DONE in 12.3s (cards=17, created=1)
+    # -> INFO players forum REPAIR (guild X): ensure posts (created=1, dead=0)
+    # -> INFO players forum REPAIR (guild X): post cards (cards=17)
+    # -> INFO players forum REPAIR (guild X): DONE in 12.3s (cards=17, created=1)
 """
 
 from __future__ import annotations

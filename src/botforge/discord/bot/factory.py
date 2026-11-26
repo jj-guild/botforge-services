@@ -1030,7 +1030,7 @@ def create_bot(config: BotConfig | None = None) -> BotforgeBot:  # noqa: C901
     bot.registration_engine = registration_engine
     bot.registration_service = registration_service
     # bind the pokes now the bot lives: the bind/unbind events sweep
-    # the matches forums instantly (owner 2026-11-25)
+    # the players forums instantly (owner 2026-11-25)
     for _events_holder in (getattr(registration_service, "_events", None),):
         if isinstance(_events_holder, _BindingPokes):
             _events_holder.bot = bot
@@ -1230,7 +1230,7 @@ def _build_registration(
 
 
 class _BindingPokes:
-    """The registration events -> the matches forums' instant reconcile.
+    """The registration events -> the players forums' instant reconcile.
 
     The bind/unbind lifecycle must reach the posts (owner 2026-11-25):
     a member adding an account creates his post, removing it deletes
@@ -1251,7 +1251,7 @@ class _BindingPokes:
 
 
 def _spawn_instant_forums_sweep(bot: Any) -> None:
-    """Sweep the matches forums NOW (best-effort, never raises)."""
+    """Sweep the players forums NOW (best-effort, never raises)."""
 
     async def _one() -> None:
         from botforge.discord import live_activity

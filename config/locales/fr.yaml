@@ -528,8 +528,8 @@ fr:
         admin_description: 'le poste de pilotage : le menu d''administration épinglé'
         live: 📡 live
         live_description: qui joue en direct, rafraîchi en continu
-        matches: 🏁 matchs
-        matches_description: 'l’historique AoE2 du serveur : une carte par partie, en direct puis le résultat'
+        joueurs: 🏁 joueurs
+        joueurs_description: 'le forum des joueurs : un post par joueur, ses matchs en cartes, en direct puis le résultat'
         civs: 🏛️ civilisations
         civs_description: 'une fiche par civilisation : bonus, unités, arbres technologiques'
         maps: 🌍 maps

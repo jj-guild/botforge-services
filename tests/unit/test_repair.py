@@ -21,13 +21,13 @@ def _capturing_logger() -> tuple[MagicMock, list[str]]:
 
 def test_the_steps_speak_and_the_done_carries_the_totals() -> None:
     logger, lines = _capturing_logger()
-    report = RepairReport(logger, "matches forum seed", subject="42")
+    report = RepairReport(logger, "players forum seed", subject="42")
     report.step("ensure posts", created=2)
     report.step("posted the window", cards=17, posts=2)
     report.done()
-    assert lines[0] == "matches forum seed REPAIR (42): ensure posts (created=2)"
+    assert lines[0] == "players forum seed REPAIR (42): ensure posts (created=2)"
     assert "cards=17" in lines[1] and "posts=2" in lines[1]
-    assert lines[2].startswith("matches forum seed REPAIR (42): DONE in ")
+    assert lines[2].startswith("players forum seed REPAIR (42): DONE in ")
     # the DONE accumulates: created + cards + posts all read in the finish
     assert "created=2" in lines[2] and "cards=17" in lines[2]
 
