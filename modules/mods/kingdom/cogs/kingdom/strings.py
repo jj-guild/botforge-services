@@ -148,7 +148,6 @@ DEFAULTS: dict[str, dict[str, str]] = {
             " bouton du panel **Déclarer une attaque**.\n"
             "🪤 Un royaume peut activer un Traquenard sur son adversaire : l'IA de"
             " défense devient Facile pendant 6h et les mariages scellés prennent +2h"
-
             " de verrou."
         ),
         "reveal_cover": (
@@ -299,7 +298,6 @@ DEFAULTS: dict[str, dict[str, str]] = {
         "room_scoreboard_footer": (
             "🎮 Les deux joueurs sont prêts — bonne game ! Déclarez le vainqueur avec 🏆."
         ),
-
         "room_ping_message": (
             "⚔️ {attacker} {defender} — la salle de bataille est ouverte, à vos armes !"
         ),
@@ -450,7 +448,6 @@ DEFAULTS: dict[str, dict[str, str]] = {
         # -- planning (P4.1b tranche 2d) --
         "plan_button": "📅 Planifier une attaque",
         "plan_disclaimer": (
-
             "⚠️ Une plannification ne réserve pas le territoire : si un autre royaume déclare"
             " une attaque dessus avant l'heure choisie, ta plannification basculera sur ton"
             " choix suivant — ou sera rompue s'il n'en reste aucun."
@@ -601,7 +598,6 @@ DEFAULTS: dict[str, dict[str, str]] = {
             "corruption": "💰",
             "garde_royale": "💂",
             "patrouille": "👣",
-
             "mariage_arrange": "💐",
         },
         "market_fiche_effect": "**__EFFET :__**\n> {0}",
@@ -752,7 +748,6 @@ DEFAULTS: dict[str, dict[str, str]] = {
         "alliances_next_dropping": "➖ Perdues : {0}",
         "alliances_next_elsewhere": "🔒 Épousées ailleurs : {0}",
         "alliances_near_title": "🎯 Presque déverrouillées",
-
         "alliances_near_line": "• **{0}** — {1}",
         "alliances_none": "—",
         "alliances_no_data": "❌ Aucune donnée d'alliance pour l'instant.",
@@ -903,7 +898,6 @@ DEFAULTS: dict[str, dict[str, str]] = {
             "👁️ Suivi par votre Corbeau — statut et chronique visibles pendant 24h."
         ),
         "scriptorium_fiche_gated": (
-
             "🔒 Seule l'identité est visible — un Corbeau `corbeau_track` (24h)"
             " ouvre le statut et la chronique."
         ),
@@ -1054,7 +1048,6 @@ DEFAULTS: dict[str, dict[str, str]] = {
         "protected_line": "🛡️ Under patrol (impossible to attack): {kingdoms}",
         "patrol_kingdom": "**{name}** until {end}:00",
         "ai_level_desc": "Defense AI: {level}/5 · {count} territory(ies)",
-
         "choose_territory": "🗺️ **Pick the territory of {kingdom} to attack:**",
         "mode_choose": "⚔️ **Declare an attack — pick your itinerary:**",
         "mode_classic_button": "⚔️ Classic attack — {delay} itinerary",
@@ -1205,7 +1198,6 @@ DEFAULTS: dict[str, dict[str, str]] = {
             "🗡️ Sabotage: {sabotage} · 🦅 Faucon: {faucon}\nOne side can suffer at most 2 sabotaged civilizations."
         ),
         "sab_faucon_ready": "ready",
-
         "sab_faucon_flying": "flying until {time}",
         "sab_faucon_absent": "absent",
         "sab_panel_title": "🪶 **Sabotage** — {used}/2 civilizations removed in this attack",
@@ -1356,7 +1348,6 @@ DEFAULTS: dict[str, dict[str, str]] = {
         # mandatory reason and the kingdoms announcement --
         "dispute_cancel_button": "✖️ Cancel the attack",
         "decision_reason_modal_title": "⚖️ Admin decision",
-
         "decision_reason_label": "Reason (mandatory, public)",
         "decision_reason_placeholder": "e.g. no result declared, no counter-claim…",
         "decision_reason_required": (
@@ -1507,7 +1498,6 @@ DEFAULTS: dict[str, dict[str, str]] = {
                 "defence) then the kingdom receives a brand-new map. Once per "
                 "season."
             ),
-
             "corruption": (
                 "Buys ONE Corruption token. Use it from the Chambre des "
                 "comptes: instantly transfers an enemy territory to your "
@@ -1658,7 +1648,6 @@ DEFAULTS: dict[str, dict[str, str]] = {
         "church_marry_sealed_note": (
             "The kingdom is informed — the announcement was just published"
             " in **Geopolitics**."
-
         ),
         "church_wedding_announce": (
             "💍 Marriage sealed — {0} of the {1} weds the **{2}** · 🔒 lock"
@@ -1809,7 +1798,6 @@ DEFAULTS: dict[str, dict[str, str]] = {
         "scriptorium_condition_tech": "hold at least {count} tech point(s)",
         "scriptorium_condition_marriages": "have at least {count} married lord(s)",
         "scriptorium_condition_civ_count": "hold at least {count} civilization(s)",
-
         "scriptorium_seigneurie_title": "🛡️ Seigneurie — lords and remaining budgets",
         "scriptorium_seigneurie_intro": (
             "🛡️ **What it's for**: the census of lords — kingdoms, roles and"
