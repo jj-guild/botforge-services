@@ -120,6 +120,33 @@ views:
   # marché entry pin (ported from the reference panel:marche)
   panel:mod:kingdom:market:
     kind: surface
+  # Affaire 39 (branchement, Drasah 26/11) : le 📜 Scriptorium (pin +
+  # rubriques éphémères + fiche) et la 🍺 Taverne (pin + fenêtre du
+  # comptoir + confirm + info) — les ids taverne existaient au
+  # portage SANS déclaration (le drift « NOT declared »), ils sont
+  # déclarés ici avec leurs nouveaux frères.
+  panel:mod:kingdom:scriptorium:
+    kind: surface
+  panel:mod:kingdom:scriptorium:cadastre:
+    kind: surface
+  panel:mod:kingdom:scriptorium:diplomatie:
+    kind: surface
+  panel:mod:kingdom:scriptorium:seigneurie:
+    kind: surface
+  panel:mod:kingdom:scriptorium:fiche:
+    kind: surface
+  panel:mod:kingdom:tavern:
+    kind: surface
+  panel:mod:kingdom:tavern:pin:
+    kind: surface
+  panel:mod:kingdom:tavern:confirm:
+    kind: surface
+  panel:mod:kingdom:tavern:info:
+    kind: surface
+  panel:mod:kingdom:mercenary:
+    kind: surface
+  panel:mod:kingdom:mercenary:ladder:
+    kind: surface
   panel:mod:kingdom:time-machine:
     kind: surface
   panel:mod:kingdom:time-machine:restore:

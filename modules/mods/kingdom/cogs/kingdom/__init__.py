@@ -238,6 +238,43 @@ def register(bot: Any, config: Any) -> None:
         )
     )
 
+    # Affaire 39 (branchement, Drasah 26/11) : le 📜 Scriptorium et la
+    # 🍺 Taverne étaient DÉCLARÉS dans conf/mod.yaml mais leurs salons
+    # restaient vides — les surfaces vivaient dans la référence
+    # (scriptorium + tavern panel). Même seam static-pin, jamais d'envoi
+    # ad hoc : un re-provisioning converge sans duplication.
+    from .scriptorium import build_scriptorium_panel
+
+    async def _resolve_scriptorium_channel(guild_id: str) -> str:
+        return await stored_channel_id(guild_id, "mod/kingdom", "scriptorium") or ""
+
+    register_static_pin(
+        StaticPinnedView(
+            key="panel:mod:kingdom:scriptorium",
+            mark_suffix="panel:mod:kingdom:scriptorium",
+            resolve_channel=_resolve_scriptorium_channel,
+            build_layout=build_scriptorium_panel,
+            registry=getattr(bot, "message_registry", None),
+            scope="mod/kingdom",
+        )
+    )
+
+    from .tavern import build_tavern_panel
+
+    async def _resolve_tavern_channel(guild_id: str) -> str:
+        return await stored_channel_id(guild_id, "mod/kingdom", "tavern") or ""
+
+    register_static_pin(
+        StaticPinnedView(
+            key="panel:mod:kingdom:tavern:pin",
+            mark_suffix="panel:mod:kingdom:tavern:pin",
+            resolve_channel=_resolve_tavern_channel,
+            build_layout=build_tavern_panel,
+            registry=getattr(bot, "message_registry", None),
+            scope="mod/kingdom",
+        )
+    )
+
     # the salon gate's subscription (profile.bound → the access role):
     # idempotent (the sink keeps one handler reference per bot)
     subscribe_profile_gate(bot)
@@ -313,7 +350,14 @@ def setup_hook(bot: Any) -> None:
         KingdomSettingsNavButton,
         SettingsActionButton,
     )
-    from .tavern import MercenaryButton, TavernButton
+    from .scriptorium import ScriptoriumRubricButton
+    from .tavern import (
+        MercenaryButton,
+        TavernButton,
+        TavernInfoButton,
+        TavernMenuButton,
+        TavernPurseButton,
+    )
     from .time_machine import machine_dynamic_items
     from .validation import (
         ValidationArchiveButton,
@@ -352,6 +396,10 @@ def setup_hook(bot: Any) -> None:
         ChamberButton,
         TavernButton,
         MercenaryButton,
+        TavernMenuButton,
+        TavernInfoButton,
+        TavernPurseButton,
+        ScriptoriumRubricButton,
         FFAJoinButton,
         KingdomRelaunchButton,
         KingdomResetButton,

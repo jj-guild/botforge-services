@@ -161,19 +161,25 @@ class RealmReportCategorySelect(
 class ReportModal(discord.ui.Modal):
     """La description libre — la ligne du journal part à la soumission."""
 
-    body: discord.ui.TextInput = discord.ui.TextInput(
-        label="Que se passe-t-il ?",
-        style=discord.TextStyle.paragraph,
-        max_length=1000,
-        required=True,
-    )
-
     def __init__(self, strings: dict[str, str], category: str) -> None:
+        super().__init__(title=str(strings["report_modal_title"])[:45], timeout=300)
         self.strings = dict(strings)
         self.category = str(category)
-        super().__init__(title=str(strings["report_modal_title"])[:45], timeout=300)
-        self.children[0].label = str(strings["report_text_label"])[:45]  # type: ignore[index]
-        self.children[0].placeholder = str(strings["report_text_placeholder"])  # type: ignore[index]
+        # le pattern du dépôt (fenêtre 2.7) : le TextInput porte son
+        # custom_id, le libellé visible vit dans un discord.ui.Label
+        self.body = discord.ui.TextInput(
+            placeholder=str(strings["report_text_placeholder"])[:100],
+            min_length=1,
+            max_length=1000,
+            required=True,
+            style=discord.TextStyle.paragraph,
+            custom_id=f"{_NS}:report:text",
+        )
+        self.add_item(
+            discord.ui.Label(
+                text=str(strings["report_text_label"])[:45], component=self.body
+            )
+        )
 
     async def on_submit(self, interaction: discord.Interaction) -> None:
         strings = self.strings

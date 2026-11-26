@@ -8,21 +8,23 @@ their error hierarchies.
 
 from __future__ import annotations
 
+from typing import ClassVar
+
 import pytest
 
 
 def test_tavern_modules_import() -> None:
     """The P4.4 surface modules import (tavern + the ported engines)."""
-    from botforge.mods.kingdom.cogs.kingdom import tavern  # noqa: F401
+    from botforge.mods.kingdom.cogs import tavern  # noqa: F401
     from botforge.mods.kingdom.mercenary import MercenaryService  # noqa: F401
     from botforge.mods.kingdom.tavern import TavernService  # noqa: F401
 
 
 def test_tavern_error_hierarchy() -> None:
     """The tavern and mercenary errors nest under the mod's own error base."""
-    from botforge.mods.kingdom.errors import KingdomModError
     from botforge.mods.kingdom.mercenary import MercenaryError, MercenaryWindowError
-    from botforge.mods.kingdom.tavern import TavernError, TavernCooldownError
+    from botforge.mods.kingdom.service import KingdomModError
+    from botforge.mods.kingdom.tavern import TavernCooldownError, TavernError
 
     assert issubclass(TavernError, KingdomModError)
     assert issubclass(TavernCooldownError, TavernError)
@@ -132,9 +134,9 @@ def test_drinks_options_read_the_catalog() -> None:
 @pytest.mark.asyncio
 async def test_mercenary_tick_degrades_without_stack() -> None:
     """The mercenary tick is a no-op when the stack is not wired."""
-    from botforge.mods.kingdom.cogs.kingdom import phases
+    from botforge.mods.kingdom.cogs import phases
 
     class _Bot:
-        guilds: list = []
+        guilds: ClassVar[list] = []
 
     await phases.run_mercenary_tick_safe(_Bot())

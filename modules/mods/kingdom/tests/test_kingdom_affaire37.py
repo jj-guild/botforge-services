@@ -115,8 +115,26 @@ async def test_the_household_carries_the_reference_sections() -> None:
 
 @pytest.mark.asyncio
 async def test_left_members_never_show_and_an_empty_house_says_so() -> None:
-    body = _body([_lord("l1", "Parti", left=True, kingdom_id="k2")])
-    assert "Parti" not in body
+    """Le FILTRE vit dans _paroisse_lords (le corps reçoit déjà les fidèles)."""
+    from botforge.mods.kingdom.cogs import lieux
+
+    class _Lords:
+        async def __call__(self, *_args: Any, **_kwargs: Any) -> list[Any]:
+            return [
+                _lord("l1", "Parti", left=True, kingdom_id="k2"),
+                _lord("l2", "HorsRoyaume", kingdom_id="k9"),
+                _lord("l3", "Reste", left=True, kingdom_id="k1"),
+                _lord("l4", "Fidele", kingdom_id="k1"),
+            ]
+
+    stack = SimpleNamespace(kingdoms=SimpleNamespace(lords=_Lords()))
+    faithful = await lieux._paroisse_lords(stack, _kingdom())
+    names = [str(getattr(l, "display_name", "")) for l in faithful]
+    assert names == ["Fidele"], "only the resident members ride the sheet"
+    # nobody left, everything filtered: the empty house says so
+    body = lieux._paroisse_body(
+        _strings(), SimpleNamespace(), _kingdom(), {}, "Chapelle", 1, [], 0, []
+    )
     assert "Aucun fidèle pour le moment." in body
 
 

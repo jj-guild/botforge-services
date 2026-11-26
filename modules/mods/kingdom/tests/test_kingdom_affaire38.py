@@ -104,7 +104,8 @@ class _FakeInteraction(SimpleNamespace):
     def __init__(self) -> None:
         response = self._Response()
         super().__init__(
-            guild_id="77", user=SimpleNamespace(id="42"), response=response
+            guild_id="77", user=SimpleNamespace(id="42"),
+            locale="fr", response=response,
         )
 
 
@@ -123,7 +124,7 @@ async def test_the_modal_posts_one_admin_line_and_cools_down(monkeypatch: Any) -
 
     strings = _strings()
     modal = report.ReportModal(strings, "bug")
-    modal.body.value = "Le score de la partie 3 est faux."
+    modal.body = SimpleNamespace(value="Le score de la partie 3 est faux.")
     interaction = _FakeInteraction()
     await modal.on_submit(interaction)
 
@@ -137,9 +138,8 @@ async def test_the_modal_posts_one_admin_line_and_cools_down(monkeypatch: Any) -
     ), "the member gets his ✅ note"
     # the anti-spam guard is armed for THIS member only
     assert report._LAST_REPORT.get("77:42") is not None
-    monkeypatch.setattr(report.time, "time", lambda: _time.time())
-    assert report._cooldown_left("77", "42", _time.time()) >= 1
-    assert report._cooldown_left("77", "43", _time.time()) == 0
+    assert report._cooldown_left("77", "42", _time.time() + 1) >= 1
+    assert report._cooldown_left("77", "43", _time.time() + 1) == 0
 
 
 @pytest.mark.asyncio
@@ -155,7 +155,7 @@ async def test_an_empty_description_never_post(monkeypatch: Any) -> None:
     report._LAST_REPORT.clear()
 
     modal = report.ReportModal(_strings(), "other")
-    modal.body.value = "   "
+    modal.body = SimpleNamespace(value="   ")
     await modal.on_submit(_FakeInteraction())
     assert not posted, "an empty report never reaches the journal"
 

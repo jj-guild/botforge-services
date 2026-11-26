@@ -18,7 +18,7 @@ from typing import Any
 
 import discord
 
-from .common import lord_of, open_unique_ephemeral, strings_for, wiring
+from .common import lord_of, open_unique_ephemeral, strings_for, surface, wiring
 
 logger = logging.getLogger("kingdom.tavern")
 
@@ -129,7 +129,7 @@ def _tavern_view(stack: Any, lord: Any, strings: dict[str, str]) -> discord.ui.L
             await target.response.defer()
             try:
                 lord_after, drink_after = await stack.tavern.buy_drink(
-                    str(interaction.user.id), chosen[0]
+                    str(target.user.id), chosen[0]
                 )
             except Exception as exc:  # noqa: BLE001 — every refusal is a note
                 await target.followup.send(_error_note(exc, strings), ephemeral=True)
@@ -263,7 +263,7 @@ def _mercenary_view(
                 return
             await target.response.defer()
             try:
-                await stack.mercenary.place_bid(str(interaction.user.id), civ, int(picked[0]))
+                await stack.mercenary.place_bid(str(target.user.id), civ, int(picked[0]))
             except Exception as exc:  # noqa: BLE001 — every refusal is a note
                 await target.followup.send(_error_note(exc, strings), ephemeral=True)
                 return
@@ -294,7 +294,7 @@ def _mercenary_view(
     async def on_withdraw(target: discord.Interaction) -> None:
         await target.response.defer()
         try:
-            result = await stack.mercenary.withdraw_bid(str(interaction.user.id))
+            result = await stack.mercenary.withdraw_bid(str(target.user.id))
         except Exception as exc:  # noqa: BLE001 — every refusal is a note
             await target.followup.send(_error_note(exc, strings), ephemeral=True)
             return
@@ -349,18 +349,9 @@ class TavernButton(
         return cls(strings_for(interaction)["tavern_button"])
 
     async def callback(self, interaction: discord.Interaction) -> None:
-        strings = strings_for(interaction)
-        stack = wiring()
-        if stack is None:
-            await open_unique_ephemeral(interaction, strings["plan_no_service"])
-            return
-        lord = await lord_of(stack.kingdoms, str(interaction.user.id), interaction)
-        if lord is None or getattr(lord, "kingdom_id", None) is None:
-            await open_unique_ephemeral(interaction, strings["not_a_lord"])
-            return
-        await open_unique_ephemeral(
-            interaction, view=_tavern_view(stack, lord, strings)
-        )
+        # Affaire 39 : le bouton du panneau d'attaque et le pin de la
+        # Taverne partagent LE MÊME corps (un seul code, deux surfaces).
+        await _open_tavern_menu(interaction)
 
 
 class MercenaryButton(
@@ -408,3 +399,175 @@ class MercenaryButton(
         await open_unique_ephemeral(
             interaction, view=_mercenary_view(stack, doc, lord, strings)
         )
+
+
+# ---------------------------------------------------------------------------
+# The pinned Taverne panel (Affaire 39 — the salon's own surface)
+# ---------------------------------------------------------------------------
+
+
+async def build_tavern_panel(guild_id: str) -> discord.ui.LayoutView:
+    """The pinned Taverne panel (deployed by the static-pin core seam).
+
+    La référence portait le message épinglé du salon 🍺 taverne : le
+    comptoir (règles + boutons), le menu à boire et le renseignement.
+    Le portage réutilise LES MÊMES fenêtres éphémères que les boutons
+    du panneau d'attaque (la fenêtre unique) — zéro duplication : le
+    pin ne fait qu'ouvrir les surfaces existantes, le Chef Mercenaire
+    reste le bouton enregistré (un seul DynamicItem, deux surfaces).
+    """
+    from .panel import _guild_locale
+    from .strings import strings
+
+    locale = await _guild_locale(guild_id)
+    strings_map = strings(locale[:2])
+    return surface(
+        "panel:mod:kingdom:tavern:pin",
+        discord.ui.TextDisplay(f"# {strings_map['tavern_pin_title']}"),
+        discord.ui.TextDisplay(
+            f"{strings_map['tavern_pin_intro']}\n\n{strings_map['tavern_pin_rules']}"
+        ),
+        discord.ui.Separator(),
+        discord.ui.ActionRow(
+            TavernMenuButton(strings_map["tavern_menu_button"]),
+            MercenaryButton(strings_map["mercenary_button"]),
+        ),
+        discord.ui.ActionRow(
+            TavernInfoButton(strings_map["tavern_info_button"]),
+            TavernPurseButton(strings_map["tavern_purse_button"]),
+        ),
+    )
+
+
+async def _open_tavern_menu(interaction: discord.Interaction) -> None:
+    """The shared « Demander à boire » body (pin + attack panel button)."""
+    strings = strings_for(interaction)
+    stack = wiring()
+    if stack is None:
+        await open_unique_ephemeral(interaction, strings["plan_no_service"])
+        return
+    lord = await lord_of(stack.kingdoms, str(interaction.user.id), interaction)
+    if lord is None or getattr(lord, "kingdom_id", None) is None:
+        await open_unique_ephemeral(interaction, strings["not_a_lord"])
+        return
+    await open_unique_ephemeral(
+        interaction, view=_tavern_view(stack, lord, strings)
+    )
+
+
+class TavernMenuButton(
+    discord.ui.DynamicItem[discord.ui.Button[Any]],
+    template=r"kingdom:tavern:menu$",
+):
+    """The 🍺 « Demander à boire » button of the pinned Taverne panel."""
+
+    def __init__(self, label: str) -> None:
+        super().__init__(
+            discord.ui.Button(
+                label=label[:80],
+                custom_id="kingdom:tavern:menu",
+                style=discord.ButtonStyle.primary,
+            )
+        )
+
+    @classmethod
+    async def from_custom_id(
+        cls,
+        interaction: discord.Interaction,
+        item: discord.ui.Item[Any],
+        match: re.Match[str],
+        /,
+    ) -> TavernMenuButton:
+        return cls(strings_for(interaction)["tavern_menu_button"])
+
+    async def callback(self, interaction: discord.Interaction) -> None:
+        await _open_tavern_menu(interaction)
+
+
+class TavernInfoButton(
+    discord.ui.DynamicItem[discord.ui.Button[Any]],
+    template=r"kingdom:tavern:info$",
+):
+    """The 🗣️ « Demander un renseignement » button — what each drink does."""
+
+    def __init__(self, label: str) -> None:
+        super().__init__(
+            discord.ui.Button(
+                label=label[:80],
+                custom_id="kingdom:tavern:info",
+                style=discord.ButtonStyle.secondary,
+            )
+        )
+
+    @classmethod
+    async def from_custom_id(
+        cls,
+        interaction: discord.Interaction,
+        item: discord.ui.Item[Any],
+        match: re.Match[str],
+        /,
+    ) -> TavernInfoButton:
+        return cls(strings_for(interaction)["tavern_info_button"])
+
+    async def callback(self, interaction: discord.Interaction) -> None:
+        strings = strings_for(interaction)
+        stack = wiring()
+        if stack is None:
+            await open_unique_ephemeral(interaction, strings["plan_no_service"])
+            return
+        lines = [strings["tavern_info_rp"], "", strings["tavern_info_header"]]
+        for drink in getattr(getattr(stack.config, "tavern", None), "drinks", ()) or ():
+            effect = strings.get(f"tavern_effect_{drink.key}", strings["tavern_effect_generic"])
+            lines.append(
+                str(strings["tavern_info_line"]).format(
+                    drink.label, effect, int(drink.lock_minutes)
+                )
+            )
+        await open_unique_ephemeral(
+            interaction, view=surface("panel:mod:kingdom:tavern:info", discord.ui.TextDisplay("\n".join(lines)))
+        )
+
+
+class TavernPurseButton(
+    discord.ui.DynamicItem[discord.ui.Button[Any]],
+    template=r"kingdom:tavern:purse$",
+):
+    """The 💰 « Regarder sa bourse » button — the live purse note."""
+
+    def __init__(self, label: str) -> None:
+        super().__init__(
+            discord.ui.Button(
+                label=label[:80],
+                custom_id="kingdom:tavern:purse",
+                style=discord.ButtonStyle.secondary,
+            )
+        )
+
+    @classmethod
+    async def from_custom_id(
+        cls,
+        interaction: discord.Interaction,
+        item: discord.ui.Item[Any],
+        match: re.Match[str],
+        /,
+    ) -> TavernPurseButton:
+        return cls(strings_for(interaction)["tavern_purse_button"])
+
+    async def callback(self, interaction: discord.Interaction) -> None:
+        strings = strings_for(interaction)
+        stack = wiring()
+        if stack is None:
+            await open_unique_ephemeral(interaction, strings["plan_no_service"])
+            return
+        lord = await lord_of(stack.kingdoms, str(interaction.user.id), interaction)
+        if lord is None:
+            await open_unique_ephemeral(interaction, strings["not_a_lord"])
+            return
+        await open_unique_ephemeral(
+            interaction, content=str(strings["tavern_purse_line"]).format(int(getattr(lord, "purse", 0) or 0))
+        )
+
+
+def tavern_dynamic_items() -> tuple:
+    """The module's restart-proof items (registered by the cog)."""
+    return (TavernButton, MercenaryButton, TavernMenuButton, TavernInfoButton, TavernPurseButton)
