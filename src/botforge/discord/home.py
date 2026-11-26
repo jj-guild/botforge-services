@@ -1063,6 +1063,13 @@ def _seat_teams(card: dict[str, Any]) -> list[tuple[int, list[dict[str, Any]]]]:
         if not isinstance(player, dict):
             continue
         by_team.setdefault(int(player.get("team", 0) or 0), []).append(player)
+    # ONE team for everyone is NO team (owner 2026-11-26: the vs-AI
+    # lobby ships its human and its computer on the same team number -
+    # the un-formed discipline reads FFA, never a "[ 2 ]" group)
+    if len(by_team) == 1 and sum(len(s) for s in by_team.values()) > 1:
+        only = next(iter(by_team))
+        if only != 0:
+            by_team = {0: by_team.pop(only)}
     for seats in by_team.values():
         seats.sort(
             key=lambda p: (int((p or {}).get("slot", 0) or 0), str((p or {}).get("alias", "")))
@@ -1133,9 +1140,11 @@ SETTING_CHECKBOX_ORDER = (
     (None, "antiquity_mode", "profile.matches_setting_antiquity"),
     ("75", "record", "profile.matches_setting_record"),
     # the lobby's OWN booleans (owner 2026-11-25): they ride the live
-    # payload named; the finished blob never carried them (None)
-    (None, "hide_civilizations", "profile.matches_setting_hide_civs"),
-    (None, "password", "profile.matches_setting_password"),
+    # payload named; the finished blob never carried them ("@lobby" -
+    # NEVER listed on a finished card, owner 2026-11-26: the data was
+    # never captured, a "?" line reads like a bug)
+    ("@lobby", "hide_civilizations", "profile.matches_setting_hide_civs"),
+    ("@lobby", "password", "profile.matches_setting_password"),
 )
 
 _LIVE_SETTING_BOOLEANS = {
@@ -1239,8 +1248,23 @@ def _live_bool_lines(card: dict[str, Any], labels: dict[str, Any], lines: list[s
     bool_labels: dict[str, str] = dict(labels.get("setting_bools_live") or {})
     names: dict[str, str] = dict(labels.get("checkbox_names") or {})
     separator_hit = False
+    lobby_separator_shown = False
     for _blob_key, key, locale_key in SETTING_CHECKBOX_ORDER:
         label = bool_labels.get(key or "") or names.get(locale_key) or str(locale_key).split(".")[-1]
+        if _blob_key == "@lobby":
+            # the lobby's OWN booleans open a SECTION of their own
+            # (owner 2026-11-26: "Cacher les civilisations" & "Mot de
+            # passe" read apart from the game's checkboxes) - the
+            # section only opens when the payload carries something
+            if key not in live:
+                continue
+            if not lobby_separator_shown:
+                section = str(labels.get("setting_lobby_section") or "Lobby")
+                lines.append(f"──────────\n**{section}**")
+                lobby_separator_shown = True
+            mark = "✅" if bool(live.get(key)) else "⬜"
+            lines.append(f"{mark} {label}")
+            continue
         if key is None:
             # the option the feed never carries: "?" (owner
             # 2026-11-24: Handicap is unknown in every source)
@@ -1341,6 +1365,10 @@ def _settings_bool_lines(card: dict[str, Any], labels: dict[str, Any]) -> list[s
     names: dict[str, str] = dict(labels.get("checkbox_names") or {})
     for blob_key, _live_key, locale_key in SETTING_CHECKBOX_ORDER:
         label = blob_labels.get(blob_key or "") or names.get(locale_key) or str(locale_key).split(".")[-1]
+        if blob_key == "@lobby":
+            # the LOBBY's own booleans never rode the finished blob
+            # (owner 2026-11-26: never captured - not listed at all)
+            continue
         if blob_key is None:
             lines.append(f"❓ {label}")
             continue
@@ -1374,7 +1402,10 @@ class _CardRefreshButton(discord.ui.Button[Any]):
 
     def __init__(self, card: dict[str, Any], labels: dict[str, Any]) -> None:
         super().__init__(
-            label=str(labels.get("refresh_button", "Rafra\u00eechir")),
+            # "Match" (owner 2026-11-26): the card's refresh never
+            # reads the dashboard's "Rafra\u00eechir" - the two touching
+            # rows looked like one duplicated button
+            label=str(labels.get("matches_refresh_match_button", "Match")),
             emoji="\U0001f504",
             style=discord.ButtonStyle.secondary,
             custom_id="home:match:refresh",
@@ -2633,7 +2664,9 @@ async def _match_panel_labels_guild(guild_id: str, bot: Any) -> dict[str, Any]:
             "custom_badge": await _r("profile.custom_badge"),
             "settings_button": await _r("profile.matches_settings_button"),
             "refresh_button": await _r("profile.matches_refresh_button"),
+            "matches_refresh_match_button": await _r("profile.matches_refresh_match_button"),
             "settings_title": await _r("profile.matches_settings_title"),
+            "setting_lobby_section": await _r("profile.matches_setting_lobby_section"),
     }
 
 
@@ -3113,6 +3146,20 @@ async def _live_dashboard_view(
             )
         )
     )
+    # the DASHBOARD refresh rides ABOVE the cards (owner 2026-11-26:
+    # it sat under the last card and read "stuck" to that card's own
+    # row - two touching refresh buttons; the card's own refresh now
+    # reads its own label (Match), the dashboard's stays up top
+    from botforge.discord.live import LiveRefreshButton
+
+    view.add_item(
+        discord.ui.ActionRow(
+            LiveRefreshButton(
+                game_key,
+                str(labels.get("refresh", "Rafra\u00eechir")),
+            ).item
+        )
+    )
     for card in cards:
         blocks, buttons, _match_id, accent = _match_card_parts(
             card, ctx, me_ids, labels or {}, known_ids
@@ -3123,16 +3170,6 @@ async def _live_dashboard_view(
     tail = await build_live_tail(interaction, snapshot)
     if tail:
         view.add_item(discord.ui.TextDisplay(tail))
-    from botforge.discord.live import LiveRefreshButton
-
-    view.add_item(
-        discord.ui.ActionRow(
-            LiveRefreshButton(
-                game_key,
-                str(labels.get("refresh", "Rafraîchir")),
-            ).item
-        )
-    )
     if snapshot.get("degraded"):
         pass  # the title line already carries the degraded warning
     return add_view_footer(view, f"panel:live:{game_key}")

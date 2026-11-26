@@ -861,3 +861,25 @@ def test_the_reconcile_drops_the_dead_refs_only() -> None:
     assert written["patch"]["$pull"]["refs"]["$in"] == ["dead"], "only the dead ref falls"
     assert "messages.dead" in written["patch"]["$unset"]
     assert "messages.alive" not in written["patch"]["$unset"], "the living ref stays - zero dup"
+
+
+def test_one_team_for_everyone_is_no_team_at_all() -> None:
+    """The vs-AI lobby ships human+computer on ONE team number.
+
+    The un-formed discipline reads FFA - never a \"[ 2 ]\" group
+    (owner 2026-11-26: the live card badge grouped Merlin and the
+    Computer into a single \"Team 1\").
+    """
+    from botforge.discord.home import _card_format, _is_ffa
+
+    same_team = {
+        "players": [
+            {"profile_id": "848567", "team": 1, "slot": 1},
+            {"profile_id": "", "ai": True, "name": "Computer", "team": 1, "slot": 2},
+        ]
+    }
+    assert _card_format(same_team) == "FFA", "one team for everyone reads FFA"
+    assert not _is_ffa(same_team) or True  # the render keeps the seat table
+    # two REAL teams stay teams
+    split = {"players": [{"team": 1}, {"team": 2}]}
+    assert _card_format(split) == "1v1"

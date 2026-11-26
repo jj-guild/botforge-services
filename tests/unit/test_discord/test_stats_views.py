@@ -321,3 +321,45 @@ async def test_the_listing_syncs_then_reads_the_store_without_cache(monkeypatch:
     assert order == ["sync", "finished+refresh", "empty-reply"], (
         "the listing syncs BEFORE reading, and the read bypasses the cache"
     )
+
+
+def test_the_lobby_booleans_read_their_own_section() -> None:
+    """The lobby's checkboxes (hide civs, password) open a SECTION.
+
+    The finished blob NEVER carried them (owner 2026-11-26): not
+    captured at play time - not listed at all, never a "?" pretender.
+    """
+    from botforge.discord.home import _settings_bool_lines
+
+    live = {
+        "lock_teams": True, "lock_speed": True, "cheats": False, "record": True,
+        "hide_civilizations": True, "password": False,
+    }
+    lines = _settings_bool_lines(
+        {"live_settings_json": __import__("json").dumps(live)},
+        {
+            "setting_bools_live": {"record": "Partie enregistrée"},
+            "checkbox_names": {
+                "profile.matches_setting_handicap": "Handicap",
+                "profile.matches_setting_hide_civs": "Cacher les civilisations",
+                "profile.matches_setting_password": "Mot de passe",
+            },
+            "setting_lobby_section": "Lobby",
+        },
+    )
+    joined = "\n".join(lines)
+    assert "**Lobby**" in joined, "the lobby booleans open their own section"
+    assert "✅ Cacher les civilisations" in lines
+    assert "⬜ Mot de passe" in lines
+    # the lobby section rides AFTER the game's own checkboxes
+    assert lines.index("✅ Partie enregistrée") < next(
+        i for i, line in enumerate(lines) if "**Lobby**" in line
+    )
+
+    # a finished card (the blob) never lists them: the data was never captured
+    blob = _settings_bool_lines(
+        {"options_json": '{"65": "y", "1": "n"}'},
+        {"setting_bools": {"65": "Vitesse verrouillée", "1": "Cheats"}},
+    )
+    assert all("Cacher les civilisations" not in line for line in blob)
+    assert all("Mot de passe" not in line for line in blob)
