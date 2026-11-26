@@ -9,6 +9,7 @@ porte sa mention). Sans archive, la vitrine retombe sur le score live
 
 from __future__ import annotations
 
+import re
 from types import SimpleNamespace
 from typing import Any
 
@@ -236,3 +237,74 @@ def test_the_polish_keys_live_in_both_locales(locale: str) -> None:
         "pantheon_phase_ended",
     ):
         assert strings[key], f"{locale} misses {key}"
+
+
+# ---------------------------------------------------------------------------
+# Affaire 46b : a select built with an EMPTY marker must not crash discord.py
+# (the live catch of Drasah's Chronique click — 26/11, ValueError since 44)
+# ---------------------------------------------------------------------------
+
+
+_HISTO_TEMPLATE = r"kingdom:pantheon:histo:(?P<sid>[A-Za-z0-9_:-]+)"
+_KINGDOM_TEMPLATE = r"kingdom:pantheon:kingdom:(?P<kid>[A-Za-z0-9_:-]+)"
+
+
+def test_the_season_select_builds_with_an_empty_marker() -> None:
+    pantheon = _pantheon()
+
+    select = pantheon.PantheonSeasonSelect([], "")
+    assert select.item.custom_id == "kingdom:pantheon:histo:-"
+    assert re.match(_HISTO_TEMPLATE, select.item.custom_id), (
+        "the custom_id must match the DynamicItem template"
+    )
+
+
+def test_the_kingdom_select_builds_with_an_empty_marker() -> None:
+    pantheon = _pantheon()
+
+    select = pantheon.PantheonKingdomSelect([], "")
+    assert select.item.custom_id == "kingdom:pantheon:kingdom:-"
+    assert re.match(_KINGDOM_TEMPLATE, select.item.custom_id), (
+        "the custom_id must match the DynamicItem template"
+    )
+
+
+def test_the_dash_marker_translates_back_to_empty_on_reload() -> None:
+    """The '-' placeholder must never leak into a season/kingdom lookup."""
+    import asyncio
+    import re
+
+    pantheon = _pantheon()
+    for cls, key in (
+        (pantheon.PantheonSeasonSelect, "sid"),
+        (pantheon.PantheonKingdomSelect, "kid"),
+    ):
+        raw = "kingdom:pantheon:histo:-" if key == "sid" else "kingdom:pantheon:kingdom:-"
+        pattern = _HISTO_TEMPLATE if key == "sid" else _KINGDOM_TEMPLATE
+        match = re.match(pattern, raw)
+        assert match is not None
+        item = asyncio.run(cls.from_custom_id(None, None, match))
+        assert getattr(item, "season_id" if key == "sid" else "kingdom_id", "-") == ""
+
+
+async def test_the_chronique_window_opens_with_no_pick(monkeypatch: pytest.MonkeyPatch) -> None:
+    """First click on Chronique = empty picked, must build, not raise."""
+    _wire_locale(monkeypatch)
+
+    class _Kingdoms:
+        async def kingdoms(self) -> list[SimpleNamespace]:
+            return [SimpleNamespace(_id="k-1", id="k-1", name="AEGIS")]
+
+    import botforge.mods.kingdom.cogs.pantheon as pantheon_module
+
+    monkeypatch.setattr(
+        pantheon_module, "wiring", lambda: SimpleNamespace(kingdoms=_Kingdoms())
+    )
+    view = await pantheon_module._chronique_view(_strings(), "")
+    ids = [
+        getattr(child, "custom_id", "")
+        for child in view.walk_children()
+    ]
+    assert "kingdom:pantheon:kingdom:-" in ids
+    texts = _texts(view)
+    assert texts.strip() != ""

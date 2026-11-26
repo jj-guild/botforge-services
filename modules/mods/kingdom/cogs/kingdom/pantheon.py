@@ -388,8 +388,11 @@ class PantheonSeasonSelect(
     """The archived-season picker of the Historique window."""
 
     def __init__(self, options: list[discord.SelectOption], sid: str = "") -> None:
+        # the template needs a NON-EMPTY sid (discord.py validates the
+        # custom_id against it at construction — an empty marker crashed
+        # the window, the live catch of Drasah's click, 26/11)
         select = discord.ui.Select(
-            custom_id=f"kingdom:pantheon:histo:{sid}"[:100],
+            custom_id=f"kingdom:pantheon:histo:{sid or '-'}"[:100],
             placeholder="…",
             options=options or [discord.SelectOption(label="—", value="-")],
         )
@@ -400,7 +403,7 @@ class PantheonSeasonSelect(
     async def from_custom_id(
         cls, interaction: discord.Interaction, item: Any, match: re.Match[str], /
     ) -> PantheonSeasonSelect:
-        return cls([], match["sid"])
+        return cls([], "" if match["sid"] == "-" else match["sid"])
 
     async def callback(self, interaction: discord.Interaction) -> None:
         strings_map = _pantheon_strings(interaction)
@@ -585,8 +588,9 @@ class PantheonKingdomSelect(
     """Build the kingdom picker of the Chronique window."""
 
     def __init__(self, options: list[discord.SelectOption], kid: str = "") -> None:
+        # same rule as the season select: never an EMPTY template param
         select = discord.ui.Select(
-            custom_id=f"kingdom:pantheon:kingdom:{kid}"[:100],
+            custom_id=f"kingdom:pantheon:kingdom:{kid or '-'}"[:100],
             placeholder="…",
             options=options or [discord.SelectOption(label="—", value="-")],
         )
@@ -597,7 +601,7 @@ class PantheonKingdomSelect(
     async def from_custom_id(
         cls, interaction: discord.Interaction, item: Any, match: re.Match[str], /
     ) -> PantheonKingdomSelect:
-        return cls([], match["kid"])
+        return cls([], "" if match["kid"] == "-" else match["kid"])
 
     async def callback(self, interaction: discord.Interaction) -> None:
         strings_map = _pantheon_strings(interaction)
