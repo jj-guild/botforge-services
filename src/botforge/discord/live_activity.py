@@ -705,11 +705,10 @@ def _thread_of(forum: Any, entry: dict[str, Any]) -> Any | None:
     thread = forum.get_thread(thread_id)
     if thread is not None:
         return thread
-    threads_map = getattr(forum, "threads", {}) or {}
-    try:
-        return threads_map.get(thread_id)
-    except Exception:
-        return None
+    for thread in _forum_threads(forum):
+        if getattr(thread, "id", None) == thread_id:
+            return thread
+    return None
 
 
 async def _week_cards(bot: discord.Client, guild_id: str) -> list[dict[str, Any]]:
@@ -1004,8 +1003,7 @@ async def _dedupe_twins(guild_id: str, forum: Any, posts: dict[str, dict[str, An
             by_title[title] = str(entry.get("thread_id") or "")
     if not by_title:
         return
-    threads = getattr(forum, "threads", {}) or {}
-    for thread in list(threads.values()):
+    for thread in _forum_threads(forum):
         try:
             registered = by_title.get(_thread_title(str(thread.name)))
             if registered and str(thread.id) != registered:
@@ -1040,8 +1038,7 @@ async def _ensure_player_posts(
             try:
                 thread = forum.get_thread(int(posts[key]["thread_id"]))
                 if thread is None:
-                    threads = getattr(forum, "threads", {})
-                    thread = threads.get(int(posts[key]["thread_id"]))
+                    thread = _thread_of(forum, posts[key])
                 if thread is not None:
                     await thread.delete()
             except Exception:
@@ -1100,6 +1097,22 @@ async def _ensure_player_posts(
     await _dedupe_twins(guild_id, forum, posts)
     return posts
 
+
+def _forum_threads(forum: Any) -> list[Any]:
+    """Fold the forum's cached threads - a LIST in discord.py, never a dict.
+
+    The `.threads.get(id)` reads of the first cuts crashed with an
+    AttributeError (owner 2026-11-26: the twins hunt) - every consumer
+    rides this resolver: dict-shaped caches fold, lists pass.
+    """
+    raw = getattr(forum, "threads", None)
+    if raw is None:
+        return []
+    if isinstance(raw, dict):
+        return list(raw.values())
+    if isinstance(raw, (list, tuple)):
+        return [t for t in raw if t is not None]
+    return []
 
 def _thread_title(name: str) -> str:
     """Build the post's title: the player's name, capped at the forum's limit."""
