@@ -34,7 +34,7 @@ class RepairReport:
         logger: Logger,
         name: str,
         subject: str = "",
-        progress: Callable[[str], None] | None = None,
+        progress: Callable[[str, RepairReport], None] | None = None,
     ) -> None:
         self._logger = logger
         self._name = str(name)
@@ -42,17 +42,28 @@ class RepairReport:
         self._started_at = time.time()
         self._totals: dict[str, int] = {}
         # the user-facing plan mirror (owner 2026-11-26: "ne dit pas
-        # que ça travaille") - a SYNC callable: the caller schedules its
-        # own async delivery (a message edit, a task)
+        # que ça travaille") - a SYNC callable receiving the line AND
+        # the report (the view builder reads the steps): the caller
+        # schedules its own async delivery (a message edit, a task)
         self._progress = progress
+        # the step ledger (the plan view reads this)
+        self.steps: list[str] = []
+        # the DONE line (set by done(); the view's synthèse reads it)
+        self.finished: str = ""
 
     @property
     def tag(self) -> str:
         """The log prefix: the repair's own name (and its subject)."""
         return f"{self._name} REPAIR" + (f" ({self._subject})" if self._subject else "")
 
-    def step(self, message: str, **counts: int) -> None:
-        """Announce one phase with its own counts (INFO, always)."""
+    def step(self, message: str, display: str = "", **counts: int) -> None:
+        """Announce one phase with its own counts (INFO, always).
+
+        ``display`` is the USER-facing sentence (owner 2026-11-26:
+        "trop technique et pas traduit") - a localized, human line; the
+        log keeps its own terse technical line. The view renders the
+        display, the logs keep the tag.
+        """
         for key, value in counts.items():
             self._totals[key] = self._totals.get(key, 0) + int(value)
         if counts:
@@ -61,16 +72,17 @@ class RepairReport:
         else:
             line = f"{self.tag}: {message}"
         self._logger.info(line)
+        self.steps.append(display or line)
         if self._progress is not None:
             try:
-                self._progress(line)
+                self._progress(display or line, self)
             except Exception:  # noqa: S110 - the mirror never kills the repair
                 pass
 
     @contextmanager
     def phase(self, label: str, **counts: int) -> Iterator[RepairReport]:
         """One timed phase: the step at the entry, the duration at the exit."""
-        self.step(label, **counts)
+        self.step(label, display=label, **counts)
         phase_started = time.time()
         try:
             yield self
@@ -90,9 +102,10 @@ class RepairReport:
         )
         line = f"{self.tag}: {message} in {time.time() - self._started_at:.1f}s{totals}"
         self._logger.info(line)
+        self.steps.append(line)
         if self._progress is not None:
             try:
-                self._progress(line)
+                self._progress(line, self)
             except Exception:  # noqa: S110 - the mirror never kills the repair
                 pass
 

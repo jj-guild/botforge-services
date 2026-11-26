@@ -103,10 +103,31 @@ async def _ensure_scope_pins(bot: Any, guild_id: str, scope: str) -> int:
     return ensured
 
 
-async def _edit_plan(interaction: Any, line: str) -> None:
-    """Mirror one repair step onto the deferred thinking message (best-effort)."""
+def _repair_view(steps: list[str], running: str, title: str) -> discord.ui.LayoutView:
+    """Build the repair's progress view (owner 2026-11-26).
+
+    A container, a checked step per line, the running banner while
+    it works.
+    """
+    view = discord.ui.LayoutView(timeout=None)
+    blocks: list[Any] = [discord.ui.TextDisplay(title)]
+    if steps:
+        blocks.append(discord.ui.Separator())
+        blocks.extend(discord.ui.TextDisplay(f"\u2705 {step}") for step in steps)
+    blocks.append(discord.ui.Separator())
+    blocks.append(discord.ui.TextDisplay(running))
+    view.add_item(
+        discord.ui.Container(*blocks, accent_colour=discord.Colour(0x5865F2))
+    )
+    return view
+
+
+async def _edit_plan(interaction: Any, report: Any, title: str, running: str) -> None:
+    """Mirror the repair's steps onto the deferred thinking message (best-effort)."""
     try:
-        await interaction.edit_original_response(content=f"\U0001F527 {line}")
+        await interaction.edit_original_response(
+            view=_repair_view(list(report.steps), running, title)
+        )
     except Exception:
         logger.debug("the repair plan edit failed - best-effort", exc_info=True)
 
@@ -149,6 +170,10 @@ async def _ensure_scope(  # noqa: C901
     from botforge.discord.repair import RepairReport
 
     tree_repair = RepairReport(logger, "tree ensure", subject=guild_id, progress=progress)
+    locale_of = _translate
+
+    def _say(key: str, **values: Any) -> str:
+        return locale_of(f"admin_tree.{key}", locale).format(**values)
     lines: list[str] = []
     pins_ok = 0
     roles_ok = 0
@@ -187,16 +212,26 @@ async def _ensure_scope(  # noqa: C901
             lock = "\U0001F512" if decl.access == "admin" else ""
             where = f"<#{channel_id}>{lock}" if channel_id else f"**{decl.key}** (absent)"
             lines.append(f"\u2022 {where}")
-        tree_repair.step(f"scope {spec.scope} provisioned", channels=len(spec.channels))
+        tree_repair.step(
+            f"scope {spec.scope} provisioned",
+            display=_say("repair_channels", scope=spec.scope, count=len(spec.channels)),
+            channels=len(spec.channels),
+        )
         pins_ok += await _ensure_scope_pins(bot, guild_id, spec.scope)
         roles_ok += await _ensure_scope_roles(bot, guild_id, spec.scope)
-        tree_repair.step(f"scope {spec.scope} surfaced", pins=pins_ok, roles=roles_ok)
+        tree_repair.step(
+            f"scope {spec.scope} surfaced",
+            display=_say("repair_pins_roles", pins=pins_ok, roles=roles_ok),
+            pins=pins_ok,
+            roles=roles_ok,
+        )
     from botforge.discord.scope_surfaces import run_scope_syncs
 
     synced_posts = await run_scope_syncs(guild_id, bot, ",".join(scopes))
     tree_repair.done(
         "the scopes stand", scopes=len(specs), pins=pins_ok, roles=roles_ok, posts=synced_posts
     )
+    tree_repair.steps.append(_say("repair_forums", posts=synced_posts))
     lines.append(f"\n\U0001f4cc Vues \u00e9pingl\u00e9es v\u00e9rifi\u00e9es/recr\u00e9\u00e9es : {pins_ok}")
     lines.append(f"\U0001F465 R\u00f4les v\u00e9rifi\u00e9s/cr\u00e9\u00e9s : {roles_ok}")
     lines.append(f"\U0001f4dc Posts de forum v\u00e9rifi\u00e9s/recr\u00e9\u00e9s : {synced_posts}")
@@ -333,11 +368,24 @@ class TreeEnsureButton(
         await interaction.response.defer(ephemeral=True, thinking=True)
 
         plan_tasks: list[asyncio.Task[None]] = []
+        title = await _tree_tr(interaction, "admin_tree.repair_title")
+        running = await _tree_tr(interaction, "admin_tree.repair_running")
 
-        def _plan_mirror(line: str) -> None:
-            plan_tasks.append(asyncio.ensure_future(_edit_plan(interaction, line)))
+        def _plan_mirror(line: str, report: Any) -> None:
+            del line  # the view renders the report's display steps
+            plan_tasks.append(
+                asyncio.ensure_future(_edit_plan(interaction, report, title, running))
+            )
 
-        answer = await _ensure_scope(interaction.client, guild_id, self.scope, _plan_mirror)
+        report: Any = None
+
+        def _plan_mirror_capture(line: str, rep: Any) -> None:
+            nonlocal report
+            report = rep
+            _plan_mirror(line, rep)
+
+        answer = await _ensure_scope(interaction.client, guild_id, self.scope, _plan_mirror_capture)
+        final_steps = list(report.steps) if report is not None else []
         # the last mirror's work lands before the synthèse replaces it
         for task in plan_tasks:
             task.cancel()
@@ -359,9 +407,20 @@ class TreeEnsureButton(
         # be delivered there; a clean warning, never a traceback.
         try:
             # the SYNTHÈSE replaces the live plan on the SAME deferred
-            # message (owner 2026-11-26: one thread of truth, the plan
-            # became the verdict)
-            message: Any = await interaction.edit_original_response(content=answer)
+            # message (owner 2026-11-26): the steps stay checked, the
+            # answer's channel table rides the same container
+            final_view = discord.ui.LayoutView(timeout=None)
+            final_blocks: list[Any] = [discord.ui.TextDisplay(title)]
+            final_blocks.append(discord.ui.Separator())
+            final_blocks.extend(
+                discord.ui.TextDisplay(f"\u2705 {step}") for step in final_steps
+            )
+            final_blocks.append(discord.ui.Separator())
+            final_blocks.append(discord.ui.TextDisplay(answer))
+            final_view.add_item(
+                discord.ui.Container(*final_blocks, accent_colour=discord.Colour(0x2ECC71))
+            )
+            message: Any = await interaction.edit_original_response(view=final_view, content=None)
         except discord.HTTPException as exc:
             if getattr(exc, "code", None) == 10003:
                 logger.warning(
