@@ -990,6 +990,36 @@ async def _refresh_post_intro(
 
 
 
+async def _dedupe_twins(guild_id: str, forum: Any, posts: dict[str, dict[str, Any]]) -> None:
+    """Delete the UNREGISTERED twins of a registered post (owner 2026-11-26).
+
+    The ThreadWithMessage crash created a twin on every sweep - the
+    registry only knows ONE thread per user; a live thread carrying a
+    registered post's TITLE but not its id is a twin, it dies.
+    """
+    by_title: dict[str, str] = {}
+    for entry in posts.values():
+        title = _thread_title(str(entry.get("name") or ""))
+        if title:
+            by_title[title] = str(entry.get("thread_id") or "")
+    if not by_title:
+        return
+    threads = getattr(forum, "threads", {}) or {}
+    for thread in list(threads.values()):
+        try:
+            registered = by_title.get(_thread_title(str(thread.name)))
+            if registered and str(thread.id) != registered:
+                await thread.delete()
+                logger.info(
+                    "matches forum: twin post deleted (guild %s, thread %s)",
+                    guild_id,
+                    thread.id,
+                )
+        except Exception:
+            logger.debug("the twin post delete failed - best-effort", exc_info=True)
+
+
+
 async def _ensure_player_posts(
     bot: discord.Client, guild_id: str, forum: Any, users: dict[str, dict[str, Any]]
 ) -> dict[str, dict[str, Any]]:
@@ -1067,6 +1097,7 @@ async def _ensure_player_posts(
         posts[uid] = entry
         await _save_post(guild_id, uid, entry)
         logger.info("matches forum: post created for %s (guild %s, thread %s)", uid, guild_id, thread.id)
+    await _dedupe_twins(guild_id, forum, posts)
     return posts
 
 
