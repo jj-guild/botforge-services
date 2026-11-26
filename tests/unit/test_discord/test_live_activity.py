@@ -716,11 +716,22 @@ def test_the_forum_seed_posts_each_players_group_in_his_post() -> None:  # noqa:
     async def _fake_sweep(bot, guild_id, channel_id):
         return _Forum()
 
-    async def _fake_ensure(bot, guild_id, forum, profiles):
-        return {pid: {"thread_id": f"t-{pid}", "name": pid, "refs": [], "messages": {}} for pid in profiles}
+    async def _fake_ensure(bot, guild_id, forum, users):
+        return {
+            uid: {"thread_id": f"t-{uid}", "name": u.get("name", uid), "refs": [], "messages": {}}
+            for uid, u in users.items()
+        }
 
     async def _fake_profiles(bot, guild_id):
-        return ["7", "8"]
+        return ["7", "9", "8"]
+
+    async def _fake_users(bot, guild_id):
+        # one USER owns the profiles 7 and 9 (owner 2026-11-26: a post
+        # per bot user, never per aoe2 profile)
+        return {
+            "u1": {"name": "Alice", "profiles": {"7": "Alice", "9": "Alice-alt"}},
+            "u2": {"name": "Bob", "profiles": {"8": "Bob"}},
+        }
 
     async def _fake_marker(guild_id):
         return None  # a fresh forum: the seed runs
@@ -731,7 +742,7 @@ def test_the_forum_seed_posts_each_players_group_in_his_post() -> None:  # noqa:
     async def _fake_week_cards(bot, guild_id):
         return [
             {"match_id": "m1", "players": [{"profile_id": "7"}, {"profile_id": "8"}]},
-            {"match_id": "m2", "players": [{"profile_id": "7"}]},
+            {"match_id": "m2", "players": [{"profile_id": "7"}, {"profile_id": "9"}]},
         ]
 
     async def _fake_grouped(thread, cards, ctx_by_ref, labels, known, max_group=10):
@@ -753,13 +764,14 @@ def test_the_forum_seed_posts_each_players_group_in_his_post() -> None:  # noqa:
         return {}
 
     original = {name: getattr(feed, name) for name in (
-        "_sweep_channel", "_ensure_player_posts", "_guild_profiles", "_seed_marker",
+        "_sweep_channel", "_ensure_player_posts", "_guild_profiles", "_guild_users", "_seed_marker",
         "_write_seed_marker", "_week_cards", "_send_cards_grouped", "_thread_of",
         "_save_post", "_label_pack", "_card_ctx",
     )}
     feed._sweep_channel = _fake_sweep
     feed._ensure_player_posts = _fake_ensure
     feed._guild_profiles = _fake_profiles
+    feed._guild_users = _fake_users
     feed._seed_marker = _fake_marker
     feed._write_seed_marker = _fake_write_marker
     feed._week_cards = _fake_week_cards
@@ -775,8 +787,8 @@ def test_the_forum_seed_posts_each_players_group_in_his_post() -> None:  # noqa:
         for key, value in original.items():
             setattr(feed, key, value)
     threads = list(sent.values())
-    assert sorted(threads[0]) == ["m1", "m2"], "player 7's post carries BOTH his matches"
-    assert threads[1] == ["m1"], "player 8's post carries the shared match (duplicates assumed)"
+    assert sorted(threads[0]) == ["m1", "m2"], "Alice's post carries BOTH her accounts' matches"
+    assert threads[1] == ["m1"], "Bob's post carries the shared match (duplicates assumed)"
 
 
 def test_the_grouped_sender_halves_when_discord_refuses() -> None:

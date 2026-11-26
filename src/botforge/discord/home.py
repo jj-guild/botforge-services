@@ -2835,6 +2835,14 @@ class ProfileRenameModal(discord.ui.Modal):
                     display_name=str(interaction.user.display_name or interaction.user.name),
                 )
             await identity.set_display_name(user.id, str(self.name.value))
+            # the matches-forum post rides the BOT display name (owner
+            # 2026-11-26): a rename retitles the post in EVERY guild
+            try:
+                from botforge.discord.live_activity import rename_user_posts
+
+                await rename_user_posts(interaction.client, str(interaction.user.id), str(self.name.value))
+            except Exception:
+                logger.debug("the post retitle skipped - best-effort", exc_info=True)
         except ValueError:
             await interaction.followup.send(await reply(interaction, "profile.rename_bad_length"), ephemeral=True)
             return

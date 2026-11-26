@@ -53,7 +53,8 @@ _SEED_SWEEP_S = 300.0
 # the seed's BUILD: a seed producing broken cards gets versioned up -
 # every salon re-seeds once with the fixed build (the old cards stay,
 # the guild owns its channel)
-_SEED_VERSION = 8  # 8: the seed's silent stops speak (the 23:24 repair starved silently)
+_SEED_VERSION = 9  # 9: one post per USER - the bot display name titles it;
+# the profile-keyed registry entries are strangers now (the orphan pass dies)
 
 _MATCHES_SCOPE = "games/aoe2"
 _MATCHES_KEY = "matches"
@@ -427,7 +428,12 @@ async def _send_card(
     forum = await _sweep_channel(bot, guild_id, channel_id)
     if forum is None or not isinstance(forum, discord.ForumChannel):
         return
-    posts = await _ensure_player_posts(bot, guild_id, forum, sorted(participants))
+    # the POST unit is the USER (owner 2026-11-26): the reconcile
+    # always sees EVERY user (a subset ensure would delete the rest),
+    # the live card only rides the participants' own posts
+    users = await _guild_users(bot, guild_id)
+    posts = await _ensure_player_posts(bot, guild_id, forum, users)
+    post_owners = sorted({_profile_user(users, p) for p in participants} - {""})
     try:
         labels = await _label_pack(bot, guild_id)
         ctx = await _card_ctx(bot, guild_id, card)
@@ -437,28 +443,28 @@ async def _send_card(
         # the render NEVER kills the feed - the card stays as it was
         logger.debug("live activity card render failed (match %s)", match_ref, exc_info=True)
         return
-    for profile_id in sorted(participants):
-        await _upsert_participant_card(bot, guild_id, profile_id, match_ref, posts, forum, view)
+    for uid in post_owners:
+        await _upsert_participant_card(bot, guild_id, uid, match_ref, posts, forum, view)
 
 
 async def _upsert_participant_card(
     bot: discord.Client,
     guild_id: str,
-    profile_id: str,
+    user_id: str,
     match_ref: str,
     posts: dict[str, dict[str, Any]],
     forum: Any,
     view: Any,
 ) -> None:
-    """Edit one participant's live card in HIS post, send it when new."""
+    """Edit the user's live card in HIS post, send it when new."""
     del bot
-    entry = posts.get(profile_id)
+    entry = posts.get(user_id)
     if entry is None:
         return
     thread = _thread_of(forum, entry)
     if thread is None:
         return
-    live_key = (guild_id, profile_id, match_ref)
+    live_key = (guild_id, user_id, match_ref)
     live = _CARDS.get(live_key)
     if live is not None:
         try:
@@ -468,7 +474,7 @@ async def _upsert_participant_card(
             logger.info(
                 "live activity card edit failed (guild %s, post %s, match %s) - recreating",
                 guild_id,
-                profile_id,
+                user_id,
                 match_ref,
             )
             _CARDS.pop(live_key, None)
@@ -481,12 +487,12 @@ async def _upsert_participant_card(
             entry.setdefault("refs", [])
             entry["refs"] = sorted({*entry["refs"], match_ref})
             entry.setdefault("messages", {})[match_ref] = str(message.id)
-            await _save_post(guild_id, profile_id, entry)
+            await _save_post(guild_id, user_id, entry)
     except Exception:
         logger.debug(
             "live activity card send skipped (guild %s, post %s) - best-effort",
             guild_id,
-            profile_id,
+            user_id,
             exc_info=True,
         )
 
@@ -617,11 +623,12 @@ async def _maybe_seed_matches_salon(  # noqa: C901 - one orchestration, no branc
             logger.info("matches forum seed STOP: no known profiles (guild %s)", guild_id)
             await _write_seed_marker(guild_id, channel_id)
             return
-        posts = await _ensure_player_posts(bot, guild_id, forum, profiles)
+        users = await _guild_users(bot, guild_id)
+        posts = await _ensure_player_posts(bot, guild_id, forum, users)
         logger.info(
-            "matches forum seed: %d post(s) ensured for %d known profile(s) (guild %s)",
+            "matches forum seed: %d post(s) ensured for %d user(s) (guild %s)",
             len(posts),
-            len(profiles),
+            len(users),
             guild_id,
         )
         cards = await _week_cards(bot, guild_id)
@@ -634,8 +641,8 @@ async def _maybe_seed_matches_salon(  # noqa: C901 - one orchestration, no branc
         labels = await _label_pack(bot, guild_id)
         known = set(profiles)
         posted_total = 0
-        for profile_id, entry in posts.items():
-            group = _cards_of_player(cards, profile_id)
+        for uid, entry in posts.items():
+            group = _cards_of_user(cards, set((users.get(uid) or {}).get("profiles") or {}))
             if not group:
                 continue
             refs = _post_refs(entry)
@@ -654,7 +661,7 @@ async def _maybe_seed_matches_salon(  # noqa: C901 - one orchestration, no branc
                 entry["refs"].extend(ref for ref, _mid in marked)
                 entry["refs"] = sorted(set(entry["refs"]))
                 entry.setdefault("messages", {}).update(dict(marked))
-                await _save_post(guild_id, profile_id, entry)
+                await _save_post(guild_id, uid, entry)
                 posted_total += len(marked)
         if posted_total:
             logger.info(
@@ -841,6 +848,79 @@ def _post_messages(entry: dict[str, Any]) -> dict[str, str]:
     return {str(k): str(v) for k, v in (entry.get("messages") or {}).items()}
 
 
+async def _guild_users(bot: discord.Client, guild_id: str) -> dict[str, dict[str, Any]]:  # noqa: C901 - the roster fold
+    """Return the guild's BOT USERS riding aoe2 bindings.
+
+    The post unit is the USER (owner 2026-11-26: one post per bot
+    user - NOT one per aoe2 profile; a user may bind several
+    accounts, every account's match lands in HIS post):
+    ``{user_id: {"name": the bot display name, "profiles":
+    {profile_id: alias}}}``.
+    """
+    registration = getattr(bot, "registration_service", None)
+    if registration is None:
+        return {}
+    guild = bot.get_guild(int(guild_id))
+    if guild is None:
+        return {}
+    try:
+        from botforge.discord.member_cache import guild_members
+
+        members = await guild_members(guild)
+    except Exception:
+        return {}
+    if not members:
+        return {}
+    out: dict[str, dict[str, Any]] = {}
+    try:
+        bindings = await registration.list_bindings_for_game("aoe2")
+    except Exception:
+        return {}
+    for binding in bindings:
+        uid = str(binding.get("user_id", ""))
+        pid = str(binding.get("profile_id", ""))
+        if not uid or not pid or not (uid.isdigit() and int(uid) in members):
+            continue
+        alias = str((binding.get("profile") or {}).get("alias") or pid)
+        out.setdefault(uid, {"name": "", "profiles": {}})["profiles"][pid] = alias
+    identity = getattr(bot, "identity_service", None)
+    for uid, entry in out.items():
+        name = ""
+        if identity is not None:
+            try:
+                user = await identity.get_user(f"discord:{uid}")
+                name = str((user.display_name if user is not None else "") or "")
+            except Exception:
+                name = ""
+        # the bot display name rules the post's TITLE (owner
+        # 2026-11-26); the first account's alias is the floor
+        entry["name"] = name or next(iter(entry["profiles"].values()))
+    return out
+
+
+def _profile_user(users: dict[str, dict[str, Any]], profile_id: str) -> str:
+    """Resolve the profile's USER (the post owner) - "" for a stranger."""
+    pid = str(profile_id)
+    for uid, entry in users.items():
+        if pid in entry["profiles"]:
+            return uid
+    return ""
+
+
+def _cards_of_user(cards: list[dict[str, Any]], profiles: set[str]) -> list[dict[str, Any]]:
+    """Return the cards ANY of the user's aoe2 accounts played."""
+    wanted = {str(p) for p in profiles if str(p)}
+    if not wanted:
+        return []
+    out: list[dict[str, Any]] = []
+    for card in cards:
+        for player in card.get("players") or []:
+            if str((player or {}).get("profile_id") or "") in wanted:
+                out.append(card)
+                break
+    return out
+
+
 async def _player_names(bot: discord.Client, guild_id: str) -> dict[str, str]:
     """Return the known profiles' display names (the bindings' own aliases)."""
     registration = getattr(bot, "registration_service", None)
@@ -860,46 +940,49 @@ async def _player_names(bot: discord.Client, guild_id: str) -> dict[str, str]:
 
 
 async def _ensure_player_posts(
-    bot: discord.Client, guild_id: str, forum: Any, profiles: list[str]
+    bot: discord.Client, guild_id: str, forum: Any, users: dict[str, dict[str, Any]]
 ) -> dict[str, dict[str, Any]]:
-    """Reconcile the forum's posts with the KNOWN players.
+    """Reconcile the forum's posts with the guild's BOT USERS.
 
-    The owner's lifecycle rule (2026-11-25): a known player entering
-    or leaving the guild creates/deletes his post; a member binding
-    or unbinding a profile does the same - the reconcile creates the
-    missing threads, deletes the orphaned ones, the sweep (and the
-    join/leave/bind listeners) trigger it.
+    The post unit is the USER (owner 2026-11-26): the title carries
+    his BOT display name (a rename updates every guild), the first
+    message lists his aoe2 accounts - and every match ANY of them
+    played lands in HIS post. A user leaving the guild (or losing
+    every binding) loses his post; the old profile-keyed registry
+    entries are strangers now, the reconcile deletes them.
     """
-    known = [str(p) for p in profiles if str(p)]
+    del bot
     posts = await _posts_of(guild_id)
-    names = await _player_names(bot, guild_id)
-    for profile_id in list(posts):
-        if profile_id not in known:
-            # the player left or unbound: the post dies
+    for key in list(posts):
+        if key not in users:
+            # the user left or the entry predates the per-user cut
             try:
-                thread = forum.get_thread(int(posts[profile_id]["thread_id"]))
+                thread = forum.get_thread(int(posts[key]["thread_id"]))
                 if thread is None:
                     threads = getattr(forum, "threads", {})
-                    thread = threads.get(int(posts[profile_id]["thread_id"]))
+                    thread = threads.get(int(posts[key]["thread_id"]))
                 if thread is not None:
                     await thread.delete()
             except Exception:
-                logger.debug("the orphan post delete failed (post %s)", profile_id, exc_info=True)
-            await _save_post(guild_id, profile_id, None)
-            posts.pop(profile_id, None)
-            logger.info("matches forum: post deleted for %s (guild %s)", profile_id, guild_id)
-    for profile_id in known:
-        if profile_id in posts and str(posts[profile_id].get("name") or ""):
+                logger.debug("the orphan post delete failed (post %s)", key, exc_info=True)
+            await _save_post(guild_id, key, None)
+            posts.pop(key, None)
+            logger.info("matches forum: post deleted for %s (guild %s)", key, guild_id)
+    for uid, profile in users.items():
+        name = str(profile.get("name") or uid)
+        if uid in posts and str(posts[uid].get("name") or ""):
             continue
-        name = names.get(profile_id) or f"Profil {profile_id}"
+        aliases = sorted(set(profile.get("profiles") or {uid: uid}.values()))
+        intro = f"**{name}**\n" + " \u00b7 ".join(aliases)
         try:
             # the forum post's FIRST message can never be empty (the
             # forum-empty root cause, found by the WARNING: Discord's
             # 400 "Cannot send an empty message" refused EVERY
-            # create_thread - the forum starved from day one)
+            # create_thread - the forum starved from day one); the
+            # intro names the USER and his accounts
             thread = await forum.create_thread(
                 name=_thread_title(name),
-                content=f"**{name}**",
+                content=intro,
                 auto_archive_duration=10080,
             )
         except Exception:
@@ -907,7 +990,7 @@ async def _ensure_player_posts(
             # for 15 prompts - "0 post(s) ensured" with not one line
             # saying WHY; a starved catch is a liar)
             logger.warning(
-                "matches forum: post NOT created for %s (guild %s)", profile_id, guild_id, exc_info=True
+                "matches forum: post NOT created for %s (guild %s)", uid, guild_id, exc_info=True
             )
             continue
         entry = {
@@ -916,9 +999,9 @@ async def _ensure_player_posts(
             "refs": [],
             "messages": {},
         }
-        posts[profile_id] = entry
-        await _save_post(guild_id, profile_id, entry)
-        logger.info("matches forum: post created for %s (guild %s, thread %s)", profile_id, guild_id, thread.id)
+        posts[uid] = entry
+        await _save_post(guild_id, uid, entry)
+        logger.info("matches forum: post created for %s (guild %s, thread %s)", uid, guild_id, thread.id)
     return posts
 
 
@@ -1129,7 +1212,8 @@ async def _gap_fill_matches_salon(  # noqa: C901 - one orchestration, no branch 
             guild_id,
         )
         return
-    posts = await _ensure_player_posts(bot, guild_id, forum, profiles)
+    users = await _guild_users(bot, guild_id)
+    posts = await _ensure_player_posts(bot, guild_id, forum, users)
     from botforge.discord.stats_views import recent_match_entries
 
     known = set(profiles)
@@ -1150,10 +1234,10 @@ async def _gap_fill_matches_salon(  # noqa: C901 - one orchestration, no branch 
         )
         return
     labels = await _label_pack(bot, guild_id)
-    for profile_id, entry in posts.items():
+    for uid, entry in posts.items():
         refs = _post_refs(entry)
         group = [
-            c for c in _cards_of_player(cards, profile_id)
+            c for c in _cards_of_user(cards, set((users.get(uid) or {}).get("profiles") or {}))
             if str(c.get("match_id") or "") not in refs
         ]
         if not group:
@@ -1162,7 +1246,7 @@ async def _gap_fill_matches_salon(  # noqa: C901 - one orchestration, no branch 
         if thread is None:
             logger.info(
                 "matches forum gap-fill SKIP: %s's post thread is dead (guild %s)",
-                profile_id,
+                uid,
                 guild_id,
             )
             continue
@@ -1172,19 +1256,47 @@ async def _gap_fill_matches_salon(  # noqa: C901 - one orchestration, no branch 
         try:
             marked = await _send_cards_grouped(thread, group, ctx_by_ref, labels, known)
         except Exception:
-            logger.debug("the gap-fill group skipped (post %s) - best-effort", profile_id, exc_info=True)
+            logger.debug("the gap-fill group skipped (post %s) - best-effort", uid, exc_info=True)
             continue
         if marked:
             entry.setdefault("refs", []).extend(ref for ref, _mid in marked)
             entry["refs"] = sorted(set(entry["refs"]))
             entry.setdefault("messages", {}).update(dict(marked))
-            await _save_post(guild_id, profile_id, entry)
+            await _save_post(guild_id, uid, entry)
             logger.info(
                 "matches forum gap-fill: %d card(s) posted in %s's post (guild %s)",
                 len(marked),
-                profile_id,
+                uid,
                 guild_id,
             )
+
+
+async def rename_user_posts(bot: discord.Client, user_id: str, new_name: str) -> None:
+    """Retitle the user's post in EVERY guild (owner 2026-11-26).
+
+    The post's TITLE is the bot display name - a rename in one guild
+    is a rename everywhere his post lives.
+    """
+    for guild in list(getattr(bot, "guilds", []) or []):
+        gid = str(guild.id)
+        try:
+            posts = await _posts_of(gid)
+        except Exception:  # noqa: S112 - a guild's read is best-effort
+            continue
+        entry = posts.get(str(user_id))
+        if entry is None:
+            continue
+        try:
+            thread = await bot.fetch_channel(int(entry["thread_id"]))
+            await thread.edit(name=_thread_title(new_name))
+        except Exception:
+            logger.debug(
+                "the post retitle failed (guild %s, user %s) - best-effort", gid, user_id, exc_info=True
+            )
+            continue
+        entry["name"] = new_name
+        await _save_post(gid, str(user_id), entry)
+        logger.info("matches forum: %s's post retitled in guild %s", user_id, gid)
 
 
 async def _guild_profiles(bot: discord.Client, guild_id: str) -> list[str]:
