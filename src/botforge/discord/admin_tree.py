@@ -206,15 +206,20 @@ async def _ensure_scope(  # noqa: C901
         except Exception:
             logger.warning("ADMIN TREE: ensure failed (scope %s, guild %s)", spec.scope, guild_id, exc_info=True)
             return "Channel provisioning failed — see the bot logs."
-        lines.append(f"\U0001F527 **{spec.scope}** \u2014 salons v\u00e9rifi\u00e9s/cr\u00e9\u00e9s :")
+        # the guild-admin reads WORDS, not paths (owner 2026-11-26:
+        # "tu parles \u00e0 des admin de guild discord, pas des admin
+        # sys") - the scope names its localized category, the channels
+        # their mentions, only a MISSING channel names its key
+        scope_label = _translate(spec.category_key, locale)
+        lines.append(_say("repair_scope", scope=scope_label))
         for decl in spec.channels:
             channel_id = resolved.get(decl.key, "")
             lock = "\U0001F512" if decl.access == "admin" else ""
-            where = f"<#{channel_id}>{lock}" if channel_id else f"**{decl.key}** (absent)"
+            where = f"<#{channel_id}>{lock}" if channel_id else f"**{decl.key}** ({_say('repair_absent')})"
             lines.append(f"\u2022 {where}")
         tree_repair.step(
             f"scope {spec.scope} provisioned",
-            display=_say("repair_channels", scope=spec.scope, count=len(spec.channels)),
+            display=_say("repair_channels", scope=scope_label, count=len(spec.channels)),
             channels=len(spec.channels),
         )
         pins_ok += await _ensure_scope_pins(bot, guild_id, spec.scope)
@@ -232,9 +237,9 @@ async def _ensure_scope(  # noqa: C901
         "the scopes stand", scopes=len(specs), pins=pins_ok, roles=roles_ok, posts=synced_posts
     )
     tree_repair.steps.append(_say("repair_forums", posts=synced_posts))
-    lines.append(f"\n\U0001f4cc Vues \u00e9pingl\u00e9es v\u00e9rifi\u00e9es/recr\u00e9\u00e9es : {pins_ok}")
-    lines.append(f"\U0001F465 R\u00f4les v\u00e9rifi\u00e9s/cr\u00e9\u00e9s : {roles_ok}")
-    lines.append(f"\U0001f4dc Posts de forum v\u00e9rifi\u00e9s/recr\u00e9\u00e9s : {synced_posts}")
+    lines.append(f"\n{_say('repair_summary_pins', pins=pins_ok)}")
+    lines.append(_say("repair_summary_roles", roles=roles_ok))
+    lines.append(_say("repair_summary_posts", posts=synced_posts))
     # the tree just moved: a repaired salon (its stored id changed) must
     # repopulate NOW (owner 2026-11-25) - the gateway events only fire
     # on channel create/delete, a tree-ensure repair is this side's own

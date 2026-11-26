@@ -1967,18 +1967,8 @@ def _seat_text(
     return "\n".join(lines), ctx["civ_images"].get(civ, "")
 
 
-def _seat_component(text: str, civ_image: str, avatar: str = "") -> Any:
-    """One seat becomes a Section with an image in accessory.
-
-    The post owner's OWN seat wears his DISCORD avatar (owner
-    2026-11-26) - the avatar wins over the civ icon, every other seat
-    keeps the civ icon.
-    """
-    if avatar:
-        return discord.ui.Section(
-            discord.ui.TextDisplay(text),
-            accessory=discord.ui.Thumbnail(avatar),
-        )
+def _seat_component(text: str, civ_image: str) -> Any:
+    """One seat becomes a Section with the civ icon in accessory."""
     if civ_image:
         return discord.ui.Section(
             discord.ui.TextDisplay(text),
@@ -2108,7 +2098,6 @@ def _card_ffa_blocks(
     me_ids: set[str],
     winners: set[str],
     ai_decided: bool,
-    owner_avatar: str = "",
 ) -> list[Any]:
     """Render the free-for-all ladder: no team, a per-seat W/LOSS mark.
 
@@ -2133,11 +2122,7 @@ def _card_ffa_blocks(
                 else:  # the computers decided it: the AIs win, the humans lost
                     won = bool(player.get("ai"))
                 mark = "\U0001f3c6 " if won else "\U0001f480 "
-            blocks.append(
-                _seat_component(
-                    mark + text, civ_image, owner_avatar if pid in me_ids else ""
-                )
-            )
+            blocks.append(_seat_component(mark + text, civ_image))
     return blocks
 
 
@@ -2148,7 +2133,6 @@ def _card_team_blocks(
     labels: dict[str, Any],
     ctx: dict[str, Any],
     known_ids: set[str] | None = None,
-    owner_avatar: str = "",
 ) -> list[Any]:
     """Render the card's team sections: ONE block per seat.
 
@@ -2172,9 +2156,7 @@ def _card_team_blocks(
 
     # an FFA reads ONE ladder (owner 2026-11-25)
     if _is_ffa(card):
-        return _card_ffa_blocks(
-            card, teams, ctx, labels, me_ids, winners, ai_decided, owner_avatar=owner_avatar
-        )
+        return _card_ffa_blocks(card, teams, ctx, labels, me_ids, winners, ai_decided)
     blocks: list[Any] = []
     for index, (_team, seats) in enumerate(teams):
         if index:
@@ -2198,7 +2180,6 @@ def _card_team_blocks(
                 title = f"~~{title}~~"
             blocks.append(discord.ui.TextDisplay(f"{medal}{title}"))
         for player in seats:
-            pid = str(player.get("profile_id", ""))
             text, civ_image = _seat_text(
                 player,
                 card,
@@ -2209,14 +2190,7 @@ def _card_team_blocks(
                 team_lost=scoped and verdict and finished and not won,
                 known_ids=known_ids or set(),
             )
-            blocks.append(
-                _seat_component(
-                    text,
-                    civ_image,
-                    # the post owner's own seat wears HIS avatar
-                    owner_avatar if pid in me_ids else "",
-                )
-            )
+            blocks.append(_seat_component(text, civ_image))
     return blocks
 
 def _match_card_view(
@@ -2225,7 +2199,6 @@ def _match_card_view(
     me_ids: set[str],
     labels: dict[str, Any],
     known_ids: set[str] | None = None,
-    owner_avatar: str = "",
 ) -> discord.ui.LayoutView:
     """Build ONE match card's view - the SAME panel everywhere.
 
@@ -2245,9 +2218,7 @@ def _match_card_view(
     """
     from botforge.discord.ui.view_footer import add_view_footer
 
-    blocks, buttons, match_id, accent = _match_card_parts(
-        card, ctx, me_ids, labels, known_ids, owner_avatar=owner_avatar
-    )
+    blocks, buttons, match_id, accent = _match_card_parts(card, ctx, me_ids, labels, known_ids)
     view = discord.ui.LayoutView(timeout=None)
     view.add_item(discord.ui.Container(*blocks, accent_colour=discord.Colour(accent)))
     if buttons:
@@ -2261,7 +2232,6 @@ def _match_card_parts(
     me_ids: set[str],
     labels: dict[str, Any],
     known_ids: set[str] | None = None,
-    owner_avatar: str = "",
 ) -> tuple[list[Any], list[discord.ui.Button[Any]], str, int]:
     """Build ONE match card's inner parts: (blocks, buttons, id, accent).
 
@@ -2294,31 +2264,15 @@ def _match_card_parts(
     # the SCOPE (owner 2026-11-23): the view scoped onto one player
     # rides his OWN outcome emoji on the header and strikes the
     # losers' titles - see _card_team_blocks
-    # the POST OWNER's DISCORD avatar (owner 2026-11-26: the card's
-    # image wears the player, never the provider's steam one) - set
-    # only by the players forum's per-post renders
-    header_text: discord.ui.TextDisplay[discord.ui.LayoutView] = discord.ui.TextDisplay(
-        _card_header(badge, noun, match_id, me_ids=me_ids, card=card)
-    )
-    blocks: list[Any] = []
-    if owner_avatar:
-        blocks.append(
-            discord.ui.Section(header_text, accessory=discord.ui.Thumbnail(owner_avatar))
-        )
-    else:
-        blocks.append(header_text)
+    blocks: list[Any] = [
+        discord.ui.TextDisplay(
+            _card_header(badge, noun, match_id, me_ids=me_ids, card=card)
+        ),
+    ]
     blocks.append(_card_map_section(card, ctx, labels))
     blocks.append(discord.ui.Separator())
     blocks.extend(
-        _card_team_blocks(
-            card,
-            _ordered_teams(card, me_ids),
-            me_ids,
-            labels,
-            ctx,
-            known_ids or set(),
-            owner_avatar=owner_avatar,
-        )
+        _card_team_blocks(card, _ordered_teams(card, me_ids), me_ids, labels, ctx, known_ids or set())
     )
     # the footer: the source, then the status-led action row
     blocks.append(discord.ui.Separator())

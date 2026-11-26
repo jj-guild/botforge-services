@@ -32,7 +32,13 @@ crashes&nbsp;the&nbsp;view&nbsp;(the&nbsp;panels&nbsp;degrade&nbsp;quietly).</sp
 <td class="section-title" colspan=3>&nbsp;<br><strong class="bigsection">Functions</strong></td></tr>
     
 <tr><td class="decor functions-decor"><span class="code">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span></td><td>&nbsp;</td>
-<td class="singlecolumn"><dl><dt>async <a name="-account_elo_by_profile"><strong>account_elo_by_profile</strong></a>(bot: 'Any', profile_ids: 'list[str]', translate: 'Any' = None) -&gt; 'dict[str, str]'</dt><dd><span class="code">Render&nbsp;the&nbsp;per-account&nbsp;1v1&nbsp;elo&nbsp;lines,&nbsp;keyed&nbsp;by&nbsp;profile&nbsp;id.<br>
+<td class="singlecolumn"><dl><dt>async <a name="-account_boards_by_profile"><strong>account_boards_by_profile</strong></a>(bot: 'Any', profile_ids: 'list[str]') -&gt; 'dict[str, dict[str, tuple[int, int]]]'</dt><dd><span class="code">Serve&nbsp;the&nbsp;per-account&nbsp;RM&nbsp;boards:&nbsp;{pid:&nbsp;{board:&nbsp;(current,&nbsp;max)}}.<br>
+&nbsp;<br>
+The&nbsp;players&nbsp;forum's&nbsp;profile&nbsp;card&nbsp;reads&nbsp;BOTH&nbsp;ladders&nbsp;(owner<br>
+2026-11-26:&nbsp;the&nbsp;seat-like&nbsp;account&nbsp;lines&nbsp;carry&nbsp;the&nbsp;1v1&nbsp;elo&nbsp;AND&nbsp;the<br>
+TG&nbsp;elo,&nbsp;current&nbsp;and&nbsp;max)&nbsp;-&nbsp;the&nbsp;same&nbsp;stats&nbsp;seam&nbsp;the&nbsp;seat&nbsp;lines&nbsp;ride<br>
+(LB3/LB4&nbsp;only,&nbsp;never&nbsp;the&nbsp;exotic&nbsp;boards).</span></dd></dl>
+ <dl><dt>async <a name="-account_elo_by_profile"><strong>account_elo_by_profile</strong></a>(bot: 'Any', profile_ids: 'list[str]', translate: 'Any' = None) -&gt; 'dict[str, str]'</dt><dd><span class="code">Render&nbsp;the&nbsp;per-account&nbsp;1v1&nbsp;elo&nbsp;lines,&nbsp;keyed&nbsp;by&nbsp;profile&nbsp;id.<br>
 &nbsp;<br>
 ``"1185&nbsp;Elo&nbsp;1v1&nbsp;(max&nbsp;1210)"``&nbsp;per&nbsp;account&nbsp;—&nbsp;the&nbsp;1v1&nbsp;RM&nbsp;rating&nbsp;the<br>
 player&nbsp;actually&nbsp;reads&nbsp;(the&nbsp;request&nbsp;of&nbsp;2026-11-20:&nbsp;the&nbsp;profile&nbsp;page<br>

@@ -219,10 +219,15 @@ en:
       mods_btn: Mods
       repair_title: "## \U0001F5E3 Channels repair"
       repair_running: "\u23F3 The bot is working\u2026"
-      repair_channels: "\U0001F527 **{scope}** channels checked ({count})"
-      repair_pins_roles: "\U0001F4CC Views checked ({pins}) \u00b7 \U0001F9E9 Roles checked ({roles})"
-      repair_forums: "\U0001F4DD Forum posts checked ({posts})"
+      repair_channels: "\U0001F527 **{scope}** channels in order ({count})"
+      repair_pins_roles: "\U0001F4CC Pinned messages in place ({pins}) \u00b7 \U0001F9E9 Roles in place ({roles})"
+      repair_forums: "\U0001F4DD Forum posts up to date ({posts})"
       repair_done: "\u2705 Repair finished in {duration}s"
+      repair_scope: "\U0001F527 **{scope}** \u2014 the channels are in order:"
+      repair_absent: missing
+      repair_summary_pins: "\U0001F4CC Pinned messages checked: {pins}"
+      repair_summary_roles: "\U0001F465 Roles checked: {roles}"
+      repair_summary_posts: "\U0001F4DD Forum posts refreshed: {posts}"
       ensure_btn: Sync now
       channel_access_everyone: '👁️ Read: @everyone
 

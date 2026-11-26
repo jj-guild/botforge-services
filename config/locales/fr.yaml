@@ -216,10 +216,15 @@ fr:
       mods_btn: Mods
       repair_title: "## \U0001F5E3 Réparation des salons"
       repair_running: "\u23F3 Le bot travaille\u2026"
-      repair_channels: "\U0001F527 Salons de **{scope}** vérifiés ({count})"
-      repair_pins_roles: "\U0001F4CC Vues vérifiées ({pins}) \u00b7 \U0001F9E9 Rôles vérifiés ({roles})"
-      repair_forums: "\U0001F4DD Posts de forum vérifiés ({posts})"
+      repair_channels: "\U0001F527 Salons de **{scope}** en ordre ({count})"
+      repair_pins_roles: "\U0001F4CC Messages épinglés en place ({pins}) \u00b7 \U0001F9E9 Rôles en place ({roles})"
+      repair_forums: "\U0001F4DD Posts des forums à jour ({posts})"
       repair_done: "\u2705 Réparation terminée en {duration}s"
+      repair_scope: "\U0001F527 **{scope}** \u2014 les salons sont en ordre :"
+      repair_absent: introuvable
+      repair_summary_pins: "\U0001F4CC Messages épinglés vérifiés : {pins}"
+      repair_summary_roles: "\U0001F465 Rôles vérifiés : {roles}"
+      repair_summary_posts: "\U0001F4DD Posts des forums mis à jour : {posts}"
       ensure_btn: "Réparer salons & rôles"
       channel_access_everyone: '👁️ Lecture : @everyone
 

@@ -112,6 +112,37 @@ async def account_elo_by_profile(
     return lines
 
 
+async def account_boards_by_profile(bot: Any, profile_ids: list[str]) -> dict[str, dict[str, tuple[int, int]]]:
+    """Serve the per-account RM boards: {pid: {board: (current, max)}}.
+
+    The players forum's profile card reads BOTH ladders (owner
+    2026-11-26: the seat-like account lines carry the 1v1 elo AND the
+    TG elo, current and max) - the same stats seam the seat lines ride
+    (LB3/LB4 only, never the exotic boards).
+    """
+    del bot
+    if not profile_ids:
+        return {}
+    client = stats_client()
+    if client is None:
+        return {}
+    try:
+        accounts = await client.get_account_stats([str(p) for p in profile_ids])
+    except Exception:
+        logger.warning("STATS VIEWS: the account boards fetch failed", exc_info=True)
+        return {}
+    boards: dict[str, dict[str, tuple[int, int]]] = {}
+    for account in accounts:
+        mine: dict[str, tuple[int, int]] = {}
+        for board in account.leaderboards:
+            name = str(board.name)
+            if name in ("rm_1v1", "rm_team") and int(board.current):
+                mine[name] = (int(board.current), int(board.max))
+        if mine:
+            boards[str(account.profile_id)] = mine
+    return boards
+
+
 async def recent_match_blocks(
     profile_ids: list[str],
     me_ids: set[str],

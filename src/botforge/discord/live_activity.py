@@ -461,15 +461,8 @@ async def _send_card(
         # his own view - his profiles bold, HIS verdict - rendered per
         # post, never one unscoped view shared by everyone
         try:
-            # the post owner's DISCORD avatar rides HIS card (owner
-            # 2026-11-26): the header's accessory thumbnail, his seats
             view = _match_card_view(
-                card,
-                ctx,
-                set((users.get(uid) or {}).get("profiles") or {}),
-                labels,
-                known,
-                owner_avatar=str((users.get(uid) or {}).get("avatar") or ""),
+                card, ctx, set((users.get(uid) or {}).get("profiles") or {}), labels, known
             )
         except Exception:
             logger.debug("live activity card render failed (match %s)", match_ref, exc_info=True)
@@ -704,7 +697,6 @@ async def _maybe_seed_players_forum(  # noqa: C901 - one orchestration, no branc
                 labels,
                 known,
                 me_ids=set((users.get(uid) or {}).get("profiles") or {}),
-                owner_avatar=str((users.get(uid) or {}).get("avatar") or ""),
             )
             if marked:
                 entry.setdefault("refs", [])
@@ -1057,54 +1049,88 @@ def _post_intro_signature(name: str, profile: dict[str, Any], avatar: str) -> st
 
 
 async def _post_intro_view(
-    bot: discord.Client, guild_id: str, name: str, profile: dict[str, Any], avatar: str
+    bot: discord.Client, guild_id: str, user_id: str, name: str, profile: dict[str, Any], avatar: str
 ) -> discord.ui.LayoutView:
-    """Build the post's first message: the player's PROFILE VIEW, no buttons.
+    """Build the post's first message: the player's card, the shared template.
 
-    The very view the profile popup serves (owner 2026-11-26: "mets
-    exactement la view profile correspondant au joueur que tu
-    affiches, sans aucun bouton"): the header, the aoe2 accounts with
-    their insight links and elo, the DISCORD avatar in accessory. The
-    popup's buttons stay in the popup - the post is public and quiet.
+    The entity-card contract (owner 2026-11-26): the pseudo titles the
+    card, the IMMUTABLE anchor is the DISCORD user id (the resource
+    id, in backticks - never the pseudo, which moves), the accounts
+    read like match seats (bold insight link, the 1v1 and TG elo with
+    their max as sub lines, ordered by the LATEST match first), the
+    avatar rides the header's thumbnail, the admin button opens the
+    gated submenu, and the view id ``panel:player:aoe2:<user id>``
+    foots the card - aoe2 through and through, the scope is the
+    displayed player.
     """
-    from botforge.discord.commands_i18n import reply_guild
+    from botforge.discord.commands_i18n import _feed_locale
+    from botforge.discord.entity_admin_menu import EntityAdminButton
     from botforge.discord.home import _game_label
-    from botforge.discord.stats_views import account_elo_by_profile
+    from botforge.discord.stats_views import account_boards_by_profile, recent_match_entries
+    from botforge.discord.ui.entity_cards import EntityCardBuilder
 
     profiles = {str(k): str(v) for k, v in (profile.get("profiles") or {}).items()}
-    header = await reply_guild(guild_id, bot, "profile.header_with_name", name=name)
-    elo_lines: dict[str, str] = {}
+    boards: dict[str, dict[str, tuple[int, int]]] = {}
     try:
-        elo_lines = await account_elo_by_profile(
-            bot,
-            sorted(profiles),
-            translate=lambda key, **fmt: reply_guild(guild_id, bot, key, **fmt),
-        )
+        boards = await account_boards_by_profile(bot, sorted(profiles))
     except Exception:
-        logger.debug("the intro elo lines failed - best-effort", exc_info=True)
-    lines = [f"## {_game_label('aoe2')}"]
-    for pid in sorted(profiles):
-        # the link LABEL is the account's NAME (owner 2026-11-26):
-        # the binding alias, the live feed's own name, the id as the
-        # floor - never an unnamed link
+        logger.debug("the intro boards failed - best-effort", exc_info=True)
+    # the ORDER is the activity (owner 2026-11-26): the account with
+    # the LATEST match first - the served history is newest-first, the
+    # first sight per profile wins, the never-played accounts close
+    latest: dict[str, int] = {}
+    try:
+        for entry in await recent_match_entries(sorted(profiles), limit=100):
+            when = _int_of(getattr(entry, "finished_at", 0)) or _int_of(
+                getattr(entry, "started_at", 0)
+            )
+            for player in _entry_players_of(entry):
+                pid = str((player or {}).get("profile_id") or "")
+                if pid in profiles and pid not in latest:
+                    latest[pid] = when
+    except Exception:
+        logger.debug("the intro ordering read failed - best-effort", exc_info=True)
+    ordered = sorted(profiles, key=lambda pid: (-latest.get(pid, 0), pid))
+    # the seat grammar, minus the seat (owner 2026-11-26: "affiche les
+    # comptes comme ils le sont lors d'un match, sans les civs, spot,
+    # replay" - the bold insight link, the RM ladder lines beneath)
+    indent = "\u2800" * 4
+    paragraphs: list[str] = []
+    for pid in ordered:
         label = profiles.get(pid) or _LAST_NAME.get(pid) or f"Compte {pid}"
-        account = f"\u2022 [{label}](https://www.aoe2insights.com/user/relic/{pid}/) (`{pid}`)"
-        stored = elo_lines.get(pid)
-        if stored:
-            account = f"{account} \u2014 {stored}"
-        lines.append(account)
-    blocks: list[Any] = []
-    header_text: discord.ui.TextDisplay[discord.ui.LayoutView] = discord.ui.TextDisplay(header)
-    if avatar:
-        # the player's DISCORD avatar rides the post's own image
-        # (owner 2026-11-26) - the header's accessory thumbnail
-        blocks.append(discord.ui.Section(header_text, accessory=discord.ui.Thumbnail(avatar)))
-    else:
-        blocks.append(header_text)
-    blocks.append(discord.ui.TextDisplay("\n".join(lines)))
-    view = discord.ui.LayoutView(timeout=None)
-    view.add_item(discord.ui.Container(*blocks))
-    return view
+        lines = [f"**[{label}](https://www.aoe2insights.com/user/relic/{pid}/)**"]
+        mine = boards.get(pid) or {}
+        for key, ladder_label in (("rm_1v1", "1v1"), ("rm_team", "TG")):
+            current, peak = mine.get(key, (0, 0))
+            if not current:
+                continue
+            span = f"{current} - {peak}" if peak and peak > current else f"{current}"
+            lines.append(f"-# {indent}{ladder_label} : {span}")
+        paragraphs.append("\n".join(lines))
+    try:
+        locale = str(await _feed_locale(guild_id, bot) or "en")
+    except Exception:
+        locale = "en"
+    return (
+        EntityCardBuilder(str(user_id), name, locale=locale)
+        .subtitle(_game_label("aoe2"))
+        .description("\n\n".join(paragraphs))
+        .thumbnail(avatar)
+        .buttons(EntityAdminButton("player", f"player:aoe2:{user_id}", game_key="aoe2"))
+        .view_id(f"panel:player:aoe2:{user_id}")
+        .build()
+    )
+
+
+def _entry_players_of(entry: Any) -> list[dict[str, Any]]:
+    """Fold a served history entry's seats (the players_json list)."""
+    import json as _json
+
+    try:
+        seats = _json.loads(str(getattr(entry, "players_json", "") or "[]"))
+    except (ValueError, TypeError):
+        return []
+    return [dict(s) for s in seats if isinstance(s, dict)]
 
 
 async def _refresh_post_intro(
@@ -1210,7 +1236,7 @@ async def _ensure_player_posts(  # noqa: C901 - one reconcile
                 # account, a name, an avatar) - the ensure runs on
                 # every live event, the rebuild never fires blind
                 if str(posts[uid].get("intro") or "") != signature:
-                    view = await _post_intro_view(bot, guild_id, name, profile, avatar)
+                    view = await _post_intro_view(bot, guild_id, uid, name, profile, avatar)
                     await _refresh_post_intro(guild_id, forum, posts, uid, signature, view)
                 continue
             logger.info(
@@ -1232,7 +1258,7 @@ async def _ensure_player_posts(  # noqa: C901 - one reconcile
             # 2026-11-26): the header, his insight-linked accounts,
             # the DISCORD avatar - NO buttons, the post is public and
             # quiet; the view rides create_thread's own view param
-            intro_view = await _post_intro_view(bot, guild_id, name, profile, avatar)
+            intro_view = await _post_intro_view(bot, guild_id, uid, name, profile, avatar)
             created = await forum.create_thread(
                 name=_thread_title(name),
                 view=intro_view,
@@ -1384,7 +1410,7 @@ async def _sweep_channel(bot: discord.Client, guild_id: str, channel_id: str) ->
 async def _send_cards_grouped(
     thread: Any, cards: list[dict[str, Any]], ctx_by_ref: dict[str, dict[str, Any]],
     labels: dict[str, Any], known: set[str], me_ids: set[str] | None = None,
-    max_group: int = 10, owner_avatar: str = "",
+    max_group: int = 10,
 ) -> list[tuple[str, str]]:
     """Send one card per message into the post, IN THE GIVEN ORDER.
 
@@ -1407,12 +1433,7 @@ async def _send_cards_grouped(
             # the card rides the POST owner's scope (owner
             # 2026-11-26): his profiles bold, HIS verdict
             blocks, buttons, _mid, accent = _match_card_parts(
-                card,
-                ctx_by_ref.get(match_id, {}),
-                set(me_ids or set()),
-                labels,
-                known,
-                owner_avatar=owner_avatar,
+                card, ctx_by_ref.get(match_id, {}), set(me_ids or set()), labels, known
             )
             view = discord.ui.LayoutView(timeout=None)
             view.add_item(discord.ui.Container(*blocks, accent_colour=discord.Colour(accent)))
@@ -1560,7 +1581,6 @@ async def _gap_fill_players_forum(  # noqa: C901 - one orchestration, no branch 
                 labels,
                 known,
                 me_ids=set((users.get(uid) or {}).get("profiles") or {}),
-                owner_avatar=str((users.get(uid) or {}).get("avatar") or ""),
             )
         except Exception:
             logger.debug("the gap-fill group skipped (post %s) - best-effort", uid, exc_info=True)

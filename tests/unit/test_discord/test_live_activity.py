@@ -910,23 +910,12 @@ def test_one_team_for_everyone_is_no_team_at_all() -> None:
 
 
 # ----------------------------------------------------------------------
-# the PLAYERS forum (owner 2026-11-26): "#matchs" is "#joueurs" now
-
-
-def test_the_players_forum_keys_and_names_are_renamed() -> None:
-    """The channel key, the scope constants and the registry ids read
-    "joueurs" - the salon's old "matches" identity is GONE."""
-    import botforge.discord.live_activity as feed
-
-    assert feed._PLAYERS_KEY == "joueurs", "the channel key is joueurs"
-    assert feed._PLAYERS_SCOPE == "games/aoe2"
-    assert feed._posts_doc_id("42") == "42:livefeed:joueurs:posts"
-    assert feed._SEED_VERSION >= 10, "the rename bumps the seed: every forum re-seeds"
+# the PLAYERS forum's post (owner 2026-11-26): the entity card, the ids
 
 
 def test_the_post_intro_signature_tracks_the_name_the_accounts_and_the_avatar() -> None:
-    """The first message is a VIEW now - the registry stores its
-    signature; a moved account, a rename or a new avatar re-edits it."""
+    """The first message is a VIEW - the registry stores its signature;
+    a moved account, a rename or a new avatar re-edits it."""
     import json
 
     import botforge.discord.live_activity as feed
@@ -955,79 +944,92 @@ def test_the_post_intro_signature_tracks_the_name_the_accounts_and_the_avatar() 
     )
 
 
-def test_the_post_intro_is_the_profile_view_without_any_button() -> None:
-    """The post's first message is the player's PROFILE VIEW (owner
-    2026-11-26): his header, his insight-linked accounts, his DISCORD
-    avatar in accessory - and NOT ONE button."""
+def test_the_post_intro_is_the_entity_card_of_the_displayed_player() -> None:
+    """The post's first message is the player's ENTITY CARD (owner
+    2026-11-26): the pseudo titles it, the DISCORD user id anchors it
+    (backticks - the pseudo moves, the id never does), the accounts
+    read like match seats (bold insight link, the 1v1 and TG elo with
+    their max beneath, the LATEST match first), the avatar rides the
+    header, the admin button opens the gated submenu, and the view id
+    `panel:player:aoe2:<user id>` foots the card."""
     import asyncio
+    import json
+    from types import SimpleNamespace
     from unittest.mock import patch
 
     import discord
 
     import botforge.discord.live_activity as feed
 
-    async def _fake_reply_guild(guild_id, bot, key, **fmt):
-        return f"header {fmt.get('name', '')}"
+    async def _fake_boards(bot, profile_ids):
+        return {
+            "848567": {"rm_1v1": (1039, 1120), "rm_team": (1300, 1421)},
+            "17190369": {"rm_1v1": (1100, 1100)},
+        }
 
-    async def _fake_elo(bot, profile_ids, translate=None):
-        return {"848567": "1039 Elo 1v1 (max 1120)"}
+    def _entry(mid, pid, when):
+        return SimpleNamespace(
+            match_id=mid,
+            finished_at=when,
+            started_at=when,
+            players_json=json.dumps([{"profile_id": pid, "name": "X"}]),
+        )
+
+    async def _fake_entries(profile_ids, limit=10, refresh=False):
+        # 17190369 played the LATEST match: his account leads
+        return [_entry("m2", "17190369", 200), _entry("m1", "848567", 100)]
+
+    async def _fake_locale(guild_id, bot):
+        return "fr"
 
     with (
-        patch("botforge.discord.commands_i18n.reply_guild", _fake_reply_guild),
-        patch("botforge.discord.stats_views.account_elo_by_profile", _fake_elo),
+        patch("botforge.discord.stats_views.account_boards_by_profile", _fake_boards),
+        patch("botforge.discord.stats_views.recent_match_entries", _fake_entries),
+        patch("botforge.discord.commands_i18n._feed_locale", _fake_locale),
     ):
         view = asyncio.run(
             feed._post_intro_view(
-                None, "42", "Merlin", {"profiles": {"848567": "Merlin"}}, "https://a/discord.png"
+                None,
+                "42",
+                "u1",
+                "Merlin",
+                {"profiles": {"848567": "Merlin", "17190369": "alt"}},
+                "https://a/discord.png",
             )
         )
-    assert not any(isinstance(item, discord.ui.ActionRow) for item in view.children), "no buttons"
+    def _texts(items):
+        for item in items:
+            if isinstance(item, (discord.ui.Section, discord.ui.Container)):
+                yield from _texts(item.children)
+            content = getattr(item, "content", "")
+            if content:
+                yield content
+
+    text = "\n".join(_texts(view.children))
+    assert "## Merlin" in text, "the PSEUDO titles the card - never 'Your profile'"
+    assert "`u1`" in text, "the immutable anchor is the DISCORD user id"
+    # the LATEST account first, the seats' grammar, both ladders
+    assert text.index("alt") < text.index("[Merlin]"), "the latest match orders the accounts"
+    assert "**[Merlin](https://www.aoe2insights.com/user/relic/848567/)**" in text
+    assert "1v1 : 1039 - 1120" in text, "the 1v1 elo with its max"
+    assert "TG : 1300 - 1421" in text, "the TG elo with its max"
+    assert "`P1`" not in text, "no seat chrome on the account lines"
+    assert "panel:player:aoe2:u1" in text, "the view id is aoe2-scoped, per player"
+    rows = [r for r in view.children if isinstance(r, discord.ui.ActionRow)]
+    assert rows, "the card carries its admin button row"
     containers = [c for c in view.children if isinstance(c, discord.ui.Container)]
-    assert len(containers) == 1
-    blocks = list(containers[0].children)
-    header = blocks[0]
-    assert isinstance(header, discord.ui.Section), "the avatar rides the header's accessory"
+    header = containers[0].children[0]
+    assert isinstance(header, discord.ui.Section), "the avatar rides the header's thumbnail"
     assert header.accessory.media.url == "https://a/discord.png"
-    accounts = blocks[1].content
-    assert "[Merlin](https://www.aoe2insights.com/user/relic/848567/)" in accounts
-    assert "`848567`" in accounts
-    assert "1039 Elo 1v1" in accounts, "the account line carries its elo"
 
 
-def test_the_card_wears_the_post_owners_discord_avatar() -> None:
-    """The players forum's cards carry the post owner's DISCORD avatar:
-    the header's accessory AND his own seat's - never the provider's."""
-    import discord
-
-    from botforge.discord.home import _match_card_parts
-
-    card = {
-        "status": "finished",
-        "match_id": "523338329",
-        "match_ref": "523338329",
-        "started_at": 100,
-        "finished_at": 200,
-        "winners": ["848567"],
-        "map_name": "Budapest",
-        "players": [
-            {"profile_id": "848567", "name": "Merlin", "team": 1, "civ": "Mayans"},
-            {"profile_id": "424242", "name": "Bob", "team": 2, "civ": "Teutons"},
-        ],
-    }
-    ctx: dict[str, Any] = {
-        "civ_urls": {}, "civ_images": {}, "map_urls": {}, "map_images": {},
-        "map_display": {}, "civ_display": {}, "ladder": {},
-    }
-    blocks, _buttons, _mid, _accent = _match_card_parts(
-        card, ctx, {"848567"}, {}, owner_avatar="https://a/discord.png"
-    )
-    header = blocks[0]
-    assert isinstance(header, discord.ui.Section), "the header carries the avatar accessory"
-    assert header.accessory.media.url == "https://a/discord.png"
-    # his OWN seat wears his avatar; the stranger keeps the civ icon
-    seats = [b for b in blocks if isinstance(b, discord.ui.Section) and b is not header]
-    mine = [b for b in seats if getattr(b.accessory.media, "url", "") == "https://a/discord.png"]
-    assert len(mine) == 1, "only the post owner's seat wears his avatar"
-    # without an avatar the header stays a plain text block
-    plain_blocks, _b, _m, _a = _match_card_parts(card, ctx, {"848567"}, {})
-    assert not isinstance(plain_blocks[0], discord.ui.Section)
+def test_the_repair_answers_in_the_guilds_words_not_paths() -> None:
+    """The repair's synthesis names the LOCALIZED category (owner
+    2026-11-26: guild admins read words, not scope paths) and the
+    missing-channel word reads the locale."""
+    assert "repair_scope" in open("config/locales/fr.yaml", encoding="utf-8").read()
+    assert "repair_absent" in open("config/locales/en.yaml", encoding="utf-8").read()
+    # the synthesis rides _say keys - no hardcoded French line stays
+    source = open("src/botforge/discord/admin_tree.py", encoding="utf-8").read()
+    assert "salons v\\u00e9rifi\\u00e9s/cr\\u00e9\\u00e9s" not in source
+    assert "R\\u00f4les v\\u00e9rifi\\u00e9s" not in source
