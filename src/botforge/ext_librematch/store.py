@@ -286,6 +286,12 @@ class LibrematchStore:
         try:
             # the matches: the ids and the dates, one index per READ
             await self._matches().create_index([("profile_ids", 1), ("finished_at", -1)])
+            # the LISTING's true shape (owner 2026-11-26: "indexes mongo
+            # pour optimiser le traitement beaucoup trop lent"): the
+            # profile scan filters the invalid seals and sorts by date
+            await self._matches().create_index(
+                [("profile_ids", 1), ("invalid", 1), ("finished_at", -1)]
+            )
             await self._matches().create_index([("match_id", 1)])
             await self._matches().create_index([("finished_at", -1)])
             await self._matches().create_index([("started_at", -1)])
@@ -294,8 +300,10 @@ class LibrematchStore:
             # map reads every match it ever rode - multikey array
             await self._matches().create_index("map_name")
             await self._matches().create_index("players.civ")
-            # the bindings: the user's profiles resolve directly
+            # the bindings: the user's profiles resolve directly, the
+            # profile's owner (the find_binding_by_profile read) too
             await self._bindings().create_index([("user_id", 1)])
+            await self._bindings().create_index([("game_key", 1), ("profile_id", 1)])
             logger.info("libre:match indexes ensured")
         except Exception:
             logger.warning("libre:match index creation failed \u2014 best-effort", exc_info=True)

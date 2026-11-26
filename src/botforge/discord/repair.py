@@ -20,7 +20,7 @@ Usage::
 from __future__ import annotations
 
 import time
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from logging import Logger
 from typing import Any
@@ -29,12 +29,22 @@ from typing import Any
 class RepairReport:
     """One repair's progress: steps with counts, a finish with the duration."""
 
-    def __init__(self, logger: Logger, name: str, subject: str = "") -> None:
+    def __init__(
+        self,
+        logger: Logger,
+        name: str,
+        subject: str = "",
+        progress: Callable[[str], None] | None = None,
+    ) -> None:
         self._logger = logger
         self._name = str(name)
         self._subject = str(subject)
         self._started_at = time.time()
         self._totals: dict[str, int] = {}
+        # the user-facing plan mirror (owner 2026-11-26: "ne dit pas
+        # que ça travaille") - a SYNC callable: the caller schedules its
+        # own async delivery (a message edit, a task)
+        self._progress = progress
 
     @property
     def tag(self) -> str:
@@ -47,9 +57,15 @@ class RepairReport:
             self._totals[key] = self._totals.get(key, 0) + int(value)
         if counts:
             joined = ", ".join(f"{key}={value}" for key, value in counts.items())
-            self._logger.info("%s: %s (%s)", self.tag, message, joined)
+            line = f"{self.tag}: {message} ({joined})"
         else:
-            self._logger.info("%s: %s", self.tag, message)
+            line = f"{self.tag}: {message}"
+        self._logger.info(line)
+        if self._progress is not None:
+            try:
+                self._progress(line)
+            except Exception:  # noqa: S110 - the mirror never kills the repair
+                pass
 
     @contextmanager
     def phase(self, label: str, **counts: int) -> Iterator[RepairReport]:
@@ -72,9 +88,13 @@ class RepairReport:
             if self._totals
             else ""
         )
-        self._logger.info(
-            "%s: %s in %.1fs%s", self.tag, message, time.time() - self._started_at, totals
-        )
+        line = f"{self.tag}: {message} in {time.time() - self._started_at:.1f}s{totals}"
+        self._logger.info(line)
+        if self._progress is not None:
+            try:
+                self._progress(line)
+            except Exception:  # noqa: S110 - the mirror never kills the repair
+                pass
 
 
 @contextmanager

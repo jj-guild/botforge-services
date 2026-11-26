@@ -16,6 +16,7 @@ contextual notice.
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import re
 from typing import Any
@@ -102,7 +103,17 @@ async def _ensure_scope_pins(bot: Any, guild_id: str, scope: str) -> int:
     return ensured
 
 
-async def _ensure_scope(bot: Any, guild_id: str, scope: str) -> str:  # noqa: C901
+async def _edit_plan(interaction: Any, line: str) -> None:
+    """Mirror one repair step onto the deferred thinking message (best-effort)."""
+    try:
+        await interaction.edit_original_response(content=f"\U0001F527 {line}")
+    except Exception:
+        logger.debug("the repair plan edit failed - best-effort", exc_info=True)
+
+
+async def _ensure_scope(  # noqa: C901
+    bot: Any, guild_id: str, scope: str, progress: Any = None
+) -> str:
     """Re-provision the scopes' declared channels, best-effort.
 
     ``scope`` carries a comma-separated list (the button's contract):
@@ -137,7 +148,7 @@ async def _ensure_scope(bot: Any, guild_id: str, scope: str) -> str:  # noqa: C9
             locale = DEFAULT_LOCALE
     from botforge.discord.repair import RepairReport
 
-    tree_repair = RepairReport(logger, "tree ensure", subject=guild_id)
+    tree_repair = RepairReport(logger, "tree ensure", subject=guild_id, progress=progress)
     lines: list[str] = []
     pins_ok = 0
     roles_ok = 0
@@ -316,8 +327,21 @@ class TreeEnsureButton(
         if not await _guard(interaction):
             return
         guild_id = str(interaction.guild_id) if interaction.guild_id else ""
-        await interaction.response.defer(ephemeral=True, thinking=False)
-        answer = await _ensure_scope(interaction.client, guild_id, self.scope)
+        # THINKING (owner 2026-11-26: "ne dit pas que ça travaille"):
+        # the repair takes minutes - the user sees the work happen, the
+        # live plan rides the deferred message's edits
+        await interaction.response.defer(ephemeral=True, thinking=True)
+
+        plan_tasks: list[asyncio.Task[None]] = []
+
+        def _plan_mirror(line: str) -> None:
+            plan_tasks.append(asyncio.ensure_future(_edit_plan(interaction, line)))
+
+        answer = await _ensure_scope(interaction.client, guild_id, self.scope, _plan_mirror)
+        # the last mirror's work lands before the synthèse replaces it
+        for task in plan_tasks:
+            task.cancel()
+        await asyncio.gather(*plan_tasks, return_exceptions=True)
         # The throttle verdict carries a LIVE timestamp (<t:...:R>): the
         # message deletes itself when the throttle lifts — delete_after,
         # the message's own parameter (owner direction 2026-11-06), not a
@@ -334,7 +358,10 @@ class TreeEnsureButton(
         # Channel). The provisioning SUCCEEDED — the verdict just cannot
         # be delivered there; a clean warning, never a traceback.
         try:
-            message: Any = await interaction.followup.send(answer, ephemeral=True)  # type: ignore[func-returns-value]
+            # the SYNTHÈSE replaces the live plan on the SAME deferred
+            # message (owner 2026-11-26: one thread of truth, the plan
+            # became the verdict)
+            message: Any = await interaction.edit_original_response(content=answer)
         except discord.HTTPException as exc:
             if getattr(exc, "code", None) == 10003:
                 logger.warning(

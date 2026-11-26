@@ -87,10 +87,10 @@ _MATCH_PLAYERS: dict[str, tuple[list[str], int]] = {}
 _LOGGED: set[tuple[str, str, str]] = set()
 # the guilds whose matches salon already saw their week of history
 _SEEDED: set[str] = set()
-# the (guild, user) whose post creation ran this boot - the idempotence
-# latch: a crash between the create and the registry save NEVER spawns
-# a twin post on the next sweep (owner 2026-11-26: SIX of them)
-_ENSURING: set[tuple[str, str]] = set()
+# the (guild, user) whose post creation is IN FLIGHT - a concurrency
+# guard LOCAL to one ensure pass (owner 2026-11-26: the boot-wide latch
+# blocked the DEAD-post recreation for the whole process' life - the
+# twins are the dedupe's job now, never the latch's)
 # the (guild, match_ref) the salon already carries a message for - the
 # ONE-message-per-match bookkeeping (owner 2026-11-25): the live cards,
 # the seeds and the store gap-fills all share it
@@ -1076,6 +1076,7 @@ async def _ensure_player_posts(  # noqa: C901 - one reconcile
     entries are strangers now, the reconcile deletes them.
     """
     del bot
+    _ensuring: set[tuple[str, str]] = set()
     posts = await _posts_of(guild_id)
     for key in list(posts):
         if key not in users:
@@ -1106,10 +1107,7 @@ async def _ensure_player_posts(  # noqa: C901 - one reconcile
             )
             await _save_post(guild_id, uid, None)
             posts.pop(uid, None)
-        # the idempotence latch (owner 2026-11-26: a crash between the
-        # create_thread and its registry save re-created the post on
-        # every sweep - SIX twins): a boot never asks twice
-        if (guild_id, uid) in _ENSURING:
+        if (guild_id, uid) in _ensuring:
             continue
         try:
             # the forum post's FIRST message can never be empty (the
@@ -1118,7 +1116,7 @@ async def _ensure_player_posts(  # noqa: C901 - one reconcile
             # create_thread - the forum starved from day one); the
             # intro names the USER and his accounts (the links go to
             # insights - owner 2026-11-26)
-            _ENSURING.add((guild_id, uid))
+            _ensuring.add((guild_id, uid))
             created = await forum.create_thread(
                 name=_thread_title(name),
                 content=intro,
@@ -1147,6 +1145,7 @@ async def _ensure_player_posts(  # noqa: C901 - one reconcile
         }
         posts[uid] = entry
         await _save_post(guild_id, uid, entry)
+        _ensuring.discard((guild_id, uid))
         logger.info("matches forum: post created for %s (guild %s, thread %s)", uid, guild_id, thread.id)
     await _dedupe_twins(guild_id, forum, posts)
     return posts
