@@ -1534,7 +1534,32 @@ def _settings_view(card: dict[str, Any], labels: dict[str, Any]) -> discord.ui.L
         )
     if bool_lines:
         container_blocks.append(discord.ui.Separator())
-        container_blocks.append(discord.ui.TextDisplay("\n".join(bool_lines)))
+        # REAL separators between the checkbox groups (owner
+        # 2026-11-26: "pas une suite de tirets") - the dash markers the
+        # bool builder writes are the SPLIT points, consecutive lines
+        # fold into one text block
+        line_blocks: list[Any] = []
+        chunk: list[str] = []
+        for line in bool_lines:
+            stripped = line.strip()
+            if stripped and set(stripped) == {"─"}:
+                if chunk:
+                    line_blocks.append(discord.ui.TextDisplay("\n".join(chunk)))
+                    chunk = []
+                line_blocks.append(discord.ui.Separator())
+                continue
+            if stripped.startswith("────") and "\n" in line:
+                # the lobby's own section marker: dash line + header
+                if chunk:
+                    line_blocks.append(discord.ui.TextDisplay("\n".join(chunk)))
+                    chunk = []
+                line_blocks.append(discord.ui.Separator())
+                chunk.append(line.split("\n", 1)[1])
+                continue
+            chunk.append(line)
+        if chunk:
+            line_blocks.append(discord.ui.TextDisplay("\n".join(chunk)))
+        container_blocks.extend(line_blocks)
     view.add_item(discord.ui.Container(*container_blocks))
     # the lobby REFRESH rides the popup (owner 2026-11-25): the
     # settings never go stale while the lobby stands - the launched

@@ -893,7 +893,15 @@ async def _ensure_player_posts(
             continue
         name = names.get(profile_id) or f"Profil {profile_id}"
         try:
-            thread = await forum.create_thread(name=_thread_title(name), auto_archive_duration=10080)
+            # the forum post's FIRST message can never be empty (the
+            # forum-empty root cause, found by the WARNING: Discord's
+            # 400 "Cannot send an empty message" refused EVERY
+            # create_thread - the forum starved from day one)
+            thread = await forum.create_thread(
+                name=_thread_title(name),
+                content=f"**{name}**",
+                auto_archive_duration=10080,
+            )
         except Exception:
             # WARNING (owner 2026-11-26: the forum starved SILENTLY
             # for 15 prompts - "0 post(s) ensured" with not one line
