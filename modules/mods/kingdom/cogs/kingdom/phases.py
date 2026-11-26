@@ -672,13 +672,35 @@ async def _event_report_text(strings: dict[str, str], report: dict[str, Any]) ->
             marriages=report.get("extra_marriages", 0),
         )
     if kind == "end":
-        if report.get("showmatch"):
-            return str(strings["event_end_showmatch"])
-        return str(strings["event_end"]).format(winner=str(report.get("winner_name") or "?"))
+        if report.get("showmatch") and not report.get("winner_name"):
+            # A classic tie: the season is closed ex aequo, the ShowMatch
+            # outside the season will decide (fin-saison-v2, Affaire 42).
+            text = str(strings["event_end_showmatch"])
+        else:
+            text = str(strings["event_end"]).format(
+                winner=str(report.get("winner_name") or "?")
+            )
+        return text + "\n\n" + _podium_text(strings, report)
     return str(strings["event_cycle"]).format(
         cycle=report.get("cycle", "?"),
         maps=len(report.get("gaia_new_maps", []) or []),
     )
+
+
+def _podium_text(strings: dict[str, str], report: dict[str, Any]) -> str:
+    """Render the closing podium of the territory counts (Affaire 42)."""
+    counts: dict[str, int] = {
+        str(name): int(count or 0)
+        for name, count in (report.get("territories") or {}).items()
+    }
+    if not counts:
+        return ""
+    medals = ("🥇", "🥈", "🥉")
+    lines: list[str] = []
+    for rank, (name, count) in enumerate(sorted(counts.items(), key=lambda kv: -kv[1])):
+        medal = medals[rank] if rank < len(medals) else "▫️"
+        lines.append(str(strings["event_end_podium_line"]).format(medal, name, count))
+    return str(strings["event_end_podium_title"]) + "\n" + "\n".join(lines)
 
 
 async def run_economy_due_safe(bot: Any) -> None:

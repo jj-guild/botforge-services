@@ -48,6 +48,12 @@ def test_settings_panel_is_one_template_of_twelve_actions() -> None:
         # état-surfaces-v1 (Drasah 23/11): « État des surfaces » — the
         # atelier's diagnostic, ephemeral, admin only
         "etat",
+        # fin-saison-v2 (Drasah 26/11): the season-end TEST workbench —
+        # three repeatable scenarios, right of the Serveur nav
+        "season-test",
+        "test-end",
+        "test-tie",
+        "test-duel",
     )
     # every action key answers a DynamicItem custom id + a FR label
     from botforge.mods.kingdom.cogs.settings_panel import SettingsActionButton

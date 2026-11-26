@@ -166,10 +166,11 @@ async def run_beta_loop_safe(bot: Any) -> str | None:
         return None
     if season is None or str(getattr(season, "phase", "")) != "ended":
         return None
-    if not getattr(season, "beta_name", None) or bool(
-        getattr(season, "finished", False)
-    ):
+    if not getattr(season, "beta_name", None):
         return None  # a CLASSIC end never relaunches (Drasah's asymmetry)
+    # fin-saison-v2 (Affaire 42): a beta season closes WITH
+    # ``finished=True`` (the season ALWAYS closes) — the finished flag
+    # is NOT a relaunch blocker anymore, only a classic end is.
     ended_id = str(getattr(season, "id", ""))
     beta_name = str(getattr(season, "beta_name"))
     logger.info("kingdom: beta loop relaunching after %s (%s)", ended_id, beta_name)

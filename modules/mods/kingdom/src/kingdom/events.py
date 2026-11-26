@@ -32,7 +32,7 @@ if TYPE_CHECKING:  # pragma: no cover — import cycles never at runtime
     from botforge.mods.kingdom.attacks import AttackService
     from botforge.mods.kingdom.config import KingdomSeasonConfig
     from botforge.mods.kingdom.diplomacy import DiplomacyService
-    from botforge.mods.kingdom.models import KingdomModel, SeasonState
+    from botforge.mods.kingdom.models import KingdomModel, SeasonState, ShowMatchModel
     from botforge.mods.kingdom.service import KingdomService
     from botforge.mods.kingdom.storage import KingdomStore
 
@@ -480,15 +480,17 @@ class EventService:
         await self._store.upsert_season(season.to_mongo())
         logger.info("kingdom: manual Lord's Day phase closed")
 
-    async def end_season(self) -> dict[str, object]:
+    async def end_season(self, *, force_tie: bool = False) -> dict[str, object]:
         """Apply the season-end verdict NOW (machine-temps-v3, admin seam).
 
         The time machine's « Fin de saison » button lands here: the
         public wrapper of the END slot's own closing pass (cancel the
         ongoing attacks, count the territories, crown the winner,
-        phase ``ended``) — never a re-implementation.
+        phase ``ended``) — never a re-implementation. ``force_tie``
+        closes the season ex aequo on the two leaders to rehearse
+        the ShowMatch scenario (test workbench, Affaire 42).
         """
-        return dict(await self._apply_season_end())
+        return dict(await self._apply_season_end(force_tie=force_tie))
 
     # ------------------------------------------------------------------
     # Exploration (§17, D29/D30/D44)
@@ -768,12 +770,15 @@ class EventService:
         restore_normal_config(self._config)
         self._beta_applied = None
 
-    async def _apply_season_end(self) -> dict[str, object]:
+    async def _apply_season_end(self, *, force_tie: bool = False) -> dict[str, object]:
         """Apply the endcycle verdict at 23:59 (Drasah's end rule).
 
         Every ongoing attack is cancelled first, then the closing
         counts the territories (ShowMatch on a tie) and the phase moves
         to ``ended`` — the season stays frozen until the next launch.
+        The season ALWAYS closes: a beta tie settles its ShowMatch by
+        simulation right away (the verdict must land), while a classic
+        tie leaves the ShowMatch pending outside the season (Affaire 42).
         """
         cancelled = await self._attacks.cancel_ongoing()
         season = await self._require_season()
@@ -783,7 +788,13 @@ class EventService:
         from botforge.mods.kingdom.season_end import SeasonEndService
 
         closer = SeasonEndService(self._store, self._config, self._kingdoms, self._territories)
-        report = dict(await closer.close_season())
+        report = dict(await closer.close_season(force_tie=force_tie))
+        if report.get("showmatch") and season.beta_name:
+            # Beta tie: the ShowMatch is simulated to completion and the
+            # closing is replayed to land the verdict (idempotent).
+            await closer.simulate_showmatch()
+            report = dict(await closer.close_season())
+            report["simulated_showmatch"] = True
         await self._kingdoms.set_phase("ended")
         report["cancelled_attacks"] = len(cancelled)
         report["phase"] = "ended"
@@ -793,6 +804,23 @@ class EventService:
             report.get("winner_name"),
         )
         return report
+
+    # ------------------------------------------------------------------
+    # Public seams for the admin surfaces (Affaire 42 test workbench)
+    # ------------------------------------------------------------------
+    async def pending_showmatch(self) -> ShowMatchModel | None:
+        """Return the last ShowMatch still unfinished, any season."""
+        from botforge.mods.kingdom.season_end import SeasonEndService
+
+        closer = SeasonEndService(self._store, self._config, self._kingdoms, self._territories)
+        return await closer.pending_showmatch()
+
+    async def simulate_next_duel(self, *, seed: int | None = None) -> ShowMatchModel:
+        """Prepare and decide a single pending ShowMatch duel at random."""
+        from botforge.mods.kingdom.season_end import SeasonEndService
+
+        closer = SeasonEndService(self._store, self._config, self._kingdoms, self._territories)
+        return await closer.simulate_next_duel(seed=seed)
 
     # ------------------------------------------------------------------
     # Internals

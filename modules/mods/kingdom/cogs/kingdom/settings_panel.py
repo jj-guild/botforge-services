@@ -85,6 +85,13 @@ _SETTINGS_ACTIONS: tuple[tuple[str, str, discord.ButtonStyle], ...] = (
     # la réponse est éphémère, admin seul) ; les échecs du tuyau ne
     # sont plus jamais muets pour l'organisateur.
     ("etat", "settings_etat_button", discord.ButtonStyle.secondary),
+    # fin-saison-v2 (Drasah 26/11) : l'atelier de test de la fin de
+    # saison — trois scénarios répétables (fin normale, égalité
+    # classique, duel simulé), posés À DROITE du nav Serveur.
+    ("season-test", "settings_season_test_button", discord.ButtonStyle.secondary),
+    ("test-end", "settings_test_end_button", discord.ButtonStyle.danger),
+    ("test-tie", "settings_test_tie_button", discord.ButtonStyle.primary),
+    ("test-duel", "settings_test_duel_button", discord.ButtonStyle.secondary),
 )
 # casquette-removal-v1 (Drasah 19/11): the hat op RETIRES from the
 # console (11 actions) — the bypass lives in the code's own seams and
@@ -365,6 +372,16 @@ async def build_settings_panel(guild_id: str) -> discord.ui.LayoutView:
     atelier_row: Any = discord.ui.ActionRow()
     atelier_row.add_item(
         KingdomSettingsNavButton("atelier", str(strings["settings_nav_atelier_button"])).item
+    )
+    # fin-saison-v2 (Drasah 26/11) : le bouton de TEST de la fin de
+    # saison vit À DROITE du nav Serveur — trois scénarios répétables
+    # (l'égalité, le verdict, le duel) pour répéter la cérémonie.
+    atelier_row.add_item(
+        SettingsActionButton(
+            "season-test",
+            str(strings.get("settings_season_test_button") or "🧪"),
+            discord.ButtonStyle.secondary,
+        ).item
     )
 
     # cockpit-lisible-v1 (Drasah 21/11) : une zone = UN titre + UNE
@@ -1537,6 +1554,133 @@ async def _etat(interaction: discord.Interaction, strings: dict[str, str]) -> No
         if gaia.get("error"):
             lines.append(str(strings["settings_etat_error"]).format(gaia["error"]))
     await open_unique_ephemeral(interaction, "\n".join(lines))
+
+
+# ---------------------------------------------------------------------------
+# fin-saison-v2 (Drasah 26/11): the season-end TEST workbench — three
+# repeatable scenarios on the real engine seams, never a re-implementation.
+# ---------------------------------------------------------------------------
+_SEASON_TEST_VIEW = "panel:mod:kingdom:admin:season-test"
+
+
+def _season_test_card(strings: dict[str, str]) -> discord.ui.LayoutView:
+    """The ephemeral workbench panel: three scenario buttons, one surface."""
+    row: Any = discord.ui.ActionRow()
+    row.add_item(
+        SettingsActionButton(
+            "test-end", str(strings["settings_test_end_button"]), discord.ButtonStyle.danger
+        ).item
+    )
+    row.add_item(
+        SettingsActionButton(
+            "test-tie", str(strings["settings_test_tie_button"]), discord.ButtonStyle.primary
+        ).item
+    )
+    row.add_item(
+        SettingsActionButton(
+            "test-duel", str(strings["settings_test_duel_button"]), discord.ButtonStyle.secondary
+        ).item
+    )
+    container: discord.ui.Container[discord.ui.LayoutView] = discord.ui.Container(
+        discord.ui.TextDisplay(f"# {strings['settings_season_test_title']}"),
+        discord.ui.TextDisplay(str(strings["settings_season_test_hint"])),
+        discord.ui.Separator(),
+        row,
+        accent_colour=_ADMIN_COLOUR,
+    )
+    return surface(_SEASON_TEST_VIEW, container)
+
+
+async def _season_test(interaction: discord.Interaction, strings: dict[str, str]) -> None:
+    """Open the ephemeral season-end workbench (admin only, one window)."""
+    await open_unique_ephemeral(interaction, view=_season_test_card(strings))
+
+
+async def _test_end(interaction: discord.Interaction, strings: dict[str, str]) -> None:
+    """Scenario (a): the normal end — cancel, verdict, podium, phase ended."""
+    if not interaction.response.is_done():
+        await interaction.response.defer(ephemeral=True)
+    stack, busy = _needs_stack(strings)
+    if busy:
+        await interaction.followup.send(busy, ephemeral=True)
+        return
+    if not await _season_live(stack):
+        await interaction.followup.send(str(strings["settings_test_no_season"]), ephemeral=True)
+        return
+    try:
+        report = dict(await stack.events.end_season())
+    except Exception:  # noqa: BLE001 — the workbench never crashes the console
+        logger.warning("kingdom: the test end failed", exc_info=True)
+        await interaction.followup.send(
+            str(strings["settings_test_failed"]).format("end_season"), ephemeral=True
+        )
+        return
+    cancelled = int(report.get("cancelled_attacks", 0) or 0)
+    if report.get("showmatch") and not report.get("winner_name"):
+        note = str(strings["settings_test_end_showmatch"]).format(cancelled)
+    else:
+        note = str(strings["settings_test_end_done"]).format(
+            cancelled, str(report.get("winner_name") or "?")
+        )
+    await interaction.followup.send(note, ephemeral=True)
+
+
+async def _test_tie(interaction: discord.Interaction, strings: dict[str, str]) -> None:
+    """Scenario (b): the classic tie — season closed ex aequo, ShowMatch outside."""
+    if not interaction.response.is_done():
+        await interaction.response.defer(ephemeral=True)
+    stack, busy = _needs_stack(strings)
+    if busy:
+        await interaction.followup.send(busy, ephemeral=True)
+        return
+    if not await _season_live(stack):
+        await interaction.followup.send(str(strings["settings_test_no_season"]), ephemeral=True)
+        return
+    try:
+        report = dict(await stack.events.end_season(force_tie=True))
+    except Exception:  # noqa: BLE001 — the workbench never crashes the console
+        logger.warning("kingdom: the test tie failed", exc_info=True)
+        await interaction.followup.send(
+            str(strings["settings_test_failed"]).format("end_season(force_tie)"), ephemeral=True
+        )
+        return
+    cancelled = int(report.get("cancelled_attacks", 0) or 0)
+    await interaction.followup.send(
+        str(strings["settings_test_tie_done"]).format(cancelled), ephemeral=True
+    )
+
+
+async def _test_duel(interaction: discord.Interaction, strings: dict[str, str]) -> None:
+    """Scenario (c): simulate ONE duel of the pending ShowMatch (PA2 step)."""
+    if not interaction.response.is_done():
+        await interaction.response.defer(ephemeral=True)
+    stack, busy = _needs_stack(strings)
+    if busy:
+        await interaction.followup.send(busy, ephemeral=True)
+        return
+    try:
+        if await stack.events.pending_showmatch() is None:
+            await interaction.followup.send(
+                str(strings["settings_test_no_showmatch"]), ephemeral=True
+            )
+            return
+        match = await stack.events.simulate_next_duel()
+    except Exception:  # noqa: BLE001 — the workbench never crashes the console
+        logger.warning("kingdom: the test duel failed", exc_info=True)
+        await interaction.followup.send(
+            str(strings["settings_test_failed"]).format("simulate_next_duel"), ephemeral=True
+        )
+        return
+    note = str(strings["settings_test_duel_done"]).format(match.score_a, match.score_b)
+    if match.finished:
+        names = {
+            str(kingdom.id): str(kingdom.name)
+            for kingdom in await stack.kingdoms.kingdoms()
+        }
+        note += str(strings["settings_test_duel_finished"]).format(
+            names.get(str(match.winner_kingdom_id), str(match.winner_kingdom_id))
+        )
+    await interaction.followup.send(note, ephemeral=True)
 
 
 async def _pending_admissions() -> list[Any]:
@@ -3425,6 +3569,11 @@ _SETTINGS_HANDLERS: dict[str, Any] = {
     "remove": _open_remove,
     # état-surfaces-v1 (Drasah 23/11) : le bouton 🧭 de l'Atelier
     "etat": _etat,
+    # fin-saison-v2 (Drasah 26/11) : l'atelier de test de la fin de saison
+    "season-test": _season_test,
+    "test-end": _test_end,
+    "test-tie": _test_tie,
+    "test-duel": _test_duel,
 }
 
 

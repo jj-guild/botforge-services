@@ -382,13 +382,17 @@ async def test_the_beta_loop_relanches_an_ended_beta(monkeypatch) -> None:
 
 @pytest.mark.asyncio
 async def test_the_beta_loop_ignores_the_living_and_the_classic(monkeypatch) -> None:
-    """ended WITHOUT beta_name, finished, setup, started → NOTHING."""
+    """ended WITHOUT beta_name, setup, started → NOTHING.
+
+    fin-saison-v2 (Affaire 42): a beta season closed with
+    ``finished=True`` DOES relaunch — that case moved to
+    test_kingdom_affaire42 (only a CLASSIC end never restarts).
+    """
     from botforge.mods.kingdom.cogs import beta_loop as bl
 
     bot = NS(guilds=[])
     for season in (
-        NS(id="s", phase="ended", beta_name=None, finished=False),  # classic
-        NS(id="s", phase="ended", beta_name="w", finished=True),  # already done
+        NS(id="s", phase="ended", beta_name=None, finished=True),  # classic
         NS(id="s", phase="setup", beta_name="w", finished=False),
         NS(id="s", phase="started", beta_name="w", finished=False),
     ):

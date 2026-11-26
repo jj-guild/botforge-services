@@ -806,6 +806,8 @@ DEFAULTS: dict[str, dict[str, str]] = {
             "🏁 **Fin de saison** — les attaques en cours sont annulées, "
             "les royaumes de tête sont à égalité : le ShowMatch tranche !"
         ),
+        "event_end_podium_title": "### 🏆 Podium de la saison",
+        "event_end_podium_line": "{0} **{1}** — {2} territoire(s)",
         "tavern_button": "🍺 Taverne",
         "mercenary_button": "🗡️ Mercenaires",
         "tavern_title": "🍺 La Taverne",
@@ -1773,6 +1775,8 @@ DEFAULTS: dict[str, dict[str, str]] = {
             "🏁 **End of the season** — the attacks are cancelled and "
             "the top kingdoms are tied: the ShowMatch decides!"
         ),
+        "event_end_podium_title": "### 🏆 Season podium",
+        "event_end_podium_line": "{0} **{1}** — {2} territories",
         "tavern_button": "🍺 Taverne",
         "mercenary_button": "🗡️ Mercenaires",
         "tavern_title": "🍺 The Taverne",

@@ -324,10 +324,18 @@ class MongoKingdomStore:
         Every season-scoped collection is dropped: a new season never
         inherits anything from the previous one (reference §3.3).
         The PERSISTENT realm shells (REALMS_COLLECTION) are NEVER
-        dropped here (royaume-persistant-v1, Drasah 20/11).
+        dropped here (royaume-persistant-v1, Drasah 20/11), and a
+        ShowMatch still UNFINISHED survives the reset too
+        (fin-saison-v2, Affaire 42): the tie ShowMatch lives outside
+        the season, so only the finished/archived ones are purged.
         """
         for collection in SEASON_WIPE_COLLECTIONS:
-            await self._storage.collection(collection).delete_many({})
+            if collection == SHOWMATCH_COLLECTION:
+                await self._storage.collection(collection).delete_many(
+                    {"finished": {"$ne": False}}
+                )
+            else:
+                await self._storage.collection(collection).delete_many({})
 
     async def upsert_season_archive(self, document: dict[str, Any]) -> None:
         """Insert one season archive document (never wiped by a reset)."""
