@@ -100,19 +100,102 @@ async def _score_rows(stack: Any) -> list[tuple[str, int, int, bool]]:
     return rows
 
 
+def _count_words(strings: dict[str, str], territories: int, alliances: int) -> tuple[str, str]:
+    """Return the plural-aware count words (le « (s) » bizarre est mort)."""
+    terr_word = strings["pantheon_territory"] if territories == 1 else strings["pantheon_territories"]
+    all_word = strings["pantheon_alliance"] if alliances == 1 else strings["pantheon_alliances"]
+    return terr_word, all_word
+
+
 def _score_text(strings: dict[str, str], rows: list[tuple[str, int, int, bool]]) -> str:
-    """Render the at-a-glance score block of the panel."""
+    """Render the at-a-glance LIVE score block (the panel's fallback)."""
     lines: list[str] = []
     for rank, (name, territories, alliances, is_gaia) in enumerate(rows):
         medal = _MEDALS[rank] if rank < len(_MEDALS) else "▫️"
         if is_gaia:
-            line = strings["pantheon_pin_gaia_line"].format(territories)
+            terr_word, _all_word = _count_words(strings, territories, alliances)
+            line = strings["pantheon_pin_gaia_line"].format(territories, terr_word)
         else:
-            line = strings["pantheon_pin_line"].format(medal, name, territories, alliances)
+            terr_word, all_word = _count_words(strings, territories, alliances)
+            line = strings["pantheon_pin_line"].format(
+                medal, name, territories, terr_word, alliances, all_word
+            )
         lines.append(line)
     if not lines:
         lines.append(strings["pantheon_pin_no_season"])
     return "\n".join(lines)
+
+
+def _phase_text(strings: dict[str, str], phase: str) -> str:
+    """Return the phase's player-readable label (data, #369 : a new phase = a key)."""
+    return strings.get(f"pantheon_phase_{phase}") or str(phase or "?")
+
+
+def _season_label(strings: dict[str, str], season: Any) -> str:
+    """Return the season's readable name (never a raw technical id).
+
+    A season whose « name » IS its technical id (``s-20261126-182152``,
+    the engine's default) reads « Saison en cours » — the vitrine never
+    shows plumbing (le retour visuel de Drasah, 26/11).
+    """
+    name = str(getattr(season, "name", "") or "")
+    if name and not re.fullmatch(r"s-\d[\w-]*", name):
+        return name
+    return strings["pantheon_pin_season_unnamed"]
+
+
+async def _gaia_ids(stack: Any) -> set[str]:
+    """Return the live Gaïa kingdom ids (the world is never a competitor)."""
+    if stack is None:
+        return set()
+    try:
+        kingdoms = await stack.kingdoms.kingdoms()
+    except Exception:
+        return set()
+    return {str(k.id) for k in kingdoms if getattr(k, "is_gaia", False)}
+
+
+async def _last_podium_lines(strings: dict[str, str], stack: Any) -> list[str] | None:
+    """Build the LAST finished season's podium (the panel's default block).
+
+    panthéon-polish-v1 (Drasah 26/11) : la vitrine montre par défaut
+    le podium de la dernière saison terminée — le vainqueur porte sa
+    mention (comptes ou ShowMatch), Gaïa n'y figure pas (le monde ne
+    court pas). None = pas d'archive (le panel retombe sur le score
+    live, la vitrine n'est jamais vide).
+    """
+    if stack is None:
+        return None
+    try:
+        archives = await stack.kingdoms.season_archives()
+    except Exception:
+        return None
+    if not archives:
+        return None
+    archive = max(archives, key=lambda a: str(a.get("season_id", "")))
+    names = {
+        str(k.get("_id")): str(k.get("name", k.get("_id"))) for k in archive.get("kingdoms", [])
+    }
+    gaia = await _gaia_ids(stack)
+    counts: dict[str, int] = {}
+    for territory in archive.get("territories", []):
+        owner = str(territory.get("owner_kingdom_id") or "")
+        if owner and owner not in gaia:
+            counts[owner] = counts.get(owner, 0) + 1
+    if not counts:
+        return None
+    ordered = sorted(counts.items(), key=lambda kv: kv[1], reverse=True)
+    season_name = str(archive.get("name") or archive.get("season_id", "?"))
+    lines = [strings["pantheon_pin_last_title"].format(season_name)]
+    note = _archive_note(strings, archive)
+    for rank, (kid, count) in enumerate(ordered):
+        medal = _MEDALS[rank] if rank < len(_MEDALS) else "▫️"
+        terr_word, _all_word = _count_words(strings, count, 1)
+        line = strings["pantheon_pin_last_line"].format(medal, names.get(kid, kid), count, terr_word)
+        if rank == 0:
+            line = f"{line} — {note}"
+        lines.append(line)
+    return lines
 
 
 # ---------------------------------------------------------------------------
@@ -126,22 +209,29 @@ async def build_pantheon_panel(guild_id: str) -> discord.ui.LayoutView:
     strings_map = _pantheon_strings(locale)
     stack = wiring()
     rows = await _score_rows(stack)
-    season_line = strings_map["pantheon_pin_hint"]
     try:
         season = None if stack is None else await stack.kingdoms.current_season()
     except Exception:
         season = None
     if season is not None:
         season_line = strings_map["pantheon_pin_season"].format(
-            str(getattr(season, "name", getattr(season, "id", "?"))),
-            str(getattr(season, "phase", "?")),
+            _season_label(strings_map, season),
+            _phase_text(strings_map, str(getattr(season, "phase", ""))),
         )
+    else:
+        season_line = strings_map["pantheon_pin_no_season"]
+    # panthéon-polish-v1 : le gros bloc par défaut = le PODIUM de la
+    # dernière saison terminée ; sans archive (la première saison), la
+    # vitrine retombe sur le score live — jamais vide.
+    podium = await _last_podium_lines(strings_map, stack)
+    score_text = "\n".join(podium) if podium else _score_text(strings_map, rows)
     return surface(
         PANTHEON_PIN_KEY,
         discord.ui.TextDisplay(f"# {strings_map['pantheon_pin_title']}"),
+        discord.ui.TextDisplay(strings_map["pantheon_pin_hint"]),
         discord.ui.TextDisplay(season_line),
         discord.ui.Separator(),
-        discord.ui.TextDisplay(_score_text(strings_map, rows)),
+        discord.ui.TextDisplay(score_text),
         discord.ui.Separator(),
         discord.ui.ActionRow(
             PantheonPalmaresButton(strings_map["pantheon_palmares_button"]).item,
@@ -347,8 +437,11 @@ async def _verdict_view(strings: dict[str, str], season_id: str) -> discord.ui.L
     lines.append(strings["pantheon_histo_podium_title"])
     for rank, (kid, count) in enumerate(ordered):
         medal = _MEDALS[rank] if rank < len(_MEDALS) else "▫️"
+        terr_word, _all_word = _count_words(strings, count, 1)
         lines.append(
-            strings["pantheon_histo_podium_line"].format(medal, names.get(kid, kid), count)
+            strings["pantheon_histo_podium_line"].format(
+                medal, names.get(kid, kid), count, terr_word
+            )
         )
     return surface(
         "panel:mod:kingdom:pantheon:histo",

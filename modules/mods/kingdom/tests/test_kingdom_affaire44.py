@@ -114,11 +114,13 @@ async def test_the_panel_scores_kingdoms_in_medals_order(
         "rows are sorted by territories, medals order"
     )
     text = pantheon._score_text(_strings(), rows)
-    assert "🥇 **BASTION** — 7 territoire(s) · 1 alliance(s)" in text
-    assert "🥈 **AEGIS** — 5 territoire(s) · 1 alliance(s)" in text, (
+    assert "🥇 **BASTION** — 7 territoires · 1 alliance" in text
+    assert "🥈 **AEGIS** — 5 territoires · 1 alliance" in text, (
         "a married civ counts ONCE per kingdom even with two lords"
     )
-    assert "▫️ Gaïa — 2 territoire(s)" in text, "Gaïa has its own grey line"
+    assert "▫️ Gaïa — 2 territoires, le monde sauvage" in text, (
+        "Gaïa has its own grey line"
+    )
 
 
 @pytest.mark.asyncio
@@ -127,7 +129,7 @@ async def test_the_panel_says_it_when_no_season_runs(
 ) -> None:
     pantheon = _pantheon()
     text = pantheon._score_text(_strings(), [])
-    assert "Aucune saison en cours" in text
+    assert "🌙 Les royaumes dorment" in text
 
 
 # ---------------------------------------------------------------------------
@@ -216,8 +218,8 @@ async def test_the_verdict_reads_the_archived_podium(
     view = await pantheon._verdict_view(_strings(), "s-2026-1")
     body = _texts(view)
     assert "🥇 Vainqueur : **AEGIS**" in body
-    assert "🥇 **AEGIS** — 3 territoire(s)" in body
-    assert "🥈 **BASTION** — 1 territoire(s)" in body
+    assert "🥇 **AEGIS** — 3 territoires" in body
+    assert "🥈 **BASTION** — 1 territoire" in body
 
 
 @pytest.mark.asyncio
