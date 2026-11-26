@@ -450,3 +450,101 @@ async def test_the_summary_names_slots_and_ai_players() -> None:
     # a filled seat without a profile is a COMPUTER (owner: the AI seats render)
     assert by_slot[3]["ai"] is True and by_slot[3]["name"] == "Computer"
     assert int(by_slot[3]["civ"]) == 20
+
+
+async def test_an_absent_lobby_never_closes_fast_but_a_leave_does() -> None:
+    """The REASON rides the window (owner 2026-11-26: the lobby-out hunt)."""
+    adapter = Aoe2LobbyAdapter()
+    await adapter.set_subscribed_profiles(["123"])
+    _frame(adapter, {"lobby_match_all": {"111": _lobby("111", [123])}})
+    # the lobby drops out of the SNAPSHOT: an absence - weak signal
+    _frame(adapter, {"lobby_match_all": {}})
+    adapter._grace._closed_at["123"] -= 60.0  # a minute of frame silence
+    assert adapter._sweep_pending_closes() == [], "an absent lobby survives a flaky snapshot"
+    adapter._grace._closed_at["123"] -= 300.0  # the sustained silence elapsed
+    events = adapter._sweep_pending_closes()
+    assert [e["type"] for e in events] == ["lobby_closed"], "the leak-guard fires at last"
+
+    # the PLAYERS channel said null AND the lobby left the feed: an
+    # explicit leave - the close speaks FAST
+    _frame(adapter, {"lobby_match_all": {"222": _lobby("222", [123])}})
+    _frame(adapter, {"lobby_match_all": {}, "player_status": {"123": {"status": None, "matchid": 222}}})
+    adapter._grace._closed_at["123"] -= 16.0
+    events = adapter._sweep_pending_closes()
+    assert [e["type"] for e in events] == ["lobby_closed"], "an explicit leave fires fast"
+
+
+async def test_a_snapshot_absence_upgrades_to_explicit_not_the_other_way() -> None:
+    """An explicit pending close never stretches back to the absent window."""
+    adapter = Aoe2LobbyAdapter()
+    await adapter.set_subscribed_profiles(["123"])
+    _frame(adapter, {"lobby_match_all": {"111": _lobby("111", [123])}})
+    _frame(adapter, {"lobby_match_all": {}})
+    assert adapter._close_reasons["123"] == "absent"
+    _frame(adapter, {"player_status": {"123": {"status": None, "matchid": 111}}})
+    assert adapter._close_reasons["123"] == "explicit", "the strongest reason wins"
+    assert adapter._close_reasons["123"] == "explicit"
+
+
+async def test_a_strangers_player_remove_never_schedules_a_close() -> None:
+    """The enrollment guard: the feed pushes the WHOLE world's leaves."""
+    adapter = Aoe2LobbyAdapter()
+    await adapter.set_subscribed_profiles(["123"])
+    _frame(adapter, {"lobby_player_remove": [999, 888]})
+    assert adapter._close_refs == {}, "no close ever parks for a stranger"
+
+
+def test_colliding_seat_positions_renumber() -> None:
+    """Two seats on one color never share a P badge (the double P1)."""
+    adapter = Aoe2LobbyAdapter()
+    match = {
+        "matchid": 111,
+        "map_name": "Arabia",
+        "slots": {
+            "s1": {"profileid": 123, "status": 3, "color": 1, "team": 1},
+            "s2": {"profileid": None, "status": 2, "color": 1, "team": 1, "name": "Computer"},
+        },
+    }
+    seats = adapter._match_seats(match)
+    positions = [seat["position"] for seat in seats]
+    assert positions == [1, 2], "the collision renumbers to the lowest free seat"
+
+
+async def test_failed_connects_back_off_the_fibonacci_way(monkeypatch) -> None:
+    """The degraded upstream gets 8, 13, 21, 55... minutes of SPACE.
+
+    The github-polling skill's rule (owner 2026-11-26): a refused
+    connect is not a 5s retry signal - the sequence resets only on a
+    clean OPEN session.
+    """
+    import asyncio as real_asyncio
+
+    import botforge.ext_aoe2lobby.adapter as adapter_mod
+
+    delays: list[float] = []
+
+    async def record_sleep(delay: float) -> None:
+        delays.append(round(delay))
+        if len(delays) >= 5:
+            raise real_asyncio.CancelledError()
+
+    class _Refused:
+        async def __aenter__(self) -> None:
+            raise OSError("nope")
+
+        async def __aexit__(self, *_: object) -> None:
+            return None
+
+    def refuse(*args: object, **kwargs: object) -> _Refused:
+        return _Refused()
+
+    monkeypatch.setattr(adapter_mod.asyncio, "sleep", record_sleep)
+    monkeypatch.setattr(adapter_mod.websockets, "connect", refuse)
+    adapter = Aoe2LobbyAdapter()
+    stream = adapter.stream_events()
+    try:
+        async for _ in stream:
+            pass
+    except real_asyncio.CancelledError:
+        pass
+    assert delays == [480, 780, 1260, 2040, 3300], "the skill's sequence: 8, 13, 21, 34, 55 min"

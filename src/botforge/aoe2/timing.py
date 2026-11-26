@@ -30,17 +30,22 @@ class LobbyClosedGrace:
         """Cancel the pending downgrade: a game_started arrived."""
         self._closed_at.pop(match_ref, None)
 
-    def should_downgrade(self, match_ref: str, now: float | None = None) -> bool:
+    def should_downgrade(
+        self, match_ref: str, now: float | None = None, grace_s: float | None = None
+    ) -> bool:
         """Report whether the grace period has fully elapsed since lobby_closed.
 
         No recorded lobby_closed means nothing to downgrade (idempotent
-        — external events can be received multiple times).
+        — external events can be received multiple times). A caller may
+        pass its OWN window (``grace_s``): the aoe2lobby close rides the
+        reason's window — an explicit leave fires fast, a snapshot
+        absence needs sustained silence (owner 2026-11-26).
         """
         closed_at = self._closed_at.get(match_ref)
         if closed_at is None:
             return False
         current = now if now is not None else time.monotonic()
-        return (current - closed_at) >= self._grace_s
+        return (current - closed_at) >= (grace_s if grace_s is not None else self._grace_s)
 
     def forget(self, match_ref: str) -> None:
         """Drop the tracking once the match reached a terminal state."""
