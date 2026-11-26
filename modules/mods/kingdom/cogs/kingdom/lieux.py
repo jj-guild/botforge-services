@@ -364,6 +364,28 @@ LIEUX_STRINGS: dict[str, dict[str, str]] = {
         "paroisse_stats_line": (
             "💍 Bague : {0} · 💐 Mariage arrangé : {1} · ⚙️ Point Technologie : {2}"
         ),
+        # paroisse-v3 (Drasah 26/11) : la présentation de la référence —
+        # blocs titrés « Notre {palier} » et « Les Fidèles du Royaume ».
+        "paroisse_household_palier": "🙏 Notre {0}",
+        "paroisse_unknown_palier": "Chapelle",
+        "paroisse_household": "💒 Les Fidèles du Royaume",
+        "paroisse_household_none": "Aucun fidèle pour le moment.",
+        "paroisse_married_locked": "💍 {0} — {1} · 🔒 verrou jusqu'à <t:{2}:R>",
+        "paroisse_married_free": "💍 {0} — {1} · ✅ verrou levé",
+        "paroisse_royal_locked": "💍 {0} — 👑 {1} · 🔒 verrou jusqu'à <t:{2}:R>",
+        "paroisse_royal_free": "💍 {0} — 👑 {1} · ✅ verrou levé",
+        "paroisse_bachelor": "🎖️ {0} — célibataire · prêt à se marier 💍",
+        "paroisse_queen_word": "Reine",
+        "paroisse_chantier_line": (
+            "⏳ Lieu Sacrée en chantier sur **{0}** — verdict <t:{1}:R>"
+        ),
+        "paroisse_sacred_line": (
+            "⛪ Lieu Sacrée SACRÉ sur **{0}** — inattaquable jusqu'à la fin de la saison"
+        ),
+        # requested by marry._princess_label — the paroisse surfaces (the
+        # household badges AND the 💐 wizard) pass THIS catalog, and the
+        # Affaire 36 wizard shipped without it (a silent KeyError).
+        "church_marry_princess": "Princesse {0}",
         "voliere_title": "# 🪶 Volière de {kingdom}",
         "voliere_line": (
             "Gratuite dès l'Âge Féodal — cooldowns partagés par tout le royaume."
@@ -609,6 +631,23 @@ LIEUX_STRINGS: dict[str, dict[str, str]] = {
         "paroisse_stats_line": (
             "💍 Ring: {0} · 💐 Arranged marriage: {1} · ⚙️ Tech Point: {2}"
         ),
+        "paroisse_household_palier": "🙏 Our {0}",
+        "paroisse_unknown_palier": "Chapel",
+        "paroisse_household": "💒 The Faithful of the Kingdom",
+        "paroisse_household_none": "No faithful member for now.",
+        "paroisse_married_locked": "💍 {0} — {1} · 🔒 locked until <t:{2}:R>",
+        "paroisse_married_free": "💍 {0} — {1} · ✅ lock lifted",
+        "paroisse_royal_locked": "💍 {0} — 👑 {1} · 🔒 locked until <t:{2}:R>",
+        "paroisse_royal_free": "💍 {0} — 👑 {1} · ✅ lock lifted",
+        "paroisse_bachelor": "🎖️ {0} — single · ready to marry 💍",
+        "paroisse_queen_word": "Queen",
+        "paroisse_chantier_line": (
+            "⏳ Holy Site under construction on **{0}** — verdict <t:{1}:R>"
+        ),
+        "paroisse_sacred_line": (
+            "⛪ Holy Site SACRED on **{0}** — unassailable until the end of the season"
+        ),
+        "church_marry_princess": "Princess {0}",
         "voliere_title": "# 🪶 Aviary of {kingdom}",
         "voliere_line": (
             "Free from the Feudal Age — cooldowns shared by the whole kingdom."
@@ -1783,6 +1822,113 @@ def _locale_of_catalog(strings: dict[str, str]) -> str:
 # ---------------------------------------------------------------------------
 
 
+async def _paroisse_lords(stack: Any, kingdom: Any) -> list[Any]:
+    """The kingdom's faithful — members still in (never the left ones)."""
+    try:
+        kingdoms = getattr(stack, "kingdoms", None)
+        lords = await kingdoms.lords() if kingdoms is not None else []
+        kid = str(getattr(kingdom, "id", ""))
+        return [
+            lord for lord in lords
+            if str(getattr(lord, "kingdom_id", "")) == kid
+            and not bool(getattr(lord, "left", False))
+        ]
+    except Exception:
+        logger.warning("kingdom lieux: the paroisse household read failed", exc_info=True)
+        return []
+
+
+def _paroisse_body(
+    strings: dict[str, str],
+    stack: Any,
+    kingdom: Any,
+    state: dict[str, Any],
+    name: str,
+    tier: int,
+    tiers: list[Any],
+    offering: int,
+    lords: list[Any],
+) -> str:
+    """The paroisse sheet's body — the reference's rich presentation."""
+    import time as _time
+
+    from .marry import _civ_names, _princess_label
+
+    lines = [
+        strings["paroisse_stats_line"].format(
+            int(getattr(kingdom, "marriage_points", 0) or 0),
+            int(getattr(kingdom, "arranged_marriage_stock", 0) or 0),
+            int(state.get("wallet", 0) or 0),
+        ),
+        "",
+        f"## {strings['paroisse_household_palier'].format(name or strings['paroisse_unknown_palier'])}",
+        strings["paroisse_tier_line"].format(
+            name or strings["paroisse_unknown_palier"], tier, max(len(tiers), 3), offering
+        ),
+        "",
+        f"## {strings['paroisse_household']}",
+    ]
+    if not lords:
+        lines.append(strings["paroisse_household_none"])
+    names: dict[str, str] = {}
+    try:
+        names = _civ_names(stack)
+    except Exception:
+        names = {}
+    now = int(_time.time())
+    married = [lord for lord in lords if getattr(lord, "married_civilization", None)]
+    singles = [lord for lord in lords if getattr(lord, "married_civilization", None) is None]
+    for lord in married:
+        civ = str(getattr(lord, "married_civilization", ""))
+        princess = _princess_label(strings, str(getattr(lord, "id", "")), civ, names)
+        label = str(getattr(lord, "display_name", "") or getattr(lord, "id", "?"))
+        royal = bool(getattr(lord, "royal_marriage", False))
+        if royal:
+            # the King weds a QUEEN — the ref's royal badge (never a princess).
+            princess = re.sub(r"^\S+", strings["paroisse_queen_word"], princess, count=1)
+        until = int(getattr(lord, "marriage_locked_until", 0) or 0)
+        if royal:
+            base = strings["paroisse_royal_locked"] if until > now else strings["paroisse_royal_free"]
+        else:
+            base = strings["paroisse_married_locked"] if until > now else strings["paroisse_married_free"]
+        line = base.format(label, princess, until) if until > now else base.format(label, princess)
+        lines.append(line[:300])
+    for lord in singles:
+        label = str(getattr(lord, "display_name", "") or getattr(lord, "id", "?"))
+        lines.append(strings["paroisse_bachelor"].format(label)[:300])
+    # The LIVE Lieu Sacrée states — chantiers ⏳ then sacrés ⛪ (the
+    # kingdom's own territories, defensive on a dead stack).
+    chantiers, sacreds = [], []
+    for territory in state.get("territories") or []:
+        if bool(getattr(territory, "sacred", False)):
+            sacreds.append(territory)
+            continue
+        until_dt = getattr(territory, "cathedral_until", None)
+        if until_dt is not None:
+            try:
+                if until_dt.timestamp() > now:
+                    chantiers.append(territory)
+            except Exception:
+                continue
+    if chantiers or sacreds:
+        lines.append("")
+        for territory in chantiers:
+            try:
+                epoch = int(territory.cathedral_until.timestamp())
+            except Exception:
+                epoch = now
+            lines.append(
+                strings["paroisse_chantier_line"].format(
+                    str(getattr(territory, "map_key", "")), epoch
+                )
+            )
+        for territory in sacreds:
+            lines.append(
+                strings["paroisse_sacred_line"].format(str(getattr(territory, "map_key", "")))
+            )
+    return "\n".join(lines)
+
+
 async def _paroisse_window(
     strings: dict[str, str], kingdom: Any, state: dict[str, Any]
 ) -> tuple[discord.ui.LayoutView, list[discord.File]]:
@@ -1797,14 +1943,14 @@ async def _paroisse_window(
             offering = int(getattr(tiers[tier - 1], "offering", 0) or 0)
     except Exception:
         tiers = []
-    body = "\n".join([
-        strings["paroisse_tier_line"].format(name or "?", tier, max(len(tiers), 3), offering),
-        strings["paroisse_stats_line"].format(
-            int(getattr(kingdom, "marriage_points", 0) or 0),
-            int(getattr(kingdom, "arranged_marriage_stock", 0) or 0),
-            int(state.get("wallet", 0) or 0),
-        ),
-    ])
+    # paroisse-v3 (Drasah 26/11) : la PRESENTATION de la référence revient
+    # — stats, bloc titré « Notre {palier} », bloc titré « Les Fidèles du
+    # Royaume » (un seigneur par ligne avec son état de mariage, les
+    # promesses nommées par le helper de marry.py), puis les états Lieu
+    # Sacrée en direct (chantier ⏳ / sacré ⛪). Les boutons de la rangée 2
+    # (💐 arrangé, ⛪ consacrer) et le toggle 🔎 En savoir plus restent.
+    lords = await _paroisse_lords(stack, kingdom)
+    body = _paroisse_body(strings, stack, kingdom, state, name, tier, tiers, offering, lords)
     # vague2-actions-v1 (Drasah 21/11) : 💍 Se marier (la DynamicItem de
     # marry.py, harmonisation gratuite) + ⛪ Améliorer + Sortir
     from .marry import MarryButton
