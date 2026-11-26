@@ -104,6 +104,7 @@ fr:
       match_noun: "Match n\u00b0"
       lobby_noun: "Lobby n\u00b0"
       ranked_word: "Class\u00e9e"
+      custom_badge: "Personnalis\u00e9e"
       matches_setting_hide_civs: "Cacher les civilisations"
       matches_setting_password: "Mot de passe"
       matches_settings_button: "Param\u00e8tres de la partie"
@@ -158,6 +159,8 @@ fr:
       live_log_lobby_close: "🚪 {player} a quitté le lobby — {id}"
       live_log_match_start: "⚔ {player} a lancé un match — {id}"
       live_log_match_end: "🏁 {player} — fin de match — {id} · ⏱ {duration}"
+      live_log_match_won: "\U0001F3C6 {player} a gagn\u00e9 {match} \u2014 {badge}"
+      live_log_match_lost: "\U0001F480 {player} a perdu {match} \u2014 {badge}"
       matches_empty: 'Aucun match stock\u00e9 pour tes comptes \u2014 l\u2019historique se rafra\u00eechit quelques minutes apr\u00e8s la liaison.'
       add_button: Ajouter un compte
       rename_button: Changer de pseudo

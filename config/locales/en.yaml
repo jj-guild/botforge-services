@@ -104,6 +104,7 @@ en:
       match_noun: "Match #"
       lobby_noun: "Lobby #"
       ranked_word: "Ranked"
+      custom_badge: "Custom"
       matches_setting_hide_civs: "Hide civilizations"
       matches_setting_password: "Password"
       matches_settings_button: "Game settings"
@@ -161,6 +162,8 @@ en:
       live_log_lobby_close: "🚪 {player} left the lobby — {id}"
       live_log_match_start: "⚔ {player} started a match — {id}"
       live_log_match_end: "🏁 {player} — match over — {id} · ⏱ {duration}"
+      live_log_match_won: "\U0001F3C6 {player} won {match} \u2014 {badge}"
+      live_log_match_lost: "\U0001F480 {player} lost {match} \u2014 {badge}"
       matches_empty: 'No stored match yet for your accounts \u2014 the history refreshes a few minutes after binding.'
       add_button: Add an account
       rename_button: Change nickname

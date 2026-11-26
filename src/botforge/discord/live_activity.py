@@ -70,6 +70,9 @@ _CARD_STATE: dict[tuple[str, str], dict[str, Any]] = {}
 _FIRST_SEEN: dict[tuple[str, str], int] = {}
 # the last known summary per match - the end card keeps the context
 _LAST_SUMMARY: dict[str, dict[str, Any]] = {}
+# the FINISHED card model per match - the rich end line reads it after
+# the correlation (the state lives on past the card's own death)
+_FINISHED_CARDS: dict[str, dict[str, Any]] = {}
 # the last in-game name seen per profile (labels survive the offline event)
 _LAST_NAME: dict[str, str] = {}
 # the match's profiles + started-at epoch s - the result correlation keys
@@ -289,7 +292,11 @@ async def _upsert_matches_card(
         _CARD_STATE[key] = {**card, "status": "finished", "finished_at": int(time.time())}
         await _send_card(bot, guild_id, channel_id, match_ref)
         profiles, started_at = _MATCH_PLAYERS.get(match_ref, ([], 0))
-        _spawn(_fetch_result_then_update(bot, guild_id, channel_id, match_ref, profiles, started_at))
+        _spawn(
+            _fetch_result_then_update(
+                bot, guild_id, channel_id, match_ref, profiles, started_at, profile_id
+            )
+        )
         return
 
     _remember_player_ref(profile_id, match_ref)
@@ -433,6 +440,9 @@ async def _apply_result_to_card(
         "players": players,
     }
     await _send_card(bot, guild_id, channel_id, match_ref)
+    # the FINISHED model stays for the rich end line (owner
+    # 2026-11-25): the verdict reads partners, map and format from it
+    _FINISHED_CARDS[match_ref] = dict(_CARD_STATE.get(key) or {})
     _CARD_STATE.pop(key, None)
     _CARDS.pop(key, None)
     _FIRST_SEEN.pop(key, None)
@@ -718,7 +728,44 @@ async def _write_seed_marker(guild_id: str, channel_id: str) -> None:
 async def _log_event_line(
     bot: discord.Client, guild_id: str, event: dict[str, Any], profile_id: str
 ) -> None:
-    """Append ONE short line per (match, event) to the guild's logs."""
+    """Append ONE short line per (match, event) to the guild's logs.
+
+    The MATCH END line defers (owner 2026-11-25): its verdict, the
+    streak, the forum post link and the known partners all live on
+    the result correlation - the offline transition itself says
+    nothing, the correlated result says everything.
+    """
+    logs = getattr(bot, "logs_service", None)
+    if logs is None:
+        return
+    verb = _verb_of(event)
+    if verb == "match_end":
+        return  # the correlated result renders the rich end line
+    try:
+        resolved = await logs.resolve_channel(guild_id)
+    except Exception:
+        return
+    channel_id = str(resolved) if resolved else ""
+    if not channel_id:
+        return
+    guild = bot.get_guild(int(guild_id))
+    channel = guild.get_channel(int(channel_id)) if guild else None
+    if channel is None or not isinstance(channel, discord.TextChannel):
+        return
+    match = event.get("match") or {}
+    match_ref = str(match.get("match_ref") or "")
+    if verb == "":
+        return
+    if match_ref and (guild_id, match_ref, verb) in _LOGGED:
+        return  # one log per (match, event) - never per player
+    if match_ref:
+        _LOGGED.add((guild_id, match_ref, verb))
+    text = await _log_line(bot, guild_id, event, profile_id, match_ref, verb)
+    await _append_logs_line(bot, guild_id, verb, text)
+
+
+async def _append_logs_line(bot: discord.Client, guild_id: str, verb: str, text: str) -> None:
+    """Append one rendered line to the guild's logs (the shared sender)."""
     logs = getattr(bot, "logs_service", None)
     if logs is None:
         return
@@ -733,16 +780,6 @@ async def _log_event_line(
     channel = guild.get_channel(int(channel_id)) if guild else None
     if channel is None or not isinstance(channel, discord.TextChannel):
         return
-    match = event.get("match") or {}
-    match_ref = str(match.get("match_ref") or "")
-    verb = _verb_of(event)
-    if verb == "":
-        return
-    if match_ref and (guild_id, match_ref, verb) in _LOGGED:
-        return  # one log per (match, event) - never per player
-    if match_ref:
-        _LOGGED.add((guild_id, match_ref, verb))
-    text = await _log_line(bot, guild_id, event, profile_id, match_ref, verb)
     view = discord.ui.LayoutView(timeout=None)
     view.add_item(
         discord.ui.Container(
@@ -816,6 +853,143 @@ async def _log_line(
     return line + tail
 
 
+async def _log_match_end_line(
+    bot: discord.Client,
+    guild_id: str,
+    match_ref: str,
+    profile_id: str,
+    result: Any,
+) -> None:
+    """Render the RICH match-end bullet (owner 2026-11-25).
+
+    One dense line, the logs channel is a bullet list:
+    ``{player} a perdu une [partie](le post du joueur) - 1v1 Classée -
+    avec/contre {les connus} - sur {la carte} {<t:R>} - série : VVDDV``
+    The verdict, the partners, the map, the streak all read the
+    CORRELATED result - never a stale snapshot.
+    """
+    from botforge.discord.commands_i18n import reply_guild
+    from botforge.discord.home import _card_format, _is_ranked
+
+    key = (guild_id, match_ref)
+    card = _CARD_STATE.get(key) or _FINISHED_CARDS.get(match_ref) or {}
+    winners = {str(w) for w in (result.winner_profile_id or "").split(",") if w}
+    won = str(profile_id) in winners
+    players = _players(card) or _players(_LAST_SUMMARY.get(match_ref) or {})
+    # the subject's side: same team when the team field reads
+    team_of = {str(p.get("profile_id", "")): int(p.get("team", 0) or 0) for p in players}
+    known = {str(p) for p in await _guild_profiles(bot, guild_id)}
+    subject_team = team_of.get(str(profile_id), 0)
+    with_names: list[str] = []
+    against_names: list[str] = []
+    for player in players:
+        pid = str(player.get("profile_id", ""))
+        if not pid or pid == str(profile_id) or pid not in known:
+            continue
+        name = str(player.get("alias") or player.get("name") or pid)
+        mate = " **" + name + "**"
+        if team_of.get(pid, subject_team) == subject_team:
+            with_names.append(mate)
+        else:
+            against_names.append(mate)
+    known_bit = ""
+    if with_names:
+        known_bit += f"{with_word(guild_id, bot)}{''.join(with_names)}"
+    if against_names:
+        known_bit += f" {against_word(guild_id, bot)}{''.join(against_names)}"
+    # the forum post link: the player's own thread message
+    match_link = await _forum_post_link(bot, guild_id, profile_id, match_ref)
+    if not match_link:
+        match_link = f"https://www.aoe2insights.com/match/{match_ref}/"
+    map_name = str(card.get("map_name") or "") or "carte ?"
+    finished_at = int(card.get("finished_at") or 0) or int(time.time())
+    fmt = _card_format(card)
+    labels = await _label_pack(bot, guild_id)
+    if fmt == "FFA":
+        badge = "FFA"
+    elif _is_ranked(card):
+        badge = f"{fmt} {labels.get('ranked_word') or 'Classée'!s}".strip()
+    else:
+        badge = str(labels.get("custom_badge") or "Personnalisée")
+    streak = await _player_streak(bot, profile_id, match_ref, won)
+    line = await reply_guild(
+        guild_id,
+        bot,
+        "profile.live_log_match_won" if won else "profile.live_log_match_lost",
+        player=f"**[{_LAST_NAME.get(profile_id) or profile_id}](https://www.aoe2insights.com/user/relic/{profile_id}/)**",
+        match=f"[une partie]({match_link})",
+        badge=badge,
+    )
+    bits = [bit for bit in (known_bit, f"sur {map_name}", f"<t:{finished_at}:R>") if bit]
+    line += " — " + " · ".join(bits)
+    if streak:
+        line += f" — série : `{streak}`"
+    await _append_logs_line(bot, guild_id, "match_end", line)
+
+
+def with_word(guild_id: str, bot: Any) -> str:
+    """Return the 'avec' joiner."""
+    del guild_id, bot
+    return "avec"
+
+
+def against_word(guild_id: str, bot: Any) -> str:
+    """Return the 'contre' joiner."""
+    del guild_id, bot
+    return "contre"
+
+
+async def _forum_post_link(
+    bot: discord.Client, guild_id: str, profile_id: str, match_ref: str
+) -> str:
+    """Return the match's card message link in the PLAYER'S forum post."""
+    del bot
+    try:
+        posts = await _posts_of(guild_id)
+        entry = posts.get(str(profile_id)) or {}
+        message_id = _post_messages(entry).get(str(match_ref), "")
+        thread_id = str(entry.get("thread_id") or "")
+        if message_id and thread_id:
+            return f"https://discord.com/channels/{guild_id}/{thread_id}/{message_id}"
+    except Exception:
+        return ""
+    return ""
+
+
+async def _player_streak(
+    bot: discord.Client, profile_id: str, match_ref: str, won: bool
+) -> str:
+    """Return the player's last results, oldest first.
+
+    The owner's bullet reads the HISTORY (owner 2026-11-25):
+    ``VVDDV`` - V for a win, D for a defeat; the current match's
+    letter rides last. Five letters maximum, dense like the game's
+    own UI.
+    """
+    try:
+        from botforge.discord.stats_views import recent_match_entries
+
+        entries = await recent_match_entries([str(profile_id)], limit=6)
+    except Exception:
+        entries = []
+    letters: list[str] = []
+    order: list[tuple[int, str]] = []
+    for entry in entries:
+        ref = str(getattr(entry, "match_id", "") or "")
+        if not ref:
+            continue
+        finished = _int_of(getattr(entry, "finished_at", 0))
+        inner = {str(w) for w in getattr(entry, "winners", ()) or ()}
+        letter = "V" if str(profile_id) in inner else "D"
+        if not inner:
+            continue  # unplayed loot: no streak letter
+        order.append((finished, letter))
+    order.sort(key=lambda row: row[0])
+    letters = [letter for _at, letter in order if letter] or []
+    result = "".join(letters[-4:]) + ("V" if won else "D")
+    return result[-5:]
+
+
 def _first_seen_of(guild_id: str, match_ref: str) -> int:
     return _FIRST_SEEN.get((guild_id, match_ref), 0)
 
@@ -883,12 +1057,15 @@ async def _fetch_result_then_update(
     match_ref: str,
     profile_ids: list[str],
     started_after: int,
+    subject_profile_id: str = "",
 ) -> None:
     """Fetch the real match outcome with a backoff, then update the card.
 
     The upstream records the result a few seconds after the end
     notification; the card's message is known, the final edit lands on
-    it directly.
+    it directly. The END LINE rides the verdict (owner 2026-11-25):
+    won/lost, the forum post link, the known partners, the map, the
+    streak - one dense bullet, after the correlation.
     """
     if not profile_ids:
         await _drop_card(bot, guild_id, channel_id, match_ref)
@@ -916,6 +1093,7 @@ async def _fetch_result_then_update(
         _forget_player_ref(profile_ids[0])
         return
     await _apply_result_to_card(bot, guild_id, channel_id, match_ref, result)
+    await _log_match_end_line(bot, guild_id, match_ref, subject_profile_id or profile_ids[0], result)
     for pid in profile_ids:
         _forget_player_ref(pid)
     # the store warms the MOMENT the verdict lands (owner 2026-11-25):

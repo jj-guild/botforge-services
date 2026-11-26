@@ -2630,6 +2630,7 @@ async def _match_panel_labels_guild(guild_id: str, bot: Any) -> dict[str, Any]:
             "match_noun": await _r("profile.match_noun"),
             "lobby_noun": await _r("profile.lobby_noun"),
             "ranked_word": await _r("profile.ranked_word"),
+            "custom_badge": await _r("profile.custom_badge"),
             "settings_button": await _r("profile.matches_settings_button"),
             "refresh_button": await _r("profile.matches_refresh_button"),
             "settings_title": await _r("profile.matches_settings_title"),
