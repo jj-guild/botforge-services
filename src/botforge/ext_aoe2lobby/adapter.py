@@ -797,6 +797,10 @@ class Aoe2LobbyAdapter:
             "spectate_url": f"https://www.aoe2lobby.com/w/{match_ref}",
             "deep_link": f"{DEEP_LINK_URL}{match_ref}" if status != STATUS_GAME else "",
             "settings_json": self._settings_json(match),
+            # the OPEN slots (owner 2026-11-25): a LOBBY's own
+            # property - the finished games and the launched ones
+            # never carried it
+            "open_slots": self._open_slots(match) if status == STATUS_LOBBY else -1,
         }
 
     #: the live settings the lobby payload carries RAW and named
@@ -832,12 +836,35 @@ class Aoe2LobbyAdapter:
         "team_positions",
         "team_together",
         "turbo_mode",
+        # the lobby's OWN properties (owner 2026-11-25): the settings
+        # popup renders them - hide_civs and password as checkboxes,
+        # the scenario as a named line
+        "hide_civilizations",
+        "password",
+        "scenario",
     )
 
     def _settings_json(self, match: dict[str, Any]) -> str:
         """Dump the lobby's raw named settings as one json string."""
         settings = {key: match[key] for key in self.SETTINGS_KEYS if key in match}
         return json.dumps(settings) if settings else ""
+
+    def _open_slots(self, match: dict[str, Any]) -> int:
+        """Count the match's OPEN (joinable) slots.
+
+        The seat grammar (the _match_seats lesson): status 0 = an
+        OPEN slot - the "3/6" of the game's own lobby UI (owner
+        2026-11-25).
+        """
+        slots = match.get("slots")
+        if not isinstance(slots, dict):
+            return -1
+        open_count = 0
+        for key in sorted(slots.keys(), key=lambda k: _slot_position_of(k)):
+            slot = slots[key]
+            if isinstance(slot, dict) and str(slot.get("status") or "") == "0":
+                open_count += 1
+        return open_count
 
     def _match_slots(self, match: dict[str, Any]) -> list[dict[str, Any]]:
         """Extract the occupied slot dicts of one match payload."""
@@ -878,6 +905,15 @@ class Aoe2LobbyAdapter:
         module owns it); this adapter only keeps the profile→match_ref
         association for the eventual close event payload.
         """
+        # the ingest OBSERVES its close decisions (owner 2026-11-25:
+        # the lobby-vanished hunt - a close without a WHY starved the
+        # live dashboard post-reboot): the schedule and the FIRE both
+        # speak
+        logger.info(
+            "aoe2lobby CLOSE SCHEDULED: profile %s (match %s) - not seen in the frame",
+            profile_id,
+            match_ref or "?",
+        )
         self._grace.on_lobby_closed(profile_id, now=now_ms / 1000.0)
         self._close_refs[profile_id] = match_ref
 
@@ -901,6 +937,12 @@ class Aoe2LobbyAdapter:
                 continue
             previous_status = self._player_status.get(profile_id, ("", ""))[0]
             event_type = EVENT_GAME_ENDED if previous_status == STATUS_GAME else EVENT_LOBBY_CLOSED
+            logger.info(
+                "aoe2lobby CLOSE FIRED: profile %s, match %s, type %s (the grace elapsed, no re-sight)",
+                profile_id,
+                match_ref or "?",
+                event_type,
+            )
             events.append(
                 {
                     "match_ref": match_ref,

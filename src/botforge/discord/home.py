@@ -975,83 +975,69 @@ SETTING_LABEL_KEYS = {
 #: live: speed 0-3, victory 0-5, size 0-12, resources 0-6, ages,
 #: difficulty 0-5); unknown values render raw, absent keys nothing.
 _LIVE_SETTINGS_KEYS: dict[str, tuple[str, dict[str, str] | None]] = {
+    # the CANONICAL ORDER is the game's own lobby UI (owner
+    # 2026-11-25): Mode, Taille, IA, Ressources, Pop, Vitesse, Vision,
+    # ages, Traite, Victoire; the finished pairs and these live pairs
+    # BOTH sort through _order_settings_pairs below
     "mode": ("Mode", {
-        "0": "Random Map", "1": "Empire Wars", "2": "Régicide", "3": "King of the Hill",
+        "0": "Random Map", "1": "Empire Wars", "2": "R\u00e9gicide", "3": "King of the Hill",
         "4": "Death Match", "5": "Battle Royale", "6": "Sudden Death", "7": "Capture du Relique",
-        "8": "Défendre la Merveille", "9": "Course à la Merveille", "10": "Scénario",
+        "8": "D\u00e9fendre la Merveille", "9": "Course \u00e0 la Merveille", "10": "Sc\u00e9nario",
         "11": "Campagne co-op",
     }),
     "size": ("Taille", {
         "0": "Minuscule (2)", "1": "Petite (3)", "2": "Moyenne (4)", "3": "Normale (6)",
         "4": "Grande (8)", "5": "Immense", "6": "Colossale",
     }),
-    "population": ("Pop", None),
-    "speed": ("Vitesse", {"0": "Lente", "1": "Décontractée", "2": "Normale", "3": "Rapide"}),
-    "victory": ("Victoire", {
-        "0": "Standard", "1": "Conquête", "2": "Temps", "3": "Score",
-        "4": "Dernier debout", "5": "Personnalisée",
+    "ai_difficulty": ("Difficult\u00e9 IA", {
+        "0": "Tr\u00e8s facile", "1": "Mod\u00e9r\u00e9e", "2": "Difficile", "3": "Extr\u00eame",
+        "4": "Normale", "5": "Tr\u00e8s difficile",
     }),
     "resources": ("Ressources", {
-        "0": "Standard", "1": "Faible", "2": "Moyen", "3": "Élevé",
-        "4": "Très élevé", "5": "Infini", "6": "Aléatoire",
+        "0": "Standard", "1": "Faible", "2": "Moyen", "3": "\u00c9lev\u00e9",
+        "4": "Tr\u00e8s \u00e9lev\u00e9", "5": "Infini", "6": "Al\u00e9atoire",
     }),
-    "reveal_map": ("Vision", {"0": "Normale", "1": "Explorée", "2": "Toute visible"}),
-    "starting_age": ("Âge départ", {
-        "0": "Standard", "1": "Âge sombre", "2": "Âge féodal", "3": "Âge des châteaux",
-        "4": "Âge impérial", "5": "Post-impérial",
+    "population": ("Pop", None),
+    "speed": ("Vitesse", {"0": "Lente", "1": "D\u00e9contract\u00e9e", "2": "Normale", "3": "Rapide"}),
+    "reveal_map": ("Vision", {"0": "Normale", "1": "Explor\u00e9e", "2": "Toute visible"}),
+    "starting_age": ("\u00c2ge d\u00e9part", {
+        "0": "Standard", "1": "\u00c2ge sombre", "2": "\u00c2ge f\u00e9odal", "3": "\u00c2ge des ch\u00e2teaux",
+        "4": "\u00c2ge imp\u00e9rial", "5": "Post-imp\u00e9rial",
     }),
-    "ending_age": ("Âge final", {
-        "0": "Âge sombre", "1": "Âge impérial", "2": "Standard", "3": "Âge des châteaux",
-        "4": "Âge féodal", "5": "Post-impérial",
+    "ending_age": ("\u00c2ge final", {
+        "0": "\u00c2ge sombre", "1": "\u00c2ge imp\u00e9rial", "2": "Standard", "3": "\u00c2ge des ch\u00e2teaux",
+        "4": "\u00c2ge f\u00e9odal", "5": "Post-imp\u00e9rial",
     }),
-    "ai_difficulty": ("Difficulté IA", {
-        "0": "Très facile", "1": "Modérée", "2": "Difficile", "3": "Extrême",
-        "4": "Normale", "5": "Très difficile",
+    "treaty_length": ("Trait\u00e9", None),  # the raw treaty minutes - shown only when > 0
+    "victory": ("Victoire", {
+        "0": "Standard", "1": "Conqu\u00eate", "2": "Temps", "3": "Score",
+        "4": "Dernier debout", "5": "Personnalis\u00e9e",
     }),
-    "treaty_length": ("Traité", None),  # the raw treaty minutes - shown only when > 0
+    "scenario": ("Sc\u00e9nario", None),  # the lobby's scenario name - shown when carried
 }
 
-#: the live lobby's named booleans -> the SAME locale keys as the
-#: finished cards' blob booleans (the panel renders one grammar)
-#: the game-rule checkboxes in THE GAME'S OWN ORDER (owner
-#: 2026-11-24), "(blob key, live key, locale)": the blob key serves
-#: the finished cards, the live key the lobbies/ongoing ones; a None
-#: key renders "?" - the option exists in the game but the provider
-#: never carries it (Handicap: no feed field, unknown blob key)
-SETTING_CHECKBOX_ORDER = (
-    ("66", "lock_teams", "profile.matches_setting_lock_teams"),
-    ("78", "team_together", "profile.matches_setting_team_together"),
-    ("77", "team_positions", "profile.matches_setting_team_positions"),
-    ("76", "shared_exploration", "profile.matches_setting_shared_expl"),
-    (None, None, "profile.matches_setting_handicap"),  # "?" always
-    ("65", "lock_speed", "profile.matches_setting_lock_speed"),
-    ("1", "cheats", "profile.matches_setting_cheats"),
-    ("79", "turbo_mode", "profile.matches_setting_turbo"),
-    ("62", "full_tech_tree", "profile.matches_setting_full_tech"),
-    ("@ew", "ew_mode", "profile.matches_setting_ew"),
-    ("@sudden", "sudden_death_mode", "profile.matches_setting_sudden_death"),
-    ("@regicide", "regicide_mode", "profile.matches_setting_regicide"),
-    (None, "antiquity_mode", "profile.matches_setting_antiquity"),
-    ("75", "record", "profile.matches_setting_record"),
+#: the settings pairs' CANONICAL order (owner 2026-11-25): the game's
+#: own lobby UI - Mode, Taille, IA, Ressources, Pop, Vitesse, Vision,
+#: ages, Traite, Victoire; unknown labels tail, original order kept
+_SETTINGS_ORDER = (
+    "Mode", "Taille", "Difficult\u00e9 IA", "Ressources", "Pop", "Vitesse", "Vision",
+    "\u00c2ge d\u00e9part", "\u00c2ge final", "Trait\u00e9", "Victoire", "Sc\u00e9nario", "Places",
 )
 
-_LIVE_SETTING_BOOLEANS = {
-    "cheats": "profile.matches_setting_cheats",
-    "lock_speed": "profile.matches_setting_lock_speed",
-    "lock_teams": "profile.matches_setting_lock_teams",
-    "full_tech_tree": "profile.matches_setting_full_tech",
-    "record": "profile.matches_setting_record",
-    "shared_exploration": "profile.matches_setting_shared_expl",
-    "team_positions": "profile.matches_setting_team_positions",
-    "team_together": "profile.matches_setting_team_together",
-    "turbo_mode": "profile.matches_setting_turbo",
-    # the mode flags (owner 2026-11-23): the aoe2lobby payload names
-    # them, the schema labels them Yes/No - the checkboxes render them
-    "ew_mode": "profile.matches_setting_ew",
-    "sudden_death_mode": "profile.matches_setting_sudden_death",
-    "regicide_mode": "profile.matches_setting_regicide",
-    "antiquity_mode": "profile.matches_setting_antiquity",
-}
+#: the map-size tile -> the game UI's own player count (the finished
+#: cards carry tiles, the count rides the label like in-game)
+_MAP_SIZE_COUNTS = {120: 2, 144: 3, 168: 4, 200: 6, 220: 8}
+
+
+def _order_settings_pairs(pairs: list[tuple[str, str]]) -> list[tuple[str, str]]:
+    """Sort the settings pairs in the GAME'S OWN order (owner 2026-11-25)."""
+    def rank(pair: tuple[str, str]) -> tuple[int, str]:
+        label = str(pair[0]).strip()
+        for index, known in enumerate(_SETTINGS_ORDER):
+            if label.lower() == known.lower():
+                return (index, label)
+        return (len(_SETTINGS_ORDER), label)
+    return sorted(pairs, key=rank)
 
 SETTING_BOOLEANS = {
     "1": "profile.matches_setting_cheats",
@@ -1126,6 +1112,53 @@ def _card_footer_text(card: dict[str, Any], labels: dict[str, Any], me_ids: set[
     source = str(labels.get("source", "Source : libre:match")).format(url=source_url or "libre:match")
     return f"-# {source}"
 
+#: the game-rule checkboxes in THE GAME'S OWN ORDER (owner
+#: 2026-11-24), "(blob key, live key, locale)": the blob key serves
+#: the finished cards, the live key the lobbies/ongoing ones; a None
+#: key renders "?" - the option exists in the game but the provider
+#: never carries it (Handicap: no feed field, unknown blob key)
+SETTING_CHECKBOX_ORDER = (
+    ("66", "lock_teams", "profile.matches_setting_lock_teams"),
+    ("78", "team_together", "profile.matches_setting_team_together"),
+    ("77", "team_positions", "profile.matches_setting_team_positions"),
+    ("76", "shared_exploration", "profile.matches_setting_shared_expl"),
+    (None, None, "profile.matches_setting_handicap"),  # "?" always
+    ("65", "lock_speed", "profile.matches_setting_lock_speed"),
+    ("1", "cheats", "profile.matches_setting_cheats"),
+    ("79", "turbo_mode", "profile.matches_setting_turbo"),
+    ("62", "full_tech_tree", "profile.matches_setting_full_tech"),
+    ("@ew", "ew_mode", "profile.matches_setting_ew"),
+    ("@sudden", "sudden_death_mode", "profile.matches_setting_sudden_death"),
+    ("@regicide", "regicide_mode", "profile.matches_setting_regicide"),
+    (None, "antiquity_mode", "profile.matches_setting_antiquity"),
+    ("75", "record", "profile.matches_setting_record"),
+    # the lobby's OWN booleans (owner 2026-11-25): they ride the live
+    # payload named; the finished blob never carried them (None)
+    (None, "hide_civilizations", "profile.matches_setting_hide_civs"),
+    (None, "password", "profile.matches_setting_password"),
+)
+
+_LIVE_SETTING_BOOLEANS = {
+    "cheats": "profile.matches_setting_cheats",
+    "lock_speed": "profile.matches_setting_lock_speed",
+    "lock_teams": "profile.matches_setting_lock_teams",
+    "full_tech_tree": "profile.matches_setting_full_tech",
+    "record": "profile.matches_setting_record",
+    "shared_exploration": "profile.matches_setting_shared_expl",
+    "team_positions": "profile.matches_setting_team_positions",
+    "team_together": "profile.matches_setting_team_together",
+    "turbo_mode": "profile.matches_setting_turbo",
+    # the mode flags (owner 2026-11-23): the aoe2lobby payload names
+    # them, the schema labels them Yes/No - the checkboxes render them
+    "ew_mode": "profile.matches_setting_ew",
+    "sudden_death_mode": "profile.matches_setting_sudden_death",
+    "regicide_mode": "profile.matches_setting_regicide",
+    "antiquity_mode": "profile.matches_setting_antiquity",
+    # the lobby's OWN booleans (owner 2026-11-25)
+    "hide_civilizations": "profile.matches_setting_hide_civs",
+    "password": "profile.matches_setting_password",
+}
+
 
 #: the named settings the RAW options blob completes (the
 #: post-Return-of-Rome AoE2 keys); label key \u2192 value table
@@ -1189,13 +1222,13 @@ def _settings_named_pairs(card: dict[str, Any]) -> list[tuple[str, str]]:
                 continue  # no treaty reads better than "0 min"
             shown = str((table or {}).get(str(value), value)) if table is not None else f"{value} min"
             pairs.append((label, shown))
-        return pairs
+        return _order_settings_pairs(_sized_pairs(card, pairs))
     # the LIVE lobby carries its settings RAW and named (aoe2lobby,
     # not the encoded blob): the same popup renders them through the
     # live tables (owner 2026-11-23: the settings button of a live
     # card answered empty)
     pairs.extend(_live_named_pairs(card))
-    return pairs
+    return _order_settings_pairs(_sized_pairs(card, pairs))
 
 
 def _live_bool_lines(card: dict[str, Any], labels: dict[str, Any], lines: list[str]) -> list[str]:
@@ -1243,6 +1276,37 @@ def _live_named_pairs(card: dict[str, Any]) -> list[tuple[str, str]]:
                 shown = f"{shown} ({threshold})"
         pairs.append((label, shown))
     return pairs
+
+
+def _sized_pairs(card: dict[str, Any], pairs: list[tuple[str, str]]) -> list[tuple[str, str]]:
+    """Dress the settings pairs: the Taille, the counts, the open slots.
+
+    The Taille line carries the player COUNT like the game's UI (owner
+    2026-11-25: "Grande (8)"), and a LOBBY shows its open slots.
+    """
+    import re as _re
+
+    out: list[tuple[str, str]] = []
+    for label, value in pairs:
+        if str(label).strip().lower() == "taille":
+            match = _re.search(r"(\d+)\s*\u00d7\s*(\d+)", str(value))
+            if match:
+                tiles = _int_or(match.group(1), 0)
+                count = _MAP_SIZE_COUNTS.get(tiles)
+                size_name = _re.search(r"\(([^()]+)\)", str(value))
+                if count and size_name:
+                    value = f"{size_name.group(1)} ({count})"
+                elif count:
+                    value = f"{value} ({count})"
+        out.append((label, value))
+    # the LOBBY's open slots (owner 2026-11-25): a lobby-only property
+    if str(card.get("status") or "") == "lobby" and str(card.get("open_slots") or "-1") not in ("-1", ""):
+        open_slots = _int_or(card.get("open_slots"), -1)
+        players = len(card.get("players") or [])
+        if open_slots >= 0:
+            total = players + open_slots
+            out.append(("Places", f"{open_slots}/{total}"))
+    return out
 
 
 def _live_settings(card: dict[str, Any]) -> dict[str, Any]:
@@ -1298,6 +1362,39 @@ def _settings_bool_lines(card: dict[str, Any], labels: dict[str, Any]) -> list[s
         mark = "✅" if enabled else "⬜"
         lines.append(f"{mark} {label}")
     return lines
+
+
+class _CardRefreshButton(discord.ui.Button[Any]):
+    """The REFRESH button of a LIVE card (owner 2026-11-25).
+
+    The lobby moves (seats fill, settings change): the refresh
+    re-reads the CURRENT snapshot and re-renders THE MESSAGE in
+    place - the row reads refresh, parametres, rejoindre/spectate.
+    """
+
+    def __init__(self, card: dict[str, Any], labels: dict[str, Any]) -> None:
+        super().__init__(
+            label=str(labels.get("refresh_button", "Rafra\u00eechir")),
+            emoji="\U0001f504",
+            style=discord.ButtonStyle.secondary,
+            custom_id="home:match:refresh",
+        )
+        self._card = card
+        self._labels = labels
+
+    async def callback(self, interaction: discord.Interaction) -> None:
+        """Re-read the live snapshot and edit THIS message in place."""
+        card = self._card
+        fresh = await _refresh_live_card(interaction, card)
+        if fresh is not None:
+            card = fresh
+        try:
+            await interaction.response.edit_message(
+                view=_match_card_view(card, {}, set(), self._labels)
+            )
+        except Exception:
+            logger.debug("the live card refresh edit failed", exc_info=True)
+            await interaction.response.defer()
 
 
 class _MatchSettingsButton(discord.ui.Button[Any]):
@@ -1358,6 +1455,36 @@ async def _refresh_live_card(
     return None
 
 
+class _SettingsRefreshButton(discord.ui.Button[Any]):
+    """Refresh the settings popup, while the lobby stands.
+
+    The click re-reads the CURRENT snapshot and re-renders the popup
+    in place (owner 2026-11-25) - the settings never go stale.
+    """
+
+    def __init__(self, card: dict[str, Any], labels: dict[str, Any]) -> None:
+        super().__init__(
+            label=str(labels.get("refresh_button", "Rafra\u00eechir")),
+            emoji="\U0001f504",
+            style=discord.ButtonStyle.secondary,
+            custom_id="home:match:settings:refresh",
+        )
+        self._card = card
+        self._labels = labels
+
+    async def callback(self, interaction: discord.Interaction) -> None:
+        card = self._card
+        if card.get("status") in ("lobby", "ongoing"):
+            fresh = await _refresh_live_card(interaction, card)
+            if fresh is not None:
+                card = fresh
+        try:
+            await interaction.response.edit_message(view=_settings_view(card, self._labels))
+        except Exception:
+            logger.debug("the settings refresh edit failed", exc_info=True)
+            await interaction.response.defer()
+
+
 def _settings_view(card: dict[str, Any], labels: dict[str, Any]) -> discord.ui.LayoutView:
     """Build the FULL settings view of one match (an ephemeral popup)."""
     from botforge.discord.ui.view_footer import add_view_footer
@@ -1378,6 +1505,11 @@ def _settings_view(card: dict[str, Any], labels: dict[str, Any]) -> discord.ui.L
         container_blocks.append(discord.ui.Separator())
         container_blocks.append(discord.ui.TextDisplay("\n".join(bool_lines)))
     view.add_item(discord.ui.Container(*container_blocks))
+    # the lobby REFRESH rides the popup (owner 2026-11-25): the
+    # settings never go stale while the lobby stands - the launched
+    # games and the finished matches carry no refresh button
+    if str(card.get("status") or "") in ("lobby", "ongoing"):
+        view.add_item(discord.ui.ActionRow(_SettingsRefreshButton(card, labels)))
     return add_view_footer(view, f"panel:match:settings:aoe2:{match_id}")
 
 
@@ -1387,7 +1519,13 @@ def _card_format(card: dict[str, Any]) -> str:
     ``1v2v3v1`` reads team by team; the all-alone melee (every team
     a single player, three teams or more) reads FFA.
     """
-    sizes = [len(seats) for _, seats in _seat_teams(card)]
+    teams = _seat_teams(card)
+    # seats in NO team at all read FFA too (owner 2026-11-25: the
+    # lobby before its teams form is a melee, never a "[ 2 ]")
+    teamless = all(team == 0 for team, _seats in teams)
+    if teams and teamless and sum(len(seats) for _, seats in teams) >= 2:
+        return "FFA"
+    sizes = [len(seats) for _, seats in teams]
     if not sizes:
         return ""
     if len(sizes) >= 3 and all(size == 1 for size in sizes):
@@ -1401,7 +1539,13 @@ def _is_ffa(card: dict[str, Any]) -> bool:
     An FFA shows NO team - the seats read as one ladder, a single
     winner carries the crown.
     """
-    sizes = [len(seats) for _, seats in _seat_teams(card)]
+    teams = _seat_teams(card)
+    teamless = all(team == 0 for team, _seats in teams)
+    if teams and teamless and sum(len(seats) for _, seats in teams) >= 2 and len(teams) == 1:
+        return False  # one group never splits - the seats table reads
+    if teams and teamless:
+        return False  # no teams formed: the seat table keeps the slots
+    sizes = [len(seats) for _, seats in teams]
     return len(sizes) >= 3 and all(size == 1 for size in sizes)
 
 
@@ -2044,11 +2188,13 @@ def _match_card_parts(
     status = card["status"]  # lobby | ongoing | finished
     fmt = _card_format(card)
     match_id = str(card.get("match_id") or card.get("match_ref") or "?")
-    # the badge carries the FORMAT only (owner 2026-11-25: no CUSTOM
-    # word) - the ranked marker rides the header OUTSIDE the insights
-    # link (a masked link never renders an emoji right)
+    # the badge carries the FORMAT, the ranked ones append the WORD
+    # (owner 2026-11-25: the \U0001F3AF emoji left, "1v1 Class\u00e9e" /
+    # "4v4 Ranked" in)
     badge = fmt
-    ranked_prefix = "\U0001F3AF " if _is_ranked(card) else ""
+    if _is_ranked(card) and fmt:
+        ranked_word = str(labels.get("ranked_word") or "Class\u00e9e")
+        badge = f"{fmt} {ranked_word}"
     noun_key = "lobby_noun" if status == "lobby" else "match_noun"
     noun = str(labels.get(noun_key, "Match n\u00b0" if status != "lobby" else "Lobby n\u00b0"))
     winners = {str(w) for w in card.get("winners") or []}
@@ -2064,9 +2210,7 @@ def _match_card_parts(
     # losers' titles - see _card_team_blocks
     blocks: list[Any] = [
         discord.ui.TextDisplay(
-            _card_header(
-                badge, noun, match_id, me_ids=me_ids, card=card, ranked_prefix=ranked_prefix
-            )
+            _card_header(badge, noun, match_id, me_ids=me_ids, card=card)
         ),
     ]
     blocks.append(_card_map_section(card, ctx, labels))
@@ -2078,6 +2222,10 @@ def _match_card_parts(
     blocks.append(discord.ui.Separator())
     blocks.append(discord.ui.TextDisplay(_card_footer_text(card, labels, me_ids)))
     buttons: list[discord.ui.Button[Any]] = []
+    # the LIVE row reads refresh, parametres, rejoindre/spectate (owner
+    # 2026-11-25) - the finished cards keep their settings button alone
+    if status in ("lobby", "ongoing"):
+        buttons.append(_CardRefreshButton(card, labels))
     if status == "lobby" and card.get("lobby_url"):
         buttons.append(
             discord.ui.Button(
@@ -2481,7 +2629,9 @@ async def _match_panel_labels_guild(guild_id: str, bot: Any) -> dict[str, Any]:
             },
             "match_noun": await _r("profile.match_noun"),
             "lobby_noun": await _r("profile.lobby_noun"),
+            "ranked_word": await _r("profile.ranked_word"),
             "settings_button": await _r("profile.matches_settings_button"),
+            "refresh_button": await _r("profile.matches_refresh_button"),
             "settings_title": await _r("profile.matches_settings_title"),
     }
 

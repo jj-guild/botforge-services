@@ -803,12 +803,14 @@ async def _log_line(
     lobby_url = str(summary.get("lobby_url") or match.get("lobby_url") or "")
     spectate_url = str(summary.get("spectate_url") or match.get("spectate_url") or "")
     if verb in ("lobby_open", "lobby_update") and lobby_url:
-        links.append(f"[\U0001f3ae aoe2lobby]({lobby_url})")
+        # the link LABELS carry NO emoji (owner 2026-11-25: they
+        # never render inside a masked link)
+        links.append(f"[aoe2lobby]({lobby_url})")
     if verb == "match_start" and spectate_url:
-        links.append(f"[\U0001f441\ufe0f spectate]({spectate_url})")
+        links.append(f"[spectate]({spectate_url})")
     if match_ref:
         links.append(
-            f"[\U0001f50d insights](https://www.aoe2insights.com/match/{match_ref}/)"
+            f"[insights](https://www.aoe2insights.com/match/{match_ref}/)"
         )
     tail = " \u2014 " + " \u00b7 ".join(bit for bit in links if bit) if links else ""
     return line + tail
