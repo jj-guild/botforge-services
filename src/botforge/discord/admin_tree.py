@@ -236,10 +236,19 @@ async def _ensure_scope(  # noqa: C901
     from botforge.discord.scope_surfaces import run_scope_syncs
 
     synced_posts = await run_scope_syncs(guild_id, bot, ",".join(scopes))
-    tree_repair.done(
-        "the scopes stand", scopes=len(specs), pins=pins_ok, roles=roles_ok, posts=synced_posts
-    )
+    # the forums' line rides BEFORE the closing step (owner 2026-11-27:
+    # the "done" is the LAST line the admin reads), and the closing
+    # itself SPEAKS - the raw "the scopes stand in 52.7s (channels=6...)"
+    # never hits the view again
     tree_repair.steps.append(_say("repair_forums", posts=synced_posts))
+    tree_repair.done(
+        "the scopes stand",
+        display=_say("repair_done", duration="{duration}"),
+        scopes=len(specs),
+        pins=pins_ok,
+        roles=roles_ok,
+        posts=synced_posts,
+    )
     lines.append(f"\n{_say('repair_summary_pins', pins=pins_ok)}")
     lines.append(_say("repair_summary_roles", roles=roles_ok))
     lines.append(_say("repair_summary_posts", posts=synced_posts))

@@ -91,8 +91,16 @@ class RepairReport:
                 "%s: %s done in %.1fs", self.tag, label, time.time() - phase_started
             )
 
-    def done(self, message: str = "DONE", **counts: int) -> None:
-        """Finish the repair: the duration and the accumulated counts."""
+    def done(self, message: str = "DONE", display: str = "", **counts: int) -> None:
+        """Finish the repair: the duration and the accumulated counts.
+
+        ``display`` is the USER-facing closing line (owner 2026-11-27:
+        the raw "tree ensure REPAIR (guild): the scopes stand in 52.7s
+        (channels=6...)" hit the admin's view) - a localized sentence
+        whose ``{duration}`` placeholder receives the elapsed seconds;
+        the log keeps its own terse technical line, the view and the
+        mirror render the display.
+        """
         for key, value in counts.items():
             self._totals[key] = self._totals.get(key, 0) + int(value)
         totals = (
@@ -100,12 +108,14 @@ class RepairReport:
             if self._totals
             else ""
         )
-        line = f"{self.tag}: {message} in {time.time() - self._started_at:.1f}s{totals}"
+        elapsed = time.time() - self._started_at
+        line = f"{self.tag}: {message} in {elapsed:.1f}s{totals}"
         self._logger.info(line)
-        self.steps.append(line)
+        shown = display.format(duration=f"{elapsed:.1f}") if display else line
+        self.steps.append(shown)
         if self._progress is not None:
             try:
-                self._progress(line, self)
+                self._progress(shown, self)
             except Exception:  # noqa: S110 - the mirror never kills the repair
                 pass
 
