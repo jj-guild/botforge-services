@@ -1302,7 +1302,10 @@ class LieuxSeigneurieButton(
         await interaction.response.defer(ephemeral=True)
         stack = wiring()
         realm = await _shell_of(stack, str(getattr(interaction.user, "id", "")))
-        strings = realm_strings(_locale_of(interaction))
+        # retour-testeurs-v1: realm_strings reads the INTERACTION (it
+        # re-derives the locale itself) — a bare locale string crashed
+        # every Seigneurie click after the defer.
+        strings = realm_strings(interaction)
         if realm is None:
             await open_unique_ephemeral(interaction, content=strings["realm_gone_note"])
             return

@@ -171,7 +171,9 @@ async def test_the_scoreboard_landing_restamps_the_clock(monkeypatch: pytest.Mon
     class _Salon:
         id = 55
 
-        async def send(self, content: str, view: Any = None) -> Any:
+        async def send(self, content: str, view: Any = None, **kwargs: Any) -> Any:
+            # retour-testeurs-v1 (affaire 49): the meeting message may
+            # carry the Civ-VS-Civ banner as an attachment.
             return SimpleNamespace(id=77)
 
     async def _body(stack: Any, attack: Any, strings: Any) -> Any:

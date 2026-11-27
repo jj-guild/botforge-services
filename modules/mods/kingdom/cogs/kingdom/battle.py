@@ -33,10 +33,10 @@ Every component is a persistent DynamicItem — a restart between the
 send and the click never kills the flow. All Discord writes are
 best-effort: a failing edit never breaks the engine state.
 
-Degradation (assumed, reported): the reference's blasons/crests
-mosaic banner is NOT ported — the meeting message wears the text
-scoreboard alone (the seam returns the day the visual generator
-exists).
+retour-testeurs-v1 (supasaymon): the reference's blasons/crests
+mosaic banner rides the meeting message again (meeting_banner_file →
+civ_crests.meeting_vs_mosaic_file) — a build failure degrades to the
+text scoreboard alone, the banner never blocks the room.
 """
 
 from __future__ import annotations
@@ -279,6 +279,28 @@ async def refresh_room_message_safe(bot: Any, stack: Any, attack: Any, locale: s
 # ---------------------------------------------------------------------------
 
 
+async def meeting_banner_file(attack: Any) -> discord.File | None:
+    """Return the meeting message's Civ-VS-Civ banner (None = text only).
+
+    retour-testeurs-v1 (supasaymon) : the reference's blasons/crests
+    mosaic banner lives again — the composite [crest+nom][VS badge][crest+nom]
+    rides the meeting message as its attachment, painted from the FINAL
+    civs of each side. Unknown or undrafted civs degrade to the default
+    crest inside the helper — the banner never blocks the room (a build
+    failure renders the text scoreboard alone, the documented degrade).
+    """
+    from .civ_crests import meeting_vs_mosaic_file
+
+    try:
+        pickban = dict(getattr(attack, "pickban", None) or {})
+        return await meeting_vs_mosaic_file(
+            final_civ(pickban, "attacker"), final_civ(pickban, "defender")
+        )
+    except Exception:
+        logger.warning("kingdom: meeting banner build failed", exc_info=True)
+        return None
+
+
 def _battle_room_overwrites(role_name: str) -> dict[str, dict[str, bool]]:
     """Build the battle-room channel overwrites (players' role only) — DATA form (#408).
 
@@ -341,9 +363,14 @@ async def post_meeting_message(guild: Any, stack: Any, attack: Any, strings: dic
         logger.warning("kingdom: no attack salon for the meeting message")
         return None
     try:
+        # retour-testeurs-v1: the Civ-VS-Civ blasons banner rides the
+        # meeting message (an edit-in-place refresh never touches a
+        # message's attachments — the banner stays for the room's life).
+        banner = await meeting_banner_file(attack)
         message = await salon.send(
             await room_body_text(stack, attack, strings),
             view=await room_view(stack, attack, strings),
+            files=[banner] if banner is not None else [],
         )
         await _record_safe(stack, "record_meeting_message", attack.id, int(salon.id), int(message.id))
         # beta-fixes-v1: the scoreboard landing IS the phase's real
@@ -1581,8 +1608,17 @@ class DraftViewButton(
         return cls(attack_id, strings_of(interaction)["draft_button"])
 
     async def callback(self, interaction: discord.Interaction) -> None:
-        """Answer the draft sheet in the single ephemeral window."""
+        """Answer the draft sheet in the single ephemeral window.
+
+        fast-ack-v1 (retour-testeurs Drasah : « L'application n'a pas
+        répondu ») : the click is acked FIRST — the 3-second interaction
+        clock belongs to the defer, the sheet's build (the Mongo reads)
+        runs behind it and the window rides the followup (the core seam's
+        documented pattern: a done response makes open_ephemeral_window
+        send through interaction.followup).
+        """
         strings = strings_of(interaction)
+        await interaction.response.defer(ephemeral=True)
         stack = wiring()
         if stack is None or not self.attack_id:
             await open_unique_ephemeral(interaction, strings["no_service"])
@@ -2137,6 +2173,7 @@ __all__ = [
     "dm_admins_dispute_safe",
     "draft_sheet_embed",
     "handle_dispute_reply_safe",
+    "meeting_banner_file",
     "on_score_resolved_safe",
     "open_battle_room",
     "open_meeting_and_room_safe",
