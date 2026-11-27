@@ -922,7 +922,7 @@ def test_the_post_intro_signature_tracks_the_name_the_accounts_and_the_avatar() 
         "Merlin", {"profiles": {"848567": "Merlin"}}, "https://a/1.png"
     )
     assert json.loads(base) == {
-        "v": 3,
+        "v": 4,
         "name": "Merlin",
         "avatar": "https://a/1.png",
         "profiles": {"848567": "Merlin"},
@@ -1368,3 +1368,68 @@ def test_the_repair_re_renders_only_the_cards_whose_inputs_moved() -> None:  # n
 
 async def _async_iter(items: list[Any]) -> list[Any]:
     return items
+
+
+def test_the_player_link_template_renders_from_the_game_conf() -> None:
+    """The player link template lives ONCE in the game's conf (owner
+    2026-11-27): the model's vars inject prefixed, the label swaps
+    when the caller owns the display name, the undeclared vars stay
+    empty."""
+    from botforge.core.services.profile_sites import (
+        format_profile_link,
+        format_profile_link_url,
+        profile_link_template,
+    )
+
+    assert "aoe2insights.com/user/relic/{profile_id}/" in profile_link_template("aoe2")
+    # the raw template renders its own label (the id in backticks)
+    assert format_profile_link("aoe2", {"profile_id": "848567"}) == (
+        "[`848567`](https://www.aoe2insights.com/user/relic/848567/)"
+    )
+    # a display-name caller keeps his label, the href rides the template
+    assert format_profile_link(
+        "aoe2", {"profile_id": "848567", "profile_name": "Merlin"}, label="Merlin"
+    ) == "[Merlin](https://www.aoe2insights.com/user/relic/848567/)"
+    # the URL alone (the fallback href), and a bare-model prefix normalization
+    assert (
+        format_profile_link_url("aoe2", {"profile_id": "17190369"})
+        == "https://www.aoe2insights.com/user/relic/17190369/"
+    )
+
+
+def test_the_seat_pseudo_points_to_the_known_players_post() -> None:
+    """A KNOWN player's pseudo redirects to HIS #joueurs post (owner
+    2026-11-27) - the unknown players fall back to the game's
+    profile_link_template."""
+    from botforge.discord.home import _seat_text
+
+    card = {
+        "match_id": "507",
+        "status": "finished",
+        "finished_at": 1732300000,
+        "players": [],
+    }
+    labels = {
+        "ai": "IA",
+        "post_links": {"848567": "https://discord.com/channels/42/77/78"},
+    }
+    ctx = {"civ_urls": {}, "civ_images": {}, "ladder": {}, "ladder_by_ts": {}}
+    known = {"profile_id": "848567", "alias": "Merlin", "civ": ""}
+    stranger = {"profile_id": "17190369", "alias": "Rex", "civ": ""}
+
+    mine, _ = _seat_text(known, card, ctx, labels, known_ids={"848567"})
+    assert "](https://discord.com/channels/42/77/78)" in mine, "the KNOWN player rides his post"
+
+    theirs, _ = _seat_text(stranger, card, ctx, labels, known_ids={"848567"})
+    assert "](" + "https://www.aoe2insights.com/user/relic/17190369/" + ")" in theirs, (
+        "the stranger falls back to the game's profile_link_template"
+    )
+
+
+def test_the_players_forum_repairs_on_the_button_only_never_on_a_timer() -> None:
+    """No periodic seed loop (owner 2026-11-27: "ne répare les posts
+    existants hors event que sur clic du bouton repair - ni au boot,
+    ni toutes les 5 minutes"): the timer sweep is gone, the events
+    and the repair button stay."""
+    assert not hasattr(feed, "_seed_loop"), "the 5-minute sweep must not come back"
+    assert not hasattr(feed, "_SEED_SWEEP_S"), "the sweep window must not come back"

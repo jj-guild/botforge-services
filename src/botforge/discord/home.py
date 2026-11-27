@@ -240,8 +240,14 @@ async def _profile_game_blocks(
             stored = elo_lines.get(pid)
             if stored:
                 elo = f" — {stored}" if not elo else f"{elo} · {stored}"
-            url = _game_account_url(game, str(pid))
-            account = f"[{name}]({url}) (`{pid}`)" if url else f"{name} (`{pid}`)"
+            # the account link rides the game's profile_link_template
+            # (owner 2026-11-27), the model's vars injected prefixed
+            from botforge.core.services.profile_sites import format_profile_link
+
+            link = format_profile_link(
+                game, {"profile_id": pid, "profile_name": name}, label=name
+            )
+            account = f"{link} (`{pid}`)" if link else f"{name} (`{pid}`)"
             lines.append(f"• {account}{elo}")
         blocks.append(discord.ui.TextDisplay(chr(10).join(lines)))
     return blocks
@@ -367,11 +373,16 @@ def _profile_sites(game_key: str) -> list[tuple[str, str, str]]:
 def _game_account_url(game_key: str, relic_id: str, site_key: str = "") -> str:
     """Build the profile's public page URL on the chosen (or default) site.
 
-    The sites are declared in ``config/games/<game>/profile_sites.yaml``
-    — never hard-coded; the user's preferred site rides their settings.
+    The DEFAULT site is the game's ``profile_link_template`` (owner
+    2026-11-27: one hard place per game, ``config/games/<g>/game.yaml``);
+    an explicit ``site_key`` keeps the declared sites (the picker).
     """
-    from botforge.core.services.profile_sites import format_profile_url
+    from botforge.core.services.profile_sites import format_profile_link_url, format_profile_url
 
+    if not site_key:
+        url = format_profile_link_url(game_key, {"profile_id": relic_id})
+        if url:
+            return url
     return format_profile_url(game_key, relic_id, site_key)
 
 
@@ -2047,10 +2058,17 @@ def _seat_text(
     # English on the match links while the guild speaks French)
     civ_shown = str((ctx.get("civ_display") or {}).get(civ) or civ)
     civ_link = f"[{civ_shown}]({civ_urls[civ]})" if civ and civ_urls.get(civ) else civ_shown
-    # the alias links to its insights profile (relic id); ONLY the
-    # viewed player's alias carries the bold (owner 2026-11-22)
-    insights_profile = f"https://www.aoe2insights.com/user/relic/{pid}/" if pid else ""
-    alias_link = f"[{alias}]({insights_profile})" if insights_profile else alias
+    # the alias links to the player's #joueurs POST when he is known,
+    # else to the game's profile_link_template (owner 2026-11-27: the
+    # pseudo redirects to the guild's own forum, never straight to the
+    # external site); ONLY the viewed player's alias carries the bold
+    # (owner 2026-11-22)
+    raw_links: Any = labels.get("post_links") if isinstance(labels, dict) else {}
+    post_links: dict[str, str] = dict(raw_links) if isinstance(raw_links, dict) else {}
+    alias_target = str(post_links.get(pid) or "") if pid else ""
+    if not alias_target and pid:
+        alias_target = _game_account_url("aoe2", pid)
+    alias_link = f"[{alias}]({alias_target})" if alias_target else alias
     # a COMPUTER wears its level (owner 2026-11-25: "IA (Extrême)")
     if bool(player.get("ai")):
         level = _ai_level_label(card)
@@ -2783,7 +2801,17 @@ async def _match_panel_labels_guild(guild_id: str, bot: Any) -> dict[str, Any]:
     async def _r(key: str) -> Any:
         return await reply_guild(guild_id, bot, key)
 
+    # the KNOWN players' #joueurs post links (owner 2026-11-27): a
+    # seat's pseudo redirects there, the unknown players fall back to
+    # the game's profile_link_template
+    from botforge.discord import live_activity
+
+    try:
+        post_links = await live_activity.post_link_map(bot, guild_id)
+    except Exception:
+        post_links = {}
     return {
+            "post_links": post_links,
             "team": await _r("profile.matches_team"),
             "with": await _r("profile.matches_with"),
             "join": await _r("profile.matches_join"),

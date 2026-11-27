@@ -155,8 +155,23 @@ Data descriptors defined here:<br>
     
 <tr><td class="decor functions-decor"><span class="code">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span></td><td>&nbsp;</td>
 <td class="singlecolumn"><dl><dt><a name="-any_dict"><strong>any_dict</strong></a>() -&gt; 'dict[str, Any]'</dt><dd><span class="code">Expose&nbsp;the&nbsp;registry's&nbsp;internal&nbsp;state&nbsp;(diagnostics,&nbsp;admin&nbsp;views).</span></dd></dl>
+ <dl><dt><a name="-format_profile_link"><strong>format_profile_link</strong></a>(game_key: 'str', model: 'Any', label: 'str' = '') -&gt; 'str'</dt><dd><span class="code">Render&nbsp;the&nbsp;game's&nbsp;player&nbsp;link&nbsp;from&nbsp;its&nbsp;profile&nbsp;model.<br>
+&nbsp;<br>
+Every&nbsp;model&nbsp;field&nbsp;injects&nbsp;prefixed&nbsp;(``profile_id``,<br>
+``profile_name``,&nbsp;...&nbsp;-&nbsp;owner&nbsp;2026-11-27:&nbsp;"injecte&nbsp;l'objet&nbsp;du<br>
+model&nbsp;et&nbsp;préfixe&nbsp;les&nbsp;vars,&nbsp;ça&nbsp;sera&nbsp;plus&nbsp;évolutif").&nbsp;A&nbsp;``label``<br>
+overrides&nbsp;the&nbsp;template's&nbsp;own&nbsp;label&nbsp;when&nbsp;the&nbsp;caller&nbsp;owns&nbsp;the<br>
+display&nbsp;name;&nbsp;without&nbsp;one&nbsp;the&nbsp;template's&nbsp;label&nbsp;renders&nbsp;as<br>
+declared.</span></dd></dl>
+ <dl><dt><a name="-format_profile_link_url"><strong>format_profile_link_url</strong></a>(game_key: 'str', model: 'Any') -&gt; 'str'</dt><dd><span class="code">Extract&nbsp;the&nbsp;rendered&nbsp;template's&nbsp;URL&nbsp;(the&nbsp;href,&nbsp;label&nbsp;aside).</span></dd></dl>
  <dl><dt><a name="-format_profile_url"><strong>format_profile_url</strong></a>(game_key: 'str', profile_id: 'str', site_key: 'str' = '') -&gt; 'str'</dt><dd><span class="code">Format&nbsp;the&nbsp;profile&nbsp;page&nbsp;URL&nbsp;on&nbsp;the&nbsp;chosen&nbsp;(or&nbsp;default)&nbsp;site.</span></dd></dl>
  <dl><dt><a name="-parse_profile_url"><strong>parse_profile_url</strong></a>(game_key: 'str', url: 'str') -&gt; 'tuple[str, str] | None'</dt><dd><span class="code">Parse&nbsp;a&nbsp;pasted&nbsp;URL&nbsp;of&nbsp;any&nbsp;known&nbsp;site&nbsp;into&nbsp;(site_key,&nbsp;profile_id).</span></dd></dl>
+ <dl><dt><a name="-profile_link_template"><strong>profile_link_template</strong></a>(game_key: 'str') -&gt; 'str'</dt><dd><span class="code">Return&nbsp;the&nbsp;game's&nbsp;declared&nbsp;player-link&nbsp;template&nbsp;(''&nbsp;undeclared).<br>
+&nbsp;<br>
+The&nbsp;template&nbsp;lives&nbsp;in&nbsp;``config/games/&lt;game_key&gt;/game.yaml``&nbsp;under<br>
+``profile_link_template``&nbsp;-&nbsp;a&nbsp;full&nbsp;markdown&nbsp;link&nbsp;whose&nbsp;vars&nbsp;are<br>
+the&nbsp;profile&nbsp;model's&nbsp;fields,&nbsp;prefixed&nbsp;(``{profile_id}``,<br>
+``{profile_name}``,&nbsp;...).</span></dd></dl>
  <dl><dt><a name="-profile_sites_registry"><strong>profile_sites_registry</strong></a>() -&gt; 'ProfileSitesRegistry'</dt><dd><span class="code">Return&nbsp;the&nbsp;process-wide&nbsp;registry,&nbsp;loading&nbsp;the&nbsp;known&nbsp;games&nbsp;once.</span></dd></dl>
  <dl><dt><a name="-reset_registry_for_tests"><strong>reset_registry_for_tests</strong></a>(config_dir: 'Path | None' = None) -&gt; 'None'</dt><dd><span class="code">Reload&nbsp;the&nbsp;registry&nbsp;from&nbsp;an&nbsp;explicit&nbsp;config&nbsp;dir&nbsp;(tests).</span></dd></dl>
 </td></tr></table><p>
@@ -166,5 +181,6 @@ Data descriptors defined here:<br>
     
 <tr><td class="decor data-decor"><span class="code">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span></td><td>&nbsp;</td>
 <td class="singlecolumn"><strong>ID_KIND_RELIC</strong> = 'relic_id'<br>
-<strong>ID_KIND_SITE</strong> = 'site_id'</td></tr></table>
+<strong>ID_KIND_SITE</strong> = 'site_id'<br>
+<strong>__annotations__</strong> = {'_LINK_TEMPLATES': 'dict[str, str]'}</td></tr></table>
 </body></html>

@@ -142,6 +142,81 @@ class ProfileSitesRegistry:
 
 _REGISTRY = ProfileSitesRegistry()
 
+# the per-game profile_link_template (config/games/<g>/game.yaml) -
+# ONE hard place per game (owner 2026-11-27): every surface that
+# shows a player's pseudo renders it, the unknown players fall back
+# to it
+_LINK_TEMPLATES: dict[str, str] = {}
+_LABEL_RE = re.compile(r"^\[[^\]]*\]")
+_URL_RE = re.compile(r"\]\(([^)]*)\)")
+
+
+def profile_link_template(game_key: str) -> str:
+    """Return the game's declared player-link template ('' undeclared).
+
+    The template lives in ``config/games/<game_key>/game.yaml`` under
+    ``profile_link_template`` - a full markdown link whose vars are
+    the profile model's fields, prefixed (``{profile_id}``,
+    ``{profile_name}``, ...).
+    """
+    if game_key in _LINK_TEMPLATES:
+        return _LINK_TEMPLATES[game_key]
+    template = ""
+    path = _default_config_path(game_key).with_name("game.yaml")
+    if path.is_file():
+        try:
+            data = yaml.safe_load(path.read_text()) or {}
+            if isinstance(data, dict):
+                template = str(data.get("profile_link_template") or "")
+        except Exception:
+            template = ""
+    _LINK_TEMPLATES[game_key] = template
+    return template
+
+
+class _SafeVars(dict[str, str]):
+    """A format mapping that renders the undeclared vars empty."""
+
+    def __missing__(self, key: str) -> str:
+        return ""
+
+
+def format_profile_link(game_key: str, model: Any, label: str = "") -> str:
+    """Render the game's player link from its profile model.
+
+    Every model field injects prefixed (``profile_id``,
+    ``profile_name``, ... - owner 2026-11-27: "injecte l'objet du
+    model et préfixe les vars, ça sera plus évolutif"). A ``label``
+    overrides the template's own label when the caller owns the
+    display name; without one the template's label renders as
+    declared.
+    """
+    template = profile_link_template(game_key)
+    if not template:
+        return ""
+    fields: dict[str, str] = {}
+    for key, value in dict(model or {}).items():
+        # the model may already speak the prefixed names (profile_id)
+        # or the bare ones (id) - both normalize to the prefixed vars
+        bare = key[8:] if key.startswith("profile_") else key
+        fields[f"profile_{bare}"] = "" if value is None else str(value)
+    try:
+        rendered = template.format_map(_SafeVars(fields))
+    except Exception:
+        return ""
+    if label:
+        rendered = _LABEL_RE.sub(lambda _m: f"[{label}]", rendered, count=1)
+    return rendered
+
+
+def format_profile_link_url(game_key: str, model: Any) -> str:
+    """Extract the rendered template's URL (the href, label aside)."""
+    rendered = format_profile_link(game_key, model)
+    if not rendered:
+        return ""
+    match = _URL_RE.search(rendered)
+    return match.group(1) if match else ""
+
 
 def profile_sites_registry() -> ProfileSitesRegistry:
     """Return the process-wide registry, loading the known games once."""

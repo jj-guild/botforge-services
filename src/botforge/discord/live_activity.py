@@ -48,17 +48,20 @@ logger = logging.getLogger("botforge.live_activity")
 
 __all__ = ["start_live_activity_feed"]
 
-# the seed sweep: a forum created (or repaired) after the boot seeds
-# within this window - the seed never waits on the next match event
-_SEED_SWEEP_S = 300.0
+# (owner 2026-11-27): NO periodic repair - the existing posts repair
+# on the REPAIR BUTTON only, never at the boot, never on a timer; the
+# events (channel/member/bind, the live stream) stay the fast paths
 
 # the seed's BUILD: a seed producing broken cards gets versioned up -
 # every forum re-seeds once with the fixed build (the old cards stay,
 # the guild owns its channel)
-_SEED_VERSION = 13  # 13: the rebuild EDITS IN PLACE (owner 2026-11-27:
-# a build change re-renders the registered card messages instead of
-# delete+repost - half the calls, no DELETE rate limit); 12: the shed
-# walks the thread; 11: the avatar header; 10: the PLAYERS forum
+_SEED_VERSION = 14  # 14: the seats' pseudos link to the player's
+# #joueurs post (owner 2026-11-27), the rest falls back to the game's
+# profile_link_template; 13: the rebuild EDITS IN PLACE (owner
+# 2026-11-27: a build change re-renders the registered card messages
+# instead of delete+repost - half the calls, no DELETE rate limit);
+# 12: the shed walks the thread; 11: the avatar header; 10: the
+# PLAYERS forum
 
 _PLAYERS_SCOPE = "games/aoe2"
 _PLAYERS_KEY = "joueurs"
@@ -152,8 +155,8 @@ async def instant_sweep(bot: discord.Client, guild_id: str) -> None:
     """Run the forum reconcile NOW for one guild (the pokes' entry).
 
     The member join/leave and the bind/unbind hooks ride this - the
-    posts' lifecycle answers the EVENT, the 5-minute sweep stays the
-    safety net.
+    posts' lifecycle answers the EVENT; the existing posts repair on
+    the REPAIR BUTTON only (owner 2026-11-27: no timer, no boot pass).
     """
     try:
         channel_id = await _players_channel_id(bot, guild_id)
@@ -165,6 +168,7 @@ async def instant_sweep(bot: discord.Client, guild_id: str) -> None:
         # moved is EDITED IN PLACE, the rest stays untouched
         _CTX_MEMO.clear()
         _LABELS_MEMO.clear()
+        _POST_LINKS_MEMO.pop(guild_id, None)
         _SEEDED.discard(guild_id)
         await _maybe_seed_players_forum(bot, guild_id, channel_id)
         await _gap_fill_players_forum(bot, guild_id, channel_id)
@@ -177,9 +181,9 @@ def _bind_instant_repair(bot: discord.Client) -> None:
     """Bind the channel delete/create events to an INSTANT forum sweep.
 
     The owner's rule (2026-11-25): a repaired forum repopulates
-    INSTANTLY, nobody waits for the 5-minute sweep - the sweep stays
-    the safety net, the event is the fast path. The marker decides
-    cheaply: an unchanged forum returns in one read.
+    INSTANTLY, the event is the fast path (2026-11-27: there is NO
+    timer anymore - the button repairs, the events answer). The
+    marker decides cheaply: an unchanged forum returns in one read.
     """
 
     async def _on_channel_event(channel: Any) -> None:
@@ -245,10 +249,6 @@ def start_live_activity_feed(bot: discord.Client) -> asyncio.Task[None] | None:
                 await asyncio.sleep(5)
 
     task = asyncio.create_task(_run())
-    # the seed sweep watches for a freshly created (or repaired) players
-    # forum: a channel provisioned AFTER the boot seeds within the
-    # sweep window - never waiting on the next match to fire an event
-    seed_task = asyncio.create_task(_seed_loop(bot))
     # the INSTANT repair (owner 2026-11-25: "au delete, tout repopulate
     # instant"): a channel deleted or created sweeps NOW
     _bind_instant_repair(bot)
@@ -258,26 +258,7 @@ def start_live_activity_feed(bot: discord.Client) -> asyncio.Task[None] | None:
             logger.error("live activity feed DIED: %r", task.exception())
 
     task.add_done_callback(_log_death)
-    seed_task.add_done_callback(_log_death)
     return task
-
-
-async def _seed_loop(bot: discord.Client) -> None:
-    """Sweep the guilds' players forums for a seeding to run."""
-    while True:
-        for guild in list(bot.guilds):
-            try:
-                guild_id = str(guild.id)
-                channel_id = await _players_channel_id(bot, guild_id)
-                if channel_id is None:
-                    continue
-                await _maybe_seed_players_forum(bot, guild_id, channel_id)
-                await _gap_fill_players_forum(bot, guild_id, channel_id)
-            except Exception:
-                logger.debug(
-                    "the seed sweep skipped a guild (%s) - best-effort", guild.id, exc_info=True
-                )
-        await asyncio.sleep(_SEED_SWEEP_S)
 
 
 async def _deliver_event(bot: discord.Client, event: dict[str, Any]) -> None:
@@ -1087,7 +1068,8 @@ async def _player_names(bot: discord.Client, guild_id: str) -> dict[str, str]:
 
 # the intro card's BUILD: the mention/catalog-link/admin-menu cut
 # re-edits every existing post once (owner 2026-11-26 review)
-_INTRO_TEMPLATE_V = 3
+_INTRO_TEMPLATE_V = 4  # 4: the accounts link to the player's post,
+# else the game's profile_link_template (owner 2026-11-27)
 
 
 def _post_intro_signature(name: str, profile: dict[str, Any], avatar: str) -> str:
@@ -1163,7 +1145,7 @@ async def _post_intro_view(
     paragraphs: list[str] = []
     for pid in ordered:
         label = profiles.get(pid) or _LAST_NAME.get(pid) or f"Compte {pid}"
-        lines = [f"**[{label}](https://www.aoe2insights.com/user/relic/{pid}/)**"]
+        lines = [f"**{await _player_link_md(bot, guild_id, pid, label)}**"]
         mine = boards.get(pid) or {}
         for key, ladder_label in (("rm_1v1", "1v1"), ("rm_team", "TG")):
             current, peak = mine.get(key, (0, 0))
@@ -1971,6 +1953,60 @@ async def rename_user_posts(bot: discord.Client, user_id: str, new_name: str) ->
         logger.info("players forum: %s's post retitled in guild %s", user_id, gid)
 
 
+# the guild's player-post links (owner 2026-11-27): a KNOWN player's
+# pseudo points to HIS #joueurs post's intro message, never to the
+# external site - memoized with the label pack's window, purged by
+# every repair (a recreated post re-links at once)
+_POST_LINKS_MEMO: dict[str, tuple[float, dict[str, str]]] = {}
+
+
+async def post_link_map(bot: discord.Client, guild_id: str) -> dict[str, str]:
+    """Return {profile_id: the player's post intro jump url}.
+
+    The owner's rule (2026-11-27): when a surface shows a player's
+    pseudo, a KNOWN player redirects to "le profil du post original
+    dans le forum #joueurs de la guilde" - the UNKNOWN players fall
+    back to the game's profile_link_template.
+    """
+    cached = _POST_LINKS_MEMO.get(guild_id)
+    if cached and time.monotonic() - cached[0] < _MEMO_TTL_S:
+        return cached[1]
+    links: dict[str, str] = {}
+    try:
+        users = await _guild_users(bot, guild_id)
+        posts = await _posts_of(guild_id)
+        for uid, info in users.items():
+            entry = posts.get(str(uid)) or {}
+            thread_id = str(entry.get("thread_id") or "")
+            if not thread_id:
+                continue
+            target = str(entry.get("intro_id") or "") or thread_id
+            url = f"https://discord.com/channels/{guild_id}/{thread_id}/{target}"
+            for pid in (info.get("profiles") or {}):
+                links[str(pid)] = url
+    except Exception:
+        logger.debug("the post link map read failed (guild %s)", guild_id, exc_info=True)
+    _POST_LINKS_MEMO[guild_id] = (time.monotonic(), links)
+    return links
+
+
+async def _player_link_md(bot: discord.Client, guild_id: str, profile_id: str, label: str) -> str:
+    """Render one player pseudo's link: his post when known, else the template.
+
+    The KNOWN player's label keeps his displayed pseudo (owner
+    2026-11-27); the fallback renders the game's profile_link_template
+    with the same label - the href moves, the grammar stays.
+    """
+    from botforge.core.services.profile_sites import format_profile_link
+
+    if not profile_id:
+        return label
+    url = (await post_link_map(bot, guild_id)).get(str(profile_id)) or ""
+    if url:
+        return f"[{label}]({url})"
+    return format_profile_link("aoe2", {"profile_id": profile_id, "profile_name": label}, label=label) or label
+
+
 async def _guild_profiles(bot: discord.Client, guild_id: str) -> list[str]:
     """Return the guild members' bound AoE2 profiles."""
     registration = getattr(bot, "registration_service", None)
@@ -2121,7 +2157,7 @@ async def _log_line(
 
     match = event.get("match") or {}
     name = _LAST_NAME.get(profile_id) or profile_id
-    player = f"**[{name}](https://www.aoe2insights.com/user/relic/{profile_id}/)**"
+    player = f"**{await _player_link_md(bot, guild_id, profile_id, name)}**"
     id_part = f"n\u00b0`{match_ref}`" if match_ref else ""
     duration_bit = ""
     if verb == "match_end":
@@ -2218,7 +2254,7 @@ async def _log_match_end_line(
         guild_id,
         bot,
         "profile.live_log_match_won" if won else "profile.live_log_match_lost",
-        player=f"**[{_LAST_NAME.get(profile_id) or profile_id}](https://www.aoe2insights.com/user/relic/{profile_id}/)**",
+        player=f"**{await _player_link_md(bot, guild_id, profile_id, _LAST_NAME.get(profile_id) or profile_id)}**",
         match=f"[une partie]({match_link})",
         badge=badge,
     )
