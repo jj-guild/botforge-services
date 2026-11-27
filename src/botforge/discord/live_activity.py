@@ -159,9 +159,16 @@ async def instant_sweep(bot: discord.Client, guild_id: str) -> None:
         channel_id = await _players_channel_id(bot, guild_id)
         if channel_id is None:
             return
+        # a REPAIR re-reads the world (owner 2026-11-27: an imported
+        # map reaches the cards): the enrichment memos die, the render
+        # hash decides which cards re-render - a card whose inputs
+        # moved is EDITED IN PLACE, the rest stays untouched
+        _CTX_MEMO.clear()
+        _LABELS_MEMO.clear()
         _SEEDED.discard(guild_id)
         await _maybe_seed_players_forum(bot, guild_id, channel_id)
         await _gap_fill_players_forum(bot, guild_id, channel_id)
+        await _reconcile_rendered_cards(bot, guild_id, channel_id)
     except Exception:
         logger.debug("the instant forum sweep failed (guild %s)", guild_id, exc_info=True)
 
@@ -793,6 +800,33 @@ async def _week_cards(bot: discord.Client, guild_id: str) -> list[dict[str, Any]
     return cards
 
 
+def _card_render_hash(card: dict[str, Any], ctx: dict[str, Any]) -> str:
+    """Hash the card view's INPUTS - the model and its enrichment.
+
+    The repair's reconcile (owner 2026-11-27: "quand tu repair, tu
+    remets l'objet tel quel, sans regen des views - une map manquait,
+    je l'ai importée, repair, et la vue est restée sans la map") lives
+    on this: a card re-renders ONLY when its inputs moved - the model
+    (players, verdict, settings) or the enrichment (the map's freshly
+    imported image, the civs' urls, the display names).
+    """
+    import hashlib
+
+    payload = json.dumps(
+        {
+            "card": card,
+            "map_images": ctx.get("map_images") or {},
+            "civ_images": ctx.get("civ_images") or {},
+            "map_display": ctx.get("map_display") or {},
+            "civ_display": ctx.get("civ_display") or {},
+        },
+        sort_keys=True,
+        ensure_ascii=False,
+        default=str,
+    )
+    return hashlib.sha256(payload.encode("utf-8", "replace")).hexdigest()
+
+
 def _int_of(value: Any) -> int:
     """Coerce a raw field to int (0 on garbage)."""
     try:
@@ -877,6 +911,11 @@ async def _posts_of(guild_id: str) -> dict[str, dict[str, Any]]:
                     "intro": str(entry.get("intro") or ""),
                     "intro_id": str(entry.get("intro_id") or ""),
                     "intro_pinned": bool(entry.get("intro_pinned")),
+                    "hashes": {
+                        str(k): str(v)
+                        for k, v in (entry.get("hashes") or {}).items()
+                        if str(k) and str(v)
+                    },
                 }
         return posts
     except Exception:
@@ -1293,7 +1332,7 @@ async def _shed_old_cards(
         window_refs = {str(c.get("match_id") or "") for c in _cards_of_user(cards, profiles)}
         kept: dict[str, str] = {}
         if thread is not None:
-            kept, moved, died = await _reshuffle_post_cards(
+            kept, kept_hashes, moved, died = await _reshuffle_post_cards(
                 bot, guild_id, uid, thread, entry, cards_by_ref, window_refs,
                 profiles, labels, known, bot_id, _match_card_view,
             )
@@ -1301,6 +1340,7 @@ async def _shed_old_cards(
             shed += died
         entry["refs"] = sorted(kept)
         entry["messages"] = kept
+        entry["hashes"] = kept_hashes if kept else {}
         await _save_post(guild_id, uid, entry)
     if edited or shed:
         logger.info(
@@ -1309,6 +1349,99 @@ async def _shed_old_cards(
             edited,
             shed,
         )
+
+
+async def _reconcile_rendered_cards(
+    bot: discord.Client, guild_id: str, channel_id: str
+) -> None:
+    """Re-render the posts' cards whose INPUTS moved - the repair's regen.
+
+    The owner's rule (2026-11-27): a repair re-reads the world - a map
+    imported seconds before must reach the match card that missed it.
+    Each traced card carries its RENDER HASH (the model + the
+    enrichment); a moved hash is EDITED IN PLACE, an unmoved card is
+    never touched - the repair costs the edits it needs, no more.
+    """
+    from botforge.discord.home import _match_card_view
+
+    try:
+        forum = await _sweep_channel(bot, guild_id, channel_id)
+        if forum is None or not isinstance(forum, discord.ForumChannel):
+            return
+        profiles = await _guild_profiles(bot, guild_id)
+        if not profiles:
+            return
+        cards = await _week_cards(bot, guild_id)
+        if not cards:
+            return
+        cards_by_ref = {str(c.get("match_id") or ""): c for c in cards if str(c.get("match_id") or "")}
+        users = await _guild_users(bot, guild_id)
+        posts = await _posts_of(guild_id)
+        labels = await _label_pack(bot, guild_id)
+        known = set(profiles)
+    except Exception:
+        logger.debug("the render reconcile skipped (guild %s) - best-effort", guild_id, exc_info=True)
+        return
+    refreshed = 0
+    for uid, entry in posts.items():
+        thread = _thread_of(forum, entry)
+        if thread is None:
+            continue
+        refreshed += await _reconcile_post_cards(
+            bot, guild_id, uid, entry, thread, cards_by_ref, users, labels, known, _match_card_view
+        )
+    if refreshed:
+        logger.info(
+            "players forum (guild %s): %d card(s) re-rendered - their inputs moved",
+            guild_id,
+            refreshed,
+        )
+
+
+async def _reconcile_post_cards(
+    bot: discord.Client,
+    guild_id: str,
+    uid: str,
+    entry: dict[str, Any],
+    thread: Any,
+    cards_by_ref: dict[str, dict[str, Any]],
+    users: dict[str, Any],
+    labels: dict[str, Any],
+    known: set[str],
+    view_builder: Any,
+) -> int:
+    """Re-render ONE post's moved cards - returns how many were edited."""
+    profiles_of_uid = set((users.get(uid) or {}).get("profiles") or {})
+    hashes = dict(entry.get("hashes") or {})
+    changed = 0
+    for ref, mid in list(entry.get("messages", {}).items()):
+        card = cards_by_ref.get(ref)
+        if card is None or not str(mid).isdigit():
+            continue
+        try:
+            ctx = await _card_ctx(bot, guild_id, card)
+        except Exception:
+            logger.debug("the reconcile ctx failed (match %s) - best-effort", ref, exc_info=True)
+            continue
+        mark = _card_render_hash(card, ctx)
+        if hashes.get(ref) == mark:
+            continue  # the inputs never moved - the card stays
+        try:
+            view = view_builder(card, ctx, profiles_of_uid, labels, known)
+            await thread.get_partial_message(int(mid)).edit(view=view)
+            hashes[ref] = mark
+            changed += 1
+        except Exception:
+            logger.debug(
+                "the card re-render failed (post %s, match %s) - best-effort",
+                uid,
+                ref,
+                exc_info=True,
+            )
+    if changed:
+        entry["hashes"] = hashes
+        await _save_post(guild_id, uid, entry)
+    return changed
 
 
 async def _reshuffle_post_cards(
@@ -1324,14 +1457,15 @@ async def _reshuffle_post_cards(
     known: set[str],
     bot_id: Any,
     view_builder: Any,
-) -> tuple[dict[str, str], int, int]:
+) -> tuple[dict[str, str], dict[str, str], int, int]:
     """Walk ONE post's thread: edit the traced window cards, delete the rest.
 
-    Returns (kept: ref -> message id, edits, deletes) - the caller folds
+    Returns (kept: ref -> message id, hashes, edits, deletes) - the caller folds
     the kept map into the registry and the counters into the report.
     """
     intro_id = int(entry.get("intro_id") or 0)
     kept: dict[str, str] = {}
+    kept_hashes: dict[str, str] = dict(entry.get("hashes") or {})
     edited = 0
     shed = 0
     try:
@@ -1352,6 +1486,7 @@ async def _reshuffle_post_cards(
                     view = view_builder(cards_by_ref[traced], ctx, profiles, labels, known)
                     await message.edit(view=view)
                     kept[traced] = str(message.id)
+                    kept_hashes[traced] = _card_render_hash(cards_by_ref[traced], ctx)
                     edited += 1
                     continue
                 except Exception:
@@ -1364,6 +1499,7 @@ async def _reshuffle_post_cards(
             try:
                 await message.delete()
                 shed += 1
+                kept_hashes.pop(traced, None)
             except Exception:
                 logger.debug(
                     "the old card delete failed (post %s, message %s) - best-effort",
@@ -1373,7 +1509,7 @@ async def _reshuffle_post_cards(
                 )
     except Exception:
         logger.debug("the thread history walk failed (post %s) - best-effort", uid, exc_info=True)
-    return kept, edited, shed
+    return kept, kept_hashes, edited, shed
 
 
 async def _dedupe_twins(guild_id: str, forum: Any, posts: dict[str, dict[str, Any]]) -> None:

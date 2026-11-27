@@ -10,6 +10,7 @@ player. A guild WITHOUT the players forum sees the logs only.
 from __future__ import annotations
 
 import json
+from types import SimpleNamespace
 from typing import Any
 
 import botforge.discord.live_activity as feed
@@ -64,7 +65,6 @@ def test_the_logs_verbs_and_the_one_line_per_event_dedupe() -> None:
 
 def _entry(**kw: Any) -> Any:
     """A served MatchHistoryEntry stand-in."""
-    from types import SimpleNamespace
 
     base = {
         "match_id": "507", "leaderboard_id": "", "started_at": 1732300000, "finished_at": 0,
@@ -279,7 +279,6 @@ def test_the_format_reads_the_exact_sizes_and_the_ffa_stands_alone() -> None:
 
 def test_a_solo_match_never_lists_in_the_five() -> None:
     """A single-seat match is a lobby test, not a game (owner 2026-11-25)."""
-    from types import SimpleNamespace
 
     # the guard on the listing path: seats < 2 skips the entry
     from botforge.discord import home
@@ -382,7 +381,6 @@ def test_the_when_line_never_doubles_the_discord_prefix() -> None:
 def test_the_listing_keeps_the_unplayed_matches() -> None:
     """The 10-match listing never pokes holes (owner 2026-11-25)."""
     import asyncio
-    from types import SimpleNamespace
 
     import botforge.discord.stats_views as stats_views
     from botforge.discord.home import _finished_cards
@@ -955,7 +953,6 @@ def test_the_post_intro_is_the_entity_card_of_the_displayed_player() -> None:
     `panel:player:aoe2:<user id>` foots the card."""
     import asyncio
     import json
-    from types import SimpleNamespace
     from unittest.mock import patch
 
     import discord
@@ -1082,7 +1079,6 @@ def test_the_player_menu_bar_gates_on_the_global_admin_or_the_player() -> None:
     the DISPLAYED player himself - nobody else, guild admins included
     when they are neither."""
     import asyncio
-    from types import SimpleNamespace
 
     from botforge.discord.home import _player_menu_guard
 
@@ -1178,7 +1174,6 @@ def test_the_build_change_edits_the_traced_cards_and_deletes_the_strays() -> Non
     message stay, and the registry keeps only the survivors - the
     posting loop fills the holes."""
     import asyncio
-    from types import SimpleNamespace
     from unittest.mock import patch
 
     import botforge.discord.live_activity as feed
@@ -1257,3 +1252,119 @@ def test_the_build_change_edits_the_traced_cards_and_deletes_the_strays() -> Non
     assert posts["u1"]["refs"] == ["m1"], "the registry keeps the re-rendered card only"
     assert posts["u1"]["messages"] == {"m1": "11"}
     assert posts["u2"]["refs"] == [], "a dead thread still resets - the card re-posts"
+
+
+def test_the_render_hash_tracks_the_model_and_the_enrichment() -> None:
+    """The repair's regen rides this hash (owner 2026-11-27): the model
+    AND the enrichment are the inputs - a freshly imported map image
+    moves the hash, the card re-renders."""
+    import botforge.discord.live_activity as feed
+
+    card = {"match_id": "m1", "map_name": "Arabia"}
+    bare = feed._card_render_hash(card, {"map_images": {}})
+    same = feed._card_render_hash(dict(card), {"map_images": {}})
+    with_map = feed._card_render_hash(card, {"map_images": {"Arabia": "https://img/arabia.png"}})
+    new_verdict = feed._card_render_hash({**card, "winners": ["848567"]}, {"map_images": {}})
+    assert bare == same, "the same inputs hash the same"
+    assert bare != with_map, "an imported map image moves the hash"
+    assert bare != new_verdict, "a moved model moves the hash"
+
+
+def test_the_repair_re_renders_only_the_cards_whose_inputs_moved() -> None:  # noqa: C901
+    """A repair re-reads the world (owner 2026-11-27): the map imported
+    seconds before reaches the match card that missed it - the moved
+    hash is EDITED IN PLACE, the unmoved card is never touched."""
+    import asyncio
+    from unittest.mock import patch
+
+    import botforge.discord.live_activity as feed
+
+    edited: list[int] = []
+
+    class _Partial:
+        def __init__(self, mid: int) -> None:
+            self.mid = mid
+
+        async def edit(self, view: Any = None) -> None:
+            del view
+            edited.append(self.mid)
+
+    class _Thread:
+        def get_partial_message(self, mid: int) -> _Partial:
+            return _Partial(mid)
+
+        def id(self) -> int:  # pragma: no cover
+            return 1
+
+    thread = _Thread()
+
+    class _ForumBase:
+        pass
+
+    class _Forum(_ForumBase):
+        def get_thread(self, tid: int):
+            return thread
+
+        def threads(self):  # pragma: no cover
+            return []
+
+    cards = [{"match_id": "m1", "players": [{"profile_id": "848567"}]}]
+    users = {"u1": {"name": "Merlin", "profiles": {"848567": "Merlin"}}}
+    # the map was NOT imported when the card rendered: no image
+    ctx_no_map = {"map_images": {}}
+    entry = {
+        "thread_id": "1", "intro_id": "1", "refs": ["m1"], "messages": {"m1": "11"},
+        "hashes": {"m1": feed._card_render_hash(cards[0], ctx_no_map)},
+    }
+    saved: list[Any] = []
+
+    async def _fake_save(guild_id, uid, entry):
+        saved.append((uid, dict(entry or {})))
+
+    async def _fake_sweep(bot, guild_id, channel_id):
+        return _Forum()
+
+    async def _fake_profiles(bot, guild_id):
+        return ["848567"]
+
+    async def _fake_users(bot, guild_id):
+        return users
+
+    async def _fake_posts(guild_id):
+        return {"u1": entry}
+
+    async def _fake_ctx(bot, guild_id, card):
+        # the map is imported NOW: the enrichment carries its image
+        return {"map_images": {"Arabia": "https://img/arabia.png"}}
+
+    with (
+        patch.object(feed, "_save_post", _fake_save),
+        patch.object(feed, "_sweep_channel", _fake_sweep),
+        patch.object(feed, "_guild_profiles", _fake_profiles),
+        patch.object(feed, "_guild_users", _fake_users),
+        patch.object(feed, "_posts_of", _fake_posts),
+        patch.object(feed, "_card_ctx", _fake_ctx),
+        patch.object(feed, "_week_cards", lambda bot, guild_id: _async_iter(cards)),
+        patch.object(feed.discord, "ForumChannel", _ForumBase),
+        patch("botforge.discord.home._match_card_view", lambda *a, **k: "FRESH VIEW"),
+    ):
+        asyncio.run(feed._reconcile_rendered_cards(None, "42", "999"))
+    assert edited == [11], "the card whose map arrived re-renders IN PLACE"
+    assert entry["hashes"]["m1"] != "", "the new hash persists"
+    # the SECOND repair with the same inputs touches nothing
+    with (
+        patch.object(feed, "_save_post", _fake_save),
+        patch.object(feed, "_sweep_channel", _fake_sweep),
+        patch.object(feed, "_guild_profiles", _fake_profiles),
+        patch.object(feed, "_guild_users", _fake_users),
+        patch.object(feed, "_posts_of", _fake_posts),
+        patch.object(feed, "_card_ctx", _fake_ctx),
+        patch.object(feed, "_week_cards", lambda bot, guild_id: _async_iter(cards)),
+        patch.object(feed.discord, "ForumChannel", _ForumBase),
+    ):
+        asyncio.run(feed._reconcile_rendered_cards(None, "42", "999"))
+    assert edited == [11], "an unmoved hash never re-edits - the repair costs what changed"
+
+
+async def _async_iter(items: list[Any]) -> list[Any]:
+    return items
