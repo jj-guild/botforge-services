@@ -31,6 +31,12 @@ _REALM_STRINGS: dict[str, _Strings] = {
             "-# Le royaume est accepté pour la saison — la draft starter "
             "partira au lancement de la saison par l'admin."
         ),
+        # affaire 48 : le verdict est tombé, la clôture attend — le
+        # monde se fige, la note l'explique sur le hub vivant.
+        "realm_hub_frozen_note": (
+            "-# La saison est terminée — les royaumes dorment en "
+            "attendant la clôture."
+        ),
         "realm_enter_button": "🏰 Entrée",
         # kingdom-report-v1 (Drasah 26/11, acté) : le signalement vit à
         # droite de l'Entrée, membres du royaume, Roi inclus — la ligne
@@ -137,6 +143,10 @@ _REALM_STRINGS: dict[str, _Strings] = {
         "realm_hub_awaiting_draft": (
             "-# The realm is accepted for the season — the starter draft "
             "will fire when the admin launches the season."
+        ),
+        # affaire 48 — the frozen note (the world awaits the close).
+        "realm_hub_frozen_note": (
+            "-# The season is over — the realms sleep until the close."
         ),
         "realm_enter_button": "🏰 Enter",
         # kingdom-report-v1 (Drasah 26/11) — the report door, right of Enter.

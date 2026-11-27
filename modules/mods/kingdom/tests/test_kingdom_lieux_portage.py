@@ -267,7 +267,7 @@ async def test_the_heal_pass_reensures_the_engaged_structure(monkeypatch: pytest
         calls.append(f"structure:{dormant}")
         return {"hub": "chan-9"}
 
-    async def fake_hub(guild: Any, r: Any, locale: str = "fr") -> str:
+    async def fake_hub(guild: Any, r: Any, locale: str = "fr", *, frozen: bool = False) -> str:
         calls.append("hub")
         return "m-1"
 
@@ -531,7 +531,7 @@ async def test_a_stale_category_anchor_no_longer_skips_the_realm(
         calls.append(f"structure:{dormant}")
         return {"category": "cat-NEW", "hub": "chan-9"}
 
-    async def fake_hub(guild: Any, r: Any, locale: str = "fr") -> str:
+    async def fake_hub(guild: Any, r: Any, locale: str = "fr", *, frozen: bool = False) -> str:
         calls.append("hub")
         return "m-1"  # SAME hub id — the habitat saves on the fresh anchor alone
 

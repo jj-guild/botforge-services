@@ -38,8 +38,9 @@ views:
     kind: surface
   panel:mod:kingdom:admin:atelier:
     kind: surface
-  # fin-saison-v2 (Drasah 26/11): the season-end test workbench panel
-  panel:mod:kingdom:admin:season-test:
+  # fin-de-saison-unifiee-v1 (Drasah 27/11): the unified season-end
+  # announcement surface (verdict + podium + the admin close button)
+  panel:mod:kingdom:season:end:
     kind: surface
   # decisions-admin-v1 (Drasah 25/11): the admin decisions inbox
   # (the drawer) and the per-attack action window — same surface rule

@@ -149,31 +149,36 @@ async def _reseat_one(
 
 
 async def run_beta_loop_safe(bot: Any) -> str | None:
-    """The 5-min pass step: relaunch an ENDED beta season, nothing else.
+    """The 5-min pass step: NOTHING anymore (affaire 48, Drasah 27/11).
 
-    Returns a one-line summary when it relaunched (for the caller's
-    log), None when there was nothing to do. Never raises.
+    La bêta ne relance PLUS toute seule : une saison terminée (le
+    verdict tombé, le monde figé) attend le clic admin sur le bouton
+    « Boucler » du message d'annonce de fin. La relance vit dans
+    :func:`relaunch_beta` (le clic), jamais dans la passe.
     """
-    from .common import wiring
+    return None
 
-    stack = wiring()
-    if stack is None or getattr(stack, "kingdoms", None) is None:
-        return None
+
+async def relaunch_beta(bot: Any, stack: Any) -> str | None:
+    """Relaunch a fresh beta season NOW (the « Boucler » click, affaire 48).
+
+    The former loop's own body: release the played shells, launch the
+    fresh season, re-arm the ended season's beta format, reopen the
+    game, reseat the shells, refresh the surfaces, announce. Returns
+    a one-line summary, None when there was nothing to loop. Never raises.
+    """
+    season = None
     try:
         season = await stack.kingdoms.current_season()
     except Exception:  # noqa: BLE001
-        logger.warning("kingdom: beta loop season read failed", exc_info=True)
-        return None
-    if season is None or str(getattr(season, "phase", "")) != "ended":
-        return None
-    if not getattr(season, "beta_name", None):
+        logger.warning("kingdom: beta relaunch season read failed", exc_info=True)
+    if season is not None and str(getattr(season, "phase", "")) != "ended":
+        return None  # only a CLOSED season can loop
+    if season is not None and not getattr(season, "beta_name", None):
         return None  # a CLASSIC end never relaunches (Drasah's asymmetry)
-    # fin-saison-v2 (Affaire 42): a beta season closes WITH
-    # ``finished=True`` (the season ALWAYS closes) — the finished flag
-    # is NOT a relaunch blocker anymore, only a classic end is.
-    ended_id = str(getattr(season, "id", ""))
-    beta_name = str(getattr(season, "beta_name"))
-    logger.info("kingdom: beta loop relaunching after %s (%s)", ended_id, beta_name)
+    ended_id = str(getattr(season, "id", "")) if season is not None else ""
+    beta_name = str(getattr(season, "beta_name", "")) if season is not None else ""
+    logger.info("kingdom: beta relaunch after %s (%s)", ended_id, beta_name)
 
     # (1) release the played shells BEFORE the archive — a binding to
     # the dying season ids would bar the re-entry
@@ -282,4 +287,4 @@ async def run_beta_loop_safe(bot: Any) -> str | None:
     return summary
 
 
-__all__ = ["run_beta_loop_safe", "season_running"]
+__all__ = ["relaunch_beta", "run_beta_loop_safe", "season_running"]

@@ -237,10 +237,14 @@ def _fake_stack(phase: str, beta_name: str | None) -> SimpleNamespace:
     return _Stack()
 
 
-async def test_beta_loop_relaunches_a_finished_beta(
+async def test_relaunch_beta_relaunches_a_finished_beta(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """A closed (finished=True) beta season still relaunches (rule 4)."""
+    """A closed (finished=True) beta season still loops (rule 4).
+
+    fin-de-saison-unifiee-v1 (affaire 48): the pass no longer relaunches
+    on its own — the « Boucler » click calls relaunch_beta directly.
+    """
     import botforge.mods.kingdom.cogs.beta_loop as beta_loop
     import botforge.mods.kingdom.cogs.common as common
     import botforge.mods.kingdom.cogs.settings_panel as settings_panel
@@ -252,69 +256,55 @@ async def test_beta_loop_relaunches_a_finished_beta(
         return None
 
     monkeypatch.setattr(settings_panel, "_arm_compressed_beta", _noop_arm)
-    summary = await beta_loop.run_beta_loop_safe(SimpleNamespace(guilds=[]))
+    summary = await beta_loop.relaunch_beta(SimpleNamespace(guilds=[]), stack)
     assert summary is not None
     assert "beta-weekend" in summary
+    # and the PASS itself is inert now — nothing relaunches on its own
+    assert await beta_loop.run_beta_loop_safe(SimpleNamespace(guilds=[])) is None
 
 
-async def test_beta_loop_ignores_a_classic_end(
+async def test_relaunch_beta_ignores_a_classic_end(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """A CLASSIC end never relaunches (Drasah's asymmetry)."""
     import botforge.mods.kingdom.cogs.beta_loop as beta_loop
-    import botforge.mods.kingdom.cogs.common as common
 
     stack = _fake_stack("ended", None)
-    monkeypatch.setattr(common, "wiring", lambda: stack)
-    assert await beta_loop.run_beta_loop_safe(SimpleNamespace(guilds=[])) is None
+    assert await beta_loop.relaunch_beta(SimpleNamespace(guilds=[]), stack) is None
 
 
 # ---------------------------------------------------------------------------
 # The test workbench wiring (design rule 6)
 # ---------------------------------------------------------------------------
-def test_settings_actions_declare_the_workbench() -> None:
-    """The four workbench actions ride the console's own template."""
+def test_settings_actions_removed_the_workbench() -> None:
+    """fin-de-saison-unifiee-v1 (affaire 48): the grey workbench is GONE."""
     import botforge.mods.kingdom.cogs.settings_panel as settings_panel
 
     actions = {action for action, _key, _style in settings_panel._SETTINGS_ACTIONS}
-    assert {"season-test", "test-end", "test-tie", "test-duel"} <= actions
-    for action in ("season-test", "test-end", "test-tie", "test-duel"):
-        assert callable(settings_panel._SETTINGS_HANDLERS[action])
+    assert not ({"season-test", "test-end", "test-tie", "test-duel"} & actions)
 
 
-def test_views_yaml_declares_the_workbench_surface() -> None:
-    """#381 ruling 1: the workbench panel rides conf/views.yaml."""
+def test_views_yaml_declares_the_season_end_surface() -> None:
+    """affaire 48: the unified end announcement rides conf/views.yaml."""
     root = Path(__file__).resolve().parents[1]
     yaml_text = (root / "conf" / "views.yaml").read_text()
-    assert "panel:mod:kingdom:admin:season-test:" in yaml_text
+    assert "panel:mod:kingdom:admin:season-test:" not in yaml_text
+    assert "panel:mod:kingdom:season:end:" in yaml_text
 
 
-def test_locales_carry_the_workbench_keys() -> None:
-    """The workbench labels live in BOTH locale files (data i18n)."""
-    import yaml
-
+def test_locales_dropped_the_workbench_keys() -> None:
+    """affaire 48: the workbench labels are GONE from both locales."""
     root = Path(__file__).resolve().parents[1]
     keys = (
         "settings_season_test_button",
-        "settings_season_test_title",
-        "settings_season_test_hint",
         "settings_test_end_button",
-        "settings_test_tie_button",
-        "settings_test_duel_button",
         "settings_test_end_done",
-        "settings_test_end_showmatch",
-        "settings_test_tie_done",
-        "settings_test_duel_done",
-        "settings_test_duel_finished",
-        "settings_test_no_season",
-        "settings_test_no_showmatch",
         "settings_test_failed",
     )
     for locale in ("fr", "en"):
-        data = yaml.safe_load((root / "conf" / "locales" / f"{locale}.yaml").read_text())
-        flat = str(data)
+        flat = (root / "conf" / "locales" / f"{locale}.yaml").read_text()
         for key in keys:
-            assert key in flat, f"{key} missing from {locale}.yaml"
+            assert key not in flat, f"{key} still haunts {locale}.yaml"
 
 
 def test_strings_carry_the_podium_keys() -> None:

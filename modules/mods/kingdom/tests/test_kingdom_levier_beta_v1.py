@@ -358,8 +358,11 @@ def _fake_stack(phase: str, beta_name: str | None, finished: bool = False) -> NS
 
 
 @pytest.mark.asyncio
-async def test_the_beta_loop_relanches_an_ended_beta(monkeypatch) -> None:
-    """phase ended + beta_name → launch + arm + start, the shells re-seated."""
+async def test_relaunch_beta_relanches_an_ended_beta(monkeypatch) -> None:
+    """affaire 48: « Boucler » (relaunch_beta) — the pass itself is inert.
+
+    phase ended + beta_name → launch + arm + start, the shells re-seated.
+    """
     from botforge.mods.kingdom.cogs import beta_loop as bl
 
     stack = _fake_stack("ended", "weekend-compressé")
@@ -371,22 +374,23 @@ async def test_the_beta_loop_relanches_an_ended_beta(monkeypatch) -> None:
     monkeypatch.setattr(_common, "wiring", lambda: stack)
     monkeypatch.setattr(_sp, "_arm_compressed_beta", _arm)
     bot = NS(guilds=[NS(id="7")])
-    summary = await bl.run_beta_loop_safe(bot)
+    summary = await bl.relaunch_beta(bot, stack)
 
-    assert summary is not None, "the pass RELAUNCHES an ended beta"
+    assert summary is not None, "the click RELAUNCHES an ended beta"
     assert "launch" in stack.launched and "start" in stack.launched and "arm" in stack.launched
     assert stack.realms.released == ["realm:aegis-1"], (
         "the played shells are released BEFORE the archive"
     )
+    # the 5-min PASS is inert — nothing relaunches on its own anymore
+    assert await bl.run_beta_loop_safe(bot) is None
 
 
 @pytest.mark.asyncio
 async def test_the_beta_loop_ignores_the_living_and_the_classic(monkeypatch) -> None:
     """ended WITHOUT beta_name, setup, started → NOTHING.
 
-    fin-saison-v2 (Affaire 42): a beta season closed with
-    ``finished=True`` DOES relaunch — that case moved to
-    test_kingdom_affaire42 (only a CLASSIC end never restarts).
+    affaire 48: the PASS is inert — relaunching now lives in
+    relaunch_beta (the « Boucler » click), never in the 5-min pass.
     """
     from botforge.mods.kingdom.cogs import beta_loop as bl
 

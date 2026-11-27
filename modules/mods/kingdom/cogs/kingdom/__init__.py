@@ -402,6 +402,7 @@ def setup_hook(bot: Any) -> None:
         KingdomRegieSwitchButton,
         KingdomRoyaumesPageButton,
         KingdomSettingsNavButton,
+        SeasonCloseButton,
         SettingsActionButton,
     )
     from .scriptorium import ScriptoriumRubricButton
@@ -467,6 +468,7 @@ def setup_hook(bot: Any) -> None:
         KingdomApplyOpenButton,
         KingdomPostulerButton,
         SettingsActionButton,
+        SeasonCloseButton,
         KingdomSettingsNavButton,
         KingdomRegieSwitchButton,
         KingdomRegieRealmButton,

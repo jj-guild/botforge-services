@@ -331,14 +331,19 @@ fr:
       settings_end_season_confirm_button: "🏁 Oui, terminer"
       settings_end_season_not_running: "⛔ Aucune saison LANÇÉE à terminer — le geste ne vit que sur une saison en cours."
       settings_end_season_done: "✅ Saison terminée — données archivées et remises à zéro, {released} royaume(s) repartant en sommeil. Prêt à relancer une préparation."
-      # fin-saison-v2 (Drasah 26/11) : l'atelier de test de la fin de
-      # saison — trois scénarios répétables depuis les Paramètres
-      settings_season_test_button: "🧪 Fin de saison (test)"
-      settings_season_test_title: "🧪 Atelier fin de saison"
-      settings_season_test_hint: "Trois scénarios de répétition : la fin normale (verdict + podium), l'égalité classique (saison close ex aequo, ShowMatch hors saison) et un duel simulé du ShowMatch en attente."
-      settings_test_end_button: "🏁 Fin normale"
-      settings_test_tie_button: "⚖️ Égalité classique"
-      settings_test_duel_button: "⚔️ Simuler un duel"
+      # fin-de-saison-unifiee-v1 (Drasah 27/11) : un seul déroulé de fin —
+      # le verdict tombe (temps ou bouton rouge), le monde se fige,
+      # l'annonce porte le bouton admin de clôture, le panthéon suit.
+      settings_finish_done: "✅ Le verdict est tombé — la saison est terminée, le monde est figé. L'annonce de fin attend ta clôture (🔒 Clôturer la saison, ou 🔁 Boucler en bêta)."
+      settings_finish_showmatch: "✅ Le verdict est tombé en ÉGALITÉ — le ShowMatch hors saison est ouvert, le monde est figé. L'annonce de fin attend ta clôture."
+      settings_close_confirm_title: "🔒 Clôturer la saison ?"
+      settings_close_confirm_hint: "La saison figée se referme pour de bon : les données moteur sont ARCHIVÉES puis remises à zéro, chaque royaume engagé repart en sommeil, le panthéon enregistre le palmarès. En bêta, une NOUVELLE saison bêta repart aussitôt."
+      settings_close_confirm_button: "🔒 Oui, clôturer"
+      season_close_classic_button: "🔒 Clôturer la saison"
+      season_close_beta_button: "🔁 Boucler"
+      season_close_not_admin: "⛔ Seul l'organisateur peut clôturer la saison."
+      season_end_admin_note: "📢 **Fin de saison décidée par l'organisateur.**"
+      settings_relaunch_beta_done: "🔁 Bouclé — la saison est archivée et une nouvelle bêta repart. Bonne saison !"
       # panthéon-manuel-v1 (Drasah 26/11) : la vitrine se crée à la demande
       settings_add_pantheon_button: "🏛️ Ajouter Panthéon"
       settings_add-pantheon_button: "🏛️ Ajouter Panthéon"
@@ -346,14 +351,6 @@ fr:
       settings_add_pantheon_exists: "ℹ️ Le salon **🏛️ panthéon** existe déjà — glisse-le simplement où tu veux, tout suit."
       settings_add_pantheon_no_guild: "⚠️ Le bouton ne vit que dans un serveur."
       settings_add_pantheon_failed: "⚠️ La création du salon panthéon a échoué — réessaie dans un instant."
-      settings_test_end_done: "✅ Fin de saison jouée — {0} attaque(s) annulée(s), verdict : **{1}**."
-      settings_test_end_showmatch: "✅ Fin de saison jouée — {0} attaque(s) annulée(s), les royaumes de tête sont à égalité : le ShowMatch hors saison tranche."
-      settings_test_tie_done: "⚖️ Égalité forcée — saison close ex aequo, {0} attaque(s) annulée(s), le ShowMatch hors saison est ouvert."
-      settings_test_duel_done: "⚔️ Duel simulé — score : {0}-{1}."
-      settings_test_duel_finished: " Verdict : **{0}** remporte le ShowMatch !"
-      settings_test_no_season: "⛔ Aucune saison en cours — la fin (test) s'applique à une saison lancée."
-      settings_test_no_showmatch: "⛔ Aucun ShowMatch en attente — l'égalité classique en ouvre un."
-      settings_test_failed: "❌ Le scénario de test a échoué — {0}"
       settings_false_start_failed: "❌ Le faux départ a échoué — {0}"
       settings_false_start_no_season: "❌ Aucune saison en cours — le faux départ s'applique à une saison lancée."
       settings_regie_switches_label: "🎚️ Les interrupteurs (défaut : ouvert)"

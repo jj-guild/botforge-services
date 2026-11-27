@@ -48,12 +48,6 @@ def test_settings_panel_is_one_template_of_twelve_actions() -> None:
         # état-surfaces-v1 (Drasah 23/11): « État des surfaces » — the
         # atelier's diagnostic, ephemeral, admin only
         "etat",
-        # fin-saison-v2 (Drasah 26/11): the season-end TEST workbench —
-        # three repeatable scenarios, right of the Serveur nav
-        "season-test",
-        "test-end",
-        "test-tie",
-        "test-duel",
         # panthéon-manuel-v1 (Drasah 26/11) : la vitrine se crée depuis
         # l'atelier — le salon manuel, tout en haut hors catégorie
         "add-pantheon",

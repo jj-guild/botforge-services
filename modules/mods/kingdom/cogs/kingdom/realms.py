@@ -734,8 +734,16 @@ def _hub_marker() -> str:
 _HUB_LAST_RENDER: dict[tuple[str, str], str] = {}
 
 
-def hub_layout(realm: Any, strings: dict[str, str], *, dormant: bool) -> discord.ui.LayoutView:
-    """The 🏰 Le royaume panel — one template, two states (dormant/vivant)."""
+def hub_layout(
+    realm: Any, strings: dict[str, str], *, dormant: bool, frozen: bool = False
+) -> discord.ui.LayoutView:
+    """Build the 🏰 Le royaume panel — one template, three states.
+
+    dormant : hors saison (le sommeil, l'acte du Roi sous la main).
+    vivant : en saison, le hub de jeu ouvert.
+    frozen : la saison est TERMINÉE mais pas clôturée (affaire 48) —
+    les boutons joueurs se grisent, une note explique l'attente.
+    """
     blocks: list[discord.ui.Item[discord.ui.LayoutView]] = []
     artwork = str(strings.get("realm_artwork", "") or "")
     if artwork:
@@ -753,21 +761,25 @@ def hub_layout(realm: Any, strings: dict[str, str], *, dormant: bool) -> discord
         # sas-acceptance-v1 (Drasah 21/11) : un royaume ACCEPTÉ est prêt —
         # le hub affiche l'attente draft, PAS les béquilles hors-saison.
         blocks.append(discord.ui.TextDisplay(str(strings["realm_hub_awaiting_draft"])))
+    if frozen and not dormant:
+        # affaire 48 : le verdict est tombé, la clôture attend — le
+        # monde se fige (les boutons se grisent), la note l'explique.
+        blocks.append(discord.ui.TextDisplay(str(strings["realm_hub_frozen_note"])))
     row: Any = discord.ui.ActionRow()
-    row.add_item(
-        RealmHomeButton(
-            str(strings["realm_enter_button"]),
-            discord.ButtonStyle.secondary if dormant else discord.ButtonStyle.primary,
-            str(realm.slug),
-        ).item
+    home_button = RealmHomeButton(
+        str(strings["realm_enter_button"]),
+        discord.ButtonStyle.secondary if dormant else discord.ButtonStyle.primary,
+        str(realm.slug),
     )
+    row.add_item(home_button.item)
     # kingdom-report-v1 (Drasah 26/11, acté) : « à droite de l'Entrée » —
     # la porte du signalement, MEMBRES du royaume (Roi inclus), les deux
     # états du hub (dormant et vivant). Elle n'est pas une porte de jeu :
     # une action méta, toujours sous la main.
     from .report import RealmReportButton
 
-    row.add_item(RealmReportButton(str(strings["report_button"])).item)
+    report_button = RealmReportButton(str(strings["report_button"]))
+    row.add_item(report_button.item)
     if dormant:
         # hub-dormant-actions (Drasah 21/11) : « l'Entrée n'a jamais été
         # un bouton rouage » — la porte s'ouvre (chez soi) même sans
@@ -797,13 +809,22 @@ def hub_layout(realm: Any, strings: dict[str, str], *, dormant: bool) -> discord
         )
     )
     blocks.append(settings_row)
+    if frozen:
+        # affaire 48 : le monde figé — les portes joueurs se grisent
+        # (l'Entrée, le signalement, la saison, l'acte du Roi).
+        home_button.item.disabled = True
+        report_button.item.disabled = True
+        for child in row.children:
+            child.disabled = True
     return surface(
         HUB_SURFACE,
         discord.ui.Container(*blocks, accent_colour=_DORMANT_GREY if dormant else _GOLD),
     )
 
 
-async def deploy_realm_hub(guild: Any, realm: Any, locale: str = "fr") -> str | None:
+async def deploy_realm_hub(
+    guild: Any, realm: Any, locale: str = "fr", *, frozen: bool = False
+) -> str | None:
     """Land/refresh the hub panel in 🏰 Le royaume — the message id back.
 
     hub-content-v2 (Drasah 20/11): the panel is a LayoutView (components
@@ -829,7 +850,7 @@ async def deploy_realm_hub(guild: Any, realm: Any, locale: str = "fr") -> str | 
 
     strings = catalog(locale)
     dormant = getattr(realm, "engagement", None) is None  # t2a — the season link decides
-    layout = hub_layout(realm, strings, dormant=dormant)
+    layout = hub_layout(realm, strings, dormant=dormant, frozen=frozen)
     # the declared pin seam's own hash — one source of truth (the
     # platform's static-pins idiom, reused, not reimplemented)
     from botforge.discord.static_pins import _layout_fingerprint  # noqa: PLC2701 — same codebase
@@ -931,6 +952,17 @@ async def heal_realm_hubs(bot: Any) -> int:
                         getattr(realm, "id", "?"),
                         exc_info=True,
                     )
+    # affaire 48 : la saison figée (verdict tombé, clôture en attente)
+    # se RÉFLÈTE sur les hubs — les boutons joueurs se grisent via le
+    # même heal idempotent, aucun clic ne casse pendant l'attente.
+    frozen = False
+    engine = getattr(stack, "kingdoms", None)
+    if engine is not None:
+        try:
+            season = await engine.current_season()
+            frozen = season is not None and str(getattr(season, "phase", "")) == "ended"
+        except Exception:  # noqa: BLE001 — un échec de lecture ne fige pas
+            frozen = False
     touched = 0
     for guild in list(getattr(bot, "guilds", []) or []):
         known_categories = {
@@ -974,7 +1006,7 @@ async def heal_realm_hubs(bot: Any) -> int:
                             habitat_changed = True
                 except Exception:  # noqa: BLE001 — le hub guérit même si la structure échoue
                     logger.warning("kingdom realms: dormancy heal failed", exc_info=True)
-            message_id = await deploy_realm_hub(guild, realm, locale=locale)
+            message_id = await deploy_realm_hub(guild, realm, locale=locale, frozen=frozen)
             if message_id and message_id != str(disc.get("hub_message", "") or ""):
                 disc["hub_message"] = message_id
                 habitat_changed = True

@@ -662,6 +662,95 @@ async def _meeting_salon_heal_safe(bot: Any, stack: Any, guild: Any, strings: di
             logger.info("kingdom: meeting heal landed the scoreboard (attack %s)", attack.id)
 
 
+_SEASON_END_VIEW = "panel:mod:kingdom:season:end"
+
+
+def _end_strings(locale: str) -> dict[str, str]:
+    """Merge the attack strings with the settings catalog (one dict).
+
+    The announcement reads its verdict in the attack catalog and its
+    close-button labels in the settings one — one merged dict, never
+    a hardcoded fallback label in production.
+    """
+    from .common import strings_by_locale
+    from .settings_panel import settings_strings
+
+    merged = dict(strings_by_locale(locale))
+    merged.update(settings_strings(locale))
+    return merged
+
+
+async def season_end_layout(
+    strings: dict[str, str], report: dict[str, Any], *, cause: str = "natural"
+) -> discord.ui.LayoutView:
+    """Build the season-end announcement WITH the admin close button.
+
+    affaire 48 (Drasah 27/11) : le message d'annonce est la SEULE porte
+    de clôture — le verdict et le podium en haut, le bouton admin en
+    bas (classique « Clôturer la saison », bêta « Boucler »). Tant que
+    personne ne clique, rien n'est effacé : la fin n'est jamais brutale.
+    """
+    from .settings_panel import SeasonCloseButton
+
+    beta = bool(report.get("beta"))
+    kind = "beta" if beta else "classic"
+    label_key = (
+        "season_close_beta_button" if beta else "season_close_classic_button"
+    )
+    text = await _event_report_text(strings, report)
+    if cause == "admin":
+        text = str(strings["season_end_admin_note"]) + "\n\n" + text
+    row: Any = discord.ui.ActionRow()
+    row.add_item(
+        SeasonCloseButton(str(strings.get(label_key) or "🔒"), kind).item
+    )
+    container: discord.ui.Container[discord.ui.LayoutView] = discord.ui.Container(
+        discord.ui.TextDisplay(text),
+        discord.ui.Separator(),
+        row,
+    )
+    from .common import surface
+
+    return surface(_SEASON_END_VIEW, container)
+
+
+async def announce_season_end(bot: Any, report: dict[str, Any], *, cause: str) -> None:
+    """Post the end announcement in EVERY served guild's Géopolitique."""
+    from .battle import _geopolitics_channel
+    from .panel import _guild_locale
+
+    beta = bool(report.get("beta"))
+    if not beta:
+        stack = None
+        try:
+            from .common import wiring
+
+            stack = wiring()
+        except Exception:  # noqa: BLE001 — a read, never a crash
+            stack = None
+        if stack is not None and getattr(stack, "kingdoms", None) is not None:
+            try:
+                season = await stack.kingdoms.current_season()
+                beta = season is not None and bool(getattr(season, "beta_name", None))
+                if beta:
+                    report = dict(report)
+                    report["beta"] = True
+            except Exception:  # noqa: BLE001 — best-effort détection bêta
+                logger.warning("kingdom: season beta read failed", exc_info=True)
+    for guild in list(getattr(bot, "guilds", []) or []):
+        try:
+            locale = await _guild_locale(str(guild.id))
+            channel = _geopolitics_channel(guild)
+            if channel is not None:
+                await channel.send(
+                    view=await season_end_layout(
+                        _end_strings(locale), report, cause=cause
+                    )
+                )
+        except Exception:  # noqa: BLE001 — l'annonce ne casse jamais la fin
+            logger.warning("kingdom: season-end announcement failed", exc_info=True)
+
+
 async def _event_report_text(strings: dict[str, str], report: dict[str, Any]) -> str:
     """Render one due report as a salon announcement (best effort)."""
     kind = str(report.get("kind", "cycle"))
@@ -891,7 +980,18 @@ async def run_event_slots_safe(bot: Any) -> None:
         for report in reports:
             try:
                 channel = _geopolitics_channel(guild)
-                if channel is not None:
+                if channel is None:
+                    continue
+                # affaire 48 : la fin porte l'annonce AVEC le bouton admin
+                # de clôture (le monde figé attend la main) — les autres
+                # slots restent des annonces textuelles simples.
+                if str(report.get("kind", "")) == "end":
+                    await channel.send(
+                        view=await season_end_layout(
+                            _end_strings(locale), report, cause="natural"
+                        )
+                    )
+                else:
                     await channel.send(await _event_report_text(strings, report))
             except Exception:
                 logger.warning("kingdom: one event report announcement failed", exc_info=True)
@@ -1209,16 +1309,10 @@ def start_attack_refresher(bot: Any) -> None:
             await run_ffa_tick_safe(bot)
         except Exception:
             logger.warning("kingdom: FFA tick failed — best-effort", exc_info=True)
-        # boucle bêta (levier-bêta-v1, Check 140, Drasah 22/11) : une
-        # saison bêta qui se termine TOUTE SEULE (slot end → verdict,
-        # phase « ended ») se RELANCHE toute seule ici — la boucle de
-        # test continue jusqu'au « 🏁 Terminer » de l'admin (LE stop).
-        try:
-            from .beta_loop import run_beta_loop_safe
-
-            await run_beta_loop_safe(bot)
-        except Exception:
-            logger.warning("kingdom: beta loop pass failed — best-effort", exc_info=True)
+        # affaire 48 (Drasah 27/11) : la boucle bêta ne relance PLUS
+        # toute seule — une saison terminée (phase « ended ») attend le
+        # clic admin sur le bouton de l'annonce (« Boucler » en bêta) :
+        # la fin n'est jamais brutale, l'admin décide du quand.
         # territory-reveal-v1-fix (Drasah 23/11) : l'alimentation vit DANS
         # la passe de 5 min, PAS dans la seule relance de fin de bêta (le
         # retour None d'une saison non finie court-circuitait le
