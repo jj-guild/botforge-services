@@ -55,10 +55,10 @@ _SEED_SWEEP_S = 300.0
 # the seed's BUILD: a seed producing broken cards gets versioned up -
 # every forum re-seeds once with the fixed build (the old cards stay,
 # the guild owns its channel)
-_SEED_VERSION = 12  # 12: the shed WALKS THE THREAD (owner 2026-11-27:
-# the registry-traced shed missed the cards posted before the message
-# ids were tracked - the avatar-headed strays stayed); 11: the match
-# cards shed the avatar header; 10: the salon became the PLAYERS forum
+_SEED_VERSION = 13  # 13: the rebuild EDITS IN PLACE (owner 2026-11-27:
+# a build change re-renders the registered card messages instead of
+# delete+repost - half the calls, no DELETE rate limit); 12: the shed
+# walks the thread; 11: the avatar header; 10: the PLAYERS forum
 
 _PLAYERS_SCOPE = "games/aoe2"
 _PLAYERS_KEY = "joueurs"
@@ -670,8 +670,15 @@ async def _maybe_seed_players_forum(  # noqa: C901 - one orchestration, no branc
                     _LAST_NAME[pid] = nickname
         users = await _guild_users(bot, guild_id)
         posts = await _ensure_player_posts(bot, guild_id, forum, users)
+        labels = await _label_pack(bot, guild_id)
+        known = set(profiles)
         if cards_rebuild:
-            await _shed_old_cards(bot, guild_id, forum, posts)
+            # the BUILD changed: the traced cards re-render IN PLACE
+            # (owner 2026-11-27), the strays die, the registry keeps the
+            # survivors - the posting loop below fills the holes only
+            await _shed_old_cards(
+                bot, guild_id, forum, posts, users, cards, labels, known
+            )
         logger.info(
             "players forum seed: %d post(s) ensured for %d user(s) (guild %s)",
             len(posts),
@@ -684,8 +691,6 @@ async def _maybe_seed_players_forum(  # noqa: C901 - one orchestration, no branc
                 "players forum seed STOP: the window carries no card (guild %s)", guild_id
             )
             return
-        labels = await _label_pack(bot, guild_id)
-        known = set(profiles)
         posted_total = 0
         for uid, entry in posts.items():
             group = _cards_of_user(cards, set((users.get(uid) or {}).get("profiles") or {}))
@@ -1255,61 +1260,120 @@ async def _pin_post_intro(
 
 
 async def _shed_old_cards(
-    bot: discord.Client, guild_id: str, forum: Any, posts: dict[str, dict[str, Any]]
+    bot: discord.Client,
+    guild_id: str,
+    forum: Any,
+    posts: dict[str, dict[str, Any]],
+    users: dict[str, dict[str, Any]],
+    cards: list[dict[str, Any]],
+    labels: dict[str, Any],
+    known: set[str],
 ) -> None:
-    """Delete every post's card messages - the seed rebuilds the window.
+    """Re-render the posts' card messages on a BUILD change - in place.
 
-    The match cards are immutable by contract; a build change (the
-    avatar header of 2026-11-26) can only land by shedding the old
-    messages and re-posting the window. The shed WALKS THE THREAD'S
-    HISTORY (owner 2026-11-27: the registry-traced cut missed the
-    cards posted before the message ids were tracked - the
-    avatar-headed strays stayed next to the fresh ones); the pinned
-    profile card and every human message stay, the registry resets
-    with the sweep - a ref without its message would skip the card
-    forever.
+    The match cards are immutable by contract; a build change lands
+    here. A card the registry TRACES (a ref with its message id) is
+    EDITED with the fresh view (owner 2026-11-27: "oui pour edit
+    inplace" - half the calls, no DELETE rate limit); an UNTRACED stray
+    (a message posted before the ids were tracked) DIES, so does a card
+    the window no longer wants. The pinned profile card and every human
+    message stay. The registry keeps only what survived - a ref without
+    its message would skip the card forever.
     """
+    from botforge.discord.home import _match_card_view
+
     bot_id = getattr(getattr(bot, "user", None), "id", None)
+    cards_by_ref = {str(c.get("match_id") or ""): c for c in cards if str(c.get("match_id") or "")}
+    edited = 0
     shed = 0
     for uid, entry in posts.items():
         thread = _thread_of(forum, entry)
-        intro_id = int(entry.get("intro_id") or 0)
-        if thread is None:
-            entry["refs"] = []
-            entry["messages"] = {}
-            await _save_post(guild_id, uid, entry)
-            continue
-        try:
-            async for message in thread.history(limit=500):
-                # a HUMAN's message never dies here (the post is the
-                # bot's, but the hand stays off what it did not send)
-                if bot_id is not None and getattr(getattr(message, "author", None), "id", None) != bot_id:
-                    continue
-                if message.id == intro_id:
-                    continue  # the pinned profile card stays
-                try:
-                    await message.delete()
-                    shed += 1
-                except Exception:
-                    logger.debug(
-                        "the old card delete failed (post %s, message %s) - best-effort",
-                        uid,
-                        message.id,
-                        exc_info=True,
-                    )
-        except Exception:
-            logger.debug(
-                "the thread history walk failed (post %s) - best-effort", uid, exc_info=True
+        profiles = set((users.get(uid) or {}).get("profiles") or {})
+        # the window's refs this post carries: only they re-render
+        window_refs = {str(c.get("match_id") or "") for c in _cards_of_user(cards, profiles)}
+        kept: dict[str, str] = {}
+        if thread is not None:
+            kept, moved, died = await _reshuffle_post_cards(
+                bot, guild_id, uid, thread, entry, cards_by_ref, window_refs,
+                profiles, labels, known, bot_id, _match_card_view,
             )
-        entry["refs"] = []
-        entry["messages"] = {}
+            edited += moved
+            shed += died
+        entry["refs"] = sorted(kept)
+        entry["messages"] = kept
         await _save_post(guild_id, uid, entry)
-    if shed:
+    if edited or shed:
         logger.info(
-            "players forum (guild %s): the cards' build changed - %d old message(s) shed, the seed rebuilds them",
+            "players forum (guild %s): the cards' build changed - %d re-rendered in place, %d stray(s) deleted",
             guild_id,
+            edited,
             shed,
         )
+
+
+async def _reshuffle_post_cards(
+    bot: discord.Client,
+    guild_id: str,
+    uid: str,
+    thread: Any,
+    entry: dict[str, Any],
+    cards_by_ref: dict[str, dict[str, Any]],
+    window_refs: set[str],
+    profiles: set[str],
+    labels: dict[str, Any],
+    known: set[str],
+    bot_id: Any,
+    view_builder: Any,
+) -> tuple[dict[str, str], int, int]:
+    """Walk ONE post's thread: edit the traced window cards, delete the rest.
+
+    Returns (kept: ref -> message id, edits, deletes) - the caller folds
+    the kept map into the registry and the counters into the report.
+    """
+    intro_id = int(entry.get("intro_id") or 0)
+    kept: dict[str, str] = {}
+    edited = 0
+    shed = 0
+    try:
+        async for message in thread.history(limit=500):
+            # a HUMAN's message never dies here (the post is the bot's,
+            # but the hand stays off what it did not send)
+            if bot_id is not None and getattr(getattr(message, "author", None), "id", None) != bot_id:
+                continue
+            if message.id == intro_id:
+                continue  # the pinned profile card stays
+            traced = next(
+                (ref for ref, mid in entry.get("messages", {}).items() if mid == str(message.id)),
+                "",
+            )
+            if traced and traced in window_refs and traced in cards_by_ref:
+                try:
+                    ctx = await _card_ctx(bot, guild_id, cards_by_ref[traced])
+                    view = view_builder(cards_by_ref[traced], ctx, profiles, labels, known)
+                    await message.edit(view=view)
+                    kept[traced] = str(message.id)
+                    edited += 1
+                    continue
+                except Exception:
+                    logger.debug(
+                        "the card re-render failed (post %s, match %s) - it falls to the delete",
+                        uid,
+                        traced,
+                        exc_info=True,
+                    )
+            try:
+                await message.delete()
+                shed += 1
+            except Exception:
+                logger.debug(
+                    "the old card delete failed (post %s, message %s) - best-effort",
+                    uid,
+                    message.id,
+                    exc_info=True,
+                )
+    except Exception:
+        logger.debug("the thread history walk failed (post %s) - best-effort", uid, exc_info=True)
+    return kept, edited, shed
 
 
 async def _dedupe_twins(guild_id: str, forum: Any, posts: dict[str, dict[str, Any]]) -> None:

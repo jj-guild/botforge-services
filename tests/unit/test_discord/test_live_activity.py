@@ -1170,18 +1170,20 @@ def test_the_profile_card_pins_to_the_top_of_its_post() -> None:
         assert not posts["u2"].get("intro_pinned"), "the refusal never flags"
 
 
-def test_the_build_change_sheds_the_old_cards_before_the_reseed() -> None:
-    """The match cards are immutable; a BUILD change (the avatar header
-    of 2026-11-26) lands by DELETING the thread's bot messages - the
-    WALK covers the strays the registry never traced (owner
-    2026-11-27), the pinned profile card and every human message stay,
-    the refs reset, the seed rebuilds the window."""
+def test_the_build_change_edits_the_traced_cards_and_deletes_the_strays() -> None:  # noqa: C901 - the walk's five cases
+    """The match cards are immutable; a BUILD change re-renders them:
+    a card the registry TRACES is EDITED IN PLACE (owner 2026-11-27:
+    "oui pour edit inplace" - no delete+repost, no DELETE rate limit),
+    an UNTRACED stray dies, the pinned profile card and every human
+    message stay, and the registry keeps only the survivors - the
+    posting loop fills the holes."""
     import asyncio
     from types import SimpleNamespace
     from unittest.mock import patch
 
     import botforge.discord.live_activity as feed
 
+    edited: list[tuple[int, Any]] = []
     deleted: list[int] = []
 
     class _Message:
@@ -1189,14 +1191,19 @@ def test_the_build_change_sheds_the_old_cards_before_the_reseed() -> None:
             self.id = mid
             self.author = SimpleNamespace(id=author)
 
+        async def edit(self, view: Any = None) -> None:
+            edited.append((self.id, view))
+
         async def delete(self) -> None:
             deleted.append(self.id)
 
-    # the thread carries: the pinned profile card (1, KEEP), a
-    # REGISTERED card (11), an UNTRACED avatar-headed stray (77), a
-    # HUMAN message (88, KEEP)
+    # the thread carries: the pinned profile card (1, KEEP), a TRACED
+    # window card (11, EDIT), an UNTRACED stray (77, DELETE), a traced
+    # card OUT of the window (55, DELETE - the window no longer wants
+    # it), a HUMAN message (88, KEEP)
     thread_messages = [
-        _Message(1, "bot"), _Message(11, "bot"), _Message(77, "bot"), _Message(88, "human")
+        _Message(1, "bot"), _Message(11, "bot"), _Message(77, "bot"),
+        _Message(55, "bot"), _Message(88, "human"),
     ]
 
     class _Thread:
@@ -1222,15 +1229,31 @@ def test_the_build_change_sheds_the_old_cards_before_the_reseed() -> None:
     async def _fake_save(guild_id, uid, entry):
         saved.append((uid, dict(entry or {})))
 
+    async def _fake_ctx(bot, guild_id, card):
+        return {}
+
     bot = SimpleNamespace(user=SimpleNamespace(id="bot"))
+    cards = [{"match_id": "m1", "players": [{"profile_id": "848567"}]}]
+    users = {"u1": {"name": "Merlin", "profiles": {"848567": "Merlin"}}}
     posts = {
-        "u1": {"thread_id": "1", "intro_id": "1", "refs": ["m1"], "messages": {"m1": "11"}},
+        "u1": {
+            "thread_id": "1", "intro_id": "1",
+            "refs": ["m1", "m55"], "messages": {"m1": "11", "m55": "55"},
+        },
         "u2": {"thread_id": "9", "refs": ["m3"], "messages": {"m3": "33"}},  # dead thread
     }
-    with patch.object(feed, "_save_post", _fake_save):
-        asyncio.run(feed._shed_old_cards(bot, "42", _Forum(), posts))
-    assert sorted(deleted) == [11, 77], (
-        "the registered card AND the untraced stray die; the profile card and the human message stay"
+    with (
+        patch.object(feed, "_save_post", _fake_save),
+        patch.object(feed, "_card_ctx", _fake_ctx),
+        patch("botforge.discord.home._match_card_view", lambda *a, **k: "FRESH VIEW"),
+    ):
+        asyncio.run(
+            feed._shed_old_cards(bot, "42", _Forum(), posts, users, cards, {}, {"848567"})
+        )
+    assert edited == [(11, "FRESH VIEW")], "the traced window card re-renders IN PLACE"
+    assert sorted(deleted) == [55, 77], (
+        "the stray AND the out-of-window card die - never the profile card, never a human message"
     )
-    assert posts["u1"]["refs"] == [] and posts["u1"]["messages"] == {}, "the refs reset with the map"
+    assert posts["u1"]["refs"] == ["m1"], "the registry keeps the re-rendered card only"
+    assert posts["u1"]["messages"] == {"m1": "11"}
     assert posts["u2"]["refs"] == [], "a dead thread still resets - the card re-posts"
