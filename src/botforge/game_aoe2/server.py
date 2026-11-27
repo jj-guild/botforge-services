@@ -141,6 +141,8 @@ class _EnrollmentPusher:
         self, game_key: str, profile_ids: list[str], user_ids: list[str] | None = None
     ) -> tuple[int, bool]:
         """Record the roster, then push the subscription down."""
+        if game_key != "aoe2":
+            return 0, False
         self._aggregator.set_roster(
             [
                 {"profile_id": pid, "user_id": uid}
@@ -148,37 +150,41 @@ class _EnrollmentPusher:
             ]
             or profile_ids
         )
-        """Push one enrollment list to the realtime provider for the game."""
-        if game_key != "aoe2":
-            return 0, False
+        # Without the REALTIME provider (owner 2026-11-27: aoe2lobby
+        # rides DISABLED in the delivery), the enrollments still
+        # STAND: the roster records, the stats provider subscribes -
+        # applied=True, a healthy steady state the core's retry loop
+        # must never treat as a failure
+        applied = True
         uri = os.environ.get("EXT_AOE2LOBBY_URI", "")
-        if not uri:
+        if uri:
+            try:
+                from botforge.core.rpc.game_client import GameProviderClient
+
+                if self._client is None:
+                    self._client = GameProviderClient(uri, "ext-aoe2lobby", "aoe2")
+                applied = await self._client.update_subscriptions(profile_ids, user_ids or [])
+                if applied:
+                    self._last_ids = list(profile_ids)
+            except Exception:
+                logger.warning("enrollment push to the realtime provider failed", exc_info=True)
+                applied = False
+        else:
             self._last_ids = None
-            return len(profile_ids), False
-        try:
-            from botforge.core.rpc.game_client import GameProviderClient
+        # The stats provider keeps the profile -> user mapping too
+        # (#404): the same enrollment list rides its UpdateSubscriptions,
+        # which triggers the on-demand history sync (T4) - it rides
+        # whether or not the realtime layer is wired.
+        stats_uri = os.environ.get("EXT_LIBREMATCH_URI", "")
+        if stats_uri:
+            try:
+                from botforge.core.rpc.game_client import GameProviderClient
 
-            if self._client is None:
-                self._client = GameProviderClient(uri, "ext-aoe2lobby", "aoe2")
-            applied = await self._client.update_subscriptions(profile_ids, user_ids or [])
-            if applied:
-                self._last_ids = list(profile_ids)
-            # The stats provider keeps the profile -> user mapping too
-            # (#404): the same enrollment list rides its UpdateSubscriptions,
-            # which triggers the on-demand history sync (T4).
-            stats_uri = os.environ.get("EXT_LIBREMATCH_URI", "")
-            if stats_uri:
-                try:
-                    from botforge.core.rpc.game_client import GameProviderClient
-
-                    stats_client = GameProviderClient(stats_uri, "ext-librematch", "aoe2")
-                    await stats_client.update_subscriptions(profile_ids, user_ids or [])
-                except Exception:
-                    logger.warning("enrollment push to the stats provider failed", exc_info=True)
-            return len(profile_ids), applied
-        except Exception:
-            logger.warning("enrollment push to the realtime provider failed", exc_info=True)
-            return len(profile_ids), False
+                stats_client = GameProviderClient(stats_uri, "ext-librematch", "aoe2")
+                await stats_client.update_subscriptions(profile_ids, user_ids or [])
+            except Exception:
+                logger.warning("enrollment push to the stats provider failed", exc_info=True)
+        return len(profile_ids), applied
 
 
 async def _consume_providers(aggregator: Any) -> None:
