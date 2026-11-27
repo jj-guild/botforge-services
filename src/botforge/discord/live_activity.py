@@ -1029,6 +1029,11 @@ async def _player_names(bot: discord.Client, guild_id: str) -> dict[str, str]:
     return out
 
 
+# the intro card's BUILD: the entity-card cut re-edits every existing
+# post once (the popup-style first messages predate the template)
+_INTRO_TEMPLATE_V = 2
+
+
 def _post_intro_signature(name: str, profile: dict[str, Any], avatar: str) -> str:
     """Build the post's first-message SIGNATURE (the change detector).
 
@@ -1039,6 +1044,7 @@ def _post_intro_signature(name: str, profile: dict[str, Any], avatar: str) -> st
     """
     return json.dumps(
         {
+            "v": _INTRO_TEMPLATE_V,
             "name": str(name),
             "avatar": str(avatar),
             "profiles": {str(k): str(v) for k, v in (profile.get("profiles") or {}).items()},

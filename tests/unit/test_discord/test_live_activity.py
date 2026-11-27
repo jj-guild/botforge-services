@@ -924,6 +924,7 @@ def test_the_post_intro_signature_tracks_the_name_the_accounts_and_the_avatar() 
         "Merlin", {"profiles": {"848567": "Merlin"}}, "https://a/1.png"
     )
     assert json.loads(base) == {
+        "v": 2,
         "name": "Merlin",
         "avatar": "https://a/1.png",
         "profiles": {"848567": "Merlin"},
