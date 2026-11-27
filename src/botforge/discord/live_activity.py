@@ -55,10 +55,10 @@ _SEED_SWEEP_S = 300.0
 # the seed's BUILD: a seed producing broken cards gets versioned up -
 # every forum re-seeds once with the fixed build (the old cards stay,
 # the guild owns its channel)
-_SEED_VERSION = 10  # 10: the salon became the PLAYERS forum (owner 2026-11-26:
-# the match feed renamed #matchs into #joueurs) - the channel key, the
-# registry ids and the first message (the profile VIEW) all changed:
-# every forum re-seeds once
+_SEED_VERSION = 11  # 11: the match cards SHED the avatar header (owner
+# 2026-11-26: the avatar is the POST's own image, never the match's -
+# the old card messages die, the seed rebuilds them); 10: the salon
+# became the PLAYERS forum
 
 _PLAYERS_SCOPE = "games/aoe2"
 _PLAYERS_KEY = "joueurs"
@@ -622,6 +622,15 @@ async def _maybe_seed_players_forum(  # noqa: C901 - one orchestration, no branc
         return
     _SEEDED.add(guild_id)
     marker_channel = str((marker or {}).get("channel_id") or "") if isinstance(marker, dict) else ""
+    # the CARDS' BUILD changed (owner 2026-11-26: the avatar header
+    # lived one round on the match cards) - the same forum, a new
+    # build: the old card messages DIE and the seed rebuilds them,
+    # an immutable message never re-renders itself
+    cards_rebuild = (
+        isinstance(marker, dict)
+        and marker_channel == str(channel_id)
+        and marker.get("v") != _SEED_VERSION
+    )
     if marker_channel and marker_channel != str(channel_id):
         logger.info(
             "players forum repaired (guild %s): channel %s -> %s - the posts died with the old forum",
@@ -661,6 +670,8 @@ async def _maybe_seed_players_forum(  # noqa: C901 - one orchestration, no branc
                     _LAST_NAME[pid] = nickname
         users = await _guild_users(bot, guild_id)
         posts = await _ensure_player_posts(bot, guild_id, forum, users)
+        if cards_rebuild:
+            await _shed_old_cards(guild_id, forum, posts)
         logger.info(
             "players forum seed: %d post(s) ensured for %d user(s) (guild %s)",
             len(posts),
@@ -860,6 +871,7 @@ async def _posts_of(guild_id: str) -> dict[str, dict[str, Any]]:
                     },
                     "intro": str(entry.get("intro") or ""),
                     "intro_id": str(entry.get("intro_id") or ""),
+                    "intro_pinned": bool(entry.get("intro_pinned")),
                 }
         return posts
     except Exception:
@@ -1207,6 +1219,86 @@ async def _refresh_post_intro(
 
 
 
+async def _pin_post_intro(
+    guild_id: str, forum: Any, posts: dict[str, dict[str, Any]], uid: str, first_message: Any = None
+) -> None:
+    """Pin the post's first message - the profile card stays on top.
+
+    (owner 2026-11-26) The first message carries the player; the cards
+    pile beneath it.
+    Best-effort with the WHY: a permission refusal names the post,
+    never a silent starve (the pinned flag only lands on success).
+    """
+    entry = posts.get(uid) or {}
+    if entry.get("intro_pinned"):
+        return
+    intro_id = str(entry.get("intro_id") or "")
+    if first_message is None:
+        thread = _thread_of(forum, entry)
+        if thread is None or not intro_id:
+            return
+        first_message = thread.get_partial_message(int(intro_id))
+    try:
+        await first_message.pin()
+    except Exception:
+        logger.warning(
+            "players forum: %s's profile card refused its pin (guild %s)",
+            uid,
+            guild_id,
+            exc_info=True,
+        )
+        return
+    entry["intro_pinned"] = True
+    posts[uid] = entry
+    await _save_post(guild_id, uid, entry)
+    logger.info("players forum: %s's profile card pinned (guild %s)", uid, guild_id)
+
+
+async def _shed_old_cards(
+    guild_id: str, forum: Any, posts: dict[str, dict[str, Any]]
+) -> None:
+    """Delete every post's REGISTERED card messages - the seed rebuilds them.
+
+    The match cards are immutable by contract; a build change (the
+    avatar header of 2026-11-26) can only land by shedding the old
+    messages and re-posting the window. The registry's message ids
+    point at them, the refs and the map reset together - a ref without
+    its message would skip the card forever.
+    """
+    shed = 0
+    for uid, entry in posts.items():
+        messages = _post_messages(entry)
+        if not messages:
+            continue
+        thread = _thread_of(forum, entry)
+        if thread is None:
+            entry["refs"] = []
+            entry["messages"] = {}
+            await _save_post(guild_id, uid, entry)
+            continue
+        for _ref, mid in messages.items():
+            try:
+                await thread.get_partial_message(int(mid)).delete()
+                shed += 1
+            except Exception:
+                # a message already gone (a manual delete) never blocks
+                logger.debug(
+                    "the old card delete failed (post %s, message %s) - best-effort",
+                    uid,
+                    mid,
+                    exc_info=True,
+                )
+        entry["refs"] = []
+        entry["messages"] = {}
+        await _save_post(guild_id, uid, entry)
+    if shed:
+        logger.info(
+            "players forum (guild %s): the cards' build changed - %d old message(s) shed, the seed rebuilds them",
+            guild_id,
+            shed,
+        )
+
+
 async def _dedupe_twins(guild_id: str, forum: Any, posts: dict[str, dict[str, Any]]) -> None:
     """Delete the UNREGISTERED twins of a registered post (owner 2026-11-26).
 
@@ -1279,6 +1371,7 @@ async def _ensure_player_posts(  # noqa: C901 - one reconcile
                 if str(posts[uid].get("intro") or "") != signature:
                     view = await _post_intro_view(bot, guild_id, uid, name, profile, avatar)
                     await _refresh_post_intro(guild_id, forum, posts, uid, signature, view)
+                await _pin_post_intro(guild_id, forum, posts, uid)
                 continue
             logger.info(
                 "players forum: %s's post is DEAD - recreating (guild %s)", uid, guild_id
@@ -1329,6 +1422,7 @@ async def _ensure_player_posts(  # noqa: C901 - one reconcile
         posts[uid] = entry
         await _save_post(guild_id, uid, entry)
         _ensuring.discard((guild_id, uid))
+        await _pin_post_intro(guild_id, forum, posts, uid, first_message=first_message)
         logger.info("players forum: post created for %s (guild %s, thread %s)", uid, guild_id, thread.id)
     await _dedupe_twins(guild_id, forum, posts)
     return posts

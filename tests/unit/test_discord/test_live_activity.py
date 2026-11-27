@@ -1099,3 +1099,103 @@ def test_the_player_menu_bar_gates_on_the_global_admin_or_the_player() -> None:
     stranger = _interaction("77", ())
     assert asyncio.run(_player_menu_guard(stranger, "1234")) is False
     assert stranger.response.sent, "the refusal answers - never a silent close"
+
+
+def test_the_profile_card_pins_to_the_top_of_its_post() -> None:
+    """The post's FIRST message - the profile card - is PINNED (owner
+    2026-11-26): the player stays on top, the match cards pile
+    beneath. A refusal never flags the entry (the pin retries)."""
+    import asyncio
+    from unittest.mock import patch as _patch
+
+    import botforge.discord.live_activity as feed
+
+    pinned: list[int] = []
+
+    class _Partial:
+        def __init__(self, mid: int) -> None:
+            self.mid = mid
+
+        async def pin(self) -> None:
+            if self.mid == 666:
+                raise RuntimeError("refused")
+            pinned.append(self.mid)
+
+    class _Thread:
+        def get_partial_message(self, mid: int) -> _Partial:
+            return _Partial(mid)
+
+        def id(self) -> int:  # pragma: no cover - unused here
+            return 1
+
+    thread = _Thread()
+
+    class _Forum:
+        def get_thread(self, tid: int):
+            return thread if tid == 1 else None
+
+        def threads(self):  # pragma: no cover - the cache fold
+            return [thread]
+
+    saved: list[Any] = []
+
+    async def _fake_save(guild_id, uid, entry):
+        saved.append((uid, entry))
+
+    posts = {"u1": {"thread_id": "1", "intro_id": "55", "refs": [], "messages": {}}}
+    with _patch.object(feed, "_save_post", _fake_save):
+        asyncio.run(feed._pin_post_intro("42", _Forum(), posts, "u1"))
+        assert pinned == [55], "the intro message pins"
+        assert posts["u1"]["intro_pinned"] is True, "the flag lands on success"
+        # a pinned entry never re-pins
+        asyncio.run(feed._pin_post_intro("42", _Forum(), posts, "u1"))
+        assert pinned == [55], "the flag short-circuits the REST call"
+        # a refusal leaves the flag unset - the next pass retries
+        posts["u2"] = {"thread_id": "1", "intro_id": "666", "refs": [], "messages": {}}
+        asyncio.run(feed._pin_post_intro("42", _Forum(), posts, "u2"))
+        assert not posts["u2"].get("intro_pinned"), "the refusal never flags"
+
+
+def test_the_build_change_sheds_the_old_cards_before_the_reseed() -> None:
+    """The match cards are immutable; a BUILD change (the avatar header
+    of 2026-11-26) lands by DELETING the registered messages and
+    resetting the refs - the seed then rebuilds the window."""
+    import asyncio
+    from unittest.mock import patch
+
+    import botforge.discord.live_activity as feed
+
+    deleted: list[int] = []
+
+    class _Partial:
+        def __init__(self, mid: int) -> None:
+            self.mid = mid
+
+        async def delete(self) -> None:
+            deleted.append(self.mid)
+
+    class _Thread:
+        def get_partial_message(self, mid: int) -> _Partial:
+            return _Partial(mid)
+
+    class _Forum:
+        def get_thread(self, tid: int):
+            return _Thread() if tid == 1 else None
+
+        def threads(self):  # pragma: no cover - the cache fold
+            return []
+
+    saved: list[Any] = []
+
+    async def _fake_save(guild_id, uid, entry):
+        saved.append((uid, dict(entry or {})))
+
+    posts = {
+        "u1": {"thread_id": "1", "refs": ["m1", "m2"], "messages": {"m1": "11", "m2": "22"}},
+        "u2": {"thread_id": "9", "refs": ["m3"], "messages": {"m3": "33"}},  # dead thread
+    }
+    with patch.object(feed, "_save_post", _fake_save):
+        asyncio.run(feed._shed_old_cards("42", _Forum(), posts))
+    assert sorted(deleted) == [11, 22], "the registered messages die, the dead thread skips"
+    assert posts["u1"]["refs"] == [] and posts["u1"]["messages"] == {}, "the refs reset with the map"
+    assert posts["u2"]["refs"] == [], "a dead thread still resets - the card re-posts"
