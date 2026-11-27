@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Python: botforge.core.services.provider_stats</title>
+</head><body>
+
+<table class="heading">
+<tr class="heading-text decor">
+<td class="title">&nbsp;<br><strong class="title"><a href="botforge.html" class="white">botforge</a>.<a href="botforge.core.html" class="white">core</a>.<a href="botforge.core.services.html" class="white">services</a>.provider_stats</strong></td>
+<td class="extra"><a href=".">index</a><br><a href="file:SOURCE_ROOT/core/services/provider_stats.py">SOURCE_ROOT/core/services/provider_stats.py</a></td></tr></table>
+    <p><span class="code">The&nbsp;EnrollmentStats&nbsp;seam&nbsp;over&nbsp;the&nbsp;providers'&nbsp;stats&nbsp;layer&nbsp;(#404&nbsp;T5).<br>
+&nbsp;<br>
+The&nbsp;generic&nbsp;enrollment&nbsp;(``EnrollmentService``)&nbsp;evaluates&nbsp;its&nbsp;automatic<br>
+criteria&nbsp;against&nbsp;the&nbsp;``EnrollmentStats``&nbsp;protocol;&nbsp;this&nbsp;module<br>
+implements&nbsp;the&nbsp;protocol&nbsp;over&nbsp;the&nbsp;REAL&nbsp;data&nbsp;—&nbsp;the&nbsp;game&nbsp;service's&nbsp;stats<br>
+proxies&nbsp;(the&nbsp;per-user&nbsp;unified&nbsp;view:&nbsp;current/max&nbsp;elo&nbsp;per&nbsp;leaderboard,<br>
+the&nbsp;matches&nbsp;of&nbsp;the&nbsp;last&nbsp;N&nbsp;days),&nbsp;never&nbsp;the&nbsp;external&nbsp;API,&nbsp;never&nbsp;a<br>
+provider's&nbsp;database.<br>
+&nbsp;<br>
+Degradation&nbsp;is&nbsp;the&nbsp;rule:&nbsp;an&nbsp;unreachable&nbsp;service&nbsp;reads&nbsp;as&nbsp;"unknown<br>
+stats"&nbsp;(None)&nbsp;—&nbsp;the&nbsp;enrollment&nbsp;falls&nbsp;back&nbsp;to&nbsp;manual&nbsp;review,&nbsp;never&nbsp;a<br>
+crash,&nbsp;never&nbsp;a&nbsp;silent&nbsp;refusal.</span></p>
+<p>
+<table class="section">
+<tr class="decor pkg-content-decor heading-text">
+<td class="section-title" colspan=3>&nbsp;<br><strong class="bigsection">Modules</strong></td></tr>
+    
+<tr><td class="decor pkg-content-decor"><span class="code">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span></td><td>&nbsp;</td>
+<td class="singlecolumn"><table><tr><td class="multicolumn"><a href="logging.html">logging</a><br>
+</td><td class="multicolumn"></td><td class="multicolumn"></td><td class="multicolumn"></td></tr></table></td></tr></table><p>
+<table class="section">
+<tr class="decor index-decor heading-text">
+<td class="section-title" colspan=3>&nbsp;<br><strong class="bigsection">Classes</strong></td></tr>
+    
+<tr><td class="decor index-decor"><span class="code">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span></td><td>&nbsp;</td>
+<td class="singlecolumn"><dl>
+<dt class="heading-text"><a href="builtins.html#object">builtins.object</a>
+</dt><dd>
+<dl>
+<dt class="heading-text"><a href="botforge.core.services.provider_stats.html#GrpcEnrollmentStats">GrpcEnrollmentStats</a>
+</dt></dl>
+</dd>
+<dt class="heading-text"><a href="typing.html#Protocol">typing.Protocol</a>(<a href="typing.html#Generic">typing.Generic</a>)
+</dt><dd>
+<dl>
+<dt class="heading-text"><a href="botforge.core.services.provider_stats.html#UserBindings">UserBindings</a>
+</dt></dl>
+</dd>
+</dl>
+ <p>
+<table class="section">
+<tr class="decor title-decor heading-text">
+<td class="section-title" colspan=3>&nbsp;<br><a name="GrpcEnrollmentStats">class <strong>GrpcEnrollmentStats</strong></a>(<a href="builtins.html#object">builtins.object</a>)</td></tr>
+    
+<tr><td class="decor title-decor" rowspan=2><span class="code">&nbsp;&nbsp;&nbsp;</span></td>
+<td class="decor title-decor" colspan=2><span class="code"><a href="#GrpcEnrollmentStats">GrpcEnrollmentStats</a>(game_client:&nbsp;'Any',&nbsp;bindings:&nbsp;'<a href="#UserBindings">UserBindings</a>&nbsp;|&nbsp;None'&nbsp;=&nbsp;None)&nbsp;-&amp;gt;&nbsp;'None'<br>
+&nbsp;<br>
+EnrollmentStats&nbsp;served&nbsp;by&nbsp;the&nbsp;game&nbsp;service's&nbsp;stats&nbsp;layer.<br>&nbsp;</span></td></tr>
+<tr><td>&nbsp;</td>
+<td class="singlecolumn">Methods defined here:<br>
+<dl><dt><a name="GrpcEnrollmentStats-__init__"><strong>__init__</strong></a>(self, game_client: 'Any', bindings: 'UserBindings | None' = None) -&gt; 'None'</dt><dd><span class="code">Wire&nbsp;the&nbsp;GameData&nbsp;client&nbsp;and&nbsp;(optionally)&nbsp;the&nbsp;bindings&nbsp;seam.<br>
+&nbsp;<br>
+``game_client``&nbsp;is&nbsp;the&nbsp;game&nbsp;service's&nbsp;client&nbsp;(GameDataClient)<br>
+—&nbsp;the&nbsp;stats&nbsp;RPCs&nbsp;it&nbsp;serves&nbsp;are&nbsp;the&nbsp;providers'&nbsp;own&nbsp;answers,<br>
+cached&nbsp;by&nbsp;the&nbsp;service&nbsp;(T4).&nbsp;``bindings``&nbsp;answers<br>
+``has_profile``&nbsp;from&nbsp;the&nbsp;platform's&nbsp;own&nbsp;truth&nbsp;when&nbsp;wired.</span></dd></dl>
+
+<dl><dt>async <a name="GrpcEnrollmentStats-has_profile"><strong>has_profile</strong></a>(self, user_id: 'str', game_key: 'str') -&gt; 'bool'</dt><dd><span class="code">Whether&nbsp;the&nbsp;player&nbsp;has&nbsp;a&nbsp;bound,&nbsp;validated&nbsp;game&nbsp;profile.</span></dd></dl>
+
+<dl><dt>async <a name="GrpcEnrollmentStats-matches_in_window"><strong>matches_in_window</strong></a>(self, user_id: 'str', game_key: 'str', days: 'int', leaderboard: 'str' = '') -&gt; 'int | None'</dt><dd><span class="code">Return&nbsp;the&nbsp;matches&nbsp;played&nbsp;in&nbsp;the&nbsp;last&nbsp;N&nbsp;days;&nbsp;None&nbsp;unknown.</span></dd></dl>
+
+<dl><dt>async <a name="GrpcEnrollmentStats-player_elo"><strong>player_elo</strong></a>(self, user_id: 'str', game_key: 'str', leaderboard: 'str' = '') -&gt; 'int | None'</dt><dd><span class="code">Return&nbsp;the&nbsp;player's&nbsp;current&nbsp;rating;&nbsp;None&nbsp;when&nbsp;unknown.<br>
+&nbsp;<br>
+The&nbsp;per-user&nbsp;unification&nbsp;keeps&nbsp;the&nbsp;BEST&nbsp;current&nbsp;rating&nbsp;across<br>
+the&nbsp;user's&nbsp;accounts;&nbsp;the&nbsp;leaderboard&nbsp;narrows&nbsp;it&nbsp;(by&nbsp;logical<br>
+name&nbsp;—&nbsp;``rm_1v1``&nbsp;—&nbsp;or&nbsp;by&nbsp;the&nbsp;provider's&nbsp;own&nbsp;id).</span></dd></dl>
+
+<hr>
+Data descriptors defined here:<br>
+<dl><dt><strong>__dict__</strong></dt>
+<dd><span class="code">dictionary&nbsp;for&nbsp;instance&nbsp;variables</span></dd>
+</dl>
+<dl><dt><strong>__weakref__</strong></dt>
+<dd><span class="code">list&nbsp;of&nbsp;weak&nbsp;references&nbsp;to&nbsp;the&nbsp;object</span></dd>
+</dl>
+</td></tr></table> <p>
+<table class="section">
+<tr class="decor title-decor heading-text">
+<td class="section-title" colspan=3>&nbsp;<br><a name="UserBindings">class <strong>UserBindings</strong></a>(<a href="typing.html#Protocol">typing.Protocol</a>)</td></tr>
+    
+<tr><td class="decor title-decor" rowspan=2><span class="code">&nbsp;&nbsp;&nbsp;</span></td>
+<td class="decor title-decor" colspan=2><span class="code"><a href="#UserBindings">UserBindings</a>(*args,&nbsp;**kwargs)<br>
+&nbsp;<br>
+The&nbsp;platform's&nbsp;own&nbsp;profile-bindings&nbsp;seam&nbsp;(the&nbsp;registration&nbsp;DB).<br>&nbsp;</span></td></tr>
+<tr><td>&nbsp;</td>
+<td class="singlecolumn"><dl><dt>Method resolution order:</dt>
+<dd><a href="botforge.core.services.provider_stats.html#UserBindings">UserBindings</a></dd>
+<dd><a href="typing.html#Protocol">typing.Protocol</a></dd>
+<dd><a href="typing.html#Generic">typing.Generic</a></dd>
+<dd><a href="builtins.html#object">builtins.object</a></dd>
+</dl>
+<hr>
+Methods defined here:<br>
+<dl><dt><a name="UserBindings-__init__"><strong>__init__</strong></a> = _no_init_or_replace_init(self, *args, **kwargs)<span class="grey"><span class="heading-text"> from <a href="typing.html">typing</a></span></span></dt></dl>
+
+<dl><dt>async <a name="UserBindings-find_user_bindings"><strong>find_user_bindings</strong></a>(self, user_id: 'str') -&gt; 'list[dict[str, Any]]'</dt><dd><span class="code">List&nbsp;the&nbsp;game-profile&nbsp;bindings&nbsp;of&nbsp;a&nbsp;user&nbsp;(all&nbsp;games).</span></dd></dl>
+
+<hr>
+Class methods defined here:<br>
+<dl><dt><a name="UserBindings-__subclasshook__"><strong>__subclasshook__</strong></a> = _proto_hook(other)<span class="grey"><span class="heading-text"> from typing</span></span></dt></dl>
+
+<hr>
+Data descriptors defined here:<br>
+<dl><dt><strong>__dict__</strong></dt>
+<dd><span class="code">dictionary&nbsp;for&nbsp;instance&nbsp;variables</span></dd>
+</dl>
+<dl><dt><strong>__weakref__</strong></dt>
+<dd><span class="code">list&nbsp;of&nbsp;weak&nbsp;references&nbsp;to&nbsp;the&nbsp;object</span></dd>
+</dl>
+<hr>
+Data and other attributes defined here:<br>
+<dl><dt><strong>__abstractmethods__</strong> = frozenset()</dl>
+
+<dl><dt><strong>__annotations__</strong> = {}</dl>
+
+<dl><dt><strong>__parameters__</strong> = ()</dl>
+
+<dl><dt><strong>__protocol_attrs__</strong> = {'find_user_bindings'}</dl>
+
+<hr>
+Class methods inherited from <a href="typing.html#Protocol">typing.Protocol</a>:<br>
+<dl><dt><a name="UserBindings-__init_subclass__"><strong>__init_subclass__</strong></a>(*args, **kwargs)</dt><dd><span class="code">Function&nbsp;to&nbsp;initialize&nbsp;subclasses.</span></dd></dl>
+
+<hr>
+Class methods inherited from <a href="typing.html#Generic">typing.Generic</a>:<br>
+<dl><dt><a name="UserBindings-__class_getitem__"><strong>__class_getitem__</strong></a>(...)</dt><dd><span class="code">Parameterizes&nbsp;a&nbsp;generic&nbsp;class.<br>
+&nbsp;<br>
+At&nbsp;least,&nbsp;parameterizing&nbsp;a&nbsp;generic&nbsp;class&nbsp;is&nbsp;the&nbsp;*main*&nbsp;thing&nbsp;this<br>
+method&nbsp;does.&nbsp;For&nbsp;example,&nbsp;for&nbsp;some&nbsp;generic&nbsp;class&nbsp;`Foo`,&nbsp;this&nbsp;is&nbsp;called<br>
+when&nbsp;we&nbsp;do&nbsp;`Foo[int]`&nbsp;-&nbsp;there,&nbsp;with&nbsp;`cls=Foo`&nbsp;and&nbsp;`params=int`.<br>
+&nbsp;<br>
+However,&nbsp;note&nbsp;that&nbsp;this&nbsp;method&nbsp;is&nbsp;also&nbsp;called&nbsp;when&nbsp;defining&nbsp;generic<br>
+classes&nbsp;in&nbsp;the&nbsp;first&nbsp;place&nbsp;with&nbsp;`class&nbsp;Foo[T]:&nbsp;...`.</span></dd></dl>
+
+</td></tr></table></td></tr></table><p>
+<table class="section">
+<tr class="decor data-decor heading-text">
+<td class="section-title" colspan=3>&nbsp;<br><strong class="bigsection">Data</strong></td></tr>
+    
+<tr><td class="decor data-decor"><span class="code">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span></td><td>&nbsp;</td>
+<td class="singlecolumn"><strong>logger</strong> = &lt;Logger botforge.core.provider_stats (INFO)&gt;</td></tr></table>
+</body></html>

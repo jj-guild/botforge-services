@@ -68,6 +68,15 @@ in&nbsp;when&nbsp;the&nbsp;environment&nbsp;declares&nbsp;no&nbsp;URI:&nbsp;the&
 always&nbsp;carries&nbsp;the&nbsp;provider,&nbsp;and&nbsp;an&nbsp;empty&nbsp;URI&nbsp;made&nbsp;the&nbsp;seam<br>
 reject&nbsp;every&nbsp;profile&nbsp;silently&nbsp;(the&nbsp;2026-10-16&nbsp;test&nbsp;findings).</span></dd></dl>
 
+<dl><dt>async <a name="Aoe2ProfileValidationSeam-search_profiles"><strong>search_profiles</strong></a>(self, alias: 'str') -&gt; 'list[dict[str, Any]]'</dt><dd><span class="code">Search&nbsp;the&nbsp;provider's&nbsp;profiles&nbsp;by&nbsp;in-game&nbsp;alias&nbsp;(#402's&nbsp;name&nbsp;path).<br>
+&nbsp;<br>
+The&nbsp;Cloudflare&nbsp;finding&nbsp;forced&nbsp;a&nbsp;resolution&nbsp;path&nbsp;that&nbsp;never<br>
+touches&nbsp;aoe2insights:&nbsp;the&nbsp;provider's&nbsp;own&nbsp;upstream&nbsp;(World's<br>
+Edge)&nbsp;answers&nbsp;exact-alias&nbsp;lookups,&nbsp;so&nbsp;the&nbsp;player&nbsp;types&nbsp;their<br>
+in-game&nbsp;name&nbsp;and&nbsp;picks&nbsp;their&nbsp;account&nbsp;among&nbsp;the&nbsp;homonyms.&nbsp;The<br>
+candidates&nbsp;carry&nbsp;their&nbsp;last&nbsp;matches&nbsp;—&nbsp;the&nbsp;player&nbsp;recognizes<br>
+what&nbsp;THEY&nbsp;played,&nbsp;not&nbsp;an&nbsp;id.&nbsp;Degrades&nbsp;to&nbsp;an&nbsp;empty&nbsp;list.</span></dd></dl>
+
 <dl><dt>async <a name="Aoe2ProfileValidationSeam-validate_profile"><strong>validate_profile</strong></a>(self, profile_id: 'str') -&gt; 'dict[str, Any] | None'</dt><dd><span class="code">Return&nbsp;the&nbsp;profile's&nbsp;public&nbsp;data&nbsp;when&nbsp;the&nbsp;provider&nbsp;knows&nbsp;it.<br>
 &nbsp;<br>
 The&nbsp;typed&nbsp;id&nbsp;may&nbsp;be&nbsp;either&nbsp;the&nbsp;relic&nbsp;id&nbsp;(what&nbsp;the&nbsp;provider&nbsp;wants)<br>
@@ -103,7 +112,11 @@ Async&nbsp;MongoDB&nbsp;adapter&nbsp;for&nbsp;the&nbsp;RegistrationService&nbsp;
 
 <dl><dt>async <a name="MongoRegistrationDatabase-delete_binding"><strong>delete_binding</strong></a>(self, game_key: 'str', user_id: 'str', profile_id: 'str') -&gt; 'bool'</dt><dd><span class="code">Drop&nbsp;one&nbsp;profile&nbsp;binding;&nbsp;True&nbsp;when&nbsp;one&nbsp;existed.</span></dd></dl>
 
-<dl><dt>async <a name="MongoRegistrationDatabase-find_binding_by_profile"><strong>find_binding_by_profile</strong></a>(self, game_key: 'str', profile_id: 'str') -&gt; 'dict[str, Any] | None'</dt><dd><span class="code">Return&nbsp;the&nbsp;binding&nbsp;owning&nbsp;a&nbsp;profile;&nbsp;None&nbsp;when&nbsp;unbound.</span></dd></dl>
+<dl><dt>async <a name="MongoRegistrationDatabase-find_binding_by_profile"><strong>find_binding_by_profile</strong></a>(self, game_key: 'str', profile_id: 'str') -&gt; 'dict[str, Any] | None'</dt><dd><span class="code">Return&nbsp;the&nbsp;binding&nbsp;owning&nbsp;a&nbsp;profile;&nbsp;None&nbsp;when&nbsp;unbound.<br>
+&nbsp;<br>
+The&nbsp;profile&nbsp;is&nbsp;addressable&nbsp;by&nbsp;EITHER&nbsp;id&nbsp;(#402):&nbsp;the&nbsp;relic&nbsp;id<br>
+the&nbsp;provider&nbsp;validated,&nbsp;or&nbsp;the&nbsp;aoe2insights&nbsp;user&nbsp;id&nbsp;the&nbsp;player<br>
+pasted&nbsp;—&nbsp;the&nbsp;binding&nbsp;stores&nbsp;both.</span></dd></dl>
 
 <dl><dt>async <a name="MongoRegistrationDatabase-find_bindings_by_profiles"><strong>find_bindings_by_profiles</strong></a>(self, game_key: 'str', profile_ids: 'list[str]') -&gt; 'list[dict[str, Any]]'</dt><dd><span class="code">Read&nbsp;many&nbsp;profiles'&nbsp;bindings&nbsp;in&nbsp;ONE&nbsp;batched&nbsp;find($in).</span></dd></dl>
 
@@ -191,32 +204,40 @@ Data descriptors inherited from <a href="builtins.html#BaseException">builtins.B
 <td class="section-title" colspan=3>&nbsp;<br><strong class="bigsection">Functions</strong></td></tr>
     
 <tr><td class="decor functions-decor"><span class="code">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span></td><td>&nbsp;</td>
-<td class="singlecolumn"><dl><dt><a name="-extract_insights_user_id"><strong>extract_insights_user_id</strong></a>(typed: 'str') -&gt; 'str | None'</dt><dd><span class="code">Extract&nbsp;the&nbsp;aoe2insights&nbsp;user&nbsp;id&nbsp;from&nbsp;a&nbsp;pasted&nbsp;URL,&nbsp;strictly.<br>
+<td class="singlecolumn"><dl><dt><a name="-extract_insights_user_id"><strong>extract_insights_user_id</strong></a>(typed: 'str') -&gt; 'str | None'</dt><dd><span class="code">Extract&nbsp;the&nbsp;aoe2insights&nbsp;user&nbsp;id&nbsp;from&nbsp;a&nbsp;pasted&nbsp;URL,&nbsp;resiliently.<br>
 &nbsp;<br>
-Only&nbsp;an&nbsp;aoe2insights.com&nbsp;URL&nbsp;of&nbsp;the&nbsp;exact&nbsp;shape<br>
-``<a href="https://www.aoe2insights.com/user/&lt;digits">https://www.aoe2insights.com/user/&lt;digits</a>&gt;...``&nbsp;matches&nbsp;—&nbsp;anything<br>
-else&nbsp;(another&nbsp;host,&nbsp;a&nbsp;path-injection&nbsp;attempt,&nbsp;a&nbsp;query&nbsp;trick)&nbsp;is<br>
-rejected.&nbsp;Double&nbsp;gate:&nbsp;the&nbsp;anchored&nbsp;regex&nbsp;AND&nbsp;a&nbsp;parsed-URL&nbsp;host&nbsp;check<br>
-(the&nbsp;id&nbsp;never&nbsp;leaves&nbsp;the&nbsp;regex's&nbsp;capture&nbsp;group,&nbsp;so&nbsp;the&nbsp;downstream<br>
-request&nbsp;URL&nbsp;cannot&nbsp;be&nbsp;tampered&nbsp;with).</span></dd></dl>
+The&nbsp;pasted&nbsp;URL&nbsp;may&nbsp;be&nbsp;LONGER&nbsp;than&nbsp;the&nbsp;canonical&nbsp;profile&nbsp;page&nbsp;(a&nbsp;deep<br>
+link,&nbsp;a&nbsp;trailing&nbsp;path,&nbsp;a&nbsp;query,&nbsp;a&nbsp;fragment)&nbsp;—&nbsp;the&nbsp;insights&nbsp;id&nbsp;is&nbsp;the<br>
+``/user/&lt;digits&gt;``&nbsp;segment&nbsp;and&nbsp;that&nbsp;is&nbsp;ALL&nbsp;we&nbsp;keep&nbsp;(#402:&nbsp;store&nbsp;the<br>
+insights&nbsp;id,&nbsp;resolve&nbsp;the&nbsp;relic&nbsp;id).&nbsp;Double&nbsp;gate:&nbsp;the&nbsp;host&nbsp;is&nbsp;checked<br>
+on&nbsp;the&nbsp;parsed&nbsp;URL,&nbsp;the&nbsp;id&nbsp;never&nbsp;leaves&nbsp;the&nbsp;regex's&nbsp;capture&nbsp;group&nbsp;—<br>
+the&nbsp;downstream&nbsp;request&nbsp;URL&nbsp;cannot&nbsp;be&nbsp;tampered&nbsp;with.&nbsp;The&nbsp;relic-keyed<br>
+shape&nbsp;(``/user/relic/&lt;id&gt;``)&nbsp;does&nbsp;NOT&nbsp;match:&nbsp;its&nbsp;id&nbsp;is&nbsp;a&nbsp;relic&nbsp;id.</span></dd></dl>
  <dl><dt>async <a name="-resolve_relic_id"><strong>resolve_relic_id</strong></a>(typed_id: 'str', transport: 'httpx.AsyncBaseTransport | None' = None) -&gt; 'str | None'</dt><dd><span class="code">Resolve&nbsp;whatever&nbsp;id&nbsp;the&nbsp;user&nbsp;typed&nbsp;into&nbsp;the&nbsp;relic&nbsp;profile&nbsp;id.<br>
 &nbsp;<br>
-The&nbsp;user&nbsp;may&nbsp;paste&nbsp;either&nbsp;id&nbsp;(the&nbsp;2026-10-16&nbsp;UX&nbsp;lesson:&nbsp;the&nbsp;insights<br>
-URL&nbsp;id&nbsp;and&nbsp;the&nbsp;relic&nbsp;id&nbsp;are&nbsp;different&nbsp;numbers&nbsp;and&nbsp;only&nbsp;the&nbsp;relic&nbsp;id<br>
-works&nbsp;with&nbsp;librematch/aoe2lobby):<br>
+Returns&nbsp;the&nbsp;relic&nbsp;id,&nbsp;or&nbsp;None&nbsp;when&nbsp;nothing&nbsp;resolves&nbsp;(unknown&nbsp;id,<br>
+insights&nbsp;down,&nbsp;or&nbsp;the&nbsp;site's&nbsp;bot&nbsp;filter&nbsp;refusing&nbsp;this&nbsp;server&nbsp;—<br>
+:func:`resolve_relic_id_outcome`&nbsp;tells&nbsp;them&nbsp;apart).</span></dd></dl>
+ <dl><dt>async <a name="-resolve_relic_id_outcome"><strong>resolve_relic_id_outcome</strong></a>(typed_id: 'str', transport: 'httpx.AsyncBaseTransport | None' = None) -&gt; 'tuple[str | None, str]'</dt><dd><span class="code">Resolve&nbsp;whatever&nbsp;id&nbsp;the&nbsp;user&nbsp;typed&nbsp;into&nbsp;``(relic_id,&nbsp;outcome)``.<br>
 &nbsp;<br>
--&nbsp;a&nbsp;relic&nbsp;id&nbsp;(what&nbsp;we&nbsp;want)&nbsp;—&nbsp;validates&nbsp;as-is;<br>
--&nbsp;an&nbsp;aoe2insights&nbsp;user&nbsp;id&nbsp;—&nbsp;resolved&nbsp;through<br>
-&nbsp;&nbsp;``/user/&lt;id&gt;/relic-id/``,&nbsp;which&nbsp;answers&nbsp;the&nbsp;relic&nbsp;id&nbsp;in&nbsp;plain&nbsp;text;<br>
--&nbsp;a&nbsp;full&nbsp;insights&nbsp;URL&nbsp;—&nbsp;**always&nbsp;resolved**:&nbsp;the&nbsp;user&nbsp;id&nbsp;is&nbsp;extracted<br>
-&nbsp;&nbsp;by&nbsp;the&nbsp;strict&nbsp;URL&nbsp;pattern,&nbsp;then&nbsp;mapped&nbsp;to&nbsp;the&nbsp;relic&nbsp;id.<br>
+See&nbsp;:func:`resolve_relic_id`&nbsp;for&nbsp;the&nbsp;resolution&nbsp;contract;&nbsp;this&nbsp;is&nbsp;the<br>
+seam&nbsp;that&nbsp;carries&nbsp;WHY&nbsp;a&nbsp;resolution&nbsp;failed:<br>
 &nbsp;<br>
-Injection&nbsp;safety:&nbsp;the&nbsp;request&nbsp;URL&nbsp;is&nbsp;built&nbsp;ONLY&nbsp;from&nbsp;a<br>
-regex-validated&nbsp;digit&nbsp;string&nbsp;(&lt;=&nbsp;15&nbsp;chars);&nbsp;the&nbsp;reply&nbsp;must&nbsp;be&nbsp;a<br>
-bare&nbsp;numeric&nbsp;id&nbsp;—&nbsp;any&nbsp;HTML,&nbsp;extra&nbsp;text&nbsp;or&nbsp;mismatch&nbsp;is&nbsp;rejected.<br>
+-&nbsp;``resolved``&nbsp;—&nbsp;the&nbsp;site&nbsp;answered&nbsp;the&nbsp;relic&nbsp;id&nbsp;in&nbsp;plain&nbsp;text;<br>
+-&nbsp;``blocked``&nbsp;—&nbsp;the&nbsp;site&nbsp;refuses&nbsp;this&nbsp;server&nbsp;(its&nbsp;bot&nbsp;filter):<br>
+&nbsp;&nbsp;the&nbsp;id&nbsp;is&nbsp;NOT&nbsp;trusted&nbsp;as&nbsp;a&nbsp;relic&nbsp;id,&nbsp;the&nbsp;binding&nbsp;refuses&nbsp;and&nbsp;the<br>
+&nbsp;&nbsp;player&nbsp;is&nbsp;guided&nbsp;to&nbsp;the&nbsp;relic-keyed&nbsp;URL&nbsp;shape&nbsp;instead;<br>
+-&nbsp;``unknown``&nbsp;—&nbsp;the&nbsp;site&nbsp;answered&nbsp;and&nbsp;this&nbsp;id&nbsp;maps&nbsp;to&nbsp;nothing;<br>
+-&nbsp;``unreachable``&nbsp;—&nbsp;network-level&nbsp;failure.<br>
 &nbsp;<br>
-``transport``&nbsp;is&nbsp;the&nbsp;test&nbsp;seam;&nbsp;None&nbsp;means&nbsp;the&nbsp;real&nbsp;network.<br>
-Returns&nbsp;None&nbsp;when&nbsp;nothing&nbsp;resolves&nbsp;(unknown&nbsp;id,&nbsp;insights&nbsp;down).</span></dd></dl>
+The&nbsp;live&nbsp;2026-11-17&nbsp;finding&nbsp;drives&nbsp;the&nbsp;``blocked``&nbsp;distinction:&nbsp;the<br>
+relic-id&nbsp;endpoint&nbsp;sits&nbsp;behind&nbsp;a&nbsp;Cloudflare&nbsp;JavaScript&nbsp;challenge<br>
+("Just&nbsp;a&nbsp;moment...")&nbsp;on&nbsp;datacenter&nbsp;egress&nbsp;—&nbsp;NO&nbsp;User-Agent&nbsp;passes,<br>
+not&nbsp;even&nbsp;a&nbsp;browser-compatible&nbsp;one,&nbsp;and&nbsp;a&nbsp;TLS-impersonating&nbsp;client<br>
+fares&nbsp;no&nbsp;better.&nbsp;The&nbsp;un-distinguishable&nbsp;failure&nbsp;previously&nbsp;fed&nbsp;the<br>
+silent&nbsp;typed-id-as-relic&nbsp;fallback,&nbsp;which&nbsp;bound&nbsp;the&nbsp;WRONG&nbsp;profile<br>
+(an&nbsp;insights&nbsp;id&nbsp;that&nbsp;happens&nbsp;to&nbsp;be&nbsp;someone&nbsp;else's&nbsp;relic&nbsp;id)&nbsp;—&nbsp;the<br>
+binding&nbsp;must&nbsp;fail&nbsp;loudly&nbsp;instead.</span></dd></dl>
 </td></tr></table><p>
 <table class="section">
 <tr class="decor data-decor heading-text">
@@ -224,6 +245,11 @@ Returns&nbsp;None&nbsp;when&nbsp;nothing&nbsp;resolves&nbsp;(unknown&nbsp;id,&nb
     
 <tr><td class="decor data-decor"><span class="code">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span></td><td>&nbsp;</td>
 <td class="singlecolumn"><strong>INSIGHTS_BASE_URL</strong> = 'https://www.aoe2insights.com'<br>
-<strong>INSIGHTS_URL_RE</strong> = re.compile('^https?://(?:www\\.)?aoe2insights\\.com/user/(\\d{1,15})(?:[/?#].*)?$', re.IGNORECASE)<br>
-<strong>PROFILE_BINDINGS_COLLECTION</strong> = 'profile_bindings'</td></tr></table>
+<strong>INSIGHTS_RELIC_URL_RE</strong> = re.compile('^https?://(?:www\\.)?aoe2insights\\....r/relic/(\\d{1,15})(?:[/?#].*)?$', re.IGNORECASE)<br>
+<strong>INSIGHTS_URL_RE</strong> = re.compile('aoe2insights\\.com/user/(?!relic/)(\\d{1,15})(?!\\d)', re.IGNORECASE)<br>
+<strong>PROFILE_BINDINGS_COLLECTION</strong> = 'profile_bindings'<br>
+<strong>RELIC_BLOCKED</strong> = 'blocked'<br>
+<strong>RELIC_RESOLVED</strong> = 'resolved'<br>
+<strong>RELIC_UNKNOWN</strong> = 'unknown'<br>
+<strong>RELIC_UNREACHABLE</strong> = 'unreachable'</td></tr></table>
 </body></html>

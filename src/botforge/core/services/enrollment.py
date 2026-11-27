@@ -117,11 +117,18 @@ class ModLifecycleGate(Protocol):
 
 @dataclass(frozen=True, slots=True)
 class CriterionResult:
-    """One criterion's evaluation: passed, and a human reason."""
+    """One criterion's evaluation: passed, and a human reason.
+
+    ``unknown`` marks a stat the seam could not read (the provider
+    unreachable, the player unranked): the criterion neither passes
+    nor fails — the application waits in the queue for an admin
+    (manual review), NEVER a silent refusal (#404 T5).
+    """
 
     key: str
     passed: bool
     reason: str
+    unknown: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -266,13 +273,16 @@ class EnrollmentService:
             # no criteria at all — the admin dashboard is the surface)
             await self._db.upsert_application(_application_to_doc(stored))
             return stored
-        failures = [r.reason for r in results if not r.passed]
+        failures = [r.reason for r in results if not r.passed and not r.unknown]
         if failures:
             return await self._decide(stored, STATE_REFUSED, now=now, reasons=failures)
-        if not self._criteria.get(CRITERION_MANUAL):
-            return await self._decide(stored, STATE_ACCEPTED, now=now)
-        await self._db.upsert_application(_application_to_doc(stored))
-        return stored
+        # an unreadable stat is neither a pass nor a fail: the queue
+        # decides (manual review) — never a crash, never a silent
+        # refusal (#404 T5)
+        if any(r.unknown for r in results) or self._criteria.get(CRITERION_MANUAL):
+            await self._db.upsert_application(_application_to_doc(stored))
+            return stored
+        return await self._decide(stored, STATE_ACCEPTED, now=now)
 
     async def accept(self, application_id: str, now: int = 0, reason: str = "") -> Application:
         """Accept a pending application; registers the member (roles sync)."""
@@ -384,7 +394,12 @@ class EnrollmentService:
             elo = await stats.player_elo(user_id, game, leaderboard)
             if elo is None:
                 board = f" ({leaderboard})" if leaderboard else ""
-                return CriterionResult(key, False, f"rating unknown for {game or 'the game'}{board} — manual review")
+                return CriterionResult(
+                    key,
+                    False,
+                    f"rating unknown for {game or 'the game'}{board} — manual review",
+                    unknown=True,
+                )
             if key == CRITERION_MIN_ELO:
                 passed = elo >= threshold
                 return CriterionResult(key, passed, f"rating {elo} {'≥' if passed else '<'} required {threshold}")
@@ -396,7 +411,9 @@ class EnrollmentService:
             leaderboard = str(spec.get("leaderboard", ""))
             played = await stats.matches_in_window(user_id, game, days, leaderboard)
             if played is None:
-                return CriterionResult(key, False, "match history unknown — manual review")
+                return CriterionResult(
+                    key, False, "match history unknown — manual review", unknown=True
+                )
             passed = played >= count
             return CriterionResult(
                 key, passed, f"{played} matches in {days}d {'≥' if passed else '<'} required {count}"
@@ -498,7 +515,13 @@ def _application_to_doc(application: Application) -> dict[str, Any]:
         "decided_at": application.decided_at,
         "reasons": list(application.reasons),
         "criteria_results": [
-            {"key": r.key, "passed": r.passed, "reason": r.reason} for r in application.criteria_results
+            {
+                "key": r.key,
+                "passed": r.passed,
+                "reason": r.reason,
+                "unknown": r.unknown,
+            }
+            for r in application.criteria_results
         ],
         "profiles": list(application.profiles),
     }
@@ -521,6 +544,7 @@ def _application_from_doc(doc: dict[str, Any]) -> Application:
                 key=str(r.get("key", "")),
                 passed=bool(r.get("passed", False)),
                 reason=str(r.get("reason", "")),
+                unknown=bool(r.get("unknown", False)),
             )
             for r in (doc.get("criteria_results") or ())
         ),

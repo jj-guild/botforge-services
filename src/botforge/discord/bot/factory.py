@@ -1190,7 +1190,7 @@ def _build_registration(
     """Wire the DM enrollment stack (#133): engine + AoE2-validated service.
 
     Returns (None, None) when Mongo/Redis are not configured (unit tests,
-    local runs) — the /register command then answers with a note.
+    local runs) — the registration surfaces then answer with a note.
     """
     if not config.mongo_uri or not config.redis_uri:
         return None, None
