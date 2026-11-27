@@ -1433,3 +1433,39 @@ def test_the_players_forum_repairs_on_the_button_only_never_on_a_timer() -> None
     and the repair button stay."""
     assert not hasattr(feed, "_seed_loop"), "the 5-minute sweep must not come back"
     assert not hasattr(feed, "_SEED_SWEEP_S"), "the sweep window must not come back"
+
+
+def test_the_known_players_pseudo_wears_his_star() -> None:
+    """The KNOWN player's pseudo wears a star before his name (owner
+    2026-11-27) and rides HIS post's profile message; the stranger
+    keeps his template link with no star."""
+    from botforge.discord.home import _seat_text
+
+    card = {"match_id": "507", "status": "finished", "finished_at": 1732300000, "players": []}
+    labels = {"ai": "IA", "post_links": {"848567": "https://discord.com/channels/42/77/78"}}
+    ctx = {"civ_urls": {}, "civ_images": {}, "ladder": {}, "ladder_by_ts": {}}
+
+    mine, _ = _seat_text(
+        {"profile_id": "848567", "alias": "Merlin", "civ": ""}, card, ctx, labels, known_ids={"848567"}
+    )
+    assert "\U0001F31F[Merlin]" in mine, "the known player wears his star"
+    theirs, _ = _seat_text(
+        {"profile_id": "17190369", "alias": "Rex", "civ": ""}, card, ctx, labels, known_ids={"848567"}
+    )
+    assert "\U0001F31F" not in theirs, "the stranger wears no star"
+
+
+def test_the_render_hash_moves_when_the_post_links_move() -> None:
+    """The repair updates every match's player links (owner 2026-11-27):
+    a card whose player's post link moved re-renders - the link rides
+    the render hash's inputs."""
+    card = {
+        "match_id": "507",
+        "players": [{"profile_id": "848567", "alias": "Merlin"}],
+    }
+    ctx: dict[str, Any] = {}
+    before = feed._card_render_hash(card, ctx, {"848567": "https://discord.com/channels/42/1/2"})
+    after = feed._card_render_hash(card, ctx, {"848567": "https://discord.com/channels/42/9/9"})
+    untouched = feed._card_render_hash(card, ctx, {})
+    assert before != after, "a moved post link moves the hash"
+    assert before != untouched, "a gained post link moves the hash"

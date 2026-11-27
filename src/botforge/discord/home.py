@@ -2068,7 +2068,9 @@ def _seat_text(
     alias_target = str(post_links.get(pid) or "") if pid else ""
     if not alias_target and pid:
         alias_target = _game_account_url("aoe2", pid)
-    alias_link = f"[{alias}]({alias_target})" if alias_target else alias
+    # the KNOWN player wears his star before his name (owner 2026-11-27)
+    star = "\U0001F31F" if alias_target and pid and pid in post_links else ""
+    alias_link = f"{star}[{alias}]({alias_target})" if alias_target else alias
     # a COMPUTER wears its level (owner 2026-11-25: "IA (Extrême)")
     if bool(player.get("ai")):
         level = _ai_level_label(card)
