@@ -1029,9 +1029,9 @@ async def _player_names(bot: discord.Client, guild_id: str) -> dict[str, str]:
     return out
 
 
-# the intro card's BUILD: the entity-card cut re-edits every existing
-# post once (the popup-style first messages predate the template)
-_INTRO_TEMPLATE_V = 2
+# the intro card's BUILD: the mention/catalog-link/admin-menu cut
+# re-edits every existing post once (owner 2026-11-26 review)
+_INTRO_TEMPLATE_V = 3
 
 
 def _post_intro_signature(name: str, profile: dict[str, Any], avatar: str) -> str:
@@ -1070,8 +1070,8 @@ async def _post_intro_view(
     displayed player.
     """
     from botforge.discord.commands_i18n import _feed_locale
-    from botforge.discord.entity_admin_menu import EntityAdminButton
     from botforge.discord.home import _game_label
+    from botforge.discord.player_admin_menu import PlayerAdminButton
     from botforge.discord.stats_views import account_boards_by_profile, recent_match_entries
     from botforge.discord.ui.entity_cards import EntityCardBuilder
 
@@ -1100,7 +1100,10 @@ async def _post_intro_view(
     # the seat grammar, minus the seat (owner 2026-11-26: "affiche les
     # comptes comme ils le sont lors d'un match, sans les civs, spot,
     # replay" - the bold insight link, the RM ladder lines beneath)
-    indent = "\u2800" * 4
+    # the ladder lines indent LESS than a match seat (owner
+    # 2026-11-26): no slot badge precedes the account name, the
+    # columns align on the name itself
+    indent = "\u2800" * 2
     paragraphs: list[str] = []
     for pid in ordered:
         label = profiles.get(pid) or _LAST_NAME.get(pid) or f"Compte {pid}"
@@ -1117,15 +1120,47 @@ async def _post_intro_view(
         locale = str(await _feed_locale(guild_id, bot) or "en")
     except Exception:
         locale = "en"
+    # the game's line LINKS its catalog post when it lives (owner
+    # 2026-11-26: "a la place du nom du jeu, mets un lien vers la page
+    # du jeu dans le catalogue, si le forum et le post existent")
+    catalog_url = await _game_catalog_url(bot, guild_id)
+    game_line = f"[{_game_label('aoe2')}]({catalog_url})" if catalog_url else _game_label("aoe2")
     return (
         EntityCardBuilder(str(user_id), name, locale=locale)
-        .subtitle(_game_label("aoe2"))
+        # the mention anchors the player's place (owner 2026-11-26:
+        # "ne mets pas l'id du joueur, mets la mention du user discord")
+        .id_display(f"<@{user_id}>")
+        .subtitle(game_line)
         .description("\n\n".join(paragraphs))
         .thumbnail(avatar)
-        .buttons(EntityAdminButton("player", f"player:aoe2:{user_id}", game_key="aoe2"))
+        .buttons(PlayerAdminButton(str(user_id)))
         .view_id(f"panel:player:aoe2:{user_id}")
         .build()
     )
+
+
+async def _game_catalog_url(bot: discord.Client, guild_id: str) -> str:
+    """Resolve the aoe2 game's CATALOG post into its jump URL ("" when absent).
+
+    The catalog forum owns the post (one per game, the install
+    showcase); a dead thread, a missing forum or an unwired Mongo read
+    render NO link - a wrong link is worse than a plain label.
+    """
+    try:
+        from botforge.core.models.db import get_async_database
+
+        document = await get_async_database()["mod_catalog_posts"].find_one(
+            {"_id": f"{guild_id}:game:aoe2"}
+        )
+        thread_id = str((document or {}).get("thread_id") or "")
+        if not thread_id or not thread_id.isdigit():
+            return ""
+        channel = await bot.fetch_channel(int(thread_id))
+        if isinstance(channel, discord.Thread):
+            return f"https://discord.com/channels/{guild_id}/{thread_id}"
+    except Exception:
+        logger.debug("the game catalog link failed - best-effort", exc_info=True)
+    return ""
 
 
 def _entry_players_of(entry: Any) -> list[dict[str, Any]]:

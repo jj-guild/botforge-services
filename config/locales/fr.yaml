@@ -165,6 +165,7 @@ fr:
       live_log_match_lost: "\U0001F480 {player} a perdu {match} \u2014 {badge}"
       matches_empty: 'Aucun match stock\u00e9 pour tes comptes \u2014 l\u2019historique se rafra\u00eechit quelques minutes apr\u00e8s la liaison.'
       add_button: Ajouter un compte
+      player_menu_denied: "Ce menu est réservé au joueur affiché et aux opérateurs du bot."
       rename_button: Changer de pseudo
       header_no_name: '# 👤 Ton profil
 

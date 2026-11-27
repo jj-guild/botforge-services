@@ -466,14 +466,23 @@ async def _dm_profile_notice(interaction: discord.Interaction, key: str, **kwarg
 
 class ProfileAddAccountButton(
     discord.ui.DynamicItem[discord.ui.Button[Any]],
-    template=r"home:profile:add",
+    template=r"home:profile:add(?::(?P<target>\d+))?",
 ):
-    """Open the add-account modal (profile id)."""
+    """Open the add-account modal (profile id).
 
-    def __init__(self, label: str = "Ajouter un compte") -> None:
+    The optional ``target`` (owner 2026-11-26: the players forum's
+    admin menu) binds the DISPLAYED player's account instead of the
+    clicker's own - aoe2-focused, no game picker.
+    """
+
+    def __init__(self, label: str = "Ajouter un compte", target: str = "") -> None:
+        self.target = str(target) if str(target).isdigit() else ""
         super().__init__(
             discord.ui.Button(
-                label=label, emoji="\u2795", style=discord.ButtonStyle.success, custom_id="home:profile:add"
+                label=label,
+                emoji="\u2795",
+                style=discord.ButtonStyle.success,
+                custom_id=f"home:profile:add:{self.target}"[:100] if self.target else "home:profile:add",
             )
         )
 
@@ -486,13 +495,24 @@ class ProfileAddAccountButton(
         /,
     ) -> ProfileAddAccountButton:
         """Rebuild the item from the wire."""
-        del interaction, item, match
-        return cls()
+        del interaction, item
+        return cls(target=match.group("target") or "")
 
     async def callback(self, interaction: discord.Interaction) -> None:
         """Open the add-account modal (game options, aoe2-only fallback)."""
         import asyncio
 
+        if self.target and not await _player_menu_guard(interaction, self.target):
+            return
+        if self.target:
+            # aoe2-FOCUSED (owner 2026-11-26): the players forum's menu
+            # manages Age of Empires II accounts, no game picker
+            await interaction.response.send_modal(
+                ProfileAddAccountModal(
+                    None, origin=EphemeralOrigin.capture(interaction), target=self.target
+                )
+            )
+            return
         try:
             options = await asyncio.wait_for(_game_select_options(), timeout=2.5)
         except Exception:
@@ -571,10 +591,33 @@ async def _bind_error_note(interaction: discord.Interaction, exc: Exception, gam
 
 
 async def _finish_bind(
-    interaction: discord.Interaction, game: str, profile_id: str, origin: Any
+    interaction: discord.Interaction,
+    game: str,
+    profile_id: str,
+    origin: Any,
+    target: str = "",
 ) -> None:
-    """Confirm a successful bind: the DM notice, then the refreshed profile."""
+    """Confirm a successful bind: the DM notice, then the refreshed profile.
+
+    A ``target`` (owner 2026-11-26: the players forum's admin menu)
+    binds the DISPLAYED player: the DM notice goes to HIM, the answer
+    is the success note and his post re-edits at the sweep - the
+    clicker's own profile view never opens.
+    """
     bound_url = _game_account_url(game, profile_id)
+    if target:
+        await _dm_target_notice(
+            interaction,
+            target,
+            "account_added",
+            account=f"[{game} {profile_id}]({bound_url})" if bound_url else game,
+        )
+        await interaction.followup.send(
+            await reply(interaction, "profile.add_success"), ephemeral=True
+        )
+        await _delete_deferred_followup(interaction)
+        await _poke_players_forum(interaction)
+        return
     await _dm_profile_notice(
         interaction,
         "account_added",
@@ -587,10 +630,95 @@ async def _finish_bind(
     )
 
 
+async def _dm_target_notice(
+    interaction: discord.Interaction, target: str, key: str, **kwargs: Any
+) -> None:
+    """DM the TARGET user the account-change notice (best-effort)."""
+    client = interaction.client
+    catalog = getattr(client, "messages", None)
+    if catalog is None:
+        return
+    logs = getattr(client, "logs_service", None)
+    locale = "en"
+    if logs is not None:
+        try:
+            locale = str(await logs.get_user_locale(target) or "en")
+        except Exception:
+            locale = "en"
+    rendered = catalog.render(f"replies.{key}", locale, **kwargs)
+    if rendered == f"replies.{key}":
+        rendered = catalog.render(key, locale, **kwargs)
+    try:
+        user = client.get_user(int(target)) or await client.fetch_user(int(target))
+        if user is not None:
+            await user.send(rendered)
+    except Exception:
+        logger.debug("the target DM notice failed (user %s) - best-effort", target, exc_info=True)
+
+
+async def _poke_players_forum(interaction: discord.Interaction) -> None:
+    """Reconcile the players forum NOW - the post re-edits immediately."""
+    guild_id = str(interaction.guild_id or "") if interaction.guild_id else ""
+    if not guild_id:
+        return
+    try:
+        from botforge.discord import live_activity
+
+        await live_activity.instant_sweep(interaction.client, guild_id)
+    except Exception:
+        logger.debug("the players forum poke failed - best-effort", exc_info=True)
+
+
+async def _player_menu_bar(interaction: discord.Interaction, user_id: str) -> discord.ui.LayoutView:
+    """Build the displayed player's ephemeral account menu (owner 2026-11-26).
+
+    The profile panel's OWN buttons, aoe2-focused: add an account,
+    remove one - NO rename (a rename floods, the retitle rides the
+    identity service's own hooks). The view id is the player's panel
+    ("panel:player:aoe2:<user id>"), the id the card carries.
+    """
+    row: discord.ui.ActionRow[discord.ui.LayoutView] = discord.ui.ActionRow()
+    row.add_item(
+        ProfileAddAccountButton(
+            await tr(interaction, "profile.add_button", "Ajouter un compte"), target=user_id
+        )
+    )
+    row.add_item(
+        ProfileRemoveAccountButton(
+            await tr(interaction, "profile.remove_button", "Retirer un compte"), target=user_id
+        )
+    )
+    from botforge.discord.ui.view_footer import add_view_footer
+
+    view = discord.ui.LayoutView(timeout=None)
+    view.add_item(row)
+    return add_view_footer(view, f"panel:player:aoe2:{user_id}")
+
+
+async def _player_menu_guard(interaction: discord.Interaction, target: str) -> bool:
+    """Gate the players forum's admin menu (owner 2026-11-26).
+
+    A GLOBAL bot operator (BOT_ADMINS) or the DISPLAYED player himself
+    opens the menu - a guild admin of another guild, a random member,
+    nobody else. The refusal answers as an ephemeral note.
+    """
+    bot_admins = getattr(getattr(interaction.client, "status_service", None), "bot_admins", None)
+    operators = set(getattr(bot_admins, "user_ids", ()) or ())
+    user_id = str(interaction.user.id)
+    if user_id in operators or user_id == str(target):
+        return True
+    await interaction.response.send_message(
+        await reply(interaction, "player_menu_denied"), ephemeral=True
+    )
+    return False
+
+
 class _AccountCandidateSelect(discord.ui.Select[Any]):
     """The homonym picker: each option is one profile's last played preview."""
 
-    def __init__(self, candidates: list[dict[str, Any]], game: str, origin: Any) -> None:
+    def __init__(
+        self, candidates: list[dict[str, Any]], game: str, origin: Any, target: str = ""
+    ) -> None:
         super().__init__(
             custom_id="home:profile:add:candidate",
             placeholder="Pick your account...",
@@ -607,6 +735,7 @@ class _AccountCandidateSelect(discord.ui.Select[Any]):
         )
         self.game = game
         self.origin = origin
+        self.target = str(target) if str(target).isdigit() else ""
 
     async def callback(self, interaction: discord.Interaction) -> None:
         """Bind the picked candidate \u2014 selection IS the validation."""
@@ -624,30 +753,38 @@ class _AccountCandidateSelect(discord.ui.Select[Any]):
         note = await reply(interaction, "profile.add_picked")
         await interaction.response.edit_message(content=note, view=None)
         try:
-            await registration.bind_profile(str(interaction.user.id), self.game, profile_id)
+            await registration.bind_profile(self.target or str(interaction.user.id), self.game, profile_id)
         except Exception as exc:
             failure = await _bind_error_note(interaction, exc, self.game, profile_id)
             await interaction.followup.send(failure, ephemeral=True)
             return
-        await _finish_bind(interaction, self.game, profile_id, self.origin)
+        await _finish_bind(interaction, self.game, profile_id, self.origin, target=self.target)
 
 
 class _AccountCandidateView(discord.ui.View):
     """Ephemeral: pick your account among the alias-search candidates."""
 
-    def __init__(self, candidates: list[dict[str, Any]], game: str, origin: Any) -> None:
+    def __init__(
+        self, candidates: list[dict[str, Any]], game: str, origin: Any, target: str = ""
+    ) -> None:
         super().__init__(timeout=180)
-        self.add_item(_AccountCandidateSelect(candidates, game, origin))
+        self.add_item(_AccountCandidateSelect(candidates, game, origin, target))
 
 
 class ProfileAddAccountModal(discord.ui.Modal):
     """The add-account form: game select (aoe2 preselected) + profile id."""
 
     def __init__(
-        self, options: list[discord.SelectOption] | None = None, origin: Any = None
+        self,
+        options: list[discord.SelectOption] | None = None,
+        origin: Any = None,
+        target: str = "",
     ) -> None:
         super().__init__(title="Ajouter un compte", timeout=None)
         self.origin = origin
+        # the TARGET (owner 2026-11-26): the players forum's admin menu
+        # binds the DISPLAYED player - the clicker acts on his behalf
+        self.target = str(target) if str(target).isdigit() else ""
         self.game: discord.ui.Select[Any] = discord.ui.Select(
             custom_id="home:profile:add:game",
             options=options or [discord.SelectOption(label="Age of Empires II", value="aoe2", default=True)],
@@ -693,17 +830,17 @@ class ProfileAddAccountModal(discord.ui.Modal):
                 return
             await interaction.followup.send(
                 await reply(interaction, "profile.add_pick", name=typed),
-                view=_AccountCandidateView(candidates, chosen, self.origin),
+                view=_AccountCandidateView(candidates, chosen, self.origin, target=self.target),
                 ephemeral=True,
             )
             return
         try:
-            await registration.bind_profile(str(interaction.user.id), str(chosen), typed)
+            await registration.bind_profile(self.target or str(interaction.user.id), str(chosen), typed)
         except Exception as exc:
             note = await _bind_error_note(interaction, exc, chosen, typed)
             await interaction.followup.send(note, ephemeral=True)
             return
-        await _finish_bind(interaction, str(chosen), typed, self.origin)
+        await _finish_bind(interaction, str(chosen), typed, self.origin, target=self.target)
 
 
 async def _profile_header(interaction: discord.Interaction, user_id: str) -> str:
@@ -2880,14 +3017,24 @@ def _remove_options(bindings: list[dict[str, Any]]) -> list[discord.SelectOption
 
 class ProfileRemoveAccountButton(
     discord.ui.DynamicItem[discord.ui.Button[Any]],
-    template=r"home:profile:remove",
+    template=r"home:profile:remove(?::(?P<target>\d+))?",
 ):
-    """Open the remove-account modal (multi-select of the linked accounts)."""
+    """Open the remove-account modal (multi-select of the linked accounts).
 
-    def __init__(self, label: str = "Retirer un compte") -> None:
+    The optional ``target`` (owner 2026-11-26: the players forum's
+    admin menu) unlinks the DISPLAYED player's accounts - aoe2 only.
+    """
+
+    def __init__(self, label: str = "Retirer un compte", target: str = "") -> None:
+        self.target = str(target) if str(target).isdigit() else ""
         super().__init__(
             discord.ui.Button(
-                label=label, emoji="\U0001F5D1", style=discord.ButtonStyle.danger, custom_id="home:profile:remove"
+                label=label,
+                emoji="\U0001F5D1",
+                style=discord.ButtonStyle.danger,
+                custom_id=f"home:profile:remove:{self.target}"[:100]
+                if self.target
+                else "home:profile:remove",
             )
         )
 
@@ -2900,27 +3047,36 @@ class ProfileRemoveAccountButton(
         /,
     ) -> ProfileRemoveAccountButton:
         """Rebuild the item from the wire (bindings resolve at click time)."""
-        del interaction, item, match
-        return cls()
+        del interaction, item
+        return cls(target=match.group("target") or "")
 
     async def callback(self, interaction: discord.Interaction) -> None:
         """Open the multi-select remove modal (accounts read fast, aoe2 cap)."""
         import asyncio
 
+        if self.target and not await _player_menu_guard(interaction, self.target):
+            return
+        owner = self.target or str(interaction.user.id)
         registration = getattr(interaction.client, "registration_service", None)
         if registration is None:
             await interaction.response.send_message(await reply(interaction, "not_configured"), ephemeral=True)
             return
         try:
-            bindings = await asyncio.wait_for(registration.list_bindings(str(interaction.user.id)), timeout=2.5)
+            bindings = await asyncio.wait_for(registration.list_bindings(owner), timeout=2.5)
         except Exception:
             bindings = []
+        if self.target:
+            # aoe2-FOCUSED (owner 2026-11-26): the players forum's menu
+            # manages Age of Empires II accounts only
+            bindings = [b for b in bindings if str(b.get("game_key")) == "aoe2"]
         if not bindings:
             await interaction.response.send_message(await reply(interaction, "no_account"), ephemeral=True)
             return
         await interaction.response.send_modal(
             ProfileRemoveAccountModal(
-                _remove_options(bindings), origin=EphemeralOrigin.capture(interaction)
+                _remove_options(bindings),
+                origin=EphemeralOrigin.capture(interaction),
+                target=self.target,
             )
         )
 
@@ -2928,9 +3084,14 @@ class ProfileRemoveAccountButton(
 class ProfileRemoveAccountModal(discord.ui.Modal):
     """The remove-account form: one multi-select of the linked accounts."""
 
-    def __init__(self, options: list[discord.SelectOption], origin: Any = None) -> None:
+    def __init__(
+        self, options: list[discord.SelectOption], origin: Any = None, target: str = ""
+    ) -> None:
         super().__init__(title="Retirer des comptes", timeout=None)
         self.origin = origin
+        # the TARGET (owner 2026-11-26): the players forum's admin menu
+        # unlinks the DISPLAYED player's accounts
+        self.target = str(target) if str(target).isdigit() else ""
         self.accounts: discord.ui.Select[Any] = discord.ui.Select(
             custom_id="home:profile:remove:select",
             options=options,
@@ -2940,7 +3101,7 @@ class ProfileRemoveAccountModal(discord.ui.Modal):
         )
         self.add_item(discord.ui.Label(text="Comptes \u00e0 retirer", component=self.accounts))
 
-    async def on_submit(self, interaction: discord.Interaction) -> None:
+    async def on_submit(self, interaction: discord.Interaction) -> None:  # noqa: C901 - one unlink loop
         """Unlink every chosen account, then refresh the profile view."""
         registration = getattr(interaction.client, "registration_service", None)
         if registration is None:
@@ -2955,7 +3116,9 @@ class ProfileRemoveAccountModal(discord.ui.Modal):
         for entry in chosen:
             game_key, _, profile_id = str(entry).partition("|")
             try:
-                if await registration.unlink_profile(str(interaction.user.id), game_key, profile_id):
+                if await registration.unlink_profile(
+                    self.target or str(interaction.user.id), game_key, profile_id
+                ):
                     url = _game_account_url(game_key, str(profile_id))
                     removed.append(f"[{game_key} {profile_id}]({url})" if url else f"{game_key} (`{profile_id}`)")
                 else:
@@ -2979,10 +3142,23 @@ class ProfileRemoveAccountModal(discord.ui.Modal):
                 "Removal failed for: " + ", ".join(failures) + " — the details went to the admins."
             )
         if removed:
-            await _dm_profile_notice(interaction, "accounts_removed", listed=", ".join(removed))
+            if self.target:
+                await _dm_target_notice(
+                    interaction, self.target, "accounts_removed", listed=", ".join(removed)
+                )
+            else:
+                await _dm_profile_notice(interaction, "accounts_removed", listed=", ".join(removed))
         banner = "\n".join(banner_bits)
         if not removed and not failures:
             banner = await reply(interaction, "profile.no_account")
+        if self.target:
+            # the target mode answers with the note (owner 2026-11-26):
+            # the clicker's own profile view never opens, the DISPLAYED
+            # player's post re-edits at the poke
+            await interaction.followup.send(banner, ephemeral=True)
+            await _delete_deferred_followup(interaction)
+            await _poke_players_forum(interaction)
+            return
         await _profile_followup(interaction, banner=banner, origin=self.origin)
 
 

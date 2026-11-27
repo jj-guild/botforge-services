@@ -924,7 +924,7 @@ def test_the_post_intro_signature_tracks_the_name_the_accounts_and_the_avatar() 
         "Merlin", {"profiles": {"848567": "Merlin"}}, "https://a/1.png"
     )
     assert json.loads(base) == {
-        "v": 2,
+        "v": 3,
         "name": "Merlin",
         "avatar": "https://a/1.png",
         "profiles": {"848567": "Merlin"},
@@ -992,7 +992,7 @@ def test_the_post_intro_is_the_entity_card_of_the_displayed_player() -> None:
             feed._post_intro_view(
                 None,
                 "42",
-                "u1",
+                "4242",
                 "Merlin",
                 {"profiles": {"848567": "Merlin", "17190369": "alt"}},
                 "https://a/discord.png",
@@ -1008,16 +1008,22 @@ def test_the_post_intro_is_the_entity_card_of_the_displayed_player() -> None:
 
     text = "\n".join(_texts(view.children))
     assert "## Merlin" in text, "the PSEUDO titles the card - never 'Your profile'"
-    assert "`u1`" in text, "the immutable anchor is the DISCORD user id"
+    assert "<@4242>" in text, "the MENTION anchors the player (owner: not the raw id)"
+    assert "`u1`" not in text, "the backticked id is GONE - the mention replaced it"
     # the LATEST account first, the seats' grammar, both ladders
     assert text.index("alt") < text.index("[Merlin]"), "the latest match orders the accounts"
     assert "**[Merlin](https://www.aoe2insights.com/user/relic/848567/)**" in text
     assert "1v1 : 1039 - 1120" in text, "the 1v1 elo with its max"
     assert "TG : 1300 - 1421" in text, "the TG elo with its max"
+    # the ladder lines indent LESS than a match seat (owner
+    # 2026-11-26: no slot badge rides the account lines)
+    assert text.count("\u2800\u28001v1") == 2, "two braille blanks of indent, not four"
     assert "`P1`" not in text, "no seat chrome on the account lines"
-    assert "panel:player:aoe2:u1" in text, "the view id is aoe2-scoped, per player"
+    assert "panel:player:aoe2:4242" in text, "the view id is aoe2-scoped, per player"
     rows = [r for r in view.children if isinstance(r, discord.ui.ActionRow)]
     assert rows, "the card carries its admin button row"
+    ids = [getattr(item, "custom_id", "") for item in rows[0].children]
+    assert "panel:admin:player:4242" in ids, "the PLAYER admin button (its own gate)"
     containers = [c for c in view.children if isinstance(c, discord.ui.Container)]
     header = containers[0].children[0]
     assert isinstance(header, discord.ui.Section), "the avatar rides the header's thumbnail"
@@ -1034,3 +1040,62 @@ def test_the_repair_answers_in_the_guilds_words_not_paths() -> None:
     source = open("src/botforge/discord/admin_tree.py", encoding="utf-8").read()
     assert "salons v\\u00e9rifi\\u00e9s/cr\\u00e9\\u00e9s" not in source
     assert "R\\u00f4les v\\u00e9rifi\\u00e9s" not in source
+
+
+def test_the_player_admin_menu_carries_the_profile_buttons_and_the_players_id() -> None:
+    """The ⚙️ menu of a player card (owner 2026-11-26): the profile
+    panel's own add/remove, TARGETED at the displayed player, aoe2
+    only, NO rename - and the bar foots the player's own panel id."""
+
+    from botforge.discord.home import ProfileAddAccountButton, ProfileRemoveAccountButton
+    from botforge.discord.player_admin_menu import PlayerAdminButton
+
+    # the wire carries the target: the same buttons, another owner
+    add = ProfileAddAccountButton("Ajouter un compte", target="1234")
+    remove = ProfileRemoveAccountButton("Retirer un compte", target="1234")
+    assert add.target == "1234" and add.custom_id == "home:profile:add:1234"
+    assert remove.target == "1234" and remove.custom_id == "home:profile:remove:1234"
+    # the popup's own buttons keep their bare ids (no target, no change)
+    assert ProfileAddAccountButton("x").target == ""
+    assert ProfileAddAccountButton("x").custom_id == "home:profile:add"
+    # the card's button: its own gate, its own namespace
+    button = PlayerAdminButton("1234")
+    assert button.custom_id == "panel:admin:player:1234"
+
+
+def test_the_player_menu_bar_gates_on_the_global_admin_or_the_player() -> None:
+    """The gate (owner 2026-11-26): a GLOBAL operator (BOT_ADMINS) or
+    the DISPLAYED player himself - nobody else, guild admins included
+    when they are neither."""
+    import asyncio
+    from types import SimpleNamespace
+
+    from botforge.discord.home import _player_menu_guard
+
+    class _Response:
+        def __init__(self) -> None:
+            self.sent: list[Any] = []
+
+        async def send_message(self, *args: Any, **kwargs: Any) -> None:
+            self.sent.append((args, kwargs))
+
+    def _interaction(uid: str, admins: tuple[str, ...]):
+        return SimpleNamespace(
+            user=SimpleNamespace(id=int(uid)),
+            client=SimpleNamespace(
+                messages=None,
+                status_service=SimpleNamespace(
+                    bot_admins=SimpleNamespace(user_ids=admins)
+                ),
+            ),
+            response=_Response(),
+        )
+
+    # the displayed player opens his own menu
+    assert asyncio.run(_player_menu_guard(_interaction("1234", ()), "1234")) is True
+    # a GLOBAL operator opens anyone's
+    assert asyncio.run(_player_menu_guard(_interaction("99", ("99",)), "1234")) is True
+    # a random member is refused, with an ephemeral note
+    stranger = _interaction("77", ())
+    assert asyncio.run(_player_menu_guard(stranger, "1234")) is False
+    assert stranger.response.sent, "the refusal answers - never a silent close"

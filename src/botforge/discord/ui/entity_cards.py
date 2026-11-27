@@ -110,7 +110,7 @@ def _subtitle_text(spec: EntityCardSpec) -> str:
     The #321 contract: the resource id sits at the same place on
     every card — the subtitle's first line, in backticks.
     """
-    lines = [f"`{spec.entity_id}`"]
+    lines = [spec.id_display or f"`{spec.entity_id}`"]
     if spec.subtitle:
         lines.append(spec.subtitle)
     return "\n".join(lines)
@@ -195,6 +195,11 @@ class EntityCardSpec:
 
     title: str
     entity_id: str
+    # the resource id's DISPLAY form (owner 2026-11-26): the anchor
+    # stays the entity id, but a surface may render another form in
+    # its place - a player's card shows the Discord MENTION, not the
+    # raw id in backticks; empty keeps the backticked id
+    id_display: str = ""
     subtitle: str = ""
     view_id: str = ""
     locale: str = "en"
@@ -470,6 +475,16 @@ class EntityCardBuilder:
             "title": title,
             "locale": locale,
         }
+
+    def id_display(self, text: str) -> EntityCardBuilder:
+        """Render the resource id's place as this form (the mention).
+
+        The anchor stays the entity id (the spec's own field); a
+        surface may display another form in its place (owner
+        2026-11-26: the player card shows the Discord mention, not
+        the raw id in backticks).
+        """
+        return self._set("id_display", text)
 
     def subtitle(self, text: str) -> EntityCardBuilder:
         """Set the subtitle's second line (the id rides the first)."""

@@ -168,6 +168,7 @@ en:
       live_log_match_lost: "\U0001F480 {player} lost {match} \u2014 {badge}"
       matches_empty: 'No stored match yet for your accounts \u2014 the history refreshes a few minutes after binding.'
       add_button: Add an account
+      player_menu_denied: "This menu belongs to the displayed player and the bot operators."
       rename_button: Change nickname
       header_no_name: '# 👤 Your profile
 

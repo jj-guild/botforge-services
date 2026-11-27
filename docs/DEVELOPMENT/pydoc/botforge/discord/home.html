@@ -471,9 +471,13 @@ Data and other attributes inherited from <a href="discord.ui.view.html#BaseView"
 <td class="section-title" colspan=3>&nbsp;<br><a name="ProfileAddAccountButton">class <strong>ProfileAddAccountButton</strong></a>(<a href="discord.ui.dynamic.html#DynamicItem">discord.ui.dynamic.DynamicItem</a>)</td></tr>
     
 <tr><td class="decor title-decor" rowspan=2><span class="code">&nbsp;&nbsp;&nbsp;</span></td>
-<td class="decor title-decor" colspan=2><span class="code"><a href="#ProfileAddAccountButton">ProfileAddAccountButton</a>(label:&nbsp;'str'&nbsp;=&nbsp;'Ajouter&nbsp;un&nbsp;compte')&nbsp;-&amp;gt;&nbsp;'None'<br>
+<td class="decor title-decor" colspan=2><span class="code"><a href="#ProfileAddAccountButton">ProfileAddAccountButton</a>(label:&nbsp;'str'&nbsp;=&nbsp;'Ajouter&nbsp;un&nbsp;compte',&nbsp;target:&nbsp;'str'&nbsp;=&nbsp;'')&nbsp;-&amp;gt;&nbsp;'None'<br>
 &nbsp;<br>
-Open&nbsp;the&nbsp;add-account&nbsp;modal&nbsp;(profile&nbsp;id).<br>&nbsp;</span></td></tr>
+Open&nbsp;the&nbsp;add-account&nbsp;modal&nbsp;(profile&nbsp;id).<br>
+&nbsp;<br>
+The&nbsp;optional&nbsp;``target``&nbsp;(owner&nbsp;2026-11-26:&nbsp;the&nbsp;players&nbsp;forum's<br>
+admin&nbsp;menu)&nbsp;binds&nbsp;the&nbsp;DISPLAYED&nbsp;player's&nbsp;account&nbsp;instead&nbsp;of&nbsp;the<br>
+clicker's&nbsp;own&nbsp;-&nbsp;aoe2-focused,&nbsp;no&nbsp;game&nbsp;picker.<br>&nbsp;</span></td></tr>
 <tr><td>&nbsp;</td>
 <td class="singlecolumn"><dl><dt>Method resolution order:</dt>
 <dd><a href="botforge.discord.home.html#ProfileAddAccountButton">ProfileAddAccountButton</a></dd>
@@ -484,7 +488,7 @@ Open&nbsp;the&nbsp;add-account&nbsp;modal&nbsp;(profile&nbsp;id).<br>&nbsp;</spa
 </dl>
 <hr>
 Methods defined here:<br>
-<dl><dt><a name="ProfileAddAccountButton-__init__"><strong>__init__</strong></a>(self, label: 'str' = 'Ajouter un compte') -&gt; 'None'</dt><dd><span class="code">Initialize&nbsp;self.&nbsp;&nbsp;See&nbsp;help(<a href="#ProfileAddAccountButton-type">type</a>(self))&nbsp;for&nbsp;accurate&nbsp;signature.</span></dd></dl>
+<dl><dt><a name="ProfileAddAccountButton-__init__"><strong>__init__</strong></a>(self, label: 'str' = 'Ajouter un compte', target: 'str' = '') -&gt; 'None'</dt><dd><span class="code">Initialize&nbsp;self.&nbsp;&nbsp;See&nbsp;help(<a href="#ProfileAddAccountButton-type">type</a>(self))&nbsp;for&nbsp;accurate&nbsp;signature.</span></dd></dl>
 
 <dl><dt>async <a name="ProfileAddAccountButton-callback"><strong>callback</strong></a>(self, interaction: 'discord.Interaction') -&gt; 'None'</dt><dd><span class="code">Open&nbsp;the&nbsp;add-account&nbsp;modal&nbsp;(game&nbsp;options,&nbsp;aoe2-only&nbsp;fallback).</span></dd></dl>
 
@@ -496,7 +500,7 @@ Class methods defined here:<br>
 Data and other attributes defined here:<br>
 <dl><dt><strong>__annotations__</strong> = {}</dl>
 
-<dl><dt><strong>__discord_ui_compiled_template__</strong> = re.compile('home:profile:add')</dl>
+<dl><dt><strong>__discord_ui_compiled_template__</strong> = re.compile('home:profile:add(?::(?P&lt;target&gt;\\d+))?')</dl>
 
 <dl><dt><strong>__orig_bases__</strong> = (discord.ui.dynamic.DynamicItem[discord.ui.button.Button[typing.Any]],)</dl>
 
@@ -611,7 +615,7 @@ classes&nbsp;in&nbsp;the&nbsp;first&nbsp;place&nbsp;with&nbsp;`class&nbsp;Foo[T]
 <td class="section-title" colspan=3>&nbsp;<br><a name="ProfileAddAccountModal">class <strong>ProfileAddAccountModal</strong></a>(<a href="discord.ui.modal.html#Modal">discord.ui.modal.Modal</a>)</td></tr>
     
 <tr><td class="decor title-decor" rowspan=2><span class="code">&nbsp;&nbsp;&nbsp;</span></td>
-<td class="decor title-decor" colspan=2><span class="code"><a href="#ProfileAddAccountModal">ProfileAddAccountModal</a>(options:&nbsp;'list[discord.SelectOption]&nbsp;|&nbsp;None'&nbsp;=&nbsp;None,&nbsp;origin:&nbsp;'Any'&nbsp;=&nbsp;None)&nbsp;-&amp;gt;&nbsp;'None'<br>
+<td class="decor title-decor" colspan=2><span class="code"><a href="#ProfileAddAccountModal">ProfileAddAccountModal</a>(options:&nbsp;'list[discord.SelectOption]&nbsp;|&nbsp;None'&nbsp;=&nbsp;None,&nbsp;origin:&nbsp;'Any'&nbsp;=&nbsp;None,&nbsp;target:&nbsp;'str'&nbsp;=&nbsp;'')&nbsp;-&amp;gt;&nbsp;'None'<br>
 &nbsp;<br>
 The&nbsp;add-account&nbsp;form:&nbsp;game&nbsp;select&nbsp;(aoe2&nbsp;preselected)&nbsp;+&nbsp;profile&nbsp;id.<br>&nbsp;</span></td></tr>
 <tr><td>&nbsp;</td>
@@ -623,7 +627,7 @@ The&nbsp;add-account&nbsp;form:&nbsp;game&nbsp;select&nbsp;(aoe2&nbsp;preselecte
 </dl>
 <hr>
 Methods defined here:<br>
-<dl><dt><a name="ProfileAddAccountModal-__init__"><strong>__init__</strong></a>(self, options: 'list[discord.SelectOption] | None' = None, origin: 'Any' = None) -&gt; 'None'</dt><dd><span class="code">Initialize&nbsp;self.&nbsp;&nbsp;See&nbsp;help(type(self))&nbsp;for&nbsp;accurate&nbsp;signature.</span></dd></dl>
+<dl><dt><a name="ProfileAddAccountModal-__init__"><strong>__init__</strong></a>(self, options: 'list[discord.SelectOption] | None' = None, origin: 'Any' = None, target: 'str' = '') -&gt; 'None'</dt><dd><span class="code">Initialize&nbsp;self.&nbsp;&nbsp;See&nbsp;help(type(self))&nbsp;for&nbsp;accurate&nbsp;signature.</span></dd></dl>
 
 <dl><dt>async <a name="ProfileAddAccountModal-on_submit"><strong>on_submit</strong></a>(self, interaction: 'discord.Interaction') -&gt; 'None'</dt><dd><span class="code">Bind&nbsp;the&nbsp;account,&nbsp;audit,&nbsp;confirm,&nbsp;then&nbsp;refresh&nbsp;the&nbsp;profile&nbsp;view.<br>
 &nbsp;<br>
@@ -995,9 +999,12 @@ classes&nbsp;in&nbsp;the&nbsp;first&nbsp;place&nbsp;with&nbsp;`class&nbsp;Foo[T]
 <td class="section-title" colspan=3>&nbsp;<br><a name="ProfileRemoveAccountButton">class <strong>ProfileRemoveAccountButton</strong></a>(<a href="discord.ui.dynamic.html#DynamicItem">discord.ui.dynamic.DynamicItem</a>)</td></tr>
     
 <tr><td class="decor title-decor" rowspan=2><span class="code">&nbsp;&nbsp;&nbsp;</span></td>
-<td class="decor title-decor" colspan=2><span class="code"><a href="#ProfileRemoveAccountButton">ProfileRemoveAccountButton</a>(label:&nbsp;'str'&nbsp;=&nbsp;'Retirer&nbsp;un&nbsp;compte')&nbsp;-&amp;gt;&nbsp;'None'<br>
+<td class="decor title-decor" colspan=2><span class="code"><a href="#ProfileRemoveAccountButton">ProfileRemoveAccountButton</a>(label:&nbsp;'str'&nbsp;=&nbsp;'Retirer&nbsp;un&nbsp;compte',&nbsp;target:&nbsp;'str'&nbsp;=&nbsp;'')&nbsp;-&amp;gt;&nbsp;'None'<br>
 &nbsp;<br>
-Open&nbsp;the&nbsp;remove-account&nbsp;modal&nbsp;(multi-select&nbsp;of&nbsp;the&nbsp;linked&nbsp;accounts).<br>&nbsp;</span></td></tr>
+Open&nbsp;the&nbsp;remove-account&nbsp;modal&nbsp;(multi-select&nbsp;of&nbsp;the&nbsp;linked&nbsp;accounts).<br>
+&nbsp;<br>
+The&nbsp;optional&nbsp;``target``&nbsp;(owner&nbsp;2026-11-26:&nbsp;the&nbsp;players&nbsp;forum's<br>
+admin&nbsp;menu)&nbsp;unlinks&nbsp;the&nbsp;DISPLAYED&nbsp;player's&nbsp;accounts&nbsp;-&nbsp;aoe2&nbsp;only.<br>&nbsp;</span></td></tr>
 <tr><td>&nbsp;</td>
 <td class="singlecolumn"><dl><dt>Method resolution order:</dt>
 <dd><a href="botforge.discord.home.html#ProfileRemoveAccountButton">ProfileRemoveAccountButton</a></dd>
@@ -1008,7 +1015,7 @@ Open&nbsp;the&nbsp;remove-account&nbsp;modal&nbsp;(multi-select&nbsp;of&nbsp;the
 </dl>
 <hr>
 Methods defined here:<br>
-<dl><dt><a name="ProfileRemoveAccountButton-__init__"><strong>__init__</strong></a>(self, label: 'str' = 'Retirer un compte') -&gt; 'None'</dt><dd><span class="code">Initialize&nbsp;self.&nbsp;&nbsp;See&nbsp;help(<a href="#ProfileRemoveAccountButton-type">type</a>(self))&nbsp;for&nbsp;accurate&nbsp;signature.</span></dd></dl>
+<dl><dt><a name="ProfileRemoveAccountButton-__init__"><strong>__init__</strong></a>(self, label: 'str' = 'Retirer un compte', target: 'str' = '') -&gt; 'None'</dt><dd><span class="code">Initialize&nbsp;self.&nbsp;&nbsp;See&nbsp;help(<a href="#ProfileRemoveAccountButton-type">type</a>(self))&nbsp;for&nbsp;accurate&nbsp;signature.</span></dd></dl>
 
 <dl><dt>async <a name="ProfileRemoveAccountButton-callback"><strong>callback</strong></a>(self, interaction: 'discord.Interaction') -&gt; 'None'</dt><dd><span class="code">Open&nbsp;the&nbsp;multi-select&nbsp;remove&nbsp;modal&nbsp;(accounts&nbsp;read&nbsp;fast,&nbsp;aoe2&nbsp;cap).</span></dd></dl>
 
@@ -1020,7 +1027,7 @@ Class methods defined here:<br>
 Data and other attributes defined here:<br>
 <dl><dt><strong>__annotations__</strong> = {}</dl>
 
-<dl><dt><strong>__discord_ui_compiled_template__</strong> = re.compile('home:profile:remove')</dl>
+<dl><dt><strong>__discord_ui_compiled_template__</strong> = re.compile('home:profile:remove(?::(?P&lt;target&gt;\\d+))?')</dl>
 
 <dl><dt><strong>__orig_bases__</strong> = (discord.ui.dynamic.DynamicItem[discord.ui.button.Button[typing.Any]],)</dl>
 
@@ -1135,7 +1142,7 @@ classes&nbsp;in&nbsp;the&nbsp;first&nbsp;place&nbsp;with&nbsp;`class&nbsp;Foo[T]
 <td class="section-title" colspan=3>&nbsp;<br><a name="ProfileRemoveAccountModal">class <strong>ProfileRemoveAccountModal</strong></a>(<a href="discord.ui.modal.html#Modal">discord.ui.modal.Modal</a>)</td></tr>
     
 <tr><td class="decor title-decor" rowspan=2><span class="code">&nbsp;&nbsp;&nbsp;</span></td>
-<td class="decor title-decor" colspan=2><span class="code"><a href="#ProfileRemoveAccountModal">ProfileRemoveAccountModal</a>(options:&nbsp;'list[discord.SelectOption]',&nbsp;origin:&nbsp;'Any'&nbsp;=&nbsp;None)&nbsp;-&amp;gt;&nbsp;'None'<br>
+<td class="decor title-decor" colspan=2><span class="code"><a href="#ProfileRemoveAccountModal">ProfileRemoveAccountModal</a>(options:&nbsp;'list[discord.SelectOption]',&nbsp;origin:&nbsp;'Any'&nbsp;=&nbsp;None,&nbsp;target:&nbsp;'str'&nbsp;=&nbsp;'')&nbsp;-&amp;gt;&nbsp;'None'<br>
 &nbsp;<br>
 The&nbsp;remove-account&nbsp;form:&nbsp;one&nbsp;multi-select&nbsp;of&nbsp;the&nbsp;linked&nbsp;accounts.<br>&nbsp;</span></td></tr>
 <tr><td>&nbsp;</td>
@@ -1147,7 +1154,7 @@ The&nbsp;remove-account&nbsp;form:&nbsp;one&nbsp;multi-select&nbsp;of&nbsp;the&n
 </dl>
 <hr>
 Methods defined here:<br>
-<dl><dt><a name="ProfileRemoveAccountModal-__init__"><strong>__init__</strong></a>(self, options: 'list[discord.SelectOption]', origin: 'Any' = None) -&gt; 'None'</dt><dd><span class="code">Initialize&nbsp;self.&nbsp;&nbsp;See&nbsp;help(type(self))&nbsp;for&nbsp;accurate&nbsp;signature.</span></dd></dl>
+<dl><dt><a name="ProfileRemoveAccountModal-__init__"><strong>__init__</strong></a>(self, options: 'list[discord.SelectOption]', origin: 'Any' = None, target: 'str' = '') -&gt; 'None'</dt><dd><span class="code">Initialize&nbsp;self.&nbsp;&nbsp;See&nbsp;help(type(self))&nbsp;for&nbsp;accurate&nbsp;signature.</span></dd></dl>
 
 <dl><dt>async <a name="ProfileRemoveAccountModal-on_submit"><strong>on_submit</strong></a>(self, interaction: 'discord.Interaction') -&gt; 'None'</dt><dd><span class="code">Unlink&nbsp;every&nbsp;chosen&nbsp;account,&nbsp;then&nbsp;refresh&nbsp;the&nbsp;profile&nbsp;view.</span></dd></dl>
 
