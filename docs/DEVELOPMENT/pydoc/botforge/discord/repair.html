@@ -60,7 +60,14 @@ One&nbsp;repair's&nbsp;progress:&nbsp;steps&nbsp;with&nbsp;counts,&nbsp;a&nbsp;f
 <td class="singlecolumn">Methods defined here:<br>
 <dl><dt><a name="RepairReport-__init__"><strong>__init__</strong></a>(self, logger: 'Logger', name: 'str', subject: 'str' = '', progress: 'Callable[[str, RepairReport], None] | None' = None) -&gt; 'None'</dt><dd><span class="code">Initialize&nbsp;self.&nbsp;&nbsp;See&nbsp;help(type(self))&nbsp;for&nbsp;accurate&nbsp;signature.</span></dd></dl>
 
-<dl><dt><a name="RepairReport-done"><strong>done</strong></a>(self, message: 'str' = 'DONE', **counts: 'int') -&gt; 'None'</dt><dd><span class="code">Finish&nbsp;the&nbsp;repair:&nbsp;the&nbsp;duration&nbsp;and&nbsp;the&nbsp;accumulated&nbsp;counts.</span></dd></dl>
+<dl><dt><a name="RepairReport-done"><strong>done</strong></a>(self, message: 'str' = 'DONE', display: 'str' = '', **counts: 'int') -&gt; 'None'</dt><dd><span class="code">Finish&nbsp;the&nbsp;repair:&nbsp;the&nbsp;duration&nbsp;and&nbsp;the&nbsp;accumulated&nbsp;counts.<br>
+&nbsp;<br>
+``display``&nbsp;is&nbsp;the&nbsp;USER-facing&nbsp;closing&nbsp;line&nbsp;(owner&nbsp;2026-11-27:<br>
+the&nbsp;raw&nbsp;"tree&nbsp;ensure&nbsp;REPAIR&nbsp;(guild):&nbsp;the&nbsp;scopes&nbsp;stand&nbsp;in&nbsp;52.7s<br>
+(channels=6...)"&nbsp;hit&nbsp;the&nbsp;admin's&nbsp;view)&nbsp;-&nbsp;a&nbsp;localized&nbsp;sentence<br>
+whose&nbsp;``{duration}``&nbsp;placeholder&nbsp;receives&nbsp;the&nbsp;elapsed&nbsp;seconds;<br>
+the&nbsp;log&nbsp;keeps&nbsp;its&nbsp;own&nbsp;terse&nbsp;technical&nbsp;line,&nbsp;the&nbsp;view&nbsp;and&nbsp;the<br>
+mirror&nbsp;render&nbsp;the&nbsp;display.</span></dd></dl>
 
 <dl><dt><a name="RepairReport-phase"><strong>phase</strong></a>(self, label: 'str', **counts: 'int') -&gt; 'Iterator[RepairReport]'</dt><dd><span class="code">One&nbsp;timed&nbsp;phase:&nbsp;the&nbsp;step&nbsp;at&nbsp;the&nbsp;entry,&nbsp;the&nbsp;duration&nbsp;at&nbsp;the&nbsp;exit.</span></dd></dl>
 
