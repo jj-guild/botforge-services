@@ -173,7 +173,10 @@ async def _ensure_scope(  # noqa: C901
     locale_of = _translate
 
     def _say(key: str, **values: Any) -> str:
-        return locale_of(f"admin_tree.{key}", locale).format(**values)
+        # the repair keys live under replies.admin_tree.* (the locale
+        # tree) - the bare "admin_tree." prefix missed the section and
+        # the RAW DOTTED KEY hit the admin's view (owner 2026-11-27)
+        return locale_of(f"replies.admin_tree.{key}", locale).format(**values)
     lines: list[str] = []
     pins_ok = 0
     roles_ok = 0

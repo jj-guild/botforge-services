@@ -1041,6 +1041,20 @@ def test_the_repair_answers_in_the_guilds_words_not_paths() -> None:
     assert "salons v\\u00e9rifi\\u00e9s/cr\\u00e9\\u00e9s" not in source
     assert "R\\u00f4les v\\u00e9rifi\\u00e9s" not in source
 
+    # the keys resolve (owner 2026-11-27: the bare "admin_tree." prefix
+    # missed the replies section - the RAW DOTTED KEY hit the view)
+    from botforge.core.services.i18n import MessageCatalog
+
+    catalog = MessageCatalog("config")
+    for locale in ("fr", "en"):
+        for key in ("repair_channels", "repair_pins_roles", "repair_forums", "repair_done",
+                    "repair_scope", "repair_absent", "repair_summary_pins",
+                    "repair_summary_roles", "repair_summary_posts"):
+            rendered = catalog.render(f"replies.admin_tree.{key}", locale)
+            assert rendered != f"replies.admin_tree.{key}", (
+                f"{locale}.{key} never resolves - the raw key would hit the admin's view"
+            )
+
 
 def test_the_player_admin_menu_carries_the_profile_buttons_and_the_players_id() -> None:
     """The ⚙️ menu of a player card (owner 2026-11-26): the profile
