@@ -173,6 +173,17 @@ scopes:
       kind: forum
       access: readonly
       description: ui.panels.channels.civs_description
+    # the players forum (botforge-services#405): a FORUM, one post per
+    # BOT USER, the user's matches as cards (owner 2026-11-26: the
+    # match feed became the players' forum, "#matchs" renamed into
+    # "#joueurs" - a match with several known players lands in each
+    # one's post, the duplicates are assumed). Public: the feed is
+    # the point
+    - key: joueurs
+      label: ui.panels.channels.joueurs
+      kind: forum
+      access: public
+      description: ui.panels.channels.joueurs_description
     - key: maps
       label: ui.panels.channels.maps
       kind: forum

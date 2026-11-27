@@ -9,28 +9,39 @@
 <tr class="heading-text decor">
 <td class="title">&nbsp;<br><strong class="title"><a href="botforge.html" class="white">botforge</a>.<a href="botforge.discord.html" class="white">discord</a>.live_activity</strong></td>
 <td class="extra"><a href=".">index</a><br><a href="file:SOURCE_ROOT/discord/live_activity.py">SOURCE_ROOT/discord/live_activity.py</a></td></tr></table>
-    <p><span class="code">The&nbsp;AoE2&nbsp;live&nbsp;activity&nbsp;feed&nbsp;(botforge-services#147,&nbsp;owner&nbsp;direction).<br>
+    <p><span class="code">The&nbsp;AoE2&nbsp;activity&nbsp;surfaces:&nbsp;the&nbsp;players&nbsp;forum&nbsp;+&nbsp;the&nbsp;logs&nbsp;channel.<br>
 &nbsp;<br>
-Every&nbsp;match&nbsp;involving&nbsp;a&nbsp;linked&nbsp;player&nbsp;becomes&nbsp;ONE&nbsp;rich&nbsp;message&nbsp;in&nbsp;each<br>
-concerned&nbsp;guild's&nbsp;LOGS&nbsp;channel&nbsp;—&nbsp;a&nbsp;components-v2&nbsp;layout&nbsp;(the<br>
-match-card&nbsp;look)&nbsp;that&nbsp;LIVES&nbsp;with&nbsp;the&nbsp;match:<br>
+Every&nbsp;match&nbsp;involving&nbsp;a&nbsp;linked&nbsp;player&nbsp;lives&nbsp;in&nbsp;TWO&nbsp;surfaces,&nbsp;each&nbsp;with<br>
+its&nbsp;own&nbsp;contract&nbsp;(owner&nbsp;2026-11-24):<br>
 &nbsp;<br>
--&nbsp;the&nbsp;lobby&nbsp;opens:&nbsp;the&nbsp;card&nbsp;shows&nbsp;the&nbsp;players&nbsp;as&nbsp;they&nbsp;join,&nbsp;the&nbsp;join<br>
-&nbsp;&nbsp;link,&nbsp;the&nbsp;setup&nbsp;(mode,&nbsp;map);<br>
--&nbsp;the&nbsp;game&nbsp;launches:&nbsp;the&nbsp;card&nbsp;flips&nbsp;to&nbsp;the&nbsp;watch&nbsp;link,&nbsp;the&nbsp;civs&nbsp;and<br>
-&nbsp;&nbsp;teams&nbsp;ride&nbsp;the&nbsp;roster;<br>
--&nbsp;the&nbsp;match&nbsp;ends:&nbsp;the&nbsp;card&nbsp;closes&nbsp;with&nbsp;the&nbsp;duration&nbsp;and&nbsp;the&nbsp;results<br>
-&nbsp;&nbsp;link.<br>
+-&nbsp;the&nbsp;PLAYERS&nbsp;forum&nbsp;(``games/aoe2/joueurs``,&nbsp;owner&nbsp;2026-11-26:&nbsp;the<br>
+&nbsp;&nbsp;match&nbsp;feed&nbsp;became&nbsp;the&nbsp;players&nbsp;forum):&nbsp;ONE&nbsp;post&nbsp;per&nbsp;BOT&nbsp;USER,&nbsp;the<br>
+&nbsp;&nbsp;user's&nbsp;matches&nbsp;as&nbsp;cards&nbsp;—&nbsp;the&nbsp;very&nbsp;same&nbsp;card&nbsp;class&nbsp;as&nbsp;the&nbsp;profile<br>
+&nbsp;&nbsp;panels<br>
+&nbsp;&nbsp;(owner&nbsp;2026-11-23:&nbsp;"tu&nbsp;n'utilises&nbsp;pas&nbsp;la&nbsp;même&nbsp;classe"&nbsp;—&nbsp;the<br>
+&nbsp;&nbsp;dashboard&nbsp;and&nbsp;the&nbsp;feed&nbsp;both&nbsp;render&nbsp;through&nbsp;``_match_card_parts``):<br>
+&nbsp;&nbsp;the&nbsp;contextual&nbsp;AoE2&nbsp;header,&nbsp;the&nbsp;seats,&nbsp;the&nbsp;links,&nbsp;the&nbsp;settings<br>
+&nbsp;&nbsp;button.&nbsp;The&nbsp;card&nbsp;LIVES&nbsp;with&nbsp;the&nbsp;match&nbsp;(lobby&nbsp;→&nbsp;in&nbsp;game&nbsp;→<br>
+&nbsp;&nbsp;finished&nbsp;→&nbsp;the&nbsp;real&nbsp;result)&nbsp;and&nbsp;the&nbsp;forum&nbsp;reads&nbsp;as&nbsp;the&nbsp;guild's<br>
+&nbsp;&nbsp;AoE2&nbsp;history.&nbsp;When&nbsp;the&nbsp;forum&nbsp;does&nbsp;not&nbsp;exist,&nbsp;NOTHING&nbsp;is&nbsp;sent&nbsp;(the<br>
+&nbsp;&nbsp;tree&nbsp;owns&nbsp;the&nbsp;channel:&nbsp;no&nbsp;adoption,&nbsp;no&nbsp;fallback).<br>
 &nbsp;<br>
-One&nbsp;message&nbsp;per&nbsp;(guild,&nbsp;match)&nbsp;—&nbsp;updated&nbsp;in&nbsp;place&nbsp;on&nbsp;every&nbsp;transition,<br>
-never&nbsp;resent;&nbsp;the&nbsp;channel&nbsp;reads&nbsp;as&nbsp;the&nbsp;guild's&nbsp;AoE2&nbsp;history,&nbsp;each<br>
-match&nbsp;a&nbsp;single&nbsp;block&nbsp;in&nbsp;arrival&nbsp;order.<br>
+&nbsp;&nbsp;On&nbsp;the&nbsp;forum's&nbsp;very&nbsp;first&nbsp;use&nbsp;the&nbsp;LAST&nbsp;WEEK&nbsp;of&nbsp;stored&nbsp;history&nbsp;seeds<br>
+&nbsp;&nbsp;the&nbsp;channel,&nbsp;OLDEST&nbsp;first:&nbsp;the&nbsp;valid&nbsp;matches&nbsp;AND&nbsp;the&nbsp;invalid&nbsp;ones<br>
+&nbsp;&nbsp;(no&nbsp;result,&nbsp;under&nbsp;five&nbsp;minutes)&nbsp;—&nbsp;an&nbsp;invalid&nbsp;match&nbsp;still&nbsp;shows,<br>
+&nbsp;&nbsp;with&nbsp;its&nbsp;status&nbsp;(owner&nbsp;2026-11-24).<br>
+&nbsp;<br>
+-&nbsp;the&nbsp;LOGS&nbsp;channel&nbsp;(``bot/logs``):&nbsp;very&nbsp;short,&nbsp;DENSE,&nbsp;append-only<br>
+&nbsp;&nbsp;event&nbsp;lines&nbsp;—&nbsp;one&nbsp;log&nbsp;per&nbsp;(match,&nbsp;event),&nbsp;never&nbsp;per&nbsp;player&nbsp;(a<br>
+&nbsp;&nbsp;match&nbsp;with&nbsp;several&nbsp;linked&nbsp;players&nbsp;logs&nbsp;once).&nbsp;Components&nbsp;V2,&nbsp;one<br>
+&nbsp;&nbsp;accent-coloured&nbsp;container,&nbsp;emphasis&nbsp;and&nbsp;links,&nbsp;no&nbsp;image;&nbsp;the<br>
+&nbsp;&nbsp;messages&nbsp;are&nbsp;NEVER&nbsp;edited&nbsp;—&nbsp;the&nbsp;logs&nbsp;are&nbsp;a&nbsp;journal,&nbsp;the&nbsp;cards<br>
+&nbsp;&nbsp;(the&nbsp;players&nbsp;forum)&nbsp;carry&nbsp;the&nbsp;living&nbsp;state.<br>
 &nbsp;<br>
 The&nbsp;source&nbsp;is&nbsp;the&nbsp;game&nbsp;service's&nbsp;``WatchPlayerEvents``&nbsp;stream&nbsp;(the<br>
 enrollments&nbsp;already&nbsp;subscribe&nbsp;the&nbsp;provider&nbsp;to&nbsp;the&nbsp;guilds'&nbsp;linked<br>
-profile&nbsp;ids);&nbsp;the&nbsp;delivery&nbsp;rides&nbsp;the&nbsp;logs&nbsp;channel&nbsp;resolution;&nbsp;the<br>
-loop&nbsp;is&nbsp;resilient&nbsp;(a&nbsp;stream&nbsp;break&nbsp;reconnects,&nbsp;a&nbsp;send&nbsp;failure&nbsp;never<br>
-kills&nbsp;the&nbsp;feed).</span></p>
+profile&nbsp;ids);&nbsp;the&nbsp;loop&nbsp;is&nbsp;resilient&nbsp;(a&nbsp;stream&nbsp;break&nbsp;reconnects,&nbsp;a<br>
+send&nbsp;failure&nbsp;never&nbsp;kills&nbsp;the&nbsp;feed).</span></p>
 <p>
 <table class="section">
 <tr class="decor pkg-content-decor heading-text">
@@ -49,7 +60,7 @@ kills&nbsp;the&nbsp;feed).</span></p>
 <td class="section-title" colspan=3>&nbsp;<br><strong class="bigsection">Functions</strong></td></tr>
     
 <tr><td class="decor functions-decor"><span class="code">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span></td><td>&nbsp;</td>
-<td class="singlecolumn"><dl><dt><a name="-start_live_activity_feed"><strong>start_live_activity_feed</strong></a>(bot: 'discord.Client') -&gt; 'asyncio.Task[None] | None'</dt><dd><span class="code">Run&nbsp;the&nbsp;AoE2&nbsp;activity&nbsp;feed:&nbsp;match&nbsp;cards&nbsp;in&nbsp;the&nbsp;guilds'&nbsp;logs&nbsp;channels.<br>
+<td class="singlecolumn"><dl><dt><a name="-start_live_activity_feed"><strong>start_live_activity_feed</strong></a>(bot: 'discord.Client') -&gt; 'asyncio.Task[None] | None'</dt><dd><span class="code">Run&nbsp;the&nbsp;AoE2&nbsp;activity&nbsp;feed:&nbsp;matches&nbsp;cards&nbsp;+&nbsp;short&nbsp;event&nbsp;logs.<br>
 &nbsp;<br>
 One&nbsp;stream&nbsp;consumer,&nbsp;forever;&nbsp;None&nbsp;when&nbsp;the&nbsp;game&nbsp;service&nbsp;is&nbsp;not<br>
 wired&nbsp;(the&nbsp;feed&nbsp;degrades&nbsp;to&nbsp;nothing,&nbsp;silently).</span></dd></dl>
@@ -60,5 +71,5 @@ wired&nbsp;(the&nbsp;feed&nbsp;degrades&nbsp;to&nbsp;nothing,&nbsp;silently).</s
     
 <tr><td class="decor data-decor"><span class="code">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span></td><td>&nbsp;</td>
 <td class="singlecolumn"><strong>__all__</strong> = ['start_live_activity_feed']<br>
-<strong>__annotations__</strong> = {'_BG_TASKS': 'set[asyncio.Task[Any]]', '_CARDS': 'dict[tuple[str, str], Any]', '_LAST_NAME': 'dict[str, str]', '_LAST_SUMMARY': 'dict[str, dict[str, Any]]', '_MATCH_PLAYERS': 'dict[str, tuple[list[str], int]]', '_MATCH_STARTED_AT': 'dict[tuple[str, str], float]', '_PLAYER_REF': 'dict[str, str]'}</td></tr></table>
+<strong>__annotations__</strong> = {'_AVATAR_MEMO': 'dict[str, tuple[float, str]]', '_BG_TASKS': 'set[asyncio.Task[Any]]', '_CARDS': 'dict[tuple[str, str, str], Any]', '_CARD_STATE': 'dict[tuple[str, str], dict[str, Any]]', '_CTX_MEMO': 'dict[tuple[str, str, str], tuple[float, dict[str, Any]]]', '_FINISHED_CARDS': 'dict[str, dict[str, Any]]', '_FIRST_SEEN': 'dict[tuple[str, str], int]', '_LABELS_MEMO': 'dict[str, tuple[float, dict[str, Any]]]', '_LAST_NAME': 'dict[str, str]', '_LAST_SUMMARY': 'dict[str, dict[str, Any]]', ...}</td></tr></table>
 </body></html>

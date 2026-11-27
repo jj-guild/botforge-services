@@ -69,6 +69,19 @@ async def _serve() -> None:
         FactionContentService(_database, content_state_from_env()),
     )
 
+    # The stats answers cache (#404 T4): Redis when configured, the
+    # in-memory dict otherwise — a click never costs a provider call.
+    from botforge.game_aoe2.stats_cache import StatsCache
+
+    stats_cache = None
+    redis_uri = os.environ.get("REDIS_URI", "")
+    if redis_uri:
+        import redis.asyncio as redis
+
+        stats_cache = StatsCache(redis.from_url(redis_uri, decode_responses=True))
+    else:
+        stats_cache = StatsCache()
+
     server = build_status_server(
         lambda: CoreStatus(version=__version__, process=PROCESS_LABEL),
     )
@@ -78,6 +91,7 @@ async def _serve() -> None:
             aggregator,
             enrollments=enrollments,
             stats_provider=stats_provider,
+            stats_cache=stats_cache,
             map_seeds=map_seeds,
             catalog=catalog,
         ),
@@ -127,6 +141,8 @@ class _EnrollmentPusher:
         self, game_key: str, profile_ids: list[str], user_ids: list[str] | None = None
     ) -> tuple[int, bool]:
         """Record the roster, then push the subscription down."""
+        if game_key != "aoe2":
+            return 0, False
         self._aggregator.set_roster(
             [
                 {"profile_id": pid, "user_id": uid}
@@ -134,25 +150,41 @@ class _EnrollmentPusher:
             ]
             or profile_ids
         )
-        """Push one enrollment list to the realtime provider for the game."""
-        if game_key != "aoe2":
-            return 0, False
+        # Without the REALTIME provider (owner 2026-11-27: aoe2lobby
+        # rides DISABLED in the delivery), the enrollments still
+        # STAND: the roster records, the stats provider subscribes -
+        # applied=True, a healthy steady state the core's retry loop
+        # must never treat as a failure
+        applied = True
         uri = os.environ.get("EXT_AOE2LOBBY_URI", "")
-        if not uri:
-            self._last_ids = None
-            return len(profile_ids), False
-        try:
-            from botforge.core.rpc.game_client import GameProviderClient
+        if uri:
+            try:
+                from botforge.core.rpc.game_client import GameProviderClient
 
-            if self._client is None:
-                self._client = GameProviderClient(uri, "ext-aoe2lobby", "aoe2")
-            applied = await self._client.update_subscriptions(profile_ids)
-            if applied:
-                self._last_ids = list(profile_ids)
-            return len(profile_ids), applied
-        except Exception:
-            logger.warning("enrollment push to the realtime provider failed", exc_info=True)
-            return len(profile_ids), False
+                if self._client is None:
+                    self._client = GameProviderClient(uri, "ext-aoe2lobby", "aoe2")
+                applied = await self._client.update_subscriptions(profile_ids, user_ids or [])
+                if applied:
+                    self._last_ids = list(profile_ids)
+            except Exception:
+                logger.warning("enrollment push to the realtime provider failed", exc_info=True)
+                applied = False
+        else:
+            self._last_ids = None
+        # The stats provider keeps the profile -> user mapping too
+        # (#404): the same enrollment list rides its UpdateSubscriptions,
+        # which triggers the on-demand history sync (T4) - it rides
+        # whether or not the realtime layer is wired.
+        stats_uri = os.environ.get("EXT_LIBREMATCH_URI", "")
+        if stats_uri:
+            try:
+                from botforge.core.rpc.game_client import GameProviderClient
+
+                stats_client = GameProviderClient(stats_uri, "ext-librematch", "aoe2")
+                await stats_client.update_subscriptions(profile_ids, user_ids or [])
+            except Exception:
+                logger.warning("enrollment push to the stats provider failed", exc_info=True)
+        return len(profile_ids), applied
 
 
 async def _consume_providers(aggregator: Any) -> None:

@@ -216,6 +216,20 @@ async def _profile_game_blocks(
             logger.warning("HOME: profile enricher failed", exc_info=True)
     blocks: list[discord.ui.TextDisplay[discord.ui.LayoutView]] = []
     resolved = await _resolve_profile_names(interaction, bindings)
+    # The stats enrichment (#404 T6): the profile view carries each
+    # account's current elo and its stored peak — best-effort, the
+    # account line stays as it was when the stats are unknown.
+    from botforge.discord.stats_views import account_elo_by_profile
+
+    elo_lines: dict[str, str] = {}
+    try:
+        elo_lines = await account_elo_by_profile(
+            interaction.client,
+            [str(e.get("profile_id", "")) for e in bindings],
+            translate=lambda key, **fmt: reply(interaction, key, **fmt),
+        )
+    except Exception:
+        logger.warning("HOME: the account stats enrichment failed", exc_info=True)
     for game, entries in sorted(by_game.items()):
         lines = [f"## {_game_label(game)}"]
         for entry in entries:
@@ -223,8 +237,17 @@ async def _profile_game_blocks(
             name = resolved.get(pid) or pid
             player = players_by_id.get(user_id)
             elo = f" — {player.get('rating')} elo" if player else ""
-            url = _game_account_url(game, str(pid))
-            account = f"[{name}]({url}) (`{pid}`)" if url else f"{name} (`{pid}`)"
+            stored = elo_lines.get(pid)
+            if stored:
+                elo = f" — {stored}" if not elo else f"{elo} · {stored}"
+            # the account link rides the game's profile_link_template
+            # (owner 2026-11-27), the model's vars injected prefixed
+            from botforge.core.services.profile_sites import format_profile_link
+
+            link = format_profile_link(
+                game, {"profile_id": pid, "profile_name": name}, label=name
+            )
+            account = f"{link} (`{pid}`)" if link else f"{name} (`{pid}`)"
             lines.append(f"• {account}{elo}")
         blocks.append(discord.ui.TextDisplay(chr(10).join(lines)))
     return blocks
@@ -262,6 +285,11 @@ async def _profile_followup(
         row.add_item(
             ProfileRemoveAccountButton(await tr(interaction, "profile.remove_button", "Retirer un compte"))
         )
+        # the stats layer serves aoe2 today: the matches button rides
+        # the profile view whenever the user owns at least one aoe2
+        # account (a new game's stats will widen the guard).
+        if any(str(b.get("game_key")) == "aoe2" for b in bindings):
+            row.add_item(ProfileMatchesButton(await tr(interaction, "profile.matches_button", "Derniers matchs")))
     header = await _profile_header(interaction, user_id)
     if banner:
         header = f"{header}\n\n{banner}"
@@ -345,11 +373,16 @@ def _profile_sites(game_key: str) -> list[tuple[str, str, str]]:
 def _game_account_url(game_key: str, relic_id: str, site_key: str = "") -> str:
     """Build the profile's public page URL on the chosen (or default) site.
 
-    The sites are declared in ``config/games/<game>/profile_sites.yaml``
-    — never hard-coded; the user's preferred site rides their settings.
+    The DEFAULT site is the game's ``profile_link_template`` (owner
+    2026-11-27: one hard place per game, ``config/games/<g>/game.yaml``);
+    an explicit ``site_key`` keeps the declared sites (the picker).
     """
-    from botforge.core.services.profile_sites import format_profile_url
+    from botforge.core.services.profile_sites import format_profile_link_url, format_profile_url
 
+    if not site_key:
+        url = format_profile_link_url(game_key, {"profile_id": relic_id})
+        if url:
+            return url
     return format_profile_url(game_key, relic_id, site_key)
 
 
@@ -444,14 +477,23 @@ async def _dm_profile_notice(interaction: discord.Interaction, key: str, **kwarg
 
 class ProfileAddAccountButton(
     discord.ui.DynamicItem[discord.ui.Button[Any]],
-    template=r"home:profile:add",
+    template=r"home:profile:add(?::(?P<target>\d+))?",
 ):
-    """Open the add-account modal (profile id)."""
+    """Open the add-account modal (profile id).
 
-    def __init__(self, label: str = "Ajouter un compte") -> None:
+    The optional ``target`` (owner 2026-11-26: the players forum's
+    admin menu) binds the DISPLAYED player's account instead of the
+    clicker's own - aoe2-focused, no game picker.
+    """
+
+    def __init__(self, label: str = "Ajouter un compte", target: str = "") -> None:
+        self.target = str(target) if str(target).isdigit() else ""
         super().__init__(
             discord.ui.Button(
-                label=label, emoji="\u2795", style=discord.ButtonStyle.success, custom_id="home:profile:add"
+                label=label,
+                emoji="\u2795",
+                style=discord.ButtonStyle.success,
+                custom_id=f"home:profile:add:{self.target}"[:100] if self.target else "home:profile:add",
             )
         )
 
@@ -464,13 +506,24 @@ class ProfileAddAccountButton(
         /,
     ) -> ProfileAddAccountButton:
         """Rebuild the item from the wire."""
-        del interaction, item, match
-        return cls()
+        del interaction, item
+        return cls(target=match.group("target") or "")
 
     async def callback(self, interaction: discord.Interaction) -> None:
         """Open the add-account modal (game options, aoe2-only fallback)."""
         import asyncio
 
+        if self.target and not await _player_menu_guard(interaction, self.target):
+            return
+        if self.target:
+            # aoe2-FOCUSED (owner 2026-11-26): the players forum's menu
+            # manages Age of Empires II accounts, no game picker
+            await interaction.response.send_modal(
+                ProfileAddAccountModal(
+                    None, origin=EphemeralOrigin.capture(interaction), target=self.target
+                )
+            )
+            return
         try:
             options = await asyncio.wait_for(_game_select_options(), timeout=2.5)
         except Exception:
@@ -496,14 +549,253 @@ async def _game_select_options() -> list[discord.SelectOption]:
 
 
 
+def _is_name_input(typed: str) -> bool:
+    """Tell whether the typed input reads as an in-game name, not an id/URL.
+
+    The #402 name path: ids are digits, URLs carry a scheme/host —
+    anything else is a name the provider searches by alias.
+    """
+    stripped = typed.strip()
+    if not stripped:
+        return False
+    if stripped.isdigit():
+        return False
+    return "http://" not in stripped and "https://" not in stripped and ".com" not in stripped
+
+
+def _candidate_line(candidate: dict[str, Any]) -> str:
+    """One candidate's discriminator line: what the ACCOUNT carries.
+
+    The player picks among homonyms by the account's own identity —
+    clan, country and the two elos. The maps ride the MATCHES, never
+    the account, so they never headline the candidate (#402).
+    """
+    alias = str(candidate.get("alias", ""))
+    clan = str(candidate.get("clan", ""))
+    country = str(candidate.get("country", ""))
+    head = alias + (f" [{clan}]" if clan else "")
+    if country:
+        head = f"{head} ({country.upper()})"
+    elo_1v1 = int(candidate.get("elo_1v1", 0))
+    elo_tg = int(candidate.get("elo_tg", 0))
+    return f"{head} \u2014 1v1 {elo_1v1 or '?'} \u00b7 TG {elo_tg or '?'}"[:100]
+
+
+async def _bind_error_note(interaction: discord.Interaction, exc: Exception, game: str, typed: str) -> str:
+    """Map a binding failure to its player-facing note (the add flow)."""
+    await _report_profile_error(interaction, "profile.add", game, exc)
+    reason = str(exc).lower()
+    if "d\u00e9j\u00e0" in reason or "already" in reason:
+        return await reply(interaction, "profile.add_taken")
+    if "no profile seam" in reason or "unknown game" in reason:
+        return await reply(interaction, "profile.add_game_unconfigured", game=game)
+    if "player_stats" in reason or "mal configur" in reason:
+        return await reply(interaction, "profile.add_provider_error", provider=PROFILE_PROVIDER)
+    if "not accepted anymore" in reason:
+        return await reply(interaction, "profile.add_insights_refused")
+    if "valid" in reason or "inconnu" in reason:
+        return await reply(interaction, "profile.add_unknown", profile=typed)
+    return (
+        f"Add failed: the provider {PROFILE_PROVIDER} did not answer "
+        "\u2014 the exact error went to the admins."
+    )
+
+
+async def _finish_bind(
+    interaction: discord.Interaction,
+    game: str,
+    profile_id: str,
+    origin: Any,
+    target: str = "",
+) -> None:
+    """Confirm a successful bind: the DM notice, then the refreshed profile.
+
+    A ``target`` (owner 2026-11-26: the players forum's admin menu)
+    binds the DISPLAYED player: the DM notice goes to HIM, the answer
+    is the success note and his post re-edits at the sweep - the
+    clicker's own profile view never opens.
+    """
+    bound_url = _game_account_url(game, profile_id)
+    if target:
+        await _dm_target_notice(
+            interaction,
+            target,
+            "account_added",
+            account=f"[{game} {profile_id}]({bound_url})" if bound_url else game,
+        )
+        await interaction.followup.send(
+            await reply(interaction, "profile.add_success"), ephemeral=True
+        )
+        await _delete_deferred_followup(interaction)
+        await _poke_players_forum(interaction)
+        return
+    await _dm_profile_notice(
+        interaction,
+        "account_added",
+        account=f"[{game} {profile_id}]({bound_url})" if bound_url else game,
+    )
+    await _profile_followup(
+        interaction,
+        banner=await reply(interaction, "profile.add_success"),
+        origin=origin,
+    )
+
+
+async def _dm_target_notice(
+    interaction: discord.Interaction, target: str, key: str, **kwargs: Any
+) -> None:
+    """DM the TARGET user the account-change notice (best-effort)."""
+    client = interaction.client
+    catalog = getattr(client, "messages", None)
+    if catalog is None:
+        return
+    logs = getattr(client, "logs_service", None)
+    locale = "en"
+    if logs is not None:
+        try:
+            locale = str(await logs.get_user_locale(target) or "en")
+        except Exception:
+            locale = "en"
+    rendered = catalog.render(f"replies.{key}", locale, **kwargs)
+    if rendered == f"replies.{key}":
+        rendered = catalog.render(key, locale, **kwargs)
+    try:
+        user = client.get_user(int(target)) or await client.fetch_user(int(target))
+        if user is not None:
+            await user.send(rendered)
+    except Exception:
+        logger.debug("the target DM notice failed (user %s) - best-effort", target, exc_info=True)
+
+
+async def _poke_players_forum(interaction: discord.Interaction) -> None:
+    """Reconcile the players forum NOW - the post re-edits immediately."""
+    guild_id = str(interaction.guild_id or "") if interaction.guild_id else ""
+    if not guild_id:
+        return
+    try:
+        from botforge.discord import live_activity
+
+        await live_activity.instant_sweep(interaction.client, guild_id)
+    except Exception:
+        logger.debug("the players forum poke failed - best-effort", exc_info=True)
+
+
+async def _player_menu_bar(interaction: discord.Interaction, user_id: str) -> discord.ui.LayoutView:
+    """Build the displayed player's ephemeral account menu (owner 2026-11-26).
+
+    The profile panel's OWN buttons, aoe2-focused: add an account,
+    remove one - NO rename (a rename floods, the retitle rides the
+    identity service's own hooks). The view id is the player's panel
+    ("panel:player:aoe2:<user id>"), the id the card carries.
+    """
+    row: discord.ui.ActionRow[discord.ui.LayoutView] = discord.ui.ActionRow()
+    row.add_item(
+        ProfileAddAccountButton(
+            await tr(interaction, "profile.add_button", "Ajouter un compte"), target=user_id
+        )
+    )
+    row.add_item(
+        ProfileRemoveAccountButton(
+            await tr(interaction, "profile.remove_button", "Retirer un compte"), target=user_id
+        )
+    )
+    from botforge.discord.ui.view_footer import add_view_footer
+
+    view = discord.ui.LayoutView(timeout=None)
+    view.add_item(row)
+    return add_view_footer(view, f"panel:player:aoe2:{user_id}")
+
+
+async def _player_menu_guard(interaction: discord.Interaction, target: str) -> bool:
+    """Gate the players forum's admin menu (owner 2026-11-26).
+
+    A GLOBAL bot operator (BOT_ADMINS) or the DISPLAYED player himself
+    opens the menu - a guild admin of another guild, a random member,
+    nobody else. The refusal answers as an ephemeral note.
+    """
+    bot_admins = getattr(getattr(interaction.client, "status_service", None), "bot_admins", None)
+    operators = set(getattr(bot_admins, "user_ids", ()) or ())
+    user_id = str(interaction.user.id)
+    if user_id in operators or user_id == str(target):
+        return True
+    await interaction.response.send_message(
+        await reply(interaction, "player_menu_denied"), ephemeral=True
+    )
+    return False
+
+
+class _AccountCandidateSelect(discord.ui.Select[Any]):
+    """The homonym picker: each option is one profile's last played preview."""
+
+    def __init__(
+        self, candidates: list[dict[str, Any]], game: str, origin: Any, target: str = ""
+    ) -> None:
+        super().__init__(
+            custom_id="home:profile:add:candidate",
+            placeholder="Pick your account...",
+            options=[
+                discord.SelectOption(
+                    label=(_candidate_line(c) or str(c.get("profile_id", "")))[:100],
+                    description=str(c.get("steam_name", ""))[:100],
+                    value=str(c.get("profile_id", "")),
+                )
+                for c in candidates[:25]
+            ],
+            min_values=1,
+            max_values=1,
+        )
+        self.game = game
+        self.origin = origin
+        self.target = str(target) if str(target).isdigit() else ""
+
+    async def callback(self, interaction: discord.Interaction) -> None:
+        """Bind the picked candidate \u2014 selection IS the validation."""
+        registration = getattr(interaction.client, "registration_service", None)
+        if registration is None:
+            await interaction.response.send_message(await reply(interaction, "not_configured"), ephemeral=True)
+            return
+        profile_id = str((self.values or [""])[0])
+        # The candidate list vanishes IMMEDIATELY (owner direction
+        # 2026-11-20, the delete-after-bind never fired on ephemerals):
+        # editing THIS message \u2014 the component's own primitive, never
+        # the flaky ephemeral delete \u2014 replaces it with the pickup note
+        # and pulls the picker away in the same ack. The bind then runs
+        # in the followup window; a failure reports as a new note.
+        note = await reply(interaction, "profile.add_picked")
+        await interaction.response.edit_message(content=note, view=None)
+        try:
+            await registration.bind_profile(self.target or str(interaction.user.id), self.game, profile_id)
+        except Exception as exc:
+            failure = await _bind_error_note(interaction, exc, self.game, profile_id)
+            await interaction.followup.send(failure, ephemeral=True)
+            return
+        await _finish_bind(interaction, self.game, profile_id, self.origin, target=self.target)
+
+
+class _AccountCandidateView(discord.ui.View):
+    """Ephemeral: pick your account among the alias-search candidates."""
+
+    def __init__(
+        self, candidates: list[dict[str, Any]], game: str, origin: Any, target: str = ""
+    ) -> None:
+        super().__init__(timeout=180)
+        self.add_item(_AccountCandidateSelect(candidates, game, origin, target))
+
+
 class ProfileAddAccountModal(discord.ui.Modal):
     """The add-account form: game select (aoe2 preselected) + profile id."""
 
     def __init__(
-        self, options: list[discord.SelectOption] | None = None, origin: Any = None
+        self,
+        options: list[discord.SelectOption] | None = None,
+        origin: Any = None,
+        target: str = "",
     ) -> None:
         super().__init__(title="Ajouter un compte", timeout=None)
         self.origin = origin
+        # the TARGET (owner 2026-11-26): the players forum's admin menu
+        # binds the DISPLAYED player - the clicker acts on his behalf
+        self.target = str(target) if str(target).isdigit() else ""
         self.game: discord.ui.Select[Any] = discord.ui.Select(
             custom_id="home:profile:add:game",
             options=options or [discord.SelectOption(label="Age of Empires II", value="aoe2", default=True)],
@@ -512,8 +804,8 @@ class ProfileAddAccountModal(discord.ui.Modal):
             max_values=1,
         )
         self.profile_id: discord.ui.TextInput[Any] = discord.ui.TextInput(
-            label="Ton id aoe2insights ou ton relic id",
-            placeholder="Ex. 17190369 ou https://www.aoe2insights.com/user/12488557/",
+            label="Ton pseudo en jeu ou ton Relic ID",
+            placeholder="Ex. JeanJack ou 17190369 — Relic ID : sur aoe2insights, sous l'avatar, clique l'id puis copie",
             max_length=64,
             required=True,
         )
@@ -521,68 +813,2053 @@ class ProfileAddAccountModal(discord.ui.Modal):
         self.add_item(self.profile_id)
 
     async def on_submit(self, interaction: discord.Interaction) -> None:
-        """Bind the account, audit, confirm, then refresh the profile view."""
+        """Bind the account, audit, confirm, then refresh the profile view.
+
+        A typed NAME never goes to bind_profile: it searches the
+        provider's alias index (#402's name path) and the player picks
+        their account among the homonyms in a followup view.
+        """
         registration = getattr(interaction.client, "registration_service", None)
         if registration is None:
             await interaction.response.send_message(await reply(interaction, "not_configured"), ephemeral=True)
             return
         chosen = (self.game.values or ["aoe2"])[0]
+        typed = str(self.profile_id.value).strip()
         # the ONLY valid ephemeral modal defer (discord.py): thinking=True —
         # the bind takes seconds, the 3s window survives it
         await interaction.response.defer(ephemeral=True, thinking=True)
-        try:
-            await registration.bind_profile(
-                str(interaction.user.id), str(chosen), str(self.profile_id.value).strip()
+        if _is_name_input(typed):
+            try:
+                candidates = await registration.search_candidates(str(chosen), typed)
+            except Exception as exc:
+                note = await _bind_error_note(interaction, exc, chosen, typed)
+                await interaction.followup.send(note, ephemeral=True)
+                return
+            if not candidates:
+                note = await reply(interaction, "profile.add_unknown", profile=typed)
+                await interaction.followup.send(note, ephemeral=True)
+                return
+            await interaction.followup.send(
+                await reply(interaction, "profile.add_pick", name=typed),
+                view=_AccountCandidateView(candidates, chosen, self.origin, target=self.target),
+                ephemeral=True,
             )
+            return
+        try:
+            await registration.bind_profile(self.target or str(interaction.user.id), str(chosen), typed)
         except Exception as exc:
-            await _report_profile_error(interaction, "profile.add", chosen, exc)
-            reason = str(exc).lower()
-            if "déjà" in reason or "already" in reason:
-                note = await reply(interaction, "profile.add_taken")
-            elif "no profile seam" in reason or "unknown game" in reason:
-                note = await reply(interaction, "profile.add_game_unconfigured", game=chosen)
-            elif "player_stats" in reason or "mal configur" in reason:
-                note = await reply(interaction, "profile.add_provider_error", provider=PROFILE_PROVIDER)
-            elif "valid" in reason or "inconnu" in reason:
-                note = (
-                    f"Add failed: no profile found for "
-                    f"`{str(self.profile_id.value).strip()}`. Paste your aoe2insights "
-                    "page URL (or the id it contains) \u2014 the right id resolves "
-                    "automatically."
-                )
-            else:
-                note = (
-                    f"Add failed: the provider {PROFILE_PROVIDER} did not answer "
-                    "\u2014 the exact error went to the admins."
-                )
+            note = await _bind_error_note(interaction, exc, chosen, typed)
             await interaction.followup.send(note, ephemeral=True)
             return
-        bound_url = _game_account_url(str(chosen), str(self.profile_id.value).strip())
-        await _dm_profile_notice(
-            interaction,
-            "account_added",
-            account=f"[{chosen} {self.profile_id.value}]({bound_url})" if bound_url else str(chosen),
-        )
-        await _profile_followup(
-            interaction,
-            banner=await reply(interaction, "profile.add_success"),
-            origin=self.origin,
-        )
+        await _finish_bind(interaction, str(chosen), typed, self.origin, target=self.target)
 
 
 async def _profile_header(interaction: discord.Interaction, user_id: str) -> str:
-    """Build the profile header: the user's chosen name when known."""
+    """Build the profile header: the user's chosen name when known.
+
+    The wordage rides the locale (owner 2026-11-22: the hardcoded
+    header spoke English whatever the guild's language).
+    """
     identity = getattr(interaction.client, "identity_service", None)
-    if identity is None:
-        return "# 👤 Your profile\nName: *(not set)*"
-    try:
-        user = await identity.get_user(f"discord:{user_id}")
-    except Exception:
-        logger.warning("HOME: identity lookup failed", exc_info=True)
-        return "# 👤 Your profile\nName: *(not set)*"
+    user = None
+    if identity is not None:
+        try:
+            user = await identity.get_user(f"discord:{user_id}")
+        except Exception:
+            logger.warning("HOME: identity lookup failed", exc_info=True)
     if user is None or not user.display_name:
-        return "# 👤 Your profile\nName: *(not set)*"
-    return f"# 👤 Your profile\nName: **{user.display_name}**"
+        # reply() resolves the replies.* catalog (tr() only maps the
+        # ui.* component labels \u2014 a replies key through tr() always
+        # fell back to the English, owner 2026-11-22)
+        return await reply(interaction, "profile.header_no_name")
+    header = await reply(interaction, "profile.header_with_name")
+    return header.format(name=user.display_name)
+
+
+
+
+
+
+INSIGHTS_MATCH_URL = "https://www.aoe2insights.com/match/{match_id}"
+REPLAY_URL = (
+    "https://api.ageofempires.com/api/GameStats/AgeII/GetMatchReplay/"
+    "?matchId={match_id}&profileId={profile_id}"
+)
+LIBREMATCH_SOURCE_URL = (
+    "https://aoe-api.worldsedgelink.com/community/leaderboard/getMatchHistory"
+    "?title=age2&matchIDs=%5B{match_id}%5D"
+)  # the provider's OWN single-match fetch (LibreMatch wiki,
+# community/leaderboard/getMatchHistory - a public GET without auth,
+# owner 2026-11-23: the source names THE MATCH, not a profile's page)
+
+#: the named settings the RAW options blob completes (the
+_OUTCOME_COLOURS = {"win": 0x57F287, "loss": 0xED4245, "ongoing": 0xFEE75C, "lobby": 0x5865F2}
+
+
+async def _entity_post_url(
+    bot: Any,
+    guild_id: str,
+    channel_id: str,
+    names: str | list[str],
+) -> str:
+    """Resolve one entity's forum POST into its jump URL (best-effort).
+
+    The civs/maps forums keep one thread per entity, titled by its
+    LOCALIZED display name (which language the guild speaks decides
+    the title, owner 2026-11-22: the Italian/Vietnamese posts never
+    linked under their English names). The caller hands EVERY known
+    name form, localized first; each also matches its plural/singular
+    and its ``Name - whatever`` prefix, walking the public AND the
+    private archives. A miss renders plain text, never a wrong link.
+    """
+    if isinstance(names, str):
+        names = [names]
+    names = [str(n or "").strip() for n in names if str(n or "").strip()]
+    if not channel_id or not names:
+        return ""
+    channel = bot.get_channel(int(channel_id)) if guild_id else None
+    if channel is None:
+        return ""
+    forms: list[str] = []
+    for wanted in [n.casefold() for n in names]:
+        for form in (wanted, wanted[:-1] if wanted.endswith("s") else wanted + "s"):
+            if form and form not in forms:
+                forms.append(form)
+    return await _thread_named(channel, forms)
+
+
+#: the forum scan answers from a TTL SNAPSHOT (owner 2026-11-25:
+#: "15 secondes... probleme de design evidente") - the civ/map link
+#: resolution walked the guild's active threads AND both archives
+#: PER ENTITY (three REST calls each, ~40 calls for a ten-card
+#: batch). One snapshot per forum every five minutes, the miss too.
+_THREAD_SCAN_TTL_S = 300.0
+_THREAD_SNAPSHOT: dict[tuple[str, str], tuple[float, dict[str, str]]] = {}
+
+
+async def _forum_snapshot(channel: Any) -> dict[str, str]:
+    """Scan one forum COMPLETELY: every thread title -> its jump url.
+
+    The client's channel.threads cache only carries the threads it
+    happened to load (owner 2026-11-23: Magyars linked, Italiens did
+    not - the cache had one and not the other); the guild's ACTIVE
+    thread list plus BOTH archives is the complete walk - ONE scan
+    per forum, the TTL snapshot below answers the rest.
+    """
+    snapshot: dict[str, str] = {}
+    for thread in getattr(channel, "threads", []) or []:
+        name = str(getattr(thread, "name", "")).strip().casefold()
+        if name:
+            snapshot[name] = str(getattr(thread, "jump_url", "") or "")
+    try:
+        parent_id = getattr(channel, "id", None)
+        active = await channel.guild.fetch_active_threads()
+        for thread in getattr(active, "threads", []) or []:
+            if getattr(thread, "parent_id", None) == parent_id:
+                name = str(getattr(thread, "name", "")).strip().casefold()
+                snapshot.setdefault(name, str(getattr(thread, "jump_url", "") or ""))
+    except Exception:
+        logger.debug("the active thread walk failed", exc_info=True)
+    for private in (False, True):
+        try:
+            async for thread in channel.archived_threads(limit=100, private=private):
+                name = str(getattr(thread, "name", "")).strip().casefold()
+                if name:
+                    snapshot.setdefault(name, str(getattr(thread, "jump_url", "") or ""))
+        except Exception:
+            logger.debug("the archived thread walk failed", exc_info=True)
+    return snapshot
+
+
+async def _thread_named(channel: Any, forms: list[str]) -> str:
+    """Find the forum thread whose title matches one of the forms."""
+    from time import monotonic
+
+    key = (
+        str(getattr(getattr(channel, "guild", None), "id", "") or ""),
+        str(getattr(channel, "id", "") or ""),
+    )
+    now = monotonic()
+    hit = _THREAD_SNAPSHOT.get(key)
+    if hit is None or now - hit[0] > _THREAD_SCAN_TTL_S:
+        _THREAD_SNAPSHOT[key] = (now, await _forum_snapshot(channel))
+        hit = _THREAD_SNAPSHOT[key]
+    snapshot = hit[1]
+    for raw in forms:
+        form = str(raw).strip().casefold()
+        # the exact title, then the "Name - whatever" prefixes
+        if form in snapshot:
+            return snapshot[form]
+        for name, url in snapshot.items():
+            if name.startswith(f"{form} ") or name.startswith(f"{form} -"):
+                return url
+    return ""
+
+
+async def _entity_image(entity_id: str, guild_id: str) -> str:
+    """Read one entity's stored image url (the content service)."""
+    from botforge.discord.content_posts import content_service, guild_locale
+
+    service = content_service()
+    if service is None:
+        return ""
+    locale = await guild_locale(guild_id, None)
+    try:
+        doc = await service.content_get(entity_id, locale)
+        if doc is None and locale != "en":
+            doc = await service.content_get(entity_id, "en")
+    except Exception:
+        logger.debug("the content read failed (%s)", entity_id, exc_info=True)
+        return ""
+    if not doc:
+        return ""
+    return str(doc.get("image_url") or "")
+
+
+def _civ_entity_id(civ_name: str) -> str:
+    """Return the stored civ content id - the core's faction convention.
+
+    The catalog's faction ids follow ``faction:<game>:<slug>`` (the
+    game service's own builder, game_data.py) - the panel reuses the
+    SAME convention, never its own. The KEY is CANONICAL (the
+    English reference name's slug): localized display names never
+    address the database (owner 2026-11-22).
+    """
+    from botforge.core.ids import slug_id
+
+    return f"faction:aoe2:{slug_id(civ_name)}"
+
+
+def _civ_entity_ids(civ_name: str) -> list[str]:
+    """Return the civ's content id CANDIDATES, canonical first.
+
+    AoE2 renames its civilizations across patches (Maya/Mayas/Mayans,
+    Inca/Incas, Magyar/Magyars) and adds/removes some: when the
+    reference table hands a newer (or older) name than the catalog
+    stored, the plural/singular alias of the SAME civ stands the
+    best chance of addressing the stored doc.
+    """
+    from botforge.core.ids import slug_id
+
+    slug = slug_id(civ_name).strip().casefold()
+    forms: list[str] = [slug]
+    if slug.endswith("s"):
+        alt = slug[:-1]
+    else:
+        alt = slug + "s"
+    if alt and alt not in forms:
+        forms.append(alt)
+    return [f"faction:aoe2:{form}" for form in forms if form]
+
+
+def _map_entity_id(map_name: str) -> str:
+    """Return the stored map content id - the core's own builder.
+
+    ``map_entry_id`` is the platform's single map-id convention - the
+    panel never re-implements it.
+    """
+    from botforge.core.ids import map_entry_id
+
+    return map_entry_id("aoe2", map_name, None)
+
+
+def _fmt_clock(seconds: int) -> str:
+    """Render a duration as mm:ss (the old bot's 00:37)."""
+    minutes, secs = divmod(max(0, seconds), 60)
+    return f"{minutes:02d}:{secs:02d}"
+
+
+async def _stored_channel(guild_id: str, scope: str, key: str) -> str:
+    """Return the stored channel id (empty when unwired)."""
+    from botforge.discord.ui.panels_provisioning import stored_channel_id
+
+    channel_id = await stored_channel_id(guild_id, scope, key) if guild_id else None
+    return str(channel_id) if channel_id else ""
+
+
+#: the slot colours ride the locale (profile.matches_colour_N);
+#: these stay the fallback when a label never resolves
+SLOT_COLOURS = {
+    1: "Bleue",
+    2: "Rouge",
+    3: "Verte",
+    4: "Jaune",
+    5: "Cyan",
+    6: "Violette",
+    7: "Grise",
+    8: "Orange",
+}
+
+#: the settings footer labels ride the locale too (the provider's
+#: settings_json carries the canonical label, the panel translates)
+SETTING_LABEL_KEYS = {
+    "Mode": "profile.matches_setting_mode",
+    "Taille": "profile.matches_setting_size",
+    "Pop": "profile.matches_setting_pop",
+    "Vitesse": "profile.matches_setting_speed",
+    "Victoire": "profile.matches_setting_victory",
+    "Cheats": "profile.matches_setting_cheats",
+    "Ressources": "profile.matches_setting_resources",
+    "Vision": "profile.matches_setting_reveal",
+    "Âge départ": "profile.matches_setting_start_age",
+    "Âge final": "profile.matches_setting_end_age",
+    "Difficulté": "profile.matches_setting_difficulty",
+    "Traité": "profile.matches_setting_treaty",
+    # the raw tables' own spelling (the live lobby rides it too):
+    # localize it as well - the EN view read it raw until now
+    "Difficulté IA": "profile.matches_setting_difficulty",
+}
+
+#: the BOOLEAN settings (the post-RoR option keys): option key
+#: \u2192 locale label key. DIRECT 'y'/'n' flags - verified against
+#: aoe2insights' own rendering of match 506901691 (owner 2026-11-23):
+#: every ticked rule reads 'y' in the blob, every unticked one 'n'
+#: (the collector's "!bool" notes sat the values the wrong way).
+#: the named settings the LIVE lobby payload carries (aoe2lobby
+#: rides them RAW and named - NOT the encoded World's Edge blob,
+#: verified live 2026-11-23): the SAME canonical French labels as the
+#: finished cards' blob, the VALUE tables follow the provider's OWN
+#: schema ws enums (wss://data.aoe2lobby.com/ws/lobby/ - captured
+#: live: speed 0-3, victory 0-5, size 0-12, resources 0-6, ages,
+#: difficulty 0-5); unknown values render raw, absent keys nothing.
+_LIVE_SETTINGS_KEYS: dict[str, tuple[str, dict[str, str] | None]] = {
+    # the CANONICAL ORDER is the game's own lobby UI (owner
+    # 2026-11-25): Mode, Taille, IA, Ressources, Pop, Vitesse, Vision,
+    # ages, Traite, Victoire; the finished pairs and these live pairs
+    # BOTH sort through _order_settings_pairs below
+    "mode": ("Mode", {
+        "0": "Random Map", "1": "Empire Wars", "2": "R\u00e9gicide", "3": "King of the Hill",
+        "4": "Death Match", "5": "Battle Royale", "6": "Sudden Death", "7": "Capture du Relique",
+        "8": "D\u00e9fendre la Merveille", "9": "Course \u00e0 la Merveille", "10": "Sc\u00e9nario",
+        "11": "Campagne co-op",
+    }),
+    "size": ("Taille", {
+        "0": "Minuscule (2)", "1": "Petite (3)", "2": "Moyenne (4)", "3": "Normale (6)",
+        "4": "Grande (8)", "5": "Immense", "6": "Colossale",
+    }),
+    "ai_difficulty": ("Difficult\u00e9 IA", {
+        "0": "Tr\u00e8s facile", "1": "Mod\u00e9r\u00e9e", "2": "Difficile", "3": "Extr\u00eame",
+        "4": "Normale", "5": "Tr\u00e8s difficile",
+    }),
+    "resources": ("Ressources", {
+        "0": "Standard", "1": "Faible", "2": "Moyen", "3": "\u00c9lev\u00e9",
+        "4": "Tr\u00e8s \u00e9lev\u00e9", "5": "Infini", "6": "Al\u00e9atoire",
+    }),
+    "population": ("Pop", None),
+    "speed": ("Vitesse", {"0": "Lente", "1": "D\u00e9contract\u00e9e", "2": "Normale", "3": "Rapide"}),
+    "reveal_map": ("Vision", {"0": "Normale", "1": "Explor\u00e9e", "2": "Toute visible"}),
+    "starting_age": ("\u00c2ge d\u00e9part", {
+        "0": "Standard", "1": "\u00c2ge sombre", "2": "\u00c2ge f\u00e9odal", "3": "\u00c2ge des ch\u00e2teaux",
+        "4": "\u00c2ge imp\u00e9rial", "5": "Post-imp\u00e9rial",
+    }),
+    "ending_age": ("\u00c2ge final", {
+        "0": "\u00c2ge sombre", "1": "\u00c2ge imp\u00e9rial", "2": "Standard", "3": "\u00c2ge des ch\u00e2teaux",
+        "4": "\u00c2ge f\u00e9odal", "5": "Post-imp\u00e9rial",
+    }),
+    "treaty_length": ("Trait\u00e9", None),  # the raw treaty minutes - shown only when > 0
+    "victory": ("Victoire", {
+        "0": "Standard", "1": "Conqu\u00eate", "2": "Temps", "3": "Score",
+        "4": "Dernier debout", "5": "Personnalis\u00e9e",
+    }),
+    "scenario": ("Sc\u00e9nario", None),  # the lobby's scenario name - shown when carried
+}
+
+#: the settings pairs' CANONICAL order (owner 2026-11-25): the game's
+#: own lobby UI - Mode, Taille, IA, Ressources, Pop, Vitesse, Vision,
+#: ages, Traite, Victoire; unknown labels tail, original order kept
+_SETTINGS_ORDER = (
+    "Mode", "Taille", "Difficult\u00e9 IA", "Ressources", "Pop", "Vitesse", "Vision",
+    "\u00c2ge d\u00e9part", "\u00c2ge final", "Trait\u00e9", "Victoire", "Sc\u00e9nario", "Places",
+)
+
+#: the map-size tile -> the game UI's own player count (the finished
+#: cards carry tiles, the count rides the label like in-game)
+_MAP_SIZE_COUNTS = {120: 2, 144: 3, 168: 4, 200: 6, 220: 8}
+
+
+def _order_settings_pairs(pairs: list[tuple[str, str]]) -> list[tuple[str, str]]:
+    """Sort the settings pairs in the GAME'S OWN order (owner 2026-11-25)."""
+    def rank(pair: tuple[str, str]) -> tuple[int, str]:
+        label = str(pair[0]).strip()
+        for index, known in enumerate(_SETTINGS_ORDER):
+            if label.lower() == known.lower():
+                return (index, label)
+        return (len(_SETTINGS_ORDER), label)
+    return sorted(pairs, key=rank)
+
+SETTING_BOOLEANS = {
+    "1": "profile.matches_setting_cheats",
+    "65": "profile.matches_setting_lock_speed",
+    "66": "profile.matches_setting_lock_teams",
+    "62": "profile.matches_setting_full_tech",
+    "75": "profile.matches_setting_record",
+    "76": "profile.matches_setting_shared_expl",
+    "77": "profile.matches_setting_team_positions",
+    "78": "profile.matches_setting_team_together",
+    "79": "profile.matches_setting_turbo",
+}
+
+
+def _seat_teams(card: dict[str, Any]) -> list[tuple[int, list[dict[str, Any]]]]:
+    """Group the card's seats per team, SLOT-ordered within each.
+
+    The seats follow the slotinfo positions (the game's slots 1-8);
+    a missing slot falls back to the alias order.
+    """
+    by_team: dict[int, list[dict[str, Any]]] = {}
+    for player in card.get("players") or []:
+        if not isinstance(player, dict):
+            continue
+        by_team.setdefault(int(player.get("team", 0) or 0), []).append(player)
+    # ONE team for everyone is NO team (owner 2026-11-26: the vs-AI
+    # lobby ships its human and its computer on the same team number -
+    # the un-formed discipline reads FFA, never a "[ 2 ]" group)
+    if len(by_team) == 1 and sum(len(s) for s in by_team.values()) > 1:
+        only = next(iter(by_team))
+        if only != 0:
+            by_team = {0: by_team.pop(only)}
+    for seats in by_team.values():
+        seats.sort(
+            key=lambda p: (int((p or {}).get("slot", 0) or 0), str((p or {}).get("alias", "")))
+        )
+    return [(team, by_team[team]) for team in sorted(by_team)]
+
+
+def _ordered_teams(card: dict[str, Any], me_ids: set[str]) -> list[tuple[int, list[dict[str, Any]]]]:
+    """Order the teams: MY team first (owner 2026-11-22), even team 2."""
+    teams = _seat_teams(card)
+    my_team = next(
+        (
+            i
+            for i, (_, seats) in enumerate(teams)
+            if any(str((p or {}).get("profile_id", "")) in me_ids for p in seats)
+        ),
+        None,
+    )
+    if my_team is None or my_team == 0:
+        return teams
+    return [*teams[my_team : my_team + 1], *teams[:my_team], *teams[my_team + 1 :]]
+
+
+
+def _card_footer_text(card: dict[str, Any], labels: dict[str, Any], me_ids: set[str] | None = None) -> str:
+    """Render the footer: the source line only.
+
+    The settings LINE is gone (owner 2026-11-23: the footer carries
+    the source, the settings live behind the settings button). The
+    source link mirrors the provider's OWN fetch of THE match
+    (getMatchHistory?matchIDs, the public GET - owner 2026-11-23):
+    the card's match id, no profile page, no count.
+    """
+    status = str(card.get("status") or "")
+    if status in ("lobby", "ongoing"):
+        # a LIVE match names its source: aoe2lobby (owner 2026-11-23) -
+        # the join page while the lobby stands, the watch page during
+        # the game; libre:match serves the FINISHED history only
+        # the site has NO per-match page (owner 2026-11-24): the link
+        # names the provider, the join/watch buttons own the match
+        source = str(labels.get("source_live", "Source : [aoe2lobby]({url})")).format(
+            url="https://aoe2lobby.com/"
+        )
+        return f"-# {source}"
+    match_id = str(card.get("match_id") or "").strip()
+    source_url = LIBREMATCH_SOURCE_URL.format(match_id=match_id) if match_id else ""
+    source = str(labels.get("source", "Source : libre:match")).format(url=source_url or "libre:match")
+    return f"-# {source}"
+
+#: the game-rule checkboxes in THE GAME'S OWN ORDER (owner
+#: 2026-11-24), "(blob key, live key, locale)": the blob key serves
+#: the finished cards, the live key the lobbies/ongoing ones; a None
+#: key renders "?" - the option exists in the game but the provider
+#: never carries it (Handicap: no feed field, unknown blob key)
+SETTING_CHECKBOX_ORDER = (
+    ("66", "lock_teams", "profile.matches_setting_lock_teams"),
+    ("78", "team_together", "profile.matches_setting_team_together"),
+    ("77", "team_positions", "profile.matches_setting_team_positions"),
+    ("76", "shared_exploration", "profile.matches_setting_shared_expl"),
+    (None, None, "profile.matches_setting_handicap"),  # "?" always
+    ("65", "lock_speed", "profile.matches_setting_lock_speed"),
+    ("1", "cheats", "profile.matches_setting_cheats"),
+    ("79", "turbo_mode", "profile.matches_setting_turbo"),
+    ("62", "full_tech_tree", "profile.matches_setting_full_tech"),
+    ("@ew", "ew_mode", "profile.matches_setting_ew"),
+    ("@sudden", "sudden_death_mode", "profile.matches_setting_sudden_death"),
+    ("@regicide", "regicide_mode", "profile.matches_setting_regicide"),
+    (None, "antiquity_mode", "profile.matches_setting_antiquity"),
+    ("75", "record", "profile.matches_setting_record"),
+    # the lobby's OWN booleans (owner 2026-11-25): they ride the live
+    # payload named; the finished blob never carried them ("@lobby" -
+    # NEVER listed on a finished card, owner 2026-11-26: the data was
+    # never captured, a "?" line reads like a bug)
+    ("@lobby", "hide_civilizations", "profile.matches_setting_hide_civs"),
+    ("@lobby", "password", "profile.matches_setting_password"),
+)
+
+_LIVE_SETTING_BOOLEANS = {
+    "cheats": "profile.matches_setting_cheats",
+    "lock_speed": "profile.matches_setting_lock_speed",
+    "lock_teams": "profile.matches_setting_lock_teams",
+    "full_tech_tree": "profile.matches_setting_full_tech",
+    "record": "profile.matches_setting_record",
+    "shared_exploration": "profile.matches_setting_shared_expl",
+    "team_positions": "profile.matches_setting_team_positions",
+    "team_together": "profile.matches_setting_team_together",
+    "turbo_mode": "profile.matches_setting_turbo",
+    # the mode flags (owner 2026-11-23): the aoe2lobby payload names
+    # them, the schema labels them Yes/No - the checkboxes render them
+    "ew_mode": "profile.matches_setting_ew",
+    "sudden_death_mode": "profile.matches_setting_sudden_death",
+    "regicide_mode": "profile.matches_setting_regicide",
+    "antiquity_mode": "profile.matches_setting_antiquity",
+    # the lobby's OWN booleans (owner 2026-11-25)
+    "hide_civilizations": "profile.matches_setting_hide_civs",
+    "password": "profile.matches_setting_password",
+}
+
+
+#: the named settings the RAW options blob completes (the
+#: post-Return-of-Rome AoE2 keys); label key \u2192 value table
+_SETTINGS_RAW_KEYS: dict[str, tuple[str, dict[str, str] | None]] = {
+    "37": ("Ressources", {
+        "0": "Standard", "1": "Faible", "2": "Moyen", "3": "\u00c9lev\u00e9", "4": "Tr\u00e8s \u00e9lev\u00e9",
+        "5": "Infini", "6": "Al\u00e9atoire",
+    }),
+    "82": ("Vision", {"0": "Normale", "1": "Explor\u00e9e", "2": "Toute visible"}),
+    "0": ("\u00c2ge d\u00e9part", {
+        "0": "Standard", "2": "\u00c2ge sombre", "3": "\u00c2ge f\u00e9odal", "4": "\u00c2ge des ch\u00e2teaux",
+        "5": "\u00c2ge imp\u00e9rial", "6": "Post-imp\u00e9rial",
+    }),
+    "4": ("\u00c2ge final", {
+        "0": "Standard", "2": "\u00c2ge sombre", "3": "\u00c2ge f\u00e9odal", "4": "\u00c2ge des ch\u00e2teaux",
+        "5": "\u00c2ge imp\u00e9rial", "6": "Post-imp\u00e9rial",
+    }),
+    "61": ("Difficult\u00e9 IA", {
+        "-1": "Extr\u00eame", "0": "Tr\u00e8s difficile", "1": "Difficile", "2": "Mod\u00e9r\u00e9e",
+        "3": "Normale", "4": "Tr\u00e8s facile",
+    }),
+    "57": ("Trait\u00e9", None),  # the raw treaty minutes - shown only when > 0
+}
+
+
+def _int_or(value: Any, default: int = 0) -> int:
+    """Coerce to int, the default on garbage."""
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return default
+
+
+def _settings_named_pairs(card: dict[str, Any]) -> list[tuple[str, str]]:
+    """Derive the named value lines of the settings view.
+
+    The provider's stored pairs (Mode, Taille, Pop, Vitesse,
+    Victoire) stay the canonical summary; the raw options blob
+    completes them (Ressources, Vision, ages, difficult\u00e9, trait\u00e9)
+    when it rides the card. The LIVE lobby cards (no blob at all)
+    render through the aoe2lobby named tables instead - one popup,
+    two sources, one grammar.
+    """
+    import json as _json
+
+    pairs: list[tuple[str, str]] = [
+        (str(label), str(value)) for label, value in (card.get("settings") or [])
+        if str(label) != "Cheats"
+    ]
+    raw = str(card.get("options_json") or "")
+    try:
+        options: dict[str, Any] = _json.loads(raw) if raw else {}
+    except Exception:
+        options = {}
+    if raw and isinstance(options, dict):
+        for key, (label, table) in _SETTINGS_RAW_KEYS.items():
+            value = options.get(key)
+            if value in (None, ""):
+                continue
+            if key == "57" and _int_or(value, 0) <= 0:
+                continue  # no treaty reads better than "0 min"
+            shown = str((table or {}).get(str(value), value)) if table is not None else f"{value} min"
+            pairs.append((label, shown))
+        return _order_settings_pairs(_sized_pairs(card, pairs))
+    # the LIVE lobby carries its settings RAW and named (aoe2lobby,
+    # not the encoded blob): the same popup renders them through the
+    # live tables (owner 2026-11-23: the settings button of a live
+    # card answered empty)
+    pairs.extend(_live_named_pairs(card))
+    return _order_settings_pairs(_sized_pairs(card, pairs))
+
+
+def _live_bool_lines(card: dict[str, Any], labels: dict[str, Any], lines: list[str]) -> list[str]:
+    """Render the LIVE lobby's checkboxes (raw true/false, the game's order)."""
+    live = _live_settings(card)
+    if not live:
+        return lines
+    bool_labels: dict[str, str] = dict(labels.get("setting_bools_live") or {})
+    names: dict[str, str] = dict(labels.get("checkbox_names") or {})
+    separator_hit = False
+    lobby_separator_shown = False
+    for _blob_key, key, locale_key in SETTING_CHECKBOX_ORDER:
+        label = bool_labels.get(key or "") or names.get(locale_key) or str(locale_key).split(".")[-1]
+        if _blob_key == "@lobby":
+            # the lobby's OWN booleans open a SECTION of their own
+            # (owner 2026-11-26: "Cacher les civilisations" & "Mot de
+            # passe" read apart from the game's checkboxes) - the
+            # section only opens when the payload carries something
+            if key not in live:
+                continue
+            if not lobby_separator_shown:
+                section = str(labels.get("setting_lobby_section") or "Lobby")
+                lines.append(f"──────────\n**{section}**")
+                lobby_separator_shown = True
+            mark = "✅" if bool(live.get(key)) else "⬜"
+            lines.append(f"{mark} {label}")
+            continue
+        if key is None:
+            # the option the feed never carries: "?" (owner
+            # 2026-11-24: Handicap is unknown in every source)
+            lines.append(f"❓ {label}")
+            continue
+        if key not in live:
+            continue
+        enabled = bool(live.get(key))
+        mark = "✅" if enabled else "⬜"
+        if not separator_hit and key == "lock_speed":
+            lines.append("──────────")
+            separator_hit = True
+        lines.append(f"{mark} {label}")
+    return lines
+
+
+def _live_named_pairs(card: dict[str, Any]) -> list[tuple[str, str]]:
+    """Render the live lobby's named settings through the aoe2lobby tables."""
+    live = _live_settings(card)
+    pairs: list[tuple[str, str]] = []
+    for key, (label, table) in _LIVE_SETTINGS_KEYS.items():
+        value = live.get(key)
+        if value in (None, ""):
+            continue
+        if key == "treaty_length" and _int_or(value, 0) <= 0:
+            continue
+        shown = str((table or {}).get(str(value), value)) if table is not None else str(value)
+        if key == "treaty_length":
+            shown = f"{shown} min"
+        if key == "victory" and str(live.get("victory")) in ("3", "5"):
+            threshold = _int_or(live.get("victory_threshold"), 0)
+            if threshold > 0:
+                shown = f"{shown} ({threshold})"
+        pairs.append((label, shown))
+    return pairs
+
+
+def _sized_pairs(card: dict[str, Any], pairs: list[tuple[str, str]]) -> list[tuple[str, str]]:
+    """Dress the settings pairs: the Taille, the counts, the open slots.
+
+    The Taille line carries the player COUNT like the game's UI (owner
+    2026-11-25: "Grande (8)"), and a LOBBY shows its open slots.
+    """
+    import re as _re
+
+    out: list[tuple[str, str]] = []
+    for label, value in pairs:
+        if str(label).strip().lower() == "taille":
+            match = _re.search(r"(\d+)\s*\u00d7\s*(\d+)", str(value))
+            if match:
+                tiles = _int_or(match.group(1), 0)
+                count = _MAP_SIZE_COUNTS.get(tiles)
+                size_name = _re.search(r"\(([^()]+)\)", str(value))
+                if count and size_name:
+                    value = f"{size_name.group(1)} ({count})"
+                elif count:
+                    value = f"{value} ({count})"
+        out.append((label, value))
+    # the LOBBY's open slots (owner 2026-11-25): a lobby-only property
+    if str(card.get("status") or "") == "lobby" and str(card.get("open_slots") or "-1") not in ("-1", ""):
+        open_slots = _int_or(card.get("open_slots"), -1)
+        players = len(card.get("players") or [])
+        if open_slots >= 0:
+            total = players + open_slots
+            out.append(("Places", f"{open_slots}/{total}"))
+    return out
+
+
+def _live_settings(card: dict[str, Any]) -> dict[str, Any]:
+    """Parse the card's raw named live settings (aoe2lobby)."""
+    import json as _json
+
+    raw = str(card.get("live_settings_json") or "")
+    if not raw:
+        return {}
+    try:
+        data = _json.loads(raw)
+    except Exception:
+        return {}
+    return data if isinstance(data, dict) else {}
+
+
+def _settings_bool_lines(card: dict[str, Any], labels: dict[str, Any]) -> list[str]:
+    """Derive the game-rule checkbox lines (✅ enabled, ⬜ off)."""
+    import json as _json
+
+    raw = str(card.get("options_json") or "")
+    try:
+        options: dict[str, Any] = _json.loads(raw) if raw else {}
+    except Exception:
+        options = {}
+    lines: list[str] = []
+    if not isinstance(options, dict) or not options:
+        # the live lobby's booleans are RAW true/false json (aoe2lobby)
+        return _live_bool_lines(card, labels, lines)
+    # the finished cards: the blob's 'y'/'n' flags, the game's order
+    blob_labels: dict[str, str] = dict(labels.get("setting_bools") or {})
+    names: dict[str, str] = dict(labels.get("checkbox_names") or {})
+    for blob_key, _live_key, locale_key in SETTING_CHECKBOX_ORDER:
+        label = blob_labels.get(blob_key or "") or names.get(locale_key) or str(locale_key).split(".")[-1]
+        if blob_key == "@lobby":
+            # the LOBBY's own booleans never rode the finished blob
+            # (owner 2026-11-26: never captured - not listed at all)
+            continue
+        if blob_key is None:
+            lines.append(f"❓ {label}")
+            continue
+        if blob_key == "65":
+            lines.append("──────────")
+        if blob_key.startswith("@"):
+            # the MODE carries the exotic rule (owner 2026-11-25 - a
+            # 3651-match upstream sweep: NO dedicated boolean rides
+            # the finished blob for these three; EW ticks when the
+            # game mode key 5 reads 13, sudden death 11, regicide 1)
+            _flags_of = {"@ew": "13", "@sudden": "11", "@regicide": "1"}
+            enabled = str(options.get("5", "")).strip() == _flags_of[blob_key]
+            lines.append(f"{'✅' if enabled else '⬜'} {label}")
+            continue
+        raw_value = options.get(blob_key)
+        if raw_value in (None, ""):
+            continue
+        enabled = str(raw_value).lower() == "y"
+        mark = "✅" if enabled else "⬜"
+        lines.append(f"{mark} {label}")
+    return lines
+
+
+class _CardRefreshButton(discord.ui.Button[Any]):
+    """The REFRESH button of a LIVE card (owner 2026-11-25).
+
+    The lobby moves (seats fill, settings change): the refresh
+    re-reads the CURRENT snapshot and re-renders THE MESSAGE in
+    place - the row reads refresh, parametres, rejoindre/spectate.
+    """
+
+    def __init__(self, card: dict[str, Any], labels: dict[str, Any]) -> None:
+        super().__init__(
+            # "Match" (owner 2026-11-26): the card's refresh never
+            # reads the dashboard's "Rafra\u00eechir" - the two touching
+            # rows looked like one duplicated button
+            label=str(labels.get("matches_refresh_match_button", "Match")),
+            emoji="\U0001f504",
+            style=discord.ButtonStyle.secondary,
+            custom_id="home:match:refresh",
+        )
+        self._card = card
+        self._labels = labels
+
+    async def callback(self, interaction: discord.Interaction) -> None:
+        """Re-read the live snapshot and edit THIS message in place."""
+        card = self._card
+        fresh = await _refresh_live_card(interaction, card)
+        if fresh is not None:
+            card = fresh
+        try:
+            await interaction.response.edit_message(
+                view=_match_card_view(card, {}, set(), self._labels)
+            )
+        except Exception:
+            logger.debug("the live card refresh edit failed", exc_info=True)
+            await interaction.response.defer()
+
+
+class _MatchSettingsButton(discord.ui.Button[Any]):
+    """The settings button of ONE match card (owner 2026-11-23).
+
+    An INLINE, non-persistent item: the panels are ephemeral popups,
+    the button and its payload (the card) share the popup's own
+    lifetime. The click answers the FULL settings view - sober but
+    complete: disabled selects for the named values, emoji checkbox
+    lines for the game rules.
+    """
+
+    def __init__(self, card: dict[str, Any], labels: dict[str, Any]) -> None:
+        super().__init__(
+            label=str(labels.get("settings_button", "Param\u00e8tres")),
+            emoji="\u2699\ufe0f",
+            style=discord.ButtonStyle.secondary,
+            custom_id="home:match:settings",
+        )
+        self._card = card
+        self._labels = labels
+
+    async def callback(self, interaction: discord.Interaction) -> None:
+        """Answer the settings view - REFRESHED for a live match.
+
+        A live match moves (owner 2026-11-23: the settings read stale
+        unless the whole view re-rendered): the click re-reads the
+        CURRENT snapshot and rebuilds the card before rendering - no
+        cache on a running match's settings, full freshness.
+        """
+        card = self._card
+        if card.get("status") in ("lobby", "ongoing"):
+            fresh = await _refresh_live_card(interaction, card)
+            if fresh is not None:
+                card = fresh
+        await interaction.response.send_message(
+            view=_settings_view(card, self._labels),
+            ephemeral=True,
+        )
+
+
+async def _refresh_live_card(
+    interaction: discord.Interaction, card: dict[str, Any]
+) -> dict[str, Any] | None:
+    """Re-read ONE live card from the current dashboard snapshot."""
+    client = _live_client_for(interaction.client, "aoe2")
+    if client is None:
+        return None
+    try:
+        snapshot = await client.watch("aoe2")
+    except Exception:
+        logger.debug("the live settings refresh failed", exc_info=True)
+        return None
+    ref = str(card.get("match_ref") or card.get("match_id") or "")
+    for fresh in _cards_from_live_snapshot(snapshot):
+        if str(fresh.get("match_ref") or fresh.get("match_id")) == ref:
+            return fresh
+    return None
+
+
+class _SettingsRefreshButton(discord.ui.Button[Any]):
+    """Refresh the settings popup, while the lobby stands.
+
+    The click re-reads the CURRENT snapshot and re-renders the popup
+    in place (owner 2026-11-25) - the settings never go stale.
+    """
+
+    def __init__(self, card: dict[str, Any], labels: dict[str, Any]) -> None:
+        super().__init__(
+            label=str(labels.get("refresh_button", "Rafra\u00eechir")),
+            emoji="\U0001f504",
+            style=discord.ButtonStyle.secondary,
+            custom_id="home:match:settings:refresh",
+        )
+        self._card = card
+        self._labels = labels
+
+    async def callback(self, interaction: discord.Interaction) -> None:
+        card = self._card
+        if card.get("status") in ("lobby", "ongoing"):
+            fresh = await _refresh_live_card(interaction, card)
+            if fresh is not None:
+                card = fresh
+        try:
+            await interaction.response.edit_message(view=_settings_view(card, self._labels))
+        except Exception:
+            logger.debug("the settings refresh edit failed", exc_info=True)
+            await interaction.response.defer()
+
+
+def _settings_view(card: dict[str, Any], labels: dict[str, Any]) -> discord.ui.LayoutView:
+    """Build the FULL settings view of one match (an ephemeral popup)."""
+    from botforge.discord.ui.view_footer import add_view_footer
+
+    match_id = str(card.get("match_id") or card.get("match_ref") or "?")
+    pairs = _settings_named_pairs(card)
+    bool_lines = _settings_bool_lines(card, labels)
+    named_labels: dict[str, str] = dict(labels.get("settings") or {})
+    title = str(labels.get("settings_title", "\u2699\ufe0f Param\u00e8tres \u2014 Match n\u00b0{id}"))
+    title = title.format(id=match_id)
+    view = discord.ui.LayoutView(timeout=None)
+    container_blocks: list[Any] = [discord.ui.TextDisplay(f"## {title}")]
+    for label, value in pairs:
+        container_blocks.append(
+            discord.ui.TextDisplay(f"-# {named_labels.get(label, label)} : {value}")
+        )
+    if bool_lines:
+        container_blocks.append(discord.ui.Separator())
+        # REAL separators between the checkbox groups (owner
+        # 2026-11-26: "pas une suite de tirets") - the dash markers the
+        # bool builder writes are the SPLIT points, consecutive lines
+        # fold into one text block
+        line_blocks: list[Any] = []
+        chunk: list[str] = []
+        for line in bool_lines:
+            stripped = line.strip()
+            if stripped and set(stripped) == {"─"}:
+                if chunk:
+                    line_blocks.append(discord.ui.TextDisplay("\n".join(chunk)))
+                    chunk = []
+                line_blocks.append(discord.ui.Separator())
+                continue
+            if stripped.startswith("────") and "\n" in line:
+                # the lobby's own section marker: dash line + header
+                if chunk:
+                    line_blocks.append(discord.ui.TextDisplay("\n".join(chunk)))
+                    chunk = []
+                line_blocks.append(discord.ui.Separator())
+                chunk.append(line.split("\n", 1)[1])
+                continue
+            chunk.append(line)
+        if chunk:
+            line_blocks.append(discord.ui.TextDisplay("\n".join(chunk)))
+        container_blocks.extend(line_blocks)
+    view.add_item(discord.ui.Container(*container_blocks))
+    # the lobby REFRESH rides the popup (owner 2026-11-25): the
+    # settings never go stale while the lobby stands - the launched
+    # games and the finished matches carry no refresh button
+    if str(card.get("status") or "") in ("lobby", "ongoing"):
+        view.add_item(discord.ui.ActionRow(_SettingsRefreshButton(card, labels)))
+    return add_view_footer(view, f"panel:match:settings:aoe2:{match_id}")
+
+
+def _card_format(card: dict[str, Any]) -> str:
+    """Return the match's format tag - the teams' EXACT sizes (owner 2026-11-25).
+
+    ``1v2v3v1`` reads team by team; the all-alone melee (every team
+    a single player, three teams or more) reads FFA.
+    """
+    teams = _seat_teams(card)
+    # seats in NO team at all read FFA too (owner 2026-11-25: the
+    # lobby before its teams form is a melee, never a "[ 2 ]")
+    teamless = all(team == 0 for team, _seats in teams)
+    if teams and teamless and sum(len(seats) for _, seats in teams) >= 2:
+        return "FFA"
+    sizes = [len(seats) for _, seats in teams]
+    if not sizes:
+        return ""
+    if len(sizes) >= 3 and all(size == 1 for size in sizes):
+        return "FFA"
+    return "v".join(str(size) for size in sizes)
+
+
+def _is_ffa(card: dict[str, Any]) -> bool:
+    """Whether the match is a free-for-all (owner 2026-11-25).
+
+    An FFA shows NO team - the seats read as one ladder, a single
+    winner carries the crown.
+    """
+    teams = _seat_teams(card)
+    teamless = all(team == 0 for team, _seats in teams)
+    if teams and teamless and sum(len(seats) for _, seats in teams) >= 2 and len(teams) == 1:
+        return False  # one group never splits - the seats table reads
+    if teams and teamless:
+        return False  # no teams formed: the seat table keeps the slots
+    sizes = [len(seats) for _, seats in teams]
+    return len(sizes) >= 3 and all(size == 1 for size in sizes)
+
+
+def _is_ranked(card: dict[str, Any]) -> bool:
+    """Return True when the match is an AUTOMATCH (the ranked label)."""
+    lobby = str(card.get("lobby_title") or card.get("description") or "").strip().upper()
+    return lobby == "AUTOMATCH" or (not lobby and card.get("status") == "finished")
+
+
+
+async def _entity_local_names(
+    entity_ids: str | list[str], guild_id: str, fallback: str, bot: Any = None
+) -> list[str]:
+    """Resolve an entity's LOCALIZED display names (guild locale, then en).
+
+    The aoe2techtree content docs carry per-locale names (fr:
+    ``Italiens``, ``Vietnamiens``...) while the provider's reference
+    tables speak English \u2014 the panels must display and resolve
+    the names of the guild's own language (owner 2026-11-22: the
+    Italian/Vietnamese posts never linked).
+    """
+    from botforge.discord.content_posts import content_service, guild_locale
+
+    service = content_service()
+    if service is None:
+        return [fallback] if fallback else []
+    if isinstance(entity_ids, str):
+        entity_ids = [entity_ids]
+    # the REAL guild locale needs the bot (the STORED choice rides the
+    # logs service on it): a null bot resolved "en" and the French
+    # posts never matched (owner 2026-11-23: Vietnamese/Italians)
+    locales_resolved = await guild_locale(guild_id, bot)
+    names: list[str] = []
+    locales = list(dict.fromkeys([locales_resolved, "en"]))
+    for locale in locales:
+        for entity_id in entity_ids:
+            try:
+                doc = await service.content_get(entity_id, locale)
+            except Exception:
+                logger.debug("the entity content read failed (%s)", entity_id, exc_info=True)
+                doc = None
+            name = str((doc or {}).get("name", "") or "").strip()
+            if name and name not in names:
+                names.append(name)
+            if doc:
+                break  # the first candidate that answers names the entity
+    if fallback and fallback not in names:
+        names.append(fallback)
+    return [n for n in names if n]
+
+
+async def _posts_enrichment(
+    client: discord.Client,
+    cards: list[dict[str, Any]],
+    guild_id: str,
+) -> tuple[
+    dict[str, str], dict[str, str], dict[str, str], dict[str, str], dict[str, str], dict[str, str]
+]:
+    """Resolve per-batch: (civ posts, civ images, map posts, map images, civ names, map names)."""
+    civ_urls: dict[str, str] = {}
+    civ_images: dict[str, str] = {}
+    map_urls: dict[str, str] = {}
+    map_images: dict[str, str] = {}
+    if not guild_id:
+        return civ_urls, civ_images, map_urls, map_images, civ_urls, map_urls
+    civs_channel = await _stored_channel(guild_id, "games/aoe2", "civs")
+    maps_channel = await _stored_channel(guild_id, "games/aoe2", "maps")
+    civs_needed: set[str] = set()
+    maps_needed: set[str] = set()
+    for card in cards:
+        for player in card.get("players") or []:
+            civ = str((player or {}).get("civ") or "").strip()
+            if civ:
+                civs_needed.add(civ)
+        map_name = str(card.get("map_name") or "").strip()
+        if map_name:
+            maps_needed.add(map_name)
+    civ_display: dict[str, str] = {}
+    map_display: dict[str, str] = {}
+    for civ in civs_needed:
+        candidates = _civ_entity_ids(civ)
+        names = await _entity_local_names(candidates, guild_id, civ, client)
+        civ_urls[civ] = await _entity_post_url(client, guild_id, civs_channel, names)
+        civ_display[civ] = names[0] if names else civ
+        civ_images[civ] = ""
+        for candidate in candidates:
+            civ_images[civ] = await _entity_image(candidate, guild_id)
+            if civ_images[civ]:
+                break
+    for map_name in maps_needed:
+        names = await _entity_local_names(_map_entity_id(map_name), guild_id, map_name, client)
+        map_urls[map_name] = await _entity_post_url(client, guild_id, maps_channel, names)
+        map_display[map_name] = names[0] if names else map_name
+        map_images[map_name] = await _entity_image(_map_entity_id(map_name), guild_id)
+    return civ_urls, civ_images, map_urls, map_images, civ_display, map_display
+
+
+async def _match_panels_ctx(
+    interaction: discord.Interaction,
+    cards: list[dict[str, Any]],
+) -> dict[str, Any]:
+    """Interaction-bound wrapper: the ctx resolves for the guild."""
+    return await _match_panels_ctx_for(interaction.client, cards, str(interaction.guild_id or ""))
+
+
+async def _match_panels_ctx_for(
+    client: discord.Client,
+    cards: list[dict[str, Any]],
+    guild_id: str,
+) -> dict[str, Any]:
+    """Resolve the shared context of the whole card batch.
+
+    The civ/map post urls and stored images plus the ladder boards
+    (1v1 / TG, current - max) resolve ONCE for every card - a popup
+    costs one enrichment per distinct entity, not per card. The feed
+    surfaces (live activity) call the SAME builder with the bare
+    client - no interaction anywhere.
+    """
+    from botforge.discord.stats_views import stats_client
+
+    civ_urls, civ_images, map_urls, map_images, civ_display, map_display = await _posts_enrichment(
+        client, cards, guild_id
+    )
+    ladder: dict[str, dict[str, tuple[int, int]]] = {}
+    seat_ids = sorted({str((p or {}).get("profile_id", "")) for c in cards for p in c.get("players") or []})
+    stats = stats_client()
+    if seat_ids and stats is not None:
+        try:
+            accounts = await stats.get_account_stats(seat_ids)
+        except Exception:
+            logger.debug("the account stats fetch failed", exc_info=True)
+            accounts = []
+        for account in accounts:
+            boards = _rm_boards_of(account)
+            if boards:
+                ladder[str(account.profile_id)] = boards
+    ctx = {
+        "civ_urls": civ_urls,
+        "civ_images": civ_images,
+        "map_urls": map_urls,
+        "map_images": map_images,
+        "civ_display": civ_display,
+        "map_display": map_display,
+        "ladder": ladder,
+    }
+    ctx["ladder_by_ts"] = await _ladder_as_of(stats, cards)
+    return ctx
+
+
+def _rm_boards_of(account: Any) -> dict[str, tuple[int, int]]:
+    """Extract the SHOWN boards (rm_1v1, rm_team) of one account reply.
+
+    Unranked/custom (leaderboard 0) never renders on a seat (owner
+    2026-11-22).
+    """
+    boards: dict[str, tuple[int, int]] = {}
+    for board in account.leaderboards:
+        if str(board.name) in ("rm_1v1", "rm_team"):
+            boards[str(board.name)] = (int(board.current), int(board.max))
+    return boards
+
+
+def _seats_by_day(cards: list[dict[str, Any]]) -> dict[int, set[str]]:
+    """Group the finished cards' seat ids per THEIR OWN end timestamp.
+
+    A running match (no finished date) stays out: it reads the
+    CURRENT ladder.
+    """
+    by_ts: dict[int, set[str]] = {}
+    for card in cards:
+        ts = int(card.get("finished_at") or 0)
+        if ts <= 0:
+            continue
+        for player in card.get("players") or []:
+            pid = str((player or {}).get("profile_id") or "")
+            if pid:
+                by_ts.setdefault(ts, set()).add(pid)
+    return by_ts
+
+
+async def _ladder_as_of(
+    stats: Any, cards: list[dict[str, Any]]
+) -> dict[int, dict[str, dict[str, tuple[int, int]]]]:
+    """Read the elo (current + max) PER MATCH DAY (owner 2026-11-25).
+
+    They answer AS OF the match's own end - the seat lines render the
+    match's day, not the card's. One as-of read per DISTINCT
+    timestamp of the batch (a seek on the elo timeseries, never per
+    seat); a running game keeps the CURRENT ladder via ``ctx["ladder"]``.
+    """
+    by_ts = _seats_by_day(cards)
+    if stats is None or not by_ts:
+        return {}
+    out: dict[int, dict[str, dict[str, tuple[int, int]]]] = {}
+    for ts, pids in sorted(by_ts.items()):
+        try:
+            accounts = await stats.get_account_stats(sorted(pids), at_s=ts)
+        except Exception:
+            logger.debug("the as-of account stats fetch failed", exc_info=True)
+            continue
+        boards_of = {
+            str(account.profile_id): boards
+            for account in accounts
+            if (boards := _rm_boards_of(account))
+        }
+        if boards_of:
+            out[ts] = boards_of
+    return out
+
+
+def _seat_name(
+    alias_link: str,
+    pid: str,
+    me_ids: set[str],
+    team_mine: bool,
+    team_lost: bool,
+    known_ids: set[str] | None = None,
+) -> str:
+    """Style one seat's name - ONE typography (owner 2026-11-25).
+
+    The strike belongs to the TEAM TITLES only, every name stays
+    whole. The SCOPED card bolds the scoped player; the UNSCOPED
+    card bolds the players the bot KNOWS (the bound profiles).
+    """
+    del team_mine, team_lost  # the titles carry the verdict
+    if me_ids:
+        return f"**{alias_link}**" if pid in me_ids else alias_link
+    known = known_ids or set()
+    return f"**{alias_link}**" if pid in known else alias_link
+
+
+def _ai_level_label(card: dict[str, Any]) -> str:
+    """Return the computer seats' difficulty level (owner 2026-11-25).
+
+    The seat reads the SAME table the settings popup renders (owner
+    2026-11-25: the seat said Extrême while the game settings
+    answered Modérée): the finished blob's key 61 maps through the
+    settings enums, the live WS's ``ai_difficulty`` through the live
+    lobby's own - each payload speaks its own scale.
+    """
+    import json as _json
+
+    value: int | None = None
+    table: dict[str, str] = {}
+    try:
+        live = _json.loads(str(card.get("live_settings_json") or "{}"))
+        value = int(live.get("ai_difficulty"))
+        table = (_LIVE_SETTINGS_KEYS.get("ai_difficulty") or (None, {}))[1] or {}
+    except (ValueError, TypeError, AttributeError):
+        value = None
+    if value is None:
+        try:
+            blob = _json.loads(str(card.get("options_json") or "{}"))
+            value = int(blob.get("61"))
+            table = (_SETTINGS_RAW_KEYS.get("61") or (None, {}))[1] or {}
+        except (ValueError, TypeError, AttributeError, KeyError):
+            return ""
+    return str(table.get(str(value), ""))
+
+
+def _seat_text(
+    player: dict[str, Any],
+    card: dict[str, Any],
+    ctx: dict[str, Any],
+    labels: dict[str, str],
+    me_ids: set[str] | None = None,
+    team_mine: bool = False,
+    team_lost: bool = False,
+    known_ids: set[str] | None = None,
+) -> tuple[str, str]:
+    me_ids = me_ids or set()
+    """Render ONE seat: (text, civ image url).
+
+    The owner's 2026-11-22 grammar:
+    ``💀 [ ▸ ] **Merlin Pinpin** avec [Magyars](post)``
+    ``1v1 : 1039 - 1120``
+    ``TG : **1300** - 1421 (-11)``
+    The MATCH's own board renders pre-match Elo in bold with the diff
+    (finished only); the other board renders plain current - max. The
+    post-match Elo never renders - it is pre-match + diff.
+    """
+    civ_urls = ctx["civ_urls"]
+    ladder = ctx["ladder"]
+    # the finished match reads its OWN day (owner 2026-11-25): the elo
+    # (current + max) as it stood at the match's end; a running game
+    # (no finished date) keeps the CURRENT ladder
+    day_ladder = (ctx.get("ladder_by_ts") or {}).get(int(card.get("finished_at") or 0)) or {}
+    pid = str(player.get("profile_id", ""))
+    alias = str(player.get("alias") or player.get("name") or pid or "?")
+    civ = str(player.get("civ") or "").strip()
+    match_id = str(card.get("match_id") or card.get("match_ref") or "")
+    finished = card.get("status") == "finished"
+    # the replay link ONLY when finished (owner 2026-11-23): a lobby
+    # or a running game has no replay - the link was nonsense there
+    # an AI seat carries no profile id: the replay jump stays with
+    # the humans (owner 2026-11-24 - the computer link pointed nowhere)
+    replay = (
+        REPLAY_URL.format(match_id=match_id, profile_id=pid)
+        if match_id and finished and pid
+        else ""
+    )
+    jump = f"[[ \u25b8 ]]({replay})" if replay else ""
+    # the display name reads the GUILD's own locale (aoe2techtree's
+    # localized docs): the stored civ is the English reference key;
+    # the raw key never displays (owner 2026-11-23: the civs showed
+    # English on the match links while the guild speaks French)
+    civ_shown = str((ctx.get("civ_display") or {}).get(civ) or civ)
+    civ_link = f"[{civ_shown}]({civ_urls[civ]})" if civ and civ_urls.get(civ) else civ_shown
+    # the alias links to the player's #joueurs POST when he is known,
+    # else to the game's profile_link_template (owner 2026-11-27: the
+    # pseudo redirects to the guild's own forum, never straight to the
+    # external site); ONLY the viewed player's alias carries the bold
+    # (owner 2026-11-22)
+    raw_links: Any = labels.get("post_links") if isinstance(labels, dict) else {}
+    post_links: dict[str, str] = dict(raw_links) if isinstance(raw_links, dict) else {}
+    alias_target = str(post_links.get(pid) or "") if pid else ""
+    if not alias_target and pid:
+        alias_target = _game_account_url("aoe2", pid)
+    # the KNOWN player wears his star before his name (owner 2026-11-27)
+    star = "\U0001F31F" if alias_target and pid and pid in post_links else ""
+    alias_link = f"{star}[{alias}]({alias_target})" if alias_target else alias
+    # a COMPUTER wears its level (owner 2026-11-25: "IA (Extrême)")
+    if bool(player.get("ai")):
+        level = _ai_level_label(card)
+        base = str(labels.get("ai") or "IA")
+        alias_link = f"{base} ({level})" if level else base
+    name = _seat_name(alias_link, pid, me_ids, team_mine, team_lost, known_ids)
+    slot = int(player.get("slot", 0) or 0)
+    # the position reads P1-8, backticked for a FIXED width; the
+    # ladder lines underneath indent 4 spaces so the columns align
+    # (owner 2026-11-23)
+    slot_badge = f"`P{slot}`" if slot else ""
+    line = " ".join(bit for bit in [slot_badge, name] if bit)
+    if civ_link:
+        line += f" {labels.get('with', 'avec')} {civ_link}"
+    if jump:
+        line += f" {jump}"
+    # the ladder lines: 1v1 and TG only (never unranked), one under
+    # the other; the match's own board carries the bold elo — even
+    # in a custom game — and the elo DIFF renders for RANKED
+    # matches only (an unranked diff means nothing, owner 2026-11-22)
+    boards = day_ladder.get(pid) or ladder.get(pid) or {}
+    boards = dict(boards)
+    before = int(player.get("rating_before") or 0)
+    after = int(player.get("rating_after") or 0)
+    is_team_game = len(_seat_teams(card)) and any(len(seats) > 1 for _, seats in _seat_teams(card))
+    match_board = "rm_team" if is_team_game else "rm_1v1"
+    ranked = str(card.get("lobby_title") or "").strip().upper() == "AUTOMATCH"
+    # the boards a player's card ALWAYS names: LB3 and LB4, nothing
+    # else (owner 2026-11-24: an Empire Wars TG automatch must not
+    # dress its board-14 elo as the TG line)
+    rm_board = str(card.get("leaderboard_id") or "") in ("3", "4")
+    lines = [line]
+    # an INVISIBLE fixed-width decal, no backticks (owner 2026-11-23:
+    # the backtick span read as a visible token): Discord's renderer
+    # eats whitespace after a -# prefix - regular spaces AND nbsp -
+    # but the braille blank (U+2800) is a glyph, not whitespace: it
+    # never trims and renders as an invisible blank of fixed width.
+    indent = "\u2800\u2800\u2800\u2800"
+    for key, label in (("rm_1v1", "1v1"), ("rm_team", "TG")):
+        current, peak = boards.get(key, (0, 0))
+        if key == match_board and rm_board and (before if ranked else current):
+            value = before if ranked else current
+            highlight = max(value, peak, after if ranked else 0, 0)
+            body = f"-# {indent}{label} : **{value}** - {highlight}"
+            if ranked and finished and after != before:
+                body += f" ({after - before:+d})"
+            lines.append(body)
+        elif current:
+            span = f"{current} - {peak}" if peak and peak > current else f"{current}"
+            lines.append(f"-# {indent}{label} : {span}")
+    return "\n".join(lines), ctx["civ_images"].get(civ, "")
+
+
+def _seat_component(text: str, civ_image: str) -> Any:
+    """One seat becomes a Section with the civ icon in accessory."""
+    if civ_image:
+        return discord.ui.Section(
+            discord.ui.TextDisplay(text),
+            accessory=discord.ui.Thumbnail(civ_image),
+        )
+    return discord.ui.TextDisplay(text)
+
+
+def _card_map_section(card: dict[str, Any], ctx: dict[str, Any], labels: dict[str, Any] | None = None) -> Any:
+    """Build the card's map section.
+
+    The post link carries the title, the stored image rides as the
+    section accessory, the when reads the end (finished) or the
+    start, the duration renders when finished.
+    """
+    map_name = str(card.get("map_name") or "").strip()
+    titled = bool(map_name) and map_name.lower() != "my map"
+    # the DISPLAY name localizes (the reference tables stay English);
+    # the post url resolution already tried every handed name form
+    map_shown = str((ctx.get("map_display") or {}).get(map_name) or map_name)
+    map_label = map_shown if titled else (str(card.get("lobby_title") or "").strip() or "Match")
+    map_url = ctx["map_urls"].get(map_name, "") if titled else ""
+    map_link = f"[{map_label}]({map_url})" if map_url else f"**{map_label}**"
+    labels = labels or {}
+    when_at = int(card.get("finished_at") or card.get("started_at") or 0)
+    # the relative timestamp renders "Il y a" ITSELF (owner 2026-11-25):
+    # the locale carries {when} alone, the fallback too - never twice
+    when_line = str(labels.get("when", "{when}")).format(when=f"<t:{when_at}:R>") if when_at else ""
+    sub_lines = [when_line]
+    # an INVALID match still shows, WITH ITS STATUS (owner 2026-11-24:
+    # a match under five minutes or without a result seeds the
+    # players forum like any other - the status line says why)
+    if card.get("invalid"):
+        reason = str(card.get("invalid_reason") or "")
+        if reason == "no_result":
+            reason = str(labels.get("invalid_no_result", ""))
+        elif reason == "short":
+            reason = str(labels.get("invalid_short", ""))
+        sub_lines.append(
+            "-# "
+            + str(labels.get("invalid", "Match non compté"))
+            + ((" \u2014 " + reason) if reason else "")
+        )
+    if card.get("status") == "finished":
+        duration = max(0, int(card.get("finished_at") or 0) - int(card.get("started_at") or 0))
+        if duration:
+            sub_lines.append(
+                "-# " + str(labels.get("duration", "Durée : {clock}")).format(clock=_fmt_clock(duration))
+            )
+    title = str(card.get("lobby_title") or "").strip()
+    title_line = ""
+    if title and title.upper() != "AUTOMATCH":
+        title_line = f"**{title}**\n"
+    map_text = f"{title_line}### {map_link}\n" + "\n".join(line for line in sub_lines if line)
+    image = ctx["map_images"].get(map_name, "") if titled else ""
+    if image:
+        return discord.ui.Section(discord.ui.TextDisplay(map_text), accessory=discord.ui.Thumbnail(image))
+    return discord.ui.TextDisplay(map_text)
+
+
+def _card_header(
+    badge: str,
+    noun: str,
+    match_id: str,
+    me_ids: set[str] | None = None,
+    card: dict[str, Any] | None = None,
+    ranked_prefix: str = "",
+) -> str:
+    """Render the card's header: the badge line, the match id linked.
+
+    The insights match page wraps the id (owner 2026-11-22: a link
+    button left the row, the id itself carries it). A SCOPED view
+    (owner 2026-11-23) rides the scoped player's OWN outcome emoji
+    before the badge: one emoji per view, none per team.
+    """
+    insights_match = (
+        INSIGHTS_MATCH_URL.format(match_id=match_id) if match_id and match_id != "?" else ""
+    )
+    # the owner's 2026-11-23 pattern: the insights link wraps the
+    # part-name badge, the id rides backticks for an easy copy
+    name_part = f"[[ {badge} ]]({insights_match})" if insights_match else f"[ {badge} ]"
+    id_part = f"`{match_id}`"
+    scope_icon = ""
+    me_ids = me_ids or set()
+    card = card or {}
+    winners = {str(w) for w in card.get("winners") or []}
+    if me_ids and card.get("status") in ("lobby", "ongoing"):
+        # the scoped LIVE view wears its OWN icon (owner 2026-11-25):
+        # the lobby stands, the game runs
+        scope_icon = "\U0001F7E1 " if card.get("status") == "lobby" else "\U0001F7E2 "
+    elif me_ids and card.get("status") == "finished" and not card.get("invalid"):
+        if winners:
+            scope_icon = "\U0001f3c6 " if winners & me_ids else "\U0001f480 "
+        elif any(bool((p or {}).get("ai")) for p in card.get("players") or []):
+            # no human victor with computers on the board: the AIs won,
+            # the scoped human LOST (owner 2026-11-24 - his 1v1v1
+            # against two AIs recorded no winner upstream)
+            scope_icon = "\U0001f480 "
+        elif card.get("status") == "finished":
+            scope_icon = ""
+    # the ranked marker rides OUTSIDE the link, AFTER the badge
+    # (owner 2026-11-25): a masked link's text never renders an emoji
+    return f"{scope_icon}**{name_part}** {ranked_prefix}{noun}{id_part}"
+
+
+
+def _ai_decided(card: dict[str, Any]) -> bool:
+    """Whether the COMPUTERS decided the match (owner 2026-11-24).
+
+    A finished match with NO human winner and computers on board is
+    decided: the AIs won, the humans lost. Renders like any verdict -
+    the unscoped teams take their medals, the scoped human takes the
+    skull and the strike.
+    """
+    if card.get("status") != "finished" or card.get("invalid"):
+        return False
+    if any(str(w) for w in card.get("winners") or []):
+        return False
+    return any(bool((p or {}).get("ai")) for p in card.get("players") or [])
+
+
+def _card_ffa_blocks(
+    card: dict[str, Any],
+    teams: list[tuple[int, list[dict[str, Any]]]],
+    ctx: dict[str, Any],
+    labels: dict[str, Any],
+    me_ids: set[str],
+    winners: set[str],
+    ai_decided: bool,
+) -> list[Any]:
+    """Render the free-for-all ladder: no team, a per-seat W/LOSS mark.
+
+    A melee reads as one list of seats (owner 2026-11-25) - no team
+    titles, so NOTHING strikes through (owner 2026-11-25: "pas besoin
+    de barrer les perdants" - each player carries his own verdict at
+    the front of his line). When the computers decided it, EVERY
+    living AI seat wins and every human lost (owner 2026-11-25:
+    upstream records no victor, the eyes still see a defeat).
+    """
+    blocks: list[Any] = []
+    finished = card.get("status") == "finished" and not card.get("invalid")
+    verdict = bool(winners) or ai_decided
+    for _team, seats in teams:
+        for player in seats:
+            pid = str(player.get("profile_id", ""))
+            text, civ_image = _seat_text(player, card, ctx, labels, me_ids)
+            mark = ""
+            if finished and verdict:
+                if winners:
+                    won = pid in winners
+                else:  # the computers decided it: the AIs win, the humans lost
+                    won = bool(player.get("ai"))
+                mark = "\U0001f3c6 " if won else "\U0001f480 "
+            blocks.append(_seat_component(mark + text, civ_image))
+    return blocks
+
+
+def _card_team_blocks(
+    card: dict[str, Any],
+    teams: list[tuple[int, list[dict[str, Any]]]],
+    me_ids: set[str],
+    labels: dict[str, Any],
+    ctx: dict[str, Any],
+    known_ids: set[str] | None = None,
+) -> list[Any]:
+    """Render the card's team sections: ONE block per seat.
+
+    The SCOPE (owner 2026-11-23): a view scoped onto one player
+    strikes the LOSING teams' titles and rides no per-team medal -
+    the header's emoji already tells the outcome; an unscoped view
+    keeps one \U0001f3c6/\U0001f480 medal per team.
+    """
+    scoped = bool(me_ids)
+    winners = {str(w) for w in card.get("winners") or []}
+    finished = card.get("status") == "finished"
+    # the AI verdict (owner 2026-11-24): no human winner with
+    # computers on board - the computer teams WON, the humans lost
+    ai_decided = _ai_decided(card)
+    verdict = bool(winners) or ai_decided
+
+    def _team_won(seats: list[dict[str, Any]]) -> bool:
+        if any(str((p or {}).get("profile_id", "")) in winners for p in seats):
+            return True
+        return ai_decided and any(bool((p or {}).get("ai")) for p in seats)
+
+    # an FFA reads ONE ladder (owner 2026-11-25)
+    if _is_ffa(card):
+        return _card_ffa_blocks(card, teams, ctx, labels, me_ids, winners, ai_decided)
+    blocks: list[Any] = []
+    for index, (_team, seats) in enumerate(teams):
+        if index:
+            blocks.append(discord.ui.Separator())
+        # the scoped player's team (the seat grammar rides it,
+        # whatever the team count)
+        mine = any(str((p or {}).get("profile_id", "")) in me_ids for p in seats)
+        if len(teams) > 1:
+            won = _team_won(seats)
+            medal = ""
+            if not scoped and verdict and finished:
+                medal = "\U0001f3c6 " if won else "\U0001f480 "
+            # the SCOPE carries no per-team medal: the scoped player's
+            # team reads BOLD, every other team reads italics, the
+            # losers strike through (owner 2026-11-23)
+            base = f"{labels.get('team', 'Team')} {index + 1}"
+            title = f"**{base}**" if mine else f"*{base}*"
+            if verdict and finished and not won:
+                # the losing team titles strike through, scoped AND
+                # unscoped (owner 2026-11-25 - one typography)
+                title = f"~~{title}~~"
+            blocks.append(discord.ui.TextDisplay(f"{medal}{title}"))
+        for player in seats:
+            text, civ_image = _seat_text(
+                player,
+                card,
+                ctx,
+                labels,
+                me_ids,
+                team_mine=mine,
+                team_lost=scoped and verdict and finished and not won,
+                known_ids=known_ids or set(),
+            )
+            blocks.append(_seat_component(text, civ_image))
+    return blocks
+
+def _match_card_view(
+    card: dict[str, Any],
+    ctx: dict[str, Any],
+    me_ids: set[str],
+    labels: dict[str, Any],
+    known_ids: set[str] | None = None,
+) -> discord.ui.LayoutView:
+    """Build ONE match card's view - the SAME panel everywhere.
+
+    Lobbies, ongoing games and finished matches share the panel; the
+    status only drives the badge, the duration, the action row and
+    the links.
+
+    The owner's 2026-11-22 grammar:
+    - header: ``[ Ranked 4v4 ] Match - #508712854`` (Lobby when not started);
+    - the map section: its post link, the stored image in accessory,
+      the when (end when finished, start when not), the duration when finished;
+    - the seats: one section per seat (civ icon in accessory), a
+      separator BETWEEN the teams;
+    - the footer: Source : libre:match, then the status-led buttons -
+      join while the lobby stands, spectate while the game runs,
+      insights once the match lives on.
+    """
+    from botforge.discord.ui.view_footer import add_view_footer
+
+    blocks, buttons, match_id, accent = _match_card_parts(card, ctx, me_ids, labels, known_ids)
+    view = discord.ui.LayoutView(timeout=None)
+    view.add_item(discord.ui.Container(*blocks, accent_colour=discord.Colour(accent)))
+    if buttons:
+        view.add_item(discord.ui.ActionRow(*buttons))
+    return add_view_footer(view, f"panel:match:aoe2:{match_id}")
+
+
+def _match_card_parts(
+    card: dict[str, Any],
+    ctx: dict[str, Any],
+    me_ids: set[str],
+    labels: dict[str, Any],
+    known_ids: set[str] | None = None,
+) -> tuple[list[Any], list[discord.ui.Button[Any]], str, int]:
+    """Build ONE match card's inner parts: (blocks, buttons, id, accent).
+
+    The SAME parts compose every surface (owner 2026-11-23: "tu
+    n'utilises pas la même classe" - the /live dashboard rendered its
+    own text layout): the match panel builds ONE view, the live
+    dashboard folds SEVERAL cards into one view. The grammar stays
+    the owner's 2026-11-22 card (header, map, seats, footer).
+    """
+    status = card["status"]  # lobby | ongoing | finished
+    fmt = _card_format(card)
+    match_id = str(card.get("match_id") or card.get("match_ref") or "?")
+    # the badge carries the FORMAT, the ranked ones append the WORD
+    # (owner 2026-11-25: the \U0001F3AF emoji left, "1v1 Class\u00e9e" /
+    # "4v4 Ranked" in)
+    badge = fmt
+    if _is_ranked(card) and fmt:
+        ranked_word = str(labels.get("ranked_word") or "Class\u00e9e")
+        badge = f"{fmt} {ranked_word}"
+    noun_key = "lobby_noun" if status == "lobby" else "match_noun"
+    noun = str(labels.get(noun_key, "Match n\u00b0" if status != "lobby" else "Lobby n\u00b0"))
+    winners = {str(w) for w in card.get("winners") or []}
+    accent = (
+        _OUTCOME_COLOURS["win"]
+        if winners and winners & me_ids
+        else _OUTCOME_COLOURS["loss"]
+        if winners
+        else _OUTCOME_COLOURS.get(status, 0x5865F2)
+    )
+    # the SCOPE (owner 2026-11-23): the view scoped onto one player
+    # rides his OWN outcome emoji on the header and strikes the
+    # losers' titles - see _card_team_blocks
+    blocks: list[Any] = [
+        discord.ui.TextDisplay(
+            _card_header(badge, noun, match_id, me_ids=me_ids, card=card)
+        ),
+    ]
+    blocks.append(_card_map_section(card, ctx, labels))
+    blocks.append(discord.ui.Separator())
+    blocks.extend(
+        _card_team_blocks(card, _ordered_teams(card, me_ids), me_ids, labels, ctx, known_ids or set())
+    )
+    # the footer: the source, then the status-led action row
+    blocks.append(discord.ui.Separator())
+    blocks.append(discord.ui.TextDisplay(_card_footer_text(card, labels, me_ids)))
+    buttons: list[discord.ui.Button[Any]] = []
+    # the LIVE row reads refresh, parametres, rejoindre/spectate (owner
+    # 2026-11-25) - the finished cards keep their settings button alone
+    if status in ("lobby", "ongoing"):
+        buttons.append(_CardRefreshButton(card, labels))
+    if status == "lobby" and card.get("lobby_url"):
+        buttons.append(
+            discord.ui.Button(
+                label=labels.get("join", "Rejoindre"),
+                emoji="\U0001f3ae",
+                style=discord.ButtonStyle.link,
+                url=str(card["lobby_url"]),
+            )
+        )
+    if status == "ongoing" and card.get("spectate_url"):
+        buttons.append(
+            discord.ui.Button(
+                label=labels.get("spectate", "Regarder"),
+                emoji="\U0001f441\ufe0f",
+                style=discord.ButtonStyle.link,
+                url=str(card["spectate_url"]),
+            )
+        )
+    # the full settings live behind their own button (owner 2026-11-23:
+    # the footer stays the source line only); the row rides OUTSIDE the
+    # container, the view id beneath
+    buttons.append(_MatchSettingsButton(card, labels))
+    return blocks, buttons, match_id, accent
+
+
+def _entry_settings_of(entry: Any) -> list[list[str]]:
+    """Read the stored settings snapshot of one history entry."""
+    raw = getattr(entry, "settings_json", "") or ""
+    try:
+        import json as _json
+
+        data = _json.loads(raw)
+        return [list(pair) for pair in data if isinstance(pair, list) and len(pair) == 2]
+    except Exception:
+        return []
+
+
+def _cards_from_live_snapshot(
+    snapshot: dict[str, Any], keep_ids: set[str] | None = None
+) -> list[dict[str, Any]]:
+    """Build the ONGOING/lobby cards from an aggregator snapshot.
+
+    One card per distinct match; ``in_lobby`` renders a lobby card
+    (join), ``in_game`` an ongoing one (spectate). ``keep_ids``
+    filters the seats (the profile popup keeps ONLY the viewed
+    profiles' matches); None keeps every seat (the /live dashboard
+    shows the whole guild - owner 2026-11-23: the same card class,
+    no more private text layout).
+    """
+    by_ref: dict[str, dict[str, Any]] = {}
+    for player in snapshot.get("players") or []:
+        record = player if isinstance(player, dict) else {}
+        if keep_ids is not None and str(record.get("profile_id", "")) not in keep_ids:
+            continue
+        state = str(record.get("state", ""))
+        if state not in ("in_lobby", "in_game"):
+            continue
+        summary = record.get("match") or {}
+        if not isinstance(summary, dict):
+            continue
+        ref = str(summary.get("match_ref") or record.get("match_ref") or "")
+        if not ref:
+            continue
+        summary = {**summary, "match_ref": ref}
+        if ref in by_ref:
+            continue
+        by_ref[ref] = {
+            "status": "lobby" if state == "in_lobby" else "ongoing",
+            "match_ref": ref,
+            "match_id": ref,
+            # the WHEN of a live card reads the state's own "since"
+            # (owner 2026-11-23): the running game shows how long, the
+            # finished card keeps its end timestamp at the same place
+            "started_at": int(record.get("since") or 0) // 1000,
+            "map_name": str(summary.get("map") or ""),
+            "description": str(summary.get("match_type") or ""),
+            "finished_at": 0,
+            "winners": [],
+            "players": _live_summary_players(summary),
+            "lobby_url": str(summary.get("lobby_url") or ""),
+            "spectate_url": str(summary.get("spectate_url") or ""),
+            "live_settings_json": str(summary.get("settings_json") or ""),
+        }
+    return list(by_ref.values())
+
+
+def _live_summary_players(summary: dict[str, Any]) -> list[dict[str, Any]]:
+    """Read a live summary's seats - a list OR the compact json string.
+
+    The seats ride TWO shapes: the wire round-trip parses them into a
+    list, the event-metadata path keeps the adapter's compact json
+    string - the card builder accepts both (never iterates a str).
+    """
+    import json as _json
+
+    seats = summary.get("players")
+    if isinstance(seats, str):
+        try:
+            seats = _json.loads(seats) if seats else []
+        except Exception:
+            return []
+    if not isinstance(seats, list):
+        return []
+    return [dict(p) for p in seats if isinstance(p, dict)]
+
+
+async def _live_cards(interaction: discord.Interaction, me_ids: set[str]) -> list[dict[str, Any]]:
+    """Build the ONGOING/lobby cards of the VIEWED profiles."""
+    client = _live_client_for(interaction.client, "aoe2")
+    if client is None or not me_ids:
+        return []
+    try:
+        snapshot = await client.watch("aoe2")
+    except Exception:
+        logger.debug("the live snapshot read failed", exc_info=True)
+        return []
+    return _cards_from_live_snapshot(snapshot, keep_ids=me_ids)
+
+
+async def _finished_cards(
+    interaction: discord.Interaction,
+    me_ids: set[str],
+    limit: int = 10,
+    refresh: bool = False,
+) -> list[dict[str, Any]]:
+    """Build the FINISHED cards - the listing NEVER pokes holes.
+
+    An unplayed match still lists (owner 2026-11-25: "tu n'as affiché que
+    3 matchs" - the winner-only gate starved the listing): every
+    stored entry renders, the SEALED ones carry their status line
+    instead of a silent skip. The solo lobby tests stay out - a
+    single seat is not a game (owner 2026-11-25).
+    """
+    from botforge.discord.stats_views import recent_match_entries
+
+    # OVERFETCH (owner 2026-11-25): the listing must show its FULL
+    # budget - the solo lobby tests and other skips between the
+    # fetch and the trim starved it at nine of ten
+    entries = await recent_match_entries(sorted(me_ids), limit=max(limit * 2, 10), refresh=refresh)
+    cards: list[dict[str, Any]] = []
+    for entry in entries:
+        finished_at = int(getattr(entry, "finished_at", 0) or 0)
+        winners = tuple(getattr(entry, "winners", ()) or ())
+        seats = _entry_players_of(entry)
+        # a SOLO match never lists (owner 2026-11-25): a single seat
+        # - human or computer - is a lobby test, not a game
+        valid_seats = [s for s in seats if isinstance(s, dict)]
+        if len(valid_seats) < 2:
+            continue
+        started_at = int(getattr(entry, "started_at", 0) or 0)
+        # the seal recomputes fresh (owner 2026-11-24): a store flag may
+        # pre-date the AI rule - a FINISHED match against computers
+        # with no recorded winner is DECIDED (the computers won, the
+        # humans lost - his 1v1v1 returned no victor upstream) - and
+        # the UPSTREAM-invalid ones stay, WITH their status line
+        reason = _invalid_reason_type_of(started_at, finished_at, winners, seats)
+        cards.append(
+            {
+                "status": "finished",
+                "match_id": str(getattr(entry, "match_id", "") or ""),
+                # the match's OWN WE board (3 = RM 1v1, 4 = RM TG, 13/14
+                # = Empire Wars...): the ladder lines stay LB3/LB4 only
+                # (owner 2026-11-24: his EW TG game displayed its
+                # board-14 elo as the "TG" line)
+                "leaderboard_id": str(getattr(entry, "leaderboard_id", "") or ""),
+                "map_name": str(getattr(entry, "map_name", "") or ""),
+                "lobby_title": str(getattr(entry, "description", "") or "").strip(),
+                "description": str(getattr(entry, "description", "") or ""),
+                "started_at": started_at,
+                "finished_at": finished_at,
+                "winners": winners,
+                "players": seats,
+                "settings": _entry_settings_of(entry),
+                "options_json": str(getattr(entry, "options_json", "") or ""),
+            }
+        )
+        if reason:
+            # the SEALED card rides its status (owner 2026-11-24)
+            cards[-1]["invalid"] = True
+            cards[-1]["invalid_reason"] = reason
+        if len(cards) >= limit:
+            break
+    return cards
+
+
+def _invalid_reason_type_of(
+    started_at: int, finished_at: int, winners: tuple[str, ...] | list[str], players: list[dict[str, Any]]
+) -> str:
+    """Why the seal: a KEY, the label resolves at render time.
+
+    A finished match without a winner is only NEVER DECIDED when no
+    computer played (owner 2026-11-24): the AIs carry no profile id,
+    upstream records no human victor - the computers won, the match
+    counts, the humans lost.
+    """
+    if not finished_at:
+        return "no_result"
+    if not winners:
+        if any(bool((p or {}).get("ai")) for p in players):
+            return ""  # the computers decided it - the humans lost
+        return "no_result"
+    if finished_at - max(0, int(started_at)) < 300:
+        return "short"
+    return ""
+
+
+def _entry_players_of(entry: Any) -> list[dict[str, Any]]:
+    """Parse the entry's players_json into seat dicts.
+
+    Each seat carries the alias, the civ, the team and the
+    pre/post ratings of the match.
+    """
+    import json as _json
+
+    try:
+        seats = _json.loads(getattr(entry, "players_json", "") or "[]")
+    except Exception:
+        return []
+    return [dict(seat) for seat in seats if isinstance(seat, dict)]
+
+
+async def _sync_for_listing(interaction: discord.Interaction, me_ids: set[str]) -> None:
+    """Warm the viewed profiles' history - NEVER on the click's clock.
+
+    The listing answers in UNDER A SECOND (owner 2026-11-25: "15
+    secondes... au-del\u00e0 d'une seconde c'est d\u00e9j\u00e0 trop"):
+    the click reads the STORE, the sync rides the BACKGROUND - the
+    store stays fresh through the match-end hook (the live feed's
+    result correlation syncs the playing accounts the moment a game
+    ends) and the periodic loops; the next click sees every match.
+    """
+    from botforge.discord.stats_views import stats_client
+
+    client = stats_client()
+    if client is None or not me_ids:
+        return
+    try:
+        await client.sync_stats(sorted(me_ids), wait=False)
+    except Exception:
+        logger.debug("the background listing sync failed", exc_info=True)
+
+
+async def _send_match_panels(
+    interaction: discord.Interaction,
+    me_ids: set[str],
+    known_ids: set[str],
+    labels: dict[str, Any],
+) -> None:
+    """Send the match cards: live/lobbies first, then the finished ones.
+
+    ONE panel implementation for every status (owner 2026-11-22):
+    lobbies, ongoing games and finished matches render the same card,
+    the status only drives the badge, the duration, the buttons and
+    the links.
+
+    The LIVE matches EAT the budget (owner 2026-11-25: the panel
+    reads "10 derniers matchs joués" - a live match in progress means
+    1 live card + 9 finished ones, ten cards, never more).
+
+    The listing owns its FRESHNESS (owner 2026-11-24: his finished
+    match never showed - the click read a COLD store under a TTL
+    cache while the daily loop is way too slow for a game that just
+    ended): the view SYNCED the viewed accounts on demand, then the
+    history read BYPASSES the cache (``refresh``) - a finished
+    match appears on the very click that follows its end.
+    """
+    await _sync_for_listing(interaction, me_ids)
+    live = await _live_cards(interaction, me_ids)
+    cards = list(live)
+    # OVERFETCH then trim (owner 2026-11-25: "tu n'as affich\u00e9 que 9
+    # matchs" - the solo lobby tests eat entries between the fetch
+    # and the budget); the store serves more than it shows
+    finished = await _finished_cards(interaction, me_ids, limit=10, refresh=True)
+    for card in finished:
+        if len(cards) >= 10:
+            break
+        cards.append(card)
+    if not cards:
+        await interaction.followup.send(await reply(interaction, "profile.matches_empty"), ephemeral=True)
+        return
+    ctx = await _match_panels_ctx(interaction, cards)
+    for card in cards:
+        view = _match_card_view(card, ctx, me_ids, labels, known_ids)
+        try:
+            await interaction.followup.send(view=view, ephemeral=True)
+        except Exception:
+            logger.warning("the match panel send failed (%s)", card.get("match_id"), exc_info=True)
+            return
+
+
+class ProfileMatchesButton(
+    discord.ui.DynamicItem[discord.ui.Button[Any]],
+    template=r"home:profile:matches",
+):
+    """Show the accounts' last matches (ephemeral, 10 lines)."""
+
+    def __init__(self, label: str = "Derniers matchs") -> None:
+        super().__init__(
+            discord.ui.Button(
+                label=label,
+                emoji="\U0001f3ae",
+                style=discord.ButtonStyle.secondary,
+                custom_id="home:profile:matches",
+            )
+        )
+
+    @classmethod
+    async def from_custom_id(
+        cls,
+        interaction: discord.Interaction,
+        item: discord.ui.Item[Any],
+        match: re.Match[str],
+        /,
+    ) -> ProfileMatchesButton:
+        """Rebuild the item from the wire."""
+        del interaction, item, match
+        return cls()
+
+    async def callback(self, interaction: discord.Interaction) -> None:
+        """List the matches: live first (when any), then the last finished ones."""
+        registration = getattr(interaction.client, "registration_service", None)
+        if registration is None:
+            await interaction.response.send_message(await reply(interaction, "not_configured"), ephemeral=True)
+            return
+        # the listing takes seconds (history fetch): the visible thinking
+        # state first, never silent work
+        await interaction.response.defer(ephemeral=True, thinking=True)
+        bindings = await registration.list_bindings(str(interaction.user.id))
+        me_ids = {str(b.get("profile_id", "")) for b in bindings if b.get("game_key") == "aoe2"}
+        # the highlight contract (owner direction 2026-11-20): the viewed
+        # profiles render bold, every other profile bound in this guild's
+        # game renders italic — the server, not the match, decides ties
+        known_ids: set[str] = set()
+        try:
+            for binding in await registration.list_bindings_for_game("aoe2"):
+                known_ids.add(str(binding.get("profile_id", "")))
+        except Exception:
+            logger.debug("the guild-wide bindings read failed", exc_info=True)
+        known_ids -= me_ids
+        labels = await _match_panel_labels(interaction)
+        if not me_ids:
+            await interaction.followup.send(
+                await reply(interaction, "profile.matches_empty"), ephemeral=True
+            )
+            return
+        await _send_match_panels(interaction, me_ids, known_ids, labels)
+
+
+async def _match_panel_labels(interaction: discord.Interaction) -> dict[str, Any]:
+    """Interaction wrapper: the pack resolves for the guild."""
+    return await _match_panel_labels_guild(str(interaction.guild_id or ""), interaction.client)
+
+
+async def _match_panel_labels_guild(guild_id: str, bot: Any) -> dict[str, Any]:
+    """Resolve the match panel's label pack (one builder, every surface).
+
+    The /live dashboard renders the SAME cards (owner 2026-11-23) -
+    the labels resolve once here, never per surface.
+    """
+    from botforge.discord.commands_i18n import reply_guild
+
+    async def _r(key: str) -> Any:
+        return await reply_guild(guild_id, bot, key)
+
+    # the KNOWN players' #joueurs post links (owner 2026-11-27): a
+    # seat's pseudo redirects there, the unknown players fall back to
+    # the game's profile_link_template
+    from botforge.discord import live_activity
+
+    try:
+        post_links = await live_activity.post_link_map(bot, guild_id)
+    except Exception:
+        post_links = {}
+    return {
+            "post_links": post_links,
+            "team": await _r("profile.matches_team"),
+            "with": await _r("profile.matches_with"),
+            "join": await _r("profile.matches_join"),
+            "spectate": await _r("profile.matches_spectate"),
+            # every hardcoded panel word rides the locale (owner
+            # 2026-11-22: the panels mixed untranslated fr and en)
+            "when": await _r("profile.matches_when"),
+            "duration": await _r("profile.matches_duration"),
+            "source": await _r("profile.matches_source"),
+            "source_live": await _r("profile.matches_source_live"),
+            "invalid": await _r("profile.matches_invalid"),
+            # the COMPUTER's seat name (owner 2026-11-25): "IA (Extrême)"
+            "ai": await _r("profile.matches_ai"),
+            "invalid_no_result": await _r("profile.matches_invalid_no_result"),
+            "invalid_short": await _r("profile.matches_invalid_short"),
+            "colours": {
+                slot: await _r(f"profile.matches_colour_{slot}") for slot in SLOT_COLOURS
+            },
+            "settings": {
+                plain: await _r(key) for plain, key in SETTING_LABEL_KEYS.items()
+            },
+            "setting_bools": {
+                key: await _r(label_key) for key, label_key in SETTING_BOOLEANS.items()
+            },
+            # the live lobby's named booleans share the SAME locale
+            # lines (one grammar, one popup - owner 2026-11-23)
+            "setting_bools_live": {
+                key: await _r(label_key)
+                for key, label_key in _LIVE_SETTING_BOOLEANS.items()
+            },
+            # one name per checkbox, whatever the source (the "-" keys
+            # render "?": the game's own order, owner 2026-11-24)
+            "checkbox_names": {
+                locale_key: await _r(locale_key)
+                for _blob_key, _live_key, locale_key in SETTING_CHECKBOX_ORDER
+            },
+            "match_noun": await _r("profile.match_noun"),
+            "lobby_noun": await _r("profile.lobby_noun"),
+            "ranked_word": await _r("profile.ranked_word"),
+            "custom_badge": await _r("profile.custom_badge"),
+            "settings_button": await _r("profile.matches_settings_button"),
+            "refresh_button": await _r("profile.matches_refresh_button"),
+            "matches_refresh_match_button": await _r("profile.matches_refresh_match_button"),
+            "settings_title": await _r("profile.matches_settings_title"),
+            "setting_lobby_section": await _r("profile.matches_setting_lobby_section"),
+    }
 
 
 class ProfileRenameButton(
@@ -725,6 +3002,14 @@ class ProfileRenameModal(discord.ui.Modal):
                     display_name=str(interaction.user.display_name or interaction.user.name),
                 )
             await identity.set_display_name(user.id, str(self.name.value))
+            # the matches-forum post rides the BOT display name (owner
+            # 2026-11-26): a rename retitles the post in EVERY guild
+            try:
+                from botforge.discord.live_activity import rename_user_posts
+
+                await rename_user_posts(interaction.client, str(interaction.user.id), str(self.name.value))
+            except Exception:
+                logger.debug("the post retitle skipped - best-effort", exc_info=True)
         except ValueError:
             await interaction.followup.send(await reply(interaction, "profile.rename_bad_length"), ephemeral=True)
             return
@@ -762,14 +3047,24 @@ def _remove_options(bindings: list[dict[str, Any]]) -> list[discord.SelectOption
 
 class ProfileRemoveAccountButton(
     discord.ui.DynamicItem[discord.ui.Button[Any]],
-    template=r"home:profile:remove",
+    template=r"home:profile:remove(?::(?P<target>\d+))?",
 ):
-    """Open the remove-account modal (multi-select of the linked accounts)."""
+    """Open the remove-account modal (multi-select of the linked accounts).
 
-    def __init__(self, label: str = "Retirer un compte") -> None:
+    The optional ``target`` (owner 2026-11-26: the players forum's
+    admin menu) unlinks the DISPLAYED player's accounts - aoe2 only.
+    """
+
+    def __init__(self, label: str = "Retirer un compte", target: str = "") -> None:
+        self.target = str(target) if str(target).isdigit() else ""
         super().__init__(
             discord.ui.Button(
-                label=label, emoji="\U0001F5D1", style=discord.ButtonStyle.danger, custom_id="home:profile:remove"
+                label=label,
+                emoji="\U0001F5D1",
+                style=discord.ButtonStyle.danger,
+                custom_id=f"home:profile:remove:{self.target}"[:100]
+                if self.target
+                else "home:profile:remove",
             )
         )
 
@@ -782,27 +3077,36 @@ class ProfileRemoveAccountButton(
         /,
     ) -> ProfileRemoveAccountButton:
         """Rebuild the item from the wire (bindings resolve at click time)."""
-        del interaction, item, match
-        return cls()
+        del interaction, item
+        return cls(target=match.group("target") or "")
 
     async def callback(self, interaction: discord.Interaction) -> None:
         """Open the multi-select remove modal (accounts read fast, aoe2 cap)."""
         import asyncio
 
+        if self.target and not await _player_menu_guard(interaction, self.target):
+            return
+        owner = self.target or str(interaction.user.id)
         registration = getattr(interaction.client, "registration_service", None)
         if registration is None:
             await interaction.response.send_message(await reply(interaction, "not_configured"), ephemeral=True)
             return
         try:
-            bindings = await asyncio.wait_for(registration.list_bindings(str(interaction.user.id)), timeout=2.5)
+            bindings = await asyncio.wait_for(registration.list_bindings(owner), timeout=2.5)
         except Exception:
             bindings = []
+        if self.target:
+            # aoe2-FOCUSED (owner 2026-11-26): the players forum's menu
+            # manages Age of Empires II accounts only
+            bindings = [b for b in bindings if str(b.get("game_key")) == "aoe2"]
         if not bindings:
             await interaction.response.send_message(await reply(interaction, "no_account"), ephemeral=True)
             return
         await interaction.response.send_modal(
             ProfileRemoveAccountModal(
-                _remove_options(bindings), origin=EphemeralOrigin.capture(interaction)
+                _remove_options(bindings),
+                origin=EphemeralOrigin.capture(interaction),
+                target=self.target,
             )
         )
 
@@ -810,9 +3114,14 @@ class ProfileRemoveAccountButton(
 class ProfileRemoveAccountModal(discord.ui.Modal):
     """The remove-account form: one multi-select of the linked accounts."""
 
-    def __init__(self, options: list[discord.SelectOption], origin: Any = None) -> None:
+    def __init__(
+        self, options: list[discord.SelectOption], origin: Any = None, target: str = ""
+    ) -> None:
         super().__init__(title="Retirer des comptes", timeout=None)
         self.origin = origin
+        # the TARGET (owner 2026-11-26): the players forum's admin menu
+        # unlinks the DISPLAYED player's accounts
+        self.target = str(target) if str(target).isdigit() else ""
         self.accounts: discord.ui.Select[Any] = discord.ui.Select(
             custom_id="home:profile:remove:select",
             options=options,
@@ -822,7 +3131,7 @@ class ProfileRemoveAccountModal(discord.ui.Modal):
         )
         self.add_item(discord.ui.Label(text="Comptes \u00e0 retirer", component=self.accounts))
 
-    async def on_submit(self, interaction: discord.Interaction) -> None:
+    async def on_submit(self, interaction: discord.Interaction) -> None:  # noqa: C901 - one unlink loop
         """Unlink every chosen account, then refresh the profile view."""
         registration = getattr(interaction.client, "registration_service", None)
         if registration is None:
@@ -837,7 +3146,9 @@ class ProfileRemoveAccountModal(discord.ui.Modal):
         for entry in chosen:
             game_key, _, profile_id = str(entry).partition("|")
             try:
-                if await registration.unlink_profile(str(interaction.user.id), game_key, profile_id):
+                if await registration.unlink_profile(
+                    self.target or str(interaction.user.id), game_key, profile_id
+                ):
                     url = _game_account_url(game_key, str(profile_id))
                     removed.append(f"[{game_key} {profile_id}]({url})" if url else f"{game_key} (`{profile_id}`)")
                 else:
@@ -861,10 +3172,23 @@ class ProfileRemoveAccountModal(discord.ui.Modal):
                 "Removal failed for: " + ", ".join(failures) + " — the details went to the admins."
             )
         if removed:
-            await _dm_profile_notice(interaction, "accounts_removed", listed=", ".join(removed))
+            if self.target:
+                await _dm_target_notice(
+                    interaction, self.target, "accounts_removed", listed=", ".join(removed)
+                )
+            else:
+                await _dm_profile_notice(interaction, "accounts_removed", listed=", ".join(removed))
         banner = "\n".join(banner_bits)
         if not removed and not failures:
             banner = await reply(interaction, "profile.no_account")
+        if self.target:
+            # the target mode answers with the note (owner 2026-11-26):
+            # the clicker's own profile view never opens, the DISPLAYED
+            # player's post re-edits at the poke
+            await interaction.followup.send(banner, ephemeral=True)
+            await _delete_deferred_followup(interaction)
+            await _poke_players_forum(interaction)
+            return
         await _profile_followup(interaction, banner=banner, origin=self.origin)
 
 
@@ -958,6 +3282,23 @@ async def _view_live(interaction: discord.Interaction, game_key: str = "aoe2") -
     await interaction.followup.send(view=view, ephemeral=True)
 
 
+async def _live_known_ids(bot: Any, guild_id: str, game_key: str) -> set[str]:
+    """Return the guild's bound profiles - the KNOWN names (owner 2026-11-25).
+
+    An UNSCOPED card (a match the viewer does not play) still bolds
+    the players the bot knows: the guild's bound game profiles.
+    """
+    if game_key != "aoe2":
+        return set()
+    try:
+        from botforge.discord.live_activity import _guild_profiles
+
+        return set(await _guild_profiles(bot, guild_id))
+    except Exception:
+        logger.debug("the live known-ids lookup failed", exc_info=True)
+        return set()
+
+
 async def _build_live_view(
     interaction: discord.Interaction, game_key: str = "aoe2"
 ) -> Any:
@@ -966,7 +3307,7 @@ async def _build_live_view(
     Shared by /live, the menu button and the dashboard's refresh
     button (which already deferred): the caller owns the transport.
     """
-    from botforge.discord.live import collect_profile_stats, render_dashboard
+    from botforge.discord.live import scope_snapshot_to_guild
 
     snapshot: dict[str, Any] = {"players": [], "generated_at": 0, "degraded": True}
     client = _live_client_for(interaction.client, game_key)
@@ -977,25 +3318,100 @@ async def _build_live_view(
             logger.warning("HOME: live snapshot failed (game %s)", game_key, exc_info=True)
     guild = interaction.client.get_guild(int(interaction.guild_id)) if interaction.guild_id else None
     if guild is not None:
-        from botforge.discord.live import scope_snapshot_to_guild
-
         snapshot = await scope_snapshot_to_guild(snapshot, guild)
-    active_ids = [
-        str(p.get("profile_id", ""))
-        for p in snapshot.get("players", [])
-        if p.get("state") != "offline"
-    ]
-    stats = await collect_profile_stats(active_ids, game_key)
+    # THE SAME CARD CLASS AS THE MATCH PANELS (owner 2026-11-23: "tu
+    # n'utilises pas la même classe" - the dashboard rendered its own
+    # text layout, nothing like a finished match). The viewer's own
+    # bindings scope the cards (his emoji, his bold team) - a match he
+    # does not play renders unscoped, per-team marks only.
+    me_ids: set[str] = set()
+    registration = getattr(interaction.client, "registration_service", None)
+    if registration is not None:
+        try:
+            for binding in await registration.list_bindings(str(interaction.user.id)):
+                if str(binding.get("game_key", "")) == game_key:
+                    me_ids.add(str(binding.get("profile_id", "")))
+        except Exception:
+            logger.debug("the live scope lookup failed", exc_info=True)
+    known_ids = await _live_known_ids(interaction.client, str(interaction.guild_id or ""), game_key)
+    cards = _cards_from_live_snapshot(snapshot)[:4] if game_key == "aoe2" else []
+    if cards:
+        try:
+            ctx = await _match_panels_ctx(interaction, cards)
+            labels = await _match_panel_labels(interaction)
+        except Exception:
+            logger.warning("the live panel context failed", exc_info=True)
+            ctx, labels = {}, {}
+    else:
+        ctx, labels = {}, {}
+    return await _live_dashboard_view(interaction, snapshot, cards, me_ids, ctx, labels, game_key, known_ids)
+
+
+async def _live_dashboard_view(
+    interaction: discord.Interaction,
+    snapshot: dict[str, Any],
+    cards: list[dict[str, Any]],
+    me_ids: set[str],
+    ctx: dict[str, Any],
+    labels: dict[str, Any],
+    game_key: str = "aoe2",
+    known_ids: set[str] | None = None,
+) -> Any:
+    """Compose the /live view: the title, the MATCH CARDS, the tail.
+
+    One view, many cards (owner 2026-11-23): each active match renders
+    through the SAME ``_match_card_parts`` the profile panels render -
+    header, map section, seats, settings button - never a private
+    layout. The offline tail keeps one text display; the freshness
+    and the refresh button ride the top and bottom rows.
+    """
+    from botforge.discord.live import build_live_tail, live_title_line
+    from botforge.discord.ui.view_footer import add_view_footer
+
+    view = discord.ui.LayoutView(timeout=None)
     from botforge.discord.content_posts import guild_locale
 
-    locale = await guild_locale(str(interaction.guild_id), interaction.client)
-    body = render_dashboard(snapshot, locale=locale, stats=stats, bot=interaction.client)
-    from botforge.discord.live import build_dashboard_view
+    try:
+        locale = await guild_locale(str(interaction.guild_id or ""), interaction.client)
+    except Exception:
+        locale = "fr"
+    view.add_item(
+        discord.ui.TextDisplay(
+            live_title_line(
+                interaction.client,
+                game_key,
+                locale=locale,
+                generated_at_ms=int(snapshot.get("generated_at") or 0),
+            )
+        )
+    )
+    # the DASHBOARD refresh rides ABOVE the cards (owner 2026-11-26:
+    # it sat under the last card and read "stuck" to that card's own
+    # row - two touching refresh buttons; the card's own refresh now
+    # reads its own label (Match), the dashboard's stays up top
+    from botforge.discord.live import LiveRefreshButton
 
-    # THE dashboard rendering (unified, owner direction): the same view
-    # the pinned channel shows — Container + the id under it, one code path.
-    view = build_dashboard_view(snapshot, body, interaction.client, locale=locale, game_key=game_key)
-    return view
+    view.add_item(
+        discord.ui.ActionRow(
+            LiveRefreshButton(
+                game_key,
+                str(labels.get("refresh", "Rafra\u00eechir")),
+            ).item
+        )
+    )
+    for card in cards:
+        blocks, buttons, _match_id, accent = _match_card_parts(
+            card, ctx, me_ids, labels or {}, known_ids
+        )
+        view.add_item(discord.ui.Container(*blocks, accent_colour=discord.Colour(accent)))
+        if buttons:
+            view.add_item(discord.ui.ActionRow(*buttons))
+    tail = await build_live_tail(interaction, snapshot)
+    if tail:
+        view.add_item(discord.ui.TextDisplay(tail))
+    if snapshot.get("degraded"):
+        pass  # the title line already carries the degraded warning
+    return add_view_footer(view, f"panel:live:{game_key}")
 
 
 async def _view_mods_for_guild(interaction: discord.Interaction, guild_id: str) -> None:

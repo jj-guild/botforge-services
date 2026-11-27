@@ -235,6 +235,9 @@ class BotforgeBot(discord.Client):
 
         register_pool_flow_items(self)
         register_entity_admin_items(self)
+        from botforge.discord.player_admin_menu import register_player_admin_items
+
+        register_player_admin_items(self)
         register_guild_context_items(self)
         from botforge.discord.mod_beta import register_beta_items
         from botforge.discord.season_panels import register_season_items
@@ -1029,6 +1032,11 @@ def create_bot(config: BotConfig | None = None) -> BotforgeBot:  # noqa: C901
     registration_engine, registration_service = _build_registration(resolved, state=shared_state)
     bot.registration_engine = registration_engine
     bot.registration_service = registration_service
+    # bind the pokes now the bot lives: the bind/unbind events sweep
+    # the players forums instantly (owner 2026-11-25)
+    for _events_holder in (getattr(registration_service, "_events", None),):
+        if isinstance(_events_holder, _BindingPokes):
+            _events_holder.bot = bot
     bot.identity_service = _build_identity_service(resolved, state=shared_state)
     home_channel_service = _build_home_channel_service(resolved, bot)
     bot.home_channel_service = home_channel_service
@@ -1190,7 +1198,7 @@ def _build_registration(
     """Wire the DM enrollment stack (#133): engine + AoE2-validated service.
 
     Returns (None, None) when Mongo/Redis are not configured (unit tests,
-    local runs) — the /register command then answers with a note.
+    local runs) — the registration surfaces then answer with a note.
     """
     if not config.mongo_uri or not config.redis_uri:
         return None, None
@@ -1210,12 +1218,73 @@ def _build_registration(
         MongoWorkflowStore(database),
         state or StateService(redis_uri=config.redis_uri or os.environ.get("REDIS_URI")),
     )
+    registration_db = MongoRegistrationDatabase(database)
     service = RegistrationService(
-        MongoRegistrationDatabase(database),
+        registration_db,
         profile_seams={"aoe2": Aoe2ProfileValidationSeam()},
+        events=_BindingPokes(),
     )
+    # One boot sweep (best-effort): the #402 insights ids the old
+    # resolution stored are gone with it — the legacy field leaves
+    # the bindings (the owner's 2026-11-20 purge).
+    _boot_tasks.append(_scrub_legacy_insights_ids(registration_db))
     engine.register_workflow(RegistrationWorkflow(service))
     return engine, service
+
+
+class _BindingPokes:
+    """The registration events -> the players forums' instant reconcile.
+
+    The bind/unbind lifecycle must reach the posts (owner 2026-11-25):
+    a member adding an account creates his post, removing it deletes
+    the orphan. The bot reference binds LATE - the service is built
+    before the client, the factory attaches itself once it lives.
+    """
+
+    def __init__(self) -> None:
+        self.bot: Any = None
+
+    async def emit(self, intent: str, payload: dict[str, Any]) -> None:
+        bot = self.bot
+        if bot is None or intent not in ("profile.bound", "profile.unbound"):
+            return
+        if str(payload.get("game_key") or "") != "aoe2":
+            return
+        _spawn_instant_forums_sweep(bot)
+
+
+def _spawn_instant_forums_sweep(bot: Any) -> None:
+    """Sweep the players forums NOW (best-effort, never raises)."""
+
+    async def _one() -> None:
+        from botforge.discord import live_activity
+
+        for guild in list(getattr(bot, "guilds", []) or []):
+            await live_activity.instant_sweep(bot, str(guild.id))
+
+    try:
+        import asyncio
+
+        task = asyncio.get_running_loop().create_task(_one())
+        _BOOT_TASKS_POOL.add(task)
+        task.add_done_callback(_BOOT_TASKS_POOL.discard)
+    except Exception:
+        logger.debug("the instant forums sweep spawn failed - best-effort", exc_info=True)
+
+
+_BOOT_TASKS_POOL: set[Any] = set()
+
+_boot_tasks: list[Any] = []
+
+
+async def _scrub_legacy_insights_ids(db: Any) -> None:
+    """Scrub the legacy insights id field (best-effort, logged never raised)."""
+    try:
+        scrub = getattr(db, "scrub_legacy_insights_ids", None)
+        if scrub is not None:
+            await scrub()
+    except Exception:
+        logger.debug("the legacy insights id scrub failed", exc_info=True)
 
 
 def _build_identity_service(config: BotConfig, state: StateService | None = None) -> IdentityService | None:

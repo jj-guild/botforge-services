@@ -41,7 +41,8 @@ from typing import Any
 
 import websockets
 
-from botforge.aoe2.timing import GRACE_PERIOD_S, LobbyClosedGrace
+from botforge.aoe2.known_ids import KnownIds, log_match_event
+from botforge.aoe2.timing import LobbyClosedGrace
 from botforge.core_process.provider_endpoints import provider_url as _provider_url
 
 logger = logging.getLogger(__name__)
@@ -53,6 +54,16 @@ DEFAULT_MAX_SIZE = 10 * 1024 * 1024
 DEFAULT_RECONNECT_DELAY_S = 5.0
 DEFAULT_HEARTBEAT_S = 90.0  # WS ping interval (transport keepalive)
 DEFAULT_REFRESH_S = 5.0
+AOE2LOBBY_CLOSE_GRACE_S = 15.0
+# the close windows, per REASON (owner 2026-11-26: the lobby-out hunt):
+# an EXPLICIT signal (the players channel said null, a player_remove)
+# speaks FAST; a mere SNAPSHOT ABSENCE is weak - the upstream feed
+# drops an OPEN lobby for minutes at a time (observed 2026-11-25
+# 00:37-00:41: the lobby 523671411 vanished from every frame while
+# the owner sat in it), so an absence needs SUSTAINED silence before
+# it downgrades a live status
+AOE2LOBBY_EXPLICIT_CLOSE_GRACE_S = 15.0
+AOE2LOBBY_ABSENT_CLOSE_GRACE_S = 300.0
 
 CONTEXT_LOBBY = "lobby"
 CONTEXT_SPECTATE = "spectate"
@@ -84,7 +95,11 @@ class Aoe2LobbyAdapter:
         self,
         ws_url: str = DEFAULT_WS_URL,
         reconnect_delay_s: float = DEFAULT_RECONNECT_DELAY_S,
-        grace_s: float = GRACE_PERIOD_S,
+        # the close grace doubles as the FEED-CHURN window (owner
+        # 2026-11-23): the ws feed drops an idle lobby and re-adds it
+        # under a NEW match id ~30s later - a 15s grace fired the false
+        # "died" mid-idle; 60s lets the churn re-assert cancel the close.
+        grace_s: float = AOE2LOBBY_CLOSE_GRACE_S,
         heartbeat_s: float = DEFAULT_HEARTBEAT_S,
         max_size: int = DEFAULT_MAX_SIZE,
         refresh_s: float = DEFAULT_REFRESH_S,
@@ -101,9 +116,13 @@ class Aoe2LobbyAdapter:
         self._match_payload_fp: dict[str, dict[str, str]] = {c: {} for c in _CONTEXTS}
         self._player_status: dict[str, tuple[str, str]] = {}
         self._close_refs: dict[str, str] = {}
+        self._close_reasons: dict[str, str] = {}
         self._grace = LobbyClosedGrace(grace_s=int(grace_s))
         self._last_snapshot_at = 0
         self._subscribed_ids: set[str] = set()
+        # the known ids + display names for the #423 log taxonomy
+        # (INFO names the player, strangers stay DEBUG)
+        self._known = KnownIds()
         self._ws: Any = None
         self._schema: dict[str, Any] = {}
         self._last_frame: dict[str, Any] | None = None
@@ -122,20 +141,29 @@ class Aoe2LobbyAdapter:
         removes = sorted(self._subscribed_ids - requested)
         self._subscribed_ids = requested
         if not adds and not removes:
+            self._known.set_ids(requested)
             return True
+        # the subscription delta concerns known profiles: INFO, and it
+        # NAMES them (botforge-services#423 — a nameless id falls back
+        # to the profile id)
+        delta = f"+{self._delta_label(adds)}/-{self._delta_label(removes)}"
         if self._ws is None:
-            logger.info(
-                "aoe2lobby players subscription queued (no session): +%d/-%d",
-                len(adds),
-                len(removes),
-            )
+            logger.info("aoe2lobby players subscription queued (no session): %s", delta)
+            self._known.set_ids(requested)
             return False
         # nothing to reconcile on the wire anymore (the owner's
         # direction): the matches feed is global and the players
         # channel is gone — the subscribed ids stay the REDUCER's
         # filter (which profiles surface), not a wire subscription.
-        logger.info("aoe2lobby subscription updated (reducer filter): +%d/-%d", len(adds), len(removes))
+        logger.info("aoe2lobby subscription updated (reducer filter): %s", delta)
+        self._known.set_ids(requested)
         return True
+
+    def _delta_label(self, ids: list[str]) -> str:
+        """Human-readable delta naming the profiles (fallback: the id)."""
+        if not ids:
+            return "none"
+        return f"{len(ids)} [{self._known.display_names(ids)}]"
 
     async def fetch_schema(self, timeout_s: float = 15.0) -> dict[str, Any]:
         """Capture the ws schema frame (civ labels, reference §7).
@@ -164,7 +192,7 @@ class Aoe2LobbyAdapter:
                     frame = json.loads(raw)
                 if isinstance(frame.get("schema"), dict):
                     self._schema = frame["schema"]
-                    logger.info("aoe2lobby schema captured: %d key(s)", len(self._schema))
+                    logger.debug("aoe2lobby schema captured: %d key(s)", len(self._schema))
         except Exception:
             logger.warning("aoe2lobby schema capture failed — civs stay as raw ids")
         return self._schema
@@ -251,13 +279,25 @@ class Aoe2LobbyAdapter:
         Exactly one session is open at any time. Every failure path —
         transport error, server-side close, heartbeat timeout,
         unexpected exception — falls into the same reconnect loop:
-        fixed backoff, re-subscribe both channels with the last known
-        profile ids, then resume. Yields nothing while disconnected:
+        FIBONACCI backoff (owner 2026-11-26: the upstream throws 502s
+        while it struggles - a fixed 5s retry bombs a degraded
+        provider, the gaps grow 5, 8, 13, 21, 34, 55... capped),
+        re-subscribe both channels with the last known profile ids,
+        then resume. Yields nothing while disconnected:
         the stream stays alive, the consumer sees silence, not
         failures. The state is kept across reconnects so the snapshot
         diff yields exactly the real transitions (deltas may be sparse
         server-side).
         """
+        # the github-polling skill's FIBONACCI rule (owner 2026-11-26:
+        # "fibonacci please"): a REFUSED/failed connect is a degraded
+        # upstream answering "no" - the next try waits 8 minutes, then
+        # 13, 21, 34, 55 - the sequence grows, capped at the last step;
+        # it RESETS only on a clean OPEN session. A server close after
+        # healthy frames is ordinary feed churn: the base delay.
+        backoff_a, backoff_b = 8 * 60.0, 13 * 60.0
+        backoff_cap_s = 55 * 60.0
+        delay_s = self._reconnect_delay_s
         while True:
             try:
                 from botforge.core.upstream_identity import project_user_agent
@@ -270,9 +310,15 @@ class Aoe2LobbyAdapter:
                     user_agent_header=project_user_agent(),
                 ) as ws:
                     self._ws = ws
+                    if delay_s != self._reconnect_delay_s:
+                        logger.info(
+                            "aoe2lobby ws reconnected - backing off for %.0f more second(s)",
+                            delay_s,
+                        )
+                    delay_s = self._reconnect_delay_s  # the clean OPEN resets the sequence
                     if not self._schema:
                         await self.fetch_schema()
-                    logger.info("aoe2lobby ws OPEN: %s", self._ws_url)
+                    logger.debug("aoe2lobby ws OPEN: %s", self._ws_url)
                     await self._subscribe_all(ws)
                     async for event in self._run_session(ws):
                         yield event
@@ -282,13 +328,25 @@ class Aoe2LobbyAdapter:
                         "aoe2lobby ws CLOSED by the server; reconnecting in %ss",
                         self._reconnect_delay_s,
                     )
-            except (TimeoutError, websockets.WebSocketException, OSError):
-                logger.warning("aoe2lobby ws FAILED; retrying in %ss", self._reconnect_delay_s)
+            except (TimeoutError, websockets.WebSocketException, OSError) as exc:
+                # the DEGRADED path: the Fibonacci sequence (8, 13, 21,
+                # 34, 55 min - the skill's rule, a refused connect is
+                # not a 5s retry signal); the exception NAMED tells a
+                # refusal (503/403/blocked?) from a plain timeout
+                delay_s = backoff_a
+                backoff_a, backoff_b = backoff_b, min(backoff_a + backoff_b, backoff_cap_s)
+                logger.warning(
+                    "aoe2lobby ws FAILED (%s: %s); the degraded upstream gets SPACE -"
+                    " retrying in %.0fs",
+                    type(exc).__name__,
+                    str(exc)[:120],
+                    delay_s,
+                )
             except Exception:
-                logger.exception("aoe2lobby ws unexpected error; retrying in %ss", self._reconnect_delay_s)
+                logger.exception("aoe2lobby ws unexpected error; retrying in %ss", delay_s)
             finally:
                 self._ws = None
-            await asyncio.sleep(self._reconnect_delay_s)
+            await asyncio.sleep(delay_s)
 
     async def _subscribe_all(self, ws: Any) -> None:
         """Subscribe both channels scoped to the enrolled profile ids.
@@ -302,10 +360,11 @@ class Aoe2LobbyAdapter:
         the server actually honors.
         """
         ids = sorted(self._subscribed_ids)
+        # the subscribed ids are the known profiles: INFO, named (#423)
         logger.info(
             "aoe2lobby SUBSCRIBE: %d profile(s): %s",
             len(ids),
-            ",".join(ids) if ids else "(EMPTY)",
+            self._known.display_names(ids) if ids else "(EMPTY)",
         )
         # THE DOCUMENTED SHAPE + the owner's direction: the MATCHES
         # subscribe carries NO ids (the FULL feed); the PLAYERS channel
@@ -314,9 +373,9 @@ class Aoe2LobbyAdapter:
         # status from the lobby/spectate payloads).
         for context in _CONTEXTS:
             payload = {"action": "subscribe", "type": "matches", "context": context}
-            logger.info("aoe2lobby SUBSCRIBE payload: %s", json.dumps(payload))
+            logger.debug("aoe2lobby SUBSCRIBE payload: %s", json.dumps(payload))
             await ws.send(json.dumps(payload))
-        logger.info(
+        logger.debug(
             "aoe2lobby session ready: matches (global feed), %d profile(s) in the reducer filter",
             len(ids),
         )
@@ -337,7 +396,7 @@ class Aoe2LobbyAdapter:
         schema = frame.get(SCHEMA_FIELD)
         if isinstance(schema, dict):
             self._schema = schema
-            logger.info("aoe2lobby schema captured: %d key(s)", len(schema))
+            logger.debug("aoe2lobby schema captured: %d key(s)", len(schema))
             return []
         # every match-carrying frame logs (the owner's tick visibility):
         # what the websocket actually sends, when
@@ -345,7 +404,8 @@ class Aoe2LobbyAdapter:
         if keys:
             sizes = {k: len(frame.get(k) or {}) for k in keys if isinstance(frame.get(k), (dict, list))}
             if sizes:
-                logger.info("aoe2lobby FRAME: %s", " ".join(f"{k}={v}" for k, v in sizes.items()))
+                # the lobby counts: DEBUG — they concern nobody we follow (#423)
+                logger.debug("aoe2lobby FRAME: %s", " ".join(f"{k}={v}" for k, v in sizes.items()))
         events = self._reduce_player_status(frame.get(PLAYER_STATUS_FIELD))
         if events:
             self._log_events("player_status push", events)
@@ -381,7 +441,7 @@ class Aoe2LobbyAdapter:
                 hits = profiles and enrolled.intersection(profiles)
                 if hits:
                     found.update(hits)
-                    per_match.append(f"{match_id}[ENROLLED:{','.join(sorted(hits))}]")
+                    per_match.append(f"{match_id}[ENROLLED:{self._known.display_names(sorted(hits))}]")
                 elif logger.isEnabledFor(logging.DEBUG):
                     per_match.append(str(match_id))
             logger.debug(
@@ -403,7 +463,7 @@ class Aoe2LobbyAdapter:
             if status:
                 logger.debug(
                     "aoe2lobby DEBUG %s => %s in %s",
-                    profile_id,
+                    self._known.display_name(profile_id),
                     status,
                     match_ref,
                 )
@@ -446,19 +506,35 @@ class Aoe2LobbyAdapter:
     def _log_events(self, source: str, events: list[dict[str, Any]]) -> None:
         """Log every emitted transition — the pod's observable trail.
 
-        One INFO line per event: the profile ids, the transition and
-        the match — 'AOE2LOBBY EVENT player=848567 match=123 lobby_opened'
-        reads straight in `docker logs`.
+        One INFO line per event, NAMING the known player (the reducer
+        only emits for subscribed profiles): 'aoe2lobby EVENT match
+        delta: Alice — lobby_opened on match 123 map=Arabia' reads
+        straight in `docker logs` (botforge-services#423).
         """
         for event in events:
-            logger.info(
-                "aoe2lobby EVENT %s: profiles=%s match=%s type=%s%s",
-                source,
-                ",".join(str(p) for p in event.get("profile_ids", [])),
-                event.get("match_ref", ""),
-                event.get("type", "?"),
-                f" map={event['metadata'].get('map', '')}" if event.get("metadata", {}).get("map") else "",
+            metadata = event.get("metadata") or {}
+            log_match_event(
+                logger,
+                f"aoe2lobby EVENT {source}",
+                str(event.get("type", "?")),
+                str(event.get("match_ref", "")),
+                event.get("profile_ids", []),
+                self._known,
+                dict(metadata) if not isinstance(metadata, dict) else metadata,
             )
+
+    def _learn_names(self, matches: dict[str, dict[str, Any]]) -> None:
+        """Remember the display names of known profiles seen in match slots."""
+        for match in matches.values():
+            slots = match.get("slots") if isinstance(match, dict) else None
+            if not isinstance(slots, dict):
+                continue
+            for slot in slots.values():
+                if isinstance(slot, dict) and slot.get("status") == 3:
+                    profile_id = slot.get("profileid")
+                    name = str(slot.get("name") or "")
+                    if profile_id not in (None, "") and name:
+                        self._known.learn_name(str(profile_id), name)
 
     def _reduce_player_status(self, statuses: object) -> list[dict[str, Any]]:
         """Fold one ``player_status`` push for the subscribed profiles.
@@ -496,7 +572,7 @@ class Aoe2LobbyAdapter:
         if status is None:
             if previous is None:
                 return []
-            self._schedule_close(profile_id, previous[1], _now_ms())
+            self._schedule_close(profile_id, previous[1], _now_ms(), "explicit")
             return []
         if (status, match_ref) == previous:
             self._cancel_close(profile_id)
@@ -512,16 +588,36 @@ class Aoe2LobbyAdapter:
             self._apply_match_all(context, frame.get(f"{context}_match_all"), touched)
         if f"{context}_match_update" in frame:
             self._apply_match_updates(context, frame.get(f"{context}_match_update"), touched)
-        removes = frame.get(f"{context}_match_remove")
-        if isinstance(removes, list):
-            for match_id in removes:
-                match = self._matches[context].pop(str(match_id), None)
-                if match is not None:
-                    touched[str(match_id)] = match
+        self._apply_match_removes(context, frame.get(f"{context}_match_remove"), touched)
         player_removes = frame.get(f"{context}_player_remove")
         if isinstance(player_removes, list):
             for profile_id in player_removes:
-                self._schedule_close(str(profile_id), "", _now_ms())
+                # the enrollment guard (owner 2026-11-26: the feed pushes
+                # the WHOLE world's leaves - every close scheduled for a
+                # stranger flooded the pods' logs)
+                if str(profile_id) in self._subscribed_ids:
+                    self._schedule_close(str(profile_id), "", _now_ms(), "explicit")
+
+    def _apply_match_removes(
+        self, context: str, removes: object, touched: dict[str, dict[str, Any]]
+    ) -> None:
+        """Pop the EXPLICITLY removed matches; their players close fast.
+
+        An ``*_match_remove`` is the server's own close signature
+        (owner 2026-11-26): the §4 game-start trap stays the short
+        explicit window's job - the weak absent window would sit on a
+        lobby the server just closed with its own hand.
+        """
+        if not isinstance(removes, list):
+            return
+        for match_id in removes:
+            match = self._matches[context].pop(str(match_id), None)
+            if match is None:
+                continue
+            touched[str(match_id)] = match
+            for profile_id in _profiles_of({str(match_id): match}):
+                if profile_id in self._subscribed_ids:
+                    self._schedule_close(profile_id, str(match_id), _now_ms(), "explicit")
 
     def _apply_match_all(self, context: str, payload: object, touched: dict[str, dict[str, Any]]) -> None:
         """Fold a full snapshot: replace the matches, touch only the CHANGED.
@@ -533,6 +629,7 @@ class Aoe2LobbyAdapter:
         replay the whole world, the spammer's lesson).
         """
         snapshot = _as_match_dict(payload)
+        self._learn_names(snapshot)
         for stale_id in self._matches[context]:
             if stale_id not in snapshot:
                 # gone from the feed: the close path handles it (the
@@ -551,6 +648,7 @@ class Aoe2LobbyAdapter:
     def _apply_match_updates(self, context: str, payload: object, touched: dict[str, dict[str, Any]]) -> None:
         """Fold one delta batch: touch only the payloads that changed."""
         updates = _as_match_dict(payload)
+        self._learn_names(updates)
         self._matches[context].update(updates)
         for mid, match in updates.items():
             fp = _payload_fingerprint(match)
@@ -570,7 +668,10 @@ class Aoe2LobbyAdapter:
             previous = self._player_status.get(profile_id)
             if status is None:
                 if previous is not None:
-                    self._schedule_close(profile_id, previous[1], _now_ms())
+                    # the SNAPSHOT omission is a weak signal (the feed
+                    # drops an OPEN lobby for minutes, owner 2026-11-26):
+                    # the reason reads "absent", the window stretches
+                    self._schedule_close(profile_id, previous[1], _now_ms(), "absent")
                 continue
             if (status, match_ref) == previous:
                 self._cancel_close(profile_id)
@@ -701,23 +802,33 @@ class Aoe2LobbyAdapter:
         match = self._matches[context].get(match_ref)
         if not isinstance(match, dict):
             return {}
-        slots = self._match_slots(match)
+        seats = self._match_seats(match)
         players: list[dict[str, Any]] = []
         teams: dict[int, int] = {}
-        for slot in slots:
+        for seat in seats:
+            slot, position = seat["slot"], seat["position"]
             profile_id = slot.get("profileid")
-            if profile_id in (None, ""):
-                continue
+            ai = profile_id in (None, "", 0)
+            name = str(slot.get("name") or "")
+            if ai and not name:
+                name = "Computer"
             team = int(slot.get("team") or 0)
+            # the AIs count in the LAYOUT (1v1 vs a computer reads 1v1):
+            # a team holds *players*, human or computer
             teams[team] = teams.get(team, 0) + 1
             players.append(
                 {
-                    "profile_id": str(profile_id),
-                    "name": str(slot.get("name") or ""),
+                    "profile_id": str(profile_id or ""),
+                    "name": name,
                     "civilization": self._civ_label(slot.get("civilization")),
-                    "avatar": str(slot.get("steam_avatar") or ""),
-                    "country": str(slot.get("country") or ""),
+                    "avatar": "" if ai else str(slot.get("steam_avatar") or ""),
+                    "country": "" if ai else str(slot.get("country") or ""),
                     "team": team,
+                    # the seat position reads P1-8 (owner 2026-11-23: the
+                    # live cards showed no slot badge); an AI seat marks
+                    # itself so the panels render it honestly
+                    "slot": position,
+                    "ai": ai,
                 }
             )
         host_profile = str(match.get("host_profileid") or "")
@@ -739,6 +850,8 @@ class Aoe2LobbyAdapter:
                         "avatar": p["avatar"],
                         "country": p["country"],
                         "team": p["team"],
+                        "slot": p["slot"],
+                        "ai": p["ai"],
                     }
                     for p in players
                 ]
@@ -746,45 +859,196 @@ class Aoe2LobbyAdapter:
             "lobby_url": f"https://www.aoe2lobby.com/j/{match_ref}",
             "spectate_url": f"https://www.aoe2lobby.com/w/{match_ref}",
             "deep_link": f"{DEEP_LINK_URL}{match_ref}" if status != STATUS_GAME else "",
+            "settings_json": self._settings_json(match),
+            # the OPEN slots (owner 2026-11-25): a LOBBY's own
+            # property - the finished games and the launched ones
+            # never carried it
+            "open_slots": self._open_slots(match) if status == STATUS_LOBBY else -1,
         }
+
+    #: the live settings the lobby payload carries RAW and named
+    #: (captured live 2026-11-23 \u2014 the payload is NOT the encoded
+    #: World's Edge blob, every key rides verbatim): the consumer
+    #: (the panels' settings view) owns the labels and the enum
+    #: tables, as it already does for the finished cards' blob.
+    SETTINGS_KEYS = (
+        "mode",
+        "size",
+        "population",
+        "speed",
+        "victory",
+        "victory_threshold",
+        "resources",
+        "reveal_map",
+        "starting_age",
+        "ending_age",
+        "ai_difficulty",
+        "treaty_length",
+        "cheats",
+        "lock_speed",
+        "lock_teams",
+        "full_tech_tree",
+        "record",
+        "shared_exploration",
+        # the mode flags the owner asked for (2026-11-23): they ride the
+        # payload named, the schema ws labels them Yes/No
+        "ew_mode",
+        "sudden_death_mode",
+        "regicide_mode",
+        "antiquity_mode",
+        "team_positions",
+        "team_together",
+        "turbo_mode",
+        # the lobby's OWN properties (owner 2026-11-25): the settings
+        # popup renders them - hide_civs and password as checkboxes,
+        # the scenario as a named line
+        "hide_civilizations",
+        "password",
+        "scenario",
+    )
+
+    def _settings_json(self, match: dict[str, Any]) -> str:
+        """Dump the lobby's raw named settings as one json string."""
+        settings = {key: match[key] for key in self.SETTINGS_KEYS if key in match}
+        return json.dumps(settings) if settings else ""
+
+    def _open_slots(self, match: dict[str, Any]) -> int:
+        """Count the match's OPEN (joinable) slots.
+
+        The seat grammar (the _match_seats lesson): status 0 = an
+        OPEN slot - the "3/6" of the game's own lobby UI (owner
+        2026-11-25).
+        """
+        slots = match.get("slots")
+        if not isinstance(slots, dict):
+            return -1
+        open_count = 0
+        for key in sorted(slots.keys(), key=lambda k: _slot_position_of(k)):
+            slot = slots[key]
+            if isinstance(slot, dict) and str(slot.get("status") or "") == "0":
+                open_count += 1
+        return open_count
 
     def _match_slots(self, match: dict[str, Any]) -> list[dict[str, Any]]:
         """Extract the occupied slot dicts of one match payload."""
+        return [seat["slot"] for seat in self._match_seats(match)]
+
+    def _match_seats(self, match: dict[str, Any]) -> list[dict[str, Any]]:
+        """Extract the occupied seats (humans AND AIs) with their P-position.
+
+        The feed's own grammar (verified live 2026-11-24, the owner's
+        AI lobby): status 3 = a human (with profileid), status 2 =
+        a COMPUTER (no profileid, its civ/team/color set), 0/1 =
+        open/closed - the first attempt keyed the AIs on status 3
+        and never caught one. The seat's game position reads the
+        COLOR (the game's own player number - the slot KEY follows
+        the join order, not the seat: "tu me mets toujours slot 1",
+        owner 2026-11-24); the keys only order the list.
+        """
         slots = match.get("slots")
         if not isinstance(slots, dict):
             return []
-        return [s for s in slots.values() if isinstance(s, dict) and s.get("status") == 3]
+        seats: list[dict[str, Any]] = []
+        for key in sorted(slots.keys(), key=lambda k: _slot_position_of(k)):
+            slot = slots[key]
+            if not isinstance(slot, dict):
+                continue
+            status = int(slot.get("status") or 0)
+            if status not in (2, 3):
+                continue  # open/closed play nobody
+            if status == 2 and slot.get("profileid"):
+                continue  # a closed seat behind a player is not an AI
+            seats.append({"slot": slot, "position": _seat_position(slot, key)})
+        # the P-badge COLLISION (owner 2026-11-26: the live card read
+        # two "P1"): the colors collide or stay unset on some payloads
+        # - the seats keep DISTINCT positions, the first collision
+        # re-numbers to the lowest free seat (P1, P2, ...)
+        taken: set[int] = set()
+        for seat in seats:
+            if seat["position"] in taken:
+                free = next((i for i in range(1, 9) if i not in taken), seat["position"])
+                seat["position"] = free
+            taken.add(seat["position"])
+        return seats
 
-    def _schedule_close(self, profile_id: str, match_ref: str, now_ms: float) -> None:
-        """Park a removal behind the game module's grace window (§4 trap).
+    def _schedule_close(
+        self, profile_id: str, match_ref: str, now_ms: float, reason: str = "explicit"
+    ) -> None:
+        """Park a removal behind its reason's grace window (§4 trap).
 
-        The window rule lives once in ``LobbyClosedGrace`` (the game
-        module owns it); this adapter only keeps the profile→match_ref
-        association for the eventual close event payload.
+        The window now rides the REASON (owner 2026-11-26: the
+        lobby-vanished hunt): an ``explicit`` signal (the players
+        channel pushed null, a player_remove) fires fast; an
+        ``absent`` sighting (the lobby dropped out of a snapshot)
+        needs SUSTAINED silence - the upstream feed drops an OPEN
+        lobby for minutes while the owner sits in it.
         """
+        previous_reason = self._close_reasons.get(profile_id)
+        # the STRONGEST pending reason wins (owner 2026-11-26): an
+        # explicit signal never lets a later weaker absence stretch
+        # its window - and a re-sighting of the same reason NEVER
+        # re-arms the ORIGINAL window (the absence frames repeat)
+        if previous_reason is not None and (previous_reason == "explicit" or previous_reason == reason):
+            self._close_refs[profile_id] = match_ref
+            return
+        # the ingest OBSERVES its close decisions (owner 2026-11-25:
+        # the lobby-vanished hunt - a close without a WHY starved the
+        # live dashboard post-reboot): the schedule and the FIRE both
+        # speak
+        logger.info(
+            "aoe2lobby CLOSE SCHEDULED: profile %s (match %s) - %s, window %.0fs",
+            profile_id,
+            match_ref or "?",
+            "not seen in the frame" if reason == "absent" else "the player left",
+            AOE2LOBBY_EXPLICIT_CLOSE_GRACE_S if reason == "explicit" else AOE2LOBBY_ABSENT_CLOSE_GRACE_S,
+        )
         self._grace.on_lobby_closed(profile_id, now=now_ms / 1000.0)
         self._close_refs[profile_id] = match_ref
+        self._close_reasons[profile_id] = reason
 
     def _cancel_close(self, profile_id: str) -> None:
         """Drop a pending close: the player was seen again (§9 last-state rule)."""
         self._grace.forget(profile_id)
+        self._close_reasons.pop(profile_id, None)
         self._close_refs.pop(profile_id, None)
 
     def _sweep_pending_closes(self) -> list[dict[str, Any]]:
-        """Emit the close events whose grace period has fully elapsed."""
+        """Emit the close events whose reason's grace period has fully elapsed."""
         now = _now_ms()
         events: list[dict[str, Any]] = []
         for profile_id in sorted(self._close_refs):
-            if not self._grace.should_downgrade(profile_id, now=now / 1000.0):
+            if profile_id not in self._subscribed_ids:
+                # the enrollment guard again: a stranger never fires
+                self._close_refs.pop(profile_id, None)
+                self._close_reasons.pop(profile_id, None)
+                self._grace.forget(profile_id)
+                continue
+            reason = self._close_reasons.get(profile_id, "explicit")
+            window = (
+                AOE2LOBBY_EXPLICIT_CLOSE_GRACE_S
+                if reason == "explicit"
+                else AOE2LOBBY_ABSENT_CLOSE_GRACE_S
+            )
+            if not self._grace.should_downgrade(
+                profile_id, now=now / 1000.0, grace_s=window
+            ):
                 continue
             match_ref = self._close_refs.pop(profile_id)
             self._grace.forget(profile_id)
+            self._close_reasons.pop(profile_id, None)
             status, current_ref = self._current_status(profile_id)
             if status is not None:
                 self._player_status[profile_id] = (status, current_ref)
                 continue
             previous_status = self._player_status.get(profile_id, ("", ""))[0]
             event_type = EVENT_GAME_ENDED if previous_status == STATUS_GAME else EVENT_LOBBY_CLOSED
+            logger.info(
+                "aoe2lobby CLOSE FIRED: profile %s, match %s, type %s (%s - the window elapsed, no re-sight)",
+                profile_id,
+                match_ref or "?",
+                event_type,
+                "the player left" if reason == "explicit" else "absent from the frames",
+            )
             events.append(
                 {
                     "match_ref": match_ref,
@@ -831,6 +1095,28 @@ def _profiles_of(matches: dict[str, dict[str, Any]]) -> set[str]:
             if isinstance(slot, dict) and slot.get("status") == 3 and slot.get("profileid") not in (None, ""):
                 profiles.add(str(slot["profileid"]))
     return profiles
+
+
+def _slot_position_of(key: str) -> int:
+    """Read the ORDER of a slot key ("s4" -> 4, 0 unknown)."""
+    digits = "".join(ch for ch in str(key) if ch.isdigit())
+    return int(digits) if digits else 0
+
+
+def _seat_position(slot: dict[str, Any], key: str) -> int:
+    """Read the seat's GAME position: the color, 0 unknown.
+
+    The color IS the game's player number (owner 2026-11-24: the
+    badge read the slot key, which follows the join order, not the
+    seat); the key only keeps the list ordered.
+    """
+    try:
+        color = int(slot.get("color") or 0)
+    except (TypeError, ValueError):
+        color = 0
+    if 1 <= color <= 8:
+        return color
+    return _slot_position_of(key)
 
 
 def _format_label(teams: dict[int, int], player_count: int) -> str:

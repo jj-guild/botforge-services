@@ -1,25 +1,36 @@
-"""The AoE2 live activity feed (botforge-services#147, owner direction).
+"""The AoE2 activity surfaces: the players forum + the logs channel.
 
-Every match involving a linked player becomes ONE rich message in each
-concerned guild's LOGS channel — a components-v2 layout (the
-match-card look) that LIVES with the match:
+Every match involving a linked player lives in TWO surfaces, each with
+its own contract (owner 2026-11-24):
 
-- the lobby opens: the card shows the players as they join, the join
-  link, the setup (mode, map);
-- the game launches: the card flips to the watch link, the civs and
-  teams ride the roster;
-- the match ends: the card closes with the duration and the results
-  link.
+- the PLAYERS forum (``games/aoe2/joueurs``, owner 2026-11-26: the
+  match feed became the players forum): ONE post per BOT USER, the
+  user's matches as cards \u2014 the very same card class as the profile
+  panels
+  (owner 2026-11-23: "tu n'utilises pas la m\u00eame classe" \u2014 the
+  dashboard and the feed both render through ``_match_card_parts``):
+  the contextual AoE2 header, the seats, the links, the settings
+  button. The card LIVES with the match (lobby \u2192 in game \u2192
+  finished \u2192 the real result) and the forum reads as the guild's
+  AoE2 history. When the forum does not exist, NOTHING is sent (the
+  tree owns the channel: no adoption, no fallback).
 
-One message per (guild, match) — updated in place on every transition,
-never resent; the channel reads as the guild's AoE2 history, each
-match a single block in arrival order.
+  On the forum's very first use the LAST WEEK of stored history seeds
+  the channel, OLDEST first: the valid matches AND the invalid ones
+  (no result, under five minutes) \u2014 an invalid match still shows,
+  with its status (owner 2026-11-24).
+
+- the LOGS channel (``bot/logs``): very short, DENSE, append-only
+  event lines \u2014 one log per (match, event), never per player (a
+  match with several linked players logs once). Components V2, one
+  accent-coloured container, emphasis and links, no image; the
+  messages are NEVER edited \u2014 the logs are a journal, the cards
+  (the players forum) carry the living state.
 
 The source is the game service's ``WatchPlayerEvents`` stream (the
 enrollments already subscribe the provider to the guilds' linked
-profile ids); the delivery rides the logs channel resolution; the
-loop is resilient (a stream break reconnects, a send failure never
-kills the feed).
+profile ids); the loop is resilient (a stream break reconnects, a
+send failure never kills the feed).
 """
 
 from __future__ import annotations
@@ -37,25 +48,224 @@ logger = logging.getLogger("botforge.live_activity")
 
 __all__ = ["start_live_activity_feed"]
 
-_STATE_ICONS = {"in_lobby": "🟡", "in_game": "🟢", "offline": "⚪"}
+# (owner 2026-11-27): NO periodic repair - the existing posts repair
+# on the REPAIR BUTTON only, never at the boot, never on a timer; the
+# events (channel/member/bind, the live stream) stay the fast paths
 
-# the live cards: (guild_id, match_ref) -> the sent message — updated
-# in place while the match lives, dropped at the end
-_CARDS: dict[tuple[str, str], Any] = {}
+# the seed's BUILD: a seed producing broken cards gets versioned up -
+# every forum re-seeds once with the fixed build (the old cards stay,
+# the guild owns its channel)
+_SEED_VERSION = 14  # 14: the seats' pseudos link to the player's
+# #joueurs post (owner 2026-11-27), the rest falls back to the game's
+# profile_link_template; 13: the rebuild EDITS IN PLACE (owner
+# 2026-11-27: a build change re-renders the registered card messages
+# instead of delete+repost - half the calls, no DELETE rate limit);
+# 12: the shed walks the thread; 11: the avatar header; 10: the
+# PLAYERS forum
+
+_PLAYERS_SCOPE = "games/aoe2"
+_PLAYERS_KEY = "joueurs"
+# the seed window: the forum's first use replays the last WEEK
+# the forum's window (owner 2026-11-25: the week was starving it - his
+# November history deserves its cards; 90 days)
+_SEED_WINDOW_S = 90 * 86400
+# an invalid match (owner 2026-11-24): under 5 minutes or no result
+_INVALID_DURATION_S = 5 * 60
+
+# (guild, profile_id, match_ref) -> the sent message - one LIVING
+# card per known participant's post (owner 2026-11-25: the forum is
+# per player), updated in place while the match lives, dropped at the
+# end
+_CARDS: dict[tuple[str, str, str], Any] = {}
+# (guild, match_ref) -> the card's current model (re-rendered in place)
+_CARD_STATE: dict[tuple[str, str], dict[str, Any]] = {}
+# (guild, match_ref) -> the first-seen epoch s (the live card's "since")
+_FIRST_SEEN: dict[tuple[str, str], int] = {}
+# the last known summary per match - the end card keeps the context
+_LAST_SUMMARY: dict[str, dict[str, Any]] = {}
+# the FINISHED card model per match - the rich end line reads it after
+# the correlation (the state lives on past the card's own death)
+_FINISHED_CARDS: dict[str, dict[str, Any]] = {}
 # the last in-game name seen per profile (labels survive the offline event)
 _LAST_NAME: dict[str, str] = {}
-# the first-seen time per (guild, match) — the duration line at the end
-_MATCH_STARTED_AT: dict[tuple[str, str], float] = {}
-# the match's profiles + started-at epoch s — the result correlation keys
+# the match's profiles + started-at epoch s - the result correlation keys
 _MATCH_PLAYERS: dict[str, tuple[list[str], int]] = {}
+# the (guild, match_ref, verb) events already logged this boot (one log per event)
+_LOGGED: set[tuple[str, str, str]] = set()
+# the guilds whose players forum already saw their week of history
+_SEEDED: set[str] = set()
+# the (guild, user) whose post creation is IN FLIGHT - a concurrency
+# guard LOCAL to one ensure pass (owner 2026-11-26: the boot-wide latch
+# blocked the DEAD-post recreation for the whole process' life - the
+# twins are the dedupe's job now, never the latch's)
+# the (guild, match_ref) the forum already carries a message for - the
+# ONE-message-per-match bookkeeping (owner 2026-11-25): the live cards,
+# the seeds and the store gap-fills all share it
+_POSTED: dict[str, set[str]] = {}
 # the fire-and-forget tasks (kept alive until they finish)
 _BG_TASKS: set[asyncio.Task[Any]] = set()
-# the last known summary per match — the end card keeps the context
-_LAST_SUMMARY: dict[str, dict[str, Any]] = {}
+
+# per-guild render memos (labels, then the civ/map enrichment): the
+# feed re-renders cards on every event delta - the label pack and the
+# civ/map posts resolve once per window, never per event
+_LABELS_MEMO: dict[str, tuple[float, dict[str, Any]]] = {}
+_CTX_MEMO: dict[tuple[str, str, str], tuple[float, dict[str, Any]]] = {}
+_MEMO_TTL_S = 600.0
+
+# the accent of the logs line per verb (verdict at a glance, dense)
+_LOG_ACCENTS = {
+    "lobby_open": 0xF1C40F,  # yellow: a lobby stands
+    "lobby_update": 0x99AAB5,  # grey: a tweak, nothing more
+    "lobby_close": 0x71368A,  # purple: the lobby left, nothing ran
+    "match_start": 0x2ECC71,  # green: the game runs
+    "match_end": 0x9B59B6,  # the finished verdict
+}
+
+
+async def _label_pack(bot: discord.Client, guild_id: str) -> dict[str, Any]:
+    """Resolve the guild's match-panel label pack - memoized per window."""
+    from botforge.discord.home import _match_panel_labels_guild
+
+    cached = _LABELS_MEMO.get(guild_id)
+    if cached and time.monotonic() - cached[0] < _MEMO_TTL_S:
+        return cached[1]
+    labels = await _match_panel_labels_guild(guild_id, bot)
+    _LABELS_MEMO[guild_id] = (time.monotonic(), labels)
+    return labels
+
+
+async def _card_ctx(bot: discord.Client, guild_id: str, card: dict[str, Any]) -> dict[str, Any]:
+    """Resolve the guild's enrichment ctx for one card - memoized per window."""
+    from botforge.discord.home import _match_panels_ctx_for
+
+    civs = ",".join(
+        sorted({str((p or {}).get("civ") or "") for p in card.get("players") or [] if (p or {}).get("civ")})
+    )
+    map_name = str(card.get("map_name") or "")
+    key = (guild_id, civs, map_name)
+    cached = _CTX_MEMO.get(key)
+    if cached and time.monotonic() - cached[0] < _MEMO_TTL_S:
+        return cached[1]
+    ctx = await _match_panels_ctx_for(bot, [card], guild_id)
+    _CTX_MEMO[key] = (time.monotonic(), ctx)
+    return ctx
+
+
+async def instant_sweep(bot: discord.Client, guild_id: str) -> int:
+    """Run the forum reconcile NOW - returns how many cards moved.
+
+    One guild, the pokes' entry:
+
+    The member join/leave and the bind/unbind hooks ride this - the
+    posts' lifecycle answers the EVENT; the existing posts repair on
+    the REPAIR BUTTON only (owner 2026-11-27: no timer, no boot pass).
+    """
+    try:
+        channel_id = await _players_channel_id(bot, guild_id)
+        if channel_id is None:
+            return 0
+        # a REPAIR re-reads the world (owner 2026-11-27: an imported
+        # map reaches the cards): the enrichment memos die, the render
+        # hash decides which cards re-render - a card whose inputs
+        # moved is EDITED IN PLACE, the rest stays untouched
+        _CTX_MEMO.clear()
+        _LABELS_MEMO.clear()
+        _POST_LINKS_MEMO.pop(guild_id, None)
+        _SEEDED.discard(guild_id)
+        await _maybe_seed_players_forum(bot, guild_id, channel_id)
+        await _gap_fill_players_forum(bot, guild_id, channel_id)
+        return await _reconcile_rendered_cards(bot, guild_id, channel_id)
+    except Exception:
+        logger.debug("the instant forum sweep failed (guild %s)", guild_id, exc_info=True)
+        return 0
+
+
+async def repair_players_forum(bot: discord.Client, guild_id: str, full: bool) -> dict[str, int]:
+    """Repair the players forum - the repair button's heavy arm.
+
+    The owner's 2026-11-27 rule: the players' HISTORY re-syncs
+    upstream first (every bound account, the stale ones wait - "vérifie
+    que l'historique de tous les joueurs est à jour"), every known
+    player's post is then ensured present, and the FULL pass also
+    re-renders the match cards whose inputs moved. Returns the counts
+    the repair's plan shows.
+    """
+    counts = {"posts": 0, "cards": 0}
+    profiles: list[str] = []
+    try:
+        profiles = await _guild_profiles(bot, guild_id)
+    except Exception:
+        logger.debug("the repair profiles read failed - best-effort", exc_info=True)
+    if profiles:
+        try:
+            import os
+
+            from botforge.game_aoe2.client import GameDataClient
+
+            uri = os.environ.get("GAME_AOE2_URI", "")
+            if uri:
+                await GameDataClient(uri).sync_stats(profiles, wait=True)
+        except Exception:
+            logger.warning(
+                "players forum repair: the history refresh failed - best-effort", exc_info=True
+            )
+    channel_id = await _players_channel_id(bot, guild_id)
+    if channel_id is None:
+        return counts
+    if full:
+        counts["cards"] = int(await instant_sweep(bot, guild_id) or 0)
+    else:
+        try:
+            await _maybe_seed_players_forum(bot, guild_id, channel_id)
+        except Exception:
+            logger.warning("players forum repair: the seed failed - best-effort", exc_info=True)
+    try:
+        counts["posts"] = len(await _posts_of(guild_id))
+    except Exception:
+        logger.debug("the repair posts read failed - best-effort", exc_info=True)
+    return counts
+
+
+def _bind_instant_repair(bot: discord.Client) -> None:
+    """Bind the channel delete/create events to an INSTANT forum sweep.
+
+    The owner's rule (2026-11-25): a repaired forum repopulates
+    INSTANTLY, the event is the fast path (2026-11-27: there is NO
+    timer anymore - the button repairs, the events answer). The
+    marker decides cheaply: an unchanged forum returns in one read.
+    """
+
+    async def _on_channel_event(channel: Any) -> None:
+        guild = getattr(channel, "guild", None)
+        if guild is None:
+            return
+        await instant_sweep(bot, str(guild.id))
+
+    async def _on_member_event(member: Any) -> None:
+        # a known player ENTERS or LEAVES the guild (owner 2026-11-25):
+        # his post is created/deleted NOW, not at the next sweep
+        guild = getattr(member, "guild", None)
+        if guild is None:
+            return
+        await instant_sweep(bot, str(guild.id))
+
+    if getattr(bot, "_players_instant_bound", False):
+        return
+    try:
+        bot._players_instant_bound = True  # type: ignore[attr-defined]
+        add_listener: Any = getattr(bot, "add_listener", None)
+        if add_listener is None:
+            return
+        add_listener(_on_channel_event, "on_guild_channel_delete")
+        add_listener(_on_channel_event, "on_guild_channel_create")
+        add_listener(_on_member_event, "on_member_join")
+        add_listener(_on_member_event, "on_member_remove")
+    except Exception:
+        logger.debug("the instant forum binding failed - the sweep stays", exc_info=True)
 
 
 def start_live_activity_feed(bot: discord.Client) -> asyncio.Task[None] | None:
-    """Run the AoE2 activity feed: match cards in the guilds' logs channels.
+    """Run the AoE2 activity feed: matches cards + short event logs.
 
     One stream consumer, forever; None when the game service is not
     wired (the feed degrades to nothing, silently).
@@ -63,7 +273,7 @@ def start_live_activity_feed(bot: discord.Client) -> asyncio.Task[None] | None:
     game_key = "aoe2"
     uri = os.environ.get(f"GAME_{game_key.upper()}_URI", "")
     if not uri:
-        logger.info("live activity feed: no game service wired — off")
+        logger.info("live activity feed: no game service wired - off")
         return None
 
     async def _run() -> None:
@@ -78,16 +288,19 @@ def start_live_activity_feed(bot: discord.Client) -> asyncio.Task[None] | None:
                 raise
             except Exception as exc:
                 # UNIMPLEMENTED: the game service does not serve the
-                # stream yet — retrying every 5 s forever spams both
+                # stream yet - retrying every 5 s forever spams both
                 # logs; log once and stay idle (a restart picks it up).
                 code = getattr(exc, "code", None)
                 if code is not None and getattr(code(), "name", "") == "UNIMPLEMENTED":
-                    logger.info("live activity feed: the stream is not served yet — staying idle")
+                    logger.info("live activity feed: the stream is not served yet - staying idle")
                     return
-                logger.warning("live activity feed: stream broke — reconnecting", exc_info=True)
+                logger.warning("live activity feed: stream broke - reconnecting", exc_info=True)
                 await asyncio.sleep(5)
 
     task = asyncio.create_task(_run())
+    # the INSTANT repair (owner 2026-11-25: "au delete, tout repopulate
+    # instant"): a channel deleted or created sweeps NOW
+    _bind_instant_repair(bot)
 
     def _log_death(task: asyncio.Task[None]) -> None:
         if not task.cancelled() and task.exception() is not None:
@@ -98,32 +311,33 @@ def start_live_activity_feed(bot: discord.Client) -> asyncio.Task[None] | None:
 
 
 async def _deliver_event(bot: discord.Client, event: dict[str, Any]) -> None:
-    """Route one transition to every concerned guild's match card."""
+    """Route one transition to the players forum card + the logs line."""
     profile_id = str(event.get("profile_id", ""))
     user_id = str(event.get("user_id", ""))
     if not profile_id or not user_id:
         return
+    match = event.get("match") or {}
+    _remember_name(profile_id, match)
+    ref = str(match.get("match_ref") or "")
+    if ref and match.get("players"):
+        _LAST_SUMMARY[ref] = match
     logger.info(
         "live activity EVENT: profile=%s user=%s %s->%s match=%s",
         profile_id,
         user_id,
         event.get("old_status", "?"),
         event.get("new_status", "?"),
-        (event.get("match") or {}).get("match_ref", ""),
+        ref,
     )
-    match = event.get("match") or {}
-    _remember_name(profile_id, match)
-    ref = str(match.get("match_ref") or "")
-    if ref and match.get("players"):
-        _LAST_SUMMARY[ref] = match
     for guild in list(bot.guilds):
         if not await _is_guild_member(bot, guild, user_id):
             continue
-        await _upsert_card(bot, str(guild.id), event)
+        guild_id = str(guild.id)
+        await _upsert_players_card(bot, guild_id, event, profile_id)
+        await _log_event_line(bot, guild_id, event, profile_id)
 
 
 def _remember_name(profile_id: str, match: dict[str, Any]) -> None:
-    """Keep the last in-game name of a profile (labels survive offline)."""
     for p in _players(match):
         if isinstance(p, dict) and str(p.get("profile_id")) == profile_id:
             name = str(p.get("name") or "")
@@ -131,171 +345,2060 @@ def _remember_name(profile_id: str, match: dict[str, Any]) -> None:
                 _LAST_NAME[profile_id] = name
 
 
-async def _upsert_card(bot: discord.Client, guild_id: str, event: dict[str, Any]) -> None:
-    """Create or update the guild's card for the event's match."""
+# ---------------------------------------------------------------------
+# the PLAYERS forum: one living card per (guild, match)
+
+
+async def _players_channel_id(bot: discord.Client, guild_id: str) -> str | None:
+    """Resolve the guild's players forum by its stored tree id.
+
+    The tree owns the channel (owner 2026-11-24): the boot never
+    creates, no name adoption - a guild without the forum sees the
+    feed's logs only.
+    """
+    from botforge.discord.ui.panels_provisioning import stored_channel_id
+
+    try:
+        return await stored_channel_id(guild_id, _PLAYERS_SCOPE, _PLAYERS_KEY)
+    except Exception:
+        return None
+
+
+async def _upsert_players_card(
+    bot: discord.Client, guild_id: str, event: dict[str, Any], profile_id: str
+) -> None:
+    """Create or update the guild's living card for the event's match."""
+    channel_id = await _players_channel_id(bot, guild_id)
+    if channel_id is None:
+        return
     match = event.get("match") or {}
     status = str(event.get("new_status", ""))
     old_status = str(event.get("old_status", ""))
-    profile_id = str(event.get("profile_id", ""))
     match_ref = str(match.get("match_ref") or "")
-    # an offline event carries no match: the card to close is the
-    # player's live one
     if not match_ref:
+        # an offline event carries no match: the card to touch is the
+        # player's live one
         match_ref = _player_live_ref(profile_id)
     if not match_ref:
         return
     key = (guild_id, match_ref)
+    if key not in _FIRST_SEEN:
+        _FIRST_SEEN[key] = int(time.time())
+        await _maybe_seed_players_forum(bot, guild_id, channel_id)
 
     if status == "offline":
-        # the player left / the match ended: refresh the card one last
-        # time then drop it from the live set
-        card = _CARDS.get(key)
-        if card is not None and old_status == "in_game":
-            # the match ended: the card closes NOW (duration, results
-            # link), then a backoff task fetches the real outcome
-            # (winner, duration, map — the upstream records it a few
-            # seconds after the end) and updates the card in place
-            await _send_card(bot, guild_id, event, match_ref, ended=True)
-            profiles, started_at = _MATCH_PLAYERS.get(match_ref, ([], 0))
-            # the card's message stays in _CARDS until the result lands —
-            # the backoff task edits the KNOWN message directly
-            _spawn(_fetch_result_then_update(bot, guild_id, match_ref, profiles, started_at))
-            _MATCH_STARTED_AT.pop(key, None)
-            _LAST_SUMMARY.pop(match_ref, None)
-            _forget_player_ref(profile_id)
-            _schedule_card_gc(key)
+        card = _CARD_STATE.get(key)
+        if card is None:
             return
-        if card is not None:
-            await _send_card(bot, guild_id, event, match_ref, ended=False)
-            _forget_player_ref(profile_id)
+        # the match ended or the lobby folded: one LAST render, then
+        # the result correlation (the upstream records the true
+        # outcome a few seconds later) refreshes the card in place
+        ended = old_status == "in_game"
+        if not ended:
+            # the lobby folded without a game: the card closes,
+            # no result ever comes
+            await _drop_card(bot, guild_id, channel_id, match_ref, status_suffix="lobby fin")
             return
+        _CARD_STATE[key] = {**card, "status": "finished", "finished_at": int(time.time())}
+        await _send_card(bot, guild_id, channel_id, match_ref)
+        profiles, started_at = _MATCH_PLAYERS.get(match_ref, ([], 0))
+        _spawn(
+            _fetch_result_then_update(
+                bot, guild_id, channel_id, match_ref, profiles, started_at, profile_id
+            )
+        )
         return
 
     _remember_player_ref(profile_id, match_ref)
     _remember_match_profiles(match, match_ref)
-    await _send_card(bot, guild_id, event, match_ref, ended=False)
+    card = _CARD_STATE.get(key)
+    summary = _LAST_SUMMARY.get(match_ref) or {}
+    state = "lobby" if status == "in_lobby" else "ongoing"
+    _CARD_STATE[key] = {
+        **(card or {}),
+        **_live_card_of(match_ref, summary, state, _FIRST_SEEN[key]),
+    }
+    await _send_card(bot, guild_id, channel_id, match_ref)
+
+
+def _live_card_of(
+    match_ref: str, summary: dict[str, Any], state: str, started_at: int
+) -> dict[str, Any]:
+    """Build the live card's model from the event's match summary.
+
+    The SAME shape as the /live dashboard's cards - the shared
+    renderer (``_match_card_parts``) reads it untouched.
+    """
+    from botforge.discord.home import _live_summary_players
+
+    return {
+        "status": state,
+        "match_ref": match_ref,
+        "match_id": match_ref,
+        "started_at": started_at,
+        "finished_at": 0,
+        "winners": [],
+        "map_name": str(summary.get("map") or ""),
+        "lobby_title": str(summary.get("match_type") or "") if state == "lobby" else "",
+        "description": str(summary.get("match_type") or ""),
+        "players": _live_summary_players(summary),
+        "lobby_url": str(summary.get("lobby_url") or ""),
+        "spectate_url": str(summary.get("spectate_url") or ""),
+        "live_settings_json": str(summary.get("settings_json") or ""),
+    }
 
 
 async def _send_card(
     bot: discord.Client,
     guild_id: str,
-    event: dict[str, Any],
+    channel_id: str,
     match_ref: str,
-    ended: bool,
 ) -> None:
-    """Send (create) or edit (update) the guild's card for one match."""
+    """Send (create) or edit (update) the match's LIVING cards.
+
+    The forum is a FORUM, one post per KNOWN player (owner
+    2026-11-25): every known participant of the match carries a live
+    card in HIS post, updated in place. A match with several known
+    players duplicates (assumed).
+    """
+    from botforge.discord.home import _match_card_view
+
+    key = (guild_id, match_ref)
+    card = _CARD_STATE.get(key)
+    if card is None:
+        return
+    # NO message until the game STARTS (owner 2026-11-26): the lobby's
+    # state warms the model, the POST waits the launch - the card then
+    # updates at the end and stays immutable afterwards
+    status = str(card.get("status") or "")
+    if status == "lobby":
+        return
+    participants = _known_participants(card, await _guild_profiles(bot, guild_id))
+    if not participants:
+        return
+    forum = await _sweep_channel(bot, guild_id, channel_id)
+    if forum is None or not isinstance(forum, discord.ForumChannel):
+        return
+    # the POST unit is the USER (owner 2026-11-26): the reconcile
+    # always sees EVERY user (a subset ensure would delete the rest),
+    # the live card only rides the participants' own posts
+    users = await _guild_users(bot, guild_id)
+    posts = await _ensure_player_posts(bot, guild_id, forum, users)
+    post_owners = sorted({_profile_user(users, p) for p in participants} - {""})
+    try:
+        labels = await _label_pack(bot, guild_id)
+        ctx = await _card_ctx(bot, guild_id, card)
+        known = set(participants)
+    except Exception:
+        # the render NEVER kills the feed - the card stays as it was
+        logger.debug("live activity card render failed (match %s)", match_ref, exc_info=True)
+        return
+    for uid in post_owners:
+        # each post's card is SCOPED to its owner (owner 2026-11-26):
+        # his own view - his profiles bold, HIS verdict - rendered per
+        # post, never one unscoped view shared by everyone
+        try:
+            view = _match_card_view(
+                card, ctx, set((users.get(uid) or {}).get("profiles") or {}), labels, known
+            )
+        except Exception:
+            logger.debug("live activity card render failed (match %s)", match_ref, exc_info=True)
+            continue
+        await _upsert_participant_card(bot, guild_id, uid, match_ref, posts, forum, view)
+
+
+async def _upsert_participant_card(
+    bot: discord.Client,
+    guild_id: str,
+    user_id: str,
+    match_ref: str,
+    posts: dict[str, dict[str, Any]],
+    forum: Any,
+    view: Any,
+) -> None:
+    """Edit the user's live card in HIS post, send it when new."""
+    del bot
+    entry = posts.get(user_id)
+    if entry is None:
+        return
+    thread = _thread_of(forum, entry)
+    if thread is None:
+        return
+    live_key = (guild_id, user_id, match_ref)
+    live = _CARDS.get(live_key)
+    if live is not None:
+        try:
+            await live.edit(view=view)
+            return
+        except Exception:
+            logger.info(
+                "live activity card edit failed (guild %s, post %s, match %s) - recreating",
+                guild_id,
+                user_id,
+                match_ref,
+            )
+            _CARDS.pop(live_key, None)
+    try:
+        message = await thread.send(view=view, silent=True)
+        _CARDS[live_key] = message
+        # the live card rides the post's registry: the gap-fill never
+        # duplicates a match the live feed already carries
+        if match_ref not in _post_refs(entry):
+            entry.setdefault("refs", [])
+            entry["refs"] = sorted({*entry["refs"], match_ref})
+            entry.setdefault("messages", {})[match_ref] = str(message.id)
+            await _save_post(guild_id, user_id, entry)
+    except Exception:
+        logger.debug(
+            "live activity card send skipped (guild %s, post %s) - best-effort",
+            guild_id,
+            user_id,
+            exc_info=True,
+        )
+
+
+def _known_participants(card: dict[str, Any], profiles: list[str]) -> set[str]:
+    """Return the match's seats that belong to the guild's KNOWN players."""
+    known = {str(p) for p in profiles}
+    return {
+        str((player or {}).get("profile_id") or "")
+        for player in card.get("players") or []
+    } & known
+
+
+async def _drop_card(
+    bot: discord.Client,
+    guild_id: str,
+    channel_id: str,
+    match_ref: str,
+    status_suffix: str = "",
+) -> None:
+    """Fold the card (a lobby that never ran) and forget the match."""
+    del status_suffix
+    key = (guild_id, match_ref)
+    _CARD_STATE.pop(key, None)
+    for live_key in [k for k in _CARDS if k[0] == guild_id and k[2] == match_ref]:
+        _CARDS.pop(live_key, None)
+    _FIRST_SEEN.pop(key, None)
+    _MATCH_PLAYERS.pop(match_ref, None)
+    _LAST_SUMMARY.pop(match_ref, None)
+
+
+async def _apply_result_to_card(
+    bot: discord.Client,
+    guild_id: str,
+    channel_id: str,
+    match_ref: str,
+    result: Any,
+) -> None:
+    """Edit the finished card with the real outcome (winner, duration, elo)."""
+    key = (guild_id, match_ref)
+    card = _CARD_STATE.get(key)
+    if card is None:
+        return
+    winners = [w for w in str(result.winner_profile_id or "").split(",") if w]
+    duration_ms = int(result.duration_ms or 0)
+    started = int(card.get("started_at") or 0)
+    finished = int(card.get("finished_at") or started + duration_ms // 1000 or 0)
+    players = []
+    for player in card.get("players") or []:
+        pid = str((player or {}).get("profile_id", ""))
+        old_new = (result.ratings or {}).get(pid)
+        seat = dict(player)
+        if old_new is not None:
+            seat["rating_before"] = int(old_new[0])
+            seat["rating_after"] = int(old_new[1])
+        players.append(seat)
+    _CARD_STATE[key] = {
+        **card,
+        "status": "finished",
+        "started_at": started,
+        "finished_at": finished,
+        "winners": winners,
+        "map_name": str(result.map_name or card.get("map_name") or ""),
+        "players": players,
+    }
+    await _send_card(bot, guild_id, channel_id, match_ref)
+    # the FINISHED model stays for the rich end line (owner
+    # 2026-11-25): the verdict reads partners, map and format from it
+    _FINISHED_CARDS[match_ref] = dict(_CARD_STATE.get(key) or {})
+    _CARD_STATE.pop(key, None)
+    for live_key in [k for k in _CARDS if k[0] == guild_id and k[2] == match_ref]:
+        _CARDS.pop(live_key, None)
+    _FIRST_SEEN.pop(key, None)
+    _MATCH_PLAYERS.pop(match_ref, None)
+
+
+# ---------------------------------------------------------------------
+# the forum's SEED: the last week of stored history, oldest first
+
+
+async def _maybe_seed_players_forum(  # noqa: C901 - one orchestration, no branch soup
+    bot: discord.Client, guild_id: str, channel_id: str
+) -> None:
+    """Seed the guild's matches FORUM: one post per KNOWN player.
+
+    Once per guild (a stored marker): the window's finished matches
+    AND the invalid ones (no result, under five minutes) - an invalid
+    match still shows, with its status (owner 2026-11-24). A match
+    with several known players lands in EACH one's post (owner
+    2026-11-25: the duplicates are assumed), chronologically.
+    """
+    from botforge.discord.repair import RepairReport
+
+    seed_repair = RepairReport(logger, "players forum seed", subject=guild_id)
+    marker = await _seed_marker(guild_id)
+    if guild_id in _SEEDED or (
+        isinstance(marker, dict)
+        and marker.get("v") == _SEED_VERSION
+        # a REPAIRED forum (deleted, recreated) changed its id - the
+        # window re-seeds into the new channel (owner 2026-11-24)
+        and str(marker.get("channel_id") or "") == str(channel_id)
+    ):
+        _SEEDED.add(guild_id)
+        return
+    _SEEDED.add(guild_id)
+    marker_channel = str((marker or {}).get("channel_id") or "") if isinstance(marker, dict) else ""
+    # the CARDS' BUILD changed (owner 2026-11-26: the avatar header
+    # lived one round on the match cards) - the same forum, a new
+    # build: the old card messages DIE and the seed rebuilds them,
+    # an immutable message never re-renders itself
+    cards_rebuild = (
+        isinstance(marker, dict)
+        and marker_channel == str(channel_id)
+        and marker.get("v") != _SEED_VERSION
+    )
+    if marker_channel and marker_channel != str(channel_id):
+        logger.info(
+            "players forum repaired (guild %s): channel %s -> %s - the posts died with the old forum",
+            guild_id,
+            marker_channel,
+            channel_id,
+        )
+        # the posts registry carries THREADS of the deleted forum and
+        # refs "already posted" there (owner 2026-11-25: the repair
+        # silently starved - every card answered into a dead thread) -
+        # the registry dies with the forum, the ensure (and its
+        # dead-thread recreate) rebuilds everything in the new one
+        for _pid in list((await _posts_of(guild_id)).keys()):
+            await _save_post(guild_id, _pid, None)
+    try:
+        forum = await _sweep_channel(bot, guild_id, channel_id)
+        if forum is None:
+            logger.info("players forum seed STOP: the channel %s resolves nothing (guild %s)", channel_id, guild_id)
+            return
+        profiles = await _guild_profiles(bot, guild_id)
+        if not profiles:
+            # no KNOWN player rides the guild (no binding in the member
+            # list): nothing to post - the WHY says itself (owner
+            # 2026-11-25: the silent starves hunted us twice)
+            logger.info("players forum seed STOP: no known profiles (guild %s)", guild_id)
+            await _write_seed_marker(guild_id, channel_id)
+            return
+        cards = await _week_cards(bot, guild_id)
+        # the served history NAMES the accounts (owner 2026-11-26: the
+        # intro's links read the players' own names, the bare ids read
+        # like a bug) - harvest BEFORE the ensure builds the intro
+        for card in cards:
+            for player in card.get("players") or []:
+                pid = str((player or {}).get("profile_id") or "")
+                nickname = str((player or {}).get("name") or "")
+                if pid and nickname:
+                    _LAST_NAME[pid] = nickname
+        users = await _guild_users(bot, guild_id)
+        posts = await _ensure_player_posts(bot, guild_id, forum, users)
+        labels = await _label_pack(bot, guild_id)
+        known = set(profiles)
+        if cards_rebuild:
+            # the BUILD changed: the traced cards re-render IN PLACE
+            # (owner 2026-11-27), the strays die, the registry keeps the
+            # survivors - the posting loop below fills the holes only
+            await _shed_old_cards(
+                bot, guild_id, forum, posts, users, cards, labels, known
+            )
+        logger.info(
+            "players forum seed: %d post(s) ensured for %d user(s) (guild %s)",
+            len(posts),
+            len(users),
+            guild_id,
+        )
+        await _write_seed_marker(guild_id, channel_id)
+        if not cards:
+            logger.info(
+                "players forum seed STOP: the window carries no card (guild %s)", guild_id
+            )
+            return
+        posted_total = 0
+        for uid, entry in posts.items():
+            group = _cards_of_user(cards, set((users.get(uid) or {}).get("profiles") or {}))
+            if not group:
+                continue
+            refs = _post_refs(entry)
+            pending_cards = [c for c in group if str(c.get("match_id") or "") not in refs]
+            if not pending_cards:
+                continue
+            thread = _thread_of(forum, entry)
+            if thread is None:
+                continue
+            ctx_by_ref: dict[str, dict[str, Any]] = {}
+            for card in pending_cards:
+                ctx_by_ref[str(card.get("match_id"))] = await _card_ctx(bot, guild_id, card)
+            marked = await _send_cards_grouped(
+                thread,
+                pending_cards,
+                ctx_by_ref,
+                labels,
+                known,
+                me_ids=set((users.get(uid) or {}).get("profiles") or {}),
+            )
+            if marked:
+                entry.setdefault("refs", [])
+                entry["refs"].extend(ref for ref, _mid in marked)
+                entry["refs"] = sorted(set(entry["refs"]))
+                entry.setdefault("messages", {}).update(dict(marked))
+                await _save_post(guild_id, uid, entry)
+                posted_total += len(marked)
+        seed_repair.step("posted the window", cards=posted_total, posts=len(posts))
+        seed_repair.done()
+    except Exception:
+        logger.warning("players forum seed failed (guild %s) - best-effort", guild_id, exc_info=True)
+
+
+def _cards_of_player(cards: list[dict[str, Any]], profile_id: str) -> list[dict[str, Any]]:
+    """Return the match cards the player took part in (the duplicates are assumed)."""
+    pid = str(profile_id)
+    out: list[dict[str, Any]] = []
+    for card in cards:
+        for player in card.get("players") or []:
+            if str((player or {}).get("profile_id") or "") == pid:
+                out.append(card)
+                break
+    return out
+
+
+def _thread_of(forum: Any, entry: dict[str, Any]) -> Any | None:
+    """Resolve a post's LIVE thread - a dead id reads None, never a ghost.
+
+    The partial-messageable fallback "resolved" ANY id (owner
+    2026-11-25: every repair starved on it - the zombie threads looked
+    alive, the ensure skipped, the sends 404'd in silence). Only the
+    forum's OWN caches answer: a thread that does not resolve is DEAD
+    and gets recreated.
+    """
+    thread_id = int(entry.get("thread_id") or 0)
+    if not thread_id:
+        return None
+    thread = forum.get_thread(thread_id)
+    if thread is not None:
+        return thread
+    for thread in _forum_threads(forum):
+        if getattr(thread, "id", None) == thread_id:
+            return thread
+    return None
+
+
+async def _week_cards(bot: discord.Client, guild_id: str) -> list[dict[str, Any]]:
+    """Return the guild's stored FINISHED matches, OLDEST first.
+
+    The seed rides the SERVED history (rule 4): the entries commute
+    through the game service, the AI seats already fold ext-side with
+    their real civ names, and the SEAL travels with the entry - the
+    seed renders the invalid matches with their status, never as a
+    hole (owner 2026-11-24). Only FINISHED matches post (owner
+    2026-11-26): the ongoing ones live on the live card, never the
+    store's seed.
+    """
+    profiles = await _guild_profiles(bot, guild_id)
+    if not profiles:
+        return []
+    from botforge.discord.stats_views import recent_match_entries
+
+    # the fetch window rides the SALON's own window (owner 2026-11-
+    # 25): 90 days of history BEFORE the local filter, never a bare 50
+    entries = await recent_match_entries(profiles, limit=200)
+    deadline = int(time.time()) - _SEED_WINDOW_S
+    cards: list[dict[str, Any]] = []
+    for entry in entries:
+        finished_at = _int_of(getattr(entry, "finished_at", 0))
+        if not finished_at or finished_at < deadline:
+            continue  # NEWEST first, FINISHED only
+        cards.append(_seed_card_of(entry))
+    # ASCENDING (owner 2026-11-26): the thread reads chronologically
+    # top-to-bottom and a LIVE match's message lands at the bottom,
+    # where the newest belongs - the order never breaks
+    cards.sort(key=lambda c: int(c.get("finished_at") or 0))
+    return cards
+
+
+def _card_render_hash(card: dict[str, Any], ctx: dict[str, Any], links: dict[str, str] | None = None) -> str:
+    """Hash the card view's INPUTS - the model, its enrichment, its links.
+
+    The repair's reconcile (owner 2026-11-27: "quand tu repair, tu
+    remets l'objet tel quel, sans regen des views - une map manquait,
+    je l'ai importée, repair, et la vue est restée sans la map") lives
+    on this: a card re-renders ONLY when its inputs moved - the model
+    (players, verdict, settings), the enrichment (the map's freshly
+    imported image, the civs' urls, the display names) or the PLAYERS'
+    POST LINKS (owner 2026-11-27: "le repair doit aller update tous les
+    liens de joueurs des matchs") - a recreated post moves its seat
+    links, the hash moves with it.
+    """
+    import hashlib
+
+    post_links: dict[str, str] = {}
+    for player in card.get("players") or []:
+        pid = str((player or {}).get("profile_id") or "")
+        if pid and links and links.get(pid):
+            post_links[pid] = str(links[pid])
+    payload = json.dumps(
+        {
+            "card": card,
+            "map_images": ctx.get("map_images") or {},
+            "civ_images": ctx.get("civ_images") or {},
+            "map_display": ctx.get("map_display") or {},
+            "civ_display": ctx.get("civ_display") or {},
+            "post_links": post_links,
+        },
+        sort_keys=True,
+        ensure_ascii=False,
+        default=str,
+    )
+    return hashlib.sha256(payload.encode("utf-8", "replace")).hexdigest()
+
+
+def _int_of(value: Any) -> int:
+    """Coerce a raw field to int (0 on garbage)."""
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return 0
+
+
+def _seed_card_of(entry: Any) -> dict[str, Any]:
+    """Build one served entry's seed card - valid OR invalid.
+
+    The entry IS the served projection: the players json folds the AI
+    seats ext-side, with their civ names; the seal rule colours the
+    AI-decided matches as the DEFEAT they are (owner 2026-11-24).
+    """
+    from botforge.discord.home import _entry_settings_of, _invalid_reason_type_of
+
+    started = _int_of(getattr(entry, "started_at", 0))
+    finished = _int_of(getattr(entry, "finished_at", 0))
+    winners = [str(w) for w in getattr(entry, "winners", ()) or ()]
+    import json as _json
+
+    try:
+        seats = [dict(s) for s in _json.loads(str(getattr(entry, "players_json", "") or "[]")) if isinstance(s, dict)]
+    except (ValueError, TypeError):
+        seats = []
+    card: dict[str, Any] = {
+        "status": "finished",
+        "match_id": str(getattr(entry, "match_id", "") or ""),
+        "match_ref": str(getattr(entry, "match_id", "") or ""),
+        "leaderboard_id": str(getattr(entry, "leaderboard_id", "") or ""),
+        "map_name": str(getattr(entry, "map_name", "") or ""),
+        "lobby_title": str(getattr(entry, "description", "") or "").strip(),
+        "description": str(getattr(entry, "description", "") or ""),
+        "started_at": started,
+        "finished_at": finished,
+        "winners": winners,
+        "players": seats,
+        "settings": _entry_settings_of(entry),
+        "options_json": str(getattr(entry, "options_json", "") or ""),
+    }
+    reason = _invalid_reason_type_of(started, finished, winners, seats)
+    if reason:
+        card["invalid"] = True
+        card["invalid_reason"] = reason
+    return card
+
+
+def _posts_doc_id(guild_id: str) -> str:
+    """Return the per-player posts registry's mongo id."""
+    return f"{guild_id}:livefeed:joueurs:posts"
+
+
+async def _posts_of(guild_id: str) -> dict[str, dict[str, Any]]:
+    """Read the forum's PER-PLAYER posts registry (owner 2026-11-25).
+
+    The forum is a FORUM, one post per KNOWN player:
+    ``{profile_id: {"thread_id": ..., "name": ..., "refs": [...],
+    "messages": {match_ref: message_id}}}`` - a match with several
+    known participants lands in EACH one's post (the duplicate is
+    assumed), each post owns its own refs and message ids.
+    """
+    try:
+        from botforge.core.models.db import get_async_database
+
+        document = await get_async_database()["channels"].find_one({"_id": _posts_doc_id(guild_id)})
+        raw = (document or {}).get("posts") or {}
+        if not isinstance(raw, dict):
+            raw = {}
+        posts: dict[str, dict[str, Any]] = {}
+        for pid, entry in raw.items():
+            if isinstance(entry, dict) and str(entry.get("thread_id") or ""):
+                posts[str(pid)] = {
+                    "thread_id": str(entry.get("thread_id")),
+                    "name": str(entry.get("name") or ""),
+                    "refs": sorted({str(r) for r in (entry.get("refs") or [None]) if r}),
+                    "messages": {
+                        str(k): str(v)
+                        for k, v in (entry.get("messages") or {}).items()
+                        if str(k) and str(v)
+                    },
+                    "intro": str(entry.get("intro") or ""),
+                    "intro_id": str(entry.get("intro_id") or ""),
+                    "intro_pinned": bool(entry.get("intro_pinned")),
+                    "hashes": {
+                        str(k): str(v)
+                        for k, v in (entry.get("hashes") or {}).items()
+                        if str(k) and str(v)
+                    },
+                }
+        return posts
+    except Exception:
+        return {}
+
+
+async def _save_post(guild_id: str, profile_id: str, entry: dict[str, Any] | None) -> None:
+    """Write one player's post entry - None drops it (the post died)."""
+    try:
+        from botforge.core.models.db import get_async_database
+
+        patch: dict[str, Any] = {"$set": {f"posts.{profile_id}": entry}}
+        if entry is None:
+            patch = {"$unset": {f"posts.{profile_id}": ""}}
+        await get_async_database()["channels"].update_one(
+            {"_id": _posts_doc_id(guild_id)}, patch, upsert=True
+        )
+    except Exception:
+        logger.debug("the posts registry write failed (guild %s, post %s)", guild_id, profile_id, exc_info=True)
+
+
+def _post_refs(entry: dict[str, Any]) -> set[str]:
+    """Return the post's posted match refs."""
+    return {str(r) for r in (entry.get("refs") or [])}
+
+
+def _post_messages(entry: dict[str, Any]) -> dict[str, str]:
+    """Return the post's match-ref -> message-id map."""
+    return {str(k): str(v) for k, v in (entry.get("messages") or {}).items()}
+
+
+# the member's DISCORD avatar, memoized (owner 2026-11-26: the post's
+# cards wear the DISCORD avatar - never the provider's own steam one)
+_AVATAR_MEMO: dict[str, tuple[float, str]] = {}
+_AVATAR_TTL_S = 600.0
+
+
+async def _member_avatar(guild: Any, user_id: str) -> str:
+    """Resolve the member's DISCORD avatar url (best-effort, "" on miss).
+
+    The cache rides get_member first; a member outside the client's
+    cache fetches ONCE per TTL - the ensure runs on every live event,
+    the avatar read must never spam the REST surface.
+    """
+    cached = _AVATAR_MEMO.get(str(user_id))
+    if cached and time.monotonic() - cached[0] < _AVATAR_TTL_S:
+        return cached[1]
+    url = ""
+    member = None
+    if str(user_id).isdigit():
+        member = guild.get_member(int(user_id))
+        if member is None:
+            try:
+                member = await guild.fetch_member(int(user_id))
+            except Exception:
+                logger.debug(
+                    "the member avatar fetch failed (user %s) - best-effort", user_id, exc_info=True
+                )
+    if member is not None:
+        try:
+            url = str(member.display_avatar.url)
+        except Exception:
+            url = ""
+    _AVATAR_MEMO[str(user_id)] = (time.monotonic(), url)
+    return url
+
+
+async def _guild_users(bot: discord.Client, guild_id: str) -> dict[str, dict[str, Any]]:  # noqa: C901 - the roster fold
+    """Return the guild's BOT USERS riding aoe2 bindings.
+
+    The post unit is the USER (owner 2026-11-26: one post per bot
+    user - NOT one per aoe2 profile; a user may bind several
+    accounts, every account's match lands in HIS post):
+    ``{user_id: {"name": the bot display name, "profiles":
+    {profile_id: alias}}}``.
+    """
+    registration = getattr(bot, "registration_service", None)
+    if registration is None:
+        return {}
+    guild = bot.get_guild(int(guild_id))
+    if guild is None:
+        return {}
+    try:
+        from botforge.discord.member_cache import guild_members
+
+        members = await guild_members(guild)
+    except Exception:
+        return {}
+    if not members:
+        return {}
+    out: dict[str, dict[str, Any]] = {}
+    try:
+        bindings = await registration.list_bindings_for_game("aoe2")
+    except Exception:
+        return {}
+    for binding in bindings:
+        uid = str(binding.get("user_id", ""))
+        pid = str(binding.get("profile_id", ""))
+        if not uid or not pid or not (uid.isdigit() and int(uid) in members):
+            continue
+        # the binding's validated profile carries the NAME under
+        # "profile_name" (the seam's own shape) - the alias key reads
+        # empty, the intro's links fell back to the bare id
+        alias = (
+            str((binding.get("profile") or {}).get("profile_name") or "")
+            or str((binding.get("profile") or {}).get("alias") or "")
+            or _LAST_NAME.get(pid)
+            or pid
+        )
+        out.setdefault(uid, {"name": "", "profiles": {}})["profiles"][pid] = alias
+    identity = getattr(bot, "identity_service", None)
+    for uid, entry in out.items():
+        name = ""
+        if identity is not None:
+            try:
+                user = await identity.get_user(f"discord:{uid}")
+                name = str((user.display_name if user is not None else "") or "")
+            except Exception:
+                name = ""
+        # the bot display name rules the post's TITLE (owner
+        # 2026-11-26); the first account's alias is the floor
+        entry["name"] = name or next(iter(entry["profiles"].values()))
+        # the DISCORD avatar rides every entry (owner 2026-11-26): the
+        # post's intro view and the post's cards wear it
+        entry["avatar"] = await _member_avatar(guild, uid)
+    return out
+
+
+def _profile_user(users: dict[str, dict[str, Any]], profile_id: str) -> str:
+    """Resolve the profile's USER (the post owner) - "" for a stranger."""
+    pid = str(profile_id)
+    for uid, entry in users.items():
+        if pid in entry["profiles"]:
+            return uid
+    return ""
+
+
+def _cards_of_user(cards: list[dict[str, Any]], profiles: set[str]) -> list[dict[str, Any]]:
+    """Return the cards ANY of the user's aoe2 accounts played."""
+    wanted = {str(p) for p in profiles if str(p)}
+    if not wanted:
+        return []
+    out: list[dict[str, Any]] = []
+    for card in cards:
+        for player in card.get("players") or []:
+            if str((player or {}).get("profile_id") or "") in wanted:
+                out.append(card)
+                break
+    return out
+
+
+async def _player_names(bot: discord.Client, guild_id: str) -> dict[str, str]:
+    """Return the known profiles' display names (the bindings' own aliases)."""
+    registration = getattr(bot, "registration_service", None)
+    if registration is None:
+        return {}
+    out: dict[str, str] = {}
+    try:
+        for binding in await registration.list_bindings_for_game("aoe2"):
+            profile = str(binding.get("profile_id", ""))
+            if profile:
+                name = str((binding.get("profile") or {}).get("alias") or "")
+                out[profile] = name
+    except Exception:
+        out.clear()
+    out.update({pid: name for pid, name in _LAST_NAME.items() if pid in out and not out.get(pid)})
+    return out
+
+
+# the intro card's BUILD: the mention/catalog-link/admin-menu cut
+# re-edits every existing post once (owner 2026-11-26 review)
+_INTRO_TEMPLATE_V = 4  # 4: the accounts link to the player's post,
+# else the game's profile_link_template (owner 2026-11-27)
+
+
+def _post_intro_signature(name: str, profile: dict[str, Any], avatar: str) -> str:
+    """Build the post's first-message SIGNATURE (the change detector).
+
+    The first message is a VIEW now (owner 2026-11-26: the profile
+    view, no buttons) - the registry stores its signature; the ensure
+    rebuilds and re-edits the view only when it moved (an account
+    added or removed, a rename, a new avatar).
+    """
+    return json.dumps(
+        {
+            "v": _INTRO_TEMPLATE_V,
+            "name": str(name),
+            "avatar": str(avatar),
+            "profiles": {str(k): str(v) for k, v in (profile.get("profiles") or {}).items()},
+        },
+        sort_keys=True,
+        ensure_ascii=False,
+    )
+
+
+async def _post_intro_view(
+    bot: discord.Client, guild_id: str, user_id: str, name: str, profile: dict[str, Any], avatar: str
+) -> discord.ui.LayoutView:
+    """Build the post's first message: the player's card, the shared template.
+
+    The entity-card contract (owner 2026-11-26): the pseudo titles the
+    card, the IMMUTABLE anchor is the DISCORD user id (the resource
+    id, in backticks - never the pseudo, which moves), the accounts
+    read like match seats (bold insight link, the 1v1 and TG elo with
+    their max as sub lines, ordered by the LATEST match first), the
+    avatar rides the header's thumbnail, the admin button opens the
+    gated submenu, and the view id ``panel:player:aoe2:<user id>``
+    foots the card - aoe2 through and through, the scope is the
+    displayed player.
+    """
+    from botforge.discord.commands_i18n import _feed_locale
+    from botforge.discord.home import _game_label
+    from botforge.discord.player_admin_menu import PlayerAdminButton
+    from botforge.discord.stats_views import account_boards_by_profile, recent_match_entries
+    from botforge.discord.ui.entity_cards import EntityCardBuilder
+
+    profiles = {str(k): str(v) for k, v in (profile.get("profiles") or {}).items()}
+    boards: dict[str, dict[str, tuple[int, int]]] = {}
+    try:
+        boards = await account_boards_by_profile(bot, sorted(profiles))
+    except Exception:
+        logger.debug("the intro boards failed - best-effort", exc_info=True)
+    # the ORDER is the activity (owner 2026-11-26): the account with
+    # the LATEST match first - the served history is newest-first, the
+    # first sight per profile wins, the never-played accounts close
+    latest: dict[str, int] = {}
+    try:
+        for entry in await recent_match_entries(sorted(profiles), limit=100):
+            when = _int_of(getattr(entry, "finished_at", 0)) or _int_of(
+                getattr(entry, "started_at", 0)
+            )
+            for player in _entry_players_of(entry):
+                pid = str((player or {}).get("profile_id") or "")
+                if pid in profiles and pid not in latest:
+                    latest[pid] = when
+    except Exception:
+        logger.debug("the intro ordering read failed - best-effort", exc_info=True)
+    ordered = sorted(profiles, key=lambda pid: (-latest.get(pid, 0), pid))
+    # the seat grammar, minus the seat (owner 2026-11-26: "affiche les
+    # comptes comme ils le sont lors d'un match, sans les civs, spot,
+    # replay" - the bold insight link, the RM ladder lines beneath)
+    # the ladder lines indent LESS than a match seat (owner
+    # 2026-11-26): no slot badge precedes the account name, the
+    # columns align on the name itself
+    indent = "\u2800" * 2
+    paragraphs: list[str] = []
+    for pid in ordered:
+        label = profiles.get(pid) or _LAST_NAME.get(pid) or f"Compte {pid}"
+        lines = [f"**{await _player_link_md(bot, guild_id, pid, label)}**"]
+        mine = boards.get(pid) or {}
+        for key, ladder_label in (("rm_1v1", "1v1"), ("rm_team", "TG")):
+            current, peak = mine.get(key, (0, 0))
+            if not current:
+                continue
+            span = f"{current} - {peak}" if peak and peak > current else f"{current}"
+            lines.append(f"-# {indent}{ladder_label} : {span}")
+        paragraphs.append("\n".join(lines))
+    try:
+        locale = str(await _feed_locale(guild_id, bot) or "en")
+    except Exception:
+        locale = "en"
+    # the game's line LINKS its catalog post when it lives (owner
+    # 2026-11-26: "a la place du nom du jeu, mets un lien vers la page
+    # du jeu dans le catalogue, si le forum et le post existent")
+    catalog_url = await _game_catalog_url(bot, guild_id)
+    game_line = f"[{_game_label('aoe2')}]({catalog_url})" if catalog_url else _game_label("aoe2")
+    return (
+        EntityCardBuilder(str(user_id), name, locale=locale)
+        # the mention anchors the player's place (owner 2026-11-26:
+        # "ne mets pas l'id du joueur, mets la mention du user discord")
+        .id_display(f"<@{user_id}>")
+        .subtitle(game_line)
+        .description("\n\n".join(paragraphs))
+        .thumbnail(avatar)
+        .buttons(PlayerAdminButton(str(user_id)))
+        .view_id(f"panel:player:aoe2:{user_id}")
+        .build()
+    )
+
+
+async def _game_catalog_url(bot: discord.Client, guild_id: str) -> str:
+    """Resolve the aoe2 game's CATALOG post into its jump URL ("" when absent).
+
+    The catalog forum owns the post (one per game, the install
+    showcase); a dead thread, a missing forum or an unwired Mongo read
+    render NO link - a wrong link is worse than a plain label.
+    """
+    try:
+        from botforge.core.models.db import get_async_database
+
+        document = await get_async_database()["mod_catalog_posts"].find_one(
+            {"_id": f"{guild_id}:game:aoe2"}
+        )
+        thread_id = str((document or {}).get("thread_id") or "")
+        if not thread_id or not thread_id.isdigit():
+            return ""
+        channel = await bot.fetch_channel(int(thread_id))
+        if isinstance(channel, discord.Thread):
+            return f"https://discord.com/channels/{guild_id}/{thread_id}"
+    except Exception:
+        logger.debug("the game catalog link failed - best-effort", exc_info=True)
+    return ""
+
+
+def _entry_players_of(entry: Any) -> list[dict[str, Any]]:
+    """Fold a served history entry's seats (the players_json list)."""
+    import json as _json
+
+    try:
+        seats = _json.loads(str(getattr(entry, "players_json", "") or "[]"))
+    except (ValueError, TypeError):
+        return []
+    return [dict(s) for s in seats if isinstance(s, dict)]
+
+
+async def _refresh_post_intro(
+    guild_id: str,
+    forum: Any,
+    posts: dict[str, dict[str, Any]],
+    uid: str,
+    signature: str,
+    view: discord.ui.LayoutView,
+) -> None:
+    """Re-edit the post's first message (the profile VIEW) when it changed."""
+    entry = posts.get(uid) or {}
+    if not signature or str(entry.get("intro") or "") == signature:
+        return
+    thread = _thread_of(forum, entry)
+    intro_id = str(entry.get("intro_id") or "")
+    if thread is None or not intro_id:
+        return
+    try:
+        await thread.get_partial_message(int(intro_id)).edit(view=view)
+    except Exception:
+        logger.warning(
+            "players forum: %s's post intro refused its re-edit (guild %s)",
+            uid,
+            guild_id,
+            exc_info=True,
+        )
+        return
+    entry["intro"] = signature
+    posts[uid] = entry
+    await _save_post(guild_id, uid, entry)
+    logger.info("players forum: %s's post intro refreshed (guild %s)", uid, guild_id)
+
+
+
+async def _pin_post_intro(
+    guild_id: str, forum: Any, posts: dict[str, dict[str, Any]], uid: str, first_message: Any = None
+) -> None:
+    """Pin the post's first message - the profile card stays on top.
+
+    (owner 2026-11-26) The first message carries the player; the cards
+    pile beneath it.
+    Best-effort with the WHY: a permission refusal names the post,
+    never a silent starve (the pinned flag only lands on success).
+    """
+    entry = posts.get(uid) or {}
+    if entry.get("intro_pinned"):
+        return
+    intro_id = str(entry.get("intro_id") or "")
+    if first_message is None:
+        thread = _thread_of(forum, entry)
+        if thread is None or not intro_id:
+            return
+        first_message = thread.get_partial_message(int(intro_id))
+    try:
+        await first_message.pin()
+    except Exception:
+        logger.warning(
+            "players forum: %s's profile card refused its pin (guild %s)",
+            uid,
+            guild_id,
+            exc_info=True,
+        )
+        return
+    entry["intro_pinned"] = True
+    posts[uid] = entry
+    await _save_post(guild_id, uid, entry)
+    logger.info("players forum: %s's profile card pinned (guild %s)", uid, guild_id)
+
+
+async def _shed_old_cards(
+    bot: discord.Client,
+    guild_id: str,
+    forum: Any,
+    posts: dict[str, dict[str, Any]],
+    users: dict[str, dict[str, Any]],
+    cards: list[dict[str, Any]],
+    labels: dict[str, Any],
+    known: set[str],
+) -> None:
+    """Re-render the posts' card messages on a BUILD change - in place.
+
+    The match cards are immutable by contract; a build change lands
+    here. A card the registry TRACES (a ref with its message id) is
+    EDITED with the fresh view (owner 2026-11-27: "oui pour edit
+    inplace" - half the calls, no DELETE rate limit); an UNTRACED stray
+    (a message posted before the ids were tracked) DIES, so does a card
+    the window no longer wants. The pinned profile card and every human
+    message stay. The registry keeps only what survived - a ref without
+    its message would skip the card forever.
+    """
+    from botforge.discord.home import _match_card_view
+
+    bot_id = getattr(getattr(bot, "user", None), "id", None)
+    cards_by_ref = {str(c.get("match_id") or ""): c for c in cards if str(c.get("match_id") or "")}
+    edited = 0
+    shed = 0
+    for uid, entry in posts.items():
+        thread = _thread_of(forum, entry)
+        profiles = set((users.get(uid) or {}).get("profiles") or {})
+        # the window's refs this post carries: only they re-render
+        window_refs = {str(c.get("match_id") or "") for c in _cards_of_user(cards, profiles)}
+        kept: dict[str, str] = {}
+        if thread is not None:
+            kept, kept_hashes, moved, died = await _reshuffle_post_cards(
+                bot, guild_id, uid, thread, entry, cards_by_ref, window_refs,
+                profiles, labels, known, bot_id, _match_card_view,
+            )
+            edited += moved
+            shed += died
+        entry["refs"] = sorted(kept)
+        entry["messages"] = kept
+        entry["hashes"] = kept_hashes if kept else {}
+        await _save_post(guild_id, uid, entry)
+    if edited or shed:
+        logger.info(
+            "players forum (guild %s): the cards' build changed - %d re-rendered in place, %d stray(s) deleted",
+            guild_id,
+            edited,
+            shed,
+        )
+
+
+async def _reconcile_rendered_cards(
+    bot: discord.Client, guild_id: str, channel_id: str
+) -> int:
+    """Re-render the posts' cards whose INPUTS moved - the repair's regen.
+
+    The owner's rule (2026-11-27): a repair re-reads the world - a map
+    imported seconds before must reach the match card that missed it.
+    Each traced card carries its RENDER HASH (the model + the
+    enrichment); a moved hash is EDITED IN PLACE, an unmoved card is
+    never touched - the repair costs the edits it needs, no more.
+    """
+    from botforge.discord.home import _match_card_view
+
+    try:
+        forum = await _sweep_channel(bot, guild_id, channel_id)
+        if forum is None or not isinstance(forum, discord.ForumChannel):
+            return 0
+        profiles = await _guild_profiles(bot, guild_id)
+        if not profiles:
+            return 0
+        cards = await _week_cards(bot, guild_id)
+        if not cards:
+            return 0
+        cards_by_ref = {str(c.get("match_id") or ""): c for c in cards if str(c.get("match_id") or "")}
+        users = await _guild_users(bot, guild_id)
+        posts = await _posts_of(guild_id)
+        labels = await _label_pack(bot, guild_id)
+        known = set(profiles)
+    except Exception:
+        logger.debug("the render reconcile skipped (guild %s) - best-effort", guild_id, exc_info=True)
+        return 0
+    refreshed = 0
+    for uid, entry in posts.items():
+        thread = _thread_of(forum, entry)
+        if thread is None:
+            continue
+        refreshed += await _reconcile_post_cards(
+            bot, guild_id, uid, entry, thread, cards_by_ref, users, labels, known, _match_card_view
+        )
+    if refreshed:
+        logger.info(
+            "players forum (guild %s): %d card(s) re-rendered - their inputs moved",
+            guild_id,
+            refreshed,
+        )
+    return refreshed
+
+
+async def _reconcile_post_cards(
+    bot: discord.Client,
+    guild_id: str,
+    uid: str,
+    entry: dict[str, Any],
+    thread: Any,
+    cards_by_ref: dict[str, dict[str, Any]],
+    users: dict[str, Any],
+    labels: dict[str, Any],
+    known: set[str],
+    view_builder: Any,
+) -> int:
+    """Re-render ONE post's moved cards - returns how many were edited."""
+    profiles_of_uid = set((users.get(uid) or {}).get("profiles") or {})
+    hashes = dict(entry.get("hashes") or {})
+    changed = 0
+    for ref, mid in list(entry.get("messages", {}).items()):
+        card = cards_by_ref.get(ref)
+        if card is None or not str(mid).isdigit():
+            continue
+        try:
+            ctx = await _card_ctx(bot, guild_id, card)
+        except Exception:
+            logger.debug("the reconcile ctx failed (match %s) - best-effort", ref, exc_info=True)
+            continue
+        links = labels.get("post_links") or {}
+        mark = _card_render_hash(card, ctx, links if isinstance(links, dict) else None)
+        if hashes.get(ref) == mark:
+            continue  # the inputs never moved - the card stays
+        try:
+            view = view_builder(card, ctx, profiles_of_uid, labels, known)
+            await thread.get_partial_message(int(mid)).edit(view=view)
+            hashes[ref] = mark
+            changed += 1
+        except Exception:
+            logger.debug(
+                "the card re-render failed (post %s, match %s) - best-effort",
+                uid,
+                ref,
+                exc_info=True,
+            )
+    if changed:
+        entry["hashes"] = hashes
+        await _save_post(guild_id, uid, entry)
+    return changed
+
+
+async def _reshuffle_post_cards(
+    bot: discord.Client,
+    guild_id: str,
+    uid: str,
+    thread: Any,
+    entry: dict[str, Any],
+    cards_by_ref: dict[str, dict[str, Any]],
+    window_refs: set[str],
+    profiles: set[str],
+    labels: dict[str, Any],
+    known: set[str],
+    bot_id: Any,
+    view_builder: Any,
+) -> tuple[dict[str, str], dict[str, str], int, int]:
+    """Walk ONE post's thread: edit the traced window cards, delete the rest.
+
+    Returns (kept: ref -> message id, hashes, edits, deletes) - the caller folds
+    the kept map into the registry and the counters into the report.
+    """
+    intro_id = int(entry.get("intro_id") or 0)
+    kept: dict[str, str] = {}
+    kept_hashes: dict[str, str] = dict(entry.get("hashes") or {})
+    edited = 0
+    shed = 0
+    try:
+        async for message in thread.history(limit=500):
+            # a HUMAN's message never dies here (the post is the bot's,
+            # but the hand stays off what it did not send)
+            if bot_id is not None and getattr(getattr(message, "author", None), "id", None) != bot_id:
+                continue
+            if message.id == intro_id:
+                continue  # the pinned profile card stays
+            traced = next(
+                (ref for ref, mid in entry.get("messages", {}).items() if mid == str(message.id)),
+                "",
+            )
+            if traced and traced in window_refs and traced in cards_by_ref:
+                try:
+                    ctx = await _card_ctx(bot, guild_id, cards_by_ref[traced])
+                    view = view_builder(cards_by_ref[traced], ctx, profiles, labels, known)
+                    await message.edit(view=view)
+                    kept[traced] = str(message.id)
+                    _pl = labels.get("post_links") or {}
+                    kept_hashes[traced] = _card_render_hash(
+                        cards_by_ref[traced], ctx, _pl if isinstance(_pl, dict) else None
+                    )
+                    edited += 1
+                    continue
+                except Exception:
+                    logger.debug(
+                        "the card re-render failed (post %s, match %s) - it falls to the delete",
+                        uid,
+                        traced,
+                        exc_info=True,
+                    )
+            try:
+                await message.delete()
+                shed += 1
+                kept_hashes.pop(traced, None)
+            except Exception:
+                logger.debug(
+                    "the old card delete failed (post %s, message %s) - best-effort",
+                    uid,
+                    message.id,
+                    exc_info=True,
+                )
+    except Exception:
+        logger.debug("the thread history walk failed (post %s) - best-effort", uid, exc_info=True)
+    return kept, kept_hashes, edited, shed
+
+
+async def _dedupe_twins(guild_id: str, forum: Any, posts: dict[str, dict[str, Any]]) -> None:
+    """Delete the UNREGISTERED twins of a registered post (owner 2026-11-26).
+
+    The ThreadWithMessage crash created a twin on every sweep - the
+    registry only knows ONE thread per user; a live thread carrying a
+    registered post's TITLE but not its id is a twin, it dies.
+    """
+    by_title: dict[str, str] = {}
+    for entry in posts.values():
+        title = _thread_title(str(entry.get("name") or ""))
+        if title:
+            by_title[title] = str(entry.get("thread_id") or "")
+    if not by_title:
+        return
+    for thread in _forum_threads(forum):
+        try:
+            registered = by_title.get(_thread_title(str(thread.name)))
+            if registered and str(thread.id) != registered:
+                await thread.delete()
+                logger.info(
+                    "players forum: twin post deleted (guild %s, thread %s)",
+                    guild_id,
+                    thread.id,
+                )
+        except Exception:
+            logger.debug("the twin post delete failed - best-effort", exc_info=True)
+
+
+
+async def _ensure_player_posts(  # noqa: C901 - one reconcile
+    bot: discord.Client, guild_id: str, forum: Any, users: dict[str, dict[str, Any]]
+) -> dict[str, dict[str, Any]]:
+    """Reconcile the forum's posts with the guild's BOT USERS.
+
+    The post unit is the USER (owner 2026-11-26): the title carries
+    his BOT display name (a rename updates every guild), the first
+    message lists his aoe2 accounts - and every match ANY of them
+    played lands in HIS post. A user leaving the guild (or losing
+    every binding) loses his post; the old profile-keyed registry
+    entries are strangers now, the reconcile deletes them.
+    """
+    _ensuring: set[tuple[str, str]] = set()
+    posts = await _posts_of(guild_id)
+    for key in list(posts):
+        if key not in users:
+            # the user left or the entry predates the per-user cut
+            try:
+                thread = forum.get_thread(int(posts[key]["thread_id"]))
+                if thread is None:
+                    thread = _thread_of(forum, posts[key])
+                if thread is not None:
+                    await thread.delete()
+            except Exception:
+                logger.debug("the orphan post delete failed (post %s)", key, exc_info=True)
+            await _save_post(guild_id, key, None)
+            posts.pop(key, None)
+            logger.info("players forum: post deleted for %s (guild %s)", key, guild_id)
+    for uid, profile in users.items():
+        name = str(profile.get("name") or uid)
+        avatar = str(profile.get("avatar") or "")
+        signature = _post_intro_signature(name, profile, avatar)
+        if uid in posts and str(posts[uid].get("name") or ""):
+            # the liveness check (owner 2026-11-26: a DELETED post left
+            # a registered-but-dead entry - "nothing happened" on the
+            # repair and the account rebind; a dead thread recreates)
+            if _thread_of(forum, posts[uid]) is not None:
+                # the profile VIEW re-edits only when it MOVED (an
+                # account, a name, an avatar) - the ensure runs on
+                # every live event, the rebuild never fires blind
+                if str(posts[uid].get("intro") or "") != signature:
+                    view = await _post_intro_view(bot, guild_id, uid, name, profile, avatar)
+                    await _refresh_post_intro(guild_id, forum, posts, uid, signature, view)
+                await _pin_post_intro(guild_id, forum, posts, uid)
+                continue
+            logger.info(
+                "players forum: %s's post is DEAD - recreating (guild %s)", uid, guild_id
+            )
+            await _save_post(guild_id, uid, None)
+            posts.pop(uid, None)
+        if (guild_id, uid) in _ensuring:
+            continue
+        try:
+            # the forum post's FIRST message can never be empty (the
+            # forum-empty root cause, found by the WARNING: Discord's
+            # 400 "Cannot send an empty message" refused EVERY
+            # create_thread - the forum starved from day one); the
+            # intro names the USER and his accounts (the links go to
+            # insights - owner 2026-11-26)
+            _ensuring.add((guild_id, uid))
+            # the first message is the player's PROFILE VIEW (owner
+            # 2026-11-26): the header, his insight-linked accounts,
+            # the DISCORD avatar - NO buttons, the post is public and
+            # quiet; the view rides create_thread's own view param
+            intro_view = await _post_intro_view(bot, guild_id, uid, name, profile, avatar)
+            created = await forum.create_thread(
+                name=_thread_title(name),
+                view=intro_view,
+                auto_archive_duration=10080,
+            )
+            # discord.py returns a ThreadWithMessage PAIR when the
+            # creation carries a first message: unpack (the pair has
+            # no .id - the crash that spawned the twin posts)
+            thread = getattr(created, "thread", created)
+            first_message = getattr(created, "message", None)
+        except Exception:
+            # WARNING (owner 2026-11-26: the forum starved SILENTLY
+            # for 15 prompts - "0 post(s) ensured" with not one line
+            # saying WHY; a starved catch is a liar)
+            logger.warning(
+                "players forum: post NOT created for %s (guild %s)", uid, guild_id, exc_info=True
+            )
+            continue
+        entry = {
+            "thread_id": str(thread.id),
+            "name": name,
+            "refs": [],
+            "messages": {},
+            "intro": signature,
+            "intro_id": str(first_message.id) if first_message is not None else "",
+        }
+        posts[uid] = entry
+        await _save_post(guild_id, uid, entry)
+        _ensuring.discard((guild_id, uid))
+        await _pin_post_intro(guild_id, forum, posts, uid, first_message=first_message)
+        logger.info("players forum: post created for %s (guild %s, thread %s)", uid, guild_id, thread.id)
+    await _dedupe_twins(guild_id, forum, posts)
+    return posts
+
+
+def _forum_threads(forum: Any) -> list[Any]:
+    """Fold the forum's cached threads - a LIST in discord.py, never a dict.
+
+    The `.threads.get(id)` reads of the first cuts crashed with an
+    AttributeError (owner 2026-11-26: the twins hunt) - every consumer
+    rides this resolver: dict-shaped caches fold, lists pass.
+    """
+    raw = getattr(forum, "threads", None)
+    if raw is None:
+        return []
+    if isinstance(raw, dict):
+        return list(raw.values())
+    if isinstance(raw, (list, tuple)):
+        return [t for t in raw if t is not None]
+    return []
+
+def _thread_title(name: str) -> str:
+    """Build the post's title: the player's name, capped at the forum's limit."""
+    clean = " ".join(str(name or "?").split())[:90] or "?"
+    return clean
+
+
+async def _posted_messages(guild_id: str) -> dict[str, str]:
+    """Return the forum's match-ref -> message-id map (the reconcile's truth).
+
+    A posted ref carries the DISCORD MESSAGE it lives in (owner
+    2026-11-25): listing the channel tells live from deleted - the
+    reconcile drops the dead ones, the re-seed recreates the missing.
+    """
+    try:
+        from botforge.core.models.db import get_async_database
+
+        document = await get_async_database()["channels"].find_one(
+            {"_id": f"{guild_id}:livefeed:joueurs:posted"}
+        )
+        raw: Any = (document or {}).get("messages") or {}
+        if not isinstance(raw, dict):
+            raw = {}
+        return {str(k): str(v) for k, v in raw.items() if str(k) and str(v)}
+    except Exception:
+        return {}
+
+
+async def _posted_refs(guild_id: str) -> set[str]:
+    """Retrieve the forum messages' matches - persisted, process-wide cache."""
+    cached = _POSTED.get(guild_id)
+    if cached is not None:
+        return cached
+    refs: set[str] = set()
+    try:
+        from botforge.core.models.db import get_async_database
+
+        document = await get_async_database()["channels"].find_one(
+            {"_id": f"{guild_id}:livefeed:joueurs:posted"}
+        )
+        raw_refs: Any = (document or {}).get("refs") or []
+        if not isinstance(raw_refs, (list, tuple, set)):
+            raw_refs = []
+        refs = {str(ref) for ref in raw_refs}
+    except Exception:
+        refs = set()
+    _POSTED[guild_id] = refs
+    return refs
+
+
+async def _mark_posted(
+    guild_id: str, match_ref: str, message_id: str | None = None
+) -> None:
+    """Record one match's forum message - the ONE-message bookkeeping.
+
+    The message id rides the ref when known (owner 2026-11-25): the
+    reconcile reads it to tell a LIVING card from a deleted one.
+    """
+    refs = await _posted_refs(guild_id)
+    if match_ref in refs and not message_id:
+        return
+    refs.add(match_ref)
+    patch: dict[str, Any] = {"$addToSet": {"refs": match_ref}}
+    if message_id:
+        patch["$set"] = {f"messages.{match_ref}": str(message_id)}
+    try:
+        from botforge.core.models.db import get_async_database
+
+        await get_async_database()["channels"].update_one(
+            {"_id": f"{guild_id}:livefeed:joueurs:posted"},
+            patch,
+            upsert=True,
+        )
+    except Exception:
+        logger.debug("the posted-refs write failed (match %s)", match_ref, exc_info=True)
+
+
+async def _sweep_channel(bot: discord.Client, guild_id: str, channel_id: str) -> Any | None:
+    """Resolve the forum's text channel - the CACHE may not know it yet.
+
+    A channel created after the boot never rides the client's cache
+    (owner 2026-11-25: the repaired forum stayed EMPTY - the seed
+    resolved get_channel, read None, returned in silence). The
+    players forum is a FORUM (owner 2026-11-25) - both text and
+    forum channels resolve here.
+    """
+    guild = bot.get_guild(int(guild_id))
+    if guild is None:
+        return None
+    channel: Any = guild.get_channel(int(channel_id))
+    if channel is not None:
+        return channel
+    try:
+        fetched: Any = await guild.fetch_channel(int(channel_id))
+    except Exception:
+        return None
+    return fetched if isinstance(fetched, (discord.TextChannel, discord.ForumChannel)) else None
+
+
+async def _send_cards_grouped(
+    thread: Any, cards: list[dict[str, Any]], ctx_by_ref: dict[str, dict[str, Any]],
+    labels: dict[str, Any], known: set[str], me_ids: set[str] | None = None,
+    max_group: int = 10,
+) -> list[tuple[str, str]]:
+    """Send one card per message into the post, IN THE GIVEN ORDER.
+
+    The grouped multi-card messages died on Discord's 40-component
+    cap (owner 2026-11-26: each card is heavy - two per message was
+    the ceiling, the halving loop LOST the rest and the next sweep
+    re-posted the survivors in a jumbled order). One card = one
+    message; the ORDER rides the given list, discord.py paces the
+    channel's own rate limit. ``max_group`` now batches MESSAGES (10
+    messages per burst). Returns [(match_ref, message_id), ...].
+    """
+    del max_group  # the burst rides discord.py's own bucket pacing now
+    from botforge.discord.home import _match_card_parts
+    from botforge.discord.ui.view_footer import add_view_footer
+
+    marked: list[tuple[str, str]] = []
+    for card in cards:
+        match_id = str(card.get("match_id") or card.get("match_ref") or "")
+        try:
+            # the card rides the POST owner's scope (owner
+            # 2026-11-26): his profiles bold, HIS verdict
+            blocks, buttons, _mid, accent = _match_card_parts(
+                card, ctx_by_ref.get(match_id, {}), set(me_ids or set()), labels, known
+            )
+            view = discord.ui.LayoutView(timeout=None)
+            view.add_item(discord.ui.Container(*blocks, accent_colour=discord.Colour(accent)))
+            if buttons:
+                view.add_item(discord.ui.ActionRow(*buttons))
+            view = add_view_footer(view, f"panel:match:aoe2:{match_id}")
+            message = await thread.send(view=view, silent=True)
+        except Exception:
+            logger.warning(
+                "players forum: card send failed (post %s, match %s)", thread.id, match_id, exc_info=True
+            )
+            continue  # one refusal never stops the run - best-effort
+        marked.append((match_id, str(message.id)))
+    return marked
+
+
+async def _reconcile_posted_refs(bot: discord.Client, guild_id: str, channel_id: str) -> None:
+    """Reconcile the posted refs with the LIVE channel messages.
+
+    The owner's rule (2026-11-25): on repair, LIST the forum's
+    messages, DROP the refs whose message was deleted, RECREATE the
+    missing cards - ZERO duplicates (a living message keeps its ref, a
+    dead one posts again exactly once).
+    """
+    channel = await _sweep_channel(bot, guild_id, channel_id)
+    if channel is None:
+        return
+    messages = await _posted_messages(guild_id)
+    if not messages:
+        return  # nothing mapped yet: the refs assume alive, never a dup
+    live: set[int] = set()
+    try:
+        async for message in channel.history(limit=500):
+            live.add(message.id)
+    except Exception:
+        logger.debug("the forum history read failed (guild %s)", guild_id, exc_info=True)
+        return
+    dead = [ref for ref, mid in messages.items() if int(mid) not in live]
+    if not dead:
+        return
+    try:
+        from botforge.core.models.db import get_async_database
+
+        await get_async_database()["channels"].update_one(
+            {"_id": f"{guild_id}:livefeed:joueurs:posted"},
+            {
+                "$pull": {"refs": {"$in": dead}},
+                "$unset": {f"messages.{ref}": "" for ref in dead},
+            },
+        )
+    except Exception:
+        logger.debug("the posted-refs reconcile write failed (guild %s)", guild_id, exc_info=True)
+        return
+    _POSTED.pop(guild_id, None)
+    logger.info(
+        "players forum reconcile (guild %s): %d dead message(s) dropped, recreating",
+        guild_id,
+        len(dead),
+    )
+
+
+async def _gap_fill_players_forum(  # noqa: C901 - one orchestration, no branch soup
+    bot: discord.Client, guild_id: str, channel_id: str
+) -> None:
+    """Post the store matches the forum's posts never saw (owner 2026-11-25).
+
+    A match played without a live feed only lives in the store: the
+    sweep posts its card into EVERY known participant's post (the
+    duplicates are assumed), batched, one registry per post - the
+    live events, the seeds and the store gap-fills all share it.
+    """
+    from botforge.discord.repair import RepairReport
+
+    fill_repair = RepairReport(logger, "players forum gap-fill", subject=guild_id)
+    profiles = await _guild_profiles(bot, guild_id)
+    if not profiles:
+        logger.info("players forum gap-fill STOP: no known profiles (guild %s)", guild_id)
+        return
+    forum = await _sweep_channel(bot, guild_id, channel_id)
+    if forum is None:
+        logger.info(
+            "players forum gap-fill STOP: the channel %s resolves nothing (guild %s)",
+            channel_id,
+            guild_id,
+        )
+        return
+    from botforge.discord.stats_views import recent_match_entries
+
+    users = await _guild_users(bot, guild_id)
+    posts = await _ensure_player_posts(bot, guild_id, forum, users)
+
+    known = set(profiles)
+    entries = await recent_match_entries(profiles, limit=200)
+    deadline = int(time.time()) - _SEED_WINDOW_S
+    cards: list[dict[str, Any]] = []
+    for entry in entries:
+        finished_at = _int_of(getattr(entry, "finished_at", 0))
+        # FINISHED matches only (owner 2026-11-26): the ongoing ones
+        # live on the live card, the store's seed never touches them
+        if finished_at and finished_at >= deadline:
+            card = _seed_card_of(entry)
+            cards.append(card)
+            for player in card.get("players") or []:
+                pid = str((player or {}).get("profile_id") or "")
+                nickname = str((player or {}).get("name") or "")
+                if pid and nickname:
+                    _LAST_NAME[pid] = nickname
+    # ASCENDING (owner 2026-11-26): chronological top-to-bottom, the
+    # live matches land at the bottom where the newest belongs
+    cards.sort(key=lambda c: int(c.get("finished_at") or 0))
+    if not cards:
+        # the WHY says itself (owner 2026-11-26: the forum starved for
+        # hours without one line - every silent stop hid the culprit)
+        logger.info(
+            "players forum gap-fill STOP: no stored card in the window (guild %s, %d entr\u00e9e(s) servie(s))",
+            guild_id,
+            len(entries),
+        )
+        return
+    labels = await _label_pack(bot, guild_id)
+    for uid, entry in posts.items():
+        refs = _post_refs(entry)
+        group = [
+            c for c in _cards_of_user(cards, set((users.get(uid) or {}).get("profiles") or {}))
+            if str(c.get("match_id") or "") not in refs
+        ]
+        if not group:
+            continue
+        thread = _thread_of(forum, entry)
+        if thread is None:
+            logger.info(
+                "players forum gap-fill SKIP: %s's post thread is dead (guild %s)",
+                uid,
+                guild_id,
+            )
+            continue
+        ctx_by_ref: dict[str, dict[str, Any]] = {}
+        for card in group:
+            ctx_by_ref[str(card.get("match_id"))] = await _card_ctx(bot, guild_id, card)
+        try:
+            marked = await _send_cards_grouped(
+                thread,
+                group,
+                ctx_by_ref,
+                labels,
+                known,
+                me_ids=set((users.get(uid) or {}).get("profiles") or {}),
+            )
+        except Exception:
+            logger.debug("the gap-fill group skipped (post %s) - best-effort", uid, exc_info=True)
+            continue
+        if marked:
+            entry.setdefault("refs", []).extend(ref for ref, _mid in marked)
+            entry["refs"] = sorted(set(entry["refs"]))
+            entry.setdefault("messages", {}).update(dict(marked))
+            await _save_post(guild_id, uid, entry)
+            fill_repair.step(f"posted in {uid}'s post", cards=len(marked))
+    fill_repair.done()
+
+
+async def rename_user_posts(bot: discord.Client, user_id: str, new_name: str) -> None:
+    """Retitle the user's post in EVERY guild (owner 2026-11-26).
+
+    The post's TITLE is the bot display name - a rename in one guild
+    is a rename everywhere his post lives.
+    """
+    for guild in list(getattr(bot, "guilds", []) or []):
+        gid = str(guild.id)
+        try:
+            posts = await _posts_of(gid)
+        except Exception:  # noqa: S112 - a guild's read is best-effort
+            continue
+        entry = posts.get(str(user_id))
+        if entry is None:
+            continue
+        try:
+            thread = await bot.fetch_channel(int(entry["thread_id"]))
+            if isinstance(thread, discord.Thread):
+                await thread.edit(name=_thread_title(new_name))
+        except Exception:
+            logger.debug(
+                "the post retitle failed (guild %s, user %s) - best-effort", gid, user_id, exc_info=True
+            )
+            continue
+        entry["name"] = new_name
+        await _save_post(gid, str(user_id), entry)
+        logger.info("players forum: %s's post retitled in guild %s", user_id, gid)
+
+
+# the guild's player-post links (owner 2026-11-27): a KNOWN player's
+# pseudo points to HIS #joueurs post's intro message, never to the
+# external site - memoized with the label pack's window, purged by
+# every repair (a recreated post re-links at once)
+_POST_LINKS_MEMO: dict[str, tuple[float, dict[str, str]]] = {}
+
+
+async def post_link_map(bot: discord.Client, guild_id: str) -> dict[str, str]:
+    """Return {profile_id: the player's post intro jump url}.
+
+    The owner's rule (2026-11-27): when a surface shows a player's
+    pseudo, a KNOWN player redirects to "le profil du post original
+    dans le forum #joueurs de la guilde" - the UNKNOWN players fall
+    back to the game's profile_link_template.
+    """
+    cached = _POST_LINKS_MEMO.get(guild_id)
+    if cached and time.monotonic() - cached[0] < _MEMO_TTL_S:
+        return cached[1]
+    links: dict[str, str] = {}
+    try:
+        users = await _guild_users(bot, guild_id)
+        posts = await _posts_of(guild_id)
+        for uid, info in users.items():
+            entry = posts.get(str(uid)) or {}
+            thread_id = str(entry.get("thread_id") or "")
+            if not thread_id:
+                continue
+            target = str(entry.get("intro_id") or "") or thread_id
+            url = f"https://discord.com/channels/{guild_id}/{thread_id}/{target}"
+            for pid in (info.get("profiles") or {}):
+                links[str(pid)] = url
+    except Exception:
+        logger.debug("the post link map read failed (guild %s)", guild_id, exc_info=True)
+    _POST_LINKS_MEMO[guild_id] = (time.monotonic(), links)
+    return links
+
+
+async def _player_link_md(bot: discord.Client, guild_id: str, profile_id: str, label: str) -> str:
+    """Render one player pseudo's link: his post when known, else the template.
+
+    The KNOWN player's label keeps his displayed pseudo (owner
+    2026-11-27); the fallback renders the game's profile_link_template
+    with the same label - the href moves, the grammar stays.
+    """
+    from botforge.core.services.profile_sites import format_profile_link
+
+    if not profile_id:
+        return label
+    url = (await post_link_map(bot, guild_id)).get(str(profile_id)) or ""
+    if url:
+        # the KNOWN player wears his star (owner 2026-11-27): his
+        # pseudo names his own post's profile message
+        return f"\U0001F31F[{label}]({url})"
+    return format_profile_link("aoe2", {"profile_id": profile_id, "profile_name": label}, label=label) or label
+
+
+async def _guild_profiles(bot: discord.Client, guild_id: str) -> list[str]:
+    """Return the guild members' bound AoE2 profiles."""
+    registration = getattr(bot, "registration_service", None)
+    if registration is None:
+        return []
+    guild = bot.get_guild(int(guild_id))
+    if guild is None:
+        return []
+    try:
+        from botforge.discord.member_cache import guild_members
+
+        members = await guild_members(guild)
+    except Exception:
+        return []
+    if not members:
+        return []
+    out: list[str] = []
+    for binding in await registration.list_bindings_for_game("aoe2"):
+        user_id = str(binding.get("user_id", ""))
+        if user_id and user_id.isdigit() and int(user_id) in members:
+            profile = str(binding.get("profile_id", ""))
+            if profile:
+                out.append(profile)
+    return sorted(set(out))
+
+
+async def _seed_marker(guild_id: str) -> Any | None:
+    """Read the guild's seed marker (None when the forum never seeded)."""
+    try:
+        from botforge.core.models.db import get_async_database
+
+        return await get_async_database()["channels"].find_one(
+            {"_id": f"{guild_id}:livefeed:joueurs:seeded"}
+        )
+    except Exception:
+        return "unreachable"  # a broken read never re-seeds
+
+
+async def _write_seed_marker(guild_id: str, channel_id: str) -> None:
+    """Write the guild's seed marker (the forum it last seeded)."""
+    try:
+        from botforge.core.models.db import get_async_database
+
+        await get_async_database()["channels"].update_one(
+            {"_id": f"{guild_id}:livefeed:joueurs:seeded"},
+            {"$set": {"seeded_at": int(time.time()), "v": _SEED_VERSION, "channel_id": str(channel_id)}},
+            upsert=True,
+        )
+    except Exception:
+        logger.debug("the seed marker write failed", exc_info=True)
+
+
+# ---------------------------------------------------------------------
+# the LOGS channel: short, dense, append-only event lines
+
+
+async def _log_event_line(
+    bot: discord.Client, guild_id: str, event: dict[str, Any], profile_id: str
+) -> None:
+    """Append ONE short line per (match, event) to the guild's logs.
+
+    The MATCH END line defers (owner 2026-11-25): its verdict, the
+    streak, the forum post link and the known partners all live on
+    the result correlation - the offline transition itself says
+    nothing, the correlated result says everything.
+    """
     logs = getattr(bot, "logs_service", None)
     if logs is None:
         return
-    channel_id = await _resolve_logs_channel(bot, guild_id)
-    if channel_id is None:
-        return
-    key = (guild_id, match_ref)
-    if key not in _MATCH_STARTED_AT:
-        _MATCH_STARTED_AT[key] = time.monotonic()
-    view = _build_card(event, match_ref, ended, _MATCH_STARTED_AT[key])
-    card = _CARDS.get(key)
-    if card is not None:
-        try:
-            await card.edit(view=view)
-            return
-        except Exception:
-            logger.info("live activity card edit failed (guild %s, match %s) — recreating", guild_id, match_ref)
-            _CARDS.pop(key, None)
-    # create: the channel id is resolved, the message rides the logs seam
+    verb = _verb_of(event)
+    if verb == "match_end":
+        return  # the correlated result renders the rich end line
     try:
-        guild = bot.get_guild(int(guild_id))
-        channel = guild.get_channel(int(channel_id)) if guild else None
-        if channel is None or not isinstance(channel, discord.TextChannel):
-            return
-        message = await channel.send(view=view, silent=True)
-        _CARDS[key] = message
+        resolved = await logs.resolve_channel(guild_id)
     except Exception:
-        logger.debug("live activity card send skipped (guild %s) — best-effort", guild_id, exc_info=True)
+        return
+    channel_id = str(resolved) if resolved else ""
+    if not channel_id:
+        return
+    guild = bot.get_guild(int(guild_id))
+    channel = guild.get_channel(int(channel_id)) if guild else None
+    if channel is None or not isinstance(channel, discord.TextChannel):
+        return
+    match = event.get("match") or {}
+    match_ref = str(match.get("match_ref") or "")
+    if verb == "":
+        return
+    if match_ref and (guild_id, match_ref, verb) in _LOGGED:
+        return  # one log per (match, event) - never per player
+    if match_ref:
+        _LOGGED.add((guild_id, match_ref, verb))
+    text = await _log_line(bot, guild_id, event, profile_id, match_ref, verb)
+    await _append_logs_line(bot, guild_id, verb, text)
 
 
-def _build_card(event: dict[str, Any], match_ref: str, ended: bool, started_at: float) -> Any:
-    """Build the match card: a components-v2 container with the live state."""
-    match = event.get("match") or _LAST_SUMMARY.get(match_ref) or {}
-    players = _players(match)
-    mode_bits = [b for b in (str(match.get("match_type") or ""), str(match.get("format") or "")) if b]
-    mode = " ".join(dict.fromkeys(mode_bits))
-    map_name = str(match.get("map") or "")
-    slots = f"{match.get('slots_taken', '?')}/{match.get('slots_total', '?')}"
-    icon = "⚪" if ended else _STATE_ICONS.get(str(event.get("new_status", "")), "🟡")
-    status_label = "finished" if ended else ("live" if str(event.get("new_status")) == "in_game" else "in lobby")
-
-    title = f"{icon} Partie #{match_ref} — {status_label}"
-    header_bits = [b for b in (mode, f"— {map_name}" if map_name else "") if b]
-    header = f"**{title}**"
-    if header_bits:
-        header += "\n" + " ".join(header_bits)
-    if not ended:
-        header += f" · {slots} slots"
-
-    lines = [header]
-    roster = _roster_line(players)
-    if roster:
-        lines.append(f"> {roster}")
-    if ended:
-        duration_s = max(0, int(time.monotonic() - started_at))
-        lines.append(f"> ⏱️ duration: {duration_s // 60}m {duration_s % 60:02d}s")
+async def _append_logs_line(bot: discord.Client, guild_id: str, verb: str, text: str) -> None:
+    """Append one rendered line to the guild's logs (the shared sender)."""
+    logs = getattr(bot, "logs_service", None)
+    if logs is None:
+        return
+    try:
+        resolved = await logs.resolve_channel(guild_id)
+    except Exception:
+        return
+    channel_id = str(resolved) if resolved else ""
+    if not channel_id:
+        return
+    guild = bot.get_guild(int(guild_id))
+    channel = guild.get_channel(int(channel_id)) if guild else None
+    if channel is None or not isinstance(channel, discord.TextChannel):
+        return
     view = discord.ui.LayoutView(timeout=None)
     view.add_item(
         discord.ui.Container(
-            discord.ui.TextDisplay("\n".join(lines)),
-            accent_colour=discord.Colour(
-                0x9B59B6 if ended else (0x2ECC71 if str(event.get("new_status")) == "in_game" else 0xF1C40F)
-            ),
+            discord.ui.TextDisplay(text),
+            accent_colour=discord.Colour(_LOG_ACCENTS.get(verb, 0x5865F2)),
         )
     )
-    row = _card_buttons(match, ended, str(event.get("new_status", "")))
-    if row is not None:
-        view.add_item(row)
-    return view
+    try:
+        await channel.send(view=view, silent=True)
+    except Exception:
+        logger.debug("live activity log send skipped (guild %s) - best-effort", guild_id, exc_info=True)
 
 
-def _card_buttons(match: dict[str, Any], ended: bool, status: str) -> Any:
-    """Build the action row per state: lobby → join, started → watch/download, ended → results."""
-    lobby_url = str(match.get("lobby_url") or "")
-    spectate_url = str(match.get("spectate_url") or "")
-    deep_link = str(match.get("deep_link") or "")
-    buttons: list[discord.ui.Button[Any]] = []
-    if not ended:
-        if status == "in_lobby" and lobby_url:
-            buttons.append(discord.ui.Button(label="🚪 Rejoindre", url=lobby_url, style=discord.ButtonStyle.link))
-        if status == "in_game" and spectate_url:
-            buttons.append(discord.ui.Button(label="👀 Regarder", url=spectate_url, style=discord.ButtonStyle.link))
-        if status == "in_game" and deep_link:
-            buttons.append(
-                discord.ui.Button(label="⬇️ Download", url=deep_link, style=discord.ButtonStyle.link)
-            )
-    if ended and (spectate_url or lobby_url):
-        buttons.append(
-            discord.ui.Button(label="📊 Results", url=(spectate_url or lobby_url), style=discord.ButtonStyle.link)
+def _verb_of(event: dict[str, Any]) -> str:
+    """Map the event to its log verb - the owner's lifecycle lexicon."""
+    new = str(event.get("new_status", ""))
+    old = str(event.get("old_status", ""))
+    if new == "in_lobby":
+        return "lobby_open" if old != "in_lobby" else "lobby_update"
+    if new == "in_game":
+        return "match_start"
+    if new == "offline":
+        return "match_end" if old == "in_game" else ("lobby_close" if old == "in_lobby" else "")
+    return ""
+
+
+async def _log_line(
+    bot: discord.Client,
+    guild_id: str,
+    event: dict[str, Any],
+    profile_id: str,
+    match_ref: str,
+    verb: str,
+) -> str:
+    """Render one dense log line: the player, the verb, the links."""
+    from botforge.discord.commands_i18n import reply_guild
+
+    match = event.get("match") or {}
+    name = _LAST_NAME.get(profile_id) or profile_id
+    player = f"**{await _player_link_md(bot, guild_id, profile_id, name)}**"
+    id_part = f"n\u00b0`{match_ref}`" if match_ref else ""
+    duration_bit = ""
+    if verb == "match_end":
+        started = _first_seen_of(guild_id, match_ref)
+        if started:
+            span = max(0, int(time.time()) - started)
+            duration_bit = f"{span // 60}m{span % 60:02d}"
+    line = await reply_guild(
+        guild_id,
+        bot,
+        f"profile.live_log_{verb}",
+        player=player,
+        id=id_part,
+        duration=duration_bit,
+    )
+    links: list[str] = []
+    summary = _LAST_SUMMARY.get(match_ref) or match
+    lobby_url = str(summary.get("lobby_url") or match.get("lobby_url") or "")
+    spectate_url = str(summary.get("spectate_url") or match.get("spectate_url") or "")
+    if verb in ("lobby_open", "lobby_update") and lobby_url:
+        # the link LABELS carry NO emoji (owner 2026-11-25: they
+        # never render inside a masked link)
+        links.append(f"[aoe2lobby]({lobby_url})")
+    if verb == "match_start" and spectate_url:
+        links.append(f"[spectate]({spectate_url})")
+    if match_ref:
+        links.append(
+            f"[insights](https://www.aoe2insights.com/match/{match_ref}/)"
         )
-    if not buttons:
-        return None
-    row: discord.ui.ActionRow[discord.ui.LayoutView] = discord.ui.ActionRow()
-    for button in buttons:
-        row.add_item(button)
-    return row
+    tail = " \u2014 " + " \u00b7 ".join(bit for bit in links if bit) if links else ""
+    return line + tail
 
 
-def _roster_line(players: list[dict[str, Any]]) -> str:
-    """Render the players with their civs and teams, one compact line."""
-    parts: list[str] = []
-    for p in players:
-        name = str(p.get("name") or p.get("profile_id") or "?")
-        civ = str(p.get("civ") or "")
-        team = p.get("team")
-        bit = name
-        if civ:
-            bit += f" ({civ})"
-        if team not in (None, "", 0):
-            bit += f" — team {team}"
-        parts.append(bit)
-    return " · ".join(parts)
+async def _log_match_end_line(
+    bot: discord.Client,
+    guild_id: str,
+    match_ref: str,
+    profile_id: str,
+    result: Any,
+) -> None:
+    """Render the RICH match-end bullet (owner 2026-11-25).
+
+    One dense line, the logs channel is a bullet list:
+    ``{player} a perdu une [partie](le post du joueur) - 1v1 Classée -
+    avec/contre {les connus} - sur {la carte} {<t:R>} - série : VVDDV``
+    The verdict, the partners, the map, the streak all read the
+    CORRELATED result - never a stale snapshot.
+    """
+    from botforge.discord.commands_i18n import reply_guild
+    from botforge.discord.home import _card_format, _is_ranked
+
+    key = (guild_id, match_ref)
+    card = _CARD_STATE.get(key) or _FINISHED_CARDS.get(match_ref) or {}
+    winners = {str(w) for w in (result.winner_profile_id or "").split(",") if w}
+    won = str(profile_id) in winners
+    players = _players(card) or _players(_LAST_SUMMARY.get(match_ref) or {})
+    # the subject's side: same team when the team field reads
+    team_of = {str(p.get("profile_id", "")): int(p.get("team", 0) or 0) for p in players}
+    known = {str(p) for p in await _guild_profiles(bot, guild_id)}
+    subject_team = team_of.get(str(profile_id), 0)
+    with_names: list[str] = []
+    against_names: list[str] = []
+    for player in players:
+        pid = str(player.get("profile_id", ""))
+        if not pid or pid == str(profile_id) or pid not in known:
+            continue
+        name = str(player.get("alias") or player.get("name") or pid)
+        mate = " **" + name + "**"
+        if team_of.get(pid, subject_team) == subject_team:
+            with_names.append(mate)
+        else:
+            against_names.append(mate)
+    known_bit = ""
+    if with_names:
+        known_bit += f"{with_word(guild_id, bot)}{''.join(with_names)}"
+    if against_names:
+        known_bit += f" {against_word(guild_id, bot)}{''.join(against_names)}"
+    # the forum post link: the player's own thread message
+    match_link = await _forum_post_link(bot, guild_id, profile_id, match_ref)
+    if not match_link:
+        match_link = f"https://www.aoe2insights.com/match/{match_ref}/"
+    map_name = str(card.get("map_name") or "") or "carte ?"
+    finished_at = int(card.get("finished_at") or 0) or int(time.time())
+    fmt = _card_format(card)
+    labels = await _label_pack(bot, guild_id)
+    if fmt == "FFA":
+        badge = "FFA"
+    elif _is_ranked(card):
+        badge = f"{fmt} {labels.get('ranked_word') or 'Classée'!s}".strip()
+    else:
+        badge = str(labels.get("custom_badge") or "Personnalisée")
+    streak = await _player_streak(bot, profile_id, match_ref, won)
+    line = await reply_guild(
+        guild_id,
+        bot,
+        "profile.live_log_match_won" if won else "profile.live_log_match_lost",
+        player=f"**{await _player_link_md(bot, guild_id, profile_id, _LAST_NAME.get(profile_id) or profile_id)}**",
+        match=f"[une partie]({match_link})",
+        badge=badge,
+    )
+    bits = [bit for bit in (known_bit, f"sur {map_name}", f"<t:{finished_at}:R>") if bit]
+    line += " — " + " · ".join(bits)
+    if streak:
+        line += f" — série : `{streak}`"
+    await _append_logs_line(bot, guild_id, "match_end", line)
+
+
+def with_word(guild_id: str, bot: Any) -> str:
+    """Return the 'avec' joiner."""
+    del guild_id, bot
+    return "avec"
+
+
+def against_word(guild_id: str, bot: Any) -> str:
+    """Return the 'contre' joiner."""
+    del guild_id, bot
+    return "contre"
+
+
+async def _forum_post_link(
+    bot: discord.Client, guild_id: str, profile_id: str, match_ref: str
+) -> str:
+    """Return the match's card message link in the PLAYER'S forum post."""
+    del bot
+    try:
+        posts = await _posts_of(guild_id)
+        entry = posts.get(str(profile_id)) or {}
+        message_id = _post_messages(entry).get(str(match_ref), "")
+        thread_id = str(entry.get("thread_id") or "")
+        if message_id and thread_id:
+            return f"https://discord.com/channels/{guild_id}/{thread_id}/{message_id}"
+    except Exception:
+        return ""
+    return ""
+
+
+async def _player_streak(
+    bot: discord.Client, profile_id: str, match_ref: str, won: bool
+) -> str:
+    """Return the player's last results, oldest first.
+
+    The owner's bullet reads the HISTORY (owner 2026-11-25):
+    ``VVDDV`` - V for a win, D for a defeat; the current match's
+    letter rides last. Five letters maximum, dense like the game's
+    own UI.
+    """
+    try:
+        from botforge.discord.stats_views import recent_match_entries
+
+        entries = await recent_match_entries([str(profile_id)], limit=6)
+    except Exception:
+        entries = []
+    letters: list[str] = []
+    order: list[tuple[int, str]] = []
+    for entry in entries:
+        ref = str(getattr(entry, "match_id", "") or "")
+        if not ref:
+            continue
+        finished = _int_of(getattr(entry, "finished_at", 0))
+        inner = {str(w) for w in getattr(entry, "winners", ()) or ()}
+        letter = "V" if str(profile_id) in inner else "D"
+        if not inner:
+            continue  # unplayed loot: no streak letter
+        order.append((finished, letter))
+    order.sort(key=lambda row: row[0])
+    letters = [letter for _at, letter in order if letter] or []
+    result = "".join(letters[-4:]) + ("V" if won else "D")
+    return result[-5:]
+
+
+def _first_seen_of(guild_id: str, match_ref: str) -> int:
+    return _FIRST_SEEN.get((guild_id, match_ref), 0)
+
+
+# ---------------------------------------------------------------------
+# the event plumbing (statuses, players, the result correlation)
 
 
 def _players(match: dict[str, Any]) -> list[dict[str, Any]]:
@@ -350,31 +2453,25 @@ def _spawn(coro: Any) -> None:
     task.add_done_callback(_BG_TASKS.discard)
 
 
-def _schedule_card_gc(key: tuple[str, str]) -> None:
-    """Drop the card's message ref once the result window closes."""
-
-    async def _gc() -> None:
-        await asyncio.sleep(sum(_RESULT_BACKOFF_S) + 5)
-        _CARDS.pop(key, None)
-
-    _spawn(_gc())
-
-
 async def _fetch_result_then_update(
     bot: discord.Client,
     guild_id: str,
+    channel_id: str,
     match_ref: str,
     profile_ids: list[str],
     started_after: int,
+    subject_profile_id: str = "",
 ) -> None:
     """Fetch the real match outcome with a backoff, then update the card.
 
     The upstream records the result a few seconds after the end
-    notification; each retry re-reads the card's message (the end
-    state rendered first), and the winner/duration/map land on the
-    card's final edit.
+    notification; the card's message is known, the final edit lands on
+    it directly. The END LINE rides the verdict (owner 2026-11-25):
+    won/lost, the forum post link, the known partners, the map, the
+    streak - one dense bullet, after the correlation.
     """
     if not profile_ids:
+        await _drop_card(bot, guild_id, channel_id, match_ref)
         return
     import os
 
@@ -390,80 +2487,36 @@ async def _fetch_result_then_update(
         try:
             result = await client.get_match_result(profile_ids, started_after)
         except Exception:
-            logger.debug("match result fetch failed (match %s) — retrying", match_ref, exc_info=True)
+            logger.debug("match result fetch failed (match %s) - retrying", match_ref, exc_info=True)
             continue
         if result is not None:
             break
     if result is None:
-        logger.info("match result never appeared (match %s) — the card stays as-is", match_ref)
+        logger.info("match result never appeared (match %s) - the card stays as-is", match_ref)
+        _forget_player_ref(profile_ids[0])
         return
-    await _apply_result_to_card(bot, guild_id, match_ref, result)
-
-
-async def _apply_result_to_card(
-    bot: discord.Client, guild_id: str, match_ref: str, result: Any
-) -> None:
-    """Edit the ended card with the real outcome (winner, duration, map)."""
-    card = _CARDS.get((guild_id, match_ref))
-    if card is None:
-        return
+    await _apply_result_to_card(bot, guild_id, channel_id, match_ref, result)
+    await _log_match_end_line(bot, guild_id, match_ref, subject_profile_id or profile_ids[0], result)
+    for pid in profile_ids:
+        _forget_player_ref(pid)
+    # the store warms the MOMENT the verdict lands (owner 2026-11-25):
+    # the listing answers from the store in under a second - its sync
+    # rides the background, this hook is what keeps it fresh
     try:
-        view = _result_card(match_ref, result)
-        await card.edit(view=view)
-        _CARDS.pop((guild_id, match_ref), None)
+        from botforge.discord.stats_views import stats_client
+
+        stats = stats_client()
+        if stats is not None:
+            await stats.sync_stats(profile_ids, wait=False)
     except Exception:
-        logger.debug("result card update failed (match %s) — best-effort", match_ref, exc_info=True)
-
-
-def _result_card(match_ref: str, result: Any) -> Any:
-    """Build the final card: the real winner, duration, map, elo deltas."""
-    winner_raw = str(result.winner_profile_id or "")
-    winner_ids = [w for w in winner_raw.split(",") if w]
-    winner_names = [_LAST_NAME.get(w, w) for w in winner_ids]
-    winner_label = " · ".join(winner_names) if winner_names else ""
-    duration_ms = int(result.duration_ms or 0)
-    minutes, seconds = divmod(duration_ms // 1000, 60)
-    lines = [f"⚪ **Match #{match_ref} — finished**"]
-    if result.map_name:
-        lines.append(f"— {result.map_name!s}")
-    if winner_label:
-        lines.append(f"> 🏆 Vainqueur : **{winner_label}**")
-    lines.append(f"> ⏱️ Duration: {minutes}m {seconds:02d}s")
-    deltas: list[str] = []
-    for pid, (old, new) in (result.ratings or {}).items():
-        name = _LAST_NAME.get(pid, pid)
-        delta = new - old
-        sign = "+" if delta >= 0 else ""
-        deltas.append(f"{name} {old}→{new} ({sign}{delta})")
-    if deltas:
-        lines.append("> " + " · ".join(deltas))
-    view = discord.ui.LayoutView(timeout=None)
-    view.add_item(
-        discord.ui.Container(
-            discord.ui.TextDisplay("\n".join(lines)),
-            accent_colour=discord.Colour(0x9B59B6),
-        )
-    )
-    _MATCH_PLAYERS.pop(match_ref, None)
-    return view
-
-
-async def _resolve_logs_channel(bot: discord.Client, guild_id: str) -> str | None:
-    """Resolve the guild's logs channel through the logs service."""
-    logs = getattr(bot, "logs_service", None)
-    if logs is None:
-        return None
-    try:
-        resolved = await logs.resolve_channel(guild_id)
-    except Exception:
-        return None
-    return str(resolved) if resolved else None
+        logger.debug("the post-match store sync failed", exc_info=True)
 
 
 async def _is_guild_member(bot: discord.Client, guild: discord.Guild, user_id: str) -> bool:
     """Answer guild membership through the cache; an unresolvable roster fails open."""
     from botforge.discord.member_cache import guild_members
 
+    del bot
     try:
         members = await guild_members(guild)
     except Exception:

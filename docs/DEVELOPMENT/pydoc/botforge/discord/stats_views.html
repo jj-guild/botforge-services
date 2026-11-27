@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Python: botforge.discord.stats_views</title>
+</head><body>
+
+<table class="heading">
+<tr class="heading-text decor">
+<td class="title">&nbsp;<br><strong class="title"><a href="botforge.html" class="white">botforge</a>.<a href="botforge.discord.html" class="white">discord</a>.stats_views</strong></td>
+<td class="extra"><a href=".">index</a><br><a href="file:SOURCE_ROOT/discord/stats_views.py">SOURCE_ROOT/discord/stats_views.py</a></td></tr></table>
+    <p><span class="code">The&nbsp;stats&nbsp;enrichments&nbsp;of&nbsp;the&nbsp;existing&nbsp;views&nbsp;(#404&nbsp;T6).<br>
+&nbsp;<br>
+The&nbsp;surfaces&nbsp;stay&nbsp;as&nbsp;they&nbsp;are&nbsp;—&nbsp;these&nbsp;helpers&nbsp;only&nbsp;ENRICH&nbsp;their&nbsp;lines<br>
+with&nbsp;the&nbsp;stats&nbsp;the&nbsp;providers&nbsp;now&nbsp;serve&nbsp;(the&nbsp;per-account&nbsp;elo&nbsp;status,<br>
+the&nbsp;per-user&nbsp;unification,&nbsp;the&nbsp;criteria&nbsp;results).&nbsp;Every&nbsp;helper&nbsp;is<br>
+best-effort:&nbsp;an&nbsp;unreachable&nbsp;game&nbsp;service&nbsp;renders&nbsp;nothing,&nbsp;never<br>
+crashes&nbsp;the&nbsp;view&nbsp;(the&nbsp;panels&nbsp;degrade&nbsp;quietly).</span></p>
+<p>
+<table class="section">
+<tr class="decor pkg-content-decor heading-text">
+<td class="section-title" colspan=3>&nbsp;<br><strong class="bigsection">Modules</strong></td></tr>
+    
+<tr><td class="decor pkg-content-decor"><span class="code">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span></td><td>&nbsp;</td>
+<td class="singlecolumn"><table><tr><td class="multicolumn"><a href="inspect.html">inspect</a><br>
+</td><td class="multicolumn"><a href="json.html">json</a><br>
+</td><td class="multicolumn"><a href="logging.html">logging</a><br>
+</td><td class="multicolumn"><a href="os.html">os</a><br>
+</td></tr></table></td></tr></table><p>
+<table class="section">
+<tr class="decor functions-decor heading-text">
+<td class="section-title" colspan=3>&nbsp;<br><strong class="bigsection">Functions</strong></td></tr>
+    
+<tr><td class="decor functions-decor"><span class="code">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span></td><td>&nbsp;</td>
+<td class="singlecolumn"><dl><dt>async <a name="-account_boards_by_profile"><strong>account_boards_by_profile</strong></a>(bot: 'Any', profile_ids: 'list[str]') -&gt; 'dict[str, dict[str, tuple[int, int]]]'</dt><dd><span class="code">Serve&nbsp;the&nbsp;per-account&nbsp;RM&nbsp;boards:&nbsp;{pid:&nbsp;{board:&nbsp;(current,&nbsp;max)}}.<br>
+&nbsp;<br>
+The&nbsp;players&nbsp;forum's&nbsp;profile&nbsp;card&nbsp;reads&nbsp;BOTH&nbsp;ladders&nbsp;(owner<br>
+2026-11-26:&nbsp;the&nbsp;seat-like&nbsp;account&nbsp;lines&nbsp;carry&nbsp;the&nbsp;1v1&nbsp;elo&nbsp;AND&nbsp;the<br>
+TG&nbsp;elo,&nbsp;current&nbsp;and&nbsp;max)&nbsp;-&nbsp;the&nbsp;same&nbsp;stats&nbsp;seam&nbsp;the&nbsp;seat&nbsp;lines&nbsp;ride<br>
+(LB3/LB4&nbsp;only,&nbsp;never&nbsp;the&nbsp;exotic&nbsp;boards).</span></dd></dl>
+ <dl><dt>async <a name="-account_elo_by_profile"><strong>account_elo_by_profile</strong></a>(bot: 'Any', profile_ids: 'list[str]', translate: 'Any' = None) -&gt; 'dict[str, str]'</dt><dd><span class="code">Render&nbsp;the&nbsp;per-account&nbsp;1v1&nbsp;elo&nbsp;lines,&nbsp;keyed&nbsp;by&nbsp;profile&nbsp;id.<br>
+&nbsp;<br>
+``"1185&nbsp;Elo&nbsp;1v1&nbsp;(max&nbsp;1210)"``&nbsp;per&nbsp;account&nbsp;—&nbsp;the&nbsp;1v1&nbsp;RM&nbsp;rating&nbsp;the<br>
+player&nbsp;actually&nbsp;reads&nbsp;(the&nbsp;request&nbsp;of&nbsp;2026-11-20:&nbsp;the&nbsp;profile&nbsp;page<br>
+shows&nbsp;the&nbsp;1v1&nbsp;elo&nbsp;of&nbsp;every&nbsp;aoe2&nbsp;account,&nbsp;not&nbsp;the&nbsp;best&nbsp;board);&nbsp;the<br>
+accounts&nbsp;without&nbsp;stored&nbsp;1v1&nbsp;stats&nbsp;map&nbsp;to&nbsp;"".</span></dd></dl>
+ <dl><dt><a name="-criteria_lines"><strong>criteria_lines</strong></a>(application: 'Any') -&gt; 'list[str]'</dt><dd><span class="code">Render&nbsp;the&nbsp;application's&nbsp;criteria&nbsp;results&nbsp;(stats&nbsp;vs&nbsp;criteria).<br>
+&nbsp;<br>
+One&nbsp;line&nbsp;per&nbsp;evaluated&nbsp;criterion&nbsp;—&nbsp;passed&nbsp;✓,&nbsp;failed&nbsp;✗,&nbsp;unknown&nbsp;❔<br>
+(the&nbsp;manual-review&nbsp;marker&nbsp;of&nbsp;T5)&nbsp;—&nbsp;so&nbsp;the&nbsp;admin&nbsp;announce&nbsp;shows&nbsp;WHY<br>
+the&nbsp;queue&nbsp;holds&nbsp;the&nbsp;candidate.&nbsp;Empty&nbsp;when&nbsp;no&nbsp;criterion&nbsp;ran.</span></dd></dl>
+ <dl><dt><a name="-finished_match_block"><strong>finished_match_block</strong></a>(entry: 'Any', me_ids: 'set[str]', known_ids: 'set[str]', labels: 'dict[str, str]') -&gt; 'list[str]'</dt><dd><span class="code">Render&nbsp;one&nbsp;finished&nbsp;match&nbsp;block:&nbsp;the&nbsp;header,&nbsp;then&nbsp;the&nbsp;teams.</span></dd></dl>
+ <dl><dt><a name="-live_match_block"><strong>live_match_block</strong></a>(match: 'dict[str, Any]', me_ids: 'set[str]', known_ids: 'set[str]', labels: 'dict[str, str]') -&gt; 'list[str]'</dt><dd><span class="code">Render&nbsp;one&nbsp;ongoing-match&nbsp;block:&nbsp;header&nbsp;with&nbsp;the&nbsp;live&nbsp;marker,&nbsp;teams.<br>
+&nbsp;<br>
+``match``&nbsp;is&nbsp;the&nbsp;aggregator&nbsp;snapshot's&nbsp;per-player&nbsp;match&nbsp;context<br>
+(aoe2lobby:&nbsp;map,&nbsp;format,&nbsp;per-slot&nbsp;players).&nbsp;No&nbsp;outcome,&nbsp;no&nbsp;delta&nbsp;—<br>
+the&nbsp;seats&nbsp;carry&nbsp;the&nbsp;alias,&nbsp;the&nbsp;civ,&nbsp;the&nbsp;team;&nbsp;the&nbsp;same&nbsp;layout&nbsp;the<br>
+finished&nbsp;blocks&nbsp;render,&nbsp;so&nbsp;both&nbsp;sources&nbsp;read&nbsp;identically.</span></dd></dl>
+ <dl><dt>async <a name="-recent_match_blocks"><strong>recent_match_blocks</strong></a>(profile_ids: 'list[str]', me_ids: 'set[str]', known_ids: 'set[str]', labels: 'dict[str, str]', limit: 'int' = 10) -&gt; 'list[list[str]]'</dt><dd><span class="code">Render&nbsp;the&nbsp;accounts'&nbsp;last&nbsp;finished&nbsp;matches&nbsp;as&nbsp;bullet&nbsp;blocks.<br>
+&nbsp;<br>
+One&nbsp;BLOCK&nbsp;per&nbsp;match&nbsp;(newest&nbsp;first,&nbsp;&lt;=&nbsp;limit):&nbsp;the&nbsp;header&nbsp;line&nbsp;(the<br>
+match's&nbsp;own&nbsp;name,&nbsp;the&nbsp;time,&nbsp;the&nbsp;duration,&nbsp;the&nbsp;format)&nbsp;then&nbsp;one<br>
+sub-bullet&nbsp;per&nbsp;team&nbsp;carrying&nbsp;every&nbsp;seat&nbsp;(alias,&nbsp;civ,&nbsp;Elo,&nbsp;the<br>
+rating&nbsp;delta).&nbsp;``me_ids``&nbsp;renders&nbsp;bold,&nbsp;the&nbsp;other&nbsp;server-known<br>
+profiles&nbsp;render&nbsp;italic&nbsp;—&nbsp;the&nbsp;highlight&nbsp;contract&nbsp;of&nbsp;the&nbsp;matches<br>
+popup.&nbsp;Best-effort&nbsp;—&nbsp;an&nbsp;unreachable&nbsp;game&nbsp;service&nbsp;renders&nbsp;[].</span></dd></dl>
+ <dl><dt>async <a name="-recent_match_entries"><strong>recent_match_entries</strong></a>(profile_ids: 'list[str]', limit: 'int' = 10, refresh: 'bool' = False) -&gt; 'list[Any]'</dt><dd><span class="code">Return&nbsp;the&nbsp;last&nbsp;distinctive&nbsp;finished-match&nbsp;entries,&nbsp;newest&nbsp;first.<br>
+&nbsp;<br>
+The&nbsp;same&nbsp;dedupe&nbsp;as&nbsp;``recent_match_blocks``&nbsp;(one&nbsp;entry&nbsp;per&nbsp;match&nbsp;id,<br>
+only&nbsp;matches&nbsp;the&nbsp;viewed&nbsp;profiles&nbsp;played)&nbsp;but&nbsp;RAW&nbsp;—&nbsp;the&nbsp;panel<br>
+builder&nbsp;re-reads&nbsp;every&nbsp;field&nbsp;(description,&nbsp;players,&nbsp;ratings)&nbsp;to<br>
+compose&nbsp;its&nbsp;own&nbsp;layout.</span></dd></dl>
+ <dl><dt><a name="-stats_client"><strong>stats_client</strong></a>() -&gt; 'Any | None'</dt><dd><span class="code">Return&nbsp;the&nbsp;game&nbsp;service's&nbsp;stats&nbsp;client;&nbsp;None&nbsp;when&nbsp;unconfigured.</span></dd></dl>
+ <dl><dt>async <a name="-user_stats_line"><strong>user_stats_line</strong></a>(bot: 'Any', user_id: 'str') -&gt; 'str'</dt><dd><span class="code">Render&nbsp;the&nbsp;user's&nbsp;unified&nbsp;elo&nbsp;head&nbsp;line&nbsp;(best&nbsp;board).<br>
+&nbsp;<br>
+``"&nbsp;—&nbsp;1400&nbsp;Elo&nbsp;(max&nbsp;1500)"``&nbsp;on&nbsp;the&nbsp;player's&nbsp;best&nbsp;leaderboard;<br>
+empty&nbsp;when&nbsp;the&nbsp;stats&nbsp;are&nbsp;unknown&nbsp;—&nbsp;the&nbsp;roster&nbsp;line&nbsp;stays&nbsp;as&nbsp;it&nbsp;was.</span></dd></dl>
+</td></tr></table><p>
+<table class="section">
+<tr class="decor data-decor heading-text">
+<td class="section-title" colspan=3>&nbsp;<br><strong class="bigsection">Data</strong></td></tr>
+    
+<tr><td class="decor data-decor"><span class="code">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span></td><td>&nbsp;</td>
+<td class="singlecolumn"><strong>BOARD_LABELS</strong> = {'dm_1v1': '1v1 DM', 'dm_team': 'TG DM', 'rm_1v1': '1v1 RM', 'rm_team': 'TG RM', 'unranked': 'unranked'}<br>
+<strong>logger</strong> = &lt;Logger botforge.discord.stats_views (INFO)&gt;</td></tr></table>
+</body></html>

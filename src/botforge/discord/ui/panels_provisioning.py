@@ -127,33 +127,38 @@ class _Platform:
         return str(created.id)
 
 
-async def _apply_access(guild: discord.Guild, channel_id: str, decl: ChannelDecl) -> None:
-    """Apply the channel's access band (overwrites, best-effort).
+async def _apply_access(guild: discord.Guild, channel: Any, decl: ChannelDecl) -> None:  # noqa: C901 - the band
+    """Apply the channel's access band - a PUT only on a REAL diff.
 
     The bot's own member always carries an explicit allow (view, send,
     manage) — without it a ``view_channel=False`` for @everyone locks
     the bot out of the very channel it provisioned, and every surface
     (pins, syncs, dashboards) degrades with 403s.
+
+    The reconcile is DIFF-driven (owner 2026-11-26): a healthy channel
+    answers ZERO Discord calls - the current overwrite already IS the
+    desired one; only a drifted one pays the PUT.
     """
-    channel = guild.get_channel(int(channel_id)) if channel_id.isdigit() else None
     if channel is None:
         return
     try:
         me = guild.me
         if me is not None:
-            await channel.set_permissions(
-                me,
-                overwrite=discord.PermissionOverwrite(
-                    view_channel=True,
-                    send_messages=True,
-                    manage_messages=True,
-                    manage_threads=True,
-                    read_message_history=True,
-                    embed_links=True,
-                    attach_files=True,
-                ),
-                reason="botforge: the bot operates its own channel",
+            desired = discord.PermissionOverwrite(
+                view_channel=True,
+                send_messages=True,
+                manage_messages=True,
+                manage_threads=True,
+                read_message_history=True,
+                embed_links=True,
+                attach_files=True,
             )
+            if not _overwrite_matches(channel.overwrites_for(me), desired):
+                await channel.set_permissions(
+                    me,
+                    overwrite=desired,
+                    reason="botforge: the bot operates its own channel",
+                )
         policy = getattr(decl, "policy", None)
         if policy is not None:
             # the DECLARED policy (the salons-as-data gating, #216
@@ -162,11 +167,13 @@ async def _apply_access(guild: discord.Guild, channel_id: str, decl: ChannelDecl
             # name (the mod's roles are provisioned from the same
             # declaration)
             if not getattr(policy, "everyone_view", True):
-                await channel.set_permissions(
-                    guild.default_role,
-                    overwrite=discord.PermissionOverwrite(view_channel=False),
-                    reason="botforge: the declared policy gates @everyone",
-                )
+                desired = discord.PermissionOverwrite(view_channel=False)
+                if not _overwrite_matches(channel.overwrites_for(guild.default_role), desired):
+                    await channel.set_permissions(
+                        guild.default_role,
+                        overwrite=desired,
+                        reason="botforge: the declared policy gates @everyone",
+                    )
             # the view roles ride as RESOLVED IDS (the persisted
             # mapping is the resolver — a renamed role keeps its grant;
             # never a name lookup at apply time)
@@ -178,31 +185,58 @@ async def _apply_access(guild: discord.Guild, channel_id: str, decl: ChannelDecl
                         role_id,
                     )
                     continue
-                await channel.set_permissions(
-                    role,
-                    overwrite=discord.PermissionOverwrite(
-                        view_channel=True,
-                        send_messages=not getattr(policy, "everyone_post", False),
-                        read_message_history=True,
-                    ),
-                    reason="botforge: the declared policy grants the view role",
+                desired = discord.PermissionOverwrite(
+                    view_channel=True,
+                    send_messages=not getattr(policy, "everyone_post", False),
+                    read_message_history=True,
                 )
+                if not _overwrite_matches(channel.overwrites_for(role), desired):
+                    await channel.set_permissions(
+                        role,
+                        overwrite=desired,
+                        reason="botforge: the declared policy grants the view role",
+                    )
         elif decl.access == "readonly":
-            overwrite = discord.PermissionOverwrite(send_messages=False, add_reactions=True)
-            await channel.set_permissions(
-                guild.default_role, overwrite=overwrite, reason="botforge: readonly menu channel"
-            )
+            desired = discord.PermissionOverwrite(send_messages=False, add_reactions=True)
+            if not _overwrite_matches(channel.overwrites_for(guild.default_role), desired):
+                await channel.set_permissions(
+                    guild.default_role, overwrite=desired, reason="botforge: readonly menu channel"
+                )
         elif decl.access == "admin":
-            overwrite = discord.PermissionOverwrite(view_channel=False)
-            await channel.set_permissions(
-                guild.default_role, overwrite=overwrite, reason="botforge: admin channel"
-            )
+            desired = discord.PermissionOverwrite(view_channel=False)
+            if not _overwrite_matches(channel.overwrites_for(guild.default_role), desired):
+                await channel.set_permissions(
+                    guild.default_role, overwrite=desired, reason="botforge: admin channel"
+                )
     except Exception:
         logger.warning(
             "panels provisioning: access apply failed (%s) — best-effort",
             decl.key,
             exc_info=True,
         )
+
+
+async def _fetch_channel_map(guild: discord.Guild) -> dict[str, Any]:
+    """ONE fetch of the guild's channels, id -> channel (owner 2026-11-26).
+
+    "Tu peux faire un single fetch channels, tu compares avec la db,
+    tu sais ce qu'il manque en moins de temps qu'il ne faut pour te
+    le dire" - the reconcile reads THIS map, never a per-channel
+    cache lookup, never a per-channel HTTP call.
+    """
+    try:
+        return {str(c.id): c for c in await guild.fetch_channels()}
+    except discord.HTTPException:
+        logger.warning("panels provisioning: the channels fetch failed - falling back to the cache")
+        return {str(c.id): c for c in guild.channels}
+
+
+def _overwrite_matches(current: discord.PermissionOverwrite, desired: discord.PermissionOverwrite) -> bool:
+    """Whether the stored overwrite already IS the desired one - no PUT then."""
+    try:
+        return bool(current._values == desired._values)
+    except Exception:
+        return False  # unknown shape: apply (the heal path)
 
 
 async def _ensure_scope_category(
@@ -317,6 +351,10 @@ async def provision_scope(
     (``MessageCatalog.render``-shaped callable).
     """
     platform = _Platform(guild)
+    # the SINGLE fetch (owner 2026-11-26): one HTTP call maps the whole
+    # guild, the diff against the stored resolutions says what is
+    # missing in no time - the healthy channels cost ZERO Discord calls
+    channel_map = await _fetch_channel_map(guild)
     resolved: dict[str, str] = {}
     category_id = ""
     if spec.category_key:
@@ -343,7 +381,7 @@ async def provision_scope(
         try:
             stored = await stored_channel_id(str(guild.id), spec.scope, decl.key)
             if stored and stored.isdigit():
-                channel = guild.get_channel(int(stored))
+                channel = channel_map.get(stored)
                 if (
                     channel is not None
                     and _kind_matches(channel, decl.kind)
@@ -354,7 +392,7 @@ async def provision_scope(
                         await channel.edit(
                             name=name, reason="botforge: panels provisioning (label refresh)"
                         )
-                    await _apply_access(guild, stored, decl)
+                    await _apply_access(guild, channel, decl)
                     resolved[decl.key] = stored
                     continue
                 # a stored channel of the WRONG kind (a corrupted
@@ -382,7 +420,7 @@ async def provision_scope(
                 exc_info=True,
             )
             continue
-        await _apply_access(guild, channel_id, decl)
+        await _apply_access(guild, channel_map.get(str(channel_id)), decl)
         resolved[decl.key] = channel_id
     return resolved
 

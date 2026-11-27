@@ -70,12 +70,12 @@ frames&nbsp;can&nbsp;exceed&nbsp;1&nbsp;MB&nbsp;(max_size&nbsp;raised);&nbsp;``*
 <td class="section-title" colspan=3>&nbsp;<br><a name="Aoe2LobbyAdapter">class <strong>Aoe2LobbyAdapter</strong></a>(<a href="builtins.html#object">builtins.object</a>)</td></tr>
     
 <tr><td class="decor title-decor" rowspan=2><span class="code">&nbsp;&nbsp;&nbsp;</span></td>
-<td class="decor title-decor" colspan=2><span class="code"><a href="#Aoe2LobbyAdapter">Aoe2LobbyAdapter</a>(ws_url:&nbsp;'str'&nbsp;=&nbsp;'wss://data.aoe2lobby.com/ws/',&nbsp;reconnect_delay_s:&nbsp;'float'&nbsp;=&nbsp;5.0,&nbsp;grace_s:&nbsp;'float'&nbsp;=&nbsp;15,&nbsp;heartbeat_s:&nbsp;'float'&nbsp;=&nbsp;90.0,&nbsp;max_size:&nbsp;'int'&nbsp;=&nbsp;10485760,&nbsp;refresh_s:&nbsp;'float'&nbsp;=&nbsp;5.0,&nbsp;schema_ws_url:&nbsp;'str'&nbsp;=&nbsp;'wss://data.aoe2lobby.com/ws/lobby/')&nbsp;-&amp;gt;&nbsp;'None'<br>
+<td class="decor title-decor" colspan=2><span class="code"><a href="#Aoe2LobbyAdapter">Aoe2LobbyAdapter</a>(ws_url:&nbsp;'str'&nbsp;=&nbsp;'wss://data.aoe2lobby.com/ws/',&nbsp;reconnect_delay_s:&nbsp;'float'&nbsp;=&nbsp;5.0,&nbsp;grace_s:&nbsp;'float'&nbsp;=&nbsp;15.0,&nbsp;heartbeat_s:&nbsp;'float'&nbsp;=&nbsp;90.0,&nbsp;max_size:&nbsp;'int'&nbsp;=&nbsp;10485760,&nbsp;refresh_s:&nbsp;'float'&nbsp;=&nbsp;5.0,&nbsp;schema_ws_url:&nbsp;'str'&nbsp;=&nbsp;'wss://data.aoe2lobby.com/ws/lobby/')&nbsp;-&amp;gt;&nbsp;'None'<br>
 &nbsp;<br>
 One-session&nbsp;WebSocket&nbsp;client&nbsp;reducing&nbsp;aoe2lobby&nbsp;deltas&nbsp;to&nbsp;transitions.<br>&nbsp;</span></td></tr>
 <tr><td>&nbsp;</td>
 <td class="singlecolumn">Methods defined here:<br>
-<dl><dt><a name="Aoe2LobbyAdapter-__init__"><strong>__init__</strong></a>(self, ws_url: 'str' = 'wss://data.aoe2lobby.com/ws/', reconnect_delay_s: 'float' = 5.0, grace_s: 'float' = 15, heartbeat_s: 'float' = 90.0, max_size: 'int' = 10485760, refresh_s: 'float' = 5.0, schema_ws_url: 'str' = 'wss://data.aoe2lobby.com/ws/lobby/') -&gt; 'None'</dt><dd><span class="code">Initialize&nbsp;self.&nbsp;&nbsp;See&nbsp;help(type(self))&nbsp;for&nbsp;accurate&nbsp;signature.</span></dd></dl>
+<dl><dt><a name="Aoe2LobbyAdapter-__init__"><strong>__init__</strong></a>(self, ws_url: 'str' = 'wss://data.aoe2lobby.com/ws/', reconnect_delay_s: 'float' = 5.0, grace_s: 'float' = 15.0, heartbeat_s: 'float' = 90.0, max_size: 'int' = 10485760, refresh_s: 'float' = 5.0, schema_ws_url: 'str' = 'wss://data.aoe2lobby.com/ws/lobby/') -&gt; 'None'</dt><dd><span class="code">Initialize&nbsp;self.&nbsp;&nbsp;See&nbsp;help(type(self))&nbsp;for&nbsp;accurate&nbsp;signature.</span></dd></dl>
 
 <dl><dt><a name="Aoe2LobbyAdapter-apply_frame"><strong>apply_frame</strong></a>(self, raw: 'str | bytes') -&gt; 'list[dict[str, Any]]'</dt><dd><span class="code">Fold&nbsp;one&nbsp;raw&nbsp;WS&nbsp;frame;&nbsp;return&nbsp;the&nbsp;resulting&nbsp;transition&nbsp;events.<br>
 &nbsp;<br>
@@ -118,8 +118,11 @@ connect&nbsp;(the&nbsp;adapter&nbsp;never&nbsp;opens&nbsp;a&nbsp;second&nbsp;ses
 Exactly&nbsp;one&nbsp;session&nbsp;is&nbsp;open&nbsp;at&nbsp;any&nbsp;time.&nbsp;Every&nbsp;failure&nbsp;path&nbsp;—<br>
 transport&nbsp;error,&nbsp;server-side&nbsp;close,&nbsp;heartbeat&nbsp;timeout,<br>
 unexpected&nbsp;exception&nbsp;—&nbsp;falls&nbsp;into&nbsp;the&nbsp;same&nbsp;reconnect&nbsp;loop:<br>
-fixed&nbsp;backoff,&nbsp;re-subscribe&nbsp;both&nbsp;channels&nbsp;with&nbsp;the&nbsp;last&nbsp;known<br>
-profile&nbsp;ids,&nbsp;then&nbsp;resume.&nbsp;Yields&nbsp;nothing&nbsp;while&nbsp;disconnected:<br>
+FIBONACCI&nbsp;backoff&nbsp;(owner&nbsp;2026-11-26:&nbsp;the&nbsp;upstream&nbsp;throws&nbsp;502s<br>
+while&nbsp;it&nbsp;struggles&nbsp;-&nbsp;a&nbsp;fixed&nbsp;5s&nbsp;retry&nbsp;bombs&nbsp;a&nbsp;degraded<br>
+provider,&nbsp;the&nbsp;gaps&nbsp;grow&nbsp;5,&nbsp;8,&nbsp;13,&nbsp;21,&nbsp;34,&nbsp;55...&nbsp;capped),<br>
+re-subscribe&nbsp;both&nbsp;channels&nbsp;with&nbsp;the&nbsp;last&nbsp;known&nbsp;profile&nbsp;ids,<br>
+then&nbsp;resume.&nbsp;Yields&nbsp;nothing&nbsp;while&nbsp;disconnected:<br>
 the&nbsp;stream&nbsp;stays&nbsp;alive,&nbsp;the&nbsp;consumer&nbsp;sees&nbsp;silence,&nbsp;not<br>
 failures.&nbsp;The&nbsp;state&nbsp;is&nbsp;kept&nbsp;across&nbsp;reconnects&nbsp;so&nbsp;the&nbsp;snapshot<br>
 diff&nbsp;yields&nbsp;exactly&nbsp;the&nbsp;real&nbsp;transitions&nbsp;(deltas&nbsp;may&nbsp;be&nbsp;sparse<br>
@@ -133,13 +136,20 @@ Data descriptors defined here:<br>
 <dl><dt><strong>__weakref__</strong></dt>
 <dd><span class="code">list&nbsp;of&nbsp;weak&nbsp;references&nbsp;to&nbsp;the&nbsp;object</span></dd>
 </dl>
+<hr>
+Data and other attributes defined here:<br>
+<dl><dt><strong>SETTINGS_KEYS</strong> = ('mode', 'size', 'population', 'speed', 'victory', 'victory_threshold', 'resources', 'reveal_map', 'starting_age', 'ending_age', 'ai_difficulty', 'treaty_length', 'cheats', 'lock_speed', 'lock_teams', 'full_tech_tree', 'record', 'shared_exploration', 'ew_mode', 'sudden_death_mode', ...)</dl>
+
 </td></tr></table></td></tr></table><p>
 <table class="section">
 <tr class="decor data-decor heading-text">
 <td class="section-title" colspan=3>&nbsp;<br><strong class="bigsection">Data</strong></td></tr>
     
 <tr><td class="decor data-decor"><span class="code">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span></td><td>&nbsp;</td>
-<td class="singlecolumn"><strong>CONTEXT_LOBBY</strong> = 'lobby'<br>
+<td class="singlecolumn"><strong>AOE2LOBBY_ABSENT_CLOSE_GRACE_S</strong> = 300.0<br>
+<strong>AOE2LOBBY_CLOSE_GRACE_S</strong> = 15.0<br>
+<strong>AOE2LOBBY_EXPLICIT_CLOSE_GRACE_S</strong> = 15.0<br>
+<strong>CONTEXT_LOBBY</strong> = 'lobby'<br>
 <strong>CONTEXT_SPECTATE</strong> = 'spectate'<br>
 <strong>DEEP_LINK_URL</strong> = 'aoe2de://1/-'<br>
 <strong>DEFAULT_HEARTBEAT_S</strong> = 90.0<br>
@@ -152,7 +162,6 @@ Data descriptors defined here:<br>
 <strong>EVENT_LOBBY_CLOSED</strong> = 'lobby_closed'<br>
 <strong>EVENT_LOBBY_OPENED</strong> = 'lobby_opened'<br>
 <strong>EVENT_MATCH_UPDATED</strong> = 'match_updated'<br>
-<strong>GRACE_PERIOD_S</strong> = 15<br>
 <strong>MATCHID_FIELD</strong> = 'matchid'<br>
 <strong>PLAYER_STATUS_FIELD</strong> = 'player_status'<br>
 <strong>SCHEMA_FIELD</strong> = 'schema'<br>

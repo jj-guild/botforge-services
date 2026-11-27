@@ -151,7 +151,7 @@ async def _resolve_managed_channel(
         BOT_LOGS_CATEGORY: ("bot", "logs"),
         ADMIN_CHANNEL_CATEGORY: ("bot", "admin"),
         HOME_CHANNEL_CATEGORY: ("root", "general"),
-        LIVE_CHANNEL_CATEGORY: ("games/aoe2", "live"),
+        LIVE_CHANNEL_CATEGORY: ("games/aoe2", "joueurs"),
     }
     scope, key = tree_keys.get(category, ("", ""))
     if not scope:

@@ -60,6 +60,28 @@ an&nbsp;empty&nbsp;answer,&nbsp;never&nbsp;an&nbsp;error.<br>&nbsp;</span></td><
 
 <dl><dt>async <a name="LibrematchAdapter-fetch_lobbies"><strong>fetch_lobbies</strong></a>(self) -&gt; 'list[dict[str, Any]]'</dt><dd><span class="code">Fetch&nbsp;the&nbsp;current&nbsp;public&nbsp;lobby&nbsp;listings&nbsp;(raw&nbsp;API&nbsp;payloads).</span></dd></dl>
 
+<dl><dt>async <a name="LibrematchAdapter-fetch_match_details_raw"><strong>fetch_match_details_raw</strong></a>(self, match_id: 'str') -&gt; 'dict[str, Any]'</dt><dd><span class="code">Fetch&nbsp;one&nbsp;stored&nbsp;match's&nbsp;detailed&nbsp;payload,&nbsp;RAW&nbsp;(#288,&nbsp;T2).<br>
+&nbsp;<br>
+``GetMatchHistory``&nbsp;answers&nbsp;a&nbsp;match's&nbsp;full&nbsp;record&nbsp;once&nbsp;its&nbsp;id<br>
+is&nbsp;known&nbsp;—&nbsp;including&nbsp;the&nbsp;``options``&nbsp;and&nbsp;``slotinfo``&nbsp;blobs&nbsp;the<br>
+decode&nbsp;step&nbsp;(T2)&nbsp;exploits.&nbsp;The&nbsp;raw&nbsp;payload&nbsp;is&nbsp;returned<br>
+verbatim;&nbsp;transport&nbsp;failures&nbsp;degrade&nbsp;to&nbsp;an&nbsp;empty&nbsp;payload,&nbsp;never<br>
+an&nbsp;error.</span></dd></dl>
+
+<dl><dt>async <a name="LibrematchAdapter-fetch_match_history_raw"><strong>fetch_match_history_raw</strong></a>(self, profile_id: 'str', leaderboard_id: 'str' = '', count: 'int' = 1000) -&gt; 'list[dict[str, Any]]'</dt><dd><span class="code">Fetch&nbsp;a&nbsp;profile's&nbsp;recent&nbsp;finished&nbsp;matches&nbsp;as&nbsp;RAW&nbsp;payloads&nbsp;(#404).<br>
+&nbsp;<br>
+``GetRecentMatchHistory``&nbsp;with&nbsp;a&nbsp;real&nbsp;``count``&nbsp;—&nbsp;the&nbsp;history<br>
+store&nbsp;ingests&nbsp;the&nbsp;raw&nbsp;documents&nbsp;first&nbsp;(store&nbsp;now,&nbsp;exploit<br>
+later),&nbsp;never&nbsp;a&nbsp;filtered&nbsp;projection.&nbsp;The&nbsp;leaderboard&nbsp;narrows<br>
+the&nbsp;upstream&nbsp;query&nbsp;when&nbsp;given;&nbsp;transport&nbsp;failures&nbsp;degrade&nbsp;to<br>
+an&nbsp;empty&nbsp;list,&nbsp;never&nbsp;an&nbsp;error.</span></dd></dl>
+
+<dl><dt>async <a name="LibrematchAdapter-fetch_personal_stat_raw"><strong>fetch_personal_stat_raw</strong></a>(self, profile_id: 'str', leaderboard_id: 'str') -&gt; 'dict[str, Any]'</dt><dd><span class="code">Fetch&nbsp;one&nbsp;leaderboard's&nbsp;personal-stat&nbsp;payload,&nbsp;RAW&nbsp;(#404).<br>
+&nbsp;<br>
+The&nbsp;account&nbsp;status&nbsp;(current&nbsp;elo,&nbsp;rank,&nbsp;wins/losses)&nbsp;reads&nbsp;from<br>
+the&nbsp;raw&nbsp;reply&nbsp;—&nbsp;the&nbsp;store&nbsp;keeps&nbsp;it&nbsp;verbatim;&nbsp;a&nbsp;transport<br>
+failure&nbsp;degrades&nbsp;to&nbsp;an&nbsp;empty&nbsp;payload.</span></dd></dl>
+
 <dl><dt>async <a name="LibrematchAdapter-list_maps"><strong>list_maps</strong></a>(self) -&gt; 'list[GameMap]'</dt><dd><span class="code">Serve&nbsp;the&nbsp;map&nbsp;catalog&nbsp;seen&nbsp;across&nbsp;the&nbsp;current&nbsp;lobbies.<br>
 &nbsp;<br>
 The&nbsp;Community&nbsp;API&nbsp;exposes&nbsp;no&nbsp;dedicated&nbsp;map&nbsp;catalog;&nbsp;the&nbsp;distinct<br>
@@ -95,6 +117,17 @@ Returns&nbsp;None&nbsp;on&nbsp;transport&nbsp;failure&nbsp;or&nbsp;when&nbsp;not
 (the&nbsp;upstream&nbsp;has&nbsp;not&nbsp;recorded&nbsp;the&nbsp;match&nbsp;yet&nbsp;—&nbsp;the&nbsp;caller<br>
 retries&nbsp;with&nbsp;a&nbsp;backoff).</span></dd></dl>
 
+<dl><dt>async <a name="LibrematchAdapter-search_profiles"><strong>search_profiles</strong></a>(self, alias: 'str', match_count: 'int' = 3) -&gt; 'list[dict[str, Any]]'</dt><dd><span class="code">Search&nbsp;profiles&nbsp;by&nbsp;exact&nbsp;in-game&nbsp;alias&nbsp;(the&nbsp;#402&nbsp;name&nbsp;path).<br>
+&nbsp;<br>
+``GetPersonalStat``&nbsp;accepts&nbsp;``aliases``&nbsp;instead&nbsp;of<br>
+``profile_ids``&nbsp;(ONE&nbsp;identifier&nbsp;type&nbsp;per&nbsp;call&nbsp;—&nbsp;the&nbsp;upstream<br>
+contract):&nbsp;the&nbsp;reply's&nbsp;``statGroups[].members[]``&nbsp;carries&nbsp;the<br>
+relic&nbsp;profile_id,&nbsp;the&nbsp;alias,&nbsp;the&nbsp;steam&nbsp;name&nbsp;and&nbsp;the&nbsp;country&nbsp;of<br>
+every&nbsp;exact-alias&nbsp;match.&nbsp;Homonyms&nbsp;ride&nbsp;along:&nbsp;each&nbsp;candidate<br>
+—&nbsp;capped&nbsp;at&nbsp;5&nbsp;—&nbsp;is&nbsp;enriched&nbsp;with&nbsp;the&nbsp;profile's&nbsp;last&nbsp;matches&nbsp;so<br>
+the&nbsp;player&nbsp;recognizes&nbsp;THEIR&nbsp;account&nbsp;by&nbsp;what&nbsp;they&nbsp;played,&nbsp;not<br>
+by&nbsp;an&nbsp;id.&nbsp;Transport&nbsp;failures&nbsp;degrade&nbsp;to&nbsp;an&nbsp;empty&nbsp;list.</span></dd></dl>
+
 <hr>
 Data descriptors defined here:<br>
 <dl><dt><strong>__dict__</strong></dt>
@@ -111,9 +144,10 @@ Data descriptors defined here:<br>
 <tr><td class="decor data-decor"><span class="code">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span></td><td>&nbsp;</td>
 <td class="singlecolumn"><strong>DEFAULT_BASE_URL</strong> = 'https://aoe-api.worldsedgelink.com'<br>
 <strong>LEADERBOARDS_PATH</strong> = '/api/leaderboard'<br>
-<strong>LEADERBOARD_KEYS</strong> = {'0': 'rm_1v1', '1': 'rm_team', '2': 'unranked', '3': 'dm_1v1', '4': 'dm_team'}<br>
+<strong>LEADERBOARD_KEYS</strong> = {'0': 'unranked', '1': 'dm_1v1', '2': 'dm_team', '3': 'rm_1v1', '4': 'rm_team'}<br>
 <strong>LOBBIES_PATH</strong> = '/community/advertisement/findAdvertisements'<br>
 <strong>LOBBIES_QUERY_PARAMS</strong> = {'title': 'age2'}<br>
+<strong>MATCH_DETAILS_HISTORY_PATH</strong> = '/community/leaderboard/GetMatchHistory'<br>
 <strong>PERSONAL_STAT_PATH</strong> = '/community/leaderboard/GetPersonalStat'<br>
 <strong>RECENT_MATCH_PATH</strong> = '/community/leaderboard/GetRecentMatchHistory'<br>
 <strong>logger</strong> = &lt;Logger botforge.ext_librematch.adapter (INFO)&gt;</td></tr></table>

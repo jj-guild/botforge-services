@@ -64,8 +64,14 @@ fr:
       add_success: ✅ Compte lié — voilà ton profil à jour.
       add_taken: Ce profil est déjà lié — retire-le d'abord ou choisis un autre profil.
       add_game_unconfigured: 'Ajout échoué : le jeu {game} n''est pas configuré pour l''inscription.'
-      add_unknown: 'Ajout échoué : aucun profil trouvé pour {profile}. Colle l''URL de ta page aoe2insights
-        (ou l''id qu''elle contient) — le bon id sera récupéré automatiquement.'
+      add_unknown: 'Ajout échoué : aucun profil trouvé pour {profile}. Essaie ton pseudo
+        en jeu EXACT, ou ton Relic ID (sur aoe2insights, sous ton avatar : clique l''id
+        affiché puis l''icône de copie).'
+      add_picked: "✔️ Compte sélectionné — liaison en cours…"
+      add_pick: 'Choisis ton compte pour **{name}** — chaque option montre ce que ce profil a joué en dernier :'
+      add_insights_refused: 'Ajout échoué : les URL aoe2insights ne sont plus acceptées (le site nous bloque).
+        Colle ton pseudo en jeu, ou ton Relic ID — sur aoe2insights, sous ton avatar,
+        clique l''id affiché puis l''icône de copie.'
       add_provider_error: 'Ajout échoué : le provider {provider} ne répond pas correctement — le détail
         part aux admins (vois les logs du bot).'
       add_not_configured: 'Ajout échoué : le provider {provider} ne sert pas les stats de profil — vois
@@ -73,8 +79,8 @@ fr:
       remove_title: Retirer des comptes
       remove_placeholder: Comptes à retirer...
       remove_label: Comptes à retirer
-      add_label: Ton id aoe2insights ou ton relic id
-      add_placeholder: Ex. 17190369 ou https://www.aoe2insights.com/user/12488557/
+      add_label: Ton pseudo en jeu ou ton Relic ID
+      add_placeholder: Ex. JeanJack ou 17190369 (sur aoe2insights, clique l'id sous ton avatar puis copie)
       game_label: Jeu du compte
       game_placeholder: Jeu du compte...
       rename_title: Ton pseudo
@@ -83,7 +89,83 @@ fr:
       rename_failed: Renommage impossible pour le moment.
       rename_success: '✅ Pseudo mis à jour : {name}'
       remove_button: Retirer un compte
+      matches_button: "Derniers matchs joués"
+      matches_ladder: "Ladder {name} \u2014 Match n\u00b0{number}"
+      matches_title: "Tes 10 derniers matchs joués"
+      matches_live_title: "🎯 En cours"
+      matches_with: avec
+      matches_join: Rejoindre
+      matches_spectate: Regarder
+      matches_team: "Équipe"
+      matches_ongoing: "en cours"
+      matches_untitled: "Match {id}"
+      stats_elo_1v1: "{current} Elo 1v1"
+      stats_elo_1v1_max: "{current} Elo 1v1 (max {peak})"
+      match_noun: "Match n\u00b0"
+      lobby_noun: "Lobby n\u00b0"
+      ranked_word: "Class\u00e9e"
+      custom_badge: "Personnalis\u00e9e"
+      matches_setting_hide_civs: "Cacher les civilisations"
+      matches_setting_lobby_section: "Lobby"
+      matches_setting_password: "Mot de passe"
+      matches_settings_button: "Param\u00e8tres de la partie"
+      matches_refresh_button: "Rafra\u00eechir"
+      matches_refresh_match_button: "Match"
+      matches_settings_title: "\u2699\ufe0f Param\u00e8tres de la partie \u2014 [{id}](https://www.aoe2insights.com/match/{id}/)"
+      matches_setting_resources: "Ressources"
+      matches_setting_reveal: "Vision de la carte"
+      matches_setting_start_age: "Âge de départ"
+      matches_setting_end_age: "Âge final"
+      matches_setting_difficulty: "Difficulté IA"
+      matches_setting_treaty: "Durée du traité"
+      matches_setting_lock_teams: "Équipes verrouillées"
+      matches_setting_lock_speed: "Vitesse verrouillée"
+      matches_setting_team_positions: "Positions d'équipe"
+      matches_setting_team_together: "Équipes ensemble"
+      matches_setting_turbo: "Mode Turbo"
+      matches_setting_ew: "Mode Empire Wars"
+      matches_setting_sudden_death: "Mort subite"
+      matches_setting_regicide: "Mode Régicide"
+      matches_setting_antiquity: "Mode Antiquité"
+      matches_ai: IA
+      matches_setting_handicap: "Handicap"
+      matches_setting_full_tech: "Arbre technologique complet"
+      matches_setting_record: "Partie enregistrée"
+      matches_setting_shared_expl: "Exploration partagée"
+      matches_when: "{when}"
+      matches_duration: "Durée : {clock}"
+      matches_source: "Source : [libre:match]({url})"
+      matches_source_live: "Source : [aoe2lobby]({url})"
+      matches_setting_mode: Mode
+      matches_setting_size: Taille
+      matches_setting_pop: Pop
+      matches_setting_speed: Vitesse
+      matches_setting_victory: Victoire
+      matches_setting_cheats: Cheats
+      matches_colour_1: Bleue
+      matches_colour_2: Rouge
+      matches_colour_3: Verte
+      matches_colour_4: Jaune
+      matches_colour_5: Cyan
+      matches_colour_6: Violette
+      matches_colour_7: Grise
+      matches_colour_8: Orange
+      matches_colour_8: Orange
+      # the never-decided captures (owner 2026-11-24): the seed of the
+      # matches salon renders them with their own status
+      matches_invalid: "Match non compt\u00e9"
+      matches_invalid_no_result: "jamais d\u00e9cid\u00e9 — pas de r\u00e9sultat"
+      matches_invalid_short: "forfait — moins de 5 minutes"
+      live_log_lobby_open: "🛠 {player} a ouvert un lobby — {id}"
+      live_log_lobby_update: "🔧 {player} — mise à jour du lobby — {id}"
+      live_log_lobby_close: "🚪 {player} a quitté le lobby — {id}"
+      live_log_match_start: "⚔ {player} a lancé un match — {id}"
+      live_log_match_end: "🏁 {player} — fin de match — {id} · ⏱ {duration}"
+      live_log_match_won: "\U0001F3C6 {player} a gagn\u00e9 {match} \u2014 {badge}"
+      live_log_match_lost: "\U0001F480 {player} a perdu {match} \u2014 {badge}"
+      matches_empty: 'Aucun match stock\u00e9 pour tes comptes \u2014 l\u2019historique se rafra\u00eechit quelques minutes apr\u00e8s la liaison.'
       add_button: Ajouter un compte
+      player_menu_denied: "Ce menu est réservé au joueur affiché et aux opérateurs du bot."
       rename_button: Changer de pseudo
       header_no_name: '# 👤 Ton profil
 
@@ -133,6 +215,32 @@ fr:
       admin_failed: Le panneau des rôles a échoué — voir les logs du bot.
       games_btn: Jeux
       mods_btn: Mods
+      repair_title: "## \U0001F5E3 Réparation des salons"
+      repair_modal_title: "\U0001F5E3 R\u00e9paration \u2014 choisis le p\u00e9rim\u00e8tre"
+      repair_roles_label: "R\u00f4les \u00e0 recr\u00e9er (permissions r\u00e9appliqu\u00e9es)"
+      repair_channels_label: "Salons \u00e0 r\u00e9parer (permissions r\u00e9appliqu\u00e9es)"
+      repair_forums_label: "Forums \u00e0 mettre \u00e0 jour"
+      repair_data_label: "Donn\u00e9es du jeu \u00e0 rafra\u00eechir (admin bot)"
+      repair_roles_admin: "R\u00f4le bot-admins"
+      repair_roles_mod: "R\u00f4les de {mod}"
+      repair_forums_matchs: "Matchs des joueurs (lourd)"
+      repair_data_civs: "Civs \u2192 techtree (rapide)"
+      repair_data_maps: "Maps \u2192 Liquipedia (long)"
+      repair_roles_done: "\U0001F9E9 R\u00f4les recr\u00e9\u00e9s : {count} \u2014 permissions r\u00e9appliqu\u00e9es"
+      repair_data_done: "\U0001F504 Donn\u00e9es rafra\u00eechies : {kinds}"
+      repair_players_done: "\U0001F3C1 Posts des joueurs v\u00e9rifi\u00e9s : {posts}"
+      repair_matchs_done: "\U0001F0CF Cards de matchs re-rendues : {cards}"
+      repair_nothing: "Rien \u00e0 r\u00e9parer \u2014 aucun p\u00e9rim\u00e8tre s\u00e9lectionn\u00e9."
+      repair_running: "\u23F3 Le bot travaille\u2026"
+      repair_channels: "\U0001F527 Salons de **{scope}** en ordre ({count})"
+      repair_pins_roles: "\U0001F4CC Messages épinglés en place ({pins}) \u00b7 \U0001F9E9 Rôles en place ({roles})"
+      repair_forums: "\U0001F4DD Posts des forums à jour ({posts})"
+      repair_done: "\u2705 Réparation terminée en {duration}s"
+      repair_scope: "\U0001F527 **{scope}** \u2014 les salons sont en ordre :"
+      repair_absent: introuvable
+      repair_summary_pins: "\U0001F4CC Messages épinglés vérifiés : {pins}"
+      repair_summary_roles: "\U0001F465 Rôles vérifiés : {roles}"
+      repair_summary_posts: "\U0001F4DD Posts des forums mis à jour : {posts}"
       ensure_btn: "Réparer salons & rôles"
       channel_access_everyone: '👁️ Lecture : @everyone
 
@@ -441,6 +549,8 @@ fr:
         admin_description: 'le poste de pilotage : le menu d''administration épinglé'
         live: 📡 live
         live_description: qui joue en direct, rafraîchi en continu
+        joueurs: 🏁 joueurs
+        joueurs_description: 'le forum des joueurs : un post par joueur, ses matchs en cartes, en direct puis le résultat'
         civs: 🏛️ civilisations
         civs_description: 'une fiche par civilisation : bonus, unités, arbres technologiques'
         maps: 🌍 maps
@@ -597,10 +707,10 @@ fr:
       game_menu_failed: Le menu du jeu a échoué à s'ouvrir (voir les logs).
       game_menu_not_sent: Le menu du jeu n'a pas pu être envoyé (voir les logs).
       global_maps_admins: Les maps globales sont réservées aux bot admins.
-      unexpected_state: État inattendu — recommence avec /register.
-      no_enrollment: Aucune inscription en cours — recommence avec /register.
+      unexpected_state: État inattendu — recommence depuis `/home` → Profil.
+      no_enrollment: Aucune inscription en cours — ouvre `/home` → Profil pour lier ton compte.
       enrolled: Inscription terminée ! Ton profil AoE2 `{profile}` est lié — tu peux rejoindre le ladder.
-      enrolled_cancelled: Inscription annulée — /register quand tu veux.
+      enrolled_cancelled: Inscription annulée — `/home` → Profil quand tu veux.
       enrolled_cancelled_short: Inscription annulée.
       unknown_panel: Panneau inconnu
       registered: Inscrit ({value}).

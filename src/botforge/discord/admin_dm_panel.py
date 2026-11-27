@@ -18,13 +18,11 @@ click has exactly one dispatch path.
 from __future__ import annotations
 
 import logging
-import os
 import re
 from typing import Any, ClassVar
 
 import discord
 
-from botforge.discord.ui.emoji import EMOJI
 from botforge.discord.ui.view_footer import add_view_footer
 
 logger = logging.getLogger("botforge.admin_dm")
@@ -167,7 +165,6 @@ async def build_admin_dm_panel(
     row: discord.ui.ActionRow[discord.ui.LayoutView] = discord.ui.ActionRow()
     row.add_item(DmOpenButton("servers", _dm_tr(interaction, dm_locale, "menu_btn_servers")))
     row.add_item(DmOpenButton("language", _dm_tr(interaction, dm_locale, "menu_btn_language")))
-    row.add_item(DmOpenButton("sync", _dm_tr(interaction, dm_locale, "menu_btn_sync")))
     view.add_item(row)
     rendered = add_view_footer(view, "panel:dm:admin")
     _PANEL_CACHE[dm_locale] = rendered
@@ -246,12 +243,11 @@ class DmOpenButton(
 ):
     """One DM menu opener: opens its section's ephemeral sub-view."""
 
-    SECTIONS = ("language", "servers", "sync-aoe2")
+    SECTIONS = ("language", "servers")
 
     EMOJIS: ClassVar[dict[str, str]] = {
         "language": "\U0001F310",
         "servers": "\U0001F30D",
-        "sync-aoe2": EMOJI.WRENCH,
     }
 
     def __init__(self, section: str, label: str, disabled: bool = False) -> None:
@@ -276,17 +272,17 @@ class DmOpenButton(
     ) -> DmOpenButton:
         """Rebuild from the wire (labels via the admin's DM locale)."""
         section = match.group("section")
-        if section == "sync":
-            # the pre-aoe2 wire (an older DM menu still carries it): the
-            # legacy button opens the same aoe2 sync, never the language modal
-            section = "sync-aoe2"
+        dm_locale = await _dm_locale(interaction)
+        if section in ("sync", "sync-aoe2"):
+            # the legacy sync wire (owner 2026-11-27: the sync moved into
+            # the aoe2 repair's modal) - the stale button opens the
+            # language modal, never a dead section
+            section = "language"
         if section not in cls.SECTIONS:
             section = "language"
-        dm_locale = await _dm_locale(interaction)
         labels = {
             "language": "menu_btn_language",
             "servers": "menu_btn_servers",
-            "sync-aoe2": "menu_btn_sync",
         }
         return cls(section, _dm_tr(interaction, dm_locale, labels[section]))
 
@@ -304,8 +300,6 @@ class DmOpenButton(
             )
         elif self.section == "servers":
             await _open_servers(interaction)
-        elif self.section == "sync-aoe2":
-            await _open_sync(interaction)
         else:
             await interaction.response.defer(ephemeral=True)
 
@@ -343,254 +337,6 @@ async def _open_servers(interaction: discord.Interaction) -> None:
     await interaction.response.send_message(view=add_view_footer(view, "panel:dm:servers"), ephemeral=True)
 
 
-async def _open_sync(interaction: discord.Interaction) -> None:
-    """Open the content sync sub-view: both on-demand sync actions.
-
-    Short button labels ("Civs", "Maps") \u2014 the panel carries the
-    descriptions: each action gets its own line under the buttons,
-    stating what it does and how long it takes (the maps sync is paced
-    against the Liquipedia API terms, minutes on a cold catalog).
-    """
-    dm_locale = await _dm_locale(interaction)
-    view = discord.ui.LayoutView(timeout=None)
-    view.add_item(
-        discord.ui.Container(
-            discord.ui.TextDisplay("# " + _dm_tr(interaction, dm_locale, "sync_title")),
-            discord.ui.TextDisplay(_dm_tr(interaction, dm_locale, "sync_subtitle")),
-            discord.ui.Separator(),
-            discord.ui.TextDisplay(_dm_tr(interaction, dm_locale, "sync_civs_line")),
-            discord.ui.TextDisplay(_dm_tr(interaction, dm_locale, "sync_maps_line")),
-            accent_colour=discord.Colour(0x5865F2),
-        )
-    )
-    row: discord.ui.ActionRow[discord.ui.LayoutView] = discord.ui.ActionRow()
-    row.add_item(ContentRefreshButton(label=_dm_tr(interaction, dm_locale, "btn_sync_civs")))
-    row.add_item(MapsSyncButton(label=_dm_tr(interaction, dm_locale, "btn_sync_maps")))
-    view.add_item(row)
-    await interaction.response.send_message(view=add_view_footer(view, "panel:dm:sync-aoe2"), ephemeral=True)
-
-
-class ContentRefreshButton(
-    discord.ui.DynamicItem[discord.ui.Button[Any]],
-    template=rf"{_NS}:refresh",
-):
-    """Refresh the localized faction content from the vendored dataset."""
-
-    def __init__(self, label: str = "Civs") -> None:
-        super().__init__(
-            discord.ui.Button(
-                label=label[:80],
-                emoji="\U0001F3DB",
-                style=discord.ButtonStyle.primary,
-                custom_id=f"{_NS}:refresh",
-            )
-        )
-
-    @classmethod
-    async def from_custom_id(
-        cls,
-        interaction: discord.Interaction,
-        item: discord.ui.Item[Any],
-        match: re.Match[str],
-        /,
-    ) -> ContentRefreshButton:
-        """Rebuild from the wire."""
-        del interaction, item, match
-        return cls()
-
-    async def callback(self, interaction: discord.Interaction) -> None:
-        """Guard, run the dataset refresh (catalog + content), confirm."""
-        if not _is_bot_admin(interaction):
-            await _deny(interaction)
-            return
-        dm_locale = await _dm_locale(interaction)
-        await interaction.response.defer(ephemeral=True)
-        # The civs sync rides the GAME SERVICE (the provider isolation:
-        # the bot asks the service, the service asks its providers).
-        try:
-            from botforge.game_aoe2.client import GameDataClient
-
-            game_uri = os.environ.get("GAME_AOE2_URI", "")
-            if not game_uri:
-                raise RuntimeError("GAME_AOE2_URI is not configured")
-            result = await GameDataClient(game_uri).sync_content("aoe2", "factions")
-        except Exception as exc:
-            logger.exception("DM PANEL: content refresh failed")
-            await interaction.followup.send(
-                f"{_dm_tr(interaction, dm_locale, 'refresh_failed')}\n`{exc}`",
-                ephemeral=True,
-            )
-            return
-        if not result.get("ok"):
-            # a FUNCTIONAL provider error: shown as-is, never a crash
-            await interaction.followup.send(
-                f"⚠️ {result.get('error', 'unknown error')}",
-                ephemeral=True,
-            )
-            return
-        counts = result.get("counts") or {}
-        new_factions = [str(n) for n in result.get("new_factions") or []]
-        new_line = (
-            _dm_tr(interaction, dm_locale, "new_civs_line", names=", ".join(new_factions))
-            if new_factions else ""
-        )
-        # the confirmation lands FIRST — the admin sees the counts right
-        # away; the mirror below may create a hundred posts and must
-        # never hold the interaction token past its window.
-        await interaction.followup.send(
-            _dm_tr(
-                interaction, dm_locale, "refresh_done",
-                factions=counts.get("total_factions", 0), new=counts.get("factions", 0),
-                docs=counts.get("content_docs", 0), new_line=new_line,
-            ),
-            ephemeral=True,
-        )
-        # best-effort: the refreshed civ content shows up on the civs
-        # forum posts right away — the civ sync upserts the content
-        # docs, the forum sync creates/refreshes the posts (#330 — the
-        # maps button already had its mirror, the civs button had none).
-        try:
-            from botforge.core.services.entity_forum import sync_entity_forum
-            from botforge.discord.factions_forum import factions_forum_spec
-
-            for guild in interaction.client.guilds:
-                actions = await sync_entity_forum(
-                    str(guild.id), interaction.client, factions_forum_spec(interaction.client)
-                )
-                logger.debug(
-                    "DM PANEL: civs forum mirror took %d action(s) on guild %s",
-                    actions,
-                    guild.id,
-                )
-        except Exception:
-            logger.warning("DM PANEL: civs forum sync after refresh failed — best-effort")
-
-
-# The maps sync cooldown: two clicks minutes apart double the Liquipedia
-# traffic for the same result (and worsen the 429s). One run at a time,
-# and a fresh click within 5 minutes of the last answer is refused with
-# when it may retry. Process-wide: the sync is bot-wide, not per-user.
-_MAPS_SYNC_LAST_DONE = 0.0
-_MAPS_SYNC_COOLDOWN_S = 300.0
-
-
-class MapsSyncButton(
-    discord.ui.DynamicItem[discord.ui.Button[Any]],
-    template=rf"{_NS}:refresh:maps",
-):
-    """The on-demand Liquipedia maps enrichment (never at boot).
-
-    The enrichment is SLOW BY DESIGN: the Liquipedia API terms pace one
-    parse request every 60 s, and every map missing its content doc
-    costs one request \u2014 a cold catalog means minutes of pacing.
-    Boot-time runs hammered the API into 429s; this button is the only
-    trigger, and the defer(thinking) keeps the admin informed while it
-    grinds.
-    """
-
-    def __init__(self, label: str) -> None:
-        super().__init__(
-            discord.ui.Button(
-                label=label,
-                emoji="\U0001F30D",
-                style=discord.ButtonStyle.secondary,
-                custom_id=f"{_NS}:refresh:maps",
-            )
-        )
-
-    @classmethod
-    async def from_custom_id(
-        cls,
-        interaction: discord.Interaction,
-        item: discord.ui.Item[Any],
-        match: re.Match[str],
-        /,
-    ) -> MapsSyncButton:
-        """Rebuild from the wire; the label is re-resolved on render."""
-        del interaction, item, match
-        return cls("Maps")
-
-    async def callback(self, interaction: discord.Interaction) -> None:
-        """Guard, run the paced Liquipedia enrichment, confirm."""
-        if not _is_bot_admin(interaction):
-            await _deny(interaction)
-            return
-        global _MAPS_SYNC_LAST_DONE
-        import time as _time
-
-        if _time.monotonic() - _MAPS_SYNC_LAST_DONE < _MAPS_SYNC_COOLDOWN_S:
-            remaining = max(
-                int((_MAPS_SYNC_COOLDOWN_S - (_time.monotonic() - _MAPS_SYNC_LAST_DONE)) // 60),
-                1,
-            )
-            dm_locale = await _dm_locale(interaction)
-            await interaction.response.send_message(
-                _dm_tr(interaction, dm_locale, "maps_sync_cooldown", minutes=remaining),
-                ephemeral=True,
-            )
-            return
-        # the cooldown clock starts NOW (the run holds it): a second
-        # click while the first still runs — or within 5 minutes of
-        # its answer — is refused, never queued.
-        _MAPS_SYNC_LAST_DONE = _time.monotonic()
-        dm_locale = await _dm_locale(interaction)
-        await interaction.response.defer(ephemeral=True, thinking=True)
-        # The long-running action pattern (skills/discord-ui): acknowledge
-        # WHAT runs, that it is in progress, and that the result lands in
-        # this very message \u2014 the Liquipedia pacing means minutes.
-        progress: Any = await interaction.followup.send(  # type: ignore[func-returns-value]
-            _dm_tr(interaction, dm_locale, "maps_sync_started"), ephemeral=True
-        )
-        try:
-            from botforge.game_aoe2.client import GameDataClient
-
-            game_uri = os.environ.get("GAME_AOE2_URI", "")
-            if not game_uri:
-                raise RuntimeError("GAME_AOE2_URI is not configured")
-            result = await GameDataClient(game_uri).sync_content("aoe2", "maps")
-            if not result.get("ok"):
-                raise RuntimeError(str(result.get("error", "unknown error")))
-            counts = result.get("counts") or {}
-        except Exception:
-            logger.exception("DM PANEL: maps sync failed")
-            _MAPS_SYNC_LAST_DONE = _time.monotonic()
-            await interaction.followup.edit_message(
-                progress.id,
-                content=_dm_tr(interaction, dm_locale, "maps_sync_failed"),
-            )
-            return
-        # best-effort: the enriched content shows up on the maps forum
-        # posts right away, not at the next boot.
-        try:
-            from botforge.discord.maps_forum import sync_maps_forum
-
-            for guild in interaction.client.guilds:
-                actions = await sync_maps_forum(str(guild.id), "aoe2", interaction.client)
-                logger.debug(
-                    "DM PANEL: maps forum mirror took %d action(s) on guild %s",
-                    actions,
-                    guild.id,
-                )
-        except Exception:
-            logger.warning("DM PANEL: maps forum sync after enrichment failed — best-effort")
-        # the result replaces the progress message: same place, as promised.
-        _MAPS_SYNC_LAST_DONE = _time.monotonic()
-        await interaction.followup.edit_message(
-            progress.id,
-            content=_dm_tr(
-                interaction,
-                dm_locale,
-                "maps_sync_done",
-                enriched=int(counts.get("maps_enriched", 0)),
-                checked=int(counts.get("maps_checked", 0)),
-                complete=int(counts.get("maps_complete", 0)),
-                total=int(counts.get("maps_total", 0)),
-            ),
-        )
-
-
 def register_admin_dm_items(bot: discord.Client) -> None:
     """Register the DM panel's persistent dynamic items."""
     bot.add_dynamic_items(DmOpenButton)
-    bot.add_dynamic_items(ContentRefreshButton)
-    bot.add_dynamic_items(MapsSyncButton)

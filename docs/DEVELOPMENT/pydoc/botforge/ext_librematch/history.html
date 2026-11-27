@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Python: botforge.ext_librematch.history</title>
+</head><body>
+
+<table class="heading">
+<tr class="heading-text decor">
+<td class="title">&nbsp;<br><strong class="title"><a href="botforge.html" class="white">botforge</a>.<a href="botforge.ext_librematch.html" class="white">ext_librematch</a>.history</strong></td>
+<td class="extra"><a href=".">index</a><br><a href="file:SOURCE_ROOT/ext_librematch/history.py">SOURCE_ROOT/ext_librematch/history.py</a></td></tr></table>
+    <p><span class="code">libre:match&nbsp;history&nbsp;syncer&nbsp;—&nbsp;store&nbsp;first,&nbsp;exploit&nbsp;after&nbsp;(#404&nbsp;T1).<br>
+&nbsp;<br>
+The&nbsp;syncer&nbsp;pulls,&nbsp;for&nbsp;every&nbsp;known&nbsp;account&nbsp;and&nbsp;every&nbsp;kept&nbsp;leaderboard<br>
+(0,&nbsp;3,&nbsp;4&nbsp;—&nbsp;rm_1v1,&nbsp;dm_1v1,&nbsp;dm_team):<br>
+&nbsp;<br>
+-&nbsp;the&nbsp;FULL&nbsp;recent&nbsp;match&nbsp;history&nbsp;(raw&nbsp;documents,&nbsp;stored&nbsp;verbatim);<br>
+-&nbsp;the&nbsp;personal&nbsp;stat&nbsp;(the&nbsp;account's&nbsp;current&nbsp;elo&nbsp;per&nbsp;leaderboard);<br>
+&nbsp;<br>
+then&nbsp;EXPLOITS&nbsp;the&nbsp;stored&nbsp;data:&nbsp;the&nbsp;per-account&nbsp;status&nbsp;(current&nbsp;elo&nbsp;+<br>
+MAX&nbsp;elo&nbsp;per&nbsp;leaderboard&nbsp;—&nbsp;the&nbsp;max&nbsp;rides&nbsp;the&nbsp;history's&nbsp;rating_after<br>
+values),&nbsp;and&nbsp;the&nbsp;per-USER&nbsp;unification&nbsp;(multiple&nbsp;accounts&nbsp;aggregated<br>
+into&nbsp;one&nbsp;view).<br>
+&nbsp;<br>
+Never&nbsp;a&nbsp;re-fetch&nbsp;at&nbsp;read&nbsp;time:&nbsp;the&nbsp;queries&nbsp;answer&nbsp;from&nbsp;the&nbsp;store;&nbsp;the<br>
+sync&nbsp;(periodic&nbsp;+&nbsp;on-demand,&nbsp;T4)&nbsp;keeps&nbsp;the&nbsp;store&nbsp;fresh.</span></p>
+<p>
+<table class="section">
+<tr class="decor pkg-content-decor heading-text">
+<td class="section-title" colspan=3>&nbsp;<br><strong class="bigsection">Modules</strong></td></tr>
+    
+<tr><td class="decor pkg-content-decor"><span class="code">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span></td><td>&nbsp;</td>
+<td class="singlecolumn"><table><tr><td class="multicolumn"><a href="json.html">json</a><br>
+</td><td class="multicolumn"><a href="logging.html">logging</a><br>
+</td><td class="multicolumn"><a href="re.html">re</a><br>
+</td><td class="multicolumn"><a href="time.html">time</a><br>
+</td></tr></table></td></tr></table><p>
+<table class="section">
+<tr class="decor index-decor heading-text">
+<td class="section-title" colspan=3>&nbsp;<br><strong class="bigsection">Classes</strong></td></tr>
+    
+<tr><td class="decor index-decor"><span class="code">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span></td><td>&nbsp;</td>
+<td class="singlecolumn"><dl>
+<dt class="heading-text"><a href="builtins.html#object">builtins.object</a>
+</dt><dd>
+<dl>
+<dt class="heading-text"><a href="botforge.ext_librematch.history.html#MatchHistorySyncer">MatchHistorySyncer</a>
+</dt></dl>
+</dd>
+</dl>
+ <p>
+<table class="section">
+<tr class="decor title-decor heading-text">
+<td class="section-title" colspan=3>&nbsp;<br><a name="MatchHistorySyncer">class <strong>MatchHistorySyncer</strong></a>(<a href="builtins.html#object">builtins.object</a>)</td></tr>
+    
+<tr><td class="decor title-decor" rowspan=2><span class="code">&nbsp;&nbsp;&nbsp;</span></td>
+<td class="decor title-decor" colspan=2><span class="code"><a href="#MatchHistorySyncer">MatchHistorySyncer</a>(adapter:&nbsp;'Any',&nbsp;store:&nbsp;'LibrematchStore',&nbsp;leaderboards:&nbsp;'tuple[str,&nbsp;...]'&nbsp;=&nbsp;('0',&nbsp;'3',&nbsp;'4'),&nbsp;sync_count:&nbsp;'int'&nbsp;=&nbsp;1000,&nbsp;quick_count:&nbsp;'int'&nbsp;=&nbsp;25)&nbsp;-&amp;gt;&nbsp;'None'<br>
+&nbsp;<br>
+Pull&nbsp;the&nbsp;known&nbsp;accounts'&nbsp;history&nbsp;into&nbsp;the&nbsp;store,&nbsp;exploit&nbsp;it&nbsp;after.<br>&nbsp;</span></td></tr>
+<tr><td>&nbsp;</td>
+<td class="singlecolumn">Methods defined here:<br>
+<dl><dt><a name="MatchHistorySyncer-__init__"><strong>__init__</strong></a>(self, adapter: 'Any', store: 'LibrematchStore', leaderboards: 'tuple[str, ...]' = ('0', '3', '4'), sync_count: 'int' = 1000, quick_count: 'int' = 25) -&gt; 'None'</dt><dd><span class="code">Initialize&nbsp;self.&nbsp;&nbsp;See&nbsp;help(type(self))&nbsp;for&nbsp;accurate&nbsp;signature.</span></dd></dl>
+
+<dl><dt>async <a name="MatchHistorySyncer-account_stats"><strong>account_stats</strong></a>(self, profile_ids: 'list[str]', at_s: 'int' = 0) -&gt; 'list[AccountEloStatus]'</dt><dd><span class="code">Serve&nbsp;the&nbsp;per-account&nbsp;status&nbsp;(current&nbsp;+&nbsp;max&nbsp;elo&nbsp;per&nbsp;board).<br>
+&nbsp;<br>
+Store-only,&nbsp;NEVER&nbsp;a&nbsp;probe&nbsp;on&nbsp;the&nbsp;serve&nbsp;path&nbsp;(owner<br>
+2026-11-23):&nbsp;a&nbsp;batch&nbsp;of&nbsp;8&nbsp;seats&nbsp;probing&nbsp;the&nbsp;missing&nbsp;1v1/TG<br>
+boards&nbsp;walked&nbsp;the&nbsp;upstream&nbsp;and&nbsp;the&nbsp;gRPC&nbsp;reply&nbsp;ran&nbsp;past&nbsp;its<br>
+deadline&nbsp;-&nbsp;the&nbsp;panels&nbsp;then&nbsp;rendered&nbsp;NO&nbsp;elo&nbsp;lines&nbsp;at&nbsp;all<br>
+(DEADLINE_EXCEEDED,&nbsp;merlin&nbsp;14:27).&nbsp;The&nbsp;probes&nbsp;ride&nbsp;the&nbsp;SYNC<br>
+flow&nbsp;(sync_account&nbsp;probes&nbsp;the&nbsp;met&nbsp;players,&nbsp;capped);&nbsp;the<br>
+serve&nbsp;answers&nbsp;what&nbsp;the&nbsp;store&nbsp;already&nbsp;knows.<br>
+&nbsp;<br>
+``at_s&nbsp;&gt;&nbsp;0``&nbsp;serves&nbsp;the&nbsp;ELO&nbsp;AS&nbsp;OF&nbsp;THAT&nbsp;MOMENT&nbsp;(owner<br>
+2026-11-25):&nbsp;the&nbsp;seat&nbsp;lines&nbsp;render&nbsp;the&nbsp;match's&nbsp;day,&nbsp;not&nbsp;the<br>
+card's&nbsp;-&nbsp;the&nbsp;timeseries&nbsp;(librematch:elo)&nbsp;answers&nbsp;the&nbsp;last<br>
+point&nbsp;at&nbsp;or&nbsp;before&nbsp;it;&nbsp;before&nbsp;the&nbsp;first&nbsp;point&nbsp;the&nbsp;status<br>
+reads&nbsp;UNKNOWN,&nbsp;never&nbsp;a&nbsp;guess.</span></dd></dl>
+
+<dl><dt>async <a name="MatchHistorySyncer-backfill_elo_series"><strong>backfill_elo_series</strong></a>(self) -&gt; 'int'</dt><dd><span class="code">Fold&nbsp;the&nbsp;STORED&nbsp;matches&nbsp;into&nbsp;the&nbsp;elo&nbsp;timeseries&nbsp;(once).<br>
+&nbsp;<br>
+The&nbsp;matches&nbsp;already&nbsp;carry&nbsp;every&nbsp;after-rating&nbsp;with&nbsp;its&nbsp;date<br>
+(owner&nbsp;2026-11-25)&nbsp;-&nbsp;one&nbsp;boot-time&nbsp;pass&nbsp;folds&nbsp;the&nbsp;whole&nbsp;store<br>
+into&nbsp;the&nbsp;series;&nbsp;the&nbsp;regular&nbsp;fold&nbsp;keeps&nbsp;it&nbsp;alive&nbsp;afterwards.<br>
+ALWAYS&nbsp;observably&nbsp;logged,&nbsp;never&nbsp;gated&nbsp;on&nbsp;the&nbsp;collection&nbsp;being<br>
+empty&nbsp;(the&nbsp;previous&nbsp;empty-gate&nbsp;silently&nbsp;skipped&nbsp;the&nbsp;rebuild:<br>
+the&nbsp;first&nbsp;boot's&nbsp;elo&nbsp;refresh&nbsp;had&nbsp;already&nbsp;written&nbsp;the&nbsp;day's<br>
+points,&nbsp;and&nbsp;the&nbsp;seat&nbsp;lines&nbsp;kept&nbsp;reading&nbsp;TODAY).<br>
+&nbsp;<br>
+Idempotent&nbsp;but&nbsp;READ-MODIFY-WRITE&nbsp;per&nbsp;point:&nbsp;cheap&nbsp;at&nbsp;today's<br>
+scale,&nbsp;the&nbsp;incremental&nbsp;gate&nbsp;(last&nbsp;folded&nbsp;finished_at)&nbsp;comes<br>
+with&nbsp;the&nbsp;1M-matches&nbsp;horizon.</span></dd></dl>
+
+<dl><dt>async <a name="MatchHistorySyncer-decode_stored"><strong>decode_stored</strong></a>(self, profile_ids: 'list[str]', batch: 'int' = 25) -&gt; 'int'</dt><dd><span class="code">Decode&nbsp;the&nbsp;stored&nbsp;matches'&nbsp;encoded&nbsp;fields&nbsp;(#288,&nbsp;T2).<br>
+&nbsp;<br>
+The&nbsp;blobs&nbsp;ride&nbsp;the&nbsp;stored&nbsp;``raw``&nbsp;payload&nbsp;verbatim&nbsp;—&nbsp;the&nbsp;history<br>
+fetch&nbsp;already&nbsp;returned&nbsp;them&nbsp;(the&nbsp;upstream's&nbsp;own&nbsp;fields,<br>
+base64+zlib&nbsp;per&nbsp;the&nbsp;LibreMatch&nbsp;wiki);&nbsp;the&nbsp;match-details<br>
+endpoint&nbsp;played&nbsp;that&nbsp;role&nbsp;earlier&nbsp;but&nbsp;World's&nbsp;Edge&nbsp;400s&nbsp;it,<br>
+so&nbsp;the&nbsp;decode&nbsp;re-fetches&nbsp;NOTHING.&nbsp;It&nbsp;also&nbsp;RE-DERIVES&nbsp;every<br>
+projection&nbsp;field&nbsp;from&nbsp;the&nbsp;raw&nbsp;payload&nbsp;—&nbsp;a&nbsp;document&nbsp;stored&nbsp;by<br>
+an&nbsp;older&nbsp;revision&nbsp;heals&nbsp;itself&nbsp;(the&nbsp;labels&nbsp;the&nbsp;reference<br>
+tables&nbsp;now&nbsp;name),&nbsp;without&nbsp;a&nbsp;purge&nbsp;and&nbsp;without&nbsp;touching&nbsp;the<br>
+immutable&nbsp;raw.&nbsp;Returns&nbsp;the&nbsp;number&nbsp;of&nbsp;documents&nbsp;patched.</span></dd></dl>
+
+<dl><dt>async <a name="MatchHistorySyncer-match_history"><strong>match_history</strong></a>(self, profile_ids: 'list[str]', limit: 'int' = 0, since_s: 'int' = 0, leaderboard_id: 'str' = '') -&gt; 'list[MatchHistoryEntry]'</dt><dd><span class="code">Serve&nbsp;the&nbsp;stored&nbsp;history&nbsp;as&nbsp;the&nbsp;exploited&nbsp;projection.</span></dd></dl>
+
+<dl><dt>async <a name="MatchHistorySyncer-refresh_missing_1v1"><strong>refresh_missing_1v1</strong></a>(self, profile_ids: 'list[str]', cap: 'int' = 30) -&gt; 'list[str]'</dt><dd><span class="code">Probe&nbsp;the&nbsp;missing&nbsp;1v1&nbsp;AND&nbsp;TG&nbsp;boards&nbsp;of&nbsp;the&nbsp;MET&nbsp;players&nbsp;-&nbsp;once&nbsp;each.<br>
+&nbsp;<br>
+The&nbsp;seen&nbsp;harvest&nbsp;only&nbsp;folds&nbsp;the&nbsp;boards&nbsp;the&nbsp;matches&nbsp;carried<br>
+(a&nbsp;player&nbsp;met&nbsp;through&nbsp;NOTHING&nbsp;but&nbsp;custom&nbsp;lobbies&nbsp;never&nbsp;gets<br>
+his&nbsp;TG&nbsp;board&nbsp;either):&nbsp;every&nbsp;board&nbsp;the&nbsp;panels&nbsp;read,&nbsp;3&nbsp;(RM&nbsp;1v1)<br>
+and&nbsp;4&nbsp;(RM&nbsp;team),&nbsp;probes&nbsp;once&nbsp;when&nbsp;absent&nbsp;—&nbsp;found&nbsp;is<br>
+stored,&nbsp;an&nbsp;honest&nbsp;absence&nbsp;marks&nbsp;the&nbsp;board&nbsp;so&nbsp;the&nbsp;probe&nbsp;never<br>
+repeats&nbsp;(owners&nbsp;2026-11-22/23:&nbsp;the&nbsp;missing&nbsp;TG&nbsp;elo).</span></dd></dl>
+
+<dl><dt>async <a name="MatchHistorySyncer-refresh_status"><strong>refresh_status</strong></a>(self, profile_id: 'str') -&gt; 'bool'</dt><dd><span class="code">Refresh&nbsp;ONE&nbsp;account's&nbsp;elo&nbsp;status&nbsp;—&nbsp;no&nbsp;history&nbsp;fetch&nbsp;at&nbsp;all.<br>
+&nbsp;<br>
+The&nbsp;light&nbsp;path&nbsp;of&nbsp;the&nbsp;hourly&nbsp;loop:&nbsp;only&nbsp;the&nbsp;per-board&nbsp;stats<br>
+(current&nbsp;elo,&nbsp;rank,&nbsp;wins/losses);&nbsp;the&nbsp;MAX&nbsp;never&nbsp;drops&nbsp;(the<br>
+account&nbsp;document&nbsp;merges&nbsp;with&nbsp;the&nbsp;stored&nbsp;max).</span></dd></dl>
+
+<dl><dt>async <a name="MatchHistorySyncer-refresh_statuses"><strong>refresh_statuses</strong></a>(self, profile_ids: 'list[str]') -&gt; 'int'</dt><dd><span class="code">Run&nbsp;the&nbsp;light&nbsp;elo&nbsp;refresh&nbsp;(every&nbsp;BOUND&nbsp;account&nbsp;when&nbsp;empty).<br>
+&nbsp;<br>
+The&nbsp;MET&nbsp;players&nbsp;never&nbsp;join&nbsp;the&nbsp;loop:&nbsp;their&nbsp;boards&nbsp;ride&nbsp;the<br>
+encounter&nbsp;fold,&nbsp;a&nbsp;scheduled&nbsp;stat&nbsp;call&nbsp;for&nbsp;every&nbsp;stranger&nbsp;ever<br>
+met&nbsp;would&nbsp;hammer&nbsp;the&nbsp;upstream&nbsp;for&nbsp;data&nbsp;the&nbsp;store&nbsp;already&nbsp;has<br>
+(owner&nbsp;2026-11-22&nbsp;—&nbsp;the&nbsp;post-purge&nbsp;boot&nbsp;walked&nbsp;thousands&nbsp;of<br>
+unrelated&nbsp;profiles).</span></dd></dl>
+
+<dl><dt>async <a name="MatchHistorySyncer-stale_sync_targets"><strong>stale_sync_targets</strong></a>(self, profile_ids: 'list[str]', window_s: 'int' = 120) -&gt; 'list[str]'</dt><dd><span class="code">Return&nbsp;the&nbsp;profiles&nbsp;whose&nbsp;sync&nbsp;stamp&nbsp;is&nbsp;OLDER&nbsp;than&nbsp;the&nbsp;window.<br>
+&nbsp;<br>
+The&nbsp;on-demand&nbsp;listing&nbsp;gate&nbsp;(owner&nbsp;2026-11-25):&nbsp;the&nbsp;profile<br>
+synced&nbsp;seconds&nbsp;ago&nbsp;already&nbsp;owns&nbsp;the&nbsp;match&nbsp;that&nbsp;just&nbsp;ended<br>
+upstream&nbsp;-&nbsp;re-fetching&nbsp;it&nbsp;only&nbsp;added&nbsp;seconds&nbsp;to&nbsp;the&nbsp;click.</span></dd></dl>
+
+<dl><dt>async <a name="MatchHistorySyncer-sync_account"><strong>sync_account</strong></a>(self, profile_id: 'str') -&gt; 'bool'</dt><dd><span class="code">Sync&nbsp;one&nbsp;account:&nbsp;raw&nbsp;history&nbsp;+&nbsp;status,&nbsp;then&nbsp;the&nbsp;elo&nbsp;max.<br>
+&nbsp;<br>
+The&nbsp;SMART&nbsp;fetch&nbsp;(the&nbsp;#404&nbsp;T4&nbsp;rule):&nbsp;the&nbsp;account's&nbsp;FIRST&nbsp;sync<br>
+pulls&nbsp;the&nbsp;deep&nbsp;window&nbsp;(``sync_count``),&nbsp;every&nbsp;later&nbsp;one&nbsp;reads<br>
+the&nbsp;incremental&nbsp;window&nbsp;(``quick_count``)&nbsp;and&nbsp;inserts&nbsp;ONLY&nbsp;the<br>
+unknown&nbsp;matches&nbsp;—&nbsp;a&nbsp;finished&nbsp;match&nbsp;is&nbsp;immutable,&nbsp;never<br>
+rewritten,&nbsp;never&nbsp;re-counted.<br>
+&nbsp;<br>
+Returns&nbsp;True&nbsp;when&nbsp;anything&nbsp;was&nbsp;stored.&nbsp;Failures&nbsp;degrade&nbsp;to<br>
+False&nbsp;—&nbsp;the&nbsp;provider&nbsp;keeps&nbsp;serving&nbsp;the&nbsp;previous&nbsp;store,&nbsp;the<br>
+periodic&nbsp;sync&nbsp;retries&nbsp;later.</span></dd></dl>
+
+<dl><dt>async <a name="MatchHistorySyncer-sync_accounts"><strong>sync_accounts</strong></a>(self, profile_ids: 'list[str]') -&gt; 'int'</dt><dd><span class="code">Sync&nbsp;the&nbsp;given&nbsp;accounts&nbsp;(every&nbsp;BOUND&nbsp;one&nbsp;when&nbsp;empty).&nbsp;T4&nbsp;rides.<br>
+&nbsp;<br>
+The&nbsp;met&nbsp;players&nbsp;stay&nbsp;OUT&nbsp;of&nbsp;the&nbsp;walk&nbsp;(list_bound_profiles)<br>
+—&nbsp;the&nbsp;encounter&nbsp;fold&nbsp;already&nbsp;harvests&nbsp;their&nbsp;boards&nbsp;(see<br>
+refresh_statuses).</span></dd></dl>
+
+<dl><dt>async <a name="MatchHistorySyncer-user_stats"><strong>user_stats</strong></a>(self, user_id: 'str', window_days: 'int' = 0) -&gt; 'UserEloStats | None'</dt><dd><span class="code">Serve&nbsp;the&nbsp;per-USER&nbsp;unified&nbsp;view&nbsp;over&nbsp;the&nbsp;user's&nbsp;accounts.<br>
+&nbsp;<br>
+None&nbsp;when&nbsp;the&nbsp;user&nbsp;owns&nbsp;no&nbsp;known&nbsp;account&nbsp;—&nbsp;the&nbsp;caller&nbsp;reads&nbsp;it<br>
+as&nbsp;"unknown&nbsp;stats"&nbsp;and&nbsp;degrades&nbsp;to&nbsp;manual&nbsp;review&nbsp;(never&nbsp;a&nbsp;crash,<br>
+never&nbsp;a&nbsp;silent&nbsp;refusal).</span></dd></dl>
+
+<hr>
+Data descriptors defined here:<br>
+<dl><dt><strong>__dict__</strong></dt>
+<dd><span class="code">dictionary&nbsp;for&nbsp;instance&nbsp;variables</span></dd>
+</dl>
+<dl><dt><strong>__weakref__</strong></dt>
+<dd><span class="code">list&nbsp;of&nbsp;weak&nbsp;references&nbsp;to&nbsp;the&nbsp;object</span></dd>
+</dl>
+</td></tr></table></td></tr></table><p>
+<table class="section">
+<tr class="decor data-decor heading-text">
+<td class="section-title" colspan=3>&nbsp;<br><strong class="bigsection">Data</strong></td></tr>
+    
+<tr><td class="decor data-decor"><span class="code">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span></td><td>&nbsp;</td>
+<td class="singlecolumn"><strong>CAPTURE_ERA</strong> = 5<br>
+<strong>DECODE_BATCH</strong> = 25<br>
+<strong>DEFAULT_HISTORY_LIMIT</strong> = 50<br>
+<strong>DEFAULT_QUICK_COUNT</strong> = 25<br>
+<strong>DEFAULT_SYNC_COUNT</strong> = 1000<br>
+<strong>LEADERBOARD_KEYS</strong> = {'0': 'unranked', '1': 'dm_1v1', '2': 'dm_team', '3': 'rm_1v1', '4': 'rm_team'}<br>
+<strong>OPTION_LOCATION</strong> = '10'<br>
+<strong>STATS_LEADERBOARDS</strong> = ('0', '3', '4')<br>
+<strong>logger</strong> = &lt;Logger botforge.ext_librematch.history (INFO)&gt;</td></tr></table>
+</body></html>

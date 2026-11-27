@@ -21,6 +21,11 @@ async def ensure_game_indexes(database: Any) -> None:
         await database["matches"].create_index([("host_profile_id", 1)])
         await database["matches"].create_index([("guest_profile_id", 1)])
         await database["matches"].create_index([("status", 1), ("completed_at", -1)])
+        # the DATE scans and the MATCH id rides (owner 2026-11-25):
+        # the seed windows and the correlation reads seek, never scan.
+        await database["matches"].create_index([("completed_at", -1)])
+        await database["matches"].create_index([("started_at", -1)])
+        await database["matches"].create_index([("match_id", 1)])
         # player_state: the subscriptions-maintained live truth — the
         # panels' snapshot reads ride the profile id.
         await database["player_state"].create_index([("profile_id", 1)], unique=True)

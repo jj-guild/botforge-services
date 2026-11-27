@@ -16,6 +16,7 @@ contextual notice.
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import re
 from typing import Any
@@ -102,86 +103,407 @@ async def _ensure_scope_pins(bot: Any, guild_id: str, scope: str) -> int:
     return ensured
 
 
-async def _ensure_scope(bot: Any, guild_id: str, scope: str) -> str:  # noqa: C901
-    """Re-provision the scopes' declared channels, best-effort.
+def _repair_view(steps: list[str], running: str, title: str) -> discord.ui.LayoutView:
+    """Build the repair's progress view (owner 2026-11-26).
 
-    ``scope`` carries a comma-separated list (the button's contract):
-    every scope provisions in order, then the pins and the declared
-    forum syncs of the whole list run. Returns a human outcome.
+    A container, a checked step per line, the running banner while
+    it works.
     """
-    from botforge.core.services.i18n import DEFAULT_LOCALE
+    view = discord.ui.LayoutView(timeout=None)
+    blocks: list[Any] = [discord.ui.TextDisplay(title)]
+    if steps:
+        blocks.append(discord.ui.Separator())
+        blocks.extend(discord.ui.TextDisplay(f"\u2705 {step}") for step in steps)
+    blocks.append(discord.ui.Separator())
+    blocks.append(discord.ui.TextDisplay(running))
+    view.add_item(
+        discord.ui.Container(*blocks, accent_colour=discord.Colour(0x5865F2))
+    )
+    return view
+
+
+async def _edit_plan(interaction: Any, report: Any, title: str, running: str) -> None:
+    """Mirror the repair's steps onto the deferred thinking message (best-effort)."""
+    try:
+        await interaction.edit_original_response(
+            view=_repair_view(list(report.steps), running, title)
+        )
+    except Exception:
+        logger.debug("the repair plan edit failed - best-effort", exc_info=True)
+
+
+def _scope_parts(scope: str) -> list[str]:
+    """Split the button's comma-separated scope list."""
+    return [part for part in scope.split(",") if part]
+
+
+def _scope_specs_of(scope: str) -> list[Any]:
+    """Return the registered specs the button's scope list names."""
     from botforge.discord.ui.panels import registered_scopes
+
+    wanted = set(_scope_parts(scope))
+    return [spec for spec in registered_scopes() if spec.scope in wanted]
+
+
+async def _guild_locale(bot: Any, guild_id: str) -> str:
+    """Return the guild's own locale (the repair speaks the admin's language)."""
+    from botforge.core.services.i18n import DEFAULT_LOCALE
+
+    logs = getattr(bot, "logs_service", None)
+    if logs is None:
+        return DEFAULT_LOCALE
+    try:
+        return str(await logs.get_locale(guild_id) or DEFAULT_LOCALE)
+    except Exception:
+        return DEFAULT_LOCALE
+
+
+def _say_of(bot: Any, locale: str) -> Any:
+    """Build the repair's localized speaker (replies.admin_tree.*)."""
+    catalog = getattr(bot, "messages", None)
+
+    def _translate(key: str, loc: str) -> str:
+        if catalog is None:
+            return key
+        rendered: str = catalog.render(key, loc)
+        return rendered if rendered != key else catalog.render(key, "en")
+
+    def _say(key: str, **values: Any) -> str:
+        # the repair keys live under replies.admin_tree.* (the locale
+        # tree) - the bare prefix misses the section and the RAW
+        # DOTTED KEY would hit the admin's view
+        return _translate(f"replies.admin_tree.{key}", locale).format(**values)
+
+    _say.translate = _translate  # type: ignore[attr-defined]
+    return _say
+
+
+class _ThrottledError(Exception):
+    """Signal a channel-creation throttle.
+
+    The verdict carries the LIVE retry timestamp - the runner returns
+    it as the answer.
+    """
+
+    def __init__(self, retry_at: int) -> None:
+        super().__init__(str(retry_at))
+        self.retry_at = retry_at
+
+
+async def _provision_one_scope(
+    bot: Any,
+    guild_id: str,
+    spec: Any,
+    locale: str,
+    say: Any,
+    report: Any,
+) -> list[str]:
+    """Provision ONE scope's channels + pins; return the answer lines."""
     from botforge.discord.ui.panels_provisioning import persist_resolutions, provision_scope
 
     guild = getattr(bot, "get_guild", lambda _gid: None)(int(guild_id)) if guild_id.isdigit() else None
     if guild is None:
-        return "Guild not found — cannot re-provision."
-    scopes = [part for part in scope.split(",") if part]
-    specs = [s for s in registered_scopes() if s.scope in scopes]
-    if not specs:
-        return f"Unknown scope: `{scope}`."
-    catalog = getattr(bot, "messages", None)
-
-    def _translate(key: str, locale: str) -> str:
-        if catalog is None:
-            return key
-        rendered: str = catalog.render(key, locale)
-        return rendered if rendered != key else catalog.render(key, "en")
-
-    logs = getattr(bot, "logs_service", None)
-    locale = DEFAULT_LOCALE
-    if logs is not None:
-        try:
-            locale = str(await logs.get_locale(guild_id) or DEFAULT_LOCALE)
-        except Exception:
-            locale = DEFAULT_LOCALE
+        return ["Guild not found — cannot re-provision."]
+    translate = say.translate
     lines: list[str] = []
-    pins_ok = 0
-    roles_ok = 0
-    for spec in specs:
+    resolved = await provision_scope(guild, spec, locale, translate)
+    await persist_resolutions(guild_id, spec.scope, resolved)
+    # the guild-admin reads WORDS, not paths (owner 2026-11-26: "tu
+    # parles à des admin de guild discord, pas des admin sys") - the
+    # scope names its localized category, the channels their mentions,
+    # only a MISSING channel names its key
+    scope_label = translate(spec.category_key, locale)
+    lines.append(say("repair_scope", scope=scope_label))
+    for decl in spec.channels:
+        channel_id = resolved.get(decl.key, "")
+        lock = "\U0001F512" if decl.access == "admin" else ""
+        where = f"<#{channel_id}>{lock}" if channel_id else f"**{decl.key}** ({say('repair_absent')})"
+        lines.append(f"\u2022 {where}")
+    report.step(
+        f"scope {spec.scope} provisioned",
+        display=say("repair_channels", scope=scope_label, count=len(spec.channels)),
+        channels=len(spec.channels),
+    )
+    pins_ok = await _ensure_scope_pins(bot, guild_id, spec.scope)
+    roles_ok = await _ensure_scope_roles(bot, guild_id, spec.scope)
+    report.step(
+        f"scope {spec.scope} surfaced",
+        display=say("repair_pins_roles", pins=pins_ok, roles=roles_ok),
+        pins=pins_ok,
+        roles=roles_ok,
+    )
+    lines.append(say("repair_summary_pins", pins=pins_ok))
+    lines.append(say("repair_summary_roles", roles=roles_ok))
+    return lines
+
+
+async def _recreate_scope_roles(bot: Any, guild_id: str, values: list[str]) -> int:
+    """Recreate the CHOSEN role sets (owner 2026-11-27).
+
+    The selected roles die and come back fresh (teardown then setup -
+    the mappings and the Discord roles both); the channels'
+    permissions are REAPPLIED right after by the provisioning pass -
+    the roles recreation implies it (a fresh role id must reach the
+    channels' overwrites).
+    """
+    recreated = 0
+    for value in values:
+        if value == "admin":
+            roles_service = getattr(bot, "roles_service", None)
+            if roles_service is None:
+                continue
+            try:
+                await roles_service.provision_admin_role(guild_id)
+                recreated += 1
+            except Exception:
+                logger.warning("the admin role recreate failed - best-effort", exc_info=True)
+        elif value.startswith("mod:"):
+            mod_name = value.split(":", 1)[1]
+            svc = getattr(bot, "mod_roles_service", None)
+            if svc is None:
+                continue
+            try:
+                await svc.teardown_mod_roles(guild_id, mod_name)
+                resolved = await svc.setup_mod_roles(guild_id, mod_name)
+                recreated += len(resolved)
+            except Exception:
+                logger.warning(
+                    "the mod roles recreate failed (%s) - best-effort", mod_name, exc_info=True
+                )
+    return recreated
+
+
+async def _refresh_game_data(bot: Any, kinds: list[str]) -> list[str]:  # noqa: C901 - one fold
+    """Refresh the game's provider data (owner 2026-11-27).
+
+    The DM admin sync buttons are GONE - the civs (techtree, fast) and
+    the maps (Liquipedia, long and paced) refresh through the aoe2
+    repair, the bot admins only. The forums' mirrors ride along so the
+    fresh data shows up on the posts right away.
+    """
+    import os
+
+    from botforge.game_aoe2.client import GameDataClient
+
+    uri = os.environ.get("GAME_AOE2_URI", "")
+    if not uri:
+        logger.warning("REPAIR: the game data refresh has no GAME_AOE2_URI - skipped")
+        return []
+    client = GameDataClient(uri)
+    kind_map = {"civs": "factions", "maps": "maps"}
+    done: list[str] = []
+    for kind in kinds:
         try:
-            resolved = await provision_scope(guild, spec, locale, _translate)
-            await persist_resolutions(guild_id, spec.scope, resolved)
+            result = await client.sync_content("aoe2", kind_map.get(kind, kind))
+            if result.get("ok"):
+                done.append(kind)
+            else:
+                logger.warning(
+                    "REPAIR: the %s data refresh failed (%s)", kind, result.get("error", "?")
+                )
+        except Exception:
+            logger.warning("REPAIR: the %s data refresh failed - best-effort", kind, exc_info=True)
+    # the mirrors: the refreshed content reaches the forums' posts now
+    for kind in done:
+        try:
+            if kind == "civs":
+                from botforge.core.services.entity_forum import sync_entity_forum
+                from botforge.discord.factions_forum import factions_forum_spec
+
+                for guild in getattr(bot, "guilds", []) or []:
+                    await sync_entity_forum(str(guild.id), bot, factions_forum_spec(bot))
+            elif kind == "maps":
+                from botforge.discord.maps_forum import sync_maps_forum
+
+                for guild in getattr(bot, "guilds", []) or []:
+                    await sync_maps_forum(str(guild.id), "aoe2", bot)
+        except Exception:
+            logger.warning(
+                "REPAIR: the %s forum mirror failed - best-effort", kind, exc_info=True
+            )
+    return done
+
+
+async def run_scope_repair(  # noqa: C901 - one orchestration, no branch soup
+    bot: Any,
+    guild_id: str,
+    scope: str,
+    plan: dict[str, list[str]],
+    progress: Any = None,
+    say: Any = None,
+) -> tuple[str, Any]:
+    """Run the CHOSEN repair plan (owner 2026-11-27).
+
+    The modal owns the perimeter - roles recreated, channels
+    provisioned with their permissions, forums refreshed, the players'
+    history re-synced.
+
+    The mod repair and the game repair run the SAME code: the plan's
+    sections decide what happens, the scope decides what the sections
+    offer. Returns (answer, report).
+    """
+    from botforge.discord.repair import RepairReport
+
+    if say is None:
+        say = _say_of(bot, await _guild_locale(bot, guild_id))
+    locale = await _guild_locale(bot, guild_id)
+    tree_repair = RepairReport(logger, "tree repair", subject=guild_id, progress=progress)
+    lines: list[str] = []
+    chosen = {key: list(values or []) for key, values in plan.items()}
+
+    # 1. the game data (bot admins only - the civs and maps refresh)
+    if chosen.get("data"):
+        done = await _refresh_game_data(bot, chosen["data"])
+        if done:
+            tree_repair.step(
+                f"game data refreshed ({','.join(done)})",
+                display=say("repair_data_done", kinds="\u00b7 ".join(done)),
+            )
+    # 2. the roles - recreated, the channels pass REAPPLIES the
+    # permissions (a fresh role id must reach the overwrites)
+    roles_recreated = 0
+    if chosen.get("roles"):
+        roles_recreated = await _recreate_scope_roles(bot, guild_id, chosen["roles"])
+        tree_repair.step(
+            f"roles recreated ({roles_recreated})",
+            display=say("repair_roles_done", count=roles_recreated),
+            roles=roles_recreated,
+        )
+    # 3. the channels - the roles recreation implies the provisioning
+    # pass (the permissions ride it); otherwise the CHOSEN scopes only
+    channel_values = list(chosen.get("channels") or [])
+    if roles_recreated and not channel_values:
+        channel_values = [spec.scope for spec in _scope_specs_of(scope)]
+    for spec in _scope_specs_of(",".join(channel_values) if channel_values else ""):
+        try:
+            lines.extend(
+                await _provision_one_scope(bot, guild_id, spec, locale, say, tree_repair)
+            )
         except discord.errors.RateLimited as exc:
             # Discord throttled the channel creation for THIS bot: the
             # retry_after is Discord's own word (minutes for a routine
-            # bucket, HOURS when the token earned a hard throttle — e.g.
-            # two instances provisioning in parallel for hours). The
-            # verdict carries a LIVE Discord timestamp (<t:...:R> renders
-            # 'dans 1 heure 38 minutes', self-updating) — no stale
-            # "~98 min" that drifts while the admin reads it.
+            # bucket, HOURS on a hard throttle).
             import time as _time
 
-            retry_at = int(_time.time() + exc.retry_after)
-            logger.warning(
-                "ADMIN TREE: channel-creation throttled by Discord (scope %s) "
-                "— retry at <t:%d:R>",
-                spec.scope,
-                retry_at,
-            )
-            return (
-                f"⏳ Discord bloque la création de salons pour ce bot — "
-                f"réessaie <t:{retry_at}:R> (<t:{retry_at}:t>).\n"
-                f"_Ce message disparaîtra à ce moment-là._"
-            )
+            raise _ThrottledError(int(_time.time() + exc.retry_after)) from exc
         except Exception:
-            logger.warning("ADMIN TREE: ensure failed (scope %s, guild %s)", spec.scope, guild_id, exc_info=True)
-            return "Channel provisioning failed — see the bot logs."
-        lines.append(f"\U0001F527 **{spec.scope}** \u2014 salons v\u00e9rifi\u00e9s/cr\u00e9\u00e9s :")
-        for decl in spec.channels:
-            channel_id = resolved.get(decl.key, "")
-            lock = "\U0001F512" if decl.access == "admin" else ""
-            where = f"<#{channel_id}>{lock}" if channel_id else f"**{decl.key}** (absent)"
-            lines.append(f"\u2022 {where}")
-        pins_ok += await _ensure_scope_pins(bot, guild_id, spec.scope)
-        roles_ok += await _ensure_scope_roles(bot, guild_id, spec.scope)
-    from botforge.discord.scope_surfaces import run_scope_syncs
+            logger.warning(
+                "ADMIN TREE: ensure failed (scope %s, guild %s)", spec.scope, guild_id, exc_info=True
+            )
+            return "Channel provisioning failed — see the bot logs.", tree_repair
+    # 4. the forums (the games): the entity forums' posts, the players'
+    # posts, the heavy matchs pass
+    forum_values = list(chosen.get("forums") or [])
+    if forum_values:
+        entity_values = [
+            value for value in forum_values if not value.startswith("__") and value != "joueurs"
+        ]
+        posts = 0
+        if entity_values:
+            from botforge.discord.scope_surfaces import run_scope_syncs
 
-    synced_posts = await run_scope_syncs(guild_id, bot, ",".join(scopes))
-    lines.append(f"\n\U0001f4cc Vues \u00e9pingl\u00e9es v\u00e9rifi\u00e9es/recr\u00e9\u00e9es : {pins_ok}")
-    lines.append(f"\U0001F465 R\u00f4les v\u00e9rifi\u00e9s/cr\u00e9\u00e9s : {roles_ok}")
-    lines.append(f"\U0001f4dc Posts de forum v\u00e9rifi\u00e9s/recr\u00e9\u00e9s : {synced_posts}")
-    return "\n".join(lines)
+            posts = await run_scope_syncs(guild_id, bot, scope)
+            tree_repair.step(
+                "the forums synced",
+                display=say("repair_forums", posts=posts),
+                posts=posts,
+            )
+        if "joueurs" in forum_values or "__matchs__" in forum_values:
+            from botforge.discord.live_activity import repair_players_forum
+
+            heavy = "__matchs__" in forum_values
+            counts = await repair_players_forum(bot, guild_id, full=heavy)
+            tree_repair.step(
+                "the players forum repaired",
+                display=say("repair_players_done", posts=counts.get("posts", 0)),
+                posts=counts.get("posts", 0),
+            )
+            if heavy:
+                tree_repair.step(
+                    "the match cards re-rendered",
+                    display=say("repair_matchs_done", cards=counts.get("cards", 0)),
+                    cards=counts.get("cards", 0),
+                )
+    tree_repair.done(
+        "the scopes stand",
+        display=say("repair_done", duration="{duration}"),
+    )
+    if not lines:
+        lines.append(say("repair_done", duration="{duration}").replace("{duration}", "0"))
+    return "\n".join(lines), tree_repair
+
+
+async def _repair_sections(  # noqa: C901 - one options fold
+    bot: Any, scope: str, bot_admin: bool, tr: Any
+) -> dict[str, list[dict[str, Any]]]:
+    """Build the repair modal's option sets (owner 2026-11-27).
+
+    The MOD and the GAME repairs offer the SAME sections - roles,
+    channels - and the games add their forums and (the bot admins) the
+    provider data: the modal is one, the scope decides the options.
+    """
+    sections: dict[str, list[dict[str, Any]]] = {}
+    roles: list[dict[str, Any]] = []
+    for part in _scope_parts(scope):
+        if part in ("bot", "root"):
+            roles.append(
+                {
+                    "value": "admin",
+                    "label": await tr("admin_tree.repair_roles_admin"),
+                    "selected": True,
+                }
+            )
+        elif part == "mods" or part.startswith("mods/"):
+            registry = getattr(bot, "registry", None)
+            names = (
+                [part.split("/", 1)[1]] if "/" in part else list(registry.enabled() or [])
+                if registry is not None
+                else []
+            )
+            for name in names:
+                roles.append(
+                    {
+                        "value": f"mod:{name}",
+                        "label": await tr("admin_tree.repair_roles_mod", mod=name),
+                        "selected": True,
+                    }
+                )
+    if roles:
+        sections["roles"] = roles
+    channels = [
+        {"value": spec.scope, "label": await tr(spec.category_key), "selected": True}
+        for spec in _scope_specs_of(scope)
+    ]
+    if channels:
+        sections["channels"] = channels
+    specs = _scope_specs_of(scope)
+    if any(spec.scope.startswith("games/") for spec in specs):
+        forums: list[dict[str, Any]] = []
+        for spec in specs:
+            if not spec.scope.startswith("games/"):
+                continue
+            for decl in spec.channels:
+                if getattr(decl, "kind", "") == "forum":
+                    forums.append(
+                        {"value": decl.key, "label": await tr(decl.label_key), "selected": True}
+                    )
+            # the heavy pass - the match cards of every player's post
+            # (owner: "matchs non sélectionné, trop lourd")
+            forums.append(
+                {
+                    "value": "__matchs__",
+                    "label": await tr("admin_tree.repair_forums_matchs"),
+                    "selected": False,
+                }
+            )
+        if forums:
+            sections["forums"] = forums
+        if bot_admin:
+            sections["data"] = [
+                {"value": "civs", "label": await tr("admin_tree.repair_data_civs"), "selected": False},
+                {"value": "maps", "label": await tr("admin_tree.repair_data_maps"), "selected": False},
+            ]
+    return sections
 
 
 class TreeOpenButton(
@@ -254,16 +576,134 @@ class TreeOpenButton(
             return
 
 
+class RepairModal(discord.ui.Modal):
+    """Pick the repair PLAN (owner 2026-11-27).
+
+    No silent healing (owner: "si on a cassé des trucs, on clique sur
+    réparer - jamais de autoheal"): the click opens the plan, the admin
+    CHOOSES the perimeter - the roles to recreate, the channels to
+    repair, the forums to refresh, the provider data to update. The
+    MOD and the GAME repairs ride the same modal: the scope decides the
+    options, the plan decides the run.
+    """
+
+    def __init__(
+        self, scope: str, sections: dict[str, list[dict[str, Any]]], texts: dict[str, str]
+    ) -> None:
+        super().__init__(title=str(texts.get("title", ""))[:45], timeout=None)
+        self.scope = scope
+        self.selects: dict[str, discord.ui.Select[discord.ui.LayoutView]] = {}
+        for key in ("roles", "channels", "forums", "data"):
+            options = sections.get(key) or []
+            if not options:
+                continue
+            select: discord.ui.Select[discord.ui.LayoutView] = discord.ui.Select(
+                custom_id=f"{_NS}:repair:plan:{key}",
+                min_values=0,
+                max_values=len(options),
+                options=[
+                    discord.SelectOption(
+                        label=str(option["label"])[:100],
+                        value=str(option["value"])[:100],
+                        default=bool(option.get("selected")),
+                    )
+                    for option in options
+                ],
+            )
+            self.selects[key] = select
+            # a bare select inside a modal is silently rejected by the
+            # API - the Label wrapper is REQUIRED (the modal constraint)
+            self.add_item(
+                discord.ui.Label(text=str(texts.get(f"label:{key}", key)), component=select)
+            )
+
+    async def on_submit(self, interaction: discord.Interaction) -> None:
+        """Run the CHOSEN plan; the live view mirrors the steps."""
+        if not await _guard(interaction):
+            return
+        plan = {key: [str(v) for v in select.values or []] for key, select in self.selects.items()}
+        if not any(plan.values()):
+            await interaction.response.send_message(
+                await _tree_tr(interaction, "admin_tree.repair_nothing"), ephemeral=True
+            )
+            return
+        # THINKING (owner 2026-11-26: "ne dit pas que ça travaille"):
+        # the repair takes minutes - the live plan rides the deferred
+        # message's edits
+        await interaction.response.defer(ephemeral=True, thinking=True)
+        guild_id = str(interaction.guild_id) if interaction.guild_id else ""
+        title = await _tree_tr(interaction, "admin_tree.repair_title")
+        running = await _tree_tr(interaction, "admin_tree.repair_running")
+
+        plan_tasks: list[asyncio.Task[None]] = []
+
+        def _plan_mirror(line: str, report: Any) -> None:
+            del line  # the view renders the report's display steps
+            plan_tasks.append(
+                asyncio.ensure_future(_edit_plan(interaction, report, title, running))
+            )
+
+        say = _say_of(interaction.client, await _guild_locale(interaction.client, guild_id))
+        try:
+            answer, report = await run_scope_repair(
+                interaction.client, guild_id, self.scope, plan, _plan_mirror, say
+            )
+        except _ThrottledError as throttled:
+            answer = (
+                f"\u23f3 Discord bloque la cr\u00e9ation de salons pour ce bot \u2014 "
+                f"r\u00e9essaie <t:{throttled.retry_at}:R> (<t:{throttled.retry_at}:t>).\n"
+                f"_Ce message dispara\u00eetra \u00e0 ce moment-l\u00e0._"
+            )
+            report = None
+        final_steps = list(report.steps) if report is not None else []
+        for task in plan_tasks:
+            task.cancel()
+        await asyncio.gather(*plan_tasks, return_exceptions=True)
+        import time as _time
+
+        delete_after: float | None = None
+        match = re.search(r"<t:(\d+):R>", answer)
+        if match:
+            delete_after = max(1.0, int(match.group(1)) - _time.time() + 2.0)
+        # the provisioning may RECREATE the very channel this
+        # interaction lives in: the followup webhook then targets a
+        # vanished channel (10003) - the provisioning SUCCEEDED, the
+        # verdict just cannot be delivered there
+        try:
+            final_view = discord.ui.LayoutView(timeout=None)
+            final_blocks: list[Any] = [discord.ui.TextDisplay(title)]
+            final_blocks.append(discord.ui.Separator())
+            final_blocks.extend(discord.ui.TextDisplay(f"\u2705 {step}") for step in final_steps)
+            final_blocks.append(discord.ui.Separator())
+            final_blocks.append(discord.ui.TextDisplay(answer))
+            final_view.add_item(
+                discord.ui.Container(*final_blocks, accent_colour=discord.Colour(0x2ECC71))
+            )
+            message: Any = await interaction.edit_original_response(view=final_view, content=None)
+        except discord.HTTPException as exc:
+            if getattr(exc, "code", None) == 10003:
+                logger.warning(
+                    "ADMIN TREE: the invoking channel vanished during the "
+                    "repair (scope %s) \u2014 the verdict is undeliverable, "
+                    "the channels themselves are in place",
+                    self.scope,
+                )
+                return
+            raise
+        if delete_after is not None:
+            await message.delete(delay=delete_after)
+
+
 class TreeEnsureButton(
     discord.ui.DynamicItem[discord.ui.Button[Any]],
     template=rf"{_NS}:ensure:(?P<scope>[a-z0-9_/,]+)",
 ):
-    """Re-provision scopes' channels (and mod/game roles), on demand.
+    """Open the repair PLAN modal (the scopes' channels, roles, forums).
 
-    The custom id carries a comma-separated scope list: the sync of an
-    admin menu heals its own scope plus anything it owns (the bot menu
-    also carries ``root`` — the guild's root channels belong to no
-    sub-scope).
+    The custom id carries a comma-separated scope list: the repair of
+    an admin menu heals its own scope plus anything it owns. The click
+    never runs anything silent - the modal shows the plan, the admin
+    picks the perimeter (owner 2026-11-27).
     """
 
     def __init__(self, scope: str, label: str = "Sync now", emoji: str = "") -> None:
@@ -293,44 +733,25 @@ class TreeEnsureButton(
         return cls(match["scope"])
 
     async def callback(self, interaction: discord.Interaction) -> None:
-        """Run the provisioning ensure and answer with the outcome."""
+        """Open the repair modal - the plan is the admin's choice."""
         if not await _guard(interaction):
             return
-        guild_id = str(interaction.guild_id) if interaction.guild_id else ""
-        await interaction.response.defer(ephemeral=True, thinking=False)
-        answer = await _ensure_scope(interaction.client, guild_id, self.scope)
-        # The throttle verdict carries a LIVE timestamp (<t:...:R>): the
-        # message deletes itself when the throttle lifts — delete_after,
-        # the message's own parameter (owner direction 2026-11-06), not a
-        # manual cleanup task.
-        import time as _time
+        bot = interaction.client
+        admins = tuple(getattr(getattr(bot, "status_service", None), "bot_admins", ()) or ())
+        bot_admin = str(interaction.user.id) in {str(a) for a in admins}
 
-        delete_after: float | None = None
-        match = re.search(r"<t:(\d+):R>", answer)
-        if match:
-            delete_after = max(1.0, int(match.group(1)) - _time.time() + 2.0)
-        # The provisioning may RECREATE the very channel this interaction
-        # lives in (the admin menu sits in a provisioned scope): the
-        # followup webhook then targets a vanished channel (10003 Unknown
-        # Channel). The provisioning SUCCEEDED — the verdict just cannot
-        # be delivered there; a clean warning, never a traceback.
-        try:
-            message: Any = await interaction.followup.send(answer, ephemeral=True)  # type: ignore[func-returns-value]
-        except discord.HTTPException as exc:
-            if getattr(exc, "code", None) == 10003:
-                logger.warning(
-                    "ADMIN TREE: the invoking channel vanished during the "
-                    "provisioning (scope %s) — the verdict is undeliverable, "
-                    "the channels themselves are in place",
-                    self.scope,
-                )
-                return
-            raise
-        if delete_after is not None:
-            # delete_after rides the message's own delete(delay=...) — the
-            # followup webhook has no delete_after parameter (unlike the
-            # response path); delay IS the parameter, no manual task.
-            await message.delete(delay=delete_after)
+        async def _tr(key: str, **kwargs: Any) -> str:
+            return await _tree_tr(interaction, key, **kwargs)
+
+        sections = await _repair_sections(bot, self.scope, bot_admin, _tr)
+        if not sections:
+            await interaction.response.defer(ephemeral=True)
+            return
+        texts = {"title": await _tree_tr(interaction, "admin_tree.repair_modal_title")}
+        for key in ("roles", "channels", "forums", "data"):
+            if key in sections:
+                texts[f"label:{key}"] = await _tree_tr(interaction, f"admin_tree.repair_{key}_label")
+        await interaction.response.send_modal(RepairModal(self.scope, sections, texts))
 
 
 async def build_admin_menu(

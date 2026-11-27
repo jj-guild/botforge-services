@@ -8,9 +8,12 @@ period, and per-profile transitions come out in the MatchEvent shape.
 from __future__ import annotations
 
 import json
+import logging
 from typing import Any
 
 from botforge.ext_aoe2lobby.adapter import Aoe2LobbyAdapter
+
+ADAPTER_LOGGER = "botforge.ext_aoe2lobby.adapter"
 
 
 def _frame(adapter: Aoe2LobbyAdapter, payload: dict[str, Any]) -> list[dict[str, Any]]:
@@ -22,9 +25,7 @@ def _lobby(match_id: str, profile_ids: list[Any]) -> dict[str, Any]:
         "matchid": int(match_id),
         "map_name": "Arabia",
         "slots": {
-            f"s{i}": {"profileid": pid, "status": 3}
-            for i, pid in enumerate(profile_ids, start=1)
-            if pid is not None
+            f"s{i}": {"profileid": pid, "status": 3} for i, pid in enumerate(profile_ids, start=1) if pid is not None
         },
     }
 
@@ -321,6 +322,8 @@ def test_match_summary_enriched_with_format_civs_links() -> None:
         "avatar": "",
         "country": "",
         "team": 1,
+        "slot": 1,
+        "ai": False,
     }
     assert players[1]["name"] == "Bob"
     assert summary["lobby_url"] == "https://www.aoe2lobby.com/j/111"
@@ -387,3 +390,161 @@ async def test_no_subscribers_emits_nothing() -> None:
     adapter = Aoe2LobbyAdapter()
     events = _frame(adapter, {"lobby_match_all": {"111": _lobby("111", [123])}})
     assert events == []
+
+
+async def test_stranger_match_logs_debug_not_info(caplog: Any) -> None:
+    """#423 taxonomy: lobby counts / stranger matches never pollute INFO."""
+    adapter = Aoe2LobbyAdapter()
+    await adapter.set_subscribed_profiles(["123"])
+    with caplog.at_level(logging.DEBUG, logger=ADAPTER_LOGGER):
+        events = _frame(adapter, {"lobby_match_all": {"111": _lobby("111", [999])}})
+    assert events == []
+    records = [r for r in caplog.records if r.name == ADAPTER_LOGGER]
+    assert records  # the frame is still diagnosed…
+    assert all(r.levelno < logging.INFO for r in records)  # …but at DEBUG
+
+
+async def test_known_player_event_logs_info_with_name(caplog: Any) -> None:
+    """#423 taxonomy: a subscribed player's transition is INFO and NAMED."""
+    adapter = Aoe2LobbyAdapter()
+    await adapter.set_subscribed_profiles(["123"])
+    lobby = _lobby("111", [123])
+    lobby["slots"]["s1"]["name"] = "Alice"
+    with caplog.at_level(logging.INFO, logger=ADAPTER_LOGGER):
+        events = _frame(adapter, {"lobby_match_all": {"111": lobby}})
+    assert [e["type"] for e in events] == ["lobby_opened"]
+    info_lines = [r.getMessage() for r in caplog.records if r.name == ADAPTER_LOGGER and r.levelno == logging.INFO]
+    assert any("Alice" in line and "lobby début" in line and "111" in line for line in info_lines)
+
+
+async def test_subscription_delta_logs_info_naming_profiles(caplog: Any) -> None:
+    """#423 taxonomy: the enrollment deltas are INFO and name the profiles."""
+    adapter = Aoe2LobbyAdapter()
+    with caplog.at_level(logging.INFO, logger=ADAPTER_LOGGER):
+        await adapter.set_subscribed_profiles(["123", "456"])
+    info_lines = [r.getMessage() for r in caplog.records if r.name == ADAPTER_LOGGER and r.levelno == logging.INFO]
+    # no name known yet: the profile ids name the players (fallback rule)
+    assert any("123" in line and "456" in line for line in info_lines)
+
+async def test_the_summary_names_slots_and_ai_players() -> None:
+    """P-positions and AI seats ride the summary (owner 2026-11-23)."""
+    adapter = Aoe2LobbyAdapter()
+    await adapter.set_subscribed_profiles(["123"])
+    frame = {
+        "lobby_match_all": {
+            "523": {
+                "matchid": 523,
+                "map_name": "Budapest",
+                "slots": {
+                    "s1": {"profileid": 123, "status": 3, "name": "Alice", "team": 0, "civilization": 12},
+                    "s3": {"profileid": None, "status": 3, "name": "", "team": 1, "civilization": 20},
+                },
+            }
+        }
+    }
+    _frame(adapter, frame)
+    summary = adapter.match_summary("523", "lobby")
+    players = json.loads(summary["players"])
+    by_slot = {p["slot"]: p for p in players}
+    assert by_slot[1]["profile_id"] == "123" and by_slot[1]["ai"] is False
+    # a filled seat without a profile is a COMPUTER (owner: the AI seats render)
+    assert by_slot[3]["ai"] is True and by_slot[3]["name"] == "Computer"
+    assert int(by_slot[3]["civ"]) == 20
+
+
+async def test_an_absent_lobby_never_closes_fast_but_a_leave_does() -> None:
+    """The REASON rides the window (owner 2026-11-26: the lobby-out hunt)."""
+    adapter = Aoe2LobbyAdapter()
+    await adapter.set_subscribed_profiles(["123"])
+    _frame(adapter, {"lobby_match_all": {"111": _lobby("111", [123])}})
+    # the lobby drops out of the SNAPSHOT: an absence - weak signal
+    _frame(adapter, {"lobby_match_all": {}})
+    adapter._grace._closed_at["123"] -= 60.0  # a minute of frame silence
+    assert adapter._sweep_pending_closes() == [], "an absent lobby survives a flaky snapshot"
+    adapter._grace._closed_at["123"] -= 300.0  # the sustained silence elapsed
+    events = adapter._sweep_pending_closes()
+    assert [e["type"] for e in events] == ["lobby_closed"], "the leak-guard fires at last"
+
+    # the PLAYERS channel said null AND the lobby left the feed: an
+    # explicit leave - the close speaks FAST
+    _frame(adapter, {"lobby_match_all": {"222": _lobby("222", [123])}})
+    _frame(adapter, {"lobby_match_all": {}, "player_status": {"123": {"status": None, "matchid": 222}}})
+    adapter._grace._closed_at["123"] -= 16.0
+    events = adapter._sweep_pending_closes()
+    assert [e["type"] for e in events] == ["lobby_closed"], "an explicit leave fires fast"
+
+
+async def test_a_snapshot_absence_upgrades_to_explicit_not_the_other_way() -> None:
+    """An explicit pending close never stretches back to the absent window."""
+    adapter = Aoe2LobbyAdapter()
+    await adapter.set_subscribed_profiles(["123"])
+    _frame(adapter, {"lobby_match_all": {"111": _lobby("111", [123])}})
+    _frame(adapter, {"lobby_match_all": {}})
+    assert adapter._close_reasons["123"] == "absent"
+    _frame(adapter, {"player_status": {"123": {"status": None, "matchid": 111}}})
+    assert adapter._close_reasons["123"] == "explicit", "the strongest reason wins"
+    assert adapter._close_reasons["123"] == "explicit"
+
+
+async def test_a_strangers_player_remove_never_schedules_a_close() -> None:
+    """The enrollment guard: the feed pushes the WHOLE world's leaves."""
+    adapter = Aoe2LobbyAdapter()
+    await adapter.set_subscribed_profiles(["123"])
+    _frame(adapter, {"lobby_player_remove": [999, 888]})
+    assert adapter._close_refs == {}, "no close ever parks for a stranger"
+
+
+def test_colliding_seat_positions_renumber() -> None:
+    """Two seats on one color never share a P badge (the double P1)."""
+    adapter = Aoe2LobbyAdapter()
+    match = {
+        "matchid": 111,
+        "map_name": "Arabia",
+        "slots": {
+            "s1": {"profileid": 123, "status": 3, "color": 1, "team": 1},
+            "s2": {"profileid": None, "status": 2, "color": 1, "team": 1, "name": "Computer"},
+        },
+    }
+    seats = adapter._match_seats(match)
+    positions = [seat["position"] for seat in seats]
+    assert positions == [1, 2], "the collision renumbers to the lowest free seat"
+
+
+async def test_failed_connects_back_off_the_fibonacci_way(monkeypatch) -> None:
+    """The degraded upstream gets 8, 13, 21, 55... minutes of SPACE.
+
+    The github-polling skill's rule (owner 2026-11-26): a refused
+    connect is not a 5s retry signal - the sequence resets only on a
+    clean OPEN session.
+    """
+    import asyncio as real_asyncio
+
+    import botforge.ext_aoe2lobby.adapter as adapter_mod
+
+    delays: list[float] = []
+
+    async def record_sleep(delay: float) -> None:
+        delays.append(round(delay))
+        if len(delays) >= 5:
+            raise real_asyncio.CancelledError()
+
+    class _Refused:
+        async def __aenter__(self) -> None:
+            raise OSError("nope")
+
+        async def __aexit__(self, *_: object) -> None:
+            return None
+
+    def refuse(*args: object, **kwargs: object) -> _Refused:
+        return _Refused()
+
+    monkeypatch.setattr(adapter_mod.asyncio, "sleep", record_sleep)
+    monkeypatch.setattr(adapter_mod.websockets, "connect", refuse)
+    adapter = Aoe2LobbyAdapter()
+    stream = adapter.stream_events()
+    try:
+        async for _ in stream:
+            pass
+    except real_asyncio.CancelledError:
+        pass
+    assert delays == [480, 780, 1260, 2040, 3300], "the skill's sequence: 8, 13, 21, 34, 55 min"

@@ -101,6 +101,21 @@ service GameData {
   // The providers' health-test results for a game: the game service
   // probes its providers periodically (capabilities ping, live stream
   // liveness) and serves the last results per provider.
+
+  // ---- The stats layer, PROXIED (botforge-services#404) ---------------
+  // Rule 4: the bot and the mods talk to the game service, never to an
+  // ext. The wire messages are the Game contract's own — one shape, no
+  // copy. The service caches the answers (Redis, adapted TTLs) so a
+  // click never costs a provider call.
+  rpc SyncStats(botforge.v1.SyncStatsRequest) returns (botforge.v1.SyncStatsReply);
+  rpc GetMatchHistory(botforge.v1.MatchHistoryRequest) returns (botforge.v1.MatchHistoryReply);
+  rpc GetAccountStats(botforge.v1.AccountStatsRequest) returns (botforge.v1.AccountStatsReply);
+  rpc GetUserStats(botforge.v1.UserStatsRequest) returns (botforge.v1.UserStatsReply);
+
+  // Alias search proxied to the owner provider (same wire shapes as the
+  // game contract — one shape, no copy) so profile binding resolves a
+  // typed in-game name into candidates (#402).
+  rpc SearchProfiles(botforge.v1.SearchProfilesRequest) returns (botforge.v1.ProfileSearchReply);
 }
 
 message CoverageRequest {}
@@ -144,6 +159,7 @@ message GameMatchSummary {
   string spectate_url = 10;  // aoe2lobby.com/w/<id> (in game) — watch page
   string deep_link = 11;     // aoe2de:// join deep link when available
   string match_type = 12;    // the game mode label (RandomMap, FFA, ...)
+  string settings_json = 13; // live lobby settings, raw named json (aoe2lobby)
 }
 
 message GamePlayerSlot {
@@ -154,6 +170,7 @@ message GamePlayerSlot {
   bool filled = 5;
   string avatar_url = 6;      // the player's steam avatar, may be empty
   string country = 7;        // country code, may be empty
+  int32 slot = 8;            // the seat position P1-8, 0 when unknown
 }
 
 message GamePlayerEvent {

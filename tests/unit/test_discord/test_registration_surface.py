@@ -1,4 +1,4 @@
-"""Unit tests for the /register Discord surface and platform adapters (#133)."""
+"""Unit tests for the registration surface and platform adapters (#133)."""
 
 from __future__ import annotations
 

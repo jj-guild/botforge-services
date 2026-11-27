@@ -51,6 +51,9 @@ def _live_label(key: str, locale: str = "fr") -> str:
 
 
 OFFLINE_GRACE_MS = 3600 * 1000
+NO_PLAYERS_FALLBACK = (
+    "Aucun joueur li\u00e9 \u2014 ajoutez votre profil AoE2 depuis le menu profil (/home \u2192 Profil)."
+)
 
 
 def _t(bot: Any, locale: str, key: str, fallback: str) -> str:
@@ -186,40 +189,46 @@ def _render_match_section(
     links = _match_links(match, str(first.get("state", "")))
     if links:
         header += f" · {' · '.join(links)}"
-    lines = [header]
+    by_team = _seats_by_team(players, accounts, stats or {})
+    team_label = _t(bot, locale, "team", "Team")
+    for index, team in enumerate(sorted(by_team)):
+        header += f"\n  - {team_label} {index + 1} : " + ", ".join(by_team[team])
+    return header
+
+
+def _seats_by_team(
+    players: list[dict[str, Any]],
+    accounts: dict[str, dict[str, Any]],
+    stats: dict[str, dict[str, Any]],
+) -> dict[int, list[str]]:
+    """Render the section's seats, grouped by team (mention + civ + Elo).
+
+    One sub-bullet per TEAM (owner direction 2026-11-20): the same block
+    layout the matches popup renders — both sources read identically,
+    the mention keeps the guild link.
+    """
+    by_team: dict[int, list[str]] = {}
     for player in players:
         account = accounts.get(str(player.get("user_id", "")))
         if account is None:
             continue
-        lines.append(_render_section_player(player, account, accounts_by_profile, stats))
-    return "\n".join(lines)
-
-
-def _render_section_player(
-    player: dict[str, Any],
-    account: dict[str, Any],
-    accounts_by_profile: dict[str, dict[str, Any]],
-    stats: dict[str, dict[str, Any]] | None,
-) -> str:
-    """One player line inside a match section: mention, name, elo, civ, co-players.
-
-    The match context (map, link) lives on the section header — the line
-    carries the player only.
-    """
-    match = player.get("match") or {}
-    profile_id = str(player.get("profile_id", ""))
-    display_name = str((stats or {}).get(profile_id, {}).get("display_name", "")) or profile_id
-    line = f"  <@{account['user_id']}> · **{display_name}**"
-    elo = _profile_elo(stats or {}, profile_id)
-    if elo:
-        line += f" · {elo}"
-    civ = _profile_civ(match, str(player.get("profile_id", "")))
-    if civ:
-        line += f" · {civ}"
-    others = _enrolled_others(match, str(player.get("profile_id", "")), accounts_by_profile)
-    if others:
-        line += " · " + " · ".join(others)
-    return line
+        match = player.get("match") or {}
+        seat = None
+        for entry in _match_players(match):
+            if str(entry.get("profile_id", "")) == str(player.get("profile_id", "")):
+                seat = entry
+                break
+        line = f"<@{account['user_id']}>"
+        if seat is not None:
+            civ = str(seat.get("civ") or "").strip()
+            if civ:
+                line += f" · {civ}"
+        elo = _profile_elo(stats, str(player.get("profile_id", "")))
+        if elo:
+            line += f" · {elo}"
+        team = int((seat or {}).get("team", 0) or 0)
+        by_team.setdefault(team, []).append(line)
+    return by_team
 
 
 def group_by_account(
@@ -337,7 +346,7 @@ def _profile_elo(stats: dict[str, dict[str, Any]], profile_id: str) -> str:
     boards = (stats.get(profile_id) or {}).get("boards") or []
     for board in boards:
         if str(board.get("key", "")) == "rm_1v1" or "1v1" in str(board.get("label", "")):
-            return f"{board.get('rating', '')} elo"
+            return f"{board.get('rating', '')} Elo"
     return ""
 
 
@@ -540,6 +549,52 @@ class LiveRefreshButton(
 
         view = await _build_live_view(interaction, self.game_key)
         await interaction.response.edit_message(view=view)
+
+
+def live_title_line(
+    bot: Any, game_key: str = DEFAULT_GAME_KEY, locale: str = "fr", generated_at_ms: int = 0
+) -> str:
+    """Render the /live view's ONE title line: title, game, freshness."""
+    title = _t(bot, locale, "title", "\U0001f3ae Dashboard en direct")
+    line = f"# {title} \u2014 {game_label(game_key)}"
+    stamp = (generated_at_ms or _now_ms()) // 1000
+    line += f"\n-# <t:{stamp}:R>"
+    return line
+
+
+async def build_live_tail(interaction: Any, snapshot: dict[str, Any]) -> str:
+    """Render the /live view's tail: the recently-offline members, nothing else.
+
+    The match cards cover every active match (owner 2026-11-23); the
+    tail keeps only the members who were in a match within the last
+    hour - one text display, mentions + the offline separator.
+    """
+    bot = getattr(interaction, "client", None)
+    from botforge.discord.content_posts import guild_locale
+
+    locale = "fr"
+    try:
+        locale = await guild_locale(str(interaction.guild_id or ""), bot)
+    except Exception:
+        logging.getLogger("botforge.live").debug("the guild locale failed", exc_info=True)
+    players = snapshot.get("players") or []
+    if not players:
+        return _t(bot, locale, "no_players", NO_PLAYERS_FALLBACK)
+    now = _now_ms()
+    bits: list[str] = []
+    for player in players:
+        if str(player.get("state", "")) != "offline":
+            continue
+        since = int(player.get("since") or 0)
+        if now - since > OFFLINE_GRACE_MS:
+            continue
+        user_id = str(player.get("user_id", "") or "")
+        name = f"<@{user_id}>" if user_id else str(player.get("profile_id", "?"))
+        bits.append(f"- {name}")
+    if not bits:
+        return ""
+    separator = _t(bot, locale, "offline_separator", "\u2014 hors ligne \u2014")
+    return f"-# {separator}\n" + "\n".join(bits)
 
 
 def build_dashboard_view(

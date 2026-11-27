@@ -44,6 +44,12 @@ Typed&nbsp;client&nbsp;for&nbsp;the&nbsp;botforge.v1.GameData&nbsp;service&nbsp;
 <td class="singlecolumn">Methods defined here:<br>
 <dl><dt><a name="GameDataClient-__init__"><strong>__init__</strong></a>(self, uri: 'str') -&gt; 'None'</dt><dd><span class="code">Keep&nbsp;the&nbsp;service&nbsp;address;&nbsp;channels&nbsp;are&nbsp;per-call&nbsp;(ADR-0020).</span></dd></dl>
 
+<dl><dt>async <a name="GameDataClient-get_account_stats"><strong>get_account_stats</strong></a>(self, profile_ids: 'list[str]', at_s: 'int' = 0) -&gt; 'Any'</dt><dd><span class="code">Fetch&nbsp;the&nbsp;per-account&nbsp;elo&nbsp;status&nbsp;(current&nbsp;+&nbsp;max,&nbsp;#404).<br>
+&nbsp;<br>
+``at_s&nbsp;&gt;&nbsp;0``&nbsp;fetches&nbsp;the&nbsp;elo&nbsp;AS&nbsp;OF&nbsp;that&nbsp;epoch&nbsp;second&nbsp;(owner<br>
+2026-11-25):&nbsp;the&nbsp;seat&nbsp;lines&nbsp;render&nbsp;the&nbsp;match's&nbsp;day&nbsp;-&nbsp;the<br>
+provider's&nbsp;timeseries&nbsp;answers&nbsp;the&nbsp;last&nbsp;point&nbsp;at&nbsp;or&nbsp;before&nbsp;it.</span></dd></dl>
+
 <dl><dt>async <a name="GameDataClient-get_capabilities"><strong>get_capabilities</strong></a>(self) -&gt; 'Any'</dt><dd><span class="code">Fetch&nbsp;the&nbsp;stats&nbsp;provider's&nbsp;declared&nbsp;capabilities&nbsp;(proxied).</span></dd></dl>
 
 <dl><dt>async <a name="GameDataClient-get_last_completed_times"><strong>get_last_completed_times</strong></a>(self, profile_ids: 'list[str]', timeout_s: 'float' = 15.0) -&gt; 'dict[str, int]'</dt><dd><span class="code">Fetch&nbsp;the&nbsp;profiles'&nbsp;last&nbsp;completed-match&nbsp;times&nbsp;(the&nbsp;game's&nbsp;matches).</span></dd></dl>
@@ -55,12 +61,25 @@ coalescing,&nbsp;pacing&nbsp;and&nbsp;circuit&nbsp;breaker&nbsp;apply.&nbsp;The&
 long&nbsp;BY&nbsp;DESIGN&nbsp;(the&nbsp;provider&nbsp;may&nbsp;back&nbsp;off&nbsp;on&nbsp;a&nbsp;rate-limited<br>
 upstream);&nbsp;a&nbsp;circuit-open&nbsp;provider&nbsp;raises&nbsp;the&nbsp;functional&nbsp;error.</span></dd></dl>
 
+<dl><dt>async <a name="GameDataClient-get_match_history"><strong>get_match_history</strong></a>(self, profile_ids: 'list[str]', limit: 'int' = 0, since_s: 'int' = 0, leaderboard_id: 'str' = '', refresh: 'bool' = False) -&gt; 'Any'</dt><dd><span class="code">Fetch&nbsp;the&nbsp;stored&nbsp;match&nbsp;history&nbsp;of&nbsp;the&nbsp;accounts&nbsp;(#404).</span></dd></dl>
+
 <dl><dt>async <a name="GameDataClient-get_match_result"><strong>get_match_result</strong></a>(self, profile_ids: 'list[str]', started_after: 'int') -&gt; 'Any | None'</dt><dd><span class="code">Fetch&nbsp;a&nbsp;finished&nbsp;match's&nbsp;outcome&nbsp;through&nbsp;the&nbsp;game&nbsp;service.</span></dd></dl>
 
 <dl><dt>async <a name="GameDataClient-get_player_stats"><strong>get_player_stats</strong></a>(self, profile_id: 'str') -&gt; 'Any | None'</dt><dd><span class="code">Fetch&nbsp;a&nbsp;profile's&nbsp;stats&nbsp;blocks&nbsp;through&nbsp;the&nbsp;game&nbsp;service.<br>
 &nbsp;<br>
 The&nbsp;service&nbsp;proxies&nbsp;its&nbsp;stats&nbsp;provider&nbsp;—&nbsp;the&nbsp;caller&nbsp;never&nbsp;sees<br>
 one&nbsp;(rule&nbsp;4).&nbsp;Degrades&nbsp;to&nbsp;None&nbsp;when&nbsp;the&nbsp;profile&nbsp;has&nbsp;no&nbsp;stats.</span></dd></dl>
+
+<dl><dt>async <a name="GameDataClient-get_user_stats"><strong>get_user_stats</strong></a>(self, user_id: 'str', window_days: 'int' = 0) -&gt; 'Any | None'</dt><dd><span class="code">Fetch&nbsp;the&nbsp;per-user&nbsp;unified&nbsp;stats&nbsp;through&nbsp;the&nbsp;game&nbsp;service&nbsp;(#404).<br>
+&nbsp;<br>
+Degrades&nbsp;to&nbsp;None&nbsp;when&nbsp;the&nbsp;user&nbsp;owns&nbsp;no&nbsp;known&nbsp;account&nbsp;or&nbsp;the<br>
+service&nbsp;is&nbsp;unreachable&nbsp;—&nbsp;the&nbsp;caller&nbsp;reads&nbsp;"unknown&nbsp;stats"&nbsp;and<br>
+falls&nbsp;back&nbsp;to&nbsp;manual&nbsp;review,&nbsp;never&nbsp;a&nbsp;crash.</span></dd></dl>
+
+<dl><dt>async <a name="GameDataClient-search_profiles"><strong>search_profiles</strong></a>(self, alias: 'str') -&gt; 'list[dict[str, Any]]'</dt><dd><span class="code">Search&nbsp;profiles&nbsp;by&nbsp;exact&nbsp;in-game&nbsp;alias&nbsp;(the&nbsp;#402&nbsp;name&nbsp;path).<br>
+&nbsp;<br>
+Degrades&nbsp;to&nbsp;an&nbsp;empty&nbsp;list&nbsp;when&nbsp;the&nbsp;service&nbsp;is&nbsp;unreachable&nbsp;—<br>
+the&nbsp;caller&nbsp;shows&nbsp;"no&nbsp;candidate"&nbsp;and&nbsp;keeps&nbsp;guiding&nbsp;the&nbsp;player.</span></dd></dl>
 
 <dl><dt>async <a name="GameDataClient-stream_player_events"><strong>stream_player_events</strong></a>(self, game_key: 'str' = '')</dt><dd><span class="code">Yield&nbsp;normalized&nbsp;player&nbsp;transitions&nbsp;continuously,&nbsp;forever.</span></dd></dl>
 
@@ -72,6 +91,8 @@ The&nbsp;service&nbsp;runs&nbsp;it&nbsp;against&nbsp;ITS&nbsp;providers&nbsp;—
 touches&nbsp;one.&nbsp;The&nbsp;reply&nbsp;carries&nbsp;the&nbsp;counts&nbsp;or&nbsp;a&nbsp;FUNCTIONAL&nbsp;error<br>
 the&nbsp;UI&nbsp;shows&nbsp;as-is.&nbsp;The&nbsp;timeout&nbsp;is&nbsp;long&nbsp;BY&nbsp;DESIGN:&nbsp;the&nbsp;maps<br>
 enrichment&nbsp;rides&nbsp;the&nbsp;Liquipedia&nbsp;pacing&nbsp;(minutes).</span></dd></dl>
+
+<dl><dt>async <a name="GameDataClient-sync_stats"><strong>sync_stats</strong></a>(self, profile_ids: 'list[str]', wait: 'bool' = False) -&gt; 'dict[str, Any]'</dt><dd><span class="code">Trigger&nbsp;the&nbsp;on-demand&nbsp;history&nbsp;sync&nbsp;through&nbsp;the&nbsp;game&nbsp;service&nbsp;(T4).</span></dd></dl>
 
 <dl><dt>async <a name="GameDataClient-watch"><strong>watch</strong></a>(self, game_key: 'str', timeout_s: 'float' = 5.0) -&gt; 'dict[str, Any]'</dt><dd><span class="code">Fetch&nbsp;the&nbsp;current&nbsp;dashboard&nbsp;snapshot&nbsp;(first&nbsp;stream&nbsp;frame).</span></dd></dl>
 

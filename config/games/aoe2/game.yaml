@@ -6,6 +6,11 @@
 # locale keys render in the guild's language).
 id: aoe2
 default_active: true
+# THE player link (owner 2026-11-27): every surface that shows a
+# player's pseudo renders THIS template - a KNOWN player points to
+# his #joueurs post, the others fall back here. The vars ride the
+# profile model, prefixed (profile_id, profile_name, ...).
+profile_link_template: "[`{profile_id}`](https://www.aoe2insights.com/user/relic/{profile_id}/)"
 emoji: "⚔️"
 display_key: ui.games.aoe2.name
 providers:

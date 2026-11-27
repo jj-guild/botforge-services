@@ -64,8 +64,14 @@ en:
       add_success: ✅ Account linked — here is your updated profile.
       add_taken: This profile is already linked — remove it first or pick another one.
       add_game_unconfigured: 'Add failed: the game {game} is not configured for registration.'
-      add_unknown: 'Add failed: no profile found for {profile}. Paste your aoe2insights page URL (or the
-        id it holds) — the right id will be resolved automatically.'
+      add_unknown: 'Add failed: no profile found for {profile}. Try your EXACT in-game
+        name, or your Relic ID (on aoe2insights, under your avatar: click the displayed
+        id then the copy icon).'
+      add_picked: "\u2705 Account selected \u2014 linking in progress\u2026"
+      add_pick: 'Pick your account for **{name}** — every option shows what that profile last played:'
+      add_insights_refused: 'Add failed: aoe2insights urls are not accepted anymore (the site blocks us).
+        Paste your in-game name, or your Relic ID — on aoe2insights, under your avatar,
+        click the displayed id then the copy icon.'
       add_provider_error: 'Add failed: the provider {provider} did not answer properly — the details go
         to the admins (see the bot logs).'
       add_not_configured: 'Add failed: the provider {provider} does not serve profile stats — see the
@@ -73,8 +79,8 @@ en:
       remove_title: Remove accounts
       remove_placeholder: Accounts to remove...
       remove_label: Accounts to remove
-      add_label: Your aoe2insights id or your relic id
-      add_placeholder: Ex. 17190369 or https://www.aoe2insights.com/user/12488557/
+      add_label: Your in-game name or your Relic ID
+      add_placeholder: e.g. JeanJack or 17190369 (on aoe2insights, click the id under your avatar then copy)
       game_label: Account game
       game_placeholder: Account game...
       rename_title: Your nickname
@@ -83,7 +89,86 @@ en:
       rename_failed: Renaming is not possible right now.
       rename_success: '✅ Nickname updated: {name}'
       remove_button: Remove an account
+      matches_button: "Last matches played"
+      matches_ladder: "Ladder {name} \u2014 Match #{number}"
+      matches_title: "Your last 10 matches played"
+      matches_live_title: "🎯 In progress"
+      matches_with: with
+      matches_join: Join
+      matches_spectate: Spectate
+      matches_team: "Team"
+      matches_ongoing: "in progress"
+      matches_untitled: "Match {id}"
+      stats_elo_1v1: "{current} 1v1 Elo"
+      stats_elo_1v1_max: "{current} 1v1 Elo (max {peak})"
+      match_noun: "Match #"
+      lobby_noun: "Lobby #"
+      ranked_word: "Ranked"
+      custom_badge: "Custom"
+      matches_setting_hide_civs: "Hide civilizations"
+      matches_setting_lobby_section: "Lobby"
+      matches_setting_password: "Password"
+      matches_settings_button: "Game settings"
+      matches_refresh_button: "Refresh"
+      matches_refresh_match_button: "Match"
+      matches_settings_title: "\u2699\ufe0f Game settings \u2014 [{id}](https://www.aoe2insights.com/match/{id}/)"
+      matches_setting_resources: "Resources"
+      matches_setting_reveal: "Reveal map"
+      matches_setting_start_age: "Starting age"
+      matches_setting_end_age: "Ending age"
+      matches_setting_difficulty: "AI difficulty"
+      matches_setting_treaty: "Treaty length"
+      matches_setting_lock_teams: "Lock teams"
+      matches_setting_lock_speed: "Lock speed"
+      matches_setting_team_positions: "Team positions"
+      matches_setting_team_together: "Teams together"
+      matches_setting_turbo: "Turbo mode"
+
+      matches_setting_ew: "Empire Wars mode"
+
+      matches_setting_sudden_death: "Sudden death"
+
+      matches_setting_regicide: "Regicide mode"
+
+      matches_setting_antiquity: "Antiquity mode"
+      matches_ai: AI
+      matches_setting_handicap: "Handicap"
+      matches_setting_full_tech: "Full tech tree"
+      matches_setting_record: "Game recorded"
+      matches_setting_shared_expl: "Shared exploration"
+      matches_when: "{when}"
+      matches_duration: "Duration: {clock}"
+      matches_source: "Source: [libre:match]({url})"
+
+      matches_source_live: "Source: [aoe2lobby]({url})"
+      matches_setting_mode: Mode
+      matches_setting_size: Size
+      matches_setting_pop: Pop
+      matches_setting_speed: Speed
+      matches_setting_victory: Victory
+      matches_setting_cheats: Cheats
+      matches_colour_1: Blue
+      matches_colour_2: Red
+      matches_colour_3: Green
+      matches_colour_4: Yellow
+      matches_colour_5: Cyan
+      matches_colour_6: Purple
+      matches_colour_7: Grey
+      matches_colour_8: Orange
+      matches_colour_8: Orange
+      matches_invalid: "Match not counted"
+      matches_invalid_no_result: "never decided — no result"
+      matches_invalid_short: "forfeit — under 5 minutes"
+      live_log_lobby_open: "🛠 {player} opened a lobby — {id}"
+      live_log_lobby_update: "🔧 {player} — lobby updated — {id}"
+      live_log_lobby_close: "🚪 {player} left the lobby — {id}"
+      live_log_match_start: "⚔ {player} started a match — {id}"
+      live_log_match_end: "🏁 {player} — match over — {id} · ⏱ {duration}"
+      live_log_match_won: "\U0001F3C6 {player} won {match} \u2014 {badge}"
+      live_log_match_lost: "\U0001F480 {player} lost {match} \u2014 {badge}"
+      matches_empty: 'No stored match yet for your accounts \u2014 the history refreshes a few minutes after binding.'
       add_button: Add an account
+      player_menu_denied: "This menu belongs to the displayed player and the bot operators."
       rename_button: Change nickname
       header_no_name: '# 👤 Your profile
 
@@ -133,6 +218,32 @@ en:
       admin_failed: The roles panel failed — see the bot logs.
       games_btn: Games
       mods_btn: Mods
+      repair_title: "## \U0001F5E3 Channels repair"
+      repair_modal_title: "\U0001F5E3 Repair \u2014 pick the perimeter"
+      repair_roles_label: "Roles to recreate (permissions reapplied)"
+      repair_channels_label: "Channels to repair (permissions reapplied)"
+      repair_forums_label: "Forums to refresh"
+      repair_data_label: "Game data to refresh (bot admin)"
+      repair_roles_admin: "bot-admins role"
+      repair_roles_mod: "Roles of {mod}"
+      repair_forums_matchs: "Players' matches (heavy)"
+      repair_data_civs: "Civs \u2192 techtree (fast)"
+      repair_data_maps: "Maps \u2192 Liquipedia (long)"
+      repair_roles_done: "\U0001F9E9 Roles recreated: {count} \u2014 permissions reapplied"
+      repair_data_done: "\U0001F504 Data refreshed: {kinds}"
+      repair_players_done: "\U0001F3C1 Player posts checked: {posts}"
+      repair_matchs_done: "\U0001F0CF Match cards re-rendered: {cards}"
+      repair_nothing: "Nothing to repair \u2014 no perimeter selected."
+      repair_running: "\u23F3 The bot is working\u2026"
+      repair_channels: "\U0001F527 **{scope}** channels in order ({count})"
+      repair_pins_roles: "\U0001F4CC Pinned messages in place ({pins}) \u00b7 \U0001F9E9 Roles in place ({roles})"
+      repair_forums: "\U0001F4DD Forum posts up to date ({posts})"
+      repair_done: "\u2705 Repair finished in {duration}s"
+      repair_scope: "\U0001F527 **{scope}** \u2014 the channels are in order:"
+      repair_absent: missing
+      repair_summary_pins: "\U0001F4CC Pinned messages checked: {pins}"
+      repair_summary_roles: "\U0001F465 Roles checked: {roles}"
+      repair_summary_posts: "\U0001F4DD Forum posts refreshed: {posts}"
       ensure_btn: Sync now
       channel_access_everyone: '👁️ Read: @everyone
 
@@ -441,6 +552,8 @@ en:
         admin_description: 'the control room: the pinned admin menu'
         live: 📡 live
         live_description: who is playing live, refreshed continuously
+        joueurs: 🏁 players
+        joueurs_description: 'the players'' forum: one post per player, their matches as cards, live then the result'
         civs: 🏛️ civs
         civs_description: 'one sheet per civilisation: bonuses, units, tech trees'
         maps: 🌍 maps
@@ -595,10 +708,10 @@ en:
       game_menu_failed: The game menu failed to open (see the logs).
       game_menu_not_sent: The game menu could not be sent (see the logs).
       global_maps_admins: Global maps are reserved for bot admins.
-      unexpected_state: Unexpected state — restart with /register.
-      no_enrollment: No enrollment in progress — restart with /register.
+      unexpected_state: Unexpected state — restart from `/home` → Profile.
+      no_enrollment: No enrollment in progress — open `/home` → Profile to link your account.
       enrolled: Enrolled! Your AoE2 profile `{profile}` is linked — you can join the ladder.
-      enrolled_cancelled: Enrollment cancelled — /register whenever you like.
+      enrolled_cancelled: Enrollment cancelled — `/home` → Profile whenever you like.
       enrolled_cancelled_short: Enrollment cancelled.
       unknown_panel: Unknown panel
       registered: Registered ({value}).

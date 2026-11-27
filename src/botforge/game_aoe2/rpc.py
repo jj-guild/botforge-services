@@ -9,6 +9,7 @@ civs, aoe2lobby join/spectate URLs, aoe2de deep link).
 from __future__ import annotations
 
 import logging
+from collections.abc import Awaitable, Callable
 from typing import Any
 
 import grpc
@@ -44,6 +45,7 @@ def summary_to_wire(summary: dict[str, Any]) -> gamedata_pb2.GameMatchSummary:
         spectate_url=str(summary.get("spectate_url", "")),
         deep_link=str(summary.get("deep_link", "")),
         match_type=str(summary.get("match_type", "")),
+        settings_json=str(summary.get("settings_json", "")),
     )
 
 
@@ -74,6 +76,7 @@ def _parse_players(compact: str) -> list[gamedata_pb2.GamePlayerSlot]:
                 filled=True,
                 avatar_url=str(entry.get("avatar", "")),
                 country=str(entry.get("country", "")),
+                slot=int(entry.get("slot", 0) or 0),
             )
         )
     return slots
@@ -164,6 +167,7 @@ def summary_from_wire(wire: gamedata_pb2.GameMatchSummary) -> dict[str, Any]:
                 "avatar": p.avatar_url,
                 "country": p.country,
                 "team": p.team,
+                "slot": int(p.slot),
             }
             for p in wire.players
         ],
@@ -171,6 +175,7 @@ def summary_from_wire(wire: gamedata_pb2.GameMatchSummary) -> dict[str, Any]:
         "lobby_url": wire.lobby_url,
         "spectate_url": wire.spectate_url,
         "deep_link": wire.deep_link,
+        "settings_json": wire.settings_json,
     }
 
 
@@ -185,6 +190,7 @@ class GameDataServicer(gamedata_pb2_grpc.GameDataServicer):
         stats_provider: Any = None,
         map_seeds: Any = None,
         catalog: Any = None,
+        stats_cache: Any = None,
     ) -> None:
         """Wire the aggregator, the poll interval, the enrollments and the stats proxy."""
         self._aggregator = aggregator
@@ -193,6 +199,7 @@ class GameDataServicer(gamedata_pb2_grpc.GameDataServicer):
         self._stats_provider = stats_provider
         self._map_seeds = map_seeds
         self._catalog = catalog
+        self._stats_cache = stats_cache
 
     async def GetCoverage(
         self,
@@ -450,6 +457,157 @@ class GameDataServicer(gamedata_pb2_grpc.GameDataServicer):
             ok=True,
             result_json=json.dumps(_jsonable(result)),
         )
+
+    async def _cached(
+        self,
+        prefix: str,
+        ttl_s: int,
+        parts: list[str],
+        fetch: Callable[[], Awaitable[Any]],
+    ) -> Any:
+        """Serve one stats answer through the TTL cache (#404 T4).
+
+        A cache miss asks the stats provider; a hit answers at once —
+        a click never costs a provider call. Provider failures abort
+        (the caller degrades to manual review), the cache never serves
+        a stale error.
+        """
+        from botforge.game_aoe2.stats_cache import _key
+
+        cache = self._stats_cache
+        key = _key(prefix, parts)
+        if cache is not None:
+            cached = await cache.get_json(key)
+            if cached is not None:
+                from google.protobuf.json_format import ParseDict
+
+                return ParseDict(cached, self._stats_reply_prototype(prefix)())
+        reply = await fetch()
+        if cache is not None:
+            from google.protobuf.json_format import MessageToDict
+
+            try:
+                await cache.set_json(key, MessageToDict(reply), ttl_s)
+            except Exception:
+                logger.warning("stats cache write failed (%s)", prefix, exc_info=True)
+        return reply
+
+    @staticmethod
+    def _stats_reply_prototype(prefix: str) -> Any:
+        """Return the reply message class of one stats proxy (cache rebuild)."""
+        from botforge.rpc_generated.botforge.v1 import game_pb2
+
+        return {
+            "user": game_pb2.UserStatsReply,
+            "account": game_pb2.AccountStatsReply,
+            "history": game_pb2.MatchHistoryReply,
+            "search": game_pb2.ProfileSearchReply,
+        }[prefix]
+
+    async def SyncStats(
+        self,
+        request: Any,
+        context: grpc.aio.ServicerContext,
+    ) -> Any:
+        """Proxy the on-demand history sync to the stats provider (T4)."""
+        if self._stats_provider is None:
+            await context.abort(grpc.StatusCode.UNIMPLEMENTED, "stats provider not wired")
+            raise AssertionError
+        from botforge.rpc_generated.botforge.v1 import game_pb2
+
+        ok, synced, error = await self._stats_provider.sync_stats(
+            list(request.profile_ids), bool(request.wait)
+        )
+        return game_pb2.SyncStatsReply(ok=ok, synced=synced, error=error)
+
+    async def GetMatchHistory(
+        self,
+        request: Any,
+        context: grpc.aio.ServicerContext,
+    ) -> Any:
+        """Proxy the stored match history (rule 4) through the TTL cache."""
+        if self._stats_provider is None:
+            await context.abort(grpc.StatusCode.UNIMPLEMENTED, "stats provider not wired")
+            raise AssertionError
+        from botforge.game_aoe2.stats_cache import TTL_MATCH_HISTORY_S
+
+        async def fetch() -> Any:
+            return await self._stats_provider.get_match_history_wire(request)
+
+        if request.refresh:
+            # the owner's rule (2026-11-23): a click that just synced
+            # reads the store directly - no cache between a finished
+            # game and its card
+            return await fetch()
+        return await self._cached(
+            "history",
+            TTL_MATCH_HISTORY_S,
+            [str(p) for p in request.profile_ids]
+            + [str(request.limit), str(request.since_s), request.leaderboard_id],
+            fetch,
+        )
+
+    async def GetAccountStats(
+        self,
+        request: Any,
+        context: grpc.aio.ServicerContext,
+    ) -> Any:
+        """Proxy the per-account elo status through the TTL cache."""
+        if self._stats_provider is None:
+            await context.abort(grpc.StatusCode.UNIMPLEMENTED, "stats provider not wired")
+            raise AssertionError
+        from botforge.game_aoe2.stats_cache import TTL_ACCOUNT_STATS_S
+
+        async def fetch() -> Any:
+            return await self._stats_provider.get_account_stats_wire(request)
+
+        # the AS-OF read never caches (owner 2026-11-25): the elo
+        # history answer is point-per-moment, the CURRENT status
+        # alone rides the TTL cache
+        at_s = int(getattr(request, "at_s", 0) or 0)
+        if at_s > 0:
+            return await fetch()
+        return await self._cached(
+            "account", TTL_ACCOUNT_STATS_S, [str(p) for p in request.profile_ids], fetch
+        )
+
+    async def GetUserStats(
+        self,
+        request: Any,
+        context: grpc.aio.ServicerContext,
+    ) -> Any:
+        """Proxy the per-user unified stats through the TTL cache."""
+        if self._stats_provider is None:
+            await context.abort(grpc.StatusCode.UNIMPLEMENTED, "stats provider not wired")
+            raise AssertionError
+        from botforge.game_aoe2.stats_cache import TTL_USER_STATS_S
+
+        async def fetch() -> Any:
+            return await self._stats_provider.get_user_stats_wire(request)
+
+        return await self._cached(
+            "user", TTL_USER_STATS_S, [request.user_id, str(request.window_days)], fetch
+        )
+
+    async def SearchProfiles(
+        self,
+        request: Any,
+        context: grpc.aio.ServicerContext,
+    ) -> Any:
+        """Proxy the alias search to the stats provider (rule 4), cached.
+
+        The binding flow reads the same search a few times while the
+        player picks their account — the TTL cache absorbs the re-reads.
+        """
+        if self._stats_provider is None:
+            await context.abort(grpc.StatusCode.UNIMPLEMENTED, "stats provider not wired")
+            raise AssertionError
+        from botforge.game_aoe2.stats_cache import TTL_PROFILE_SEARCH_S
+
+        async def fetch() -> Any:
+            return await self._stats_provider.search_profiles_wire(request.alias)
+
+        return await self._cached("search", TTL_PROFILE_SEARCH_S, [request.alias], fetch)
 
     async def UpdateEnrollments(
         self,

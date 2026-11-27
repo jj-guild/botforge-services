@@ -21,8 +21,6 @@ import pytest
 
 from tests.integration.test_catalog_gateway import _FakeDB
 
-CIVS_BUTTON_ID = "admin:dm:refresh"
-
 
 class _CatalogFake(_FakeDB):
     """The catalog fake, extended to serve the faction list."""
@@ -112,9 +110,12 @@ class TestCivsSyncJourney:
 
         @bot.tree.command(name="civsync")
         async def civsync(interaction: discord.Interaction) -> None:
-            from botforge.discord.admin_dm_panel import _open_sync
+            # the sync moved into the repair (owner 2026-11-27): the DM
+            # buttons are gone, the journey runs the same seam
+            from botforge.discord.admin_tree import _refresh_game_data
 
-            await _open_sync(interaction)
+            await interaction.response.send_message("civsync", ephemeral=True)
+            await _refresh_game_data(interaction.client, ["civs"])
 
         return bot
 
@@ -179,13 +180,9 @@ class TestCivsSyncJourney:
         try:
             channel = guild.create_text_channel("general")
             result = await alice.slash(channel, "civsync")
-            message = result.response
-            assert message is not None, "the sync sub-view must answer the command"
-            assert message.ephemeral, "the admin DM sub-view is ephemeral"
+            assert result.response is not None, "the repair must answer the command"
 
-            await alice.click(message, custom_id=CIVS_BUTTON_ID)
-
-            # the mirror ran inside the click: one post per faction, in
+            # the mirror ran inside the refresh: one post per faction, in
             # the provisionned civs forum (the #330 fix — the remote's
             # factions carry their game_key, so the scope resolves)
             names = {thread.name for thread in forum.threads}

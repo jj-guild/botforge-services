@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Python: botforge.ext_librematch.store</title>
+</head><body>
+
+<table class="heading">
+<tr class="heading-text decor">
+<td class="title">&nbsp;<br><strong class="title"><a href="botforge.html" class="white">botforge</a>.<a href="botforge.ext_librematch.html" class="white">ext_librematch</a>.store</strong></td>
+<td class="extra"><a href=".">index</a><br><a href="file:SOURCE_ROOT/ext_librematch/store.py">SOURCE_ROOT/ext_librematch/store.py</a></td></tr></table>
+    <p><span class="code">libre:match&nbsp;stats&nbsp;store&nbsp;—&nbsp;the&nbsp;provider's&nbsp;OWN&nbsp;history&nbsp;database&nbsp;(#404&nbsp;T1).<br>
+&nbsp;<br>
+The&nbsp;provider&nbsp;is&nbsp;the&nbsp;source&nbsp;of&nbsp;truth&nbsp;of&nbsp;its&nbsp;perimeter:&nbsp;the&nbsp;RAW&nbsp;match<br>
+documents&nbsp;and&nbsp;the&nbsp;per-account&nbsp;status&nbsp;live&nbsp;HERE,&nbsp;in&nbsp;the&nbsp;provider's<br>
+namespaced&nbsp;collections&nbsp;—&nbsp;never&nbsp;filtered&nbsp;at&nbsp;ingestion&nbsp;(store&nbsp;first,<br>
+exploit&nbsp;later),&nbsp;never&nbsp;read&nbsp;by&nbsp;another&nbsp;service's&nbsp;process.<br>
+&nbsp;<br>
+Collections&nbsp;(all&nbsp;under&nbsp;the&nbsp;``librematch:``&nbsp;namespace):<br>
+&nbsp;<br>
+-&nbsp;``librematch:matches``&nbsp;—&nbsp;one&nbsp;document&nbsp;per&nbsp;(match,&nbsp;leaderboard):&nbsp;the<br>
+&nbsp;&nbsp;raw&nbsp;upstream&nbsp;payload&nbsp;plus&nbsp;the&nbsp;exploited&nbsp;projection&nbsp;(participants,<br>
+&nbsp;&nbsp;elo&nbsp;deltas,&nbsp;outcome);<br>
+-&nbsp;``librematch:accounts``&nbsp;—&nbsp;one&nbsp;document&nbsp;per&nbsp;known&nbsp;account:&nbsp;the&nbsp;elo<br>
+&nbsp;&nbsp;status&nbsp;per&nbsp;leaderboard&nbsp;(current&nbsp;+&nbsp;MAX)&nbsp;and&nbsp;the&nbsp;sync&nbsp;freshness;<br>
+-&nbsp;``librematch:bindings``&nbsp;—&nbsp;the&nbsp;profile&nbsp;-&gt;&nbsp;platform-user&nbsp;mapping&nbsp;pushed<br>
+&nbsp;&nbsp;by&nbsp;the&nbsp;core&nbsp;through&nbsp;``UpdateSubscriptions``&nbsp;(the&nbsp;per-USER<br>
+&nbsp;&nbsp;unification's&nbsp;key).</span></p>
+<p>
+<table class="section">
+<tr class="decor pkg-content-decor heading-text">
+<td class="section-title" colspan=3>&nbsp;<br><strong class="bigsection">Modules</strong></td></tr>
+    
+<tr><td class="decor pkg-content-decor"><span class="code">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span></td><td>&nbsp;</td>
+<td class="singlecolumn"><table><tr><td class="multicolumn"><a href="logging.html">logging</a><br>
+</td><td class="multicolumn"></td><td class="multicolumn"></td><td class="multicolumn"></td></tr></table></td></tr></table><p>
+<table class="section">
+<tr class="decor index-decor heading-text">
+<td class="section-title" colspan=3>&nbsp;<br><strong class="bigsection">Classes</strong></td></tr>
+    
+<tr><td class="decor index-decor"><span class="code">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span></td><td>&nbsp;</td>
+<td class="singlecolumn"><dl>
+<dt class="heading-text"><a href="builtins.html#object">builtins.object</a>
+</dt><dd>
+<dl>
+<dt class="heading-text"><a href="botforge.ext_librematch.store.html#LibrematchStore">LibrematchStore</a>
+</dt></dl>
+</dd>
+</dl>
+ <p>
+<table class="section">
+<tr class="decor title-decor heading-text">
+<td class="section-title" colspan=3>&nbsp;<br><a name="LibrematchStore">class <strong>LibrematchStore</strong></a>(<a href="builtins.html#object">builtins.object</a>)</td></tr>
+    
+<tr><td class="decor title-decor" rowspan=2><span class="code">&nbsp;&nbsp;&nbsp;</span></td>
+<td class="decor title-decor" colspan=2><span class="code"><a href="#LibrematchStore">LibrematchStore</a>(database:&nbsp;'Any')&nbsp;-&amp;gt;&nbsp;'None'<br>
+&nbsp;<br>
+The&nbsp;provider's&nbsp;own&nbsp;persistence&nbsp;seam&nbsp;over&nbsp;async&nbsp;MongoDB.<br>&nbsp;</span></td></tr>
+<tr><td>&nbsp;</td>
+<td class="singlecolumn">Methods defined here:<br>
+<dl><dt><a name="LibrematchStore-__init__"><strong>__init__</strong></a>(self, database: 'Any') -&gt; 'None'</dt><dd><span class="code">Wrap&nbsp;the&nbsp;provider's&nbsp;async&nbsp;Mongo&nbsp;database.</span></dd></dl>
+
+<dl><dt>async <a name="LibrematchStore-count_incomplete_matches"><strong>count_incomplete_matches</strong></a>(self, profile_id: 'str') -&gt; 'int'</dt><dd><span class="code">Count&nbsp;the&nbsp;profile's&nbsp;stored&nbsp;matches&nbsp;whose&nbsp;capture&nbsp;is&nbsp;incomplete.<br>
+&nbsp;<br>
+A&nbsp;document&nbsp;stored&nbsp;by&nbsp;an&nbsp;older&nbsp;revision&nbsp;may&nbsp;carry&nbsp;a&nbsp;raw&nbsp;payload<br>
+WITHOUT&nbsp;the&nbsp;members/description&nbsp;fields&nbsp;(incomplete<br>
+captures)&nbsp;—&nbsp;the&nbsp;heal&nbsp;re-reads&nbsp;the&nbsp;raw,&nbsp;so&nbsp;it&nbsp;cannot&nbsp;invent<br>
+them:&nbsp;those&nbsp;documents&nbsp;need&nbsp;a&nbsp;fresh&nbsp;upstream&nbsp;fetch&nbsp;that&nbsp;REPLACES&nbsp;the<br>
+capture.&nbsp;An&nbsp;empty&nbsp;(or&nbsp;absent)&nbsp;``players``&nbsp;list&nbsp;is&nbsp;the&nbsp;marker.</span></dd></dl>
+
+<dl><dt>async <a name="LibrematchStore-count_matches_of_profile"><strong>count_matches_of_profile</strong></a>(self, profile_id: 'str') -&gt; 'int'</dt><dd><span class="code">Count&nbsp;the&nbsp;stored&nbsp;matches&nbsp;of&nbsp;one&nbsp;profile&nbsp;(deep-vs-quick&nbsp;preset).</span></dd></dl>
+
+<dl><dt>async <a name="LibrematchStore-count_matches_since"><strong>count_matches_since</strong></a>(self, profile_ids: 'list[str]', since_s: 'int') -&gt; 'int'</dt><dd><span class="code">Count&nbsp;the&nbsp;matches&nbsp;of&nbsp;the&nbsp;profiles&nbsp;finished&nbsp;after&nbsp;``since_s``.</span></dd></dl>
+
+<dl><dt>async <a name="LibrematchStore-delete_matches"><strong>delete_matches</strong></a>(self, doc_ids: 'list[str]') -&gt; 'int'</dt><dd><span class="code">Delete&nbsp;stored&nbsp;captures&nbsp;by&nbsp;their&nbsp;document&nbsp;ids&nbsp;(the&nbsp;repair).</span></dd></dl>
+
+<dl><dt>async <a name="LibrematchStore-elo_as_of"><strong>elo_as_of</strong></a>(self, profile_ids: 'list[str]', at_s: 'int', boards: 'tuple[str, ...]' = ('3', '4')) -&gt; 'dict[str, dict[str, tuple[int, int]]]'</dt><dd><span class="code">Read&nbsp;the&nbsp;elo&nbsp;(current,&nbsp;running-max)&nbsp;AS&nbsp;OF&nbsp;one&nbsp;moment.<br>
+&nbsp;<br>
+The&nbsp;LAST&nbsp;point&nbsp;at&nbsp;or&nbsp;before&nbsp;``at_s``&nbsp;answers&nbsp;(owner<br>
+2026-11-25):&nbsp;before&nbsp;the&nbsp;first&nbsp;point&nbsp;the&nbsp;profile&nbsp;carries<br>
+nothing&nbsp;-&nbsp;the&nbsp;caller&nbsp;renders&nbsp;the&nbsp;absent&nbsp;line,&nbsp;never&nbsp;a&nbsp;guess.</span></dd></dl>
+
+<dl><dt>async <a name="LibrematchStore-ensure_indexes"><strong>ensure_indexes</strong></a>(self) -&gt; 'None'</dt><dd><span class="code">Create&nbsp;the&nbsp;provider's&nbsp;hot-path&nbsp;indexes&nbsp;(idempotent,&nbsp;best-effort).<br>
+&nbsp;<br>
+Rule&nbsp;5&nbsp;(one&nbsp;owner&nbsp;per&nbsp;collection):&nbsp;the&nbsp;provider&nbsp;ensures&nbsp;ITS<br>
+OWN&nbsp;collections'&nbsp;indexes&nbsp;at&nbsp;ITS&nbsp;boot.&nbsp;The&nbsp;listing's&nbsp;read<br>
+(`profile_ids&nbsp;$in`&nbsp;+&nbsp;`finished_at`&nbsp;sort)&nbsp;was&nbsp;a&nbsp;COLLSCAN&nbsp;over<br>
+the&nbsp;whole&nbsp;raw&nbsp;history&nbsp;(owner&nbsp;2026-11-25:&nbsp;"le&nbsp;chargement&nbsp;est<br>
+beaucoup&nbsp;trop&nbsp;lent&nbsp;-&nbsp;problème&nbsp;d'index")&nbsp;—&nbsp;the&nbsp;compound<br>
+index&nbsp;walks&nbsp;it&nbsp;in&nbsp;one&nbsp;seek.</span></dd></dl>
+
+<dl><dt>async <a name="LibrematchStore-find_accounts"><strong>find_accounts</strong></a>(self, profile_ids: 'list[str]') -&gt; 'list[dict[str, Any]]'</dt><dd><span class="code">Return&nbsp;the&nbsp;status&nbsp;documents&nbsp;of&nbsp;the&nbsp;accounts&nbsp;(missing&nbsp;ones&nbsp;absent).</span></dd></dl>
+
+<dl><dt>async <a name="LibrematchStore-find_incomplete_docs"><strong>find_incomplete_docs</strong></a>(self, profile_id: 'str', limit: 'int' = 100) -&gt; 'list[dict[str, Any]]'</dt><dd><span class="code">Return&nbsp;the&nbsp;profile's&nbsp;stored&nbsp;captures&nbsp;of&nbsp;an&nbsp;OLDER&nbsp;era.<br>
+&nbsp;<br>
+The&nbsp;repair&nbsp;is&nbsp;era-gated&nbsp;(the&nbsp;merlin&nbsp;loops&nbsp;of&nbsp;2026-11-21:&nbsp;any<br>
+content-based&nbsp;marker&nbsp;midjudged&nbsp;and&nbsp;the&nbsp;deep&nbsp;refetch&nbsp;looped):<br>
+a&nbsp;capture&nbsp;written&nbsp;before&nbsp;the&nbsp;current&nbsp;era&nbsp;—&nbsp;or&nbsp;by&nbsp;an&nbsp;older<br>
+revision&nbsp;(no&nbsp;era&nbsp;field&nbsp;at&nbsp;all)&nbsp;—&nbsp;repairs&nbsp;ONCE,&nbsp;the&nbsp;rebuilt<br>
+capture&nbsp;carries&nbsp;the&nbsp;current&nbsp;era&nbsp;and&nbsp;never&nbsp;candidates&nbsp;again,<br>
+whatever&nbsp;the&nbsp;upstream&nbsp;genuinely&nbsp;failed&nbsp;to&nbsp;carry.</span></dd></dl>
+
+<dl><dt>async <a name="LibrematchStore-find_matches"><strong>find_matches</strong></a>(self, profile_ids: 'list[str]', limit: 'int' = 0, since_s: 'int' = 0, leaderboard_id: 'str' = '', include_invalid: 'bool' = False) -&gt; 'list[dict[str, Any]]'</dt><dd><span class="code">Query&nbsp;the&nbsp;stored&nbsp;history:&nbsp;matches&nbsp;of&nbsp;the&nbsp;profiles,&nbsp;newest&nbsp;first.<br>
+&nbsp;<br>
+An&nbsp;empty&nbsp;``profile_ids``&nbsp;means&nbsp;every&nbsp;known&nbsp;account's&nbsp;matches.<br>
+An&nbsp;INVALIDATED&nbsp;match&nbsp;serves&nbsp;too&nbsp;when&nbsp;``include_invalid``&nbsp;rides<br>
+(owner&nbsp;2026-11-24):&nbsp;the&nbsp;listing&nbsp;shows&nbsp;it&nbsp;WITH&nbsp;its&nbsp;status&nbsp;-&nbsp;the<br>
+invalid&nbsp;flag&nbsp;travels&nbsp;on&nbsp;the&nbsp;entry,&nbsp;the&nbsp;PANEL&nbsp;decides.&nbsp;The<br>
+default&nbsp;stays&nbsp;honest:&nbsp;no&nbsp;result,&nbsp;no&nbsp;completion,&nbsp;never&nbsp;played.</span></dd></dl>
+
+<dl><dt>async <a name="LibrematchStore-find_profiles_of_user"><strong>find_profiles_of_user</strong></a>(self, user_id: 'str') -&gt; 'list[str]'</dt><dd><span class="code">Return&nbsp;the&nbsp;platform&nbsp;user's&nbsp;known&nbsp;accounts&nbsp;(the&nbsp;unification's&nbsp;key).</span></dd></dl>
+
+<dl><dt>async <a name="LibrematchStore-find_undecoded_matches"><strong>find_undecoded_matches</strong></a>(self, profile_ids: 'list[str]', limit: 'int' = 25) -&gt; 'list[dict[str, Any]]'</dt><dd><span class="code">List&nbsp;the&nbsp;stored&nbsp;matches&nbsp;whose&nbsp;encoded&nbsp;fields&nbsp;are&nbsp;not&nbsp;decoded&nbsp;yet.<br>
+&nbsp;<br>
+The&nbsp;decode&nbsp;step&nbsp;(T2)&nbsp;exploits&nbsp;the&nbsp;stored&nbsp;documents&nbsp;AFTER&nbsp;the<br>
+ingestion&nbsp;—&nbsp;this&nbsp;is&nbsp;its&nbsp;work&nbsp;queue,&nbsp;newest&nbsp;first.</span></dd></dl>
+
+<dl><dt>async <a name="LibrematchStore-find_user_of_profile"><strong>find_user_of_profile</strong></a>(self, profile_id: 'str') -&gt; 'str'</dt><dd><span class="code">Return&nbsp;the&nbsp;account's&nbsp;platform&nbsp;owner;&nbsp;empty&nbsp;when&nbsp;unknown.</span></dd></dl>
+
+<dl><dt>async <a name="LibrematchStore-insert_matches_new_only"><strong>insert_matches_new_only</strong></a>(self, documents: 'list[dict[str, Any]]') -&gt; 'int'</dt><dd><span class="code">Insert&nbsp;the&nbsp;matches&nbsp;that&nbsp;do&nbsp;not&nbsp;exist&nbsp;yet;&nbsp;return&nbsp;the&nbsp;inserted&nbsp;count.<br>
+&nbsp;<br>
+A&nbsp;FINISHED&nbsp;match&nbsp;is&nbsp;immutable&nbsp;—&nbsp;an&nbsp;already&nbsp;stored&nbsp;document&nbsp;is<br>
+never&nbsp;rewritten&nbsp;(the&nbsp;smart-sync&nbsp;rule&nbsp;of&nbsp;#404&nbsp;T4:&nbsp;the&nbsp;incremental<br>
+sync&nbsp;only&nbsp;ever&nbsp;APPENDS&nbsp;the&nbsp;new&nbsp;games).</span></dd></dl>
+
+<dl><dt>async <a name="LibrematchStore-invalidate_stale_matches"><strong>invalidate_stale_matches</strong></a>(self, stale_after_s: 'int' = 86400) -&gt; 'int'</dt><dd><span class="code">Flag&nbsp;the&nbsp;never-played&nbsp;captures:&nbsp;started&nbsp;long&nbsp;ago,&nbsp;never&nbsp;decided.<br>
+&nbsp;<br>
+A&nbsp;match&nbsp;older&nbsp;than&nbsp;``stale_after_s``&nbsp;that&nbsp;never&nbsp;saw&nbsp;a&nbsp;VALID<br>
+DECISION&nbsp;is&nbsp;a&nbsp;capture&nbsp;of&nbsp;a&nbsp;lobby&nbsp;that&nbsp;never&nbsp;ran&nbsp;(owner<br>
+2026-11-23:&nbsp;a&nbsp;result&nbsp;never&nbsp;heard&nbsp;from&nbsp;again&nbsp;for&nbsp;more&nbsp;than&nbsp;a<br>
+day&nbsp;means&nbsp;the&nbsp;game&nbsp;was&nbsp;never&nbsp;played).&nbsp;A&nbsp;valid&nbsp;decision&nbsp;is&nbsp;a<br>
+finished&nbsp;timestamp&nbsp;WITH&nbsp;a&nbsp;winner&nbsp;AND&nbsp;at&nbsp;least&nbsp;two&nbsp;players&nbsp;-<br>
+the&nbsp;abandoned&nbsp;captures&nbsp;often&nbsp;carry&nbsp;a&nbsp;completion&nbsp;or&nbsp;a&nbsp;lone<br>
+self-reported&nbsp;outcome,&nbsp;so&nbsp;the&nbsp;OLD&nbsp;narrow&nbsp;$or&nbsp;(no&nbsp;completion,<br>
+no&nbsp;winner)&nbsp;matched&nbsp;nothing&nbsp;on&nbsp;the&nbsp;live&nbsp;store&nbsp;(merlin&nbsp;log,<br>
+nModified&nbsp;0).&nbsp;Marked&nbsp;``invalid``&nbsp;once&nbsp;-&nbsp;the&nbsp;serving&nbsp;and&nbsp;the<br>
+panels&nbsp;skip&nbsp;it,&nbsp;the&nbsp;raw&nbsp;document&nbsp;stays&nbsp;for&nbsp;the&nbsp;archaeology.</span></dd></dl>
+
+<dl><dt>async <a name="LibrematchStore-list_bound_profiles"><strong>list_bound_profiles</strong></a>(self) -&gt; 'list[str]'</dt><dd><span class="code">List&nbsp;only&nbsp;the&nbsp;BOUND&nbsp;accounts&nbsp;—&nbsp;the&nbsp;bot's&nbsp;own&nbsp;users.<br>
+&nbsp;<br>
+The&nbsp;periodic&nbsp;sync&nbsp;loops&nbsp;must&nbsp;never&nbsp;walk&nbsp;the&nbsp;MET&nbsp;players:&nbsp;the<br>
+encounter&nbsp;fold&nbsp;already&nbsp;harvests&nbsp;their&nbsp;boards&nbsp;(no&nbsp;extra&nbsp;call,<br>
+owner&nbsp;2026-11-22),&nbsp;and&nbsp;a&nbsp;known-player&nbsp;sweep&nbsp;would&nbsp;deep-fetch<br>
+the&nbsp;history&nbsp;of&nbsp;every&nbsp;opponent&nbsp;ever&nbsp;met&nbsp;—&nbsp;each&nbsp;fetch&nbsp;folding<br>
+HIS&nbsp;opponents&nbsp;in,&nbsp;an&nbsp;exponential&nbsp;cascade&nbsp;(merlin&nbsp;2026-11-22:<br>
+the&nbsp;post-purge&nbsp;boot&nbsp;walked&nbsp;thousands&nbsp;of&nbsp;unrelated&nbsp;profiles).</span></dd></dl>
+
+<dl><dt>async <a name="LibrematchStore-list_known_profiles"><strong>list_known_profiles</strong></a>(self) -&gt; 'list[str]'</dt><dd><span class="code">List&nbsp;every&nbsp;account&nbsp;the&nbsp;store&nbsp;has&nbsp;a&nbsp;status&nbsp;or&nbsp;binding&nbsp;for.</span></dd></dl>
+
+<dl><dt>async <a name="LibrematchStore-mark_missing_board"><strong>mark_missing_board</strong></a>(self, profile_id: 'str', board_id: 'str') -&gt; 'None'</dt><dd><span class="code">Mark&nbsp;one&nbsp;honestly-absent&nbsp;board&nbsp;(the&nbsp;probe&nbsp;never&nbsp;repeats).</span></dd></dl>
+
+<dl><dt>async <a name="LibrematchStore-recently_synced"><strong>recently_synced</strong></a>(self, profile_ids: 'list[str]', within_s: 'int') -&gt; 'set[str]'</dt><dd><span class="code">Return&nbsp;the&nbsp;profile&nbsp;ids&nbsp;whose&nbsp;sync&nbsp;stamp&nbsp;is&nbsp;FRESHER&nbsp;than&nbsp;the&nbsp;window.</span></dd></dl>
+
+<dl><dt>async <a name="LibrematchStore-record_elo_points"><strong>record_elo_points</strong></a>(self, profile_id: 'str', board: 'str', points: 'list[tuple[int, int]]') -&gt; 'None'</dt><dd><span class="code">Append&nbsp;dated&nbsp;elo&nbsp;points&nbsp;to&nbsp;one&nbsp;(profile,&nbsp;board)&nbsp;timeseries.<br>
+&nbsp;<br>
+Each&nbsp;point&nbsp;carries&nbsp;the&nbsp;RUNNING&nbsp;MAX&nbsp;(owner&nbsp;2026-11-25:&nbsp;the&nbsp;seat<br>
+lines&nbsp;read&nbsp;the&nbsp;match's&nbsp;day&nbsp;-&nbsp;``1039&nbsp;-&nbsp;1120``&nbsp;is&nbsp;what&nbsp;the&nbsp;player<br>
+carried&nbsp;THAT&nbsp;day,&nbsp;not&nbsp;today).&nbsp;Cheap&nbsp;and&nbsp;idempotent:&nbsp;duplicates<br>
+fold&nbsp;on&nbsp;upsert,&nbsp;unsorted&nbsp;batches&nbsp;sort&nbsp;before&nbsp;the&nbsp;write.</span></dd></dl>
+
+<dl><dt>async <a name="LibrematchStore-stamp_synced"><strong>stamp_synced</strong></a>(self, profile_ids: 'list[str]', when: 'int' = 0) -&gt; 'None'</dt><dd><span class="code">Stamp&nbsp;the&nbsp;accounts'&nbsp;LAST&nbsp;history&nbsp;sync&nbsp;(the&nbsp;click's&nbsp;freshness&nbsp;gate).<br>
+&nbsp;<br>
+The&nbsp;on-demand&nbsp;sync&nbsp;(the&nbsp;listing's&nbsp;click)&nbsp;checks&nbsp;this&nbsp;stamp<br>
+before&nbsp;re-fetching&nbsp;the&nbsp;upstream:&nbsp;a&nbsp;profile&nbsp;synced&nbsp;seconds&nbsp;ago<br>
+answers&nbsp;straight&nbsp;from&nbsp;the&nbsp;store,&nbsp;the&nbsp;STALE&nbsp;ones&nbsp;only&nbsp;wait<br>
+(owner&nbsp;2026-11-25:&nbsp;"le&nbsp;chargement&nbsp;est&nbsp;beaucoup&nbsp;trop&nbsp;lent").</span></dd></dl>
+
+<dl><dt>async <a name="LibrematchStore-stored_match_ids"><strong>stored_match_ids</strong></a>(self, ids: 'list[str]') -&gt; 'set[str]'</dt><dd><span class="code">Return&nbsp;which&nbsp;of&nbsp;the&nbsp;given&nbsp;match&nbsp;ids&nbsp;are&nbsp;already&nbsp;stored.</span></dd></dl>
+
+<dl><dt>async <a name="LibrematchStore-update_match_fields"><strong>update_match_fields</strong></a>(self, doc_id: 'str', fields: 'dict[str, Any]') -&gt; 'None'</dt><dd><span class="code">Patch&nbsp;the&nbsp;projection&nbsp;fields&nbsp;of&nbsp;one&nbsp;stored&nbsp;match&nbsp;document.</span></dd></dl>
+
+<dl><dt>async <a name="LibrematchStore-upsert_account"><strong>upsert_account</strong></a>(self, document: 'dict[str, Any]') -&gt; 'None'</dt><dd><span class="code">Insert&nbsp;or&nbsp;replace&nbsp;one&nbsp;account's&nbsp;status&nbsp;document.</span></dd></dl>
+
+<dl><dt>async <a name="LibrematchStore-upsert_bindings"><strong>upsert_bindings</strong></a>(self, profile_ids: 'list[str]', user_ids: 'list[str]') -&gt; 'int'</dt><dd><span class="code">Record&nbsp;the&nbsp;profile&nbsp;-&gt;&nbsp;user&nbsp;mapping&nbsp;pushed&nbsp;by&nbsp;the&nbsp;core.<br>
+&nbsp;<br>
+``user_ids``&nbsp;is&nbsp;parallel&nbsp;to&nbsp;``profile_ids``;&nbsp;an&nbsp;empty&nbsp;owner<br>
+entry&nbsp;keeps&nbsp;whatever&nbsp;mapping&nbsp;is&nbsp;already&nbsp;stored&nbsp;(the&nbsp;core&nbsp;may<br>
+push&nbsp;a&nbsp;list&nbsp;without&nbsp;owners&nbsp;—&nbsp;the&nbsp;realtime&nbsp;reconciliation).</span></dd></dl>
+
+<dl><dt>async <a name="LibrematchStore-upsert_matches"><strong>upsert_matches</strong></a>(self, documents: 'list[dict[str, Any]]') -&gt; 'int'</dt><dd><span class="code">Insert&nbsp;or&nbsp;replace&nbsp;the&nbsp;raw&nbsp;match&nbsp;documents;&nbsp;return&nbsp;the&nbsp;new&nbsp;count.<br>
+&nbsp;<br>
+The&nbsp;document&nbsp;``_id``&nbsp;is&nbsp;``&lt;match_id&gt;:&lt;leaderboard_id&gt;``&nbsp;—&nbsp;the<br>
+upstream&nbsp;may&nbsp;list&nbsp;the&nbsp;same&nbsp;match&nbsp;id&nbsp;under&nbsp;several&nbsp;leaderboards.</span></dd></dl>
+
+<dl><dt>async <a name="LibrematchStore-upsert_seen_accounts"><strong>upsert_seen_accounts</strong></a>(self, updates: 'dict[str, dict[str, dict[str, int]]]') -&gt; 'None'</dt><dd><span class="code">Merge&nbsp;the&nbsp;ENCOUNTERED&nbsp;seats'&nbsp;boards&nbsp;into&nbsp;the&nbsp;accounts.</span></dd></dl>
+
+<hr>
+Data descriptors defined here:<br>
+<dl><dt><strong>__dict__</strong></dt>
+<dd><span class="code">dictionary&nbsp;for&nbsp;instance&nbsp;variables</span></dd>
+</dl>
+<dl><dt><strong>__weakref__</strong></dt>
+<dd><span class="code">list&nbsp;of&nbsp;weak&nbsp;references&nbsp;to&nbsp;the&nbsp;object</span></dd>
+</dl>
+</td></tr></table></td></tr></table><p>
+<table class="section">
+<tr class="decor data-decor heading-text">
+<td class="section-title" colspan=3>&nbsp;<br><strong class="bigsection">Data</strong></td></tr>
+    
+<tr><td class="decor data-decor"><span class="code">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span></td><td>&nbsp;</td>
+<td class="singlecolumn"><strong>ACCOUNTS_COLLECTION</strong> = 'librematch:accounts'<br>
+<strong>BINDINGS_COLLECTION</strong> = 'librematch:bindings'<br>
+<strong>DEFAULT_HISTORY_LIMIT</strong> = 50<br>
+<strong>ELO_COLLECTION</strong> = 'librematch:elo'<br>
+<strong>MATCHES_COLLECTION</strong> = 'librematch:matches'<br>
+<strong>logger</strong> = &lt;Logger botforge.ext_librematch.store (INFO)&gt;</td></tr></table>
+</body></html>

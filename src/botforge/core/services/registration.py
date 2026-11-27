@@ -56,6 +56,15 @@ class GameProfileSeam(Protocol):
         """Validate a game profile id; return its public data, None when invalid."""
         ...
 
+    async def search_profiles(self, alias: str) -> list[dict[str, Any]]:
+        """Search profiles by in-game alias (#402's name path).
+
+        Returns the candidates (profile id, alias, steam name, country,
+        last matches) — homonyms included: the player picks their
+        account; an empty list reads as "no candidate".
+        """
+        ...
+
 
 class RegistrationEvents(Protocol):
     """Notification-intent seam (registration.requested/accepted/refused)."""
@@ -108,10 +117,12 @@ class RegistrationService:
             raise ValueError(f"unknown game {game_key!r}: no profile seam registered")
         validated = await seam.validate_profile(profile_id)
         if validated is None:
-            raise InvalidProfileError(f"profile {profile_id!r} is not valid for game {game_key!r}")
-        # The seam may have resolved the typed id (an aoe2insights user id)
-        # into the canonical relic id — the binding always stores the
-        # relic id the provider validated.
+            raise InvalidProfileError(
+                f"profile {profile_id!r} is not valid for game {game_key!r} — the provider "
+                "knows no such relic id (#402)"
+            )
+        # The seam validates the relic id the provider itself accepted —
+        # the binding always stores the canonical relic id.
         canonical_id = str(validated.get("profile_id") or profile_id)
         owner = await self._db.find_binding_by_profile(game_key, canonical_id)
         if owner is not None and owner.get("user_id") != user_id:
@@ -125,6 +136,13 @@ class RegistrationService:
             "bound_at": _now_ms(),
         }
         await self._db.upsert_entry(PROFILE_BINDINGS_COLLECTION, binding)
+        # the binding's lifecycle travels (owner 2026-11-25): a member
+        # adding an account must create/update the forums' per-player
+        # posts - the live feed's reconcile listens
+        await self._emit(
+            "profile.bound",
+            {"user_id": user_id, "game_key": game_key, "profile_id": canonical_id},
+        )
         await self._audit_record("profile.bind", {"user_id": user_id, "game_key": game_key, "profile_id": canonical_id})
         return binding
 
@@ -139,6 +157,19 @@ class RegistrationService:
         if not profile_ids:
             return []
         return await self._db.find_bindings_by_profiles(game_key, profile_ids)
+
+    async def search_candidates(self, game_key: str, alias: str) -> list[dict[str, Any]]:
+        """Search the game's profiles by in-game alias — no binding here.
+
+        The #402 name path: the player types their in-game name, the
+        seam lists the matching profiles (homonyms included, each with
+        its last matches) and the player SELECTS their account; the
+        binding happens on selection, through bind_profile as always.
+        """
+        seam = self._seams.get(game_key)
+        if seam is None:
+            raise ValueError(f"unknown game {game_key!r}: no profile seam registered")
+        return await seam.search_profiles(alias)
 
     async def get_binding(self, user_id: str, game_key: str) -> dict[str, Any] | None:
         """Return the user's first binding for a game; None when unbound.
@@ -156,6 +187,19 @@ class RegistrationService:
         """List all of a user's game-profile bindings."""
         return await self._db.find_user_bindings(user_id)
 
+    async def list_bindings_for_game(self, game_key: str) -> list[dict[str, Any]]:
+        """List every profile binding of a game (the whole server).
+
+        The matches popup's highlight contract (2026-11-20): the other
+        SERVER-KNOWN profiles render highlighted — this read is how the
+        view learns them.
+        """
+        getter = getattr(self._db, "list_bindings_for_game", None)
+        if getter is None:
+            return []
+        bindings = await getter(game_key)
+        return list(bindings)
+
     async def unlink_profile(self, user_id: str, game_key: str, profile_id: str) -> bool:
         """Remove one profile binding; True when one existed.
 
@@ -164,6 +208,10 @@ class RegistrationService:
         """
         removed = await self._db.delete_binding(game_key, user_id, profile_id)
         if removed:
+            await self._emit(
+                "profile.unbound",
+                {"user_id": user_id, "game_key": game_key, "profile_id": profile_id},
+            )
             await self._audit_record(
                 "profile.unbind", {"user_id": user_id, "game_key": game_key, "profile_id": profile_id}
             )

@@ -1,11 +1,14 @@
-"""The /register command and the DM enrollment flow (botforge-services#133).
+"""The DM enrollment flow, legacy (botforge-services#133).
 
-Registration is a *permanent* mod: the flow binds the Discord user to a
-validated AoE2 profile. The command opens the DM workflow: confirm →
-type the in-game profile id → the RegistrationService validates through
-the game seam (ext-librematch via svc-core) and binds. Steps ride the
-WorkflowEngine so the flow survives restarts; the views are dynamic
-items (restart-proof, #122) and answers follow the 3-second rule.
+There is NO /register command: the profile binding lives in the home
+profile menu since 2026-10-16 (``/home`` → Profil → Ajouter un compte).
+This module keeps the older DM workflow — confirm → type the in-game
+profile id → the RegistrationService validates through the game seam
+(ext-librematch via svc-core) and binds — for the sessions that still
+ride it. Steps ride the WorkflowEngine so the flow survives restarts;
+the views are dynamic items (restart-proof, #122) and answers follow
+the 3-second rule. The user-facing strings ride the i18n catalog
+(``ui.flows.*``).
 """
 
 from __future__ import annotations
@@ -64,13 +67,15 @@ class RegistrationConfirmButton(
         workflow_id = _active_workflow_id(interaction.user.id)
         if workflow_id is None:
             await interaction.response.send_message(
-                "Aucune inscription en cours — recommence avec /register.", ephemeral=True
+                await reply(interaction, "ui.flows.no_enrollment"), ephemeral=True
             )
             return
         await interaction.response.defer(ephemeral=True, thinking=False)
         if self.choice == "decline":
             await engine.cancel(workflow_id)
-            await interaction.followup.send("Enrollment cancelled — /register whenever you like.", ephemeral=True)
+            await interaction.followup.send(
+                await reply(interaction, "ui.flows.enrolled_cancelled"), ephemeral=True
+            )
             return
         state = await engine.handle_interaction(workflow_id, {"action": "confirm", "user_id": str(interaction.user.id)})
         if state.status in ("CANCELLED", "TIMED_OUT"):
@@ -102,7 +107,7 @@ class ProfileIdModal(discord.ui.Modal, title="AoE2 profile"):
         workflow_id = _active_workflow_id(interaction.user.id)
         if workflow_id is None:
             await interaction.response.send_message(
-                "Aucune inscription en cours — recommence avec /register.", ephemeral=True
+                await reply(interaction, "ui.flows.no_enrollment"), ephemeral=True
             )
             return
         await interaction.response.defer(ephemeral=True, thinking=False)
@@ -117,11 +122,13 @@ class ProfileIdModal(discord.ui.Modal, title="AoE2 profile"):
         if state.status == "COMPLETED":
             _clear_active(interaction.user.id)
             await interaction.followup.send(
-                f"Inscription terminée ! Ton profil AoE2 `{state.payload.get('binding', '')}` est lié — tu peux rejoindre le ladder.",  # noqa: E501
+                await reply(
+                    interaction, "ui.flows.enrolled", profile=str(state.payload.get("binding", ""))
+                ),
                 ephemeral=True,
             )
             return
-        await interaction.followup.send("État inattendu — recommence avec /register.", ephemeral=True)
+        await interaction.followup.send(await reply(interaction, "ui.flows.unexpected_state"), ephemeral=True)
 
 
 def _profile_prompt_view() -> discord.ui.View:

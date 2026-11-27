@@ -104,6 +104,10 @@ Data descriptors inherited from <a href="discord.app_commands.translator.html#Tr
 ``default``&nbsp;is&nbsp;the&nbsp;English&nbsp;string&nbsp;Discord&nbsp;falls&nbsp;back&nbsp;to;&nbsp;the<br>
 catalog&nbsp;keys&nbsp;live&nbsp;under&nbsp;the&nbsp;``commands.``&nbsp;yaml&nbsp;section.</span></dd></dl>
  <dl><dt>async <a name="-reply"><strong>reply</strong></a>(interaction: 'discord.Interaction', key: 'str', **kwargs: 'object') -&gt; 'str'</dt><dd><span class="code">Render&nbsp;a&nbsp;``replies.*``&nbsp;message&nbsp;in&nbsp;the&nbsp;guild's&nbsp;locale&nbsp;(English&nbsp;fallback).</span></dd></dl>
+ <dl><dt>async <a name="-reply_guild"><strong>reply_guild</strong></a>(guild_id: 'str', bot: 'object', key: 'str', **kwargs: 'object') -&gt; 'str'</dt><dd><span class="code">Render&nbsp;a&nbsp;``replies.*``&nbsp;message&nbsp;in&nbsp;a&nbsp;GUILD's&nbsp;locale&nbsp;-&nbsp;no&nbsp;interaction.<br>
+&nbsp;<br>
+The&nbsp;mirror&nbsp;of&nbsp;``reply``&nbsp;for&nbsp;the&nbsp;feed&nbsp;surfaces&nbsp;(live&nbsp;activity):&nbsp;the<br>
+render&nbsp;rides&nbsp;the&nbsp;stored&nbsp;guild&nbsp;locale&nbsp;with&nbsp;the&nbsp;English&nbsp;fallback.</span></dd></dl>
  <dl><dt>async <a name="-reply_locale"><strong>reply_locale</strong></a>(interaction: 'discord.Interaction') -&gt; 'str'</dt><dd><span class="code">Resolve&nbsp;the&nbsp;interaction's&nbsp;native&nbsp;Discord&nbsp;locale&nbsp;(guild,&nbsp;else&nbsp;client).</span></dd></dl>
  <dl><dt>async <a name="-tr"><strong>tr</strong></a>(interaction: 'discord.Interaction', key: 'str', fallback: 'str' = '') -&gt; 'str'</dt><dd><span class="code">Render&nbsp;one&nbsp;UI&nbsp;label&nbsp;(buttons,&nbsp;selects,&nbsp;titles)&nbsp;in&nbsp;the&nbsp;guild's&nbsp;locale.<br>
 &nbsp;<br>
