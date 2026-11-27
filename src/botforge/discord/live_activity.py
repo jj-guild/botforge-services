@@ -55,10 +55,10 @@ _SEED_SWEEP_S = 300.0
 # the seed's BUILD: a seed producing broken cards gets versioned up -
 # every forum re-seeds once with the fixed build (the old cards stay,
 # the guild owns its channel)
-_SEED_VERSION = 11  # 11: the match cards SHED the avatar header (owner
-# 2026-11-26: the avatar is the POST's own image, never the match's -
-# the old card messages die, the seed rebuilds them); 10: the salon
-# became the PLAYERS forum
+_SEED_VERSION = 12  # 12: the shed WALKS THE THREAD (owner 2026-11-27:
+# the registry-traced shed missed the cards posted before the message
+# ids were tracked - the avatar-headed strays stayed); 11: the match
+# cards shed the avatar header; 10: the salon became the PLAYERS forum
 
 _PLAYERS_SCOPE = "games/aoe2"
 _PLAYERS_KEY = "joueurs"
@@ -671,7 +671,7 @@ async def _maybe_seed_players_forum(  # noqa: C901 - one orchestration, no branc
         users = await _guild_users(bot, guild_id)
         posts = await _ensure_player_posts(bot, guild_id, forum, users)
         if cards_rebuild:
-            await _shed_old_cards(guild_id, forum, posts)
+            await _shed_old_cards(bot, guild_id, forum, posts)
         logger.info(
             "players forum seed: %d post(s) ensured for %d user(s) (guild %s)",
             len(posts),
@@ -1255,39 +1255,52 @@ async def _pin_post_intro(
 
 
 async def _shed_old_cards(
-    guild_id: str, forum: Any, posts: dict[str, dict[str, Any]]
+    bot: discord.Client, guild_id: str, forum: Any, posts: dict[str, dict[str, Any]]
 ) -> None:
-    """Delete every post's REGISTERED card messages - the seed rebuilds them.
+    """Delete every post's card messages - the seed rebuilds the window.
 
     The match cards are immutable by contract; a build change (the
     avatar header of 2026-11-26) can only land by shedding the old
-    messages and re-posting the window. The registry's message ids
-    point at them, the refs and the map reset together - a ref without
-    its message would skip the card forever.
+    messages and re-posting the window. The shed WALKS THE THREAD'S
+    HISTORY (owner 2026-11-27: the registry-traced cut missed the
+    cards posted before the message ids were tracked - the
+    avatar-headed strays stayed next to the fresh ones); the pinned
+    profile card and every human message stay, the registry resets
+    with the sweep - a ref without its message would skip the card
+    forever.
     """
+    bot_id = getattr(getattr(bot, "user", None), "id", None)
     shed = 0
     for uid, entry in posts.items():
-        messages = _post_messages(entry)
-        if not messages:
-            continue
         thread = _thread_of(forum, entry)
+        intro_id = int(entry.get("intro_id") or 0)
         if thread is None:
             entry["refs"] = []
             entry["messages"] = {}
             await _save_post(guild_id, uid, entry)
             continue
-        for _ref, mid in messages.items():
-            try:
-                await thread.get_partial_message(int(mid)).delete()
-                shed += 1
-            except Exception:
-                # a message already gone (a manual delete) never blocks
-                logger.debug(
-                    "the old card delete failed (post %s, message %s) - best-effort",
-                    uid,
-                    mid,
-                    exc_info=True,
-                )
+        try:
+            async for message in thread.history(limit=500):
+                # a HUMAN's message never dies here (the post is the
+                # bot's, but the hand stays off what it did not send)
+                if bot_id is not None and getattr(getattr(message, "author", None), "id", None) != bot_id:
+                    continue
+                if message.id == intro_id:
+                    continue  # the pinned profile card stays
+                try:
+                    await message.delete()
+                    shed += 1
+                except Exception:
+                    logger.debug(
+                        "the old card delete failed (post %s, message %s) - best-effort",
+                        uid,
+                        message.id,
+                        exc_info=True,
+                    )
+        except Exception:
+            logger.debug(
+                "the thread history walk failed (post %s) - best-effort", uid, exc_info=True
+            )
         entry["refs"] = []
         entry["messages"] = {}
         await _save_post(guild_id, uid, entry)

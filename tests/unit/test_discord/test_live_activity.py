@@ -1158,25 +1158,43 @@ def test_the_profile_card_pins_to_the_top_of_its_post() -> None:
 
 def test_the_build_change_sheds_the_old_cards_before_the_reseed() -> None:
     """The match cards are immutable; a BUILD change (the avatar header
-    of 2026-11-26) lands by DELETING the registered messages and
-    resetting the refs - the seed then rebuilds the window."""
+    of 2026-11-26) lands by DELETING the thread's bot messages - the
+    WALK covers the strays the registry never traced (owner
+    2026-11-27), the pinned profile card and every human message stay,
+    the refs reset, the seed rebuilds the window."""
     import asyncio
+    from types import SimpleNamespace
     from unittest.mock import patch
 
     import botforge.discord.live_activity as feed
 
     deleted: list[int] = []
 
-    class _Partial:
-        def __init__(self, mid: int) -> None:
-            self.mid = mid
+    class _Message:
+        def __init__(self, mid: int, author: str) -> None:
+            self.id = mid
+            self.author = SimpleNamespace(id=author)
 
         async def delete(self) -> None:
-            deleted.append(self.mid)
+            deleted.append(self.id)
+
+    # the thread carries: the pinned profile card (1, KEEP), a
+    # REGISTERED card (11), an UNTRACED avatar-headed stray (77), a
+    # HUMAN message (88, KEEP)
+    thread_messages = [
+        _Message(1, "bot"), _Message(11, "bot"), _Message(77, "bot"), _Message(88, "human")
+    ]
 
     class _Thread:
-        def get_partial_message(self, mid: int) -> _Partial:
-            return _Partial(mid)
+        def get_partial_message(self, mid: int):  # pragma: no cover - the history walk rules
+            del mid
+
+        def history(self, limit: int = 500):
+            async def _gen():
+                for message in list(thread_messages):
+                    yield message
+
+            return _gen()
 
     class _Forum:
         def get_thread(self, tid: int):
@@ -1190,12 +1208,15 @@ def test_the_build_change_sheds_the_old_cards_before_the_reseed() -> None:
     async def _fake_save(guild_id, uid, entry):
         saved.append((uid, dict(entry or {})))
 
+    bot = SimpleNamespace(user=SimpleNamespace(id="bot"))
     posts = {
-        "u1": {"thread_id": "1", "refs": ["m1", "m2"], "messages": {"m1": "11", "m2": "22"}},
+        "u1": {"thread_id": "1", "intro_id": "1", "refs": ["m1"], "messages": {"m1": "11"}},
         "u2": {"thread_id": "9", "refs": ["m3"], "messages": {"m3": "33"}},  # dead thread
     }
     with patch.object(feed, "_save_post", _fake_save):
-        asyncio.run(feed._shed_old_cards("42", _Forum(), posts))
-    assert sorted(deleted) == [11, 22], "the registered messages die, the dead thread skips"
+        asyncio.run(feed._shed_old_cards(bot, "42", _Forum(), posts))
+    assert sorted(deleted) == [11, 77], (
+        "the registered card AND the untraced stray die; the profile card and the human message stay"
+    )
     assert posts["u1"]["refs"] == [] and posts["u1"]["messages"] == {}, "the refs reset with the map"
     assert posts["u2"]["refs"] == [], "a dead thread still resets - the card re-posts"
