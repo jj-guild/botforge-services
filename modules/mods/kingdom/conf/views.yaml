@@ -42,6 +42,14 @@ views:
   # announcement surface (verdict + podium + the admin close button)
   panel:mod:kingdom:season:end:
     kind: surface
+  # delta-lab-v1 (Drasah 28/11) : le 🌱 labo bêta — le tiroir, la
+  # cérémonie de fin (les deux portes) et la galerie de messages
+  panel:mod:kingdom:admin:delta:
+    kind: surface
+  panel:mod:kingdom:delta:end:
+    kind: surface
+  panel:mod:kingdom:delta:gallery:
+    kind: surface
   # decisions-admin-v1 (Drasah 25/11): the admin decisions inbox
   # (the drawer) and the per-attack action window — same surface rule
   panel:mod:kingdom:admin:decisions:

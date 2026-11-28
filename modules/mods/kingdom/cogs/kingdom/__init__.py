@@ -366,6 +366,7 @@ def setup_hook(bot: Any) -> None:
     from .common import KingdomWindowCloseButton
     from .console import KingdomClockButton, KingdomRelaunchButton, KingdomResetButton
     from .decisions import decisions_dynamic_items
+    from .delta import delta_dynamic_items
     from .distributor import distributor_dynamic_items
     from .ffa import FFAJoinButton
     from .lieux import lieux_dynamic_items
@@ -480,6 +481,7 @@ def setup_hook(bot: Any) -> None:
         *machine_dynamic_items(),
         *distributor_dynamic_items(),
         *camp_dynamic_items(),
+        *delta_dynamic_items(),
         *realm_dynamic_items(),
         *lieux_dynamic_items(),
         *realm_content_dynamic_items(),
