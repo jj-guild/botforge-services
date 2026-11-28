@@ -10,6 +10,7 @@ the whole flow against fakes (no Mongo, no provider).
 from __future__ import annotations
 
 import re
+from pathlib import Path
 from typing import Any
 
 import discord
@@ -45,7 +46,7 @@ class _FakeRegistration:
     async def list_bindings(self, user_id: str) -> list[dict[str, Any]]:
         return [b for b in self.bindings if b["user_id"] == user_id]
 
-    async def bind_profile(self, user_id: str, game_key: str, profile_id: str) -> dict[str, Any]:
+    async def bind_profile(self, user_id: str, game_key: str, profile_id: str, guild_id: str = "") -> dict[str, Any]:
         for b in self.bindings:
             if b["profile_id"] == profile_id:
                 raise ValueError("already bound")
@@ -59,7 +60,7 @@ class _FakeRegistration:
         self.bindings.append(binding)
         return binding
 
-    async def unlink_profile(self, user_id: str, game_key: str, profile_id: str) -> bool:
+    async def unlink_profile(self, user_id: str, game_key: str, profile_id: str, guild_id: str = "") -> bool:
         before = len(self.bindings)
         self.bindings = [
             b
@@ -287,7 +288,7 @@ async def test_add_failure_names_the_provider(monkeypatch: Any) -> None:
     interaction = _Interaction()
     interaction.client.registration_service = registration
 
-    async def _boom(user_id: str, game_key: str, profile_id: str) -> dict[str, Any]:
+    async def _boom(user_id: str, game_key: str, profile_id: str, guild_id: str = "") -> dict[str, Any]:
         raise ConnectionError("ext-librematch provider did not answer")
 
     registration.bind_profile = _boom  # type: ignore[method-assign]
@@ -551,3 +552,40 @@ async def test_resolve_relic_id_caps_the_input() -> None:
     assert await resolve_relic_id("", transport=_NoNetworkTransport()) is None
     assert await resolve_relic_id("9" * 101, transport=_NoNetworkTransport()) is None
     assert await resolve_relic_id("abc", transport=_NoNetworkTransport()) is None
+
+
+class TestProfileHeaderLocalized:
+    """The header rides the catalog — no hardcoded English island."""
+
+    @staticmethod
+    def _fr_interaction() -> Any:
+        from botforge.core.services.i18n import MessageCatalog
+
+        interaction = _Interaction()
+        interaction.client.messages = MessageCatalog(Path("config"))
+        interaction.locale = "fr"
+        return interaction
+
+    @pytest.mark.asyncio
+    async def test_no_name_renders_french(self) -> None:
+        interaction = self._fr_interaction()
+        header = await home_module._profile_header(interaction, "42")
+        assert "Ton profil" in header, header
+        assert "Your profile" not in header, "the header must not leak English"
+
+    @pytest.mark.asyncio
+    async def test_with_name_renders_french(self) -> None:
+        interaction = self._fr_interaction()
+        identity = _FakeIdentity()
+        identity.users["discord:42"] = "Merlin"
+        interaction.client.identity_service = identity
+
+        header = await home_module._profile_header(interaction, "42")
+        assert "Ton profil" in header, header
+        assert "Merlin" in header, header
+
+    @pytest.mark.asyncio
+    async def test_catalog_missing_falls_back_english(self) -> None:
+        interaction = _Interaction()  # client.messages stays None
+        header = await home_module._profile_header(interaction, "42")
+        assert header == "# 👤 Your profile\nNickname: *(unset)*"

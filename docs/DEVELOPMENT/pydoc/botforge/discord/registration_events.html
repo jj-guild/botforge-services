@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Python: botforge.discord.registration_events</title>
+</head><body>
+
+<table class="heading">
+<tr class="heading-text decor">
+<td class="title">&nbsp;<br><strong class="title"><a href="botforge.html" class="white">botforge</a>.<a href="botforge.discord.html" class="white">discord</a>.registration_events</strong></td>
+<td class="extra"><a href=".">index</a><br><a href="file:SOURCE_ROOT/discord/registration_events.py">SOURCE_ROOT/discord/registration_events.py</a></td></tr></table>
+    <p><span class="code">The&nbsp;Discord-side&nbsp;registration&nbsp;event&nbsp;sink&nbsp;(salon-gating&nbsp;subscriptions).<br>
+&nbsp;<br>
+The&nbsp;core's&nbsp;``RegistrationEvents``&nbsp;seam&nbsp;stays&nbsp;transport-free&nbsp;—&nbsp;this<br>
+module&nbsp;is&nbsp;the&nbsp;Discord&nbsp;dispatcher:&nbsp;an&nbsp;intent&nbsp;emitted&nbsp;by&nbsp;the<br>
+RegistrationService&nbsp;fans&nbsp;out&nbsp;to&nbsp;every&nbsp;subscriber&nbsp;registered&nbsp;on&nbsp;the&nbsp;bot<br>
+(``bot.registration_event_subscribers``).&nbsp;Mods&nbsp;subscribe&nbsp;to&nbsp;grant<br>
+access&nbsp;(a&nbsp;role&nbsp;the&nbsp;gated&nbsp;salons&nbsp;read);&nbsp;the&nbsp;platform&nbsp;wires&nbsp;the&nbsp;sink&nbsp;in<br>
+the&nbsp;factory,&nbsp;never&nbsp;the&nbsp;other&nbsp;way&nbsp;around.</span></p>
+<p>
+<table class="section">
+<tr class="decor pkg-content-decor heading-text">
+<td class="section-title" colspan=3>&nbsp;<br><strong class="bigsection">Modules</strong></td></tr>
+    
+<tr><td class="decor pkg-content-decor"><span class="code">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span></td><td>&nbsp;</td>
+<td class="singlecolumn"><table><tr><td class="multicolumn"><a href="logging.html">logging</a><br>
+</td><td class="multicolumn"></td><td class="multicolumn"></td><td class="multicolumn"></td></tr></table></td></tr></table><p>
+<table class="section">
+<tr class="decor index-decor heading-text">
+<td class="section-title" colspan=3>&nbsp;<br><strong class="bigsection">Classes</strong></td></tr>
+    
+<tr><td class="decor index-decor"><span class="code">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span></td><td>&nbsp;</td>
+<td class="singlecolumn"><dl>
+<dt class="heading-text"><a href="builtins.html#object">builtins.object</a>
+</dt><dd>
+<dl>
+<dt class="heading-text"><a href="botforge.discord.registration_events.html#RegistrationEventSink">RegistrationEventSink</a>
+</dt></dl>
+</dd>
+</dl>
+ <p>
+<table class="section">
+<tr class="decor title-decor heading-text">
+<td class="section-title" colspan=3>&nbsp;<br><a name="RegistrationEventSink">class <strong>RegistrationEventSink</strong></a>(<a href="builtins.html#object">builtins.object</a>)</td></tr>
+    
+<tr><td class="decor title-decor" rowspan=2><span class="code">&nbsp;&nbsp;&nbsp;</span></td>
+<td class="decor title-decor" colspan=2><span class="code"><a href="#RegistrationEventSink">RegistrationEventSink</a>(bot:&nbsp;'Any'&nbsp;=&nbsp;None)&nbsp;-&amp;gt;&nbsp;'None'<br>
+&nbsp;<br>
+Fan&nbsp;the&nbsp;core's&nbsp;registration&nbsp;intents&nbsp;out&nbsp;to&nbsp;the&nbsp;bot's&nbsp;subscribers.<br>
+&nbsp;<br>
+The&nbsp;sink&nbsp;is&nbsp;best-effort&nbsp;by&nbsp;contract&nbsp;(the&nbsp;core&nbsp;wraps&nbsp;the&nbsp;emit):&nbsp;a<br>
+failing&nbsp;subscriber&nbsp;logs&nbsp;and&nbsp;NEVER&nbsp;breaks&nbsp;the&nbsp;bind&nbsp;itself.<br>&nbsp;</span></td></tr>
+<tr><td>&nbsp;</td>
+<td class="singlecolumn">Methods defined here:<br>
+<dl><dt><a name="RegistrationEventSink-__init__"><strong>__init__</strong></a>(self, bot: 'Any' = None) -&gt; 'None'</dt><dd><span class="code">Store&nbsp;the&nbsp;bot&nbsp;the&nbsp;subscribers&nbsp;live&nbsp;on.</span></dd></dl>
+
+<dl><dt>async <a name="RegistrationEventSink-emit"><strong>emit</strong></a>(self, intent: 'str', payload: 'dict[str, Any]') -&gt; 'None'</dt><dd><span class="code">Forward&nbsp;one&nbsp;intent&nbsp;to&nbsp;every&nbsp;subscriber&nbsp;(best-effort).</span></dd></dl>
+
+<hr>
+Data descriptors defined here:<br>
+<dl><dt><strong>__dict__</strong></dt>
+<dd><span class="code">dictionary&nbsp;for&nbsp;instance&nbsp;variables</span></dd>
+</dl>
+<dl><dt><strong>__weakref__</strong></dt>
+<dd><span class="code">list&nbsp;of&nbsp;weak&nbsp;references&nbsp;to&nbsp;the&nbsp;object</span></dd>
+</dl>
+</td></tr></table></td></tr></table><p>
+<table class="section">
+<tr class="decor functions-decor heading-text">
+<td class="section-title" colspan=3>&nbsp;<br><strong class="bigsection">Functions</strong></td></tr>
+    
+<tr><td class="decor functions-decor"><span class="code">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span></td><td>&nbsp;</td>
+<td class="singlecolumn"><dl><dt><a name="-subscribe_registration_events"><strong>subscribe_registration_events</strong></a>(bot: 'Any', handler: 'Any') -&gt; 'None'</dt><dd><span class="code">Register&nbsp;one&nbsp;async&nbsp;``(intent,&nbsp;payload)``&nbsp;subscriber&nbsp;(idempotent).</span></dd></dl>
+</td></tr></table><p>
+<table class="section">
+<tr class="decor data-decor heading-text">
+<td class="section-title" colspan=3>&nbsp;<br><strong class="bigsection">Data</strong></td></tr>
+    
+<tr><td class="decor data-decor"><span class="code">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span></td><td>&nbsp;</td>
+<td class="singlecolumn"><strong>logger</strong> = &lt;Logger botforge.registration_events (INFO)&gt;</td></tr></table>
+</body></html>

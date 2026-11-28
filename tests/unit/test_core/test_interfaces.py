@@ -2,7 +2,16 @@
 
 from __future__ import annotations
 
-from botforge.core.interfaces.platform import IChannel, IMessage, IPlatform, IUser, IWorkflow
+from typing import Any
+
+from botforge.core.interfaces.platform import (
+    IChannel,
+    IMessage,
+    IPlatform,
+    IUser,
+    IView,
+    IWorkflow,
+)
 from botforge.core.models.workflow import WorkflowStatus, WorkflowTransition
 
 
@@ -44,15 +53,48 @@ class FakeMessage:
         return FakeChannel()
 
 
+class FakeView:
+    """A view handle: opaque by contract, whatever it carries is the impl's business."""
+
+
 class FakePlatform:
     async def send_message(self, channel: IChannel, content: str) -> IMessage:
         return FakeMessage()
 
-    async def send_dm(self, user: IUser, content: str) -> IMessage:
+    async def send_dm(
+        self,
+        user: IUser,
+        content: str,
+        view: IView | None = None,
+        files: Any | None = None,
+    ) -> IMessage:
         return FakeMessage()
 
-    async def create_channel(self, guild_id: str, category: str) -> IChannel:
+    async def edit_dm(
+        self,
+        message: IMessage,
+        content: str,
+        view: IView | None = None,
+        files: Any | None = None,
+    ) -> IMessage:
+        return FakeMessage()
+
+    async def delete_dm(self, message: IMessage) -> None:
+        return None
+
+    async def create_channel(
+        self,
+        guild_id: str,
+        name: str,
+        category_id: str | None = None,
+        kind: str = "text",
+        overwrites: dict[str, dict[str, bool]] | None = None,
+        position: int | None = None,
+    ) -> IChannel:
         return FakeChannel()
+
+    async def delete_channel(self, channel_id: str) -> None:
+        return None
 
     async def assign_role(self, user: IUser, role_key: str) -> None:
         return None

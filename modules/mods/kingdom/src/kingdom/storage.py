@@ -1,4 +1,4 @@
-"""Kingdoms mod persistence: a narrow async store over the season data.
+"""Kingdom mod persistence: a narrow async store over the season data.
 
 The season collections are owned by the mod (ADR-0020 note on the
 models): seasons, kingdoms and lords live in MongoDB behind this seam.
@@ -21,6 +21,32 @@ PLANS_COLLECTION = "kingdoms_plans"
 SHOWMATCH_COLLECTION = "kingdoms_showmatch"
 FFA_COLLECTION = "kingdoms_ffa"
 SEASON_ARCHIVES_COLLECTION = "kingdoms_season_archives"
+# royaume-persistant-v1 (Drasah 20/11): the PERSISTENT realm shells —
+# NEVER listed in wipe_season_data (a realm outlives every season).
+REALMS_COLLECTION = "kingdoms_realms"
+# decisions-admin-v1 (Drasah 25/11): the admin decisions LEDGER — a
+# decision outlives the season it was taken in (the B2 consultation
+# surface reads it across seasons), so like the realm shells it is
+# NEVER listed in wipe_season_data.
+DECISIONS_COLLECTION = "kingdoms_decisions"
+
+# The season wipe's collection list — the PERSISTENT shells
+# (REALMS_COLLECTION, royaume-persistant-v1 Drasah 20/11) are
+# DELIBERATELY ABSENT: a realm survives every season wipe.
+SEASON_WIPE_COLLECTIONS: tuple[str, ...] = (
+    SEASONS_COLLECTION,
+    KINGDOMS_COLLECTION,
+    LORDS_COLLECTION,
+    TERRITORIES_COLLECTION,
+    TECHNOLOGIES_COLLECTION,
+    ATTACKS_COLLECTION,
+    SHOWMATCH_COLLECTION,
+    FFA_COLLECTION,
+    # plan-orphan-v1 (Drasah 31/10): a plan is season data — the prod
+    # wipe NEVER dropped this collection, so a resetup left stale plans
+    # whose lords no longer existed.
+    PLANS_COLLECTION,
+)
 
 
 class KingdomStore(Protocol):
@@ -132,6 +158,26 @@ class KingdomStore(Protocol):
 
     async def find_season_archives(self) -> list[dict[str, Any]]:
         """Return every archived season snapshot (ascending by date)."""
+        ...
+
+    async def upsert_realm(self, document: dict[str, Any]) -> None:
+        """Insert or replace one persistent realm shell by ``_id``."""
+        ...
+
+    async def find_realms(self) -> list[dict[str, Any]]:
+        """Return every persistent realm shell (never season-wiped)."""
+        ...
+
+    async def delete_realm(self, realm_id: str) -> None:
+        """Drop one persistent realm shell (dissolution, admin/Roi)."""
+        ...
+
+    async def upsert_decision(self, document: dict[str, Any]) -> None:
+        """Insert or replace one admin-decision document by ``_id``."""
+        ...
+
+    async def find_decisions(self) -> list[dict[str, Any]]:
+        """Return every admin-decision document (newest last)."""
         ...
 
 
@@ -277,24 +323,19 @@ class MongoKingdomStore:
 
         Every season-scoped collection is dropped: a new season never
         inherits anything from the previous one (reference §3.3).
+        The PERSISTENT realm shells (REALMS_COLLECTION) are NEVER
+        dropped here (royaume-persistant-v1, Drasah 20/11), and a
+        ShowMatch still UNFINISHED survives the reset too
+        (fin-saison-v2, Affaire 42): the tie ShowMatch lives outside
+        the season, so only the finished/archived ones are purged.
         """
-        for collection in (
-            SEASONS_COLLECTION,
-            KINGDOMS_COLLECTION,
-            LORDS_COLLECTION,
-            TERRITORIES_COLLECTION,
-            TECHNOLOGIES_COLLECTION,
-            ATTACKS_COLLECTION,
-            SHOWMATCH_COLLECTION,
-            FFA_COLLECTION,
-            # plan-orphan-v1 (Drasah 31/10): a plan is season data —
-            # the prod wipe NEVER dropped this collection, so a resetup
-            # left stale plans whose lords no longer existed; the
-            # first due plan then raised NotEnrolledError at EVERY
-            # tick and killed the whole attack phase pass.
-            PLANS_COLLECTION,
-        ):
-            await self._storage.collection(collection).delete_many({})
+        for collection in SEASON_WIPE_COLLECTIONS:
+            if collection == SHOWMATCH_COLLECTION:
+                await self._storage.collection(collection).delete_many(
+                    {"finished": {"$ne": False}}
+                )
+            else:
+                await self._storage.collection(collection).delete_many({})
 
     async def upsert_season_archive(self, document: dict[str, Any]) -> None:
         """Insert one season archive document (never wiped by a reset)."""
@@ -303,4 +344,34 @@ class MongoKingdomStore:
     async def find_season_archives(self) -> list[dict[str, Any]]:
         """Return every archived season snapshot (ascending by archived_at)."""
         cursor = self._storage.collection(SEASON_ARCHIVES_COLLECTION).find({}).sort("archived_at", 1)
+        return [dict(doc) async for doc in cursor]
+
+    async def upsert_realm(self, document: dict[str, Any]) -> None:
+        """Upsert one persistent realm shell (royaume-persistant-v1)."""
+        await self._storage.collection(REALMS_COLLECTION).replace_one(
+            {"_id": document["_id"]}, document, upsert=True
+        )
+
+    async def find_realms(self) -> list[dict[str, Any]]:
+        """Every persistent realm shell — the wipe NEVER touches these."""
+        cursor = self._storage.collection(REALMS_COLLECTION).find({})
+        return [dict(doc) async for doc in cursor]
+
+    async def delete_realm(self, realm_id: str) -> None:
+        """Drop one persistent realm shell (best-effort, one id)."""
+        await self._storage.collection(REALMS_COLLECTION).delete_one({"_id": realm_id})
+
+    async def upsert_decision(self, document: dict[str, Any]) -> None:
+        """Upsert one admin-decision document (decisions-admin-v1)."""
+        await self._storage.collection(DECISIONS_COLLECTION).replace_one(
+            {"_id": document["_id"]}, document, upsert=True
+        )
+
+    async def find_decisions(self) -> list[dict[str, Any]]:
+        """Every admin-decision document, ascending by ``created_at``.
+
+        Never wiped (like the realm shells): a decision outlives its
+        season — the B2 consultation reads it across seasons.
+        """
+        cursor = self._storage.collection(DECISIONS_COLLECTION).find({}).sort("created_at", 1)
         return [dict(doc) async for doc in cursor]

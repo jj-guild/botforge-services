@@ -222,6 +222,15 @@ ALLOWLIST_R5: tuple[str, ...] = (
 MODS_ROOT = Path(__file__).resolve().parents[2] / "modules"
 
 
+def _mod_relative(path: Path) -> str:
+    """One offender's stable, checkout-independent path (relative to modules/).
+
+    The repo root differs between CI and a local workspace (the path prefix
+    otherwise breaks the allowlist's fresh/stale pairing).
+    """
+    return str(path.relative_to(MODS_ROOT))
+
+
 def _mod_files(*, exclude_cogs: bool = False) -> list[Path]:
     """Every Python file under modules/, minus the cogs when asked."""
     if not MODS_ROOT.is_dir():
@@ -252,8 +261,12 @@ def test_r6_mod_services_never_import_discord() -> None:
     """
     offenders: list[str] = []
     for path in _mod_files(exclude_cogs=True):
+        if "tests" in path.parts:
+            # the mod's own test suite is UI-facing with the cogs (it
+            # mounts simcord/discord shells), never mod service logic
+            continue
         if _DISCORD_IMPORT_RE.search(path.read_text(encoding="utf-8")):
-            offenders.append(f"{path.relative_to(MODS_ROOT.parents[1])} imports discord outside its cogs")
+            offenders.append(f"{_mod_relative(path)} imports discord outside its cogs")
     _assert_allowed(offenders, ALLOWLIST_R6, "a mod imports discord outside its cogs")
 
 
@@ -267,7 +280,7 @@ def test_r7_mods_never_touch_the_network() -> None:
     offenders: list[str] = []
     for path in _mod_files():
         if _NETWORK_IMPORT_RE.search(path.read_text(encoding="utf-8")):
-            offenders.append(f"{path.relative_to(MODS_ROOT.parents[1])} touches the network directly")
+            offenders.append(f"{_mod_relative(path)} touches the network directly")
     _assert_allowed(offenders, ALLOWLIST_R7, "a mod touches the network directly")
 
 
@@ -281,11 +294,15 @@ def test_r8_mods_never_touch_collections_raw() -> None:
     offenders: list[str] = []
     for path in _mod_files():
         if _RAW_COLLECTION_RE.search(path.read_text(encoding="utf-8")):
-            offenders.append(f"{path.relative_to(MODS_ROOT.parents[1])} touches a collection raw")
+            offenders.append(f"{_mod_relative(path)} touches a collection raw")
     _assert_allowed(offenders, ALLOWLIST_R8, "a mod touches a collection raw")
 
 
 # The dated, documented gaps (the audit trail — every chantier shrinks it):
 ALLOWLIST_R6: tuple[str, ...] = ()
-ALLOWLIST_R7: tuple[str, ...] = ()
+ALLOWLIST_R7: tuple[str, ...] = (
+    # the crest images (civ_crests) fetch the shared CDN art pack
+    # directly; a provider seam replaces it when #182 lands
+    "mods/kingdom/cogs/kingdom/civ_crests.py touches the network directly",
+)
 ALLOWLIST_R8: tuple[str, ...] = ()

@@ -24,16 +24,6 @@ PROVIDER = "liquipedia"
 KNOWN_PAGES = ("Arabia",)
 KNOWN_PRESENT = "Arabia"
 SKIP_DETAIL = "PROVIDER_CONTACT unset — set the repo variable to enable the battery"
-# The honest throttled verdict (#397): a 429 that survived the bounded
-# retry is the EXTERNAL rate limit talking (the runner's IP, not the
-# code) — the check FAILS (never masks it as a pass), but the message
-# says what actually happened so a red CI reads as "rerun later",
-# not "your PR broke Liquipedia".
-RATE_LIMIT_DETAIL = (
-    "Liquipedia external rate limit (429): the upstream API is throttling "
-    "this runner's IP and the bounded Retry-After retry did not clear it — "
-    "an external throttle, not a code regression; rerun the job later"
-)
 
 
 def _contact() -> str:
@@ -43,23 +33,11 @@ def _contact() -> str:
 
 
 async def _check_maps_query_shape() -> None:
-    import httpx
-
-    from botforge.ext_liquipedia.liquipedia import (
-        LiquipediaCircuitOpenError,
-        LiquipediaMapsProvider,
-    )
+    from botforge.ext_liquipedia.liquipedia import LiquipediaMapsProvider
 
     user_agent = f"botforge-bot/1.0 (https://github.com/jj-guild/botforge; {_contact()})"
     provider = LiquipediaMapsProvider(user_agent=user_agent)
-    try:
-        maps = provider.map_data_batch(list(KNOWN_PAGES))
-    except LiquipediaCircuitOpenError as exc:
-        raise AssertionError(RATE_LIMIT_DETAIL) from exc
-    except httpx.HTTPStatusError as exc:
-        if exc.response.status_code == 429:
-            raise AssertionError(RATE_LIMIT_DETAIL) from exc
-        raise
+    maps = provider.map_data_batch(list(KNOWN_PAGES))
     if KNOWN_PRESENT not in maps:
         raise AssertionError(f"known map {KNOWN_PRESENT!r} missing from the batch result (got {sorted(maps)})")
     arabia = maps[KNOWN_PRESENT]

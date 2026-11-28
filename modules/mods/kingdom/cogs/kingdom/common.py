@@ -1,0 +1,876 @@
+"""The attack surfaces' shared plumbing (P4.1b tranche 1).
+
+Everything the declare panel, the wizard and the attack salons share:
+the service wiring (through the §7 contract — never the mod's
+internals), the locale, the fenêtre-unique ephemeral registry, the
+Paris clock formatters and the salon helpers. Ported from the
+reference ``kingdom_persistent.py``/``kingdom_attack_panel.py``
+helpers, harmonized onto the core seams (botforge.discord.ephemeral,
+locales, guards).
+"""
+
+from __future__ import annotations
+
+import hashlib
+import logging
+import re
+from datetime import datetime
+from typing import Any
+from zoneinfo import ZoneInfo
+
+import discord
+
+logger = logging.getLogger("kingdom.attack")
+
+_PARIS = ZoneInfo("Europe/Paris")
+_ACCENTS = re.compile(r"[\W_]+", re.UNICODE)
+
+# the fenêtre unique rides the platform seam (#381 ruling 3): the mod
+# DECLARES its navigation mode (SINGLE — one live window per player,
+# fenetre-unique-v3, Drasah 28/10) and the seam owns the plumbing.
+KINGDOM_WINDOW_SCOPE = "mod/kingdom"
+
+
+def _declare_window_mode() -> None:
+    """Idempotent mode registration (import time and register time)."""
+    from botforge.discord.ui.ephemeral_windows import EphemeralWindowMode, set_window_mode, set_window_ttl
+
+    set_window_mode(KINGDOM_WINDOW_SCOPE, EphemeralWindowMode.SINGLE)
+    # Drasah 21/11: an ephemeral window is pollution if it lingers —
+    # data, not code: the TTL lives here per scope (14 minutes).
+    set_window_ttl(KINGDOM_WINDOW_SCOPE, 14 * 60.0)
+
+
+_declare_window_mode()
+
+
+# ---------------------------------------------------------------------------
+# The window close button (Drasah 21/11: « rejeter le message » n'est
+# pas découvrable — every mod window carries an explicit ✖️ close)
+# ---------------------------------------------------------------------------
+
+
+class KingdomWindowCloseButton(
+    discord.ui.DynamicItem[discord.ui.Button], template=r"kingdom:window:close"
+):
+    """The explicit close control on every mod ephemeral window.
+
+    It rides the LAST row of the window (appended by
+    ``open_unique_ephemeral``), deletes the message it was clicked on
+    (which also settles post-restart orphans the registry lost), and
+    pops the single-window record so the seam stays coherent.
+    """
+
+    def __init__(self, label: str) -> None:
+        super().__init__(
+            discord.ui.Button(
+                label=label,
+                style=discord.ButtonStyle.grey,
+                custom_id="kingdom:window:close",
+            )
+        )
+
+    @classmethod
+    async def from_custom_id(cls, interaction: discord.Interaction, item: discord.ui.Button, match: re.Match[str]) -> "KingdomWindowCloseButton":
+        # Check-108 lesson, both sides read the SAME catalog — the
+        # replay cannot crash on a missing key the callback owns.
+        catalog = mod_catalog()
+        strings = catalog.section("kingdom.settings", locale_of(interaction))
+        return cls(str(strings["settings_window_close_button"]))
+
+    async def callback(self, interaction: discord.Interaction) -> None:
+        from botforge.discord.ui.ephemeral_windows import close_ephemeral_window
+
+        # silent ack first — the click must NEVER show the timeout
+        try:
+            await interaction.response.defer(ephemeral=True)
+        except Exception:
+            logger.debug("kingdom: close ack failed", exc_info=True)
+        # the message the button rides IS the window — deleting it
+        # works even when the registry lost it (a restart)
+        message = getattr(interaction, "message", None)
+        if message is not None:
+            try:
+                await message.delete()
+            except Exception:
+                logger.debug("kingdom: close delete failed", exc_info=True)
+        await close_ephemeral_window(KINGDOM_WINDOW_SCOPE, str(interaction.user.id))
+
+
+def _window_string(interaction: discord.Interaction, key: str) -> str:
+    strings = mod_catalog().section("kingdom.settings", locale_of(interaction))
+    return str(strings[key])
+
+
+def _with_close_row(view: "discord.ui.LayoutView", interaction: discord.Interaction) -> "discord.ui.LayoutView":
+    """Append the explicit close control to a window view (#395: the
+    same parameterised row everywhere, never a bespoke per-view one).
+
+    fenetres-classiques-v1 (Drasah 24/11, incident live « Kingdom Test
+    ne répond pas ») : the wizard steps pass a CLASSIC View, and
+    discord.py forbids v2 items there (``ValueError: v2 items cannot
+    be added to this view``) — the click crashed AFTER Discord's 3s
+    ack window, so the player saw « the application did not respond »
+    instead of his window. The branch keeps ONE close control, worn
+    the way the receiving view accepts it: an ActionRow (v2) on a
+    LayoutView, a plain Button on a classic View. Same custom_id,
+    same KingdomWindowCloseButton handler either way."""
+    if isinstance(view, discord.ui.LayoutView):
+        row = discord.ui.ActionRow()
+        row.add_item(
+            discord.ui.Button(
+                label=_window_string(interaction, "settings_window_close_button"),
+                style=discord.ButtonStyle.grey,
+                custom_id="kingdom:window:close",
+            )
+        )
+        view.add_item(row)
+        return view
+    view.add_item(
+        discord.ui.Button(
+            label=_window_string(interaction, "settings_window_close_button"),
+            style=discord.ButtonStyle.grey,
+            custom_id="kingdom:window:close",
+        )
+    )
+    return view
+
+
+def _note_window(text: str, interaction: discord.Interaction) -> "discord.ui.LayoutView":
+    """A content-only note turned into a declared closable surface."""
+    body = discord.ui.Container(discord.ui.TextDisplay(text))
+    view = surface("panel:mod:kingdom:note", body)
+    return _with_close_row(view, interaction)
+
+
+# ---------------------------------------------------------------------------
+# The service wiring (§7: the cog talks ONLY through the contract)
+# ---------------------------------------------------------------------------
+
+
+def wiring() -> Any:
+    """Return the mod's service stack holder (``stack`` may be None).
+
+    The stack resolves LAZILY on every call — a bot that wired its
+    Mongo later (or rebuilt it) self-heals, exactly like the
+    reference's on-demand resolution.
+    """
+    from botforge.core.services.mod_entrypoint import mod_service
+
+    service = mod_service("kingdom")
+    return getattr(service, "stack", lambda: None)()
+
+
+def _bot_admins(interaction: discord.Interaction | None = None) -> tuple[str, ...]:
+    """The platform's bot-admins ids (best-effort, empty in CI)."""
+    if interaction is None:
+        return ()
+    try:
+        admins = getattr(getattr(interaction.client, "status_service", None), "bot_admins", ())
+        return tuple(str(admin) for admin in admins or ())
+    except Exception:
+        return ()
+
+
+async def lord_of(kingdoms: Any, user_id: str, interaction: discord.Interaction | None = None) -> Any | None:
+    """Return the active lord record of the user (any role, None otherwise).
+
+    kingdom-test-v1: an admin with no record falls back to the test
+    kingdom's king (the admin-as-king rule).
+    """
+    if kingdoms is None:
+        return None
+    try:
+        lords = await kingdoms.lords()
+    except Exception:
+        logger.warning("kingdom: lord scan failed", exc_info=True)
+        return None
+    lord = next((item for item in lords if str(item.id) == str(user_id) and not item.left), None)
+    if lord is not None:
+        return lord
+    if str(user_id) not in {str(admin) for admin in _bot_admins(interaction)}:
+        return None
+    # the admin hat: pilot the test kingdom's king when one exists
+    from botforge.mods.kingdom.service import TEST_KINGDOM_ID
+
+    return next(
+        (
+            item
+            for item in lords
+            if not item.left and str(item.kingdom_id or "") == str(TEST_KINGDOM_ID)
+        ),
+        None,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Locale + strings
+# ---------------------------------------------------------------------------
+
+
+def locale_of(interaction: discord.Interaction) -> str:
+    """The interaction's locale (the reference's default: fr)."""
+    return str(interaction.locale) if interaction.locale else "fr"
+
+
+def strings_for(interaction: discord.Interaction) -> dict[str, str]:
+    from .strings import strings
+
+    return strings(locale_of(interaction))
+
+
+# ---------------------------------------------------------------------------
+# The fenêtre unique (one ephemeral window per player)
+# ---------------------------------------------------------------------------
+
+
+async def close_previous_ephemeral(user_id: str) -> None:
+    """Best-effort: delete the player's previous ephemeral window."""
+    from botforge.discord.ui.ephemeral_windows import close_ephemeral_window
+
+    await close_ephemeral_window(KINGDOM_WINDOW_SCOPE, user_id)
+
+
+def live_unique_window(interaction: discord.Interaction) -> Any | None:
+    """The player's tracked single window (None when nothing is open).
+
+    settings-window-autoclose (Drasah 21/11): a caller captures this
+    BEFORE an action, then asks ``close_window_if_unmoved`` — the
+    pair is the mod's retire-the-window template (announce-ready:
+    any action surface reuses it, no bespoke closing code).
+    """
+    from botforge.discord.ui.ephemeral_windows import get_live_window
+
+    return get_live_window(KINGDOM_WINDOW_SCOPE, str(interaction.user.id))
+
+
+async def close_window_if_unmoved(
+    interaction: discord.Interaction, before: Any | None
+) -> None:
+    """Retire the window an action RODE (best-effort, never raises).
+
+    Drasah 21/11: « quand j'appuie sur Démarrer/Fermer la bêta, Faux
+    départ... la fenêtre se ferme — sinon, ça me pollue trop » — an
+    action that produced its answer from inside a window closes it,
+    so the note stays ALONE on screen. The close runs ONLY when the
+    tracked window is still the one captured BEFORE the action: a
+    handler that OPENED a window moved the record (the SINGLE mode
+    already retired the old card in that path), and the close must
+    never kill the NEW surface. Pin-side clicks (nothing tracked)
+    are no-ops — a pinned cockpit button never deletes the pin.
+    """
+    if before is None:
+        return
+    try:
+        from botforge.discord.ui.ephemeral_windows import (
+            close_ephemeral_window,
+            get_live_window,
+        )
+
+        if get_live_window(KINGDOM_WINDOW_SCOPE, str(interaction.user.id)) is not before:
+            return
+        await close_ephemeral_window(KINGDOM_WINDOW_SCOPE, str(interaction.user.id))
+    except Exception:
+        logger.info("kingdom: window autoclose skipped", exc_info=True)
+
+
+def surface(view_id: str, *items: Any) -> "discord.ui.LayoutView":
+    """Build one declared mod surface — the id footer appended, always.
+
+    #381 ruling 1 (Merlin 17/11): every ephemeral surface is DECLARED
+    (``conf/views.yaml``) and carries its view-id footer — the anchor
+    every human feedback refers to. A missing declaration is logged
+    loudly but never kills a live game surface (the drift is caught by
+    the tests, the player still gets his window).
+    """
+    from botforge.discord.ui.view_footer import build_view, require_declared_view_id
+
+    try:
+        require_declared_view_id(view_id)
+    except ValueError:
+        logger.error("kingdom: surface %s is NOT declared in conf/views.yaml", view_id)
+    return build_view(view_id, *items)
+
+
+def surface_footer(view_id: str) -> str:
+    """The id footer line for a content-only surface (text, not a view)."""
+    from botforge.core.ids import footer
+    from botforge.discord.ui.view_footer import require_declared_view_id
+
+    try:
+        require_declared_view_id(view_id)
+    except ValueError:
+        logger.error("kingdom: surface %s is NOT declared in conf/views.yaml", view_id)
+    return footer(view_id)
+
+
+async def open_unique_ephemeral(
+    interaction: discord.Interaction, content: str | None = None, **kwargs: Any
+) -> None:
+    """Open THE player's single ephemeral window (the declared mode).
+
+    Drasah 21/11: EVERY window the mod opens is explicitly closable —
+    a bare text note becomes a declared note surface (with the ✖️
+    row), a view gets the ✖️ row appended. One code path, no bespoke
+    surfaces.
+    """
+    from botforge.discord.ui.ephemeral_windows import open_ephemeral_window
+
+    view = kwargs.get("view")
+    if view is not None:
+        _with_close_row(view, interaction)
+    elif content is not None:
+        kwargs["view"] = _note_window(content, interaction)
+        content = None
+    await open_ephemeral_window(interaction, KINGDOM_WINDOW_SCOPE, content, **kwargs)
+
+
+async def silent_ack(interaction: discord.Interaction) -> None:
+    """Swallow a click: a bare defer renders NOTHING, never an error."""
+    try:
+        await interaction.response.defer()
+    except Exception:
+        logger.debug("kingdom: silent ack failed", exc_info=True)
+
+
+# ---------------------------------------------------------------------------
+# The Paris clock formatters (the players' clock, D77)
+# ---------------------------------------------------------------------------
+
+
+def fmt_paris(moment: Any) -> str:
+    """Format a moment in Paris time (« 29/08 19:15 »)."""
+    when = moment if isinstance(moment, datetime) else datetime.fromtimestamp(moment, tz=_PARIS)
+    return when.astimezone(_PARIS).strftime("%d/%m %H:%M")
+
+
+def fmt_rdv_auto(moment: Any, locale: str) -> str:
+    """The self-updating RDV clock — « à **10h32** (<t:epoch:R>) »."""
+    when = moment if isinstance(moment, datetime) else datetime.fromtimestamp(moment, tz=_PARIS)
+    local = when.astimezone(_PARIS)
+    epoch = int(when.timestamp())
+    if str(locale).lower().startswith("fr"):
+        hm = f"{local.hour:02d}h{local.minute:02d}"
+        return f"à **{hm}** (<t:{epoch}:R>)"
+    hm = f"{local.hour:02d}:{local.minute:02d}"
+    return f"at **{hm}** (<t:{epoch}:R>)"
+
+
+def fmt_when_paris(moment: Any, strings: dict[str, str]) -> str:
+    """The readable RELATIVE clock — « aujourd'hui à 18h30 »."""
+    from datetime import timedelta
+
+    when = moment if isinstance(moment, datetime) else datetime.fromtimestamp(moment, tz=_PARIS)
+    local = when.astimezone(_PARIS)
+    hm = str(strings["when_hm"]).format(hour=f"{local.hour:02d}", minute=f"{local.minute:02d}")
+    now = datetime.now(tz=_PARIS)
+    if local.date() == now.date():
+        return str(strings["when_today"]).format(time=hm)
+    if local.date() == now.date() + timedelta(days=1):
+        return str(strings["when_tomorrow"]).format(time=hm)
+    return str(strings["when_other"]).format(date=local.strftime("%d/%m"), time=hm)
+
+
+def fmt_delay(minutes: int) -> str:
+    """Format an itinerary as « 1h », « 1h30 » or « 45 min »."""
+    if minutes <= 0:
+        return "0 min"
+    hours, rest = divmod(int(minutes), 60)
+    if hours == 0:
+        return f"{rest} min"
+    if rest == 0:
+        return f"{hours}h"
+    return f"{hours}h{rest:02d}"
+
+
+def slug(value: str) -> str:
+    """The Discord-safe slug (accents stripped, lowercase)."""
+    import unicodedata
+
+    folded = unicodedata.normalize("NFKD", value).encode("ascii", "ignore").decode("ascii")
+    return _ACCENTS.sub("-", folded.lower()).strip("-") or "bataille"
+
+
+def room_key(attack_id: str) -> str:
+    """The 16-hex digest keying a salon component (Check 73)."""
+    return hashlib.sha256(str(attack_id).encode()).hexdigest()[:16]
+
+
+def ready_key(attack_id: str, player_id: str) -> str:
+    """The 16-hex digest keying a per-player DM component (Check 73)."""
+    return hashlib.sha256(f"{attack_id}:{player_id}".encode()).hexdigest()[:16]
+
+
+def strings_by_locale(locale: str) -> dict[str, str]:
+    """The strings of one locale (the DM surfaces' accessor)."""
+    from .strings import strings
+
+    return strings(locale)
+
+
+_MOD_CATALOG: Any = None
+
+
+def mod_catalog() -> Any:
+    """The mod's yaml message catalog (``conf/locales/*.yaml`` — data i18n).
+
+    The mod's own translations live in its ``conf/locales/fr.yaml`` and
+    ``en.yaml`` (the standard modular layout, mod_layout's locale
+    files) — never hardcoded in a python module. The core
+    ``MessageCatalog`` loads them once (cached here); its ``section``
+    renders one dotted section per locale with the English fallback —
+    a missing key degrades, never raises. This is the accessor every
+    new mod surface uses; the legacy ``strings_by_locale`` dict shrinks
+    as P5 migrates the remaining keys.
+    """
+    global _MOD_CATALOG
+    if _MOD_CATALOG is None:
+        from pathlib import Path
+
+        from botforge.core.services.i18n import MessageCatalog
+
+        conf_dir = Path(__file__).resolve().parents[2] / "conf"
+        _MOD_CATALOG = MessageCatalog(str(conf_dir))
+    return _MOD_CATALOG
+
+
+# ---------------------------------------------------------------------------
+# Name resolvers + failures
+# ---------------------------------------------------------------------------
+
+
+async def lord_name(kingdoms: Any, lord_id: str | None) -> str:
+    """The lord's display name (fallback: the raw id)."""
+    if kingdoms is None or not lord_id:
+        return "—"
+    try:
+        lord = next((item for item in await kingdoms.lords() if str(item.id) == str(lord_id)), None)
+        return str(getattr(lord, "display_name", "") or lord_id) if lord else str(lord_id)
+    except Exception:
+        return str(lord_id)
+
+
+async def kingdom_name(kingdoms: Any, kingdom_id: str | None) -> str:
+    """The kingdom's name (fallback: the raw id)."""
+    if kingdoms is None or not kingdom_id:
+        return "—"
+    try:
+        kingdom = next(
+            (item for item in await kingdoms.kingdoms() if str(item.id) == str(kingdom_id)), None
+        )
+        return str(getattr(kingdom, "name", "") or kingdom_id) if kingdom else str(kingdom_id)
+    except Exception:
+        return str(kingdom_id)
+
+
+async def lord_kingdom_name(kingdoms: Any, lord_id: str | None) -> str:
+    """The kingdom NAME of one lord ('' when unresolvable)."""
+    if kingdoms is None or not lord_id:
+        return ""
+    try:
+        lord = next((item for item in await kingdoms.lords() if str(item.id) == str(lord_id)), None)
+        if lord is None or lord.kingdom_id is None:
+            return ""
+        return await kingdom_name(kingdoms, lord.kingdom_id)
+    except Exception:
+        return ""
+
+
+def kingdom_mention(guild: Any, name: str) -> str:
+    """Mention the kingdom's Discord role when it exists (bold fallback)."""
+    roles = list(getattr(guild, "roles", []) or [])
+    role = next((r for r in roles if getattr(r, "name", "") == name), None)
+    if role is not None:
+        return str(getattr(role, "mention", f"**{name}**"))
+    return f"**{name}**"
+
+
+async def kingdom_by_id(kingdoms: Any, kingdom_id: str | None) -> Any:
+    """One kingdom record by id (None on any miss)."""
+    if kingdoms is None or not kingdom_id:
+        return None
+    try:
+        return next((item for item in await kingdoms.kingdoms() if str(item.id) == str(kingdom_id)), None)
+    except Exception:
+        return None
+
+
+async def attack_by_id(stack: Any, attack_id: str) -> Any:
+    """One attack record by id (None on any miss)."""
+    if stack is None or not attack_id:
+        return None
+    try:
+        return next((item for item in await stack.attacks.attacks() if str(item.id) == str(attack_id)), None)
+    except Exception:
+        return None
+
+
+def combat_failure_note(exc: Exception, strings: dict[str, str]) -> str:
+    """Map a combat-action failure to its player-facing note."""
+    from botforge.mods.kingdom.attacks import LordEngagedError, LordTavernLockedError
+
+    if isinstance(exc, LordTavernLockedError):
+        return str(strings["lord_tavern_locked"])
+    if isinstance(exc, LordEngagedError):
+        return str(strings["lord_engaged"])
+    message = getattr(exc, "message", None) or str(exc)
+    return str(strings["failed"]).format(message=message)
+
+
+def service_failure_note(strings: dict[str, str], fallback_key: str, exc: Exception) -> str:
+    """Map a service failure to its USER-FACING note — the log is never the only report.
+
+    A ``KingdomError`` carries a stable ``code`` (``KINGDOMS_NO_SEASON``,
+    ``KINGDOMS_KINGDOM_LIMIT``, …): the catalog key ``settings_err_<code>``
+    (lowercased) wins when present; otherwise the generic failure note
+    with the raw message. The caller always answers the user.
+    """
+    from botforge.mods.kingdom.errors import KingdomError
+
+    if isinstance(exc, KingdomError):
+        code = str(getattr(exc, "code", "") or "")
+        if code:
+            key = f"settings_err_{code.lower()}"
+            if strings.get(key):
+                return str(strings[key])
+    return str(strings[fallback_key]).format(str(exc)[:150])
+
+
+# ---------------------------------------------------------------------------
+# The attack salons (restructuration-serveur-v1 b)
+# ---------------------------------------------------------------------------
+
+
+def attack_salon(guild: Any, attack: Any) -> Any:
+    """Return the attack's OWN salon (stored ref, never a name lookup)."""
+    channel_id = int((dict(getattr(attack, "score", None) or {})).get("attack_channel_id") or 0)
+    if guild is None or not channel_id:
+        return None
+    return getattr(guild, "get_channel", lambda _id: None)(channel_id)
+
+
+async def attack_salon_send_safe(guild: Any, attack: Any, content: str) -> Any:
+    """Best-effort announcement in the attack's own salon."""
+    channel = attack_salon(guild, attack)
+    if channel is None:
+        return None
+    try:
+        return await channel.send(content)
+    except Exception:
+        logger.warning("kingdom: attack salon announcement failed", exc_info=True)
+        return None
+
+
+# The attack salon's overwrite set (permissions-serveur-v1) — the
+# seam's DATA form (#408): logical targets (@everyone, @me, named
+# roles) resolved at creation time by the platform seam, never
+# Discord objects in the mod.
+# ⚠️ lesson Check 75: the set MUST carry an explicit @me entry (the
+# bot is no admin) or it locks itself out of its own salon.
+SALON_OVERWRITES: dict[str, dict[str, bool]] = {
+    "@everyone": {"view_channel": False, "send_messages": False, "read_message_history": False},
+    "Kingdom Lord": {"view_channel": True, "send_messages": False, "read_message_history": True},
+    "Kingdom King": {"view_channel": True, "send_messages": False, "read_message_history": True},
+    "Kingdom Admin": {"view_channel": True, "send_messages": False, "read_message_history": True},
+    # self-manage-channels-v1 (Drasah 27/11): the mod stays master of
+    # the salons it creates — manage_channels rides the @me carry-along.
+    "@me": {
+        "view_channel": True,
+        "send_messages": True,
+        "read_message_history": True,
+        "manage_messages": True,
+        "manage_channels": True,
+    },
+}
+
+# The FFA salon (#367): public to read, @everyone denied send — same
+# @me carry-along as the attack salons.
+FFA_SALON_OVERWRITES: dict[str, dict[str, bool]] = {
+    "@everyone": {"view_channel": True, "send_messages": False, "read_message_history": True},
+    "@me": {
+        "view_channel": True,
+        "send_messages": True,
+        "read_message_history": True,
+        "manage_messages": True,
+        "manage_channels": True,
+    },
+}
+
+
+async def open_dynamic_channel_safe(
+    guild: Any,
+    name: str,
+    *,
+    category: Any = None,
+    kind: str = "text",
+    overwrites: dict[str, dict[str, bool]] | None = None,
+    position: int | None = None,
+    options: dict[str, Any] | None = None,
+) -> Any:
+    """Best-effort dynamic channel via the platform seam (#408) — the channel, or None.
+
+    The mod owns the best-effort policy, the seam owns the plumbing
+    (data overwrites → Discord objects, role names resolved there).
+    """
+    from botforge.discord.dynamic_channels import DiscordDynamicChannelsPlatform
+
+    client = getattr(guild, "client", None)
+    if client is None:
+        # salon-dynamique-client-v1 (Drasah 24/11, incident live
+        # « j'ai pas eu le salon qui s'écrit ») : the vendored
+        # discord.py has NO ``Guild.client`` — the old lookup silently
+        # skipped EVERY dynamic channel (attack salon, battle room,
+        # FFA salon) with « no client on the guild ». The canonical
+        # reach on this discord.py is the connection state's
+        # ``_get_client()``; the property stays for future versions.
+        state = getattr(guild, "_state", None)
+        get_client = getattr(state, "_get_client", None)
+        client = get_client() if callable(get_client) else None
+    if client is None:
+        logger.warning("kingdom: no client on the guild — dynamic channel skipped (%s)", name)
+        return None
+    category_id = str(getattr(category, "id", "") or "") if category is not None else None
+    try:
+        return await DiscordDynamicChannelsPlatform(client).create_channel(
+            str(getattr(guild, "id", "")),
+            name,
+            category_id=category_id,
+            kind=kind,
+            overwrites=overwrites,
+            position=position,
+            options=options,
+        )
+    except Exception:
+        logger.warning("kingdom: dynamic channel creation failed (%s)", name, exc_info=True)
+        return None
+
+
+async def delete_dynamic_channel_safe(bot: Any, channel_id: Any) -> None:
+    """Best-effort dynamic channel delete via the seam (#408) — a miss never blocks."""
+    from botforge.discord.dynamic_channels import DiscordDynamicChannelsPlatform
+
+    try:
+        await DiscordDynamicChannelsPlatform(bot).delete_channel(str(channel_id or ""))
+    except Exception:
+        logger.warning("kingdom: dynamic channel delete failed", exc_info=True)
+
+
+def room_channel_name(guild: Any, prefix: str, *parts: str) -> str:
+    """The duel channel name — ``🗡️-drasah-vs-bourgogne`` (battle-room-id-v2)."""
+    base = f"{prefix}-" + "-vs-".join(slug(str(part)) for part in parts) or f"{prefix}-bataille"
+    base = base[:90]
+    names = {str(getattr(channel, "name", "")) for channel in getattr(guild, "channels", [])}
+    if base not in names:
+        return base
+    suffix = 2
+    while f"{base}-{suffix}" in names:
+        suffix += 1
+    return f"{base}-{suffix}"
+
+
+# ---------------------------------------------------------------------------
+# The pick & ban document helpers (the engine's pickban dict, D77)
+# ---------------------------------------------------------------------------
+
+PICKBAN_RANKS = ("1️⃣", "2️⃣", "3️⃣")
+
+
+def pickban_staged(pickban: dict[str, Any], side: str) -> list[str]:
+    """The STAGED draft picks of one side (``{side}_draft``, padded to 3)."""
+    staged = [str(x) for x in (pickban.get(f"{side}_draft") or [])]
+    while len(staged) < 3:
+        staged.append("")
+    return staged[:3]
+
+
+def side_of(attack: Any, player_id: str) -> str:
+    """The draft side a player speaks for (defender by default)."""
+    if str(attack.attacker_lord_id) == str(player_id):
+        return "attacker"
+    return "defender"
+
+
+def room_side_of(attack: Any, user_id: str) -> str:
+    """The meeting side of a user ('' when a spectator)."""
+    if user_id == str(attack.attacker_lord_id):
+        return "attacker"
+    if user_id == str(attack.defender_lord_id) and not getattr(attack, "ai_defender", False):
+        return "defender"
+    return ""
+
+
+def score_players(attack: Any) -> list[str]:
+    """The HUMAN players of a meeting (the AI never declares)."""
+    players = [str(attack.attacker_lord_id)]
+    if attack.defender_lord_id and not getattr(attack, "ai_defender", False):
+        players.append(str(attack.defender_lord_id))
+    return players
+
+
+def shuffled_civs(seed: str, picks: Any) -> list[str]:
+    """Seeded shuffle of one side's picks (draft-sheet order, stable)."""
+    import random as _random
+
+    pool = [str(civ) for civ in (picks or [])]
+    _random.Random(f"sheet:{seed}").shuffle(pool)
+    return pool
+
+
+def reveal_civs(seed: str, picks: Any) -> list[str]:
+    """Seeded shuffle of the reveal (stable across every refresh)."""
+    import random as _random
+
+    pool = [str(civ) for civ in (picks or [])]
+    _random.Random(f"reveal:{seed}").shuffle(pool)
+    return pool
+
+
+def final_civ(pickban: dict[str, Any], side: str) -> str:
+    """The FINAL civilization of one side (first non-struck pick)."""
+    picks = [str(civ) for civ in (pickban.get(f"{side}_picks") or [])]
+    enemy = "defender" if side == "attacker" else "attacker"
+    struck = [str(civ) for civ in (pickban.get(f"{enemy}_sabotages") or [])]
+    return next((civ for civ in picks if civ not in struck), "")
+
+
+def own_picks_line(own: list[str]) -> str:
+    """The « 1️⃣ X · 2️⃣ Y · 3️⃣ Z » line of one side's stored picks."""
+    return " · ".join(f"{PICKBAN_RANKS[i]} {civ}" for i, civ in enumerate(own[: len(PICKBAN_RANKS)]))
+
+
+# ---------------------------------------------------------------------------
+# The DM lane (pick & ban, sabotage, RDV — best effort, never raises)
+# ---------------------------------------------------------------------------
+
+
+async def dm_user_safe(
+    bot: Any, user_id: str, content: str, view: Any = None, files: Any = None
+) -> Any:
+    """Best-effort DM to one player — returns the message (or None).
+
+    Thin delegate to the platform DM seam (#407): the mod owns the
+    best-effort policy, the seam owns the plumbing.
+    """
+    from botforge.discord.dm_platform import DiscordDMPlatform
+
+    try:
+        return await DiscordDMPlatform(bot).send_dm(user_id, content, view, files)
+    except Exception:
+        logger.warning("kingdom: player DM failed (%s)", user_id, exc_info=True)
+    return None
+
+
+async def edit_dm_message_safe(
+    bot: Any, ref: Any, content: str, view: Any = None, files: Any = None
+) -> bool:
+    """Edit a stored DM message (channel_id + message_id) — best effort."""
+    from botforge.discord.dm_platform import DiscordDMPlatform
+
+    try:
+        await DiscordDMPlatform(bot).edit_dm(ref, content, view, files)
+        return True
+    except Exception:
+        logger.warning("kingdom: DM edit failed — falling back to a new DM", exc_info=True)
+        return False
+
+
+async def delete_dm_message_safe(bot: Any, ref: Any) -> None:
+    """Delete a stored DM message — best effort (a miss never blocks)."""
+    from botforge.discord.dm_platform import DiscordDMPlatform
+
+    try:
+        await DiscordDMPlatform(bot).delete_dm(ref)
+    except Exception:
+        logger.warning("kingdom: old DM delete failed", exc_info=True)
+
+
+def dm_view(*items: Any, timeout: float | None = None) -> Any:
+    """Build one interactive DM view through the UI SDK (#407 complément).
+
+    Rule #367 arbitrage 2 : toujours le SDK UI — the mod never
+    constructs a raw ``discord.ui.View`` itself; the composed-view
+    builder owns the base (permission checks, delivery policies, the
+    mod anchor), the mod only brings its gameplay items.
+    """
+    from botforge.discord.ui.views import ComposedView
+
+    return ComposedView(*items, timeout=timeout, mod="kingdom")
+
+
+def channel_id_by_flattened_name(bot: Any, guild_id: str, tokens: tuple[str, ...]) -> str:
+    """Last-chance salon resolution by declared name (accent-insensitive).
+
+    settings-pin-fallback-v1 (Drasah 20/11): a migrated guild's stored
+    tree id may miss a declared salon (a pre-key provisioning, a drifted
+    id) — the pin then never lands and its salon stays empty. The
+    fallback scans the cached guild for a channel whose name carries
+    one of the tokens, accents flattened; the provisioning keeps owning
+    the canonical ids, this only heals the pin.
+    """
+    import unicodedata
+
+    guild = bot.get_guild(int(guild_id)) if str(guild_id).isdigit() else None
+    if guild is None:
+        return ""
+    for channel in getattr(guild, "channels", ()) or ():
+        name = str(getattr(channel, "name", "")).lower()
+        flat = "".join(
+            ch
+            for ch in unicodedata.normalize("NFKD", name)
+            if not unicodedata.combining(ch)
+        )
+        if any(str(token) in flat for token in tokens):
+            return str(channel.id)
+    return ""
+
+
+__all__ = [
+    "PICKBAN_RANKS",
+    "attack_by_id",
+    "attack_salon",
+    "attack_salon_send_safe",
+    "KingdomWindowCloseButton",
+    "KINGDOM_WINDOW_SCOPE",
+    "close_previous_ephemeral",
+    "combat_failure_note",
+    "delete_dm_message_safe",
+    "dm_view",
+    "dm_user_safe",
+    "edit_dm_message_safe",
+    "final_civ",
+    "fmt_delay",
+    "fmt_paris",
+    "fmt_rdv_auto",
+    "fmt_when_paris",
+    "kingdom_by_id",
+    "kingdom_mention",
+    "kingdom_name",
+    "lord_kingdom_name",
+    "lord_name",
+    "lord_of",
+    "locale_of",
+    "open_unique_ephemeral",
+    "surface",
+    "surface_footer",
+    "own_picks_line",
+    "pickban_staged",
+    "ready_key",
+    "reveal_civs",
+    "room_channel_name",
+    "room_key",
+    "room_side_of",
+    "SALON_OVERWRITES",
+    "FFA_SALON_OVERWRITES",
+    "open_dynamic_channel_safe",
+    "delete_dynamic_channel_safe",
+    "score_players",
+    "service_failure_note",
+    "shuffled_civs",
+    "side_of",
+    "silent_ack",
+    "slug",
+    "strings_by_locale",
+    "strings_for",
+    "wiring",
+    "channel_id_by_flattened_name",
+]

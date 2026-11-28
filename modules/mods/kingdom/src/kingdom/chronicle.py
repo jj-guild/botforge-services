@@ -1,4 +1,4 @@
-"""Kingdoms mod — the Lord chronicle (Seigneurie V2 + corbeau-v3, Drasah 15/10/2026).
+"""Kingdom mod — the Lord chronicle (Seigneurie V2 + corbeau-v3, Drasah 15/10/2026).
 
 Every lord carries a FACTUAL, exactly-timestamped log of the actions
 they REALLY CLICKED (Drasah's fundamental rule, 15/10): actions

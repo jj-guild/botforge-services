@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Python: botforge.discord.dm_platform</title>
+</head><body>
+
+<table class="heading">
+<tr class="heading-text decor">
+<td class="title">&nbsp;<br><strong class="title"><a href="botforge.html" class="white">botforge</a>.<a href="botforge.discord.html" class="white">discord</a>.dm_platform</strong></td>
+<td class="extra"><a href=".">index</a><br><a href="file:SOURCE_ROOT/discord/dm_platform.py">SOURCE_ROOT/discord/dm_platform.py</a></td></tr></table>
+    <p><span class="code">discord.py&nbsp;platform&nbsp;seam&nbsp;for&nbsp;interactive&nbsp;DMs&nbsp;(#407).<br>
+&nbsp;<br>
+The&nbsp;contract&nbsp;(``IPlatform.send_dm/edit_dm/delete_dm``)&nbsp;carries&nbsp;opaque<br>
+view&nbsp;handles&nbsp;(#221);&nbsp;this&nbsp;is&nbsp;where&nbsp;they&nbsp;become&nbsp;real&nbsp;Discord&nbsp;payloads.<br>
+The&nbsp;seam&nbsp;resolves&nbsp;users&nbsp;and&nbsp;messages&nbsp;lazily,&nbsp;exactly&nbsp;like&nbsp;every<br>
+platform&nbsp;seam:&nbsp;a&nbsp;user&nbsp;id&nbsp;is&nbsp;looked&nbsp;up&nbsp;in&nbsp;the&nbsp;cache&nbsp;first,&nbsp;then&nbsp;fetched,<br>
+so&nbsp;a&nbsp;restart&nbsp;that&nbsp;lost&nbsp;its&nbsp;cache&nbsp;still&nbsp;finds&nbsp;the&nbsp;player.<br>
+&nbsp;<br>
+Message&nbsp;references:&nbsp;callers&nbsp;keep&nbsp;DM&nbsp;messages&nbsp;under&nbsp;two&nbsp;shapes&nbsp;—&nbsp;the<br>
+message&nbsp;itself&nbsp;(``IMessage``)&nbsp;or&nbsp;a&nbsp;persisted&nbsp;ref<br>
+(``{"channel_id":&nbsp;…,&nbsp;"message_id":&nbsp;…}``&nbsp;—&nbsp;the&nbsp;mod's&nbsp;stored&nbsp;form,&nbsp;the&nbsp;one<br>
+that&nbsp;survives&nbsp;a&nbsp;restart).&nbsp;Both&nbsp;are&nbsp;accepted&nbsp;everywhere&nbsp;a&nbsp;message&nbsp;is<br>
+expected;&nbsp;a&nbsp;ref&nbsp;is&nbsp;resolved&nbsp;to&nbsp;the&nbsp;live&nbsp;message&nbsp;on&nbsp;demand,&nbsp;and&nbsp;a<br>
+resolution&nbsp;miss&nbsp;raises&nbsp;like&nbsp;the&nbsp;contract&nbsp;says&nbsp;(the&nbsp;``_safe``&nbsp;wrappers<br>
+at&nbsp;the&nbsp;caller's&nbsp;edge&nbsp;swallow,&nbsp;the&nbsp;seam&nbsp;stays&nbsp;honest).</span></p>
+<p>
+<table class="section">
+<tr class="decor pkg-content-decor heading-text">
+<td class="section-title" colspan=3>&nbsp;<br><strong class="bigsection">Modules</strong></td></tr>
+    
+<tr><td class="decor pkg-content-decor"><span class="code">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span></td><td>&nbsp;</td>
+<td class="singlecolumn"><table><tr><td class="multicolumn"><a href="discord.html">discord</a><br>
+</td><td class="multicolumn"><a href="logging.html">logging</a><br>
+</td><td class="multicolumn"></td><td class="multicolumn"></td></tr></table></td></tr></table><p>
+<table class="section">
+<tr class="decor index-decor heading-text">
+<td class="section-title" colspan=3>&nbsp;<br><strong class="bigsection">Classes</strong></td></tr>
+    
+<tr><td class="decor index-decor"><span class="code">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span></td><td>&nbsp;</td>
+<td class="singlecolumn"><dl>
+<dt class="heading-text"><a href="builtins.html#object">builtins.object</a>
+</dt><dd>
+<dl>
+<dt class="heading-text"><a href="botforge.discord.dm_platform.html#DiscordDMPlatform">DiscordDMPlatform</a>
+</dt></dl>
+</dd>
+</dl>
+ <p>
+<table class="section">
+<tr class="decor title-decor heading-text">
+<td class="section-title" colspan=3>&nbsp;<br><a name="DiscordDMPlatform">class <strong>DiscordDMPlatform</strong></a>(<a href="builtins.html#object">builtins.object</a>)</td></tr>
+    
+<tr><td class="decor title-decor" rowspan=2><span class="code">&nbsp;&nbsp;&nbsp;</span></td>
+<td class="decor title-decor" colspan=2><span class="code"><a href="#DiscordDMPlatform">DiscordDMPlatform</a>(bot:&nbsp;'discord.Client')&nbsp;-&amp;gt;&nbsp;'None'<br>
+&nbsp;<br>
+discord.py&nbsp;implementation&nbsp;of&nbsp;the&nbsp;DM&nbsp;seam&nbsp;(send/edit/delete,&nbsp;with&nbsp;views).<br>&nbsp;</span></td></tr>
+<tr><td>&nbsp;</td>
+<td class="singlecolumn">Methods defined here:<br>
+<dl><dt><a name="DiscordDMPlatform-__init__"><strong>__init__</strong></a>(self, bot: 'discord.Client') -&gt; 'None'</dt><dd><span class="code">Keep&nbsp;a&nbsp;client&nbsp;reference&nbsp;for&nbsp;user&nbsp;and&nbsp;channel&nbsp;lookups.</span></dd></dl>
+
+<dl><dt>async <a name="DiscordDMPlatform-delete_dm"><strong>delete_dm</strong></a>(self, message: 'MessageLike') -&gt; 'None'</dt><dd><span class="code">Delete&nbsp;a&nbsp;sent&nbsp;DM&nbsp;—&nbsp;a&nbsp;miss&nbsp;is&nbsp;a&nbsp;no-op,&nbsp;never&nbsp;an&nbsp;error.</span></dd></dl>
+
+<dl><dt>async <a name="DiscordDMPlatform-edit_dm"><strong>edit_dm</strong></a>(self, message: 'MessageLike', content: 'str', view: 'Any | None' = None) -&gt; 'discord.Message'</dt><dd><span class="code">Edit&nbsp;a&nbsp;sent&nbsp;DM&nbsp;in&nbsp;place&nbsp;—&nbsp;raises&nbsp;when&nbsp;the&nbsp;message&nbsp;is&nbsp;gone.</span></dd></dl>
+
+<dl><dt>async <a name="DiscordDMPlatform-send_dm"><strong>send_dm</strong></a>(self, user: 'UserLike', content: 'str', view: 'Any | None' = None) -&gt; 'discord.Message'</dt><dd><span class="code">Send&nbsp;the&nbsp;DM&nbsp;(optionally&nbsp;interactive)&nbsp;—&nbsp;raises&nbsp;when&nbsp;unreachable.</span></dd></dl>
+
+<hr>
+Data descriptors defined here:<br>
+<dl><dt><strong>__dict__</strong></dt>
+<dd><span class="code">dictionary&nbsp;for&nbsp;instance&nbsp;variables</span></dd>
+</dl>
+<dl><dt><strong>__weakref__</strong></dt>
+<dd><span class="code">list&nbsp;of&nbsp;weak&nbsp;references&nbsp;to&nbsp;the&nbsp;object</span></dd>
+</dl>
+</td></tr></table></td></tr></table><p>
+<table class="section">
+<tr class="decor data-decor heading-text">
+<td class="section-title" colspan=3>&nbsp;<br><strong class="bigsection">Data</strong></td></tr>
+    
+<tr><td class="decor data-decor"><span class="code">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span></td><td>&nbsp;</td>
+<td class="singlecolumn"><strong>logger</strong> = &lt;Logger botforge.discord.dm_platform (INFO)&gt;</td></tr></table>
+</body></html>

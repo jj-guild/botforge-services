@@ -51,6 +51,13 @@ def scopes_from_config(config_dir: Path | str | None = None) -> dict[str, ScopeS
             scope=str(scope),
             category_key=str(raw.get("category", "") or ""),
             channels=tuple(channels),
+            # the machine-room rule (Drasah 18/11): a scope may declare
+            # its category staff-only — the folder's front door hides
+            # from @everyone, the channels keep their own bands
+            category_admin_only=bool(raw.get("admin_only", False)),
+            # category-bottom (Drasah 20/11): the folder sinks to the
+            # sidebar's very end (the plumbing folders)
+            category_bottom=bool(raw.get("bottom", False)),
         )
     return out
 

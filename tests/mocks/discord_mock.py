@@ -473,6 +473,24 @@ class MockCategoryChannel(discord.CategoryChannel):
     def __repr__(self) -> str:
         return f"<MockCategoryChannel id={self.id} name={self.name!r}>"
 
+    async def set_permissions(
+        self,
+        target: discord.Member | discord.Role,
+        overwrite: discord.PermissionOverwrite | None = None,
+        *,
+        reason: str | None = None,
+        **kwargs: Any,
+    ) -> None:
+        """In-memory overwrite store (the category gate tests read it)."""
+        if not hasattr(self, "_permissions"):
+            self._permissions: dict[tuple[int, bool], discord.PermissionOverwrite | None] = {}
+        self._permissions[(target.id, isinstance(target, discord.Role))] = overwrite
+
+    def permission_overwrite_for(
+        self, target: discord.Member | discord.Role
+    ) -> discord.PermissionOverwrite | None:
+        return getattr(self, "_permissions", {}).get((target.id, isinstance(target, discord.Role)))
+
 
 class MockDMChannel(discord.DMChannel):
     """In-memory :class:`discord.DMChannel` with message history capture."""

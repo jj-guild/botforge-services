@@ -82,3 +82,12 @@ def simcord_bot(botforge_bot: BotforgeBot) -> BotforgeBot:
 # the season posts' refresher stays OFF in the journeys: a background
 # loop never settles (simcord's contract waits for the outstanding work)
 os.environ.setdefault("BOTFORGE_SEASON_REFRESHER", "off")
+# the kingdom mod's attack phases loop follows the same contract
+os.environ.setdefault("BOTFORGE_KINGDOM_ATTACK_REFRESHER", "off")
+# refresher-boot-v1 (Drasah 24/11): the pin/machine healing loop now
+# actually starts at boot — it follows the SAME journeys contract as
+# the attack loop (a background loop never settles, simcord's runner
+# waits for the outstanding work to drain). Production leaves it unset:
+# the healing loop is ON in prod, OFF in the journeys.
+os.environ.setdefault("BOTFORGE_KINGDOM_PIN_REFRESHER", "off")
+os.environ.setdefault("BOTFORGE_KINGDOM_MACHINE_REFRESHER", "off")

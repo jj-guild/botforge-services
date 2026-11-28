@@ -1,0 +1,3717 @@
+"""lieux-portage-v1 (Drasah 21/11) — the castle's FIVE illustrated places.
+
+PORTAGE of the diverged branch's `lieux-et-conseil-v1` (vibe/drasah/main,
+kingdom_lieux.py), à l'identique : the engaged realm's 🏰 Entrée opens
+« Où souhaitez-vous vous rendre ? » — the five doors of the castle
+(⚔️ Salle du conseil · 🧱 Remparts · 🏛️ Chambre des comptes · ⛪ Paroisse
+· 🏗️ Volière), each opening an ILLUSTRATED window (the 8 PNG of
+assets/lieux, uploaded by Drasah 01/11). Tranche 1 = the CONSULTATION
+faces (the ROUGE/VERT action cards, the 🎯 Objectifs, the Classement
+and the in-place wizards ride tranche 2).
+
+Architecture (the portage rules): the VIEWS are the reference branch's
+(faithful labels, illustrations, Sortir-in-red-last), the DATA rides
+the NEW engine's seams only — stack.kingdoms (lords/kingdoms/parish),
+stack.territories, stack.attacks.technology_state (+ base_ai_level),
+stack.config.parish (the palier ladder). The dormant realm's hub is
+UNTOUCHED (hors-sas = the chez-soi window stays the Entrée's door);
+ONLY an ENGAGED realm routes Entrée here (Drasah 21/11 : « l'ancienne
+vue ne doit pas être écrasée — la vue dans le sas réattribue ce
+qu'on avait fait auparavant »).
+"""
+
+from __future__ import annotations
+
+import logging
+import re
+from pathlib import Path
+from typing import Any
+
+import discord
+
+from .common import (
+    fmt_paris,
+    kingdom_name,
+    lord_name,
+    open_unique_ephemeral,
+    room_key,
+    surface,
+    wiring,
+)
+
+logger = logging.getLogger("kingdom.lieux")
+
+# The deployment-local illustrations (uploaded by Drasah 01/11 — the
+# file names on disk are irregular ON PURPOSE, they mirror the upload).
+_LIEUX_ASSETS = Path(__file__).resolve().parents[2] / "assets" / "lieux"
+
+_NS = "kingdoms:lieux"
+# realm-content-v1 : la vue de cueilleur d'objectifs (Roi-only)
+OBJECTIF_SURFACE = "panel:mod:kingdom:lieux:objectif"
+CONSEIL_SURFACE = "panel:mod:kingdom:lieux:conseil"
+
+GOLD = discord.Colour(0xE6B800)
+TEAL = discord.Colour.dark_teal()
+GREEN = discord.Colour.green()
+
+ENTREE_SURFACE = "panel:mod:kingdom:lieux:entree"
+CONSEIL_SURFACE = "panel:mod:kingdom:lieux:conseil"
+REMPARTS_SURFACE = "panel:mod:kingdom:lieux:remparts"
+# classement-vue-v1 (Drasah 26/11, T-C) : la fenêtre Classement du Conseil
+CLASSEMENT_SURFACE = "panel:mod:kingdom:lieux:classement"
+COMPTES_SURFACE = "panel:mod:kingdom:lieux:comptes"
+PAROISSE_SURFACE = "panel:mod:kingdom:lieux:paroisse"
+VOLIERE_SURFACE = "panel:mod:kingdom:lieux:voliere"
+# vague2-actions-v1 (Drasah 21/11) : les nouvelles fenêtres d'action
+PAROISSE_UPGRADE_SURFACE = "panel:mod:kingdom:lieux:paroisse-upgrade"
+HIST_SURFACE = "panel:mod:kingdom:lieux:hist"
+TRAQUENARD_SURFACE = "panel:mod:kingdom:lieux:traquenard"
+
+# Les étiquettes du registre (portées de la référence, market_tech +
+# market_action fusionnés) — l'item inconnu garde sa clé brute.
+_HIST_LABELS: dict[str, dict[str, str]] = {
+    "fr": {
+        "embuscade": "🥷 Embuscade",
+        "traquenard": "🪤 Traquenard",
+        "contre_espionnage": "👀 Contre-espionnage",
+        "sabotage": "🗡️ Sabotage",
+        "jeu_d_armes": "⚔️ Jeu d'armes",
+        "explorateur": "🧭 Explorateur",
+        "corruption": "💰 Corruption",
+        "garde_royale": "💂 Garde Royale",
+        "patrouille": "👣 Patrouille",
+        "mariage_arrange": "💐 Mariage arrangé",
+    },
+    "en": {
+        "embuscade": "🥷 Ambush",
+        "traquenard": "🪤 Traquenard",
+        "contre_espionnage": "👀 Counter-espionage",
+        "sabotage": "🗡️ Sabotage",
+        "jeu_d_armes": "⚔️ Arms Mastery",
+        "explorateur": "🧭 Explorer",
+        "corruption": "💰 Corruption",
+        "garde_royale": "💂 Royal Guard",
+        "patrouille": "👣 Patrol",
+        "mariage_arrange": "💐 Arranged marriage",
+    },
+}
+_HIST_EMOJI: dict[str, str] = {
+    "embuscade": "🥷",
+    "traquenard": "🪤",
+    "contre_espionnage": "👀",
+    "sabotage": "🗡️",
+    "jeu_d_armes": "⚔️",
+    "explorateur": "🧭",
+    "corruption": "💰",
+    "garde_royale": "💂",
+    "patrouille": "👣",
+    "mariage_arrange": "💐",
+}
+
+
+def _hist_label(strings: dict[str, str], item: str) -> str:
+    return str(_HIST_LABELS.get(_locale_of_catalog(strings), _HIST_LABELS["fr"]).get(item, item))
+
+# The volière bird catalog (voliere-v2 : pigeon / corbeau / faucon).
+_BIRD_EMOJI = {"pigeon": "🕊️", "corbeau": "🐦‍⬛", "faucon": "🦅"}
+
+
+# ---------------------------------------------------------------------------
+# The strings — VERBATIM from the reference branch (kingdom_lieux.py +
+# kingdom_realm_content.py + kingdom_voliere_panel.py, fr THEN en mirror).
+# retrait-chez-soi (Drasah 21/11) : « on n'en a pas besoin » — la
+# 6ᵉ porte qui vivait ici a disparu avec les strings qui la portaient.
+# ---------------------------------------------------------------------------
+
+LIEUX_STRINGS: dict[str, dict[str, str]] = {
+    "fr": {
+        "entree_button": "🏰 Entrée",
+        "entree_title": "Où souhaitez-vous vous rendre ?",
+        "conseil_button": "⚔️ Salle du conseil",
+        "remparts_button": "🧱 Remparts",
+        "comptes_button": "🏛️ Chambre des comptes",
+        "paroisse_button": "⛪ Paroisse",
+        "voliere_button": "🏗️ Volière",
+        "sortir_button": "🚪 Sortir",
+        "not_lord": (
+            "Seuls les seigneurs du royaume peuvent entrer dans ses lieux."
+        ),
+        "no_service": "Le service Kingdom n'est pas câblé.",
+        "conseil_title": "⚔️ Salle du conseil — {0}",
+        "conseil_intro_l1": (
+            "Jetez un coup d'œil aux attaques et défenses de vos seigneurs —"
+            " leurs mariages comme leurs verrouillages."
+        ),
+        "conseil_intro_l2": (
+            "Vous pouvez définir vos objectifs pour mieux vous coordonner :"
+            " attaque de royaume, map recherchée ou alliance recherchée."
+        ),
+        "conseil_intro_l3": (
+            "Vous pouvez aussi organiser vos explorations ou vos traquenards"
+            " depuis cette interface."
+        ),
+        "conseil_classement": "**Classement** : {0}",
+        "conseil_classement_hint": (
+            "-# Classement par nombre de territoires — en cas d'égalité :"
+            " alliances, puis points technologiques."
+        ),
+        "conseil_objectifs_title": "🎯 Objectifs",
+        "conseil_objectif_kingdom": "⚔️ Royaume à focus : **{0}**",
+        "conseil_objectif_map": "🗺️ Territoire recherché : **{0}**",
+        "conseil_objectif_alliance": "🤝 Alliance recherchée : **{0}**",
+        "conseil_objectifs_none": (
+            "Aucun objectif fixé pour le moment — le Roi peut les définir"
+            " avec le bouton 🎯 Objectif."
+        ),
+        "conseil_traquenard_title": "**🪤 Traquenard**",
+        "conseil_traquenard_line": (
+            "Vous avez affaibli le niveau de l'IA du royaume **{0}** —"
+            " actif pendant {1}"
+        ),
+        "objectif_button": "🎯 Objectif",
+        "objectif_king_only": "🎯 Réservé au Roi du royaume.",
+        "objectif_picker_title": "🎯 Objectifs du royaume — {0}",
+        "objectif_select_kingdom": "⚔️ Royaume à attaquer en priorité",
+        "objectif_select_map": "🗺️ Territoire recherché",
+        "objectif_select_alliance": "🤝 Alliance souhaitée",
+        "objectif_none_label": "🚫 Aucun — ne pas définir",
+        "objectif_validate_button": "✅ Valider",
+        "objectif_flip_prev": "◀️ Précédent",
+        "objectif_flip_next": "▶️ Suivant",
+        "objectif_flip_pages": "Page {0}/{1} · {2}",
+        "objectif_edit_hint": (
+            "-# Chaque menu choisi devient un objectif, affiché à tes"
+            " membres — ◀️ Précédent / ▶️ Suivant feuillettent les pages de"
+            " la liste, ✅ Valider pour sauvegarder, 🚪 Quitter pour fermer"
+            " sans sauvegarder."
+        ),
+        "objectif_save_failed": "⚠️ Sauvegarde échouée — réessaie dans un instant.",
+        "objectif_done_note": "🎯 Objectifs sauvegardés — l'épinglé de Discussions est à jour.",
+        "conseil_seigneurie_button": "🛡️ Seigneurie",
+        "conseil_stats": (
+            "**Trésorerie** : {0} ⚙️ · **Territoires** : {1} 🗺️ ·"
+            " **Alliances** : {2} 🤝"
+        ),
+        "patrol_title": "🧱 Remparts — {0}",
+        "remparts_ai_level": "🤖 Niveau de votre IA : **{0}/5 {1}**",
+        "remparts_patrouille_title": "👣 **Patrouille :**",
+        "remparts_patrouille_title_reinforced": "👣 **Patrouilles Renforcées :**",
+        "remparts_state_missing": (
+            "❌ Vous ne disposez pas de patrouille [{0}/2] —"
+            " achat au Marché (2 ⚙️)"
+        ),
+        "remparts_state_unplaced": (
+            "⚠️ Vous disposez d'une patrouille [{0}/2] —"
+            " cliquez sur le bouton Patrouille pour la paramétrer"
+        ),
+        "remparts_state_active": (
+            "⏲ Votre patrouille [{0}/2] est bien active entre"
+            " {1:02d}h00 et {2:02d}h00"
+        ),
+        "remparts_garde_title": "💂 **Garde Royal :**",
+        "remparts_garde_owned_one": "Vous disposez de {0} garde royal",
+        "remparts_garde_owned_many": "Vous disposez de {0} gardes royaux",
+        "remparts_garde_owned_none": "Vous ne disposez d'aucun Garde Royal",
+        "remparts_guard_line": "✅ {0} — protégée jusqu'à {1}",
+        "remparts_guard_stock": "En réserve : {0}",
+        # vague2-actions-v1 (Drasah 21/11) : rangée 2 des Remparts
+        "remparts_use_jeu": "⚔️ Jeu d'armes",
+        "remparts_use_patrouille": "🚨 Patrouille",
+        "remparts_use_garde": "💂 Garde royale",
+        # remparts-managers-v1 (Drasah 26/11, T-C) : la rangée 1 de la
+        # référence — les deux salles de guerre + la face En savoir plus.
+        "defense_manager_button": "🛡️ Gestion de la défense",
+        "defense_manager_title": "🛡️ Gestion de la défense — attaques contre **{kingdom}**",
+        "defense_manager_empty": "🐺 Aucune attaque en cours contre ton royaume.",
+        "defense_manager_row": "• **{map}** — aura lieu **{when}** · {state}",
+        "defense_manager_defended": "défendue par **{lord}** ✓",
+        "defense_manager_waiting": "en attente de défenseur ⏳",
+        "defense_manager_not_lord": "❌ Tu n'es pas un seigneur actif d'un royaume.",
+        "defense_manager_no_service": "❌ Le service des attaques est indisponible.",
+        "cancel_defense_button": "↩️ Retirer ma défense",
+        "plan_manager_button": "⚔️ Gestion d'attaque",
+        "plan_manager_title": "⚔️ Gestion d'attaque — **{kingdom}**",
+        "plan_manager_declared_section": "**⚔️ Attaques déclarées**",
+        "plan_manager_planned_section": "**📅 Attaques planifiées**",
+        "plan_manager_empty": "Aucune attaque en cours ni planifiée.",
+        "plan_manager_declared_row": (
+            "• **{map}** (royaume **{kingdom}**) — déclarée par **{lord}** —"
+            " aura lieu **{when}**"
+        ),
+        "plan_manager_planned_row": "• **{map}** — aura lieu **{when}** · {lord} · choix {index}/{total}",
+        "plan_choices_line": "·· Choix {n} : **{map}**{active}",
+        "plan_active_tag": " ✅",
+        "remparts_info_button": "🔎 En savoir plus",
+        "remparts_state_button": "✅ Compris",
+        "remparts_back_button": "🧱 Remparts",
+        "remparts_ai_intro": (
+            "🤖 **Bot de défense (IA) :**\n"
+            "Si aucun seigneur ne défend votre royaume, votre bot IA prend le"
+            " relais de votre défense automatiquement. Vous pouvez augmenter le"
+            " niveau de votre IA en l'entraînant via l'achat d'un Jeu d'armes au"
+            " Marché ; lorsque votre IA est au niveau max, cela améliore votre"
+            " Patrouille (Patrouilles Renforcées, créneaux de 3h)."
+        ),
+        "remparts_patrouille_intro": (
+            "🛡️ **Patrouille :**\n"
+            "Permet de vous protéger d'une attaque normale, exceptionnelle et"
+            " technologique, sur un créneau de 2h fixe dans une journée — cela"
+            " s'applique donc tous les jours de la semaine. Si votre patrouille"
+            " est améliorée, le créneau de protection passe à 3h. Limite de 2"
+            " patrouilles par royaume, une patrouille est utilisable pour la"
+            " durée de toute la saison."
+        ),
+        "remparts_patrol_window": (
+            "🔄 Redéfinition des créneaux : uniquement pendant le Jour du"
+            " Seigneur (dimanche 23h30 → lundi 10h00)."
+        ),
+        "remparts_garde_intro": (
+            "💂 **Gardes Royaux :**\n"
+            "Permet de protéger un territoire de toute attaque — normale,"
+            " exceptionnelle et technologique — pour une durée de 12h. Le"
+            " Garde Royal se consomme."
+        ),
+        # classement-vue-v1 (Drasah 26/11, T-C) : la fenêtre Classement
+        "classement_button": "🏆 Classement",
+        "classement_title": "🏆 Classement de la saison",
+        "classement_line": "{0} {1}. **{2}** — {3} 🗺️ · {4} 🤝",
+        "classement_empty": "Aucun royaume à classer pour le moment.",
+        "conseil_card_exploration": "🧭 Exploration",
+        "conseil_card_traquenard": "🪤 Traquenard",
+        "traquenard_select": "Choisissez le royaume à piéger :",
+        "traquenard_done": (
+            "✅ Traquenard armé contre **{0}** — l'IA affrontée devient "
+            "Facile <t:{1}:R>. {2} verrou(s) vivant(s) étendu(s) +2h."
+        ),
+        "action_error_note": "❌ {0}",
+        "paroisse_marry_button": "💍 Se marier",
+        "paroisse_upgrade_button": "⛪ Améliorer : {0}",
+        "paroisse_upgrade_max": "⛪ Palier maximum atteint",
+        "paroisse_upgrade_confirm": "Améliorer la Paroisse vers **{0}** pour **{1}** ⚙️ ?",
+        "paroisse_upgrade_ok": "✅ Améliorer",
+        "paroisse_upgrade_cancel": "❌ Annuler",
+        "paroisse_upgrade_done": "✅ La Paroisse est désormais **{0}**.",
+        # paroisse-v2 (Drasah 26/11, T-D) : rangée 2 + En savoir plus
+        "paroisse_info_button": "🔎 En savoir plus",
+        "paroisse_state_button": "✅ Compris",
+        "paroisse_info_intro": (
+            "## ⛪ La Paroisse\n"
+            "Le mariage scelle une alliance entre un seigneur et une"
+            " civilisation : la civilisation rejoint la main du royaume."
+            " Un seigneur ne peut avoir qu'UN mariage actif à la fois."
+        ),
+        "paroisse_info_locks": (
+            "🔒 **Verrous mariage :**\n"
+            "Un nouveau mariage verrouille le seigneur hors des combats"
+            " pour 24h (Chapelle), 12h (Église) ou 6h (Cathédrale) —"
+            " doublé pour un mariage royal du Roi."
+        ),
+        "paroisse_info_offrande": (
+            "🎁 **Offrande :**\n"
+            "Chaque mariage célébré verse l'offrande du palier au trésor"
+            " du royaume (+1 ⚙️ à l'Église, +2 ⚙️ à la Cathédrale). Les"
+            " mariages arrangés n'en versent pas."
+        ),
+        "paroisse_info_sacree": (
+            "⛪ **Lieu Sacrée :**\n"
+            "Au palier Cathédrale, le Roi peut consacrer un territoire"
+            " (3 ⚙️) : un chantier de 72h résiste à toute technologie"
+            " adverse. S'il survit, le territoire devient SACRÉ à vie —"
+            " immunisé contre tout."
+        ),
+        "paroisse_arrange_button": "💐 Mariage arrangé ({0})",
+        "paroisse_arrange_king_only": "👑 Réservé au Roi du royaume.",
+        "paroisse_arrange_no_token": "💐 Aucun jeton de mariage arrangé en réserve.",
+        "paroisse_arrange_no_lord": "💐 Aucun seigneur de ton royaume n'est disponible.",
+        "paroisse_arrange_lord_intro": "Choisis le seigneur à marier :",
+        "paroisse_arrange_civ_intro": "Choisis la civilisation pour **{0}** :",
+        "paroisse_arrange_confirm": "💐 Marier **{0}** avec **{1}** ? Le jeton est consommé au scellement.",
+        "paroisse_arrange_ok": "✅ Sceller",
+        "paroisse_arrange_cancel": "❌ Annuler",
+        "paroisse_arrange_done": "✅ **{0}** a épousé **{1}** — l'alliance est scellée, {2} verrouillé 6h.",
+        "paroisse_arrange_announce": (
+            "💐 **{0}** de **{1}** a scellé une alliance arrangée avec **{2}**."
+        ),
+        "paroisse_consecrate_button": "⛪ Consacrer",
+        "paroisse_consecrate_king_only": "👑 Réservé au Roi du royaume.",
+        "paroisse_consecrate_tier": "⛪ La consécration exige le palier Cathédrale.",
+        "paroisse_consecrate_none": "⛪ Aucun territoire disponible à la consécration.",
+        "paroisse_consecrate_choose": "Choisis le territoire à consacrer :",
+        "paroisse_consecrate_done": "✅ **{0}** porte le chantier du Lieu Sacrée — verdict le **{1}**.",
+        "paroisse_consecrate_announce": (
+            "⛪ **{0}** a consacré **{1}** : le chantier du Lieu Sacrée court 72h."
+        ),
+        "comptes_use_button": "🚀 Utiliser",
+        # objectif-possede-v1 (Drasah 26/11, T-D) : lignes enrichies
+        "conseil_objectif_map_defend": "🛡️ Territoire à défendre : **{0}**",
+        "conseil_objectif_map_owner_suffix": " *(appartient à {0})*",
+        "conseil_objectif_map_unknown": "destination inconnue",
+        "conseil_objectif_alliance_marry": "💍 Alliance à consolider : **{0}**",
+        "conseil_objectif_alliance_wed_suffix": " *(mariée à {0})*",
+        "hist_achats_button": "📜 Historique achats",
+        "hist_actions_button": "⚔️ Historique actions",
+        "hist_achats_title": "📜 Historique des achats",
+        "hist_actions_title": "⚔️ Historique des actions",
+        "hist_achats_empty": "Aucun achat pour le moment.",
+        "hist_actions_empty": "Aucune carte utilisée pour le moment.",
+        "hist_purchase_line": "{0} {1} — {2} · {3} ⚙️ · {4}",
+        "hist_action_line": "{0} {1} — {2} · {3}",
+        "comptes_title": "🏛️ Chambre des comptes — {0}",
+        "paroisse_title": "⛪ Paroisse — {0}",
+        "paroisse_tier_line": (
+            "Palier : {0} ({1}/{2}) — Offrande 🎁 : +{3} ⚙️ par mariage"
+        ),
+        "paroisse_stats_line": (
+            "💍 Bague : {0} · 💐 Mariage arrangé : {1} · ⚙️ Point Technologie : {2}"
+        ),
+        # paroisse-v3 (Drasah 26/11) : la présentation de la référence —
+        # blocs titrés « Notre {palier} » et « Les Fidèles du Royaume ».
+        "paroisse_household_palier": "🙏 Notre {0}",
+        "paroisse_unknown_palier": "Chapelle",
+        "paroisse_household": "💒 Les Fidèles du Royaume",
+        "paroisse_household_none": "Aucun fidèle pour le moment.",
+        "paroisse_married_locked": "💍 {0} — {1} · 🔒 verrou jusqu'à <t:{2}:R>",
+        "paroisse_married_free": "💍 {0} — {1} · ✅ verrou levé",
+        "paroisse_royal_locked": "💍 {0} — 👑 {1} · 🔒 verrou jusqu'à <t:{2}:R>",
+        "paroisse_royal_free": "💍 {0} — 👑 {1} · ✅ verrou levé",
+        "paroisse_bachelor": "🎖️ {0} — célibataire · prêt à se marier 💍",
+        "paroisse_queen_word": "Reine",
+        "paroisse_chantier_line": (
+            "⏳ Lieu Sacrée en chantier sur **{0}** — verdict <t:{1}:R>"
+        ),
+        "paroisse_sacred_line": (
+            "⛪ Lieu Sacrée SACRÉ sur **{0}** — inattaquable jusqu'à la fin de la saison"
+        ),
+        # requested by marry._princess_label — the paroisse surfaces (the
+        # household badges AND the 💐 wizard) pass THIS catalog, and the
+        # Affaire 36 wizard shipped without it (a silent KeyError).
+        "church_marry_princess": "Princesse {0}",
+        "voliere_title": "# 🪶 Volière de {kingdom}",
+        "voliere_line": (
+            "Gratuite dès l'Âge Féodal — cooldowns partagés par tout le royaume."
+        ),
+        "bird_ready": "🪶 **{bird}** — sur son perchoir, prêt",
+        "bird_flying": "🕊️ **{bird}** — en vol, retour <t:{ts}:R>",
+        "voliere_corbeau": "**Corbeau**",
+        "voliere_faucon": "**Faucon**",
+        "voliere_pigeon": "**Pigeon**",
+        "ai_levels": (
+            "Très facile|Standard|Intermédiaire|Difficile|Plus difficile|Expert"
+        ),
+    },
+    "en": {
+        "entree_button": "🏰 Entrance",
+        "entree_title": "Where would you like to go?",
+        "conseil_button": "⚔️ Council room",
+        "remparts_button": "🧱 Ramparts",
+        "comptes_button": "🏛️ Chamber of accounts",
+        "paroisse_button": "⛪ Parish",
+        "voliere_button": "🏗️ Aviary",
+        "sortir_button": "🚪 Leave",
+        "not_lord": (
+            "Only the lords of this kingdom may enter its places."
+        ),
+        "no_service": "The Kingdom service is not wired.",
+        "conseil_title": "⚔️ Council room — {0}",
+        "conseil_intro_l1": (
+            "Keep an eye on your lords' attacks and defenses — their"
+            " marriages as well as their locks."
+        ),
+        "conseil_intro_l2": (
+            "You may set your objectives to coordinate better: a kingdom"
+            " to strike, a map you seek or an alliance you covet."
+        ),
+        "conseil_intro_l3": (
+            "You can also organise your explorations or your traps from"
+            " this interface."
+        ),
+        "conseil_classement": "**Rank** : {0}",
+        "conseil_classement_hint": (
+            "-# Ranked by territories — ties broken by alliances, then"
+            " technology points."
+        ),
+        "conseil_objectifs_title": "🎯 Objectives",
+        "conseil_objectif_kingdom": "⚔️ Kingdom to focus : **{0}**",
+        "conseil_objectif_map": "🗺️ Territory sought : **{0}**",
+        "conseil_objectif_alliance": "🤝 Alliance wanted : **{0}**",
+        "conseil_objectifs_none": (
+            "No objective set yet — the King may define them with the"
+            " 🎯 Objective button."
+        ),
+        "conseil_traquenard_title": "**🪤 Trap**",
+        "conseil_traquenard_line": (
+            "You weakened the AI level of the kingdom **{0}** — active"
+            " for {1}"
+        ),
+        "objectif_button": "🎯 Objectives",
+        "objectif_king_only": "🎯 Reserved to the King of the realm.",
+        "objectif_picker_title": "🎯 Kingdom objectives — {0}",
+        "objectif_select_kingdom": "⚔️ Kingdom to strike first",
+        "objectif_select_map": "🗺️ Territory you seek",
+        "objectif_select_alliance": "🤝 Alliance you covet",
+        "objectif_none_label": "🚫 None — leave undefined",
+        "objectif_validate_button": "✅ Apply",
+        "objectif_flip_prev": "◀️ Previous",
+        "objectif_flip_next": "▶️ Next",
+        "objectif_flip_pages": "Page {0}/{1} · {2}",
+        "objectif_edit_hint": (
+            "-# Every menu picked becomes an objective, shown to your"
+            " members — ◀️ Previous / ▶️ Next flip the list pages,"
+            " ✅ Apply to save, 🚪 Leave to close without saving."
+        ),
+        "objectif_save_failed": "⚠️ Save failed — try again in a moment.",
+        "objectif_done_note": "🎯 Objectives saved — the Discussions recap is fresh.",
+        "conseil_seigneurie_button": "🛡️ Lordship",
+        "conseil_stats": (
+            "**Treasury** : {0} ⚙️ · **Territories** : {1} 🗺️ ·"
+            " **Alliances** : {2} 🤝"
+        ),
+        "patrol_title": "🧱 Ramparts — {0}",
+        "remparts_ai_level": "🤖 Your AI level: **{0}/5 {1}**",
+        "remparts_patrouille_title": "👣 **Patrol:**",
+        "remparts_patrouille_title_reinforced": "👣 **Reinforced Patrols:**",
+        "remparts_state_missing": (
+            "❌ You have no patrol [{0}/2] — purchase one at the"
+            " Market (2 ⚙️)"
+        ),
+        "remparts_state_unplaced": (
+            "⚠️ You own a patrol [{0}/2] — click the Patrol button"
+            " to configure it"
+        ),
+        "remparts_state_active": (
+            "⏲ Your patrol [{0}/2] is active between {1:02d}:00"
+            " and {2:02d}:00"
+        ),
+        "remparts_garde_title": "💂 **Royal Guard:**",
+        "remparts_garde_owned_one": "You own {0} Royal Guard",
+        "remparts_garde_owned_many": "You own {0} Royal Guards",
+        "remparts_garde_owned_none": "You do not own any Royal Guard",
+        "remparts_guard_line": "✅ {0} — shielded until {1}",
+        "remparts_guard_stock": "In reserve: {0}",
+        # vague2-actions-v1 (Drasah 21/11): the Remparts action row 2
+        "remparts_use_jeu": "⚔️ Arms Mastery",
+        "remparts_use_patrouille": "🚨 Patrol",
+        "remparts_use_garde": "💂 Royal Guard",
+        "defense_manager_button": "🛡️ Defense management",
+        "defense_manager_title": "🛡️ Defense management — attacks against **{kingdom}**",
+        "defense_manager_empty": "🐺 No ongoing attack against your kingdom.",
+        "defense_manager_row": "• **{map}** — due **{when}** · {state}",
+        "defense_manager_defended": "defended by **{lord}** ✓",
+        "defense_manager_waiting": "waiting for a defender ⏳",
+        "defense_manager_not_lord": "❌ You are not an active lord of a kingdom.",
+        "defense_manager_no_service": "❌ The attacks service is unavailable.",
+        "cancel_defense_button": "↩️ Withdraw my defense",
+        "plan_manager_button": "⚔️ Attack management",
+        "plan_manager_title": "⚔️ Attack management — **{kingdom}**",
+        "plan_manager_declared_section": "**⚔️ Declared attacks**",
+        "plan_manager_planned_section": "**📅 Planned attacks**",
+        "plan_manager_empty": "No ongoing or planned attack.",
+        "plan_manager_declared_row": (
+            "• **{map}** (kingdom **{kingdom}**) — declared by **{lord}** —"
+            " due **{when}**"
+        ),
+        "plan_manager_planned_row": "• **{map}** — due **{when}** · {lord} · choice {index}/{total}",
+        "plan_choices_line": "·· Choice {n}: **{map}**{active}",
+        "plan_active_tag": " ✅",
+        "remparts_info_button": "🔎 Learn more",
+        "remparts_state_button": "✅ Got it",
+        "remparts_back_button": "🧱 Ramparts",
+        "remparts_ai_intro": (
+            "🤖 **Defense bot (AI):**\n"
+            "If no lord defends your kingdom, your AI bot automatically takes"
+            " over your defense. You can raise your AI's level by training it —"
+            " buy a Set of Arms at the Market; once your AI reaches its max"
+            " level, it improves your Patrol (Reinforced Patrols, 3h slots)."
+        ),
+        "remparts_patrouille_intro": (
+            "🛡️ **Patrol:**\n"
+            "Shields your kingdom from a normal, exceptional and technological"
+            " attack on a fixed 2h slot each day — every day of the week. An"
+            " improved patrol widens the protection slot to 3h. Limit of 2"
+            " patrols per kingdom, usable for the whole season."
+        ),
+        "remparts_patrol_window": (
+            "🔄 Window redefinition: only during the Lord's Day"
+            " (Sunday 23:30 → Monday 10:00)."
+        ),
+        "remparts_garde_intro": (
+            "💂 **Royal Guards:**\n"
+            "Shields one territory from every attack — normal, exceptional"
+            " and technological — for 12 hours. The Royal Guard is consumed."
+        ),
+        "classement_button": "🏆 Ranking",
+        "classement_title": "🏆 Season ranking",
+        "classement_line": "{0} {1}. **{2}** — {3} 🗺️ · {4} 🤝",
+        "classement_empty": "No kingdom to rank yet.",
+        "conseil_card_exploration": "🧭 Exploration",
+        "conseil_card_traquenard": "🪤 Traquenard",
+        "traquenard_select": "Pick the kingdom to trap:",
+        "traquenard_done": (
+            "✅ Traquenard armed against **{0}** — the AI faced turns "
+            "Easy <t:{1}:R>. {2} living lock(s) extended +2h."
+        ),
+        "action_error_note": "❌ {0}",
+        "paroisse_marry_button": "💍 Get married",
+        "paroisse_upgrade_button": "⛪ Upgrade: {0}",
+        "paroisse_upgrade_max": "⛪ Top tier reached",
+        "paroisse_upgrade_confirm": "Upgrade the Parish to **{0}** for **{1}** ⚙️?",
+        "paroisse_upgrade_ok": "✅ Upgrade",
+        "paroisse_upgrade_cancel": "❌ Cancel",
+        "paroisse_upgrade_done": "✅ The Parish now stands at **{0}**.",
+        # paroisse-v2 (Drasah 26/11, T-D) : rangée 2 + En savoir plus
+        "paroisse_info_button": "🔎 Learn more",
+        "paroisse_state_button": "✅ Got it",
+        "paroisse_info_intro": (
+            "## ⛪ The Parish\n"
+            "A wedding seals an alliance between a lord and a"
+            " civilization: the civilization joins the kingdom's hand."
+            " A lord may hold only ONE active marriage."
+        ),
+        "paroisse_info_locks": (
+            "🔒 **Marriage locks:**\n"
+            "A fresh marriage locks the lord out of combat for 24h"
+            " (Chapel), 12h (Church) or 6h (Cathedral) — doubled for the"
+            " King's royal wedding."
+        ),
+        "paroisse_info_offrande": (
+            "🎁 **Offering:**\n"
+            "Every celebrated wedding pays the tier's offering to the"
+            " kingdom treasury (+1 ⚙️ at Church, +2 ⚙️ at Cathedral)."
+            " Arranged marriages pay none."
+        ),
+        "paroisse_info_sacree": (
+            "⛪ **Sacred Place:**\n"
+            "At the Cathedral tier the King may consecrate a territory"
+            " (3 ⚙️): a 72h chantier resists every adverse technology."
+            " If it survives, the territory stays SACRED forever —"
+            " immune to everything."
+        ),
+        "paroisse_arrange_button": "💐 Arranged marriage ({0})",
+        "paroisse_arrange_king_only": "👑 Reserved to the King of the realm.",
+        "paroisse_arrange_no_token": "💐 No arranged-marriage token in reserve.",
+        "paroisse_arrange_no_lord": "💐 No lord of your kingdom is available.",
+        "paroisse_arrange_lord_intro": "Choose the lord to wed:",
+        "paroisse_arrange_civ_intro": "Choose the civilization for **{0}**:",
+        "paroisse_arrange_confirm": "💐 Wed **{0}** to **{1}**? The token is spent on sealing.",
+        "paroisse_arrange_ok": "✅ Seal",
+        "paroisse_arrange_cancel": "❌ Cancel",
+        "paroisse_arrange_done": "✅ **{0}** wed **{1}** — the alliance is sealed, {2} locked 6h.",
+        "paroisse_arrange_announce": (
+            "💐 **{0}** of **{1}** sealed an arranged alliance with **{2}**."
+        ),
+        "paroisse_consecrate_button": "⛪ Consecrate",
+        "paroisse_consecrate_king_only": "👑 Reserved to the King of the realm.",
+        "paroisse_consecrate_tier": "⛪ Consecration requires the Cathedral tier.",
+        "paroisse_consecrate_none": "⛪ No territory available for consecration.",
+        "paroisse_consecrate_choose": "Choose the territory to consecrate:",
+        "paroisse_consecrate_done": "✅ **{0}** carries the Sacred Place chantier — verdict on **{1}**.",
+        "paroisse_consecrate_announce": (
+            "⛪ **{0}** consecrated **{1}**: the Sacred Place chantier runs 72h."
+        ),
+        "comptes_use_button": "🚀 Use",
+        # objectif-possede-v1 (Drasah 26/11, T-D) : enriched lines
+        "conseil_objectif_map_defend": "🛡️ Territory to defend : **{0}**",
+        "conseil_objectif_map_owner_suffix": " *(held by {0})*",
+        "conseil_objectif_map_unknown": "unknown destination",
+        "conseil_objectif_alliance_marry": "💍 Alliance to secure : **{0}**",
+        "conseil_objectif_alliance_wed_suffix": " *(wed to {0})*",
+        "hist_achats_button": "📜 Purchase history",
+        "hist_actions_button": "⚔️ Action history",
+        "hist_achats_title": "📜 Purchase history",
+        "hist_actions_title": "⚔️ Action history",
+        "hist_achats_empty": "No purchase yet.",
+        "hist_actions_empty": "No card used yet.",
+        "hist_purchase_line": "{0} {1} — {2} · {3} ⚙️ · {4}",
+        "hist_action_line": "{0} {1} — {2} · {3}",
+        "comptes_title": "🏛️ Chamber of accounts — {0}",
+        "paroisse_title": "⛪ Parish — {0}",
+        "paroisse_tier_line": (
+            "Tier: {0} ({1}/{2}) — Offering 🎁: +{3} ⚙️ per marriage"
+        ),
+        "paroisse_stats_line": (
+            "💍 Ring: {0} · 💐 Arranged marriage: {1} · ⚙️ Tech Point: {2}"
+        ),
+        "paroisse_household_palier": "🙏 Our {0}",
+        "paroisse_unknown_palier": "Chapel",
+        "paroisse_household": "💒 The Faithful of the Kingdom",
+        "paroisse_household_none": "No faithful member for now.",
+        "paroisse_married_locked": "💍 {0} — {1} · 🔒 locked until <t:{2}:R>",
+        "paroisse_married_free": "💍 {0} — {1} · ✅ lock lifted",
+        "paroisse_royal_locked": "💍 {0} — 👑 {1} · 🔒 locked until <t:{2}:R>",
+        "paroisse_royal_free": "💍 {0} — 👑 {1} · ✅ lock lifted",
+        "paroisse_bachelor": "🎖️ {0} — single · ready to marry 💍",
+        "paroisse_queen_word": "Queen",
+        "paroisse_chantier_line": (
+            "⏳ Holy Site under construction on **{0}** — verdict <t:{1}:R>"
+        ),
+        "paroisse_sacred_line": (
+            "⛪ Holy Site SACRED on **{0}** — unassailable until the end of the season"
+        ),
+        "church_marry_princess": "Princess {0}",
+        "voliere_title": "# 🪶 Aviary of {kingdom}",
+        "voliere_line": (
+            "Free from the Feudal Age — cooldowns shared by the whole kingdom."
+        ),
+        "bird_ready": "🪶 **{bird}** — on its perch, ready",
+        "bird_flying": "🕊️ **{bird}** — flying, back <t:{ts}:R>",
+        "voliere_corbeau": "**Corbeau**",
+        "voliere_faucon": "**Faucon**",
+        "voliere_pigeon": "**Pigeon**",
+        "ai_levels": (
+            "Very easy|Standard|Intermediate|Hard|Harder|Expert"
+        ),
+    },
+}
+
+
+def lieux_strings(locale: Any) -> dict[str, str]:
+    """The lieux catalog (fr default, like every mod surface)."""
+    raw = getattr(locale, "value", locale) or "fr"
+    text = str(raw)
+    return LIEUX_STRINGS["fr"] if text.lower().startswith("fr") else LIEUX_STRINGS["en"]
+
+
+def _locale_of(interaction: discord.Interaction) -> str:
+    return str(getattr(interaction, "locale", "fr") or "fr")
+
+
+# ---------------------------------------------------------------------------
+# The illustrations (deployment-local files — best-effort, never a raise)
+# ---------------------------------------------------------------------------
+
+
+def _lieu_file(filename_on_disk: str, filename: str) -> discord.File | None:
+    """Best-effort illustration of one lieu (deployment-local asset)."""
+    try:
+        path = _LIEUX_ASSETS / filename_on_disk
+        if not path.is_file():
+            logger.warning("kingdom lieux: illustration %s missing", filename_on_disk)
+            return None
+        return discord.File(path, filename=filename, spoiler=False)
+    except Exception:
+        logger.warning("kingdom lieux: illustration %s read failed", filename_on_disk, exc_info=True)
+        return None
+
+
+def _lieu_files(filename_on_disk: str, filename: str) -> list[discord.File]:
+    file = _lieu_file(filename_on_disk, filename)
+    return [file] if file is not None else []
+
+
+def _bird_label(strings: dict[str, str], bird: str) -> str:
+    key = f"voliere_{bird}"
+    if key in strings:
+        return str(strings[key])
+    emoji = _BIRD_EMOJI.get(bird, "🪶")
+    return f"{emoji} **{bird}**"
+
+
+# ---------------------------------------------------------------------------
+# The window template — illustration on top, the panel under (the
+# reference branch's _panel_view_with_buttons, ports-2 layout face).
+# ---------------------------------------------------------------------------
+
+
+def _lieu_window(
+    strings: dict[str, str],
+    view_id: str,
+    accent: discord.Colour,
+    title: str,
+    body: str,
+    media: str | None,
+    rows: list[list[discord.ui.Item[Any]]] | None = None,
+    card_media: str | None = None,
+    extra_items: list[discord.ui.Item[discord.ui.LayoutView]] | None = None,
+) -> discord.ui.LayoutView:
+    """One lieu window : illustration TOP, the panel under, Sortir last.
+
+    ``card_media`` (comptes-cv2-v1, T-D) : la galerie de carte révélée
+    vit DANS le container sous le corps — l'illustration de tête reste
+    seule en haut (Drasah : jamais côte à côte).
+
+    ``extra_items`` (voliere-espaces-v2, Drasah 28/11) : une SECTION
+    additionnelle rendue dans le MÊME container, sous les rangées —
+    la fenêtre reste le contexte, la section s'ouvre en dessous.
+    """
+    blocks: list[discord.ui.Item[discord.ui.LayoutView]] = []
+    if media:
+        blocks.append(discord.ui.MediaGallery(discord.MediaGalleryItem(media)))
+    container_items: list[discord.ui.Item[discord.ui.LayoutView]] = [
+        discord.ui.TextDisplay(f"# {title}"),
+        discord.ui.Separator(),
+        discord.ui.TextDisplay(body),
+    ]
+    if card_media:
+        container_items.append(discord.ui.MediaGallery(discord.MediaGalleryItem(card_media)))
+    for row in rows or []:
+        if row:
+            container_items.append(discord.ui.ActionRow(*row))
+    if extra_items:
+        container_items.append(discord.ui.Separator())
+        container_items.extend(extra_items)
+    blocks.append(discord.ui.Container(*container_items, accent_colour=accent))
+    return surface(view_id, *blocks)
+
+
+def _sortir_item(strings: dict[str, str]) -> discord.ui.Button:
+    return _lieu_item(strings, "sortir", discord.ButtonStyle.danger)
+
+
+def _lieu_item(
+    strings: dict[str, str], kind: str, style: discord.ButtonStyle, label: str | None = None
+) -> discord.ui.Button:
+    """A plain wire button — every lieux door is restart-proof BELOW."""
+    return discord.ui.Button(
+        label=str(label or strings[f"{kind}_button"])[:80],
+        custom_id=f"{_NS}:{kind}",
+        style=style,
+    )
+
+
+# ---------------------------------------------------------------------------
+# The engine reads (the NEW seams only — lords, kingdoms, technology,
+# territories, the parish ladder : stack.kingdoms/.attacks/.territories/.config)
+# ---------------------------------------------------------------------------
+
+
+async def _lord_kingdom_of(
+    interaction: discord.Interaction, strings: dict[str, str]
+) -> tuple[Any, Any, Any] | tuple[None, None, Any]:
+    """Resolve the clicker's lord + kingdom + stack (None,None,stack on miss).
+
+    lieux-portage-v1-hotfix (Drasah 21/11) : le resolveur lit le SEAM
+    CANONIQUE du mod — ``lord_of`` (l'admin sans fiche pilote le Roi du
+    royaume de test, la règle kingdom-test-v1 portée de la référence).
+    Le portage initial lisait ``lord.player_id``, un champ que le moteur
+    n'a JAMAIS eu (un seigneur EST son id) → le Roi d'un royaume accepté
+    était lu « pas seigneur » (le cas Blanc). ailleurs-vision : le lieu
+    montre TOUJOURS le royaume DU CLIQUEUR (l'ancienne branche, jamais
+    le hub cliqué) — strict en saison normale, arbitré 21/11.
+    """
+    from .common import kingdom_by_id, lord_of
+
+    stack = wiring()
+    kingdoms = getattr(stack, "kingdoms", None)
+    if kingdoms is None:
+        await open_unique_ephemeral(interaction, content=strings["no_service"])
+        return (None, None, stack)
+    user_id = str(getattr(interaction.user, "id", ""))
+    lord = await lord_of(kingdoms, user_id, interaction)
+    lord = None if lord is None or bool(getattr(lord, "left", False)) else lord
+    if lord is None:
+        await open_unique_ephemeral(interaction, content=strings["not_lord"])
+        return (None, None, stack)
+    kingdom = await kingdom_by_id(kingdoms, getattr(lord, "kingdom_id", None))
+    if kingdom is None:
+        await open_unique_ephemeral(interaction, content=strings["not_lord"])
+        return (None, None, stack)
+    return (lord, kingdom, stack)
+
+
+async def _gather_state(stack: Any, kingdom: Any) -> dict[str, Any]:
+    """The consultation data (defensive — a missing seam reads empty)."""
+    kid = str(getattr(kingdom, "id", ""))
+    state: dict[str, Any] = {"wallet": int(getattr(kingdom, "tech_points_bank", 0) or 0)}
+    try:
+        attacks = getattr(stack, "attacks", None)
+        technology = await attacks.technology_state(kid) if attacks is not None else None
+        state["purchases"] = dict(getattr(technology, "purchases", {}) or {})
+        state["base_ai"] = await attacks.base_ai_level() if attacks is not None else 0
+    except Exception:
+        state["purchases"] = {}
+        state["base_ai"] = 0
+    try:
+        territories = getattr(stack, "territories", None)
+        owned = []
+        if territories is not None:
+            for territory in await territories.territories():
+                if str(getattr(territory, "owner_kingdom_id", "")) == kid:
+                    owned.append(territory)
+        state["territories"] = owned
+    except Exception:
+        state["territories"] = []
+    return state
+
+
+def _ai_display(strings: dict[str, str], state: dict[str, Any], kingdom: Any) -> tuple[int, str]:
+    """The motor scale IS Drasah's scale (base 0 — fifths to Expert)."""
+    import time as _time
+
+    purchases = state.get("purchases") or {}
+    level = 0
+    try:
+        level = min(5, int(state.get("base_ai", 0) or 0) + int(purchases.get("jeu_d_armes", 0) or 0))
+        until = int(getattr(kingdom, "traquenard_until", 0) or 0) if getattr(kingdom, "traquenard_until", None) else 0
+        if until and until > int(_time.time()):
+            level = 0  # the Traquenard window forces the weakened state
+    except Exception:
+        level = 0
+    names = str(strings.get("ai_levels", "") or "").split("|")
+    name = names[level].strip() if 0 <= level < len(names) else str(level)
+    return level, name
+
+
+# ---------------------------------------------------------------------------
+# The five doors + the two traveling buttons (restart-proof DynamicItems)
+# ---------------------------------------------------------------------------
+
+
+def _lieu_button_class(kind: str, style: discord.ButtonStyle):
+    class _Button(
+        discord.ui.DynamicItem[discord.ui.Button[Any]], template=rf"{_NS}:{kind}"
+    ):
+        """One restart-proof hub door of the Entrée chooser."""
+
+        def __init__(self, label: str) -> None:
+            super().__init__(
+                discord.ui.Button(
+                    label=str(label)[:80],
+                    custom_id=f"{_NS}:{kind}",
+                    style=style,
+                )
+            )
+
+        @classmethod
+        async def from_custom_id(cls, interaction, item, match, /):  # type: ignore[no-untyped-def]
+            return cls(lieux_strings(_locale_of(interaction))[f"{kind}_button"])
+
+        async def callback(self, interaction: discord.Interaction) -> None:
+            await _open_lieu(interaction, kind)
+
+    _Button.__name__ = f"Lieux{kind.capitalize()}Button"
+    _Button.__qualname__ = _Button.__name__
+    return _Button
+
+
+LieuxConseilButton = _lieu_button_class("conseil", discord.ButtonStyle.secondary)
+LieuxRempartsButton = _lieu_button_class("remparts", discord.ButtonStyle.secondary)
+LieuxComptesButton = _lieu_button_class("comptes", discord.ButtonStyle.secondary)
+LieuxParoisseButton = _lieu_button_class("paroisse", discord.ButtonStyle.secondary)
+LieuxVoliereButton = _lieu_button_class("voliere", discord.ButtonStyle.secondary)
+
+
+class LieuxEntreeButton(
+    discord.ui.DynamicItem[discord.ui.Button[Any]], template=rf"{_NS}:entree"
+):
+    """The 🏰 Entrée door — opens the chooser (the ENGAGED realm's hub)."""
+
+    def __init__(self, label: str) -> None:
+        super().__init__(
+            discord.ui.Button(
+                label=label[:80], custom_id=f"{_NS}:entree", style=discord.ButtonStyle.primary
+            )
+        )
+
+    @classmethod
+    async def from_custom_id(cls, interaction, item, match, /):  # type: ignore[no-untyped-def]
+        return cls(lieux_strings(_locale_of(interaction))["entree_button"])
+
+    async def callback(self, interaction: discord.Interaction) -> None:
+        await open_entree(interaction)
+
+
+class LieuxSortirButton(
+    discord.ui.DynamicItem[discord.ui.Button[Any]], template=rf"{_NS}:sortir"
+):
+    """The red 🚪 Sortir of every lieu — walks back to the Entrée chooser."""
+
+    def __init__(self, label: str) -> None:
+        super().__init__(
+            discord.ui.Button(
+                label=label[:80], custom_id=f"{_NS}:sortir", style=discord.ButtonStyle.danger
+            )
+        )
+
+    @classmethod
+    async def from_custom_id(cls, interaction, item, match, /):  # type: ignore[no-untyped-def]
+        return cls(lieux_strings(_locale_of(interaction))["sortir_button"])
+
+    async def callback(self, interaction: discord.Interaction) -> None:
+        await open_entree(interaction)
+
+
+def lieux_dynamic_items() -> tuple:
+    """Every restart-proof DynamicItem of the lieux surfaces."""
+    return (
+        LieuxEntreeButton,
+        LieuxConseilButton,
+        LieuxRempartsButton,
+        LieuxComptesButton,
+        LieuxParoisseButton,
+        LieuxVoliereButton,
+        LieuxSortirButton,
+        LieuxSeigneurieButton,
+        LieuxObjectifButton,
+        LieuxObjectifSelect,
+        LieuxObjectifFlip,
+        LieuxObjectifValidateButton,
+        # vague2-actions-v1 (Drasah 21/11)
+        LieuxRempartsUseButton,
+        # remparts-managers-v1 / classement-vue-v1 (Drasah 26/11, T-C)
+        LieuxRempartsManagerButton,
+        LieuxRempartsInfoButton,
+        LieuxRempartsStateButton,
+        LieuxRempartsBackButton,
+        LieuxCancelDefenseButton,
+        LieuxClassementButton,
+        LieuxExplorationButton,
+        LieuxTraquenardButton,
+        LieuxTraquenardSelect,
+        LieuxParoisseUpgradeButton,
+        LieuxParoisseUpgradeOkButton,
+        LieuxParoisseUpgradeCancelButton,
+        # paroisse-v2 / comptes-cv2 (Drasah 26/11, T-D)
+        LieuxParoisseInfoButton,
+        LieuxParoisseStateButton,
+        LieuxParoisseArrangeButton,
+        LieuxParoisseConsecrateButton,
+        LieuxConsecrateSelect,
+        LieuxComptesCardButton,
+        LieuxComptesUseButton,
+        LieuxHistButton,
+    )
+
+
+# ---------------------------------------------------------------------------
+# The Entrée chooser — « Où souhaitez-vous vous rendre ? »
+# ---------------------------------------------------------------------------
+
+
+def entree_view(strings: dict[str, str]) -> discord.ui.LayoutView:
+    """The ephemeral chooser behind 🏰 Entrée — the five doors in one
+    ActionRow (the reference branch's entree_view). retrait-chez-soi
+    (Drasah 21/11) : « on n'en a pas besoin » — la 6ᵉ porte disparaît."""
+    row: Any = discord.ui.ActionRow(
+        LieuxConseilButton(strings["conseil_button"]).item,
+        LieuxRempartsButton(strings["remparts_button"]).item,
+        LieuxComptesButton(strings["comptes_button"]).item,
+        LieuxParoisseButton(strings["paroisse_button"]).item,
+        LieuxVoliereButton(strings["voliere_button"]).item,
+    )
+    return surface(
+        ENTREE_SURFACE,
+        discord.ui.Container(
+            discord.ui.TextDisplay(f"## {strings['entree_title']}"),
+            discord.ui.Separator(),
+            row,
+            accent_colour=GOLD,
+        ),
+    )
+
+
+async def open_entree(interaction: discord.Interaction) -> None:
+    """Open the Entrée chooser as the clicker's single ephemeral window."""
+    strings = lieux_strings(_locale_of(interaction))
+    lord, kingdom, stack = await _lord_kingdom_of(interaction, strings)
+    if lord is None or kingdom is None:
+        return
+    await open_unique_ephemeral(interaction, view=entree_view(strings))
+
+
+async def _shell_of(stack: Any, user_id: str) -> Any:
+    """Best-effort — the clicker's realm shell (None when unreadable)."""
+    try:
+        realms = getattr(stack, "realms", None)
+        if realms is None:
+            return None
+        return await realms.realm_of_member(user_id)
+    except Exception:
+        return None
+
+
+async def _open_lieu(interaction: discord.Interaction, kind: str) -> None:
+    """Open one lieu as the clicker's single ephemeral window."""
+    await interaction.response.defer(ephemeral=True)
+    strings = lieux_strings(_locale_of(interaction))
+    lord, kingdom, stack = await _lord_kingdom_of(interaction, strings)
+    if lord is None or kingdom is None:
+        return
+    try:
+        state = await _gather_state(stack, kingdom)
+        if kind == "conseil":
+            view, files = await _conseil_window(interaction, strings, lord, kingdom, state)
+        elif kind == "remparts":
+            view, files = _remparts_window(strings, kingdom, state)
+        elif kind == "comptes":
+            view, files = await _comptes_window(strings, kingdom, state)
+        elif kind == "paroisse":
+            view, files = await _paroisse_window(strings, kingdom, state)
+        else:  # voliere
+            view, files = await _voliere_window(strings, kingdom, _locale_of(interaction))
+    except Exception:
+        logger.warning("kingdom lieux: the %s window failed", kind, exc_info=True)
+        from .realms import realm_strings as _rs
+
+        await open_unique_ephemeral(interaction, content=str(_rs(interaction)["realm_error_note"]))
+        return
+    await open_unique_ephemeral(interaction, view=view, files=files or None)
+
+
+# ---------------------------------------------------------------------------
+# ⚔️ Salle du conseil — the FULL sheet (realm-content-v1, Drasah 21/11) :
+# intro 3 lignes + Classement (médaille + rang) + stats + 🎯 Objectifs
+# (les lignes du Roi) + le statut Traquenard live. Bouton 🎯 Objectif
+# ROUGE pour tout le monde hors le Roi (vert pour lui, jamais caché) ;
+# cartes Exploration/Traquenard + actions Remparts/Paroisse/Comptes =
+# Vague 2 (actions de jeu), PAS cette vague.
+# ---------------------------------------------------------------------------
+
+_RANK_MEDALS = {1: "🥇", 2: "🥈", 3: "🥉"}
+
+
+def _rank_medal(rank: int) -> str:
+    rank = int(rank or 0)
+    return _RANK_MEDALS.get(rank, "🏰" if rank >= 4 else "")
+
+
+async def _classement_rows(stack: Any) -> list[tuple[Any, int, int]]:
+    """The ranking rows — territories desc, ties by alliances then tech."""
+    kingdoms = getattr(stack, "kingdoms", None)
+    if kingdoms is None:
+        return []
+    try:
+        items = [k for k in await kingdoms.kingdoms() if not getattr(k, "is_gaia", False)]
+        counts = {str(k.id): 0 for k in items}
+        territories = getattr(stack, "territories", None)
+        if territories is not None:
+            for territory in await territories.territories():
+                owner = str(getattr(territory, "owner_kingdom_id", ""))
+                if owner in counts:
+                    counts[owner] += 1
+        rows = [(k, counts[str(k.id)], len(getattr(k, "civilizations", []) or [])) for k in items]
+        rows.sort(key=lambda row: (-row[1], -row[2], -int(getattr(row[0], "tech_points_bank", 0) or 0)))
+        return rows
+    except Exception:  # noqa: BLE001
+        logger.warning("kingdom lieux: classement rows failed", exc_info=True)
+        return []
+
+
+async def _conseil_rank(stack: Any, kingdom: Any) -> tuple[int, int]:
+    rows = await _classement_rows(stack)
+    if not rows:
+        return (0, 0)
+    ids = [str(getattr(row[0], "id", "")) for row in rows]
+    kid = str(getattr(kingdom, "id", ""))
+    if kid not in ids:
+        return (0, len(ids))
+    return (ids.index(kid) + 1, len(ids))
+
+
+async def _traquenard_status_lines(
+    strings: dict[str, str], stack: Any, kingdom: Any
+) -> list[str]:
+    """traquenard-echelle-v1 (porté) : le statut LIVE — une ligne par
+    fenêtre Facile encore OUVERTE (``traquenard_uses``), délai « 2h05 »."""
+    import time as _time
+
+    uses = dict(getattr(kingdom, "traquenard_uses", None) or {})
+    now_ts = int(_time.time())
+    live = {str(t): int(u or 0) for t, u in uses.items() if int(u or 0) > now_ts}
+    if not live:
+        return []
+    names: dict[str, str] = {}
+    try:
+        for item in await stack.kingdoms.kingdoms():
+            kid = str(getattr(item, "id", "") or "")
+            if kid in live:
+                names[kid] = str(getattr(item, "name", "") or kid)
+    except Exception:  # noqa: BLE001
+        names = {}
+    lines = ["", str(strings["conseil_traquenard_title"])]
+    for target_id, until in sorted(live.items()):
+        remaining = max(0, until - now_ts)
+        lines.append(
+            str(strings["conseil_traquenard_line"]).format(
+                names.get(str(target_id), str(target_id)),
+                f"{remaining // 3600}h{(remaining % 3600) // 60:02d}",
+            )
+        )
+    return lines
+
+
+async def _objectifs_lines(strings: dict[str, str], stack: Any, kingdom: Any) -> str:
+    """The 🎯 block, ENRICHED with live data (objectif-possede-v1, T-D).
+
+    Un objectif DÉJÀ POSSÉDÉ ne se lit JAMAIS « recherché » : une map de
+    son royaume devient une priorité DÉFENSE, une civilisation déjà en
+    main un souhait de MARIAGE. Sinon la ligne vit : la map porte son
+    propriétaire (ou « destination inconnue »), l'alliance mariée porte
+    son seigneur. Wiring défaillant = lignes brutes, jamais de crash.
+    """
+    goals = dict(getattr(kingdom, "council_objectives", None) or {})
+    rows = {
+        "target_kingdom": strings["conseil_objectif_kingdom"],
+        "target_territory": strings["conseil_objectif_map"],
+        "target_alliance": strings["conseil_objectif_alliance"],
+    }
+    parts: list[str] = []
+    for kind, line in rows.items():
+        label = str(goals.get(f"{kind}_label", "") or "").strip()
+        if not label:
+            continue
+        key = str(goals.get(kind, "") or "")
+        if kind == "target_territory" and await _territory_owned_by_kingdom(stack, kingdom, key):
+            parts.append(strings["conseil_objectif_map_defend"].format(label))
+            continue
+        if kind == "target_alliance" and key in [
+            str(civ) for civ in (getattr(kingdom, "civilizations", None) or [])
+        ]:
+            parts.append(strings["conseil_objectif_alliance_marry"].format(label))
+            continue
+        text = line.format(label)
+        if kind == "target_territory":
+            text += await _territory_owner_suffix(strings, stack, key)
+        elif kind == "target_alliance":
+            text += await _alliance_wed_suffix(strings, stack, key)
+        parts.append(text)
+    return "\n".join(parts) if parts else str(strings["conseil_objectifs_none"])
+
+
+async def _territory_owned_by_kingdom(stack: Any, kingdom: Any, map_key: str) -> bool:
+    """True when the map behind the goal already belongs to the kingdom."""
+    if not map_key:
+        return False
+    try:
+        territories = getattr(stack, "territories", None)
+        if territories is None:
+            return False
+        for territory in await territories.territories():
+            if str(getattr(territory, "map_key", "")) == map_key:
+                return (
+                    str(getattr(territory, "owner_kingdom_id", "") or "")
+                    == str(getattr(kingdom, "id", ""))
+                )
+    except Exception:  # noqa: BLE001 — a failing read keeps the plain line
+        logger.warning("kingdom lieux: territory ownership check failed", exc_info=True)
+    return False
+
+
+async def _territory_owner_suffix(strings: dict[str, str], stack: Any, map_key: str) -> str:
+    """The sought map's live owner (or « destination inconnue »)."""
+    if not map_key:
+        return ""
+    try:
+        owner = ""
+        for territory in await stack.territories.territories():
+            if str(getattr(territory, "map_key", "")) == map_key:
+                owner = str(getattr(territory, "owner_kingdom_id", "") or "")
+                break
+        if not owner:
+            return strings["conseil_objectif_map_owner_suffix"].format(
+                strings["conseil_objectif_map_unknown"]
+            )
+        for kingdom in await stack.kingdoms.kingdoms():
+            if str(getattr(kingdom, "id", "")) == owner:
+                return strings["conseil_objectif_map_owner_suffix"].format(
+                    str(getattr(kingdom, "name", owner))
+                )
+        return strings["conseil_objectif_map_owner_suffix"].format(
+            strings["conseil_objectif_map_unknown"]
+        )
+    except Exception:  # noqa: BLE001
+        logger.warning("kingdom lieux: territory owner suffix failed", exc_info=True)
+        return ""
+
+
+async def _alliance_wed_suffix(strings: dict[str, str], stack: Any, civ_key: str) -> str:
+    """The civ's wedded lord name, when an active marriage claims it."""
+    if not civ_key:
+        return ""
+    try:
+        for lord in await stack.kingdoms.lords():
+            if not getattr(lord, "left", False) and str(
+                getattr(lord, "married_civilization", "") or ""
+            ) == civ_key:
+                return strings["conseil_objectif_alliance_wed_suffix"].format(
+                    str(getattr(lord, "display_name", "?"))
+                )
+    except Exception:  # noqa: BLE001
+        logger.warning("kingdom lieux: alliance wed suffix failed", exc_info=True)
+    return ""
+
+
+async def _conseil_window(
+    interaction: discord.Interaction,
+    strings: dict[str, str],
+    lord: Any,
+    kingdom: Any,
+    state: dict[str, Any],
+) -> tuple[discord.ui.LayoutView, list[discord.File]]:
+    stack = wiring()
+    rank = await _conseil_rank(stack, kingdom)
+    rank_display = (
+        f"{_rank_medal(int(rank[0]))} {int(rank[0])}/{int(rank[1])}".strip()
+        if int(rank[0] or 0) > 0 and int(rank[1] or 0) > 0
+        else "—"
+    )
+    body = "\n".join(
+        [
+            strings["conseil_intro_l1"],
+            strings["conseil_intro_l2"],
+            strings["conseil_intro_l3"],
+            "",
+            strings["conseil_classement"].format(rank_display),
+            strings["conseil_stats"].format(
+                int(state.get("wallet", 0) or 0),
+                len(state.get("territories") or []),
+                len(getattr(kingdom, "civilizations", []) or []),
+            ),
+            strings["conseil_classement_hint"],
+            "",
+            f"## {strings['conseil_objectifs_title']}",
+            await _objectifs_lines(strings, stack, kingdom),
+            *await _traquenard_status_lines(strings, stack, kingdom),
+        ]
+    )
+    viewer_is_king = str(getattr(lord, "role", "")) == "king"
+    objectif = LieuxObjectifButton(strings["objectif_button"], king=viewer_is_king)
+    rows = [[
+        LieuxSeigneurieButton(strings["conseil_seigneurie_button"]).item,
+        objectif.item,
+        # classement-vue-v1 (Drasah 26/11, T-C) : entre 🎯 et 🚪 (la référence)
+        _lieu_item(strings, "classement", discord.ButtonStyle.primary),
+        _sortir_item(strings),
+    ]]
+    # vague2-actions-v1 (Drasah 21/11) : rangée 2 — les cartes d'action
+    # 🧭 Exploration / 🪤 Traquenard (vertes si en réserve, grisées sinon,
+    # jamais cachées — pattern _remparts_rows de la référence)
+    rows.append(_conseil_cards_row(strings, state, kingdom))
+    view = _lieu_window(
+        strings,
+        CONSEIL_SURFACE,
+        discord.Colour.gold(),
+        strings["conseil_title"].format(str(getattr(kingdom, "name", ""))),
+        body,
+        "attachment://salle_du_conseil.png",
+        rows,
+    )
+    return view, _lieu_files("salle du conseil.png", "salle_du_conseil.png")
+
+
+class LieuxSeigneurieButton(
+    discord.ui.DynamicItem[discord.ui.Button[Any]], template=rf"{_NS}:seigneurie"
+):
+    """🛡️ Seigneurie — the lords' roster (the real window is the realm's)."""
+
+    def __init__(self, label: str) -> None:
+        super().__init__(
+            discord.ui.Button(
+                label=label[:80], custom_id=f"{_NS}:seigneurie", style=discord.ButtonStyle.success
+            )
+        )
+
+    @classmethod
+    async def from_custom_id(cls, interaction, item, match, /):  # type: ignore[no-untyped-def]
+        return cls(lieux_strings(_locale_of(interaction))["conseil_seigneurie_button"])
+
+    async def callback(self, interaction: discord.Interaction) -> None:
+        from .realms import realm_strings, seigneurie_window
+
+        await interaction.response.defer(ephemeral=True)
+        stack = wiring()
+        realm = await _shell_of(stack, str(getattr(interaction.user, "id", "")))
+        # retour-testeurs-v1: realm_strings reads the INTERACTION (it
+        # re-derives the locale itself) — a bare locale string crashed
+        # every Seigneurie click after the defer.
+        strings = realm_strings(interaction)
+        if realm is None:
+            await open_unique_ephemeral(interaction, content=strings["realm_gone_note"])
+            return
+        await open_unique_ephemeral(
+            interaction, view=await seigneurie_window(interaction, realm, strings)
+        )
+
+
+# ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# 🎯 Objectif — the King's goal picker (realm-content-v1, porté synfoni-v1)
+#
+# Trois objectifs INDÉPENDANTS : ⚔️ royaume à focus, 🗺️ territoire
+# recherché, 🤝 alliance souhaitée. Les pages (maps/civs > 25) se
+# feuillettent ◀️ ▶️, chaque menu devient un objectif stagé, ✅ Valider
+# sauvegarde (moteur) et rafraîchit l'épinglé 🎯 de Discussions.
+# Le staging vit en mémoire (user id → choix) — éphémère par nature.
+# ---------------------------------------------------------------------------
+
+_OBJECTIF_KINDS = ("target_kingdom", "target_territory", "target_alliance")
+_OBJECTIF_STAGING: dict[str, dict[str, str]] = {}
+_OBJECTIF_PAGES: dict[str, int] = {"target_territory": 0, "target_alliance": 0}
+
+
+def _staged(user_id: str) -> dict[str, str]:
+    return _OBJECTIF_STAGING.setdefault(str(user_id), {})
+
+
+class LieuxObjectifButton(
+    discord.ui.DynamicItem[discord.ui.Button[Any]], template=rf"{_NS}:objectif"
+):
+    """🎯 Objectif — ROUGE pour tous hors le Roi, VERT pour lui (jamais caché)."""
+
+    def __init__(self, label: str, king: bool = False) -> None:
+        super().__init__(
+            discord.ui.Button(
+                label=str(label)[:80],
+                custom_id=f"{_NS}:objectif",
+                style=discord.ButtonStyle.success if king else discord.ButtonStyle.danger,
+                disabled=not king,
+            )
+        )
+
+    @classmethod
+    async def from_custom_id(cls, interaction, item, match, /):  # type: ignore[no-untyped-def]
+        # after a restart the role is re-read — the button renders
+        # harmless until the callback re-checks the King's crown
+        return cls(lieux_strings(_locale_of(interaction))["objectif_button"], king=True)
+
+    async def callback(self, interaction: discord.Interaction) -> None:
+        from botforge.mods.kingdom.models import LordRole
+
+        await interaction.response.defer(ephemeral=True)
+        strings = lieux_strings(_locale_of(interaction))
+        lord, kingdom, stack = await _lord_kingdom_of(interaction, strings)
+        if lord is None or kingdom is None:
+            return
+        if str(getattr(lord, "role", "")) != str(LordRole.KING):
+            await open_unique_ephemeral(interaction, content=strings["objectif_king_only"])
+            return
+        # le staging démarre depuis les objectifs LIVE (éditer ≠ repartir de zéro)
+        goals = dict(getattr(kingdom, "council_objectives", None) or {})
+        staged = _staged(str(getattr(interaction.user, "id", "")))
+        for kind in _OBJECTIF_KINDS:
+            if not staged.get(kind) and not staged.get(f"{kind}_label"):
+                staged[kind] = str(goals.get(kind, "") or "")
+                staged[f"{kind}_label"] = str(goals.get(f"{kind}_label", "") or "")
+        await open_unique_ephemeral(
+            interaction, view=await _objectif_picker_view(interaction, strings, kingdom)
+        )
+
+
+async def _objectif_options(
+    strings: dict[str, str], stack: Any, kingdom: Any, kind: str, page: int
+) -> list[discord.SelectOption]:
+    """One page of options (max 25) + the none option on page one."""
+    out: list[discord.SelectOption] = []
+    if kind == "target_kingdom":
+        try:
+            items = [
+                item
+                for item in await stack.kingdoms.kingdoms()
+                if str(getattr(item, "id", "")) != str(getattr(kingdom, "id", ""))
+                and not getattr(item, "is_gaia", False)
+            ]
+        except Exception:  # noqa: BLE001
+            items = []
+        out = [
+            discord.SelectOption(
+                label=str(getattr(item, "name", "?"))[:100], value=str(getattr(item, "id", ""))
+            )
+            for item in items
+        ]
+    elif kind == "target_territory":
+        entries = list(getattr(getattr(stack, "config", None), "maps", ()) or [])
+        out = [
+            discord.SelectOption(
+                label=str(getattr(entry, "display_name", "") or getattr(entry, "key", "?"))[:100],
+                value=str(getattr(entry, "key", "")),
+            )
+            for entry in entries[page * 25 : page * 25 + 25]
+            if str(getattr(entry, "key", "") or "")
+        ]
+    else:  # target_alliance
+        entries = list(getattr(getattr(stack, "config", None), "civilizations", ()) or ())
+        out = [
+            discord.SelectOption(
+                label=str(getattr(entry, "display_name", "") or getattr(entry, "key", "?"))[:100],
+                value=str(getattr(entry, "key", "")),
+            )
+            for entry in entries[page * 25 : page * 25 + 25]
+            if str(getattr(entry, "key", "") or "")
+        ]
+    if page == 0:
+        # objectif-50035 (Drasah 28/11) : Discord REFUSE une valeur
+        # d'option vide (1 à 100 caractères) — l'option « Aucun » porte
+        # le sentinel "none", le callback le traduit en « pas d'objectif ».
+        out.append(discord.SelectOption(label=strings["objectif_none_label"], value="none"))
+    return out[:25]
+
+
+class LieuxObjectifSelect(
+    discord.ui.DynamicItem[discord.ui.Select[Any]],
+    template=rf"{_NS}:objectif:pick:(?P<kind>[a-z_]+):(?P<page>[0-9]+)",
+):
+    """One staged select of the picker — a choice becomes a goal."""
+
+    def __init__(
+        self, kind: str, page: int, placeholder: str, options: list[discord.SelectOption]
+    ) -> None:
+        super().__init__(
+            discord.ui.Select(
+                custom_id=f"{_NS}:objectif:pick:{kind}:{page}",
+                options=options[:25],
+                placeholder=placeholder[:100],
+                min_values=1,
+                max_values=1,
+            )
+        )
+        self.kind = kind
+        self.page = page
+
+    @classmethod
+    async def from_custom_id(cls, interaction, item, match, /):  # type: ignore[no-untyped-def]
+        strings = lieux_strings(_locale_of(interaction))
+        stack = wiring()
+        lord, kingdom, _s = await _lord_kingdom_of(interaction, strings)
+        kind = str(match["kind"])
+        page = int(match["page"])
+        options = await _objectif_options(strings, stack, kingdom, kind, page) if kingdom else []
+        keys = {
+            "target_kingdom": "objectif_select_kingdom",
+            "target_territory": "objectif_select_map",
+            "target_alliance": "objectif_select_alliance",
+        }
+        return cls(kind, page, strings[keys.get(kind, "objectif_select_kingdom")], options)
+
+    async def callback(self, interaction: discord.Interaction) -> None:
+        strings = lieux_strings(_locale_of(interaction))
+        lord, kingdom, stack = await _lord_kingdom_of(interaction, strings)
+        if kingdom is None:
+            return
+        value = str(self.item.values[0] if self.item.values else "")
+        if value == "none":  # le sentinel de l'option « Aucun »
+            value = ""
+        label = ""
+        if value:
+            if self.kind == "target_kingdom":
+                try:
+                    match = next(
+                        item
+                        for item in await stack.kingdoms.kingdoms()
+                        if str(getattr(item, "id", "")) == value
+                    )
+                    label = str(getattr(match, "name", value))
+                except Exception:  # noqa: BLE001
+                    label = value
+            else:
+                catalog = (
+                    getattr(getattr(stack, "config", None), "maps", ())
+                    if self.kind == "target_territory"
+                    else getattr(getattr(stack, "config", None), "civilizations", ())
+                )
+                for entry in catalog or ():
+                    if str(getattr(entry, "key", "")) == value:
+                        label = str(getattr(entry, "display_name", "") or value)
+                        break
+                label = label or value
+        staged = _staged(str(getattr(interaction.user, "id", "")))
+        staged[self.kind] = value
+        staged[f"{self.kind}_label"] = label
+        await open_unique_ephemeral(
+            interaction, view=await _objectif_picker_view(interaction, strings, kingdom)
+        )
+
+
+class LieuxObjectifFlip(
+    discord.ui.DynamicItem[discord.ui.Button[Any]],
+    template=rf"{_NS}:objectif:flip:(?P<kind>[a-z_]+):(?P<page>[0-9]+):(?P<dir>back|next)",
+):
+    """◀️ ▶️ — flip one catalog's pages (maps/civilizations > 25)."""
+
+    def __init__(self, label: str, kind: str, page: int, direction: str) -> None:
+        super().__init__(
+            discord.ui.Button(
+                label=str(label)[:80],
+                custom_id=f"{_NS}:objectif:flip:{kind}:{page}:{direction}",
+                style=discord.ButtonStyle.secondary,
+            )
+        )
+        self.kind = kind
+        self.page = page
+        self.direction = direction
+
+    @classmethod
+    async def from_custom_id(cls, interaction, item, match, /):  # type: ignore[no-untyped-def]
+        strings = lieux_strings(_locale_of(interaction))
+        direction = str(match["dir"])
+        label = strings["objectif_flip_prev"] if direction == "back" else strings["objectif_flip_next"]
+        return cls(label, str(match["kind"]), int(match["page"]), direction)
+
+    async def callback(self, interaction: discord.Interaction) -> None:
+        strings = lieux_strings(_locale_of(interaction))
+        lord, kingdom, stack = await _lord_kingdom_of(interaction, strings)
+        if kingdom is None:
+            return
+        _OBJECTIF_PAGES[self.kind] = max(0, self.page)
+        await open_unique_ephemeral(
+            interaction, view=await _objectif_picker_view(interaction, strings, kingdom)
+        )
+
+
+class LieuxObjectifValidateButton(
+    discord.ui.DynamicItem[discord.ui.Button[Any]], template=rf"{_NS}:objectif:validate"
+):
+    """✅ Valider — save the staged goals to the engine, refresh the pin."""
+
+    def __init__(self, label: str) -> None:
+        super().__init__(
+            discord.ui.Button(
+                label=str(label)[:80],
+                custom_id=f"{_NS}:objectif:validate",
+                style=discord.ButtonStyle.success,
+            )
+        )
+
+    @classmethod
+    async def from_custom_id(cls, interaction, item, match, /):  # type: ignore[no-untyped-def]
+        return cls(lieux_strings(_locale_of(interaction))["objectif_validate_button"])
+
+    async def callback(self, interaction: discord.Interaction) -> None:
+        import time as _time
+
+        from .realm_content import refresh_objectifs_pin_safe
+
+        await interaction.response.defer(ephemeral=True)
+        strings = lieux_strings(_locale_of(interaction))
+        lord, kingdom, stack = await _lord_kingdom_of(interaction, strings)
+        if kingdom is None or stack is None:
+            return
+        staged = _staged(str(getattr(interaction.user, "id", "")))
+        objectives = dict(getattr(kingdom, "council_objectives", None) or {})
+        for kind in _OBJECTIF_KINDS:
+            objectives[kind] = str(staged.get(kind, "") or "")
+            objectives[f"{kind}_label"] = str(staged.get(f"{kind}_label", "") or "")
+        objectives["updated_at"] = int(_time.time())
+        try:
+            kingdom.council_objectives = objectives
+            await stack.kingdoms.save_kingdom(kingdom)
+        except Exception:  # noqa: BLE001
+            logger.warning("kingdom lieux: objectives save failed", exc_info=True)
+            await open_unique_ephemeral(interaction, content=strings["objectif_save_failed"])
+            return
+        guild = getattr(interaction, "guild", None)
+        if guild is not None:
+            realm = await _shell_of(stack, str(getattr(interaction.user, "id", "")))
+            if realm is not None:
+                await refresh_objectifs_pin_safe(guild, kingdom, _locale_of(interaction), realm)
+        await open_unique_ephemeral(interaction, content=strings["objectif_done_note"])
+
+
+def _catalog_len(stack: Any, kind: str) -> int:
+    catalog = (
+        getattr(getattr(stack, "config", None), "maps", ())
+        if kind == "target_territory"
+        else getattr(getattr(stack, "config", None), "civilizations", ())
+    )
+    try:
+        return len(list(catalog or ()))
+    except Exception:  # noqa: BLE001
+        return 0
+
+
+async def _objectif_picker_view(
+    interaction: discord.Interaction, strings: dict[str, str], kingdom: Any
+) -> discord.ui.LayoutView:
+    """The picker sheet — 3 selects, flip rows for the paginated ones."""
+    stack = wiring()
+    staged = _staged(str(getattr(interaction.user, "id", "")))
+    rows: list[discord.ui.Item[discord.ui.LayoutView]] = []
+    kinds = [
+        ("target_kingdom", "objectif_select_kingdom", 0),
+        ("target_territory", "objectif_select_map", _OBJECTIF_PAGES["target_territory"]),
+        ("target_alliance", "objectif_select_alliance", _OBJECTIF_PAGES["target_alliance"]),
+    ]
+    for kind, key, page in kinds:
+        options = await _objectif_options(strings, stack, kingdom, kind, page)
+        select = LieuxObjectifSelect(kind, page, strings[key], options)
+        rows.append(discord.ui.ActionRow(select.item))
+        if kind != "target_kingdom":
+            total = max(1, (_catalog_len(stack, kind) + 24) // 25)
+            row: Any = discord.ui.ActionRow()
+            if page > 0:
+                row.add_item(
+                    LieuxObjectifFlip(strings["objectif_flip_prev"], kind, page - 1, "back").item
+                )
+            if page + 1 < total:
+                row.add_item(
+                    LieuxObjectifFlip(strings["objectif_flip_next"], kind, page + 1, "next").item
+                )
+            rows.append(row)
+    rows.append(discord.ui.ActionRow(LieuxObjectifValidateButton(strings["objectif_validate_button"]).item))
+    return surface(
+        OBJECTIF_SURFACE,
+        discord.ui.Container(
+            discord.ui.TextDisplay(
+                f"## {strings['objectif_picker_title'].format(str(getattr(kingdom, 'name', '')))}"
+            ),
+            discord.ui.Separator(),
+            *rows,
+            discord.ui.TextDisplay(strings["objectif_edit_hint"]),
+            accent_colour=GOLD,
+        ),
+    )
+
+
+# ---------------------------------------------------------------------------
+# 🧱 Remparts — the live state face (IA, patrouille, gardes)
+# ---------------------------------------------------------------------------
+
+
+def _remparts_window(
+    strings: dict[str, str], kingdom: Any, state: dict[str, Any]
+) -> tuple[discord.ui.LayoutView, list[discord.File]]:
+    import time as _time
+
+    purchases = dict(state.get("purchases") or {})
+    level, name = _ai_display(strings, state, kingdom)
+    now_ts = int(_time.time())
+    lines = [strings["remparts_ai_level"].format(level, name), ""]
+    lines.append(strings["remparts_patrouille_title"])
+    for slot_no in (1, 2):
+        slot_key = f"patrouille_slot_{slot_no}"
+        unlock_key = f"patrouille_unlock_{slot_no}"
+        if slot_key in purchases:
+            start = int(purchases[slot_key])
+            line = strings["remparts_state_active"].format(slot_no, start, start + 2)
+        elif unlock_key in purchases:
+            line = strings["remparts_state_unplaced"].format(slot_no)
+        else:
+            line = strings["remparts_state_missing"].format(slot_no)
+        lines.append(line)
+    lines.append("")
+    lines.append(strings["remparts_garde_title"])
+    shielded = []
+    for territory in state.get("territories") or []:
+        until_dt = getattr(territory, "protected_until", None)
+        if until_dt is None:
+            continue
+        try:
+            until_ts = int(until_dt.timestamp())
+        except Exception:
+            continue
+        if until_ts > now_ts:
+            shielded.append((str(getattr(territory, "map_key", "")), until_ts))
+    if shielded:
+        for map_key, until_ts in shielded:
+            lines.append(strings["remparts_guard_line"].format(map_key, fmt_paris(until_ts)))
+    else:
+        lines.append(strings["remparts_garde_owned_none"])
+    reserve = int(purchases.get("garde_royale_stock", 0) or 0)
+    if reserve > 0:
+        lines.append(strings["remparts_guard_stock"].format(reserve))
+    # vague2-actions-v1 (Drasah 21/11) : rangée 2 — Jeu d'armes,
+    # Patrouille, Garde royale (verts si détenus, gris sinon, jamais cachés)
+    # remparts-managers-v1 (Drasah 26/11, T-C) : rangée 1 — les deux
+    # salles de guerre + En savoir plus + Sortir (la référence) ; la
+    # rangée 2 garde les cartes jeu d'armes/patrouille/garde.
+    rows = [
+        [
+            _remparts_wire_button(
+                f"{_NS}:remparts:defense-manager",
+                strings["defense_manager_button"],
+                discord.ButtonStyle.success,
+            ),
+            _remparts_wire_button(
+                f"{_NS}:remparts:attack-manager",
+                strings["plan_manager_button"],
+                discord.ButtonStyle.success,
+            ),
+            _remparts_wire_button(
+                f"{_NS}:remparts:info",
+                strings["remparts_info_button"],
+                discord.ButtonStyle.primary,
+            ),
+            _sortir_item(strings),
+        ],
+        _remparts_use_row(strings, state),
+    ]
+    view = _lieu_window(
+        strings,
+        REMPARTS_SURFACE,
+        TEAL,
+        strings["patrol_title"].format(str(getattr(kingdom, "name", ""))),
+        "\n".join(lines),
+        "attachment://rempart.png",
+        rows,
+    )
+    return view, _lieu_files("Rempart.png", "rempart.png")
+
+
+# ---------------------------------------------------------------------------
+# 🏛️ Chambre des comptes — the ledger sheet (the market's chamber_text seam)
+# ---------------------------------------------------------------------------
+
+
+async def _comptes_window(
+    strings: dict[str, str],
+    kingdom: Any,
+    state: dict[str, Any],
+    selected: str | None = None,
+    extra_text: str | None = None,
+) -> tuple[discord.ui.LayoutView, list[discord.File]]:
+    from .market import chamber_text
+    from .strings import strings as mod_strings
+
+    stack = wiring()
+    mod_catalog = mod_strings(_locale_of_catalog(strings))
+    # comptes-feuille-v2 (Drasah 26/11, Affaire 41) : le corps se
+    # réduit au titre + aux points technologiques — les cartes en main
+    # vivent dans leur bloc dédié, les lignes de jetons dégagent.
+    body = await chamber_text(stack, kingdom, mod_catalog, compact=True)
+    # comptes-cv2-v1 (Drasah 26/11, T-D) : la sélection de carte —
+    # chaque carte en main est un bouton, la carte choisie révèle son
+    # art dans le container et porte le bouton 🚀 Utiliser (le wizard
+    # du marché, jamais dupliqué ici).
+    from .market import _market_label, chamber_held_cards
+
+    held = await chamber_held_cards(stack, kingdom, mod_catalog)
+    # comptes-cv2-conformité (Drasah 26/11, Affaire 40) : le bloc
+    # « Cartes en main » vit SOUS le corps (une ligne par carte,
+    # emoji + nom + compteur), le bouton porte le nom seul.
+    emojis = dict(mod_catalog.get("market_ledger_emoji") or {})
+    cards_block = [f"## {mod_catalog['market_ledger_cards_title']}"]
+    if held:
+        for key, stock in held:
+            # comptes-feuille-v2 (Affaire 41) : UN SEUL emoji par ligne —
+            # celui du comptoir (market_ledger_emoji), le nom de la carte
+            # est NU (le label du marché porte déjà son emoji).
+            cards_block.append(
+                str(mod_catalog["market_ledger_card_line"]).format(
+                    emojis.get(key, "•"),
+                    _market_bare_label(_market_label(key, mod_catalog)),
+                    int(stock),
+                )
+            )
+    else:
+        cards_block.append(str(mod_catalog["market_ledger_cards_empty"]))
+    body = body + "\n" + "\n".join(cards_block)
+    if extra_text:
+        body = body + "\n\n" + str(extra_text)
+    selected = str(selected or "") or None
+    row1: list[discord.ui.Item[Any]] = []
+    if selected in {key for key, _stock in held} and selected in _COMPTES_USABLE:
+        row1.append(
+            discord.ui.Button(
+                label=str(strings["comptes_use_button"])[:80],
+                custom_id=f"{_NS}:comptes:use:{selected}",
+                style=discord.ButtonStyle.success,
+            )
+        )
+    row1.append(LieuxHistButton("achats", strings).item)
+    row1.append(LieuxHistButton("actions", strings).item)
+    row1.append(_sortir_item(strings))
+    rows: list[list[discord.ui.Item[Any]]] = [row1]
+    current: list[discord.ui.Item[Any]] = []
+    for key, _stock in held:
+        label = str(_market_label(key, mod_catalog))[:80]
+        current.append(
+            discord.ui.Button(
+                label=label,
+                custom_id=f"{_NS}:comptes:card:{key}",
+                # comptes-feuille-v2 (Affaire 41) : les cartes sont
+                # BLEUES (des objets à manipuler), la carte SÉLECTIONNÉE
+                # devient VERTE — les boutons du bas se détachent de la
+                # rangée verte des historiques.
+                style=(
+                    discord.ButtonStyle.success
+                    if key == selected
+                    else discord.ButtonStyle.primary
+                ),
+            )
+        )
+        if len(current) == 5:
+            rows.append(current)
+            current = []
+    if current:
+        rows.append(current)
+    # comptes-cv2-conformité (Drasah 26/11, Affaire 40) : la zone carte
+    # montre TOUJOURS une image — l'art de la carte choisie, sinon le
+    # dos de carte par défaut.
+    card_file: discord.File | None = (
+        await _comptes_card_file(selected) if selected else await _comptes_card_back_file()
+    )
+    view = _lieu_window(
+        strings,
+        COMPTES_SURFACE,
+        GOLD,
+        strings["comptes_title"].format(str(getattr(kingdom, "name", ""))),
+        body,
+        "attachment://chambre_des_comptes.png",
+        rows,
+        card_media="attachment://carte.png" if card_file else None,
+    )
+    files = _lieu_files("chambre des comptes.png", "chambre_des_comptes.png")
+    if card_file is not None:
+        files.append(card_file)
+    return view, files
+
+
+_COMPTES_USABLE = frozenset(
+    {"explorateur", "corruption", "jeu_d_armes", "garde_royale", "patrouille"}
+)
+
+
+def _market_bare_label(label: str) -> str:
+    """Strip the label's LEADING emoji — one glyph per line, not two.
+
+    comptes-feuille-v2 (Drasah 26/11, Affaire 41) : le comptoir pose
+    déjà l'emoji de la carte (market_ledger_emoji), le label du marché
+    en porte un aussi — ici le nom sort NU.
+    """
+    return re.sub(r"^\W+\s", "", str(label), count=1)
+
+
+def _comptes_card_fiche(card: str, locale: Any) -> str:
+    """comptes-cv2-conformité (Affaire 40) : la fiche de LA carte cliquée.
+
+    Titre « ## emoji nom » + « Effet : … » + « Usage : … », les textes
+    viennent du catalogue central (market_effect / market_usage).
+    """
+    from .market import _market_label
+    from .strings import strings as mod_strings
+
+    mod_catalog = mod_strings(locale)
+    emojis = dict(mod_catalog.get("market_ledger_emoji") or {})
+    fiche = [
+        f"## {emojis.get(card, '•')} "
+        f"{_market_bare_label(_market_label(card, mod_catalog))}"
+    ]
+    effect = (mod_catalog.get("market_effect") or {}).get(card)
+    if effect:
+        fiche.append(str(mod_catalog["market_card_effect"]).format(effect))
+    usage = (mod_catalog.get("market_usage") or {}).get(card)
+    if usage:
+        fiche.append(str(mod_catalog["market_card_usage"]).format(usage))
+    return "\n".join(fiche)
+
+
+async def _comptes_card_file(card: str) -> discord.File | None:
+    """The revealed art of the selected card (best effort, None stays dos)."""
+    from io import BytesIO
+
+    try:
+        from .marche_art import card_bytes
+
+        data = await card_bytes(card)
+        if data:
+            return discord.File(BytesIO(data), filename="carte.png")
+    except Exception:  # the missing art never kills the sheet
+        logger.warning("kingdom lieux: card art read failed (%s)", card, exc_info=True)
+    return None
+
+
+async def _comptes_card_back_file() -> discord.File | None:
+    """Return the default reveal: the card BACK (best effort, None = no image)."""
+    from io import BytesIO
+
+    try:
+        from .marche_art import card_back_bytes
+
+        data = await card_back_bytes()
+        if data:
+            return discord.File(BytesIO(data), filename="carte.png")
+    except Exception:  # the missing art never kills the sheet
+        logger.warning("kingdom lieux: card back read failed", exc_info=True)
+    return None
+
+
+def _locale_of_catalog(strings: dict[str, str]) -> str:
+    return "fr" if strings is LIEUX_STRINGS["fr"] else "en"
+
+
+# ---------------------------------------------------------------------------
+# ⛪ Paroisse — the palier sheet + the palier-tiered illustration
+# ---------------------------------------------------------------------------
+
+
+async def _paroisse_lords(stack: Any, kingdom: Any) -> list[Any]:
+    """The kingdom's faithful — members still in (never the left ones)."""
+    try:
+        kingdoms = getattr(stack, "kingdoms", None)
+        lords = await kingdoms.lords() if kingdoms is not None else []
+        kid = str(getattr(kingdom, "id", ""))
+        return [
+            lord for lord in lords
+            if str(getattr(lord, "kingdom_id", "")) == kid
+            and not bool(getattr(lord, "left", False))
+        ]
+    except Exception:
+        logger.warning("kingdom lieux: the paroisse household read failed", exc_info=True)
+        return []
+
+
+def _paroisse_body(
+    strings: dict[str, str],
+    stack: Any,
+    kingdom: Any,
+    state: dict[str, Any],
+    name: str,
+    tier: int,
+    tiers: list[Any],
+    offering: int,
+    lords: list[Any],
+) -> str:
+    """The paroisse sheet's body — the reference's rich presentation."""
+    import time as _time
+
+    from .marry import _civ_names, _princess_label
+
+    lines = [
+        strings["paroisse_stats_line"].format(
+            int(getattr(kingdom, "marriage_points", 0) or 0),
+            int(getattr(kingdom, "arranged_marriage_stock", 0) or 0),
+            int(state.get("wallet", 0) or 0),
+        ),
+        "",
+        f"## {strings['paroisse_household_palier'].format(name or strings['paroisse_unknown_palier'])}",
+        strings["paroisse_tier_line"].format(
+            name or strings["paroisse_unknown_palier"], tier, max(len(tiers), 3), offering
+        ),
+        "",
+        f"## {strings['paroisse_household']}",
+    ]
+    if not lords:
+        lines.append(strings["paroisse_household_none"])
+    names: dict[str, str] = {}
+    try:
+        names = _civ_names(stack)
+    except Exception:
+        names = {}
+    now = int(_time.time())
+    married = [lord for lord in lords if getattr(lord, "married_civilization", None)]
+    singles = [lord for lord in lords if getattr(lord, "married_civilization", None) is None]
+    for lord in married:
+        civ = str(getattr(lord, "married_civilization", ""))
+        princess = _princess_label(strings, str(getattr(lord, "id", "")), civ, names)
+        label = str(getattr(lord, "display_name", "") or getattr(lord, "id", "?"))
+        royal = bool(getattr(lord, "royal_marriage", False))
+        if royal:
+            # the King weds a QUEEN — the ref's royal badge (never a princess).
+            princess = re.sub(r"^\S+", strings["paroisse_queen_word"], princess, count=1)
+        until = int(getattr(lord, "marriage_locked_until", 0) or 0)
+        if royal:
+            base = strings["paroisse_royal_locked"] if until > now else strings["paroisse_royal_free"]
+        else:
+            base = strings["paroisse_married_locked"] if until > now else strings["paroisse_married_free"]
+        line = base.format(label, princess, until) if until > now else base.format(label, princess)
+        lines.append(line[:300])
+    for lord in singles:
+        label = str(getattr(lord, "display_name", "") or getattr(lord, "id", "?"))
+        lines.append(strings["paroisse_bachelor"].format(label)[:300])
+    # The LIVE Lieu Sacrée states — chantiers ⏳ then sacrés ⛪ (the
+    # kingdom's own territories, defensive on a dead stack).
+    chantiers, sacreds = [], []
+    for territory in state.get("territories") or []:
+        if bool(getattr(territory, "sacred", False)):
+            sacreds.append(territory)
+            continue
+        until_dt = getattr(territory, "cathedral_until", None)
+        if until_dt is not None:
+            try:
+                if until_dt.timestamp() > now:
+                    chantiers.append(territory)
+            except Exception:
+                continue
+    if chantiers or sacreds:
+        lines.append("")
+        for territory in chantiers:
+            try:
+                epoch = int(territory.cathedral_until.timestamp())
+            except Exception:
+                epoch = now
+            lines.append(
+                strings["paroisse_chantier_line"].format(
+                    str(getattr(territory, "map_key", "")), epoch
+                )
+            )
+        for territory in sacreds:
+            lines.append(
+                strings["paroisse_sacred_line"].format(str(getattr(territory, "map_key", "")))
+            )
+    return "\n".join(lines)
+
+
+async def _paroisse_window(
+    strings: dict[str, str], kingdom: Any, state: dict[str, Any]
+) -> tuple[discord.ui.LayoutView, list[discord.File]]:
+    stack = wiring()
+    tier = int(getattr(kingdom, "parish_tier", 1) or 1)
+    tiers: list[Any] = []
+    name, offering = "", 0
+    try:
+        tiers = list(getattr(stack.config.parish, "tiers", ()) or [])
+        if 0 < tier <= len(tiers):
+            name = str(getattr(tiers[tier - 1], "display_name", ""))
+            offering = int(getattr(tiers[tier - 1], "offering", 0) or 0)
+    except Exception:
+        tiers = []
+    # paroisse-v3 (Drasah 26/11) : la PRESENTATION de la référence revient
+    # — stats, bloc titré « Notre {palier} », bloc titré « Les Fidèles du
+    # Royaume » (un seigneur par ligne avec son état de mariage, les
+    # promesses nommées par le helper de marry.py), puis les états Lieu
+    # Sacrée en direct (chantier ⏳ / sacré ⛪). Les boutons de la rangée 2
+    # (💐 arrangé, ⛪ consacrer) et le toggle 🔎 En savoir plus restent.
+    lords = await _paroisse_lords(stack, kingdom)
+    body = _paroisse_body(strings, stack, kingdom, state, name, tier, tiers, offering, lords)
+    # vague2-actions-v1 (Drasah 21/11) : 💍 Se marier (la DynamicItem de
+    # marry.py, harmonisation gratuite) + ⛪ Améliorer + Sortir
+    from .marry import MarryButton
+
+    next_name, next_cost, at_top = "", 0, True
+    if 0 <= tier - 1 < len(tiers):
+        at_top = tier >= len(tiers)
+        if not at_top:
+            next_name = str(getattr(tiers[tier], "display_name", ""))
+            next_cost = int(getattr(tiers[tier], "cost", 0) or 0)
+    upgrade = (
+        discord.ui.Button(
+            label=str(strings["paroisse_upgrade_max"])[:80],
+            custom_id=f"{_NS}:paroisse:upgrade",
+            style=discord.ButtonStyle.secondary,
+            disabled=True,
+        )
+        if at_top
+        else LieuxParoisseUpgradeButton(
+            strings["paroisse_upgrade_button"].format(next_name)
+        ).item
+    )
+    # paroisse-v2 (Drasah 26/11, T-D) : rangée 1 = Se marier, Améliorer,
+    # En savoir plus (bleu) et Sortir ; rangée 2 = les cartes techno —
+    # 💐 Mariage arrangé (vert dès l'Église + un jeton, gris sinon) et
+    # ⛪ Consacrer (vert au palier max) — jamais cachées.
+    stock = int(getattr(kingdom, "arranged_marriage_stock", 0) or 0)
+    arrange_ok = tier >= 2 and stock > 0
+    arrange = discord.ui.Button(
+        label=str(strings["paroisse_arrange_button"].format(stock))[:80],
+        custom_id=f"{_NS}:paroisse:arrange",
+        style=discord.ButtonStyle.success if arrange_ok else discord.ButtonStyle.secondary,
+        disabled=not arrange_ok,
+    )
+    consecrate = discord.ui.Button(
+        label=str(strings["paroisse_consecrate_button"])[:80],
+        custom_id=f"{_NS}:paroisse:consecrate",
+        style=discord.ButtonStyle.success if at_top else discord.ButtonStyle.secondary,
+        disabled=not at_top,
+    )
+    rows = [
+        [
+            MarryButton(strings["paroisse_marry_button"]).item,
+            upgrade,
+            _remparts_wire_button(
+                f"{_NS}:paroisse:info",
+                strings["paroisse_info_button"],
+                discord.ButtonStyle.primary,
+            ),
+            _sortir_item(strings),
+        ],
+        [arrange, consecrate],
+    ]
+    view = _lieu_window(
+        strings,
+        PAROISSE_SURFACE,
+        discord.Colour.blurple(),
+        strings["paroisse_title"].format(str(getattr(kingdom, "name", ""))),
+        body,
+        "attachment://paroisse.png",
+        rows,
+    )
+    tier_file = min(3, max(1, tier))
+    return view, _lieu_files(f"paroisse{tier_file}.png", "paroisse.png")
+
+
+# ---------------------------------------------------------------------------
+# 🏗️ Volière — the birds' sommaire (model-side cooldowns)
+# ---------------------------------------------------------------------------
+
+
+async def _voliere_window(
+    strings: dict[str, str],
+    kingdom: Any,
+    locale: str = "fr",
+    note: str = "",
+    open_bird: str = "",
+) -> tuple[discord.ui.LayoutView, list[discord.File]]:
+    """voliere-v2 (Drasah 28/11) : la fenêtre illustrée héberge AUSSI les
+    lignes et rangées du moteur (emplacement ouvert, oiseaux prêts, 9
+    actions) — l'état vient du service (``stack.voliere``), jamais du
+    modèle direct. Fallback modèle quand le moteur est absent (tests).
+
+    voliere-espaces-v2 (Drasah 28/11) : LA VOLIÈRE EST LE CONTEXTE —
+    ``open_bird`` ouvre la SECTION de l'oiseau DANS cette fenêtre, sous
+    le sommaire (jamais une fenêtre à part) ; le résultat (``note``)
+    se colle alors sous le titre de l'espace, la volière au-dessus.
+    Un seul espace ouvert à la fois (re-rendu, sans état de session)."""
+    import time as _time
+
+    # voliere-v2-fix (Drasah 28/11) : les lignes/rangées du moteur lisent
+    # le catalogue VOLIÈRE (slot_open, beta_line, act_*…) — le catalogue
+    # lieux ne les porte pas (KeyError → fenêtre muette en live).
+    from .voliere import (
+        espace_items,
+        voliere_extra_lines,
+        voliere_rows,
+        voliere_state,
+        voliere_strings,
+    )
+
+    vstrings = voliere_strings(locale)
+    title = strings["voliere_title"].format(kingdom=str(getattr(kingdom, "name", ""))).lstrip("# ")
+    lines = [title]
+    if note and not open_bird:
+        # voliere-espaces-v1 : le résultat de la dernière action, collé
+        # sous le titre au retour au sommaire (une seule bulle). Quand un
+        # espace est ouvert, le résultat vit DANS sa section (v2).
+        lines += [str(note), ""]
+    lines += [strings["voliere_line"], ""]
+    state = await voliere_state(kingdom)
+    extra: list[Any] | None = None
+    if state is None:
+        # fallback : moteur indisponible (tests, service absent) — les
+        # lignes viennent du modèle, comme avant le portage moteur.
+        now_ts = int(_time.time())
+        cooldowns = {
+            str(k): int(v)
+            for k, v in (dict(getattr(kingdom, "voliere_cooldowns", {}) or {})).items()
+        }
+        for bird in [str(b) for b in (list(getattr(kingdom, "voliere_slots", []) or []))]:
+            ready_at = cooldowns.get(bird, 0)
+            if ready_at > now_ts:
+                lines.append(
+                    strings["bird_flying"].format(bird=_bird_label(strings, bird), ts=ready_at)
+                )
+            else:
+                lines.append(strings["bird_ready"].format(bird=_bird_label(strings, bird)))
+        rows: list[list[Any]] = [[_sortir_item(strings)]]
+    else:
+        lines.extend(await voliere_extra_lines(vstrings, state))
+        rows = await voliere_rows(vstrings, state)
+        rows.append([_sortir_item(strings)])
+        if open_bird:
+            # #395 : le template d'espace instancié par paramètre — la
+            # section vit SOUS le sommaire, dans la même fenêtre.
+            extra = espace_items(vstrings, state, open_bird, note=note)
+    view = _lieu_window(
+        strings,
+        VOLIERE_SURFACE,
+        GREEN,
+        title,
+        "\n".join(lines),
+        "attachment://voliere.png",
+        rows,
+        extra_items=extra,
+    )
+    return view, _lieu_files("voliere.png", "voliere.png")
+
+
+# ---------------------------------------------------------------------------
+# vague2-actions-v1 (Drasah 21/11) — les rangées d'action + leurs
+# restart-proof DynamicItems. Règle des cartes : VERT si en réserve,
+# GRIS + disabled sinon, jamais caché (pattern _remparts_rows référence).
+# ---------------------------------------------------------------------------
+
+
+def _stock_button(
+    custom_id: str, label: str, held: bool, strings: dict[str, str]
+) -> discord.ui.Button:
+    """One wire button — green when held, gray+disabled otherwise."""
+    return discord.ui.Button(
+        label=str(label)[:80],
+        custom_id=custom_id[:100],
+        style=discord.ButtonStyle.success if held else discord.ButtonStyle.secondary,
+        disabled=not held,
+    )
+
+
+def _remparts_use_row(strings: dict[str, str], state: dict[str, Any]) -> list[Any]:
+    """Rangée 2 des Remparts : ⚔️ Jeu d'armes · 🚨 Patrouille · 💂 Garde."""
+    purchases = dict(state.get("purchases") or {})
+    patrouille_held = any(
+        f"patrouille_slot_{slot_no}" in purchases or f"patrouille_unlock_{slot_no}" in purchases
+        for slot_no in (1, 2)
+    )
+    return [
+        _stock_button(
+            f"{_NS}:remparts:use:jeu_d_armes",
+            strings["remparts_use_jeu"],
+            int(purchases.get("jeu_d_armes_stock", 0) or 0) > 0,
+            strings,
+        ),
+        _stock_button(
+            f"{_NS}:remparts:use:patrouille",
+            strings["remparts_use_patrouille"],
+            patrouille_held,
+            strings,
+        ),
+        _stock_button(
+            f"{_NS}:remparts:use:garde_royale",
+            strings["remparts_use_garde"],
+            int(purchases.get("garde_royale_stock", 0) or 0) > 0,
+            strings,
+        ),
+    ]
+
+
+def _conseil_cards_row(strings: dict[str, str], state: dict[str, Any], kingdom: Any) -> list[Any]:
+    """Rangée 2 du Conseil : 🧭 Exploration · 🪤 Traquenard."""
+    purchases = dict(state.get("purchases") or {})
+    return [
+        _stock_button(
+            f"{_NS}:exploration",
+            strings["conseil_card_exploration"],
+            int(purchases.get("explorateur_stock", 0) or 0) > 0,
+            strings,
+        ),
+        _stock_button(
+            f"{_NS}:traquenard",
+            strings["conseil_card_traquenard"],
+            int(purchases.get("traquenard", 0) or 0) > 0,
+            strings,
+        ),
+    ]
+
+
+class LieuxRempartsUseButton(
+    discord.ui.DynamicItem[discord.ui.Button[Any]],
+    template=rf"{_NS}:remparts:use:(?P<card>[a-z_]+)",
+):
+    """Une carte d'action des Remparts — délègue au wizard du Marché
+    (market._use_wizard gère EXACTEMENT jeu d'armes/patrouille/garde :
+    choix IA, créneau patrouille, territoire protégé — zéro doublon)."""
+
+    def __init__(self, card: str) -> None:
+        super().__init__(
+            discord.ui.Button(
+                label=card,
+                custom_id=f"{_NS}:remparts:use:{card}",
+                style=discord.ButtonStyle.success,
+            )
+        )
+        self.card = str(card)
+
+    @classmethod
+    async def from_custom_id(cls, interaction, item, match, /):  # type: ignore[no-untyped-def]
+        return cls(str(match["card"]))
+
+    async def callback(self, interaction: discord.Interaction) -> None:
+        from .common import strings_for
+        from .market import _use_wizard
+
+        strings = lieux_strings(_locale_of(interaction))
+        lord, kingdom, stack = await _lord_kingdom_of(interaction, strings)
+        if lord is None or kingdom is None or stack is None:
+            return
+        await _use_wizard(interaction, stack, strings_for(interaction), self.card, kingdom)
+
+
+class LieuxExplorationButton(
+    discord.ui.DynamicItem[discord.ui.Button[Any]], template=rf"{_NS}:exploration"
+):
+    """🧭 Exploration — le wizard Explorateur du Marché (choix du
+    seigneur, verrou 48h), jamais dupliqué ici."""
+
+    def __init__(self, label: str) -> None:
+        super().__init__(
+            discord.ui.Button(
+                label=str(label)[:80], custom_id=f"{_NS}:exploration", style=discord.ButtonStyle.success
+            )
+        )
+
+    @classmethod
+    async def from_custom_id(cls, interaction, item, match, /):  # type: ignore[no-untyped-def]
+        return cls(lieux_strings(_locale_of(interaction))["conseil_card_exploration"])
+
+    async def callback(self, interaction: discord.Interaction) -> None:
+        from .common import strings_for
+        from .market import _use_wizard
+
+        strings = lieux_strings(_locale_of(interaction))
+        lord, kingdom, stack = await _lord_kingdom_of(interaction, strings)
+        if lord is None or kingdom is None or stack is None:
+            return
+        await _use_wizard(interaction, stack, strings_for(interaction), "explorateur", kingdom)
+
+
+class LieuxTraquenardButton(
+    discord.ui.DynamicItem[discord.ui.Button[Any]], template=rf"{_NS}:traquenard"
+):
+    """🪤 Traquenard — ouvre la fenêtre éphémère de choix de cible."""
+
+    def __init__(self, label: str) -> None:
+        super().__init__(
+            discord.ui.Button(
+                label=str(label)[:80], custom_id=f"{_NS}:traquenard", style=discord.ButtonStyle.success
+            )
+        )
+
+    @classmethod
+    async def from_custom_id(cls, interaction, item, match, /):  # type: ignore[no-untyped-def]
+        return cls(lieux_strings(_locale_of(interaction))["conseil_card_traquenard"])
+
+    async def callback(self, interaction: discord.Interaction) -> None:
+        await interaction.response.defer(ephemeral=True)
+        strings = lieux_strings(_locale_of(interaction))
+        lord, kingdom, stack = await _lord_kingdom_of(interaction, strings)
+        if lord is None or kingdom is None or stack is None:
+            return
+        options = await _traquenard_options(stack, kingdom)
+        if not options:
+            await open_unique_ephemeral(interaction, content=strings["traquenard_select"])
+            return
+        view = surface(
+            TRAQUENARD_SURFACE,
+            discord.ui.Container(
+                discord.ui.TextDisplay(f"## 🪤 {strings['traquenard_select']}"),
+                discord.ui.Separator(),
+                discord.ui.ActionRow(LieuxTraquenardSelect(options).item),
+                accent_colour=GOLD,
+            ),
+        )
+        await open_unique_ephemeral(interaction, view=view)
+
+
+async def _traquenard_options(stack: Any, kingdom: Any) -> list[discord.SelectOption]:
+    """Les royaumes cibles — jamais soi-même, jamais Gaïa."""
+    try:
+        items = [
+            item
+            for item in await stack.kingdoms.kingdoms()
+            if str(getattr(item, "id", "")) != str(getattr(kingdom, "id", ""))
+            and not getattr(item, "is_gaia", False)
+        ]
+    except Exception:  # noqa: BLE001
+        return []
+    return [
+        discord.SelectOption(
+            label=str(getattr(item, "name", getattr(item, "id", "?")))[:100],
+            value=str(getattr(item, "id", "")),
+        )
+        for item in items
+    ][:25]
+
+
+class LieuxTraquenardSelect(
+    discord.ui.DynamicItem[discord.ui.Select[Any]], template=rf"{_NS}:traquenard:pick"
+):
+    """Le select du Traquenard — consomme la carte et arme la fenêtre."""
+
+    def __init__(self, options: list[discord.SelectOption]) -> None:
+        super().__init__(
+            discord.ui.Select(
+                custom_id=f"{_NS}:traquenard:pick",
+                options=options[:25],
+                placeholder="🎯",
+                min_values=1,
+                max_values=1,
+            )
+        )
+
+    @classmethod
+    async def from_custom_id(cls, interaction, item, match, /):  # type: ignore[no-untyped-def]
+        strings = lieux_strings(_locale_of(interaction))
+        lord, kingdom, stack = await _lord_kingdom_of(interaction, strings)
+        options = await _traquenard_options(stack, kingdom) if kingdom else []
+        return cls(options)
+
+    async def callback(self, interaction: discord.Interaction) -> None:
+        strings = lieux_strings(_locale_of(interaction))
+        lord, kingdom, stack = await _lord_kingdom_of(interaction, strings)
+        if lord is None or kingdom is None or stack is None:
+            return
+        chosen = str(self.item.values[0] if self.item.values else "")
+        if not chosen:
+            return
+        await interaction.response.defer(ephemeral=True)
+        try:
+            result = await stack.attacks.activate_traquenard(str(getattr(interaction.user, "id", "")), chosen)
+        except Exception as exc:  # noqa: BLE001 — every engine refusal is a note
+            logger.info("kingdom lieux: traquenard refused: %s", exc)
+            await open_unique_ephemeral(
+                interaction, content=strings["action_error_note"].format(str(exc)[:150])
+            )
+            return
+        # le nom de la cible, ressolu au moment de la note
+        target_name = chosen
+        try:
+            for item in await stack.kingdoms.kingdoms():
+                if str(getattr(item, "id", "")) == chosen:
+                    target_name = str(getattr(item, "name", "") or chosen)
+                    break
+        except Exception:  # noqa: BLE001
+            pass
+        until_ts = 0
+        try:
+            until_ts = int(getattr(result, "until", 0) or 0)
+        except Exception:  # noqa: BLE001
+            pass
+        affected = len(getattr(result, "affected", ()) or ())
+        await open_unique_ephemeral(
+            interaction, content=strings["traquenard_done"].format(target_name, until_ts, affected)
+        )
+
+
+# ---------------------------------------------------------------------------
+# paroisse-v2 (Drasah 26/11, T-D) : la face En savoir plus, le mariage
+# arrangé et la consécration du Lieu Sacrée — le COG ne garde que la
+# vue, tout l'effet vit dans les seams moteur (diplomacy.arranged_marriage,
+# cathedrals.consecrate/consecratable, déjà portés).
+# ---------------------------------------------------------------------------
+
+
+def paroisse_info_body(strings: dict[str, str]) -> str:
+    """The Paroisse pedagogic face — marriage, locks, offering, Sacred Place."""
+    return "\n\n".join([
+        strings["paroisse_info_intro"],
+        strings["paroisse_info_locks"],
+        strings["paroisse_info_offrande"],
+        strings["paroisse_info_sacree"],
+    ])
+
+
+async def _paroisse_face(interaction: discord.Interaction, mode: str) -> None:
+    """Toggle the Paroisse window EN PLACE — state ↔ explanations."""
+    strings = lieux_strings(_locale_of(interaction))
+    lord, kingdom, stack = await _lord_kingdom_of(interaction, strings)
+    if lord is None or kingdom is None:
+        return
+    if mode == "info":
+        view = _lieu_window(
+            strings,
+            PAROISSE_SURFACE,
+            discord.Colour.blurple(),
+            strings["paroisse_title"].format(str(getattr(kingdom, "name", ""))),
+            paroisse_info_body(strings),
+            "attachment://paroisse.png",
+            [[
+                _remparts_wire_button(
+                    f"{_NS}:paroisse:state",
+                    strings["paroisse_state_button"],
+                    discord.ButtonStyle.success,
+                ),
+                _sortir_item(strings),
+            ]],
+        )
+    else:
+        try:
+            state = await _gather_state(stack, kingdom)
+            view, _files = await _paroisse_window(strings, kingdom, state)
+        except Exception:  # noqa: BLE001 — the toggle never raises
+            logger.warning("kingdom lieux: the paroisse state face failed", exc_info=True)
+            return
+    try:
+        await interaction.response.edit_message(view=view)
+    except Exception:  # noqa: BLE001
+        logger.warning("kingdom lieux: the paroisse toggle failed", exc_info=True)
+
+
+class LieuxParoisseInfoButton(
+    discord.ui.DynamicItem[discord.ui.Button[Any]], template=rf"{_NS}:paroisse:info"
+):
+    """« 🔎 En savoir plus » — swap the window to its explanations face."""
+
+    def __init__(self, label: str) -> None:
+        super().__init__(
+            _remparts_wire_button(
+                f"{_NS}:paroisse:info", label, discord.ButtonStyle.primary
+            )
+        )
+
+    @classmethod
+    async def from_custom_id(cls, interaction, item, match, /):  # type: ignore[no-untyped-def]
+        return cls(lieux_strings(_locale_of(interaction))["paroisse_info_button"])
+
+    async def callback(self, interaction: discord.Interaction) -> None:
+        await _paroisse_face(interaction, "info")
+
+
+class LieuxParoisseStateButton(
+    discord.ui.DynamicItem[discord.ui.Button[Any]], template=rf"{_NS}:paroisse:state"
+):
+    """« ✅ Compris » — swap back to the live-state face."""
+
+    def __init__(self, label: str) -> None:
+        super().__init__(
+            _remparts_wire_button(
+                f"{_NS}:paroisse:state", label, discord.ButtonStyle.success
+            )
+        )
+
+    @classmethod
+    async def from_custom_id(cls, interaction, item, match, /):  # type: ignore[no-untyped-def]
+        return cls(lieux_strings(_locale_of(interaction))["paroisse_state_button"])
+
+    async def callback(self, interaction: discord.Interaction) -> None:
+        await _paroisse_face(interaction, "state")
+
+
+async def _paroisse_arrange(
+    interaction: discord.Interaction,
+    strings: dict[str, str],
+    lord: Any,
+    kingdom: Any,
+    stack: Any,
+) -> None:
+    """The 💐 arranged marriage wizard : lord → civilization → confirm.
+
+    Roi seul : le jeton vient du royaume, l'effet vit ENTIER dans le
+    seam ``diplomacy.arranged_marriage`` (tokens royaux, exclusivité,
+    verrou 6h) — le wizard ne fait que collecter les deux choix.
+    """
+    if str(getattr(lord, "role", "")) != "king":
+        await open_unique_ephemeral(interaction, content=strings["paroisse_arrange_king_only"])
+        return
+    if int(getattr(kingdom, "arranged_marriage_stock", 0) or 0) <= 0:
+        await open_unique_ephemeral(interaction, content=strings["paroisse_arrange_no_token"])
+        return
+    await interaction.response.defer(ephemeral=True)
+    bachelors = [
+        item
+        for item in await stack.kingdoms.lords()
+        if not getattr(item, "left", False)
+        and str(getattr(item, "kingdom_id", "") or "") == str(getattr(kingdom, "id", ""))
+        and getattr(item, "married_civilization", None) is None
+    ]
+    if not bachelors:
+        await open_unique_ephemeral(interaction, content=strings["paroisse_arrange_no_lord"])
+        return
+    from .marry import _civ_names
+
+    names = _civ_names(stack)
+    lord_select: discord.ui.Select[Any] = discord.ui.Select(
+        custom_id="kingdom:paroisse:arlord",
+        placeholder=str(strings["paroisse_arrange_lord_intro"])[:100],
+        options=_lord_options(bachelors),
+    )
+
+    async def on_lord(target: discord.Interaction) -> None:
+        lord_id = str(lord_select.values[0] if lord_select.values else "")
+        if not lord_id:
+            return
+        await _arrange_civ_step(target, strings, stack, kingdom, lord_id, bachelors, names)
+
+    lord_select.callback = on_lord  # type: ignore[method-assign, assignment]
+    from .common import surface
+
+    await open_unique_ephemeral(
+        interaction,
+        view=surface(
+            PAROISSE_SURFACE,
+            discord.ui.TextDisplay(strings["paroisse_arrange_lord_intro"]),
+            discord.ui.ActionRow(lord_select),
+        ),
+    )
+
+
+def _lord_options(bachelors: list[Any]) -> list[discord.SelectOption]:
+    """The wizard's bachelor options — one per unmarried active lord."""
+    return [
+        discord.SelectOption(
+            label=str(getattr(item, "display_name", item.id))[:100],
+            value=str(item.id)[:100],
+        )
+        for item in bachelors[:25]
+    ]
+
+
+def _arrange_display(bachelors: list[Any], lord_id: str) -> str:
+    """The chosen lord's display name (his id as the fallback)."""
+    found = next((b for b in bachelors if str(b.id) == lord_id), None)
+    return str(getattr(found, "display_name", lord_id)) if found is not None else lord_id
+
+
+async def _arrange_civ_step(
+    target: discord.Interaction,
+    strings: dict[str, str],
+    stack: Any,
+    kingdom: Any,
+    lord_id: str,
+    bachelors: list[Any],
+    names: dict[str, str],
+) -> None:
+    """Wizard step 2 — the civilization of the chosen lord."""
+    from .marry import _princess_label
+
+    married = {
+        str(item.married_civilization)
+        for item in await stack.kingdoms.lords()
+        if getattr(item, "married_civilization", None) is not None
+    }
+    options = [
+        discord.SelectOption(
+            label=_princess_label(strings, lord_id, str(civ), names)[:100],
+            value=str(civ)[:100],
+        )
+        for civ in getattr(kingdom, "civilizations", ())
+        if str(civ) not in married
+    ][:25]
+    if not options:
+        await target.response.edit_message(
+            content=strings["paroisse_arrange_no_lord"], view=None
+        )
+        return
+    lord_name = _arrange_display(bachelors, lord_id)
+    civ_select: discord.ui.Select[Any] = discord.ui.Select(
+        custom_id=f"kingdom:paroisse:arciv:{lord_id[:60]}",
+        placeholder=str(strings["paroisse_arrange_civ_intro"].format(lord_name))[:100],
+        options=options,
+    )
+
+    async def on_civ(target2: discord.Interaction) -> None:
+        civ_key = str(civ_select.values[0] if civ_select.values else "")
+        if not civ_key:
+            return
+        await _arrange_confirm_step(
+            target2, strings, stack, kingdom, lord_id, civ_key, lord_name, names
+        )
+
+    civ_select.callback = on_civ  # type: ignore[method-assign, assignment]
+    from .common import surface
+
+    await target.response.edit_message(
+        content=None,
+        view=surface(
+            PAROISSE_SURFACE,
+            discord.ui.TextDisplay(strings["paroisse_arrange_civ_intro"].format(lord_name)),
+            discord.ui.ActionRow(civ_select),
+        ),
+    )
+
+
+async def _arrange_confirm_step(
+    target: discord.Interaction,
+    strings: dict[str, str],
+    stack: Any,
+    kingdom: Any,
+    lord_id: str,
+    civ_key: str,
+    lord_name: str,
+    names: dict[str, str],
+) -> None:
+    """Wizard step 3 — the confirmation card, then the engine seam."""
+    from .marry import _princess_label
+
+    princess = _princess_label(strings, lord_id, civ_key, names)
+    confirm_text = strings["paroisse_arrange_confirm"].format(lord_name, princess)
+
+    async def on_yes(target3: discord.Interaction) -> None:
+        await target3.response.defer(ephemeral=True)
+        try:
+            await stack.diplomacy.arranged_marriage(lord_id, civ_key)
+        except Exception as exc:  # noqa: BLE001 — every engine refusal is a note
+            await open_unique_ephemeral(
+                target3,
+                content=strings["action_error_note"].format(str(exc)[:150]),
+            )
+            return
+        from .marry import _announce_wedding_safe
+
+        await _announce_wedding_safe(
+            target3.guild,
+            strings,
+            str(strings["paroisse_arrange_announce"]).format(
+                lord_name,
+                str(getattr(kingdom, "name", "")),
+                princess,
+            ),
+        )
+        sealed = f"## {strings['paroisse_arrange_done'].format(lord_name, princess, lord_name)}"
+        try:
+            await target3.edit_original_response(content=sealed, view=None)
+        except Exception:  # noqa: BLE001 — the sealed note always lands
+            await open_unique_ephemeral(target3, content=sealed)
+
+    async def on_no(target3: discord.Interaction) -> None:
+        await target3.response.edit_message(
+            content=strings["paroisse_arrange_cancel"], view=None
+        )
+
+    yes: discord.ui.Button[Any] = discord.ui.Button(
+        label=str(strings["paroisse_arrange_ok"])[:80],
+        custom_id="kingdom:paroisse:aryes",
+        style=discord.ButtonStyle.success,
+    )
+    no: discord.ui.Button[Any] = discord.ui.Button(
+        label=str(strings["paroisse_arrange_cancel"])[:80],
+        custom_id="kingdom:paroisse:arno",
+        style=discord.ButtonStyle.secondary,
+    )
+    yes.callback = on_yes  # type: ignore[method-assign, assignment]
+    no.callback = on_no  # type: ignore[method-assign, assignment]
+    from .common import surface as _surface
+
+    await target.response.edit_message(
+        content=None,
+        view=_surface(
+            PAROISSE_SURFACE,
+            discord.ui.TextDisplay(confirm_text),
+            discord.ui.ActionRow(yes, no),
+        ),
+    )
+
+
+class LieuxParoisseArrangeButton(
+    discord.ui.DynamicItem[discord.ui.Button[Any]], template=rf"{_NS}:paroisse:arrange"
+):
+    """The restart-proof 💐 Mariage arrangé button — Roi seul, one flow."""
+
+    def __init__(self, label: str | None = None) -> None:
+        strings = lieux_strings("fr")
+        super().__init__(
+            discord.ui.Button(
+                label=str(label or strings["paroisse_arrange_button"].format(0))[:80],
+                custom_id=f"{_NS}:paroisse:arrange",
+                style=discord.ButtonStyle.secondary,
+            )
+        )
+
+    @classmethod
+    async def from_custom_id(cls, interaction, item, match, /):  # type: ignore[no-untyped-def]
+        strings = lieux_strings(_locale_of(interaction))
+        return cls(strings["paroisse_arrange_button"].format(0))
+
+    async def callback(self, interaction: discord.Interaction) -> None:
+        strings = lieux_strings(_locale_of(interaction))
+        lord, kingdom, stack = await _lord_kingdom_of(interaction, strings)
+        if lord is None or kingdom is None or stack is None:
+            return
+        await _paroisse_arrange(interaction, strings, lord, kingdom, stack)
+
+
+def _consecrate_error_note(strings: dict[str, str], exc: Exception) -> str:
+    """The consecration refusals, one note per engine verdict."""
+    from botforge.mods.kingdom.cathedrale import (
+        CathedralActiveError,
+        CathedralKingOnlyError,
+        CathedralNotFoundError,
+        CathedralTierError,
+    )
+
+    if isinstance(exc, CathedralKingOnlyError):
+        return strings["paroisse_consecrate_king_only"]
+    if isinstance(exc, CathedralTierError):
+        return strings["paroisse_consecrate_tier"]
+    if isinstance(exc, (CathedralActiveError, CathedralNotFoundError)):
+        return strings["paroisse_consecrate_none"]
+    return strings["action_error_note"].format(str(exc)[:150])
+
+
+async def _consecrate_and_report(
+    interaction: discord.Interaction,
+    strings: dict[str, str],
+    kingdom: Any,
+    map_key: str,
+) -> None:
+    """Run the consecration and report it (note + Géopolitique)."""
+    stack = wiring()
+    cathedrals = getattr(stack, "cathedrals", None)
+    if cathedrals is None:
+        await open_unique_ephemeral(interaction, content=strings["no_service"])
+        return
+    try:
+        territory = await cathedrals.consecrate(
+            str(getattr(interaction.user, "id", "")), map_key
+        )
+    except Exception as exc:  # noqa: BLE001 — every engine refusal is a note
+        logger.info("kingdom lieux: consecrate refused: %s", exc)
+        await open_unique_ephemeral(interaction, content=_consecrate_error_note(strings, exc))
+        return
+    from .common import fmt_paris
+
+    until = getattr(territory, "cathedral_until", None)
+    until_label = fmt_paris(int(until.timestamp())) if until is not None else "?"
+    await open_unique_ephemeral(
+        interaction,
+        content=strings["paroisse_consecrate_done"].format(str(map_key), until_label),
+    )
+    guild = interaction.guild
+    if guild is not None:
+        from .battle import _geopolitics_channel
+
+        try:
+            channel = _geopolitics_channel(guild)
+            if channel is not None:
+                await channel.send(
+                    str(strings["paroisse_consecrate_announce"]).format(
+                        str(getattr(kingdom, "name", "")), str(map_key)
+                    )
+                )
+        except Exception:  # noqa: BLE001 — the announce never blocks the note
+            logger.info("kingdom lieux: consecration announcement skipped", exc_info=True)
+
+
+class LieuxConsecrateSelect(
+    discord.ui.DynamicItem[discord.ui.Select[Any]], template=rf"{_NS}:paroisse:sacree:pick"
+):
+    """The consecration map picker — one choice consecrates."""
+
+    def __init__(self, options: list[discord.SelectOption]) -> None:
+        super().__init__(
+            discord.ui.Select(
+                custom_id=f"{_NS}:paroisse:sacree:pick",
+                options=options[:25],
+                placeholder="⛪",
+                min_values=1,
+                max_values=1,
+            )
+        )
+
+    @classmethod
+    async def from_custom_id(cls, interaction, item, match, /):  # type: ignore[no-untyped-def]
+        strings = lieux_strings(_locale_of(interaction))
+        options: list[discord.SelectOption] = []
+        _lord, kingdom, stack = await _lord_kingdom_of(interaction, strings)
+        if kingdom is not None and stack is not None:
+            cathedrals = getattr(stack, "cathedrals", None)
+            if cathedrals is not None:
+                try:
+                    for territory in await cathedrals.consecratable(str(getattr(kingdom, "id", ""))):
+                        options.append(
+                            discord.SelectOption(
+                                label=str(getattr(territory, "map_key", ""))[:100],
+                                value=str(getattr(territory, "map_key", ""))[:100],
+                            )
+                        )
+                except Exception:  # noqa: BLE001
+                    options = []
+        return cls(options)
+
+    async def callback(self, interaction: discord.Interaction) -> None:
+        strings = lieux_strings(_locale_of(interaction))
+        lord, kingdom, stack = await _lord_kingdom_of(interaction, strings)
+        if lord is None or kingdom is None:
+            return
+        chosen = str(self.item.values[0] if self.item.values else "")
+        if not chosen:
+            return
+        await interaction.response.defer(ephemeral=True)
+        await _consecrate_and_report(interaction, strings, kingdom, chosen)
+
+
+class LieuxParoisseConsecrateButton(
+    discord.ui.DynamicItem[discord.ui.Button[Any]], template=rf"{_NS}:paroisse:consecrate"
+):
+    """The restart-proof ⛪ Consacrer button (lieu-sacree-v1) — Roi seul."""
+
+    def __init__(self, label: str | None = None) -> None:
+        strings = lieux_strings("fr")
+        super().__init__(
+            discord.ui.Button(
+                label=str(label or strings["paroisse_consecrate_button"])[:80],
+                custom_id=f"{_NS}:paroisse:consecrate",
+                style=discord.ButtonStyle.secondary,
+            )
+        )
+
+    @classmethod
+    async def from_custom_id(cls, interaction, item, match, /):  # type: ignore[no-untyped-def]
+        return cls(lieux_strings(_locale_of(interaction))["paroisse_consecrate_button"])
+
+    async def callback(self, interaction: discord.Interaction) -> None:
+        strings = lieux_strings(_locale_of(interaction))
+        lord, kingdom, stack = await _lord_kingdom_of(interaction, strings)
+        if lord is None or kingdom is None or stack is None:
+            return
+        if str(getattr(lord, "role", "")) != "king":
+            await open_unique_ephemeral(
+                interaction, content=strings["paroisse_consecrate_king_only"]
+            )
+            return
+        cathedrals = getattr(stack, "cathedrals", None)
+        if cathedrals is None:
+            await open_unique_ephemeral(interaction, content=strings["no_service"])
+            return
+        tiers = list(getattr(stack.config.parish, "tiers", ()) or [])
+        tier = int(getattr(kingdom, "parish_tier", 1) or 1)
+        if tier < len(tiers):
+            await open_unique_ephemeral(interaction, content=strings["paroisse_consecrate_tier"])
+            return
+        await interaction.response.defer(ephemeral=True)
+        try:
+            candidates = await cathedrals.consecratable(str(getattr(kingdom, "id", "")))
+        except Exception as exc:  # noqa: BLE001
+            await open_unique_ephemeral(
+                interaction, content=_consecrate_error_note(strings, exc)
+            )
+            return
+        if not candidates:
+            await open_unique_ephemeral(interaction, content=strings["paroisse_consecrate_none"])
+            return
+        if len(candidates) == 1:
+            await _consecrate_and_report(
+                interaction, strings, kingdom, str(getattr(candidates[0], "map_key", ""))
+            )
+            return
+        from .common import surface
+
+        await open_unique_ephemeral(
+            interaction,
+            view=surface(
+                PAROISSE_SURFACE,
+                discord.ui.TextDisplay(strings["paroisse_consecrate_choose"]),
+                discord.ui.ActionRow(
+                    LieuxConsecrateSelect(
+                        [
+                            discord.SelectOption(
+                                label=str(getattr(item, "map_key", ""))[:100],
+                                value=str(getattr(item, "map_key", ""))[:100],
+                            )
+                            for item in candidates[:25]
+                        ]
+                    ).item
+                ),
+            ),
+        )
+
+
+class LieuxComptesCardButton(
+    discord.ui.DynamicItem[discord.ui.Button[Any]],
+    template=rf"{_NS}:comptes:card:(?P<card>[a-z_]+)",
+):
+    """comptes-cv2-v1 : one card of the hand — reveals its art, selected."""
+
+    def __init__(self, card: str, label: str, stock: int, selected: bool) -> None:
+        super().__init__(
+            discord.ui.Button(
+                # comptes-cv2-conformité (Affaire 40) : nom seul — le
+                # compteur vit dans le bloc « Cartes en main ».
+                # comptes-feuille-v2 (Affaire 41) : BLEUE par défaut,
+                # VERTE quand sélectionnée (dissociée des historiques).
+                label=str(label)[:80],
+                custom_id=f"{_NS}:comptes:card:{card}",
+                style=(
+                    discord.ButtonStyle.success
+                    if selected
+                    else discord.ButtonStyle.primary
+                ),
+            )
+        )
+        self.card = str(card)
+
+    @classmethod
+    async def from_custom_id(cls, interaction, item, match, /):  # type: ignore[no-untyped-def]
+        return cls(str(match["card"]), str(match["card"]), 0, False)
+
+    async def callback(self, interaction: discord.Interaction) -> None:
+        # comptes-ed inplace (Drasah 28/11) : changer de carte RAFRAÎCHIT
+        # la fenêtre ouverte au lieu de la re-poster — PAS de defer, la
+        # réponse reste libre pour ``edit_message`` ; repli vers la
+        # fenêtre unique si l'edit part en erreur (bulle déjà fermée).
+        strings = lieux_strings(_locale_of(interaction))
+        lord, kingdom, stack = await _lord_kingdom_of(interaction, strings)
+        if lord is None or kingdom is None or stack is None:
+            return
+        try:
+            state = await _gather_state(stack, kingdom)
+            # comptes-cv2-conformité (Affaire 40) : la fiche de la carte
+            # cliquée — titre + Effet + Usage, collée sous le corps.
+            fiche = _comptes_card_fiche(self.card, _locale_of(interaction))
+            view, files = await _comptes_window(
+                strings, kingdom, state, self.card, extra_text=fiche
+            )
+        except Exception:  # noqa: BLE001
+            logger.warning("kingdom lieux: comptes card view failed", exc_info=True)
+            return
+        from .common import _with_close_row
+
+        try:
+            view = _with_close_row(view, interaction)
+            await interaction.response.edit_message(
+                view=view, files=files or [], attachments=[]
+            )
+        except Exception:  # noqa: BLE001
+            logger.info("kingdom lieux: comptes card edit fell back", exc_info=True)
+            await open_unique_ephemeral(interaction, view=view, files=files or None)
+
+
+class LieuxComptesUseButton(
+    discord.ui.DynamicItem[discord.ui.Button[Any]],
+    template=rf"{_NS}:comptes:use:(?P<card>[a-z_]+)",
+):
+    """comptes-cv2-v1 : 🚀 Utiliser — delegates to the market wizard."""
+
+    def __init__(self, card: str, label: str) -> None:
+        super().__init__(
+            discord.ui.Button(
+                label=str(label)[:80],
+                custom_id=f"{_NS}:comptes:use:{card}",
+                style=discord.ButtonStyle.success,
+            )
+        )
+        self.card = str(card)
+
+    @classmethod
+    async def from_custom_id(cls, interaction, item, match, /):  # type: ignore[no-untyped-def]
+        strings = lieux_strings(_locale_of(interaction))
+        return cls(str(match["card"]), strings["comptes_use_button"])
+
+    async def callback(self, interaction: discord.Interaction) -> None:
+        from .common import strings_for
+        from .market import _use_wizard
+
+        strings = lieux_strings(_locale_of(interaction))
+        lord, kingdom, stack = await _lord_kingdom_of(interaction, strings)
+        if lord is None or kingdom is None or stack is None:
+            return
+        if self.card not in _COMPTES_USABLE:
+            await interaction.response.defer(ephemeral=True)
+            return
+        await _use_wizard(interaction, stack, strings_for(interaction), self.card, kingdom)
+
+
+class LieuxParoisseUpgradeButton(
+    discord.ui.DynamicItem[discord.ui.Button[Any]], template=rf"{_NS}:paroisse:upgrade"
+):
+    """⛪ Améliorer — ouvre la carte de confirmation (achat direct)."""
+
+    def __init__(self, label: str) -> None:
+        super().__init__(
+            discord.ui.Button(
+                label=str(label)[:80],
+                custom_id=f"{_NS}:paroisse:upgrade",
+                style=discord.ButtonStyle.success,
+            )
+        )
+
+    @classmethod
+    async def from_custom_id(cls, interaction, item, match, /):  # type: ignore[no-untyped-def]
+        return cls(lieux_strings(_locale_of(interaction))["paroisse_upgrade_button"].format(""))
+
+    async def callback(self, interaction: discord.Interaction) -> None:
+        await interaction.response.defer(ephemeral=True)
+        strings = lieux_strings(_locale_of(interaction))
+        lord, kingdom, stack = await _lord_kingdom_of(interaction, strings)
+        if lord is None or kingdom is None or stack is None:
+            return
+        next_name, next_cost, at_top = "", 0, True
+        try:
+            tiers = list(getattr(stack.config.parish, "tiers", ()) or ())
+            tier = int(getattr(kingdom, "parish_tier", 1) or 1)
+            at_top = tier >= len(tiers)
+            if not at_top:
+                next_name = str(getattr(tiers[tier], "display_name", ""))
+                next_cost = int(getattr(tiers[tier], "cost", 0) or 0)
+        except Exception:  # noqa: BLE001
+            pass
+        if at_top:
+            await open_unique_ephemeral(interaction, content=strings["paroisse_upgrade_max"])
+            return
+        view = surface(
+            PAROISSE_UPGRADE_SURFACE,
+            discord.ui.Container(
+                discord.ui.TextDisplay(
+                    f"## ⛪ {strings['paroisse_upgrade_confirm'].format(next_name, next_cost)}"
+                ),
+                discord.ui.Separator(),
+                discord.ui.ActionRow(
+                    LieuxParoisseUpgradeOkButton(strings["paroisse_upgrade_ok"]).item,
+                    LieuxParoisseUpgradeCancelButton(strings["paroisse_upgrade_cancel"]).item,
+                ),
+                accent_colour=discord.Colour.blurple(),
+            ),
+        )
+        await open_unique_ephemeral(interaction, view=view)
+
+
+class LieuxParoisseUpgradeOkButton(
+    discord.ui.DynamicItem[discord.ui.Button[Any]], template=rf"{_NS}:paroisse:upgrade:ok"
+):
+    """✅ Améliorer — le seam moteur upgrade_parish (service.py) paie et monte."""
+
+    def __init__(self, label: str) -> None:
+        super().__init__(
+            discord.ui.Button(
+                label=str(label)[:80],
+                custom_id=f"{_NS}:paroisse:upgrade:ok",
+                style=discord.ButtonStyle.success,
+            )
+        )
+
+    @classmethod
+    async def from_custom_id(cls, interaction, item, match, /):  # type: ignore[no-untyped-def]
+        return cls(lieux_strings(_locale_of(interaction))["paroisse_upgrade_ok"])
+
+    async def callback(self, interaction: discord.Interaction) -> None:
+        strings = lieux_strings(_locale_of(interaction))
+        lord, kingdom, stack = await _lord_kingdom_of(interaction, strings)
+        if lord is None or kingdom is None or stack is None:
+            await interaction.response.defer(ephemeral=True)
+            return
+        await interaction.response.defer(ephemeral=True)
+        try:
+            upgraded = await stack.kingdoms.upgrade_parish(str(getattr(kingdom, "id", "")))
+        except Exception as exc:  # noqa: BLE001
+            logger.info("kingdom lieux: parish upgrade refused: %s", exc)
+            await open_unique_ephemeral(
+                interaction, content=strings["action_error_note"].format(str(exc)[:150])
+            )
+            return
+        name = ""
+        try:
+            tiers = list(getattr(stack.config.parish, "tiers", ()) or [])
+            tier = int(getattr(upgraded, "parish_tier", 1) or 1)
+            if 0 < tier <= len(tiers):
+                name = str(getattr(tiers[tier - 1], "display_name", "") or "")
+        except Exception:  # noqa: BLE001
+            pass
+        await open_unique_ephemeral(
+            interaction, content=strings["paroisse_upgrade_done"].format(name or "?")
+        )
+
+
+class LieuxParoisseUpgradeCancelButton(
+    discord.ui.DynamicItem[discord.ui.Button[Any]], template=rf"{_NS}:paroisse:upgrade:cancel"
+):
+    """❌ Annuler — rouvre la fiche Paroisse (fenêtre unique)."""
+
+    def __init__(self, label: str) -> None:
+        super().__init__(
+            discord.ui.Button(
+                label=str(label)[:80],
+                custom_id=f"{_NS}:paroisse:upgrade:cancel",
+                style=discord.ButtonStyle.secondary,
+            )
+        )
+
+    @classmethod
+    async def from_custom_id(cls, interaction, item, match, /):  # type: ignore[no-untyped-def]
+        return cls(lieux_strings(_locale_of(interaction))["paroisse_upgrade_cancel"])
+
+    async def callback(self, interaction: discord.Interaction) -> None:
+        await _open_lieu(interaction, "paroisse")
+
+
+class LieuxHistButton(
+    discord.ui.DynamicItem[discord.ui.Button[Any]],
+    template=rf"{_NS}:hist:(?P<kind>achats|actions)",
+):
+    """📜/⚔️ Historique — les fenêtres de lecture du registre (les 50
+    dernières entrées, dates Paris), portées de la référence."""
+
+    def __init__(self, kind: str, strings: dict[str, str]) -> None:
+        key = "hist_achats_button" if kind == "achats" else "hist_actions_button"
+        super().__init__(
+            discord.ui.Button(
+                label=str(strings[key])[:80],
+                custom_id=f"{_NS}:hist:{kind}",
+                style=discord.ButtonStyle.success,
+            )
+        )
+        self.kind = str(kind)
+
+    @classmethod
+    async def from_custom_id(cls, interaction, item, match, /):  # type: ignore[no-untyped-def]
+        return cls(str(match["kind"]), lieux_strings(_locale_of(interaction)))
+
+    async def callback(self, interaction: discord.Interaction) -> None:
+        await interaction.response.defer(ephemeral=True)
+        strings = lieux_strings(_locale_of(interaction))
+        lord, kingdom, stack = await _lord_kingdom_of(interaction, strings)
+        if lord is None or kingdom is None:
+            return
+        lines: list[str] = []
+        if self.kind == "achats":
+            title = str(strings["hist_achats_title"])
+            registry = list(getattr(kingdom, "market_registry", None) or [])[-50:]
+            if not registry:
+                lines = [str(strings["hist_achats_empty"])]
+            else:
+                for entry in sorted(
+                    registry, key=lambda e: int(e.get("at", 0) or 0), reverse=True
+                ):
+                    item = str(entry.get("item", ""))
+                    lines.append(
+                        str(strings["hist_purchase_line"]).format(
+                            _HIST_EMOJI.get(item, "•"),
+                            _hist_label(strings, item),
+                            str(entry.get("detail", "")),
+                            int(entry.get("cost", 0) or 0),
+                            fmt_paris(int(entry.get("at", 0) or 0)),
+                        )
+                    )
+        else:
+            title = str(strings["hist_actions_title"])
+            actions = list(getattr(kingdom, "market_actions", None) or [])[-50:]
+            if not actions:
+                lines = [str(strings["hist_actions_empty"])]
+            else:
+                for entry in sorted(
+                    actions, key=lambda e: int(e.get("at", 0) or 0), reverse=True
+                ):
+                    item = str(entry.get("item", ""))
+                    lines.append(
+                        str(strings["hist_action_line"]).format(
+                            _HIST_EMOJI.get(item, "•"),
+                            _hist_label(strings, item),
+                            str(entry.get("detail", "")),
+                            fmt_paris(int(entry.get("at", 0) or 0)),
+                        )
+                    )
+        view = surface(
+            HIST_SURFACE,
+            discord.ui.Container(
+                discord.ui.TextDisplay(f"# {title}"),
+                discord.ui.Separator(),
+                discord.ui.TextDisplay("\n".join(lines)),
+                discord.ui.ActionRow(_sortir_item(strings)),
+                accent_colour=GOLD,
+            ),
+        )
+        await open_unique_ephemeral(interaction, view=view)
+
+
+# ---------------------------------------------------------------------------
+# remparts-managers-v1 (Drasah 26/11, T-C) — les salles de guerre des
+# Remparts + la face En savoir plus + la fenêtre Classement du Conseil.
+# Le portage de la rangée 1 de la référence : 🛡️ Gestion de la défense
+# (l'effet de surprise : QUI défend ne se voit QUE dans le royaume),
+# ⚔️ Gestion d'attaque (declared + planned, l'état de la défense JAMAIS
+# — synfoni-v1), 🔎 En savoir plus (toggle EN PLACE), 🏆 Classement.
+# Tout consomme les seams existants : stack.attacks.attacks/plans/
+# cancel_defense, _classement_rows déjà porté — zéro nouveau moteur.
+# ---------------------------------------------------------------------------
+
+
+def _remparts_wire_button(
+    custom_id: str, label: str, style: discord.ButtonStyle
+) -> discord.ui.Button:
+    """One plain wire button — the DynamicItems below catch the clicks."""
+    return discord.ui.Button(label=str(label)[:80], custom_id=custom_id[:100], style=style)
+
+
+def _remparts_back_row(strings: dict[str, str]) -> list[Any]:
+    """The sheet's ↩️ Remparts row — walks home without reopening Entrée."""
+    return [
+        _remparts_wire_button(
+            f"{_NS}:remparts:back", strings["remparts_back_button"], discord.ButtonStyle.secondary
+        )
+    ]
+
+
+def _remparts_media_of(interaction: discord.Interaction) -> str | None:
+    """The rempart attachment ref — kept ONLY when already on the message."""
+    media = next(
+        (
+            f"attachment://{attachment.filename}"
+            for attachment in getattr(interaction.message, "attachments", None) or []
+            if str(attachment.filename) == "rempart.png"
+        ),
+        None,
+    )
+    return media
+
+
+async def defense_manager_payload(
+    stack: Any, lord: Any, strings: dict[str, str]
+) -> tuple[str, list[discord.ui.Button]]:
+    """The defense sheet — one row per attack ON the kingdom, WHO defends.
+
+    Drasah 18/10 — effet de surprise : la défense n'est jamais annoncée
+    publiquement ; cette fiche PRIVÉE du royaume défenseur porte seule
+    le nom du défenseur. Le ↩️ Retirer ma défense ne vit QUE sur les
+    attaques que CE seigneur défend (le seam moteur cancel_defense
+    existait — la référence gardait son unique appelant).
+    """
+    from botforge.mods.kingdom.models import AttackState
+
+    kingdoms = getattr(stack, "kingdoms", None)
+    kingdom_id = str(getattr(lord, "kingdom_id", "") or "")
+    text_rows: list[str] = []
+    try:
+        ongoing = [
+            attack
+            for attack in await stack.attacks.attacks()
+            if not getattr(attack, "is_over", True)
+            and str(getattr(attack, "defender_kingdom_id", "")) == kingdom_id
+        ]
+    except Exception:
+        ongoing = []
+    for attack in ongoing:
+        defended = (
+            getattr(attack, "state", None) is AttackState.DEFENDED
+            and not getattr(attack, "ai_defender", False)
+        )
+        if defended:
+            state_txt = strings["defense_manager_defended"].format(
+                lord=await lord_name(kingdoms, str(getattr(attack, "defender_lord_id", "")))
+            )
+        else:
+            state_txt = strings["defense_manager_waiting"]
+        text_rows.append(
+            strings["defense_manager_row"].format(
+                map=str(getattr(attack, "map_key", "?")),
+                when=fmt_paris(getattr(attack, "expires_at", None)),
+                state=state_txt,
+            )
+        )
+    body = "\n".join(text_rows) if text_rows else strings["defense_manager_empty"]
+    title = strings["defense_manager_title"].format(
+        kingdom=await kingdom_name(kingdoms, kingdom_id)
+    )
+    cancels = [
+        _remparts_wire_button(
+            f"{_NS}:remparts:cancel-defense:{room_key(str(attack.id))}",
+            strings["cancel_defense_button"],
+            discord.ButtonStyle.secondary,
+        )
+        for attack in ongoing
+        if (
+            getattr(attack, "state", None) is AttackState.DEFENDED
+            and not getattr(attack, "revealed", False)
+            and not getattr(attack, "ai_defender", False)
+            and str(getattr(attack, "defender_lord_id", "") or "") == str(getattr(lord, "id", ""))
+        )
+    ]
+    return f"{title}\n{body}", cancels
+
+
+async def attack_manager_payload(stack: Any, lord: Any, strings: dict[str, str]) -> str:
+    """The war room — the kingdom's declared + planned attacks (ephemeral).
+
+    synfoni-v1 (Drasah 06/11) : la ligne d'une declared nomme l'AUTEUR
+    et le royaume cible et ne JAMAIS dire l'état de la défense (SECRET
+    — un attaquant ne doit pas apprendre si le territoire est déjà
+    défendu). Les plans montrent les 3 choix, le ✅ sur l'actif.
+    """
+    from botforge.mods.kingdom.models import PlanState
+
+    kingdoms = getattr(stack, "kingdoms", None)
+    kingdom_id = str(getattr(lord, "kingdom_id", "") or "")
+    sections: list[str] = [
+        strings["plan_manager_title"].format(
+            kingdom=await kingdom_name(kingdoms, kingdom_id)
+        )
+    ]
+    try:
+        attacks = [
+            attack
+            for attack in await stack.attacks.attacks()
+            if not getattr(attack, "is_over", True)
+            and str(getattr(attack, "attacker_kingdom_id", "")) == kingdom_id
+        ]
+        plans = [
+            plan
+            for plan in await stack.attacks.plans()
+            if getattr(plan, "state", None) is PlanState.PLANNED
+            and str(getattr(plan, "kingdom_id", "")) == kingdom_id
+        ]
+    except Exception:
+        attacks, plans = [], []
+    if not attacks and not plans:
+        sections.append(strings["plan_manager_empty"])
+    if attacks:
+        sections.append(strings["plan_manager_declared_section"])
+        for attack in attacks:
+            sections.append(
+                strings["plan_manager_declared_row"].format(
+                    map=str(getattr(attack, "map_key", "?")),
+                    kingdom=await kingdom_name(
+                        kingdoms, str(getattr(attack, "defender_kingdom_id", ""))
+                    ),
+                    lord=await lord_name(
+                        kingdoms, str(getattr(attack, "attacker_lord_id", ""))
+                    ),
+                    when=fmt_paris(getattr(attack, "expires_at", None)),
+                )
+            )
+    if plans:
+        sections.append(strings["plan_manager_planned_section"])
+        for plan in plans:
+            lord_id = str(getattr(plan, "lord_id", ""))
+            choices = [str(choice) for choice in getattr(plan, "choices", None) or []]
+            active_index = int(getattr(plan, "active_index", 0) or 0)
+            for index, choice in enumerate(choices, start=1):
+                sections.append(
+                    strings["plan_choices_line"].format(
+                        n=index,
+                        map=choice,
+                        active=strings["plan_active_tag"] if index - 1 == active_index else "",
+                    )
+                )
+            sections.append(
+                strings["plan_manager_planned_row"].format(
+                    map=str(getattr(plan, "active_choice", "") or ""),
+                    when=fmt_paris(getattr(plan, "meeting_at", None)),
+                    lord=await lord_name(kingdoms, lord_id),
+                    index=active_index + 1,
+                    total=len(choices),
+                )
+            )
+    return "\n".join(sections)
+
+
+def remparts_info_body(strings: dict[str, str]) -> str:
+    """The EXPLANATIONS face — the IA loop, the Patrouille, the Gardes."""
+    blocks = [
+        strings["remparts_ai_intro"],
+        f'{strings["remparts_patrouille_intro"]}\n{strings["remparts_patrol_window"]}',
+        strings["remparts_garde_intro"],
+    ]
+    return "\n\n".join(blocks)
+
+
+def classement_content(strings: dict[str, str], rows: list[tuple[Any, int, int]]) -> str:
+    """classement-vue-v1 — one line per kingdom, a blank before the 4th."""
+    lines: list[str] = [strings["classement_title"], ""]
+    for index, (kingdom, territories, alliances) in enumerate(rows, start=1):
+        if index == 4:
+            lines.append("")
+        lines.append(
+            strings["classement_line"].format(
+                _rank_medal(index),
+                index,
+                str(getattr(kingdom, "name", "?")),
+                territories,
+                alliances,
+            )
+        )
+    lines += ["", strings["conseil_classement_hint"]]
+    return "\n".join(lines)
+
+
+def _manager_sheet_rows(cancels: list[discord.ui.Button], strings: dict[str, str]) -> list[list[Any]]:
+    rows: list[list[Any]] = []
+    if cancels:
+        rows.append(cancels)
+    rows.append(_remparts_back_row(strings))
+    return rows
+
+
+class LieuxRempartsManagerButton(
+    discord.ui.DynamicItem[discord.ui.Button[Any]],
+    template=rf"{_NS}:remparts:(?P<which>defense|attack)-manager",
+):
+    """The war-room door — ONE class, the `which` parameter tells the sheet."""
+
+    def __init__(self, which: str, label: str) -> None:
+        super().__init__(
+            _remparts_wire_button(
+                f"{_NS}:remparts:{which}-manager", label, discord.ButtonStyle.success
+            )
+        )
+        self.which = str(which)
+
+    @classmethod
+    async def from_custom_id(cls, interaction, item, match, /):  # type: ignore[no-untyped-def]
+        strings = lieux_strings(_locale_of(interaction))
+        which = str(match["which"])
+        key = "defense_manager_button" if which == "defense" else "plan_manager_button"
+        return cls(which, strings[key])
+
+    async def callback(self, interaction: discord.Interaction) -> None:
+        """Show the kingdom's war sheet (ephemeral, the single window)."""
+        strings = lieux_strings(_locale_of(interaction))
+        lord, kingdom, stack = await _lord_kingdom_of(interaction, strings)
+        if lord is None or kingdom is None:
+            await open_unique_ephemeral(interaction, content=strings["defense_manager_not_lord"])
+            return
+        if getattr(stack, "attacks", None) is None:
+            await open_unique_ephemeral(interaction, content=strings["defense_manager_no_service"])
+            return
+        await interaction.response.defer(ephemeral=True)
+        if self.which == "defense":
+            body, cancels = await defense_manager_payload(stack, lord, strings)
+        else:
+            body = await attack_manager_payload(stack, lord, strings)
+            cancels = []
+        view = _lieu_window(
+            strings,
+            REMPARTS_SURFACE,
+            TEAL,
+            strings["patrol_title"].format(str(getattr(kingdom, "name", ""))),
+            body,
+            "attachment://rempart.png",
+            _manager_sheet_rows(cancels, strings),
+        )
+        await open_unique_ephemeral(
+            interaction, view=view, files=_lieu_files("Rempart.png", "rempart.png") or None
+        )
+
+
+async def _remparts_face(interaction: discord.Interaction, mode: str) -> None:
+    """Toggle the Remparts window EN PLACE — state ↔ explanations."""
+    strings = lieux_strings(_locale_of(interaction))
+    lord, kingdom, stack = await _lord_kingdom_of(interaction, strings)
+    if lord is None or kingdom is None:
+        return
+    try:
+        state = await _gather_state(stack, kingdom)
+    except Exception:
+        logger.warning("kingdom lieux: the remparts face failed", exc_info=True)
+        return
+    media = _remparts_media_of(interaction)
+    if mode == "info":
+        view = _lieu_window(
+            strings,
+            REMPARTS_SURFACE,
+            TEAL,
+            strings["patrol_title"].format(str(getattr(kingdom, "name", ""))),
+            remparts_info_body(strings),
+            media,
+            [[
+                _remparts_wire_button(
+                    f"{_NS}:remparts:state",
+                    strings["remparts_state_button"],
+                    discord.ButtonStyle.success,
+                ),
+                _sortir_item(strings),
+            ]],
+        )
+    else:
+        view, _files = _remparts_window(strings, kingdom, state)
+    try:
+        await interaction.response.edit_message(view=view)
+    except Exception:
+        logger.warning("kingdom lieux: the remparts toggle failed", exc_info=True)
+
+
+class LieuxRempartsInfoButton(
+    discord.ui.DynamicItem[discord.ui.Button[Any]], template=rf"{_NS}:remparts:info"
+):
+    """« 🔎 En savoir plus » — swap the window to its explanations face."""
+
+    def __init__(self, label: str) -> None:
+        super().__init__(
+            _remparts_wire_button(
+                f"{_NS}:remparts:info", label, discord.ButtonStyle.primary
+            )
+        )
+
+    @classmethod
+    async def from_custom_id(cls, interaction, item, match, /):  # type: ignore[no-untyped-def]
+        return cls(lieux_strings(_locale_of(interaction))["remparts_info_button"])
+
+    async def callback(self, interaction: discord.Interaction) -> None:
+        await _remparts_face(interaction, "info")
+
+
+class LieuxRempartsStateButton(
+    discord.ui.DynamicItem[discord.ui.Button[Any]], template=rf"{_NS}:remparts:state"
+):
+    """« ✅ Compris » — swap back to the live-state face."""
+
+    def __init__(self, label: str) -> None:
+        super().__init__(
+            _remparts_wire_button(
+                f"{_NS}:remparts:state", label, discord.ButtonStyle.success
+            )
+        )
+
+    @classmethod
+    async def from_custom_id(cls, interaction, item, match, /):  # type: ignore[no-untyped-def]
+        return cls(lieux_strings(_locale_of(interaction))["remparts_state_button"])
+
+    async def callback(self, interaction: discord.Interaction) -> None:
+        await _remparts_face(interaction, "state")
+
+
+class LieuxRempartsBackButton(
+    discord.ui.DynamicItem[discord.ui.Button[Any]], template=rf"{_NS}:remparts:back"
+):
+    """The 🧱 Remparts back of the war sheets — walks home directly."""
+
+    def __init__(self, label: str) -> None:
+        super().__init__(
+            _remparts_wire_button(
+                f"{_NS}:remparts:back", label, discord.ButtonStyle.secondary
+            )
+        )
+
+    @classmethod
+    async def from_custom_id(cls, interaction, item, match, /):  # type: ignore[no-untyped-def]
+        return cls(lieux_strings(_locale_of(interaction))["remparts_back_button"])
+
+    async def callback(self, interaction: discord.Interaction) -> None:
+        await _open_lieu(interaction, "remparts")
+
+
+class LieuxCancelDefenseButton(
+    discord.ui.DynamicItem[discord.ui.Button[Any]],
+    template=rf"{_NS}:remparts:cancel-defense:(?P<key>[0-9a-f]{{16}})",
+):
+    """The ↩️ Retirer ma défense of the defense sheet (in-place re-render)."""
+
+    def __init__(self, key: str, label: str) -> None:
+        super().__init__(
+            _remparts_wire_button(
+                f"{_NS}:remparts:cancel-defense:{key}", label, discord.ButtonStyle.secondary
+            )
+        )
+        self.key = str(key)
+
+    @classmethod
+    async def from_custom_id(cls, interaction, item, match, /):  # type: ignore[no-untyped-def]
+        return cls(str(match["key"]), lieux_strings(_locale_of(interaction))["cancel_defense_button"])
+
+    async def callback(self, interaction: discord.Interaction) -> None:
+        """Withdraw — then re-render the SAME sheet in place (gestion-inplace-v1)."""
+        from .battle import resolve_room_key
+
+        strings = lieux_strings(_locale_of(interaction))
+        lord, kingdom, stack = await _lord_kingdom_of(interaction, strings)
+        if lord is None or kingdom is None:
+            return
+        attacks = getattr(stack, "attacks", None)
+        if attacks is None:
+            await open_unique_ephemeral(interaction, content=strings["defense_manager_no_service"])
+            return
+        try:
+            attack_id = await resolve_room_key(stack, self.key)
+        except Exception:
+            attack_id = ""
+        if not attack_id:
+            await open_unique_ephemeral(interaction, content=strings["defense_manager_no_service"])
+            return
+        try:
+            await attacks.cancel_defense(attack_id, str(getattr(interaction.user, "id", "")))
+        except Exception as exc:
+            message = getattr(exc, "message", None) or str(exc)
+            await open_unique_ephemeral(interaction, content=str(message))
+            return
+        body, cancels = await defense_manager_payload(stack, lord, strings)
+        view = _lieu_window(
+            strings,
+            REMPARTS_SURFACE,
+            TEAL,
+            strings["patrol_title"].format(str(getattr(kingdom, "name", ""))),
+            body,
+            _remparts_media_of(interaction),
+            _manager_sheet_rows(cancels, strings),
+        )
+        try:
+            await interaction.response.edit_message(view=view)
+        except Exception:
+            logger.warning("kingdom lieux: defense sheet re-render failed", exc_info=True)
+
+
+class LieuxClassementButton(
+    discord.ui.DynamicItem[discord.ui.Button[Any]], template=rf"{_NS}:classement"
+):
+    """classement-vue-v1 — the 🏆 Classement window of the Salle du conseil."""
+
+    def __init__(self, label: str) -> None:
+        super().__init__(
+            _remparts_wire_button(f"{_NS}:classement", label, discord.ButtonStyle.primary)
+        )
+
+    @classmethod
+    async def from_custom_id(cls, interaction, item, match, /):  # type: ignore[no-untyped-def]
+        return cls(lieux_strings(_locale_of(interaction))["classement_button"])
+
+    async def callback(self, interaction: discord.Interaction) -> None:
+        """The season ranking — one line per kingdom, ephemeral."""
+        strings = lieux_strings(_locale_of(interaction))
+        lord, kingdom, stack = await _lord_kingdom_of(interaction, strings)
+        if lord is None or kingdom is None:
+            return
+        await interaction.response.defer(ephemeral=True)
+        rows = await _classement_rows(stack)
+        if not rows:
+            await open_unique_ephemeral(interaction, content=strings["classement_empty"])
+            return
+        view = _lieu_window(
+            strings,
+            CLASSEMENT_SURFACE,
+            discord.Colour.gold(),
+            strings["classement_title"],
+            classement_content(strings, rows),
+            None,
+            [[_sortir_item(strings)]],
+        )
+        await open_unique_ephemeral(interaction, view=view)

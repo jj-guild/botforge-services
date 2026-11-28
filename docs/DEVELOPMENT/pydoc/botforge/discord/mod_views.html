@@ -20,7 +20,11 @@ GENERATES&nbsp;them&nbsp;at&nbsp;boot,&nbsp;for&nbsp;every&nbsp;enabled&nbsp;mod
 &nbsp;&nbsp;(admin-only&nbsp;flip&nbsp;to&nbsp;the&nbsp;admin&nbsp;surface)<br>
 -&nbsp;``menu:mod:&lt;name&gt;:admin``&nbsp;—&nbsp;the&nbsp;admin:&nbsp;the&nbsp;standard&nbsp;content&nbsp;+&nbsp;the<br>
 &nbsp;&nbsp;**repair&nbsp;button**&nbsp;(the&nbsp;declared&nbsp;channels&nbsp;and&nbsp;roles&nbsp;re-provision,<br>
-&nbsp;&nbsp;#384's&nbsp;label)<br>
+&nbsp;&nbsp;#384's&nbsp;label)&nbsp;+&nbsp;the&nbsp;**Console&nbsp;button**&nbsp;(🛠️&nbsp;danger&nbsp;—&nbsp;opens&nbsp;the&nbsp;mod's<br>
+&nbsp;&nbsp;admin&nbsp;console)<br>
+-&nbsp;``panel:mod:&lt;name&gt;:admin:console``&nbsp;—&nbsp;the&nbsp;mod's&nbsp;admin&nbsp;console&nbsp;surface,<br>
+&nbsp;&nbsp;ALWAYS&nbsp;declared&nbsp;(a&nbsp;console&nbsp;exists&nbsp;as&nbsp;soon&nbsp;as&nbsp;a&nbsp;mod&nbsp;is&nbsp;added);&nbsp;the&nbsp;mod<br>
+&nbsp;&nbsp;wires&nbsp;its&nbsp;content&nbsp;with&nbsp;``wire_view``,&nbsp;the&nbsp;SDK&nbsp;injects&nbsp;the&nbsp;button<br>
 &nbsp;<br>
 The&nbsp;mods'&nbsp;home/admin&nbsp;menus&nbsp;(menu:mods:home,&nbsp;menu:mods:admin)&nbsp;list&nbsp;the<br>
 entries&nbsp;automatically&nbsp;—&nbsp;installed&nbsp;ones&nbsp;enabled,&nbsp;the&nbsp;not-installed<br>
@@ -34,11 +38,11 @@ with&nbsp;their&nbsp;install&nbsp;state).</span></p>
 <td class="section-title" colspan=3>&nbsp;<br><strong class="bigsection">Functions</strong></td></tr>
     
 <tr><td class="decor functions-decor"><span class="code">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span></td><td>&nbsp;</td>
-<td class="singlecolumn"><dl><dt><a name="-declare_mod_views"><strong>declare_mod_views</strong></a>(registry: 'Any') -&gt; 'int'</dt><dd><span class="code">Generate&nbsp;every&nbsp;enabled&nbsp;mod's&nbsp;home&nbsp;and&nbsp;admin&nbsp;views&nbsp;(boot-time).<br>
+<td class="singlecolumn"><dl><dt><a name="-declare_mod_views"><strong>declare_mod_views</strong></a>(registry: 'Any') -&gt; 'int'</dt><dd><span class="code">Generate&nbsp;every&nbsp;enabled&nbsp;mod's&nbsp;home,&nbsp;admin&nbsp;and&nbsp;console&nbsp;views&nbsp;(boot-time).<br>
 &nbsp;<br>
-Idempotent:&nbsp;the&nbsp;auto-generated&nbsp;ids&nbsp;are&nbsp;stable&nbsp;(menu:mod:&lt;name&gt;&nbsp;and<br>
-menu:mod:&lt;name&gt;:admin),&nbsp;the&nbsp;last&nbsp;declaration&nbsp;wins.&nbsp;Returns&nbsp;how&nbsp;many<br>
-views&nbsp;were&nbsp;generated.</span></dd></dl>
+Idempotent:&nbsp;the&nbsp;auto-generated&nbsp;ids&nbsp;are&nbsp;stable&nbsp;(menu:mod:&lt;name&gt;,<br>
+menu:mod:&lt;name&gt;:admin&nbsp;and&nbsp;panel:mod:&lt;name&gt;:admin:console),&nbsp;the&nbsp;last<br>
+declaration&nbsp;wins.&nbsp;Returns&nbsp;how&nbsp;many&nbsp;views&nbsp;were&nbsp;generated.</span></dd></dl>
 </td></tr></table><p>
 <table class="section">
 <tr class="decor data-decor heading-text">

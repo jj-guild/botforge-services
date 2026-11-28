@@ -152,9 +152,7 @@ def _catalog_post_view(
     # (the maps/pools precedent): the click is guarded, the actions ride
     # an EPHEMERAL admin-only view — the public post never carries them
     row: discord.ui.ActionRow[discord.ui.LayoutView] = discord.ui.ActionRow()
-    row.add_item(
-        ModAdminButton(kind, name, label=labels.get("admin_btn", "Admin"))
-    )
+    row.add_item(ModAdminButton(kind, name, label=labels.get("admin_btn", "Admin")))
     view.add_item(row)
     from botforge.discord.ui.view_footer import add_view_footer
 
@@ -365,9 +363,7 @@ async def _guard(interaction: discord.Interaction) -> bool:
         "admin_only",
         "The catalog actions are reserved for bot admins.",
     )
-    return await require_admin(
-        interaction, admins, getattr(bot, "roles_service", None), denied_message=denied
-    )
+    return await require_admin(interaction, admins, getattr(bot, "roles_service", None), denied_message=denied)
 
 
 async def provision_game_scope(bot: Any, guild_id: str, game_key: str) -> int:
@@ -435,16 +431,12 @@ async def delete_game_scope(bot: Any, guild_id: str, game_key: str) -> int:
                     await channel.delete(reason=f"botforge: uninstall the {game_key} game")
                     deleted += 1
                 except discord.HTTPException:
-                    logger.warning(
-                        "catalog: deleting the %s channel failed — best-effort", channel_id, exc_info=True
-                    )
+                    logger.warning("catalog: deleting the %s channel failed — best-effort", channel_id, exc_info=True)
     await database["channels"].delete_many({"_id": {"$regex": f"^{prefix}"}})
     return deleted
 
 
-async def _game_presentation(
-    bot: Any, guild_id: str, game_key: str
-) -> tuple[str, tuple[tuple[str, str], ...]]:
+async def _game_presentation(bot: Any, guild_id: str, game_key: str) -> tuple[str, tuple[tuple[str, str], ...]]:
     """Return the game's long title and its (provider, purpose) pairs.
 
     The declaration (config/games/<key>/game.yaml) carries the display
@@ -463,9 +455,7 @@ async def _game_presentation(
         pairs = []
         for entry in raw_providers:
             if isinstance(entry, dict) and entry.get("key"):
-                purpose = _tr_key(
-                    catalog, str(entry.get("purpose_key", "")), locale, str(entry.get("key"))
-                )
+                purpose = _tr_key(catalog, str(entry.get("purpose_key", "")), locale, str(entry.get("key")))
                 pairs.append((str(entry["key"]), purpose))
         providers = tuple(pairs)
     return title, providers
@@ -509,7 +499,15 @@ def _seasonal_standard_channels(definition: Any) -> tuple[Any, ...]:
     from botforge.core.services.mod_definition import ChannelCategoryDef
 
     standard_keys = {"general", "admin", "seasons", "candidates", "participants"}
-    out = [channel for channel in declared if str(channel.key) not in standard_keys]
+    # MANUAL salons (vitrine-v1, Drasah 26/11): declared as data, NEVER
+    # auto-provisioned — the organiser creates them on demand (the
+    # mod's atelier) and positions them by hand; a stored resolution
+    # (a salon the atelier already created) is simply left alone.
+    out = [
+        channel
+        for channel in declared
+        if str(channel.key) not in standard_keys and not getattr(channel, "manual", False)
+    ]
     out.extend(
         [
             ChannelCategoryDef(
@@ -549,25 +547,26 @@ def _seasonal_standard_channels(definition: Any) -> tuple[Any, ...]:
     return tuple(out)
 
 
-async def provision_mod_channels(bot: Any, guild_id: str, mod_name: str) -> int:
-    """Provision one mod's declared channels under its own folder (mod/<name>).
-
-    The declaration's channels ride the SAME provisioning machinery as
-    the tree scopes (provision_scope + persist_resolutions): the stored
-    ids live under the ``mod/<name>`` scope, the heal and the repair
-    button work exactly like the games'.
-    """
-    from botforge.discord.ui.panels import ChannelDecl, ScopeSpec
-    from botforge.discord.ui.panels_provisioning import persist_resolutions, provision_scope
-
+def _declared_mod_channels(bot: Any, guild_id: str, mod_name: str) -> tuple[Any, Any, tuple[Any, ...]]:
+    """Return the guild + definition + declared channels, or (None, None, ())."""
     guild = bot.get_guild(int(guild_id)) if guild_id.isdigit() else None
     registry = getattr(bot, "registry", None)
     definition = registry.get(mod_name) if registry is not None else None
     if guild is None or definition is None:
-        return 0
-    declared = _seasonal_standard_channels(definition)
-    if not declared:
-        return 0
+        return None, None, ()
+    return guild, definition, _seasonal_standard_channels(definition)
+
+
+async def _build_mod_scope_spec(
+    bot: Any,
+    guild_id: str,
+    mod_name: str,
+    definition: Any,
+    declared: tuple[Any, ...],
+) -> tuple[Any, str, Any]:
+    """Build the mod's ScopeSpec + its locale + catalog (the view roles resolved)."""
+    from botforge.discord.ui.panels import ChannelDecl, ScopeSpec
+
     # the declared view roles resolve to IDS through the persisted
     # mapping (the display name is renamable — the stored id is the
     # resolver, exactly like the channels): name -> the declared role's
@@ -578,30 +577,40 @@ async def provision_mod_channels(bot: Any, guild_id: str, mod_name: str) -> int:
         for role in (getattr(definition, "roles", ()) or ())
     }
 
-    async def _resolve_view_ids(policy: Any) -> tuple[str, ...]:
+    async def _resolve_role_ids(names: Any, label: str = "view") -> tuple[str, ...]:
+        """Resolve declared role NAMES to ids through the persisted mapping."""
         if roles_service is None:
             return ()
         ids: list[str] = []
-        for name in (getattr(policy, "view", ()) or ()):
+        for name in names or ():
             role_key = role_keys_by_name.get(str(name), "")
             if not role_key:
-                logger.warning(
-                    "catalog: the view role %r is not a declared role — skipped", name
-                )
+                logger.warning("catalog: the %s role %r is not a declared role — skipped", label, name)
                 continue
             role_id = await roles_service.resolve_role_id(guild_id, mod_name, role_key)
             if role_id:
                 ids.append(str(role_id))
         return tuple(ids)
+
     from botforge.discord.scope_pins import _catalog, _locale_of
     from botforge.discord.scope_pins import _tr as _tr_key
 
     catalog = _catalog(bot)
     locale = await _locale_of(bot, guild_id)
     category_name = _tr_key(catalog, f"ui.mods.homes.{mod_name}", locale, mod_name)
+
+    # the machine-room rule (Drasah 18/11): the mod's home folder
+    # is staff-only when the declaration says so — the players'
+    # surfaces are the declared channel groups, never the home
     spec = ScopeSpec(
         scope=f"mod/{mod_name}",
         category_key=category_name,
+        category_admin_only=bool(getattr(definition, "home_admin_only", False)),
+        # the mod's home folder may sink to the sidebar's very end
+        category_bottom=bool(getattr(definition, "home_bottom", False)),
+        category_view_role_ids=await _resolve_role_ids(
+            getattr(definition, "home_view_roles", ()) or (), label="home view"
+        ),
         channels=tuple(
             [
                 ChannelDecl(
@@ -610,13 +619,33 @@ async def provision_mod_channels(bot: Any, guild_id: str, mod_name: str) -> int:
                     kind="text",
                     access="admin" if getattr(channel, "admin_only", False) else "public",
                     group=str(getattr(channel, "group", "") or ""),
+                    group_admin_only=bool(getattr(channel, "group_admin_only", False)),
+                    group_bottom=bool(getattr(channel, "group_bottom", False)),
                     policy=getattr(channel, "access", None),
-                    view_role_ids=await _resolve_view_ids(getattr(channel, "access", None)),
+                    position=getattr(channel, "position", None),
+                    view_role_ids=await _resolve_role_ids(getattr(getattr(channel, "access", None), "view", ()) or ()),
                 )
                 for channel in declared
             ]
         ),
     )
+    return spec, locale, catalog
+
+
+async def provision_mod_channels(bot: Any, guild_id: str, mod_name: str) -> int:
+    """Provision one mod's declared channels under its own folder (mod/<name>).
+
+    The declaration's channels ride the SAME provisioning machinery as
+    the tree scopes (provision_scope + persist_resolutions): the stored
+    ids live under the ``mod/<name>`` scope, the heal and the repair
+    button work exactly like the games'.
+    """
+    from botforge.discord.ui.panels_provisioning import persist_resolutions, provision_scope
+
+    guild, _definition, declared = _declared_mod_channels(bot, guild_id, mod_name)
+    if guild is None or not declared:
+        return 0
+    spec, locale, catalog = await _build_mod_scope_spec(bot, guild_id, mod_name, _definition, declared)
 
     def _translate(key: str, _locale: str) -> str:
         rendered: str = catalog.render(key, _locale)
@@ -627,9 +656,7 @@ async def provision_mod_channels(bot: Any, guild_id: str, mod_name: str) -> int:
         await persist_resolutions(guild_id, spec.scope, resolved)
         return len(resolved)
     except Exception:
-        logger.warning(
-            "catalog: provisioning the %s mod channels failed — best-effort", mod_name, exc_info=True
-        )
+        logger.warning("catalog: provisioning the %s mod channels failed — best-effort", mod_name, exc_info=True)
         return 0
 
 
@@ -657,9 +684,7 @@ async def delete_mod_scope(bot: Any, guild_id: str, mod_name: str) -> int:
                     await channel.delete(reason=f"botforge: uninstall the {mod_name} mod")
                     deleted += 1
                 except discord.HTTPException:
-                    logger.warning(
-                        "catalog: deleting the %s channel failed — best-effort", channel_id, exc_info=True
-                    )
+                    logger.warning("catalog: deleting the %s channel failed — best-effort", channel_id, exc_info=True)
     await database["channels"].delete_many({"_id": {"$regex": f"^{prefix}"}})
     return deleted
 
@@ -673,9 +698,7 @@ async def provision_mod_roles(bot: Any, guild_id: str, mod_name: str) -> int:
         resolved = await mod_roles_service.setup_mod_roles(guild_id, mod_name)
         return len(resolved)
     except Exception:
-        logger.warning(
-            "catalog: provisioning the %s mod roles failed — best-effort", mod_name, exc_info=True
-        )
+        logger.warning("catalog: provisioning the %s mod roles failed — best-effort", mod_name, exc_info=True)
         return 0
 
 
@@ -687,9 +710,7 @@ async def teardown_mod_roles(bot: Any, guild_id: str, mod_name: str) -> int:
     try:
         return int(await mod_roles_service.teardown_mod_roles(guild_id, mod_name))
     except Exception:
-        logger.warning(
-            "catalog: tearing down the %s mod roles failed — best-effort", mod_name, exc_info=True
-        )
+        logger.warning("catalog: tearing down the %s mod roles failed — best-effort", mod_name, exc_info=True)
         return 0
 
 
@@ -864,11 +885,13 @@ class ModInstallButton(
         if not result.ok:
             await interaction.response.send_message(
                 (
-                await _tr(
-                    interaction.client, guild_id, "refused",
-                    "Refused: {reason}",
-                )
-            ).format(reason=result.summary),
+                    await _tr(
+                        interaction.client,
+                        guild_id,
+                        "refused",
+                        "Refused: {reason}",
+                    )
+                ).format(reason=result.summary),
                 ephemeral=True,
             )
             return
@@ -883,13 +906,19 @@ class ModInstallButton(
             from botforge.discord.scope_pins import ensure_mod_pins
 
             await ensure_mod_pins(interaction.client, guild_id, self.name)
+            # install rule: while a mod is installed the bot's own
+            # categories go staff-only; the mod's folders keep their
+            # own declared permissions
+            from botforge.discord.ui.panels_provisioning import set_platform_categories_private
+
+            guild = interaction.client.get_guild(int(guild_id)) if guild_id.isdigit() else None
+            if guild is not None:
+                await set_platform_categories_private(guild, True)
         message = await _tr(interaction.client, guild_id, "installed_done", "Installed.")
         if ensured:
             key = "installed_game" if self.kind == "game" else "installed_mod"
             fallback = "{count} channels" if self.kind == "game" else "{count} roles"
-            message += " " + (await _tr(interaction.client, guild_id, key, fallback)).format(
-                count=ensured
-            )
+            message += " " + (await _tr(interaction.client, guild_id, key, fallback)).format(count=ensured)
         # the ephemeral action bar REFRESHES in place: the button flips
         # to the item's new state (the confirmation rides the edit)
         try:
@@ -942,14 +971,10 @@ class ModUninstallButton(
         """Open the uninstall modal (the data choice is explicit)."""
         if not await _guard(interaction):
             return
-        await interaction.response.send_modal(
-            await ModUninstallModal.build(interaction, self.kind, self.name)
-        )
+        await interaction.response.send_modal(await ModUninstallModal.build(interaction, self.kind, self.name))
 
 
-async def _apply_uninstall_choice(
-    bot: Any, guild_id: str, kind: str, name: str, drop_channels: bool
-) -> int:
+async def _apply_uninstall_choice(bot: Any, guild_id: str, kind: str, name: str, drop_channels: bool) -> int:
     """Apply the uninstall's channels/roles choice; return what was deleted.
 
     The uninstalled mod's pins are removed whatever the choice: the
@@ -966,6 +991,17 @@ async def _apply_uninstall_choice(
         from botforge.discord.scope_pins import remove_mod_pins
 
         await remove_mod_pins(bot, guild_id, name)
+        # uninstall rule: when the LAST mod leaves the guild, the bot's
+        # categories return to their normal (public) rights
+        from botforge.discord.wiring import build_guild_access_service
+
+        access = build_guild_access_service()
+        remaining = tuple(await access.enabled_mods(guild_id)) if access is not None else (name,)
+        guild = bot.get_guild(int(guild_id)) if guild_id.isdigit() else None
+        if guild is not None and not remaining:
+            from botforge.discord.ui.panels_provisioning import set_platform_categories_private
+
+            await set_platform_categories_private(guild, False)
     return deleted
 
 
@@ -1049,9 +1085,7 @@ class ModUninstallModal(discord.ui.Modal):
         await interaction.response.defer(ephemeral=True)
         guild_id = str(interaction.guild_id or "")
         wipe = bool(self.data_select.values and self.data_select.values[0] == self.DELETE)
-        drop_channels = bool(
-            self.channels_select.values and self.channels_select.values[0] == self.DELETE
-        )
+        drop_channels = bool(self.channels_select.values and self.channels_select.values[0] == self.DELETE)
         service = _build_service(interaction.client)
         if service is None:
             return
@@ -1065,13 +1099,10 @@ class ModUninstallModal(discord.ui.Modal):
 
             catalog = _catalog(interaction.client)
             locale = await _locale_of(interaction.client, guild_id)
-            names = [
-                _tr_key(catalog, f"ui.mods.homes.{item}", locale, item)
-                for item in result.refused_by
-            ] or [result.summary]
-            await interaction.followup.send(
-                self.refused.format(reason=", ".join(names)), ephemeral=True
-            )
+            names = [_tr_key(catalog, f"ui.mods.homes.{item}", locale, item) for item in result.refused_by] or [
+                result.summary
+            ]
+            await interaction.followup.send(self.refused.format(reason=", ".join(names)), ephemeral=True)
             return
         # the channels/roles choice: delete the item's provisioned scope;
         # an uninstalled MOD's pinned menus go with it — whatever the
@@ -1081,9 +1112,7 @@ class ModUninstallModal(discord.ui.Modal):
         if deleted:
             key = "uninstalled_game" if self.kind == "game" else "uninstalled_mod"
             fallback = "{count} channels deleted" if self.kind == "game" else "{count} roles deleted"
-            message += " " + (await _tr(interaction.client, guild_id, key, fallback)).format(
-                count=deleted
-            )
+            message += " " + (await _tr(interaction.client, guild_id, key, fallback)).format(count=deleted)
         # the ephemeral action bar REFRESHES in place: the button flips
         # to the item's new state (the confirmation rides the edit)
         try:

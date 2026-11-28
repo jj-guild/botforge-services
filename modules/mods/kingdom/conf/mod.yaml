@@ -12,46 +12,102 @@ enabled: true
 # the visual identity is data (#334)
 emoji: "👑"
 seasonal: true
+# machine-room rule (Drasah 18/11): the mod's HOME folder (the
+# auto-provisioned « Kingdom » category) is staff-only — the players'
+# surfaces are the declared channel groups (the Conscription door),
+# never the home plumbing. The gate grants the mod's admin role.
+home_admin_only: true
+home_view_roles: ["Kingdom Admin"]
+# category-bottom (Drasah 20/11): the 👑 Kingdom machine room sinks to
+# the sidebar's very end (private to staff, invisible to the players)
+home_bottom: true
 settings: {}
+# architecture-salons-v1 (Drasah 24/11) : l'ordre de la sidebar est une
+# RÈGLE — ✒️ conscription, ⚔️ champs de bataille, 🏰 Kingdom-Gaïa, puis les
+# royaumes (le BANDEAU dynamique, toujours au-dessus d'admin), ⚙️ admin en
+# DERNIER (bottom), la réserve du bot en toute fin (home_bottom). L'ordre
+# des groupes = les `position` des salons (bandes de 10 par groupe),
+# jamais un accident alphabétique.
 channel_groups:
-  - key: profiles
-    display_name: 👤 ᴘʀᴏꜰɪʟs
   # restructuration-serveur-v1 e (Drasah 19/10): the general group is
   # GONE ENTIRELY (Taverne + the vocal) — nothing is kept or moved.
+  # architecture-salons-v1 (Drasah 24/11) : le groupe profiles est RETIRÉ
+  # (« le profil sera une commande, plus jamais un salon ni une
+  # catégorie ») — la catégorie vide legacy est balayée au boot.
   - key: conscription
     display_name: ✒️ ᴄᴏɴsᴄʀɪᴘᴛɪᴏɴ
   # restructuration-gaia-v1 (Drasah 24/10): the Gaïa group RETIRES —
-  # its Territoire salon moves into the Kingdoms category, which is
-  # renamed « Kingdoms-Gaia »; the Taverne (taverne-v1) is born here.
+  # its Territoire salon moves into the Kingdom category, which is
+  # renamed « Kingdom-Gaia »; the Taverne (taverne-v1) is born here.
   - key: kingdom
-    display_name: 🏰 ᴋɪɴɢᴅᴏᴍs-ɢᴀɪᴀ
+    display_name: 🏰 ᴋɪɴɢᴅᴏᴍ-ɢᴀɪᴀ
   - key: battlefield
     display_name: ⚔️ ᴄʜᴀᴍᴘs ᴅᴇ ʙᴀᴛᴀɪʟʟᴇ
-  # laboratoire-v1 (Drasah 05/11): the visual-validation lab — ONE
-  # admin-only category, ONE salon with the cockpit panel. The lab
-  # never touches the game salons (renders ride the Nilrem data).
-  - key: laboratoire
-    display_name: 🧪 ʟᴀʙᴏʀᴀᴛᴏɪʀᴇ
-    admin_only: true
+  # laboratoire-v3 (Drasah 19/11): the Labo group RETIRES — the visual
+  # validation lives with Mistral now; the lab salons (lab, lab_original,
+  # lab_travaux) are swept at the next provisioning as undeclared slugs.
   - key: admin
     display_name: ⚙️ ᴀᴅᴍɪɴ
     admin_only: true
+    # category-bottom (Drasah 20/11): the ADMIN machine room sinks to
+    # the sidebar's very end with the home folder (private plumbing)
+    bottom: true
 channels:
-  # restructuration-serveur-v1 e (Drasah 19/10): the general group and
-  # its Taverne are RETIRED — the category disappears at the next
-  # provisioning (the legacy cleanup sweeps both).
-  - key: realms
-    display_name: 👑 royaumes
-    description: Kingdom validation panel (admin only)
+  # conscription-4-salons (Drasah 20/11): la CONSCRIPTION EST le
+  # parcours — l'ordre de la sidebar = les étapes du joueur, et ce que
+  # le joueur VOIT dit où il en est :
+  # 1. « register » : public pour les SANS-compte, MASQUÉ dès le compte
+  #    créé (deny_view sur le rôle d'accès « Kingdom Enregistré » — le
+  #    salon disparaît de sa vue, l'étape est passée) ;
+  # 2. « apply » : OUVERT par le compte — la récompense visible de
+  #    l'étape 1 ; le pin porte la saison qui vit + la porte ⚔️ ;
+  # 3. « seigneurerie » : caché admin — les PERSONNES (file, affectations) ;
+  # 4. « realms » : caché admin — les ENTITÉS (validation des royaumes).
+  - key: register
+    display_name: 🪙 enregistrement
+    description: The account door — create the project account and link AoE2
     group: conscription
+    position: 1
+    access:
+      everyone_view: true
+      everyone_post: false
+      deny_view: [🪙 Kingdom Enregistré]
+  - key: apply
+    display_name: ⚔️ postuler
+    description: Roi ou Seigneur ? — fonder ou rejoindre un royaume
+    group: conscription
+    position: 2
+    access:
+      everyone_view: false
+      view: [🪙 Kingdom Enregistré, Kingdom Admin]
+  - key: seigneurerie
+    display_name: 🛡️ seigneurerie
+    description: The lords' desk — queue, candidates, assignments (admin only)
+    group: conscription
+    position: 3
     admin_only: true
     access:
       everyone_view: false
       view: [Kingdom Admin]
+  - key: realms
+    display_name: 👑 royaumes
+    description: Kingdom validation panel (admin only)
+    group: conscription
+    position: 4
+    admin_only: true
+    access:
+      everyone_view: false
+      view: [Kingdom Admin]
+  # restructuration-serveur-v1 e (Drasah 19/10): the general group and
+  # its Taverne are RETIRED — the category disappears at the next
+  # provisioning (the legacy cleanup sweeps both).
   - key: scriptorium
     display_name: 📜 scriptorium
     description: Sommaire — Cadastre, Diplomatie, Seigneurie (ephemeral rubrics)
     group: kingdom
+    # architecture-salons-v1 (Drasah 24/11) : bande 20 — le groupe
+    # Kingdom-Gaïa vit EN 3e position, l'ordre interne est explicite.
+    position: 20
     # permissions-serveur-v1 (Drasah 19/10): a newcomer sees only
     # Conscription and Beta — every other salon denies @everyone and
     # unlocks through the player roles (granted at acceptance).
@@ -66,6 +122,7 @@ channels:
     display_name: 💰 marché
     description: The kingdom's market — techs and actions bought with écus
     group: kingdom
+    position: 21
     access:
       everyone_view: false
       view: [Kingdom Lord, Kingdom King, Kingdom Admin]
@@ -73,6 +130,7 @@ channels:
     display_name: 🌍 géopolitique
     description: Announcements, treaties and political rules
     group: kingdom
+    position: 22
     # permissions-serveur-v1: the pinned age message lives here (the
     # dedicated 🏺 Âge salon is gone — its name now carries the age emoji).
     access:
@@ -82,8 +140,9 @@ channels:
     display_name: 🗺️ territoire
     description: Territories and their cadastre effects — plus the Gaïa AI level (restructuration-serveur-v1 c, Drasah 19/10)
     # restructuration-gaia-v1 (Drasah 24/10): moved from the retired
-    # gaia group into kingdoms (Kingdoms-Gaia).
+    # gaia group into kingdoms (Kingdom-Gaia).
     group: kingdom
+    position: 23
     access:
       everyone_view: false
       view: [Kingdom Lord, Kingdom King, Kingdom Admin]
@@ -91,6 +150,23 @@ channels:
     display_name: 🍺 taverne
     description: The lords' tavern — drinks, rumors, bets and the Mercenary Chief (taverne-v1)
     group: kingdom
+    position: 24
+    access:
+      everyone_view: false
+      view: [Kingdom Lord, Kingdom King, Kingdom Admin]
+  # vitrine-v1 (Drasah 26/11, tranche 44) : le 🏛️ Panthéon — le salon
+  # SOLO et PERMANENT qui vit HORS de la partie, la vitrine des
+  # saisons (score en direct, palmarès, historique, chronique). Il
+  # n'est jamais renommé ni rembobiné : il lit les archives.
+  # panthéon-manuel-v1 (Drasah 26/11) : salon MANUEL — le provisioning
+  # ne le crée JAMAIS ; l'organisateur le crée depuis l'atelier
+  # (🛠️ Paramètres → 🏛️ Ajouter Panthéon), il naît TOUT EN HAUT hors
+  # catégorie, puis se positionne à la main (la résolution suit
+  # l'id stocké : tout le branchement suit le salon glissé).
+  - key: pantheon
+    display_name: 🏛️ panthéon
+    description: The seasons' showcase — live score, palmarès, historique, chronicle (vitrine-v1)
+    manual: true
     access:
       everyone_view: false
       view: [Kingdom Lord, Kingdom King, Kingdom Admin]
@@ -98,6 +174,9 @@ channels:
     display_name: ⚔️ déclarer une attaque
     description: The guided attack declaration panel
     group: battlefield
+    # architecture-salons-v1 : bande 10 — les champs de bataille vivent
+    # EN 2e position, juste après la conscription.
+    position: 10
     access:
       everyone_view: false
       view: [Kingdom Lord, Kingdom King, Kingdom Admin]
@@ -105,28 +184,18 @@ channels:
     display_name: 🕊️ pourparlers
     description: War negotiations
     group: battlefield
+    position: 11
     access:
       everyone_view: false
       view: [Kingdom Lord, Kingdom King, Kingdom Admin]
       post: [Kingdom Lord, Kingdom King, Kingdom Admin]
-  - key: settings
-    display_name: ⚙️ paramètres
-    description: Mod settings panel channel
-    group: admin
-    # permissions-serveur-v1: the admin category and its salons are
-    # admin-only — an explicit access block keeps the provisioning's
-    # policy application from re-granting @everyone view (the default
-    # policy is everyone_view: true).
-    access:
-      everyone_view: false
-      view: [Kingdom Admin]
-  # saison-removal-v1 (Drasah 27/10): the 🗓️ gestion saison salon is
-  # GONE — nothing in the mod ever targeted it (no panel, no command);
-  # the live salon is swept as a legacy slug at the next provisioning.
   - key: time_machine
     display_name: ⏱️ machine à temps
     description: Game-clock test panel — fast-forward and snapshots (admin only)
     group: admin
+    # architecture-salons-v1 : bande 30 — l'ordre INTERNE d'admin est
+    # explicite (machine, distributeur, paramètres, demandes, journal).
+    position: 30
     admin_only: true
     access:
       everyone_view: false
@@ -135,6 +204,22 @@ channels:
     display_name: 🎁 distributeur
     description: Admin test injector — hand elements to a kingdom (admin only)
     group: admin
+    position: 31
+    admin_only: true
+    access:
+      everyone_view: false
+      view: [Kingdom Admin]
+  # parametres-restore-v1 (Drasah 20/11): the console salon WEARS the
+  # designer's original name — Admin > ⚙️ paramètres (capture 08/11).
+  # The KEY stays `console` (the seam is stable: the settings-pin
+  # fallback already heals by flattened name — console, parametres,
+  # settings) and the legacy `settings` slug stays swept as
+  # undeclared at the next provisioning.
+  - key: console
+    display_name: ⚙️ paramètres
+    description: Kingdom settings — the admin season cockpit (pinned, admin only)
+    group: admin
+    position: 32
     admin_only: true
     access:
       everyone_view: false
@@ -142,50 +227,18 @@ channels:
   # console-removal-v1 (Drasah 25/10): the console channel block is
   # GONE — the listener never booted in prod; the live flows live on
   # the ⚙️ Paramètres panel and the salon is swept as a legacy slug.
-  - key: requests
-    display_name: 📬 demandes
-    description: Edit/leave requests (admin only)
-    group: admin
-    access:
-      everyone_view: false
-      view: [Kingdom Admin]
+  # admin-logs-v2 (Drasah 25/11): the 📬 demandes block is GONE — T4a
+  # merges the requests INTO 📜 logs; the slug joins the undeclared
+  # legacy sweep and the ONLY live branch (the notices' season entry
+  # request) now lands in admin_log.
   # admin-logs-v1 (Drasah 30/10): the destructive admin actions land in
-  # 📜 journal-admin — a timestamped trail (ejection, reking, validation).
+  # 📜 logs — a timestamped trail (ejection, reking, validation);
+  # admin-logs-v2 (Drasah 25/11): the entry requests land here too.
   - key: admin_log
-    display_name: 📜 journal-admin
-    description: Timestamped admin actions log (admin only)
+    display_name: 📜 logs
+    description: Timestamped admin log, requests included (admin only)
     group: admin
-    admin_only: true
-    access:
-      everyone_view: false
-      view: [Kingdom Admin]
-  # laboratoire-v1 (Drasah 05/11): the Labo salon — the pinned cockpit
-  # panel renders the mod's views in the salon (admin only, nothing
-  # interactive, Nilrem data, zero game-channel write).
-  - key: lab
-    display_name: 🧪 labo
-    description: The visual laboratory cockpit (admin only)
-    group: laboratoire
-    admin_only: true
-    access:
-      everyone_view: false
-      view: [Kingdom Admin]
-  # laboratoire-v2 (Drasah 05/11): the lab DISPATCHES every test into
-  # two version salons — 📜 original (the deployed code's render) and
-  # 🚧 travaux (the work-in-progress render) — the side-by-side
-  # comparison Drasah validates before confirming to Mistral.
-  - key: lab_original
-    display_name: 📜 original
-    description: The lab's original-version renders — the deployed code (admin only)
-    group: laboratoire
-    admin_only: true
-    access:
-      everyone_view: false
-      view: [Kingdom Admin]
-  - key: lab_travaux
-    display_name: 🚧 travaux
-    description: The lab's work-in-progress renders — the pending version (admin only)
-    group: laboratoire
+    position: 34
     admin_only: true
     access:
       everyone_view: false
@@ -209,6 +262,13 @@ roles:
     display_name: Kingdom Admin
     color: 0xE74C3C
     hoisted: true
+  # salon-parcours-v2 (Drasah 18/11): the Postuler salon's access
+  # role — the platform's profile.bound event grants it (the gate
+  # rides the registration seam, registration_gate.py), the last
+  # unbind revokes it
+  - key: enregistre
+    display_name: "🪙 Kingdom Enregistré"
+    color: 0x5865F2
   # the season enrollment's roles (the owner's spec): the candidate
   # role lands at apply, the member role at accept; the membership
   # resets each season (the roles stay)

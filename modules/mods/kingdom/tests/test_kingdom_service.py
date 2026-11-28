@@ -1,4 +1,4 @@
-"""Kingdoms mod season & enrollment service — unit tests (botforge-services#157).
+"""Kingdom mod season & enrollment service — unit tests (botforge-services#157).
 
 The domain rules of reference §3-§5 behind an in-memory store: manual
 launch (free or imposed), wholesale reset, King/Lord enrollment, the
@@ -328,6 +328,58 @@ async def test_models_survive_the_mongo_wire_roundtrip() -> None:
     assert lords == []  # no lords yet, but the read must not crash either
 
 
+async def test_draw_missing_starting_draft_catches_up_a_hand_started_season() -> None:
+    """alliances-last-mile-v1 (live incident 2026-11-23): a season that
+    reached « started » WITHOUT passing through ``start_season`` (the
+    phase moved by hand / the time machine) left every kingdom's hand
+    EMPTY FOREVER — the starting draft only runs inside ``start_season``,
+    which is deliberately idempotent on a started season. The catch-up
+    seam fills the empty hands with the SAME rules as the start."""
+    from botforge.mods.kingdom.config import (
+        CivilizationCondition,
+        KingdomSeasonConfig,
+    )
+
+    config = KingdomSeasonConfig(
+        starting_civilizations=8,
+        civilizations=tuple(
+            CivilizationCondition(key=f"civ-{index}", display_name=f"Civ {index}")
+            for index in range(20)
+        ),
+    )
+    service = KingdomService(MongoWireStore(), config)  # type: ignore[arg-type]
+    await service.launch(imposed_names=["Aegis", "HeN"])
+    await service.ensure_test_kingdom()  # the Nilrem admin kingdom
+    await service.set_phase("started")  # the incident path: no start_season call
+    kingdoms = await service.kingdoms()
+    assert all(not k.civilizations for k in kingdoms if not k.is_gaia)
+    await service.start_season()  # the old escape hatch is a NO-OP now
+    assert all(not k.civilizations for k in await service.kingdoms() if not k.is_gaia)
+
+    report = await service.draw_missing_starting_draft()  # the catch-up
+    kingdoms = await service.kingdoms()  # read back through BSON
+    players = [k for k in kingdoms if not k.is_gaia and k.id != "k-nilrem"]
+    assert len(players) == 2
+    test_kingdom = next(k for k in kingdoms if k.id == "k-nilrem")
+    drawn: list[str] = []
+    for kingdom in players:
+        assert len(kingdom.civilizations) == 8
+        assert str(kingdom.id) in report
+        ledger = dict(kingdom.civilization_acquisitions or {})
+        assert set(ledger) == set(kingdom.civilizations)
+        assert all(e["origin"] == "starter" for e in ledger.values())
+        drawn.extend(kingdom.civilizations)
+    assert len(set(drawn)) == len(drawn)  # duplicate-free across kingdoms
+    assert not test_kingdom.civilizations  # the test kingdom is never drawn
+    gaia = next(k for k in kingdoms if k.is_gaia)
+    assert not gaia.civilizations
+
+    # a second pass never touches the served hands
+    assert await service.draw_missing_starting_draft() == {}
+    again = await service.kingdoms()
+    assert [list(k.civilizations) for k in again] == [list(k.civilizations) for k in kingdoms]
+
+
 async def test_founding_creates_a_pending_kingdom() -> None:
     service, _ = _service()
     await service.launch()
@@ -513,3 +565,54 @@ async def test_delete_kingdom_refuses_gaia() -> None:
     await service.launch()
     with pytest.raises(NotEnrollableError):
         await service.delete_kingdom(GAIA_KINGDOM_KEY)
+
+
+class _TerritoryStore(MemoryStore):
+    """MemoryStore + the territories seam (the ejection's pot commun)."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.territories: dict[str, dict] = {}
+
+    async def upsert_territory(self, document: dict) -> None:
+        self.territories[str(document["_id"])] = dict(document)
+
+    async def find_territories(self) -> list[dict]:
+        return list(self.territories.values())
+
+
+async def test_redistribute_territories_shares_rounds_and_gives_the_rest_to_gaia() -> None:
+    """ejection-archive-v1 — l'éjection redistribue ÉQUITABLEMENT : des
+    tours complets par royaume joueur (ordre aléatoire), le reste du
+    tour incomplet à Gaïa, et Gaïa refuse la redistribution."""
+    from botforge.mods.kingdom.service import NotEnrollableError as _NE
+
+    store = _TerritoryStore()
+    config = default_season_config()
+    config.kingdoms_count = 5  # la limite par défaut (2) laisserait 4 joueurs hors saison
+    service = KingdomService(store, config)  # type: ignore[arg-type]
+    await service.launch(["Aquitaine", "Bourgogne", "Anjou", "Forez"])
+    kingdoms = await service.kingdoms()
+    by_name = {k.name: k for k in kingdoms}
+    aquitaine = by_name["Aquitaine"]
+    gaia = by_name[GAIA_KINGDOM_KEY]
+    # 7 tuiles à Aquitaine → 3 autres joueurs × 2 (tour complet), le
+    # reste du tour incomplet (1) à Gaïa
+    for index in range(7):
+        store.territories[f"t{index}"] = {
+            "_id": f"t{index}", "owner_kingdom_id": aquitaine.id,
+        }
+    counts = await service.redistribute_territories(aquitaine.id)
+    assert counts == {"territories": 7, "per_kingdom": 2, "kingdoms": 3, "to_gaia": 1}
+    owners = {doc["owner_kingdom_id"] for doc in store.territories.values()}
+    assert aquitaine.id not in owners
+    per = {}
+    for doc in store.territories.values():
+        per[doc["owner_kingdom_id"]] = per.get(doc["owner_kingdom_id"], 0) + 1
+    for player in ("Bourgogne", "Anjou", "Forez"):
+        assert per[by_name[player].id] == 2, player
+    assert per[gaia.id] == 1
+    # Gaïa ne redistribue jamais — la règle absolue
+    with pytest.raises(_NE):
+        await service.redistribute_territories(gaia.id)
+

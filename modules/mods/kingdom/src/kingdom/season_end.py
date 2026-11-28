@@ -1,4 +1,4 @@
-"""Kingdoms mod season closing & ShowMatch service (botforge-services#162, T8).
+"""Kingdom mod season closing & ShowMatch service (botforge-services#162, T8).
 
 Reference §23 and decisions D16/D19/D38/D50/D51/D52: the Conquest
 finish at the Monday midnight following the last cycle - territory
@@ -67,13 +67,16 @@ class SeasonEndService:
     # ------------------------------------------------------------------
     # Conquest closing (D16/D19/D52)
     # ------------------------------------------------------------------
-    async def close_season(self) -> dict[str, object]:
+    async def close_season(self, *, force_tie: bool = False) -> dict[str, object]:
         """Close the season on the territory counts (Conquest, D16).
 
         The leading kingdom wins; a tie between the two leaders moves
         the decision to a ShowMatch PA2 (D50) and the winner stays
-        undecided until its end. Idempotent: calling again on a closed
-        season returns the same verdict without touching state.
+        undecided until its end. ``force_tie`` closes ex aequo on the
+        two leaders regardless of the counts - the test workbench uses
+        it to rehearse the tie scenario. Idempotent: calling again on
+        a closed season returns the same verdict without touching
+        state.
         """
         season = await self._require_season()
         if season.finished:
@@ -88,14 +91,16 @@ class SeasonEndService:
         ordered = sorted(scores, key=lambda kid: scores[kid], reverse=True)
         winner: str | None = None
         showmatch: ShowMatchModel | None = None
-        if ordered and scores[ordered[0]] > scores.get(ordered[1] if len(ordered) > 1 else "", -1):
+        if force_tie and len(ordered) >= 2:
+            showmatch = await self._pending_or_new(season, ordered[0], ordered[1])
+        elif ordered and scores[ordered[0]] > scores.get(ordered[1] if len(ordered) > 1 else "", -1):
             winner = ordered[0]
         elif ordered:
             tied = [kid for kid in ordered if scores[kid] == scores[ordered[0]]][:2]
             if len(tied) < 2:
                 winner = ordered[0]
             else:
-                showmatch = await self._create_showmatch(season, tied[0], tied[1])
+                showmatch = await self._pending_or_new(season, tied[0], tied[1])
         season.finished = True
         season.winner_kingdom_id = winner
         await self._store.upsert_season(season.to_mongo())
@@ -127,6 +132,46 @@ class SeasonEndService:
         if match is None:
             raise ShowMatchError("no ShowMatch was opened for this season")
         return match
+
+    async def pending_showmatch(self) -> ShowMatchModel | None:
+        """Return the last ShowMatch still unfinished, any season.
+
+        The tie ShowMatch lives outside the season (Affaire 42): the
+        season may already be closed, wiped or relaunched while the
+        duel ladder is still pending, and its document outlives the
+        wholesale reset.
+        """
+        pending: list[ShowMatchModel] = []
+        for doc in await self._store.find_showmatches():
+            match = ShowMatchModel.from_mongo(doc)
+            if not match.finished:
+                pending.append(match)
+        if not pending:
+            return None
+        return max(pending, key=lambda match: match.season_id)
+
+    async def simulate_showmatch(self, *, seed: int | None = None) -> ShowMatchModel:
+        """Play the whole pending ShowMatch out, randomly (Affaire 42).
+
+        The beta tie rehearsal: duels are prepared and decided by a
+        seeded draw until one side reaches the needed wins, then the
+        verdict lands like a played match would. A guard of 200 duels
+        keeps the loop finite whatever the config says.
+        """
+        rng = random.Random(seed)  # noqa: S311 - game draw, not crypto
+        match = await self.require_showmatch()
+        guard = 200
+        while not match.finished and guard:
+            duel = await self.next_duel(seed=rng.randrange(1 << 30))
+            match = await self.record_duel_result(duel.index, rng.choice(("a", "b")))
+            guard -= 1
+        return match
+
+    async def simulate_next_duel(self, *, seed: int | None = None) -> ShowMatchModel:
+        """Prepare and decide a single ShowMatch duel at random."""
+        rng = random.Random(seed)  # noqa: S311 - game draw, not crypto
+        duel = await self.next_duel(seed=rng.randrange(1 << 30))
+        return await self.record_duel_result(duel.index, rng.choice(("a", "b")))
 
     async def next_duel(self, *, seed: int | None = None) -> DuelModel:
         """Prepare the next ShowMatch duel (D50).
@@ -179,9 +224,17 @@ class SeasonEndService:
             match.winner_kingdom_id = (
                 match.kingdom_a if match.score_a > match.score_b else match.kingdom_b
             )
-            season = await self._require_season()
-            season.winner_kingdom_id = match.winner_kingdom_id
-            await self._store.upsert_season(season.to_mongo())
+            # Best-effort verdict transfer: the ShowMatch lives outside
+            # the season (Affaire 42) - after a wipe there is nothing to
+            # update, and a relaunched season keeps its own fresh winner.
+            season = await self._kingdoms.current_season()
+            if (
+                season is not None
+                and season.id == match.season_id
+                and season.winner_kingdom_id is None
+            ):
+                season.winner_kingdom_id = match.winner_kingdom_id
+                await self._store.upsert_season(season.to_mongo())
         match.duels = duels
         await self._store.upsert_showmatch(match.to_mongo())
         logger.info(
@@ -228,6 +281,15 @@ class SeasonEndService:
         )
         await self._store.upsert_showmatch(match.to_mongo())
         return match
+
+    async def _pending_or_new(
+        self, season: SeasonState, kingdom_a: str, kingdom_b: str
+    ) -> ShowMatchModel:
+        """Reuse the season's unfinished ShowMatch or open a fresh one."""
+        existing = await self.showmatch()
+        if existing is not None and not existing.finished:
+            return existing
+        return await self._create_showmatch(season, kingdom_a, kingdom_b)
 
     async def _build_duel(self, match: ShowMatchModel, rng: random.Random) -> DuelModel:
         """Pick the sides, the map and the civilizations of one duel."""
@@ -327,12 +389,13 @@ class SeasonEndService:
             for kid in counts
             if kid not in gaia_ids
         }
+        match = await self.showmatch()
         return {
             "season_id": season.id,
             "winner_kingdom_id": winner,
             "winner_name": names.get(winner) if winner else None,
             "territories": per_kingdom,
-            "showmatch": await self.showmatch() is not None,
+            "showmatch": match is not None and not match.finished,
         }
 
     async def _require_season(self) -> SeasonState:

@@ -1,0 +1,1420 @@
+"""Kingdom mod special-action economy service (botforge-services#161, T7).
+
+Reference §20 and decisions D9/D15/D36/D47/D48/D58/D61/D68: the kingdom
+tech-point wallet (``tech_points_bank`` fed by the epochs and the
+exploration rewards) and the purchasable special actions built on
+it - Explorateur (receive one random non-out territory, D48),
+Corruption (steal any territory, protected 48 real hours, D58), the
+Garde Royale shield (24h, one active guard per kingdom, extendable at
+a rising cost, D61) and Patrouille (a daily 2h no-aggression slot,
+D68). The wallet is single: every purchase debits the kingdom bank,
+including combat technologies through the transfer seam toward the T4
+technology state.
+"""
+from __future__ import annotations
+
+import logging
+import random
+import time
+from datetime import datetime, timedelta
+from typing import TYPE_CHECKING, Any
+
+from botforge.mods.kingdom.admin_debug import bypass_guard
+from botforge.mods.kingdom.attacks import (
+    AI_LEVEL_CAP,
+    JEU_D_ARMES_RUSH_PREFIX,
+    PATROUILLE_SLOT_KEYS,
+    patrouille_active_at,
+)
+from botforge.mods.kingdom.events import active_lords_day_window
+from botforge.mods.kingdom.game_clock import game_now
+from botforge.mods.kingdom.models import (
+    KingdomModel,
+    LordModel,
+    SeasonState,
+    TerritoryModel,
+)
+from botforge.mods.kingdom.service import (
+    KingdomNotFoundError,
+    KingdomModError,
+    NoSeasonError,
+)
+from botforge.mods.kingdom.territories import (
+    TerritoryNotFoundError,
+)
+
+if TYPE_CHECKING:  # pragma: no cover — import cycles never at runtime
+    from botforge.mods.kingdom.attacks import AttackService
+    from botforge.mods.kingdom.config import KingdomSeasonConfig
+    from botforge.mods.kingdom.service import KingdomService
+    from botforge.mods.kingdom.storage import KingdomStore
+    from botforge.mods.kingdom.territories import TerritoryService
+
+logger = logging.getLogger("kingdom.economy")
+
+EXPLORATEUR = "explorateur"
+EXPLORATION_LOCK_HOURS = 48
+CORRUPTION = "corruption"
+GARDE_ROYALE = "garde_royale"
+PATROUILLE = "patrouille"
+PATROUILLE_HOURS = 2
+ROYAL_GUARD_HOURS = 12
+CORRUPTION_PROTECTION_HOURS = 48
+CORRUPTION_COMPENSATION_TECH = 1
+GARDE_ROYALE_STOCK = "garde_royale_stock"
+"""remparts-v2: bought-but-unplaced royal-guard tokens (no hard limit)."""
+GUARD_TERRITORY_PREFIX = "garde_royale_until:"
+"""remparts-v2: per-territory guard marker — ``garde_royale_until:<tid>``."""
+PATROUILLE_UNLOCK_PREFIX = "patrouille_unlock_"
+"""remparts-v2: slot-unlock markers — slot 1 first, then slot 2."""
+CORRUPTION_STOCK = "corruption_stock"
+"""chambre-utiliser-v1: bought-but-unused Corruption tokens."""
+JEU_D_ARMES = "jeu_d_armes"
+JEU_D_ARMES_STOCK = "jeu_d_armes_stock"
+JEU_D_ARMES_BOUGHT = "jeu_d_armes_bought"
+"""chambre-utiliser-v1: the Arms-mastery counters — stock = held
+tokens, bought = the per-season purchase counter. The APPLIED AI
+levels stay under ``jeu_d_armes`` (the defence bot reads it)."""
+EXPLORATEUR_STOCK = "explorateur_stock"
+"""chambre-utiliser-v1: bought-but-unused Explorateur tokens."""
+EXPEDITION_BASE_SECONDS = 600
+"""exploration-beta-duree (Drasah 02/11): BETA timing on the drasah
+canary — the voyage lasts 10 MINUTES instead of 48h so the whole rail
+(embarquement, masque en mer, retour, débarquement) can be tested live.
+Every embarked CREW member cuts it by 50 s (the chef never cuts it),
+plancher 5 minutes. NEVER merge this branch to prod without restoring
+48h / −4h par matelot / plancher 24h (the hour constants of
+exploration-expedition-v1)."""
+EXPEDITION_PER_LORD_SECONDS = 50
+EXPEDITION_MIN_SECONDS = 300
+EXPEDITION_BOARDING_SECONDS = 300
+"""exploration-refonte-v1 (Drasah 02/11): the boarding window — a due
+boarding WITH a captain launches itself (the events tick fires the
+auto-launch). exploration-retour-v3 (Drasah 02/11): BETA 5 minutes on
+the drasah canary (was 900) — restore 900 before any prod merge."""
+EXPEDITION_COMPENSATION_TECH = 2
+"""exploration-expedition-v1: when the map pool runs dry at the return,
+the kingdom keeps a compensation lot — one civilization it does not
+hold yet (origin ``exploration``) plus 2 ⚙️."""
+EXPEDITION_BETA_UNLIMITED = True
+"""exploration-beta-illimite (Drasah 02/11): BETA on the drasah canary
+— the voyages are UNLIMITED: no Explorateur token is required to open
+a boarding and none is consumed at the cast-off (nor refunded at a
+sailing cancel), so Drasah can loop the whole rail while testing the
+refonte. NEVER merge this branch to prod without flipping this flag
+to False — the token stock, the consumption and the refund are the
+prod economy (exploration-expedition-v1).
+"""
+
+
+class EconomyError(KingdomModError):
+    """Base of the economy-domain errors."""
+
+    code = "KINGDOMS_ECONOMY_ERROR"
+    message_key = "kingdoms.errors.economy_unexpected"
+
+
+class InsufficientPointsError(EconomyError):
+    """Raised when the kingdom wallet cannot cover a purchase (D9)."""
+
+    code = "KINGDOMS_INSUFFICIENT_POINTS"
+    message_key = "kingdoms.errors.insufficient_points"
+
+
+class EconomyLimitReachedError(EconomyError):
+    """Raised when a consumable hits its per-season purchase limit (D36/D48)."""
+
+    code = "KINGDOMS_ECONOMY_LIMIT_REACHED"
+    message_key = "kingdoms.errors.economy_limit_reached"
+
+
+class TerritoryProtectedError(EconomyError):
+    """Raised when a protected territory resists corruption or attack (D15/D37/D47)."""
+
+    code = "KINGDOMS_TERRITORY_PROTECTED"
+    message_key = "kingdoms.errors.territory_protected"
+
+
+class GuardAlreadyActiveError(EconomyError):
+    """Raised when a guard would shield a map that is already guarded (remparts-v2)."""
+
+    code = "KINGDOMS_GUARD_ALREADY_ACTIVE"
+    message_key = "kingdoms.errors.guard_already_active"
+
+
+class EconomyService:
+    """The tech-point wallet and the purchasable special actions (reference §20)."""
+
+    def __init__(
+        self,
+        store: KingdomStore,
+        config: KingdomSeasonConfig,
+        kingdoms_service: KingdomService,
+        territory_service: TerritoryService,
+        attacks_service: AttackService,
+    ) -> None:
+        """Store the seams: persistence, config, kingdoms, territories, attacks."""
+        self._store = store
+        self._config = config
+        self._kingdoms = kingdoms_service
+        self._territories = territory_service
+        self._attacks = attacks_service
+
+    # ------------------------------------------------------------------
+    # Wallet (D9/D36)
+    # ------------------------------------------------------------------
+    async def grant_tech_points(self, kingdom_id: str, amount: int) -> KingdomModel:
+        """Credit the kingdom wallet - epochs, exploration, admin grants."""
+        kingdom = await self._kingdom_by_id(kingdom_id)
+        kingdom.tech_points_bank += amount
+        await self._store.upsert_kingdom(kingdom.to_mongo())
+        logger.info("kingdoms: %s granted %s tech points", kingdom_id, amount)
+        return kingdom
+
+    async def spend_points(self, kingdom_id: str, cost: int) -> None:
+        """Debit the wallet - the seam the other services call (D45).
+
+        Raises when the wallet cannot cover the cost; the caller keeps
+        its own invariants on top (limits, state transitions).
+        """
+        kingdom = await self._kingdom_by_id(kingdom_id)
+        if kingdom.tech_points_bank < cost and not bypass_guard(
+            f"economy cost {cost} of {kingdom.name} (bank {kingdom.tech_points_bank})"
+        ):
+            raise InsufficientPointsError("the kingdom lacks tech points")
+        # The bypassed path pays what the treasury holds (never negative).
+        paid = cost if kingdom.tech_points_bank >= cost else kingdom.tech_points_bank
+        kingdom.tech_points_bank -= paid
+        await self._store.upsert_kingdom(kingdom.to_mongo())
+
+    async def wallet(self, kingdom_id: str) -> int:
+        """Return the kingdom's current tech-point balance."""
+        return (await self._kingdom_by_id(kingdom_id)).tech_points_bank
+
+    async def buy_arranged_marriage_token(self, kingdom_id: str) -> KingdomModel:
+        """Buy one arranged-marriage token for the Paroisse (D60, 2026-10-11).
+
+        The Marché no longer celebrates the marriage itself: the King
+        buys a token here (cost = ``technologies.mariage_arrange``, 3
+        🔬), the kingdom's ``arranged_marriage_stock`` grows by one and
+        the token is consumed at the Paroisse button. Payment first,
+        token second — a refused purchase never grants a token.
+        """
+        kingdom = await self._kingdom_by_id(kingdom_id)
+        cost = self._cost("mariage_arrange")
+        await self.spend_points(kingdom_id, cost)
+        kingdom = await self._kingdom_by_id(kingdom_id)
+        kingdom.arranged_marriage_stock += 1
+        await self._store.upsert_kingdom(kingdom.to_mongo())
+        logger.info(
+            "kingdoms: %s bought an arranged-marriage token (%s techs, stock=%s)",
+            kingdom_id,
+            cost,
+            kingdom.arranged_marriage_stock,
+        )
+        await self._record_purchase(kingdom_id, "mariage_arrange", "jeton 💰", cost)
+        return kingdom
+
+    async def buy_combat_technology(self, kingdom_id: str, technology: str) -> object:
+        """Buy a combat technology through the single wallet (D9/D36).
+
+        The cost moves from the kingdom bank into the T4 technology
+        state, which then owns the purchase counters and limits; a
+        refused purchase (limit reached) refunds the bank in full.
+        """
+        cost = int(getattr(self._config.technologies, technology))
+        await self.spend_points(kingdom_id, cost)
+        state = await self._attacks.technology_state(kingdom_id)
+        state.tech_points += cost
+        await self._store.upsert_technology(state.to_mongo())
+        try:
+            result = await self._attacks.buy_technology(kingdom_id, technology)
+        except KingdomModError:
+            refunded = await self._kingdom_by_id(kingdom_id)
+            refunded.tech_points_bank += cost
+            await self._store.upsert_kingdom(refunded.to_mongo())
+            raise
+        await self._record_purchase(kingdom_id, technology, "", cost)
+        return result
+
+    # ------------------------------------------------------------------
+    # Explorateur (D48)
+    # ------------------------------------------------------------------
+    async def buy_explorateur(
+        self,
+        kingdom_id: str,
+        lord_id: str,
+        *,
+        now: datetime | None = None,
+    ) -> LordModel:
+        """Send one lord exploring: 48h combat lock, map at the end (art. 6).
+
+        marche-v2 art. 6 (Drasah 13/10): any ACTIVE lord of the kingdom
+        may explore (not only the King). The chosen lord is locked for
+        48h FIXED (never scaled by the Parish, unlike the marriage) —
+        no attack, no defence — and the territory does not exist yet:
+        the map is drawn when the scheduler resolves the expired
+        exploration (``resolve_due_explorations``). Once per season
+        per kingdom; an exhausted pool refunds at resolution.
+        """
+        await self._check_consumable(kingdom_id, EXPLORATEUR)
+        timestamp = now or game_now()
+        lord = next(
+            (item for item in await self._kingdoms.lords() if item.id == lord_id),
+            None,
+        )
+        if lord is None or lord.left or lord.kingdom_id != kingdom_id:
+            raise EconomyError("the lord is no active lord of this kingdom")
+        if lord.exploration_locked_until is not None and lord.exploration_locked_until > int(
+            timestamp.timestamp()
+        ):
+            raise EconomyError("the lord is already exploring")
+        await self.spend_points(kingdom_id, self._cost(EXPLORATEUR))
+        lord.exploration_locked_until = int(timestamp.timestamp()) + int(
+            EXPLORATION_LOCK_HOURS * 3600
+        )
+        await self._store.upsert_lord(lord.to_mongo())
+        await self._count_purchase(kingdom_id, EXPLORATEUR)
+        logger.info(
+            "kingdoms: %s of %s explores until %s",
+            lord.id,
+            kingdom_id,
+            lord.exploration_locked_until,
+        )
+        await self._record_purchase(
+            kingdom_id, EXPLORATEUR, f"lord {lord.id}", self._cost(EXPLORATEUR)
+        )
+        return lord
+
+    async def buy_explorateur_token(self, kingdom_id: str) -> int:
+        """Buy ONE Explorateur token at the market (chambre-utiliser-v1).
+
+        The Marché stocks the card; the 48h exploration starts when
+        the King picks the lord from the Chambre des comptes. The
+        per-season limit counts the BUYS, never the uses.
+        """
+        await self._check_consumable(kingdom_id, EXPLORATEUR)
+        await self.spend_points(kingdom_id, self._cost(EXPLORATEUR))
+        state = await self._attacks.technology_state(kingdom_id)
+        stock = int(state.purchases.get(EXPLORATEUR_STOCK, 0) or 0) + 1
+        state.purchases[EXPLORATEUR_STOCK] = stock
+        await self._store.upsert_technology(state.to_mongo())
+        await self._count_purchase(kingdom_id, EXPLORATEUR)
+        logger.info(
+            "kingdoms: %s stocks an explorateur token (%d in reserve)", kingdom_id, stock
+        )
+        await self._record_purchase(
+            kingdom_id, EXPLORATEUR, "jeton en réserve", self._cost(EXPLORATEUR)
+        )
+        return stock
+
+    async def use_explorateur(
+        self,
+        kingdom_id: str,
+        lord_id: str,
+        *,
+        now: datetime | None = None,
+    ) -> LordModel:
+        """Spend ONE Explorateur token: send the lord exploring (chambre-utiliser-v1).
+
+        The guards of the Marché purchase stay (active lord of the
+        kingdom, no running exploration); a refused use never consumes
+        the token.
+        """
+        state = await self._attacks.technology_state(kingdom_id)
+        stock = int(state.purchases.get(EXPLORATEUR_STOCK, 0) or 0)
+        if stock <= 0:
+            raise EconomyError(
+                "no explorateur token in stock — buy one at the market first"
+            )
+        timestamp = now or game_now()
+        lord = next(
+            (item for item in await self._kingdoms.lords() if item.id == lord_id),
+            None,
+        )
+        if lord is None or lord.left or lord.kingdom_id != kingdom_id:
+            raise EconomyError("the lord is no active lord of this kingdom")
+        if lord.exploration_locked_until is not None and lord.exploration_locked_until > int(
+            timestamp.timestamp()
+        ):
+            raise EconomyError("the lord is already exploring")
+        state.purchases[EXPLORATEUR_STOCK] = stock - 1
+        await self._store.upsert_technology(state.to_mongo())
+        lord.exploration_locked_until = int(timestamp.timestamp()) + int(
+            EXPLORATION_LOCK_HOURS * 3600
+        )
+        await self._store.upsert_lord(lord.to_mongo())
+        logger.info(
+            "kingdoms: %s of %s explores until %s (token used, %d left)",
+            lord.id,
+            kingdom_id,
+            lord.exploration_locked_until,
+            stock - 1,
+        )
+        await self._record_action(kingdom_id, EXPLORATEUR, f"lord {lord.id}")
+        return lord
+
+    async def resolve_due_explorations(
+        self, *, now: datetime | None = None
+    ) -> list[tuple[LordModel, TerritoryModel | None]]:
+        """Resolve every expired exploration (the tick's engine, art. 6).
+
+        When the 48h lock passes, the kingdom receives a brand-new map
+        drawn from the catalog (never an out map) and the lord's lock
+        clears. An exhausted pool refunds the purchase in full and
+        still clears the lock — the pass is idempotent, a restart
+        mid-exploration never draws twice.
+        """
+        timestamp = now or game_now()
+        now_ts = int(timestamp.timestamp())
+        resolved: list[tuple[LordModel, TerritoryModel | None]] = []
+        # exploration-retour-v3: a live expedition (boarding/sailing/
+        # returned) owns its crew's exploration locks — the legacy solo
+        # resolver must NEVER touch them (double-draw bug, 02/11 logs).
+        live_expeditions: set[str] = set()
+        for kingdom in await self._kingdoms.kingdoms():
+            doc = dict(getattr(kingdom, "expedition", None) or {})
+            if str(doc.get("state", "")) in ("boarding", "sailing", "returned"):
+                live_expeditions.add(str(kingdom.id))
+        drawn = await self._territories.drawn_map_keys()
+        for lord in await self._kingdoms.lords():
+            until = int(lord.exploration_locked_until or 0)
+            if until <= 0 or until > now_ts:
+                continue
+            kingdom_id = lord.kingdom_id or ""
+            if kingdom_id in live_expeditions:
+                continue  # the expedition's own resolver owns this lock
+            pool = [
+                entry.key
+                for entry in self._config.maps
+                if entry.key not in drawn
+            ]
+            if not pool:
+                await self.grant_tech_points(kingdom_id, self._cost(EXPLORATEUR))
+                logger.info(
+                    "kingdoms: exploration of %s refunded (pool exhausted)", lord.id
+                )
+                resolved.append((lord, None))
+            else:
+                map_key = random.choice(pool)  # noqa: S311 - game draw, not crypto
+                territory = await self._territories.draw_map_for(kingdom_id, map_key)
+                drawn.add(map_key)
+                logger.info(
+                    "kingdoms: the exploration of %s revealed the map %s",
+                    lord.id,
+                    map_key,
+                )
+                resolved.append((lord, territory))
+            lord.exploration_locked_until = None
+            await self._store.upsert_lord(lord.to_mongo())
+        return resolved
+
+    # ------------------------------------------------------------------
+    # Expédition (exploration-expedition-v1, Drasah 30/10)
+    # ------------------------------------------------------------------
+    @staticmethod
+    def _expedition_locked(lord: LordModel, ts: int) -> bool:
+        """True when the lord sits in ANY live combat lock (expedition)."""
+        for until in (
+            lord.marriage_locked_until,
+            lord.exploration_locked_until,
+            lord.ffa_locked_until,
+        ):
+            if until is not None and int(until) > ts:
+                return True
+        return False
+
+    async def expedition(self, kingdom_id: str) -> dict[str, Any]:
+        """Read the kingdom's expedition doc (``{}`` when none)."""
+        kingdom = await self._kingdom_by_id(kingdom_id)
+        return dict(getattr(kingdom, "expedition", None) or {})
+
+    async def begin_expedition(
+        self, kingdom_id: str, *, now: datetime | None = None
+    ) -> dict[str, Any]:
+        """Open the boarding state (idempotent — the token stays intact).
+
+        The 🧭 button opens the salon: a kingdom without a token cannot
+        start, a boarding expedition returns its doc unchanged, a
+        sailing one refuses. The Explorateur token is consumed at the
+        LAUNCH, never here. ``opened_at`` stamps the 5-minute (beta) boarding
+        window (exploration-refonte-v1 — the auto-launch deadline).
+        A RETURNED expedition (the gain drawn, the crew not yet
+        unloaded — exploration-retour-v1) refuses too: the salon must
+        be unloaded first.
+        """
+        timestamp = now or game_now()
+        kingdom = await self._kingdom_by_id(kingdom_id)
+        doc = dict(getattr(kingdom, "expedition", None) or {})
+        # expedition-messages-v1 (Drasah 02/11): the refusals SPLIT —
+        # a sailing journey and a returned one are NOT the same state,
+        # each refusal carries its own message (his live report: a
+        # returned expedition answered « already at sea »).
+        if str(doc.get("state", "")) == "sailing":
+            raise EconomyError("an expedition is already at sea")
+        if str(doc.get("state", "")) == "returned":
+            raise EconomyError(
+                "the expedition is back and its crew has not yet disembarked"
+            )
+        if str(doc.get("state", "")) == "boarding":
+            return doc
+        state = await self._attacks.technology_state(kingdom_id)
+        if (
+            int(state.purchases.get(EXPLORATEUR_STOCK, 0) or 0) <= 0
+            and not EXPEDITION_BETA_UNLIMITED
+        ):
+            raise EconomyError("no explorateur token in stock — buy one at the market first")
+        doc = {
+            "state": "boarding",
+            "chef_lord_id": None,
+            "crew": [],
+            "salon_id": None,
+            "panel_message_id": None,
+            "ends_at": None,
+            "locked": [],
+            "opened_at": int(timestamp.timestamp()),
+        }
+        kingdom.expedition = doc
+        await self._store.upsert_kingdom(kingdom.to_mongo())
+        logger.info("kingdoms: %s opens an expedition boarding", kingdom_id)
+        return doc
+
+    async def record_expedition_salon(
+        self, kingdom_id: str, salon_id: int, panel_message_id: int | None = None
+    ) -> None:
+        """Store the salon (and panel) refs in the boarding doc."""
+        kingdom = await self._kingdom_by_id(kingdom_id)
+        doc = dict(getattr(kingdom, "expedition", None) or {})
+        if str(doc.get("state", "")) != "boarding":
+            return
+        doc["salon_id"] = int(salon_id)
+        if panel_message_id is not None:
+            doc["panel_message_id"] = int(panel_message_id)
+        kingdom.expedition = doc
+        await self._store.upsert_kingdom(kingdom.to_mongo())
+
+    async def captain_expedition(
+        self,
+        kingdom_id: str,
+        lord_id: str,
+        *,
+        now: datetime | None = None,
+    ) -> dict[str, Any]:
+        """conseil-exploration-v1 (Drasah 01/11): the fiche's 🧭 Devenir
+        capitaine — the defence point is checked BEFORE anything else
+        (no eligible clicker → no salon at all, the note alone rides).
+
+        The boarding opens first (idempotent — a live boarding returns
+        untouched), then the clicker enrolls as CAPITAINE. Idempotent:
+        a lord already captain returns the doc unchanged (a second click
+        never steps him down). The defence point stays a PREREQUISITE —
+        enrolling never consumes it.
+        """
+        timestamp = now or game_now()
+        await self.begin_expedition(kingdom_id, now=timestamp)
+        kingdom = await self._kingdom_by_id(kingdom_id)
+        doc = dict(getattr(kingdom, "expedition", None) or {})
+        lord = next(
+            (item for item in await self._kingdoms.lords() if item.id == lord_id),
+            None,
+        )
+        if lord is None or lord.left or lord.kingdom_id != kingdom_id:
+            raise EconomyError("the lord is no active lord of this kingdom")
+        if str(doc.get("chef_lord_id", "") or "") == str(lord.id):
+            return doc
+        if self._expedition_locked(lord, int(timestamp.timestamp())):
+            raise EconomyError("the lord is locked (marriage, exploration or FFA)")
+        if int(lord.defense_used) >= int(self._config.attacks.defenses_per_week):
+            raise EconomyError("the captain needs one AVAILABLE defence point")
+        doc["chef_lord_id"] = lord.id
+        doc["crew"] = [item for item in doc.get("crew", []) if item != lord.id]
+        kingdom.expedition = doc
+        await self._store.upsert_kingdom(kingdom.to_mongo())
+        return doc
+
+    async def toggle_expedition_chef(
+        self,
+        kingdom_id: str,
+        lord_id: str,
+        *,
+        now: datetime | None = None,
+    ) -> dict[str, Any]:
+        """Toggle the expedition CHEF (a FREE defence point is required).
+
+        The defence point is only a PREREQUISITE — enrolling as chef
+        never consumes it (Drasah: going exploring is a real risk, the
+        lord has not spent his defence).
+        """
+        timestamp = now or game_now()
+        kingdom = await self._kingdom_by_id(kingdom_id)
+        doc = dict(getattr(kingdom, "expedition", None) or {})
+        if str(doc.get("state", "")) != "boarding":
+            raise EconomyError("the expedition is not boarding")
+        lord = next(
+            (item for item in await self._kingdoms.lords() if item.id == lord_id),
+            None,
+        )
+        if lord is None or lord.left or lord.kingdom_id != kingdom_id:
+            raise EconomyError("the lord is no active lord of this kingdom")
+        if str(doc.get("chef_lord_id", "") or "") == lord.id:
+            doc["chef_lord_id"] = None  # the chef steps down — ⛵ disappears
+        else:
+            ts = int(timestamp.timestamp())
+            if self._expedition_locked(lord, ts):
+                raise EconomyError("the lord is locked (marriage, exploration or FFA)")
+            if int(lord.defense_used) >= int(self._config.attacks.defenses_per_week):
+                raise EconomyError("the chef needs one AVAILABLE defence point")
+            doc["chef_lord_id"] = lord.id
+            crew = [item for item in doc.get("crew", []) if item != lord.id]
+            doc["crew"] = crew
+        kingdom.expedition = doc
+        await self._store.upsert_kingdom(kingdom.to_mongo())
+        return doc
+
+    async def toggle_expedition_crew(
+        self,
+        kingdom_id: str,
+        lord_id: str,
+        *,
+        now: datetime | None = None,
+    ) -> dict[str, Any]:
+        """Toggle one CREW member (each lord clicks himself, −4h of travel)."""
+        timestamp = now or game_now()
+        kingdom = await self._kingdom_by_id(kingdom_id)
+        doc = dict(getattr(kingdom, "expedition", None) or {})
+        if str(doc.get("state", "")) != "boarding":
+            raise EconomyError("the expedition is not boarding")
+        lord = next(
+            (item for item in await self._kingdoms.lords() if item.id == lord_id),
+            None,
+        )
+        if lord is None or lord.left or lord.kingdom_id != kingdom_id:
+            raise EconomyError("the lord is no active lord of this kingdom")
+        crew = [item for item in doc.get("crew", []) if item != lord.id]
+        if str(doc.get("chef_lord_id", "") or "") == lord.id:
+            raise EconomyError("the expedition chef does not embark as crew")
+        if str(lord.id) in [str(item) for item in doc.get("crew", [])]:
+            pass  # leaving: already removed above
+        else:
+            if self._expedition_locked(lord, int(timestamp.timestamp())):
+                raise EconomyError("the lord is locked (marriage, exploration or FFA)")
+            crew.append(lord.id)
+        doc["crew"] = crew
+        kingdom.expedition = doc
+        await self._store.upsert_kingdom(kingdom.to_mongo())
+        return doc
+
+    async def launch_expedition(
+        self,
+        kingdom_id: str,
+        *,
+        now: datetime | None = None,
+    ) -> dict[str, Any]:
+        """Lâcher les amarres — the ONLY step that consumes the token.
+
+        Travel = 10 min (BETA drasah, exploration-beta-duree) − 50 s per
+        CREW member (the chef never cuts it), plancher 5 min. The chef
+        and every crew member are combat-locked
+        (``exploration_locked_until``) until the return — the lock is
+        the SAME one the attack/defence guards already respect.
+        """
+        timestamp = now or game_now()
+        ts = int(timestamp.timestamp())
+        kingdom = await self._kingdom_by_id(kingdom_id)
+        doc = dict(getattr(kingdom, "expedition", None) or {})
+        if str(doc.get("state", "")) != "boarding":
+            raise EconomyError("the expedition is not boarding")
+        if not doc.get("chef_lord_id"):
+            raise EconomyError("no expedition chef on board")
+        # exploration-refonte-v1 (Drasah 02/11): the captain's defence
+        # point is RE-CHECKED at the cast-off (he could have spent it
+        # during the boarding window) and stays LOCKED for the
+        # whole voyage (the exploration lock forbids attack/defence).
+        chef = next(
+            (
+                item
+                for item in await self._kingdoms.lords()
+                if str(item.id) == str(doc.get("chef_lord_id"))
+            ),
+            None,
+        )
+        if chef is None or chef.left or chef.kingdom_id != kingdom_id:
+            raise EconomyError("no expedition chef on board")
+        if self._expedition_locked(chef, ts):
+            raise EconomyError("the lord is locked (marriage, exploration or FFA)")
+        if int(chef.defense_used) >= int(self._config.attacks.defenses_per_week):
+            raise EconomyError("the chef needs one AVAILABLE defence point")
+        state = await self._attacks.technology_state(kingdom_id)
+        stock = int(state.purchases.get(EXPLORATEUR_STOCK, 0) or 0)
+        if stock <= 0 and not EXPEDITION_BETA_UNLIMITED:
+            raise EconomyError("no explorateur token in stock — buy one at the market first")
+        if not EXPEDITION_BETA_UNLIMITED:
+            state.purchases[EXPLORATEUR_STOCK] = stock - 1
+            await self._store.upsert_technology(state.to_mongo())
+        crew = [str(item) for item in doc.get("crew", [])]
+        # exploration-beta-duree: 10 minutes (BETA), each mate cuts 50 s,
+        # plancher 5 minutes.
+        seconds = max(
+            EXPEDITION_MIN_SECONDS,
+            EXPEDITION_BASE_SECONDS - EXPEDITION_PER_LORD_SECONDS * len(crew),
+        )
+        ends_at = ts + int(seconds)
+        locked = [str(doc.get("chef_lord_id", "")), *crew]
+        for lord in await self._kingdoms.lords():
+            if str(lord.id) in locked and not lord.left:
+                lord.exploration_locked_until = ends_at
+                await self._store.upsert_lord(lord.to_mongo())
+        doc["state"] = "sailing"
+        doc["ends_at"] = ends_at
+        doc["locked"] = locked
+        kingdom.expedition = doc
+        await self._store.upsert_kingdom(kingdom.to_mongo())
+        logger.info(
+            "kingdoms: %s launches its expedition (%ds, %d crew, token used)",
+            kingdom_id,
+            seconds,
+            len(crew),
+        )
+        await self._record_action(kingdom_id, EXPLORATEUR, "expédition lancée")
+        return doc
+
+    async def cancel_expedition(
+        self,
+        kingdom_id: str,
+        lord_id: str,
+        *,
+        now: datetime | None = None,
+    ) -> dict[str, Any]:
+        """exploration-refonte-v1 (Drasah 02/11): ONLY the captain may
+        cancel (🚪 Quitter le navire). Boarding: the doc clears —
+        nothing was consumed yet. Sailing: every lock clears and the
+        Explorateur token is REFUNDED to the kingdom's stock. Returns
+        ``{"kind": "boarding"|"sailing", "salon_id": int, "refunded":
+        bool, "locked": [str]}`` — the locked ids ride along so the
+        caller can lift the AT-SEA salon mask (exploration-retour-v1);
+        the salon sweeps on the caller's side.
+        """
+        kingdom = await self._kingdom_by_id(kingdom_id)
+        doc = dict(getattr(kingdom, "expedition", None) or {})
+        state = str(doc.get("state", ""))
+        if state not in ("boarding", "sailing"):
+            raise EconomyError("there is no exploration to cancel")
+        lord = next(
+            (item for item in await self._kingdoms.lords() if item.id == lord_id),
+            None,
+        )
+        if lord is None or lord.left or lord.kingdom_id != kingdom_id:
+            raise EconomyError("the lord is no active lord of this kingdom")
+        if str(doc.get("chef_lord_id", "") or "") != str(lord.id):
+            raise EconomyError("only the exploration captain may cancel")
+        salon_id = int(doc.get("salon_id", 0) or 0)
+        locked_ids = [str(item) for item in doc.get("locked", [])]
+        refunded = False
+        if state == "sailing":
+            for item in await self._kingdoms.lords():
+                if str(item.id) in locked_ids and not item.left:
+                    item.exploration_locked_until = None
+                    await self._store.upsert_lord(item.to_mongo())
+            # exploration-beta-illimite: under the beta flag nothing was
+            # consumed at the cast-off — refunding would mint a token.
+            if not EXPEDITION_BETA_UNLIMITED:
+                tech = await self._attacks.technology_state(kingdom_id)
+                tech.purchases[EXPLORATEUR_STOCK] = (
+                    int(tech.purchases.get(EXPLORATEUR_STOCK, 0) or 0) + 1
+                )
+                await self._store.upsert_technology(tech.to_mongo())
+                refunded = True
+            logger.info(
+                "kingdoms: %s cancels its exploration at sea (token refunded)",
+                kingdom_id,
+            )
+        else:
+            logger.info("kingdoms: %s cancels its exploration boarding", kingdom_id)
+        kingdom = await self._kingdom_by_id(kingdom_id)
+        kingdom.expedition = {}
+        await self._store.upsert_kingdom(kingdom.to_mongo())
+        return {
+            "kind": state,
+            "salon_id": salon_id,
+            "refunded": refunded,
+            "locked": locked_ids,
+        }
+
+    async def claim_expedition_return(
+        self,
+        kingdom_id: str,
+        lord_id: str,
+    ) -> dict[str, Any]:
+        """exploration-retour-v1 (Drasah 02/11): « 🪜 Descendre du
+        navire » — the crew VALIDATES the return. The gain was already
+        drawn and granted at the resolve (the tick) — this never draws
+        again: every lock clears, the doc empties and the salon may
+        sweep. Any ABOARD lord (captain or mate) may click — the first
+        click wins, the button dies with the salon. Returns the claimed
+        doc (chef, crew, salon_id, gain_kind, gain_value) so the caller
+        can lift the AT-SEA mask before sweeping."""
+        kingdom = await self._kingdom_by_id(kingdom_id)
+        doc = dict(getattr(kingdom, "expedition", None) or {})
+        if str(doc.get("state", "")) != "returned":
+            raise EconomyError("there is no exploration to unload")
+        lord = next(
+            (item for item in await self._kingdoms.lords() if item.id == lord_id),
+            None,
+        )
+        if lord is None or lord.left or lord.kingdom_id != kingdom_id:
+            raise EconomyError("the lord is no active lord of this kingdom")
+        aboard = [str(doc.get("chef_lord_id", "") or "")]
+        aboard += [str(item) for item in doc.get("crew", [])]
+        if str(lord.id) not in aboard:
+            raise EconomyError("only the exploration crew may unload")
+        locked = [str(item) for item in doc.get("locked", [])]
+        for item in await self._kingdoms.lords():
+            if str(item.id) in locked and not item.left:
+                item.exploration_locked_until = None
+                await self._store.upsert_lord(item.to_mongo())
+        fresh = await self._kingdom_by_id(kingdom_id)
+        fresh.expedition = {}
+        await self._store.upsert_kingdom(fresh.to_mongo())
+        logger.info("kingdoms: %s unloads its exploration return", kingdom_id)
+        return doc
+
+    async def auto_launch_due_expeditions(
+        self, *, now: datetime | None = None
+    ) -> list[tuple[KingdomModel, str, str, int]]:
+        """exploration-refonte-v1 (Drasah 02/11): the boarding
+        window — every due boarding WITH a captain launches itself.
+
+        A captain who lost his defence point (or left) cancels the
+        boarding — nothing was consumed, no refund needed — and the
+        salon sweeps. A boarding without a captain keeps waiting (the
+        window targets the crew-building phase). Returns
+        ``(kingdom, kind, value, salon_id)`` — kind ``launched`` (value
+        = ends_at) or ``cancelled`` (value = ``""``).
+        """
+        timestamp = now or game_now()
+        now_ts = int(timestamp.timestamp())
+        results: list[tuple[KingdomModel, str, str, int]] = []
+        for kingdom in await self._kingdoms.kingdoms():
+            doc = dict(getattr(kingdom, "expedition", None) or {})
+            if str(doc.get("state", "")) != "boarding":
+                continue
+            if not doc.get("chef_lord_id"):
+                continue
+            opened_at = int(doc.get("opened_at", 0) or 0)
+            if opened_at <= 0:
+                continue  # a legacy boarding without a window stamp waits
+            if opened_at + EXPEDITION_BOARDING_SECONDS > now_ts:
+                continue
+            salon_id = int(doc.get("salon_id", 0) or 0)
+            try:
+                launched = await self.launch_expedition(kingdom.id, now=timestamp)
+            except EconomyError as exc:
+                logger.warning(
+                    "kingdoms: the auto-launch of %s failed (%s) — the boarding is cancelled",
+                    kingdom.id,
+                    exc,
+                )
+                fresh = await self._kingdom_by_id(kingdom.id)
+                fresh.expedition = {}
+                await self._store.upsert_kingdom(fresh.to_mongo())
+                results.append((kingdom, "cancelled", "", salon_id))
+                continue
+            results.append(
+                (
+                    kingdom,
+                    "launched",
+                    str(int(launched.get("ends_at", 0) or 0)),
+                    salon_id,
+                )
+            )
+        return results
+
+    async def resolve_due_expeditions(
+        self, *, now: datetime | None = None
+    ) -> list[tuple[KingdomModel, str, str, int]]:
+        """Resolve every due sailing expedition (the tick's engine).
+
+        The return draws a brand-new map for the kingdom; an exhausted
+        pool pays the compensation lot instead — one civilization the
+        kingdom does not hold yet (origin ``exploration``) plus 2 ⚙️.
+        exploration-retour-v1 (Drasah 02/11): the doc flips to the
+        RETURNED state (gain stored, salon alive, locks held) — the
+        crew unloads it with « Descendre du navire » (no auto-fallback,
+        Drasah's call). Returns ``(kingdom, kind, value, salon_id)`` —
+        kind is ``map``, ``civ`` or ``tech`` (no civ left either:
+        points only).
+        """
+        timestamp = now or game_now()
+        now_ts = int(timestamp.timestamp())
+        resolved: list[tuple[KingdomModel, str, str, int]] = []
+        drawn = await self._territories.drawn_map_keys()
+        for kingdom in await self._kingdoms.kingdoms():
+            doc = dict(getattr(kingdom, "expedition", None) or {})
+            if str(doc.get("state", "")) != "sailing":
+                continue
+            ends_at = int(doc.get("ends_at", 0) or 0)
+            if ends_at <= 0 or ends_at > now_ts:
+                continue
+            salon_id = int(doc.get("salon_id", 0) or 0)
+            pool = [
+                entry.key for entry in self._config.maps if entry.key not in drawn
+            ]
+            if pool:
+                map_key = random.choice(pool)  # noqa: S311 - game draw, not crypto
+                await self._territories.draw_map_for(kingdom.id, map_key)
+                drawn.add(map_key)
+                kind, value = "map", map_key
+                logger.info(
+                    "kingdoms: the expedition of %s revealed the map %s",
+                    kingdom.id,
+                    map_key,
+                )
+            else:
+                civ_pool = [
+                    civ.key
+                    for civ in self._config.civilizations
+                    if civ.key not in (kingdom.civilizations or [])
+                ]
+                await self.grant_tech_points(kingdom.id, EXPEDITION_COMPENSATION_TECH)
+                if civ_pool:
+                    civ_key = random.choice(civ_pool)  # noqa: S311 - game draw
+                    kingdom = await self._kingdom_by_id(kingdom.id)
+                    kingdom.civilizations = [*(kingdom.civilizations or []), civ_key]
+                    kingdom.record_acquisition(civ_key, "exploration", now_ts)
+                    kind, value = "civ", civ_key
+                    logger.info(
+                        "kingdoms: the expedition of %s recruited the civ %s",
+                        kingdom.id,
+                        civ_key,
+                    )
+                else:
+                    kind, value = "tech", ""
+                    logger.info(
+                        "kingdoms: the expedition of %s paid points only", kingdom.id
+                    )
+            kingdom = await self._kingdom_by_id(kingdom.id)
+            fresh = dict(getattr(kingdom, "expedition", None) or {})
+            fresh["state"] = "returned"
+            fresh["gain_kind"] = kind
+            fresh["gain_value"] = value
+            fresh["returned_at"] = now_ts
+            kingdom.expedition = fresh
+            await self._store.upsert_kingdom(kingdom.to_mongo())
+            resolved.append((kingdom, kind, value, salon_id))
+        return resolved
+
+    # ------------------------------------------------------------------
+    # Corruption (D15/D37)
+    # ------------------------------------------------------------------
+    async def buy_corruption(
+        self,
+        kingdom_id: str,
+        territory_id: str,
+        *,
+        now: datetime | None = None,
+    ) -> TerritoryModel:
+        """Steal any territory from another kingdom (D15/D58).
+
+        The buyer takes ownership right away; the territory becomes
+        incorruptible (and unattackable) for 48 real hours, and the
+        former owner gains one tech point as compensation. A territory
+        already protected resists the corruption; the per-season
+        purchase limit applies (D58).
+        """
+        await self._check_consumable(kingdom_id, CORRUPTION)
+        timestamp = now or game_now()
+        territories = await self._territories.territories()
+        territory = next(
+            (item for item in territories if item.id == territory_id), None
+        )
+        if territory is None:
+            raise TerritoryNotFoundError("no territory with this id")
+        if territory.owner_kingdom_id == kingdom_id:
+            raise EconomyError("a kingdom cannot corrupt its own territory")
+        if territory.is_protected_at(timestamp):
+            raise TerritoryProtectedError("the territory is protected against corruption")
+        # lieu-sacree-v1: a cathedral chantier resists every adverse
+        # technology — Corruption included; a SACRED territory too.
+        if territory.sacred or territory.is_tech_protected_at(timestamp):
+            raise TerritoryProtectedError(
+                "the territory resists the corruption (Lieu Sacrée, lieu-sacree-v1)"
+            )
+        # D68: the target kingdom's daily patrol resists the steal
+        # (3h once Renforcée, marche-v2 art. 5).
+        if patrouille_active_at(
+            await self._attacks.technology_state(territory.owner_kingdom_id),
+            timestamp,
+            base_level=await self._attacks.base_ai_level(),
+        ):
+            raise TerritoryProtectedError(
+                "the target kingdom's patrol protects its territories (D68)"
+            )
+        # Volière Lâcher de faucon (voliere-v1): the Corruption is an
+        # adverse technology effect — a released victim is immune.
+        victim = next(
+            (k for k in await self._kingdoms.kingdoms() if k.id == territory.owner_kingdom_id),
+            None,
+        )
+        if victim is not None and int(
+            getattr(victim, "faucon_release_until", 0) or 0
+        ) > int(timestamp.timestamp()):
+            raise TerritoryProtectedError(
+                "the victim released the faucon — immune to technologies (voliere-v1)"
+            )
+        await self.spend_points(kingdom_id, self._cost(CORRUPTION))
+        former_owner = territory.owner_kingdom_id
+        await self._territories.transfer(territory_id, kingdom_id)
+        fresh = next(
+            (item for item in await self._territories.territories() if item.id == territory_id),
+            None,
+        )
+        if fresh is None:
+            raise TerritoryNotFoundError("the territory vanished mid-corruption")
+        fresh.protected_until = timestamp + timedelta(hours=CORRUPTION_PROTECTION_HOURS)
+        await self._store.upsert_territory(fresh.to_mongo())
+        if former_owner != kingdom_id:
+            await self.grant_tech_points(former_owner, CORRUPTION_COMPENSATION_TECH)
+        await self._count_purchase(kingdom_id, CORRUPTION)
+        logger.info(
+            "kingdoms: %s corrupted the territory %s (protected until %s)",
+            kingdom_id,
+            territory_id,
+            fresh.protected_until.isoformat(),
+        )
+        await self._record_purchase(
+            kingdom_id, CORRUPTION, f"map {fresh.map_key}", self._cost(CORRUPTION)
+        )
+        return fresh
+
+    async def buy_corruption_token(self, kingdom_id: str) -> int:
+        """Buy ONE Corruption token at the market (chambre-utiliser-v1).
+
+        Drasah 30/10 face-check: the Marché never fires the effect —
+        the purchase stocks a token, the steal happens when the King
+        uses the card from the 🏛️ Chambre des comptes. Payment first,
+        token second; the per-season limit counts the BUYS, never the
+        uses.
+        """
+        await self._check_consumable(kingdom_id, CORRUPTION)
+        await self.spend_points(kingdom_id, self._cost(CORRUPTION))
+        state = await self._attacks.technology_state(kingdom_id)
+        stock = int(state.purchases.get(CORRUPTION_STOCK, 0) or 0) + 1
+        state.purchases[CORRUPTION_STOCK] = stock
+        await self._store.upsert_technology(state.to_mongo())
+        await self._count_purchase(kingdom_id, CORRUPTION)
+        logger.info(
+            "kingdoms: %s stocks a corruption token (%d in reserve)", kingdom_id, stock
+        )
+        await self._record_purchase(
+            kingdom_id, CORRUPTION, "jeton en réserve", self._cost(CORRUPTION)
+        )
+        return stock
+
+    async def use_corruption(
+        self,
+        kingdom_id: str,
+        territory_id: str,
+        *,
+        now: datetime | None = None,
+    ) -> TerritoryModel:
+        """Spend ONE Corruption token: steal the territory (chambre-utiliser-v1).
+
+        Every guard of the Marché purchase stays (protected, Lieu
+        Sacrée, patrol, faucon); a REFUSED use never consumes the
+        token — the King keeps his card until the steal lands.
+        """
+        state = await self._attacks.technology_state(kingdom_id)
+        stock = int(state.purchases.get(CORRUPTION_STOCK, 0) or 0)
+        if stock <= 0:
+            raise EconomyError(
+                "no corruption token in stock — buy one at the market first"
+            )
+        timestamp = now or game_now()
+        territories = await self._territories.territories()
+        territory = next(
+            (item for item in territories if item.id == territory_id), None
+        )
+        if territory is None:
+            raise TerritoryNotFoundError("no territory with this id")
+        if territory.owner_kingdom_id == kingdom_id:
+            raise EconomyError("a kingdom cannot corrupt its own territory")
+        if territory.is_protected_at(timestamp):
+            raise TerritoryProtectedError("the territory is protected against corruption")
+        if territory.sacred or territory.is_tech_protected_at(timestamp):
+            raise TerritoryProtectedError(
+                "the territory resists the corruption (Lieu Sacrée, lieu-sacree-v1)"
+            )
+        if patrouille_active_at(
+            await self._attacks.technology_state(territory.owner_kingdom_id),
+            timestamp,
+            base_level=await self._attacks.base_ai_level(),
+        ):
+            raise TerritoryProtectedError(
+                "the target kingdom's patrol protects its territories (D68)"
+            )
+        victim = next(
+            (k for k in await self._kingdoms.kingdoms() if k.id == territory.owner_kingdom_id),
+            None,
+        )
+        if victim is not None and int(
+            getattr(victim, "faucon_release_until", 0) or 0
+        ) > int(timestamp.timestamp()):
+            raise TerritoryProtectedError(
+                "the victim released the faucon — immune to technologies (voliere-v1)"
+            )
+        state.purchases[CORRUPTION_STOCK] = stock - 1
+        await self._store.upsert_technology(state.to_mongo())
+        former_owner = territory.owner_kingdom_id
+        await self._territories.transfer(territory_id, kingdom_id)
+        fresh = next(
+            (item for item in await self._territories.territories() if item.id == territory_id),
+            None,
+        )
+        if fresh is None:
+            raise TerritoryNotFoundError("the territory vanished mid-corruption")
+        fresh.protected_until = timestamp + timedelta(hours=CORRUPTION_PROTECTION_HOURS)
+        await self._store.upsert_territory(fresh.to_mongo())
+        if former_owner != kingdom_id:
+            await self.grant_tech_points(former_owner, CORRUPTION_COMPENSATION_TECH)
+        logger.info(
+            "kingdoms: %s used a corruption token on %s (protected until %s, %d left)",
+            kingdom_id,
+            territory_id,
+            fresh.protected_until.isoformat(),
+            stock - 1,
+        )
+        await self._record_action(kingdom_id, CORRUPTION, f"map {fresh.map_key}")
+        return fresh
+
+    # ------------------------------------------------------------------
+    # Jeu d'armes (chambre-utiliser-v1, Drasah 30/10: token, then use)
+    # ------------------------------------------------------------------
+    async def buy_jeu_d_armes_token(self, kingdom_id: str) -> int:
+        """Buy ONE Arms-mastery token at the market (chambre-utiliser-v1).
+
+        The Marché sells the CARD; the +1 defence-AI level applies when
+        the King uses it from the Chambre des comptes. The per-season
+        limit counts the BUYS (``jeu_d_armes_bought``) — the applied
+        levels stay under ``jeu_d_armes`` (the defence bot's counter).
+        """
+        state = await self._attacks.technology_state(kingdom_id)
+        bought = int(state.purchases.get(JEU_D_ARMES_BOUGHT, 0) or 0)
+        limit = self._limit(JEU_D_ARMES)
+        if limit > 0 and bought >= limit and not bypass_guard(
+            f"economy limit jeu_d_armes of {kingdom_id} ({bought}/{limit})"
+        ):
+            raise EconomyLimitReachedError("the per-season purchase limit is reached")
+        await self.spend_points(kingdom_id, self._cost(JEU_D_ARMES))
+        state = await self._attacks.technology_state(kingdom_id)
+        stock = int(state.purchases.get(JEU_D_ARMES_STOCK, 0) or 0) + 1
+        state.purchases[JEU_D_ARMES_STOCK] = stock
+        state.purchases[JEU_D_ARMES_BOUGHT] = bought + 1
+        await self._store.upsert_technology(state.to_mongo())
+        logger.info(
+            "kingdoms: %s stocks an arms-mastery token (%d in reserve)", kingdom_id, stock
+        )
+        await self._record_purchase(
+            kingdom_id, JEU_D_ARMES, "jeton en réserve", self._cost(JEU_D_ARMES)
+        )
+        return stock
+
+    async def use_jeu_d_armes(self, kingdom_id: str, lord_id: str) -> tuple[int, bool]:
+        """Spend ONE Arms-mastery token (jeu-darmes-bonus-v1, Drasah 03/11).
+
+        Effects: +1 defence-AI level when under the cap (the token
+        still spends at the cap — only the declaration rush applies),
+        and the USING LORD's next normal (or planned) attack
+        declaration rides with -1h (6h -> 5h in prod). The rush is NOT
+        cumulable: a lord already holding one keeps his token. Returns
+        (AI level after, whether the level actually rose).
+        """
+        state = await self._attacks.technology_state(kingdom_id)
+        stock = int(state.purchases.get(JEU_D_ARMES_STOCK, 0) or 0)
+        if stock <= 0:
+            raise EconomyError(
+                "no arms-mastery token in stock — buy one at the market first"
+            )
+        rush_key = f"{JEU_D_ARMES_RUSH_PREFIX}{lord_id}"
+        if int(state.purchases.get(rush_key, 0) or 0) > 0:
+            raise EconomyError(
+                "arms-mastery rush already active — it applies to the lord's next attack declaration"
+            )
+        level = int(state.purchases.get(JEU_D_ARMES, 0) or 0)
+        leveled = level < AI_LEVEL_CAP
+        state.purchases[JEU_D_ARMES_STOCK] = stock - 1
+        if leveled:
+            state.purchases[JEU_D_ARMES] = level + 1
+        state.purchases[rush_key] = 1
+        await self._store.upsert_technology(state.to_mongo())
+        logger.info(
+            "kingdoms: %s uses an arms-mastery token (AI level %d/%d, %d left, rush %s)",
+            kingdom_id,
+            level + 1 if leveled else level,
+            AI_LEVEL_CAP,
+            stock - 1,
+            lord_id,
+        )
+        await self._record_action(
+            kingdom_id,
+            JEU_D_ARMES,
+            f"IA {min(level + 1, AI_LEVEL_CAP)}/{AI_LEVEL_CAP}"
+            if leveled
+            else f"rush -1h ({lord_id})",
+        )
+        return (level + 1 if leveled else level, leveled)
+
+    # ------------------------------------------------------------------
+    # Garde Royale (remparts-v2, Drasah 14/10: guards in stock)
+    # ------------------------------------------------------------------
+    async def buy_royal_guard(self, kingdom_id: str, *, now: datetime | None = None) -> int:
+        """Buy ONE royal-guard token at the market (remparts-v2).
+
+        Drasah's ruling breaks the Check 43 single-guard rule: a
+        kingdom may hold SEVERAL guards at once, with NO hard limit
+        (« ça coûte cher quand même » — 2 ⚙️ each). The market sells
+        the token; the King POSSES it from the 🧱 Remparts salon
+        (``place_royal_guard``) on the map of his choice.
+        """
+        del now  # the token carries no expiry — only its placement does
+        await self.spend_points(kingdom_id, self._cost(GARDE_ROYALE))
+        state = await self._attacks.technology_state(kingdom_id)
+        stock = int(state.purchases.get(GARDE_ROYALE_STOCK, 0) or 0) + 1
+        state.purchases[GARDE_ROYALE_STOCK] = stock
+        await self._store.upsert_technology(state.to_mongo())
+        logger.info("kingdoms: %s stocks a royal guard (%d in reserve)", kingdom_id, stock)
+        await self._record_purchase(
+            kingdom_id, GARDE_ROYALE, "en réserve", self._cost(GARDE_ROYALE)
+        )
+        return stock
+
+    async def place_royal_guard(
+        self,
+        kingdom_id: str,
+        territory_id: str,
+        *,
+        now: datetime | None = None,
+    ) -> TerritoryModel:
+        """Spend one guard token: shield ONE owned map for 12 hours.
+
+        remparts-v2: several guards may fly simultaneously (one per
+        map — a map already shielded takes no second guard, no
+        extension), each for its own 12h window. Not retroactive:
+        attacks declared before the placement stay valid.
+        """
+        timestamp = now or game_now()
+        territory = await self._owned_territory(kingdom_id, territory_id)
+        # paroisse-v1 (Drasah 06/11): no royal guard on a Lieu Sacrée —
+        # neither a chantier territory nor a SACRED one takes a guard.
+        if territory.sacred or territory.is_chantier_at(timestamp):
+            raise EconomyError(
+                "the territory carries a Lieu Sacrée — no royal guard on it"
+            )
+        state = await self._attacks.technology_state(kingdom_id)
+        stock = int(state.purchases.get(GARDE_ROYALE_STOCK, 0) or 0)
+        if stock <= 0:
+            raise EconomyError(
+                "no royal guard in stock — buy one at the market first (remparts-v2)"
+            )
+        guard_key = f"{GUARD_TERRITORY_PREFIX}{territory.id}"
+        if int(state.purchases.get(guard_key, 0) or 0) > int(timestamp.timestamp()):
+            raise GuardAlreadyActiveError("a royal guard already shields this territory")
+        # garde-royale-fiche-v2 (Drasah 04/11): a declared attack cannot
+        # be cancelled — no guard on a territory under attack. Engine
+        # backstop (the wizard already refuses with 💥); the getter is
+        # optional because the test stands-ins expose no attacks().
+        attacks_all = getattr(self._attacks, "attacks", None)
+        if attacks_all is not None:
+            for attack in await attacks_all():
+                if str(getattr(attack, "territory_id", "")) == str(territory.id) and not getattr(
+                    attack, "is_over", False
+                ):
+                    raise EconomyError(
+                        "the territory is under attack — the guard cannot be placed"
+                    )
+        state.purchases[GARDE_ROYALE_STOCK] = stock - 1
+        await self._record_action(
+            kingdom_id, GARDE_ROYALE, f"map {territory.map_key} placé"
+        )
+        territory.protected_until = timestamp + timedelta(hours=ROYAL_GUARD_HOURS)
+        state.purchases[guard_key] = int(territory.protected_until.timestamp())
+        await self._store.upsert_technology(state.to_mongo())
+        await self._store.upsert_territory(territory.to_mongo())
+        logger.info(
+            "kingdoms: %s places a royal guard on %s until %s (%d left in stock)",
+            kingdom_id,
+            territory_id,
+            territory.protected_until.isoformat(),
+            stock - 1,
+        )
+        return territory
+
+    # ------------------------------------------------------------------
+    # Patrouille (remparts-v2, Drasah 14/10: slots unlocked, then placed)
+    # ------------------------------------------------------------------
+    async def buy_patrouille_slot(self, kingdom_id: str, slot_no: int) -> int:
+        """Unlock ONE patrol slot at the market (slot 1, then slot 2).
+
+        remparts-v2: the patrol is a SKILL, not a consumable — no more
+        per-season purchase limit. The market sells the slot UNLOCK
+        (2 ⚙️ each, slot 1 before slot 2); the King POSSES the daily
+        window from the 🧱 Remparts salon (``place_patrouille``).
+        """
+        if slot_no not in (1, 2):
+            raise EconomyError("the patrol slot number must be 1 or 2")
+        state = await self._attacks.technology_state(kingdom_id)
+        unlock_key = f"{PATROUILLE_UNLOCK_PREFIX}{slot_no}"
+        if unlock_key in state.purchases:
+            raise EconomyError(f"the patrol slot {slot_no} is already unlocked")
+        if slot_no == 2 and PATROUILLE_UNLOCK_PREFIX + "1" not in state.purchases:
+            raise EconomyError("the patrol slot 1 must be unlocked first")
+        await self.spend_points(kingdom_id, self._cost(PATROUILLE))
+        state.purchases[unlock_key] = 1
+        await self._store.upsert_technology(state.to_mongo())
+        logger.info("kingdoms: %s unlocks the patrol slot %d", kingdom_id, slot_no)
+        await self._record_purchase(
+            kingdom_id, PATROUILLE, f"slot {slot_no} débloqué", self._cost(PATROUILLE)
+        )
+        return slot_no
+
+    async def place_patrouille(
+        self,
+        kingdom_id: str,
+        slot_no: int,
+        slot_start: int,
+        *,
+        now: datetime | None = None,
+    ) -> int:
+        """Place (or redefine) one unlocked patrol slot's daily window.
+
+        The window is a 2h tranche applied EVERY day and stays fixed
+        for the whole cycle; redefinition is possible ONLY during the
+        Jour du Seigneur (Sunday 23:30 → Monday 10:00, Paris). The
+        FIRST placement of a freshly unlocked slot is free of that
+        constraint — an empty slot has nothing to redefine.
+        """
+        if slot_no not in (1, 2):
+            raise EconomyError("the patrol slot number must be 1 or 2")
+        if slot_start not in range(0, 24, PATROUILLE_HOURS):
+            raise EconomyError("the patrol slot must start on the 2h grid (0, 2, … 22)")
+        timestamp = now or game_now()
+        state = await self._attacks.technology_state(kingdom_id)
+        unlock_key = f"{PATROUILLE_UNLOCK_PREFIX}{slot_no}"
+        if unlock_key not in state.purchases:
+            raise EconomyError(f"the patrol slot {slot_no} is not unlocked (market first)")
+        slot_key = PATROUILLE_SLOT_KEYS[slot_no - 1]
+        if slot_key in state.purchases:
+            season = await self._kingdoms.current_season()
+            if season is None:
+                raise EconomyError("no season is running")
+            if active_lords_day_window(self._config, season, timestamp) is None:
+                raise EconomyError(
+                    "the patrol window is fixed — it changes only on the Lord's Day"
+                )
+        other_slots = [
+            value
+            for key, value in state.purchases.items()
+            if key in PATROUILLE_SLOT_KEYS and key != slot_key
+        ]
+        if slot_start in other_slots:
+            raise EconomyError("another patrol slot already covers this tranche")
+        state.purchases[slot_key] = slot_start
+        await self._store.upsert_technology(state.to_mongo())
+        logger.info(
+            "kingdoms: %s places the patrol slot %d at %02dh", kingdom_id, slot_no, slot_start
+        )
+        return slot_start
+
+    # ------------------------------------------------------------------
+    # Internals
+    # ------------------------------------------------------------------
+    # ------------------------------------------------------------------
+    # Chambre des comptes (marche-v2, 2026-10-13)
+    # ------------------------------------------------------------------
+    async def _record_purchase(self, kingdom_id: str, item: str, detail: str, cost: int) -> None:
+        """Append one dated entry to the kingdom's purchase ledger.
+
+        Best-effort: a ledger failure never breaks a successful
+        purchase — the registry is the consultative Chambre des
+        comptes history, not an accounting invariant.
+        """
+        try:
+            kingdom = await self._kingdom_by_id(kingdom_id)
+            registry = list(getattr(kingdom, "market_registry", None) or [])
+            registry.append(
+                {"item": str(item), "detail": str(detail)[:100], "cost": int(cost), "at": int(time.time())}
+            )
+            kingdom.market_registry = registry[-50:]
+            await self._store.upsert_kingdom(kingdom.to_mongo())
+        except Exception:
+            logger.warning("kingdoms: ledger write failed for %s", kingdom_id, exc_info=True)
+
+    async def _record_action(self, kingdom_id: str, item: str, detail: str) -> None:
+        """comptes-rows-v1 (Drasah 01/11): append one dated USE entry to
+        the kingdom's action ledger (the ⚔️ Historique actions view).
+
+        Best-effort: a ledger failure never breaks a successful use —
+        the registry is consultative history, never an invariant.
+        """
+        try:
+            kingdom = await self._kingdom_by_id(kingdom_id)
+            actions = list(getattr(kingdom, "market_actions", None) or [])
+            actions.append(
+                {"item": str(item), "detail": str(detail)[:100], "at": int(time.time())}
+            )
+            kingdom.market_actions = actions[-50:]
+            await self._store.upsert_kingdom(kingdom.to_mongo())
+        except Exception:
+            logger.warning("kingdoms: action ledger write failed for %s", kingdom_id, exc_info=True)
+
+    def _cost(self, action: str) -> int:
+        """Return the configured cost of one special action (D9)."""
+        return int(getattr(self._config.technologies, action))
+
+    def _limit(self, action: str) -> int:
+        """Return the configured per-season purchase limit (D36)."""
+        return int(self._config.technologies.limits.get(action, 0))
+
+    async def _check_consumable(self, kingdom_id: str, action: str) -> None:
+        """Refuse a consumable purchase beyond its per-season limit (D36/D48)."""
+        bought = (await self._attacks.technology_state(kingdom_id)).purchases.get(action, 0)
+        limit = self._limit(action)
+        if limit > 0 and bought >= limit and not bypass_guard(
+            f"economy limit {action} of {kingdom_id} ({bought}/{limit})"
+        ):
+            raise EconomyLimitReachedError("the per-season purchase limit is reached")
+
+    async def _count_purchase(self, kingdom_id: str, action: str) -> None:
+        """Record one purchase in the kingdom's technology counters."""
+        state = await self._attacks.technology_state(kingdom_id)
+        state.purchases[action] = state.purchases.get(action, 0) + 1
+        await self._store.upsert_technology(state.to_mongo())
+
+    async def _owned_territory(self, kingdom_id: str, territory_id: str) -> TerritoryModel:
+        """Resolve a territory and require the kingdom to own it."""
+        territory = next(
+            (item for item in await self._territories.territories() if item.id == territory_id),
+            None,
+        )
+        if territory is None:
+            raise TerritoryNotFoundError("no territory with this id")
+        if territory.owner_kingdom_id != kingdom_id:
+            raise EconomyError("the kingdom does not own this territory")
+        return territory
+
+    async def _kingdom_by_id(self, kingdom_id: str) -> KingdomModel:
+        """Resolve a kingdom by id."""
+        kingdom = next(
+            (item for item in await self._kingdoms.kingdoms() if item.id == kingdom_id),
+            None,
+        )
+        if kingdom is None:
+            raise KingdomNotFoundError("no kingdom with this id")
+        return kingdom
+
+    async def _require_season(self) -> SeasonState:
+        """Return the running season or raise the no-season error."""
+        season = await self._kingdoms.current_season()
+        if season is None:
+            raise NoSeasonError("no season is running")
+        return season
+

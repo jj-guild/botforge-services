@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Python: botforge.discord.dynamic_channels</title>
+</head><body>
+
+<table class="heading">
+<tr class="heading-text decor">
+<td class="title">&nbsp;<br><strong class="title"><a href="botforge.html" class="white">botforge</a>.<a href="botforge.discord.html" class="white">discord</a>.dynamic_channels</strong></td>
+<td class="extra"><a href=".">index</a><br><a href="file:SOURCE_ROOT/discord/dynamic_channels.py">SOURCE_ROOT/discord/dynamic_channels.py</a></td></tr></table>
+    <p><span class="code">discord.py&nbsp;platform&nbsp;seam&nbsp;for&nbsp;dynamic&nbsp;channels&nbsp;(#408).<br>
+&nbsp;<br>
+The&nbsp;gameplay&nbsp;channels&nbsp;—&nbsp;attack&nbsp;salons,&nbsp;battle&nbsp;voice&nbsp;rooms,&nbsp;the&nbsp;FFA<br>
+salon&nbsp;—&nbsp;are&nbsp;EPHEMERAL&nbsp;structure:&nbsp;provisioned&nbsp;on&nbsp;demand,&nbsp;purged&nbsp;when<br>
+the&nbsp;moment&nbsp;passes.&nbsp;The&nbsp;static&nbsp;structure&nbsp;already&nbsp;lives&nbsp;in&nbsp;declared<br>
+data&nbsp;(mod.yaml,&nbsp;seams&nbsp;#264);&nbsp;this&nbsp;seam&nbsp;gives&nbsp;the&nbsp;dynamic&nbsp;half&nbsp;the<br>
+same&nbsp;treatment:&nbsp;overwrites&nbsp;as&nbsp;DATA&nbsp;(#221),&nbsp;the&nbsp;Discord&nbsp;objects&nbsp;built<br>
+here&nbsp;and&nbsp;only&nbsp;here.<br>
+&nbsp;<br>
+Overwrite&nbsp;keys&nbsp;are&nbsp;logical&nbsp;targets&nbsp;resolved&nbsp;at&nbsp;creation&nbsp;time:<br>
+``@everyone``,&nbsp;``@me``&nbsp;(the&nbsp;bot&nbsp;itself&nbsp;—&nbsp;the&nbsp;lesson&nbsp;of&nbsp;the&nbsp;channel&nbsp;a<br>
+bot&nbsp;locked&nbsp;itself&nbsp;out&nbsp;of),&nbsp;or&nbsp;a&nbsp;role&nbsp;NAME.&nbsp;A&nbsp;role&nbsp;that&nbsp;no&nbsp;longer<br>
+exists&nbsp;is&nbsp;skipped&nbsp;with&nbsp;a&nbsp;warning:&nbsp;a&nbsp;missing&nbsp;role&nbsp;must&nbsp;not&nbsp;abort&nbsp;the<br>
+provisioning&nbsp;of&nbsp;the&nbsp;channel&nbsp;the&nbsp;game&nbsp;needs.</span></p>
+<p>
+<table class="section">
+<tr class="decor pkg-content-decor heading-text">
+<td class="section-title" colspan=3>&nbsp;<br><strong class="bigsection">Modules</strong></td></tr>
+    
+<tr><td class="decor pkg-content-decor"><span class="code">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span></td><td>&nbsp;</td>
+<td class="singlecolumn"><table><tr><td class="multicolumn"><a href="discord.html">discord</a><br>
+</td><td class="multicolumn"><a href="logging.html">logging</a><br>
+</td><td class="multicolumn"></td><td class="multicolumn"></td></tr></table></td></tr></table><p>
+<table class="section">
+<tr class="decor index-decor heading-text">
+<td class="section-title" colspan=3>&nbsp;<br><strong class="bigsection">Classes</strong></td></tr>
+    
+<tr><td class="decor index-decor"><span class="code">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span></td><td>&nbsp;</td>
+<td class="singlecolumn"><dl>
+<dt class="heading-text"><a href="builtins.html#object">builtins.object</a>
+</dt><dd>
+<dl>
+<dt class="heading-text"><a href="botforge.discord.dynamic_channels.html#DiscordDynamicChannelsPlatform">DiscordDynamicChannelsPlatform</a>
+</dt></dl>
+</dd>
+</dl>
+ <p>
+<table class="section">
+<tr class="decor title-decor heading-text">
+<td class="section-title" colspan=3>&nbsp;<br><a name="DiscordDynamicChannelsPlatform">class <strong>DiscordDynamicChannelsPlatform</strong></a>(<a href="builtins.html#object">builtins.object</a>)</td></tr>
+    
+<tr><td class="decor title-decor" rowspan=2><span class="code">&nbsp;&nbsp;&nbsp;</span></td>
+<td class="decor title-decor" colspan=2><span class="code"><a href="#DiscordDynamicChannelsPlatform">DiscordDynamicChannelsPlatform</a>(bot:&nbsp;'discord.Client')&nbsp;-&amp;gt;&nbsp;'None'<br>
+&nbsp;<br>
+discord.py&nbsp;implementation&nbsp;of&nbsp;the&nbsp;dynamic-channel&nbsp;seam&nbsp;(create/delete).<br>&nbsp;</span></td></tr>
+<tr><td>&nbsp;</td>
+<td class="singlecolumn">Methods defined here:<br>
+<dl><dt><a name="DiscordDynamicChannelsPlatform-__init__"><strong>__init__</strong></a>(self, bot: 'discord.Client') -&gt; 'None'</dt><dd><span class="code">Keep&nbsp;a&nbsp;client&nbsp;reference&nbsp;for&nbsp;guild&nbsp;and&nbsp;channel&nbsp;lookups.</span></dd></dl>
+
+<dl><dt>async <a name="DiscordDynamicChannelsPlatform-create_channel"><strong>create_channel</strong></a>(self, guild_id: 'str', name: 'str', category_id: 'str | None' = None, kind: 'str' = 'text', overwrites: 'Mapping[str, Mapping[str, bool]] | None' = None, position: 'int | None' = None, options: 'Mapping[str, Any] | None' = None) -&gt; 'discord.abc.GuildChannel'</dt><dd><span class="code">Create&nbsp;the&nbsp;text&nbsp;or&nbsp;voice&nbsp;channel&nbsp;—&nbsp;raises&nbsp;when&nbsp;the&nbsp;guild&nbsp;is&nbsp;unreachable.</span></dd></dl>
+
+<dl><dt>async <a name="DiscordDynamicChannelsPlatform-delete_channel"><strong>delete_channel</strong></a>(self, channel_id: 'str') -&gt; 'None'</dt><dd><span class="code">Delete&nbsp;the&nbsp;channel&nbsp;—&nbsp;best-effort,&nbsp;a&nbsp;miss&nbsp;is&nbsp;never&nbsp;an&nbsp;error.</span></dd></dl>
+
+<hr>
+Data descriptors defined here:<br>
+<dl><dt><strong>__dict__</strong></dt>
+<dd><span class="code">dictionary&nbsp;for&nbsp;instance&nbsp;variables</span></dd>
+</dl>
+<dl><dt><strong>__weakref__</strong></dt>
+<dd><span class="code">list&nbsp;of&nbsp;weak&nbsp;references&nbsp;to&nbsp;the&nbsp;object</span></dd>
+</dl>
+</td></tr></table></td></tr></table><p>
+<table class="section">
+<tr class="decor data-decor heading-text">
+<td class="section-title" colspan=3>&nbsp;<br><strong class="bigsection">Data</strong></td></tr>
+    
+<tr><td class="decor data-decor"><span class="code">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span></td><td>&nbsp;</td>
+<td class="singlecolumn"><strong>BOT_KEY</strong> = '@me'<br>
+<strong>EVERYONE_KEY</strong> = '@everyone'<br>
+<strong>logger</strong> = &lt;Logger botforge.discord.dynamic_channels (INFO)&gt;</td></tr></table>
+</body></html>

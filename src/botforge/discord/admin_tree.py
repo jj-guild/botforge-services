@@ -178,6 +178,22 @@ async def _ensure_scope(bot: Any, guild_id: str, scope: str) -> str:  # noqa: C9
     from botforge.discord.scope_surfaces import run_scope_syncs
 
     synced_posts = await run_scope_syncs(guild_id, bot, ",".join(scopes))
+    # sidebar-contract-v2 (Drasah 24/11) : the mid-run bottom sinks depend
+    # on each category's CREATION order, so a repair can leave the tail
+    # half-asserted (the live incident : « Kingdom et games/aoe2 ne
+    # redescendent jamais »). The FINAL assertion is the contract — one
+    # repair click re-asserts the whole declared tail, plumbing included.
+    from botforge.discord.ui.panels_provisioning import enforce_bottom_categories
+
+    try:
+        bottom_moved = await enforce_bottom_categories(bot)
+    except Exception:
+        logger.warning(
+            "ADMIN TREE: the bottom tail assert failed (guild %s)", guild_id, exc_info=True
+        )
+        bottom_moved = 0
+    if bottom_moved:
+        lines.append(f"\n\U0001F5D3\uFE0F Dossiers techniques repositionn\u00e9s : {bottom_moved}")
     lines.append(f"\n\U0001f4cc Vues \u00e9pingl\u00e9es v\u00e9rifi\u00e9es/recr\u00e9\u00e9es : {pins_ok}")
     lines.append(f"\U0001F465 R\u00f4les v\u00e9rifi\u00e9s/cr\u00e9\u00e9s : {roles_ok}")
     lines.append(f"\U0001f4dc Posts de forum v\u00e9rifi\u00e9s/recr\u00e9\u00e9s : {synced_posts}")

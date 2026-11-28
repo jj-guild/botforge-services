@@ -1,4 +1,4 @@
-"""Kingdoms mod season configuration.
+"""Kingdom mod season configuration.
 
 Season configuration is **data**: every tunable of reference §27 lives in
 ``conf/season.yaml`` (the mod's conf dir) (or the settings section of the mod
@@ -472,7 +472,11 @@ class KingdomSeasonConfig(BaseModel):
 
     model_config = ConfigDict(strict=True)
 
-    weeks: int = Field(default=4, ge=1)
+    # machine-temps-v4 (Drasah 20/11): the official season lasts
+    # THREE weeks (the calibrage ruling) — the reference's « 4 » was a
+    # stale design value. Data: the verdict slot math (verdict_slot)
+    # reads this field, never a hardcoded count.
+    weeks: int = Field(default=3, ge=1)
     kingdoms_count: int = Field(default=2, ge=1)
     lords_per_kingdom: int = Field(default=4, ge=1)
     territories_per_kingdom: int = Field(default=5, ge=0)

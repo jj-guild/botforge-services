@@ -53,17 +53,6 @@ def test_home_opens_the_four_sections() -> None:
     assert targets == {"panel:profile", "menu:games:home", "menu:mods:home", "menu:admin"}
 
 
-def test_the_game_home_opens_with_the_profile_button() -> None:
-    """A game's home menu opens with the generic Profile button, before the
-    game's own panels (#409); the admin flip still closes the row."""
-    aoe2_home = get_view("menu:games:aoe2")
-    assert aoe2_home is not None
-    assert aoe2_home.buttons[0].target == "panel:profile"
-    assert aoe2_home.buttons[0].label_key == "ui.homes.btn_profile"
-    assert aoe2_home.buttons[-1].target == "menu:game:aoe2:admin"
-    assert aoe2_home.buttons[-1].admin
-
-
 def test_admin_buttons_carry_the_padlock() -> None:
     for decl in registered_views():
         for button in decl.buttons:
@@ -117,7 +106,7 @@ async def test_a_mod_declares_its_own_views(tmp_path) -> None:
 
     (tmp_path / "views.yaml").write_text(
         yaml.safe_dump(
-            {"views": {"menu:home": {"kind": "menu", "buttons": [{"target": "menu:mymod:home", "label": "x"}]}}}
+            {"views": {"menu:home": {"kind": "menu", "buttons": [{"target": "menu:mod:mymod:home", "label": "x"}]}}}
         ),
         encoding="utf-8",
     )
@@ -127,15 +116,91 @@ async def test_a_mod_declares_its_own_views(tmp_path) -> None:
         yaml.safe_dump({"id": "mymod", "enabled": True, "seasonal": False}), encoding="utf-8"
     )
     (mods / "mymod.views.yaml").write_text(
-        yaml.safe_dump({"views": {"menu:mymod:home": {"kind": "menu", "buttons": []}}}), encoding="utf-8"
+        yaml.safe_dump({"views": {"menu:mod:mymod:home": {"kind": "menu", "buttons": []}}}), encoding="utf-8"
     )
 
     clear_registry()
     from botforge.discord.views_declared import declare_views_from_config
 
     declare_views_from_config(tmp_path)
-    assert get_view("menu:mymod:home") is not None, "the mod's view merged into the registry"
+    assert get_view("menu:mod:mymod:home") is not None, "the mod's view merged into the registry"
     assert not validate_registry(), "the cross-references validate both ways"
+
+
+def test_a_surface_anchor_is_declared_and_never_navigates(tmp_path) -> None:
+    """A ``kind: surface`` view anchors feedback without buttons (#381).
+
+    A mod's one-shot ephemeral surfaces declare their id so every
+    footer names a real anchor; a surface that carried a button would
+    be a menu in disguise — the config loader must refuse it.
+    """
+    import yaml
+
+    (tmp_path / "views.yaml").write_text(
+        yaml.safe_dump({"views": {"surface:mymod:window": {"kind": "surface"}}}),
+        encoding="utf-8",
+    )
+
+    clear_registry()
+    from botforge.discord.views_declared import declare_views_from_config
+
+    declare_views_from_config(tmp_path)
+    decl = get_view("surface:mymod:window")
+    assert decl is not None, "the surface anchor merged into the registry"
+    assert decl.kind == "surface" and not decl.buttons, "a surface never navigates"
+    assert not validate_registry(), "an anchor adds no drift"
+
+    (tmp_path / "views.yaml").write_text(
+        yaml.safe_dump(
+            {
+                "views": {
+                    "surface:mymod:buttoned": {
+                        "kind": "surface",
+                        "buttons": [{"target": "panel:profile", "label": "x"}],
+                    }
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+    clear_registry()
+    with pytest.raises(ValueError, match="never carries buttons"):
+        declare_views_from_config(tmp_path)
+
+
+def test_a_modular_mod_declares_its_views_next_to_its_mod_yaml(tmp_path, monkeypatch) -> None:
+    """A §7 modular mod's views ride its own ``conf/`` directory.
+
+    The kingdom mod ships ``modules/mods/<mod>/conf/views.yaml`` next
+    to its declaration — the loader must discover it through the
+    modular layout (botforge#179/#221), not only the legacy
+    ``config/mods/<mod>.views.yaml`` sidecar.
+    """
+    import yaml
+
+    from botforge.core.services import mod_layout
+
+    conf = tmp_path / "modules" / "mods" / "kingdom" / "conf"
+    conf.mkdir(parents=True)
+    (conf / "mod.yaml").write_text(
+        yaml.safe_dump({"id": "kingdom", "enabled": True, "seasonal": False}), encoding="utf-8"
+    )
+    (conf / "views.yaml").write_text(
+        yaml.safe_dump({"views": {"panel:mod:kingdom:status": {"kind": "surface"}}}),
+        encoding="utf-8",
+    )
+    (tmp_path / "views.yaml").write_text(yaml.safe_dump({"views": {}}), encoding="utf-8")
+    (tmp_path / "pyproject.toml").write_text("[project]\n", encoding="utf-8")
+    monkeypatch.setattr(mod_layout, "default_repo_root", lambda: tmp_path)
+
+    clear_registry()
+    from botforge.discord.views_declared import declare_views_from_config
+
+    declare_views_from_config(tmp_path)
+    assert get_view("panel:mod:kingdom:status") is not None, (
+        "the modular mod's conf/views.yaml merged into the registry"
+    )
+    assert not validate_registry(), "a declared surface anchor adds no drift"
 
 
 @pytest.mark.asyncio
@@ -199,6 +264,35 @@ async def test_open_declared_view_answers_an_unwired_menu() -> None:
     unknown = _Inter()
     await open_declared_view(unknown, "menu:not:declared")  # type: ignore[arg-type]
     assert unknown.response.sent_message, "an undeclared id answers unknown_view"
+
+
+@pytest.mark.asyncio
+async def test_an_unwired_surface_answers_not_configured_never_raw_keys() -> None:
+    """A declared surface is always wired (wire_view): unwired, the router
+    answers not_configured — never a bare menu rendering raw i18n keys."""
+    from botforge.discord.views_registry import ViewDecl, register_view
+    from botforge.discord.views_routing import open_declared_view
+
+    register_view(ViewDecl(id="surface:mod:ghost:console", kind="surface"))
+
+    class _Response:
+        def __init__(self) -> None:
+            self.sent_message = False
+
+        async def defer(self, **kwargs: object) -> None:
+            raise AssertionError("a surface must not defer into the menu builder")
+
+        async def send_message(self, *args: object, **kwargs: object) -> None:
+            self.sent_message = True
+
+    class _Inter:
+        guild_id = 42
+        client = None
+        response = _Response()
+
+    inter = _Inter()
+    await open_declared_view(inter, "surface:mod:ghost:console")  # type: ignore[arg-type]
+    assert inter.response.sent_message, "an unwired surface answers not_configured"
 
 
 def test_admin_menus_carry_a_scope_notice() -> None:
