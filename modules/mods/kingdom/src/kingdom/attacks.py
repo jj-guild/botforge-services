@@ -2437,16 +2437,16 @@ class AttackService:
             pickban.setdefault("defender_sabotages", [])
             if attack.ai_defender:
                 # battle-ai-rdv-v1 (Drasah 22/10): the AI never bans but
-                # picks 3 RANDOM civilizations from its kingdom's han                # (it must survive the attacker's sabotage techno).
+                # picks 3 RANDOM civilizations from its kingdom's hand
+                # (it must survive the attacker's sabotage techno).
                 # ai-timing-align-v1 (Drasah 28/11: « les délais VS humain
                 # ou IA sont IDENTIQUES »): the validation is INSTANT —
                 # the former 30-90 s humanised think-time is retired;
                 # the persisted timestamp keeps the replay-safe pattern
                 # (a restart never doubles the flip) and the tick resolves
                 # it on the same pass, like a fast human defender.
-.
-                pickban["defender_picks"] = _random_picks(await self._side_hand(attack.defender_kingdom_id)                pickban["ai_validate_at"] = int(timestamp.timestamp())
-)
+                pickban["defender_picks"] = _random_picks(await self._side_hand(attack.defender_kingdom_id))
+                pickban["ai_validate_at"] = int(timestamp.timestamp())
             attack.pickban = pickban
             await self._store.upsert_attack(attack.to_mongo())
             due.append(attack)
@@ -2454,13 +2454,14 @@ class AttackService:
 
 
 
-    async def ai_draft_due(self, *, now: datetime | None = None) -> list[AttackModel]        """Play the bot-AI's draft validation (ai-timing-align-v1).
-.        Drasah 28/11 (« les délais VS humain ou IA sont IDENTIQUES »):
+    async def ai_draft_due(self, *, now: datetime | None = None) -> list[AttackModel]:
+        """Play the bot-AI's draft validation (ai-timing-align-v1).
+
+        Drasah 28/11 (« les délais VS humain ou IA sont IDENTIQUES »):
         the AI validates its draft AT ONCE — ``ai_validate_at`` equals
         the draft's flip moment and the timestamp stays PERSISTED so
         the tick replays it safely (a restart never loses nor doubles
         the flip). When both sides validated the pick & ban resolves
-s
         exactly like the human flow; the panel tick then reveals the
         civs in the attacker's DM and the meeting opens through the
         normal RDV path.
@@ -3398,17 +3399,17 @@ s
             ready.append(player_id)
             score["ready"] = ready
         if not score.get("all_ready") and set(ready) >= set(expected_score_players(attack)):
-            if attack.ai_d                # ai-timing-align-v1 (Drasah 28/11: « les délais VS
+            if attack.ai_defender:
+                # ai-timing-align-v1 (Drasah 28/11: « les délais VS
                 # humain ou IA sont IDENTIQUES »): the AI confirms AT
                 # ONCE — the former 30-90 s footprint is retired. The
                 # timestamp stays PERSISTED: the tick replays it
                 # safely, a restart never loses it. Idempotent — a
                 # re-click never re-arms.
-re-arms.
-                if not score.get("ai_rea                    score["ai_ready_at"] = int(timestamp.timestamp())
-stamp())
-                    logg                        "kingdoms: %s is Prêt on %s — the AI confirms at once",
-hortly",
+                if not score.get("ai_ready_at"):
+                    score["ai_ready_at"] = int(timestamp.timestamp())
+                    logger.info(
+                        "kingdoms: %s is Prêt on %s — the AI confirms at once",
                         player_id,
                         attack.map_key,
                     )
@@ -3424,11 +3425,12 @@ hortly",
 
 
 
-    async def ai_ready_due(self, *, now: datetime | None = None) -> list[Attac        """Play the bot-AI's Prêt confirmation (ai-timing-align-v1).
-r        Drasah 28/11 (« les délais VS humain ou IA sont IDENTIQUES »):
+    async def ai_ready_due(self, *, now: datetime | None = None) -> list[AttackModel]:
+        """Play the bot-AI's Prêt confirmation (ai-timing-align-v1).
+
+        Drasah 28/11 (« les délais VS humain ou IA sont IDENTIQUES »):
         once the attacker clicked Prêt, the AI confirms AT ONCE — the
         stamp equals the click and the next tick flips the
-lips the
         ``all_ready`` flag, the panel then refreshes the scoreboard
         (footer + 🏆) and creates the match event like the human flow.
         """
@@ -3464,8 +3466,8 @@ lips the
         """Return the nearest upcoming player-facing phase deadline (attack-phases-tick-v1).
 
         Drasah 22/10: the phases are driven by the scheduler tick (5
-        minutes stock) — a T-15 reveal, the meeting-time AI fl        AI's at-once « confirmation » could each land up to 5 minutes
-5 minutes
+        minutes stock) — a T-15 reveal, the meeting-time AI flip or the
+        AI's at-once « confirmation » could each land up to 5 minutes
         late. The loop asks this probe for the NEXT deadline it must
         wake up for, then sleeps exactly that long (bounded by its stock
         cadence): the timers are respected to the second instead of the
@@ -3473,8 +3475,8 @@ lips the
 
         The deadlines tracked are the player-facing ones — the reveal
         cutoff (T-15), the meeting time T (the AI flip / the
-        anti-blocking default), the AI's ``ai_validate        ``ai_ready_at`` (at-once confirmation) and the T+5 no-show line
-show line
+        anti-blocking default), the AI's ``ai_validate_at`` and
+        ``ai_ready_at`` (at-once confirmation) and the T+5 no-show line
         (``_phase_deadlines``). The hour-scale deadlines (score reminder
         3h, dispute 15h) stay on the stock cadence — 5 minutes of
         granularity costs nothing there. ``None`` when no live attack

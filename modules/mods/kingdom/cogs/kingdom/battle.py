@@ -61,8 +61,8 @@ from .common import (
     dm_view,
     fmt_paris,
     final_civ,
-    kingdom_nam    surface,
-e,
+    kingdom_name,
+    surface,
     surface_footer,
     lord_name,
     lord_of,
@@ -1289,7 +1289,10 @@ async def create_room_event_safe(client: Any, stack: Any, attack: Any, strings: 
 
 # ---------------------------------------------------------------------------
 # The cleanup (resultat-nettoyage-v1 / restructuration-serveur-v1 b)
-# -------------------------------------------------------------------async def _bot_member(guild: Any) -> Any:
+# ---------------------------------------------------------------------------
+
+
+async def _bot_member(guild: Any) -> Any:
     """The bot's own member on a guild — the robust resolution.
 
     client-me-v1 (Drasah 28/11, live incident): ``guild.me`` reads the
@@ -1308,9 +1311,6 @@ async def create_room_event_safe(client: Any, stack: Any, attack: Any, strings: 
         return None
 
 
---------
-
-
 async def _ensure_bot_self_manage_safe(guild: Any, channel: Any) -> None:
     """self-manage-channels-v1 (Drasah 27/11): heal a mod-owned channel.
 
@@ -1322,8 +1322,9 @@ async def _ensure_bot_self_manage_safe(guild: Any, channel: Any) -> None:
     manage_channels, ONE best-effort write heals the channel forever;
     a bot without the guild-level grant writes nothing (Discord would
     refuse anyway). Converging by design: a healed channel never
-    rewrites, steady state costs zero API call    me = await _bot_member(guild)
-me", None)
+    rewrites, steady state costs zero API calls.
+    """
+    me = await _bot_member(guild)
     if me is None or channel is None:
         return
     guild_perms = getattr(me, "guild_permissions", None)
@@ -1442,8 +1443,8 @@ async def _delete_recorded_refs_safe(guild: Any, refs: tuple[int, int, int]) -> 
     rate-limit admission storm.
     """
     room_channel_id, salon_channel_id, role_id = refs
-       me = await _bot_member(guild)
-me", None)
+    swept = 0
+    me = await _bot_member(guild)
     for channel_id in (room_channel_id, salon_channel_id):
         if not channel_id:
             continue
@@ -1709,15 +1710,17 @@ class DraftViewButton(
         if attack is None:
             await open_unique_ephemeral(interaction, strings["gaia_gone"])
             return
-        embed = await draft_sheet_embed(stack, attac        # draft-sheet-cv2 (Drasah 28/11, incident 50035): the window
+        embed = await draft_sheet_embed(stack, attack, strings)
+        # draft-sheet-cv2 (Drasah 28/11, incident 50035): the window
         # machinery declares every mod window a Components V2 surface —
         # Discord FORBIDS embeds on a CV2 message (400 Invalid Form
         # Body swallowed by discord.py = the player's total silence).
         # The sheet rides as CV2 text blocks on the DECLARED draft
         # surface (#395: one template, the same blocks everywhere).
-k, strings)
-        await open_unique            interaction, None, view=surface("panel:mod:kingdom:battle:draft", *_embed_sheet_blocks(embed))
-embed=embe
+        await open_unique_ephemeral(
+            interaction, None, view=surface("panel:mod:kingdom:battle:draft", *_embed_sheet_blocks(embed))
+        )
+
 
 def _embed_sheet_blocks(embed: Any) -> list[Any]:
     """One sheet embed's content as CV2 text blocks (duck-typed).
@@ -1743,8 +1746,6 @@ def _embed_sheet_blocks(embed: Any) -> list[Any]:
     if not blocks:
         blocks.append(discord.ui.TextDisplay("—"))
     return blocks
-d
-        )
 
 
 async def draft_sheet_embed(stack: Any, attack: Any, strings: dict[str, str]) -> discord.Embed:
