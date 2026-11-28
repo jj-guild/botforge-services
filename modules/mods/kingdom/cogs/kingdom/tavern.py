@@ -209,9 +209,14 @@ def _mercenary_view(
     from .common import surface
 
     lines = _market_lines(doc, lord_id, strings, names)
+    from .tavern_art import taverne_art_item
+
+    merc_art = taverne_art_item("mercenaire")
+    head: list[Any] = [discord.ui.MediaGallery(merc_art)] if merc_art is not None else []
     if bool(doc.get("closed", False)):
         return surface(
             "panel:mod:kingdom:mercenary",
+            *head,
             discord.ui.TextDisplay("\n".join(lines)),
         )
 
@@ -313,6 +318,7 @@ def _mercenary_view(
 
     return surface(
         "panel:mod:kingdom:mercenary",
+        *head,
         discord.ui.TextDisplay("\n".join(lines)),
         discord.ui.ActionRow(select, withdraw),
     )
@@ -418,25 +424,36 @@ async def build_tavern_panel(guild_id: str) -> discord.ui.LayoutView:
     """
     from .panel import _guild_locale
     from .strings import strings
+    from .tavern_art import taverne_art_item
 
     locale = await _guild_locale(guild_id)
     strings_map = strings(locale[:2])
-    return surface(
-        "panel:mod:kingdom:tavern:pin",
-        discord.ui.TextDisplay(f"# {strings_map['tavern_pin_title']}"),
-        discord.ui.TextDisplay(
-            f"{strings_map['tavern_pin_intro']}\n\n{strings_map['tavern_pin_rules']}"
-        ),
-        discord.ui.Separator(),
-        discord.ui.ActionRow(
-            TavernMenuButton(strings_map["tavern_menu_button"]),
-            MercenaryButton(strings_map["mercenary_button"]),
-        ),
-        discord.ui.ActionRow(
-            TavernInfoButton(strings_map["tavern_info_button"]),
-            TavernPurseButton(strings_map["tavern_purse_button"]),
-        ),
+    # taverne-v1 (Drasah 28/11) : le pin porte l'art du COMPTOIR en tête
+    # + le bouton 🍺 « Entrer dans la Taverne » (la porte, l'art de
+    # l'entrée et l'intro RP vivent dans la fenêtre éphémère du bouton).
+    items: list[Any] = []
+    art = taverne_art_item("comptoir")
+    if art is not None:
+        items.append(discord.ui.MediaGallery(art))
+    items.extend(
+        [
+            discord.ui.TextDisplay(f"# {strings_map['tavern_pin_title']}"),
+            discord.ui.TextDisplay(
+                f"{strings_map['tavern_pin_intro']}\n\n{strings_map['tavern_pin_rules']}"
+            ),
+            discord.ui.Separator(),
+            discord.ui.ActionRow(
+                TavernEnterButton(strings_map["tavern_enter_button"]),
+                TavernMenuButton(strings_map["tavern_menu_button"]),
+                MercenaryButton(strings_map["mercenary_button"]),
+            ),
+            discord.ui.ActionRow(
+                TavernInfoButton(strings_map["tavern_info_button"]),
+                TavernPurseButton(strings_map["tavern_purse_button"]),
+            ),
+        ]
     )
+    return surface("panel:mod:kingdom:tavern:pin", *items)
 
 
 async def _open_tavern_menu(interaction: discord.Interaction) -> None:
@@ -568,6 +585,72 @@ class TavernPurseButton(
         )
 
 
+class TavernEnterButton(
+    discord.ui.DynamicItem[discord.ui.Button[Any]],
+    template=r"kingdom:tavern:enter$",
+):
+    """taverne-v1 (Drasah 28/11) : le 🍺 « Entrer dans la Taverne » du pin.
+
+    La porte s'ouvre sur une fenêtre éphémère unique : l'art de
+    l'ENTRÉE (MediaGallery), l'intro RP, puis les MÊMES boutons que le
+    pin (menu / mercenaire / info / bourse) — zéro duplication, la
+    fenêtre ne fait qu'assembler les surfaces existantes.
+    """
+
+    def __init__(self, label: str) -> None:
+        super().__init__(
+            discord.ui.Button(
+                label=str(label)[:80],
+                custom_id="kingdom:tavern:enter",
+                style=discord.ButtonStyle.success,
+            )
+        )
+
+    @classmethod
+    async def from_custom_id(
+        cls,
+        interaction: discord.Interaction,
+        item: discord.ui.Item[Any],
+        match: re.Match[str],
+        /,
+    ) -> TavernEnterButton:
+        return cls(strings_for(interaction)["tavern_enter_button"])
+
+    async def callback(self, interaction: discord.Interaction) -> None:
+        await interaction.response.defer(ephemeral=True)
+        strings = strings_for(interaction)
+        from .tavern_art import taverne_art_item
+
+        art = taverne_art_item("entree")
+        items: list[Any] = []
+        if art is not None:
+            items.append(discord.ui.MediaGallery(art))
+        items.extend(
+            [
+                discord.ui.TextDisplay(str(strings["tavern_enter_intro"])),
+                discord.ui.Separator(),
+                discord.ui.ActionRow(
+                    TavernMenuButton(strings["tavern_menu_button"]),
+                    MercenaryButton(strings["mercenary_button"]),
+                ),
+                discord.ui.ActionRow(
+                    TavernInfoButton(strings["tavern_info_button"]),
+                    TavernPurseButton(strings["tavern_purse_button"]),
+                ),
+            ]
+        )
+        await open_unique_ephemeral(
+            interaction, view=surface("panel:mod:kingdom:tavern:enter", *items)
+        )
+
+
 def tavern_dynamic_items() -> tuple:
     """The module's restart-proof items (registered by the cog)."""
-    return (TavernButton, MercenaryButton, TavernMenuButton, TavernInfoButton, TavernPurseButton)
+    return (
+        TavernButton,
+        TavernEnterButton,
+        MercenaryButton,
+        TavernMenuButton,
+        TavernInfoButton,
+        TavernPurseButton,
+    )

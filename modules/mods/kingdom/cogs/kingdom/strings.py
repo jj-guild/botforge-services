@@ -937,6 +937,13 @@ DEFAULTS: dict[str, dict[str, str]] = {
             " soient.\n• Chaque seigneur paie avec **sa propre bourse**."
         ),
         "tavern_menu_button": "🍺 Demander à boire",
+        "tavern_enter_button": "🍺 Entrer dans la Taverne",
+        "tavern_enter_intro": (
+            "Tu pousses la porte : la chaleur du comptoir t'accueille, les"
+            " conversations s'apaisent un instant. La Taverne t'ouvre ses"
+            " services — la bourse, les boissons, le Chef Mercenaire et le"
+            " renseignement."
+        ),
         "tavern_info_button": "🗣️ Demander un renseignement",
         "tavern_purse_button": "💰 Regarder sa bourse",
         "tavern_info_rp": (
@@ -1978,6 +1985,13 @@ DEFAULTS: dict[str, dict[str, str]] = {
             " lord pays from **his own purse**."
         ),
         "tavern_menu_button": "🍺 Ask for a drink",
+        "tavern_enter_button": "🍺 Enter the Taverne",
+        "tavern_enter_intro": (
+            "You push the door: the counter's warmth welcomes you, and the"
+            " conversations quiet down for a moment. The Taverne opens its"
+            " services — the purse, the drinks, the Mercenary Captain and"
+            " information."
+        ),
         "tavern_info_button": "🗣️ Ask for information",
         "tavern_purse_button": "💰 Check your purse",
         "tavern_info_rp": (

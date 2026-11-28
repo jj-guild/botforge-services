@@ -172,14 +172,17 @@ async def test_the_engaged_realm_entry_routes_to_the_lieux(
 # ---------------------------------------------------------------------------
 
 
-def test_the_voliere_window_lists_the_birds_states() -> None:
-    from botforge.mods.kingdom.cogs.lieux import _voliere_window, lieux_strings
+@pytest.mark.asyncio
+async def test_the_voliere_window_lists_the_birds_states() -> None:
+    # voliere-v2 (Drasah 28/11) : la fenêtre lit le moteur quand il
+    # existe — sans moteur (tests), le fallback modèle s'applique.
+    from botforge.mods.kingdom.cogs.kingdom.lieux import _voliere_window, lieux_strings
 
     class _FakeOpen:
         async def __call__(self, interaction: Any, **kwargs: Any) -> None:
             calls.append("opened")
 
-    view, files = _voliere_window(lieux_strings("fr"), _kingdom())
+    view, files = await _voliere_window(lieux_strings("fr"), _kingdom())
     body = _texts(view)
     assert "Pigeon" in body and "sur son perchoir" in body
     assert "Corbeau" in body and "en vol" in body

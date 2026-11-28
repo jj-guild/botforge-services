@@ -151,6 +151,9 @@ views:
     kind: surface
   panel:mod:kingdom:tavern:pin:
     kind: surface
+  # taverne-v1 (Drasah 28/11) : la fenêtre « Entrer dans la Taverne »
+  panel:mod:kingdom:tavern:enter:
+    kind: surface
   # vitrine-v1 (Drasah 26/11, tranche 44) : le Panthéon — le pin du
   # salon vitrine + ses fenêtres de navigation (palmarès, historique,
   # chronique, chronique croisée), toutes déclarées (#381 règle 1)
