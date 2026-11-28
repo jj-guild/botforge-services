@@ -220,6 +220,10 @@ views:
     kind: surface
   panel:mod:kingdom:lieux:voliere:
     kind: surface
+  # voliere-espaces-v1 (Drasah 28/11) : UN template d'espace, paramétré
+  # par l'oiseau (corbeau/faucon/pigeon) — #395.
+  panel:mod:kingdom:lieux:voliere:espace:
+    kind: surface
   # realm-content-v1 (Drasah 21/11): the realm salons' content sheets —
   # Territoire, Alliances (+ her four ephemeral windows ride the same
   # surface), the Discussions welcome; the 🎯 objectifs picker window

@@ -21,6 +21,7 @@ from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
 from typing import Any
 
+import discord
 import pytest
 
 import botforge.mods.kingdom.cogs.kingdom.voliere as voliere_cog
@@ -38,6 +39,41 @@ def test_the_voliere_strings_exist_in_both_locales(locale: str) -> None:
     assert set(fr.keys()) == set(en.keys()), "both locales carry the SAME keys"
     for key in fr:
         assert str(voliere_cog._STRINGS[locale][key]), f"the key {key} must not be empty"
+
+
+def test_the_espace_template_follows_the_rules() -> None:
+    """voliere-espaces-v1 : UN template, trois instances (l'oiseau est
+    un PARAMÈTRE, pas une classe — #395), timer UNIQUEMENT si envolé."""
+    state = {
+        "chosen": ["corbeau"],
+        "cooldowns": {"corbeau": int(_NOW.timestamp()) + 300, "faucon": 0, "pigeon": 0},
+    }
+    view = voliere_cog.espace_view(voliere_cog.voliere_strings("fr"), state, "corbeau")
+    ids = [str(item.custom_id) for item in view.walk_children() if getattr(item, "custom_id", None)]  # type: ignore[attr-defined]
+    assert ids == [
+        "kingdom:voliere:act:corbeau_civ",
+        "kingdom:voliere:act:corbeau_verify",
+        "kingdom:voliere:act:corbeau_track",
+        "kingdom:voliere:back",
+    ], "the 3 actions horizontal + the back button"
+    assert all(item.disabled for item in view.walk_children() if isinstance(item, discord.ui.Button))  # type: ignore[attr-defined]
+    body = "".join(str(getattr(item, "content", "") or "") for item in view.walk_children())  # type: ignore[attr-defined]
+    assert "<t:" in body, "the flying bird carries a live timer"
+    ready = voliere_cog.espace_view(
+        voliere_cog.voliere_strings("fr"), state, "corbeau"
+    )
+    # an available bird NEVER shows a timer (cooldowns at 0)
+    ready_state = {
+        "chosen": ["corbeau"],
+        "cooldowns": {"corbeau": 0, "faucon": 0, "pigeon": 0},
+    }
+    ready_view = voliere_cog.espace_view(
+        voliere_cog.voliere_strings("fr"), ready_state, "corbeau"
+    )
+    ready_body = "".join(str(getattr(item, "content", "") or "") for item in ready_view.walk_children())  # type: ignore[attr-defined]
+    assert "<t:" not in ready_body and not any(
+        item.disabled for item in ready_view.walk_children() if isinstance(item, discord.ui.Button)  # type: ignore[attr-defined]
+    )
 
 
 def test_the_theft_views_carry_the_persistent_ids() -> None:
@@ -184,6 +220,7 @@ def test_the_voliere_and_tavern_surfaces_are_declared() -> None:
 
     for view_id in (
         "panel:mod:kingdom:lieux:voliere",
+        "panel:mod:kingdom:lieux:voliere:espace",
         "panel:mod:kingdom:tavern:pin",
         "panel:mod:kingdom:tavern:enter",
         "panel:mod:kingdom:mercenary",

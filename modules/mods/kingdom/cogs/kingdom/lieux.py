@@ -2115,7 +2115,10 @@ async def _paroisse_window(
 
 
 async def _voliere_window(
-    strings: dict[str, str], kingdom: Any, locale: str = "fr"
+    strings: dict[str, str],
+    kingdom: Any,
+    locale: str = "fr",
+    note: str = "",
 ) -> tuple[discord.ui.LayoutView, list[discord.File]]:
     """voliere-v2 (Drasah 28/11) : la fenêtre illustrée héberge AUSSI les
     lignes et rangées du moteur (emplacement ouvert, oiseaux prêts, 9
@@ -2135,7 +2138,12 @@ async def _voliere_window(
 
     vstrings = voliere_strings(locale)
     title = strings["voliere_title"].format(kingdom=str(getattr(kingdom, "name", ""))).lstrip("# ")
-    lines = [title, strings["voliere_line"], ""]
+    lines = [title]
+    if note:
+        # voliere-espaces-v1 : le résultat de la dernière action, collé
+        # sous le titre au retour au sommaire (une seule bulle).
+        lines += [str(note), ""]
+    lines += [strings["voliere_line"], ""]
     state = await voliere_state(kingdom)
     if state is None:
         # fallback : moteur indisponible (tests, service absent) — les

@@ -37,6 +37,7 @@ logger = logging.getLogger("kingdom.voliere")
 _NS = "kingdom:voliere"
 
 BIRD_NAME: dict[str, str] = {"corbeau": "Corbeau", "faucon": "Faucon", "pigeon": "Pigeon"}
+BIRD_EMOJI: dict[str, str] = {"corbeau": "🐦‍⬛", "faucon": "🦅", "pigeon": "🕊️"}
 
 BIRD_LABEL = {"corbeau_civ": "Corbeau", "pigeon_civ": "Pigeon"}
 
@@ -50,6 +51,12 @@ _STRINGS: dict[str, dict[str, str]] = {
         "ready": "ready",
         "slot_button": "🪶 Choose a bird",
         "slot_choose": "🪶 A slot is open — which bird lands in your volière?",
+        "espace_title": "{bird} — the space",
+        "espace_ready": "**{bird}** — on its perch, ready",
+        "espace_flying": "**{bird}** — flying, back <t:{ts}:R>",
+        "back_button": "↩️ Back to the volière",
+        "state_ready": "{bird} ready",
+        "state_flying": "{bird} back <t:{ts}:R>",
         "slot_open": "🕳️ Slot to fill — **choose a bird**.",
         "slot_next": "🔒 Next slot at the **{age}** age.",
         "bird_chosen": "🪶 The **{bird}** lands in your volière!",
@@ -138,6 +145,12 @@ _STRINGS: dict[str, dict[str, str]] = {
         "ready": "prêt",
         "slot_button": "🪶 Choisir un oiseau",
         "slot_choose": "🪶 Un emplacement est ouvert — quel oiseau atterrit dans ta volière ?",
+        "espace_title": "{bird} — l'espace",
+        "espace_ready": "**{bird}** — posé sur son perchoir, prêt",
+        "espace_flying": "**{bird}** — envolé, revient <t:{ts}:R>",
+        "back_button": "↩️ Retour à la volière",
+        "state_ready": "{bird} prêt",
+        "state_flying": "{bird} revient <t:{ts}:R>",
         "slot_open": "🕳️ Emplacement à remplir — **choisis un oiseau**.",
         "slot_next": "🔒 Prochain emplacement à l'âge **{age}**.",
         "bird_chosen": "🪶 Le **{bird}** atterrit dans ta volière !",
@@ -267,70 +280,229 @@ async def voliere_state(kingdom: Any) -> dict[str, Any] | None:
 
 
 async def voliere_extra_lines(strings: dict[str, str], state: dict[str, Any] | None) -> list[str]:
-    """The volière window's engine lines (empty when no engine)."""
+    """The sommaire's engine lines (empty when no engine).
+
+    voliere-espaces-v1 (Drasah 28/11) : UNE ligne d'état au-dessus de la
+    rangée horizontale des espaces — chaque oiseau possédé y figure
+    DANS L'ORDRE de son bouton. Le timer n'apparaît QUE si l'oiseau est
+    envolé (Drasah : un oiseau disponible n'affiche JAMAIS de timer).
+    """
     if not state:
         return []
     lines: list[str] = []
+    now_ts = int(_now().timestamp())
+    statuses: list[str] = []
+    for bird in (state.get("chosen") or []):
+        ready_at = int((state.get("cooldowns") or {}).get(bird, 0) or 0)
+        if ready_at > now_ts:
+            # le SEUL cas qui porte un timer : l'oiseau est parti
+            statuses.append(
+                str(strings["state_flying"]).format(
+                    bird=f"{BIRD_EMOJI.get(bird, '')} {BIRD_NAME.get(bird, bird)}",
+                    ts=ready_at,
+                )
+            )
+        else:
+            statuses.append(
+                str(strings["state_ready"]).format(
+                    bird=f"{BIRD_EMOJI.get(bird, '')} {BIRD_NAME.get(bird, bird)}"
+                )
+            )
+    if statuses:
+        lines.append(" · ".join(statuses))
     if int(state.get("open") or 0) > 0:
         lines.append(str(strings["slot_open"]))
     elif state.get("next_age"):
         lines.append(str(strings["slot_next"]).format(age=state["next_age"]))
     if bool(state.get("beta")):
         lines.append(str(strings["beta_line"]))
-    for bird in (state.get("chosen") or []):
-        ready_at = int((state.get("cooldowns") or {}).get(bird, 0) or 0)
-        if ready_at > int(_now().timestamp()):
-            lines.append(
-                str(strings["bird_flying"]).format(
-                    bird=BIRD_NAME.get(bird, bird), ts=ready_at
-                )
-            )
-        else:
-            lines.append(
-                str(strings["bird_ready"]).format(bird=BIRD_NAME.get(bird, bird))
-            )
     return lines
 
 
 async def voliere_rows(strings: dict[str, str], state: dict[str, Any] | None) -> list[list[Any]]:
-    """The volière window's action rows (slot button + per-bird actions)."""
+    """The sommaire's rows — ONE horizontal row of the three SPACES
+    (grey + disabled when the bird is not in the volière, never hidden)
+    plus the slot button when an emplacement is open. The 3 actions of
+    a bird live in ITS space, not here (voliere-espaces-v1)."""
     rows: list[list[Any]] = []
     if not state:
         return rows
-    now_ts = int(_now().timestamp())
+    row: list[Any] = []
+    for bird in BIRDS:
+        row.append(
+            discord.ui.Button(
+                label=(
+                    f"{BIRD_EMOJI.get(bird, '')} {BIRD_NAME.get(bird, bird)}"
+                )[:80],
+                custom_id=f"{_NS}:espace:{bird}",
+                style=discord.ButtonStyle.secondary,
+                disabled=bird not in (state.get("chosen") or []),
+            )
+        )
     if int(state.get("open") or 0) > 0 and (state.get("available") or []):
-        rows.append(
-            [
-                discord.ui.Button(
-                    label=str(strings["slot_button"])[:80],
-                    custom_id=f"{_NS}:slot",
-                    style=discord.ButtonStyle.success,
-                )
-            ]
+        row.append(
+            discord.ui.Button(
+                label=str(strings["slot_button"])[:80],
+                custom_id=f"{_NS}:slot",
+                style=discord.ButtonStyle.success,
+            )
         )
-    actions_by_bird: dict[str, list[str]] = {
-        "corbeau": ["corbeau_civ", "corbeau_verify", "corbeau_track"],
-        "faucon": ["faucon_territory", "faucon_sabotage", "faucon_release"],
-        "pigeon": ["pigeon_civ", "pigeon_question", "pigeon_dm"],
-    }
-    for bird in (state.get("chosen") or []):
-        actions = actions_by_bird.get(bird, [])
-        if not actions:
-            continue
-        ready_at = int((state.get("cooldowns") or {}).get(bird, 0) or 0)
-        flying = ready_at > now_ts
-        rows.append(
-            [
-                discord.ui.Button(
-                    label=str(strings[f"act_{action}"])[:80],
-                    custom_id=f"{_NS}:act:{action}",
-                    style=discord.ButtonStyle.secondary,
-                    disabled=flying,
-                )
-                for action in actions
-            ]
-        )
+    rows.append(row)
     return rows
+
+
+# ---------------------------------------------------------------------------
+# voliere-espaces-v1 (Drasah 28/11) : les ESPACES
+# ---------------------------------------------------------------------------
+
+ESPACE_SURFACE = "panel:mod:kingdom:lieux:voliere:espace"
+"""#395 : UN seul template d'espace, instancié par paramètre (l'oiseau)."""
+
+ACTIONS_BY_BIRD: dict[str, list[str]] = {
+    "corbeau": ["corbeau_civ", "corbeau_verify", "corbeau_track"],
+    "faucon": ["faucon_territory", "faucon_sabotage", "faucon_release"],
+    "pigeon": ["pigeon_civ", "pigeon_question", "pigeon_dm"],
+}
+
+
+def espace_view(
+    strings: dict[str, str],
+    state: dict[str, Any] | None,
+    bird: str,
+    *,
+    note: str = "",
+) -> "discord.ui.LayoutView":
+    """UN template d'espace, paramétré par l'oiseau (#395).
+
+    Le timer vit en tête, AU-DESSUS de la rangée horizontale des 3
+    actions — et il n'apparaît QUE si l'oiseau est envolé (Drasah :
+    un oiseau disponible n'affiche jamais de timer).
+    """
+    from .common import surface
+
+    emoji = BIRD_EMOJI.get(bird, "")
+    name = BIRD_NAME.get(bird, bird)
+    title = str(strings["espace_title"]).format(bird=f"{emoji} {name}")
+    now_ts = int(_now().timestamp())
+    ready_at = int(((state or {}).get("cooldowns") or {}).get(bird, 0) or 0)
+    flying = ready_at > now_ts
+    status = (
+        str(strings["espace_flying"]).format(bird=f"{emoji} {name}", ts=ready_at)
+        if flying
+        else str(strings["espace_ready"]).format(bird=f"{emoji} {name}")
+    )
+    items: list[Any] = [discord.ui.TextDisplay(f"# {title}")]
+    if note:
+        items.append(discord.ui.TextDisplay(str(note)))
+    items.append(discord.ui.TextDisplay(status))
+    actions = [
+        discord.ui.Button(
+            label=str(strings[f"act_{action}"])[:80],
+            custom_id=f"{_NS}:act:{action}",
+            style=discord.ButtonStyle.secondary,
+            disabled=flying,
+        )
+        for action in ACTIONS_BY_BIRD.get(bird, [])
+    ]
+    if actions:
+        items.append(discord.ui.ActionRow(*actions))
+    items.append(
+        discord.ui.ActionRow(
+            discord.ui.Button(
+                label=str(strings["back_button"])[:80],
+                custom_id=f"{_NS}:back",
+                style=discord.ButtonStyle.grey,
+            )
+        )
+    )
+    return surface(ESPACE_SURFACE, *items)
+
+
+async def _back_to_sommaire(
+    interaction: discord.Interaction, kingdom: Any, *, note: str = ""
+) -> None:
+    """Transformer la bulle en place : retour au SOMMAIRE illustré,
+    le résultat de l'action collé sous le titre (une seule bulle,
+    jamais d'empilement — la fenêtre unique referme la précédente)."""
+    from .lieux import _voliere_window, lieux_strings
+
+    locale = _locale_of(interaction)
+    try:
+        view, files = await _voliere_window(
+            lieux_strings(locale), kingdom, locale, note=note
+        )
+        await open_unique_ephemeral(interaction, view=view, files=files or None)
+    except Exception:  # noqa: BLE001 — never block a done action
+        logger.warning("kingdom volière: return to sommaire failed", exc_info=True)
+        if note:
+            await open_unique_ephemeral(interaction, content=note)
+
+
+class VoliereEspaceButton(
+    discord.ui.DynamicItem[discord.ui.Button[Any]],
+    template=rf"{_NS}:espace:(?P<bird>[a-z]+)",
+):
+    """Le bouton d'un ESPACE du sommaire — restart-proof. La bulle unique
+    se transforme en place : le sommaire ferme, l'espace s'ouvre."""
+
+    def __init__(self, bird: str, label: str, held: bool) -> None:
+        super().__init__(
+            discord.ui.Button(
+                label=str(label)[:80],
+                custom_id=f"{_NS}:espace:{bird}",
+                style=discord.ButtonStyle.secondary,
+                disabled=not held,
+            )
+        )
+        self.bird = str(bird)
+
+    @classmethod
+    async def from_custom_id(cls, interaction, item, match, /):  # type: ignore[no-untyped-def]
+        bird = str(match["bird"])
+        strings = voliere_strings(_locale_of(interaction))
+        label = f"{BIRD_EMOJI.get(bird, '')} {BIRD_NAME.get(bird, bird)}"
+        return cls(bird, label, False)
+
+    async def callback(self, interaction: discord.Interaction) -> None:
+        await interaction.response.defer(ephemeral=True)
+        strings = voliere_strings(_locale_of(interaction))
+        lord, kingdom, stack = await _require_lord(interaction, strings)
+        if kingdom is None:
+            return
+        state = await voliere_state(kingdom)
+        if state is None or self.bird not in (state.get("chosen") or []):
+            await open_unique_ephemeral(interaction, content=strings["bird_not_owned"].format(bird=BIRD_NAME.get(self.bird, self.bird)))
+            return
+        await open_unique_ephemeral(
+            interaction, view=espace_view(strings, state, self.bird)
+        )
+
+
+class VoliereBackButton(
+    discord.ui.DynamicItem[discord.ui.Button[Any]], template=rf"{_NS}:back"
+):
+    """↩️ Retour à la volière — la bulle redevient le sommaire illustré."""
+
+    def __init__(self, label: str) -> None:
+        super().__init__(
+            discord.ui.Button(
+                label=str(label)[:80],
+                custom_id=f"{_NS}:back",
+                style=discord.ButtonStyle.grey,
+            )
+        )
+
+    @classmethod
+    async def from_custom_id(cls, interaction, item, match, /):  # type: ignore[no-untyped-def]
+        return cls(voliere_strings(_locale_of(interaction))["back_button"])
+
+    async def callback(self, interaction: discord.Interaction) -> None:
+        await interaction.response.defer(ephemeral=True)
+        strings = voliere_strings(_locale_of(interaction))
+        lord, kingdom, stack = await _require_lord(interaction, strings)
+        if kingdom is None:
+            return
+        await _back_to_sommaire(interaction, kingdom)
 
 
 # ---------------------------------------------------------------------------
@@ -439,8 +611,11 @@ def _bird_select_view(
             )
         except Exception:  # noqa: BLE001
             logger.info("kingdom volière: bird chronicle skipped", exc_info=True)
-        content = strings["bird_chosen"].format(bird=BIRD_NAME.get(values[0], values[0]))
-        await target.response.edit_message(content=content, view=None)
+        await _back_to_sommaire(
+            target,
+            kingdom,
+            note=strings["bird_chosen"].format(bird=BIRD_NAME.get(values[0], values[0])),
+        )
 
     select: discord.ui.Select[Any] = discord.ui.Select(
         custom_id=f"{_NS}:slot:pick",
@@ -501,9 +676,10 @@ async def _draw_action(
             await _failed(interaction, strings, exc)
             return
         await _record_action(stack, lord, action, civ=str(drawn))
-        await open_unique_ephemeral(
+        await _back_to_sommaire(
             interaction,
-            content=strings["civ_drawn"].format(
+            kingdom,
+            note=strings["civ_drawn"].format(
                 bird=BIRD_LABEL.get(action, action),
                 civ=str(drawn),
             ),
@@ -516,8 +692,10 @@ async def _draw_action(
             await _failed(interaction, strings, exc)
             return
         await _record_action(stack, lord, action, map=str(map_key))
-        await open_unique_ephemeral(
-            interaction, content=strings["territory_drawn"].format(map=str(map_key))
+        await _back_to_sommaire(
+            interaction,
+            kingdom,
+            note=strings["territory_drawn"].format(map=str(map_key)),
         )
         return
     if action == "faucon_release":
@@ -527,7 +705,7 @@ async def _draw_action(
             await _failed(interaction, strings, exc)
             return
         await _record_action(stack, lord, action)
-        await open_unique_ephemeral(interaction, content=strings["release_done"])
+        await _back_to_sommaire(interaction, kingdom, note=strings["release_done"])
         return
     logger.info("kingdom volière: unknown draw action %s", action)
 
@@ -565,12 +743,15 @@ async def _verify_flow(
             await _failed(target, strings, exc)
             return
         await _record_action(stack, lord, "corbeau_verify", map=str(inspection["map_key"]))
-        content = strings["verify_result"].format(
-            map=str(inspection["map_key"]),
-            name=str(inspection["attacker_name"]),
-            civs=", ".join(inspection["attacker_civs"]) or strings["unknown"],
+        await _back_to_sommaire(
+            target,
+            kingdom,
+            note=strings["verify_result"].format(
+                map=str(inspection["map_key"]),
+                name=str(inspection["attacker_name"]),
+                civs=", ".join(inspection["attacker_civs"]) or strings["unknown"],
+            ),
         )
-        await target.response.edit_message(content=content, view=None)
 
     select: discord.ui.Select[Any] = discord.ui.Select(
         custom_id=f"{_NS}:verify:pick",
@@ -620,8 +801,11 @@ async def _track_flow(
             await _failed(target, strings, exc)
             return
         await _record_action(stack, lord, "corbeau_track", lord_name=str(victim.display_name))
-        content = strings["track_done"].format(name=str(victim.display_name))
-        await target.response.edit_message(content=content, view=None)
+        await _back_to_sommaire(
+            target,
+            kingdom,
+            note=strings["track_done"].format(name=str(victim.display_name)),
+        )
 
     select: discord.ui.Select[Any] = discord.ui.Select(
         custom_id=f"{_NS}:track:pick",
@@ -676,7 +860,7 @@ async def _sabotage_flow(
         )
         civs = [str(civ) for civ in ((other.civilizations if other else []) or [])]
         if not civs:
-            await target.response.edit_message(content=strings["sabotage_no_civ"], view=None)
+            await _back_to_sommaire(target, kingdom, note=strings["sabotage_no_civ"])
             return
 
         async def on_civ(civ_target: discord.Interaction[Any]) -> None:
@@ -694,10 +878,13 @@ async def _sabotage_flow(
                 await _failed(civ_target, strings, exc)
                 return
             await _record_action(stack, lord, "faucon_sabotage", civ=civ)
-            content = strings["sabotage_done"].format(
-                civ=civ, map=str(getattr(attack, "map_key", ""))
+            await _back_to_sommaire(
+                civ_target,
+                kingdom,
+                note=strings["sabotage_done"].format(
+                    civ=civ, map=str(getattr(attack, "map_key", ""))
+                ),
             )
-            await civ_target.response.edit_message(content=content, view=None)
 
         civ_select: discord.ui.Select[Any] = discord.ui.Select(
             custom_id=f"{_NS}:sabotage:civ",
@@ -934,10 +1121,13 @@ async def _theft_flow(
         await _record_action(
             stack, lord, "corbeau_civ", kingdom=str(victim.name)
         )
-        content = strings["theft_sent"].format(
-            kingdom=str(victim.name), ts=int(theft.get("execute_at", 0) or 0)
+        await _back_to_sommaire(
+            target,
+            kingdom,
+            note=strings["theft_sent"].format(
+                kingdom=str(victim.name), ts=int(theft.get("execute_at", 0) or 0)
+            ),
         )
-        await target.response.edit_message(content=content, view=None)
 
     select: discord.ui.Select[Any] = discord.ui.Select(
         custom_id=f"{_NS}:theft:pick",
@@ -1122,11 +1312,19 @@ class VoliereTheftButton(
 
 def voliere_dynamic_items() -> tuple:
     """The module's restart-proof items (registered by the cog)."""
-    return (VoliereSlotButton, VoliereActionButton, VoliereTheftButton)
+    return (
+        VoliereSlotButton,
+        VoliereEspaceButton,
+        VoliereBackButton,
+        VoliereActionButton,
+        VoliereTheftButton,
+    )
 
 
 __all__ = [
     "VoliereActionButton",
+    "VoliereBackButton",
+    "VoliereEspaceButton",
     "VoliereSlotButton",
     "VoliereTheftButton",
     "run_action",
