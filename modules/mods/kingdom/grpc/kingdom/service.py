@@ -37,6 +37,7 @@ class _KingdomStackImpl(KingdomStackContract):
         from botforge.mods.kingdom.realms import RealmService
         from botforge.mods.kingdom.decisions import DecisionService
         from botforge.mods.kingdom.cathedrale import CathedralService
+        from botforge.mods.kingdom.voliere import VoliereService
 
         self._store = store
         self._config = config
@@ -69,6 +70,10 @@ class _KingdomStackImpl(KingdomStackContract):
         # the FIRST writer of cathedral_until (the immunities were
         # already ported, no cog ever wrote the field).
         self._cathedrals = CathedralService(store, config, self._kingdoms, self._territories)
+        # voliere-v2 (Drasah 28/11) : le moteur de la volière — les 9
+        # actions + le vol de Corbeau (pickban/admin_debug attendaient
+        # déjà ce seam ``stack.voliere``).
+        self._voliere = VoliereService(store, config, self._kingdoms, self._territories, self._attacks)
 
     @property
     def realms(self) -> Any:
@@ -81,6 +86,10 @@ class _KingdomStackImpl(KingdomStackContract):
     @property
     def cathedrals(self) -> Any:
         return self._cathedrals
+
+    @property
+    def voliere(self) -> Any:
+        return self._voliere
 
     @property
     def kingdoms(self) -> Any:

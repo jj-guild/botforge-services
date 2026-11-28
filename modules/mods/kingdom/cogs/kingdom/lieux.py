@@ -1029,7 +1029,7 @@ async def _open_lieu(interaction: discord.Interaction, kind: str) -> None:
         elif kind == "paroisse":
             view, files = await _paroisse_window(strings, kingdom, state)
         else:  # voliere
-            view, files = _voliere_window(strings, kingdom)
+            view, files = await _voliere_window(strings, kingdom)
     except Exception:
         logger.warning("kingdom lieux: the %s window failed", kind, exc_info=True)
         from .realms import realm_strings as _rs
@@ -2114,32 +2114,46 @@ async def _paroisse_window(
 # ---------------------------------------------------------------------------
 
 
-def _voliere_window(
+async def _voliere_window(
     strings: dict[str, str], kingdom: Any
 ) -> tuple[discord.ui.LayoutView, list[discord.File]]:
+    """voliere-v2 (Drasah 28/11) : la fenêtre illustrée héberge AUSSI les
+    lignes et rangées du moteur (emplacement ouvert, oiseaux prêts, 9
+    actions) — l'état vient du service (``stack.voliere``), jamais du
+    modèle direct. Fallback modèle quand le moteur est absent (tests)."""
     import time as _time
 
-    now_ts = int(_time.time())
-    lines = [
-        strings["voliere_title"].format(kingdom=str(getattr(kingdom, "name", ""))).lstrip("# "),
-        strings["voliere_line"],
-        "",
-    ]
-    cooldowns = {
-        str(k): int(v) for k, v in (dict(getattr(kingdom, "voliere_cooldowns", {}) or {})).items()
-    }
-    for bird in [str(b) for b in (list(getattr(kingdom, "voliere_slots", []) or []))]:
-        ready_at = cooldowns.get(bird, 0)
-        if ready_at > now_ts:
-            lines.append(strings["bird_flying"].format(bird=_bird_label(strings, bird), ts=ready_at))
-        else:
-            lines.append(strings["bird_ready"].format(bird=_bird_label(strings, bird)))
-    rows = [[_sortir_item(strings)]]
+    from .voliere import voliere_extra_lines, voliere_rows, voliere_state
+
+    title = strings["voliere_title"].format(kingdom=str(getattr(kingdom, "name", ""))).lstrip("# ")
+    lines = [title, strings["voliere_line"], ""]
+    state = await voliere_state(kingdom)
+    if state is None:
+        # fallback : moteur indisponible (tests, service absent) — les
+        # lignes viennent du modèle, comme avant le portage moteur.
+        now_ts = int(_time.time())
+        cooldowns = {
+            str(k): int(v)
+            for k, v in (dict(getattr(kingdom, "voliere_cooldowns", {}) or {})).items()
+        }
+        for bird in [str(b) for b in (list(getattr(kingdom, "voliere_slots", []) or []))]:
+            ready_at = cooldowns.get(bird, 0)
+            if ready_at > now_ts:
+                lines.append(
+                    strings["bird_flying"].format(bird=_bird_label(strings, bird), ts=ready_at)
+                )
+            else:
+                lines.append(strings["bird_ready"].format(bird=_bird_label(strings, bird)))
+        rows: list[list[Any]] = [[_sortir_item(strings)]]
+    else:
+        lines.extend(await voliere_extra_lines(strings, state))
+        rows = await voliere_rows(strings, state)
+        rows.append([_sortir_item(strings)])
     view = _lieu_window(
         strings,
         VOLIERE_SURFACE,
         GREEN,
-        strings["voliere_title"].format(kingdom=str(getattr(kingdom, "name", ""))).lstrip("# "),
+        title,
         "\n".join(lines),
         "attachment://voliere.png",
         rows,
@@ -2935,7 +2949,10 @@ class LieuxComptesCardButton(
         return cls(str(match["card"]), str(match["card"]), 0, False)
 
     async def callback(self, interaction: discord.Interaction) -> None:
-        await interaction.response.defer(ephemeral=True)
+        # comptes-ed inplace (Drasah 28/11) : changer de carte RAFRAÎCHIT
+        # la fenêtre ouverte au lieu de la re-poster — PAS de defer, la
+        # réponse reste libre pour ``edit_message`` ; repli vers la
+        # fenêtre unique si l'edit part en erreur (bulle déjà fermée).
         strings = lieux_strings(_locale_of(interaction))
         lord, kingdom, stack = await _lord_kingdom_of(interaction, strings)
         if lord is None or kingdom is None or stack is None:
@@ -2951,7 +2968,16 @@ class LieuxComptesCardButton(
         except Exception:  # noqa: BLE001
             logger.warning("kingdom lieux: comptes card view failed", exc_info=True)
             return
-        await open_unique_ephemeral(interaction, view=view, files=files or None)
+        from .common import _with_close_row
+
+        try:
+            view = _with_close_row(view, interaction)
+            await interaction.response.edit_message(
+                view=view, files=files or [], attachments=[]
+            )
+        except Exception:  # noqa: BLE001
+            logger.info("kingdom lieux: comptes card edit fell back", exc_info=True)
+            await open_unique_ephemeral(interaction, view=view, files=files or None)
 
 
 class LieuxComptesUseButton(

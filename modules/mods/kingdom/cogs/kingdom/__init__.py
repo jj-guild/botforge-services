@@ -410,11 +410,13 @@ def setup_hook(bot: Any) -> None:
     from .tavern import (
         MercenaryButton,
         TavernButton,
+        TavernEnterButton,
         TavernInfoButton,
         TavernMenuButton,
         TavernPurseButton,
     )
     from .time_machine import machine_dynamic_items
+    from .voliere import voliere_dynamic_items
     from .validation import (
         ValidationArchiveButton,
         ValidationCrownButton,
@@ -486,6 +488,8 @@ def setup_hook(bot: Any) -> None:
         *lieux_dynamic_items(),
         *realm_content_dynamic_items(),
         *pantheon_dynamic_items(),
+        *voliere_dynamic_items(),
+        TavernEnterButton,
     ):
         try:
             bot.add_dynamic_items(item)

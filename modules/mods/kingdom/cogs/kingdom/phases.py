@@ -928,6 +928,90 @@ async def _announce_sacred_verdicts(bot: Any, stack: Any, consecrated: list[Any]
             logger.warning("kingdom: one cathedral announcement failed", exc_info=True)
 
 
+async def run_voliere_due_safe(bot: Any) -> None:
+    """voliere-v2 (Drasah 28/11) : la passe des vols de Corbeau.
+
+    Chaque vol échu vole son ⚙️ (le moteur tranche), puis la boucle
+    sonne les DEUX cloches : l'ALARME chez le royaume volé (bouton
+    🛡️ Contester persistant) et le PROMPT chez le voleur (🛑 STOP /
+    ➡️ Continuer persistants). Les deux vues sont des DynamicItems —
+    elles survivent aux restarts, et le settle silencieux sans
+    réponse reste la règle (auto-repart avec le 1er ⚙️).
+    """
+    from .common import wiring
+    from botforge.mods.kingdom.game_clock import game_now
+    from .voliere import theft_alarm_view, theft_prompt_view, voliere_strings
+
+    stack = wiring()
+    if stack is None:
+        return
+    voliere = getattr(stack, "voliere", None)
+    if voliere is None:
+        return
+    try:
+        executed = await voliere.resolve_due_thefts(now=game_now())
+    except Exception:
+        logger.warning("kingdom: volière theft pass failed — best-effort", exc_info=True)
+        return
+    if not executed:
+        return
+    kingdoms = {str(k.id): k for k in await stack.kingdoms.kingdoms()}
+    contest_minutes = 5
+    try:
+        contest_minutes = int(
+            getattr(getattr(stack.config, "voliere", None), "corbeau_theft_contest_minutes", 5)
+        )
+    except Exception:  # noqa: BLE001
+        contest_minutes = 5
+    for guild in list(getattr(bot, "guilds", []) or []):
+        locale = await _guild_locale(bot, str(guild.id))
+        strings = voliere_strings(locale)
+        for theft in executed:
+            try:
+                from .realms import _find_realm_category, _slug
+
+                def _realm_channel(kingdom: Any) -> Any:
+                    category = _find_realm_category(guild, str(getattr(kingdom, "name", "")))
+                    return next(
+                        (
+                            c
+                            for c in getattr(category, "channels", [])
+                            if _slug(getattr(c, "name", "")) == "le-royaume"
+                        ),
+                        None,
+                    )
+
+                target = kingdoms.get(str(theft.get("target_kingdom_id")))
+                thief = kingdoms.get(str(theft.get("thief_kingdom_id")))
+                stolen = int(theft.get("stolen", 0) or 0)
+                until = int(theft.get("contest_until", 0) or 0)
+                if stolen <= 0 or target is None or thief is None:
+                    continue
+                channel = _realm_channel(target)
+                if channel is not None:
+                    await channel.send(
+                        strings["alarm"].format(
+                            thief=str(getattr(thief, "name", "?")),
+                            points=stolen,
+                            ts=until,
+                            minutes=contest_minutes,
+                        ),
+                        view=theft_alarm_view(locale),
+                    )
+                channel = _realm_channel(thief)
+                if channel is not None:
+                    await channel.send(
+                        strings["prompt"].format(
+                            points=stolen,
+                            target=str(getattr(target, "name", "?")),
+                            ts=until,
+                        ),
+                        view=theft_prompt_view(locale, str(theft.get("id", ""))),
+                    )
+            except Exception:  # noqa: BLE001
+                logger.warning("kingdom: one volière alarm failed", exc_info=True)
+
+
 async def run_event_slots_safe(bot: Any) -> None:
     """Replay the due weekly slots (cycle/age/season end) and announce.
 
@@ -1301,6 +1385,10 @@ def start_attack_refresher(bot: Any) -> None:
             await run_cathedrals_due_safe(bot)
         except Exception:
             logger.warning("kingdom: cathedral due pass failed — best-effort", exc_info=True)
+        try:
+            await run_voliere_due_safe(bot)
+        except Exception:
+            logger.warning("kingdom: volière due pass failed — best-effort", exc_info=True)
         try:
             await run_mercenary_tick_safe(bot)
         except Exception:
