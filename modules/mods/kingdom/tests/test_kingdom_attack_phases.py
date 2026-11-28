@@ -239,7 +239,9 @@ async def test_ai_defense_runs_the_draft_and_opens_the_meeting() -> None:
     assert [item.id for item in sent] == [attack.id]
     fresh = next(a for a in await bundle.attacks.attacks() if a.id == attack.id)
     assert len(fresh.pickban["defender_picks"]) == 3
-    assert 30 <= fresh.pickban["ai_validate_at"] - int(attack.expires_at.timestamp()) <= 90
+    # ai-timing-align-v1 (Drasah 28/11): the AI validates AT ONCE — the
+    # stamp equals the draft's flip moment, never a delayed think-time.
+    assert fresh.pickban["ai_validate_at"] == int(attack.expires_at.timestamp())
     # The RDV NEVER opens before the draft resolves.
     assert await bundle.attacks.score_due(now=attack.expires_at) == []
     await bundle.attacks.set_picks(
@@ -247,13 +249,13 @@ async def test_ai_defense_runs_the_draft_and_opens_the_meeting() -> None:
     )
     await bundle.attacks.validate_pickban(attack.id, "king-a", now=attack.expires_at)
     validated = await bundle.attacks.ai_draft_due(
-        now=attack.expires_at + timedelta(seconds=90)
+        now=attack.expires_at + timedelta(seconds=1)
     )
     assert [item.id for item in validated] == [attack.id]
     fresh = next(a for a in await bundle.attacks.attacks() if a.id == attack.id)
     assert fresh.pickban["resolved_pickban"] is True
     # The next tick opens the RDV: the attacker plays the game (D20).
-    due = await bundle.attacks.score_due(now=attack.expires_at + timedelta(seconds=95))
+    due = await bundle.attacks.score_due(now=attack.expires_at + timedelta(seconds=5))
     assert [item.id for item in due] == [attack.id]
     assert due[0].state is AttackState.MEETING
     # The meeting keeps waiting for the game result (D20).

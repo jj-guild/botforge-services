@@ -265,23 +265,26 @@ async def test_vs_ai_the_draft_runs_and_only_the_attacker_confirms() -> None:
     fresh = next(item for item in await bundle.attacks.attacks() if item.id == attack.id)
     assert len(fresh.pickban["defender_picks"]) == 3
     assert set(fresh.pickban["defender_picks"]) <= {"huns", "perses", "byzantins"}
-    assert 30 <= fresh.pickban["ai_validate_at"] - int(_T.timestamp()) <= 90
+    # ai-timing-align-v1 (Drasah 28/11): instant validation — the stamp
+    # equals the draft's flip moment.
+    assert fresh.pickban["ai_validate_at"] == int(_T.timestamp())
     # The meeting NEVER opens before the draft resolves.
     assert await bundle.attacks.score_due(now=_T) == []
     await bundle.attacks.set_picks(
         attack.id, "king-a", ["francs", "bretons", "goths"], now=_T
     )
     await bundle.attacks.validate_pickban(attack.id, "king-a", now=_T)
-    # The AI has not « thought » yet — the tick replays nothing.
-    assert await bundle.attacks.ai_draft_due(now=_T + timedelta(seconds=29)) == []
-    validated = await bundle.attacks.ai_draft_due(now=_T + timedelta(seconds=90))
+    # Instant validation: nothing replays BEFORE the flip moment, the
+    # tick resolves it right at T — same pace as a fast human defender.
+    assert await bundle.attacks.ai_draft_due(now=_T - timedelta(seconds=1)) == []
+    validated = await bundle.attacks.ai_draft_due(now=_T + timedelta(seconds=1))
     assert [item.id for item in validated] == [attack.id]
     fresh = next(item for item in await bundle.attacks.attacks() if item.id == attack.id)
     assert fresh.pickban["resolved_pickban"] is True
     assert "ai_validate_at" not in fresh.pickban
     # The RDV opens on the resolved draft — the no-show line anchored
     # on the ACTUAL opening (never an instant forfeit past T).
-    opened_at = _T + timedelta(seconds=95)
+    opened_at = _T + timedelta(seconds=5)
     due = await bundle.attacks.score_due(now=opened_at)
     assert [item.id for item in due] == [attack.id]
     fresh = next(item for item in await bundle.attacks.attacks() if item.id == attack.id)
@@ -289,12 +292,14 @@ async def test_vs_ai_the_draft_runs_and_only_the_attacker_confirms() -> None:
     assert fresh.score["ready_deadline"] == int(
         (opened_at + timedelta(minutes=5)).timestamp()
     )
-    # The attacker is Prêt — the AI confirms at its OWN 30-90 s mark.
+    # The attacker is Prêt — the AI confirms at once (same pace as him).
     fresh = await bundle.attacks.mark_ready(attack.id, "king-a", now=opened_at)
     assert not fresh.score.get("all_ready")
-    assert 30 <= fresh.score["ai_ready_at"] - int(opened_at.timestamp()) <= 90
-    assert await bundle.attacks.ai_ready_due(now=opened_at + timedelta(seconds=29)) == []
-    confirmed = await bundle.attacks.ai_ready_due(now=opened_at + timedelta(seconds=90))
+    # ai-timing-align-v1 (Drasah 28/11): the AI confirms AT ONCE — the
+    # stamp equals the Prêt click, the resolution lands on the next pass.
+    assert fresh.score["ai_ready_at"] == int(opened_at.timestamp())
+    assert await bundle.attacks.ai_ready_due(now=opened_at - timedelta(seconds=1)) == []
+    confirmed = await bundle.attacks.ai_ready_due(now=opened_at + timedelta(seconds=1))
     assert [item.id for item in confirmed] == [attack.id]
     fresh = next(item for item in await bundle.attacks.attacks() if item.id == attack.id)
     assert fresh.score["all_ready"]
@@ -320,8 +325,8 @@ async def test_vs_ai_attacker_noshow_loses() -> None:
     await bundle.attacks.pick_ban_due(now=_T)
     await bundle.attacks.set_picks(attack.id, "king-a", ["francs", "bretons", "goths"], now=_T)
     await bundle.attacks.validate_pickban(attack.id, "king-a", now=_T)
-    await bundle.attacks.ai_draft_due(now=_T + timedelta(seconds=90))
-    opened_at = _T + timedelta(seconds=95)
+    await bundle.attacks.ai_draft_due(now=_T + timedelta(seconds=1))
+    opened_at = _T + timedelta(seconds=5)
     await bundle.attacks.score_due(now=opened_at)
     deadline = datetime.fromtimestamp(
         int((opened_at + timedelta(minutes=5)).timestamp()), tz=UTC
@@ -619,7 +624,7 @@ async def test_vs_ai_sabotage_stays_open_until_the_room_opens() -> None:
     await bundle.attacks.pick_ban_due(now=_T)
     await bundle.attacks.set_picks(attack.id, "king-a", ["francs", "bretons", "goths"], now=_T)
     await bundle.attacks.validate_pickban(attack.id, "king-a", now=_T)
-    await bundle.attacks.ai_draft_due(now=_T + timedelta(seconds=90))
+    await bundle.attacks.ai_draft_due(now=_T + timedelta(seconds=1))
     fresh = next(item for item in await bundle.attacks.attacks() if item.id == attack.id)
     assert fresh.pickban["resolved_pickban"] is True
     # PAST T the sabotage settle still works vs the AI — the room is

@@ -28,6 +28,43 @@ EVERYONE_KEY = "@everyone"
 BOT_KEY = "@me"
 
 
+async def resolve_client_member(guild: Any) -> Any:
+    """The bot's OWN member on a guild — cache first, FETCH fallback.
+
+    client-me-v1 (Drasah 28/11, live incident): ``guild.me`` reads the
+    member cache and can come back None (an empty cache, the Members
+    intent off, a guild resolved outside the cache) — the bot is then
+    unable to see ITSELF: every self-permission decision (the @me
+    overwrite at creation, the channel-level heal) silently no-ops
+    while the server-side role holds every right. The fetch path
+    (the client's own user id) always resolves; a refused fetch keeps
+    returning None (best effort, never a raise).
+    """
+    me = getattr(guild, "me", None)
+    if me is not None:
+        return me
+    fetch_member = getattr(guild, "fetch_member", None)
+    if fetch_member is None:
+        return None
+    state = getattr(guild, "_state", None)
+    user = getattr(state, "user", None)
+    if user is None:
+        get_client = getattr(state, "_get_client", None)
+        user = getattr(get_client() if callable(get_client) else None, "user", None)
+    user_id = int(getattr(user, "id", 0) or 0)
+    if not user_id:
+        return None
+    try:
+        me = await fetch_member(user_id)
+    except Exception:
+        logger.debug(
+            "client member fetch refused on guild %s", getattr(guild, "id", "?"), exc_info=True
+        )
+        return None
+    logger.info("client member resolved by fetch on guild %s", getattr(guild, "id", "?"))
+    return me
+
+
 class DiscordDynamicChannelsPlatform:
     """discord.py implementation of the dynamic-channel seam (create/delete)."""
 
@@ -93,7 +130,10 @@ class DiscordDynamicChannelsPlatform:
         # purging an ephemeral room needs it), above all inside a private
         # parent category (#413). An explicit @me from the caller is
         # normalized to that allow — view_channel is never denied.
-        me = getattr(guild, "me", None)
+        # client-me-v1: the member resolves through the robust helper
+        # (cache first, FETCH fallback) — a bot that cannot see itself
+        # in the cache still carries its allow.
+        me = await resolve_client_member(guild)
         if me is not None:
             resolved[me] = discord.PermissionOverwrite(
                 view_channel=True,
@@ -111,8 +151,42 @@ class DiscordDynamicChannelsPlatform:
             kwargs["overwrites"] = resolved
         kwargs.update(options or {})
         if kind == "voice":
-            return await guild.create_voice_channel(name, **kwargs)
-        return await guild.create_text_channel(name, **kwargs)
+            channel = await guild.create_voice_channel(name, **kwargs)
+        else:
+            channel = await guild.create_text_channel(name, **kwargs)
+        # birth-check-v1 (Drasah 28/11): the provisioning's own entry is
+        # verified on the LIVE channel the moment it exists — a creation
+        # whose @me allow did not land surfaces in the logs at once
+        # (✅/⚠️), never as an undeletable ghost discovered mid-game.
+        await self._log_birth_check(channel, me)
+        return channel
+
+    async def _log_birth_check(self, channel: Any, me: Any) -> None:
+        """Verify the bot's allow on the just-created channel, best effort."""
+        if me is None:
+            logger.warning(
+                "birth check: client member unresolved — channel %s created without a verified @me allow",
+                getattr(channel, "id", "?"),
+            )
+            return
+        overwrites_for = getattr(channel, "overwrites_for", None)
+        if overwrites_for is None:
+            return
+        try:
+            ok = bool(overwrites_for(me).manage_channels)
+        except Exception:
+            logger.debug("birth check read failed", exc_info=True)
+            return
+        if ok:
+            logger.info(
+                "birth check ✅ — channel %s carries the bot's manage_channels allow",
+                getattr(channel, "id", "?"),
+            )
+        else:
+            logger.warning(
+                "birth check ⚠️ — channel %s does NOT carry the bot's manage_channels allow (Discord refused it)",
+                getattr(channel, "id", "?"),
+            )
 
     async def delete_channel(self, channel_id: str) -> None:
         """Delete the channel — best-effort, a miss is never an error."""

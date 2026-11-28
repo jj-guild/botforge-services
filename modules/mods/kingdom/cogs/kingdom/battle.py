@@ -61,7 +61,8 @@ from .common import (
     dm_view,
     fmt_paris,
     final_civ,
-    kingdom_name,
+    kingdom_nam    surface,
+e,
     surface_footer,
     lord_name,
     lord_of,
@@ -1288,7 +1289,26 @@ async def create_room_event_safe(client: Any, stack: Any, attack: Any, strings: 
 
 # ---------------------------------------------------------------------------
 # The cleanup (resultat-nettoyage-v1 / restructuration-serveur-v1 b)
-# ---------------------------------------------------------------------------
+# -------------------------------------------------------------------async def _bot_member(guild: Any) -> Any:
+    """The bot's own member on a guild — the robust resolution.
+
+    client-me-v1 (Drasah 28/11, live incident): ``guild.me`` reads the
+    member cache and can be None (Members intent off, empty cache) — the
+    bot then cannot see itself and every self-permission decision
+    (the heal, the probes) silently no-ops while its server role holds
+    every right. The generic helper lives in the core seam; the mod
+    consumes it (the resolution is the platform's business).
+    """
+    from botforge.discord.dynamic_channels import resolve_client_member
+
+    try:
+        return await resolve_client_member(guild)
+    except Exception:
+        logger.debug("kingdom: client member resolution failed", exc_info=True)
+        return None
+
+
+--------
 
 
 async def _ensure_bot_self_manage_safe(guild: Any, channel: Any) -> None:
@@ -1302,9 +1322,8 @@ async def _ensure_bot_self_manage_safe(guild: Any, channel: Any) -> None:
     manage_channels, ONE best-effort write heals the channel forever;
     a bot without the guild-level grant writes nothing (Discord would
     refuse anyway). Converging by design: a healed channel never
-    rewrites, steady state costs zero API calls.
-    """
-    me = getattr(guild, "me", None)
+    rewrites, steady state costs zero API call    me = await _bot_member(guild)
+me", None)
     if me is None or channel is None:
         return
     guild_perms = getattr(me, "guild_permissions", None)
@@ -1423,8 +1442,8 @@ async def _delete_recorded_refs_safe(guild: Any, refs: tuple[int, int, int]) -> 
     rate-limit admission storm.
     """
     room_channel_id, salon_channel_id, role_id = refs
-    swept = 0
-    me = getattr(guild, "me", None)
+       me = await _bot_member(guild)
+me", None)
     for channel_id in (room_channel_id, salon_channel_id):
         if not channel_id:
             continue
@@ -1690,9 +1709,41 @@ class DraftViewButton(
         if attack is None:
             await open_unique_ephemeral(interaction, strings["gaia_gone"])
             return
-        embed = await draft_sheet_embed(stack, attack, strings)
-        await open_unique_ephemeral(
-            interaction, surface_footer("panel:mod:kingdom:battle:draft"), embed=embed
+        embed = await draft_sheet_embed(stack, attac        # draft-sheet-cv2 (Drasah 28/11, incident 50035): the window
+        # machinery declares every mod window a Components V2 surface —
+        # Discord FORBIDS embeds on a CV2 message (400 Invalid Form
+        # Body swallowed by discord.py = the player's total silence).
+        # The sheet rides as CV2 text blocks on the DECLARED draft
+        # surface (#395: one template, the same blocks everywhere).
+k, strings)
+        await open_unique            interaction, None, view=surface("panel:mod:kingdom:battle:draft", *_embed_sheet_blocks(embed))
+embed=embe
+
+def _embed_sheet_blocks(embed: Any) -> list[Any]:
+    """One sheet embed's content as CV2 text blocks (duck-typed).
+
+    title/description/fields map onto TextDisplays — a fake embed in
+    tests resolves the same way; an unreadable surface still yields
+    one block (never an empty view, never a raise).
+    """
+    blocks: list[Any] = []
+    title = str(getattr(embed, "title", "") or "").strip()
+    if title:
+        blocks.append(discord.ui.TextDisplay(f"## {title}"))
+    description = str(getattr(embed, "description", "") or "").strip()
+    if description:
+        blocks.append(discord.ui.TextDisplay(description))
+    for field in list(getattr(embed, "fields", None) or []):
+        name = str(getattr(field, "name", "") or "").strip()
+        value = str(getattr(field, "value", "") or "").strip()
+        if name and value:
+            blocks.append(discord.ui.TextDisplay(f"**{name}**\n{value}"))
+        elif value:
+            blocks.append(discord.ui.TextDisplay(value))
+    if not blocks:
+        blocks.append(discord.ui.TextDisplay("—"))
+    return blocks
+d
         )
 
 

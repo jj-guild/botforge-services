@@ -140,17 +140,18 @@ async def test_vs_ai_all_ready_needs_only_the_attacker() -> None:
     await bundle.store.upsert_attack(fresh.to_mongo())
     await bundle.attacks.score_due(now=_T)
     assert expected_score_players(fresh) == ["king-a"]
-    # battle-ai-rdv-v1: vs the AI the attacker's Prêt arms the bot's
-    # OWN 30-90 s confirmation — all_ready lands on the tick, not the
-    # click (the timing never leaks the bot).
+    # ai-timing-align-v1 (Drasah 28/11: « les délais VS humain ou IA
+    # sont IDENTIQUES »): vs the AI the attacker's Prêt arms the bot's
+    # AT-ONCE confirmation — all_ready lands on the next tick, the
+    # same pace as a human pair clicking Prêt back to back.
     await bundle.attacks.mark_ready(attack.id, "king-a", now=_T)
     refreshed = next(item for item in await bundle.attacks.attacks() if item.id == attack.id)
     assert not refreshed.score.get("all_ready")
-    assert 30 <= refreshed.score["ai_ready_at"] - int(_T.timestamp()) <= 90
-    confirmed = await bundle.attacks.ai_ready_due(now=_T + timedelta(seconds=90))
+    assert refreshed.score["ai_ready_at"] == int(_T.timestamp())
+    confirmed = await bundle.attacks.ai_ready_due(now=_T + timedelta(seconds=1))
     assert [item.id for item in confirmed] == [attack.id]
     refreshed = next(item for item in await bundle.attacks.attacks() if item.id == attack.id)
-    assert refreshed.score.get("all_ready") == int((_T + timedelta(seconds=90)).timestamp())
+    assert refreshed.score.get("all_ready") == int((_T + timedelta(seconds=1)).timestamp())
     assert phase_label(refreshed) == "score"
 
 
