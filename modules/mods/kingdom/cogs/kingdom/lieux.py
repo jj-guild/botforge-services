@@ -1029,12 +1029,12 @@ async def _open_lieu(interaction: discord.Interaction, kind: str) -> None:
         elif kind == "paroisse":
             view, files = await _paroisse_window(strings, kingdom, state)
         else:  # voliere
-            view, files = await _voliere_window(strings, kingdom)
+            view, files = await _voliere_window(strings, kingdom, _locale_of(interaction))
     except Exception:
         logger.warning("kingdom lieux: the %s window failed", kind, exc_info=True)
         from .realms import realm_strings as _rs
 
-        await open_unique_ephemeral(interaction, content=str(_rs(_locale_of(interaction))["realm_error_note"]))
+        await open_unique_ephemeral(interaction, content=str(_rs(interaction)["realm_error_note"]))
         return
     await open_unique_ephemeral(interaction, view=view, files=files or None)
 
@@ -2115,7 +2115,7 @@ async def _paroisse_window(
 
 
 async def _voliere_window(
-    strings: dict[str, str], kingdom: Any
+    strings: dict[str, str], kingdom: Any, locale: str = "fr"
 ) -> tuple[discord.ui.LayoutView, list[discord.File]]:
     """voliere-v2 (Drasah 28/11) : la fenêtre illustrée héberge AUSSI les
     lignes et rangées du moteur (emplacement ouvert, oiseaux prêts, 9
@@ -2123,8 +2123,17 @@ async def _voliere_window(
     modèle direct. Fallback modèle quand le moteur est absent (tests)."""
     import time as _time
 
-    from .voliere import voliere_extra_lines, voliere_rows, voliere_state
+    # voliere-v2-fix (Drasah 28/11) : les lignes/rangées du moteur lisent
+    # le catalogue VOLIÈRE (slot_open, beta_line, act_*…) — le catalogue
+    # lieux ne les porte pas (KeyError → fenêtre muette en live).
+    from .voliere import (
+        voliere_extra_lines,
+        voliere_rows,
+        voliere_state,
+        voliere_strings,
+    )
 
+    vstrings = voliere_strings(locale)
     title = strings["voliere_title"].format(kingdom=str(getattr(kingdom, "name", ""))).lstrip("# ")
     lines = [title, strings["voliere_line"], ""]
     state = await voliere_state(kingdom)
@@ -2146,8 +2155,8 @@ async def _voliere_window(
                 lines.append(strings["bird_ready"].format(bird=_bird_label(strings, bird)))
         rows: list[list[Any]] = [[_sortir_item(strings)]]
     else:
-        lines.extend(await voliere_extra_lines(strings, state))
-        rows = await voliere_rows(strings, state)
+        lines.extend(await voliere_extra_lines(vstrings, state))
+        rows = await voliere_rows(vstrings, state)
         rows.append([_sortir_item(strings)])
     view = _lieu_window(
         strings,
