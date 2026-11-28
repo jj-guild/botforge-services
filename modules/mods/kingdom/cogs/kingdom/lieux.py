@@ -1407,6 +1407,7 @@ async def _objectif_options(
                 value=str(getattr(entry, "key", "")),
             )
             for entry in entries[page * 25 : page * 25 + 25]
+            if str(getattr(entry, "key", "") or "")
         ]
     else:  # target_alliance
         entries = list(getattr(getattr(stack, "config", None), "civilizations", ()) or ())
@@ -1416,9 +1417,13 @@ async def _objectif_options(
                 value=str(getattr(entry, "key", "")),
             )
             for entry in entries[page * 25 : page * 25 + 25]
+            if str(getattr(entry, "key", "") or "")
         ]
     if page == 0:
-        out.append(discord.SelectOption(label=strings["objectif_none_label"], value=""))
+        # objectif-50035 (Drasah 28/11) : Discord REFUSE une valeur
+        # d'option vide (1 à 100 caractères) — l'option « Aucun » porte
+        # le sentinel "none", le callback le traduit en « pas d'objectif ».
+        out.append(discord.SelectOption(label=strings["objectif_none_label"], value="none"))
     return out[:25]
 
 
@@ -1464,6 +1469,8 @@ class LieuxObjectifSelect(
         if kingdom is None:
             return
         value = str(self.item.values[0] if self.item.values else "")
+        if value == "none":  # le sentinel de l'option « Aucun »
+            value = ""
         label = ""
         if value:
             if self.kind == "target_kingdom":

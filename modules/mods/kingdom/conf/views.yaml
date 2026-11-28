@@ -228,6 +228,13 @@ views:
     kind: surface
   panel:mod:kingdom:lieux:objectif:
     kind: surface
+  # church-marry-v1 (Drasah 28/11) : les fenêtres du mariage (l'Église
+  # les ouvre depuis la Paroisse — log error 04:19 du 28/11, jamais
+  # crash) manquaient au registre.
+  panel:mod:kingdom:church:marry:
+    kind: surface
+  panel:mod:kingdom:church:confirm:
+    kind: surface
   # vague2-actions-v1 (Drasah 21/11) : les nouvelles fenêtres d'action —
   # confirmation Paroisse, historiques achats/actions, choix Traquenard
   panel:mod:kingdom:lieux:paroisse-upgrade:

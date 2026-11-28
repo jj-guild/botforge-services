@@ -62,11 +62,18 @@ MARKET_SECTIONS: tuple[tuple[str, tuple[str, ...]], ...] = (
 # The card keys of the CARDS IN HAND section: the stock counter each
 # one reads (the buys ride the article counter, the remaining stock
 # under its own — the pattern of the reference _LEDGER_CARD_KEYS).
+# inventaire-v1 (Drasah 28/11) : les TECHNOLOGIES DE COMBAT sont des
+# cartes à part entière — leur « stock » EST le compteur d'achat
+# (décrémenté à la consommation), la main les liste comme le reste.
 _LEDGER_CARD_STOCK_KEYS = {
     "explorateur": "explorateur_stock",
     "corruption": "corruption_stock",
     "jeu_d_armes": "jeu_d_armes_stock",
     "garde_royale": "garde_royale_stock",
+    "embuscade": "embuscade",
+    "traquenard": "traquenard",
+    "contre_espionnage": "contre_espionnage",
+    "sabotage": "sabotage",
 }
 
 
