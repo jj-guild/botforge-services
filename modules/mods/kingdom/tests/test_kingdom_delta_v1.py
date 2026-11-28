@@ -120,7 +120,7 @@ def test_the_welcome_preview_formats(locale: str) -> None:
         season=section["gallery_sample_season"],
         kingdoms=section["gallery_sample_kingdoms"],
         count=4,
-        calendar=section["gallery_sample_calendar"],
+        end_date=section["gallery_sample_end_date"],
     )
     assert "{" not in text and "}" not in text, "an unformatted placeholder leaked"
     assert "royaume" in text or "kingdom" in text.lower()

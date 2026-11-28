@@ -247,7 +247,7 @@ def gallery_entries(locale: str) -> list[dict[str, Any]]:
                 season=dstrings["gallery_sample_season"],
                 kingdoms=dstrings["gallery_sample_kingdoms"],
                 count=4,
-                calendar=dstrings["gallery_sample_calendar"],
+                end_date=dstrings["gallery_sample_end_date"],
             )
         ],
     )
