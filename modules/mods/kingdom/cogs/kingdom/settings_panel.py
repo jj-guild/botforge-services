@@ -372,6 +372,21 @@ async def build_settings_panel(guild_id: str) -> discord.ui.LayoutView:
     atelier_row.add_item(
         KingdomSettingsNavButton("atelier", str(strings["settings_nav_atelier_button"])).item
     )
+    # delta-lab-v1 (Drasah 28/11) : le 🌱 Delta — À DROITE du bouton
+    # Serveur, et SEULEMENT en bêta (« delta ne doit pas être disponible
+    # en version classique ») : le rendu gomme le bouton hors bêta, le
+    # clic d'un vieux message re-vérifie et refuse (jamais muet).
+    try:
+        from .delta import delta_visible
+
+        if await delta_visible():
+            atelier_row.add_item(
+                KingdomSettingsNavButton(
+                    "delta", str(strings.get("settings_nav_delta_button") or "🌱 Delta")
+                ).item
+            )
+    except Exception:  # noqa: BLE001 — a read, never a crash
+        logger.warning("kingdom: the delta nav visibility read failed", exc_info=True)
 
     # cockpit-lisible-v1 (Drasah 21/11) : une zone = UN titre + UNE
     # ligne qui dit à quoi ça sert (données, clé manquante = pas de
@@ -1725,6 +1740,9 @@ _DRAWERS: dict[str, str] = {
     # decisions-admin-v1 (Drasah 25/11) : la file des litiges + l'historique
     # des décisions — UN tiroir, déclaré comme les autres
     "decisions": "panel:mod:kingdom:admin:decisions",
+    # delta-lab-v1 (Drasah 28/11) : le 🌱 labo bêta — un tiroir comme
+    # les autres, mais BÊTA ONLY (le bouton disparaît au classique)
+    "delta": "panel:mod:kingdom:admin:delta",
 }
 
 
@@ -2500,6 +2518,12 @@ async def _build_drawer(
         from .common import strings_by_locale
 
         view = _atelier_drawer(strings, strings_by_locale(locale))
+    elif drawer == "delta":
+        # delta-lab-v1 (Drasah 28/11) : le labo bêta rend lui-même
+        # son refus hors bêta (un vieux pin cliqué le dit, jamais muet)
+        from .delta import delta_drawer
+
+        view = await delta_drawer(strings, bot, guild_id)
     elif drawer == "decisions":
         view = await _decisions_drawer_view(locale, strings)
     else:  # pragma: no cover — the registry and the nav share the keys
