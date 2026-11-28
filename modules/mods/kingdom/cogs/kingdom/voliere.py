@@ -29,6 +29,7 @@ import discord
 
 from botforge.mods.kingdom import chronicle
 from botforge.mods.kingdom.game_clock import game_now
+from botforge.mods.kingdom.voliere import BIRDS
 
 from .common import lord_of, open_unique_ephemeral, wiring
 

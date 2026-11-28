@@ -235,3 +235,40 @@ def test_the_tavern_art_resolver_serves_the_reference_urls() -> None:
     assert item is not None and "assets/taverne" in str(item.url)
     assert taverne_art_item("entree") is not None
     assert taverne_art_item("mercenaire") is not None
+
+
+@pytest.mark.asyncio
+async def test_the_sommaire_rows_render_the_three_spaces() -> None:
+    """voliere-espaces-v1 : UNE rangée horizontale des TROIS espaces,
+    jamais cachés (grisés si non possédés), + 🪶 si emplacement ouvert.
+    Regression : le sommaire plantait en NameError (BIRDS non importé)
+    quand un seigneur ouvrait la volière en live."""
+    strings = voliere_cog.voliere_strings("fr")
+    state = {
+        "chosen": ["corbeau", "faucon"],
+        "cooldowns": {
+            "corbeau": 0,
+            "faucon": int(_NOW.timestamp()) + 300,
+            "pigeon": 0,
+        },
+        "open": 1,
+        "available": ["pigeon"],
+    }
+    rows = await voliere_cog.voliere_rows(strings, state)
+    flat = [item for row in rows for item in row]
+    ids = [str(item.custom_id) for item in flat if getattr(item, "custom_id", None)]
+    assert ids == [
+        "kingdom:voliere:espace:corbeau",
+        "kingdom:voliere:espace:faucon",
+        "kingdom:voliere:espace:pigeon",
+        "kingdom:voliere:slot",
+    ], "the three spaces in one horizontal row + the slot button"
+    assert [
+        item.disabled
+        for item in flat
+        if isinstance(item, discord.ui.Button)
+    ] == [False, False, True, False], "owned birds clickable, the missing one greyed"
+    lines = await voliere_cog.voliere_extra_lines(strings, state)
+    body = "\n".join(lines)
+    assert "Faucon" in body and "<t:" in body, "the flying bird carries its timer"
+    assert "Corbeau" in body and body.count("<t:") == 1, "an available bird NEVER gets a timer"
