@@ -159,13 +159,88 @@ async def run_beta_loop_safe(bot: Any) -> str | None:
     return None
 
 
-async def relaunch_beta(bot: Any, stack: Any) -> str | None:
+def realm_snapshot(realm: Any) -> dict[str, Any]:
+    """One engaged shell's reseat data — the crew photograph (delta-lab-v1).
+
+    bouclage-rembarquement (Drasah 28/11, live incident 02:26) : la fin
+    de saison ÉJECTE les coquilles (release_engagement + standby) AVANT
+    que la relance ne les relise — la relance trouvait 0 royaume à
+    remettre et la saison fraîche partait vide. Le clic qui boucle
+    photographie l'équipage AVANT la fermeture ; ce dict est la photo
+    (donnée, sérialisable, sans objet discord).
+    """
+    return {
+        "id": str(getattr(realm, "id", "")),
+        "name": str(getattr(realm, "name", "") or "?"),
+        "king_id": str(getattr(realm, "king_id", "") or ""),
+        "king_name": str(getattr(realm, "king_name", "") or ""),
+        "member_ids": [str(m) for m in (getattr(realm, "member_ids", []) or [])],
+    }
+
+
+async def capture_engaged_roster(realms_service: Any) -> list[dict[str, Any]]:
+    """The engaged, non-archived shells' snapshots (the pre-end crew)."""
+    out: list[dict[str, Any]] = []
+    if realms_service is None:
+        return out
+    try:
+        for realm in await realms_service.realms():
+            if not getattr(realm, "engagement", None):
+                continue
+            if getattr(realm, "archived_at", 0):
+                continue
+            out.append(realm_snapshot(realm))
+    except Exception:  # noqa: BLE001 — a read, never a crash
+        logger.warning("kingdom: the roster capture read failed", exc_info=True)
+    return out
+
+
+async def standby_shells(realms_service: Any) -> list[Any]:
+    """The NOT engaged, NOT archived shells (the réembarquement's pool)."""
+    if realms_service is None:
+        return []
+    try:
+        return [
+            realm
+            for realm in await realms_service.realms()
+            if not getattr(realm, "engagement", None)
+            and not getattr(realm, "archived_at", 0)
+        ]
+    except Exception:  # noqa: BLE001
+        logger.warning("kingdom: the standby shells read failed", exc_info=True)
+        return []
+
+
+def match_roster_shells(roster: list[dict[str, Any]], shells: list[Any]) -> list[Any]:
+    """The shells a captured roster points at, roster order, misses skipped."""
+    by_id = {str(getattr(shell, "id", "")): shell for shell in shells}
+    out: list[Any] = []
+    for entry in roster or []:
+        shell = by_id.get(str(entry.get("id", "")))
+        if shell is not None:
+            out.append(shell)
+    return out
+
+
+async def relaunch_beta(
+    bot: Any,
+    stack: Any,
+    *,
+    roster: list[dict[str, Any]] | None = None,
+    beta_name: str | None = None,
+) -> str | None:
     """Relaunch a fresh beta season NOW (the « Boucler » click, affaire 48).
 
     The former loop's own body: release the played shells, launch the
     fresh season, re-arm the ended season's beta format, reopen the
     game, reseat the shells, refresh the surfaces, announce. Returns
     a one-line summary, None when there was nothing to loop. Never raises.
+
+    bouclage-rembarquement (Drasah 28/11) : ``roster`` est la PHOTO
+    d'équipage prise AVANT la fermeture (delta-lab-v1) — les coquilles
+    sont alors standby (plus d'engagement à lire) et c'est la photo qui
+    les retrouve. Sans ``roster``, le comportement d'avant ce patch
+    reste verbatim (la voie officielle ne bouge pas).
     """
     season = None
     try:
@@ -174,33 +249,47 @@ async def relaunch_beta(bot: Any, stack: Any) -> str | None:
         logger.warning("kingdom: beta relaunch season read failed", exc_info=True)
     if season is not None and str(getattr(season, "phase", "")) != "ended":
         return None  # only a CLOSED season can loop
-    if season is not None and not getattr(season, "beta_name", None):
+    if roster is None and season is not None and not getattr(season, "beta_name", None):
         return None  # a CLASSIC end never relaunches (Drasah's asymmetry)
     ended_id = str(getattr(season, "id", "")) if season is not None else ""
-    beta_name = str(getattr(season, "beta_name", "")) if season is not None else ""
+    beta_name = str(
+        beta_name
+        if beta_name is not None
+        else (str(getattr(season, "beta_name", "")) if season is not None else "")
+    )
     logger.info("kingdom: beta relaunch after %s (%s)", ended_id, beta_name)
 
     # (1) release the played shells BEFORE the archive — a binding to
-    # the dying season ids would bar the re-entry
+    # the dying season ids would bar the re-entry. Avec une PHOTO
+    # d'équipage, les coquilles sont déjà standby : la libération
+    # n'a plus rien à faire, la photo EST la vérité.
     realms_service = getattr(stack, "realms", None)
     played: list[Any] = []
     if realms_service is not None:
-        try:
-            played = [
-                realm
-                for realm in await realms_service.realms()
-                if getattr(realm, "engagement", None)
-                and not getattr(realm, "archived_at", 0)
-            ]
-        except Exception:  # noqa: BLE001
-            logger.warning("kingdom: beta loop shells read failed", exc_info=True)
-        for realm in played:
+        if roster is not None:
             try:
-                await realms_service.release_engagement(str(realm.id))
-            except Exception:  # noqa: BLE001 — one shell never stops the loop
+                played = match_roster_shells(roster, await realms_service.realms())
+            except Exception:  # noqa: BLE001
                 logger.warning(
-                    "kingdom: beta loop release failed (%s)", realm.id, exc_info=True
+                    "kingdom: beta loop roster shells read failed", exc_info=True
                 )
+        else:
+            try:
+                played = [
+                    realm
+                    for realm in await realms_service.realms()
+                    if getattr(realm, "engagement", None)
+                    and not getattr(realm, "archived_at", 0)
+                ]
+            except Exception:  # noqa: BLE001
+                logger.warning("kingdom: beta loop shells read failed", exc_info=True)
+            for realm in played:
+                try:
+                    await realms_service.release_engagement(str(realm.id))
+                except Exception:  # noqa: BLE001 — one shell never stops the loop
+                    logger.warning(
+                        "kingdom: beta loop release failed (%s)", realm.id, exc_info=True
+                    )
 
     # (2) the fresh season — pivot: after this the pass ignores it
     from .settings_panel import _arm_compressed_beta
@@ -229,15 +318,26 @@ async def relaunch_beta(bot: Any, stack: Any) -> str | None:
             logger.warning("kingdom: beta loop sas close failed", exc_info=True)
         # (6) the played shells take their seats back
         if realms_service is not None:
+            reseated = 0
             for realm in played:
                 try:
                     await _reseat_one(stack, realms_service, guild, realm)
+                    reseated += 1
                 except Exception:  # noqa: BLE001 — one shell never stops the loop
                     logger.warning(
                         "kingdom: beta loop reseat failed (%s)",
                         getattr(realm, "id", "?"),
                         exc_info=True,
                     )
+            # bouclage-rembarquement : une photo d'équipage qui ne
+            # remet PERSONNE n'est jamais un silence — la ligne dit
+            # l'accident à l'organisateur.
+            if roster and reseated == 0:
+                logger.warning(
+                    "kingdom: the loop re-seated NO shell (%d in the roster) — "
+                    "the shells did not match the pre-end crew photograph",
+                    len(roster),
+                )
         # the mirrors and the feeding (the departure's own tail)
         try:
             from botforge.discord.static_pins import refresh_live_pins
@@ -287,4 +387,12 @@ async def relaunch_beta(bot: Any, stack: Any) -> str | None:
     return summary
 
 
-__all__ = ["relaunch_beta", "run_beta_loop_safe", "season_running"]
+__all__ = [
+    "capture_engaged_roster",
+    "match_roster_shells",
+    "realm_snapshot",
+    "relaunch_beta",
+    "run_beta_loop_safe",
+    "season_running",
+    "standby_shells",
+]
