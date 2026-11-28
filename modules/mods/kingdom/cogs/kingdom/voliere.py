@@ -29,7 +29,7 @@ import discord
 
 from botforge.mods.kingdom import chronicle
 from botforge.mods.kingdom.game_clock import game_now
-from botforge.mods.kingdom.voliere import BIRDS
+from botforge.mods.kingdom.voliere import BIRDS, bird_of
 
 from .common import lord_of, open_unique_ephemeral, wiring
 
@@ -55,7 +55,7 @@ _STRINGS: dict[str, dict[str, str]] = {
         "espace_title": "{bird} — the space",
         "espace_ready": "**{bird}** — on its perch, ready",
         "espace_flying": "**{bird}** — flying, back <t:{ts}:R>",
-        "back_button": "↩️ Back to the volière",
+        "espace_close": "↩️ Close the space",
         "state_ready": "{bird} ready",
         "state_flying": "{bird} back <t:{ts}:R>",
         "slot_open": "🕳️ Slot to fill — **choose a bird**.",
@@ -149,7 +149,7 @@ _STRINGS: dict[str, dict[str, str]] = {
         "espace_title": "{bird} — l'espace",
         "espace_ready": "**{bird}** — posé sur son perchoir, prêt",
         "espace_flying": "**{bird}** — envolé, revient <t:{ts}:R>",
-        "back_button": "↩️ Retour à la volière",
+        "espace_close": "↩️ Refermer l'espace",
         "state_ready": "{bird} prêt",
         "state_flying": "{bird} revient <t:{ts}:R>",
         "slot_open": "🕳️ Emplacement à remplir — **choisis un oiseau**.",
@@ -356,8 +356,11 @@ async def voliere_rows(strings: dict[str, str], state: dict[str, Any] | None) ->
 # voliere-espaces-v1 (Drasah 28/11) : les ESPACES
 # ---------------------------------------------------------------------------
 
-ESPACE_SURFACE = "panel:mod:kingdom:lieux:voliere:espace"
-"""#395 : UN seul template d'espace, instancié par paramètre (l'oiseau)."""
+# ---------------------------------------------------------------------------
+# voliere-espaces (Drasah 28/11) : les ESPACES — des SECTIONS de la
+# fenêtre volière, jamais des fenêtres à part (Drasah : la volière est
+# le contexte, elle reste visible au-dessus de l'espace ouvert).
+# ---------------------------------------------------------------------------
 
 ACTIONS_BY_BIRD: dict[str, list[str]] = {
     "corbeau": ["corbeau_civ", "corbeau_verify", "corbeau_track"],
@@ -366,21 +369,24 @@ ACTIONS_BY_BIRD: dict[str, list[str]] = {
 }
 
 
-def espace_view(
+def espace_items(
     strings: dict[str, str],
     state: dict[str, Any] | None,
     bird: str,
     *,
     note: str = "",
-) -> "discord.ui.LayoutView":
-    """UN template d'espace, paramétré par l'oiseau (#395).
+) -> list[Any]:
+    """#395 : UN template d'espace, paramétré par l'oiseau — rendu en
+    SECTION de la fenêtre volière (Drasah 28/11 : la volière est LE
+    CONTEXTE, elle reste visible au-dessus ; l'espace s'ouvre EN DESSOUS,
+    jamais en remplacement du sommaire).
 
-    Le timer vit en tête, AU-DESSUS de la rangée horizontale des 3
-    actions — et il n'apparaît QUE si l'oiseau est envolé (Drasah :
-    un oiseau disponible n'affiche jamais de timer).
+    Le timer vit en tête de la section, AU-DESSUS de la rangée
+    horizontale des 3 actions — et il n'apparaît QUE si l'oiseau est
+    envolé (Drasah : un oiseau disponible n'affiche jamais de timer).
+    Le résultat (ou l'échec) de la dernière action se colle SOUS le
+    titre de l'espace (Drasah : la volière reste au-dessus).
     """
-    from .common import surface
-
     emoji = BIRD_EMOJI.get(bird, "")
     name = BIRD_NAME.get(bird, bird)
     title = str(strings["espace_title"]).format(bird=f"{emoji} {name}")
@@ -392,7 +398,7 @@ def espace_view(
         if flying
         else str(strings["espace_ready"]).format(bird=f"{emoji} {name}")
     )
-    items: list[Any] = [discord.ui.TextDisplay(f"# {title}")]
+    items: list[Any] = [discord.ui.TextDisplay(f"## {title}")]
     if note:
         items.append(discord.ui.TextDisplay(str(note)))
     items.append(discord.ui.TextDisplay(status))
@@ -410,31 +416,42 @@ def espace_view(
     items.append(
         discord.ui.ActionRow(
             discord.ui.Button(
-                label=str(strings["back_button"])[:80],
+                label=str(strings["espace_close"])[:80],
                 custom_id=f"{_NS}:back",
                 style=discord.ButtonStyle.grey,
             )
         )
     )
-    return surface(ESPACE_SURFACE, *items)
+    return items
 
 
 async def _back_to_sommaire(
-    interaction: discord.Interaction, kingdom: Any, *, note: str = ""
+    interaction: discord.Interaction,
+    kingdom: Any,
+    *,
+    note: str = "",
+    open_bird: str = "",
 ) -> None:
-    """Transformer la bulle en place : retour au SOMMAIRE illustré,
-    le résultat de l'action collé sous le titre (une seule bulle,
-    jamais d'empilement — la fenêtre unique referme la précédente)."""
+    """Transformer la bulle en place : la fenêtre volière ILLUSTRÉE, le
+    résultat collé SOUS LE TITRE DE L'ESPACE OUVERT (une seule bulle,
+    jamais d'empilement — la fenêtre unique referme la précédente).
+
+    voliere-espaces-v2 (Drasah 28/11) : ``open_bird`` ouvre la section
+    de l'oiseau DANS la fenêtre volière — le sommaire (ligne d'états,
+    rangée des espaces) reste LE CONTEXTE au-dessus ; un seul espace
+    ouvert à la fois (le nouveau remplace l'ancien, c'est un re-rendu
+    de la même fenêtre, aucun état de session à porter).
+    """
     from .lieux import _voliere_window, lieux_strings
 
     locale = _locale_of(interaction)
     try:
         view, files = await _voliere_window(
-            lieux_strings(locale), kingdom, locale, note=note
+            lieux_strings(locale), kingdom, locale, note=note, open_bird=open_bird
         )
         await open_unique_ephemeral(interaction, view=view, files=files or None)
     except Exception:  # noqa: BLE001 — never block a done action
-        logger.warning("kingdom volière: return to sommaire failed", exc_info=True)
+        logger.warning("kingdom volière: volière window re-render failed", exc_info=True)
         if note:
             await open_unique_ephemeral(interaction, content=note)
 
@@ -444,7 +461,10 @@ class VoliereEspaceButton(
     template=rf"{_NS}:espace:(?P<bird>[a-z]+)",
 ):
     """Le bouton d'un ESPACE du sommaire — restart-proof. La bulle unique
-    se transforme en place : le sommaire ferme, l'espace s'ouvre."""
+    se transforme en place : la fenêtre volière se re-rend avec la
+    SECTION de l'oiseau ouverte sous le sommaire (le contexte reste
+    visible ; un seul espace ouvert à la fois — le nouveau remplace
+    l'ancien, sans état de session)."""
 
     def __init__(self, bird: str, label: str, held: bool) -> None:
         super().__init__(
@@ -474,15 +494,14 @@ class VoliereEspaceButton(
         if state is None or self.bird not in (state.get("chosen") or []):
             await open_unique_ephemeral(interaction, content=strings["bird_not_owned"].format(bird=BIRD_NAME.get(self.bird, self.bird)))
             return
-        await open_unique_ephemeral(
-            interaction, view=espace_view(strings, state, self.bird)
-        )
+        await _back_to_sommaire(interaction, kingdom, open_bird=self.bird)
 
 
 class VoliereBackButton(
     discord.ui.DynamicItem[discord.ui.Button[Any]], template=rf"{_NS}:back"
 ):
-    """↩️ Retour à la volière — la bulle redevient le sommaire illustré."""
+    """↩️ Refermer la section d'espace — la fenêtre volière se re-rend
+    en sommaire seul (le contexte ne bouge jamais)."""
 
     def __init__(self, label: str) -> None:
         super().__init__(
@@ -495,7 +514,7 @@ class VoliereBackButton(
 
     @classmethod
     async def from_custom_id(cls, interaction, item, match, /):  # type: ignore[no-untyped-def]
-        return cls(voliere_strings(_locale_of(interaction))["back_button"])
+        return cls(voliere_strings(_locale_of(interaction))["espace_close"])
 
     async def callback(self, interaction: discord.Interaction) -> None:
         await interaction.response.defer(ephemeral=True)
@@ -549,11 +568,27 @@ async def _record_action(stack: Any, lord: Any, action: str, **params: str) -> N
         logger.info("kingdom volière: chronicle record skipped", exc_info=True)
 
 
-async def _failed(interaction: discord.Interaction, strings: dict[str, str], exc: Exception) -> None:
-    """Answer the localized failure in the unique ephemeral window."""
+async def _failed(
+    interaction: discord.Interaction,
+    strings: dict[str, str],
+    exc: Exception,
+    kingdom: Any = None,
+    bird: str = "",
+) -> None:
+    """Answer the localized failure in the unique ephemeral window.
+
+    voliere-espaces-v2 (Drasah 28/11) : quand l'action venait d'un
+    espace, l'échec se colle DANS l'espace ouvert (la volière reste
+    le contexte au-dessus) — repli texte seul sinon (never block a
+    done action)."""
     message = str(getattr(exc, "message", "") or exc)
     content = strings["failed"].format(message=message)
     try:
+        if kingdom is not None:
+            await _back_to_sommaire(
+                interaction, kingdom, note=content, open_bird=bird
+            )
+            return
         await open_unique_ephemeral(interaction, content=content)
     except Exception:  # noqa: BLE001
         logger.info("kingdom volière: failure note skipped", exc_info=True)
@@ -599,7 +634,7 @@ def _bird_select_view(
         try:
             await stack.voliere.choose_bird(str(kingdom.id), values[0], now=_now())
         except Exception as exc:  # noqa: BLE001
-            await _failed(target, strings, exc)
+            await _failed(target, strings, exc, kingdom)
             return
         logger.info("kingdom volière: %s chooses the bird %s (admin trace)", lord.id, values[0])
         try:
@@ -674,7 +709,7 @@ async def _draw_action(
         try:
             drawn = await voliere.pick_civilization(str(kingdom.id), action, now=_now())
         except Exception as exc:  # noqa: BLE001
-            await _failed(interaction, strings, exc)
+            await _failed(interaction, strings, exc, kingdom, bird_of(action))
             return
         await _record_action(stack, lord, action, civ=str(drawn))
         await _back_to_sommaire(
@@ -684,29 +719,33 @@ async def _draw_action(
                 bird=BIRD_LABEL.get(action, action),
                 civ=str(drawn),
             ),
+            open_bird=bird_of(action),
         )
         return
     if action == "faucon_territory":
         try:
             map_key = await voliere.pick_territory(str(kingdom.id), now=_now())
         except Exception as exc:  # noqa: BLE001
-            await _failed(interaction, strings, exc)
+            await _failed(interaction, strings, exc, kingdom, bird_of(action))
             return
         await _record_action(stack, lord, action, map=str(map_key))
         await _back_to_sommaire(
             interaction,
             kingdom,
             note=strings["territory_drawn"].format(map=str(map_key)),
+            open_bird=bird_of(action),
         )
         return
     if action == "faucon_release":
         try:
             await voliere.release_faucon(str(kingdom.id), now=_now())
         except Exception as exc:  # noqa: BLE001
-            await _failed(interaction, strings, exc)
+            await _failed(interaction, strings, exc, kingdom, bird_of(action))
             return
         await _record_action(stack, lord, action)
-        await _back_to_sommaire(interaction, kingdom, note=strings["release_done"])
+        await _back_to_sommaire(
+            interaction, kingdom, note=strings["release_done"], open_bird=bird_of(action)
+        )
         return
     logger.info("kingdom volière: unknown draw action %s", action)
 
@@ -726,7 +765,9 @@ async def _verify_flow(
         and str(getattr(a, "state", "")) not in ("finished", "cancelled")
     ]
     if not attacks:
-        await open_unique_ephemeral(interaction, content=strings["verify_no_target"])
+        await _back_to_sommaire(
+            interaction, kingdom, note=strings["verify_no_target"], open_bird="corbeau"
+        )
         return
 
     async def on_pick(target: discord.Interaction[Any]) -> None:
@@ -741,7 +782,7 @@ async def _verify_flow(
                 str(kingdom.id), str(attack.id), now=_now()
             )
         except Exception as exc:  # noqa: BLE001
-            await _failed(target, strings, exc)
+            await _failed(target, strings, exc, kingdom, "corbeau")
             return
         await _record_action(stack, lord, "corbeau_verify", map=str(inspection["map_key"]))
         await _back_to_sommaire(
@@ -752,6 +793,7 @@ async def _verify_flow(
                 name=str(inspection["attacker_name"]),
                 civs=", ".join(inspection["attacker_civs"]) or strings["unknown"],
             ),
+            open_bird="corbeau",
         )
 
     select: discord.ui.Select[Any] = discord.ui.Select(
@@ -786,7 +828,9 @@ async def _track_flow(
         and getattr(other, "kingdom_id", None) is not None
     ]
     if not targets:
-        await open_unique_ephemeral(interaction, content=strings["track_no_target"])
+        await _back_to_sommaire(
+            interaction, kingdom, note=strings["track_no_target"], open_bird="corbeau"
+        )
         return
 
     async def on_pick(target: discord.Interaction[Any]) -> None:
@@ -799,13 +843,14 @@ async def _track_flow(
         try:
             await stack.voliere.track_lord(str(kingdom.id), str(victim.id), now=_now())
         except Exception as exc:  # noqa: BLE001
-            await _failed(target, strings, exc)
+            await _failed(target, strings, exc, kingdom, "corbeau")
             return
         await _record_action(stack, lord, "corbeau_track", lord_name=str(victim.display_name))
         await _back_to_sommaire(
             target,
             kingdom,
             note=strings["track_done"].format(name=str(victim.display_name)),
+            open_bird="corbeau",
         )
 
     select: discord.ui.Select[Any] = discord.ui.Select(
@@ -841,7 +886,9 @@ async def _sabotage_flow(
         and not bool((a.pickban or {}).get("room_revealed"))
     ]
     if not attacks:
-        await open_unique_ephemeral(interaction, content=strings["sabotage_no_target"])
+        await _back_to_sommaire(
+            interaction, kingdom, note=strings["sabotage_no_target"], open_bird="faucon"
+        )
         return
 
     async def on_attack(target: discord.Interaction[Any]) -> None:
@@ -861,7 +908,9 @@ async def _sabotage_flow(
         )
         civs = [str(civ) for civ in ((other.civilizations if other else []) or [])]
         if not civs:
-            await _back_to_sommaire(target, kingdom, note=strings["sabotage_no_civ"])
+            await _back_to_sommaire(
+                target, kingdom, note=strings["sabotage_no_civ"], open_bird="faucon"
+            )
             return
 
         async def on_civ(civ_target: discord.Interaction[Any]) -> None:
@@ -876,7 +925,7 @@ async def _sabotage_flow(
                     str(kingdom.id), str(attack.id), civ, now=_now()
                 )
             except Exception as exc:  # noqa: BLE001
-                await _failed(civ_target, strings, exc)
+                await _failed(civ_target, strings, exc, kingdom, "faucon")
                 return
             await _record_action(stack, lord, "faucon_sabotage", civ=civ)
             await _back_to_sommaire(
@@ -885,6 +934,7 @@ async def _sabotage_flow(
                 note=strings["sabotage_done"].format(
                     civ=civ, map=str(getattr(attack, "map_key", ""))
                 ),
+                open_bird="faucon",
             )
 
         civ_select: discord.ui.Select[Any] = discord.ui.Select(
@@ -928,7 +978,7 @@ async def _question_modal(
     try:
         await stack.voliere.spend_action(str(kingdom.id), "pigeon_question", now=_now())
     except Exception as exc:  # noqa: BLE001
-        await _failed(interaction, strings, exc)
+        await _failed(interaction, strings, exc, kingdom, "pigeon")
         return
 
     question_input: discord.ui.TextInput[Any] = discord.ui.TextInput(
@@ -1027,7 +1077,7 @@ async def _dm_flow(
             try:
                 await stack.voliere.spend_action(str(kingdom.id), "pigeon_dm", now=_now())
             except Exception as exc:  # noqa: BLE001
-                await _failed(submit_target, strings, exc)
+                await _failed(submit_target, strings, exc, kingdom, "pigeon")
                 return
             logger.info(
                 "kingdom volière: anonymous MP by %s to %s (admin trace)",
@@ -1102,7 +1152,9 @@ async def _theft_flow(
         if not getattr(k, "is_gaia", False) and str(k.id) != str(kingdom.id)
     ]
     if not kingdoms:
-        await open_unique_ephemeral(interaction, content=strings["theft_no_target"])
+        await _back_to_sommaire(
+            interaction, kingdom, note=strings["theft_no_target"], open_bird="corbeau"
+        )
         return
 
     async def on_pick(target: discord.Interaction[Any]) -> None:
@@ -1117,7 +1169,7 @@ async def _theft_flow(
                 str(kingdom.id), str(victim.id), str(lord.id), now=_now()
             )
         except Exception as exc:  # noqa: BLE001
-            await _failed(target, strings, exc)
+            await _failed(target, strings, exc, kingdom, "corbeau")
             return
         await _record_action(
             stack, lord, "corbeau_civ", kingdom=str(victim.name)
@@ -1128,6 +1180,7 @@ async def _theft_flow(
             note=strings["theft_sent"].format(
                 kingdom=str(victim.name), ts=int(theft.get("execute_at", 0) or 0)
             ),
+            open_bird="corbeau",
         )
 
     select: discord.ui.Select[Any] = discord.ui.Select(

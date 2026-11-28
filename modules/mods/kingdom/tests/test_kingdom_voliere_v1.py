@@ -42,37 +42,35 @@ def test_the_voliere_strings_exist_in_both_locales(locale: str) -> None:
 
 
 def test_the_espace_template_follows_the_rules() -> None:
-    """voliere-espaces-v1 : UN template, trois instances (l'oiseau est
-    un PARAMÈTRE, pas une classe — #395), timer UNIQUEMENT si envolé."""
+    """voliere-espaces-v2 : UN template en SECTION de la fenêtre volière
+    (l'oiseau est un PARAMÈTRE, pas une classe — #395), timer UNIQUEMENT
+    si envolé, résultat collé sous le titre de l'espace."""
+    strings = voliere_cog.voliere_strings("fr")
     state = {
         "chosen": ["corbeau"],
         "cooldowns": {"corbeau": int(_NOW.timestamp()) + 300, "faucon": 0, "pigeon": 0},
     }
-    view = voliere_cog.espace_view(voliere_cog.voliere_strings("fr"), state, "corbeau")
-    ids = [str(item.custom_id) for item in view.walk_children() if getattr(item, "custom_id", None)]  # type: ignore[attr-defined]
+    items = voliere_cog.espace_items(strings, state, "corbeau", note="✅ résultat")
+    ids = [str(item.custom_id) for item in items if getattr(item, "custom_id", None)]
     assert ids == [
         "kingdom:voliere:act:corbeau_civ",
         "kingdom:voliere:act:corbeau_verify",
         "kingdom:voliere:act:corbeau_track",
         "kingdom:voliere:back",
-    ], "the 3 actions horizontal + the back button"
-    assert all(item.disabled for item in view.walk_children() if isinstance(item, discord.ui.Button))  # type: ignore[attr-defined]
-    body = "".join(str(getattr(item, "content", "") or "") for item in view.walk_children())  # type: ignore[attr-defined]
+    ], "the 3 actions horizontal + the close button"
+    assert all(item.disabled for item in items if isinstance(item, discord.ui.Button))
+    body = "".join(str(getattr(item, "content", "") or "") for item in items)
     assert "<t:" in body, "the flying bird carries a live timer"
-    ready = voliere_cog.espace_view(
-        voliere_cog.voliere_strings("fr"), state, "corbeau"
-    )
+    assert "✅ résultat" in body, "the action's result lands IN the space"
     # an available bird NEVER shows a timer (cooldowns at 0)
     ready_state = {
         "chosen": ["corbeau"],
         "cooldowns": {"corbeau": 0, "faucon": 0, "pigeon": 0},
     }
-    ready_view = voliere_cog.espace_view(
-        voliere_cog.voliere_strings("fr"), ready_state, "corbeau"
-    )
-    ready_body = "".join(str(getattr(item, "content", "") or "") for item in ready_view.walk_children())  # type: ignore[attr-defined]
+    ready_items = voliere_cog.espace_items(strings, ready_state, "corbeau")
+    ready_body = "".join(str(getattr(item, "content", "") or "") for item in ready_items)
     assert "<t:" not in ready_body and not any(
-        item.disabled for item in ready_view.walk_children() if isinstance(item, discord.ui.Button)  # type: ignore[attr-defined]
+        item.disabled for item in ready_items if isinstance(item, discord.ui.Button)
     )
 
 
@@ -220,7 +218,6 @@ def test_the_voliere_and_tavern_surfaces_are_declared() -> None:
 
     for view_id in (
         "panel:mod:kingdom:lieux:voliere",
-        "panel:mod:kingdom:lieux:voliere:espace",
         "panel:mod:kingdom:tavern:pin",
         "panel:mod:kingdom:tavern:enter",
         "panel:mod:kingdom:mercenary",

@@ -721,12 +721,17 @@ def _lieu_window(
     media: str | None,
     rows: list[list[discord.ui.Item[Any]]] | None = None,
     card_media: str | None = None,
+    extra_items: list[discord.ui.Item[discord.ui.LayoutView]] | None = None,
 ) -> discord.ui.LayoutView:
     """One lieu window : illustration TOP, the panel under, Sortir last.
 
     ``card_media`` (comptes-cv2-v1, T-D) : la galerie de carte révélée
     vit DANS le container sous le corps — l'illustration de tête reste
     seule en haut (Drasah : jamais côte à côte).
+
+    ``extra_items`` (voliere-espaces-v2, Drasah 28/11) : une SECTION
+    additionnelle rendue dans le MÊME container, sous les rangées —
+    la fenêtre reste le contexte, la section s'ouvre en dessous.
     """
     blocks: list[discord.ui.Item[discord.ui.LayoutView]] = []
     if media:
@@ -741,6 +746,9 @@ def _lieu_window(
     for row in rows or []:
         if row:
             container_items.append(discord.ui.ActionRow(*row))
+    if extra_items:
+        container_items.append(discord.ui.Separator())
+        container_items.extend(extra_items)
     blocks.append(discord.ui.Container(*container_items, accent_colour=accent))
     return surface(view_id, *blocks)
 
@@ -2119,17 +2127,25 @@ async def _voliere_window(
     kingdom: Any,
     locale: str = "fr",
     note: str = "",
+    open_bird: str = "",
 ) -> tuple[discord.ui.LayoutView, list[discord.File]]:
     """voliere-v2 (Drasah 28/11) : la fenêtre illustrée héberge AUSSI les
     lignes et rangées du moteur (emplacement ouvert, oiseaux prêts, 9
     actions) — l'état vient du service (``stack.voliere``), jamais du
-    modèle direct. Fallback modèle quand le moteur est absent (tests)."""
+    modèle direct. Fallback modèle quand le moteur est absent (tests).
+
+    voliere-espaces-v2 (Drasah 28/11) : LA VOLIÈRE EST LE CONTEXTE —
+    ``open_bird`` ouvre la SECTION de l'oiseau DANS cette fenêtre, sous
+    le sommaire (jamais une fenêtre à part) ; le résultat (``note``)
+    se colle alors sous le titre de l'espace, la volière au-dessus.
+    Un seul espace ouvert à la fois (re-rendu, sans état de session)."""
     import time as _time
 
     # voliere-v2-fix (Drasah 28/11) : les lignes/rangées du moteur lisent
     # le catalogue VOLIÈRE (slot_open, beta_line, act_*…) — le catalogue
     # lieux ne les porte pas (KeyError → fenêtre muette en live).
     from .voliere import (
+        espace_items,
         voliere_extra_lines,
         voliere_rows,
         voliere_state,
@@ -2139,12 +2155,14 @@ async def _voliere_window(
     vstrings = voliere_strings(locale)
     title = strings["voliere_title"].format(kingdom=str(getattr(kingdom, "name", ""))).lstrip("# ")
     lines = [title]
-    if note:
+    if note and not open_bird:
         # voliere-espaces-v1 : le résultat de la dernière action, collé
-        # sous le titre au retour au sommaire (une seule bulle).
+        # sous le titre au retour au sommaire (une seule bulle). Quand un
+        # espace est ouvert, le résultat vit DANS sa section (v2).
         lines += [str(note), ""]
     lines += [strings["voliere_line"], ""]
     state = await voliere_state(kingdom)
+    extra: list[Any] | None = None
     if state is None:
         # fallback : moteur indisponible (tests, service absent) — les
         # lignes viennent du modèle, comme avant le portage moteur.
@@ -2166,6 +2184,10 @@ async def _voliere_window(
         lines.extend(await voliere_extra_lines(vstrings, state))
         rows = await voliere_rows(vstrings, state)
         rows.append([_sortir_item(strings)])
+        if open_bird:
+            # #395 : le template d'espace instancié par paramètre — la
+            # section vit SOUS le sommaire, dans la même fenêtre.
+            extra = espace_items(vstrings, state, open_bird, note=note)
     view = _lieu_window(
         strings,
         VOLIERE_SURFACE,
@@ -2174,6 +2196,7 @@ async def _voliere_window(
         "\n".join(lines),
         "attachment://voliere.png",
         rows,
+        extra_items=extra,
     )
     return view, _lieu_files("voliere.png", "voliere.png")
 
